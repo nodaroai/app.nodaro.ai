@@ -8,11 +8,11 @@
  *   generation's KIE taskId
  * - runway-extend: Runway extend (POST /api/v1/runway/extend) — likewise
  * - ltx-2.3-pro: LTX 2.3 Pro extend, from a video URL
- * - seedance-2-5-extend / seedance-2-0-extend / kling-4-extend: Seedance 2.5 /
- *   Seedance 2.0 / Kling 4, from a video URL — the tail recipe
- *   (lib/extend-recipe.ts): the source's last seconds as the `@video_1`
- *   reference, then a stitch. Seedance 2.5 is charged per second sent and
- *   added (@nodaro/render-rules `seedance-extend-pricing.ts`), on the source
+ * - seedance-2-5-extend / seedance-2-5-flash-extend / seedance-2-0-extend /
+ *   kling-4-extend: Seedance 2.5 / Seedance 2.5 Flash / Seedance 2.0 / Kling 4,
+ *   from a video URL — the tail recipe (lib/extend-recipe.ts): the source's
+ *   last seconds as the `@video_1` reference, then a stitch. Seedance 2.5 and
+ *   2.5 Flash are charged per second sent and added, each on its own rows (@nodaro/render-rules `seedance-extend-pricing.ts`), on the source
  *   the preHandler measures. The earlier id `seedance-2-extend` is retired:
  *   the app-wide hook (middleware/retired-video-provider.ts) runs it as
  *   `seedance-2-5-extend`.
@@ -49,6 +49,7 @@ import {
   isCatalogExtendProvider,
   isGrokExtendProvider,
   isPixverseExtendProvider,
+  refVideoAspectProblem,
 } from "@nodaro/shared/models"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, grokExtendCreditId, grokExtendSeconds, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
@@ -84,11 +85,11 @@ export const extendVideoBody = z.object({
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
   extendMode: z.enum(["start", "end"]).optional(), // LTX 2.3 Pro only
   // Seconds to add, one of the provider's own (`EXTEND_DURATION_SECONDS`):
-  // Seedance 2.5 4–30, Seedance 2.0 4–15, Kling 4 3–30, PixVerse V6 1–15,
+  // Seedance 2.5 and 2.5 Flash 4–30, Seedance 2.0 4–15, Kling 4 3–30, PixVerse V6 1–15,
   // LTX / VEO / Runway 1–20.
   duration: z.number().int().min(1).max(EXTEND_DURATION_MAX_SEC).optional(),
   // Catalog extend providers only, one their catalog entry offers (Seedance:
-  // 480p / 720p / 1080p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p /
+  // 480p / 720p / 1080p, 2.5 Flash 480p / 720p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p /
   // 720p / 1080p), checked per provider by `extendRequestProblem`.
   resolution: z.enum(["360p", "480p", "540p", "720p", "1080p"]).optional(),
   generateAudio: z.boolean().optional(), // Seedance and PixVerse V6 only (default true); Kling 4's sound is always on
@@ -180,7 +181,7 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   // Seedance 2.5 is charged per second sent and added: its resolution's
   // two-second row, which the guard multiplies by the run's units
   // (`seedanceExtendBaseCredits`, on the source the preHandler measured).
-  if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendRateCreditId(body?.resolution)
+  if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendRateCreditId(body?.resolution, provider)
   // Every other catalog extend provider (Seedance 2.0, Kling 4, PixVerse V6)
   // on its own rows (per second added × resolution; PixVerse's `:audio` with
   // its sound on) — the one builder every surface prices such an extend with.
@@ -227,7 +228,7 @@ export async function extendVideoComputeCredits(body: unknown, req: FastifyReque
   const b = body as Record<string, unknown> | undefined
   const provider = canonicalVideoProvider(typeof b?.provider === "string" ? b.provider : "veo-extend")
   if (!isSeedanceExtendPricedBySecondsSent(provider)) return undefined
-  return seedanceExtendBaseCredits({ duration: b?.duration, resolution: b?.resolution, sourcePictureSec: measuredSourcePictureSec.get(req) })
+  return seedanceExtendBaseCredits({ provider, duration: b?.duration, resolution: b?.resolution, sourcePictureSec: measuredSourcePictureSec.get(req) })
 }
 
 type ExtendVideoBody = z.infer<typeof extendVideoBody>
@@ -311,7 +312,9 @@ function retiredLengthInWindow(data: ExtendVideoBody, retiredId: string | undefi
  * {@link checkExtendSource}'s answer. `pictureSec`: the length of the source's
  * picture, when it was measured (what a Seedance 2.5 run's price counts).
  */
-export type ExtendSourceCheck = { ok: true; pictureSec?: number } | { ok: false; code: "video_too_short"; message: string }
+export type ExtendSourceCheck =
+  | { ok: true; pictureSec?: number }
+  | { ok: false; code: "video_too_short" | "video_aspect_unsupported"; message: string }
 
 /**
  * Whether a tail-recipe provider can continue `videoUrl`. The run sends the
@@ -319,7 +322,9 @@ export type ExtendSourceCheck = { ok: true; pictureSec?: number } | { ok: false;
  * picture shorter than the tail), and the model refuses a reference shorter
  * than its floor (`minSourceSec`, the floor the worker holds too: Seedance
  * 1.8 s, a little under its 2 s tail, so a nominal 2 s clip that probes a
- * frame short still runs; Kling 4 2 s, under its 3 s tail). A shorter picture
+ * frame short still runs; Seedance 2.5 Flash its documented 2 s; Kling 4 2 s,
+ * under its 3 s tail). A source whose shape the model does not take as a
+ * reference video (`refVideoAspectProblem`) is refused the same way. A shorter picture
  * is refused here — before anything is reserved — instead of failing in the
  * worker after the reservation. The picture's length is the video stream's
  * own (`videoDurationSeconds`: the sound can run past the last frame), the
@@ -339,15 +344,23 @@ export async function checkExtendSource(
 ): Promise<ExtendSourceCheck> {
   if (!isTailRecipeProvider(provider) || !safeUrlSchema.safeParse(videoUrl).success) return { ok: true }
   let pictureSec: number
+  let size: { width: number; height: number }
   try {
     const probe = await probeVideoSource(videoUrl)
     pictureSec = probe.videoDurationSeconds ?? probe.durationSeconds
+    size = { width: probe.width, height: probe.height }
   } catch (err) {
     onProbeError?.(err)
     return { ok: true }
   }
-  if (pictureSec >= TAIL_RECIPES[provider].minSourceSec) return { ok: true, pictureSec }
-  return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }
+  if (pictureSec < TAIL_RECIPES[provider].minSourceSec) {
+    return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }
+  }
+  // The source's end goes to the model as a reference video, so a shape its
+  // model does not take (Seedance 2.5 Flash: 1:2.5 to 2.5:1) is refused here too.
+  const shape = refVideoAspectProblem(TAIL_RECIPES[provider].genModel, size.width, size.height)
+  if (shape) return { ok: false, code: "video_aspect_unsupported", message: shape }
+  return { ok: true, pictureSec }
 }
 
 export async function extendVideoRoutes(app: FastifyInstance) {

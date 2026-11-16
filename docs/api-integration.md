@@ -2764,12 +2764,14 @@ count no run of it can have, lands in `missing`.
 
 A Seedance 2.5 Extend Video run is priced the same way, on its resolution's
 two-second row (`seedance-2-5-extend:<resolution>:per-2s`), at units =
-(seconds of the source sent + seconds added) ÷ 2. `@nodaro/shared`'s
-`seedanceExtendSourceCreditId(sourcePictureSec, duration, resolution)` builds
-that identifier for a source whose picture length you have measured, by the
+(seconds of the source sent + seconds added) ÷ 2, and so is a Seedance 2.5
+Flash Extend run, on its own rows (`seedance-2-5-flash-extend:<resolution>:per-2s`,
+480p or 720p). `@nodaro/shared`'s
+`seedanceExtendSourceCreditId(sourcePictureSec, duration, resolution, provider)`
+(`provider` defaults to `seedance-2-5-extend`) builds that identifier for a source whose picture length you have measured, by the
 rule the charge reads; with no known length it names the whole 10-second
 window, the most a run of that length costs, and for a source shorter than
-the 1.8 seconds an extend needs it names none (the extend refuses it) (see
+the 1.8 seconds an extend needs (2 seconds on Seedance 2.5 Flash Extend) it names none (the extend refuses it) (see
 [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)).
 
 So `GET /v1/credits/model-cost?model=speaker-frames` answers ONE block's
@@ -3356,13 +3358,14 @@ orchestrator already use):
 - **Extend Video: the Seedance providers only, with one seat reserved.** On
   `POST /v1/extend-video` both `connectedReferences` and the flat
   `referenceImageUrls` are accepted when `provider` is `seedance-2-5-extend`
-  (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0) — the only extend
+  (Seedance 2.5), `seedance-2-5-flash-extend` (Seedance 2.5 Flash) or
+  `seedance-2-0-extend` (Seedance 2.0) — the only extend
   transports with a reference path; any other extend provider refuses them with
   a 400 rather than silently dropping. The image budget, on both, is the
   Seedance 2.0 cap **minus one** (up to **8** user references): Seedance 2.0's
   extension itself occupies one reference seat with the source's last frame (the
   continuation anchor), appended AFTER the user references so `@image_1…@image_8`
-  ordinals never shift; Seedance 2.5 sends no anchor and keeps the same budget.
+  ordinals never shift; Seedance 2.5 and 2.5 Flash send no anchor and keep the same budget.
   The source's end rides as `@video_1`: its last 10 seconds on Seedance 2.5
   (declared as an extension, priced per second sent and added — see
   [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)),

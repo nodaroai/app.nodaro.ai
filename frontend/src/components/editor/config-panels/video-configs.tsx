@@ -5206,6 +5206,7 @@ export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 /** What each catalog Extend Video provider says it does — one per provider, so a new one names its own. */
 const CATALOG_EXTEND_DESCRIPTION: Readonly<Record<CatalogExtendProvider, MessageKey>> = {
   "seedance-2-5-extend": "vidcfg.descSeedanceExtend",
+  "seedance-2-5-flash-extend": "vidcfg.descSeedanceExtend",
   "seedance-2-0-extend": "vidcfg.descSeedanceExtend",
   "kling-4-extend": "vidcfg.descKlingExtend",
   "pixverse-v6-extend": "vidcfg.descPixverseExtend",
@@ -5264,7 +5265,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     : 1
   const catalogPriceIds = (r: string): { rateId: string; quoteId: string | undefined } => {
     if (sentPriced) {
-      const rateId = seedanceExtendRateCreditId(r)
+      const rateId = seedanceExtendRateCreditId(r, catalogProvider)
       return { rateId, quoteId: unitQuoteIdFor(rateId, sentUnits) }
     }
     return { rateId: catalogProvider ? catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound) : "", quoteId: undefined }

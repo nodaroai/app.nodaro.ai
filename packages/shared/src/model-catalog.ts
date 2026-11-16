@@ -3688,6 +3688,33 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5-extend:1080p:per-2s:9u", credits: 4275, note: "8s added at 1080p to a source of 10s or more" },
     ],
   },
+  // Seedance 2.5 Flash extends ANY video the way Seedance 2.5 does (the
+  // source's last 10 s declared as an extension, no start image), generated
+  // on Seedance 2.5 Flash: its own entry, so a deployment can withhold or
+  // release it apart from Flash generation, at Flash's own 480p / 720p and
+  // 4–30 s. Charged per second of video sent and added, at its resolution's
+  // row, the price of two seconds (decided 2026-11-16).
+  "seedance-2-5-flash-extend": {
+    id: "seedance-2-5-flash-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedance 2.5 Flash Extend",
+    series: "Seedance",
+    description: "Extend ANY video with Seedance 2.5 Flash, the faster and lower-cost tier: a 4–30s continuation (audio included) of the source's last 10 seconds at 480p or 720p, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
+    useCases: ["extend", "fast"],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
+    resolutions: ["480p", "720p"],
+    pricing: [
+      // The default run (8 s added to a source of 10 s or more: 18 s sent and
+      // added, 9 units of the two-second row) at each resolution. A run is
+      // charged its own seconds: `seedance-2-5-flash-extend:<res>:per-2s` × (sent + added) ÷ 2.
+      { identifier: "seedance-2-5-flash-extend:720p:per-2s:9u", credits: 1152, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
+      { identifier: "seedance-2-5-flash-extend:480p:per-2s:9u", credits: 522, note: "8s added at 480p to a source of 10s or more" },
+    ],
+  },
   "seedance-2-0-extend": {
     id: "seedance-2-0-extend",
     kind: "video",

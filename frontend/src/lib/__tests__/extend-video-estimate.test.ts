@@ -28,7 +28,7 @@ describe("Extend Video on Seedance 2.5 — the units the editor quotes", () => {
       const sec = tenths / 10
       for (let duration = 4; duration <= 30; duration++) {
         const x = extend({ duration })
-        const charged = seedanceExtendPrice({ duration, resolution: "720p", sourcePictureSec: sec }).units
+        const charged = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution: "720p", sourcePictureSec: sec }).units
         expect(extendVideoPricingUnits(x, [upload(sec), x], wire)).toBe(charged)
         const unmade = extendVideoPricingUnits(x, [generation({}), x], wire)
         expect(unmade).toBe((10 + duration) / 2)

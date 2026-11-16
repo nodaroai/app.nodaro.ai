@@ -58,6 +58,9 @@ export {
 export type { NormalizedImageGen, PricedVideoSelection, GrokExtendSourceResolution } from "../credit-identifiers.js"
 export {
   SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER,
+  SEEDANCE_EXTEND_MIN_SOURCE_SEC,
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
   SEEDANCE_EXTEND_RATE_SECONDS,
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
@@ -65,6 +68,7 @@ export {
   isSeedanceExtendRateCreditId,
   seedanceExtendAddedSec,
   seedanceExtendRefusesSource,
+  seedanceExtendSourceRefused,
   seedanceExtendSourceSec,
   seedanceExtendSentSec,
   seedanceExtendUnits,

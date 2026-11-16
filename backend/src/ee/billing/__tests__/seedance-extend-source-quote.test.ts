@@ -65,11 +65,11 @@ describe("seedanceExtendSourceCreditId, priced through the server's quote resolu
         for (const resolution of RESOLUTIONS) {
           const label = `${source} s + ${duration} s at ${resolution}`
           const id = seedanceExtendSourceCreditId(source, duration, resolution)!
-          const price = seedanceExtendPrice({ duration, resolution, sourcePictureSec: source })
+          const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution, sourcePictureSec: source })
           // The id names the rule's own rate row and units, exactly.
           expect(parseRateQuoteCreditId(id), label).toStrictEqual({ rateId: price.rateId, units: price.units })
           // What the route holds and the worker settles on that measured source, marked up once at the rate.
-          const charge = applyServiceMarkup(await seedanceExtendBaseCredits({ duration, resolution, sourcePictureSec: source }), settings.current as never, price.rateId)
+          const charge = applyServiceMarkup(await seedanceExtendBaseCredits({ provider: "seedance-2-5-extend", duration, resolution, sourcePictureSec: source }), settings.current as never, price.rateId)
           expect(chargedCredits(table, id), label).toBe(charge)
           expect(chargedCredits(table, price.rateId, price.units), label).toBe(charge)
           expect(await CreditsService.getModelCreditCost(id), label).toBe(charge)
@@ -102,9 +102,9 @@ describe("seedanceExtendSourceCreditId, priced through the server's quote resolu
   it("1.8 s + 8 s, the shortest source with more added: the id both lookups answer at the run's charge", async () => {
     const table = await getChargedPriceTable()
     const id = seedanceExtendSourceCreditId(1.8, 8, "720p")!
-    const price = seedanceExtendPrice({ duration: 8, resolution: "720p", sourcePictureSec: 1.8 })
+    const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 8, resolution: "720p", sourcePictureSec: 1.8 })
     expect(parseRateQuoteCreditId(id)).toStrictEqual({ rateId: price.rateId, units: price.units })
-    const charge = applyServiceMarkup(await seedanceExtendBaseCredits({ duration: 8, resolution: "720p", sourcePictureSec: 1.8 }), settings.current as never, price.rateId)
+    const charge = applyServiceMarkup(await seedanceExtendBaseCredits({ provider: "seedance-2-5-extend", duration: 8, resolution: "720p", sourcePictureSec: 1.8 }), settings.current as never, price.rateId)
     expect(chargedCredits(table, id)).toBe(charge)
     expect(await CreditsService.getModelCreditCost(id)).toBe(charge)
   })

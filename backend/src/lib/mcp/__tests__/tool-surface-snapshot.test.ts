@@ -1717,6 +1717,14 @@ const SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES = 325
 // all; the earlier budget was 543_329 B with 28 B of headroom (543_301 B), so the change adds 157 B.
 const SEEDANCE_2_5_FLASH_TOTAL_BYTES = 157
 
+// RAISED 2026-11-16 by Seedance 2.5 Flash Extend (`seedance-2-5-flash-extend`), and nothing else:
+// extend_video's model enum and its catalog-derived notes (the URL models, their lengths and
+// resolutions, the reference-image and sound providers) name the new provider. No tool was added, so
+// the fixture does NOT move. With the change this suite measures 544_044 B in all, 261 B over the
+// 543_783 B it measured before it; the list keeps the 28 B of headroom it had, and extend_video is
+// nowhere near the per-tool budget.
+const SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES = 261
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES,
   totalBytes:
@@ -1932,7 +1940,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_TEXT_TOOL_BYTES +
     GENERATE_TEXT_HANDOFF_BYTES +
     SEEDANCE_2_5_FLASH_TOTAL_BYTES +
-    SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES,
+    SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES +
+    SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

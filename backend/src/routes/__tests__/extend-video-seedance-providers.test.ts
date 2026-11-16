@@ -176,7 +176,7 @@ describe("POST /v1/extend-video — each Seedance provider's price", () => {
     vi.mocked(probeVideoSource).mockResolvedValue({ width: 1280, height: 720, durationSeconds: container, videoDurationSeconds: picture })
     const res = await post({ provider: "seedance-2-5-extend", duration, resolution })
     expect(res.statusCode).toBe(200)
-    const quote = seedanceExtendPrice({ duration, resolution, sourcePictureSec: picture })
+    const quote = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution, sourcePictureSec: picture })
     expect(reservedId()).toBe(quote.rateId)
     expect(h.computed).toEqual([quoteBaseCredits(STATIC_CREDIT_COSTS[quote.rateId]!, quote.units)])
   })
@@ -489,7 +489,7 @@ describe("POST /v1/extend-video — Kling 4 (kling-4-extend)", () => {
   it("takes no reference images (only the Seedance extend providers do)", async () => {
     const res = await post({ provider: "kling-4-extend", referenceImageUrls: ["https://cdn.example.com/ref.png"] })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.message).toMatch(/only supported by the Seedance extend providers \(seedance-2-5-extend, seedance-2-0-extend\)/)
+    expect(res.json().error.message).toMatch(/only supported by the Seedance extend providers \(seedance-2-5-extend, seedance-2-5-flash-extend, seedance-2-0-extend\)/)
     expect(reserveCreditsForJob).not.toHaveBeenCalled()
   })
 
@@ -498,5 +498,74 @@ describe("POST /v1/extend-video — Kling 4 (kling-4-extend)", () => {
     expect((await post({ provider: "kling-4-extend", prompt: undefined })).json().error.message).toBe(
       "prompt (what happens next) is required for kling-4-extend",
     )
+  })
+})
+
+// Decided 2026-11-16: Seedance 2.5 Flash Extend, on its own rows.
+describe("POST /v1/extend-video — seedance-2-5-flash-extend", () => {
+  it("is accepted, held per second sent and added on its own row, and queued as itself", async () => {
+    const res = await post({ provider: "seedance-2-5-flash-extend", duration: 8, resolution: "720p" })
+    expect(res.statusCode).toBe(200)
+    expect(h.guarded.map((g) => g.id)).toEqual(["seedance-2-5-flash-extend:720p:per-2s"])
+    expect(reservedId()).toBe("seedance-2-5-flash-extend:720p:per-2s")
+    // The 10 s source's last 10 s + 8 s added: 9 units of the 128 row.
+    expect(h.computed).toEqual([1152])
+    expect(queued()).toMatchObject({ provider: "seedance-2-5-flash-extend", duration: 8, resolution: "720p", sourcePictureSec: 10 })
+  })
+
+  it("holds exactly the quote for the measured source", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1280, height: 720, durationSeconds: 4.5, videoDurationSeconds: 4.37 })
+    const res = await post({ provider: "seedance-2-5-flash-extend", duration: 5, resolution: "480p" })
+    expect(res.statusCode).toBe(200)
+    const quote = seedanceExtendPrice({ provider: "seedance-2-5-flash-extend", duration: 5, resolution: "480p", sourcePictureSec: 4.37 })
+    expect(reservedId()).toBe("seedance-2-5-flash-extend:480p:per-2s")
+    expect(h.computed).toEqual([quoteBaseCredits(STATIC_CREDIT_COSTS[quote.rateId]!, quote.units)])
+    expect(h.computed).toEqual([272])
+  })
+
+  // As every catalog extend refuses a resolution it does not render (Kling 4's 480p).
+  it("refuses 1080p, which Flash does not render, before anything is reserved", async () => {
+    const res = await post({ provider: "seedance-2-5-flash-extend", resolution: "1080p" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(res.json().error.message).toMatch(/480p or 720p/)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(h.guarded).toEqual([])
+  })
+
+  it("accepts 4–30 s added and refuses a length outside it", async () => {
+    expect((await post({ provider: "seedance-2-5-flash-extend", duration: 30 })).statusCode).toBe(200)
+    expect((await post({ provider: "seedance-2-5-flash-extend", duration: 3 })).statusCode).toBe(400)
+  })
+})
+
+// Decided 2026-11-16: a Seedance 2.5 Flash source must be at least 2 s (Flash's
+// documented reference video) and between 1:2.5 and 2.5:1, refused before any hold.
+describe("POST /v1/extend-video — seedance-2-5-flash-extend's source", () => {
+  it("refuses a 1.9 s source before anything is reserved; Seedance 2.5 takes it", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 1280, height: 720, durationSeconds: 1.9, videoDurationSeconds: 1.9 })
+    const res = await post({ provider: "seedance-2-5-flash-extend" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("video_too_short")
+    expect(res.json().error.message).toMatch(/at least 2s/)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(h.guarded).toEqual([])
+    expect((await post({ provider: "seedance-2-5-extend" })).statusCode).toBe(200)
+  })
+
+  it.each([[3840, 1080], [400, 1080]])("refuses a %s×%s source (outside 1:2.5–2.5:1) before anything is reserved; Seedance 2.5 takes it", async (width, height) => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width, height, durationSeconds: 10, videoDurationSeconds: 10 })
+    const res = await post({ provider: "seedance-2-5-flash-extend" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("video_aspect_unsupported")
+    expect(res.json().error.message).toMatch(/1:2\.5 to 2\.5:1/)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    expect(h.guarded).toEqual([])
+    expect((await post({ provider: "seedance-2-5-extend" })).statusCode).toBe(200)
+  })
+
+  it("a 2 s source at 2.5:1 runs", async () => {
+    vi.mocked(probeVideoSource).mockResolvedValue({ width: 2500, height: 1000, durationSeconds: 2, videoDurationSeconds: 2 })
+    expect((await post({ provider: "seedance-2-5-flash-extend" })).statusCode).toBe(200)
   })
 })

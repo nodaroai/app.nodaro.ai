@@ -900,7 +900,7 @@ export function getModelIdentifier(
   // (`seedance-2-extend`) is priced as the model it runs as.
   if (nodeType === "extend-video") {
     const runsAs = canonicalVideoProvider(provider)
-    if (isSeedanceExtendPricedBySecondsSent(runsAs)) return seedanceExtendRateCreditId(data.resolution)
+    if (isSeedanceExtendPricedBySecondsSent(runsAs)) return seedanceExtendRateCreditId(data.resolution, runsAs)
     if (isCatalogExtendProvider(runsAs)) {
       return catalogExtendCreditId(
         runsAs,

@@ -66,7 +66,7 @@ describe("route, payload builder and estimate name one id for every tail-recipe 
         const label = `${provider} ${String(duration)} ${String(resolution)}`
         const ids = producers({ provider, duration, resolution })
         const want = isSeedanceExtendPricedBySecondsSent(runsAs)
-          ? seedanceExtendRateCreditId(resolution)
+          ? seedanceExtendRateCreditId(resolution, runsAs)
           : tailExtendCreditId(runsAs, duration, resolution)
         expect(ids, label).toEqual({ route: want, run: want, estimate: want })
         expect(STATIC_CREDIT_COSTS[want], label).toBeGreaterThan(0)
@@ -89,6 +89,22 @@ describe("route, payload builder and estimate name one id for every tail-recipe 
       run: "seedance-2-5-extend:1080p:per-2s",
       estimate: "seedance-2-5-extend:1080p:per-2s",
     })
+  })
+
+  it("Seedance 2.5 Flash Extend is priced on its own rows, never on a Seedance 2.5 one; 1080p at 720p", () => {
+    expect(TAIL_PROVIDERS).toContain("seedance-2-5-flash-extend")
+    expect(producers({ provider: "seedance-2-5-flash-extend", duration: 12, resolution: "480p" })).toEqual({
+      route: "seedance-2-5-flash-extend:480p:per-2s",
+      run: "seedance-2-5-flash-extend:480p:per-2s",
+      estimate: "seedance-2-5-flash-extend:480p:per-2s",
+    })
+    expect(producers({ provider: "seedance-2-5-flash-extend", resolution: "1080p" })).toEqual({
+      route: "seedance-2-5-flash-extend:720p:per-2s",
+      run: "seedance-2-5-flash-extend:720p:per-2s",
+      estimate: "seedance-2-5-flash-extend:720p:per-2s",
+    })
+    const queued = buildPayload(node({ prompt: "keep going", provider: "seedance-2-5-flash-extend", resolution: "1080p" }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }).payload
+    expect(queued).toMatchObject({ provider: "seedance-2-5-flash-extend", resolution: "720p", duration: 8 })
   })
 
   it("Seedance 2.0 is priced per second added, on its own rows", () => {
@@ -448,7 +464,7 @@ describe("workflow run — an MCP-built extension whose task an old server run o
 
 /** The base credits a Seedance 2.5 extend is charged on a source of `sourceSec` (undefined: not known), as every lane reads it. */
 const charge25 = (duration: unknown, resolution: unknown, sourceSec: number | undefined): number => {
-  const price = seedanceExtendPrice({ duration, resolution, sourcePictureSec: sourceSec })
+  const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution, sourcePictureSec: sourceSec })
   return quoteBaseCredits(STATIC_CREDIT_COSTS[price.rateId]!, price.units)
 }
 

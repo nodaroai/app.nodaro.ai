@@ -120,6 +120,7 @@ const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" |
   // LTX 2.3 Pro Extend (prepend or append, its `extendMode`) is not offered by this tool.
   "ltx-2.3-pro": null,
   "seedance-2-5-extend": "url",
+  "seedance-2-5-flash-extend": "url",
   "seedance-2-0-extend": "url",
   "kling-4-extend": "url",
   "pixverse-v6-extend": "url",

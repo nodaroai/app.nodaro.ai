@@ -10,12 +10,13 @@ import { EXTEND_VIDEO_PROVIDERS } from "@nodaro/shared/models"
 
 describe("the Extend Video model menu", () => {
   it("offers them in the picker in the decided order", () => {
-    expect(EXTEND_VIDEO_MODELS.map((m) => m.value)).toEqual(["seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "veo-extend", "runway-extend", "ltx-2.3-pro", "pixverse-v6-extend", "grok-extend"])
+    expect(EXTEND_VIDEO_MODELS.map((m) => m.value)).toEqual(["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend", "veo-extend", "runway-extend", "ltx-2.3-pro", "pixverse-v6-extend", "grok-extend"])
   })
 
   it("names each Seedance row by its model version, and Kling 4, PixVerse V6 and Grok by their models", () => {
     const label = (value: string) => EXTEND_VIDEO_MODELS.find((m) => m.value === value)?.label
     expect(label("seedance-2-5-extend")).toBe("Seedance 2.5")
+    expect(label("seedance-2-5-flash-extend")).toBe("Seedance 2.5 Flash")
     expect(label("seedance-2-0-extend")).toBe("Seedance 2.0")
     expect(label("kling-4-extend")).toBe("Kling 4")
     expect(label("pixverse-v6-extend")).toBe("PixVerse V6")

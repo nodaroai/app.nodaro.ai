@@ -13,7 +13,7 @@ import {
 } from "../free-video-limits.js"
 import { parseFreeVideoMaxSeconds } from "../../lib/free-video-config.js"
 import { IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS } from "@nodaro/shared/models"
-import { freeVideoLock } from "@nodaro/render-rules"
+import { FREE_BLOCKED_VIDEO_MODELS, freeVideoLock, freeVideoModelLock } from "@nodaro/render-rules"
 
 const ON = FREE_VIDEO_LIMITS_DEFAULTS
 const videos = Object.values(MODEL_CATALOG as Record<string, ModelCatalogEntry>).filter((e) => e.kind === "video")
@@ -22,7 +22,7 @@ describe("free-credit video limits — blocked models", () => {
   it("every Kling model but Kling 4.0 Flash, and Seedance 2.5 (and its HD finalizer and extend, not its Flash tier), is refused, whatever the settings", () => {
     const blocked = videos.filter((e) => (e.series === "Kling" && e.id !== "kling-4-flash") || e.id === "seedance-2-5" || (e.id.startsWith("seedance-2-5-") && e.id !== "seedance-2-5-flash"))
     // The catalog's own Kling series: generation, motion transfer and lip-sync.
-    expect(blocked.map((e) => e.id)).toEqual(expect.arrayContaining(["kling", "kling-3.0", "kling-3-omni", "kling-3.0-motion", "kling-avatar", "seedance-2-5", "seedance-2-5-hd", "seedance-2-5-extend"]))
+    expect(blocked.map((e) => e.id)).toEqual(expect.arrayContaining(["kling", "kling-3.0", "kling-3-omni", "kling-3.0-motion", "kling-avatar", "seedance-2-5", "seedance-2-5-hd", "seedance-2-5-extend", "seedance-2-5-flash-extend"]))
     for (const e of blocked) {
       expect(freeVideoRefusal({ provider: e.id, duration: 3, resolution: lowestResolution(e) }, ON), e.id).not.toBeNull()
     }
@@ -39,12 +39,28 @@ describe("free-credit video limits — blocked models", () => {
 
   it("Seedance 2.5 Flash is open (decided 2026-11-16) while Seedance 2.5, its HD finalizer and its extend stay locked", () => {
     expect(freeVideoModelRefusal("seedance-2-5-flash", ON)).toBeNull()
-    for (const id of ["seedance-2-5", "seedance-2-5-hd", "seedance-2-5-extend"]) {
+    for (const id of ["seedance-2-5", "seedance-2-5-hd", "seedance-2-5-extend", "seedance-2-5-flash-extend"]) {
       expect(freeVideoModelRefusal(id, ON), id).not.toBeNull()
       expect(freeVideoRefusal({ provider: id, duration: 4, resolution: "480p" }, ON), id).not.toBeNull()
     }
-    // The opening is exact: no other catalog id rides it by prefix.
-    expect(videos.filter((e) => e.id.startsWith("seedance-2-5-flash")).map((e) => e.id)).toEqual(["seedance-2-5-flash"])
+    // The opening is exact: the one other catalog id that starts with it,
+    // Seedance 2.5 Flash Extend, does not ride it — it stays locked.
+    expect(videos.filter((e) => e.id.startsWith("seedance-2-5-flash")).map((e) => e.id)).toEqual(["seedance-2-5-flash", "seedance-2-5-flash-extend"])
+    expect(FREE_OPEN_VIDEO_MODELS).not.toContain("seedance-2-5-flash-extend")
+  })
+
+  // Decided 2026-11-16: extending stays paid-only on every model. Seedance 2.5
+  // Flash Extend is locked twice over, each reason on its own: it is an
+  // extend model, and its id is a `seedance-2-5-…` variant that no exact
+  // open id names.
+  it("Seedance 2.5 Flash Extend is locked as an extension, at its cheapest run too", () => {
+    expect(freeVideoModelRefusal("seedance-2-5-flash-extend", ON)).not.toBeNull()
+    expect(freeVideoModelLock("seedance-2-5-flash-extend", ON)).toMatchObject({ kind: "extend" })
+    expect(freeVideoRefusal({ provider: "seedance-2-5-flash-extend", duration: 4, resolution: "480p", extend: true }, ON)).not.toBeNull()
+    expect(freeVideoLock({ provider: "seedance-2-5-flash-extend", duration: 4, resolution: "480p" }, ON)).not.toBeNull()
+    // Its id alone, without the extend mode, would still be a blocked variant.
+    expect(MODEL_CATALOG["seedance-2-5-flash-extend"]!.modes).toEqual(["extend"])
+    expect(FREE_BLOCKED_VIDEO_MODELS.some((id) => "seedance-2-5-flash-extend".startsWith(`${id}-`))).toBe(true)
   })
 
   it("Seedance 2.5 Flash runs on free credits within the limits: 4 s at 480p, its lowest resolution", () => {

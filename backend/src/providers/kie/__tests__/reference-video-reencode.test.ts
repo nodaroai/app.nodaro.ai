@@ -51,6 +51,7 @@ import {
   type ReferenceVideoProbe,
 } from "../reference-video-reencode.js"
 import { parseMatchedProbe } from "../../video/matched-encode.js"
+import { referenceVideoFitFilter } from "../reference-video-fit.js"
 
 const URL_IN = "https://cdn.nodaro.ai/videos/0f0e6b1c-seedance-output.mp4"
 const REENCODED = "https://cdn.nodaro.ai/tmp/provider-input/job/provider-reencoded-1.mp4"
@@ -476,5 +477,54 @@ describe("reencodeReferenceVideos", () => {
   it("makes no work for no clips", async () => {
     expect(await reencodeReferenceVideos([], "seedance-2-5")).toEqual([])
     expect(mocks.downloadFile).not.toHaveBeenCalled()
+  })
+})
+
+// Decided 2026-11-16: a model with a picture window (Seedance 2.5 Flash) gets
+// its clip fitted into it; every other model's encode is exactly as before.
+describe("reencodeReferenceVideo — fitting the clip to the model", () => {
+  beforeEach(() => {
+    // An earlier test leaves its own download in place: start from a plain one.
+    mocks.downloadFile.mockReset()
+    mocks.downloadFile.mockResolvedValue(undefined)
+    mocks.uploadJobScratchFile.mockReset()
+    mocks.uploadJobScratchFile.mockResolvedValue(REENCODED)
+  })
+
+  const probe1080 = JSON.stringify({
+    streams: [
+      { codec_type: "video", width: 1920, height: 1080, pix_fmt: "yuv420p", bit_rate: "6000000", avg_frame_rate: "120/1", r_frame_rate: "120/1" },
+      { codec_type: "audio", codec_name: "aac", bit_rate: "128000" },
+    ],
+    format: { duration: "8.04", tags: { major_brand: "isom" } },
+  })
+
+  it("Seedance 2.5 Flash: both passes read the same fit filter (size and frame rate), and the encode is admitted at least at the window's size", async () => {
+    mocks.runFfprobe.mockResolvedValue(probe1080)
+    await reencodeReferenceVideo(URL_IN, "seedance-2-5-flash", "reference video #1")
+    const runs = mocks.runFfmpeg.mock.calls.map((c) => c[0] as string[])
+    expect(runs).toHaveLength(2)
+    const filter = referenceVideoFitFilter("seedance-2-5-flash", parseMatchedProbe(probe1080))!
+    expect(filter.endsWith(",fps=60")).toBe(true)
+    for (const run of runs) {
+      expect(valueOf(run, "-vf")).toBe(filter)
+      expect(run.indexOf("-vf")).toBeLessThan(run.indexOf("-c:v"))
+      // Nothing trims the clip: the seconds it is priced on are the seconds sent.
+      for (const flag of ["-t", "-ss", "-to", "-sseof", "-frames:v"]) expect(run).not.toContain(flag)
+    }
+  })
+
+  it("every other model: the same arguments as with no fit at all (no -vf), byte for byte", async () => {
+    for (const provider of ["seedance-2-5", "seedance-2", "seedance-2-fast", "kling-4"]) {
+      mocks.runFfmpeg.mockClear()
+      mocks.runFfprobe.mockResolvedValue(probe1080)
+      await reencodeReferenceVideo(URL_IN, provider, "reference video #1")
+      const runs = mocks.runFfmpeg.mock.calls.map((c) => c[0] as string[])
+      const probe = parseMatchedProbe(probe1080)
+      const max = referenceVideoMaxBytes(provider)
+      expect(runs[0], provider).toEqual(reencodeFirstPassArgs("/tmp/work/input", probe, max, "/tmp/work/pass"))
+      expect(runs[1], provider).toEqual(reencodeReferenceVideoArgs("/tmp/work/input", "/tmp/work/reencoded.mp4", probe, max, "copy", "/tmp/work/pass"))
+      for (const run of runs) expect(run, provider).not.toContain("-vf")
+    }
   })
 })

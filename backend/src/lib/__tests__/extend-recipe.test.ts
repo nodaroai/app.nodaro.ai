@@ -227,3 +227,34 @@ describe("the Kling 4 Extend prompt cap", () => {
     expect(sent.endsWith("Use @image_1 as the opening (first) frame of the video.")).toBe(true)
   })
 })
+
+// Decided 2026-11-16: Seedance 2.5 Flash Extend is Seedance 2.5's recipe on
+// the Flash model, MP4 only, its tail fitted into Flash's pixel window.
+describe("seedance-2-5-flash-extend's recipe", () => {
+  const flash = TAIL_RECIPES["seedance-2-5-flash-extend"]
+  const sibling = TAIL_RECIPES["seedance-2-5-extend"]
+
+  it("is Seedance 2.5's recipe on seedance-2-5-flash, without the MOV chain (its shortest source apart)", () => {
+    expect(flash.genModel).toBe("seedance-2-5-flash")
+    expect(flash.movChain).toBeUndefined()
+    expect(sibling.movChain).toBe(true)
+    const { genModel: _g, movChain: _m, prompt: _p, minSourceSec: _f, ...rest } = flash
+    const { genModel: _sg, movChain: _sm, prompt: _sp, minSourceSec: _sf, ...siblingRest } = sibling
+    expect(rest).toEqual(siblingRest)
+    expect(flash.prompt("x", 8)).toBe(sibling.prompt("x", 8))
+  })
+
+  it("its prompt ceiling fits under Seedance 2.5 Flash's own, with room for the recipe's wrapper", () => {
+    const ceiling = getMaxVideoPromptChars("seedance-2-5-flash-extend")
+    expect(ceiling).toBe(getMaxVideoPromptChars("seedance-2-5-extend"))
+    expect(flash.prompt("x".repeat(ceiling), 30).length).toBeLessThanOrEqual(getMaxVideoPromptChars("seedance-2-5-flash"))
+  })
+
+  // Decided 2026-11-16: Flash's documented 2 s, never the 2.0 family's measured 1.8 s.
+  it("continues a source of at least Flash's documented 2 s; Seedance 2.5 keeps its 1.8 s", () => {
+    expect(flash.minSourceSec).toBe(2)
+    expect(flash.minSourceSec).toBe(VIDEO_REF_VIDEO_DURATION_LIMITS["seedance-2-5-flash"]!.minSec)
+    expect(sibling.minSourceSec).toBe(SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC)
+    expect(extendSourceTooShortMessage("seedance-2-5-flash-extend", 1.9)).toContain("at least 2s")
+  })
+})

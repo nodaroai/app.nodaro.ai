@@ -26,6 +26,7 @@ import { buildVideoCreditModelIdentifier, tailExtendCreditId, unitQuoteCreditId 
 import {
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER,
   SEEDANCE_EXTEND_RATE_SECONDS,
   seedanceExtendPrice,
   seedanceExtendRateCreditId,
@@ -45,7 +46,7 @@ const RESOLUTIONS = ["480p", "720p", "1080p"] as const
 
 /** The BASE credits a Seedance 2.5 extend is charged, read the way every lane reads it: the rate row × the units, rounded up once. */
 const base25 = (args: { duration: unknown; resolution: unknown; sourcePictureSec: number | undefined }): number => {
-  const price = seedanceExtendPrice(args)
+  const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", ...args })
   return quoteBaseCredits(STATIC_CREDIT_COSTS[price.rateId]!, price.units)
 }
 
@@ -112,8 +113,9 @@ describe.each(["seedance-2-0-extend", "kling-4-extend"] as const)("%s price rows
 })
 
 describe("each provider's lengths and resolutions", () => {
-  it("Seedance renders 480p, 720p and 1080p; Kling 4 renders 720p and 1080p", () => {
+  it("Seedance renders 480p, 720p and 1080p (2.5 Flash 480p and 720p); Kling 4 renders 720p and 1080p", () => {
     expect(MODEL_CATALOG["seedance-2-5-extend"]!.resolutions).toEqual(["480p", "720p", "1080p"])
+    expect(MODEL_CATALOG["seedance-2-5-flash-extend"]!.resolutions).toEqual(["480p", "720p"])
     expect(MODEL_CATALOG["seedance-2-0-extend"]!.resolutions).toEqual(["480p", "720p", "1080p"])
     expect(MODEL_CATALOG["kling-4-extend"]!.resolutions).toEqual(["720p", "1080p"])
   })
@@ -200,7 +202,7 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
         expect(earlier, earlierId).toBeDefined()
         expect(earlier, earlierId).toBe(chargedCredits(table, quoteId))
         for (let hundredths = 180; hundredths <= 1200; hundredths++) {
-          const price = seedanceExtendPrice({ duration: seconds, resolution, sourcePictureSec: hundredths / 100 })
+          const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: seconds, resolution, sourcePictureSec: hundredths / 100 })
           const charge = table.charge(price.rateId, quoteBaseCredits(table.base(price.rateId)!, price.units))
           if (charge > earlier!) throw new Error(`${hundredths / 100}s + ${seconds}s at ${resolution}: charge ${charge} above ${earlierId} ${earlier}`)
           cases++
@@ -218,7 +220,7 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
     const resolutionsTried: unknown[] = [undefined, "480p", "720p", "1080p", "4k", "2160p", 7]
     for (const duration of durationsTried) {
       for (const resolution of resolutionsTried) {
-        const price = seedanceExtendPrice({ duration, resolution, sourcePictureSec: undefined })
+        const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution, sourcePictureSec: undefined })
         const expected = unitQuoteCreditId(price.rateId, price.units)
         const label = `${String(duration)} ${String(resolution)}`
         expect(tailExtendCreditId(provider, duration as number | string | undefined, resolution as string | undefined), label).toBe(expected)
@@ -246,7 +248,7 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
         for (const resolution of RESOLUTIONS) {
           const rate = STATIC_CREDIT_COSTS[SEEDANCE_EXTEND_RATE_CREDIT_IDS[resolution]]!
           const charge = applyMarkupPercent(base25({ duration: seconds, resolution, sourcePictureSec: hundredths / 100 }), 10)
-          const sentHundredths = Math.round(seedanceExtendPrice({ duration: seconds, resolution, sourcePictureSec: hundredths / 100 }).sentSec * 100)
+          const sentHundredths = Math.round(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: seconds, resolution, sourcePictureSec: hundredths / 100 }).sentSec * 100)
           // (sent + added) × rate ÷ 2 × 110 ÷ 100, in hundredths of a second: an exact ceiling.
           const totalHundredths = sentHundredths + seconds * 100
           const docs = Math.ceil((totalHundredths * rate * 110) / 20000)
@@ -296,22 +298,22 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
   })
 
   it("the seconds sent: the source's last 10 s, all of a shorter source, the whole window when unknown", () => {
-    expect(seedanceExtendPrice({ duration: 8, resolution: "720p", sourcePictureSec: 25 })).toEqual({ rateId: "seedance-2-5-extend:720p:per-2s", units: 9, sentSec: 10, addedSec: 8 })
-    expect(seedanceExtendPrice({ duration: 8, resolution: "720p", sourcePictureSec: 4.37 })).toMatchObject({ sentSec: 4.37, units: (4.37 + 8) / 2 })
+    expect(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 8, resolution: "720p", sourcePictureSec: 25 })).toEqual({ rateId: "seedance-2-5-extend:720p:per-2s", units: 9, sentSec: 10, addedSec: 8 })
+    expect(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 8, resolution: "720p", sourcePictureSec: 4.37 })).toMatchObject({ sentSec: 4.37, units: (4.37 + 8) / 2 })
     for (const unknown of [undefined, null, Number.NaN, 0, -1]) {
-      expect(seedanceExtendPrice({ duration: 8, resolution: "720p", sourcePictureSec: unknown as number | undefined }).sentSec).toBe(SEEDANCE_EXTEND_CONTEXT_MAX_SEC)
+      expect(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 8, resolution: "720p", sourcePictureSec: unknown as number | undefined }).sentSec).toBe(SEEDANCE_EXTEND_CONTEXT_MAX_SEC)
     }
     // An unset length is the 8 s default; one outside the window is held in it.
-    expect(seedanceExtendPrice({ duration: undefined, resolution: undefined, sourcePictureSec: 3 })).toMatchObject({ addedSec: 8, rateId: "seedance-2-5-extend:720p:per-2s" })
-    expect(seedanceExtendPrice({ duration: 45, resolution: "480p", sourcePictureSec: 3 }).addedSec).toBe(30)
-    expect(seedanceExtendPrice({ duration: 1, resolution: "480p", sourcePictureSec: 3 }).addedSec).toBe(4)
+    expect(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: undefined, resolution: undefined, sourcePictureSec: 3 })).toMatchObject({ addedSec: 8, rateId: "seedance-2-5-extend:720p:per-2s" })
+    expect(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 45, resolution: "480p", sourcePictureSec: 3 }).addedSec).toBe(30)
+    expect(seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 1, resolution: "480p", sourcePictureSec: 3 }).addedSec).toBe(4)
   })
 
   // Decided 2026-11-13: the source's seconds follow the platform's
   // container-overhang rule (`CONTAINER_OVERHANG_SEC`): at most a quarter
   // second past a whole second is that whole second; anything else is exact.
   it("the seconds sent follow the container-overhang rule: 8.04 s is 8 s, 8.3 s is 8.3 s", () => {
-    const sent = (sec: number) => seedanceExtendPrice({ duration: 8, resolution: "720p", sourcePictureSec: sec }).sentSec
+    const sent = (sec: number) => seedanceExtendPrice({ provider: "seedance-2-5-extend", duration: 8, resolution: "720p", sourcePictureSec: sec }).sentSec
     expect(sent(8.04)).toBe(8)
     expect(sent(8.25)).toBe(8)
     expect(sent(8.3)).toBe(8.3)
@@ -370,5 +372,105 @@ describe("seedance-2-5-extend: charged per second sent and added", () => {
       }
     }
     expect(cases).toBe(5821 * 27 * 3)
+  }, SWEEP_TIMEOUT_MS)
+})
+
+// Decided 2026-11-16: Seedance 2.5 Flash Extend is priced by Seedance 2.5
+// Extend's rule (per second sent and added, each row the price of two
+// seconds) on its own rows, at Seedance 2.5 Flash's own reference-video rate.
+describe("seedance-2-5-flash-extend: charged per second sent and added, on its own rows", () => {
+  const provider = "seedance-2-5-flash-extend" as const
+  const entry = MODEL_CATALOG[provider]!
+  const durations = entry.durations ?? []
+  const FLASH_RESOLUTIONS = ["480p", "720p"] as const
+  const baseFlash = (args: { duration: unknown; resolution: unknown; sourcePictureSec: number | undefined }): number => {
+    const price = seedanceExtendPrice({ provider, ...args })
+    return quoteBaseCredits(STATIC_CREDIT_COSTS[price.rateId]!, price.units)
+  }
+
+  it("adds what Seedance 2.5 Flash renders: the generation model's own lengths and resolutions (no 1080p)", () => {
+    expect(entry.durations).toEqual(MODEL_CATALOG["seedance-2-5-flash"]!.durations)
+    expect(entry.resolutions).toEqual(MODEL_CATALOG["seedance-2-5-flash"]!.resolutions)
+    expect(entry.resolutions).toEqual(["480p", "720p"])
+    expect(entry.defaultDuration).toBe(MODEL_CATALOG["seedance-2-5-extend"]!.defaultDuration)
+    expect(TAIL_RECIPES[provider].window).toEqual(TAIL_RECIPES["seedance-2-5-extend"].window)
+  })
+
+  it("its rows are its own, one per resolution it renders", () => {
+    expect(SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER[provider]).toEqual({
+      "480p": "seedance-2-5-flash-extend:480p:per-2s",
+      "720p": "seedance-2-5-flash-extend:720p:per-2s",
+    })
+    const rows = Object.keys(STATIC_CREDIT_COSTS).filter((id) => id.startsWith(`${provider}:`))
+    expect(rows.sort()).toEqual(["seedance-2-5-flash-extend:480p:per-2s", "seedance-2-5-flash-extend:720p:per-2s"])
+  })
+
+  it("each row is two seconds at the seedance-2-5-flash reference-video rate (its 8 s -ref row ÷ 8), rounded up to a whole credit", () => {
+    for (const resolution of FLASH_RESOLUTIONS) {
+      const perSecond = STATIC_CREDIT_COSTS[`seedance-2-5-flash:8s:${resolution}-ref`]! / 8
+      expect(STATIC_CREDIT_COSTS[`${provider}:${resolution}:per-2s`], resolution).toBe(Math.ceil(perSecond * SEEDANCE_EXTEND_RATE_SECONDS))
+    }
+    expect(FLASH_RESOLUTIONS.map((r) => STATIC_CREDIT_COSTS[`${provider}:${r}:per-2s`])).toEqual([58, 128])
+  })
+
+  it("the run's rate row is its resolution's; 1080p, which Flash does not render, runs and is priced at 720p", () => {
+    expect(seedanceExtendRateCreditId("480p", provider)).toBe("seedance-2-5-flash-extend:480p:per-2s")
+    for (const other of [undefined, "720p", "1080p", "4k", 7]) expect(seedanceExtendRateCreditId(other, provider)).toBe("seedance-2-5-flash-extend:720p:per-2s")
+  })
+
+  it("the default run (8 s added to a source of 10 s or more: 9 units) is 1152 at 720p and 522 at 480p, as the catalog lists it", () => {
+    expect(seedanceExtendPrice({ provider, duration: 8, resolution: "720p", sourcePictureSec: 25 })).toEqual({ rateId: "seedance-2-5-flash-extend:720p:per-2s", units: 9, sentSec: 10, addedSec: 8 })
+    expect(baseFlash({ duration: 8, resolution: "720p", sourcePictureSec: 25 })).toBe(1152)
+    expect(baseFlash({ duration: 8, resolution: "480p", sourcePictureSec: 25 })).toBe(522)
+    expect(entry.pricing.map((row) => [row.identifier, row.credits])).toEqual([
+      ["seedance-2-5-flash-extend:720p:per-2s:9u", 1152],
+      ["seedance-2-5-flash-extend:480p:per-2s:9u", 522],
+    ])
+    expect(tailExtendCreditId(provider)).toBe("seedance-2-5-flash-extend:720p:per-2s:9u")
+    expect(tailExtendCreditId(provider, 5, "480p")).toBe("seedance-2-5-flash-extend:480p:per-2s:7.5u")
+  })
+
+  it.each([
+    [2, 640],
+    [4, 768],
+    [10, 1152],
+  ])("a %s s source with 8 s added at 720p: base %s (the row × (sent + added) ÷ 2, rounded up once)", (sourceSec, base) => {
+    expect(baseFlash({ duration: 8, resolution: "720p", sourcePictureSec: sourceSec })).toBe(base)
+    expect(base).toBe(Math.ceil(128 * (sourceSec + 8) / 2))
+  })
+
+  it("the shared builder names the whole-window quote, for every length and resolution, and the quote id parses", () => {
+    for (const duration of [undefined, "8", 1, 45, ...durations] as unknown[]) {
+      for (const resolution of [undefined, "480p", "720p", "1080p"] as unknown[]) {
+        const price = seedanceExtendPrice({ provider, duration, resolution, sourcePictureSec: undefined })
+        const expected = unitQuoteCreditId(price.rateId, price.units)
+        const label = `${String(duration)} ${String(resolution)}`
+        expect(tailExtendCreditId(provider, duration as number | string | undefined, resolution as string | undefined), label).toBe(expected)
+        expect(buildVideoCreditModelIdentifier(provider, duration as number | string | undefined, undefined, undefined, undefined, resolution as string | undefined), label).toBe(expected)
+        expect(parseRateQuoteCreditId(expected), label).toEqual({ rateId: price.rateId, units: price.units })
+      }
+    }
+  })
+
+  it("a whole-run quote names no run under Flash's 2 s source: its fewest units are (2 + 4) ÷ 2", () => {
+    expect(parseRateQuoteCreditId("seedance-2-5-flash-extend:720p:per-2s:3u")).toEqual({ rateId: "seedance-2-5-flash-extend:720p:per-2s", units: 3 })
+    expect(parseRateQuoteCreditId("seedance-2-5-flash-extend:720p:per-2s:2.95u")).toBeUndefined()
+    expect(parseRateQuoteCreditId("seedance-2-5-extend:720p:per-2s:2.9u")).toEqual({ rateId: "seedance-2-5-extend:720p:per-2s", units: 2.9 })
+  })
+
+  it("brute force: the quote is never below the charge, and equal when the source is known", () => {
+    let cases = 0
+    for (let hundredths = 200; hundredths <= 3000; hundredths += 7) {
+      const sourceSec = hundredths / 100
+      for (const seconds of durations) {
+        for (const resolution of FLASH_RESOLUTIONS) {
+          const charge = baseFlash({ duration: seconds, resolution, sourcePictureSec: sourceSec })
+          const unknownQuote = baseFlash({ duration: seconds, resolution, sourcePictureSec: undefined })
+          if (unknownQuote < charge) throw new Error(`${sourceSec}s + ${seconds}s at ${resolution}: charge ${charge}, quote ${unknownQuote}`)
+          cases++
+        }
+      }
+    }
+    expect(cases).toBeGreaterThan(10_000)
   }, SWEEP_TIMEOUT_MS)
 })

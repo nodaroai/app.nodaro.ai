@@ -1670,6 +1670,9 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // a chained MOV reference (Seedance's own SDR clip). The cut is admitted
       // at the memory a picture of the source's size needs (above 1080p, more
       // than the default; 4K when its size is not read).
+      // A model that takes reference videos only at some sizes and frame rates
+      // (Seedance 2.5 Flash) gets the tail fitted to them by the provider's
+      // reference-video re-encode, as every reference video it is sent.
       const tailPicture = extendTailPicture(await probeMatched(srcLocal))
       const tailPath = await extractTailToFile(srcLocal, sentSec, { measureFrom: "picture", ...tailPicture })
       // Generation inputs only, never the deliverable: the tail, the frame and
@@ -1687,7 +1690,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         await cleanupWorkDir(dirname(frame.imagePath))
       }
       let chainTailUrl: string | undefined
-      const chainedMovUrl = genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
+      // MOV chaining is the recipe's (`movChain`: Seedance 2.5 only; Flash renders MP4 only).
+      const chainedMovUrl = recipe.movChain === true ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
       if (chainedMovUrl) {
         try {
           const cutPath = await cutChainedMovTail(chainedMovUrl, sentSec, prepDir, { coverSec: sentSec })
@@ -1702,7 +1706,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const referenceVideoUrl = chainTailUrl ?? tailUrl
       // `mp4` is KIE's default and is sent as no field at all, so the mp4
       // payload stays byte-identical to today.
-      const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
+      const outputFormat = recipe.movChain === true ? seedance25OutputFormat() : "mp4"
       // The resolution the run was priced at (`tailExtendResolution`, the
       // credit id's own reading): one the model offers, else 720p — a job
       // naming any other can never render above the row it reserved.
@@ -1843,18 +1847,25 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       let meteredBaseCredits: number | undefined
       if (isSeedanceExtendPricedBySecondsSent(provider)) {
         try {
-          meteredBaseCredits = await seedanceExtendBaseCredits({ duration: extSeconds, resolution: genResolution, sourcePictureSec: pictureSec })
+          meteredBaseCredits = await seedanceExtendBaseCredits({ provider, duration: extSeconds, resolution: genResolution, sourcePictureSec: pictureSec })
         } catch (err) {
-          console.warn(`[worker] Job ${ctx.jobId}: Seedance 2.5 extend price not read, committing the hold as made:`, err)
+          console.warn(`[worker] Job ${ctx.jobId}: ${provider} price not read, committing the hold as made:`, err)
         }
       }
+      // What KIE bills a Seedance 2.5 Flash extension, recorded as the job's
+      // provider cost: Flash's reference-video rate over the seconds sent and
+      // the seconds added. A result with no cost of its own (a relayed run)
+      // keeps it. Seedance 2.5 Extend still records the adapter's figure.
+      const providerCost = genModel === "seedance-2-5-flash" && typeof gen.cost === "number"
+        ? seedance25FlashCostUsd({ resolution: genResolution, hasVideoRef: true, inputSec: sentSec, outputSec: extSeconds })
+        : gen.cost ?? null
       const { ok: seedanceOk } = await finalizeJobWithMedia({
         jobId: ctx.jobId,
         jobType: "extend-video",
         ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
         result: {
           url: stitchedR2Url,
-          cost: gen.cost ?? null,
+          cost: providerCost,
           providerUsed: provider,
           // Same rebuilt-literal carry as lip-sync (:868) and video-upscale
           // (:1060), same reason: `gen` IS the RouteResult from the capability

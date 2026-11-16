@@ -22,10 +22,19 @@ import {
   pixverseExtendCreditId,
   pixverseExtendQuality,
   seedanceExtendCreditId,
+  seedanceExtendFullWindowCreditId,
+  seedanceExtendRateCreditId,
   seedanceExtendResolution,
+  seedanceExtendSourceCreditId,
   tailExtendCreditId,
   tailExtendResolution,
 } from "../credit-identifiers.js"
+import {
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS,
+  isSeedanceExtendPricedBySecondsSent,
+  isSeedanceExtendRateCreditId,
+} from "../seedance-extend-rate.js"
 
 const range = (from: number, to: number): number[] => Array.from({ length: to - from + 1 }, (_, i) => from + i)
 const RESOLUTIONS = ["480p", "720p", "1080p"] as const
@@ -215,8 +224,8 @@ describe("Kling 4 Extend Video provider", () => {
 })
 
 describe("the tail-recipe extend providers", () => {
-  it("are Seedance 2.5, Seedance 2.0 and Kling 4", () => {
-    expect(EXTEND_VIDEO_PROVIDERS.filter(isTailExtendProvider)).toEqual(["seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend"])
+  it("are Seedance 2.5, Seedance 2.5 Flash, Seedance 2.0 and Kling 4", () => {
+    expect(EXTEND_VIDEO_PROVIDERS.filter(isTailExtendProvider)).toEqual(["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend"])
     expect(isTailExtendProvider("seedance-2-extend")).toBe(false)
     expect(isTailExtendProvider("veo-extend")).toBe(false)
     expect(isTailExtendProvider(undefined)).toBe(false)
@@ -256,7 +265,7 @@ describe("PixVerse V6 Extend Video provider", () => {
 
   it("is a catalog extend provider, as the tail recipes are; VEO, Runway and LTX are not", () => {
     expect(EXTEND_VIDEO_PROVIDERS.filter(isCatalogExtendProvider)).toEqual([
-      "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend",
+      "seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend",
     ])
     for (const p of ["veo-extend", "runway-extend", "ltx-2.3-pro", "seedance-2-extend", "toString", undefined]) {
       expect(isCatalogExtendProvider(p), String(p)).toBe(false)
@@ -264,7 +273,7 @@ describe("PixVerse V6 Extend Video provider", () => {
   })
 
   it("has a sound switch, as Seedance does; Kling 4 has none", () => {
-    expect(EXTEND_VIDEO_PROVIDERS.filter(extendHasSoundSwitch)).toEqual(["seedance-2-5-extend", "seedance-2-0-extend", "pixverse-v6-extend"])
+    expect(EXTEND_VIDEO_PROVIDERS.filter(extendHasSoundSwitch)).toEqual(["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "pixverse-v6-extend"])
   })
 
   it("offers 1–15 s and 360p–1080p in a catalog entry of its own, its default row first", () => {
@@ -517,5 +526,33 @@ describe("Grok Extend Video provider", () => {
       // Outside the run's nodes (Run from here on the extension): the clip it holds.
       expect(quote(ran([{ task: "t-latest", recorded: "720p" }], "480p"), new Set(["ext"]))).toBe("720p")
     })
+  })
+})
+
+// Decided 2026-11-16: Seedance 2.5 Flash Extend, priced by the seconds it sends on its own rows.
+describe("seedance-2-5-flash-extend", () => {
+  it("is priced by the seconds it sends, on its own rows (480p / 720p), and the published defaults stay Seedance 2.5's", () => {
+    expect(SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS).toEqual(["seedance-2-5-extend", "seedance-2-5-flash-extend"])
+    expect(isSeedanceExtendPricedBySecondsSent("seedance-2-5-flash-extend")).toBe(true)
+    expect(isSeedanceExtendRateCreditId("seedance-2-5-flash-extend:720p:per-2s")).toBe(true)
+    expect(isSeedanceExtendRateCreditId("seedance-2-5-flash-extend:1080p:per-2s")).toBe(false)
+    expect(SEEDANCE_EXTEND_SENT_PRICED_PROVIDER).toBe("seedance-2-5-extend")
+    expect(seedanceExtendRateCreditId("480p")).toBe("seedance-2-5-extend:480p:per-2s")
+    expect(seedanceExtendRateCreditId("480p", "seedance-2-5-flash-extend")).toBe("seedance-2-5-flash-extend:480p:per-2s")
+    expect(seedanceExtendRateCreditId("1080p", "seedance-2-5-flash-extend")).toBe("seedance-2-5-flash-extend:720p:per-2s")
+  })
+
+  it("names its whole-run quotes as Seedance 2.5 Extend names its own", () => {
+    expect(tailExtendCreditId("seedance-2-5-flash-extend")).toBe("seedance-2-5-flash-extend:720p:per-2s:9u")
+    expect(tailExtendCreditId("seedance-2-5-flash-extend", 30, "1080p")).toBe("seedance-2-5-flash-extend:720p:per-2s:20u")
+    expect(seedanceExtendFullWindowCreditId(8, "480p", "seedance-2-5-flash-extend")).toBe("seedance-2-5-flash-extend:480p:per-2s:9u")
+    expect(seedanceExtendSourceCreditId(4, 8, "720p", "seedance-2-5-flash-extend")).toBe("seedance-2-5-flash-extend:720p:per-2s:6u")
+    expect(seedanceExtendSourceCreditId(1.5, 8, "720p", "seedance-2-5-flash-extend")).toBeUndefined()
+    // Flash's shortest source is its documented 2 s; Seedance 2.5's stays 1.8 s.
+    expect(seedanceExtendSourceCreditId(1.9, 8, "720p", "seedance-2-5-flash-extend")).toBeUndefined()
+    expect(seedanceExtendSourceCreditId(2, 8, "720p", "seedance-2-5-flash-extend")).toBe("seedance-2-5-flash-extend:720p:per-2s:5u")
+    expect(seedanceExtendSourceCreditId(1.9, 8, "720p")).toBe("seedance-2-5-extend:720p:per-2s:4.95u")
+    // No provider named: Seedance 2.5 Extend, as before.
+    expect(seedanceExtendSourceCreditId(4, 8, "720p")).toBe("seedance-2-5-extend:720p:per-2s:6u")
   })
 })

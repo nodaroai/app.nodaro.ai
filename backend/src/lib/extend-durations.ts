@@ -32,6 +32,7 @@ export const EXTEND_DURATION_SECONDS: Readonly<Record<ExtendVideoProvider, reado
   // LTX's extend lengths, not its generation model's catalog 6/8/10.
   "ltx-2.3-pro": secondsFrom(LTX_EXTEND_DURATION.MIN_SEC, LTX_EXTEND_DURATION.MAX_SEC),
   "seedance-2-5-extend": catalogDurations("seedance-2-5-extend"),
+  "seedance-2-5-flash-extend": catalogDurations("seedance-2-5-flash-extend"),
   "seedance-2-0-extend": catalogDurations("seedance-2-0-extend"),
   "kling-4-extend": catalogDurations("kling-4-extend"),
   "pixverse-v6-extend": catalogDurations("pixverse-v6-extend"),

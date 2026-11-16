@@ -143,6 +143,8 @@ avoided into the instruction itself.
 | **Runway Aleph** (`runway-aleph`) | 385 cr<!-- credits: runway-aleph --> | High-quality transformations, flexible aspect ratio |
 | **HappyHorse Edit** (`happyhorse-edit`) | 385 cr<!-- credits: happyhorse-edit --> | Up to 60s input, 720p (default) or 1080p output |
 
+On Seedance 2.5 Flash the clip you edit, and every reference video, is fitted to what the model takes before it is sent: its size is scaled, shape kept, to a 480p- or 720p-class picture (a picture at exactly 2.5:1 or 1:2.5 may lose up to 2 pixels of its long side to stay inside them) (a 1080p or 4K clip down, a small one up), and its frame rate is set to stay between 24 and 60 frames a second — a constant rate outside that range moved to 24 or 60, and a clip with a variable rate (as phones record) made constant at its nominal rate, held in that range — over the same seconds, so its length and price do not change. A clip wider than 2.5:1 or taller than 1:2.5 is refused before any credits are held (`video_aspect_unsupported`): crop it to a less extreme shape.
+
 ### Seedance 2.5 Edit — credits
 
 Seedance 2.5 Flash Edit is billed the same way on its own `-ref` ladder (480p and

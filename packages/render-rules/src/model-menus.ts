@@ -267,6 +267,7 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoNodeProvider; label
 /** Seedance first, one row per model (decided 2026-11-11), then Kling 4, then VEO, Runway and LTX 2.3 Pro, then PixVerse V6, then Grok; a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */
 export const EXTEND_VIDEO_MODELS = [
   { value: "seedance-2-5-extend", label: "Seedance 2.5" },
+  { value: "seedance-2-5-flash-extend", label: "Seedance 2.5 Flash" },
   { value: "seedance-2-0-extend", label: "Seedance 2.0" },
   { value: "kling-4-extend", label: "Kling 4" },
   { value: "veo-extend", label: "VEO Extend" },

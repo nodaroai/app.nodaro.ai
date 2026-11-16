@@ -341,6 +341,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "seedance-2-fast": 20000,
   "seedance-2-mini": 20000,
   "seedance-2-5-extend": 20000,
+  // Seedance 2.5 Flash Extend: the sibling extend's ceiling, under Flash's own
+  // 20480 with room for the recipe's wrapper and the reference directives.
+  "seedance-2-5-flash-extend": 20000,
   "seedance-2-0-extend": 20000,
   // Seedance 2.5 raises the prompt ceiling to 30000
   // (docs.kie.ai/market/bytedance/seedance-2-5).
@@ -1608,8 +1611,11 @@ export const EXTEND_VIDEO_PROVIDERS = [
   // Seedance extends ANY video, one provider per model: Seedance 2.5 (4–30 s
   // added) and Seedance 2.0 (4–15 s), each priced on its own rows
   // (`tailExtendCreditId`). The earlier single id `seedance-2-extend` is
-  // retired (RETIRED_VIDEO_PROVIDERS) and runs as Seedance 2.5.
+  // retired (RETIRED_VIDEO_PROVIDERS) and runs as Seedance 2.5. Seedance 2.5
+  // Flash extends the same way as Seedance 2.5 (4–30 s added, 480p / 720p),
+  // generated on Seedance 2.5 Flash and priced on its own rows.
   "seedance-2-5-extend",
+  "seedance-2-5-flash-extend",
   "seedance-2-0-extend",
   // Kling 4 extends ANY video the same way (3–30 s added, 720p / 1080p, its
   // sound always on), generated on Kling 4.0 and priced on its own rows.
@@ -1626,8 +1632,8 @@ export const EXTEND_VIDEO_PROVIDERS = [
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
 /** The Extend Video providers that run on Seedance, one per model. */
-export type SeedanceExtendProvider = Extract<ExtendVideoProvider, "seedance-2-5-extend" | "seedance-2-0-extend">
-const SEEDANCE_EXTEND_PROVIDERS: readonly SeedanceExtendProvider[] = ["seedance-2-5-extend", "seedance-2-0-extend"]
+export type SeedanceExtendProvider = Extract<ExtendVideoProvider, "seedance-2-5-extend" | "seedance-2-5-flash-extend" | "seedance-2-0-extend">
+const SEEDANCE_EXTEND_PROVIDERS: readonly SeedanceExtendProvider[] = ["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend"]
 
 /**
  * Whether a value is one of the Seedance Extend Video providers. A retired id
@@ -3587,6 +3593,59 @@ export const VIDEO_REF_VIDEO_DURATION_LIMITS: Record<string, RefVideoDurationLim
   // between 2 and 20 seconds, got 45", docs.kie.ai/market/kling/v4-flash-reference-to-video).
   // A 2 s floor per clip makes the combined floor hold too.
   "kling-4-flash": { minSec: 2, maxSec: 20, maxTotalSec: 20 },
+}
+
+/**
+ * The picture a reference video must have, per provider: only providers with a
+ * documented rule are listed. Seedance 2.5 Flash
+ * (docs.kie.ai/market/bytedance/seedance-2-5-flash): "Total pixels:
+ * [640×640=409600, 834×1112=927408]" (a 480p- or 720p-class picture), "Aspect
+ * ratio (width/height): [0.4, 2.5]" and "Frame rate (FPS): [24, 60]".
+ *
+ * The size and the frame rate are FITTED: the platform re-encodes every
+ * reference video it sends such a model into the window (the provider's
+ * reference-video re-encode), so no clip is refused for them. The shape is
+ * REFUSED ({@link refVideoAspectProblem}) before anything is held: fitting it
+ * would crop or stretch the picture.
+ */
+export interface RefVideoPictureLimit {
+  readonly minPixels: number
+  readonly maxPixels: number
+  /** Width ÷ height, inclusive. */
+  readonly minAspect: number
+  readonly maxAspect: number
+  /** Frames per second, inclusive. */
+  readonly minFps: number
+  readonly maxFps: number
+}
+
+export const VIDEO_REF_VIDEO_PICTURE_LIMITS: Record<string, RefVideoPictureLimit | undefined> = {
+  "seedance-2-5-flash": { minPixels: 409_600, maxPixels: 927_408, minAspect: 0.4, maxAspect: 2.5, minFps: 24, maxFps: 60 },
+}
+
+/** "2.5:1" for a ratio at or above 1, "1:2.5" below it. */
+function aspectText(ratio: number): string {
+  const n = (v: number) => String(Math.round(v * 100) / 100)
+  return ratio >= 1 ? `${n(ratio)}:1` : `1:${n(1 / ratio)}`
+}
+
+/**
+ * Why `provider` cannot take a reference video of `width` × `height` pixels, as
+ * a finished sentence, or undefined when it can: its shape (width ÷ height)
+ * outside the provider's `minAspect`–`maxAspect`
+ * ({@link VIDEO_REF_VIDEO_PICTURE_LIMITS}). A provider with no row, or a size
+ * that is not known (not a positive number), is never refused: the run
+ * measures what it can, and a probe that failed must not refuse a run.
+ */
+export function refVideoAspectProblem(provider: string, width: number | undefined, height: number | undefined): string | undefined {
+  const limit = VIDEO_REF_VIDEO_PICTURE_LIMITS[provider]
+  if (!limit || !width || !height || !(width > 0) || !(height > 0)) return undefined
+  const ratio = width / height
+  if (ratio >= limit.minAspect && ratio <= limit.maxAspect) return undefined
+  return (
+    `This model takes a reference video from ${aspectText(limit.minAspect)} to ${aspectText(limit.maxAspect)} (width to height) — ` +
+    `one is ${width}×${height} (${aspectText(ratio)}). Crop it to a less extreme shape and run again.`
+  )
 }
 
 /**

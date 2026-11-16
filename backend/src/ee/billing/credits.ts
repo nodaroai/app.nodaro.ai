@@ -727,6 +727,21 @@ const SEEDANCE_25_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
 }
 
 /**
+ * Seedance 2.5 Flash Extend's rate rows (decided 2026-11-16): priced by the
+ * same rule as Seedance 2.5 Extend's (the run's seconds sent and added, each
+ * row the price of two seconds), at Seedance 2.5 Flash's own reference-video
+ * rate — two seconds of its `seedance-2-5-flash:<N>s:<res>-ref` rate, rounded
+ * up to a whole credit (57.5 → 58, 127.5 → 128). 480p and 720p only: Flash
+ * renders no 1080p. extend-price-rows.test.ts holds them to the Flash -ref
+ * rows, so a reprice of those fails it until these follow (with a migration).
+ * No earlier per-length rows: no client was ever built naming one.
+ */
+const SEEDANCE_25_FLASH_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
+  "seedance-2-5-flash-extend:480p:per-2s": 58,
+  "seedance-2-5-flash-extend:720p:per-2s": 128,
+}
+
+/**
  * Seedance 2.5 Extend's earlier per-length rows, `seedance-2-5-extend:<N>s:<res>`
  * (N = each length the catalog offers, 4–30 s, at 480p / 720p / 1080p). No run
  * of ours is priced on them, but a client built on an earlier `@nodaro/shared`
@@ -741,7 +756,7 @@ const SEEDANCE_25_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
 const SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS: Readonly<Record<string, number>> = Object.fromEntries(
   (MODEL_CATALOG[SEEDANCE_EXTEND_SENT_PRICED_PROVIDER]?.durations ?? []).flatMap((seconds) =>
     (MODEL_CATALOG[SEEDANCE_EXTEND_SENT_PRICED_PROVIDER]?.resolutions ?? []).map((resolution) => {
-      const price = seedanceExtendPrice({ duration: seconds, resolution, sourcePictureSec: undefined })
+      const price = seedanceExtendPrice({ provider: SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, duration: seconds, resolution, sourcePictureSec: undefined })
       const rate = SEEDANCE_25_EXTEND_RATE_ROWS[price.rateId]
       if (rate === undefined) throw new Error(`Seedance 2.5 Extend: no rate row ${price.rateId}`)
       return [`${SEEDANCE_EXTEND_SENT_PRICED_PROVIDER}:${seconds}s:${resolution}`, quoteBaseCredits(rate, price.units)] as const
@@ -1833,6 +1848,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   //    STATIC_CREDIT_COSTS). ──
   ...SEEDANCE_25_EXTEND_RATE_ROWS,
   ...SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS,
+  ...SEEDANCE_25_FLASH_EXTEND_RATE_ROWS,
   // ── Seedance 2.0 Extend — one row per second added (4–15s) × resolution,
   //    held to the seedance-2 reference-video price the same way. ──
   "seedance-2-0-extend:4s:480p": 173,
@@ -7267,11 +7283,12 @@ export function graphPricingUnits(
   // run measures the source before it holds anything.
   if (node.type === "extend-video") {
     const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
-    if (isSeedanceExtendPricedBySecondsSent(canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER)))) {
+    const extendProvider = canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER))
+    if (isSeedanceExtendPricedBySecondsSent(extendProvider)) {
       const sourceSec = edges && node.id
         ? extendSourceEstimateSec({ id: node.id }, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
         : undefined
-      return seedanceExtendPrice({ duration: data.duration, resolution: data.resolution, sourcePictureSec: sourceSec }).units
+      return seedanceExtendPrice({ provider: extendProvider, duration: data.duration, resolution: data.resolution, sourcePictureSec: sourceSec }).units
     }
   }
   if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
@@ -8107,7 +8124,7 @@ export function getNodeModelIdentifier(
   // follow the reservation or the quote lies. A retired id
   // (`seedance-2-extend`) is quoted as the provider it runs as.
   const catalogExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
-  if (isSeedanceExtendPricedBySecondsSent(catalogExtend)) return seedanceExtendRateCreditId(data.resolution)
+  if (isSeedanceExtendPricedBySecondsSent(catalogExtend)) return seedanceExtendRateCreditId(data.resolution, catalogExtend)
   if (isCatalogExtendProvider(catalogExtend)) {
     const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
     const resolution = typeof data.resolution === "string" ? data.resolution : undefined

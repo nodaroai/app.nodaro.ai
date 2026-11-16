@@ -124,7 +124,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       // The run's own gate: the same probe, the same refusal.
       const check = await probeAndCheckRefVideoDurations({ provider, referenceVideoUrls })
       if (!check.ok) {
-        return reply.status(400).send({ error: { code: "video_too_long", message: check.message } })
+        return reply.status(400).send({ error: { code: check.code ?? "video_too_long", message: check.message } })
       }
       // A provider with no declared bound is not probed by the gate; the
       // reservation probes it itself — so does the estimate.

@@ -2709,10 +2709,18 @@ async function executeWorkerNode(
   // source's picture is measured (best effort, as the route measures it) and
   // its length stamped before anything is held. Unmeasured: the whole
   // 10-second window is held and the worker settles on the source it measures.
+  // A source whose shape the model does not take (Seedance 2.5 Flash: 1:2.5
+  // to 2.5:1) is refused here, as the route refuses it: no row, no hold.
   const seedanceExtendStamp = await stampSeedanceExtendSource(jobName, payload, (err) => {
     console.warn(`[node-executor] extend-video ${jobId}: source ffprobe failed; holding the whole window, the worker measures it again:`, err)
   })
-  if (Object.keys(seedanceExtendStamp).length > 0) payload = { ...payload, ...seedanceExtendStamp }
+  if (!seedanceExtendStamp.ok) {
+    await dropRefusedStampedJob(jobId)
+    const err = new Error(seedanceExtendStamp.message) as Error & { errorCode?: string }
+    err.errorCode = seedanceExtendStamp.code
+    throw err
+  }
+  if (Object.keys(seedanceExtendStamp.patch).length > 0) payload = { ...payload, ...seedanceExtendStamp.patch }
 
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {

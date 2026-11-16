@@ -34,7 +34,7 @@
  * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER, SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazVideoHoldBaseCredits } from "@/lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "@/lib/nodaro-video-upscale-plan.js"
 import { seedanceExtendBaseCredits } from "@/lib/seedance-extend-credits.js"
@@ -198,13 +198,15 @@ const CHARGES: Readonly<Record<string, Charge>> = {
     ]),
   ),
   // routes/extend-video.ts (computeCredits), the workflow run's computeSeedanceExtendCreditOverride
-  // and the worker's settlement: Seedance 2.5 on a 4.5 s source with 8 s added — (4.5 + 8) ÷ 2
-  // = 6.25 units of its resolution's two-second row.
+  // and the worker's settlement: Seedance 2.5 (and 2.5 Flash, on its own rows) on a 4.5 s source
+  // with 8 s added — (4.5 + 8) ÷ 2 = 6.25 units of its resolution's two-second row.
   ...Object.fromEntries(
-    Object.entries(SEEDANCE_EXTEND_RATE_CREDIT_IDS).map(([resolution, id]): [string, Charge] => [
-      id,
-      { units: 6.25, charge: async () => markedUp(id, await seedanceExtendBaseCredits({ duration: 8, resolution, sourcePictureSec: 4.5 })) },
-    ]),
+    SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS.flatMap((provider) =>
+      Object.entries(SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER[provider]).map(([resolution, id]): [string, Charge] => [
+        id,
+        { units: 6.25, charge: async () => markedUp(id, await seedanceExtendBaseCredits({ provider, duration: 8, resolution, sourcePictureSec: 4.5 })) },
+      ]),
+    ),
   ),
 }
 

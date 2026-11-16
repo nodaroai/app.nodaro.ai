@@ -11,6 +11,9 @@
  *   the stitch is a hard cut at the source's end with a sound crossfade.
  *   Charged per second sent and added (@nodaro/render-rules
  *   `seedance-extend-pricing.ts`).
+ * - Seedance 2.5 Flash (decided 2026-11-16): Seedance 2.5's recipe on the
+ *   Flash model, MP4 only, from a source of at least 2 s. Charged per second
+ *   sent and added on its own rows.
  * - Seedance 2.0 (unchanged since the 2026-07-12 spike): the last 2 seconds
  *   and the source's last frame as the opening image, undeclared; the stitch
  *   finds and drops the duplicated boundary frame. Priced on its per-length rows.
@@ -37,7 +40,7 @@ import {
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "@nodaro/shared/models"
-import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC } from "@nodaro/shared/credits"
+import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC, SEEDANCE_EXTEND_MIN_SOURCE_SEC } from "@nodaro/shared/credits"
 import { TAIL_RECIPE_WINDOWS } from "@nodaro/render-rules"
 
 export { isTailRecipeProvider, tailRecipeSeconds } from "@nodaro/render-rules"
@@ -54,7 +57,14 @@ export interface TailRecipeStitch {
 
 export interface TailRecipe {
   /** The video model that generates the continuation. */
-  genModel: "seedance-2-5" | "seedance-2" | "kling-4"
+  genModel: "seedance-2-5" | "seedance-2-5-flash" | "seedance-2" | "kling-4"
+  /**
+   * Whether the run asks the model for a MOV extension (`seedance25OutputFormat`)
+   * and, when the source is an earlier MOV extension of ours, sends that MOV's
+   * last seconds instead of the cut tail (`findChainedMovReference`). Seedance
+   * 2.5 only: Seedance 2.5 Flash renders MP4 only.
+   */
+  movChain?: boolean
   /**
    * Seconds of the source's end sent as the `@video_1` reference — at most:
    * a source with less picture sends all of it (`tailCutSec`).
@@ -110,6 +120,7 @@ const ANCHORED_STITCH: TailRecipeStitch = {
 export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
   "seedance-2-5-extend": {
     genModel: "seedance-2-5",
+    movChain: true,
     tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
     minSourceSec: SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
     window: TAIL_RECIPE_WINDOWS["seedance-2-5-extend"],
@@ -121,6 +132,25 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     // is searched for or trimmed (a smart cut would "match" two neighbouring
     // frames and cut real footage): a hard cut at the source's end, the sound
     // crossfaded across it.
+    stitch: {
+      fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+      audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+    },
+  },
+  // Seedance 2.5's recipe on Seedance 2.5 Flash (decided 2026-11-16): the
+  // same 10 s window declared as an extension, no start image, the same hard
+  // cut. MP4 only (no `movChain`). Its shortest source is Flash's documented
+  // 2 s reference video, not the 2.0 family's measured 1.8 s. The tail is
+  // fitted to the size and frame rate Flash takes for a reference video by the
+  // provider's reference-video re-encode, as every Flash reference video is.
+  "seedance-2-5-flash-extend": {
+    genModel: "seedance-2-5-flash",
+    tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+    minSourceSec: SEEDANCE_EXTEND_MIN_SOURCE_SEC["seedance-2-5-flash-extend"],
+    window: TAIL_RECIPE_WINDOWS["seedance-2-5-flash-extend"],
+    startImage: false,
+    referenceTaskType: "extend",
+    prompt: seedance25Prompt,
     stitch: {
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
@@ -202,3 +232,4 @@ export function extensionTooShortMessage(pictureSec: number | undefined, billedS
 export function tailCutSec(provider: keyof typeof TAIL_RECIPES, pictureSec: number): number {
   return Math.min(TAIL_RECIPES[provider].tailSec, pictureSec)
 }
+

@@ -6161,7 +6161,7 @@ function buildPayloadOf(
           jobName: "extend-video",
           queueName: "video-generation",
           modelIdentifier: isSeedanceExtendPricedBySecondsSent(tailProvider)
-            ? seedanceExtendRateCreditId(resolution)
+            ? seedanceExtendRateCreditId(resolution, tailProvider)
             : tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,

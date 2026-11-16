@@ -1,0 +1,11 @@
+---
+"@nodaro/shared": minor
+---
+
+A new Extend Video provider: **Seedance 2.5 Flash Extend** (`seedance-2-5-flash-extend`), made by ByteDance — Seedance 2.5 Extend's recipe on Seedance 2.5 Flash.
+
+- Catalog entry `seedance-2-5-flash-extend` (mode `extend`): 4–30 s added (default 8), `480p` / `720p` (no 1080p), listed at its default run (8 s added at 720p to a source of 10 s or more, `seedance-2-5-flash-extend:720p:per-2s:9u`). It joins `EXTEND_VIDEO_PROVIDERS`, `SeedanceExtendProvider` (reference images, the sound switch) and so `TailExtendProvider` / `CatalogExtendProvider`, and `MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER` (20,000).
+- It is priced like Seedance 2.5 Extend: per second of video sent and added, on its own two-second rate rows `seedance-2-5-flash-extend:<480p|720p>:per-2s`. New exports `SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS` and `SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER` (each sent-priced provider's rows, read from its catalog resolutions); `SentPricedSeedanceExtendProvider` now names both providers, `isSeedanceExtendPricedBySecondsSent()` and `isSeedanceExtendRateCreditId()` answer for both, and `tailExtendCreditId()` / `buildVideoCreditModelIdentifier()` name the Flash whole-run quote.
+- `seedanceExtendRateCreditId()`, `seedanceExtendSourceCreditId()` and `seedanceExtendFullWindowCreditId()` take an optional trailing `provider` (default `seedance-2-5-extend`, so existing calls are unchanged). `SEEDANCE_EXTEND_SENT_PRICED_PROVIDER` and `SEEDANCE_EXTEND_RATE_CREDIT_IDS` keep naming Seedance 2.5 Extend.
+- New export `VIDEO_REF_VIDEO_PICTURE_LIMITS` (type `RefVideoPictureLimit`): the picture a model takes for a reference video — total pixels, width ÷ height and frames per second (Seedance 2.5 Flash: 409,600–927,408 pixels, 0.4–2.5, 24–60 fps). New `refVideoAspectProblem()`: why a model cannot take a reference video of a given size for its shape, as a sentence, or undefined.
+- New `SEEDANCE_EXTEND_MIN_SOURCE_SEC` and `seedanceExtendSourceRefused(provider, sourcePictureSec)`: the shortest source each sent-priced extend continues (1.8 s; 2 s on Seedance 2.5 Flash Extend). `seedanceExtendRefusesSource()` keeps answering for Seedance 2.5 Extend, and `seedanceExtendSourceCreditId()` names no id for a Flash source under 2 s.

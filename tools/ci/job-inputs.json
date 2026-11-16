@@ -909,6 +909,7 @@
         "backend/src/providers/kie/omni-character.ts",
         "backend/src/providers/kie/pixverse-v6-max.ts",
         "backend/src/providers/kie/reference-audio-convert.ts",
+        "backend/src/providers/kie/reference-video-fit.ts",
         "backend/src/providers/kie/reference-video-reencode.ts",
         "backend/src/providers/kie/reference-video-size.ts",
         "backend/src/providers/kie/runway-client.ts",
