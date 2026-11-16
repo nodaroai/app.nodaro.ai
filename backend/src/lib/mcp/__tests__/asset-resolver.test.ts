@@ -187,3 +187,28 @@ describe("resolveAssetId — a UGC clip", () => {
     await expect(resolveAssetId({ assetId: "j3", userId: "u1", expectedKind: "image" })).rejects.toThrow(/expected image, got job of type ugc-clip/)
   })
 })
+
+describe("resolveAssetId — every node that produces a video", () => {
+  it("a still-to-video job resolves as a video, so its id feeds the video verbs", async () => {
+    mockJob({ id: "j1", user_id: "u1", job_type: "still-to-video", output_data: { videoUrl: "https://r2/still.mp4" } })
+    expect(await resolveAssetId({ assetId: "j1", userId: "u1", expectedKind: "video" })).toBe("https://r2/still.mp4")
+  })
+
+  it("accepts every type in the shared video producer set, with no second list to keep", async () => {
+    const { VIDEO_PRODUCER_TYPES } = await import("@nodaro/shared/nodes")
+    for (const type of VIDEO_PRODUCER_TYPES) {
+      mockJob({ id: "j1", user_id: "u1", job_type: type, output_data: { videoUrl: "https://r2/v.mp4" } })
+      expect(await resolveAssetId({ assetId: "j1", userId: "u1", expectedKind: "video" }), type).toBe("https://r2/v.mp4")
+    }
+  })
+
+  it("still refuses a job that carries no video, whatever its type", async () => {
+    mockJob({ id: "j1", user_id: "u1", job_type: "still-to-video", output_data: {} })
+    await expect(resolveAssetId({ assetId: "j1", userId: "u1", expectedKind: "video" })).rejects.toThrow()
+  })
+
+  it("a video producer is not an image", async () => {
+    mockJob({ id: "j1", user_id: "u1", job_type: "still-to-video", output_data: { videoUrl: "https://r2/still.mp4" } })
+    await expect(resolveAssetId({ assetId: "j1", userId: "u1", expectedKind: "image" })).rejects.toThrow(/expected image/)
+  })
+})
