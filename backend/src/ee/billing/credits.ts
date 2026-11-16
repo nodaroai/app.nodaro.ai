@@ -5287,13 +5287,17 @@ export class CreditsService {
    * A refusal on a web surface's free pool says so (`subscriptionRequired`,
    * as `checkRunSetCredits` does): `balance` is then that pool alone, the case
    * the credit guard answers with the subscription ask rather than a balance.
+   * A deployment payer's refusal carries NO balance (`payerPool`): the pool is
+   * the operator's, and a caller that is never handed it cannot state it to the
+   * requester (`checkRunSetCredits` withholds it as `available: null`, the
+   * credit guard as `DEPLOYMENT_OUT_OF_CREDITS`).
    */
   static async checkBalanceCovers(
     userId: string,
     credits: number,
     billingContext?: BillingContext,
     webFreeMode?: boolean,
-  ): Promise<{ ok: true } | { ok: false; balance: number; subscriptionRequired?: true }> {
+  ): Promise<{ ok: true } | { ok: false; balance: number; subscriptionRequired?: true } | { ok: false; payerPool: true }> {
     if (creditsDisabled()) return { ok: true }
 
     const { data: profile } = await supabase
@@ -5311,6 +5315,7 @@ export class CreditsService {
 
     const balance = ((profile.subscription_credits as number | null) ?? 0) + (gates.webFree ? 0 : ((profile.topup_credits as number | null) ?? 0))
     if (balance >= credits) return { ok: true }
+    if (billingContext?.payer === "deployment") return { ok: false, payerPool: true }
     return { ok: false, balance, ...(gates.webFree ? { subscriptionRequired: true as const } : {}) }
   }
 

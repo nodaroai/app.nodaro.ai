@@ -35,7 +35,7 @@ import { checkPayerCanAfford, resolveWebSurfaceFlag } from "../middleware/credit
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits, llmMeteredPricing } from "../lib/config.js"
 import { editPlanPerMinuteActive } from "../lib/private-plugins/edit-plan-per-minute.js"
-import { CreditsService } from "../ee/billing/credits.js"
+import { CreditsService, DEPLOYMENT_OUT_OF_CREDITS } from "../ee/billing/credits.js"
 import { findRestrictedPickerValue, flattenItems, type PickerCardRestrictions } from "@nodaro/shared/apps"
 import type { PresentationItem } from "@nodaro/shared/types"
 import { executeAppRun } from "../services/app-execution.js"
@@ -193,6 +193,22 @@ function validateExposedInputs(
     inputValues,
   })
   return pickerRefusal ? { code: "validation_error", message: pickerRefusal } : null
+}
+
+/**
+ * An app run's refusal for want of balance: `sentence` worded with the payer's
+ * balance — or, where a deployment pays for its users, the deployment's own
+ * words and no figure: its pool is the operator's, never told to the runner.
+ * The balance check does not hand that pool out (`payerPool`), and the
+ * request's payer is asked as well, as every other refusal answers it.
+ */
+function appRunShortfall(
+  cover: { readonly ok: false; readonly balance: number } | { readonly ok: false; readonly payerPool: true },
+  payer: { readonly payer: string } | undefined,
+  sentence: (balance: number) => string,
+): { error: { code: "insufficient_credits"; message: string } } {
+  const message = "payerPool" in cover || payer?.payer === "deployment" ? DEPLOYMENT_OUT_OF_CREDITS : sentence(cover.balance)
+  return { error: { code: "insufficient_credits", message } }
 }
 
 async function resolveSlug(slug: string): Promise<string | null> {
@@ -626,12 +642,9 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           const worstCase = ugcSumPerNode(holds)
           const cover = await CreditsService.checkBalanceCovers(req.userId, worstCase, req.billingContext, await resolveWebSurfaceFlag(req))
           if (!cover.ok) {
-            return reply.status(402).send({
-              error: {
-                code: "insufficient_credits",
-                message: `This video can hold up to about ${worstCase} credits while it renders; your balance is ${cover.balance}.`,
-              },
-            })
+            return reply
+              .status(402)
+              .send(appRunShortfall(cover, req.billingContext, (balance) => `This video can hold up to about ${worstCase} credits while it renders; your balance is ${balance}.`))
           }
         } catch (err) {
           if (!(err instanceof UgcEstimateUnavailable)) throw err
@@ -659,23 +672,18 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         } else if (workspacePays === false) {
           const own = await CreditsService.checkBalanceCovers(req.userId, feeCover.fee, undefined, await resolveWebSurfaceFlag(req))
           if (!own.ok) {
-            return reply.status(402).send({
-              error: {
-                code: "insufficient_credits",
-                message: `This app's creator fee of ${feeCover.fee} credits is paid from your own balance, as your organization has not approved this app; your balance is ${own.balance}.`,
-              },
-            })
+            // The runner's own balance (no billing context: their personal pools), never a deployment's.
+            return reply
+              .status(402)
+              .send(appRunShortfall(own, undefined, (balance) => `This app's creator fee of ${feeCover.fee} credits is paid from your own balance, as your organization has not approved this app; your balance is ${balance}.`))
           }
         }
       } else if (feeCover) {
         const cover = await CreditsService.checkBalanceCovers(req.userId, feeCover.required, ctx, await resolveWebSurfaceFlag(req))
         if (!cover.ok) {
-          return reply.status(402).send({
-            error: {
-              code: "insufficient_credits",
-              message: `This app costs about ${feeCover.required} credits to run, including the creator's fee of ${feeCover.fee} credits; your balance is ${cover.balance}.`,
-            },
-          })
+          return reply
+            .status(402)
+            .send(appRunShortfall(cover, ctx, (balance) => `This app costs about ${feeCover.required} credits to run, including the creator's fee of ${feeCover.fee} credits; your balance is ${balance}.`))
         }
       }
     }

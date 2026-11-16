@@ -158,6 +158,31 @@ describe("nothing configured: every saved credit sentence exactly as before", ()
   })
 })
 
+// ── a deployment payer, nothing else configured ────────────────────────────
+
+describe("a deployment payer with no unit, no external wallet and self-serve on: the operator's pool is never saved for the requester", () => {
+  const PAYER_ID = "70000000-0000-4000-8000-000000000007"
+  const dep = { payer: "deployment", userId: USER, payerId: PAYER_ID, entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates: "pro" } } as never
+
+  it("the balance check's refusal (what the engine saves as a node's failure) names what the run needs, never the pool", async () => {
+    price(2087)
+    const check = await CreditsService.checkCreditsWithProfile(USER, PAID, "flux", false, undefined, { billingContext: dep })
+    expect(check.allowed).toBe(false)
+    expect(check.error).toBe("Insufficient credits. Required: 2087")
+    expect(check.error).not.toContain("1534")
+  })
+
+  it("a reservation the database refused names what it needed, never what the pool had", async () => {
+    price(53)
+    h.rpcError = { message: RAW_RESERVE_REFUSALS.insufficient }
+    const said = await thrown(CreditsService.reserveCredits(USER, "job-1", "flux", 0, 0, { watermarkOverride: false, billingContext: dep }))
+    expect(said).toBe("Credit reservation failed: Insufficient credits: need 2087")
+    // The payer's own run reads its own pool, as before.
+    const own = await thrown(CreditsService.reserveCredits(PAYER_ID, "job-1", "flux", 0, 0, { watermarkOverride: false, billingContext: { ...(dep as object), userId: PAYER_ID } as never }))
+    expect(own).toBe("Credit reservation failed: Insufficient credits: need 2087, have 1534")
+  })
+})
+
 // ── on a deployment in its own terms ───────────────────────────────────────
 
 function setProfile(billing: Record<string, unknown> | null) {

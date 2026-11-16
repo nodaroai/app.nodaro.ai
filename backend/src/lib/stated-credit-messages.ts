@@ -16,6 +16,11 @@
  * function returns exactly the sentence it replaced, byte for byte
  * (`ee/billing/__tests__/stored-credit-messages.test.ts` holds the recording).
  *
+ * WHATEVER IS CONFIGURED, a balance that is not the requester's own (a
+ * deployment payer's pool, `BalanceSeen.payerPool`) is never stated: a
+ * deployment payer can be set with no unit, no external wallet and self-serve
+ * on, and the operator's pool is not its users' to read there either.
+ *
  * On a deployment in its own terms (`ownTermsActive()`, `lib/mcp/amounts.ts`):
  *  - every figure is converted into the deployment's unit and named with the
  *    unit's word (credits where it has none), through the same conversion
@@ -69,7 +74,7 @@ export interface BalanceSeen {
 /** The balance check's refusal: the run's price over what the payer has. */
 export function insufficientCreditsMessage(required: number, available: number, seen: BalanceSeen = {}): string {
   const s = stating()
-  if (!s) return `Insufficient credits. Required: ${required}, Available: ${available}`
+  if (!s) return seen.payerPool ? `Insufficient credits. Required: ${required}` : `Insufficient credits. Required: ${required}, Available: ${available}`
   const need = `Insufficient balance. Required: ${s.figure(required)} ${s.word}`
   return seen.payerPool ? `${need}.` : `${need}, Available: ${s.figure(available)} ${s.word}`
 }
@@ -162,9 +167,12 @@ export function chargedAttemptClause(charged: number | undefined): string {
  * (`supabase/migrations`, held by the totality test): each one read into its
  * figures and worded like the check that answers it before the RPC.
  */
+/** The reserve RPC's shortfall: what the run needs, and what the payer's pool has. */
+const INSUFFICIENT_RESERVE = /^Insufficient credits: need (-?\d+(?:\.\d+)?), have (-?\d+(?:\.\d+)?)$/
+
 const RESERVE_REFUSALS: ReadonlyArray<{ re: RegExp; stated: (m: RegExpExecArray, s: Stating, seen: BalanceSeen) => string }> = [
   {
-    re: /^Insufficient credits: need (-?\d+(?:\.\d+)?), have (-?\d+(?:\.\d+)?)$/,
+    re: INSUFFICIENT_RESERVE,
     stated: (m, s, seen) => {
       const need = `Insufficient balance: need ${s.figure(Number(m[1]))} ${s.word}`
       return seen.payerPool ? need : `${need}, have ${s.figure(Number(m[2]))} ${s.word}`
@@ -203,11 +211,16 @@ export function statesReserveRefusal(rpcMessage: string): boolean {
  * (`SUBSCRIPTION_REQUIRED:`, `SIDE_HOLD_CONFLICT:`, a unique violation). That
  * every refusal the reservation functions raise with a credit figure is one of
  * `RESERVE_REFUSALS` or a prefixed one `lib/reserve-errors.ts` translates is
- * held by the totality test, against the migrations.
+ * held by the totality test, against the migrations. Whatever is configured, a
+ * deployment payer's pool (`seen.payerPool`) is never repeated: the shortfall
+ * keeps what the run needed and drops what the pool had.
  */
 export function reservationFailedMessage(rpcMessage: string, seen: BalanceSeen = {}): string {
   const s = stating()
-  if (!s) return `Credit reservation failed: ${rpcMessage}`
+  if (!s) {
+    const short = seen.payerPool ? INSUFFICIENT_RESERVE.exec(rpcMessage) : null
+    return short ? `Credit reservation failed: Insufficient credits: need ${short[1]}` : `Credit reservation failed: ${rpcMessage}`
+  }
   for (const { re, stated } of RESERVE_REFUSALS) {
     const m = re.exec(rpcMessage)
     if (m) return `Credit reservation failed: ${stated(m, s, seen)}`

@@ -111,7 +111,8 @@ function createChainMock(resolveValue: unknown, onSelect?: (cols: unknown) => vo
 }
 
 /** The workspace payer the auth hook stamps when set (P14's resolved context). */
-const stamp = vi.hoisted(() => ({ workspace: false }))
+const stamp = vi.hoisted(() => ({ workspace: false, deployment: false }))
+const DEPLOYMENT_PAYER_ID = "00000000-0000-4000-8000-0000000009e1"
 const ORG_ID = "00000000-0000-4000-8000-000000000050"
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000060"
 
@@ -142,6 +143,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   edition.credits = true
   stamp.workspace = false
+  stamp.deployment = false
   afford.fn.mockResolvedValue({ ok: true })
   invalidateAppCache(SLUG)
   app = Fastify({ logger: false })
@@ -150,6 +152,9 @@ beforeEach(async () => {
     if (typeof header === "string") req.userId = header
     if (typeof header === "string" && stamp.workspace) {
       req.billingContext = { payer: "workspace", userId: header, workspaceId: WORKSPACE_ID, orgId: ORG_ID, entitlements: {} } as never
+    }
+    if (typeof header === "string" && stamp.deployment) {
+      req.billingContext = { payer: "deployment", userId: header, payerId: DEPLOYMENT_PAYER_ID, entitlements: { watermark: false, dailyCapCredits: null, parallelism: 4, tierForGates: "pro" } }
     }
   })
   await app.register(async (instance) => {
@@ -188,6 +193,29 @@ describe("an app run with the creator's fee is refused when the runner cannot pa
     expect(orchestrationQueue.add).not.toHaveBeenCalled()
     expect(tables).not.toContain("workflow_executions")
     expect(tables).not.toContain("app_runs")
+  })
+
+  it("on a deployment that pays for its users, the runner is never told the operator's pool: the deployment's own words, no figure", async () => {
+    stamp.deployment = true
+    const { tables } = setupApp(APP_ROW)
+    // What the balance check read under a deployment payer before it withheld the pool: the operator's pool.
+    covers.mockResolvedValue({ ok: false, balance: 987654 })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
+    expect(res.body).not.toContain("987654")
+    expect(covers.mock.calls[0]?.[2]).toMatchObject({ payer: "deployment" })
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+    expect(tables).not.toContain("workflow_executions")
+  })
+
+  it("a deployment payer's refusal as the balance check now answers it (no figure at all): the deployment's own words", async () => {
+    stamp.deployment = true
+    setupApp(APP_ROW)
+    covers.mockResolvedValue({ ok: false, payerPool: true })
+    const res = await run(RUNNER)
+    expect(res.statusCode).toBe(402)
+    expect(res.json()).toEqual({ error: { code: "insufficient_credits", message: "This deployment is out of credits. Contact your administrator." } })
   })
 
   it("the draft-run path (a runId) is refused the same way, before an execution row", async () => {

@@ -278,6 +278,9 @@ fee, that is the listed price the fee applies to (the preview part, see
 percentage of it, rounded up to a whole credit. The flat fee counts in full
 even when the listed price is 0. A run the balance cannot cover is refused with
 `402 { "error": { "code": "insufficient_credits", "message": "This app costs about <n> credits to run, including the creator's fee of <fee> credits; your balance is <balance>." } }`.
+On a deployment that pays for its users, the balance is the deployment's own,
+which its users never see: the refusal says "This deployment is out of
+credits. Contact your administrator." instead, with no figure.
 The creator running their own app pays no fee and is not checked. On a run
 paid by an organization workspace, the fee is paid by the workspace when its
 organization has approved the app, and by the runner otherwise. An approved
@@ -5374,7 +5377,9 @@ its word timings and its split stay charged, and the node fails with
 can hold while its clips render: a run whose payer cannot cover that is refused with
 `402 insufficient_credits`,
 `This video can hold up to about <n> credits while it renders; your balance is <balance>.`,
-before anything runs or is billed. What a published UGC video carries,
+before anything runs or is billed (on a deployment that pays for its users,
+`This deployment is out of credits. Contact your administrator.`, with no
+figure: that balance is the deployment's own). What a published UGC video carries,
 and the photo an app set to My photo needs, are in
 [UGC videos in a published app or template](#ugc-videos-in-a-published-app-or-template).
 

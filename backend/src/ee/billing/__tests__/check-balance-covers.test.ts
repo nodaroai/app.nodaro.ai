@@ -86,7 +86,7 @@ describe("CreditsService.checkBalanceCovers", () => {
     expect(await CreditsService.checkBalanceCovers(USER, 4000, undefined, true)).toEqual({ ok: true })
   })
 
-  it("reads the deployment payer's profile, not the requester's", async () => {
+  it("reads the deployment payer's profile, not the requester's, and never hands its pool to the caller", async () => {
     h.profiles.set(PAYER, profile({ subscription_credits: 10, topup_credits: 0 }))
     const ctx = {
       payer: "deployment",
@@ -94,8 +94,18 @@ describe("CreditsService.checkBalanceCovers", () => {
       payerId: PAYER,
       entitlements: { watermark: false, dailyCapCredits: null, parallelism: 1, tierForGates: "pro" },
     } as BillingContext
-    expect(await CreditsService.checkBalanceCovers(USER, 100, ctx)).toEqual({ ok: false, balance: 10 })
+    // The pool is the operator's: the refusal says whose it is, and carries no figure a caller could state.
+    expect(await CreditsService.checkBalanceCovers(USER, 100, ctx)).toEqual({ ok: false, payerPool: true })
     expect(h.read).toEqual([PAYER])
+    // Covered is covered, as for any payer.
+    expect(await CreditsService.checkBalanceCovers(USER, 10, ctx)).toEqual({ ok: true })
+    // Held by the type too: a caller cannot read a refusal's balance before telling it apart from a deployment payer's.
+    const refused = await CreditsService.checkBalanceCovers(USER, 100, ctx)
+    if (!refused.ok) {
+      // @ts-expect-error — a deployment payer's refusal has no `balance` to state
+      expect(refused.balance).toBeUndefined()
+      if (!("payerPool" in refused)) expect.unreachable("a deployment payer's refusal is told apart by payerPool")
+    }
   })
 
   it("a workspace payer is not refused on a personal balance", async () => {

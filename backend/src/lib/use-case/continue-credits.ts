@@ -69,7 +69,7 @@ export async function fromFailedCover(input: {
   if (cover.ok) return { ok: true, totalCredits }
   // A deployment's pool is the operator's: its balance is not the
   // requester's to see (no figures either), and only the operator can top it up.
-  if (input.billingContext?.payer === "deployment") return { ok: false, message: DEPLOYMENT_OUT_OF_CREDITS }
+  if (input.billingContext?.payer === "deployment" || "payerPool" in cover) return { ok: false, message: DEPLOYMENT_OUT_OF_CREDITS }
   // A hold above the price is said as a hold, with no figures: `required` would read as the price.
   if (holdCredits > totalCredits) return { ok: false, message: continueHoldShortfallMessage(holdCredits, cover.balance) }
   return {

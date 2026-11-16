@@ -219,7 +219,7 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
         // requester's to see (no figures either), and only the operator can
         // top it up. Every use-case node works on an episode, so one sentence
         // serves them all; its figures ride beside the error (credits-refusal.ts).
-        const refusal = billingContext?.payer === "deployment"
+        const refusal = billingContext?.payer === "deployment" || "payerPool" in cover
           ? { message: DEPLOYMENT_OUT_OF_CREDITS }
           : statedShortfall(estimate.totalCredits, cover.balance, (required, balance) => estimateShortfallMessage("This episode is", required, balance), cover.subscriptionRequired === true)
         return reply.status(402).send(usecaseShortfallBody(refusal))
