@@ -14,7 +14,7 @@
  *
  * `EXPECTED` below is the whole recording, one row per state.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
@@ -133,8 +133,6 @@ function mount(surface: Surface) {
   )
 }
 
-const tick = (ms = 40) => act(async () => { await new Promise((r) => setTimeout(r, ms)) })
-
 /** The audio card (its GlassCard), found from its player. The Present tab has an Edit of its own (the layout). */
 const card = () => screen.getByTestId("player").closest<HTMLElement>(".rounded-xl")!
 
@@ -149,9 +147,12 @@ async function openMenu(): Promise<HTMLElement | null> {
   return screen.findByRole("menu")
 }
 
-/** What the page shows after Edit: the editor's frame, the explainer, or nothing. */
-async function opened(): Promise<Opens> {
-  await tick()
+/**
+ * What the page shows after Edit: the editor's frame, the explainer, or nothing.
+ * It is final once the click's act() has returned (the editor's code is loaded
+ * first, in the beforeAll below), so it is read at once, with no wait.
+ */
+function opened(): Opens {
   const dialog = screen.queryByRole("dialog", { name: /audio editor/i })
   if (!dialog) return "nothing"
   if (dialog.querySelector("iframe")) {
@@ -161,6 +162,17 @@ async function opened(): Promise<Opens> {
   expect(within(dialog).getByText(/no audio editor is configured/i)).toBeTruthy()
   return "explainer"
 }
+
+// The audio editor modal is a lazy chunk of the presentation view. Loaded here,
+// before any test clicks Edit, its import is never still running when a test
+// reads what a click opened: a click's whole outcome (the edit state, the lazy
+// component resolving, the dialog) settles inside the click's act(), so
+// `opened()` reads it at once and "nothing" can only mean the click opened
+// nothing. Left to the first click, the import can outlast any fixed wait on a
+// loaded machine, and the editor that was about to open reads as "nothing".
+beforeAll(async () => {
+  await import("@/components/editor/audiomass-editor-modal")
+})
 
 beforeEach(() => {
   globalThis.fetch = vi.fn(() => Promise.resolve(new Response("{}", { status: 404 }))) as never
@@ -203,7 +215,7 @@ describe.each(STATES)("an audio output card with %s", (_label, state, runtime) =
         mount(surface)
         await screen.findByTestId("player")
         await act(async () => { fireEvent.click(actionBarEdit()!) })
-        expect(await opened()).toBe(row.opens[surface])
+        expect(opened()).toBe(row.opens[surface])
       })
     }
   })
@@ -219,6 +231,6 @@ describe.each(SURFACES)("the %s's Edit handler (the backstop)", (surface) => {
     // The card bound Edit while nothing was set (it opens the explainer then, above); it is still there.
     expect(edit.isConnected).toBe(true)
     await act(async () => { fireEvent.click(edit) })
-    expect(await opened()).toBe("nothing")
+    expect(opened()).toBe("nothing")
   })
 })
