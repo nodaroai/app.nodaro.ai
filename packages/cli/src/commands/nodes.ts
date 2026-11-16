@@ -1,5 +1,6 @@
 import { Command } from "commander"
 import type { GenerateImageBatchResult } from "@nodaro/sdk/nodes"
+import { SEEDANCE_REFERENCE_TASK_TYPES } from "@nodaro/shared/models"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
@@ -29,6 +30,33 @@ function withBatchFlags(
     out.models = flags.models.split(/[\s,]+/).filter(Boolean)
   }
   return out
+}
+
+/**
+ * The node types whose run route takes `referenceTaskType`: `generate-video`
+ * (`/v1/generate-video`) and `text-to-video` (`/v1/text-to-video`). The server
+ * decides whether a request declares it (model, references); the CLI only
+ * checks the value.
+ */
+const REFERENCE_TASK_NODE_TYPES: readonly string[] = ["generate-video", "text-to-video"]
+
+/** `--reference-task-type` onto the body, after `--param` / `--params-file` (the flag wins). */
+function withReferenceTaskType(
+  type: string,
+  params: Record<string, unknown>,
+  value: string | undefined,
+): Record<string, unknown> {
+  if (value === undefined) return params
+  if (type === "video-to-video") {
+    throw new Error("--reference-task-type does not apply to video-to-video: an edit always runs as an edit")
+  }
+  if (!REFERENCE_TASK_NODE_TYPES.includes(type)) {
+    throw new Error(`--reference-task-type is a ${REFERENCE_TASK_NODE_TYPES.join(" / ")} option (got node type "${type}")`)
+  }
+  if (!(SEEDANCE_REFERENCE_TASK_TYPES as readonly string[]).includes(value)) {
+    throw new Error(`--reference-task-type must be one of ${SEEDANCE_REFERENCE_TASK_TYPES.join(", ")} (got "${value}")`)
+  }
+  return { ...params, referenceTaskType: value }
 }
 
 /** The answer of a call that made several jobs (`count` / `models`), or null. */
@@ -156,6 +184,7 @@ export function nodesCommand(): Command {
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--count <n>", "generate-image: how many images (1-4), each its own job; with --models, per model")
     .option("--models <ids>", "generate-image: run the same request on 2-4 models at once (comma-separated), instead of provider")
+    .option("--reference-task-type <type>", `generate-video / text-to-video: what the reference media is for (${SEEDANCE_REFERENCE_TASK_TYPES.join(", ")}); the platform decides whether the model and request declare it`)
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
@@ -169,6 +198,7 @@ Examples:
   $ nodaro nodes run generate-image --param presetId=generate-image/logo-wordmark --param presetVariables='{"BRAND":"Acme"}' --watch
   $ nodaro nodes run text-to-speech --param text="And so it begins." --param previousText="The night before, nobody slept." --param nextText="By noon the harbour was empty." --watch
   $ nodaro nodes run video-depth --param videoUrl=https://cdn.example/clip.mp4 --param colormap=turbo --watch
+  $ nodaro nodes run generate-video --params-file body.json --reference-task-type extend --watch
 
 Structured references (the editor's wired-reference shape) — let a {image:N} prompt
 token bind a labeled reference, assembled server-side into @image_N (same as the
@@ -184,13 +214,17 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
       async (
         type: string | undefined,
         extras: string[],
-        opts: { param?: string[]; paramsFile?: string; watch?: boolean; pollInterval: number; count?: string; models?: string } & GlobalOpts,
+        opts: { param?: string[]; paramsFile?: string; watch?: boolean; pollInterval: number; count?: string; models?: string; referenceTaskType?: string } & GlobalOpts,
       ) => {
         rejectPositionalParams(extras, { cmd: `nodaro nodes run ${type ?? "<type>"}`, key: "prompt" })
         try {
           const client = buildClient(opts.profile)
           const resolvedType = type ?? (await pickNodeInteractively(client))
-          const params = withBatchFlags(resolvedType, resolveParams(opts.param, opts.paramsFile), opts)
+          const params = withReferenceTaskType(
+            resolvedType,
+            withBatchFlags(resolvedType, resolveParams(opts.param, opts.paramsFile), opts),
+            opts.referenceTaskType,
+          )
           const result = await client.nodes.run(resolvedType, params)
           const jobId = typeof result === "object" && result && "jobId" in result ? (result.jobId as string) : null
 
