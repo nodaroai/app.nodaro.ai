@@ -240,8 +240,19 @@ type CallHandler = (request: { params: { name: string; arguments?: unknown } }, 
  * an address outside this deployment's storage (`tool-addresses.ts`, decided
  * 2026-11-11), with the same refusal, before the tool runs. With link imports
  * on the call reaches its tool exactly as it was sent: nothing is read.
+ *
+ * WHOSE OFFER. The list and `withheld` are decided once, when the tools
+ * register, from `opts.offer`: the offer for the viewer this server was built
+ * for. A tool withheld then is refused for every later call on this server,
+ * whoever makes it, and `tools/list` is that viewer's list. That is exact while
+ * each request builds its own server (one caller per server, as today). A
+ * server built once and used by many callers would have to decide the list and
+ * `withheld` per caller instead: this is the part such a build must change.
+ * What IS read per call: a tool that registered is judged again for the user
+ * making the call (`session.userId`, read when the call arrives), which is how
+ * an override saved since the build is honoured.
  */
-export function installToolOffer(server: McpServer, opts: { userId: string; offer: ToolOffer | undefined }): void {
+export function installToolOffer(server: McpServer, opts: { session: Pick<McpSession, "userId">; offer: ToolOffer | undefined }): void {
   const withheld = new Map<string, ToolRefusal>()
   // Each tool's schema as it registered it, for the addresses a call carries.
   const schemas = new Map<string, unknown>()
@@ -269,7 +280,7 @@ export function installToolOffer(server: McpServer, opts: { userId: string; offe
       const refusal =
         typeof name !== "string"
           ? undefined
-          : (withheld.get(name) ?? (Object.hasOwn(TOOL_NEEDS, name) ? (await resolveToolOffer(opts.userId))?.refusalOf(name) : undefined))
+          : (withheld.get(name) ?? (Object.hasOwn(TOOL_NEEDS, name) ? (await resolveToolOffer(opts.session.userId))?.refusalOf(name) : undefined))
       if (refusal) return refusalResult(refusal)
       if (!surfaceAllowsLinkImports() && typeof name === "string") {
         const outside = outsideAddressRefusal(name, request.params.arguments, schemas.get(name))

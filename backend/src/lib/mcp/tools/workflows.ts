@@ -209,8 +209,9 @@ export function registerWorkflows({
   fastify,
 }: RegisterWorkflowsOpts): void {
   // An in-app session is pinned to the open workflow's project, where "the
-  // mcp project" would be a misleading place to tell the model to look.
-  const projectNoun = session.scopedProjectId ? "in this project" : "in mcp project"
+  // mcp project" would be a misleading place to tell the model to look. Read
+  // when a tool runs, from the session that runs it.
+  const projectNoun = (): string => (session.scopedProjectId ? "in this project" : "in mcp project")
 
   if (passesGate(session, readGate)) {
     server.registerTool(
@@ -517,7 +518,7 @@ export function registerWorkflows({
           .maybeSingle()
         if (lookupError) return err(`Error: ${lookupError.message}`)
         if (!existing || (existing as Record<string, unknown>).project_id !== mcpProjectId) {
-          return err(`Workflow not found ${projectNoun}`)
+          return err(`Workflow not found ${projectNoun()}`)
         }
         // A month's hub holds every conversation of that month: deleting it would
         // delete them all. Delete a conversation itself instead.
@@ -849,7 +850,7 @@ export function registerWorkflows({
               )
             }
           }
-          return err(`Workflow not found ${projectNoun}`)
+          return err(`Workflow not found ${projectNoun()}`)
         }
         const updated = data as Record<string, unknown>
         const changed: string[] = []

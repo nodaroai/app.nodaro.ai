@@ -135,8 +135,8 @@ export function lessonsText(result: CompetitorLessonsResult): string {
  * the cloud plugin's (registered beside social_search under hasCredits()).
  */
 export function registerCompetitorTools({ server, session, fastify }: RegisterOpts): void {
-  const asUser = { "x-internal-user-id": session.userId }
-
+  // Who is calling rides every request `mcpInject` makes, read from the session
+  // when the tool runs; nothing here reads the caller while registering.
   if (passesGate(session, readGate)) {
     server.registerTool(
       "list_competitors",
@@ -147,7 +147,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
         annotations: { readOnlyHint: true },
       },
       async () => {
-        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors", headers: asUser })
+        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors" })
         if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
         const { data } = JSON.parse(res.body) as { data: TrackedCompetitor[] }
         return text(data.length === 0 ? "No tracked brands yet. Add one with add_competitor." : data.map(competitorLine).join("\n\n"))
@@ -164,7 +164,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
         annotations: { readOnlyHint: true },
       },
       async () => {
-        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors/cards", headers: asUser })
+        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors/cards" })
         if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
         return text(cardsText(JSON.parse(res.body) as CompetitorCardsResult))
       },
@@ -182,7 +182,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
         annotations: { readOnlyHint: true },
       },
       async (args) => {
-        const res = await mcpInject(fastify, session, { method: "GET", url: `/v1/competitors/${encodeURIComponent(args.competitor_id)}/lessons`, headers: asUser })
+        const res = await mcpInject(fastify, session, { method: "GET", url: `/v1/competitors/${encodeURIComponent(args.competitor_id)}/lessons` })
         if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
         return text(lessonsText(JSON.parse(res.body) as CompetitorLessonsResult))
       },
@@ -198,7 +198,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
         annotations: { readOnlyHint: true },
       },
       async (args) => {
-        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors/actions", headers: asUser })
+        const res = await mcpInject(fastify, session, { method: "GET", url: "/v1/competitors/actions" })
         if (res.statusCode >= 400) return routeError(res.statusCode, res.body)
         return text(triedText(JSON.parse(res.body) as CompetitorActionsResult, args.limit ?? 20))
       },

@@ -159,7 +159,7 @@ describe("with link imports on", () => {
   it("a call reaches its tool exactly as it was sent", async () => {
     setProfile(null)
     const server = new McpServer({ name: "t", version: "1" })
-    installToolOffer(server, { userId: "u1", offer: undefined })
+    installToolOffer(server, { session: { userId: "u1" }, offer: undefined })
     const seen = vi.fn(async (args: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(args) }] }))
     // `ping` is a declared tool; the schema here is only this test's.
     server.registerTool("ping", { inputSchema: { image_url: z.string(), refs: z.array(z.string()) } }, seen)
@@ -173,7 +173,7 @@ describe("with link imports on", () => {
   it("and the same call is refused before the tool runs once they are off", async () => {
     setProfile({ imports: { links: false } })
     const server = new McpServer({ name: "t", version: "1" })
-    installToolOffer(server, { userId: "u1", offer: undefined })
+    installToolOffer(server, { session: { userId: "u1" }, offer: undefined })
     const seen = vi.fn(async () => ({ content: [{ type: "text" as const, text: "ran" }] }))
     server.registerTool("ping", { inputSchema: { image_url: z.string() } }, seen)
     const res = await createMcpInvoker(server).callTool("ping", { image_url: OUTSIDE })

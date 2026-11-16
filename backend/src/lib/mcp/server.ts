@@ -212,7 +212,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   // The list follows the offer: a tool the deployment withholds from this
   // viewer is never registered, and a call naming it gets the run's coded
   // refusal. Installed before the first tool registers.
-  installToolOffer(server, { userId: session.userId, offer })
+  installToolOffer(server, { session, offer })
 
   registerWidgetResources(server, session.addresses)
 
