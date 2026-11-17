@@ -31,6 +31,7 @@ import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { rateLimitAddressKey } from "../../lib/client-address.js"
 import { tierColumns } from "../billing/tier-columns.js"
+import { readLiveOrClaimedSubscriptions } from "../billing/downgrade-floor.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { deploymentPayerId, payerCoverage } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
@@ -373,15 +374,16 @@ export async function billingRoutes(app: FastifyInstance) {
     const expireFirst = replacing?.expire ?? null
 
     // One subscription per account: a plan change goes through change-plan
-    // (charged now, applied when paid), never a second checkout. past_due
-    // and unpaid count — it is still the account's subscription.
+    // (charged now, applied when paid), never a second checkout. The rows that
+    // hold the account's plan are the ones the plan-grant claim refuses a
+    // second subscription for: a live status (active, trialing, past_due,
+    // unpaid — it is still the account's subscription), or a grant claimed on
+    // a subscription that has not ended, before its live status is written.
     if (checkoutMode === "subscription") {
-      const { data: currentSubs, error: currentSubsError } = await supabase
-        .from("subscriptions")
-        .select("id, status")
-        .eq("user_id", userId)
-        .in("status", ["active", "past_due", "unpaid"])
-        .limit(1)
+      const { data: currentSubs, error: currentSubsError } = await readLiveOrClaimedSubscriptions<{ id: string; status: string }>(
+        "id, status",
+        (q) => q.eq("user_id", userId),
+      )
       if (currentSubsError) {
         console.error("[billing] checkout: subscription lookup failed:", currentSubsError.message)
         return reply.status(500).send({ error: "Failed to create checkout session" })
@@ -757,7 +759,7 @@ export async function billingRoutes(app: FastifyInstance) {
     // The account's newest subscription. past_due and unpaid are read too, so
     // that it is refused below rather than an older active row being changed
     // instead.
-    const { data: sub } = await supabase
+    let { data: sub } = await supabase
       .from("subscriptions")
       .select("stripe_subscription_id, stripe_price_id, status")
       .eq("user_id", userId)
@@ -766,11 +768,32 @@ export async function billingRoutes(app: FastifyInstance) {
       .limit(1)
       .single()
 
+    // A subscription whose plan grant is claimed (migration 663) but whose
+    // live status the webhook has not written yet is still `incomplete`: it is
+    // the account's subscription, and Stripe's own status decides below
+    // whether it can change. A database without the claim time reads none.
+    let claimedNotYetLive = false
+    if (!sub) {
+      const { data: claimed, error: claimedError } = await supabase
+        .from("subscriptions")
+        .select("stripe_subscription_id, stripe_price_id, status")
+        .eq("user_id", userId)
+        .eq("status", "incomplete")
+        .not("plan_claimed_at", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+      const row = !claimedError && Array.isArray(claimed) ? (claimed[0] ?? null) : null
+      if (row) {
+        sub = row
+        claimedNotYetLive = true
+      }
+    }
+
     if (!sub) {
       return reply.status(404).send({ error: "No active subscription found" })
     }
 
-    if (sub.status !== "active") {
+    if (sub.status !== "active" && !claimedNotYetLive) {
       return reply.status(409).send({ error: PLAN_CHANGE_NOT_ACTIVE })
     }
 

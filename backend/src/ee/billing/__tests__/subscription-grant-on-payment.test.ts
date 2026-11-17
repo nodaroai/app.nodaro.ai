@@ -19,8 +19,16 @@
  *     does not name it) counts as granted; a database without the marker yet
  *     behaves as before.
  *
- * Runs against `memory-tables`, so filters, the unique subscription id and
- * the conditional claim behave as the database's do.
+ *   - A second subscription claimed while another of the account is claimed
+ *     (from its claim on, before its live status is written) or granted and
+ *     live is refused (`other_live`): it grants nothing and stays
+ *     `incomplete`. A paid subscription is recorded `incomplete`, claimed,
+ *     granted, and only then given its status, as on the update path.
+ *
+ * Runs against `memory-tables`, so filters and the unique subscription id
+ * behave as the database's do; `claim_subscription_grant` (migration 663) is
+ * mirrored over the same tables below, and proven against a real Postgres by
+ * supabase/tests/subscription-claim-one-live.behavior.sql.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { STRIPE_PRODUCTS, TIER_CREDITS, TIER_STORAGE_LIMITS } from "../stripe-config.js"
@@ -46,8 +54,12 @@ const { state } = vi.hoisted(() => {
     writes: [] as Array<Record<string, unknown>>,
     /** Columns the database does not have yet (a database before the migration). */
     missingColumns: new Set<string>(),
-    /** The claim's conditional update fails (a database error) while set. */
+    /** The claim (the function, or its fallback's conditional update) fails with a database error while set. */
     failClaim: false,
+    /** Database functions the database does not have yet (a database before the migration). */
+    missingFunctions: new Set<string>(),
+    /** Answers the claim function with this instead of running it, while set. */
+    claimAnswer: undefined as unknown,
     /**
      * Database errors to answer instead of running a call: the first rule whose
      * `when` matches the table, the builder method and its first argument.
@@ -62,8 +74,8 @@ const { state } = vi.hoisted(() => {
     }>,
     /**
      * Another event, run to its end just before the next subscriptions write
-     * that `when` matches lands: what a concurrent delivery does between a
-     * handler's read and its write. Runs once.
+     * (or claim function call) that `when` matches lands: what a concurrent
+     * delivery does between a handler's read and its write. Runs once.
      */
     interleave: null as { when: (write: Record<string, unknown>) => boolean; run: () => Promise<unknown> } | null,
     logTransaction: vi.fn(async (_entry: Record<string, unknown>) => undefined),
@@ -141,7 +153,38 @@ vi.mock("@/lib/supabase.js", async () => {
     })
     return proxy
   }
+  /** Migration 663's claim_subscription_grant, over the same tables. */
+  function claimSubscriptionGrantFn(args: Record<string, unknown>) {
+    const ENDED = ["canceled", "expired", "incomplete_expired"]
+    const LIVE = ["active", "trialing", "past_due", "unpaid"]
+    const answer = (outcome: string, other: string | null = null) => ({ data: [{ outcome, other_stripe_subscription_id: other }], error: null })
+    const subs = (state.db.tables.subscriptions ?? []) as Row[]
+    const row = subs.find((r) => r.stripe_subscription_id === args.p_stripe_subscription_id && r.user_id === args.p_user_id)
+    // A row without the field carries the column's default (true).
+    if (!row || row.plan_granted !== false || ENDED.includes(String(row.status))) return answer("not_claimable")
+    const other = subs
+      .filter((r) => r.user_id === row.user_id && r.stripe_subscription_id !== row.stripe_subscription_id && !ENDED.includes(String(r.status)))
+      .find((r) => (r.plan_granted !== false && LIVE.includes(String(r.status))) || r.plan_claimed_at != null)
+    if (other) return answer("other_live", String(other.stripe_subscription_id))
+    state.db.tables.subscriptions = subs.map((r) => (r === row ? { ...r, plan_granted: true, plan_claimed_at: new Date().toISOString() } : r))
+    return answer("claimed")
+  }
   const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
+    if (state.missingFunctions.has(name)) {
+      return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${name} in the schema cache` } }
+    }
+    if (name === "claim_subscription_grant") {
+      if (state.failClaim) return { data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } }
+      const write = { rpc: name, args }
+      const other = state.interleave
+      if (other && other.when(write)) {
+        state.interleave = null
+        await other.run()
+      }
+      state.writes.push(write)
+      if (state.claimAnswer !== undefined) return { data: state.claimAnswer, error: null }
+      return claimSubscriptionGrantFn(args)
+    }
     state.writes.push({ rpc: name, args })
     if (name === "add_topup_credits") {
       const profiles = (state.db.tables.profiles ?? []) as Row[]
@@ -174,6 +217,8 @@ vi.mock("@/ee/billing/signup-grant.js", () => ({
 vi.mock("@/ee/lib/account-blocking.js", () => ({ releaseQuietStopOnPurchase: vi.fn(async () => ({ released: false })) }))
 
 import { handleSubscriptionCreated, handleSubscriptionUpdated, handleSubscriptionCanceled } from "../provision-credits.js"
+import { claimSubscriptionGrant, resetClaimFunctionWarning } from "../subscription-grant.js"
+import { readLiveOrClaimedSubscriptions } from "../downgrade-floor.js"
 
 const USER = "user-pay-1"
 const CUSTOMER = "cus_pay_1"
@@ -235,10 +280,18 @@ function migratedDb(profile: Row = FREE_PROFILE): MemoryDb {
     unique: { subscriptions: ["stripe_subscription_id"] },
     defaults: { subscriptions: () => ({ plan_granted: true }) },
     guards: {
-      subscriptions: ({ row }) =>
-        STORABLE_STATUSES.has(String(row.status))
-          ? null
-          : { code: "23514", message: 'new row for relation "subscriptions" violates check constraint "subscriptions_status_check"' },
+      subscriptions: ({ row }) => {
+        if (!STORABLE_STATUSES.has(String(row.status))) {
+          return { code: "23514", message: 'new row for relation "subscriptions" violates check constraint "subscriptions_status_check"' }
+        }
+        // idx_one_active_subscription_per_user (migration 024): one `active` row per account.
+        const otherActive = ((state.db.tables.subscriptions ?? []) as Row[]).some(
+          (r) => r.user_id === row.user_id && r.stripe_subscription_id !== row.stripe_subscription_id && r.status === "active",
+        )
+        return row.status === "active" && otherActive
+          ? { code: "23505", message: 'duplicate key value violates unique constraint "idx_one_active_subscription_per_user"' }
+          : null
+      },
     },
   }
 }
@@ -270,6 +323,9 @@ beforeEach(() => {
   state.writes.length = 0
   state.missingColumns.clear()
   state.failClaim = false
+  state.missingFunctions.clear()
+  state.claimAnswer = undefined
+  resetClaimFunctionWarning()
   state.refusals.length = 0
   state.interleave = null
   state.logTransaction.mockClear()
@@ -288,7 +344,7 @@ afterEach(() => {
 })
 
 describe("a subscription paid at once (active at creation) — today's grant, write for write", () => {
-  it("records the subscription, SETs the plan, carries the remainder over, audits, logs and announces — in that order", async () => {
+  it("records the subscription incomplete and unclaimed, claims it through the function, SETs the plan, carries the remainder over, audits, logs, announces, then writes its status — in that order", async () => {
     await handleSubscriptionCreated(created("active"))
 
     expect(state.writes).toEqual([
@@ -299,11 +355,14 @@ describe("a subscription paid at once (active at creation) — today's grant, wr
           stripe_subscription_id: SUB,
           stripe_price_id: PRO,
           tier: "pro",
-          status: "active",
+          status: "incomplete",
           current_period_start: PERIOD.currentPeriodStart,
           current_period_end: PERIOD.currentPeriodEnd,
+          plan_granted: false,
+          plan_claimed_at: null,
         },
       },
+      { rpc: "claim_subscription_grant", args: { p_stripe_subscription_id: SUB, p_user_id: USER } },
       {
         table: "profiles",
         update: {
@@ -317,7 +376,10 @@ describe("a subscription paid at once (active at creation) — today's grant, wr
         },
       },
       { rpc: "add_topup_credits", args: { p_user_id: USER, p_credits: 150 } },
+      // The event's status, once the grant has landed (the update path's order).
+      { table: "subscriptions", update: { status: "active", updated_at: expect.any(String) } },
     ])
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true, plan_claimed_at: expect.any(String) })
     expect(state.logTransaction.mock.calls.map(([e]) => e)).toEqual([
       {
         userId: USER,
@@ -517,7 +579,7 @@ describe("an ended subscription is not revived by a late paid update", () => {
 })
 
 describe("a cancellation and a paid update at the same time", () => {
-  const isClaim = (w: Record<string, unknown>) => (w.update as Row | undefined)?.plan_granted === true
+  const isClaim = (w: Record<string, unknown>) => w.rpc === "claim_subscription_grant"
   const isCancel = (w: Record<string, unknown>) => (w.update as Row | undefined)?.status === "canceled"
   const isRowUpdate = (w: Record<string, unknown>) => (w.update as Row | undefined)?.stripe_price_id !== undefined
 
@@ -687,6 +749,7 @@ describe("a database without the marker yet (staging runs ahead of the migration
     state.db = migratedDb()
     delete state.db.defaults
     state.missingColumns.add("plan_granted")
+    state.missingFunctions.add("claim_subscription_grant")
   })
 
   it("created incomplete is granted at creation, as before", async () => {
@@ -739,11 +802,11 @@ describe("a plan grant whose write fails", () => {
 
     await expect(handleSubscriptionCreated(created("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
 
-    expect(subscription()).toMatchObject({ status: "active", plan_granted: false })
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false, plan_claimed_at: null })
     expect(profile()).toEqual(FREE_PROFILE)
     expect(state.logTransaction).not.toHaveBeenCalled()
     expect(state.notifyPaidConversion).not.toHaveBeenCalled()
-    expect(state.writes.filter((w) => w.rpc)).toEqual([])
+    expect(state.writes.filter((w) => w.rpc && w.rpc !== "claim_subscription_grant")).toEqual([])
 
     await handleSubscriptionCreated(created("active"))
     await handleSubscriptionCreated(created("active"))
@@ -923,4 +986,376 @@ describe("unpaid (payment retries ended without payment)", () => {
     expect(profile()).toMatchObject({ tier: "pro", subscription_tier: "pro" })
     expect(state.logTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ source: "expiry" }))
   })
+})
+
+// ---------------------------------------------------------------------------
+// One live granted subscription per account (migration 663).
+// ---------------------------------------------------------------------------
+
+describe("two subscriptions of one account", () => {
+  const SUB_B = "sub_pay_2"
+  const subscriptionB = () => (state.db.tables.subscriptions as Row[]).find((r) => r.stripe_subscription_id === SUB_B)
+  const claimOf = (id: string) => (w: Record<string, unknown>) =>
+    w.rpc === "claim_subscription_grant" && (w.args as Row).p_stripe_subscription_id === id
+  const refusals = () => errorSpy.mock.calls.flat().filter((m: unknown) => typeof m === "string" && m.includes("second live subscription refused"))
+
+  it("both recorded unpaid; the second's paid update lands in full before the first's claim: one grant, the first refused, written no status, granted nothing", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    await handleSubscriptionCreated(created("incomplete", { subscriptionId: SUB_B }))
+    // B's paid update runs to its end between A's read and A's claim.
+    state.interleave = { when: claimOf(SUB), run: () => handleSubscriptionUpdated(updated("active", { subscriptionId: SUB_B })) }
+
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(state.writes.filter((w) => w.rpc === "add_topup_credits")).toHaveLength(1)
+    expect(subscriptionB()).toMatchObject({ status: "active", plan_granted: true })
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false })
+    expect(profile()).toMatchObject(GRANTED_PRO)
+    expect(refusals()).toEqual([
+      `[stripe] second live subscription refused: sub=${SUB} user=${USER} granted nothing; kept sub=${SUB_B}, the account's live subscription`,
+    ])
+    // A's update wrote no status (and no paid tier) for A.
+    const aWrites = state.writes.filter(
+      (w) => w.table === "subscriptions" && (w.update as Row | undefined)?.status !== undefined && (w.update as Row).stripe_price_id !== undefined,
+    )
+    expect(aWrites).toHaveLength(1) // B's own status write only
+  })
+
+  it("the second's paid update lands between the first's claim and its status write: still one grant, no carryover of the first's credits", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    await handleSubscriptionCreated(created("incomplete", { subscriptionId: SUB_B }))
+    // A has claimed and granted; B's update runs to its end before A's row (and status) write lands.
+    state.interleave = {
+      when: (w) => w.table === "subscriptions" && (w.update as Row | undefined)?.stripe_price_id !== undefined,
+      run: () => handleSubscriptionUpdated(updated("active", { subscriptionId: SUB_B })),
+    }
+
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(state.writes.filter((w) => w.rpc === "add_topup_credits")).toEqual([
+      { rpc: "add_topup_credits", args: { p_user_id: USER, p_credits: 150 } },
+    ])
+    expect(profile()).toMatchObject(GRANTED_PRO)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(subscriptionB()).toMatchObject({ status: "incomplete", plan_granted: false })
+    expect(refusals()).toEqual([
+      `[stripe] second live subscription refused: sub=${SUB_B} user=${USER} granted nothing; kept sub=${SUB}, the account's live subscription`,
+    ])
+  })
+
+  it("a released claim (its grant write failed) stops blocking: the other subscription is claimed and granted", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    await handleSubscriptionCreated(created("incomplete", { subscriptionId: SUB_B }))
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+    await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false, plan_claimed_at: null })
+
+    await handleSubscriptionUpdated(updated("active", { subscriptionId: SUB_B }))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscriptionB()).toMatchObject({ status: "active", plan_granted: true })
+    expect(refusals()).toEqual([])
+  })
+
+  it("a row granted before the claim marker (stuck incomplete, no claim time) does not block", async () => {
+    ;(state.db.tables.subscriptions as Row[]).push({
+      user_id: USER, stripe_subscription_id: "sub_legacy", stripe_price_id: PRO, tier: "pro", status: "incomplete", plan_granted: true,
+      current_period_start: PERIOD.currentPeriodStart, current_period_end: PERIOD.currentPeriodEnd,
+    })
+
+    await handleSubscriptionCreated(created("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+  })
+
+  it("a trialing pair recorded at creation, at once: one grant, and the refused one stays incomplete", async () => {
+    state.interleave = { when: claimOf(SUB), run: () => handleSubscriptionCreated(created("trialing", { subscriptionId: SUB_B })) }
+
+    await handleSubscriptionCreated(created("trialing"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscriptionB()).toMatchObject({ status: "trialing", plan_granted: true })
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false })
+    expect(refusals()).toHaveLength(1)
+    expect(refusals()[0]).toContain(`sub=${SUB} `)
+    expect(refusals()[0]).toContain(`kept sub=${SUB_B}`)
+
+    // Its later trialing update is refused again: no grant, no hold, no paid tier written for it.
+    state.writes.length = 0
+    await handleSubscriptionUpdated(updated("trialing"))
+    expect(planGrants()).toHaveLength(1)
+    expect(profileWrites()).toEqual([])
+  })
+
+  it("a redelivery of the granted subscription is not_claimable, never other_live", async () => {
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionCreated(created("incomplete", { subscriptionId: SUB_B }))
+    await handleSubscriptionUpdated(updated("active", { subscriptionId: SUB_B }))
+    expect(refusals()).toHaveLength(1)
+    errorSpy.mockClear()
+
+    await expect(claimSubscriptionGrant(SUB, USER)).resolves.toEqual({ outcome: "not_claimable" })
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(refusals()).toEqual([])
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+  })
+
+  it("a second subscription after the first ended (cancelled) is claimed and granted normally", async () => {
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionCanceled(canceled)
+    state.logTransaction.mockClear()
+
+    await handleSubscriptionCreated(created("incomplete", { subscriptionId: SUB_B }))
+    await handleSubscriptionUpdated(updated("active", { subscriptionId: SUB_B }))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscriptionB()).toMatchObject({ status: "active", plan_granted: true })
+    expect(profile()).toMatchObject({ tier: "pro", subscription_tier: "pro", subscription_credits: TIER_CREDITS.pro })
+    expect(refusals()).toEqual([])
+  })
+
+  it("the update that outran created, refused: one claim, one log, and the row stays incomplete", async () => {
+    await handleSubscriptionCreated(created("active"))
+    state.writes.length = 0
+
+    await handleSubscriptionUpdated(updated("trialing", { subscriptionId: SUB_B }))
+
+    expect(state.writes.filter(claimOf(SUB_B))).toHaveLength(1)
+    expect(refusals()).toHaveLength(1)
+    expect(subscriptionB()).toMatchObject({ status: "incomplete", plan_granted: false })
+    expect(planGrants()).toHaveLength(1)
+  })
+})
+
+describe("the insert path's order: recorded incomplete, claimed, granted, then its status", () => {
+  it("the paid update before created, then created and redeliveries: one grant, the status written once, never moved back", async () => {
+    await handleSubscriptionUpdated(updated("active"))
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    await handleSubscriptionCreated(created("incomplete"))
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(state.db.tables.subscriptions).toHaveLength(1)
+  })
+
+  it("a cancellation landing between the grant and the status write is never overwritten", async () => {
+    state.interleave = {
+      when: (w) => w.table === "subscriptions" && (w.update as Row | undefined)?.status === "active",
+      run: () => handleSubscriptionCanceled(canceled),
+    }
+
+    await handleSubscriptionCreated(created("active"))
+
+    expect(subscription()).toMatchObject({ status: "canceled" })
+  })
+
+  const failStatusWriteOnce = () =>
+    state.refusals.push({
+      when: (table, prop, arg) => table === "subscriptions" && prop === "update" && (arg as Row | undefined)?.status === "active",
+      error: TIMEOUT,
+      once: true,
+    })
+
+  it("a status write that fails asks Stripe again; the redelivered created writes the status once and grants nothing more", async () => {
+    failStatusWriteOnce()
+
+    await expect(handleSubscriptionCreated(created("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: true })
+    expect(errorSpy.mock.calls.flat().join("\n")).toMatch(/plan granted but its status write failed: sub=sub_pay_1/)
+
+    state.writes.length = 0
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionCreated(created("active"))
+
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(planGrants()).toHaveLength(1)
+    expect(state.writes.filter((w) => w.rpc)).toEqual([])
+    expect(state.writes.filter((w) => w.table === "subscriptions" && (w.update as Row | undefined)?.status === "active")).toHaveLength(1)
+    expect(profileWrites()).toEqual([])
+  })
+
+  it("a status write that fails on the update that outran created: its redelivery writes the status, no second grant", async () => {
+    failStatusWriteOnce()
+
+    await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(planGrants()).toHaveLength(1)
+  })
+})
+
+describe("a claimed subscription is the account's live one for every liveness reader", () => {
+  const SUB_B = "sub_pay_2"
+
+  it("A ended; B claimed but still incomplete; A's redelivered deletion does not downgrade the account", async () => {
+    await handleSubscriptionCreated(created("active"))
+    // A is cancelled at once (its updated(canceled) lands first; its deletion is redelivered below).
+    await handleSubscriptionUpdated(updated("canceled"))
+    await handleSubscriptionCreated(created("incomplete", { subscriptionId: SUB_B }))
+    state.logTransaction.mockClear()
+    // B is claimed and granted; before its row (and live status) write lands, A's deletion arrives.
+    state.interleave = {
+      when: (w) => w.table === "subscriptions" && (w.update as Row | undefined)?.stripe_price_id !== undefined,
+      run: () => handleSubscriptionCanceled(canceled),
+    }
+
+    await handleSubscriptionUpdated(updated("active", { subscriptionId: SUB_B }))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(state.logTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ source: "expiry" }))
+    expect(profile()).toMatchObject({ tier: "pro", subscription_tier: "pro", subscription_credits: TIER_CREDITS.pro })
+    expect(logSpy.mock.calls.flat().join("\n")).toMatch(/has another live subscription, account unchanged/)
+  })
+})
+
+describe("readLiveOrClaimedSubscriptions", () => {
+  const rows = () => [
+    { user_id: USER, stripe_subscription_id: "sub_live", status: "past_due", plan_granted: true },
+    { user_id: USER, stripe_subscription_id: "sub_claimed", status: "incomplete", plan_granted: true, plan_claimed_at: "2026-11-01T00:00:00Z" },
+    { user_id: USER, stripe_subscription_id: "sub_claimed_ended", status: "canceled", plan_granted: true, plan_claimed_at: "2026-10-01T00:00:00Z" },
+    { user_id: USER, stripe_subscription_id: "sub_legacy", status: "incomplete", plan_granted: true },
+    { user_id: "someone-else", stripe_subscription_id: "sub_other", status: "active", plan_granted: true },
+  ]
+  const read = () => readLiveOrClaimedSubscriptions<{ stripe_subscription_id: string }>("stripe_subscription_id", (q) => q.eq("user_id", USER))
+
+  it("reads a live status, or a claim on a subscription that has not ended; a pre-marker row by its status alone", async () => {
+    state.db.tables.subscriptions = rows()
+    const { data, error } = await read()
+    expect(error).toBeNull()
+    expect(data.map((r) => r.stripe_subscription_id).sort()).toEqual(["sub_claimed", "sub_live"])
+  })
+
+  it("a database without the claim time: the claimed read counts nothing", async () => {
+    state.db.tables.subscriptions = rows()
+    state.refusals.push({ when: (t, p, a) => t === "subscriptions" && p === "not" && a === "plan_claimed_at", error: { code: "42703", message: "column subscriptions.plan_claimed_at does not exist" } })
+    const { data, error } = await read()
+    expect(error).toBeNull()
+    expect(data.map((r) => r.stripe_subscription_id)).toEqual(["sub_live"])
+  })
+
+  it("any other error is returned, never read as nothing live", async () => {
+    state.db.tables.subscriptions = rows()
+    state.refusals.push({ when: (t, p, a) => t === "subscriptions" && p === "not" && a === "plan_claimed_at", error: TIMEOUT })
+    const { data, error } = await read()
+    expect(error).toMatchObject({ message: TIMEOUT.message })
+    expect(data).toEqual([])
+  })
+})
+
+describe("a database without migration 663 (staging runs dev before main applies it)", () => {
+  beforeEach(() => {
+    state.missingFunctions.add("claim_subscription_grant")
+    state.missingColumns.add("plan_claimed_at")
+  })
+
+  it("records a paid subscription with its live status, as before, so the one-active index refuses a second paid one", async () => {
+    await handleSubscriptionCreated(created("active"))
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+
+    await handleSubscriptionCreated(created("active", { subscriptionId: "sub_pay_2" }))
+
+    expect(planGrants()).toHaveLength(1)
+    expect((state.db.tables.subscriptions as Row[]).map((r) => r.stripe_subscription_id)).toEqual([SUB])
+    expect(errorSpy.mock.calls.flat().join("\n")).toMatch(/second live subscription refused: sub=sub_pay_2 .* kept sub=sub_pay_1/)
+  })
+
+  it("a released claim is released without the claim time", async () => {
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+    await expect(handleSubscriptionCreated(created("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: false })
+
+    await handleSubscriptionCreated(created("active"))
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ plan_granted: true })
+  })
+})
+
+describe("an update that loses the claim to a concurrent created", () => {
+  it("re-reads the row and goes on from it: its status is written as for a plan granted before", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    // Between the update's read and its claim, a created event (trialing) claims and grants it.
+    state.interleave = {
+      when: (w) => w.rpc === "claim_subscription_grant",
+      run: () => handleSubscriptionCreated(created("trialing")),
+    }
+
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(profile()).toMatchObject(GRANTED_PRO)
+  })
+})
+
+describe("the claim function", () => {
+  it("a subscription paid at creation is claimed through it before its grant", async () => {
+    await handleSubscriptionCreated(created("active"))
+
+    const claimAt = state.writes.findIndex((w) => w.rpc === "claim_subscription_grant")
+    const grantAt = state.writes.findIndex((w) => w.table === "profiles")
+    expect(claimAt).toBeGreaterThan(0)
+    expect(grantAt).toBeGreaterThan(claimAt)
+    expect((state.writes[0]!.insert as Row).plan_granted).toBe(false)
+  })
+
+  it("missing from the database: the conditional update claims, warned once, and grants once", async () => {
+    state.missingFunctions.add("claim_subscription_grant")
+    await handleSubscriptionCreated(created("incomplete"))
+    await handleSubscriptionUpdated(updated("active"))
+    await handleSubscriptionUpdated(updated("active"))
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    // A later subscription, once the first has ended, claims through the fallback too.
+    await handleSubscriptionCanceled(canceled)
+    await handleSubscriptionCreated(created("active", { subscriptionId: "sub_pay_3" }))
+
+    expect(planGrants()).toHaveLength(2)
+    expect((state.db.tables.subscriptions as Row[]).find((r) => r.stripe_subscription_id === "sub_pay_3")).toMatchObject({ status: "active", plan_granted: true })
+    const warnings = warnSpy.mock.calls.flat().filter((m: unknown) => typeof m === "string" && m.includes("claim_subscription_grant is not in the database yet"))
+    expect(warnings).toHaveLength(1)
+  })
+
+  it("missing from the database, a failing conditional update still asks Stripe again", async () => {
+    state.missingFunctions.add("claim_subscription_grant")
+    await handleSubscriptionCreated(created("incomplete"))
+    state.failClaim = true
+
+    await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false })
+  })
+
+  it("a database error asks Stripe again, writing nothing", async () => {
+    state.failClaim = true
+
+    await expect(handleSubscriptionCreated(created("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false })
+    expect(profile()).toEqual(FREE_PROFILE)
+    expect(planGrants()).toHaveLength(0)
+
+    state.failClaim = false
+    await handleSubscriptionCreated(created("active"))
+    expect(planGrants()).toHaveLength(1)
+  })
+
+  it.each([[[]], [null], [[{ outcome: "granted" }]], [[{ outcome: "other_live", other_stripe_subscription_id: null }]]])(
+    "an answer it does not know (%j) asks Stripe again, never reads as claimed",
+    async (answer) => {
+      await handleSubscriptionCreated(created("incomplete"))
+      state.claimAnswer = answer
+
+      await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+      expect(planGrants()).toHaveLength(0)
+      expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false })
+    },
+  )
 })
