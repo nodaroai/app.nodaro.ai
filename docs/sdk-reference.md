@@ -2614,6 +2614,7 @@ interface TrendOriginal extends TrendVideo {
 interface TrendDetailSlot {
   key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
   hintImageUrl?: string                  // a picture of who or what the slot is in the original (never sent by a run)
+  defaultImages?: string[]               // an optional slot's original look: 1–3 https pictures of the role as in the original; absent on a required slot and on a trend that hides its original
   chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
   defaults?: TrendChips                  // the starting value of those chips
 }

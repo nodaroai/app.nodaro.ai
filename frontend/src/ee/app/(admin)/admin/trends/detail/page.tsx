@@ -458,6 +458,7 @@ export default function AdminTrendEditorPage() {
               slots={form.slots}
               hasPreview={hasPreview}
               fullDepth={preparation === "full-depth"}
+              hideOriginal={form.hideOriginal}
               original={cropOriginal}
               originalWaitFor={
                 cropOriginal && form.source?.videoUrl !== savedSource?.videoUrl

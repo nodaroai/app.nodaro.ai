@@ -1,6 +1,6 @@
 /**
  * Cropping one frame of a trend's original into a picture: "Take from the
- * original" in the trend builder, for a slot's default picture (Full depth).
+ * original" in the trend builder, for a slot's default picture (its original look).
  * Registered by `adminTrendsRoutes` (admin-trends.ts), so it shares its
  * `requireAdmin` door and its edition gate.
  *

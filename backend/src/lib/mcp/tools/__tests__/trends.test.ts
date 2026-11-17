@@ -83,7 +83,7 @@ const DETAIL = {
   resolutions: ["480p", "720p", "1080p"],
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example/hint-lead.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
-    { key: "partner", label: "Partner", kind: "person", required: false, chips: [] },
+    { key: "partner", label: "Partner", kind: "person", required: false, defaultImages: ["https://cdn.example/partner-as-in-clip.png"], chips: [] },
   ],
   original: {
     videoUrl: "https://cdn.example/original.mp4",
@@ -222,6 +222,14 @@ describe("get_trend", () => {
     const view = (await callTool(serverWith(f3), "get_trend", { slug: "dance-off" })).structuredContent as Record<string, unknown>
     expect(view.original).toEqual(noPreview)
     expect(view.examples).toEqual([])
+  })
+
+  it("hands back a slot's original look (https addresses only), and no key when it has none", async () => {
+    const odd = { ...DETAIL, slots: [{ ...DETAIL.slots[0], defaultImages: ["http://cdn.example/plain.png", 7] }, DETAIL.slots[1]] }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: odd } } })
+    const view = (await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent as { slots: Array<Record<string, unknown>> }
+    expect(view.slots[0]).not.toHaveProperty("defaultImages")
+    expect(view.slots[1]!.defaultImages).toEqual(["https://cdn.example/partner-as-in-clip.png"])
   })
 
   it("hands back only the original's public fields", async () => {

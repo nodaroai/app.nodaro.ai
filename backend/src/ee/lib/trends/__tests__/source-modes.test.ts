@@ -271,7 +271,9 @@ describe("a run", () => {
 
 describe("publishing", () => {
   const approved = (faceMasking: TrendVersionData["faceMasking"]) => {
-    const d0 = data({ faceMasking })
+    // The optional guest with its original look, which every optional person needs to publish.
+    const slots = data().slots.map((s) => (s.required ? s : { ...s, defaultImages: ["https://cdn.example/guest-look.png"] }))
+    const d0 = data({ faceMasking, slots })
     return withClip({ ...d0, faceMask: mask(d0) })
   }
 

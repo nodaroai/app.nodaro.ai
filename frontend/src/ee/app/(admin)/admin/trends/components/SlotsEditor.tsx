@@ -7,8 +7,10 @@
 // A slot may carry a hint picture (e.g. a frame of that actor from the
 // original), copied into the trend's storage as it is added; shown with the
 // slot, never sent with a run.
-// On a Full depth trend an optional slot may also carry default pictures
-// (SlotDefaultImages): what a run sends when the person leaves it empty.
+// Every optional slot may also carry its original look (SlotDefaultImages):
+// pictures of that role as it is in the clip, which an optional person needs
+// to publish (unless the trend hides its original). A Full depth run sends
+// them when the person leaves the slot empty.
 
 import { useState } from "react"
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react"
@@ -40,6 +42,7 @@ import {
 import { LocalizedField } from "./LocalizedField"
 import { MediaPicker } from "./MediaPicker"
 import { SlotDefaultImages } from "./SlotDefaultImages"
+import { hasOriginalLook } from "../original-look"
 import type { CropOriginal } from "./FrameCropDialog"
 import { uploadLocalFile } from "./uploads"
 
@@ -74,8 +77,10 @@ interface Props {
   readonly slots: FormSlot[]
   /** The trend offers a 4 s preview: each slot shows its preview role name (kept, not shown, otherwise). */
   readonly hasPreview: boolean
-  /** The trend's clip preparation is Full depth: each optional slot shows its default pictures. */
+  /** The trend's clip preparation is Full depth: its runs send an empty optional slot's original look. */
   readonly fullDepth?: boolean
+  /** The trend hides its original: no optional person needs an original look to publish. */
+  readonly hideOriginal?: boolean
   /** The saved original, for "Take from the original"; null while there is none. */
   readonly original?: CropOriginal | null
   /** Why "Take from the original" waits (the source clip is not saved yet). */
@@ -84,7 +89,7 @@ interface Props {
   readonly onChange: (fn: (slots: FormSlot[]) => FormSlot[]) => void
 }
 
-export function SlotsEditor({ trendId, slots, hasPreview, fullDepth = false, original = null, originalWaitFor, onChange }: Props) {
+export function SlotsEditor({ trendId, slots, hasPreview, fullDepth = false, hideOriginal = false, original = null, originalWaitFor, onChange }: Props) {
   // By uid, on the slots as they are when the change lands (never the ones this render saw).
   const update = (uid: string, fn: (s: FormSlot) => FormSlot) => onChange((ss) => ss.map((s) => (s.uid === uid ? fn(s) : s)))
   const move = (uid: string, by: -1 | 1) =>
@@ -111,6 +116,7 @@ export function SlotsEditor({ trendId, slots, hasPreview, fullDepth = false, ori
           count={slots.length}
           hasPreview={hasPreview}
           fullDepth={fullDepth}
+          hideOriginal={hideOriginal}
           original={original}
           originalWaitFor={originalWaitFor}
           kindFull={(k) => k !== s.kind && countOf(k) >= SLOT_CAPS[k]}
@@ -161,6 +167,7 @@ interface CardProps {
   readonly count: number
   readonly hasPreview: boolean
   readonly fullDepth: boolean
+  readonly hideOriginal: boolean
   readonly original: CropOriginal | null
   readonly originalWaitFor: string | undefined
   readonly kindFull: (k: TrendSlotKind) => boolean
@@ -173,7 +180,7 @@ interface CardProps {
   readonly onRemove: () => void
 }
 
-function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, original, originalWaitFor, kindFull, onChange, onHintImage, onDefaultImages, onMove, onRemove }: CardProps) {
+function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, hideOriginal, original, originalWaitFor, kindFull, onChange, onHintImage, onDefaultImages, onMove, onRemove }: CardProps) {
   const n = index + 1
   const keyOk = SLOT_KEY_RE.test(slot.key)
   const setChip = (chip: TrendChipKey, v: TrendChoice | "default") => {
@@ -246,13 +253,16 @@ function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, original
         onChange={(hint) => onChange({ ...slot, hint })}
       />
       <HintPicture trendId={trendId} n={n} url={slot.hintImageUrl} onChange={onHintImage} />
-      {/* Full depth's optional slots; a required one still holding some shows them, to remove. */}
-      {((fullDepth && !slot.required) || (slot.required && (slot.defaultImages?.length ?? 0) > 0)) && (
+      {/* Every optional slot, whatever the clip preparation; a required one still holding some shows them, to remove. */}
+      {(!slot.required || hasOriginalLook(slot)) && (
         <SlotDefaultImages
           trendId={trendId}
           n={n}
           images={slot.defaultImages ?? []}
+          kind={slot.kind}
           required={slot.required}
+          fullDepth={fullDepth}
+          hideOriginal={hideOriginal}
           original={original}
           originalWaitFor={originalWaitFor}
           onChange={onDefaultImages}

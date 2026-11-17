@@ -806,6 +806,30 @@ describe("GET /v1/trends/:slug — the original", () => {
     expect(d.slots[0].hintImageUrl).toBe("https://cdn.example/trends/t1/hint-lead.png")
     expect(d.slots[1]).not.toHaveProperty("hintImageUrl")
   })
+
+  it("passes an optional slot's original look through (https only), never a required slot's, nor any on a trend that hides its original", async () => {
+    const [lead, place] = versionData().slots
+    const look = "https://cdn.example/trends/t1/place-as-in-clip.png"
+    const slots = [
+      // A required slot's pictures (the schema refuses them; an old row could hold some) never leave.
+      { ...lead!, defaultImages: ["https://cdn.example/trends/t1/lead-default.png"] } as TrendSlot,
+      { ...place!, defaultImages: [look, "http://cdn.example/trends/t1/plain.png"] } as TrendSlot,
+    ]
+    mem.trends[0]!.versions[2] = versionData({ slots })
+    const d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    expect(d.slots[1].defaultImages).toEqual([look])
+    expect(d.slots[0]).not.toHaveProperty("defaultImages")
+
+    mem.trends[0]!.versions[2] = versionData({ slots, hideOriginal: true })
+    const hidden = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    for (const s of hidden.json().data.slots) expect(s).not.toHaveProperty("defaultImages")
+    expect(hidden.body).not.toContain(look)
+  })
+
+  it("an optional slot with no original look has no defaultImages key", async () => {
+    const d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    for (const s of d.slots) expect(s).not.toHaveProperty("defaultImages")
+  })
 })
 
 describe("a trend that hides its original (hideOriginal)", () => {

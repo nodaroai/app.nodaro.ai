@@ -208,6 +208,8 @@ export interface TrendDetail extends TrendCard {
     hint?: string
     /** A picture that shows who or what the slot is in the original (the admin's, optional). */
     hintImageUrl?: string
+    /** An optional slot's original look (1–3 https pictures of the role as in the clip); none while the trend hides its original. */
+    defaultImages?: string[]
     chips: ChipKey[]
     defaults?: Chips
   }>
@@ -397,6 +399,8 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     slots: data.slots.map((s) => {
       const hint = pickText(s.hint, locale)
       const defaults = slotDefaults(s)
+      // A trend that hides its original never shows it, so neither its role pictures (often frames of it).
+      const looks = s.required || data.hideOriginal === true ? [] : (s.defaultImages ?? []).filter((u) => u.startsWith("https://"))
       return {
         key: s.key,
         label: pickText(s.label, locale) ?? s.key,
@@ -404,6 +408,7 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
         required: s.required,
         ...(hint ? { hint } : {}),
         ...(s.hintImageUrl ? { hintImageUrl: s.hintImageUrl } : {}),
+        ...(looks.length > 0 ? { defaultImages: looks } : {}),
         chips: shownChips(s),
         ...(defaults ? { defaults } : {}),
       }

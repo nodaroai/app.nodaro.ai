@@ -1773,6 +1773,11 @@ const SUNO_SPEECH_COVER_ID_STEM_WAV_BYTES = 4_051
 // near the per-tool budget. Measured by this suite on top of the Suno raise: 549_013 B in all,
 // 291 B over the 548_722 B it measured before; the list keeps its 28 B of headroom.
 const COMPETITOR_SEARCH_TERMS_BYTES = 291
+// RAISED by a trend slot's original look and nothing else: `get_trend` names a slot's
+// `defaultImages` (an optional slot's pictures of that role as in the original). No tool was
+// added, so the fixture does NOT move. Measured by this suite on top of the competitor search
+// terms: 45 B over what it measured before; the list keeps its 28 B of headroom.
+const TRENDS_ORIGINAL_LOOK_BYTES = 45
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -1996,7 +2001,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES +
     GENERATE_TEXT_MEDIA_WORDING_BYTES +
     SUNO_SPEECH_COVER_ID_STEM_WAV_BYTES +
-    COMPETITOR_SEARCH_TERMS_BYTES,
+    COMPETITOR_SEARCH_TERMS_BYTES +
+    TRENDS_ORIGINAL_LOOK_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
