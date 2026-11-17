@@ -1,5 +1,33 @@
 # @nodaro/cli
 
+## 1.51.0
+
+### Minor Changes
+
+- 97b9f1f: `nodaro nodes run` gains `--reference-task-type <auto|reference|edit|extend>` for `generate-video` and `text-to-video`: it sets `referenceTaskType` on the body (what the request's reference media is for), checked against `SEEDANCE_REFERENCE_TASK_TYPES` before the API is called. It wins over the same key in `--param` / `--params-file`, and `--param referenceTaskType=…` still works. Any other node type refuses the flag, `video-to-video` included, where an edit always runs as an edit.
+
+### Patch Changes
+
+- Updated dependencies [f8353e9]
+- Updated dependencies [97adf73]
+- Updated dependencies [35eaf48]
+- Updated dependencies [d8585f8]
+- Updated dependencies [977e316]
+- Updated dependencies [c237040]
+- Updated dependencies [c237040]
+- Updated dependencies [81d852e]
+- Updated dependencies [cb7abbe]
+- Updated dependencies [dfc544b]
+- Updated dependencies [dfc544b]
+- Updated dependencies [4dfc210]
+- Updated dependencies [4dfc210]
+- Updated dependencies [4dfc210]
+- Updated dependencies [85c61d0]
+- Updated dependencies [77e190d]
+  - @nodaro/sdk@2.75.0
+  - @nodaro/shared@3.69.0
+  - @nodaro/prompts@1.59.0
+
 ## 1.50.2
 
 ### Patch Changes
