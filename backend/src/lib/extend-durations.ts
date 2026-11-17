@@ -35,6 +35,7 @@ export const EXTEND_DURATION_SECONDS: Readonly<Record<ExtendVideoProvider, reado
   "seedance-2-5-flash-extend": catalogDurations("seedance-2-5-flash-extend"),
   "seedance-2-0-extend": catalogDurations("seedance-2-0-extend"),
   "kling-4-extend": catalogDurations("kling-4-extend"),
+  "gemini-omni-flash-1-2-extend": catalogDurations("gemini-omni-flash-1-2-extend"),
   "pixverse-v6-extend": catalogDurations("pixverse-v6-extend"),
   "grok-extend": catalogDurations("grok-extend"),
 }

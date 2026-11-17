@@ -22,7 +22,7 @@ export interface ProviderSafetyGroup {
 /** Replicate's non-image models and Replicate's image models without a lever, by what we run them as. */
 const REPLICATE_WITHOUT_LEVER = ["kling-3-omni", "ltx-2.3-pro", "ltx-2.3-fast", "topaz-image-upscale", "topaz-video", "depth-anything-frames"] as const
 /** fal's models with no filter setting. */
-const FAL_WITHOUT_LEVER = ["video-depth-anything", "sam-3-video", "sam-3.1-video"] as const
+const FAL_WITHOUT_LEVER = ["video-depth-anything", "sam-3-video", "sam-3.1-video", "gemini-omni-flash-1-2-extend"] as const
 
 export function providerSafetyGroups(): readonly ProviderSafetyGroup[] {
   return [

@@ -2774,6 +2774,20 @@ window, the most a run of that length costs, and for a source shorter than
 the 1.8 seconds an extend needs (2 seconds on Seedance 2.5 Flash Extend) it names none (the extend refuses it) (see
 [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)).
 
+A Gemini Omni Flash 1.2 Extend run (`gemini-omni-flash-1-2-extend`) is
+charged per second sent and added on two rows of its own — the seconds of the
+source sent (`gemini-omni-flash-1-2-extend:source:per-second`) and the seconds
+added at its resolution (`gemini-omni-flash-1-2-extend:<resolution>:per-second`),
+the total rounded up to the next 10 before the pricing settings apply — so a
+whole run is priced under its own identifier,
+`gemini-omni-flash-1-2-extend:<resolution>:sent-<S>s:added-<A>s` (`<S>` the
+seconds of the source sent, at most 10; `<A>` the seconds added), which both
+endpoints answer with exactly what the run is charged. `@nodaro/shared`'s
+`geminiOmniExtendQuoteCreditId({ sourcePictureSec, duration, resolution })`
+builds it (no known length: the whole 10 seconds) and
+`parseGeminiOmniExtendQuoteCreditId` reads it back (see
+[Extend Video](nodes/ai-video/extend-video.md#gemini-omni-flash-12-extend-credits)).
+
 So `GET /v1/credits/model-cost?model=speaker-frames` answers ONE block's
 price, 3<!-- credits: speaker-frames --> — the least a run is charged, never
 a run's price: a run of 11 blocks is charged 25<!-- credits: speaker-frames@11 -->,

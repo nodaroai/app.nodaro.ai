@@ -74,6 +74,11 @@ export {
   seedanceExtendUnits,
   type SentPricedSeedanceExtendProvider,
 } from "../seedance-extend-rate.js"
+export {
+  geminiOmniExtendQuoteCreditId,
+  parseGeminiOmniExtendQuoteCreditId,
+  type GeminiOmniExtendQuoteCreditIdParts,
+} from "../gemini-omni-extend-quote.js"
 export * from "../credit-estimators/index.js"
 export {
   resolveTopazUpscale,

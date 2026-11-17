@@ -65,7 +65,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -6157,17 +6157,31 @@ function buildPayloadOf(
       if (isTailExtendProvider(tailProvider)) {
         const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
         const resolution = typeof data.resolution === "string" ? data.resolution : undefined
+        const prompt = buildExtendPrompt()
+        // Gemini Omni Flash 1.2 Extend sends the prompt as written and fal
+        // refuses an empty one: refused here, before the reservation, in the
+        // route's words.
+        if (isGeminiOmniExtendProvider(tailProvider) && !prompt?.trim()) {
+          throw new Error(`prompt (what happens next) is required for ${tailProvider}`)
+        }
         return {
           jobName: "extend-video",
           queueName: "video-generation",
+          // Gemini Omni Flash 1.2 Extend: its resolution's per-second-added
+          // row, at which node-executor marks up the run's base computed on
+          // the source it measured — the route's id
+          // (`resolveExtendVideoIdentifier`), and the id its whole-run quote is
+          // marked up at.
           modelIdentifier: isSeedanceExtendPricedBySecondsSent(tailProvider)
             ? seedanceExtendRateCreditId(resolution, tailProvider)
-            : tailExtendCreditId(tailProvider, duration, resolution),
+            : isGeminiOmniExtendProvider(tailProvider)
+              ? geminiOmniExtendAddedCreditId(resolution)
+              : tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,
             provider: tailProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
-            prompt: buildExtendPrompt(),
+            prompt,
             duration: tailRecipeSeconds(tailProvider, duration),
             resolution: tailExtendResolution(tailProvider, resolution),
             generateAudio: data.generateAudio,

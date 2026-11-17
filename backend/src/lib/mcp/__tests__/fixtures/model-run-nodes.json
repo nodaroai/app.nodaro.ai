@@ -42,6 +42,7 @@
  "gemini-4-carbon-video-analysis": "video-analysis",
  "gemini-omni-flash": "character creature generate-video generate-video-pro image-to-video location object text-to-video video-to-video",
  "gemini-omni-flash-1-2": "character creature generate-video generate-video-pro image-to-video location object text-to-video video-to-video",
+ "gemini-omni-flash-1-2-extend": "extend-video",
  "gemini-omni-video": "character creature generate-video generate-video-pro image-to-video location object text-to-video video-to-video",
  "gpt-image": "character creature face generate-image location object reference-board",
  "gpt-image-2": "character creature face generate-image location object reference-board",

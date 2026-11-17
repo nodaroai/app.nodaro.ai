@@ -224,8 +224,8 @@ describe("Kling 4 Extend Video provider", () => {
 })
 
 describe("the tail-recipe extend providers", () => {
-  it("are Seedance 2.5, Seedance 2.5 Flash, Seedance 2.0 and Kling 4", () => {
-    expect(EXTEND_VIDEO_PROVIDERS.filter(isTailExtendProvider)).toEqual(["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend"])
+  it("are Seedance 2.5, Seedance 2.5 Flash, Seedance 2.0, Kling 4 and Gemini Omni Flash 1.2", () => {
+    expect(EXTEND_VIDEO_PROVIDERS.filter(isTailExtendProvider)).toEqual(["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend", "gemini-omni-flash-1-2-extend"])
     expect(isTailExtendProvider("seedance-2-extend")).toBe(false)
     expect(isTailExtendProvider("veo-extend")).toBe(false)
     expect(isTailExtendProvider(undefined)).toBe(false)
@@ -251,10 +251,10 @@ describe("the tail-recipe extend providers", () => {
 describe("PixVerse V6 Extend Video provider", () => {
   const QUALITIES = ["360p", "540p", "720p", "1080p"] as const
 
-  it("is listed after Kling 4, and is no tail recipe", () => {
+  it("is listed after the tail recipes, and is no tail recipe", () => {
     const at = EXTEND_VIDEO_PROVIDERS.indexOf("pixverse-v6-extend")
     expect(at).toBeGreaterThan(-1)
-    expect(EXTEND_VIDEO_PROVIDERS[at - 1]).toBe("kling-4-extend")
+    expect(EXTEND_VIDEO_PROVIDERS[at - 1]).toBe("gemini-omni-flash-1-2-extend")
     expect(PIXVERSE_V6_EXTEND_PROVIDER).toBe("pixverse-v6-extend")
     expect(isPixverseExtendProvider("pixverse-v6-extend")).toBe(true)
     expect(isPixverseExtendProvider("pixverse-v6-max")).toBe(false)
@@ -265,7 +265,7 @@ describe("PixVerse V6 Extend Video provider", () => {
 
   it("is a catalog extend provider, as the tail recipes are; VEO, Runway and LTX are not", () => {
     expect(EXTEND_VIDEO_PROVIDERS.filter(isCatalogExtendProvider)).toEqual([
-      "seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend",
+      "seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend", "gemini-omni-flash-1-2-extend", "pixverse-v6-extend",
     ])
     for (const p of ["veo-extend", "runway-extend", "ltx-2.3-pro", "seedance-2-extend", "toString", undefined]) {
       expect(isCatalogExtendProvider(p), String(p)).toBe(false)

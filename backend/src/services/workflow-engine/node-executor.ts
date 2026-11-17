@@ -2721,6 +2721,8 @@ async function executeWorkerNode(
     throw err
   }
   if (Object.keys(seedanceExtendStamp.patch).length > 0) payload = { ...payload, ...seedanceExtendStamp.patch }
+  // Gemini Omni Flash 1.2: the capped tier's row is the id the job is held at.
+  if (seedanceExtendStamp.modelIdentifier) modelIdentifier = seedanceExtendStamp.modelIdentifier
 
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {

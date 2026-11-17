@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
+import { creditHint, creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
 import { unitFields } from "../amounts.js"
 import { MAX_LIP_SYNC_AUDIO_SEC } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
@@ -31,7 +31,7 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_L
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, motionTransferResolution } from "@nodaro/shared/credits"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, geminiOmniExtendQuoteCreditId, motionTransferResolution } from "@nodaro/shared/credits"
 import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
@@ -123,6 +123,7 @@ const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" |
   "seedance-2-5-flash-extend": "url",
   "seedance-2-0-extend": "url",
   "kling-4-extend": "url",
+  "gemini-omni-flash-1-2-extend": "url",
   "pixverse-v6-extend": "url",
   // Grok continues only a Grok Imagine video made here, by its task (as VEO's).
   "grok-extend": "task",
@@ -141,9 +142,11 @@ const TASK_EXTEND_LABEL = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] ===
  */
 const LENGTH_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url" || isGrokExtendProvider(p))
 const LENGTH_EXTEND_SECONDS = LENGTH_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
-/** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p"). */
+/** A resolution's lines of picture, for the order: "4k" is 2160. */
+const resolutionLines = (r: string): number => (r.toLowerCase() === "4k" ? 2160 : parseInt(r, 10))
+/** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p" < "4k"). */
 const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
-  .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
+  .sort((a, b) => resolutionLines(a) - resolutionLines(b))
 /** "a or b", "a, b or c". */
 const orList = (items: readonly string[]): string =>
   items.length > 1 ? `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}` : (items[0] ?? "")
@@ -850,6 +853,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
         "grok-extend continues a Grok Imagine video you made here (from text or an image) by its task_id the same way, adding 6 or 10 s at that video's own resolution; any other video is refused before anything is charged. " +
         `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next and join it to the source (2.5: from its last 10 s, billed per second sent + added); ` +
+        `gemini-omni-flash-1-2-extend continues only a 16:9 or 9:16 video (any other shape is refused before anything is charged), from its last 10 s, billed per second sent + added (8 s at 720p on a 10 s+ source: ${creditHint(geminiOmniExtendQuoteCreditId({ duration: 8, resolution: "720p" }))}); it does not continue dialogue. ` +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),

@@ -1071,7 +1071,16 @@ describe("probeVideoSource", () => {
     execFileOnce(withRate({ avg_frame_rate: "30/1" }))
     await probeVideoSource("/tmp/v.mp4")
     // The video stream's index and DURATION tag (a WebM / MKV states its picture's length only there) and the file's start ride the same read.
-    expect(execArgs()).toContain("stream=index,width,height,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time")
+    expect(execArgs()).toContain("stream=index,width,height,sample_aspect_ratio,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time")
+  })
+
+  it("reads a sample aspect ratio other than 1:1 (non-square pixels), and none for square or unstated ones", async () => {
+    execFileOnce(JSON.stringify({ streams: [{ width: 1440, height: 1080, sample_aspect_ratio: "4:3" }], format: { duration: "5" } }))
+    expect((await probeVideoSource("/tmp/v.mp4")).sampleAspectRatio).toBeCloseTo(4 / 3, 6)
+    for (const sar of ["1:1", "0:1", "N/A", undefined]) {
+      execFileOnce(JSON.stringify({ streams: [{ width: 1920, height: 1080, ...(sar !== undefined ? { sample_aspect_ratio: sar } : {}) }], format: { duration: "5" } }))
+      expect(await probeVideoSource("/tmp/v.mp4"), String(sar)).not.toHaveProperty("sampleAspectRatio")
+    }
   })
 
   it("falls back to r_frame_rate when the average is the unusable 0/0", async () => {

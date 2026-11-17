@@ -1722,6 +1722,7 @@ export const ptBR: ChromeDict = {
   "vidcfg.descSeedanceExtend": "Estende QUALQUER vídeo conectado: o Seedance 2 gera o que acontece depois (com som) e o resultado é unido em um único clipe contínuo.",
   "vidcfg.descKlingExtend": "Estende QUALQUER vídeo conectado: o Kling 4 gera o que acontece depois (com som) e o resultado é unido em um único clipe contínuo.",
   "vidcfg.descPixverseExtend": "Estende QUALQUER vídeo conectado: o PixVerse V6 gera o que acontece depois (com som, a menos que você desative) e só o trecho novo é unido ao seu vídeo original em um único clipe contínuo.",
+  "vidcfg.descGeminiOmniExtend": "Estende um vídeo conectado em 16:9 ou 9:16: o Gemini Omni Flash 1.2 gera o que acontece depois (com som) a partir dos últimos 10 segundos, e só o trecho novo é unido ao seu vídeo original. Ele não continua diálogos.",
   "vidcfg.descGrokExtend": "Estende um vídeo do Grok Imagine feito aqui (a partir de texto ou de uma imagem): conecte o nó do Grok Imagine que o gerou. O Grok adiciona 6 ou 10 segundos na resolução do próprio vídeo e devolve o vídeo inteiro com os novos segundos unidos. Não é possível estender vídeos enviados nem vídeos de outros modelos.",
   "vidcfg.descOtherExtend": "Estende um vídeo do VEO, Runway ou LTX com um novo prompt. Conecte o nó “Imagem para vídeo” ou “Texto para vídeo” anterior que gerou o vídeo a estender.",
   "vidcfg.advancedSettings": "Configurações avançadas",

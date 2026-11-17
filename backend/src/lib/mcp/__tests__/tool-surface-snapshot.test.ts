@@ -1740,6 +1740,15 @@ const GEMINI_4_HYDROGEN_ID_BYTES = 100
 // budget it sat exactly at. Measured by this suite on top of Gemini 4 Hydrogen: 544_168 B in all,
 // 24 B over the 544_144 B it measured before it; the list keeps its 28 B of headroom.
 const OMNI_FLASH_1_2_CHARACTERS_BYTES = 24
+// RAISED 2026-11-17 by Gemini Omni Flash 1.2 Extend (`gemini-omni-flash-1-2-extend`), and nothing
+// else: extend_video's model enum, its catalog-derived notes (the URL models, their lengths and
+// resolutions — 4k joins the resolution enum) and one sentence of its description (the two shapes it
+// takes, its price for 8 s at 720p, and that it does not continue dialogue) name the new provider. No
+// tool was added, so the membership fixture does NOT move. Measured by this suite before character
+// references on Gemini Omni Flash 1.2 landed: 544_628 B in all, 484 B over the 544_144 B it measured
+// before it. With both, this suite measures 544_652 B in all; the list keeps its 28 B of headroom,
+// and extend_video is nowhere near the per-tool budget.
+const GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES = 484
 
 // RAISED 2026-11-17 by generate_text's description naming no vendor, and nothing else: "Video and
 // audio need a Gemini model" now reads "… need a model that reads video or audio" (19 B more), since
@@ -1968,6 +1977,7 @@ export const TOOL_WIRE_BUDGET = {
     SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES +
     GEMINI_4_HYDROGEN_ID_BYTES +
     OMNI_FLASH_1_2_CHARACTERS_BYTES +
+    GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES +
     GENERATE_TEXT_MEDIA_WORDING_BYTES,
 }
 

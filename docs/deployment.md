@@ -34,8 +34,12 @@ You need:
   - [ElevenLabs](https://elevenlabs.io) — voice features (TTS, dubbing,
     voice changer, forced alignment).
   - [fal.ai](https://fal.ai) — optional; enables fal-hosted models (e.g.
-    the Sync Lipsync v3 lip-sync model). Without `FAL_KEY` those models
-    are inert and the rest of the app is unaffected.
+    the Sync Lipsync v3 lip-sync model and the Gemini Omni Flash 1.2
+    engine of Extend Video). Without `FAL_KEY` those models are inert
+    (a run on one is refused with a message naming the key, and nothing
+    is charged; Extend Video's Gemini Omni Flash 1.2 engine refuses it
+    before anything is held)
+    and the rest of the app is unaffected.
 
 Optional:
 

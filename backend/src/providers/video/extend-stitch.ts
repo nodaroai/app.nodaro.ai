@@ -236,6 +236,16 @@ export function extendTailPicture(source: MatchedProbe): { pictureFilter?: strin
   }
 }
 
+/**
+ * A filter that gives a picture square pixels at the size it plays at: its
+ * width times its sample aspect (read by ffmpeg from the frame itself, after
+ * any rotation), both sides rounded down to even. For the tail of a source
+ * with non-square pixels sent to a model that reads the stored size as the
+ * shape (Gemini Omni Flash 1.2): an anamorphic clip accepted by the shape it
+ * plays at is sent in that shape.
+ */
+export const SQUARE_PIXEL_PICTURE_FILTER = "scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1"
+
 /** How far `probe`'s sound starts after its picture, in seconds (negative: before it); 0 when either start is unread. */
 function soundOffsetOf(probe: MatchedProbe): number {
   return probe.audioStartSec !== undefined && probe.videoStartSec !== undefined ? probe.audioStartSec - probe.videoStartSec : 0

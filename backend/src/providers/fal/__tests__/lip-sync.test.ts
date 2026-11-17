@@ -58,6 +58,9 @@ describe("falLipSync", () => {
       sync_mode: "loop",
     })
     expect(arg.reconcileOpts).toBe(reconcileOpts)
+    // Lip-sync never resumes a request or retries a status read (those are
+    // Gemini Omni Flash 1.2 Extend's alone): its request path is as it was.
+    for (const key of ["resumeRequestId", "onSubmitted", "statusErrorRetries"]) expect(arg).not.toHaveProperty(key)
   })
 
   it("omits sync_mode when not provided", async () => {

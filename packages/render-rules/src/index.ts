@@ -910,6 +910,25 @@ export {
   type SentPricedSeedanceExtendProvider,
   type SeedanceExtendPrice,
 } from "./seedance-extend-pricing"
+// Gemini Omni Flash 1.2 Extend pricing (decided 2026-11-17): per second sent and added on two rows, rounded up to 10.
+export {
+  GEMINI_OMNI_EXTEND_PROVIDER,
+  GEMINI_OMNI_EXTEND_SOURCE_CREDIT_ID,
+  GEMINI_OMNI_EXTEND_ADDED_CREDIT_IDS,
+  GEMINI_OMNI_EXTEND_ROUND_TO,
+  GEMINI_OMNI_EXTEND_MIN_SOURCE_SEC,
+  isGeminiOmniExtendProvider,
+  geminiOmniExtendAddedCreditId,
+  geminiOmniExtendBaseCredits,
+  pricedGeminiOmniExtendQuote,
+  geminiOmniExtendQuoteBase,
+  GEMINI_OMNI_EXTEND_TIER_LINES,
+  GEMINI_OMNI_EXTEND_TIER_TOLERANCE,
+  GEMINI_OMNI_EXTEND_TIER_TOLERANCE_MIN_LINES,
+  geminiOmniExtendResolution,
+  geminiOmniExtendEstimateSource,
+  type GeminiOmniExtendEstimateSource,
+} from "./gemini-omni-extend-pricing"
 // Topaz upscale pricing: the video hold (output gigapixels) and the image size units.
 export {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,

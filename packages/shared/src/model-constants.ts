@@ -345,6 +345,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // 20480 with room for the recipe's wrapper and the reference directives.
   "seedance-2-5-flash-extend": 20000,
   "seedance-2-0-extend": 20000,
+  // Gemini Omni Flash 1.2 Extend (fal) — 20000 chars, the endpoint's own cap;
+  // its prompt is sent as written, so the whole cap is the user's.
+  "gemini-omni-flash-1-2-extend": 20000,
   // Seedance 2.5 raises the prompt ceiling to 30000
   // (docs.kie.ai/market/bytedance/seedance-2-5).
   "seedance-2-5": 30000,
@@ -1620,6 +1623,11 @@ export const EXTEND_VIDEO_PROVIDERS = [
   // Kling 4 extends ANY video the same way (3–30 s added, 720p / 1080p, its
   // sound always on), generated on Kling 4.0 and priced on its own rows.
   "kling-4-extend",
+  // Gemini Omni Flash 1.2 extends ANY 16:9 or 9:16 video from its tail (3–10 s
+  // added, 360p–4K), generated on fal: the source's last 10 s go in and come
+  // back with the new seconds joined on, of which only the new ones are kept.
+  // Priced on its own rows, per second sent and added.
+  "gemini-omni-flash-1-2-extend",
   // PixVerse V6 extends ANY video natively (1–15 s added, 360p–1080p, a sound
   // switch): the whole source goes in and comes back with the new seconds
   // joined on, of which only the new ones are kept. Priced on its own rows.
@@ -1652,8 +1660,8 @@ export function isSeedanceExtendProvider(p: unknown): p is SeedanceExtendProvide
  * own catalog entry (its seconds added and resolutions) and price rows, one
  * per second and resolution (`tailExtendCreditId`).
  */
-export type TailExtendProvider = SeedanceExtendProvider | Extract<ExtendVideoProvider, "kling-4-extend">
-const TAIL_EXTEND_PROVIDERS: readonly TailExtendProvider[] = [...SEEDANCE_EXTEND_PROVIDERS, "kling-4-extend"]
+export type TailExtendProvider = SeedanceExtendProvider | Extract<ExtendVideoProvider, "kling-4-extend" | "gemini-omni-flash-1-2-extend">
+const TAIL_EXTEND_PROVIDERS: readonly TailExtendProvider[] = [...SEEDANCE_EXTEND_PROVIDERS, "kling-4-extend", "gemini-omni-flash-1-2-extend"]
 
 /**
  * Whether a value is one of the tail-recipe Extend Video providers

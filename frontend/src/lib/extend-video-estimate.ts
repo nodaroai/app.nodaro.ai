@@ -14,7 +14,9 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  *   length the graph knows it (`extendSourceEstimateSec`: an upload's, a made
  *   generation's recorded length), the whole window while it does not — the
  *   run measures the source before it holds anything;
- * - every other provider: one.
+ * - every other provider: one — Gemini Omni Flash 1.2 included, whose one
+ *   whole-run quote id already names the seconds sent and added
+ *   (`getModelIdentifier`, decided 2026-11-17).
  * A wired Settings node can set the model, the length and the resolution, so
  * they are read the way the run reads them.
  */

@@ -63,6 +63,7 @@ import {
   seedanceExtendSentSec,
   seedanceExtendUnits,
 } from "./seedance-extend-rate.js"
+import { geminiOmniExtendQuoteCreditId } from "./gemini-omni-extend-quote.js"
 import { unitQuoteCreditId } from "./credit-estimators/unit-quote.js"
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import {
@@ -931,6 +932,9 @@ export function tailExtendCreditId(
   resolution?: string,
 ): string {
   if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendFullWindowCreditId(duration, resolution, provider)
+  // Gemini Omni Flash 1.2 Extend: the whole-run quote of a run that sends the
+  // whole 10 s window (`geminiOmniExtendQuoteCreditId`, no source known).
+  if (provider === "gemini-omni-flash-1-2-extend") return geminiOmniExtendQuoteCreditId({ duration, resolution })
   return `${provider}:${pricedOutputDurationSec(provider, duration)}s:${tailExtendResolution(provider, resolution)}`
 }
 

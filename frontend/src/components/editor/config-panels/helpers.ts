@@ -36,6 +36,7 @@ import {
   referenceAudioLipSyncCreditId,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
+  geminiOmniExtendQuoteCreditId,
 } from "@nodaro/shared/credits"
 import {
   buildLlmCreditIdentifier,
@@ -52,7 +53,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
-import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
@@ -901,6 +902,18 @@ export function getModelIdentifier(
   if (nodeType === "extend-video") {
     const runsAs = canonicalVideoProvider(provider)
     if (isSeedanceExtendPricedBySecondsSent(runsAs)) return seedanceExtendRateCreditId(data.resolution, runsAs)
+    // Gemini Omni Flash 1.2 Extend (decided 2026-11-17): the whole-run quote
+    // id of the run on the source the canvas knows (`geminiOmniExtendEstimateSource`:
+    // an upload's length; a made generation's recorded length rounded up to
+    // the whole second, never below what the hold counts; its size, which
+    // caps the tier), else the whole 10 s window — the upper bound. The server
+    // prices it by the rule the run is held by.
+    if (isGeminiOmniExtendProvider(runsAs)) {
+      const source = nodes && edges ? geminiOmniExtendEstimateSource(storedNode, nodes, edges, reruns ?? new Set()) : {}
+      const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+      const resolution = geminiOmniExtendResolution(data.resolution, source.frame)
+      return geminiOmniExtendQuoteCreditId({ sourcePictureSec: source.sourcePictureSec, duration, resolution })
+    }
     if (isCatalogExtendProvider(runsAs)) {
       return catalogExtendCreditId(
         runsAs,

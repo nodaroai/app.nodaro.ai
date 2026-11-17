@@ -54,6 +54,74 @@ export function createsFalRun(method: string, url: string): boolean {
   }
 }
 
+/**
+ * The endpoints whose submit is sent ONCE (`submitOnce`, decided 2026-11-17).
+ * The SDK's queue client re-sends a submit by itself on a 429 / 502 / 503 /
+ * 504 answer and on a network failure (its retry settings for the queue are
+ * fixed in the SDK; no per-call or client option reaches them). After a 502 /
+ * 503 / 504 or a lost connection the first POST may already have created a
+ * request, and the caller would learn only the second one's id: two billed
+ * runs, one of them unknown. For these endpoints the transport answers such
+ * a submit with {@link FalSubmitAmbiguousError}, which the SDK does not
+ * retry. A 429 is passed through (nothing was created; the SDK may retry it).
+ */
+const SUBMIT_ONCE_ENDPOINTS = new Set<string>()
+
+/** HTTP answers to a submit after which fal may or may not have created the request. */
+const AMBIGUOUS_SUBMIT_STATUSES: ReadonlySet<number> = new Set([502, 503, 504])
+
+/**
+ * A submit whose outcome is not known: fal may or may not have created a
+ * request. Deliberately carries no `cause`, no network `code` and is no
+ * `TypeError`: the SDK's retry reads those (down the cause chain) to decide
+ * to send the request again.
+ */
+export class FalSubmitAmbiguousError extends Error {
+  readonly status?: number
+  constructor(reason: string, status?: number) {
+    super(`fal submit outcome unknown: ${reason}`)
+    this.name = "FalSubmitAmbiguousError"
+    if (status !== undefined) this.status = status
+  }
+}
+
+/** Marks `endpoint` as one whose submit is sent once ({@link SUBMIT_ONCE_ENDPOINTS}). */
+export function markSubmitOnce(endpoint: string): void {
+  SUBMIT_ONCE_ENDPOINTS.add(endpoint.replace(/^\/+|\/+$/g, ""))
+}
+
+/** Whether a transport call is the submit of a send-once endpoint. */
+function isSubmitOnceCall(method: string, url: string): boolean {
+  if (SUBMIT_ONCE_ENDPOINTS.size === 0 || !createsFalRun(method, url)) return false
+  try {
+    const path = new URL(url).pathname.replace(/^\/+|\/+$/g, "")
+    return SUBMIT_ONCE_ENDPOINTS.has(path)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Wraps fal's transport so the submit of a send-once endpoint is never
+ * re-sent by the SDK after an ambiguous outcome. Every other call (another
+ * endpoint's submit, any status or result read) goes through untouched.
+ */
+export function submitOnceFetch(inner: typeof fetch): typeof fetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+    const method = (init?.method ?? (typeof input === "object" && "method" in input ? input.method : "GET")).toUpperCase()
+    if (!isSubmitOnceCall(method, url)) return inner(input, init)
+    let response: Response
+    try {
+      response = await inner(input, init)
+    } catch (err) {
+      throw new FalSubmitAmbiguousError(err instanceof Error ? err.message : String(err))
+    }
+    if (AMBIGUOUS_SUBMIT_STATUSES.has(response.status)) throw new FalSubmitAmbiguousError(`HTTP ${response.status}`, response.status)
+    return response
+  }) as typeof fetch
+}
+
 /** Lazy one-shot credential config (fal.config rebuilds the singleton each call). */
 let configured = false
 function ensureConfigured(coverage?: ProviderKeyCoverage): void {
@@ -62,7 +130,7 @@ function ensureConfigured(coverage?: ProviderKeyCoverage): void {
   // Inject the egress-decorated fetch so fal's queue transport (submit/status/
   // result) flows through the seam like every other provider call, and each
   // submit takes its concurrency slot there (createsWork).
-  fal.config({ credentials: config.FAL_KEY, fetch: egressSdkFetch("fal", { createsWork: createsFalRun }) })
+  fal.config({ credentials: config.FAL_KEY, fetch: submitOnceFetch(egressSdkFetch("fal", { createsWork: createsFalRun })) })
   configured = true
 }
 
@@ -118,6 +186,49 @@ function falFailureReason(error: unknown, fallback: string): string {
 }
 
 /**
+ * A failed fal request: the message is `fal request failed (<id>): <reason>`
+ * (unchanged), and the HTTP status and the provider's own `detail`, when the
+ * failure carried them, ride on the error so a caller can classify a refusal
+ * without parsing the flattened reason.
+ */
+export class FalRequestError extends Error {
+  readonly requestId: string
+  readonly status?: number
+  readonly detail?: unknown
+  /**
+   * Whether fal itself answered that the request ended in failure (a failed
+   * queue status, or an HTTP answer to the result fetch other than a gateway's
+   * or a rate limit's) — as opposed to a result that could not be read, where
+   * the request may have finished well and can be fetched again.
+   */
+  readonly ended: boolean
+  constructor(requestId: string, reason: string, source: unknown, ended = false) {
+    super(`fal request failed (${requestId}): ${reason}`)
+    this.name = "FalRequestError"
+    this.requestId = requestId
+    this.ended = ended
+    // A queue status can carry its failure as plain text: kept as the detail.
+    if (typeof source === "string" && source.trim()) this.detail = source
+    if (source && typeof source === "object") {
+      const e = source as Record<string, unknown>
+      if (typeof e.status === "number") this.status = e.status
+      const body = e.body
+      const detail = body && typeof body === "object" ? (body as Record<string, unknown>).detail : body
+      if (detail !== undefined && detail !== null) this.detail = detail
+    }
+  }
+}
+
+/** HTTP statuses of a result fetch that say nothing of the request itself (a gateway or a rate limit in the way). */
+const TRANSIENT_RESULT_STATUSES: ReadonlySet<number> = new Set([408, 429, 502, 503, 504])
+
+/** Whether a failed result fetch is fal's own answer that the request ended in failure (an HTTP status that is not a transient one). */
+function resultAnswerEndsRequest(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status
+  return typeof status === "number" && !TRANSIENT_RESULT_STATUSES.has(status)
+}
+
+/**
  * Shared dispatch envelope for fal queue requests:
  * `submit` → `fireOnTaskCreated(request_id)` (BEFORE polling, so a worker crash
  * mid-poll still leaves the row recoverable by the reconcile cron) → poll
@@ -134,21 +245,61 @@ export async function runFalRequest(opts: {
   pollIntervalMs?: number
   /** For a lane the nodaro.ai connection cannot run: the missing-key message must not offer it. */
   keyCoverage?: ProviderKeyCoverage
+  /**
+   * A request this run already submitted (a retry of the same job): it is
+   * polled and its result fetched, and nothing is submitted again. Absent:
+   * a new request is submitted (every caller but Gemini Omni Flash 1.2 Extend).
+   */
+  resumeRequestId?: string
+  /** Told the request id right after a NEW submit, before any poll: where a caller persists it for a retry. */
+  onSubmitted?: (requestId: string) => Promise<void>
+  /**
+   * How many status reads in a row may fail (a network blip, a 5xx) before
+   * the poll gives up: each failed read waits one interval and is tried
+   * again. Absent: 0 — the first failed read throws, as it always has.
+   */
+  statusErrorRetries?: number
+  /**
+   * Send this endpoint's submit once: an ambiguous outcome (502 / 503 / 504,
+   * a network failure) is not re-sent by the SDK and throws
+   * {@link FalSubmitAmbiguousError} ({@link SUBMIT_ONCE_ENDPOINTS}). Absent:
+   * the SDK's own retry, as it always was.
+   */
+  submitOnce?: boolean
+  /** The most status polls before the wait gives up. Absent: 600 (30 minutes at the default cadence). */
+  maxPolls?: number
 }): Promise<{ output: unknown; requestId: string }> {
   ensureConfigured(opts.keyCoverage)
+  if (opts.submitOnce) markSubmitOnce(opts.endpoint)
 
-  const submitted = await fal.queue.submit(opts.endpoint, { input: opts.input })
-  const requestId = (submitted as { request_id: string }).request_id
-
-  await fireOnTaskCreated(opts.reconcileOpts, requestId, opts.label)
+  let requestId: string
+  if (opts.resumeRequestId) {
+    requestId = opts.resumeRequestId
+  } else {
+    const submitted = await fal.queue.submit(opts.endpoint, { input: opts.input })
+    requestId = (submitted as { request_id: string }).request_id
+    if (opts.onSubmitted) await opts.onSubmitted(requestId)
+    await fireOnTaskCreated(opts.reconcileOpts, requestId, opts.label)
+  }
 
   const interval = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
+  const statusErrorRetries = opts.statusErrorRetries ?? 0
+  let statusErrors = 0
 
-  for (let i = 0; i < MAX_POLLS; i++) {
-    const statusResp = (await fal.queue.status(opts.endpoint, { requestId })) as {
-      status: string
-      error?: unknown
+  const maxPolls = opts.maxPolls ?? MAX_POLLS
+  for (let i = 0; i < maxPolls; i++) {
+    let statusResp: { status: string; error?: unknown }
+    try {
+      statusResp = (await fal.queue.status(opts.endpoint, { requestId })) as {
+        status: string
+        error?: unknown
+      }
+    } catch (err) {
+      if (++statusErrors > statusErrorRetries) throw err
+      await sleep(interval)
+      continue
     }
+    statusErrors = 0
     const status = statusResp.status
 
     if (status === "COMPLETED") {
@@ -158,9 +309,7 @@ export async function runFalRequest(opts: {
         }
         return { output: result.data, requestId }
       } catch (err) {
-        throw new Error(
-          `fal request failed (${requestId}): ${falFailureReason(err, "result fetch failed")}`,
-        )
+        throw new FalRequestError(requestId, falFailureReason(err, "result fetch failed"), err, resultAnswerEndsRequest(err))
       }
     }
 
@@ -168,16 +317,14 @@ export async function runFalRequest(opts: {
     // but the REST queue can surface a terminal error status. Treat anything
     // that isn't a known in-flight status as a failure.
     if (status === "ERROR" || status === "FAILED") {
-      throw new Error(
-        `fal request failed (${requestId}): ${falFailureReason(statusResp.error, status)}`,
-      )
+      throw new FalRequestError(requestId, falFailureReason(statusResp.error, status), statusResp.error, true)
     }
 
     await sleep(interval)
   }
 
   throw new Error(
-    `fal request failed (${requestId}): timed out after ${MAX_POLLS} polls`,
+    `fal request failed (${requestId}): timed out after ${maxPolls} polls`,
   )
 }
 

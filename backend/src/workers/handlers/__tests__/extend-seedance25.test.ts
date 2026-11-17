@@ -357,6 +357,12 @@ describe("the job's provider picks the model", () => {
     },
   )
 
+  it("an anamorphic source's tail is cut as it always was (square pixels are Gemini Omni Flash 1.2's alone)", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1440, height: 1080, sampleAspectRatio: 4 / 3, durationSeconds: 25.2, videoDurationSeconds: 25 })
+    await run({ provider: "seedance-2-5-extend" })
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 10, { measureFrom: "picture" })
+  })
+
   it("seedance-2-5-extend cuts the last 10 s of a longer source", async () => {
     mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 25.2, videoDurationSeconds: 25 })
     await run({ provider: "seedance-2-5-extend" })

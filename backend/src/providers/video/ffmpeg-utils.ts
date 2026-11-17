@@ -1249,6 +1249,8 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
   videoStreamIndex?: number
   /** The file's start time (`format=start_time`). */
   startTimeSeconds?: number
+  /** The first video stream's sample aspect ratio (width of a pixel ÷ its height), when it states one other than 1:1. */
+  sampleAspectRatio?: number
 }> {
   const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
@@ -1256,14 +1258,14 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
     // malicious manifest can't pivot to other protocols.
     ...probe.inputArgs,
     "-select_streams", "v:0",
-    "-show_entries", "stream=index,width,height,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time",
+    "-show_entries", "stream=index,width,height,sample_aspect_ratio,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time",
     "-of", "json",
     input,
   ], opts), opts.signal ? { signal: opts.signal } : {})
   // CSV inserts extra fields for stream side data (including an empty field
   // on Remotion MP4s). Read named fields so metadata cannot shift dimensions.
   let metadata: {
-    streams?: Array<{ index?: unknown; width?: unknown; height?: unknown; avg_frame_rate?: unknown; r_frame_rate?: unknown; duration?: unknown; tags?: { DURATION?: unknown } }>
+    streams?: Array<{ index?: unknown; width?: unknown; height?: unknown; sample_aspect_ratio?: unknown; avg_frame_rate?: unknown; r_frame_rate?: unknown; duration?: unknown; tags?: { DURATION?: unknown } }>
     format?: { duration?: unknown; start_time?: unknown }
   }
   try {
@@ -1287,6 +1289,7 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
   const videoTagDurationSeconds = parseMatroskaDurationTag(metadata?.streams?.[0]?.tags?.DURATION)
   const videoStreamIndex = Number(metadata?.streams?.[0]?.index)
   const startTimeSeconds = Number(metadata?.format?.start_time)
+  const sampleAspectRatio = parseSampleAspect(metadata?.streams?.[0]?.sample_aspect_ratio)
   return {
     width,
     height,
@@ -1296,6 +1299,7 @@ export async function probeVideoSource(srcUrlOrPath: string, opts: { readonly si
     ...(videoTagDurationSeconds !== undefined ? { videoTagDurationSeconds } : {}),
     ...(Number.isInteger(videoStreamIndex) && videoStreamIndex >= 0 ? { videoStreamIndex } : {}),
     ...(Number.isFinite(startTimeSeconds) ? { startTimeSeconds } : {}),
+    ...(sampleAspectRatio !== 1 ? { sampleAspectRatio } : {}),
   }
 }
 

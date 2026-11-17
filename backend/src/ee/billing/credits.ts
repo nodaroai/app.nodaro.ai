@@ -60,6 +60,7 @@ import {
   parseUnitQuoteCreditId,
   VIDEO_OVERLAY_PRICING,
   videoOverlayVideoUnits,
+  geminiOmniExtendQuoteCreditId,
 } from "@nodaro/shared/credits"
 import {
   videoMaskCreditId,
@@ -119,7 +120,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
+import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -763,6 +764,26 @@ const SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS: Readonly<Record<string, number>> = Ob
     }),
   ),
 )
+
+/**
+ * Gemini Omni Flash 1.2 Extend's rows (decided 2026-11-17, @nodaro/render-rules
+ * `gemini-omni-extend-pricing.ts`): 5 credits per second of the source sent
+ * (at every resolution), and per second added 15 / 42 / 63 / 125 at 360p /
+ * 720p / 1080p / 4K (decided 2026-11-17). A run is (sent × the first) + (added × its resolution's),
+ * rounded up to the next 10 once, then marked up once; its whole-run quote id
+ * (`geminiOmniExtendQuoteCreditId`) is priced from these same two rows
+ * (whole-request-quotes.ts), so it has no rows of its own.
+ * `extend-price-rows.test.ts` holds the rows to these figures and compares
+ * every run they price with the provider figure recorded for it
+ * (`falGeminiOmniExtendCostUsd`).
+ */
+const GEMINI_OMNI_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
+  "gemini-omni-flash-1-2-extend:source:per-second": 5,
+  "gemini-omni-flash-1-2-extend:360p:per-second": 15,
+  "gemini-omni-flash-1-2-extend:720p:per-second": 42,
+  "gemini-omni-flash-1-2-extend:1080p:per-second": 63,
+  "gemini-omni-flash-1-2-extend:4k:per-second": 125,
+}
 
 export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC_CREDIT_COSTS", {
   // Credits = ceil(kieCredits / 4) at 0% markup.
@@ -1849,6 +1870,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...SEEDANCE_25_EXTEND_RATE_ROWS,
   ...SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS,
   ...SEEDANCE_25_FLASH_EXTEND_RATE_ROWS,
+  ...GEMINI_OMNI_EXTEND_RATE_ROWS,
   // ── Seedance 2.0 Extend — one row per second added (4–15s) × resolution,
   //    held to the seedance-2 reference-video price the same way. ──
   "seedance-2-0-extend:4s:480p": 173,
@@ -6241,6 +6263,22 @@ function estimateNodeCredits(
   if (node.type === "video-upscale") {
     const runs = withWiredSettings(node, nodes, edges)
     if (isNodaroVideoUpscaleNode(runs) && nodaroVideoUpscaleRefusesLength(videoUpscaleWireSec(node, edges, wires.knownSec))) return 0
+  }
+  // Gemini Omni Flash 1.2 Extend (decided 2026-11-17): the whole-run quote id
+  // of the run on the source the graph knows (`geminiOmniExtendEstimateSource`,
+  // the editor's reading: its length, never below what the hold counts, else
+  // the whole 10 s window; its size, which caps the tier), priced from its two
+  // rows by the rule its hold reads (whole-request-quotes.ts).
+  if (node.type === "extend-video") {
+    const wired = withWiredSettings(node, nodes, edges ?? [])
+    const data = wired.data ?? {}
+    if (isGeminiOmniExtendProvider(canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER)))) {
+      const source = edges && node.id ? geminiOmniExtendEstimateSource({ id: node.id }, listingGateNodes(nodes), listingGateEdges(edges), rerunIds) : {}
+      const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+      const resolution = geminiOmniExtendResolution(data.resolution, source.frame)
+      const credits = chargedCredits(prices, geminiOmniExtendQuoteCreditId({ sourcePictureSec: source.sourcePictureSec, duration, resolution }))
+      if (credits !== undefined) return credits
+    }
   }
   // Image Overlay is base + 2 per extra platform render — the shared formula,
   // marked up once as a whole, the way its route's creditGuard reserves it.

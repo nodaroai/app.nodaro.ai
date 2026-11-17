@@ -185,8 +185,11 @@ const entityImage = (d: Data): string | null =>
 function extendVideoProvider(d: Data): string | null {
   const model = canonicalVideoProvider(str(d.provider))
   if (model === "ltx-2.3-pro") return "replicate" // runLtxExtend
-  // A tail recipe generates its continuation on its own model (extend-recipe.ts).
-  if (typeof model === "string" && isTailRecipeProvider(model)) return route("image-to-video", TAIL_RECIPES[model].genModel)
+  // A tail recipe generates its continuation on its own model (extend-recipe.ts):
+  // on fal, called directly (Gemini Omni Flash 1.2), else through the router.
+  if (typeof model === "string" && isTailRecipeProvider(model)) {
+    return TAIL_RECIPES[model].transport === "fal" ? "fal" : route("image-to-video", TAIL_RECIPES[model].genModel)
+  }
   // PixVerse V6 extends on KIE's own extend endpoint, called directly (runPixverseExtend).
   if (isPixverseExtendProvider(model)) return "kie"
   // Grok extends on KIE's own extend endpoint, called directly (runGrokExtend).

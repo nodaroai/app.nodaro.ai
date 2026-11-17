@@ -21,6 +21,7 @@ import { dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared/mode
 import { getTtsCapabilities } from "@nodaro/shared/model-catalog"
 import { speechCredits, speechCreditsFor, speechUnitCreditId, isSpeechLengthPriceId, speechLengthPriceModel, parseVoiceChangerProQuoteCreditId, VOICE_CHANGER_PRO_QUOTE_RATE_ID } from "@nodaro/shared/credits"
 import { sentDialogueChars, sentSpeechText } from "@nodaro/prompts/prompt-fields"
+import { geminiOmniExtendAddedCreditId, pricedGeminiOmniExtendQuote } from "@nodaro/render-rules"
 import { ttsModelKey } from "../providers/elevenlabs/tts-models.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { parseRateQuoteCreditId } from "./unit-quote-rates.js"
@@ -59,12 +60,16 @@ export function speechUnitRowServed(identifier: string): boolean {
  * override mark a speech reservation up at — a whole-run quote of a per-unit
  * rate (`<rateId>:<units>u`) at its rate, the id that run's guard marks up at,
  * a whole Voice Changer Pro convert (`voice-changer-pro:<slots>`) at
- * `voice-changer-pro`, and every other id at itself. So a per-service margin
+ * `voice-changer-pro`, a whole Gemini Omni Flash 1.2 Extend run at its
+ * resolution's per-second-added row, and every other id at itself. So a per-service margin
  * applies to a quote exactly as it applies to the charge.
  */
 export function priceMarginKey(identifier: string): string {
   // A whole-convert quote (`voice-changer-pro:<slots>`) at the id its route's guard marks up at.
   if (parseVoiceChangerProQuoteCreditId(identifier)) return VOICE_CHANGER_PRO_QUOTE_RATE_ID
+  // A whole Gemini Omni Flash 1.2 Extend run at its resolution's per-second-added row, the id its route's guard holds at.
+  const extend = pricedGeminiOmniExtendQuote(identifier)
+  if (extend) return geminiOmniExtendAddedCreditId(extend.resolution)
   const rateId = parseRateQuoteCreditId(identifier)?.rateId ?? identifier
   return speechLengthPriceModel(rateId) ?? rateId
 }

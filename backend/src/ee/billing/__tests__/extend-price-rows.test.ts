@@ -22,7 +22,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { buildVideoCreditModelIdentifier, tailExtendCreditId, unitQuoteCreditId } from "@nodaro/shared/credits"
+import { buildVideoCreditModelIdentifier, seedanceExtendSentSec, tailExtendCreditId, unitQuoteCreditId } from "@nodaro/shared/credits"
 import {
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
@@ -37,6 +37,10 @@ import { applyMarkupPercent } from "../service-margin.js"
 import { quoteBaseCredits } from "../../../lib/credit-base-cost.js"
 import { parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 import { TAIL_RECIPES } from "../../../lib/extend-recipe.js"
+import { GEMINI_OMNI_EXTEND_ADDED_CREDIT_IDS, GEMINI_OMNI_EXTEND_MIN_SOURCE_SEC, GEMINI_OMNI_EXTEND_SOURCE_CREDIT_ID, geminiOmniExtendBaseCredits } from "@nodaro/render-rules"
+import { CREDIT_BASE_USD } from "@nodaro/shared/models"
+import { falGeminiOmniExtendCostUsd } from "../../../providers/fal/pricing.js"
+import { wholeRequestQuoteOf } from "../whole-request-quotes.js"
 
 /** A sweep of tens of thousands of cases: well under a second alone, longer on a loaded CI worker. */
 const SWEEP_TIMEOUT_MS = 60_000
@@ -62,7 +66,9 @@ describe.each(Object.keys(TAIL_RECIPES) as Array<keyof typeof TAIL_RECIPES>)("%s
   it("every catalog price row is priced at its own figure (a static row, or a whole run of one)", () => {
     for (const row of entry.pricing) {
       const quote = parseRateQuoteCreditId(row.identifier)
-      const figure = quote ? quoteBaseCredits(STATIC_CREDIT_COSTS[quote.rateId]!, quote.units) : STATIC_CREDIT_COSTS[row.identifier]
+      // A whole Gemini Omni Flash 1.2 Extend run: its two rows, through the registry the price lookups read.
+      const whole = wholeRequestQuoteOf(row.identifier)
+      const figure = quote ? quoteBaseCredits(STATIC_CREDIT_COSTS[quote.rateId]!, quote.units) : whole ? whole.base((id) => STATIC_CREDIT_COSTS[id]) : STATIC_CREDIT_COSTS[row.identifier]
       expect(figure, row.identifier).toBe(row.credits)
     }
   })
@@ -473,4 +479,55 @@ describe("seedance-2-5-flash-extend: charged per second sent and added, on its o
     }
     expect(cases).toBeGreaterThan(10_000)
   }, SWEEP_TIMEOUT_MS)
+})
+
+/**
+ * Gemini Omni Flash 1.2 Extend (decided 2026-11-17): 5 per second sent, and
+ * per second added 15 / 42 / 63 / 125 at 360p / 720p / 1080p / 4K, the run
+ * rounded up to the next 10. A whole run is quoted under its own id, priced
+ * from these two rows by the rule its hold reads: there are no per-length
+ * rows. The last test compares the base of every run the engine can make —
+ * the sent seconds counted as the charge counts them — with the provider
+ * figure recorded for that run (`falGeminiOmniExtendCostUsd`, on the seconds
+ * really sent).
+ */
+describe("Gemini Omni Flash 1.2 Extend's rows", () => {
+  const P = "gemini-omni-flash-1-2-extend"
+  const ADDED: Record<string, number> = { "360p": 15, "720p": 42, "1080p": 63, "4k": 125 }
+
+  it("are its decided rates, one per second sent and one per second added per resolution it renders", () => {
+    expect(STATIC_CREDIT_COSTS[GEMINI_OMNI_EXTEND_SOURCE_CREDIT_ID]).toBe(5)
+    expect(MODEL_CATALOG[P]!.resolutions).toEqual(Object.keys(ADDED))
+    for (const [res, rate] of Object.entries(ADDED)) expect(STATIC_CREDIT_COSTS[GEMINI_OMNI_EXTEND_ADDED_CREDIT_IDS[res]!], res).toBe(rate)
+  })
+
+  it("has no per-length rows: a whole run is quoted under its own id, priced from these two", () => {
+    expect(Object.keys(STATIC_CREDIT_COSTS).filter((id) => id.startsWith(`${P}:`)).sort()).toEqual([
+      GEMINI_OMNI_EXTEND_SOURCE_CREDIT_ID, ...Object.values(GEMINI_OMNI_EXTEND_ADDED_CREDIT_IDS),
+    ].sort())
+  })
+
+  it("the catalog's figures are the base of the runs their quote ids name", () => {
+    for (const row of MODEL_CATALOG[P]!.pricing) {
+      const m = /:(\w+):sent-([\d.]+)s:added-(\d+)s$/.exec(row.identifier)!
+      expect(row.credits, row.identifier).toBe(geminiOmniExtendBaseCredits({ sourcePerSec: 5, addedPerSec: ADDED[m[1]!]!, sentSec: Number(m[2]), addedSec: Number(m[3]) }))
+    }
+  })
+
+  it("the base of every run, on the sent seconds as the charge counts them, compared with the provider figure recorded for it", () => {
+    for (const res of Object.keys(ADDED)) {
+      // Every picture length from the shortest the engine takes, by hundredths,
+      // past the 10 s window: the charge counts a picture up to a quarter second
+      // past a whole second as that second (`seedanceExtendSentSec`), while the
+      // tail really sent is the picture itself (at most 10 s).
+      for (let hundredths = Math.ceil(GEMINI_OMNI_EXTEND_MIN_SOURCE_SEC * 100); hundredths <= 1100; hundredths++) {
+        const pictureSec = hundredths / 100
+        for (const added of MODEL_CATALOG[P]!.durations!) {
+          const base = geminiOmniExtendBaseCredits({ sourcePerSec: 5, addedPerSec: ADDED[res]!, sentSec: seedanceExtendSentSec(pictureSec), addedSec: added })
+          const recorded = falGeminiOmniExtendCostUsd({ resolution: res, sentSec: Math.min(pictureSec, 10), addedSec: added })! / CREDIT_BASE_USD
+          expect(base, `${pictureSec}s + ${added}s at ${res}`).toBeGreaterThanOrEqual(recorded)
+        }
+      }
+    }
+  })
 })

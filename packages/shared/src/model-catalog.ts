@@ -3757,6 +3757,38 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-4-extend:5s:1080p", credits: 638, note: "5s 1080p" },
     ],
   },
+  // Gemini Omni Flash 1.2 extends ANY 16:9 or 9:16 video from its tail
+  // (decided 2026-11-17): the source's last 10 s go to fal's extend, which
+  // returns them with the new seconds joined on; the run keeps the user's own
+  // source and joins only the new seconds to it. Its own entry, so a
+  // deployment can withhold it apart from Gemini Omni Flash 1.2 generation.
+  // Charged per second sent and added on its own rows; each figure below is
+  // a whole run's quote id (the whole 10 s window sent).
+  "gemini-omni-flash-1-2-extend": {
+    id: "gemini-omni-flash-1-2-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Google",
+    maker: "google",
+    label: "Gemini Omni Flash 1.2 Extend",
+    series: "Gemini",
+    description: "Extend ANY 16:9 or 9:16 video with Gemini Omni Flash 1.2: a 3–10s continuation with sound, from 360p to 4K, of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
+    useCases: ["extend", "fast"],
+    durations: [3, 4, 5, 6, 7, 8, 9, 10],
+    defaultDuration: 8,
+    resolutions: ["360p", "720p", "1080p", "4k"],
+    pricing: [
+      // Whole-run quotes (`geminiOmniExtendQuoteCreditId`) of runs that send
+      // the whole 10 s window. A run is charged its own seconds: its sent row
+      // per second sent plus its resolution's row per second added, the total
+      // rounded up to the next 10.
+      { identifier: "gemini-omni-flash-1-2-extend:720p:sent-10s:added-8s", credits: 390, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
+      { identifier: "gemini-omni-flash-1-2-extend:360p:sent-10s:added-3s", credits: 100, note: "3s added at 360p to a source of 10s or more (min)" },
+      { identifier: "gemini-omni-flash-1-2-extend:1080p:sent-10s:added-8s", credits: 560, note: "8s added at 1080p to a source of 10s or more" },
+      { identifier: "gemini-omni-flash-1-2-extend:4k:sent-10s:added-8s", credits: 1050, note: "8s added at 4K to a source of 10s or more" },
+      { identifier: "gemini-omni-flash-1-2-extend:4k:sent-10s:added-10s", credits: 1300, note: "10s added at 4K to a source of 10s or more (max)" },
+    ],
+  },
   // PixVerse V6 extends ANY video natively (no tail recipe): the whole source
   // goes to its extend, which returns it with the new seconds joined on; the
   // run keeps the user's own source and joins only the new seconds to it. Its
