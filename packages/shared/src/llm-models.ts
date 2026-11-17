@@ -1672,10 +1672,21 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // choose it (modelReadsClip) — both intended. It was image-only from
   // 2026-11-12 until this enrolment was decided.
   "gemini-4-carbon":   { image: true,  video: true,  audio: true  },
-  // gemini-4-hydrogen is IMAGE-ONLY for now (decided 2026-11-16): video and
-  // audio input come in a later change. Full caps would also enrol it in
-  // VIDEO_ANALYSIS_LLM_MODELS (derived below), which it is not part of.
-  "gemini-4-hydrogen": { image: true,  video: false, audio: false },
+  // gemini-4-hydrogen takes video + audio ON THE LLM NODES ONLY (decided
+  // 2026-11-16; probed 2026-11-17): it is listed in LLM_NODE_ONLY_MEDIA_MODELS
+  // (below), so these caps do NOT enrol it in VIDEO_ANALYSIS_LLM_MODELS or let
+  // a trend's clip-reading LLM step choose it. Its KIE lane reads both through
+  // the `image_url` part the chat-completions builder already sends (an https
+  // URL or a `data:` URL; an `input_audio` part is dropped by KIE, billed, so
+  // it is never sent): a 52 s 480p clip by URL read correctly 3 of 3, its
+  // sound heard, ≈105 prompt tokens a second (≈74 of frames, ≈32 of sound);
+  // an mp3 by URL or data URL transcribed 3 of 3, ≈32 tokens a second. KIE
+  // takes a linked file up to 74 MB and picks its type from the link's
+  // extension (an extensionless link is refused). Longer clips and long
+  // audio were not probed. Google's own API (where a media call is pinned
+  // when this install has a Gemini key, as Carbon's) lists video and audio
+  // input for it; not probed with media.
+  "gemini-4-hydrogen": { image: true,  video: true,  audio: true  },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -1707,6 +1718,35 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   "kimi-k3":           { image: true,  video: false, audio: false },
   "kimi-k3.1-pro":     { image: true,  video: false, audio: false },
   "deepseek-v4.1-flash": { image: true, video: false, audio: false },
+}
+
+/**
+ * Models whose video and audio caps are for the LLM nodes ONLY (LLM Chat, the
+ * MCP `generate_text` tool and their API routes) and never enrol them in
+ * another product that derives "the models that read video" from
+ * {@link LLM_MODALITY_CAPS}: Video Analysis ({@link VIDEO_ANALYSIS_LLM_MODELS})
+ * and a trend's clip-reading LLM step. Gemini 4 Hydrogen (decided 2026-11-16).
+ */
+export const LLM_NODE_ONLY_MEDIA_MODELS: readonly string[] = ["gemini-4-hydrogen"]
+
+/** Whether `modelId` reads video/audio on the LLM nodes only ({@link LLM_NODE_ONLY_MEDIA_MODELS}). */
+export function readsMediaOnLlmNodesOnly(modelId: string | undefined): boolean {
+  return Boolean(modelId && LLM_NODE_ONLY_MEDIA_MODELS.includes(modelId))
+}
+
+/**
+ * Whether `modelId` reads VIDEO for a product other than the LLM nodes (Video
+ * Analysis, a trend's clip step, anything new): its `video` cap, less
+ * {@link LLM_NODE_ONLY_MEDIA_MODELS}. Every such product reads the cap through
+ * this, never `.video` directly (`tools/__tests__/llm-media-caps-guard.test.mjs`).
+ */
+export function readsVideoOutsideLlmNodes(modelId: string | undefined): boolean {
+  return getLlmModalityCaps(modelId).video && !readsMediaOnLlmNodesOnly(modelId)
+}
+
+/** The audio twin of {@link readsVideoOutsideLlmNodes}. */
+export function readsAudioOutsideLlmNodes(modelId: string | undefined): boolean {
+  return getLlmModalityCaps(modelId).audio && !readsMediaOnLlmNodesOnly(modelId)
 }
 
 /** Capability lookup with safe default — unknown models get image-only. */
@@ -2100,9 +2140,14 @@ export function resolveLlmCreditId(feature: string, body: unknown): string {
   )
 }
 
-/** Models capable of video-analysis: capability-derived, never hand-listed (route-enum-sync convention). */
+/**
+ * Models capable of video-analysis: capability-derived, never hand-listed
+ * (route-enum-sync convention) — less the models that read media on the LLM
+ * nodes only ({@link LLM_NODE_ONLY_MEDIA_MODELS}), which no Video Analysis
+ * tier, price or stored `llmModel` passthrough reaches.
+ */
 export const VIDEO_ANALYSIS_LLM_MODELS: string[] = LLM_MODELS
-  .filter((m) => getLlmModalityCaps(m.id).video && getLlmModalityCaps(m.id).audio)
+  .filter((m) => readsVideoOutsideLlmNodes(m.id) && readsAudioOutsideLlmNodes(m.id))
   .map((m) => m.id)
 
 /**

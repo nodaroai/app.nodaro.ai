@@ -2862,7 +2862,7 @@ export const he: ChromeDict = {
   "txtcfg.temperatureValue": "טמפרטורה: {value}",
   "txtcfg.maxTokens": "מקסימום טוקנים",
   "txtcfg.references": "ייחוסים",
-  "txtcfg.geminiOnlyRefs": "עברו למודל Gemini כדי לצרף ייחוסי וידאו או אודיו.",
+  "txtcfg.geminiOnlyRefs": "המודל הזה לא קורא וידאו או אודיו. כדי לצרף ייחוסי וידאו או אודיו, עברו למודל שקורא אותם.",
   "txtcfg.streaming": "בהזרמה...",
   "txtcfg.waitingForTokens": "ממתין לטוקנים...",
   "txtcfg.generatedPrompts": "פרומפטים שנוצרו",

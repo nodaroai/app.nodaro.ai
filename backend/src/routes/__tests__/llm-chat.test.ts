@@ -167,6 +167,37 @@ describe("POST /v1/llm-chat/generate — capability filter", () => {
     expect(res.statusCode).toBe(200)
   })
 
+  it.each([
+    ["video", { referenceVideoUrls: ["https://x/y.mp4"] }],
+    ["audio", { referenceAudioUrls: ["https://x/y.mp3"] }],
+  ])("accepts a %s ref on gemini-4-hydrogen (decided 2026-11-16)", async (_kind, refs) => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: { systemPrompt: "", userInput: "describe this", llmModel: "gemini-4-hydrogen", ...refs },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(llmComplete).toHaveBeenCalledWith(expect.objectContaining({ modelId: "gemini-4-hydrogen" }))
+  })
+
+  it.each([
+    ["video", { referenceVideoUrls: ["https://x/y.mp4"] }],
+    ["audio", { referenceAudioUrls: ["https://x/y.mp3"] }],
+  ])("still refuses a %s ref on gemini-4-argon, naming no vendor", async (kind, refs) => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: { systemPrompt: "", userInput: "describe this", llmModel: "gemini-4-argon", ...refs },
+    })
+    expect(res.statusCode).toBe(400)
+    const { error } = JSON.parse(res.body)
+    expect(error).toMatchObject({ code: "modality_not_supported", message: expect.stringContaining(`Switch to a model that reads ${kind}`) })
+    expect(error.message).not.toMatch(/Gemini/)
+    expect(llmComplete).not.toHaveBeenCalled()
+  })
+
   it("rejects audio ref + gpt-5.4 with 400", async () => {
     const app = await buildApp()
     const res = await app.inject({

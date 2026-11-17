@@ -2807,7 +2807,7 @@ export const ko: ChromeDict = {
   "txtcfg.temperatureValue": "온도: {value}",
   "txtcfg.maxTokens": "최대 토큰 수",
   "txtcfg.references": "레퍼런스",
-  "txtcfg.geminiOnlyRefs": "동영상이나 오디오 레퍼런스를 첨부하려면 Gemini 모델로 전환하세요.",
+  "txtcfg.geminiOnlyRefs": "이 모델은 동영상이나 오디오를 읽지 않습니다. 동영상이나 오디오 레퍼런스를 첨부하려면 이를 읽는 모델로 전환하세요.",
   "txtcfg.streaming": "스트리밍 중…",
   "txtcfg.waitingForTokens": "토큰을 기다리는 중…",
   "txtcfg.generatedPrompts": "생성된 프롬프트",

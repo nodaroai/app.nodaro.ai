@@ -15,7 +15,12 @@ import {
   getLlmModalityCaps,
   VIDEO_ANALYSIS_LLM_MODELS,
   VIDEO_ANALYSIS_TIERS,
+  VIDEO_ANALYSIS_LEGACY_MODELS,
   resolveVideoAnalysisModel,
+  LLM_NODE_ONLY_MEDIA_MODELS,
+  readsMediaOnLlmNodesOnly,
+  readsVideoOutsideLlmNodes,
+  readsAudioOutsideLlmNodes,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
   motionGraphicsFeature,
@@ -1198,11 +1203,39 @@ describe("gemini-4-hydrogen exposure", () => {
     expect(getLlmTier("gemini-4-hydrogen")).toBe("premium")
   })
 
-  it("reads images only (decided 2026-11-16) — no video, audio or files, and no Video Analysis tier", () => {
-    expect(getLlmModalityCaps("gemini-4-hydrogen")).toEqual({ image: true, video: false, audio: false })
+  it("reads images, video and audio on the LLM nodes (decided 2026-11-16; probed 2026-11-17) — no files", () => {
+    expect(getLlmModalityCaps("gemini-4-hydrogen")).toEqual({ image: true, video: true, audio: true })
     expect(llmAcceptsFiles("gemini-4-hydrogen")).toBe(false)
+  })
+
+  it("its media caps are for the LLM nodes only: no Video Analysis list, tier, legacy row or passthrough", () => {
+    expect(LLM_NODE_ONLY_MEDIA_MODELS).toEqual(["gemini-4-hydrogen"])
+    expect(readsMediaOnLlmNodesOnly("gemini-4-hydrogen")).toBe(true)
+    expect(readsMediaOnLlmNodesOnly("gemini-4-carbon")).toBe(false)
+    expect(readsMediaOnLlmNodesOnly(undefined)).toBe(false)
     expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-hydrogen")
     expect(Object.values(VIDEO_ANALYSIS_TIERS)).not.toContain("gemini-4-hydrogen")
+    expect(Object.keys(VIDEO_ANALYSIS_LEGACY_MODELS)).not.toContain("gemini-4-hydrogen")
+    // A stored raw `llmModel: "gemini-4-hydrogen"` on a Video Analysis node is
+    // not passed through: it resolves like any unknown value.
+    expect(resolveVideoAnalysisModel("gemini-4-hydrogen")).toBe(resolveVideoAnalysisModel("not-a-model"))
+  })
+
+  it("reads no video or audio outside the LLM nodes (readsVideoOutsideLlmNodes / readsAudioOutsideLlmNodes); Carbon does", () => {
+    expect(readsVideoOutsideLlmNodes("gemini-4-hydrogen")).toBe(false)
+    expect(readsAudioOutsideLlmNodes("gemini-4-hydrogen")).toBe(false)
+    expect(readsVideoOutsideLlmNodes("gemini-4-carbon")).toBe(true)
+    expect(readsAudioOutsideLlmNodes("gemini-4-carbon")).toBe(true)
+    expect(readsVideoOutsideLlmNodes("gemini-4-argon")).toBe(false)
+    expect(readsVideoOutsideLlmNodes(undefined)).toBe(false)
+    // The Video Analysis list is exactly the models that read both outside the LLM nodes.
+    expect(VIDEO_ANALYSIS_LLM_MODELS).toEqual(LLM_MODELS.filter((m) => readsVideoOutsideLlmNodes(m.id) && readsAudioOutsideLlmNodes(m.id)).map((m) => m.id))
+  })
+
+  it("every LLM-node-only media model really reads video and audio (else the list is stale)", () => {
+    for (const id of LLM_NODE_ONLY_MEDIA_MODELS) {
+      expect(getLlmModalityCaps(id), id).toMatchObject({ video: true, audio: true })
+    }
   })
 })
 

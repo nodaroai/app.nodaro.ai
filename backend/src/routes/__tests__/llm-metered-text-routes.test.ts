@@ -960,3 +960,101 @@ describe("Generate Text with a video or audio reference — metered: the vendor'
     }
   })
 })
+
+describe("Gemini 4 Hydrogen with a video or audio reference — metered (decided 2026-11-16; probed 2026-11-17)", () => {
+  const HYDROGEN = "gemini-4-hydrogen"
+  const withGeminiKey = async (key: string | undefined) => {
+    const { config } = (await import("../../lib/config.js")) as unknown as { config: Record<string, unknown> }
+    const before = config.GEMINI_API_KEY
+    config.GEMINI_API_KEY = key
+    return () => {
+      config.GEMINI_API_KEY = before
+    }
+  }
+  const body = (model: string, extra: Record<string, unknown>) => ({ systemPrompt: "", userInput: "describe it", llmModel: model, ...extra })
+  const VIDEO = { referenceVideoUrls: ["https://media.example/cut.mp4"] }
+  const AUDIO = { referenceAudioUrls: ["https://media.example/mix.mp3"] }
+  const sent = () => h.llmComplete.mock.calls[0]![0] as LlmRequest & { requireLane?: string; minPromptTokens?: number }
+  const held = () => (h.reserveCreditsForJob.mock.calls[0]![4] as { holdCredits: number }).holdCredits
+  /**
+   * What the probe's 52 s clip with sound would cost on `lane`, rounded UP:
+   * 110 prompt tokens a second (measured ≈105) for its media, and the output
+   * cap every Hydrogen call is sent with (it reasons by default, floored at 32768).
+   */
+  const probeClipCharge = async (lane: "kie" | "direct") => {
+    const { calculateLlmCost } = await import("../../lib/pricing/llm-cost.js")
+    const { usdToCredits } = await import("@nodaro/shared/credits")
+    const base = usdToCredits(calculateLlmCost(HYDROGEN, { inputTokens: 52 * 110, outputTokens: 32768 }, lane))
+    return applyServiceMarkup(base, MARKUP, `llm-chat:${HYDROGEN}`)
+  }
+
+  it.each([
+    ["a video", VIDEO],
+    ["an audio clip", AUDIO],
+  ])("is accepted with %s and pinned to Google's API where this install has a Gemini key — as Gemini 4 Carbon", async (_name, refs) => {
+    const restore = await withGeminiKey("gem")
+    try {
+      for (const model of [HYDROGEN, "gemini-4-carbon"]) {
+        h.llmComplete.mockReset()
+        h.llmComplete.mockRejectedValue(new Error("stop here"))
+        const app = await buildApp()
+        await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body(model, refs) })
+        expect(sent().requireLane, model).toBe("direct")
+        expect(sent().minPromptTokens, model).toBeUndefined()
+      }
+    } finally {
+      restore()
+    }
+  })
+
+  it("with no Gemini key, or kept to the cheap lanes, it stays on KIE and carries the floor — as Carbon", async () => {
+    for (const [key, extra] of [[undefined, {}], ["gem", { cheapLanesOnly: true }]] as const) {
+      const restore = await withGeminiKey(key)
+      try {
+        for (const model of [HYDROGEN, "gemini-4-carbon"]) {
+          h.llmComplete.mockReset()
+          h.llmComplete.mockRejectedValue(new Error("stop here"))
+          const app = await buildApp()
+          await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body(model, { ...VIDEO, ...extra }) })
+          expect(sent().requireLane, model).toBeUndefined()
+          expect(sent().minPromptTokens, model).toBe(61)
+        }
+      } finally {
+        restore()
+      }
+    }
+  })
+
+  it("sends the video and the audio as their own blocks, which the KIE builder turns into `image_url` parts", async () => {
+    const restore = await withGeminiKey(undefined)
+    try {
+      h.llmComplete.mockRejectedValue(new Error("stop here"))
+      const app = await buildApp()
+      await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body(HYDROGEN, { ...VIDEO, ...AUDIO }) })
+      const blocks = (sent().messages[0]!.content as Array<{ type: string; url?: string }>).filter((b) => b.type !== "text")
+      expect(blocks).toEqual([
+        expect.objectContaining({ type: "video", url: VIDEO.referenceVideoUrls[0] }),
+        expect.objectContaining({ type: "audio", url: AUDIO.referenceAudioUrls[0] }),
+      ])
+    } finally {
+      restore()
+    }
+  })
+
+  it("holds a call with one video at least what the probe's 52 s clip costs, on the lane it runs (direct pin and KIE)", async () => {
+    for (const [key, lane] of [["gem", "direct"], [undefined, "kie"]] as const) {
+      const restore = await withGeminiKey(key)
+      try {
+        h.llmComplete.mockReset()
+        h.reserveCreditsForJob.mockClear()
+        h.llmComplete.mockRejectedValue(new Error("stop here"))
+        const app = await buildApp()
+        await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body(HYDROGEN, VIDEO) })
+        expect(held(), lane).toBe(applyServiceMarkup(llmHoldBaseCredits(HYDROGEN, { request: sent() }), MARKUP, `llm-chat:${HYDROGEN}`))
+        expect(held(), lane).toBeGreaterThanOrEqual(await probeClipCharge(lane))
+      } finally {
+        restore()
+      }
+    }
+  })
+})

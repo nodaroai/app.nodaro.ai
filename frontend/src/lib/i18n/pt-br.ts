@@ -2807,7 +2807,7 @@ export const ptBR: ChromeDict = {
   "txtcfg.temperatureValue": "Temperatura: {value}",
   "txtcfg.maxTokens": "Máximo de tokens",
   "txtcfg.references": "Referências",
-  "txtcfg.geminiOnlyRefs": "Mude para um modelo Gemini para anexar referências de vídeo ou áudio.",
+  "txtcfg.geminiOnlyRefs": "Este modelo não lê vídeo nem áudio. Para anexar referências de vídeo ou áudio, mude para um modelo que os leia.",
   "txtcfg.streaming": "Transmitindo…",
   "txtcfg.waitingForTokens": "Aguardando tokens…",
   "txtcfg.generatedPrompts": "Prompts gerados",

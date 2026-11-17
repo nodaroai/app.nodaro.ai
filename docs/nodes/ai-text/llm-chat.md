@@ -5,7 +5,7 @@
 
 The Generate Text - Any LLM node (`llm-chat`; labeled "Prompt" from September 2026 until October 2026, and "Generate Text" before that) generates text from a prompt using a selectable LLM, with optional system instructions. It supports real-time token streaming and can reference upstream node outputs in its prompt via field mappings, making it a flexible text-generation and transformation step in any workflow.
 
-It can also accept **reference inputs** on the multi-modal **References** handle (its own fuchsia pip) — an image, video, audio clip, **or text** — for multimodal prompting (e.g. "describe this image", "summarize this clip"). Image/video/audio references are routed to the model as reference media (video and audio require a Gemini model — see [Multimodal inputs](#multimodal-inputs)); a **text** reference is merged into the prompt as added context.
+It can also accept **reference inputs** on the multi-modal **References** handle (its own fuchsia pip) — an image, video, audio clip, **or text** — for multimodal prompting (e.g. "describe this image", "summarize this clip"). Image/video/audio references are routed to the model as reference media (video and audio require a model that reads them — see [Multimodal inputs](#multimodal-inputs)); a **text** reference is merged into the prompt as added context.
 
 This node is the result of merging the former **AI Agent** (image-prompt fan-out) and **LLM Chat** nodes into one. Existing AI Agent / LLM Chat nodes are auto-migrated to Prompt on workflow load. The legacy `/v1/ai-writer/*` routes remain available for back-compat; the node itself now runs on `/v1/llm-chat/*`.
 
@@ -61,7 +61,7 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 | Gemini 3.1 Pro | Premium | image + video + audio |
 | Gemini 4 Argon | Premium | image only |
 | Gemini 4 Carbon | Premium | image + video + audio |
-| Gemini 4 Hydrogen | Premium | image only |
+| Gemini 4 Hydrogen | Premium | image + video + audio |
 | Claude Opus 4.7 | Premium | image only |
 | GPT-5.4 | Premium | image only |
 | GPT-5.5 | Premium | image only |
@@ -80,7 +80,7 @@ The model is chosen from the shared LLM model selector — a searchable picker g
 
 The default model is Gemini 3.6 Flash (economy tier). Most models expose reasoning levels and show an **Effort** selector next to the model picker (the exceptions: Gemini 3 Flash, Claude Haiku 4.5, GPT-5.2, and Gemini 3.1 Pro have no effort lever — though the two Gemini models gain one under **Advanced mode**, which reaches the provider's fuller range) — see [Reasoning effort](#reasoning-effort).
 
-Gemini 4 Argon and Gemini 4 Hydrogen currently accept **image references only** — video/audio references for them are not yet enabled (use Gemini 3.8 Flash, Gemini 3.6 Flash, Gemini 3.1 Pro or Gemini 4 Carbon for those).
+Gemini 4 Argon currently accepts **image references only** — video/audio references for it are not yet enabled (use Gemini 3.8 Flash, Gemini 3.6 Flash, Gemini 3.1 Pro, Gemini 4 Carbon or Gemini 4 Hydrogen for those). Gemini 4 Hydrogen reads video and audio here, on LLM Chat and the `generate_text` MCP tool only — it is not a Video Analysis model.
 
 ## Canvas controls
 
@@ -109,7 +109,8 @@ Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2
 ### Multimodal inputs
 
 - **Image reference** — supported by every model. Useful for "describe this image", "write a caption", or generating prompts from a connected image.
-- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, Gemini 3.8 Flash, Gemini 3.1 Pro, or Gemini 4 Carbon — Gemini 4 Argon and Gemini 4 Hydrogen are image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored.
+- **Video / audio reference** — supported **only by the video-capable Gemini models** (Gemini 3 Flash, Gemini 3.6 Flash, Gemini 3.8 Flash, Gemini 3.1 Pro, Gemini 4 Carbon or Gemini 4 Hydrogen — Gemini 4 Argon is image-only for now). If a video or audio reference is connected, select one of those models or the reference is ignored. A video is read with its sound.
+- **Video / audio limits on the default lane.** When a run stays on the default lane (see the next item), the provider fetches each reference itself. Measured on Gemini 4 Hydrogen, a linked file must be at most 74 MB, and its link must end in a file extension that names its type (`.mp4`, `.mp3`, …) — a link without one is refused as an unsupported format. A refused file fails the run. These limits are the provider's and are not checked before the run starts. On Google's own API the platform fetches the file (up to 512 MB). No longest clip is set by Nodaro; very long clips were not measured on Gemini 4 Hydrogen.
 - **Where a video or audio reference runs.** A Gemini run that carries a video or an audio reference runs on Google's own API, where the file is fetched by the platform and a file that cannot be read fails the run. It is charged for its tokens at that lane's rate ([LLM model rates](../../pricing/llm-models.md)), as an Advanced-mode run is; Advanced mode's other levers stay off unless you turn it on. Where a deployment has no Gemini key of its own, or a scheduled run is kept to the cheap lanes, the run stays on the default lane, and an answer the model gave without reading the file is discarded: the run fails with `502 media_not_ingested` and is refunded, instead of returning a description of media it never saw. Run it again, or turn Advanced mode on.
 - **Video frame rate** (API and MCP) — a model reads one frame of a video per second unless told otherwise. `referenceVideoFps` (above 0, up to 24) on `POST /v1/llm-chat/generate` and `/v1/llm-chat/generate-stream` (`LlmChatParams` in the SDK; `video_fps` on the MCP tool `generate_text`) samples more frames of each video, for motion that lasts under a second. It needs **Advanced mode** (`advancedMode: true`) on a Gemini model, because only the provider's own API carries a sampling rate: without it the call answers `400 video_fps_needs_advanced_mode` instead of quietly running at one frame per second, and with no video `400 video_fps_without_video`. More frames are more input tokens, charged at the model's rate like the rest of the prompt, and the hold before the run grows with the rate. A video's sound is read the same at any rate; to have a model judge sound alone, send the recording as an audio reference.
 - **Files (PDF)** — read only by a model that reads files: today **GPT-6.1 Terra**. See below.
@@ -220,7 +221,7 @@ own API, at that lane's rate (see [Credit pricing](#credit-pricing)).
 - If a run fails with *Content policy violation*, the provider's safety or recitation filter withheld the answer (on a Gemini model running on Google's own API this includes a reply stopped for reciting existing text). Nothing is saved, the run is charged only for what the provider billed for the refused request (nothing when it billed nothing), and it is not retried on another model — rephrase the request, or ask for an original answer rather than reproduced text.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
 - Pick the cheapest model that meets your quality bar — an economy model (Gemini 3.6 Flash, ≈3 cr<!-- credits: llm-chat:gemini-3.6-flash -->) is plenty for rewriting and captioning; reserve a premium one (Claude Opus 5.5, ≈6 cr<!-- credits: llm-chat:claude-opus-5.5 -->) for complex reasoning. A long prompt or a long answer costs more on any model.
-- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 4 Argon and Gemini 4 Hydrogen are image-only for now).
+- To process a video or audio reference, select a video-capable Gemini model (see the model table — Gemini 4 Argon is image-only for now).
 
 ## Common Use Cases
 

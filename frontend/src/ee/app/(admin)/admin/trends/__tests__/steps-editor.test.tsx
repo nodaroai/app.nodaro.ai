@@ -16,6 +16,7 @@
  *   is offered for Full depth with the scene from a description only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { offeredModels } from "../components/LlmStepEditor"
 import { useState } from "react"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -141,6 +142,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 const section = (name: string) => screen.getByRole("region", { name })
+
+describe("offeredModels", () => {
+  const model = (id: string) => ({ id, displayName: id, tier: "premium", vendor: "google", isEnabled: true }) as Parameters<typeof offeredModels>[0][number]
+  const MODELS = [model("gemini-4-carbon"), model("gemini-4-hydrogen")]
+
+  it("never offers a model whose video reading is for the LLM nodes only to a step shown the clip (decided 2026-11-16)", () => {
+    expect(offeredModels(MODELS, ["clip"]).map((m) => m.id)).toEqual(["gemini-4-carbon"])
+    expect(offeredModels(MODELS, ["clip", "extraPrompt"]).map((m) => m.id)).toEqual(["gemini-4-carbon"])
+  })
+
+  it("still offers it to a step that is not shown the clip", () => {
+    expect(offeredModels(MODELS, ["rolePhotos"]).map((m) => m.id)).toEqual(["gemini-4-carbon", "gemini-4-hydrogen"])
+    expect(offeredModels(MODELS, ["extraPrompt"]).map((m) => m.id)).toEqual(["gemini-4-carbon", "gemini-4-hydrogen"])
+  })
+})
 
 describe("environmentsThatCannotTakeSteps", () => {
   it("names every shared environment whose engine lacks castSwap.steps, a missing one included", () => {

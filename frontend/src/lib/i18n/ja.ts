@@ -2911,7 +2911,7 @@ export const ja: ChromeDict = {
   "txtcfg.temperatureValue": "温度：{value}",
   "txtcfg.maxTokens": "最大トークン数",
   "txtcfg.references": "リファレンス",
-  "txtcfg.geminiOnlyRefs": "動画やオーディオのリファレンスを添付するには、Gemini モデルに切り替えてください。",
+  "txtcfg.geminiOnlyRefs": "このモデルは動画やオーディオを読み取れません。動画やオーディオのリファレンスを添付するには、それらを読み取れるモデルに切り替えてください。",
   "txtcfg.streaming": "ストリーミング中…",
   "txtcfg.waitingForTokens": "トークンを待機中…",
   "txtcfg.generatedPrompts": "生成されたプロンプト",

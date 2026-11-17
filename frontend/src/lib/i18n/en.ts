@@ -2884,7 +2884,7 @@ export const en = {
   "txtcfg.temperatureValue": "Temperature: {value}",
   "txtcfg.maxTokens": "Max Tokens",
   "txtcfg.references": "References",
-  "txtcfg.geminiOnlyRefs": "Switch to a Gemini model to attach video or audio references.",
+  "txtcfg.geminiOnlyRefs": "This model does not read video or audio. Switch to a model that does to attach video or audio references.",
   "txtcfg.streaming": "Streaming...",
   "txtcfg.waitingForTokens": "Waiting for tokens...",
   "txtcfg.generatedPrompts": "Generated Prompts",

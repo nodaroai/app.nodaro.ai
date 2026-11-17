@@ -140,3 +140,30 @@ describe("Gemini 4 Hydrogen's structured output goes through parse, validate and
     expect(out.outputTokens).toBe(40 + 30)
   })
 })
+
+describe("Gemini 4 Hydrogen reads video and audio on its KIE lane (probed 2026-11-17)", () => {
+  it("sends a video and an audio link as `image_url` parts — the channel KIE delivers — and never `input_audio`", async () => {
+    fetchMock.mockResolvedValueOnce(chatOk("a clip and a song", { prompt_tokens: 5_500, completion_tokens: 5 }))
+    await llmComplete({
+      modelId: "gemini-4-hydrogen",
+      system: "",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: "describe both" },
+          { type: "video", url: "https://media.example/cut.mp4" },
+          { type: "audio", url: "https://media.example/mix.mp3" },
+        ],
+      }],
+    })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(URL)
+    const body = bodyOf()
+    expect(body.messages[0].content).toEqual([
+      { type: "text", text: "describe both" },
+      { type: "image_url", image_url: { url: "https://media.example/cut.mp4" } },
+      { type: "image_url", image_url: { url: "https://media.example/mix.mp3" } },
+    ])
+    // KIE drops these shapes silently and still bills the call.
+    expect(JSON.stringify(body)).not.toMatch(/input_audio|video_url|audio_url/)
+  })
+})
