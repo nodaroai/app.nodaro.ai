@@ -10,6 +10,8 @@ import type {
   BillingPaymentMethod,
   BillingAutoRecharge,
   BillingCheckoutStatus,
+  BillingCheckoutInput,
+  BillingLoadInput,
 } from "../../index.js"
 
 function mockOk<T>(body: T) {
@@ -276,6 +278,69 @@ describe("the signed-in-session methods", () => {
     expectTypeOf(billing.checkoutStatus).returns.toEqualTypeOf<Promise<BillingCheckoutStatus>>()
     expectTypeOf<BillingPlansResult["stripePublishableKey"]>().toEqualTypeOf<string | null | undefined>()
     expect([popupCheckout, popupLoad, pending]).toHaveLength(3)
+  })
+
+  describe("replacesSessionId", () => {
+    it("checkout() and loadCredits() send it as given", async () => {
+      const c = vi.fn<typeof fetch>().mockReturnValueOnce(mockOk({ data: { url: "https://checkout.stripe.test/x" } }))
+      await client(c).billing.checkout({ priceId: "price_1", replacesSessionId: "cs_test_1" })
+      expect(call(c)).toEqual({ url: "https://api.example.com/v1/billing/create-checkout-session", method: "POST", body: { priceId: "price_1", replacesSessionId: "cs_test_1" } })
+
+      const l = vi.fn<typeof fetch>().mockReturnValueOnce(mockOk({ data: { url: "https://checkout.stripe.test/y", credits: 2940 } }))
+      await client(l).billing.loadCredits({ amountUsd: 20, replacesSessionId: "cs_test_2" })
+      expect(call(l)).toEqual({ url: "https://api.example.com/v1/billing/create-load-session", method: "POST", body: { amountUsd: 20, replacesSessionId: "cs_test_2" } })
+    })
+
+    it("the two refusals are 409 NodaroErrors a caller tells apart by code", async () => {
+      const codes = ["checkout_already_complete", "checkout_in_progress"] as const
+      const seen: string[] = []
+      for (const code of codes) {
+        const c = vi.fn<typeof fetch>().mockReturnValueOnce(mockErr(409, { error: { code, message: "m" } }))
+        const err = await client(c).billing.checkout({ priceId: "price_1", replacesSessionId: "cs_test_1" }).catch((e: unknown) => e)
+        expect(err).toBeInstanceOf(NodaroError)
+        expect(err).not.toBeInstanceOf(InsufficientCreditsError)
+        expect(err).toMatchObject({ status: 409, code })
+        seen.push((err as NodaroError).code ?? "")
+
+        const l = vi.fn<typeof fetch>().mockReturnValueOnce(mockErr(409, { error: { code, message: "m" } }))
+        await expect(client(l).billing.loadCredits({ amountUsd: 20, replacesSessionId: "cs_test_2" })).rejects.toMatchObject({ status: 409, code })
+      }
+      expect(seen).toEqual([...codes])
+    })
+
+    it("a session that is not the caller's is a NotFoundError", async () => {
+      const body = { error: { code: "checkout_session_not_found", message: "No checkout session with this id on your account." } }
+      const c = vi.fn<typeof fetch>().mockReturnValueOnce(mockErr(404, body))
+      const err = await client(c).billing.checkout({ priceId: "price_1", replacesSessionId: "cs_test_other" }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(NotFoundError)
+      expect(err).toMatchObject({ status: 404, code: "checkout_session_not_found" })
+
+      const l = vi.fn<typeof fetch>().mockReturnValueOnce(mockErr(404, body))
+      const lerr = await client(l).billing.loadCredits({ amountUsd: 20, replacesSessionId: "cs_test_other" }).catch((e: unknown) => e)
+      expect(lerr).toBeInstanceOf(NotFoundError)
+      expect(lerr).toMatchObject({ status: 404, code: "checkout_session_not_found" })
+    })
+
+    // Held by CI's "SDK type tests" step, as the uiMode types above.
+    it("types replacesSessionId as an optional string", () => {
+      const billing = client(vi.fn<typeof fetch>()).billing
+      // Never called: only their types are checked.
+      const numericCheckout = () =>
+        billing.checkout({
+          priceId: "price_1",
+          // @ts-expect-error — a session id is a string
+          replacesSessionId: 42,
+        })
+      const numericLoad = () =>
+        billing.loadCredits({
+          amountUsd: 20,
+          // @ts-expect-error — a session id is a string
+          replacesSessionId: 42,
+        })
+      expectTypeOf<BillingCheckoutInput["replacesSessionId"]>().toEqualTypeOf<string | undefined>()
+      expectTypeOf<BillingLoadInput["replacesSessionId"]>().toEqualTypeOf<string | undefined>()
+      expect([numericCheckout, numericLoad]).toHaveLength(2)
+    })
   })
 
   it("changePlan() POSTs the new price and unwraps the tier now in force", async () => {

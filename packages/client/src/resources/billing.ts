@@ -305,7 +305,16 @@ export class BillingResource {
    * completes, poll {@link BillingResource.checkoutStatus} with `sessionId`
    * until `granted`. A `NodaroError` with status `503` and the code
    * `embedded_checkout_unavailable` means the deployment has no embedded
-   * form: use the page (no `uiMode`). **Signed-in session only.**
+   * form: use the page (no `uiMode`).
+   *
+   * Pass `replacesSessionId` (the embedded form's earlier `sessionId`) when
+   * this session replaces one of yours, so the two are never payable at once.
+   * With it, a `NodaroError` with `status` 409 and `code`
+   * `checkout_already_complete` means that purchase is paid, so do not ask
+   * again; `checkout_in_progress` means its payment is being confirmed, so
+   * read {@link BillingResource.checkoutStatus} and ask again only once it
+   * reads `open`; a `NotFoundError` (`checkout_session_not_found`) means it is
+   * not yours. **Signed-in session only.**
    */
   async checkout(input: BillingCheckoutInput): Promise<BillingCheckoutSession> {
     const res = await this.client.request<{ data: BillingCheckoutSession }>("POST", "/v1/billing/create-checkout-session", { body: input })
@@ -322,7 +331,8 @@ export class BillingResource {
    * sessionId, credits }` for Stripe's embedded Checkout, as in
    * {@link checkout} (mount it with the plans' `stripePublishableKey`;
    * `returnPath` / `embedded` are not used, but still validated; a `503`
-   * `embedded_checkout_unavailable` means use the page).
+   * `embedded_checkout_unavailable` means use the page). `replacesSessionId`
+   * and its refusals as in {@link checkout}.
    * **Signed-in session only.**
    */
   async loadCredits(input: BillingLoadInput): Promise<BillingLoadSession> {
@@ -486,6 +496,13 @@ export interface BillingCheckoutInput {
   embedded?: boolean
   /** `"embedded"` answers a session for Stripe's embedded form instead of a page (`returnPath` and `embedded` are then not used, but still validated: an invalid `returnPath` is still a `400`). Absent = `"hosted"`. */
   uiMode?: BillingUiMode
+  /**
+   * The id of an earlier Checkout session of yours that this one replaces (the embedded form's `sessionId`).
+   * With it, a `NodaroError` with `status` 409 and `code` `checkout_already_complete` means that purchase is paid,
+   * so do not ask again; `checkout_in_progress` means its payment is being confirmed, so read `checkoutStatus` and
+   * ask again only once it reads `open`; a `NotFoundError` (`checkout_session_not_found`) means it is not yours.
+   */
+  replacesSessionId?: string
 }
 
 /** A Stripe Checkout page to send the person to, or (with `uiMode: "embedded"`) a session for Stripe's embedded form. */
@@ -507,6 +524,8 @@ export interface BillingLoadInput {
   embedded?: boolean
   /** As in {@link BillingCheckoutInput.uiMode}: with `"embedded"`, `returnPath` and `embedded` are not used, but still validated. */
   uiMode?: BillingUiMode
+  /** As in {@link BillingCheckoutInput.replacesSessionId}. */
+  replacesSessionId?: string
 }
 
 /** A Stripe Checkout page (or, with `uiMode: "embedded"`, an embedded session) for a load, and the credits it grants. */

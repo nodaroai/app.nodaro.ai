@@ -28,6 +28,15 @@ export interface CheckoutStatus {
  */
 export const CHECKOUT_SESSION_ID = /^cs_[A-Za-z0-9_]{1,250}$/
 
+/**
+ * The answer for a session that is not the caller's or does not exist: the
+ * status read's 404 body, and a create route's when the session it was asked
+ * to replace is not found. One object, so the two can never differ.
+ */
+export const CHECKOUT_SESSION_NOT_FOUND = {
+  error: { code: "checkout_session_not_found", message: "No checkout session with this id on your account." },
+} as const
+
 /** An id field Stripe sends as a string, or as the expanded object. */
 function idOf(field: string | { id: string } | null | undefined): string | null {
   if (typeof field === "string") return field || null
@@ -38,13 +47,36 @@ function isMissingSession(err: unknown): boolean {
   return err instanceof Stripe.errors.StripeInvalidRequestError && err.statusCode === 404
 }
 
-async function retrieveSession(sessionId: string): Promise<Stripe.Checkout.Session | null> {
+async function retrieveSession(sessionId: string, expand?: readonly string[]): Promise<Stripe.Checkout.Session | null> {
+  const sessions = getStripe().checkout.sessions
   try {
-    return await getStripe().checkout.sessions.retrieve(sessionId)
+    return expand ? await sessions.retrieve(sessionId, { expand: [...expand] }) : await sessions.retrieve(sessionId)
   } catch (err) {
     if (isMissingSession(err)) return null
     throw err
   }
+}
+
+/**
+ * `sessionId` as Stripe has it (with `expand`, when given) when it is the
+ * caller's own pack, load or plan session; `null` when its id is malformed,
+ * the caller has no Stripe customer, it does not exist, it is another
+ * customer's, or it is not a payment or subscription session. Any other
+ * Stripe failure throws: a failed read is never a "not found".
+ */
+export async function retrieveOwnSession(
+  userId: string,
+  sessionId: string,
+  expand?: readonly string[],
+): Promise<Stripe.Checkout.Session | null> {
+  if (!CHECKOUT_SESSION_ID.test(sessionId)) return null
+  const customerId = await stripeCustomerIdOf(userId)
+  if (!customerId) return null
+  const session = await retrieveSession(sessionId, expand)
+  if (!session) return null
+  if (idOf(session.customer) !== customerId) return null
+  if (session.mode !== "payment" && session.mode !== "subscription") return null
+  return session
 }
 
 /** A pack or a load: the claim row the webhook's grant writes, keyed as it keys it. */
@@ -103,12 +135,9 @@ async function subscriptionGranted(userId: string, session: Stripe.Checkout.Sess
  * never a "not found".
  */
 export async function readCheckoutStatus(userId: string, sessionId: string): Promise<CheckoutStatus | null> {
-  if (!CHECKOUT_SESSION_ID.test(sessionId)) return null
-  const customerId = await stripeCustomerIdOf(userId)
-  if (!customerId) return null
-  const session = await retrieveSession(sessionId)
+  const session = await retrieveOwnSession(userId, sessionId)
   if (!session) return null
-  if (idOf(session.customer) !== customerId) return null
+  // Repeats retrieveOwnSession's check on purpose: it narrows `mode` for the type.
   if (session.mode !== "payment" && session.mode !== "subscription") return null
 
   const granted = session.mode === "payment" ? await packGranted(userId, session) : await subscriptionGranted(userId, session)

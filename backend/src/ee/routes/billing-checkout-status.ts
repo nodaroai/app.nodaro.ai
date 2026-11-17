@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
-import { readCheckoutStatus } from "../billing/checkout-status.js"
+import { CHECKOUT_SESSION_NOT_FOUND, readCheckoutStatus } from "../billing/checkout-status.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { rateLimitAddressKey } from "../../lib/client-address.js"
 import { BILLING_JWT_ONLY_MSG } from "./billing.js"
@@ -22,10 +22,6 @@ export const CHECKOUT_STATUS_RATE_LIMIT = {
   },
 }
 
-const NOT_FOUND = {
-  error: { code: "checkout_session_not_found", message: "No checkout session with this id on your account." },
-} as const
-
 /**
  * `GET /v1/billing/checkout-session/:sessionId`: whether the caller's own
  * Checkout session's purchase has been granted. A signed-in session only.
@@ -46,7 +42,7 @@ export async function billingCheckoutStatusRoutes(app: FastifyInstance): Promise
       reply.header("Cache-Control", "no-store")
       try {
         const status = await readCheckoutStatus(userId, req.params.sessionId)
-        if (!status) return reply.status(404).send(NOT_FOUND)
+        if (!status) return reply.status(404).send(CHECKOUT_SESSION_NOT_FOUND)
         return reply.send({ data: status })
       } catch (err) {
         console.error("[billing] Failed to read a checkout session:", (err as Error).message)

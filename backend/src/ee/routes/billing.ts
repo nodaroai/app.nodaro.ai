@@ -38,6 +38,7 @@ import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
 import { grantPaidPlanChange, invoicePriceLines, notePlanCreditPeak } from "../billing/plan-change-credits.js"
 import { billingCheckoutStatusRoutes } from "./billing-checkout-status.js"
 import { gaClientIdField, gaSessionIdField, gaVisitMetadata } from "../billing/analytics/visit-ids.js"
+import { beginReplacement, finishReplacement, REPLACEMENT_HANDLED } from "../billing/replace-checkout-session.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -79,10 +80,21 @@ const EMBEDDED_CHECKOUT_UNAVAILABLE = {
   },
 }
 
-/** The body's first problem, worded: `uiMode`, then `returnPath`, else the route's own message. */
+/**
+ * A Checkout session of the caller's that this request replaces (checkout,
+ * load): read before anything is created, and never left payable beside the
+ * new one (`billing/replace-checkout-session.ts`). A string of the wrong
+ * shape reads as a session that does not exist (404), as the status read
+ * reads it.
+ */
+const replacesSessionIdSchema = z.string().min(1).max(255).optional()
+const REPLACES_SESSION_MESSAGE = "replacesSessionId must be a Checkout session id"
+
+/** The body's first problem, worded: `uiMode`, then `returnPath`, then `replacesSessionId`, else the route's own message. */
 function bodyProblem(issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey> }>, otherwise: string): string {
   if (issues.some((issue) => issue.path[0] === "uiMode")) return UI_MODE_MESSAGE
   if (issues.some((issue) => issue.path[0] === "returnPath")) return RETURN_PATH_MESSAGE
+  if (issues.some((issue) => issue.path[0] === "replacesSessionId")) return REPLACES_SESSION_MESSAGE
   return otherwise
 }
 
@@ -104,6 +116,7 @@ const checkoutSessionSchema = z.object({
   embedded: z.boolean().optional(),
   returnPath: returnPathSchema,
   uiMode: uiModeSchema,
+  replacesSessionId: replacesSessionIdSchema,
   // The visit's Google Analytics ids, kept on the payment so its completion
   // is reported against this visit (billing/analytics/). A malformed value is
   // dropped, never refused.
@@ -332,7 +345,7 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: bodyProblem(parsed.error.issues, "priceId is required") })
     }
 
-    const { priceId, mode, embedded, returnPath, uiMode, gaClientId, gaSessionId } = parsed.data
+    const { priceId, mode, embedded, returnPath, uiMode, replacesSessionId, gaClientId, gaSessionId } = parsed.data
     const checkoutMode = mode ?? (ON_SALE_PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
     const visit = gaVisitMetadata({ gaClientId, gaSessionId })
 
@@ -348,6 +361,13 @@ export async function billingRoutes(app: FastifyInstance) {
     if (uiMode === "embedded" && stripePublishableKey() === null) {
       return reply.status(503).send(EMBEDDED_CHECKOUT_UNAVAILABLE)
     }
+
+    // The session this one replaces: refused when it is paid or being paid,
+    // else expired just before the create. Read before the one-subscription
+    // check, so a first plan session already paid says so rather than 409.
+    const replacing = replacesSessionId === undefined ? null : await beginReplacement(userId, replacesSessionId, reply, "Failed to create checkout session")
+    if (replacing === REPLACEMENT_HANDLED) return reply
+    const expireFirst = replacing?.expire ?? null
 
     // One subscription per account: a plan change goes through change-plan
     // (charged now, applied when paid), never a second checkout. past_due
@@ -421,6 +441,9 @@ export async function billingRoutes(app: FastifyInstance) {
         return { success_url: successUrl, cancel_url: cancelUrl }
       }
 
+      const notReplaced = expireFirst === null ? null : await finishReplacement(userId, expireFirst)
+      if (notReplaced) return reply.status(notReplaced.status).send(notReplaced.body)
+
       const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
         mode: checkoutMode,
@@ -467,6 +490,7 @@ export async function billingRoutes(app: FastifyInstance) {
         embedded: z.boolean().optional(),
         returnPath: returnPathSchema,
         uiMode: uiModeSchema,
+        replacesSessionId: replacesSessionIdSchema,
         gaClientId: gaClientIdField,
         gaSessionId: gaSessionIdField,
       })
@@ -476,11 +500,15 @@ export async function billingRoutes(app: FastifyInstance) {
         error: bodyProblem(parsed.error.issues, `amountUsd must be a whole dollar amount between ${MIN_LOAD_USD} and ${MAX_LOAD_USD}`),
       })
     }
-    const { amountUsd, embedded, returnPath, uiMode, gaClientId, gaSessionId } = parsed.data
+    const { amountUsd, embedded, returnPath, uiMode, replacesSessionId, gaClientId, gaSessionId } = parsed.data
     // Refused before the database or Stripe is touched, as on checkout.
     if (uiMode === "embedded" && stripePublishableKey() === null) {
       return reply.status(503).send(EMBEDDED_CHECKOUT_UNAVAILABLE)
     }
+    // The session this one replaces, as on checkout.
+    const replacing = replacesSessionId === undefined ? null : await beginReplacement(userId, replacesSessionId, reply, "Failed to create load session")
+    if (replacing === REPLACEMENT_HANDLED) return reply
+    const expireFirst = replacing?.expire ?? null
     const credits = creditsForLoadUsd(amountUsd)
 
     try {
@@ -531,6 +559,9 @@ export async function billingRoutes(app: FastifyInstance) {
             : `${baseUrl}/billing`
         return { success_url: successUrl, cancel_url: cancelUrl }
       }
+
+      const notReplaced = expireFirst === null ? null : await finishReplacement(userId, expireFirst)
+      if (notReplaced) return reply.status(notReplaced.status).send(notReplaced.body)
 
       const session = await createCheckoutSession({
         customer: stripeCustomerId ?? undefined,
