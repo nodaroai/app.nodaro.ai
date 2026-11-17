@@ -150,10 +150,10 @@ function checkModalityOrError(
 ): { code: string; message: string } | null {
   const caps = getLlmModalityCaps(llmModel)
   if (refs.videos?.length && !caps.video) {
-    return { code: "modality_not_supported", message: `Model ${llmModel} does not support video references. Switch to a Gemini model.` }
+    return { code: "modality_not_supported", message: `Model ${llmModel} does not support video references. Switch to a model that reads video.` }
   }
   if (refs.audios?.length && !caps.audio) {
-    return { code: "modality_not_supported", message: `Model ${llmModel} does not support audio references. Switch to a Gemini model.` }
+    return { code: "modality_not_supported", message: `Model ${llmModel} does not support audio references. Switch to a model that reads audio.` }
   }
   if (refs.files?.length && !llmAcceptsFiles(llmModel)) {
     const readers = LLM_FILE_MODELS.map((m) => m.displayName).join(" or ")

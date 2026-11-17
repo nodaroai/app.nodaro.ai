@@ -1725,6 +1725,13 @@ const SEEDANCE_2_5_FLASH_TOTAL_BYTES = 157
 // nowhere near the per-tool budget.
 const SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES = 261
 
+// RAISED 2026-11-16 by one LLM id added to the registry (gemini-4-hydrogen): every tool whose
+// `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists it (20 B per list, five lists:
+// generate_text, image_to_text, analyze_prompt, generate_prompt, enhance_prompt), and nothing
+// else moved. No tool was added, so the membership fixture does NOT move (the recorded tool list,
+// tool-list-wire.json, does). Measured by this suite on top of Seedance 2.5 Flash Extend: 544_144 B in all, 100 B over the 544_044 B it measured before it.
+const GEMINI_4_HYDROGEN_ID_BYTES = 100
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES,
   totalBytes:
@@ -1941,7 +1948,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_TEXT_HANDOFF_BYTES +
     SEEDANCE_2_5_FLASH_TOTAL_BYTES +
     SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES +
-    SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES,
+    SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES +
+    GEMINI_4_HYDROGEN_ID_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -86,6 +86,16 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // `credits_consumed`, which matched these rates × the reported counts in the
   // probe (KIE does not bill the reasoning `total_tokens` adds on top).
   "gemini-4-carbon":   { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
+  // KIE list price 120/600 KIE-credits per M ($0.005/credit), read
+  // 2026-11-16. KIE also lists cached input at 6 credits/M ($0.03), but no
+  // probe reply reported `cached_tokens`, so the lane cannot be seen to apply
+  // it: the flat uncached band is what this row models, as Carbon's.
+  // `credits_consumed` came back on every probe call and matched these rates
+  // × the reported counts. Unlike Carbon, its `completion_tokens` INCLUDES the
+  // reasoning (`completion_tokens_details.reasoning_tokens` is a part of it,
+  // total = prompt + completion), so the reported output count is the billed
+  // output — nothing adds the reasoning on top, nothing subtracts it.
+  "gemini-4-hydrogen": { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
   // KIE-routed models below are pinned to KIE's published list prices
   // (kie.ai/claude-opus-4-7, kie.ai/gpt-5-4, kie.ai/gpt-5-5, kie.ai/gpt-5-6,
   // kie.ai/claude-sonnet-5, kie.ai/claude-opus-4-8).
@@ -211,6 +221,11 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // from 2026-12-01, thinking billed as output, no long-context band. Pinned
   // to the standard rate for Argon's reason above.
   "gemini-4-carbon": { inputPricePerM: 4.00, outputPricePerM: 20.00 },
+  // Its FALLBACK lane (KIE is primary), as Carbon. Google's list price
+  // (2026-11-16): $1.50/$7.50, thinking billed as output, cached input
+  // $0.075 (not modelled: Google reports cached tokens inside the prompt
+  // count — see `LlmCostUsage`), no long-context band.
+  "gemini-4-hydrogen": { inputPricePerM: 1.50, outputPricePerM: 7.50 },
   // Anthropic direct-SDK lane.
   "claude-haiku-4.5": { inputPricePerM: 1.00, outputPricePerM: 5.00 },
   // Anthropic list prices, 2026-10-10: two rate cards chosen by prompt length —

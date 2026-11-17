@@ -65,9 +65,10 @@ export function __resetGeminiClient(): void {
 /**
  * Our 6-level effort scale → Gemini's 4-level `thinkingLevel`.
  *
- * `xhigh`/`max` collapse onto `high` because Google exposes nothing above it;
- * the extra levels still matter upstream, where they bump the credit tier and
- * raise the output-token floor.
+ * `xhigh`/`max` collapse onto `high` because Google exposes nothing above it
+ * on most models (a model that takes XHIGH declares `directXhighThinking`:
+ * {@link geminiThinkingLevel}); the extra levels still matter upstream, where
+ * they bump the credit tier and raise the output-token floor.
  */
 const THINKING_LEVEL: Record<LlmReasoningEffort, ThinkingLevel> = {
   none: ThinkingLevel.MINIMAL,
@@ -76,6 +77,18 @@ const THINKING_LEVEL: Record<LlmReasoningEffort, ThinkingLevel> = {
   high: ThinkingLevel.HIGH,
   xhigh: ThinkingLevel.HIGH,
   max: ThinkingLevel.HIGH,
+}
+
+/**
+ * The `thinkingLevel` an effort is sent as on `model`. A model that declares
+ * `directXhighThinking` (Google takes XHIGH on it) sends `xhigh` / `max` as
+ * XHIGH; every other model reads {@link THINKING_LEVEL} unchanged. XHIGH is
+ * not in the SDK's `ThinkingLevel` enum (2.13.0); the SDK copies
+ * `thinkingConfig` onto the request as it is, so the string reaches Google.
+ */
+function geminiThinkingLevel(model: LlmModelDef, eff: LlmReasoningEffort): ThinkingLevel {
+  if (model.directXhighThinking && (eff === "xhigh" || eff === "max")) return "XHIGH" as ThinkingLevel
+  return THINKING_LEVEL[eff]
 }
 
 /** Gemini names the assistant turn "model"; every other dialect here says "assistant". */
@@ -89,7 +102,7 @@ function buildConfig(model: LlmModelDef, req: LlmRequest, p: GeminiCallParams, s
     maxOutputTokens: p.maxTokens,
     ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
     ...(p.topP !== undefined ? { topP: p.topP } : {}),
-    ...(p.eff !== undefined ? { thinkingConfig: { thinkingLevel: THINKING_LEVEL[p.eff] } } : {}),
+    ...(p.eff !== undefined ? { thinkingConfig: { thinkingLevel: geminiThinkingLevel(model, p.eff) } } : {}),
     // Gated on the model sending its schema at all (`structuredWireMode`: a
     // trusted mode, or a hint like Gemini 4 Carbon's), not on a vendor id — a
     // model with neither falls through to llmCompleteStructured's parse+retry,

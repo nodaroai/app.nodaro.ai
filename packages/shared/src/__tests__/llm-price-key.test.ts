@@ -176,6 +176,7 @@ describe("effortBelowLowestSendsLowest (Kimi K3 and K3.1 Pro)", () => {
     expect(effectiveReasoningEffort("gpt-6.1-sol", "none")).toBeUndefined()
     expect(effectiveReasoningEffort("gpt-6.1-terra", "none")).toBeUndefined()
     expect(effectiveReasoningEffort("gemini-4-carbon", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gemini-4-hydrogen", "none")).toBeUndefined()
   })
 })
 
@@ -209,6 +210,7 @@ describe("structured output: a trusted mode vs a schema hint", () => {
 
   it("llmSendsSchema: a model that sends its schema (trusted or hinted) counts it; one that sends none does not", () => {
     expect(llmSendsSchema("gemini-4-carbon")).toBe(true)
+    expect(llmSendsSchema("gemini-4-hydrogen")).toBe(true)
     expect(llmSendsSchema("gpt-6.1-terra")).toBe(true)
     expect(llmSendsSchema("gpt-5.2")).toBe(false)
     // Unset model = the feature's default; an unknown model counts it.

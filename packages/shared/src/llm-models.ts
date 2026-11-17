@@ -182,6 +182,15 @@ export interface LlmModelDef {
    * the concrete things Advanced mode buys.
    */
   directReasoningEfforts?: readonly LlmReasoningEffort[]
+  /**
+   * true = Google's own API takes `thinkingLevel: XHIGH` on this model, so an
+   * `xhigh` (or `max`) effort on the direct lane is sent as XHIGH. Absent =
+   * both collapse onto HIGH there, the level every other Gemini tops out at.
+   * Declared per model from a probe, never derived from a model name. Only
+   * meaningful with `directGeminiModel` and an `xhigh` level on the direct
+   * ladder (registry test).
+   */
+  directXhighThinking?: true
   /** false = model rejects `temperature` (Claude 5-era, GPT-5.6). Absent = accepts. */
   supportsTemperature?: false
   /**
@@ -677,6 +686,63 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // ran well past prompt + completion on every no-effort call (its dialect
     // reports no reasoning split), and Google's no-level call reported thought
     // tokens. No `reasoningOutputFloor`: both lanes take the default 32768.
+    thinkingDefaultOn: true,
+  },
+  {
+    id: "gemini-4-hydrogen",
+    displayName: "Gemini 4 Hydrogen",
+    series: "Gemini",
+    desc: "Fast multimodal Gemini 4, four thinking levels, 1M context",
+    tier: "premium",
+    kieFormat: "chat-completions",
+    // KIE serves it on the OpenAI-compatible dialect under this slug, the
+    // same shape as Carbon's. Its lane passed its probe (2026-11-16, 29 calls):
+    // every call answered, images read, streams ended cleanly with a final
+    // usage chunk (no reasoning deltas), no empty 200, no in-band error, no
+    // negative counts, no code fences or code-execution leaks. KIE flags it
+    // "Chat only", like Carbon: it may not back a tool-loop feature (none
+    // does today). Latency: median 7 s, but 4 of 29 trivial calls took
+    // 31–78 s — inside the KIE lane's default timeout, which no model
+    // overrides.
+    kieSlugOrModel: "gemini-4-hydrogen-openai",
+    vendor: "google",
+    // NO trusted `structuredOutputMode` (decided 2026-11-16), as Carbon: KIE
+    // did NOT enforce a `response_format` json_schema — 3 of 3 probe calls
+    // came back as valid JSON with prose in the enum field. So it is not a
+    // STRUCTURED_VISION_MODELS member, and every answer is parsed, validated
+    // and re-asked by `llmCompleteStructured`. The schema still goes on the
+    // wire as a hint: `response_format` on KIE, `responseJsonSchema` on the
+    // direct Google lane, which enforced it (enum honoured) in the probe.
+    structuredOutputHint: "kie-response-format",
+    supportsImages: true,
+    // The registry's usual 16384, as Carbon. Every call is floored to the
+    // default 32768 (`thinkingDefaultOn`, below): KIE accepted max_tokens
+    // 32768 and 65536, and Google lists an output cap of 65,536 (models.list)
+    // and accepted maxOutputTokens 65536.
+    maxOutputTokens: 16384,
+    // KIE first, Google as the reliability fallback (and Advanced mode) — no
+    // `preferDirect`, no `directOnly`, as Carbon. Google serves
+    // `models/gemini-4-hydrogen` (models.list, 2026-11-16: input 1,048,576,
+    // output 65,536).
+    directGeminiModel: "gemini-4-hydrogen",
+    // KIE accepted reasoning_effort low / medium / high / xhigh (xhigh reasons
+    // clearly deeper); Google 400s thinkingLevel MINIMAL on this model ("not
+    // supported") and answers LOW / MEDIUM / HIGH / XHIGH (probed 2026-11-16).
+    // So no `none` (it maps to MINIMAL in the direct client) and no
+    // `directReasoningEfforts`: one ladder on both lanes. KIE also accepted
+    // the off-enum `none`, `minimal` and `max` and still reasoned, so the
+    // clamp here is what keeps a request on the ladder: `none` runs at Auto,
+    // `max` at xhigh.
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    // Google takes thinkingLevel XHIGH on this model, so an xhigh effort on
+    // the direct lane is sent as XHIGH rather than collapsing to HIGH.
+    directXhighThinking: true,
+    // Reasons with no thinking param sent on both lanes (KIE reported
+    // reasoning tokens on every no-effort call; Google's no-level call
+    // thought). Unlike Carbon, KIE's `completion_tokens` INCLUDES the
+    // reasoning (`completion_tokens_details.reasoning_tokens` is a part of it;
+    // total = prompt + completion), so the reported output count is billed as
+    // it stands. No `reasoningOutputFloor`: both lanes take the default 32768.
     thinkingDefaultOn: true,
   },
   {
@@ -1606,6 +1672,10 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // choose it (modelReadsClip) — both intended. It was image-only from
   // 2026-11-12 until this enrolment was decided.
   "gemini-4-carbon":   { image: true,  video: true,  audio: true  },
+  // gemini-4-hydrogen is IMAGE-ONLY for now (decided 2026-11-16): video and
+  // audio input come in a later change. Full caps would also enrol it in
+  // VIDEO_ANALYSIS_LLM_MODELS (derived below), which it is not part of.
+  "gemini-4-hydrogen": { image: true,  video: false, audio: false },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },

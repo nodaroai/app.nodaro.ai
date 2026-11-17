@@ -697,6 +697,7 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Kimi tuned for coding and research, 1M context": "コーディングとリサーチ向けに調整された Kimi、100万トークンのコンテキスト",
   "Fast, efficient GPT-6.1, sharp visual reasoning": "高速で効率的な GPT-6.1、鋭い視覚推論",
   "Deepest-reasoning Gemini, 1M context": "最も深く推論する Gemini、100万トークンのコンテキスト",
+  "Fast multimodal Gemini 4, four thinking levels, 1M context": "高速なマルチモーダル Gemini 4、4段階の思考レベル、100万トークンのコンテキスト",
   "Very cheap and fast, solid reasoning": "非常に安価で高速、堅実な推論",
   "Fastest and cheapest, image or video input": "最速かつ最安、画像または動画を入力",
   "Flagship GPT-6, deepest reasoning": "フラッグシップの GPT-6、最も深い推論",

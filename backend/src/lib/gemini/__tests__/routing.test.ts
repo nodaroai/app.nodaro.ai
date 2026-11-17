@@ -301,6 +301,57 @@ describe("gemini-4-carbon: KIE first, Google's own API as its fallback and Advan
   })
 })
 
+describe("gemini-4-hydrogen: KIE first, Google's own API as its fallback and Advanced mode's lane (as Carbon)", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.resetModules()
+    callGeminiDirect.mockReset()
+    configMock.KIE_API_KEY = "test-kie-key"
+    configMock.GEMINI_API_KEY = "test-gemini-key"
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("an unpinned call is served by KIE on its own slug, never touching Google on success", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    fetchMock.mockResolvedValue(kieOk())
+
+    const res = await llmComplete({ modelId: "gemini-4-hydrogen", ...baseReq, reasoningEffort: "xhigh" })
+
+    expect(res.text).toBe("from-kie")
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/\/gemini-4-hydrogen-openai\/v1\/chat\/completions$/)
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+  })
+
+  it("falls back to Google's gemini-4-hydrogen when KIE fails", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockRejectedValue(new Error("kie down"))
+    callGeminiDirect.mockResolvedValue(directOk("recovered"))
+
+    const res = await llmComplete({ modelId: "gemini-4-hydrogen", ...baseReq })
+
+    expect(res.text).toBe("recovered")
+    const model = callGeminiDirect.mock.calls[0]![0] as { directGeminiModel: string }
+    expect(model.directGeminiModel).toBe("gemini-4-hydrogen")
+  })
+
+  it("Advanced (a direct pin) goes to Google: `none` is Auto, `max` lands on xhigh", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    callGeminiDirect.mockResolvedValue(directOk())
+
+    for (const reasoningEffort of ["none", "max"] as const) {
+      await llmComplete({ modelId: "gemini-4-hydrogen", ...baseReq, reasoningEffort, maxTokens: 2048, requireLane: "direct" })
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(callGeminiDirect.mock.calls[0]![2]).toMatchObject({ eff: undefined, maxTokens: 32_768 })
+    expect(callGeminiDirect.mock.calls[1]![2]).toMatchObject({ eff: "xhigh" })
+  })
+})
+
 describe("gemini-3.7-flash (retired) still runs: KIE lane on 3.8's endpoint, direct lane real 3.7", () => {
   let fetchMock: ReturnType<typeof vi.fn>
 

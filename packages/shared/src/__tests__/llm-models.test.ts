@@ -66,6 +66,7 @@ const EXPECTED_MODEL_IDS = [
   "gemini-3.1-pro",
   "gemini-4-argon",
   "gemini-4-carbon",
+  "gemini-4-hydrogen",
   "claude-opus-4.7",
   "gpt-5.4",
   "gpt-5.5",
@@ -132,14 +133,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 9 economy, 8 standard, 16 premium models", () => {
+  it("has 9 economy, 8 standard, 17 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
     expect(tierCounts.economy).toBe(9)
     expect(tierCounts.standard).toBe(8)
-    expect(tierCounts.premium).toBe(16)
+    expect(tierCounts.premium).toBe(17)
   })
 
   it("all three kieFormats are represented", () => {
@@ -1133,6 +1134,86 @@ describe("gemini-4-carbon exposure", () => {
     expect(VIDEO_ANALYSIS_LLM_MODELS).toContain("gemini-4-carbon")
     expect(VIDEO_ANALYSIS_TIERS.ultra).toBe("gemini-4-carbon")
     expect(resolveVideoAnalysisModel("ultra")).toBe("gemini-4-carbon")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-11-16 addition: Gemini 4 Hydrogen (KIE lane and Google lane probed that
+// day). Carbon's lane shape, with an xhigh level on both lanes.
+// ---------------------------------------------------------------------------
+describe("gemini-4-hydrogen exposure", () => {
+  it("premium Gemini, KIE first with Google's own API as the fallback — never direct-only or direct-first", () => {
+    const m = getLlmModel("gemini-4-hydrogen")!
+    expect(m.displayName).toBe("Gemini 4 Hydrogen")
+    expect(m.series).toBe("Gemini")
+    expect(m.tier).toBe("premium")
+    expect(m.vendor).toBe("google")
+    expect(m.kieFormat).toBe("chat-completions")
+    expect(m.kieSlugOrModel).toBe("gemini-4-hydrogen-openai")
+    expect(m.directGeminiModel).toBe("gemini-4-hydrogen")
+    expect(m.directOnly).toBeUndefined()
+    expect(m.preferDirect).toBeUndefined()
+    expect(supportsAdvancedMode("gemini-4-hydrogen")).toBe(true)
+    // Only Advanced mode moves it to Google's API — no effort does.
+    expect(llmServesDirect("gemini-4-hydrogen")).toBe(false)
+    expect(llmServesDirect("gemini-4-hydrogen", "xhigh")).toBe(false)
+    expect(llmServesDirect("gemini-4-hydrogen", undefined, true)).toBe(true)
+  })
+
+  it("declares NO trusted structured mode, only the response_format hint — callers parse and re-ask", () => {
+    const m = getLlmModel("gemini-4-hydrogen")!
+    expect(m.structuredOutputMode).toBeUndefined()
+    expect(m.structuredOutputHint).toBe("kie-response-format")
+    expect(STRUCTURED_VISION_MODELS.map((x) => x.id)).not.toContain("gemini-4-hydrogen")
+    expect(DESCRIBE_TO_PICKER_MODELS.map((x) => x.id)).not.toContain("gemini-4-hydrogen")
+  })
+
+  it("offers low / medium / high / xhigh on both lanes — `none` runs at Auto, `max` clamps to xhigh", () => {
+    expect(availableReasoningEfforts("gemini-4-hydrogen")).toEqual(["low", "medium", "high", "xhigh"])
+    expect(availableReasoningEfforts("gemini-4-hydrogen", true)).toEqual(["low", "medium", "high", "xhigh"])
+    for (const advanced of [false, true]) {
+      expect(effectiveReasoningEffort("gemini-4-hydrogen", "none", advanced)).toBeUndefined()
+      expect(effectiveReasoningEffort("gemini-4-hydrogen", "max", advanced)).toBe("xhigh")
+      expect(effectiveReasoningEffort("gemini-4-hydrogen", "xhigh", advanced)).toBe("xhigh")
+      expect(effectiveReasoningEffort("gemini-4-hydrogen", "medium", advanced)).toBe("medium")
+    }
+    expect(getLlmModel("gemini-4-hydrogen")?.effortBelowLowestSendsLowest).toBeUndefined()
+  })
+
+  it("takes XHIGH on Google's API (`directXhighThinking`)", () => {
+    expect(getLlmModel("gemini-4-hydrogen")?.directXhighThinking).toBe(true)
+  })
+
+  it("reasons by default, floored at the default 32768 on the registry's usual 16384 cap", () => {
+    const m = getLlmModel("gemini-4-hydrogen")!
+    expect(m.thinkingDefaultOn).toBe(true)
+    expect(m.reasoningOutputFloor).toBeUndefined()
+    expect(reasoningOutputFloor(m)).toBe(REASONING_OUTPUT_FLOOR)
+    expect(m.maxOutputTokens).toBe(16384)
+  })
+
+  it("resolves by its id and its KIE slug, and backs no feature default", () => {
+    expect(getLlmModel("gemini-4-hydrogen-openai")?.id).toBe("gemini-4-hydrogen")
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gemini-4-hydrogen")
+    expect(getLlmTier("gemini-4-hydrogen")).toBe("premium")
+  })
+
+  it("reads images only (decided 2026-11-16) — no video, audio or files, and no Video Analysis tier", () => {
+    expect(getLlmModalityCaps("gemini-4-hydrogen")).toEqual({ image: true, video: false, audio: false })
+    expect(llmAcceptsFiles("gemini-4-hydrogen")).toBe(false)
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-hydrogen")
+    expect(Object.values(VIDEO_ANALYSIS_TIERS)).not.toContain("gemini-4-hydrogen")
+  })
+})
+
+describe("directXhighThinking is declared only where the direct lane can send it", () => {
+  it("sits only on a model with a Google lane and an xhigh level on that lane's ladder", () => {
+    const declared = LLM_MODELS.filter((m) => m.directXhighThinking)
+    expect(declared.map((m) => m.id)).toEqual(["gemini-4-hydrogen"])
+    for (const m of declared) {
+      expect(m.directGeminiModel, m.id).toBeTruthy()
+      expect(availableReasoningEfforts(m.id, true), m.id).toContain("xhigh")
+    }
   })
 })
 

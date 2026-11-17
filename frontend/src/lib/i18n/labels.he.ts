@@ -713,6 +713,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Kimi tuned for coding and research, 1M context": "Kimi מותאם לקוד ולמחקר, הקשר של מיליון טוקנים",
   "Fast, efficient GPT-6.1, sharp visual reasoning": "GPT-6.1 מהיר ויעיל, חשיבה חזותית חדה",
   "Deepest-reasoning Gemini, 1M context": "ה-Gemini עם החשיבה העמוקה ביותר, הקשר של מיליון טוקנים",
+  "Fast multimodal Gemini 4, four thinking levels, 1M context": "Gemini 4 מהיר ומולטימודלי, ארבע רמות חשיבה, הקשר של מיליון טוקנים",
   "Very cheap and fast, solid reasoning": "זול ומהיר מאוד, חשיבה מוצקה",
   "Fastest and cheapest, image or video input": "המהיר והזול ביותר, קלט תמונה או וידאו",
   "Flagship GPT-6, deepest reasoning": "GPT-6 הדגל, החשיבה העמוקה ביותר",
