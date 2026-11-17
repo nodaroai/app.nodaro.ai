@@ -123,6 +123,8 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   "/v1/llm/structured": "llm-chat",
   "/v1/llm/structured/jobs": "llm-chat",
   "/v1/llm-suggest-description": "llm-chat",
+  // A use-case node's fixed fee, for a client that plans and cuts its result itself (Edit with AI): the node named in the body.
+  "/v1/use-case-fee": (body) => (typeof body.type === "string" ? [body.type] : []),
   "/v1/prompt-helper/wizard": "llm-chat",
   // An entity's own steps: its sheet's images and motion, its caption, its
   // approval (with its optional caption), its LoRA training.

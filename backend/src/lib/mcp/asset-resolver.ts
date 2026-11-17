@@ -1,3 +1,4 @@
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { supabase } from "../supabase.js"
 import { TRASHED_JOB_COLUMN } from "../public-job-data.js"
 import { RESTRICTED_ASSET_COLUMN } from "../content-restrictions-column.js"
@@ -94,6 +95,23 @@ const AUDIO_TYPES = new Set<string>([
 ])
 
 /**
+ * Whether a job of this type can be the media asked for. A job type is taken
+ * for a kind when the list above names it OR when the shared producer set of
+ * that kind does (the set the canvas and the workflow engine read, which every
+ * new node joins): a node added there is accepted here with no second list to
+ * remember. A type whose output is decided by the run (the dual-mode types
+ * above, and the shared dynamic producers) is accepted for any kind it can
+ * give. The type only admits the job: the URL field read from its
+ * `output_data` is what decides, so a job without that media still fails.
+ */
+function jobTypeGives(jobType: string, kind: ResolveOpts["expectedKind"]): boolean {
+  const listed = kind === "image" ? IMAGE_TYPES : kind === "video" ? VIDEO_TYPES : AUDIO_TYPES
+  const produced = kind === "image" ? IMAGE_PRODUCER_TYPES : kind === "video" ? VIDEO_PRODUCER_TYPES : AUDIO_PRODUCER_TYPES
+  if (listed.has(jobType) || produced.has(jobType) || DYNAMIC_PRODUCER_TYPES.has(jobType)) return true
+  return DUAL_MODE_TYPES.has(jobType) && kind !== "image"
+}
+
+/**
  * Resolve a Nodaro asset id to the URL of its media.
  *
  * Looks up `jobs` first (generations) and falls back to `assets` (uploads)
@@ -128,20 +146,13 @@ export async function resolveAssetId(opts: ResolveOpts): Promise<string | null> 
     if (job.user_id !== userId) {
       throw new Error("forbidden: asset belongs to a different user")
     }
-    const expected =
-      expectedKind === "image"
-        ? IMAGE_TYPES
-        : expectedKind === "video"
-          ? VIDEO_TYPES
-          : AUDIO_TYPES
     const jobType = job.job_type as string | null
     // Dual-mode types (voice-changer / voice-changer-pro / dubbing) deliver
     // audio OR video depending on the run — accept them for either expected
     // kind and let the output_data field check below be the real validator
     // (a video-mode row carries videoUrl + the audio sidecar; an audio-mode
     // row asked for as video fails honestly on the missing videoUrl).
-    const dualModeOk = jobType !== null && DUAL_MODE_TYPES.has(jobType) && expectedKind !== "image"
-    if (!jobType || (!expected.has(jobType) && !dualModeOk)) {
+    if (!jobType || !jobTypeGives(jobType, expectedKind)) {
       throw new Error(`expected ${expectedKind}, got job of type ${jobType ?? "unknown"}`)
     }
     const outputData = (job.output_data ?? {}) as Record<string, unknown>

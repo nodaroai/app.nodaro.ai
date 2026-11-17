@@ -39,7 +39,8 @@ describe("the cards' words", () => {
 describe("the request", () => {
   it("is ticked by what the person wrote in their own words too", () => {
     expect(requestSteps("Tighten it up and put some music under it")).toEqual(["pauses", "music"])
-    expect(requestSteps("Change the background to a beach")).toEqual([])
+    expect(requestSteps("Put me in front of the Eiffel Tower, change the background")).toEqual(["picture"])
+    expect(requestSteps("make it go viral")).toEqual([])
   })
 
   it("loses only the part that asks for a card that is taken out", () => {

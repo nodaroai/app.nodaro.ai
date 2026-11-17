@@ -58,6 +58,7 @@ export default function EditWithAiFramePage() {
           videos={host.init.videos}
           openedVideoUrl={host.init.openedVideoUrl}
           matchByName
+          capabilities={host.init.capabilities}
           onClose={close}
           onLayout={layout}
           project={host.init.project ?? 0}

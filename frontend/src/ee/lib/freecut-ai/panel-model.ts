@@ -5,9 +5,9 @@
  * talks to the editor or the server.
  */
 import type { MessageKey } from "@/lib/i18n"
-import { listensFor } from "./abilities"
+import { ABILITY_OF, listensFor } from "./abilities"
 import type { EditPlan, EditStep } from "./edit-plan"
-import type { AgentId, AgentState, DeclinedReason, ExtraCharge, RunSummary } from "./run-ai-edit"
+import type { AgentState, DeclinedReason, ExtraCharge, RunSummary } from "./run/types"
 
 type Vars = Record<string, string | number>
 
@@ -17,72 +17,15 @@ export interface StepOutcome {
   readonly key: MessageKey
   readonly vars?: Vars
   readonly progress?: number
-  /** The provider's own words about a step that failed. */
+  /** The provider's or the editor's own words about a step that failed. */
   readonly detail?: string
 }
 
 export type StepOutcomes = Partial<Record<EditStep, StepOutcome>>
 
-const AGENT_STEPS: Record<AgentId, readonly EditStep[]> = {
-  lead: [],
-  cutter: ["pauses", "fillers"],
-  captions: ["captions"],
-  sound: ["music"],
-}
-
-/** The plan's steps an agent works on (the Cutter does the pauses and the filler words in one pass). */
-export function stepsOfAgent(agent: AgentId, planSteps: readonly EditStep[]): EditStep[] {
-  return AGENT_STEPS[agent].filter((step) => planSteps.includes(step))
-}
-
-/** The cards after an agent's event: each step that agent works on says what the agent says. */
-export function withAgentEvent(
-  outcomes: StepOutcomes,
-  agent: AgentId,
-  planSteps: readonly EditStep[],
-  event: { readonly state: AgentState; readonly key: MessageKey; readonly vars?: Vars; readonly progress?: number; readonly detail?: string },
-): StepOutcomes {
-  const steps = stepsOfAgent(agent, planSteps)
-  if (steps.length === 0) return outcomes
-  const next: StepOutcome = { state: event.state, key: event.key, vars: event.vars, progress: event.progress, ...(event.detail ? { detail: event.detail } : {}) }
-  return { ...outcomes, ...Object.fromEntries(steps.map((step) => [step, next])) }
-}
-
-const count = (n: number, one: MessageKey, many: MessageKey): Pick<StepOutcome, "key" | "vars"> => (n === 1 ? { key: one } : { key: many, vars: { n } })
-
-/**
- * The cards once a run finished: each step THIS run did says what it did on its
- * own (the Cutter's pass reports its pauses and its filler words apart). A card
- * an earlier run finished keeps what it said.
- */
-export function outcomesAfterRun(outcomes: StepOutcomes, summary: RunSummary, planSteps: readonly EditStep[]): StepOutcomes {
-  const next: StepOutcomes = { ...outcomes }
-  const ran = (step: EditStep) => planSteps.includes(step) && next[step]?.state === "done"
-  if (ran("pauses") && summary.pausesCut > 0) next.pauses = { state: "done", ...count(summary.pausesCut, "freecutAi.summaryPausesOne", "freecutAi.summaryPauses") }
-  if (ran("fillers")) {
-    next.fillers = summary.fillersCut > 0
-      ? { state: "done", ...count(summary.fillersCut, "freecutAi.summaryFillersOne", "freecutAi.summaryFillers") }
-      : { state: "done", key: "freecutAi.noFillers" }
-  }
-  if (ran("captions")) next.captions = { state: "done", ...count(summary.captions, "freecutAi.summaryCaptionsOne", "freecutAi.summaryCaptions") }
-  return next
-}
-
 /** The cards with these steps forgotten (their undo entries were reverted): they can be asked for again. */
 export function withoutSteps(outcomes: StepOutcomes, steps: readonly EditStep[]): StepOutcomes {
   return Object.fromEntries(Object.entries(outcomes).filter(([step]) => !steps.includes(step as EditStep))) as StepOutcomes
-}
-
-/**
- * The steps one undo entry of a run stands for, by its label: the Cutter
- * records every cut under one label, so a cut entry stands for the pauses and
- * the filler words that run cut.
- */
-export function stepsOfEntry(label: string, labels: Record<EditStep, string>, planSteps: readonly EditStep[]): EditStep[] {
-  if (label === labels.captions) return ["captions"]
-  if (label === labels.music) return ["music"]
-  if (label === labels.pauses || label === labels.fillers) return planSteps.filter((step) => step === "pauses" || step === "fillers")
-  return []
 }
 
 /** The cards after a stop: whatever was still at work did not finish, and can be asked for again. */
@@ -92,9 +35,12 @@ export function outcomesAfterStop(outcomes: StepOutcomes): StepOutcomes {
   ) as StepOutcomes
 }
 
-/** The steps a run already did on a video: not done again, and their cards cannot be asked for. */
+/** The steps a run already did on a video. */
 export const doneSteps = (outcomes: StepOutcomes): EditStep[] =>
   (Object.entries(outcomes) as Array<[EditStep, StepOutcome | undefined]>).filter(([, o]) => o?.state === "done").map(([step]) => step)
+
+/** The done steps that are not done again: asking for one again does nothing (an ability with no "again"). */
+export const lockedSteps = (outcomes: StepOutcomes): EditStep[] => doneSteps(outcomes).filter((step) => !ABILITY_OF[step]?.again)
 
 export type Phase =
   | { readonly kind: "idle" }
@@ -122,10 +68,15 @@ export interface StatusModel {
   readonly bar?: number
 }
 
+export type RunStage = "reading" | "listening" | "working"
+
 export interface StatusInput {
   readonly phase: Phase
+  /** Where a running run is. */
+  readonly stage: RunStage
+  /** Waiting for a free slot on the account. */
+  readonly waiting: boolean
   readonly view: "edited" | "original"
-  readonly listening: boolean
   /** The plan's steps while a run is on, with the cards' outcomes: how far along it is. */
   readonly planSteps: readonly EditStep[]
   readonly outcomes: StepOutcomes
@@ -140,14 +91,15 @@ export function statusOf(input: StatusInput): StatusModel {
   if (input.view === "original") return { kind: "original", icon: "eye", title: "freecutAi.status.original", sub: "freecutAi.status.originalSub" }
   switch (phase.kind) {
     case "running": {
-      if (input.planSteps.length === 0) return { kind: "busy", icon: "spin", title: "freecutAi.status.reading", sub: "freecutAi.status.readingSub" }
+      if (input.waiting) return { kind: "busy", icon: "spin", title: "freecutAi.status.waitingSlot", sub: "freecutAi.status.waitingSlotSub" }
+      if (input.stage === "reading" || input.planSteps.length === 0) return { kind: "busy", icon: "spin", title: "freecutAi.status.reading", sub: "freecutAi.status.readingSub" }
+      if (input.stage === "listening") return { kind: "busy", icon: "spin", title: "freecutAi.status.listening", sub: "freecutAi.status.listeningSub", bar: 0.05 }
       const total = input.planSteps.length
       const finished = input.planSteps.filter((step) => {
         const state = input.outcomes[step]?.state
         return state === "done" || state === "failed" || state === "skipped"
       }).length
       const moving = input.planSteps.reduce((sum, step) => sum + (input.outcomes[step]?.state === "working" ? input.outcomes[step]?.progress ?? 0 : 0), 0)
-      if (input.listening) return { kind: "busy", icon: "spin", title: "freecutAi.status.listening", sub: "freecutAi.status.listeningSub", bar: 0.05 }
       return {
         kind: "busy",
         icon: "spin",
@@ -177,28 +129,44 @@ export function statusOf(input: StatusInput): StatusModel {
   }
 }
 
-/** The platform's prices for the parts of a run; undefined while one is unknown. */
+/**
+ * The platform's prices for the parts of a run, at the length of the video
+ * being edited; undefined while one is unknown. Editing on the timeline itself
+ * (cutting, captions, color) costs nothing.
+ */
 export interface EditPrices {
-  readonly listen?: number
+  /** Reading a request written in the person's own words (a request made of the cards' words is not read). */
   readonly read?: number
-  readonly music?: number
+  readonly listen?: number
+  /** The creative pass (b-roll moments, zoom lines, a trailer's moments). */
+  readonly choose?: number
+  readonly steps: Partial<Record<EditStep, number>>
 }
 
 export interface Cost {
   /** The whole figure, or undefined while a needed price is unknown. */
   readonly total?: number
-  readonly parts: ReadonlyArray<{ readonly key: MessageKey; readonly credits?: number }>
+  readonly parts: ReadonlyArray<{ readonly key: MessageKey; readonly vars?: Vars; readonly credits?: number }>
 }
 
+/** The steps that are paid, beyond reading and listening. */
+export const PAID_STEPS: readonly EditStep[] = ["mistakes", "music", "broll", "picture", "phone", "layout", "cameras", "clips", "trailer", "chapters"]
+/** The steps that need the creative pass. */
+const CHOOSES: readonly EditStep[] = ["broll", "titles", "zoom"]
+
 /**
- * What a request is charged at its usual prices: reading it, listening to the
- * video (once per video, only for a step that reads its words) and the music.
- * The cutting and the captions are the editor's own work and cost nothing.
+ * What a request is charged at the platform's prices: reading it (only words
+ * of the person's own), listening to the video (once per video, only for a
+ * step that reads its words), the creative pass, and each paid step.
  */
-export function costOf(steps: readonly EditStep[], { heard, prices }: { readonly heard: boolean; readonly prices: EditPrices }): Cost {
-  const parts: Array<{ key: MessageKey; credits?: number }> = [{ key: "freecutAi.cost.read", credits: prices.read }]
+export function costOf(steps: readonly EditStep[], { heard, read, prices }: { readonly heard: boolean; readonly read: boolean; readonly prices: EditPrices }): Cost {
+  const parts: Array<{ key: MessageKey; vars?: Vars; credits?: number }> = []
+  if (read) parts.push({ key: "freecutAi.cost.read", credits: prices.read })
   if (!heard && listensFor(steps)) parts.push({ key: "freecutAi.cost.listen", credits: prices.listen })
-  if (steps.includes("music")) parts.push({ key: "freecutAi.cost.music", credits: prices.music })
+  if (steps.some((s) => CHOOSES.includes(s))) parts.push({ key: "freecutAi.cost.choose", credits: prices.choose })
+  for (const step of steps) {
+    if (PAID_STEPS.includes(step)) parts.push({ key: `freecutAi.cost.${step}` as MessageKey, credits: prices.steps[step] })
+  }
   const known = parts.every((p) => p.credits !== undefined)
   return { total: known ? parts.reduce((sum, p) => sum + (p.credits ?? 0), 0) : undefined, parts }
 }

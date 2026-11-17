@@ -1,25 +1,19 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
 import {
-  DEFAULT_MUSIC_STYLE,
   captionCues,
   fillerRanges,
+  keptRanges,
   mergeRanges,
-  parseModelPlan,
   pauseRanges,
-  planFromRequest,
   primaryVideo,
   readTimelineView,
   timelineFrameOf,
   transcriptLanguage,
   wordsFromTranscript,
+  wordsIn,
   type TimedWord,
 } from "../edit-plan"
-import { en } from "@/lib/i18n/en"
-import { he } from "@/lib/i18n/he"
-import { ja } from "@/lib/i18n/ja"
-import { ko } from "@/lib/i18n/ko"
-import { ptBR } from "@/lib/i18n/pt-br"
 
 const w = (text: string, start: number, end: number): TimedWord => ({ text, start, end })
 
@@ -34,6 +28,11 @@ describe("wordsFromTranscript", () => {
       ],
     })
     expect(words).toEqual([w("hello", 0.1, 0.5), w("world", 0.6, 1)])
+  })
+
+  it("keeps who said each word, when the transcriber says", () => {
+    const words = wordsFromTranscript({ version: 1, words: [{ text: "Hi", startMs: 0, endMs: 300, speaker: "speaker_0" }, { text: "there", startMs: 400, endMs: 700 }] })
+    expect(words).toEqual([{ text: "Hi", start: 0, end: 0.3, speaker: "speaker_0" }, w("there", 0.4, 0.7)])
   })
 
   it("answers no words for anything else", () => {
@@ -130,16 +129,6 @@ describe("transcriptLanguage", () => {
   })
 })
 
-describe("planFromRequest with accented words", () => {
-  it("finds a filler word written with an accent, and only as a word", () => {
-    expect(planFromRequest("tire o hã da fala").steps).toContain("fillers")
-    expect(planFromRequest("hãx e legendas").steps).toEqual(["captions"])
-    // The Portuguese article is not a request to cut fillers; "the ums" is.
-    expect(planFromRequest("coloque um fundo musical").steps).toEqual(["music"])
-    expect(planFromRequest("remove the ums").steps).toEqual(["fillers"])
-  })
-})
-
 describe("captionCues", () => {
   it("groups a few words per caption, breaking at sentence ends and pauses", () => {
     const words = [w("Here's", 0, 0.3), w("how", 0.3, 0.5), w("I", 0.5, 0.6), w("plan.", 0.6, 1), w("First,", 2, 2.4), w("ideas", 2.4, 2.8)]
@@ -148,8 +137,8 @@ describe("captionCues", () => {
 
   it("holds a caption a little past its last word, never into the next", () => {
     const cues = captionCues([w("a", 0, 0.5), w("b.", 0.5, 1), w("c", 1.1, 1.5)])
-    expect(cues[0]).toEqual({ text: "a b.", start: 0, end: 1.1 })
-    expect(cues[1]).toEqual({ text: "c", start: 1.1, end: 1.75 })
+    expect(cues[0]).toMatchObject({ text: "a b.", start: 0, end: 1.1 })
+    expect(cues[1]).toMatchObject({ text: "c", start: 1.1, end: 1.75 })
   })
 
   it("gives a word timed with no length a caption that still lasts a moment", () => {
@@ -162,64 +151,30 @@ describe("captionCues", () => {
   it("writes Japanese words without spaces between them", () => {
     expect(captionCues([w("今日", 0, 0.3), w("は", 0.3, 0.4)])[0]!.text).toBe("今日は")
   })
-})
 
-describe("planFromRequest", () => {
-  it("reads the steps a request names, in run order", () => {
-    expect(planFromRequest("Add captions and cut the pauses").steps).toEqual(["pauses", "captions"])
-    expect(planFromRequest("תחתכו את השתיקות ותוסיפו כתוביות ומוזיקה").steps).toEqual(["pauses", "captions", "music"])
-    expect(planFromRequest("無音を詰めて字幕をつけてください").steps).toEqual(["pauses", "captions"])
-    expect(planFromRequest("자막과 배경음악을 넣어 주세요").steps).toEqual(["captions", "music"])
-    expect(planFromRequest("Corte as pausas e coloque legendas").steps).toEqual(["pauses", "captions"])
-  })
-
-  it("names no step, never an edit nobody asked for, when the request names nothing it can do", () => {
-    expect(planFromRequest("make the presenter's shirt blue")).toEqual({ steps: [], musicStyle: null, reply: null, cannot: [] })
-    expect(planFromRequest("לשנות למציג את החולצה לכחול").steps).toEqual([])
-  })
-
-  it("gives music its default style when it reads music from the words alone", () => {
-    expect(planFromRequest("add some music")).toEqual({ steps: ["music"], musicStyle: DEFAULT_MUSIC_STYLE, reply: null, cannot: [] })
-  })
-
-  it("the panel's example request asks for all four steps, in every language", () => {
-    for (const [locale, example] of Object.entries({ en: en["freecutAi.example"], he: he["freecutAi.example"], ja: ja["freecutAi.example"], ko: ko["freecutAi.example"], "pt-br": ptBR["freecutAi.example"] })) {
-      expect(planFromRequest(example ?? "").steps, locale).toEqual(["fillers", "pauses", "captions", "music"])
-    }
+  it("keeps each caption's own timed words, for the word-by-word highlight", () => {
+    const cues = captionCues([w("one", 0, 0.3), w("two", 0.3, 0.6), w("three.", 0.6, 1), w("four", 1.5, 2)])
+    expect(cues.map((c) => (c.words ?? []).map((x) => x.text))).toEqual([["one", "two", "three."], ["four"]])
   })
 })
 
-describe("parseModelPlan", () => {
-  it("reads the planner's JSON, even in a code fence, in run order", () => {
-    const text = '```json\n{"steps":["music","pauses","teleport"],"musicStyle":"calm piano","reply":"On it."}\n```'
-    expect(parseModelPlan(text)).toEqual({ steps: ["pauses", "music"], musicStyle: "calm piano", reply: "On it.", cannot: [] })
+describe("wordsIn and keptRanges", () => {
+  const words = [w("a", 0.5, 1), w("b", 1.2, 1.6), w("c", 3, 3.4)]
+
+  it("finds the words spoken inside a range of the media", () => {
+    expect(wordsIn(words, { start: 1, end: 2 }).map((x) => x.text)).toEqual(["b"])
+    expect(wordsIn(words, { start: 0, end: 10 })).toHaveLength(3)
   })
 
-  it("takes an empty steps list as an answer: the request asked for nothing it can do", () => {
-    const text = '{"steps":[],"musicStyle":null,"reply":"I cannot change colors yet.","cannot":["change the shirt color"]}'
-    expect(parseModelPlan(text)).toEqual({ steps: [], musicStyle: null, reply: "I cannot change colors yet.", cannot: ["change the shirt color"] })
-  })
-
-  it("reads odd extras leniently instead of throwing the plan away", () => {
-    expect(parseModelPlan('{"steps":["captions"],"musicStyle":null,"reply":null,"cannot":null}')).toEqual({ steps: ["captions"], musicStyle: null, reply: null, cannot: [] })
-    const long = parseModelPlan(JSON.stringify({ steps: ["music"], musicStyle: "m".repeat(500), reply: "r".repeat(900), cannot: ["zooms", "zooms", 7] }))
-    expect(long?.reply).toHaveLength(400)
-    expect(long?.musicStyle).toHaveLength(300)
-    expect(long?.cannot).toEqual(["zooms"])
-  })
-
-  it("keeps what was left out short: trimmed, without blanks, at most six", () => {
-    const cannot = ["  b-roll ", "", "x".repeat(200), "a", "b", "c", "d", "e"]
-    const plan = parseModelPlan(JSON.stringify({ steps: ["captions"], musicStyle: null, reply: "Ok.", cannot }))
-    expect(plan?.cannot).toHaveLength(6)
-    expect(plan?.cannot[0]).toBe("b-roll")
-    expect(plan?.cannot[1]).toHaveLength(120)
-  })
-
-  it("is null for an answer that is not a plan", () => {
-    expect(parseModelPlan("Sure! I will cut the pauses.")).toBeNull()
-    expect(parseModelPlan('{"steps":["teleport"]}')).toBeNull()
-    expect(parseModelPlan("{not json}")).toBeNull()
+  it("answers what still plays once the cuts are made", () => {
+    expect(keptRanges({ start: 0, end: 10 }, [{ start: 2, end: 3 }, { start: 5, end: 6 }])).toEqual([
+      { start: 0, end: 2 },
+      { start: 3, end: 5 },
+      { start: 6, end: 10 },
+    ])
+    expect(keptRanges({ start: 2, end: 4 }, [{ start: 0, end: 3 }, { start: 3.5, end: 9 }])).toEqual([{ start: 3, end: 3.5 }])
+    expect(keptRanges({ start: 0, end: 4 }, [])).toEqual([{ start: 0, end: 4 }])
+    expect(keptRanges({ start: 0, end: 4 }, [{ start: 0, end: 4 }])).toEqual([])
   })
 })
 
@@ -242,6 +197,20 @@ describe("the timeline", () => {
     expect(timelineFrameOf(timeline, "m", 1)).toEqual({ frame: 30, itemId: "a", trackId: "v1" })
     expect(timelineFrameOf(timeline, "m", 5)).toEqual({ frame: 90, itemId: "b", trackId: "v1" })
     expect(timelineFrameOf(timeline, "m", 3)).toBeNull()
+  })
+
+  it("reads the canvas, the tracks, the media and where each picture sits, when the editor says them", () => {
+    const view = readTimelineView({
+      fps: 30,
+      durationInFrames: 30,
+      width: 1920,
+      height: 1080,
+      tracks: [{ id: "music", kind: "audio", order: 2, syncLock: false }],
+      media: [{ id: "m", fileName: "take.mp4", duration: 182, width: 1920, height: 1080 }],
+      items: [{ id: "a", type: "video", trackId: "v1", from: 0, durationInFrames: 30, label: "take.mp4", transform: { x: 0, y: 0, width: 1920, height: 1080, rotation: 0 } }],
+    })!
+    expect(view).toMatchObject({ width: 1920, height: 1080, tracks: [{ id: "music", syncLock: false }], media: [{ id: "m", duration: 182 }] })
+    expect(view.items[0]).toMatchObject({ label: "take.mp4", transform: { x: 0, width: 1920 } })
   })
 
   it("is null for a report that is not a timeline", () => {
