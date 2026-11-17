@@ -267,6 +267,7 @@ import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "@/lib/job-budget.js"
 import { unitDescriptorOf } from "@/lib/unit-descriptors.js"
 import { audioSyncRenderBudgetMs } from "@/providers/audio/audio-sync-budget.js"
 import { isDeterministicJobError } from "@/lib/deterministic-job-error.js"
+import { providerDetailOf } from "@/lib/provider-error-detail.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -619,6 +620,23 @@ describe("add-captions handler — phrase-level transcription for a subtitle", (
     await expect(handler(subtitleJob() as never, makeCtx())).rejects.toThrow(
       /no speech and no text fallback/,
     )
+  })
+
+  it("a failed transcription keeps the provider's own text on the cause chain, so the job records it as error_detail", async () => {
+    // November 2026: Replicate disabled the pinned transcription version. The
+    // job said only "transcribe failed: <our sentence>" and error_detail stayed
+    // empty, because this rewrap dropped the error that carried the raw reply.
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+    const providerError = Object.assign(new Error("The generation service is temporarily out of capacity on our side"), {
+      internalDetails: 'failed with status 422 Unprocessable Entity: {"title":"Version disabled"}',
+    })
+    mocks.mockTranscribe.mockRejectedValueOnce(providerError)
+
+    const err = await handler(subtitleJob() as never, makeCtx()).catch((e: unknown) => e)
+
+    expect((err as Error).message).toBe("transcribe failed: The generation service is temporarily out of capacity on our side")
+    expect((err as Error).cause).toBe(providerError)
+    expect(providerDetailOf(err)).toContain("Version disabled")
   })
 })
 

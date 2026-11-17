@@ -64,9 +64,16 @@ interface TranscribeResult {
   billedKieCredits?: number
 }
 
+// Pinned versions. Replicate can disable an old version of a community model:
+// every request to it is then refused with a 422 "Version disabled" before any
+// input is read. That happened to incredibly-fast-whisper's 3ab86df6 in
+// November 2026 and failed every auto-transcribed caption. Its replacement,
+// c6433aab, was checked against a real speech sample with the input below: one
+// timed entry per word, and the result reads through mapFastWhisperOutput with
+// the word-timestamp check on.
 const TRANSCRIBE_MODELS: Record<string, string> = {
   whisper: "openai/whisper:8099696689d249cf8b122d833c36ac3f75505c666a395ca40ef26f68e7d3d16e",
-  "incredibly-fast-whisper": "vaibhavs10/incredibly-fast-whisper:3ab86df6c8f54c11309d4d1f930ac292bad43ace52d10c80d87eb258b3c9f79c",
+  "incredibly-fast-whisper": "vaibhavs10/incredibly-fast-whisper:c6433aab18b7318bbae316495f1a097fc067deef7d59dc2f33e45077ae5956c7",
 }
 
 export async function transcribe(
@@ -208,14 +215,16 @@ export async function transcribe(
       input.language = "None"
     }
 
-    const prediction = await withReplicateRequestFailure("[transcribe]", () =>
+    // The label names the pin, so a refused-version alert says which one to move.
+    const label = "[transcribe:incredibly-fast-whisper]"
+    const prediction = await withReplicateRequestFailure(label, () =>
       replicate.predictions.create({
         version: extractVersion(model),
         input,
       }),
     )
     await options?.onTaskCreated?.(prediction.id)
-    const completed = await withReplicateRequestFailure("[transcribe]", () => replicate.wait(prediction))
+    const completed = await withReplicateRequestFailure(label, () => replicate.wait(prediction))
     const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "incredibly-fast-whisper")
     const output = completed.output as FastWhisperOutput
 
@@ -245,14 +254,16 @@ export async function transcribe(
     input.language = language
   }
 
-  const prediction = await withReplicateRequestFailure("[transcribe]", () =>
+  // A literal, never the caller's provider string: the alert keeps one timer per label.
+  const label = "[transcribe:whisper]"
+  const prediction = await withReplicateRequestFailure(label, () =>
     replicate.predictions.create({
       version: extractVersion(model),
       input,
     }),
   )
   await options?.onTaskCreated?.(prediction.id)
-  const completed = await withReplicateRequestFailure("[transcribe]", () => replicate.wait(prediction))
+  const completed = await withReplicateRequestFailure(label, () => replicate.wait(prediction))
   const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "whisper")
   const output = completed.output as WhisperOutput
 

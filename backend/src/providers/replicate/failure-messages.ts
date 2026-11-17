@@ -111,14 +111,31 @@ export const REPLICATE_REJECTED_MESSAGE =
 /** Any other refusal (a 5xx, a 404/409 while polling): nothing the user chose — retryable. */
 export const REPLICATE_PROVIDER_ERROR_MESSAGE = "Generation failed on the provider. Please try again."
 
-/** One credit alert per minute while the account stays throttled, not one per request. */
+/** One alert of each kind per minute while the cause lasts, not one per request. */
 const ALERT_EVERY_MS = 60_000
 let lastCreditAlertAt = 0
+/** Per call-site label: a second pin breaking while the first still alerts must alert too. */
+const lastVersionAlertAt = new Map<string, number>()
 
-/** Test hook: forget the last alert so the next credit 429 alerts again. */
+/** Test hook: forget the last alerts so the next refusal alerts again. */
 export function __resetReplicateAlertForTests(): void {
   lastCreditAlertAt = 0
+  lastVersionAlertAt.clear()
 }
+
+/**
+ * A 422 that refuses the pinned model VERSION, not the request body: Replicate
+ * answers `{"title":"Version disabled","detail":"Sorry, this version is
+ * currently disabled."}` for a version it switched off, before it reads any
+ * input, and "Invalid version or not permitted" for one that is gone. Every run
+ * of that model fails the same way until the pin in our code moves, so it is
+ * the platform's fault, never the user's settings. Production, November 2026:
+ * incredibly-fast-whisper's pinned version was disabled, and every
+ * auto-transcribed caption failed with "change the settings or the input media".
+ * Matched on the body's `title` only: the SDK message also carries the rest of
+ * the body, which can echo the request's own input back.
+ */
+const VERSION_REFUSED_RE = /"title"\s*:\s*"(?:version disabled|invalid version)/i
 
 /**
  * A failed Replicate API CALL (not a failed prediction) as the user should
@@ -137,6 +154,17 @@ export function replicateRequestFailure(err: unknown, label: string): ReplicateS
   const status = replicateApiStatus(err)
   if (status === undefined) return null
   const raw = err instanceof Error ? err.message : String(err)
+  if (status === 422 && VERSION_REFUSED_RE.test(raw)) {
+    if (Date.now() - (lastVersionAlertAt.get(label) ?? 0) > ALERT_EVERY_MS) {
+      lastVersionAlertAt.set(label, Date.now())
+      console.error(
+        `[ALERT] Replicate refused a pinned model version (${label}) — the pin in the code must move to a live version: ${(redactProviderDetail(raw) ?? "").slice(0, 300)}`,
+      )
+    }
+    // The platform's problem, said with the same sentence as an account
+    // refusal, so the MCP reads it as the platform's outage, not a settings error.
+    return new ReplicateSanitizedError(PLATFORM_CAPACITY_MESSAGE, raw)
+  }
   if (status === 429 && /credit/i.test(raw) && Date.now() - lastCreditAlertAt > ALERT_EVERY_MS) {
     lastCreditAlertAt = Date.now()
     // Operator-only, and redacted like every provider detail we record.
@@ -147,9 +175,10 @@ export function replicateRequestFailure(err: unknown, label: string): ReplicateS
   // 401/402/403 is the platform's account, not the user's request: the same
   // sentence the other providers' account refusals carry, so the MCP's
   // retry guidance (`isPlatformCapacityOutage`) reads it the same way.
-  // 400/422 is the request body — deterministic, so "rejected these
-  // settings" (not retryable); any other 4xx (a 404/409 while polling) is
-  // nothing the user chose and keeps the retryable provider-error sentence.
+  // 400/422 is the request body (a refused VERSION was answered above) —
+  // deterministic, so "rejected these settings" (not retryable); any other
+  // 4xx (a 404/409 while polling) is nothing the user chose and keeps the
+  // retryable provider-error sentence.
   const message =
     status === 429
       ? REPLICATE_BUSY_MESSAGE

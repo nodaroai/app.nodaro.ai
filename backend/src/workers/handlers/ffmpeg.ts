@@ -948,8 +948,14 @@ async function dispatchKineticCaptions(
       // on the transcribe path today, so this guards a future one rather than
       // a live bug; it costs one line and keeps the invariant local.
       if (transcribeResult.reason instanceof DrainAbortError) throw transcribeResult.reason
+      // `cause` keeps the provider's own text reachable: the worker records
+      // `providerDetailOf(err)` as `jobs.error_detail`, reading it off the
+      // cause chain. Without it a refused transcription left no detail at all
+      // (the November 2026 disabled-version incident was diagnosed by probing
+      // Replicate by hand, because nothing on the job said what it answered).
       throw new Error(
         `transcribe failed: ${transcribeResult.reason instanceof Error ? transcribeResult.reason.message : String(transcribeResult.reason)}`,
+        { cause: transcribeResult.reason },
       )
     }
     // Word timings when the render needs (and got) them; otherwise the phrase

@@ -75,6 +75,52 @@ describe("replicateRequestFailure", () => {
     expect(replicateRequestFailure(apiError(502, "x"), "[x]")!.message).toBe(REPLICATE_PROVIDER_ERROR_MESSAGE)
   })
 
+  // The November 2026 production case: Replicate disabled the pinned
+  // incredibly-fast-whisper version, and every auto-transcribed caption failed
+  // with "change the settings or the input media" — which no setting could fix.
+  const VERSION_DISABLED =
+    "Request to https://api.replicate.com/v1/predictions failed with status 422 Unprocessable Entity: " +
+    '{"title":"Version disabled","detail":"Sorry, this version is currently disabled.","status":422}.'
+
+  it("a 422 refusing the pinned VERSION is the platform's outage, not the user's settings, with an [ALERT] and the raw text kept", () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    const out = replicateRequestFailure(apiError(422, VERSION_DISABLED), "[transcribe:incredibly-fast-whisper]")
+    expect(out).toBeInstanceOf(ReplicateSanitizedError)
+    expect(out!.message).toBe(PLATFORM_CAPACITY_MESSAGE)
+    expect(isPlatformCapacityOutage(out!.message)).toBe(true)
+    // Behind the add-captions handler's prefix too.
+    expect(isPlatformCapacityOutage(`transcribe failed: ${out!.message}`)).toBe(true)
+    expect(isRetryableFailure(out!.message)).toBe(true)
+    expect(providerDetailOf(out)).toContain("Version disabled")
+    expect(alert).toHaveBeenCalledTimes(1)
+    expect(alert.mock.calls[0]![0]).toMatch(/^\[ALERT\] Replicate refused a pinned model version \(\[transcribe:incredibly-fast-whisper\]\)/)
+    expect(alert.mock.calls[0]![0]).not.toMatch(/api\.replicate\.com\/v1/)
+  })
+
+  it("a removed version reads the same way; the alert fires once a minute per pin, so a second broken pin still alerts", () => {
+    const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+    const gone =
+      "Request to https://api.replicate.com/v1/predictions failed with status 422 Unprocessable Entity: " +
+      '{"title":"Invalid version or not permitted","detail":"The specified version does not exist (or perhaps you don\'t have permission to use it?)","status":422}.'
+    expect(replicateRequestFailure(apiError(422, gone), "[a]")!.message).toBe(PLATFORM_CAPACITY_MESSAGE)
+    expect(replicateRequestFailure(apiError(422, VERSION_DISABLED), "[a]")!.message).toBe(PLATFORM_CAPACITY_MESSAGE)
+    expect(alert).toHaveBeenCalledTimes(1)
+    replicateRequestFailure(apiError(422, VERSION_DISABLED), "[b]")
+    expect(alert).toHaveBeenCalledTimes(2)
+    expect(alert.mock.calls[1]![0]).toContain("([b])")
+  })
+
+  it("a 422 about the request body is still the rejected-settings sentence, even when it echoes the words back", () => {
+    const body =
+      "Request to https://api.replicate.com/v1/predictions failed with status 422 Unprocessable Entity: " +
+      '{"detail":"- input.audio: Invalid type. Expected: string, given: integer","status":422,"title":"Input validation failed"}.'
+    expect(replicateRequestFailure(apiError(422, body), "[x]")!.message).toBe(REPLICATE_REJECTED_MESSAGE)
+    const echoed =
+      "Request to https://api.replicate.com/v1/predictions failed with status 422 Unprocessable Entity: " +
+      '{"detail":"- input.prompt: \\"version disabled\\" is not one of the allowed values","status":422,"title":"Input validation failed"}.'
+    expect(replicateRequestFailure(apiError(422, echoed), "[x]")!.message).toBe(REPLICATE_REJECTED_MESSAGE)
+  })
+
   it("the sentences classify for the MCP as intended: busy and provider error retryable, rejected settings not, the capacity one as the platform's outage", () => {
     expect(isRetryableFailure(REPLICATE_BUSY_MESSAGE)).toBe(true)
     expect(isRetryableFailure(REPLICATE_PROVIDER_ERROR_MESSAGE)).toBe(true)
