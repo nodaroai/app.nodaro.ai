@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-11-11T19:47:27.192Z
-generated_from: 223a60d37
+generated_at: 2026-11-17T08:57:26.135Z
+generated_from: cb7abbeec4
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -247,6 +247,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-music-video` — Music Video
 - `suno-replace-section` — Suno Replace Section
 - `suno-separate` — Suno Separate
+- `suno-speech` — Suno Speech
 - `suno-style-boost` — Suno Style Boost
 - `suno-upload-extend` — Suno Upload Extend
 - `suno-voice` — Suno Voice

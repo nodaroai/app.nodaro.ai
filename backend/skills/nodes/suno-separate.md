@@ -1,7 +1,7 @@
 ---
 node_type: suno-separate
-generated_at: 2026-10-19T10:00:40.243Z
-generated_from: 1a4411516
+generated_at: 2026-11-17T08:57:45.869Z
+generated_from: cb7abbeec4
 ---
 
 # Suno Separate
@@ -31,6 +31,8 @@ generated_from: 1a4411516
 - `engineUsed?: "suno" | "demucs"`
 - `sunoRefused?: boolean`
 - `fallbackReason?: "catalog" | "too_large"`
+- `sunoTaskId?: string`
+- `sunoStemIds?: Partial<Record<SunoSeparateResultField, string>>`
 - `currentJobId?: string`
 - `currentJobProgress?: number`
 - `fieldMappings?: FieldMappings`

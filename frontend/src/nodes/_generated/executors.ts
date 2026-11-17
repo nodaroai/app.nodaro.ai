@@ -7,6 +7,7 @@ import { executor as unit_remove_audio } from "../remove-audio/exec" // unit:rem
 import { executor as unit_shot_cuts } from "../shot-cuts/exec" // unit:shot-cuts
 import { executor as unit_speaker_map } from "../speaker-map/exec" // unit:speaker-map
 import { executor as unit_split_into_layers } from "../split-into-layers/exec" // unit:split-into-layers
+import { executor as unit_suno_speech } from "../suno-speech/exec" // unit:suno-speech
 
 export const UNIT_EXECUTORS: Readonly<Record<string, UnitExecutor>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
@@ -14,4 +15,5 @@ export const UNIT_EXECUTORS: Readonly<Record<string, UnitExecutor>> = Object.ass
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
 })

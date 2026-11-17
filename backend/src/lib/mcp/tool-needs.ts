@@ -339,6 +339,7 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   suno_replace_section: runs("/v1/suno/replace-section"),
   suno_style_boost: runs("/v1/suno/style-boost"),
   suno_convert_wav: runs("/v1/suno/convert-wav"),
+  suno_speech: runs("/v1/suno-speech"),
 
   // ── Video Remake (cast-swap) and trends ────────────────────────────────
   video_remake: runs("/v1/video-remake"),

@@ -11,6 +11,7 @@ import { descriptor as unit_shot_cuts } from "../shot-cuts/descriptor.generated.
 import { descriptor as unit_speaker_layout } from "../speaker-layout/descriptor.generated.js" // unit:speaker-layout
 import { descriptor as unit_speaker_map } from "../speaker-map/descriptor.generated.js" // unit:speaker-map
 import { descriptor as unit_split_into_layers } from "../split-into-layers/descriptor.generated.js" // unit:split-into-layers
+import { descriptor as unit_suno_speech } from "../suno-speech/descriptor.generated.js" // unit:suno-speech
 import { descriptor as unit_tighten_episode } from "../tighten-episode/descriptor.generated.js" // unit:tighten-episode
 
 export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.assign(Object.create(null), {
@@ -23,5 +24,6 @@ export const UNIT_REGISTRY: Readonly<Record<string, UnitDescriptor>> = Object.as
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

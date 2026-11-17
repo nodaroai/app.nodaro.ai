@@ -1223,6 +1223,33 @@ describe("Suno id passthrough — one source for the pair (#819 review)", () => 
     const result = resolveNodeInputs(target, [edge("s", "t")], states, [src, target])
     expect(result.sunoTaskId).toBeUndefined()
   })
+
+  it("into Suno Convert to WAV, a separation's stem hands on the separation's task and that stem's id (decided 2026-11-17)", () => {
+    const target = node("t", "suno-convert-wav")
+    const src = node("s", "suno-separate")
+    const output = {
+      audioUrl: "https://stem-v.mp3", vocalUrl: "https://stem-v.mp3", instrumentalUrl: "https://stem-i.mp3",
+      sunoTaskId: "sep-task", sunoStemIds: { vocalUrl: "id-v", instrumentalUrl: "id-i" },
+    }
+    const states: Record<string, NodeExecutionState> = { s: { status: "completed", output } }
+    const viaInstrumental = resolveNodeInputs(target, [{ ...edge("s", "t"), sourceHandle: "instrumental" }], states, [src, target])
+    expect(viaInstrumental.sunoTaskId).toBe("sep-task")
+    expect(viaInstrumental.sunoTrackId).toBe("id-i")
+    expect(viaInstrumental.sunoStemUnavailable).toBeUndefined()
+    // A wire with no handle: the separation's main stem.
+    expect(resolveNodeInputs(target, [edge("s", "t")], states, [src, target]).sunoTrackId).toBe("id-v")
+    // A Demucs run has no Suno stems: nothing to hand on, and the payload is told why (it refuses the run before any hold).
+    const demucs = { s: { status: "completed" as const, output: { audioUrl: "https://stem-v.mp3", vocalUrl: "https://stem-v.mp3", engineUsed: "demucs" } } }
+    const fromDemucs = resolveNodeInputs(target, [{ ...edge("s", "t"), sourceHandle: "vocals" }], demucs, [src, target])
+    expect(fromDemucs.sunoTrackId).toBeUndefined()
+    expect(fromDemucs.sunoStemUnavailable).toBe("demucs")
+    // A separation that kept no stem ids (saved before they were kept, or delivered by a connected cloud).
+    const idless = { s: { status: "completed" as const, output: { ...output, sunoStemIds: undefined } } }
+    expect(resolveNodeInputs(target, [{ ...edge("s", "t"), sourceHandle: "vocals" }], idless, [src, target]).sunoStemUnavailable).toBe("no-ids")
+    // This run's Demucs result never borrows the ids an earlier Suno run saved on the node.
+    const stale = node("s", "suno-separate", { ...output })
+    expect(resolveNodeInputs(target, [{ ...edge("s", "t"), sourceHandle: "vocals" }], demucs, [stale, target]).sunoTaskId).toBeUndefined()
+  })
 })
 
 describe("resolveNodeInputs — wired parameter pickers beside a wired text-prompt", () => {

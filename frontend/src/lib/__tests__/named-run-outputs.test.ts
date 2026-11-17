@@ -69,6 +69,8 @@ describe("sunoSeparateRunOutputFields", () => {
       vocalUrl: "V", otherUrl: "O",
       withoutUrl: "W", isolated2Url: "I2", without2Url: "W2",
       separateType: "split_stem_advanced", engineUsed: undefined, sunoRefused: true, fallbackReason: "catalog",
+      // The separation's Suno ids, which Suno Convert to WAV takes a stem by.
+      sunoTaskId: "t1", sunoStemIds: undefined,
     })
     expect("stemName" in out).toBe(false)
   })

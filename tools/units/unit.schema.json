@@ -151,7 +151,8 @@
                     "video",
                     "audio",
                     "image",
-                    "look"
+                    "look",
+                    "text"
                   ]
                 }
               },

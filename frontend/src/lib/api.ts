@@ -5808,7 +5808,11 @@ export async function sunoGenerateApi(params: {
 
 export async function sunoCoverApi(params: {
   prompt: string
-  uploadUrl: string
+  /** Any audio by URL. With a Suno track's ids beside it the server still covers this URL (a cover by id is for ids sent alone, until the server's gate is lifted). */
+  uploadUrl?: string
+  /** A Suno track made here, by its task and track ids (both or neither). */
+  taskId?: string
+  audioId?: string
   model?: string
   lyrics?: string
   style?: string
@@ -5821,7 +5825,12 @@ export async function sunoCoverApi(params: {
   personaModel?: "voice_persona" | "style_persona"
   userId?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { prompt: params.prompt, uploadUrl: params.uploadUrl }
+  const body: Record<string, unknown> = { prompt: params.prompt }
+  if (params.uploadUrl) body.uploadUrl = params.uploadUrl
+  if (params.taskId && params.audioId) {
+    body.taskId = params.taskId
+    body.audioId = params.audioId
+  }
   if (params.model) body.model = params.model
   if (params.lyrics) body.lyrics = params.lyrics
   if (params.style) body.style = params.style

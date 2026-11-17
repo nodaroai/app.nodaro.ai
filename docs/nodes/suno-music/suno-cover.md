@@ -21,6 +21,22 @@ Suno Cover takes a source audio track and generates a new cover version of it. Y
 | Instrumental | boolean | `false` | When true, generates an instrumental cover (removes vocals). |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
+## Cover by id
+
+A cover is made from its audio file: whatever is wired into the node or passed as `uploadUrl` is covered exactly as it always was, a song made with Suno here included.
+
+On the API and MCP you can instead name one of your own Suno songs by its ids alone — `taskId` and `audioId`, with no `uploadUrl` — and Suno covers it by those ids, with nothing uploaded again. The price is the same. This works when all of these hold:
+
+- the song is your own: a finished run on your account made it (Create Music, Extend, Cover, Upload Extend, Mashup, Replace Section, Add Vocals or Add Instrumental), and `audioId` is one of the tracks that run returned;
+- the cover's settings fit a cover by id. By id there is no separate prompt field: in Simple mode the prompt is sent as the style; in Custom mode the prompt is sung as the lyrics. So a prompt beside a style, a prompt longer than a style may be (1,000 characters; 200 on V4) when it is the style, and a Custom cover with both lyrics and a prompt cannot go by id.
+
+Nothing is ever shortened or dropped to make a cover go by id: a request that does not fit is refused before the run starts, with nothing charged, and tells you to pass the audio instead. The output of a run that went by id carries `coverLane: "id"`.
+
+`POST /v1/suno/cover` takes `uploadUrl`, or `taskId` with `audioId` (both or neither), or all three. Whenever `uploadUrl` is present the file is covered and the ids are not used. Refused before the run starts, with nothing charged, for ids with no `uploadUrl`:
+
+- ids of another account's song (`suno_task_not_yours`);
+- ids of a task no run here made, of a Suno task that is not a song, of a song that is not finished, an `audioId` that is not one of the song's tracks, or settings that do not fit a cover by id (`suno_cover_source`).
+
 ## Inputs & Outputs
 
 - **Inputs:** `in` -- source audio URL from an upstream audio node

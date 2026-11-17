@@ -1758,6 +1758,15 @@ const GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES = 484
 // before it; the list keeps its 28 B of headroom.
 const GENERATE_TEXT_MEDIA_WORDING_BYTES = 19
 
+// RAISED 2026-11-17 by Suno Speech, Suno Cover by id and Suno stems to WAV (decided that day): one
+// tool was added, `suno_speech` (so the membership fixture moves), `suno_cover` gained `task_id` /
+// `audio_id` and its cover-by-id note, and `suno_convert_wav` gained `stem` (an enum of the four
+// pips and every result field of a separation) and its note. None of the three is near the per-tool
+// budget. Measured by this suite on top of Gemini Omni Flash 1.2 Extend and generate_text's media
+// wording: 548_722 B in all, 4_051 B over the 544_671 B it measured before them; the list keeps its
+// 28 B of headroom.
+const SUNO_SPEECH_COVER_ID_STEM_WAV_BYTES = 4_051
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
   totalBytes:
@@ -1978,7 +1987,8 @@ export const TOOL_WIRE_BUDGET = {
     GEMINI_4_HYDROGEN_ID_BYTES +
     OMNI_FLASH_1_2_CHARACTERS_BYTES +
     GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES +
-    GENERATE_TEXT_MEDIA_WORDING_BYTES,
+    GENERATE_TEXT_MEDIA_WORDING_BYTES +
+    SUNO_SPEECH_COVER_ID_STEM_WAV_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

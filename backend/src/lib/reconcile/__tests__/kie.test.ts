@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
   const pollRunwayTaskMock = vi.fn()
   const pollAlephTaskMock = vi.fn()
   const pollSunoTaskMock = vi.fn()
+  const pollSunoMarketTracksMock = vi.fn()
   const uploadToR2Mock = vi.fn()
   const finalizeMock = vi.fn().mockResolvedValue({ ok: true })
   const refundMock = vi.fn().mockResolvedValue(undefined)
@@ -88,6 +89,7 @@ const mocks = vi.hoisted(() => {
     pollRunwayTaskMock,
     pollAlephTaskMock,
     pollSunoTaskMock,
+    pollSunoMarketTracksMock,
     uploadToR2Mock,
     finalizeMock,
     refundMock,
@@ -137,6 +139,12 @@ vi.mock("../../../providers/kie/runway-client.js", () => ({
 
 vi.mock("../../../providers/kie/suno-client.js", () => ({
   pollSunoTask: mocks.pollSunoTaskMock,
+}))
+
+// The market lane's poll (Suno Speech, a cover by id): only ever a poll here.
+vi.mock("../../../providers/kie/suno-market.js", () => ({
+  pollSunoMarketTracks: mocks.pollSunoMarketTracksMock,
+  SUNO_SPEECH_PROVIDER_COST_USD: 0.06,
 }))
 
 vi.mock("../../storage.js", () => ({
@@ -192,6 +200,16 @@ vi.mock("../../seedance-draft-finalize.js", async (importOriginal) => ({
 vi.mock("../../seedance-draft-audio-apply.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../seedance-draft-audio-apply.js")>()),
   applyDraftAudioMux: draft.apply,
+}))
+
+// A recovered lip sync's voice-line step (probe + ffmpeg stubbed; which rows
+// reach it is the real rule).
+const voiceLine = vi.hoisted(() => ({
+  add: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "muxed"; url: string } | { kind: "has-audio" } | { kind: "probe-failed" } | { kind: "voice-unreadable" }> => ({ kind: "has-audio" })),
+}))
+vi.mock("../../lip-sync-voice-line.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lip-sync-voice-line.js")>()),
+  addVoiceLineIfSilent: voiceLine.add,
 }))
 
 vi.mock("../entity-recovery.js", async (importOriginal) => {
@@ -431,6 +449,89 @@ describe("reconcileKieJob", () => {
     const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
     expect(arg).not.toHaveProperty("mediaUrl")
     expect(arg).not.toHaveProperty("extraOutputData")
+  })
+
+  describe("a recovered Lip Sync sent its voice as reference audio (decided 2026-11-17)", () => {
+    const lipSyncRow = (provider: string, input: Record<string, unknown> = {}): KieJobRow => ({
+      id: "j-ls", provider_kind: "kie-standard", provider_task_id: "t-ls", reconcile_attempts: 0, job_type: "lip-sync",
+      input_data: { provider, imageUrl: "https://a/face.png", audioUrl: "https://a/voice.mp3", ...input },
+    })
+    const polled = () => mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/talk.mp4"] }, providerMs: 1, taskId: "t-ls" })
+
+    it.each(["seedance-2", "seedance-2-5-flash", "minimax-h3"])("%s: a silent clip is finalized with the caller's voice line on it", async (provider) => {
+      polled()
+      mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
+      voiceLine.add.mockResolvedValueOnce({ kind: "muxed", url: "https://r2/talk-voiced.mp4" })
+      await reconcileKieJob(lipSyncRow(provider))
+      expect(voiceLine.add).toHaveBeenCalledWith({ videoUrl: "https://kie.example/talk.mp4", voiceUrl: "https://a/voice.mp3", jobId: "j-ls", userId: "u1", watermark: true })
+      expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({
+        jobType: "lip-sync",
+        mediaUrl: "https://r2/talk-voiced.mp4",
+        extraOutputData: { voiceLineMuxed: true },
+      })
+    })
+
+    it("a clip that already has audio is finalized as it came", async () => {
+      polled()
+      await reconcileKieJob(lipSyncRow("seedance-2-5"))
+      expect(voiceLine.add).toHaveBeenCalledTimes(1)
+      const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("extraOutputData")
+    })
+
+    it.each([
+      ["could not be probed (fail-open)", { kind: "probe-failed" } as const, { voiceLineProbeFailed: true }],
+      ["is silent and its voice line cannot be read", { kind: "voice-unreadable" } as const, { voiceLineUnreadable: true }],
+    ])("a clip that %s is finalized as it came, flagged — never parked", async (_why, outcome, flag) => {
+      polled()
+      voiceLine.add.mockResolvedValueOnce(outcome)
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
+      const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg.extraOutputData).toEqual(flag)
+      expect(mocks.jobsUpdateMock).not.toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: expect.any(Number) }))
+    })
+
+    it("a clip that already has audio finalizes as before even when the job's input names no voice line (the probe decides first)", async () => {
+      polled()
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash", { audioUrl: undefined }))
+      expect(voiceLine.add).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: "https://kie.example/talk.mp4", voiceUrl: undefined }))
+      const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("extraOutputData")
+    })
+
+    it("when the voice cannot be added (a retryable failure) the silent clip is never finalized: the row bumps", async () => {
+      polled()
+      mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: false, reconcile_attempts: 2 }, error: null })
+      voiceLine.add.mockRejectedValueOnce(new Error("The voice could not be added to the lip-sync video."))
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
+      expect(mocks.finalizeMock).not.toHaveBeenCalled()
+      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 3 }))
+    })
+
+    it.each([
+      ["errors", { data: null, error: { message: "connection reset" } }],
+      ["returns nothing", { data: null, error: null }],
+    ])("when the job-row read %s nothing is muxed without its owner and watermark flag: the row bumps for the next tick", async (_why, read) => {
+      polled()
+      // The step's read fails; the bump's own read of the row then answers.
+      mocks.jobsSingleMock.mockResolvedValueOnce(read).mockResolvedValue({ data: { reconcile_attempts: 2 }, error: null })
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
+      expect(voiceLine.add).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock).not.toHaveBeenCalled()
+      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 3 }))
+    })
+
+    it("every other row never reaches the step: another lip-sync model, and a Seedance run that is not a lip sync", async () => {
+      mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/avatar.mp4"] }, providerMs: 1, taskId: "t-a" })
+      await reconcileKieJob({ ...lipSyncRow("kling-avatar"), provider_kind: "kie-lip-sync" })
+      mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/i2v.mp4"] }, providerMs: 1, taskId: "t-b" })
+      await reconcileKieJob({ ...lipSyncRow("seedance-2-5-flash"), job_type: "image-to-video" })
+      expect(voiceLine.add).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock).toHaveBeenCalledTimes(2)
+    })
   })
 
   it("inline (stall re-pick) caller: claimant 'worker' is threaded through to finalize", async () => {
@@ -922,6 +1023,64 @@ describe("reconcileKieJob", () => {
         result: expect.objectContaining({ providerUsed: "kie" }),
       }),
     )
+  })
+
+  it("a Suno Speech job whose worker died after its task was created is finished from that task: polled where it was made, both takes kept, marked as speech (decided 2026-11-17)", async () => {
+    mocks.pollSunoMarketTracksMock.mockResolvedValueOnce({
+      taskId: "t-speech",
+      tracks: [
+        { id: "take-1", duration: 12, audioUrl: "https://suno.example/a.mp3" },
+        { id: "take-2", duration: 11, audioUrl: "https://suno.example/b.mp3" },
+      ],
+    })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-speech.mp3").mockResolvedValueOnce("https://r2.example/audio/j-speech-1.mp3")
+    mocks.finalizeMock.mockResolvedValueOnce({ ok: true })
+    const row: KieJobRow = {
+      id: "j-speech",
+      provider_kind: "kie-suno-market",
+      provider_task_id: "t-speech",
+      reconcile_attempts: 0,
+      // A node unit's job: not one of the music types, and recovered all the same — the lane says it delivers tracks.
+      job_type: "suno-speech",
+      input_data: { type: "suno-speech", mode: "brief", prompt: "A short morning news intro" },
+    }
+
+    await reconcileKieJob(row)
+
+    // The saved task is polled on the market lane; the old Suno endpoint is never asked.
+    expect(mocks.pollSunoMarketTracksMock).toHaveBeenCalledTimes(1)
+    expect(mocks.pollSunoMarketTracksMock.mock.calls[0]).toEqual(["t-speech", "Speech generation"])
+    expect(mocks.pollSunoTaskMock).not.toHaveBeenCalled()
+    expect(mocks.finalizeMock).toHaveBeenCalledTimes(1)
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: "j-speech",
+      // The provider's flat charge for a speech request, as the worker records it.
+      result: expect.objectContaining({ cost: 0.06, providerUsed: "kie" }),
+      mediaUrl: "https://r2.example/audio/j-speech.mp3",
+      extraOutputData: expect.objectContaining({
+        audioUrls: ["https://r2.example/audio/j-speech.mp3", "https://r2.example/audio/j-speech-1.mp3"],
+        sunoTaskId: "t-speech",
+        trackCount: 2,
+        sunoTrackKind: "speech",
+      }),
+    }))
+  })
+
+  it("a cover that ran by id is recovered from its market task, and says which lane ran; a file cover's task stays on the old endpoint", async () => {
+    mocks.pollSunoMarketTracksMock.mockResolvedValueOnce({ taskId: "t-cover", tracks: [{ id: "c1", audioUrl: "https://suno.example/c.mp3" }] })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-cover.mp3")
+    await reconcileKieJob({ id: "j-cover", provider_kind: "kie-suno-market", provider_task_id: "t-cover", reconcile_attempts: 0, job_type: "suno-cover", input_data: { taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" } })
+    expect(mocks.pollSunoTaskMock).not.toHaveBeenCalled()
+    const extra = mocks.finalizeMock.mock.calls.at(-1)![0].extraOutputData as Record<string, unknown>
+    expect(extra).toMatchObject({ coverLane: "id" })
+    expect(extra).not.toHaveProperty("sunoTrackKind")
+
+    mocks.pollSunoTaskMock.mockResolvedValueOnce({ taskId: "t-file", tracks: [{ id: "c1", audioUrl: "https://suno.example/c.mp3" }] })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-file.mp3")
+    // The same saved request (ids beside the file): the lane the task was made on decides, never the request.
+    await reconcileKieJob({ id: "j-file", provider_kind: "kie-suno", provider_task_id: "t-file", reconcile_attempts: 0, job_type: "suno-cover", input_data: { taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" } })
+    expect(mocks.pollSunoMarketTracksMock).toHaveBeenCalledTimes(1)
+    expect(mocks.finalizeMock.mock.calls.at(-1)![0].extraOutputData).not.toHaveProperty("coverLane")
   })
 
   it("kie-suno music: track upload throws → bumps reconcile_attempts, no finalize, no refund", async () => {

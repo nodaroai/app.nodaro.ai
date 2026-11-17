@@ -32,6 +32,8 @@ import { pollKontextTask } from "../../providers/kie/kontext-client.js"
 import { pollLumaTask } from "../../providers/kie/luma-client.js"
 import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client.js"
 import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
+import { SUNO_SPEECH_PROVIDER_COST_USD, pollSunoMarketTracks } from "../../providers/kie/suno-market.js"
+import { SUNO_TRACK_KIND_FIELD, SUNO_TRACK_KIND_SPEECH } from "../suno-id-source.js"
 import {
   finalizeJobWithMedia,
   isFinalizeJobType,
@@ -50,6 +52,7 @@ import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../seedance-draft-finalize.js"
 import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResult } from "../seedance-draft-audio-apply.js"
+import { addVoiceLineIfSilent, lipSyncSendsVoiceAsReference, voicedUrlOf, voiceLineOutputData, type VoiceLineOutcome } from "../lip-sync-voice-line.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { recoveredMaskComposite } from "./mask-paste-back.js"
@@ -122,6 +125,36 @@ async function draftFinalizeMedia(
     videoUrl: resultUrl,
     mux,
     draftVideoUrl: typeof input.draftVideoUrl === "string" ? input.draftVideoUrl : undefined,
+    jobId: row.id,
+    userId: job.user_id ?? undefined,
+    watermark: job.should_watermark ?? false,
+  })
+}
+
+/**
+ * A recovered Lip Sync whose model was sent the voice line as reference audio
+ * gets the step its worker runs before finalize (decided 2026-11-17): the
+ * recovered clip is probed and, when it has no audio stream, the caller's voice
+ * line (on the job's input) is laid on it. Returns what the step did;
+ * undefined for every other row. A clip that already has audio (whether or
+ * not the input still names a voice line), one that could not be probed
+ * (fail-open) and a silent one whose voice line cannot be read are uploaded by
+ * finalize as usual. Any other failed mux throws, and so does a job row that
+ * cannot be read (its owner and watermark flag are needed to store the voiced
+ * clip): the caller bumps, and the next tick tries again.
+ */
+async function recoveredLipSyncVoiceLine(
+  row: KieJobRow,
+  input: Record<string, unknown>,
+  resultUrl: string,
+): Promise<VoiceLineOutcome | undefined> {
+  if (row.job_type !== "lip-sync" || !lipSyncSendsVoiceAsReference(input.provider)) return undefined
+  const { data, error } = await supabase.from("jobs").select("user_id, should_watermark").eq("id", row.id).single()
+  if (error || !data) throw new Error(`lip-sync job row could not be read: ${error?.message ?? "no row"}`)
+  const job = data as { user_id?: string | null; should_watermark?: boolean | null }
+  return addVoiceLineIfSilent({
+    videoUrl: resultUrl,
+    voiceUrl: typeof input.audioUrl === "string" && input.audioUrl ? input.audioUrl : undefined,
     jobId: row.id,
     userId: job.user_id ?? undefined,
     watermark: job.should_watermark ?? false,
@@ -252,7 +285,13 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
  */
 async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
-  if (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type)) {
+  // A task of the market lane always delivers tracks (Suno Speech's two takes,
+  // a cover by id's), whatever job made it; on the old lane only the music
+  // jobs do.
+  const market = row.provider_kind === "kie-suno-market"
+  // On the market lane a music job is a cover that ran by id; any other job's tracks are Suno Speech's spoken takes.
+  const speech = market && !SUNO_MUSIC_JOB_TYPES.has(row.job_type ?? "")
+  if (!market && (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type))) {
     // Suno variant we don't recover (lyrics, separate, music-video, wav).
     await bumpAttemptsOrExhaust(row.id, `suno variant not recoverable: ${row.job_type}`)
     return
@@ -269,7 +308,12 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
 
   let result: SunoTaskResult
   try {
-    result = await pollSunoTask(row.provider_task_id)
+    // A market-lane task (suno-market.ts) is unknown to the old record-info
+    // endpoint: poll it where it was made. Only ever a poll — a recovered job
+    // never creates a second task.
+    result = market
+      ? await pollSunoMarketTracks(row.provider_task_id, speech ? "Speech generation" : "Music generation")
+      : await pollSunoTask(row.provider_task_id)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     // Same shared classifier as reconcileKieJob — pollSunoTask sets the flag via
@@ -287,7 +331,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
 
   const validTracks = result.tracks.filter((t) => t.audioUrl)
   if (validTracks.length === 0) {
-    await markFailed(row.id, "Suno returned no tracks")
+    await markFailed(row.id, speech ? "Suno Speech returned no takes" : "Suno returned no tracks")
     await refundReservedCreditsForJob(row.id)
     return
   }
@@ -315,7 +359,8 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
       // instance's own key. "suno" named the model vendor and split Suno
       // attribution three ways ("kie"/"nodaro"/"suno") depending on which
       // machinery completed the job (#753 review).
-      result: { url: r2Urls[0]!, cost: null, providerUsed: "kie" },
+      // A speech request has one flat provider charge, the one its worker records; a song's is not read here.
+      result: { url: r2Urls[0]!, cost: speech ? SUNO_SPEECH_PROVIDER_COST_USD : null, providerUsed: "kie" },
       mediaUrl: r2Urls[0]!,
       extraOutputData: {
         ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
@@ -332,6 +377,10 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
           audioUrl: r2Urls[i]!,
         })),
         trackCount: validTracks.length,
+        // The run facts the worker saves beside a market task's tracks: a
+        // music job on this lane is a cover that ran by id; any other job's
+        // tracks are spoken takes, which no Suno tool takes by their ids.
+        ...(market ? (speech ? { [SUNO_TRACK_KIND_FIELD]: SUNO_TRACK_KIND_SPEECH } : { coverLane: "id" }) : {}),
       },
     })
   } catch (err) {
@@ -534,7 +583,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
   if (!row.provider_task_id) return
 
   // Suno is a special case: multi-track output, dedicated upload + finalize path.
-  if (row.provider_kind === "kie-suno") {
+  if (row.provider_kind === "kie-suno" || row.provider_kind === "kie-suno-market") {
     return reconcileKieSunoJob(row, opts)
   }
 
@@ -661,7 +710,11 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // A recovered Seedance draft FINALIZE re-applies the draft's post-render
     // audio mux exactly as the worker would (recipe stamped on the job).
     const finalizeMedia = await draftFinalizeMedia(row, input, result.url)
-    const mediaUrl = finalizeMedia?.url
+    // A recovered lip sync that came back silent gets the caller's voice line.
+    const voiceLine = await recoveredLipSyncVoiceLine(row, input, result.url)
+    const voicedUrl = voicedUrlOf(voiceLine)
+    const voiceLineData = voiceLineOutputData(voiceLine)
+    const mediaUrl = finalizeMedia?.url ?? voicedUrl
     // A recovered inpaint or masked edit gets the paste-back its worker runs
     // before finalize (REFUND-CRITICAL there too: a failure throws into the
     // catch below, never a redraw finalized as the result).
@@ -686,6 +739,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       },
       ...(composite?.extraOutputData && { extraOutputData: composite.extraOutputData }),
       ...(finalizeMedia?.warning && { extraOutputData: draftAudioWarningOutputData(finalizeMedia) }),
+      ...(Object.keys(voiceLineData).length > 0 && { extraOutputData: voiceLineData }),
       // A recovered draft is the RAW clip: no audio merge / voice mux ran, so
       // it records the take length and `draftAudioMux: null` — what the stored
       // clip actually got (never left to the legacy inference).

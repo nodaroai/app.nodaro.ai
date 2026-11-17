@@ -18,7 +18,7 @@ import {
 describe("ProviderKind registry", () => {
   it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx + 4b nodaro-cloud + copilot-turn + seedance draft finalize + apify-run for background scrapes + house-model)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
-      "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
+      "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-suno-market",
       "kie-suno-voice-create", "kie-suno-voice-validate",
       "kie-kontext", "kie-luma",
       "kie-kling3", "kie-runway", "kie-aleph", "kie-seedance-draft", "kie-lip-sync", "kie-llm",

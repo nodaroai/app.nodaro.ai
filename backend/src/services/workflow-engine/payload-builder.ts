@@ -6,6 +6,7 @@ import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { DUBBING_VOICE_LOCK_MESSAGE, dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { retiredEditProviderReason } from "../../lib/retired-edit-providers.js"
 import { tailRecipeSeconds } from "../../lib/extend-recipe.js"
+import { SUNO_WAV_DEMUCS_MESSAGE, SUNO_WAV_NO_STEM_IDS_MESSAGE, SUNO_WAV_STEM_CODE } from "../../lib/suno-id-source.js"
 import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
@@ -6998,13 +6999,21 @@ function buildPayloadOf(
       // gives the track it fetched (videoLinkTrackInto), never its page link.
       const coverUploadUrl =
         videoLinkTrackInto(node.id, buildCtx) || resolvedInputs.uploadUrl || resolvedInputs.audioUrl || data.uploadUrl || data.audioUrl
-      if (!coverUploadUrl) {
+      // A wired Suno track carries its ids beside its URL. Which of the two the
+      // run covers is decided with the route's rule before the reservation
+      // (lib/suno-id-source.ts, node-executor's stamp): the URL, while the gate
+      // `SUNO_COVER_BY_ID_WHEN_FILE_PRESENT` is closed. Both ids or neither.
+      const coverIds = resolvedInputs.sunoTaskId && resolvedInputs.sunoTrackId
+        ? { taskId: resolvedInputs.sunoTaskId, audioId: resolvedInputs.sunoTrackId }
+        : {}
+      if (!coverUploadUrl && !("taskId" in coverIds)) {
         throw codedMediaRefusal("audio_required", "connect an audio track to the Suno Cover node")
       }
       return simpleResult("suno-cover", sunoCoverCreditId, {
         jobId,
         prompt: applyPromptAffixes(resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap), readPromptAffixes(data), refMap),
-        uploadUrl: coverUploadUrl,
+        ...coverIds,
+        uploadUrl: coverUploadUrl || undefined,
         model: data.model,
         lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
         style: data.style,
@@ -7151,13 +7160,23 @@ function buildPayloadOf(
         usageLogId,
       })
 
-    case "suno-convert-wav":
+    case "suno-convert-wav": {
+      // A wired Suno Separate stem with no Suno ids (Demucs made the
+      // separation, or it was saved before stem ids were kept) cannot be
+      // converted: refused here, before anything is reserved, as the route
+      // refuses it (decided 2026-11-17).
+      if (resolvedInputs.sunoStemUnavailable) {
+        const err = new Error(resolvedInputs.sunoStemUnavailable === "demucs" ? SUNO_WAV_DEMUCS_MESSAGE : SUNO_WAV_NO_STEM_IDS_MESSAGE) as Error & { errorCode?: string }
+        err.errorCode = SUNO_WAV_STEM_CODE
+        throw err
+      }
       return simpleResult("suno-convert-wav", "suno-convert-wav", {
         jobId,
         taskId: resolvedInputs.sunoTaskId || data.taskId,
         audioId: resolvedInputs.sunoTrackId || data.audioId,
         usageLogId,
       })
+    }
 
     case "suno-upload-extend": {
       // Same requirement as suno-cover above — Suno Upload Extend has no

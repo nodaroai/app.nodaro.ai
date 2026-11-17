@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, needsTranscode, probeMediaStreams, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, needsTranscode, probeMediaStreams, getVideoStreamDuration, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { NoVideoStreamError, isNoVideoStreamError } from "../../lib/media-stream-errors.js"
 
@@ -26,7 +26,19 @@ interface MergeVideoAudioOptions {
    * original level). Default false = back-compat averaging.
    */
   readonly sumTracks?: boolean
+  /**
+   * When true, the merged audio is exactly as long as the PICTURE: it starts
+   * where the tracks place it, is cut where the video stream ends when it runs
+   * longer, and is padded with silence when it ends sooner. Nothing is
+   * stretched. For a voice line laid on a clip of a fixed length (a Lip Sync
+   * whose model renders 8 s from a 13 s line). Default false = the output runs
+   * as long as its longest stream, as before.
+   */
+  readonly fitAudioToVideo?: boolean
 }
+
+/** The label the fitted audio leaves the filter graph on (`fitAudioToVideo`). */
+const FITTED_AUDIO_LABEL = "[afit]"
 
 /** Build FFmpeg filter_complex for mixing audio tracks (with optional original audio). */
 function buildAudioFilter(
@@ -99,7 +111,7 @@ export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<
 }
 
 async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<string> {
-  const { videoUrl, audioUrl, audioTracks, voiceoverVolume = 100, backgroundVolume = 100, keepOriginalAudio = false, sumTracks = false } = options
+  const { videoUrl, audioUrl, audioTracks, voiceoverVolume = 100, backgroundVolume = 100, keepOriginalAudio = false, sumTracks = false, fitAudioToVideo = false } = options
   const workDir = await createWorkDir("merge-video-audio")
 
   try {
@@ -186,14 +198,28 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
       console.log("[mergeVideoAudio] Could not probe codec — re-encoding to browser-safe H.264")
     }
 
+    // `fitAudioToVideo`: the VIDEO STREAM's length (never the container's),
+    // read from the downloaded file. Silence is appended without end and the
+    // output stops at the picture's last frame, so a longer voice line is cut
+    // there and a shorter one is followed by silence.
+    let fitSec: number | undefined
+    if (fitAudioToVideo) {
+      fitSec = await getVideoStreamDuration(videoPath)
+      if (!Number.isFinite(fitSec) || fitSec <= 0) throw new Error("Could not read the video's length to fit its audio")
+    }
+
     const doMerge = async (filter: string) => {
       await runFfmpeg([
         ...inputArgs,
-        "-filter_complex", filter,
+        "-filter_complex", fitSec === undefined ? filter : `${filter};[aout]apad${FITTED_AUDIO_LABEL}`,
         "-map", "0:v",
-        "-map", "[aout]",
+        "-map", fitSec === undefined ? "[aout]" : FITTED_AUDIO_LABEL,
         ...(needsReencode ? [...BROWSER_SAFE_VIDEO_ARGS] : ["-c:v", "copy"]),
         "-c:a", "aac",
+        // Fitted output only (the default arguments stay as they were): the
+        // index is written at the front, so the clip starts playing before it
+        // has fully loaded.
+        ...(fitSec === undefined ? [] : ["-t", fitSec.toFixed(3), "-movflags", "+faststart"]),
         outputPath,
       ])
     }

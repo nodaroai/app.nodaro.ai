@@ -94,6 +94,7 @@ import { kling4CostUsd } from "../../providers/kie/kling4-cost.js"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData } from "../../lib/seedance-draft-audio-apply.js"
+import { addVoiceLineIfSilent, voicedUrlOf, voiceLineOutputData } from "../../lib/lip-sync-voice-line.js"
 import {
   cleanupWorkDir,
   COMBINE_DELIVERY_CRF,
@@ -1000,6 +1001,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   // unchanged, and the rebuilt finalize literal below can read the two
   // migration-383 fields off it. Left undefined by the fal branch.
   let resultMeta: ProviderResult | undefined = undefined
+  // Set by the lane that sends the voice line as REFERENCE audio (below): its
+  // delivered clip is probed and, when silent, given the caller's voice line.
+  let voiceSentAsReference = false
 
   try {
 
@@ -1066,14 +1070,15 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultDisplayCost = cost
     resultProviderUsed = `replicate:${resolvedProvider}`
   } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
-    // Seedance 2 / 2 Fast — ByteDance's multimodal video models do native
-    // phoneme-level lip sync (8+ languages) when fed reference_audio_urls
-    // alongside a first_frame_url image. We route through the i2v provider
-    // and pass the audio as a reference; the model produces a cinematic
-    // talking-head video synced to the voice line.
+    // The Seedance 2 family and MiniMax Hailuo 3 — multimodal video models
+    // that do native phoneme-level lip sync (8+ languages) when fed
+    // reference_audio_urls alongside a first_frame_url image. We route through
+    // the i2v provider and pass the audio as a reference; the model produces a
+    // cinematic talking-head video whose lips follow the voice line.
     if (!imageUrl) {
       throw new Error(`${resolvedProvider} lip-sync requires an image (face/portrait)`)
     }
+    voiceSentAsReference = true
     const seedanceLipSyncSentResolution = isSeedanceLipSyncProvider(resolvedProvider)
       ? seedanceLipSyncResolution(resolvedProvider, resolution)
       : undefined
@@ -1090,9 +1095,14 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
         // Seedance 2 Fast renders 720p, as it is billed). MiniMax Hailuo 3
         // keeps its own rule.
         resolution: seedanceLipSyncSentResolution ?? resolution ?? "720p",
-        // generateAudio: false — we already have the audio track; let
-        // seedance use OUR audio as the soundtrack rather than synthesise
-        // a new one. (KIE merges reference_audio_urls into output by default.)
+        // generateAudio: false — we already have the voice; the model must
+        // not synthesise another one. The reference audio only drives the
+        // lips: the clip that comes back does NOT reliably carry it (measured
+        // 2026-11-17 on delivered results: Seedance 2 at 480p and 720p and
+        // Seedance 2.5 Flash at 480p each returned one video stream and no
+        // audio stream). So the delivered clip is probed after the run and,
+        // when it has no audio stream, the caller's voice line is laid on it
+        // (`addVoiceLineIfSilent`, decided 2026-11-17).
         generateAudio: false,
       },
       { onTaskCreated: lipSyncOnTaskCreated },
@@ -1168,7 +1178,21 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
 
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // A lip sync always carries the voice it was given (decided 2026-11-17). On
+  // the lane that sent the voice as reference audio, the DELIVERED clip
+  // decides: one with no audio stream gets the caller's voice line (picture
+  // copied, voice from 0, fitted to the picture's length) and that file is
+  // what is stored; one that already has audio is stored as it came, and so
+  // is one that could not be probed (fail-open, `voiceLineProbeFailed`). A
+  // failed mux or upload is a plain error — a clip known to be silent is never
+  // delivered, the job fails with a refund — and a retry recovers the saved
+  // provider task (the reconcile runs this same step), so the provider is
+  // never called a second time.
+  const voiceLine = voiceSentAsReference
+    ? await addVoiceLineIfSilent({ videoUrl: resultUrl, voiceUrl: audioUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
+    : undefined
+  const voicedUrl = voicedUrlOf(voiceLine)
+  const r2Url = voicedUrl ?? await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -1189,7 +1213,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       ...(resultMeta?.relayJobId && { relayJobId: resultMeta.relayJobId, relayCredits: resultMeta.relayCredits ?? null }),
     },
     mediaUrl: r2Url,
-    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta) },
+    // `voiceLineMuxed`: the voice on the stored clip was put there by the
+    // platform. `voiceLineProbeFailed`: the clip could not be checked for audio.
+    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta), ...voiceLineOutputData(voiceLine) },
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${resultProviderUsed}, cost: $${resultCost?.toFixed(6) ?? "N/A"})`)

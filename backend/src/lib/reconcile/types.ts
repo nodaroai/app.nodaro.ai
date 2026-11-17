@@ -9,6 +9,11 @@ export const PROVIDER_KIND_VALUES = [
   "kie-veo",
   "kie-veo-1080p",
   "kie-suno",
+  // A Suno task made on KIE's market lane (`/api/v1/jobs/createTask`: Suno
+  // Speech, a cover by id — providers/kie/suno-market.ts). Its tracks are read
+  // from `/api/v1/jobs/recordInfo`, which the kie-suno poll does not know, so
+  // the lane is its own kind: the reconcile polls a task where it was made.
+  "kie-suno-market",
   "kie-suno-voice-create",
   "kie-suno-voice-validate",
   "kie-kontext",
@@ -83,6 +88,7 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // gives the worker headroom before the cron jumps in.
   "kie-veo-1080p":            10 * MIN,
   "kie-suno":                 30 * MIN,
+  "kie-suno-market":          30 * MIN,
   // Suno voice persona: user-driven multi-step modal. Credits reserved on
   // POST /voice/generate; commit happens when the frontend's poll of
   // GET /voice/record-info sees terminal status. If the user abandons the
@@ -253,7 +259,7 @@ export function isAsyncKind(kind: ProviderKind): boolean {
 
 /** Kinds recovered via the KIE poll dispatchers (reconcileKieJob). */
 export const KIE_RECOVER_KINDS: ReadonlySet<string> = new Set([
-  "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
+  "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-suno-market", "kie-kontext",
   "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
   "kie-seedance-draft",
 ])

@@ -1,4 +1,4 @@
-import { SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "./suno-separate.js"
+import { SUNO_SEPARATE_ID_FIELDS, SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "./suno-separate.js"
 
 /**
  * Field names on a node's `data` that hold runtime / result / transient execution
@@ -203,7 +203,7 @@ export const NODE_TYPE_EXECUTION_DATA_KEYS: Readonly<Record<string, readonly str
   "ugc-clips": ["ugcOutputs", "quote"],
   "ugc-clip": ["ugcOutputs", "clipWarnings", "durationSec", "rerenderPending"],
   "ugc-cards": ["ugcOutputs"],
-  "suno-separate": [...SUNO_SEPARATE_RESULT_FIELDS, ...SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName")],
+  "suno-separate": [...SUNO_SEPARATE_RESULT_FIELDS, ...SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName"), ...SUNO_SEPARATE_ID_FIELDS],
 }
 
 /** Is `key` execution data (run state or a run's result) on a node of `type`: global, or that type's own? */

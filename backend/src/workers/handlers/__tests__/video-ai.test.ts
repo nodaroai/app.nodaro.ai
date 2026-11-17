@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => {
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/videos/raw.mp4")
   const mockMergeVideoAudio = vi.fn().mockResolvedValue("/tmp/workdir/merged.mp4")
   const mockCleanupWorkDir = vi.fn().mockResolvedValue(undefined)
+  // The stream probe of a delivered lip-sync clip (the voice-line step).
+  const mockProbeMediaStreams = vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true })
 
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
@@ -51,6 +53,7 @@ const mocks = vi.hoisted(() => {
     mockUploadToR2,
     mockMergeVideoAudio,
     mockCleanupWorkDir,
+    mockProbeMediaStreams,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
@@ -122,6 +125,7 @@ vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => ({
 
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
+  probeMediaStreams: mocks.mockProbeMediaStreams,
   COMBINE_DELIVERY_CRF: "18",
 }))
 
@@ -156,6 +160,8 @@ vi.mock("../../../lib/job-finalize.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { videoAIHandlers } from "../video-ai.js"
+import { isPostProcessingError, PostProcessingError } from "../../../lib/post-processing-error.js"
+import { SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared/models"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -211,6 +217,7 @@ beforeEach(() => {
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/videos/raw.mp4")
   mocks.mockMergeVideoAudio.mockResolvedValue("/tmp/workdir/merged.mp4")
+  mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: true })
   mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
 })
@@ -795,6 +802,136 @@ describe("lip-sync handler", () => {
     await handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider: "infinitalk", lipSyncBilledSeconds: 15 }) as never, makeCtx())
     expect(lipSyncPrep.prepare).not.toHaveBeenCalled()
     for (const call of mocks.mockLipSync.mock.calls) expect(call[1]).toBe("https://speech.mp3")
+  })
+
+  // --- the voice line on a clip that came back silent (decided 2026-11-17) ---
+  describe("a model sent the voice as reference audio always delivers the voice", () => {
+    const VOICED = "https://r2.example.com/videos/job-1-merged.mp4"
+    const run = (provider: string, ctx: Record<string, unknown> = {}) =>
+      handler(makeJob("lip-sync", { imageUrl: "https://face.png", audioUrl: "https://speech.mp3", provider, resolution: "480p" }) as never, makeCtx(ctx))
+
+    it.each([...SEEDANCE_LIP_SYNC_PROVIDERS])("%s: a clip with no audio stream gets the caller's voice line, and the voiced file is what is stored", async (provider) => {
+      mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: false })
+      await run(provider, { shouldWatermark: true })
+
+      // The delivered clip is what is probed; the model is never asked for audio.
+      expect(mocks.mockProbeMediaStreams).toHaveBeenCalledWith(VIDEO_RESULT.url)
+      expect(mocks.mockImageToVideo.mock.calls[0][5]).toMatchObject({ referenceAudioUrls: ["https://speech.mp3"], generateAudio: false })
+      // The voiced lane's own recipe, the voice from 0, fitted to the picture (cut when longer, never stretched).
+      expect(mocks.mockMergeVideoAudio).toHaveBeenCalledWith({
+        videoUrl: VIDEO_RESULT.url,
+        audioTracks: [{ url: "https://speech.mp3", startTime: 0, volume: 100, sourceType: "audio" }],
+        keepOriginalAudio: false,
+        fitAudioToVideo: true,
+      })
+      expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith("/tmp/workdir/merged.mp4", "job-1", "user-1", true)
+      expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/workdir")
+      // The raw (silent) clip is never stored; thumbnail and finalize read the voiced file.
+      expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+      expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalledWith(VOICED, "job-1", "user-1")
+      const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+      expect(finalized.mediaUrl).toBe(VOICED)
+      expect(finalized.extraOutputData.voiceLineMuxed).toBe(true)
+      // One provider call, ever.
+      expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([...SEEDANCE_LIP_SYNC_PROVIDERS])("%s: a clip that already has audio is stored as it came (no mux)", async (provider) => {
+      await run(provider)
+      expect(mocks.mockProbeMediaStreams).toHaveBeenCalledWith(VIDEO_RESULT.url)
+      expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+      expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
+      const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+      expect(finalized.mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+      expect(finalized.extraOutputData).not.toHaveProperty("voiceLineMuxed")
+      expect(finalized.extraOutputData).not.toHaveProperty("voiceLineProbeFailed")
+    })
+
+    it.each([
+      ["the mux", () => mocks.mockMergeVideoAudio.mockRejectedValueOnce(new PostProcessingError("FFmpeg merge failed"))],
+      ["the upload of the voiced file", () => mocks.mockWatermarkLocalVideoAndUpload.mockRejectedValueOnce(new PostProcessingError("R2 upload failed"))],
+    ])("when %s fails the job fails for a refund: nothing is stored or finalized, and the provider is not called again", async (_step, fail) => {
+      mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: false })
+      fail()
+      const err = await run("seedance-2-5-flash").then(() => undefined, (e: unknown) => e)
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).toBe("The voice could not be added to the lip-sync video.")
+      // The refund guard skips only a PostProcessingError: this is not one, whatever the step threw.
+      expect(isPostProcessingError(err)).toBe(false)
+      expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+      expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+      expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([...SEEDANCE_LIP_SYNC_PROVIDERS])("%s: a clip that cannot be probed is stored as it came (fail-open), flagged, with no mux", async (provider) => {
+      mocks.mockProbeMediaStreams.mockRejectedValue(new Error("probeVideoSource: blocked"))
+      await run(provider)
+      expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+      expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
+      const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+      expect(finalized.mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+      expect(finalized.extraOutputData.voiceLineProbeFailed).toBe(true)
+      expect(finalized.extraOutputData).not.toHaveProperty("voiceLineMuxed")
+    })
+
+    // What the merge helper throws: its ffmpeg / download error, wrapped twice.
+    const mergeFailure = (inner: Error) => new PostProcessingError("FFmpeg merge failed", { cause: new Error("FFmpeg merge failed", { cause: inner }) })
+    const NO_AUDIO_STREAM = "ffmpeg failed: [fc#0 @ 0x78ee804000] Stream specifier ':a' in filtergraph description [1:a]volume=1[aout];[aout]apad[afit] matches no streams.\nError binding filtergraph inputs/outputs: Invalid argument"
+    const INVALID_VOICE = "ffmpeg failed: [in#1 @ 0x7bdc404280] Error opening input: Invalid data found when processing input\nError opening input file /tmp/work/audio_0.mp3.\nError opening input files: Invalid data found when processing input"
+    const INVALID_CLIP = "ffmpeg failed: [in#0 @ 0x79c1418000] Error opening input: Invalid data found when processing input\nError opening input file /tmp/work/input.mp4.\nError opening input files: Invalid data found when processing input"
+
+    it.each([
+      ["its link answers 404", new Error("Failed to download: https://speech.mp3 (404)")],
+      ["its link answers 403", new Error("Failed to download: https://speech.mp3 (403)")],
+      ["it holds no audio stream", new Error(NO_AUDIO_STREAM)],
+      ["it is not a media file", new Error(INVALID_VOICE)],
+    ])("a silent clip whose voice line cannot be read (%s) is stored as it came, flagged, and the job is not left to retry", async (_why, inner) => {
+      mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: false })
+      mocks.mockMergeVideoAudio.mockRejectedValueOnce(mergeFailure(inner))
+      await run("seedance-2-5-flash")
+      expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
+      expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
+      const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+      expect(finalized.mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+      expect(finalized.extraOutputData.voiceLineUnreadable).toBe(true)
+      expect(finalized.extraOutputData).not.toHaveProperty("voiceLineMuxed")
+      expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ["the voice's link answers 503", new Error("Failed to download: https://speech.mp3 (503)")],
+      ["the voice's link answers 429", new Error("Failed to download: https://speech.mp3 (429)")],
+      ["the CLIP's link answers 404", new Error(`Failed to download: ${VIDEO_RESULT.url} (404)`)],
+      ["the CLIP is what ffmpeg cannot open", new Error(INVALID_CLIP)],
+      ["ffmpeg was killed (a timeout), whatever it printed", Object.assign(new Error(INVALID_VOICE), { killed: true, timedOut: true })],
+      ["ffmpeg failed some other way", new Error("ffmpeg failed: Conversion failed!")],
+    ])("anything else stays a retryable failure (%s): nothing stored or finalized", async (_why, inner) => {
+      mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: false })
+      mocks.mockMergeVideoAudio.mockRejectedValueOnce(mergeFailure(inner))
+      const err = await run("seedance-2-5-flash").then(() => undefined, (e: unknown) => e)
+      expect((err as Error).message).toBe("The voice could not be added to the lip-sync video.")
+      expect(isPostProcessingError(err)).toBe(false)
+      expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+      expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+    })
+
+    it("every other lip-sync lane (KIE avatar models, KIE dubbing, fal, Replicate) never reaches the step", async () => {
+      mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: false })
+      for (const provider of ["kling-avatar", "infinitalk", "omnihuman-2-0", "hailuo-avatar"]) await run(provider)
+      for (const provider of ["volcengine-lipsync", "sync-lipsync-v3", "heygen-lipsync-precision", "lipsync-2-pro"]) {
+        await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider }) as never, makeCtx())
+      }
+      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(8)
+      expect(mocks.mockProbeMediaStreams).not.toHaveBeenCalled()
+      expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+      for (const call of mocks.mockFinalizeJobWithMedia.mock.calls) {
+        expect(call[0].extraOutputData).not.toHaveProperty("voiceLineMuxed")
+        expect(call[0].extraOutputData).not.toHaveProperty("voiceLineProbeFailed")
+        expect(call[0].extraOutputData).not.toHaveProperty("voiceLineUnreadable")
+      }
+    })
   })
 
   it("volcengine-lipsync throws when no videoUrl is provided (no image fallback)", async () => {

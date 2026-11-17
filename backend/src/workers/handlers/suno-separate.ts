@@ -216,11 +216,20 @@ async function finalizeSunoSeparate(
     ),
   )
   const urls: Record<string, string> = Object.fromEntries(uploaded)
+  // Each stored stem's own Suno id (only a Suno run has them): with the
+  // separation's task id, what Suno Convert to WAV takes a stem by.
+  const stemIds = outcome.engine === "suno"
+    ? Object.fromEntries(Object.keys(urls).flatMap((field) => {
+        const id = result.stemIds?.[field]
+        return id ? [[field, id] as const] : []
+      }))
+    : {}
 
   const outputData: Record<string, unknown> = {
     separateType: type,
     ...(stemName ? { stemName } : {}),
     ...(result.taskId ? { sunoTaskId: result.taskId } : {}),
+    ...(Object.keys(stemIds).length > 0 ? { sunoStemIds: stemIds } : {}),
     ...urls,
     // Primary audioUrl for single-handle downstream routing + gallery.
     audioUrl: sunoSeparatePrimaryUrl(urls),

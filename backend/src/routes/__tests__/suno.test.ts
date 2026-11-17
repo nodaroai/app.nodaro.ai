@@ -20,6 +20,12 @@ const { mockVideoQueueAdd, mockReserveCreditsForJob, mockSunoStyleBoost, mockCom
   // (CLAMPED) payload asserted via mockVideoQueueAdd.
   mockJobInsert: vi.fn(),
 }))
+/** The job rows a task-id lookup reads (lib/suno-id-source.ts): none by default (a task no job carries). */
+const taskRows = vi.hoisted(() => ({
+  rows: [] as Array<Record<string, unknown>>,
+  /** The rows a track-id lookup among the caller's Suno Speech runs answers (Extend). */
+  speechTakes: [] as Array<Record<string, unknown>>,
+}))
 
 vi.mock("@/lib/supabase.js", () => {
   const mockFrom = vi.fn()
@@ -142,7 +148,24 @@ beforeEach(async () => {
 
   // Default supabase mock: insert returns a job row
   const mockFrom = vi.mocked(supabase.from)
+  taskRows.rows = []
+  taskRows.speechTakes = []
   mockFrom.mockReturnValue({
+    // The task-id lookup (select → eq(provider_task_id) → limit) and the
+    // track-id lookup among the caller's speech runs (… → contains → limit).
+    select: vi.fn(() => {
+      let byTrack = false
+      const q = {
+        eq: () => q,
+        gte: () => q,
+        contains: () => {
+          byTrack = true
+          return q
+        },
+        limit: async () => ({ data: byTrack ? taskRows.speechTakes : taskRows.rows, error: null }),
+      }
+      return q
+    }),
     insert: mockJobInsert.mockReturnValue({
       select: vi.fn().mockReturnValue({
         single: vi.fn().mockResolvedValue({
@@ -319,6 +342,76 @@ describe("POST /v1/suno/cover", () => {
     expect(res.statusCode).toBe(400)
   })
 
+  const MY_SONG = { user_id: TEST_USER_ID, job_type: "suno-generate", status: "completed", created_at: new Date().toISOString(), output_data: { sunoTaskId: "gen-task", sunoTracks: [{ id: "track-1", audioUrl: "https://example.com/audio.mp3" }, { id: "track-2", audioUrl: "https://example.com/audio-2.mp3" }] } }
+
+  it("a request with a file covers the file exactly as before, even with my own song's ids beside it (the gate, decided 2026-11-17)", async () => {
+    taskRows.rows = [MY_SONG]
+    const res = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "gen-task", audioId: "track-1", uploadUrl: "https://example.com/audio.mp3" })
+    expect(res.statusCode).toBe(200)
+    const queued = mockVideoQueueAdd.mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued).toMatchObject({ uploadUrl: "https://example.com/audio.mp3" })
+    expect(queued).not.toHaveProperty("taskId")
+    expect(queued).not.toHaveProperty("audioId")
+  })
+
+  it("my own finished song's ids alone go by id", async () => {
+    taskRows.rows = [MY_SONG]
+    const idsOnly = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "gen-task", audioId: "track-2" })
+    expect(idsOnly.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({ taskId: "gen-task", audioId: "track-2" })
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).not.toHaveProperty("uploadUrl")
+  })
+
+  it("ids alone are refused before any hold when the audio id is not one of the song's tracks, when the song is not finished, and when the prompt cannot go by id", async () => {
+    taskRows.rows = [MY_SONG]
+    const notATrack = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "gen-task", audioId: "someone-elses-track" })
+    const promptBesideStyle = await authedPost("/v1/suno/cover", { prompt: "jazz", style: "folk", taskId: "gen-task", audioId: "track-2" })
+    taskRows.rows = [{ ...MY_SONG, status: "processing" }]
+    const unfinished = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "gen-task", audioId: "track-2" })
+    for (const res of [notATrack, promptBesideStyle, unfinished]) {
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("suno_cover_source")
+    }
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("a task no job here carries is never covered by id: by the file as before, refused with none", async () => {
+    const byFile = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "typed-by-hand", audioId: "a", uploadUrl: "https://example.com/audio.mp3" })
+    expect(byFile.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({ uploadUrl: "https://example.com/audio.mp3" })
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).not.toHaveProperty("taskId")
+    const alone = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "typed-by-hand", audioId: "a" })
+    expect(alone.statusCode).toBe(400)
+    expect(alone.json().error.code).toBe("suno_cover_source")
+  })
+
+  it("a task that is not a song goes by the file; ids alone of another account are refused", async () => {
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-convert-wav", status: "completed", output_data: {} }]
+    const byFile = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "wav-task", audioId: "a", uploadUrl: "https://example.com/audio.mp3" })
+    expect(byFile.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({ uploadUrl: "https://example.com/audio.mp3" })
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).not.toHaveProperty("taskId")
+    taskRows.rows = [{ user_id: "someone-else", job_type: "suno-generate", status: "completed", output_data: {} }]
+    const notMine = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "gen-task", audioId: "a" })
+    expect(notMine.statusCode).toBe(403)
+    expect(notMine.json().error.code).toBe("suno_task_not_yours")
+  })
+
+  it("ids alone of a Suno task that is not a song are refused before any hold", async () => {
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-separate", status: "completed", output_data: {} }]
+    const res = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "sep-task", audioId: "stem-v" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("suno_cover_source")
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("takes ids only together", async () => {
+    const res = await authedPost("/v1/suno/cover", { prompt: "jazz", taskId: "gen-task" })
+    expect(res.statusCode).toBe(400)
+  })
+
   it("returns jobId on success", async () => {
     const res = await authedPost("/v1/suno/cover", {
       prompt: "A cover song",
@@ -342,6 +435,15 @@ describe("POST /v1/suno/cover", () => {
 // ==========================================================================
 
 describe("POST /v1/suno/extend", () => {
+  it("refuses a Suno Speech take by its id before any hold (it is not a song)", async () => {
+    taskRows.speechTakes = [{ id: "job-speech" }]
+    const res = await authedPost("/v1/suno/extend", { audioId: "take-1", continueAt: 5 })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("suno_not_a_track")
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
   it("returns 400 for missing audioId", async () => {
     const res = await authedPost("/v1/suno/extend", {})
     expect(res.statusCode).toBe(400)
@@ -393,6 +495,17 @@ describe("POST /v1/suno/lyrics", () => {
 // ==========================================================================
 
 describe("POST /v1/suno/separate", () => {
+  it("refuses a Suno Speech take by its ids before any hold; its audio by URL separates like any audio", async () => {
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-speech", status: "completed", output_data: { sunoTrackKind: "speech" } }]
+    const byIds = await authedPost("/v1/suno/separate", { taskId: "speech-task", audioId: "take-1" })
+    expect(byIds.statusCode).toBe(400)
+    expect(byIds.json().error.code).toBe("suno_not_a_track")
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+    const byUrl = await authedPost("/v1/suno/separate", { audioUrl: "https://example.com/take.mp3" })
+    expect(byUrl.statusCode).toBe(200)
+  })
+
   it("returns 400 for missing required fields", async () => {
     const res = await authedPost("/v1/suno/separate", {})
     expect(res.statusCode).toBe(400)
@@ -824,6 +937,47 @@ describe("POST /v1/suno/add-vocals", () => {
 // ==========================================================================
 
 describe("POST /v1/suno/convert-wav", () => {
+  it("a stem of my Suno separation queues the stem lane (decided 2026-11-17)", async () => {
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-separate", status: "completed", output_data: { engineUsed: "suno", sunoStemIds: { vocalUrl: "stem-v" } } }]
+    const res = await authedPost("/v1/suno/convert-wav", { taskId: "sep-task", audioId: "stem-v" })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-convert-wav", expect.objectContaining({ taskId: "sep-task", audioId: "stem-v", stem: true }))
+  })
+
+  it("another account's track or stem converts as it always did: no ownership check (decided 2026-11-17)", async () => {
+    taskRows.rows = [{ user_id: "someone-else", job_type: "suno-generate", status: "completed", output_data: {} }]
+    const track = await authedPost("/v1/suno/convert-wav", { taskId: "gen-task", audioId: "track-1" })
+    expect(track.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).not.toHaveProperty("stem")
+    taskRows.rows = [{ user_id: "someone-else", job_type: "suno-separate", status: "completed", output_data: { engineUsed: "suno", sunoStemIds: { vocalUrl: "stem-v" } } }]
+    const stem = await authedPost("/v1/suno/convert-wav", { taskId: "sep-task", audioId: "stem-v" })
+    expect(stem.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({ taskId: "sep-task", audioId: "stem-v", stem: true })
+  })
+
+  it("refuses a Demucs separation, an id that is not one of the stems and a Suno Speech take, before any hold", async () => {
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-separate", status: "completed", output_data: { engineUsed: "demucs" } }]
+    const demucs = await authedPost("/v1/suno/convert-wav", { taskId: "sep-task", audioId: "stem-v" })
+    expect(demucs.statusCode).toBe(400)
+    expect(demucs.json().error.code).toBe("suno_wav_stem")
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-separate", status: "completed", output_data: { engineUsed: "suno", sunoStemIds: { vocalUrl: "stem-v" } } }]
+    const notAStem = await authedPost("/v1/suno/convert-wav", { taskId: "sep-task", audioId: "nope" })
+    expect(notAStem.statusCode).toBe(400)
+    expect(notAStem.json().error.code).toBe("suno_wav_stem")
+    taskRows.rows = [{ user_id: TEST_USER_ID, job_type: "suno-separate", status: "completed", output_data: { engineUsed: "suno", vocalUrl: "https://example.com/v.mp3" } }]
+    const idless = await authedPost("/v1/suno/convert-wav", { taskId: "sep-task", audioId: "stem-v" })
+    expect(idless.statusCode).toBe(400)
+    expect(idless.json().error.code).toBe("suno_wav_stem")
+    expect(idless.json().error.message).toMatch(/Run the separation again/)
+    // A speech take, whoever made it.
+    taskRows.rows = [{ user_id: "someone-else", job_type: "suno-speech", status: "completed", output_data: { sunoTrackKind: "speech" } }]
+    const speech = await authedPost("/v1/suno/convert-wav", { taskId: "speech-task", audioId: "take-1" })
+    expect(speech.statusCode).toBe(400)
+    expect(speech.json().error.code).toBe("suno_not_a_track")
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+    expect(mockVideoQueueAdd).not.toHaveBeenCalled()
+  })
+
   it("returns 400 for missing fields", async () => {
     const res = await authedPost("/v1/suno/convert-wav", {})
     expect(res.statusCode).toBe(400)

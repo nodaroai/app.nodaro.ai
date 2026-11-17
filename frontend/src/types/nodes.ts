@@ -3463,6 +3463,10 @@ export type SunoSeparateData = {
   engineUsed?: "suno" | "demucs"
   sunoRefused?: boolean
   fallbackReason?: "catalog" | "too_large"
+  /** The last Suno run's separation task: with a stem's id, what Suno Convert to WAV takes a stem by. */
+  sunoTaskId?: string
+  /** Each stem's or take's own Suno id, by its result field (`vocalUrl` → id). Absent on a Demucs run. */
+  sunoStemIds?: Partial<Record<SunoSeparateResultField, string>>
   currentJobId?: string
   currentJobProgress?: number
   fieldMappings?: FieldMappings

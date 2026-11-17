@@ -14,6 +14,7 @@ export const UNIT_CONTRACTS: ReadonlyArray<readonly [type: string, producer: "au
   ["remove-audio", "video"], // unit:remove-audio
   ["gif-to-video", "video"], // unit:gif-to-video
   ["split-into-layers", "image"], // unit:split-into-layers
+  ["suno-speech", "audio"], // unit:suno-speech
 ]
 
 // The use-case node units (execution.kind "use-case"), in position order — each a route POST /v1/<type> (+ /estimate, /continue).

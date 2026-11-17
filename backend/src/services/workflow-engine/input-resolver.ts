@@ -77,7 +77,8 @@ import {
   listColumnMediaType,
 } from "@nodaro/shared/video"
 import {
-  SUNO_TRACK_SOURCE_TYPES
+  SUNO_TRACK_SOURCE_TYPES,
+  sunoSeparateHandleIds,
 } from "@nodaro/shared/models"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
@@ -2908,6 +2909,25 @@ function routeOutput(
           : {}
       if (ids.trackId) inputs.sunoTrackId = ids.trackId
       if (ids.taskId) inputs.sunoTaskId = ids.taskId
+    }
+    // A stem of a Suno separation, into Suno Convert to WAV only: the
+    // separation's task and the stem's own id behind the wire's pip
+    // (`sunoSeparateHandleIds`). Separate is no track source, so Extend, Add
+    // Vocals and the rest never chain off a stem. Read from one place, as above.
+    if (srcType === "suno-separate" && targetType === "suno-convert-wav") {
+      // This run's own result when the node ran in it (a Demucs run has no
+      // ids, and must not borrow an earlier Suno run's saved ones), else its
+      // saved data.
+      const fresh = nodeStates[src.id]?.output
+      const from = fresh ?? (savedDataAllowed(nodeStates[src.id]) ? src.data : undefined)
+      const stem = from ? sunoSeparateHandleIds(from as Record<string, unknown>, sourceHandle) : undefined
+      if (stem) {
+        inputs.sunoTaskId = stem.taskId
+        inputs.sunoTrackId = stem.audioId
+      } else {
+        // No ids to convert by: the payload refuses the run, before any hold.
+        inputs.sunoStemUnavailable = (from as Record<string, unknown> | undefined)?.engineUsed === "demucs" ? "demucs" : "no-ids"
+      }
     }
     return
   }

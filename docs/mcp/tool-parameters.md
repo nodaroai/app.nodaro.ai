@@ -3181,7 +3181,8 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno track. At least 1 character. |
+| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno track, or of a Suno separation. At least 1 character. |
+| `stem` | string |  | A separation's stem: a pip (vocals, instrumental, isolated, without) or a result field. Only with a separation's audio_asset_id. One of `vocals`, `instrumental`, `isolated`, `without`, `vocalUrl`, `instrumentalUrl`, `backingVocalsUrl`, `drumsUrl`, `bassUrl`, `guitarUrl`, `pianoUrl`, `keyboardUrl`, `percussionUrl`, `stringsUrl`, `synthUrl`, `fxUrl`, `brassUrl`, `woodwindsUrl`, `otherUrl`, `isolatedUrl`, `withoutUrl`, `isolated2Url`, `without2Url`. |
 
 ## `suno_cover`
 
@@ -3192,6 +3193,8 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | Style description for the cover. From 1 to 5000 characters. |
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  |  |
+| `task_id` | string |  | Your own Suno song made here: its task id (with audio_id). At most 200 characters. |
+| `audio_id` | string |  | Your own Suno song made here: its track id (with task_id). At most 200 characters. |
 | `lyrics` | string |  | At most 5000 characters. |
 | `style` | string |  | At most 500 characters. |
 | `title` | string |  | At most 80 characters. |
@@ -3294,6 +3297,20 @@ Needs `workflows:execute`.
 | `type` | string |  | `separate_vocal` (default) = vocals + instrumental. `split_stem` = full multi-stem split. `split_stem_advanced` = one instrument (`stem_name`) alone and the song without it. One of `separate_vocal`, `split_stem`, `split_stem_advanced`. |
 | `stem_name` | string |  | One of Suno's instrument names, e.g. Piano or Lead Vocal (only for split_stem_advanced; default Lead Vocal) |
 | `fallback_to_demucs` | boolean |  | When Suno refuses (a commercially released recording, or over 20 MB), run Demucs instead and charge its price. Vocals and full stems only — one-instrument mode has no fallback. Default false. |
+
+## `suno_speech`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `mode` | string |  | "brief" (default): Suno writes the script from `prompt`. "script": it speaks `script`. One of `brief`, `script`. |
+| `prompt` | string |  | Brief mode: a one-line scene description. At most 6000 characters. |
+| `script` | string |  | Script mode: the words to speak (multiline). At most 10000 characters. |
+| `tone` | string |  | Script mode: tone, rhythm, emotion and setting (accent, accompaniment). At most 2000 characters. |
+| `variety` | integer |  | Script mode: how far the two takes differ, 0-4. From 0 to 4. |
+| `vocal_gender` | string |  | Script mode: the voice gender. Unset: the model picks. One of `female`, `male`. |
+| `background_music` | boolean |  | Script mode: add background music. |
 
 ## `suno_style_boost`
 

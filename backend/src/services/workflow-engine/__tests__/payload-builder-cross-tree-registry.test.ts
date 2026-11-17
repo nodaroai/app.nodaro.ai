@@ -32,6 +32,8 @@ describe("payload-builder-media-required.test.ts", () => {
   const FRONTEND_MEDIA_REFUSAL_COUNT = 98 // +1 split-into-layers: no source image (its unit's execution.requires row); +1 shot-cuts: no video input (its unit's execution.requires row); +1 video-upscale seedance-2-5-hd: no Seedance draft task upstream ("Connect a Seedance 2.5 node with Draft on" — the server refuses the same build-time, table row video-upscale already covers it via kieTaskId); +1 video-depth: no video input found (table row video-depth); +1 pitch-tempo (no audio or video input; table row pitch-tempo); +4 video-mask (no video) and mask-composite (no foreground / background / mask video) — table rows video-mask + mask-composite; +1 video-analysis: a Social Search post with no video ("this post has no video to analyze" — the server refuses it too, before any reserve: video-analysis-post-probe post_has_no_video; table row video-analysis); +2 camera-switch ("connect an edit" / "connect a transcript" — JSON-input guards over-matching "connect a", exempt below); recounted, same guards: the refusals moved into the i18n dictionary and are now read from there, not from a 3-line source window (which over-matched 2 neighbouring lines); +1 video-overlay: base video (table row); +2 image-overlay: base image (table row) + overlay layers (the case throws its own); +1 silence-detect (audio/video source, table row); +1 apply-edl (the "connect an EDL" guard over-matches "connect a"; JSON-input guard, exempt below); +1 edit-plan (the "connect a transcript" guard over-matches "connect a"; JSON-input guard, exempt below); +1 audio-sync ("connect at least 2 recordings" — a source-COUNT guard, exempt below); +2 content-recipe / content-ideas ("connect a Video Analysis, a post or some text" / "connect at least one Content Recipe" — text-input guards over-matching "connect a", exempt below)
   /** +1 video-upscale on Nodaro Video Upscale: no video input found (table row video-upscale). */
   const NODARO_VIDEO_UPSCALE_MEDIA_REFUSALS = 1
+  /** +1 suno-convert-wav: a wired stem with no Suno ids (its sentence names the stem's audio; PARITY_EXEMPT entry suno-convert-wav). */
+  const SUNO_WAV_STEM_ID_REFUSALS = 1
 
   const JOB = "job-media-required"
   const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -374,6 +376,7 @@ describe("payload-builder-media-required.test.ts", () => {
         "extract-audio",           // :6150 no video input
         "silence-detect",          // connect an audio or video source
         "audio-sync",              // connect at least 2 recordings to the "Sources" input (source-COUNT guard, exempt below)
+        "suno-convert-wav",        // a wired Suno Separate stem with no Suno ids (a stem-ID guard, exempt below)
         "remove-audio",            // :6166 no video input
         "split-media",             // :6184 no video or audio input found
         "trim-video",              // :6287 no video input
@@ -452,6 +455,8 @@ describe("payload-builder-media-required.test.ts", () => {
           "the refusal is a recipe-COUNT guard over text folded from the `recipes` wire, not a media slot. buildPayload enforces parity: its content-ideas case throws when no recipe arrived, before the reserve (pinned by content-recipe-ideas.test.ts).",
         "camera-switch":
           "both counted refusals are JSON-input guards — 'connect an edit (EDL)' and 'connect a transcript' — never a media URL (its cameras resolve from EdlSource.url inside the EDL). buildPayload enforces parity: its camera-switch case throws for a missing edit, a missing transcript and a transcript with no speaker labels, before the reserve (pinned by camera-switch-dag.test.ts).",
+        "suno-convert-wav":
+          "the counted refusal is a stem-ID guard, not a media slot: a wired Suno Separate stem that has no Suno ids to convert by (Demucs made the separation, or it kept none). buildPayload DOES enforce parity: its suno-convert-wav case throws the same coded refusal (suno_wav_stem) on resolvedInputs.sunoStemUnavailable, before anything is reserved (payload-builder.test.ts).",
         "audio-sync":
           "the guard is a source-COUNT (2..6 recordings on one `sources` handle, each kept with its node id), not a typed-URL slot the table models. buildPayload DOES enforce parity: its audio-sync case throws for fewer than 2 or more than 6 wired recordings, and for any source that is not a fetchable media URL, before the reserve (pinned by ee/billing/__tests__/audio-sync-credits.test.ts).",
       }
@@ -505,7 +510,7 @@ describe("payload-builder-media-required.test.ts", () => {
       expect(
         count,
         "a new frontend media guard appeared — add a REQUIRED_MEDIA_INPUTS row or a PARITY_EXEMPT entry",
-      ).toBe(FRONTEND_MEDIA_REFUSAL_COUNT + NODARO_VIDEO_UPSCALE_MEDIA_REFUSALS)
+      ).toBe(FRONTEND_MEDIA_REFUSAL_COUNT + NODARO_VIDEO_UPSCALE_MEDIA_REFUSALS + SUNO_WAV_STEM_ID_REFUSALS)
     })
   })
 })

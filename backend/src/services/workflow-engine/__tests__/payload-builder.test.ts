@@ -1005,6 +1005,18 @@ describe("buildPayload", () => {
       expect(buildPayload(c, jobId, {}).modelIdentifier).toBe(key)
     })
 
+    it("suno-convert-wav refuses a wired stem that has no Suno ids, before anything is reserved (decided 2026-11-17)", () => {
+      const n = node("n1", "suno-convert-wav", {})
+      const demucs = (() => { try { buildPayload(n, jobId, { sunoStemUnavailable: "demucs" }); return undefined } catch (e) { return e as Error & { errorCode?: string } } })()
+      expect(demucs?.errorCode).toBe("suno_wav_stem")
+      expect(demucs?.message).toMatch(/Demucs/)
+      const idless = (() => { try { buildPayload(n, jobId, { sunoStemUnavailable: "no-ids" }); return undefined } catch (e) { return e as Error & { errorCode?: string } } })()
+      expect(idless?.errorCode).toBe("suno_wav_stem")
+      expect(idless?.message).toMatch(/Run the separation again/)
+      // A stem with its ids, and a track, build as before.
+      expect(buildPayload(n, jobId, { sunoTaskId: "sep", sunoTrackId: "stem-v" }).payload).toMatchObject({ taskId: "sep", audioId: "stem-v" })
+    })
+
     it("suno-cover", () => {
       const n = node("n1", "suno-cover", {})
       const inputs: ResolvedInputs = { audioUrl: "https://cover.mp3" }

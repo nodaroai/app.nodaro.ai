@@ -55,6 +55,10 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
     const { writeFile } = await import("node:fs/promises")
     await writeFile(path, "")
   },
+  // The probe of a delivered clip on the lane that sends the voice as reference
+  // audio: the clip carries audio here, so it is stored as it came (this file
+  // is about what is SENT; the voice-line step has its own tests).
+  probeMediaStreams: async () => ({ hasVideo: true, hasAudio: true }),
 }))
 vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../providers/video/decoded-audio-length.js")>()),

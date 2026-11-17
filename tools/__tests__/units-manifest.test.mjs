@@ -111,7 +111,7 @@ const cases = [
   ["registry needs a description", (m) => { m.registry.description = "" }, /registry needs a description/],
   ["docs needs a page or a reason", (m) => { delete m.docs.page }, /docs needs exactly one of page/],
   ["docs page must exist", (m) => { m.docs.page = "docs/nodes/utility/missing.md" }, /does not exist/],
-  ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["text"] }, /"text" has no editor connection rule for a unit input yet/],
+  ["an input kind with no connection rule", (m) => { m.handles.inputs[0].accepts = ["mask"] }, /"mask" has no editor connection rule for a unit input yet/],
   ["mcp is an object", (m) => { m.mcp = ["fixture_echo"] }, /mcp must be an object/],
   ["mcp keys are a whitelist", (m) => { m.mcp = { widgetModelFor: ["fixture_echo"], model: "x" } }, /mcp\.model: unknown \(widgetModelFor\)/],
   ["mcp.widgetModelFor is a non-empty list", (m) => { m.mcp = { widgetModelFor: [] } }, /mcp\.widgetModelFor must list the MCP tools/],

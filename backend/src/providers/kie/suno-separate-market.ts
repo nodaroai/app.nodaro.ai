@@ -154,28 +154,47 @@ function urlOf(entry: unknown): string | undefined {
   return typeof url === "string" && url !== "" ? encodeSpaces(url) : undefined
 }
 
-/** One-instrument mode: entry 0 is take 1, entry 1 is take 2, each `{ extract, remove }`. */
+/** An entry's own Suno id (`origin_data[].id`, what Convert to WAV takes a stem by). */
+function idOf(entry: unknown): string | undefined {
+  const id = asRecord(entry)?.id
+  return typeof id === "string" && id !== "" ? id : undefined
+}
+
+/** The URL fields of the entries that came back, and the ids of those that carry one. */
+function withIds(entries: ReadonlyArray<readonly [string, unknown]>): Partial<SunoSeparateResult> {
+  const kept = entries.flatMap(([field, entry]) => {
+    const url = urlOf(entry)
+    return url ? [{ field, url, id: idOf(entry) }] : []
+  })
+  const stemIds = Object.fromEntries(kept.flatMap((k) => (k.id ? [[k.field, k.id] as const] : [])))
+  return {
+    ...Object.fromEntries(kept.map((k) => [k.field, k.url] as const)),
+    ...(Object.keys(stemIds).length > 0 ? { stemIds } : {}),
+  }
+}
+
+/**
+ * One-instrument mode: entry 0 is take 1, entry 1 is take 2, each `{ extract, remove }`,
+ * each side with its own `id` (as the probe's recorded tasks carry them).
+ */
 function parseTakes(originData: readonly unknown[]): Partial<SunoSeparateResult> {
   const take = (i: number) => asRecord(originData[i])
-  const fields: Array<[keyof SunoSeparateResult, string | undefined]> = [
-    ["isolatedUrl", urlOf(take(0)?.extract)],
-    ["withoutUrl", urlOf(take(0)?.remove)],
-    ["isolated2Url", urlOf(take(1)?.extract)],
-    ["without2Url", urlOf(take(1)?.remove)],
-  ]
-  return Object.fromEntries(fields.filter(([, url]) => url !== undefined))
+  return withIds([
+    ["isolatedUrl", take(0)?.extract],
+    ["withoutUrl", take(0)?.remove],
+    ["isolated2Url", take(1)?.extract],
+    ["without2Url", take(1)?.remove],
+  ])
 }
 
 /** Vocals/instrumental and full stems: one entry per stem, by its stem-group name. */
 function parseStems(originData: readonly unknown[]): Partial<SunoSeparateResult> {
-  const stems = originData.flatMap((entry) => {
+  return withIds(originData.flatMap((entry) => {
     const name = asRecord(entry)?.stem_type_group_name
     if (typeof name !== "string") return []
     const field = sunoStemFieldFor(name)
-    const url = urlOf(entry)
-    return field && url ? [[field, url] as const] : []
-  })
-  return Object.fromEntries(stems)
+    return field ? [[field, entry] as const] : []
+  }))
 }
 
 /**
@@ -190,7 +209,7 @@ export function parseSeparateVocalsResult(
   const originData = asRecord(asRecord(resultJson)?.resultObject)?.origin_data
   const entries: readonly unknown[] = Array.isArray(originData) ? originData : []
   const urls = type === "split_stem_advanced" ? parseTakes(entries) : parseStems(entries)
-  if (Object.keys(urls).length === 0) {
+  if (Object.keys(urls).filter((k) => k !== "stemIds").length === 0) {
     throw createSanitizedError("Suno separate returned no stems", "Stem separation")
   }
   return { taskId, ...urls }

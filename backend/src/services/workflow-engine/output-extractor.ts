@@ -49,6 +49,7 @@ import {
   COMPOSER_PLAN_MAP,
   COMPOSER_PLAN_FIELDS,
   SUNO_SEPARATE_META_FIELDS,
+  SUNO_SEPARATE_ID_FIELDS,
   SUNO_SEPARATE_RESULT_FIELDS,
   sunoSeparateHandleUrl
 } from "@nodaro/shared/models"
@@ -388,6 +389,8 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [...new Set<keyof NodeOutput
   // isolated / without takes and every full-stems stem it has no key for.
   ...SUNO_SEPARATE_RESULT_FIELDS,
   ...SUNO_SEPARATE_META_FIELDS,
+  // The separation's task id and each stem's id, for Suno Convert to WAV.
+  ...SUNO_SEPARATE_ID_FIELDS,
 ])]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -1847,6 +1850,9 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
       const v = data[key]
       if (typeof v === "string" && v !== "") output[key] = v
     }
+    // The ids Suno Convert to WAV takes a stem by, as the run saved them.
+    if (typeof data.sunoTaskId === "string" && data.sunoTaskId !== "") output.sunoTaskId = data.sunoTaskId
+    if (typeof data.sunoStemIds === "object" && data.sunoStemIds !== null) output.sunoStemIds = data.sunoStemIds as Record<string, string>
     return Object.keys(output).length > 0 ? output : undefined
   }
 

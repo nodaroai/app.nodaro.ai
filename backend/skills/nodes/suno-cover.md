@@ -1,7 +1,7 @@
 ---
 node_type: suno-cover
-generated_at: 2026-10-14T00:02:32.491Z
-generated_from: b83a9467d
+generated_at: 2026-11-17T08:57:45.720Z
+generated_from: cb7abbeec4
 ---
 
 # Suno Cover
@@ -66,6 +66,8 @@ generated_from: b83a9467d
 - `prompt`
 - `audio_url`
 - `audio_asset_id`
+- `task_id`
+- `audio_id`
 - `lyrics`
 - `style`
 - `title`

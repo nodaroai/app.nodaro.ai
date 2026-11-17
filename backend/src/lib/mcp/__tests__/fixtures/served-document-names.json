@@ -172,6 +172,7 @@
  "get_node_skill suno-music-video": "tools: list_models suno_music_video | models: -",
  "get_node_skill suno-replace-section": "tools: list_models suno_replace_section | models: -",
  "get_node_skill suno-separate": "tools: list_models suno_separate_stems | models: suno",
+ "get_node_skill suno-speech": "tools: list_models suno_speech | models: -",
  "get_node_skill suno-style-boost": "tools: list_models suno_style_boost | models: -",
  "get_node_skill suno-upload-extend": "tools: list_models suno_upload_extend | models: -",
  "get_node_skill suno-voice": "tools: list_models | models: -",
