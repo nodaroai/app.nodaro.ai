@@ -19,6 +19,7 @@ import {
   DEFAULT_SUNO_MODEL, sunoModelHonoursDuration,
   type SunoModel, type SunoAddTrackModel, type SunoSeparateType,
 } from "@nodaro/shared/models"
+import { separateFailure } from "./suno-separate-refusals.js"
 import { sunoStemFieldFor } from "./suno-stem-fields.js"
 
 export type { SunoModel, SunoAddTrackModel, SunoSeparateType }
@@ -555,6 +556,62 @@ export async function pollSunoEndpoint<T>(
   throw createSanitizedError(opts.timeoutMessage, opts.timeoutLabel)
 }
 
+/**
+ * How a task of the stem-separation, WAV and music-video record-info endpoints
+ * says it failed. Those three do NOT send the music endpoint's `status`: their
+ * state is `data.successFlag` — `PENDING`, `SUCCESS`, or a failure
+ * (`CREATE_TASK_FAILED`, `GENERATE_AUDIO_FAILED` / `GENERATE_WAV_FAILED` /
+ * `GENERATE_MP4_FAILED`, `CALLBACK_EXCEPTION`) — with the reason beside it in
+ * `data.errorCode` (a number) and `data.errorMessage`. A poller that reads only
+ * `status` never sees such a failure and polls to its limit (production,
+ * 2026-11-17: a separation refused 27 seconds in was reported as a timeout
+ * nine minutes later).
+ *
+ * Returns the failure, or `undefined` while the flag is absent, pending or a
+ * success. Any flag naming a FAILED or ERROR state counts, so a value the docs
+ * add later is terminal too. `CALLBACK_EXCEPTION` is NOT a failure of the
+ * task: it is about the callback address (ours is a placeholder), so a record
+ * carrying it keeps being polled, and succeeds once its result is there.
+ */
+const SUNO_SUCCESS_FLAG_FAILURE_RE = /FAILED|ERROR/i
+
+function sunoSuccessFlagFailure(
+  data: Record<string, unknown> | undefined,
+): { flag: string; code: string; message: string } | undefined {
+  const flag = data?.successFlag
+  if (typeof flag !== "string" || !SUNO_SUCCESS_FLAG_FAILURE_RE.test(flag)) return undefined
+  const code = data?.errorCode
+  const message = data?.errorMessage
+  return {
+    flag,
+    code: typeof code === "number" || (typeof code === "string" && code !== "") ? String(code) : "no_code",
+    message: typeof message === "string" && message !== "" ? message : flag,
+  }
+}
+
+/**
+ * A failure the task's own record reports is FINAL on the first attempt
+ * (decided 2026-11-17): the worker fails the job and refunds now, with the
+ * error's sentence, and no retry runs (the `deterministic` mark,
+ * `lib/deterministic-job-error.ts`). A retry could never help these three job
+ * types: the row keeps its saved task id, so the retry's pickup goes to the
+ * reconcile instead of the handler, and the reconcile does not recover a
+ * separation, a WAV or a music video — the job only sat until the reconcile
+ * gave up on it. Marked on the error itself, so it stays the `KieError` it was
+ * (its sentence, its class, the provider's words as `internalDetails`).
+ * Only for a failure the record states: a timeout or a network error is
+ * never marked.
+ */
+function finalSunoRecordFailure<E extends Error>(err: E): E & { deterministic: true } {
+  return Object.assign(err, { deterministic: true as const })
+}
+
+/** `data.successFlag` when it is a string (the three endpoints above), else undefined. */
+function sunoSuccessFlag(data: Record<string, unknown> | undefined): string | undefined {
+  const flag = data?.successFlag
+  return typeof flag === "string" ? flag : undefined
+}
+
 // =============================================================================
 // API FUNCTIONS
 // =============================================================================
@@ -937,6 +994,12 @@ export async function sunoSeparate(
  * Poll a Suno separate/stem-split task until completion.
  * Uses vocal-removal/record-info endpoint.
  * Response contains originData array with stem_type_group_name + audio_url per stem.
+ *
+ * The task's state is `data.successFlag` (see `sunoSuccessFlagFailure`); the
+ * older `status` reading stays beside it. A failure that depends only on the
+ * input (the provider refuses the audio, or cannot fetch it) throws the SAME
+ * typed error the market lane throws, by the one shared rule
+ * (`separateFailure`), on the poll that first shows it.
  */
 async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult> {
   return pollSunoEndpoint<SunoSeparateResult>(taskId, {
@@ -961,10 +1024,10 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
           data?.failReason ??
           data?.errorMessage ??
           "Unknown error"
-        throw createSanitizedError(
+        throw finalSunoRecordFailure(createSanitizedError(
           `Suno separate task failed: ${reason}`,
           "Stem separation"
-        )
+        ))
       }
 
       // Success: originData is a non-empty array of stems
@@ -991,6 +1054,19 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
           `[Suno] Separate task ${taskId} completed with ${stemCount} stem(s)`
         )
         return result
+      }
+
+      // The endpoint's own terminal state. Read after the stems: a record
+      // with stems is a success whatever else it says.
+      const failed = sunoSuccessFlagFailure(data)
+      if (failed) {
+        // The typed refusals carry none of the provider's words: log them here.
+        console.error(`[Suno] Separate task ${taskId} ${failed.flag}: [${failed.code}] ${failed.message}`)
+        throw separateFailure(failed.code, failed.message) ?? finalSunoRecordFailure(createUpstreamFailureError(
+          `Suno separate task failed: [${failed.code}] ${failed.message}`,
+          "Stem separation",
+          { upstreamStatus: failed.code },
+        ))
       }
 
       // originData missing or empty — still pending, continue polling
@@ -1034,7 +1110,8 @@ export async function sunoMusicVideo(
 
 /**
  * Poll a Suno music video task until completion.
- * Uses mp4/record-info endpoint.
+ * Uses mp4/record-info endpoint, whose state is `data.successFlag`
+ * (`sunoSuccessFlagFailure`); the older `status` reading stays beside it.
  */
 async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoResult> {
   const apiKey = config.KIE_API_KEY!
@@ -1086,10 +1163,10 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
         data?.failReason ??
         data?.errorMessage ??
         "Unknown error"
-      throw createSanitizedError(
+      throw finalSunoRecordFailure(createSanitizedError(
         `Suno music video task failed: ${reason}`,
         "Music video generation"
-      )
+      ))
     }
 
     // Success: look for videoUrl in response
@@ -1099,8 +1176,20 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
       return { taskId, videoUrl }
     }
 
+    // The endpoint's own terminal state (`successFlag`). Read after the URL: a
+    // record with its result is a success whatever else it says.
+    const failed = sunoSuccessFlagFailure(data)
+    if (failed) {
+      throw finalSunoRecordFailure(createUpstreamFailureError(
+        `Suno music video task failed: [${failed.code}] ${failed.message}`,
+        "Music video generation",
+        { upstreamStatus: failed.code },
+      ))
+    }
+
     // Check top-level success status with response data
-    if ((status === "SUCCESS" || status === "FIRST_SUCCESS") && resp) {
+    const state = status ?? sunoSuccessFlag(data)
+    if ((state === "SUCCESS" || state === "FIRST_SUCCESS") && resp) {
       // Try to find a video URL in any field
       const possibleUrl = Object.values(resp).find(
         (v) => typeof v === "string" && (v.endsWith(".mp4") || v.includes("mp4"))
@@ -1405,7 +1494,9 @@ export async function sunoConvertWav(
 
 /**
  * Poll a Suno WAV conversion task until completion.
- * Uses wav/record-info endpoint (similar to mp4/record-info).
+ * Uses wav/record-info endpoint (similar to mp4/record-info), whose state is
+ * `data.successFlag` (`sunoSuccessFlagFailure`); the older `status` reading
+ * stays beside it.
  */
 async function pollSunoWavTask(taskId: string): Promise<SunoConvertWavResult> {
   const apiKey = config.KIE_API_KEY!
@@ -1452,21 +1543,34 @@ async function pollSunoWavTask(taskId: string): Promise<SunoConvertWavResult> {
         data?.failReason ??
         data?.errorMessage ??
         "Unknown error"
-      throw createSanitizedError(
+      throw finalSunoRecordFailure(createSanitizedError(
         `Suno WAV task failed: ${reason}`,
         "WAV conversion"
-      )
+      ))
     }
 
-    // Success: look for audioUrl / wav_url in response
-    const audioUrl = (resp?.audioUrl ?? resp?.audio_url ?? resp?.wavUrl ?? resp?.wav_url) as string | undefined
+    // Success: look for the WAV's URL in response (`audioWavUrl` is the
+    // endpoint's documented key; the other spellings stay accepted).
+    const audioUrl = (resp?.audioWavUrl ?? resp?.audioUrl ?? resp?.audio_url ?? resp?.wavUrl ?? resp?.wav_url) as string | undefined
     if (audioUrl) {
       if (DEBUG) console.log(`[Suno] WAV task ${taskId} completed`)
       return { taskId, audioUrl }
     }
 
+    // The endpoint's own terminal state (`successFlag`). Read after the URL: a
+    // record with its result is a success whatever else it says.
+    const failed = sunoSuccessFlagFailure(data)
+    if (failed) {
+      throw finalSunoRecordFailure(createUpstreamFailureError(
+        `Suno WAV task failed: [${failed.code}] ${failed.message}`,
+        "WAV conversion",
+        { upstreamStatus: failed.code },
+      ))
+    }
+
     // Check top-level success status with response data
-    if ((status === "SUCCESS" || status === "FIRST_SUCCESS") && resp) {
+    const state = status ?? sunoSuccessFlag(data)
+    if ((state === "SUCCESS" || state === "FIRST_SUCCESS") && resp) {
       const possibleUrl = Object.values(resp).find(
         (v) => typeof v === "string" && (v.endsWith(".wav") || v.includes("wav") || v.startsWith("http"))
       ) as string | undefined

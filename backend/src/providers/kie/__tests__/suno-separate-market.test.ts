@@ -24,6 +24,7 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
+import { providerDetailOf } from "@/lib/provider-error-detail.js"
 import { SUNO_SEPARATE_STEM_FIELDS } from "@nodaro/shared/models"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import { KieError } from "../client.js"
@@ -244,6 +245,8 @@ describe("sunoSeparateMarket", () => {
     expect(isDeterministicJobError(err)).toBe(true)
     expect((err as SunoCatalogRefusalError).code).toBe("suno_catalog_refusal")
     expect((err as Error).message).toBe(SUNO_CATALOG_REFUSAL_MESSAGE)
+    // The provider's own code and words ride as the cause, for the row's operator detail.
+    expect(providerDetailOf(err)).toMatch(/^Suno separate task failed: \[413\] \S/)
   })
 
   it("the catalog wording alone (no 413) is still a catalog refusal", async () => {

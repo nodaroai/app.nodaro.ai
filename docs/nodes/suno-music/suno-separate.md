@@ -66,10 +66,10 @@ A separation Suno made also keeps its Suno ids: `sunoTaskId` (the separation's t
 Suno will not separate a recording it recognises as **commercially released**. Audio sent by URL must also be **20 MB** or smaller.
 
 - **Setting off (default):** the job fails with a clear message and your credits are refunded in full. Use the [Audio Separation](../ai-audio/audio-separation.md) node for that audio, or turn the setting on. A file over 20 MB fails the same way, before anything is sent to Suno.
-- **Setting on:** the audio is separated with Demucs instead, and the node shows a note that Demucs was used. You pay the Audio Separation price, never more than the Suno price you were quoted (see [Credits](#credits)). A file over 20 MB goes straight to Demucs. (Demucs needs an audio file, so a run that separates a Suno track by its IDs never falls back, even with other audio wired in. Suno does not refuse its own tracks.) Demucs returns its own set of stems: vocals and instrumental, or vocals, drums, bass, guitar, piano and other.
+- **Setting on:** the audio is separated with Demucs instead, and the node shows a note that Demucs was used. You pay the Audio Separation price, never more than the Suno price you were quoted (see [Credits](#credits)). A file over 20 MB goes straight to Demucs. (Demucs needs an audio file, so a run that separates a Suno track by its IDs never falls back, even with other audio wired in. Suno can refuse one of its own tracks too, for example for its lyrics; that run fails with the refusal message and is refunded in full.) Demucs returns its own set of stems: vocals and instrumental, or vocals, drums, bass, guitar, piano and other.
 - **One instrument never falls back.** Demucs cannot pull out a named instrument, so a refused One instrument run fails and is refunded in full whatever the setting.
 
-If Suno cannot download the audio at all, the job fails with "Suno couldn't download this audio" and is refunded in full. That is not a refusal, so it does not fall back to Demucs.
+If Suno cannot download the audio at all, the job fails with "Suno couldn't download this audio" and is refunded in full. That is not a refusal, so it does not fall back to Demucs. A Suno track separated by its IDs that Suno no longer keeps fails with "This Suno track is no longer available at Suno" instead, and is refunded in full too.
 
 ## Credits
 
