@@ -25,6 +25,7 @@ describe("character reference capability (data-driven)", () => {
   it("both Gemini Omni SKUs declare a 3-character cap, Kling 4.0 and Kling 4.0 Flash a 7-subject cap; nothing else does", () => {
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-video"]?.characters).toBe(3)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-flash"]?.characters).toBe(3)
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-flash-1-2"]?.characters).toBe(2)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4"]?.characters).toBe(7)
     expect(VIDEO_REF_LIMITS_BY_PROVIDER["kling-4-flash"]?.characters).toBe(7)
     const others = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
@@ -112,6 +113,53 @@ describe("videoCharacterRefProblem", () => {
     })
     expect(over?.code).toBe("character_references_quota")
     expect(over?.message).toContain("7")
+  })
+
+  describe("Gemini Omni Flash 1.2 (characters outside the image budget, decided 2026-11-17)", () => {
+    const omni12 = { ...base, provider: "gemini-omni-flash-1-2" }
+
+    it("is the only model whose characters sit outside its budget, and it takes no voices", () => {
+      const outside = Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER).filter(([, l]) => l?.charactersOutsideImageBudget).map(([id]) => id)
+      expect(outside).toEqual(["gemini-omni-flash-1-2"])
+      expect(videoCharacterRefCap("gemini-omni-flash-1-2")).toBe(2)
+      expect(videoCharacterVoiceCap("gemini-omni-flash-1-2")).toBe(0)
+    })
+
+    it("takes 1 or 2 characters beside a full image list and a source video — they count toward no quota", () => {
+      expect(videoCharacterRefProblem({ ...omni12, characterReferences: [portrait()] })).toBeNull()
+      expect(videoCharacterRefProblem({ ...omni12, imageCount: 6, characterReferences: [portrait(), portrait()] })).toBeNull()
+      const withBody = portrait({ bodyImageUrl: "https://cdn.example/b.png" })
+      expect(videoCharacterRefProblem({ ...omni12, imageCount: 5, videoCount: 1, characterReferences: [withBody, withBody] })).toBeNull()
+    })
+
+    it("a third character is over its limit, as on 1.1", () => {
+      const p = videoCharacterRefProblem({ ...omni12, characterReferences: [portrait(), portrait(), portrait()] })
+      expect(p?.code).toBe("character_references_over_limit")
+      expect(p?.message).toContain("at most 2")
+    })
+
+    it("a start or end frame beside characters is refused with the same codes as 1.1, worded as what the platform does, not a budget", () => {
+      const start = videoCharacterRefProblem({ ...omni12, hasStartFrame: true, characterReferences: [portrait()] })
+      expect(start?.code).toBe("character_references_with_start_frame")
+      expect(start?.message).not.toContain("compete for the same input slots")
+      expect(start?.message).toContain("imageUrl")
+      const end = videoCharacterRefProblem({ ...omni12, hasEndFrame: true, characterReferences: [portrait()] })
+      expect(end?.code).toBe("character_references_with_end_frame")
+    })
+
+    it("a pinned voice is refused, naming the models that take one", () => {
+      const p = videoCharacterRefProblem({ ...omni12, characterReferences: [portrait({ voice: { preset: "kore" } })] })
+      expect(p?.code).toBe("character_voice_unsupported")
+      expect(p?.message).toContain("gemini-omni-video, gemini-omni-flash.")
+      expect(p?.message).toMatch(/takes one: gemini-omni-video, gemini-omni-flash\.$/)
+    })
+
+    it("1.1 keeps its 7-unit budget and its own start-frame sentence", () => {
+      const p = videoCharacterRefProblem({ ...base, provider: "gemini-omni-flash", imageCount: 5, characterReferences: [portrait(), portrait(), portrait()] })
+      expect(p?.code).toBe("character_references_quota")
+      const start = videoCharacterRefProblem({ ...base, provider: "gemini-omni-flash", hasStartFrame: true, characterReferences: [portrait()] })
+      expect(start?.message).toContain("compete for the same input slots")
+    })
   })
 
   it("a body image costs a second unit in the quota", () => {

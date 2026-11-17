@@ -349,3 +349,33 @@ describe("/v1/generate-video — character voice persona", () => {
     }
   })
 })
+
+describe("POST /v1/generate-video — characterReferences on Gemini Omni Flash 1.2 (decided 2026-11-17)", () => {
+  const P = "gemini-omni-flash-1-2"
+
+  it.each([1, 2])("accepts %i character(s) with no frame and threads them to the queue", async (n) => {
+    mockJobInsert({ data: { id: `job-g12-${n}` }, error: null })
+    const characterReferences = Array.from({ length: n }, () => char())
+    const res = await post({ provider: P, characterReferences })
+    expect(res.statusCode).toBe(200)
+    expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>).characterReferences).toEqual(characterReferences)
+  })
+
+  it.each([
+    ["a start frame", { imageUrl: "https://example.com/start.png" }, "character_references_with_start_frame"],
+    ["an end frame", { endFrameUrl: "https://example.com/end.png" }, "character_references_with_end_frame"],
+    ["both frames", { imageUrl: "https://example.com/start.png", endFrameUrl: "https://example.com/end.png" }, "character_references_with_start_frame"],
+  ])("characters beside %s answer 400, as on 1.1", async (_label, frames, code) => {
+    const res = await post({ provider: P, ...frames, characterReferences: [char()] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe(code)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("a third character answers 400 character_references_over_limit", async () => {
+    const res = await post({ provider: P, characterReferences: [char(), char(), char()] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("character_references_over_limit")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+})

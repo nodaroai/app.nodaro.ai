@@ -331,3 +331,40 @@ describe("POST /v1/text-to-video — a character seated in the reference images 
     expect(res.statusCode).toBe(400)
   })
 })
+
+describe("POST /v1/text-to-video — characterReferences on Gemini Omni Flash 1.2 (decided 2026-11-17)", () => {
+  const P = "gemini-omni-flash-1-2"
+
+  it.each([1, 2])("accepts %i character(s) and threads them to the queue and input_data", async (n) => {
+    const { mockInsert } = mockJobInsert({ data: { id: `job-12-${n}` }, error: null })
+    const characterReferences = Array.from({ length: n }, (_, i) => char({ name: `C${i}` }))
+    const res = await post({ provider: P, characterReferences })
+    expect(res.statusCode).toBe(200)
+    expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>).characterReferences).toEqual(characterReferences)
+    expect((mockInsert.mock.calls[0]![0] as { input_data: Record<string, unknown> }).input_data.characterReferences).toEqual(characterReferences)
+  })
+
+  it("characters take no image slot: 6 reference images and 2 characters pass", async () => {
+    mockJobInsert({ data: { id: "job-12-r" }, error: null })
+    const res = await post({
+      provider: P,
+      characterReferences: [char(), char()],
+      referenceImageUrls: Array.from({ length: 6 }, (_, i) => `https://example.com/r${i}.png`),
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("a third character answers 400 character_references_over_limit before any job row", async () => {
+    const res = await post({ provider: P, characterReferences: [char(), char(), char()] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("character_references_over_limit")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("a pinned voice answers 400 character_voice_unsupported", async () => {
+    const res = await post({ provider: P, characterReferences: [char({ voice: { preset: "kore" } })] })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("character_voice_unsupported")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+})

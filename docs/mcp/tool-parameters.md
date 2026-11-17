@@ -1488,7 +1488,7 @@ Needs `workflows:execute`.
 | `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) / seedance-2-5-flash 5, gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
 | `reference_video_captions` | string[] |  | Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`. At most 10 items. |
 | `reference_audio_urls` | string[] or string |  | Reference audio, capped per model (seedance-2-5 10; seedance-2 family, minimax-h3 3; wan-3 5, 1-15s each, ≤15s total; kling-4 3, clip 1 = soundtrack; kling-4-flash 7, clip N = character N's voice if it's a subject); else dropped. |
-| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash / kling-4 / kling-4-flash only); see docs/nodes/ai-video/generate-video.md. At most 7 items. |
+| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 / kling-4 / kling-4-flash only); see docs/nodes/ai-video/generate-video.md. At most 7 items. |
 | `character_references[].image_url` | string | yes |  |
 | `character_references[].body_image_url` | string |  |  |
 | `character_references[].extra_image_urls` | string[] |  | kling-4(-flash): more views (2-4 per subject). At most 3 items. |

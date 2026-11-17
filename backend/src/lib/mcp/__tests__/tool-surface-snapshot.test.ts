@@ -1732,8 +1732,17 @@ const SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES = 261
 // tool-list-wire.json, does). Measured by this suite on top of Seedance 2.5 Flash Extend: 544_144 B in all, 100 B over the 544_044 B it measured before it.
 const GEMINI_4_HYDROGEN_ID_BYTES = 100
 
+// RAISED 2026-11-17 by character references on Gemini Omni Flash 1.2, and nothing else:
+// generate_video's `character_references` note lists the models that take them, read from
+// VIDEO_REF_LIMITS_BY_PROVIDER, and now names `gemini-omni-flash-1-2` (" / gemini-omni-flash-1-2",
+// 24 B). No tool was added, so the membership fixture does NOT move (the recorded tool list,
+// tool-list-wire.json, does). generate_video measures 10_072 B, 24 B over the 10_048 B per-tool
+// budget it sat exactly at. Measured by this suite on top of Gemini 4 Hydrogen: 544_168 B in all,
+// 24 B over the 544_144 B it measured before it; the list keeps its 28 B of headroom.
+const OMNI_FLASH_1_2_CHARACTERS_BYTES = 24
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1949,7 +1958,8 @@ export const TOOL_WIRE_BUDGET = {
     SEEDANCE_2_5_FLASH_TOTAL_BYTES +
     SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES +
     SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES +
-    GEMINI_4_HYDROGEN_ID_BYTES,
+    GEMINI_4_HYDROGEN_ID_BYTES +
+    OMNI_FLASH_1_2_CHARACTERS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

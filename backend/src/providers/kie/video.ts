@@ -1546,7 +1546,14 @@ async function runGeminiOmni12(
   const aspectRatio = !isAuto
     ? resolveGeminiOmniAspect(modelKey, aspectRatioValue)
     : realFrames && startFrameUrl ? await geminiOmni12FrameAspect(modelKey, startFrameUrl, logLabel) : "auto"
-  const { mode, input, droppedRefImages } = buildGeminiOmni12Request({
+  // Character ids, minted (or read from the cache) the way 1.1 mints them,
+  // after every refusal above and before the body is built. A failure fails the
+  // job — never a fallback to `image_urls`. Voices were refused above (no
+  // `audio_ids` on this model), so none is ever minted here.
+  const characterRefs = options?.characterReferences ?? []
+  const characterMeta = { modelKey }
+  let characters = characterRefs.length > 0 ? await resolveOmniCharacterIds(characterRefs, characterMeta) : null
+  const buildRequest = (characterIds: readonly string[] | undefined) => buildGeminiOmni12Request({
     // The schema refuses an empty prompt; a node with nothing typed reaches here as "".
     prompt: prompt?.trim() ? prompt : "smooth cinematic motion",
     durationSec,
@@ -1557,15 +1564,36 @@ async function runGeminiOmni12(
     endFrameUrl,
     referenceImageUrls: normalized?.referenceImageUrls,
     sourceVideoUrl: source?.url,
+    ...(characterIds?.length ? { characterIds } : {}),
   })
+  const { mode, input, droppedRefImages } = buildRequest(characters?.ids)
   if (droppedRefImages > 0) console.log(`[KIE.ai] ${logLabel}: dropped ${droppedRefImages} trailing reference image(s) to fit the input limit`)
   const tierCostUsd = (GEMINI_OMNI_12_RATE_USD_PER_SEC[resolution] ?? 0) * (source?.billedSec ?? durationSec)
 
-  console.log(`[KIE.ai] ${logLabel} (${mode}) input:`, JSON.stringify(input, null, 2))
-  const { resultJson, taskId, providerMs } = await runKieTask(
-    modelConfig.model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
-    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
-  )
+  const submit = (body: Record<string, unknown>) => {
+    console.log(`[KIE.ai] ${logLabel} (${mode}) input:`, JSON.stringify(body, null, 2))
+    return runKieTask(
+      modelConfig.model, body, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+      { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(body) } },
+    )
+  }
+  let run
+  try {
+    run = await submit(input)
+  } catch (err) {
+    // As on 1.1: a CACHED id KIE rejects is forgotten, recreated ONCE and the
+    // task resubmitted; a fresh id that is rejected is a real error.
+    if (characters && characters.fromCache.some(Boolean) && isInvalidOmniCharacterError(err)) {
+      console.warn(`[KIE.ai] ${logLabel}: cached character id rejected; recreating once`)
+      // This model's own cache scope (`characterIdScope`): a recreate never touches another model's entry.
+      await forgetOmniCharacters(characterRefs.filter((_, i) => characters!.fromCache[i]), modelKey)
+      characters = await resolveOmniCharacterIds(characterRefs, characterMeta)
+      run = await submit(buildRequest(characters.ids).input)
+    } else {
+      throw err
+    }
+  }
+  const { resultJson, taskId, providerMs } = run
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {
     throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")

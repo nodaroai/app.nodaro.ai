@@ -143,3 +143,16 @@ describe("a Character node's clip on a workflow run", () => {
     expect(() => run(video("kling-4-flash"), shared)).toThrow(/same video/)
   })
 })
+
+describe("wired Character nodes on Gemini Omni (decided 2026-11-17: 1.2 takes characters the way 1.1 does)", () => {
+  it("a workflow run sends no characterReferences to either Omni Flash: the character reaches both as reference images", () => {
+    for (const provider of ["gemini-omni-flash", "gemini-omni-flash-1-2"]) {
+      const { p, subjects } = run(video(provider), [character("m"), character("l")])
+      expect(subjects, provider).toBeUndefined()
+      expect((p.referenceImageUrls as string[] | undefined) ?? [], provider).toEqual(expect.arrayContaining([portrait("m"), portrait("l")]))
+    }
+    const a = run(video("gemini-omni-flash"), [character("m")]).p
+    const b = run(video("gemini-omni-flash-1-2"), [character("m")]).p
+    expect(b.referenceImageUrls).toEqual(a.referenceImageUrls)
+  })
+})

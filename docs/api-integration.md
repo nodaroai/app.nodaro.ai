@@ -3442,19 +3442,22 @@ IS, for this run only:
   references that actually ship, so a caption can never bind a slot the payload
   dropped. Leave an entry blank to skip it without breaking the alignment.
 - **`characterReferences` (`POST /v1/generate-video` and `POST /v1/text-to-video`,
-  up to 3 on Gemini Omni, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
+  up to 3 on `gemini-omni-video` / `gemini-omni-flash`, 2 on `gemini-omni-flash-1-2`, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
   dedicated character channel — today `gemini-omni-video`,
-  `gemini-omni-flash`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
+  `gemini-omni-flash`, `gemini-omni-flash-1-2`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
   extraImageUrls?, name?, voice?, videoUrl? }`: a portrait URL, a description of the person (appearance, clothing,
   style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
   chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
   context, this is the input that holds the face. Any other model answers `400`
   `character_references_unsupported`; combining it with a start frame (`imageUrl`) or an end frame (`endFrameUrl`)
   answers `400` `character_references_with_start_frame` /
-  `character_references_with_end_frame` (a current Nodaro limit); and the request must fit
+  `character_references_with_end_frame` (a current Nodaro limit: the platform does not
+  combine characters with a start or end frame on the Gemini Omni models); and on `gemini-omni-video` /
+  `gemini-omni-flash` the request must fit
   the model's 7-unit input budget — `images + 2 × videos + characters ≤ 7`, a
   character counting 1 unit (2 with a `bodyImageUrl`) — or it answers `400`
-  `character_references_quota`. It adds no credit charge. The references are
+  `character_references_quota` (on `gemini-omni-flash-1-2` characters count toward
+  no budget, and a `voice` answers `400` `character_voice_unsupported`). It adds no credit charge. The references are
   recorded on the job's input. `voice` — `{ preset, description?, exampleLine? }`, `preset` one of the 30
   Gemini voice ids — pins one voice to that character across clips (up to 3
   distinct voices a request, else `400` `character_voices_over_limit`; `description` ≤ 2000 chars, `exampleLine`

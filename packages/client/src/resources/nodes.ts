@@ -487,6 +487,9 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *   model's 7 input units (2 with a `bodyImageUrl`). Give a character a
    *   `voice` to pin one voice persona (a Gemini preset + optional description /
    *   example line) across clips — up to 3 distinct voices a request.
+   * - Gemini Omni Flash 1.2 (`gemini-omni-flash-1-2`): up to 2. Cannot be
+   *   combined with a start or end frame; they use none of its input quota.
+   *   No `voice`.
    * - Kling 4.0 (`kling-4`): up to 7 named subjects, written in the prompt as
    *   `@Name`. A subject takes 2–4 images — the portrait, then `bodyImageUrl` /
    *   `extraImageUrls`; one with a single image is sent as a reference image.

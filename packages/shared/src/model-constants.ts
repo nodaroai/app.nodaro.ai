@@ -3360,6 +3360,26 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
      */
     materials?: number
     /**
+     * The model's `characters` draw on no input budget of their own: they do
+     * not count toward the `images` cap or the image + video quota (Gemini
+     * Omni Flash 1.2: "Character images do not count toward the
+     * reference-image quota"). Absent ⇒ a model declaring `characters` (and no
+     * `materials`) spends them from the Gemini Omni 7-unit budget
+     * (`videoCharacterRefProblem`). The cap on `characters` and the frame
+     * exclusion still apply.
+     */
+    charactersOutsideImageBudget?: true
+    /**
+     * A scope for the model's cached character ids (and their voice
+     * personas): the provider layer keys its id cache by it too, so an id
+     * minted for this model is never served to another model, nor the other
+     * way round. Absent ⇒ the unscoped cache shared by the Gemini Omni models
+     * from before (their keys stay as they were). Set on Gemini Omni Flash 1.2
+     * because whether an id minted for 1.1 works on 1.2 is unverified
+     * (decided 2026-11-17).
+     */
+    characterIdScope?: string
+    /**
      * Reference audio rides ON a character subject (its voice), not as a
      * material of its own: clip N belongs to wired character N, in the order
      * the characters arrive, and takes no seat in `materials`. A character with
@@ -3430,8 +3450,11 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   "gemini-omni-flash": { images: 7, videos: 1, characters: 3, voices: 3 },
   // Gemini Omni Flash 1.2 — up to 6 images, one source video, and images +
   // 2 for a video ≤ 7, so 5 images beside a video (the request builder holds
-  // that). No `character_ids` / `audio_ids` in its schema: no characters, no voices.
-  "gemini-omni-flash-1-2": { images: 6, videos: 1 },
+  // that). `character_ids` max 2, OUTSIDE that image quota (its schema:
+  // "Character images do not count toward the reference-image quota"), never
+  // beside a first/last frame (decided 2026-11-17). No `audio_ids` in its task
+  // schema: no voices.
+  "gemini-omni-flash-1-2": { images: 6, videos: 1, characters: 2, charactersOutsideImageBudget: true, characterIdScope: "gemini-omni-flash-1-2" },
   "kling-3-omni": { images: 7 },     // catalog/docs: "end frame + up to 7 reference images"
   // Kling 4.0 Reference — 10 images, 5 videos, 7 subjects (`characters`,
   // KIE `elements`) and 3 voices (reference audio, KIE `voices`), 15 in all

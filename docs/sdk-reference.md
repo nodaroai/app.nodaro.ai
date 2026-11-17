@@ -3227,7 +3227,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > 16:9 / 9:16-only aspect, same 7-unit input quota.
 > **Gemini Omni Flash 1.2** (`gemini-omni-flash-1-2`) is priced per second: any
 > whole-second `duration` from 3 to 15, 360p / 720p / 1080p / 4K, and `auto` beside
-> 16:9 and 9:16. No `characterReferences`. A source video is edited and charged by
+> 16:9 and 9:16. Up to 2 `characterReferences` (no `voice`, never with a start or
+> end frame, outside its input quota). A source video is edited and charged by
 > its own length, up to 15 s (`videoTrimStart` / `videoTrimEnd` pick a window of
 > up to 15 s). See
 > [Gemini Omni Flash 1.2](nodes/ai-video/generate-video.md#gemini-omni-flash-12).
@@ -3494,11 +3495,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
-> Only `gemini-omni-video` / `gemini-omni-flash`, `kling-4` and `kling-4-flash` accept them (any
+> Only `gemini-omni-video` / `gemini-omni-flash`, `gemini-omni-flash-1-2` (up to 2,
+> no `voice`), `kling-4` and `kling-4-flash` accept them (any
 > other model answers `400`). On Gemini Omni they cannot be combined with a
-> start frame (`imageUrl`), and they share the model's 7-unit input budget with
+> start frame (`imageUrl`); on `gemini-omni-video` / `gemini-omni-flash` they share the model's 7-unit input budget with
 > reference images and a source video (a character is 1 unit, 2 with a
-> `bodyImageUrl`). On `kling-4` (up to 7) each one is a named subject built from
+> `bodyImageUrl`), while on `gemini-omni-flash-1-2` they use none of it. On `kling-4` (up to 7) each one is a named subject built from
 > `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
 > allowed, and `voice` is refused; `kling-4-flash` takes them the same way, with
 > `referenceAudioUrls` clip N as entry N's voice when that entry has 2–4 images

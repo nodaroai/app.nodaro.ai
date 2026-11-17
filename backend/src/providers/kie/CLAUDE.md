@@ -741,7 +741,26 @@ builds an allow-listed body:
   frames the runner sends the ratio nearest the start frame
   (`geminiOmni12FrameAspect`, the rule the frame fit already uses).
 - `seeds`, not `seed`, 10000-99999: an out-of-range value is omitted. No
-  `character_ids` or `audio_ids`, so characters and pinned voices are refused.
+  `audio_ids`, so pinned voices are refused (`character_voice_unsupported`).
+- **Characters (`character_ids`, decided 2026-11-17):** taken the way 1.1 takes
+  them — `characterReferences` on the API / SDK / MCP, ids minted and cached by
+  `resolveOmniCharacterIds` (the same create endpoint as 1.1, but its own cache
+  scope — `characterIdScope` on `VIDEO_REF_LIMITS_BY_PROVIDER` adds it to the
+  key — so a 1.1-minted id is never served to 1.2, nor the reverse: KIE's docs
+  say only "characters you created yourself", and reuse across the two models
+  is unverified live; the 1.1 and Pro keys are unchanged), a cached id KIE
+  rejects recreated once, in 1.2's scope only. Max **2**, and they do NOT count toward the image
+  quota (`charactersOutsideImageBudget` on `VIDEO_REF_LIMITS_BY_PROVIDER`).
+  Sent in the reference and video-edit modes only: KIE refuses them beside
+  `first_frame_url` / `last_frame_url`, and the shared rule refuses characters
+  with any start or end frame (`character_references_with_start_frame` /
+  `_with_end_frame`) before the reservation, as on 1.1 — a platform limit
+  wider than KIE's (KIE would take a frame sent as a reference image beside
+  references and characters; decided 2026-11-17 to mirror 1.1). A third is
+  `character_references_over_limit`. No price of their own (KIE lists none for
+  them or for the create call). Wired Character nodes still reach it as
+  reference images, as on 1.1 (only a `character-subjects` model turns them
+  into `characterReferences`).
 - **Billing:** a `:<N>s:<res>` ladder, one row per second and resolution. An edit
   bills the same rows over the clip's length: it joins `billsReferenceVideoSeconds`
   (`billedRefVideoSeconds`: output alone, which follows the clip), so the routes,
@@ -863,7 +882,8 @@ so the emitted body always carries it (`requiresDuration` on the model config).
 `image_urls` is, per KIE, loose "reference images for characters, scenes, styles,
 or storyboard guidance" and does NOT hold a face; the dedicated identity input is
 `character_ids` (max 3, drawn from the SAME 7-unit quota: images + videos×2 +
-character_ids ≤ 7). Ids come from a **non-task, synchronous** endpoint,
+character_ids ≤ 7; Omni Flash 1.2 differs — max 2, outside its quota, see its
+wire notes above). Ids come from a **non-task, synchronous** endpoint,
 `POST /api/v1/omni/character/create` (`omni-character.ts`, own module so the
 mocked `client.ts` can never hide a character failure): body `{ descriptions,
 image_urls: [portrait, body?], character_name? }` → `data.characterId`. No price
