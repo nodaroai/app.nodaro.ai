@@ -1,8 +1,8 @@
 import { getAuthHeaders } from "@/lib/api"
 
 /**
- * Admin → Nodaro Motion's stored settings sets: the client of
- * `/v1/admin/nodaro-motion/settings-sets` (backend
+ * Admin → Video Remake's stored settings sets: the client of
+ * `/v1/admin/video-remake/settings-sets` (backend
  * `ee/routes/admin-nodaro-motion-settings-sets.ts`), typed. The wire types
  * mirror the server's; keep them in step.
  *
@@ -91,7 +91,7 @@ export class SettingsSetsApiError extends Error {
   }
 }
 
-const BASE = "/v1/admin/nodaro-motion/settings-sets"
+const BASE = "/v1/admin/video-remake/settings-sets"
 
 async function failureFrom(res: Response): Promise<SettingsSetsApiError> {
   const payload = (await res.json().catch(() => null)) as { error?: { code?: unknown; message?: unknown; issues?: unknown } } | null

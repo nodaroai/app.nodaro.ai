@@ -87,13 +87,13 @@ export interface TrendRun {
   resolution: string
   draft: boolean
   /**
-   * The engine the run was made on, by its public id: `"motion-prism"` (every
-   * run before the choice) or `"motion-pulse"`. A job stores any vocabulary
+   * The engine the run was made on, by its public id: `"nodaro-prism"` (every
+   * run before the choice) or `"nodaro-pulse"`. A job stores any vocabulary
    * (an engine that knows the public ids records those, the earlier ones up to
    * 0.397.0), each read as the current public id.
    */
   engine: NodaroMotionEngine
-  /** Its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse". */
+  /** Its name: "Nodaro Prism" or "Nodaro Pulse". */
   engineName: string
   videoUrl: string | null
   posterUrl: string | null
@@ -131,7 +131,7 @@ const FULL_QUALITY_WINDOW_MS = CAST_SWAP_FULL_QUALITY_WINDOW_MS
 
 /**
  * A run's engine (internal id), from its stored input in any vocabulary (an
- * engine that knows Nodaro Motion's public ids records those): Seedance 2.5
+ * engine that knows Video Remake's public ids records those): Seedance 2.5
  * when it names none (every run before the choice) or names no engine.
  */
 export function runEngineOf(input: Rec): CastSwapEngine {
@@ -949,7 +949,7 @@ export function relay(reply: FastifyReply, res: { statusCode: number; body: stri
   if (isRec(body) && isRec(body.error)) return reply.status(res.statusCode).send(body)
   return reply
     .status(res.statusCode >= 500 ? res.statusCode : 502)
-    .send({ error: { code: "engine_error", message: "Nodaro Motion answered unexpectedly." } })
+    .send({ error: { code: "engine_error", message: "Video Remake answered unexpectedly." } })
 }
 
 /**
@@ -1019,7 +1019,7 @@ export function publicRefusal(reply: FastifyReply, res: { statusCode: number; bo
   if (status === 503 && code === "estimate_unavailable") {
     return send(503, "estimate_unavailable", "The price can't be quoted right now. Try again shortly.")
   }
-  return send(502, "engine_error", "Nodaro Motion answered unexpectedly.")
+  return send(502, "engine_error", "Video Remake answered unexpectedly.")
 }
 
 /**

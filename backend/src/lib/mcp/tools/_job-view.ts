@@ -154,7 +154,7 @@ export const JOB_VIEW_SCHEMA = {
   suggestedProvider: z.string().optional(),
   /** Credits HELD when the job was accepted; never changes. */
   credits: z.number().nullable().optional(),
-  /** Credits actually charged once the hold settled, the run's steps (child jobs) included (can be below `creditsHeld`). 0 when the run's own hold was refunded, plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads 165). null while the job's own hold is open (even with steps settled), with no reservation in the run, or when its steps could not be read (unknown). */
+  /** Credits actually charged once the hold settled, the run's steps (child jobs) included (can be below `creditsHeld`). 0 when the run's own hold was refunded, plus any settled steps (a refunded Video Remake run whose reference and mask steps committed reads 165). null while the job's own hold is open (even with steps settled), with no reservation in the run, or when its steps could not be read (unknown). */
   creditsCharged: z.number().nullable().optional(),
   /** The run's hold: the job's own plus its steps'. */
   creditsHeld: z.number().nullable().optional(),

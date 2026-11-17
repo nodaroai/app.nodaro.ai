@@ -612,12 +612,12 @@ describe("Admin → Motion price check: a run's drill-down", () => {
         <RunDrawer runId={RUN.id} kie={null} onClose={() => undefined} />
       </QueryClientProvider>,
     )
-    const dialog = await screen.findByRole("dialog", { name: "Motion run" })
+    const dialog = await screen.findByRole("dialog", { name: "Video Remake run" })
     expect(within(dialog).getByRole("status")).toHaveTextContent("Loading the run…")
-    fail(new h.FakeMotionPriceApiError("not_found", "Motion run not found", 404))
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Motion run not found")
+    fail(new h.FakeMotionPriceApiError("not_found", "Video Remake run not found", 404))
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Video Remake run not found")
     // On the box's red tint, red-600 reads 4.43:1, under WCAG AA's 4.5:1.
-    expect(tokens(within(dialog).getByText("Motion run not found"))).toContain("text-red-700")
+    expect(tokens(within(dialog).getByText("Video Remake run not found"))).toContain("text-red-700")
     expect(within(dialog).getByRole("status")).toHaveTextContent(/^$/)
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(h.fetchMotionPriceRun).toHaveBeenCalledTimes(1)

@@ -83,12 +83,15 @@ export type LlmContentBlock =
        * (`lib/llm-files.ts :: prepareLlmFiles`): a PDF the caller linked,
        * fetched once (SSRF-safe, byte-capped), its pages counted, sent inline.
        * Only a model whose modality caps say `file` (`llmAcceptsFiles`) takes
-       * it, and only the KIE `responses` builder carries it (as an
-       * `input_file` part); every other builder throws on it.
+       * it, and a lane's builder carries it only in the shape that model
+       * declares for the lane (`LlmModelDef.fileWire`): an `input_file` part on
+       * KIE's `responses` dialect, an `image_url` part on its chat-completions
+       * dialect, an inline `application/pdf` part on Google's own API. Every
+       * other builder, and every model that declares no shape, throws on it.
        *
        * Inline rather than a URL for the reason images are (KIE's OpenAI-shaped
        * lanes failed media sent as URLs): the model reads exactly the bytes
-       * the hold was sized from.
+       * the hold was sized from. The one exception is {@link hostedUrl}.
        */
       type: "file_base64"
       /** Exact: only PDF is accepted (the aggregator refused text and Word files). */
@@ -109,6 +112,15 @@ export type LlmContentBlock =
        * (`lib/pdf-pages.ts`). Absent = `pages`.
        */
       holdPages?: number
+      /**
+       * A link to these same bytes on this install's own storage, ending in
+       * `.pdf` (`lib/llm-file-link.ts :: storeLlmFileLinks`). Set only for a
+       * file too large for the aggregator's inline limit on a model whose
+       * chat-completions lane reads a document by link (`fileWire.kie:
+       * "image-url"`): that lane sends this link in place of the bytes. Every
+       * other lane sends `data` and ignores it.
+       */
+      hostedUrl?: string
     }
 
 export interface LlmMessage {

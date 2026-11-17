@@ -1,15 +1,15 @@
 /**
- * MCP Full Quality verbs — a finished Nodaro Motion (Cast Swap) or trend
- * DRAFT (a 480p Nodaro Motion Prism run made with `draft: true`) made again at
+ * MCP Full Quality verbs — a finished Video Remake (Cast Swap) or trend
+ * DRAFT (a 480p Nodaro Prism run made with `draft: true`) made again at
  * 1080p, with the clip's audio, as a new job linked to it: the draft's own take
- * re-rendered (`kind: "same-take"`). A plain run and every Nodaro Motion Pulse
+ * re-rendered (`kind: "same-take"`). A plain run and every Nodaro Pulse
  * run have none. An engine from before Pulse's Full Quality was withdrawn may
  * still quote a Pulse 720p run as a new take (`kind: "new-take"`), which the
  * quote then words as one; an older engine answers no kind (a same take). The
  * MCP face of the Cloud plugin's routes:
  *
- *   estimate_full_quality  POST /v1/cast-swap/:jobId/full-quality/estimate  workflows:execute
- *   full_quality           POST /v1/cast-swap/:jobId/full-quality           workflows:execute
+ *   estimate_full_quality  POST /v1/video-remake/:jobId/full-quality/estimate  workflows:execute
+ *   full_quality           POST /v1/video-remake/:jobId/full-quality           workflows:execute
  *
  * Price confirmation follows `run_trend`: without `confirm`, `full_quality`
  * returns the quote (nothing is created or charged); `confirm: true`, only
@@ -27,7 +27,7 @@
  * `session_id` travels as `mcpInject`'s `sessionId` option, in the server-side
  * submission scope with the MCP session's grant, never in the body (an
  * internal hop ignores a body `sessionId`). The job funnel checks it as it
- * checks `cast_swap`'s: the caller's own session, and `assets:write` in the
+ * checks `video_remake`'s: the caller's own session, and `assets:write` in the
  * grant, else the route's 404 `not_found`.
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — the routes are
@@ -47,7 +47,7 @@ import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields }
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-const NOT_AVAILABLE = "Nodaro Motion is a Nodaro Cloud feature and is not served on this deployment."
+const NOT_AVAILABLE = "Video Remake is a Nodaro Cloud feature and is not served on this deployment."
 
 export interface RegisterCastSwapFullQualityToolsOpts {
   server: McpServer
@@ -139,12 +139,12 @@ function refusal(statusCode: number, body: string) {
 
 /** A job id: anything else (a slash, a dot segment) is refused before a request is made. */
 const JOB_ID_RE = /^[A-Za-z0-9-]{1,64}$/
-const JOB_ID_HINT = "The finished draft's job id: a cast_swap or trend run made with draft: true."
-const fullQualityUrl = (id: string) => `/v1/cast-swap/${encodeURIComponent(id)}/full-quality`
+const JOB_ID_HINT = "The finished draft's job id: a video_remake or trend run made with draft: true."
+const fullQualityUrl = (id: string) => `/v1/video-remake/${encodeURIComponent(id)}/full-quality`
 
 export function registerCastSwapFullQualityTools({ server, session, fastify }: RegisterCastSwapFullQualityToolsOpts): void {
   if (!passesGate(session, executeGate)) return
-  // A Full Quality redo is a Nodaro Motion run: what the deployment offers
+  // A Full Quality redo is a Video Remake run: what the deployment offers
   // decides whether it is listed (lib/mcp/tool-needs.ts).
 
   async function quote(id: string) {
@@ -159,8 +159,8 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Estimate Full Quality",
       description:
-        "Quote finishing a Nodaro Motion (cast_swap) or trend DRAFT (made with draft: true) at Full Quality (free; nothing starts): its same take re-rendered at 1080p. " +
-        "A plain run and motion-pulse runs have none. " +
+        "Quote finishing a Video Remake (video_remake) or trend DRAFT (made with draft: true) at Full Quality (free; nothing starts): its same take re-rendered at 1080p. " +
+        "A plain run and nodaro-pulse runs have none. " +
         "Within 7 days of the run finishing. If its Full Quality already exists, full_quality returns it free." +
         amountsNote(),
       inputSchema: {
@@ -183,7 +183,7 @@ export function registerCastSwapFullQualityTools({ server, session, fastify }: R
     {
       title: "Full Quality",
       description:
-        "Finish a Nodaro Motion (cast_swap) or trend DRAFT (made with draft: true) at Full Quality, at 1080p with the clip's audio, as a new job: its same take re-rendered. " +
+        "Finish a Video Remake (video_remake) or trend DRAFT (made with draft: true) at Full Quality, at 1080p with the clip's audio, as a new job: its same take re-rendered. " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id (the existing one, free, if this run's Full Quality already exists): poll it with wait_for_job." +
         amountsNote(),

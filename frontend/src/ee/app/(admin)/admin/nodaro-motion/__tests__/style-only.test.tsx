@@ -1,8 +1,8 @@
 /**
- * Admin → Nodaro Motion → style-only runs (a video and an art style, nothing
+ * Admin → Video Remake → style-only runs (a video and an art style, nothing
  * swapped), Prism only:
  *
- * - The switch (GET/PUT /v1/admin/nodaro-motion/style-only) sits under
+ * - The switch (GET/PUT /v1/admin/video-remake/style-only) sits under
  *   Prism's Motion column: "Original clip" (the default) or "Like other
  *   styles", and its own engine prompt (Template by default, or LLM). Save
  *   sends only what differs from the defaults; going back sends `{}`.
@@ -32,11 +32,11 @@ import { NO_ENVIRONMENT_RUNS_STYLE_ONLY, STYLE_ONLY_LEGEND, styleOnlyMissingNote
 import { STYLE_ONLY_TAB_UNOFFERED } from "../components/PromptPartsTabs"
 import { environmentsThatCannotRunStyleOnly } from "../../trends/clip-preparation"
 
-const URL_ = "/v1/admin/nodaro-motion/style-only"
-const PARTS = "/v1/admin/nodaro-motion/prompt-parts"
+const URL_ = "/v1/admin/video-remake/style-only"
+const PARTS = "/v1/admin/video-remake/prompt-parts"
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const RULE = { "head-body": "collage", "body-only": "collage", "head-only": "collage", unclear: "none" } as const
 const DEFAULTS = {
@@ -70,21 +70,21 @@ const partsView = (promptParts: unknown, styles: string[] = ["precise", "motion"
 beforeEach(() => {
   resetRoutes()
   vi.stubGlobal("fetch", fetchMock)
-  routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
-  routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
   routes[`GET ${PARTS}`] = () => partsView(null)
   routes[`POST ${PARTS}/preview`] = (init) => {
     const body = JSON.parse(String(init?.body)) as { style: string }
     const parts = [{ id: "opener", default: `${body.style} opener`, defaultHash: "0123456789abcdef", placeholders: ["{video}"], required: [], applies: true }]
     return { body: { data: { set: body.style, parts, assembled: `${body.style} assembled`, length: 10, max: 8000, problems: [] } } }
   }
-  routes["GET /v1/admin/nodaro-motion/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
-  routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
-  for (const e of ENGINES) routes[`GET /v1/admin/nodaro-motion/steps/defaults?engine=${e.id}`] = () => ({ body: { data: DEFAULTS } })
+  routes["GET /v1/admin/video-remake/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+  for (const e of ENGINES) routes[`GET /v1/admin/video-remake/steps/defaults?engine=${e.id}`] = () => ({ body: { data: DEFAULTS } })
   routes["GET /v1/admin/llm-models"] = () => ({ body: { data: { models: MODELS, tierCosts: {}, featureCosts: {} } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: BOTH } })
   routes[`GET ${URL_}`] = () => view(null)
@@ -92,24 +92,24 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const motionGroup = (name: string) => screen.findByRole("group", { name: `Nodaro Motion ${name} Motion` })
+const motionGroup = (name: string) => screen.findByRole("group", { name: `Nodaro ${name} Motion` })
 const styleOnlyOf = async (name: string) => within(await motionGroup(name)).findByRole("group", { name: STYLE_ONLY_LEGEND })
 const columnOf = async () => (await styleOnlyOf("Prism")).closest("[data-testid='style-only-column']") as HTMLElement
 const engineSection = async (name: string) =>
   (await screen.findByRole("heading", { name: new RegExp(`^Engine prompt: ${name}`) })).closest("section") as HTMLElement
 
-describe("Admin → Nodaro Motion → style-only runs", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → style-only runs", { timeout: 20_000 }, () => {
   it("styleOnlyToSaved leaves the defaults out and never writes null", () => {
     expect(styleOnlyToSaved(null)).toEqual({})
     expect(
       styleOnlyToSaved({
-        "motion-prism": { path: "original", enginePrompt: { mode: "template" } },
-        "motion-pulse": {},
+        "nodaro-prism": { path: "original", enginePrompt: { mode: "template" } },
+        "nodaro-pulse": {},
       }),
     ).toEqual({})
     const llm = { mode: "llm" as const, llm: { model: "gemini-3.1-pro", instructions: "", inputs: ["clip" as const], maxChars: 3000 } }
-    expect(styleOnlyToSaved({ "motion-prism": { path: "flex", enginePrompt: llm } })).toEqual({ "motion-prism": { path: "flex", enginePrompt: llm } })
-    expect(styleOnlyToSaved({ "motion-prism": { enginePrompt: llm } })).toEqual({ "motion-prism": { enginePrompt: llm } })
+    expect(styleOnlyToSaved({ "nodaro-prism": { path: "flex", enginePrompt: llm } })).toEqual({ "nodaro-prism": { path: "flex", enginePrompt: llm } })
+    expect(styleOnlyToSaved({ "nodaro-prism": { enginePrompt: llm } })).toEqual({ "nodaro-prism": { enginePrompt: llm } })
   })
 
   it("environmentsThatCannotRunStyleOnly names the shared environments without the flag", () => {
@@ -142,11 +142,11 @@ describe("Admin → Nodaro Motion → style-only runs", { timeout: 20_000 }, () 
     renderWith(<AdminNodaroMotionPage />)
     await user.click(within(await styleOnlyOf("Prism")).getByRole("radio", { name: "Like other styles" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ styleOnly: { "motion-prism": { path: "flex" } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ styleOnly: { "nodaro-prism": { path: "flex" } } }]))
     // Nothing else changed: nothing else is sent.
-    expect(sentTo("PUT /v1/admin/nodaro-motion/masking")).toEqual([])
-    expect(sentTo("PUT /v1/admin/nodaro-motion/motion")).toEqual([])
-    expect(sentTo("PUT /v1/admin/nodaro-motion/steps")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/masking")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/motion")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/steps")).toEqual([])
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled())
   })
 
@@ -159,10 +159,10 @@ describe("Admin → Nodaro Motion → style-only runs", { timeout: 20_000 }, () 
     await user.click(llm)
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toHaveLength(1))
-    const [first] = sentTo(`PUT ${URL_}`) as Array<{ styleOnly: { "motion-prism": { path?: string; enginePrompt: { mode: string; llm: { model: string } } } } }>
-    expect(first!.styleOnly["motion-prism"].enginePrompt.mode).toBe("llm")
-    expect(first!.styleOnly["motion-prism"].enginePrompt.llm.model).toBe("gemini-3.1-pro")
-    expect(first!.styleOnly["motion-prism"]).not.toHaveProperty("path")
+    const [first] = sentTo(`PUT ${URL_}`) as Array<{ styleOnly: { "nodaro-prism": { path?: string; enginePrompt: { mode: string; llm: { model: string } } } } }>
+    expect(first!.styleOnly["nodaro-prism"].enginePrompt.mode).toBe("llm")
+    expect(first!.styleOnly["nodaro-prism"].enginePrompt.llm.model).toBe("gemini-3.1-pro")
+    expect(first!.styleOnly["nodaro-prism"]).not.toHaveProperty("path")
     // Back to Template: the defaults are sent as an empty setting.
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled())
     await user.click(within(within(await columnOf()).getByRole("group", { name: "Style-only engine prompt" })).getByRole("radio", { name: "Template" }))
@@ -201,14 +201,14 @@ describe("Admin → Nodaro Motion → style-only runs", { timeout: 20_000 }, () 
     expect(within(column).getByRole("radio", { name: "LLM" })).toBeDisabled()
     expect(within(column).getByRole("radio", { name: "Original clip (default)" })).toBeEnabled()
     // No step defaults are asked for an engine that reads nothing.
-    expect(sentTo("GET /v1/admin/nodaro-motion/steps/defaults?engine=motion-prism")).toEqual([])
+    expect(sentTo("GET /v1/admin/video-remake/steps/defaults?engine=nodaro-prism")).toEqual([])
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 
   it("keeps a saved Like other styles choosable back to Original clip while no environment's engine runs it", async () => {
     const user = userEvent.setup()
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [runsStyleOnly("production", false), runsStyleOnly("staging", false)] } })
-    routes[`GET ${URL_}`] = () => view({ "motion-prism": { path: "flex" } })
+    routes[`GET ${URL_}`] = () => view({ "nodaro-prism": { path: "flex" } })
     renderWith(<AdminNodaroMotionPage />)
     const column = await columnOf()
     await waitFor(() => expect(within(column).getByRole("radio", { name: "Like other styles" })).toBeChecked())
@@ -222,7 +222,7 @@ describe("Admin → Nodaro Motion → style-only runs", { timeout: 20_000 }, () 
     const user = userEvent.setup()
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [runsStyleOnly("production", false), runsStyleOnly("staging", false)] } })
     routes[`GET ${URL_}`] = () =>
-      view({ "motion-prism": { enginePrompt: { mode: "llm", llm: { model: "gemini-3.1-pro", inputs: ["clip"], maxChars: 3000 } } } })
+      view({ "nodaro-prism": { enginePrompt: { mode: "llm", llm: { model: "gemini-3.1-pro", inputs: ["clip"], maxChars: 3000 } } } })
     renderWith(<AdminNodaroMotionPage />)
     const column = await columnOf()
     const prompt = within(column).getByRole("group", { name: "Style-only engine prompt" })
@@ -242,28 +242,28 @@ describe("Admin → Nodaro Motion → style-only runs", { timeout: 20_000 }, () 
   })
 })
 
-describe("Admin → Nodaro Motion → the Style only engine prompt", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → the Style only engine prompt", { timeout: 20_000 }, () => {
   it("is a Prism tab listing the engine's style-only parts, with no wording select; Pulse has none", async () => {
     const user = userEvent.setup()
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await engineSection("Nodaro Motion Prism")
+    const prism = await engineSection("Nodaro Prism")
     const tab = await within(prism).findByRole("tab", { name: "Style only" })
     await waitFor(() => expect(tab).toBeEnabled())
     await user.click(tab)
     expect(await within(prism).findByText("styleOnly opener", { selector: "p" })).toBeInTheDocument()
     expect(within(prism).queryByRole("combobox", { name: "Wording" })).not.toBeInTheDocument()
-    await waitFor(() => expect(sentTo(`POST ${PARTS}/preview`)).toContainEqual({ engine: "motion-prism", style: "styleOnly", overrides: {} }))
+    await waitFor(() => expect(sentTo(`POST ${PARTS}/preview`)).toContainEqual({ engine: "nodaro-prism", style: "styleOnly", overrides: {} }))
     // The style-only preview never names a wording.
     expect((sentTo(`POST ${PARTS}/preview`) as Array<{ style: string }>).filter((b) => b.style === "styleOnly").every((b) => !("promptWording" in b))).toBe(true)
-    const pulse = await engineSection("Nodaro Motion Pulse")
+    const pulse = await engineSection("Nodaro Pulse")
     expect(within(pulse).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Precise", "Motion (Flexible prompt)"])
-    expect(sentTo(`POST ${PARTS}/preview`)).not.toContainEqual(expect.objectContaining({ engine: "motion-pulse", style: "styleOnly" }))
+    expect(sentTo(`POST ${PARTS}/preview`)).not.toContainEqual(expect.objectContaining({ engine: "nodaro-pulse", style: "styleOnly" }))
   })
 
   it("says why it is greyed out while the environments are still unknown", async () => {
     routes["GET /v1/admin/trends/engine-environments"] = () => new Promise(() => {})
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await engineSection("Nodaro Motion Prism")
+    const prism = await engineSection("Nodaro Prism")
     expect(await within(prism).findByRole("tab", { name: "Style only" })).toBeDisabled()
     expect(within(prism).getByText("Style only: checking the environments…")).toBeInTheDocument()
   })
@@ -273,20 +273,20 @@ describe("Admin → Nodaro Motion → the Style only engine prompt", { timeout: 
     const message = "The Cast Swap engine in production cannot run style-only runs yet, and this setting is shared by every environment: keep the defaults (Original clip, Template), or wait for the engine."
     routes[`PUT ${PARTS}`] = () => ({ status: 409, body: { error: { code: "engine_unsupported", message, envs: ["production"] } } })
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await engineSection("Nodaro Motion Prism")
+    const prism = await engineSection("Nodaro Prism")
     const tab = await within(prism).findByRole("tab", { name: "Style only" })
     await waitFor(() => expect(tab).toBeEnabled())
     await user.click(tab)
     await user.type(await within(prism).findByRole("textbox"), "Restyle {{video}")
     await user.click(screen.getByRole("button", { name: "Save engine prompts" }))
     await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalledWith(message))
-    expect(sentTo(`PUT ${PARTS}`)).toEqual([{ promptParts: { "motion-prism": { styleOnly: { opener: "Restyle {video}" } } } }])
+    expect(sentTo(`PUT ${PARTS}`)).toEqual([{ promptParts: { "nodaro-prism": { styleOnly: { opener: "Restyle {video}" } } } }])
   })
 
   it("is absent while this environment's engine does not list it", async () => {
     routes[`GET ${PARTS}`] = () => partsView(null, ["precise", "motion"])
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await engineSection("Nodaro Motion Prism")
+    const prism = await engineSection("Nodaro Prism")
     await within(prism).findByRole("tab", { name: "Precise" })
     expect(within(prism).queryByRole("tab", { name: "Style only" })).not.toBeInTheDocument()
   })
@@ -294,11 +294,11 @@ describe("Admin → Nodaro Motion → the Style only engine prompt", { timeout: 
   it("is greyed out, naming the environment, until every engine runs it; a save still sends the stored style-only parts", async () => {
     const user = userEvent.setup()
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [runsStyleOnly("production", true), runsStyleOnly("staging", false)] } })
-    const stored = { "motion-prism": { styleOnly: { opener: "Restyle {video} as a watercolor." } } }
+    const stored = { "nodaro-prism": { styleOnly: { opener: "Restyle {video} as a watercolor." } } }
     routes[`GET ${PARTS}`] = () => partsView(stored)
     routes[`PUT ${PARTS}`] = (init) => partsView(JSON.parse(String(init?.body)).promptParts)
     renderWith(<AdminNodaroMotionPage />)
-    const prism = await engineSection("Nodaro Motion Prism")
+    const prism = await engineSection("Nodaro Prism")
     const tab = await within(prism).findByRole("tab", { name: "Style only" })
     await waitFor(() => expect(within(prism).getByText(STYLE_ONLY_TAB_UNOFFERED(["staging"]))).toBeInTheDocument())
     expect(tab).toBeDisabled()
@@ -308,7 +308,7 @@ describe("Admin → Nodaro Motion → the Style only engine prompt", { timeout: 
     await user.click(screen.getByRole("button", { name: "Save engine prompts" }))
     await waitFor(() => expect(sentTo(`PUT ${PARTS}`)).toHaveLength(1))
     expect(sentTo(`PUT ${PARTS}`)[0]).toEqual({
-      promptParts: { "motion-prism": { precise: { opener: "Keep {video}" }, styleOnly: { opener: "Restyle {video} as a watercolor." } } },
+      promptParts: { "nodaro-prism": { precise: { opener: "Keep {video}" }, styleOnly: { opener: "Restyle {video} as a watercolor." } } },
     })
   })
 })

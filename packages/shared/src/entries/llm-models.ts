@@ -51,6 +51,8 @@ export {
   readsAudioOutsideLlmNodes,
   type LlmModalityCaps,
   llmAcceptsFiles,
+  llmFileWire,
+  type LlmFileWire,
   LLM_FILE_MODELS,
   LLM_REFERENCE_FILES_MAX,
   LLM_REFERENCE_FILES_MAX_TOTAL_BYTES,

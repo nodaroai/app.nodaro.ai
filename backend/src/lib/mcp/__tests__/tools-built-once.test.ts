@@ -336,6 +336,11 @@ describe("every input that changes a build makes a new one", () => {
 describe("the cache is bounded", () => {
   const GRANTS: Scope[][] = ALL_SCOPES.map((s) => [s])
 
+  it("keeps up to twelve builds: a deployment's connected clients held eight distinct grants, and six rebuilt the rarer ones on every use", () => {
+    // docs/deployment.md states the same number.
+    expect(MAX_SHARED_MCP_BUILDS).toBe(12)
+  })
+
   it(`keeps at most ${"MAX_SHARED_MCP_BUILDS"} builds, dropping the least recently used`, async () => {
     expect(GRANTS.length).toBeGreaterThan(MAX_SHARED_MCP_BUILDS)
     for (const scopes of GRANTS.slice(0, MAX_SHARED_MCP_BUILDS)) await mcpServerForRequest(opts({ scopes }))

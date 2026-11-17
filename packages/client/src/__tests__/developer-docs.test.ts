@@ -54,7 +54,10 @@ describe("SDK docs outside the docs site", () => {
 
   it("the plugin's resource table lists every resource on the client, and only those", () => {
     const client = read("packages/client/src/client.ts")
-    const resources = [...client.matchAll(/^ {2}readonly (\w+): \w+Resource$/gm)].map((m) => m[1])
+    // A member kept under its former name (`@deprecated`, the same resource) is not listed.
+    const deprecated = new Set([...client.matchAll(/@deprecated[^\n]*\n {2}readonly (\w+): \w+Resource$/gm)].map((m) => m[1]))
+    const resources = [...client.matchAll(/^ {2}readonly (\w+): \w+Resource$/gm)].map((m) => m[1]).filter((name) => !deprecated.has(name))
+    expect(deprecated).toEqual(new Set(["castSwap"]))
     expect(resources.length).toBeGreaterThan(30)
 
     const table = read("plugins/nodaro/skills/nodaro-sdk/references/resources.md")

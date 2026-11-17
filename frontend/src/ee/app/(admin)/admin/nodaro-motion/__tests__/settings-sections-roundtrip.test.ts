@@ -14,21 +14,21 @@ import { MOTION_SETTINGS_KEYS, MOTION_SETTINGS_SPECS } from "../settings-section
  * bring one.
  */
 const STORED: Readonly<Record<string, unknown>> = {
-  "prompt-wording": { promptWording: { "motion-prism": "new" } },
-  masking: { masking: { "motion-prism": { mode: "auto" }, "motion-pulse": { mode: "always", fill: "none", faceMesh: true } } },
+  "prompt-wording": { promptWording: { "nodaro-prism": "new" } },
+  masking: { masking: { "nodaro-prism": { mode: "auto" }, "nodaro-pulse": { mode: "always", fill: "none", faceMesh: true } } },
   motion: {
     motion: {
       // Face mesh layers no parts value names, as the server saves them (only the layers on).
-      "motion-prism": { masking: { mode: "always", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } }, promptStyle: "precise" },
-      "motion-pulse": { promptStyle: "precise" },
+      "nodaro-prism": { masking: { mode: "always", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } }, promptStyle: "precise" },
+      "nodaro-pulse": { promptStyle: "precise" },
     },
   },
   steps: { steps: {} },
-  style: { style: { "motion-prism": "precise", "motion-pulse": "flex" } },
+  style: { style: { "nodaro-prism": "precise", "nodaro-pulse": "flex" } },
   "pulse-audio": { pulseAudio: "generated" },
   "prism-reference-audio": { prismReferenceAudio: { "480p": "full", "720p": "voice", "1080p": "none" } },
   "style-only": { styleOnly: {} },
-  "precise-art-style": { preciseArtStyle: { "motion-prism": { opener: "edit" } } },
+  "precise-art-style": { preciseArtStyle: { "nodaro-prism": { opener: "edit" } } },
   "no-person": { noPerson: {} },
   "precise-style-route": {
     preciseStyleRoute: {
@@ -44,7 +44,7 @@ const STORED: Readonly<Record<string, unknown>> = {
     },
   },
   advanced: { show: true },
-  "prompt-parts": { promptParts: { "motion-prism": { precise: { face: "Keep the faces." }, motion: { avoid: "-" } } } },
+  "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces." }, motion: { avoid: "-" } } } },
 }
 
 describe("the page reads a stored set back unchanged", () => {

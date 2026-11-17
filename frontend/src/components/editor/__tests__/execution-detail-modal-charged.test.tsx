@@ -45,7 +45,7 @@ describe("ExecutionDetailModal — the charge, not the hold", () => {
   })
 
   it("a run with steps shows the run's charge, its hold and what went back (never the job's own hold alone)", () => {
-    // The production Nodaro Motion preview: the job's own hold 44; the run
+    // The production Video Remake preview: the job's own hold 44; the run
     // (its reference preps, mask and video included) held 3,773 and charged 1,063.
     render(
       <ExecutionDetailModal

@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion, one engine's Motion column: how a run people start
+// Admin → Video Remake, one engine's Motion column: how a run people start
 // themselves with the Flex style (internally "motion") prepares its clip and
 // words its prompt (the `nodaro_motion_motion` setting's entry for the engine).
 //

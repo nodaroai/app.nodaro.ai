@@ -1,4 +1,4 @@
-// One LLM step of a Nodaro Motion run's preparation (`LlmStepSetting`): the
+// One LLM step of a Video Remake run's preparation (`LlmStepSetting`): the
 // model that writes it, its instructions, what it is shown and the longest
 // text it may write. Used by the labeller of the reference sheets and by the
 // text steps (the engine prompt, the scene description).

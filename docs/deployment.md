@@ -1039,10 +1039,10 @@ optional; each array empty = "keep the default"):
   sequence generation as `generate-video`.
   Three gateable ids have no canvas node, and are listed in `nodes.allow` /
   `nodes.deny` and Admin → Availability exactly like a node:
-  - `cast-swap` is Nodaro Motion — `POST /v1/cast-swap` and its routes (a
+  - `cast-swap` is Video Remake — `POST /v1/video-remake` and its routes (a
     trend's face mask included), and every trend run (`POST /v1/trends/:slug/estimate`
     and `/runs` answer `node_not_available` where it is not offered, and the MCP
-    tools `cast_swap`, the Full Quality pair and the trend tools are not listed).
+    tools `video_remake`, the Full Quality pair and the trend tools are not listed).
   - `film-pipeline` is the film pipeline (Story → Video, Cloud) — `POST /v1/pipelines`
     and every pipeline route that starts or continues a pipeline's work (branch,
     fork, stage approvals, edits and rejections, scene and shot regenerations,
@@ -1072,7 +1072,7 @@ optional; each array empty = "keep the default"):
   once; the one route that runs no node (Copilot, which `features.hide`
   governs) is not node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
   sends to another route is gated as the node the user ran, the engine's own:
-  Nodaro Motion's depth, mask, composite and audio-separation steps, and the
+  Video Remake's depth, mask, composite and audio-separation steps, and the
   image, video and text generations its job asks for, follow `cast-swap`, so
   allowing Motion is enough. Each step's models are still judged as the
   step's own, and a direct call to one of those routes is gated by its own
@@ -1210,7 +1210,9 @@ optional; each array empty = "keep the default"):
   server says it too: its name, its tool descriptions, its refusals, the
   documents its tools serve and its widget pages name the deployment instead
   of the platform, and a product named after the platform is said the way the
-  deployment's screens say it (Nodaro Motion is "Motion"). Tool names and other
+  deployment's screens say it (the house upscalers carry the deployment's
+  name), while Video Remake's engines keep their names, Nodaro Prism and Nodaro
+  Pulse, on every deployment. Tool names and other
   identifiers a client stores stay as they are
   ([MCP: a deployment's own name](mcp/tools.md#deployment-name)).
 - `brand.wordmark`: short lockup text rendered **beside your own logo mark** in
@@ -2197,7 +2199,7 @@ logo is dropped with a warning and the rest of `brand` is kept.
   nothing of Nodaro's in it:
   - the worlds the profile's `worlds` offers, in its order, narrowed for each
     viewer by `GET /v1/surface/availability`, each at its path on the same site
-    (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
+    (`/image`, `/video`, `/music`, `/trends`, `/video/remake`,
     `/voice-changer`, and the editor at `/projects`). Explore and Studio are
     not drawn. Before that answer, and when the request fails, the profile's
     own node lists narrow them: a world whose node types `nodes.allow` leaves
@@ -3141,9 +3143,9 @@ tools, with their schemas and descriptions, for itself, and holds it until it
 has answered. On, the tools are built once for each kind of request and kept.
 A kind of request is: the scopes its token grants, whether the client sends the
 headers that identify its conversation, the address it came in on, and what
-the deployment offers that caller. At most six such sets are kept for each
+the deployment offers that caller. At most twelve such sets are kept for each
 server that serves the endpoint, the least recently used dropped first; the
-backend's API process serves it from one server, so that is six per API
+backend's API process serves it from one server, so that is twelve per API
 process. Each request still gets a server and a session of its own, which run
 those tools for that caller alone. A change that alters what the tools look
 like while the backend runs (an Availability change in the admin panel, a
@@ -3161,6 +3163,27 @@ A set whose build fails is never shared: its kind of request goes back to
 building per request until the API restarts. The failure is logged once as a
 warning (`[mcp-built-once] a shared build failed…`) and filed once to the admin
 panel's App Reports (kind `mcp-shared-build-failed`).
+
+Before turning it on, a staging deployment can check that both ways answer
+alike with its own plugins loaded. In a shell on the staging container (for
+example over `railway ssh`):
+
+```sh
+cd /app/backend && MCP_COMPARE_STAGING_HOST=<PUBLIC_URL's host> node dist/scripts/compare-mcp-built-once.js
+```
+
+For every grant the connected clients hold (and the empty grant of a browser
+or API token), it builds the MCP server both ways in-process and compares the
+handshake and the tool, resource and resource-template listings. It calls no
+tool and changes no data, and works with the setting on or off. It exits 0
+when every grant answered the same, 1 on a difference (naming the grant and
+the first differing tool), and 2 when it refused or could not run.
+`MCP_COMPARE_ADMIN_USER_ID=<an admin's user id>` also compares an admin's view.
+It refuses to run unless `MCP_COMPARE_STAGING_HOST` names the host of this
+deployment's `PUBLIC_URL`, and it always refuses on a production host or a
+local address, whatever is set. From a checkout whose `.env` is the staging
+deployment's, the same check runs from `backend/` as
+`npx tsx src/scripts/compare-mcp-built-once.ts`.
 
 For anyone writing an MCP tool: with this setting on, a tool's session answers
 the caller of the request the code is running for, which is found from where

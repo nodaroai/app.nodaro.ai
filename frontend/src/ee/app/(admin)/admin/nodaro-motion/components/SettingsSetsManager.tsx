@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion's stored settings sets, at the top of the page: named
+// Admin → Video Remake's stored settings sets, at the top of the page: named
 // copies of every setting on the page (settings-sections.ts), to save the page
 // under a name, load one back as a draft, overwrite, rename or delete one, and
 // export or import one as a JSON file.

@@ -1,5 +1,5 @@
 /**
- * Admin → Motion price check: every Nodaro Motion run of a range (at most 30
+ * Admin → Motion price check: every Video Remake run of a range (at most 30
  * local days), what it held, what it took, that in USD, and what its steps
  * cost us, with the totals over the filtered runs.
  *
@@ -129,7 +129,7 @@ export default function AdminMotionPriceCheck() {
           Motion price check
         </h1>
         <p className="text-sm text-muted-foreground">
-          Each Nodaro Motion run: what it held, what it took, what that is worth, and what we paid for its steps.
+          Each Video Remake run: what it held, what it took, what that is worth, and what we paid for its steps.
         </p>
       </header>
 

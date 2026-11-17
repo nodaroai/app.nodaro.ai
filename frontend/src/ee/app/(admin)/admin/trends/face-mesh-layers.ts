@@ -1,5 +1,5 @@
-// The face mesh's layers as the Nodaro Motion admin sets them (Admin → Nodaro
-// Motion: the Motion column's masking, and the Precise art-style route): one
+// The face mesh's layers as the Video Remake admin sets them (Admin → Video
+// Remake: the Motion column's masking, and the Precise art-style route): one
 // switch per layer, any combination. A set a parts value names is saved as
 // that value, exactly as before the switches existed (the server saves it so
 // too); any other as `faceMeshLayers`.

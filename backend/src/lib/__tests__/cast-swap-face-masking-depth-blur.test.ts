@@ -13,7 +13,7 @@ import {
   type FaceMasking,
 } from "../cast-swap-face-masking.js"
 
-// Nodaro Motion's Motion setting (decided 2026-11-02): a full depth's depth blur and what the face mesh draws — the
+// Video Remake's Motion setting (decided 2026-11-02): a full depth's depth blur and what the face mesh draws — the
 // Motion setting's keys alone, normalised so that 0 and the full mesh are no key, and sent only to an engine that
 // declares them.
 

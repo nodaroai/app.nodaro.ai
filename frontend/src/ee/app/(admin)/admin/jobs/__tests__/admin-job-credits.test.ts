@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest"
 import { chargeSentence, creditCell, creditDetailLines, creditTileLabel, ownCreditsForTotal, runSentence, trendRunCreditLine } from "../admin-job-credits"
 import type { AdminJob, AdminJobCredit } from "@/ee/hooks/queries/use-admin-queries"
 
-// The production Nodaro Motion preview of 2026-10-26: Cast Swap 44 and four
+// The production Video Remake preview of 2026-10-26: Cast Swap 44 and four
 // steps — two reference preps at 66, a mask at 33, the video held 3,564 and
 // charged 854. The admin list used to show the video's HOLD (3,564).
 const video = (over: Partial<AdminJobCredit> = {}): Pick<AdminJob, "credits" | "credit"> => ({

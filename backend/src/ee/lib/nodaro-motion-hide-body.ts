@@ -1,8 +1,8 @@
 /**
- * A Nodaro Motion setting that hides whole people (`target: "body"` with faces
+ * A Video Remake setting that hides whole people (`target: "body"` with faces
  * hidden) is saved only once every environment's engine can do it.
  *
- * The Nodaro Motion settings (`nodaro_motion_masking`, and the Motion
+ * The Video Remake settings (`nodaro_motion_masking`, and the Motion
  * setting's own `masking`) are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that cannot hide
  * whole people (`castSwap.faceMaskHideTargets` without `"body"`,

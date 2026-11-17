@@ -5,7 +5,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 /**
- * Migration 606: `nodaro_motion_settings_sets`, Nodaro Motion's stored
+ * Migration 606: `nodaro_motion_settings_sets`, Video Remake's stored
  * settings sets (ee/routes/admin-nodaro-motion-settings-sets.ts). An admin
  * table the API alone reads and writes; never `app_settings`, so a set can
  * never be read as a live setting.
@@ -15,7 +15,7 @@ const sql = readFileSync(join(HERE, "../../../supabase/migrations/606_nodaro_mot
 /** The statements, comments removed. */
 const code = sql.replace(/--.*$/gm, "")
 
-describe("migration 606 — Nodaro Motion settings sets", () => {
+describe("migration 606 — Video Remake settings sets", () => {
   it("creates the table idempotently, with a name, a format version and the settings object", () => {
     expect(code).toMatch(/CREATE TABLE IF NOT EXISTS public\.nodaro_motion_settings_sets \(/i)
     expect(code).toMatch(/name\s+TEXT NOT NULL CHECK \(char_length\(btrim\(name\)\) BETWEEN 1 AND 120\)/i)

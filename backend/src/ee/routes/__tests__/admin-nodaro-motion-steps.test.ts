@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/steps` — the admin's preparation steps per Nodaro
- * Motion engine (for direct runs), and the engine's defaults and check behind
+ * `/v1/admin/video-remake/steps` — the admin's preparation steps per Video
+ * Remake engine (for direct runs), and the engine's defaults and check behind
  * the step editors.
  *
  * What must hold:
@@ -30,7 +30,7 @@ const h = vi.hoisted(() => ({
   admin: true,
   invalidated: 0,
   envs: [] as { env: string; pluginBuildId: string | null; supports: Record<string, unknown>; updatedAt: string }[],
-  /** The other Nodaro Motion settings' rows a save may read (the prompt parts, the Motion and masking settings). */
+  /** The other Video Remake settings' rows a save may read (the prompt parts, the Motion and masking settings). */
   others: {} as Record<string, { value: unknown; updated_at: string } | null>,
   /** What the engine's prompt parts route answers (its problems), and what it was asked. */
   promptProblems: [] as Array<Record<string, unknown>>,
@@ -80,13 +80,13 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 const SECRET = "0".repeat(64) // src/test/setup.ts
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/steps"
+const URL = "/v1/admin/video-remake/steps"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const STEPS = { castSwap: { steps: true } }
 const envRow = (env: string, supports: Record<string, unknown>) => ({ env, pluginBuildId: null, supports, updatedAt: "2026-10-31T00:00:00.000Z" })
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 
 const TEMPLATE = { enginePrompt: { mode: "template" } }
@@ -160,16 +160,16 @@ describe("admin only", () => {
     const calls = [
       () => app.inject({ method: "GET", url: URL, headers: {} }),
       () => put(TEMPLATE, {}),
-      () => defaults("motion-prism", {}),
-      () => check({ engine: "motion-prism", steps: TEMPLATE }, {}),
+      () => defaults("nodaro-prism", {}),
+      () => check({ engine: "nodaro-prism", steps: TEMPLATE }, {}),
     ]
     for (const c of calls) expect((await c()).statusCode).toBe(401)
     h.admin = false
     const asUser = [
       () => app.inject({ method: "GET", url: URL, headers: as }),
-      () => put({ "motion-prism": TEMPLATE }),
-      () => defaults("motion-prism"),
-      () => check({ engine: "motion-prism", steps: TEMPLATE }),
+      () => put({ "nodaro-prism": TEMPLATE }),
+      () => defaults("nodaro-prism"),
+      () => check({ engine: "nodaro-prism", steps: TEMPLATE }),
     ]
     for (const c of asUser) expect((await c()).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
@@ -177,7 +177,7 @@ describe("admin only", () => {
   })
 })
 
-describe("GET /v1/admin/nodaro-motion/steps", () => {
+describe("GET /v1/admin/video-remake/steps", () => {
   it("answers null until saved, with both engines named", async () => {
     const res = await app.inject({ method: "GET", url: URL, headers: as })
     expect(res.statusCode).toBe(200)
@@ -187,26 +187,26 @@ describe("GET /v1/admin/nodaro-motion/steps", () => {
   it("answers the saved row (an earlier key read as the current one)", async () => {
     h.row = { value: { "motion-lite": TEMPLATE }, updated_at: "2026-10-31T10:00:00.000Z" }
     const res = await app.inject({ method: "GET", url: URL, headers: as })
-    expect(res.json().data).toEqual({ steps: { "motion-pulse": TEMPLATE }, updatedAt: "2026-10-31T10:00:00.000Z", engines: ENGINES })
+    expect(res.json().data).toEqual({ steps: { "nodaro-pulse": TEMPLATE }, updatedAt: "2026-10-31T10:00:00.000Z", engines: ENGINES })
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/steps", () => {
+describe("PUT /v1/admin/video-remake/steps", () => {
   it("saves and audits", async () => {
-    const res = await put({ "motion-prism": TEMPLATE, "motion-pulse": {} })
+    const res = await put({ "nodaro-prism": TEMPLATE, "nodaro-pulse": {} })
     expect(res.statusCode).toBe(200)
     expect(h.upserts).toEqual([
-      { key: "nodaro_motion_steps", value: { "motion-prism": TEMPLATE, "motion-pro": TEMPLATE }, updated_at: expect.any(String), updated_by: ADMIN },
+      { key: "nodaro_motion_steps", value: { "nodaro-prism": TEMPLATE, "motion-prism": TEMPLATE, "motion-pro": TEMPLATE }, updated_at: expect.any(String), updated_by: ADMIN },
     ])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toEqual({ steps: { "motion-prism": TEMPLATE }, updatedAt: expect.any(String), engines: ENGINES })
+    expect(res.json().data).toEqual({ steps: { "nodaro-prism": TEMPLATE }, updatedAt: expect.any(String), engines: ENGINES })
     expect(h.audits).toEqual([
       {
         admin_user_id: ADMIN,
         action: "update_nodaro_motion_steps",
         target_type: "app_setting",
         target_id: NODARO_MOTION_STEPS_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_steps", before: null, after: { "motion-prism": TEMPLATE } },
+        payload: { key: "nodaro_motion_steps", before: null, after: { "nodaro-prism": TEMPLATE } },
       },
     ])
   })
@@ -218,7 +218,7 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
       [[], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await put({ "motion-pulse": TEMPLATE })
+      const res = await put({ "nodaro-pulse": TEMPLATE })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toEqual({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot take preparation steps/) })
     }
@@ -230,48 +230,48 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
     const CLIP_BODY = { castSwap: { steps: true, clipBodySheet: true } }
     h.envs = [envRow("production", CLIP_BODY), envRow("staging", CLIP_BODY)]
     const off = { clipBody: { mode: "off" } }
-    const res = await put({ "motion-pulse": off })
+    const res = await put({ "nodaro-pulse": off })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts[0]).toMatchObject({ value: { "motion-pulse": off, "motion-lite": off } })
+    expect(h.upserts[0]).toMatchObject({ value: { "nodaro-pulse": off, "motion-pulse": off, "motion-lite": off } })
   })
 
   it("409s a setting with Body from the clip while an environment's engine lacks clipBodySheet, and saves nothing", async () => {
     const CLIP_BODY = { castSwap: { steps: true, clipBodySheet: true } }
     h.envs = [envRow("production", STEPS), envRow("staging", CLIP_BODY)]
-    const res = await put({ "motion-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "on", prompt: "A test prompt." } } })
+    const res = await put({ "nodaro-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "on", prompt: "A test prompt." } } })
     expect(res.statusCode).toBe(409)
     expect(res.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/Body from the clip/) })
     expect(h.upserts).toEqual([])
     // The other steps alone still save there.
-    expect((await put({ "motion-prism": TEMPLATE })).statusCode).toBe(200)
+    expect((await put({ "nodaro-prism": TEMPLATE })).statusCode).toBe(200)
   })
 
   it("409s a shot list away from its defaults while an environment's engine lacks castSwap.shotList; the defaults save anywhere", async () => {
     const SHOT_LIST = { castSwap: { steps: true, shotList: true } }
     h.envs = [envRow("production", STEPS), envRow("staging", SHOT_LIST)]
-    const on = await put({ "motion-prism": { shotList: { precise: { mode: "on" } } } })
+    const on = await put({ "nodaro-prism": { shotList: { precise: { mode: "on" } } } })
     expect(on.statusCode).toBe(409)
     expect(on.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/shot list/) })
     expect(h.upserts).toEqual([])
     // The defaults (Precise off, Flex on) mean the same on every engine.
     h.envs = []
     const defaults = { shotList: { precise: { mode: "off" }, flex: { mode: "on" } } }
-    expect((await put({ "motion-prism": defaults })).statusCode).toBe(200)
+    expect((await put({ "nodaro-prism": defaults })).statusCode).toBe(200)
     // Flex off is refused with its path and code.
-    const off = await put({ "motion-prism": { shotList: { flex: { mode: "off" } } } })
+    const off = await put({ "nodaro-prism": { shotList: { flex: { mode: "off" } } } })
     expect(off.statusCode).toBe(400)
-    expect(off.json().error.issues).toEqual([{ path: "steps.motion-prism.shotList.flex.mode", code: "shot_list_flex_always_on", message: expect.any(String) }])
+    expect(off.json().error.issues).toEqual([{ path: "steps.nodaro-prism.shotList.flex.mode", code: "shot_list_flex_always_on", message: expect.any(String) }])
     // Every environment with it: saved.
     h.envs = [envRow("production", SHOT_LIST), envRow("staging", SHOT_LIST)]
     h.upserts = []
-    expect((await put({ "motion-prism": { shotList: { precise: { mode: "on" } } } })).statusCode).toBe(200)
-    expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": { shotList: { precise: { mode: "on" } } } } })
+    expect((await put({ "nodaro-prism": { shotList: { precise: { mode: "on" } } } })).statusCode).toBe(200)
+    expect(h.upserts[0]).toMatchObject({ value: { "nodaro-prism": { shotList: { precise: { mode: "on" } } } } })
   })
 
   it("409s Style the role pictures On while an environment's engine lacks castSwap.styleRefs; Off saves anywhere, kept as it is", async () => {
     const STYLE_REFS = { castSwap: { steps: true, styleRefs: true } }
     h.envs = [envRow("production", STEPS), envRow("staging", STYLE_REFS)]
-    const on = await put({ "motion-prism": { styleRefs: { mode: "on", send: "styled" } } })
+    const on = await put({ "nodaro-prism": { styleRefs: { mode: "on", send: "styled" } } })
     expect(on.statusCode).toBe(409)
     expect(on.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/Style the role pictures/) })
     expect(h.upserts).toEqual([])
@@ -280,23 +280,23 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
       h.envs = envs
       h.upserts = []
       const off = { styleRefs: { mode: "off", send: "styled-and-original" } }
-      const res = await put({ "motion-prism": off })
+      const res = await put({ "nodaro-prism": off })
       expect(res.statusCode, JSON.stringify(envs)).toBe(200)
-      expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": off, "motion-pro": off } })
+      expect(h.upserts[0]).toMatchObject({ value: { "nodaro-prism": off, "motion-prism": off, "motion-pro": off } })
     }
     // Every environment with it: On saved.
     h.envs = [envRow("production", STYLE_REFS), envRow("staging", STYLE_REFS)]
     h.upserts = []
     const set = { styleRefs: { mode: "on", send: "styled", prompt: "Redraw the person in the style." } }
-    expect((await put({ "motion-pulse": set })).statusCode).toBe(200)
-    expect(h.upserts[0]).toMatchObject({ value: { "motion-pulse": set } })
+    expect((await put({ "nodaro-pulse": set })).statusCode).toBe(200)
+    expect(h.upserts[0]).toMatchObject({ value: { "nodaro-pulse": set } })
   })
 
   it("refuses an unknown send and an empty prompt for Style the role pictures, with their paths", async () => {
-    const res = await put({ "motion-prism": { styleRefs: { mode: "on", send: "original", prompt: " " } } })
+    const res = await put({ "nodaro-prism": { styleRefs: { mode: "on", send: "original", prompt: " " } } })
     expect(res.statusCode).toBe(400)
     const paths = (res.json().error.issues as Array<{ path: string }>).map((i) => i.path)
-    expect(paths).toEqual(expect.arrayContaining(["steps.motion-prism.styleRefs.send", "steps.motion-prism.styleRefs.prompt"]))
+    expect(paths).toEqual(expect.arrayContaining(["steps.nodaro-prism.styleRefs.send", "steps.nodaro-prism.styleRefs.prompt"]))
     expect(h.upserts).toEqual([])
   })
 
@@ -305,12 +305,12 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
     h.envs = [envRow("production", SHOT_LIST), envRow("staging", SHOT_LIST)]
     setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true, promptParts: true } })
     h.others = {
-      nodaro_motion_prompt_parts: { value: { "motion-prism": { precise: { face: "Keep every face." } } }, updated_at: "2026-11-01T00:00:00.000Z" },
+      nodaro_motion_prompt_parts: { value: { "nodaro-prism": { precise: { face: "Keep every face." } } }, updated_at: "2026-11-01T00:00:00.000Z" },
       nodaro_motion_motion: null,
       nodaro_motion_masking: null,
     }
     h.promptProblems = [{ code: "prompt_too_long", message: "The prompt is too long." }]
-    const on = { "motion-prism": { shotList: { precise: { mode: "on" } } } }
+    const on = { "nodaro-prism": { shotList: { precise: { mode: "on" } } } }
     const res = await put(on)
     expect(res.statusCode).toBe(422)
     expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/Precise shot list on/) })
@@ -328,49 +328,49 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
     for (const envs of [[envRow("production", STEPS), envRow("staging", {})], []]) {
       h.envs = envs
       h.upserts = []
-      const res = await put({ "motion-prism": { clipBody: { mode: "off" } }, "motion-pulse": { clipBody: { mode: "on" } } })
+      const res = await put({ "nodaro-prism": { clipBody: { mode: "off" } }, "nodaro-pulse": { clipBody: { mode: "on" } } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(200)
-      expect(h.upserts[0]).toMatchObject({ value: { "motion-prism": { clipBody: { mode: "off" } } } })
+      expect(h.upserts[0]).toMatchObject({ value: { "nodaro-prism": { clipBody: { mode: "off" } } } })
     }
     // Beside another step, the steps' own rule still holds.
     h.envs = [envRow("production", STEPS)]
-    expect((await put({ "motion-prism": { ...TEMPLATE, clipBody: { mode: "off" } } })).statusCode).toBe(409)
+    expect((await put({ "nodaro-prism": { ...TEMPLATE, clipBody: { mode: "off" } } })).statusCode).toBe(409)
   })
 
   it("refuses an image prompt naming a placeholder the engine does not fill, and saves nothing", async () => {
-    const res = await put({ "motion-pulse": { clipBody: { mode: "on", prompt: "Draw {constructor}." } } })
+    const res = await put({ "nodaro-pulse": { clipBody: { mode: "on", prompt: "Draw {constructor}." } } })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.issues).toEqual([{ path: "steps.motion-pulse.clipBody.prompt", code: "clip_body_placeholder", message: expect.stringMatching(/\{constructor\}/) }])
+    expect(res.json().error.issues).toEqual([{ path: "steps.nodaro-pulse.clipBody.prompt", code: "clip_body_placeholder", message: expect.stringMatching(/\{constructor\}/) }])
     expect(h.upserts).toEqual([])
   })
 
   it("refuses an image prompt over 4000 characters with its path", async () => {
-    const res = await put({ "motion-prism": { clipBody: { mode: "on", prompt: "x".repeat(4001) } } })
+    const res = await put({ "nodaro-prism": { clipBody: { mode: "on", prompt: "x".repeat(4001) } } })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.issues).toEqual([{ path: "steps.motion-prism.clipBody.prompt", code: "too_big", message: expect.any(String) }])
+    expect(res.json().error.issues).toEqual([{ path: "steps.nodaro-prism.clipBody.prompt", code: "too_big", message: expect.any(String) }])
     expect(h.upserts).toEqual([])
   })
 
   it("refuses an unknown model with its path, and saves nothing", async () => {
-    const res = await put({ "motion-prism": { enginePrompt: llm("no-such-model") } })
+    const res = await put({ "nodaro-prism": { enginePrompt: llm("no-such-model") } })
     expect(res.statusCode).toBe(400)
     const error = res.json().error
     expect(error.code).toBe("validation_error")
-    expect(error.issues).toEqual([{ path: "steps.motion-prism.enginePrompt.llm.model", code: "unknown_model", message: expect.any(String) }])
-    expect(error.message).toMatch(/^steps\.motion-prism\.enginePrompt\.llm\.model: /)
+    expect(error.issues).toEqual([{ path: "steps.nodaro-prism.enginePrompt.llm.model", code: "unknown_model", message: expect.any(String) }])
+    expect(error.message).toMatch(/^steps\.nodaro-prism\.enginePrompt\.llm\.model: /)
     expect(h.upserts).toEqual([])
   })
 
   it("refuses an engine it does not know and an extra key", async () => {
     expect((await put({ "motion-max": TEMPLATE })).statusCode).toBe(400)
-    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { steps: {}, engine: "motion-prism" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { steps: {}, engine: "nodaro-prism" } })).statusCode).toBe(400)
     expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: {} })).statusCode).toBe(400)
     expect(h.upserts).toEqual([])
   })
 
   it("with only empty entries saves without the 409", async () => {
     h.envs = []
-    const res = await put({ "motion-prism": {}, "motion-pulse": {} })
+    const res = await put({ "nodaro-prism": {}, "nodaro-pulse": {} })
     expect(res.statusCode).toBe(200)
     expect(h.upserts).toEqual([{ key: "nodaro_motion_steps", value: {}, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.audits[0]).toMatchObject({ action: "update_nodaro_motion_steps", payload: { key: "nodaro_motion_steps", before: null, after: {} } })
@@ -390,20 +390,23 @@ describe("PUT /v1/admin/nodaro-motion/steps", () => {
   })
 })
 
-describe("GET /v1/admin/nodaro-motion/steps/defaults", () => {
+describe("GET /v1/admin/video-remake/steps/defaults", () => {
   it("answers null when the engine lacks castSwap.steps (no call)", async () => {
     setPluginSupports({ castSwap: { ...CS } })
-    const res = await defaults("motion-prism")
+    const res = await defaults("nodaro-prism")
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: null })
     expect(engine.calls).toEqual([])
   })
 
-  it("forwards the normalised engine id and answers the engine's JSON", async () => {
+  it("forwards the engine id this engine knows, whatever form was asked, and answers the engine's JSON", async () => {
+    // An engine that does not list the current ids takes the ones before them.
     for (const [asked, sent] of [
+      ["nodaro-prism", "motion-prism"],
       ["motion-prism", "motion-prism"],
       ["motion-pro", "motion-prism"],
       ["seedance-2-5", "motion-prism"],
+      ["nodaro-pulse", "motion-pulse"],
       ["motion-pulse", "motion-pulse"],
       ["motion-lite", "motion-pulse"],
       ["kling-4", "motion-pulse"],
@@ -414,11 +417,23 @@ describe("GET /v1/admin/nodaro-motion/steps/defaults", () => {
       expect(res.json(), asked).toEqual({ data: engine.reply })
       expect(engine.calls, asked).toEqual([{ engine: sent }])
     }
+    // One that lists them takes the current ids.
+    setPluginSupports({ castSwap: { ...CS, ...STEPS.castSwap, engines: ["nodaro-prism", "nodaro-pulse", "seedance-2-5", "kling-4"] } })
+    for (const [asked, sent] of [
+      ["nodaro-prism", "nodaro-prism"],
+      ["motion-prism", "nodaro-prism"],
+      ["kling-4", "nodaro-pulse"],
+    ] as const) {
+      engine.calls = []
+      const res = await defaults(asked)
+      expect(res.statusCode, asked).toBe(200)
+      expect(engine.calls, asked).toEqual([{ engine: sent }])
+    }
   })
 
   it("reads an answer wrapped in data the same", async () => {
     engine.reply = { data: { conditions: ["unclear"], problems: [] } }
-    expect((await defaults("motion-pulse")).json()).toEqual({ data: { conditions: ["unclear"], problems: [] } })
+    expect((await defaults("nodaro-pulse")).json()).toEqual({ data: { conditions: ["unclear"], problems: [] } })
   })
 
   it("answers null when the engine has no such route (404)", async () => {
@@ -426,7 +441,7 @@ describe("GET /v1/admin/nodaro-motion/steps/defaults", () => {
     build(false)
     await app.register(adminNodaroMotionRoutes)
     await app.ready()
-    const res = await defaults("motion-prism")
+    const res = await defaults("nodaro-prism")
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: null })
   })
@@ -434,9 +449,9 @@ describe("GET /v1/admin/nodaro-motion/steps/defaults", () => {
   it("answers a fixed error for any other refusal, never the engine's words", async () => {
     engine.status = 500
     engine.reply = { error: { code: "boom", message: "provider secret detail" } }
-    const res = await defaults("motion-prism")
+    const res = await defaults("nodaro-prism")
     expect(res.statusCode).toBe(502)
-    expect(res.json()).toEqual({ error: { code: "engine_error", message: "Nodaro Motion answered unexpectedly." } })
+    expect(res.json()).toEqual({ error: { code: "engine_error", message: "Video Remake answered unexpectedly." } })
     expect(res.body).not.toContain("provider secret detail")
   })
 
@@ -447,7 +462,7 @@ describe("GET /v1/admin/nodaro-motion/steps/defaults", () => {
   })
 })
 
-describe("POST /v1/admin/nodaro-motion/steps/check", () => {
+describe("POST /v1/admin/video-remake/steps/check", () => {
   it("merges the platform's and the engine's problems", async () => {
     engine.reply = {
       problems: [
@@ -473,13 +488,13 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
 
   it("answers no problems for a clean setting", async () => {
     engine.reply = { problems: [] }
-    const res = await check({ engine: "motion-prism", steps: TEMPLATE })
+    const res = await check({ engine: "nodaro-prism", steps: TEMPLATE })
     expect(res.json()).toEqual({ data: { problems: [] } })
   })
 
   it("answers the platform's problems alone for an engine without castSwap.steps (no call)", async () => {
     setPluginSupports({ castSwap: { ...CS } })
-    const res = await check({ engine: "motion-prism", steps: { enginePrompt: llm("no-such-model") } })
+    const res = await check({ engine: "nodaro-prism", steps: { enginePrompt: llm("no-such-model") } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.problems).toEqual([{ path: "steps.enginePrompt.llm.model", code: "unknown_model", message: expect.any(String) }])
     expect(engine.calls).toEqual([])
@@ -488,7 +503,7 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
   it("never forwards clipBody to an engine without castSwap.clipBodySheet; the platform still checks it", async () => {
     engine.reply = { problems: [] }
     const steps = { enginePrompt: { mode: "template" }, clipBody: { mode: "on", prompt: "x".repeat(4001) } }
-    const res = await check({ engine: "motion-prism", steps })
+    const res = await check({ engine: "nodaro-prism", steps })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.problems).toEqual([{ path: "steps.clipBody.prompt", code: "too_big", message: expect.any(String) }])
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { enginePrompt: { mode: "template" } } }])
@@ -496,7 +511,7 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
     engine.calls = []
     setPluginSupports({ castSwap: { ...CS, steps: true, clipBodySheet: true } })
     const ok = { clipBody: { mode: "off" } }
-    await check({ engine: "motion-prism", steps: ok })
+    await check({ engine: "nodaro-prism", steps: ok })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps: ok }])
   })
 
@@ -504,11 +519,11 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
     engine.reply = { problems: [] }
     setPluginSupports({ castSwap: { ...CS, steps: true } })
     const steps = { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } }
-    await check({ engine: "motion-prism", steps })
+    await check({ engine: "nodaro-prism", steps })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { enginePrompt: { mode: "template" } } }])
     engine.calls = []
     setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } })
-    await check({ engine: "motion-prism", steps })
+    await check({ engine: "nodaro-prism", steps })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps }])
   })
 
@@ -516,18 +531,18 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
     engine.reply = { problems: [] }
     setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } })
     const steps = { enginePrompt: { mode: "template" }, styleRefs: { mode: "on" } }
-    await check({ engine: "motion-prism", steps })
+    await check({ engine: "nodaro-prism", steps })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { enginePrompt: { mode: "template" } } }])
     engine.calls = []
     setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } })
-    await check({ engine: "motion-prism", steps })
+    await check({ engine: "nodaro-prism", steps })
     expect(engine.calls).toEqual([{ engine: "motion-prism", steps }])
   })
 
   it("relays the engine's styleRefs defaults as they are", async () => {
     setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } })
     engine.reply = { defaults: { styleRefs: { mode: "off", send: "styled-and-original", prompt: "Redraw {subject}." } }, problems: [] }
-    const res = await defaults("motion-prism")
+    const res = await defaults("nodaro-prism")
     expect(res.statusCode).toBe(200)
     expect(res.json().data.defaults.styleRefs).toEqual({ mode: "off", send: "styled-and-original", prompt: "Redraw {subject}." })
   })
@@ -535,7 +550,7 @@ describe("POST /v1/admin/nodaro-motion/steps/check", () => {
   it("answers a fixed error when the engine refuses, never the engine's words", async () => {
     engine.status = 400
     engine.reply = { error: { code: "validation_error", message: "provider secret detail" } }
-    const res = await check({ engine: "motion-prism", steps: TEMPLATE })
+    const res = await check({ engine: "nodaro-prism", steps: TEMPLATE })
     expect(res.statusCode).toBe(502)
     expect(res.body).not.toContain("provider secret detail")
   })

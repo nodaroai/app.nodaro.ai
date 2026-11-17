@@ -115,7 +115,7 @@ const COMPONENT_REFUSAL = "Insufficient credits. Required: 6197, Available: 4919
 const WORKFLOW_REFUSAL = "Insufficient credits. Required: 6359, Available: 4919"
 const APP_LISTING = { estimated_credits: 3571, per_minute_credits: 2593, per_item_credits: 2417, max_estimated_credits: 5939, max_per_minute_credits: 2683, max_per_item_credits: 2909 }
 const COMPONENT_LISTING = { estimated_credits: 3797, per_minute_credits: 2647, per_item_credits: 2551, max_estimated_credits: 6173, max_per_minute_credits: 2789, max_per_item_credits: 2953 }
-const CAST_SWAP = { totalCredits: 8317, expectedCredits: 7529, breakdown: { base: 2539, motion: 4987, references: 2791 }, privacyCredits: 2861, engine: "motion-prism", settlesLower: false }
+const CAST_SWAP = { totalCredits: 8317, expectedCredits: 7529, breakdown: { base: 2539, motion: 4987, references: 2791 }, privacyCredits: 2861, engine: "nodaro-prism", settlesLower: false }
 const FULL_QUALITY = { kind: "same-take", totalCredits: 6971, breakdown: { base: 2267, motionHd: 4703 }, availableUntil: "2026-11-22T00:00:00Z" }
 const TREND = { expectedCredits: 5413, holdCredits: 6247, breakdown: { base: 2711, motion: 2699 }, privacyCredits: 2843 }
 const RECAST = {
@@ -142,7 +142,7 @@ const FIGURES: Record<string, readonly number[]> = {
   retry_confirm: [RETRY.estimatedCredits],
   list_apps: Object.values(APP_LISTING),
   list_components: Object.values(COMPONENT_LISTING),
-  cast_swap_quote: [CAST_SWAP.totalCredits, CAST_SWAP.expectedCredits, ...Object.values(CAST_SWAP.breakdown), CAST_SWAP.privacyCredits],
+  video_remake_quote: [CAST_SWAP.totalCredits, CAST_SWAP.expectedCredits, ...Object.values(CAST_SWAP.breakdown), CAST_SWAP.privacyCredits],
   estimate_full_quality: [FULL_QUALITY.totalCredits, ...Object.values(FULL_QUALITY.breakdown)],
   full_quality_quote: [FULL_QUALITY.totalCredits, ...Object.values(FULL_QUALITY.breakdown)],
   estimate_trend: [TREND.expectedCredits, TREND.holdCredits, ...Object.values(TREND.breakdown), TREND.privacyCredits],
@@ -204,8 +204,8 @@ async function stubRoutes(): Promise<FastifyInstance> {
     }
   })
   f.post("/v1/component/execute", async (_req, reply) => reply.code(402).send(refusal402(COMPONENT_REFUSAL)))
-  f.post("/v1/cast-swap/estimate", async () => ({ data: CAST_SWAP }))
-  f.post("/v1/cast-swap/:jobId/full-quality/estimate", async () => ({ data: FULL_QUALITY }))
+  f.post("/v1/video-remake/estimate", async () => ({ data: CAST_SWAP }))
+  f.post("/v1/video-remake/:jobId/full-quality/estimate", async () => ({ data: FULL_QUALITY }))
   f.post("/v1/trends/:slug/estimate", async () => ({ data: TREND }))
   f.post("/v1/recast/estimate", async () => RECAST)
   f.post("/v1/recast", async () => ({ recastId: "rc-1" }))
@@ -250,7 +250,7 @@ async function replies(): Promise<{ text: Record<string, string>; raw: Record<st
   await call("run_component_402", "run_component", { component_id: "face-prep" })
   h.tables = {}
   await call("run_workflow_402", "run_workflow", { workflow_id: WORKFLOW_ID })
-  await call("cast_swap_quote", "cast_swap", { video_url: "https://cdn.example/clip.mp4", roles: [{ kind: "person", name: "the woman", images: ["https://cdn.example/a.png"] }] })
+  await call("video_remake_quote", "video_remake", { video_url: "https://cdn.example/clip.mp4", roles: [{ kind: "person", name: "the woman", images: ["https://cdn.example/a.png"] }] })
   await call("estimate_full_quality", "estimate_full_quality", { job_id: DRAFT_JOB_ID })
   await call("full_quality_quote", "full_quality", { job_id: DRAFT_JOB_ID })
   await call("estimate_trend", "estimate_trend", { slug: "zebra-walk", slots: { person: { images: ["https://cdn.example/a.png"] } } })

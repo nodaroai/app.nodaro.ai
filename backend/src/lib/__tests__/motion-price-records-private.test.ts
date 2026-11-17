@@ -1,5 +1,5 @@
 /**
- * A Nodaro Motion run's price records are server-only. The engine writes its
+ * A Video Remake run's price records are server-only. The engine writes its
  * quote (`input_data.__castSwapQuote`), what it reused
  * (`output_data.__castSwapReuse`) and which quoted extras ran
  * (`output_data.__castSwapExtras`) for the admin's Motion price check, which

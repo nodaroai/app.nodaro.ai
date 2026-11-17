@@ -2,7 +2,7 @@ import Fastify from "fastify"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
- * A DIRECT Nodaro Motion run or quote gets its Prism reference audio from the
+ * A DIRECT Video Remake run or quote gets its Prism reference audio from the
  * admin's setting (a mode per output resolution), never from the caller, and
  * only on a Prism run (one naming Prism, or no engine at all):
  * - an engine declaring `castSwap.prismReferenceAudioPerResolution` is sent
@@ -38,7 +38,7 @@ const { parseNodaroMotionPrismReferenceAudio } = await import("../../lib/cast-sw
 
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true }
 const SECRET = { "x-internal-orchestrator-secret": "s".repeat(40) }
-const URLS = ["/v1/cast-swap", "/v1/cast-swap/estimate"]
+const URLS = ["/v1/video-remake", "/v1/video-remake/estimate", "/v1/cast-swap", "/v1/cast-swap/estimate"]
 const every = (mode: Mode): ByRes => ({ "480p": mode, "720p": mode, "1080p": mode })
 
 async function seen(body: unknown, url = "/v1/cast-swap", headers: Record<string, string> = {}) {
@@ -49,6 +49,9 @@ async function seen(body: unknown, url = "/v1/cast-swap", headers: Record<string
     child.post("/v1/cast-swap", async (req) => req.body)
     child.post("/v1/cast-swap/estimate", async (req) => req.body)
     child.post("/v1/cast-swap/:jobId/full-quality", async (req) => req.body)
+    // The same routes under Video Remake's own prefix (castSwap.videoRemakeRoutes).
+    child.post("/v1/video-remake", async (req) => req.body)
+    child.post("/v1/video-remake/estimate", async (req) => req.body)
     child.post("/v1/generate-video", async (req) => req.body)
   })
   const res = await app.inject({ method: "POST", url, headers, payload: body as Record<string, unknown> })
@@ -71,9 +74,9 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes a
     h.choice = { "480p": "full", "720p": "none", "1080p": "voice" }
     for (const url of URLS) {
       for (const over of [{}, { resolution: "720p" }, { resolution: "1080p", draft: false }, { draft: true }]) {
-        expect(await seen({ videoUrl: "x", engine: "motion-prism", ...over }, url), `${url} ${JSON.stringify(over)}`).toEqual({
+        expect(await seen({ videoUrl: "x", engine: "nodaro-prism", ...over }, url), `${url} ${JSON.stringify(over)}`).toEqual({
           videoUrl: "x",
-          engine: "motion-prism",
+          engine: "nodaro-prism",
           ...over,
           prismReferenceAudio: { "720p": "none", "1080p": "voice" },
         })
@@ -151,7 +154,7 @@ describe("registerNodaroMotionPrismReferenceAudioHook — one-tone and octave (c
   it("is never sent on a Pulse run", async () => {
     setPluginSupports({ castSwap: { ...CS, prismReferenceAudioPerResolution: true, prismReferenceAudioModes: MODES } })
     h.choice = every("one-tone")
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
   })
 })
 
@@ -182,7 +185,7 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes o
     }
   })
 
-  it.each(["motion-prism", "motion-pro", "seedance-2-5"])(
+  it.each(["nodaro-prism", "motion-prism", "motion-pro", "seedance-2-5"])(
     "a direct Prism run and its quote naming %s are both sent the admin's voice or none",
     async (engine) => {
       for (const choice of ["voice", "none"] as const) {
@@ -201,23 +204,23 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes o
   it("sends no key for the full audio, a setting never saved, or a failed settings read", async () => {
     for (const choice of [every("full"), {}, null]) {
       h.choice = choice
-      expect(await seen({ videoUrl: "x", engine: "motion-prism" })).toEqual({ videoUrl: "x", engine: "motion-prism" })
+      expect(await seen({ videoUrl: "x", engine: "nodaro-prism" })).toEqual({ videoUrl: "x", engine: "nodaro-prism" })
     }
     h.choice = every("none")
     h.failed = true
-    expect(await seen({ videoUrl: "x", engine: "motion-prism" })).toEqual({ videoUrl: "x", engine: "motion-prism" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-prism" })).toEqual({ videoUrl: "x", engine: "nodaro-prism" })
   })
 
   it("sends no key to an engine that does not declare castSwap.prismReferenceAudio, and does not read the setting", async () => {
     for (const castSwap of [CS, { ...CS, prismReferenceAudio: false }]) {
       setPluginSupports({ castSwap })
-      for (const url of URLS) expect(await seen({ videoUrl: "x", engine: "motion-prism" }, url)).toEqual({ videoUrl: "x", engine: "motion-prism" })
+      for (const url of URLS) expect(await seen({ videoUrl: "x", engine: "nodaro-prism" }, url)).toEqual({ videoUrl: "x", engine: "nodaro-prism" })
     }
     expect(h.reads).toBe(0)
   })
 
   it("sends no key on a Pulse run, or one naming an engine no vocabulary knows, and does not read the setting", async () => {
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
     expect(await seen({ videoUrl: "x", engine: "kling-4" }, "/v1/cast-swap/estimate")).toEqual({ videoUrl: "x", engine: "kling-4" })
     expect(await seen({ videoUrl: "x", engine: "motion-other" })).toEqual({ videoUrl: "x", engine: "motion-other" })
     expect(h.reads).toBe(0)
@@ -226,15 +229,15 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes o
   it("drops a caller-sent prismReferenceAudio on a direct run: people never choose it", async () => {
     h.choice = every("full")
     for (const url of URLS) {
-      expect(await seen({ videoUrl: "x", engine: "motion-prism", prismReferenceAudio: "none" }, url)).toEqual({ videoUrl: "x", engine: "motion-prism" })
+      expect(await seen({ videoUrl: "x", engine: "nodaro-prism", prismReferenceAudio: "none" }, url)).toEqual({ videoUrl: "x", engine: "nodaro-prism" })
     }
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse", prismReferenceAudio: "voice" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
-    // Over the internal hop too (MCP cast_swap relays a caller's arguments).
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse", prismReferenceAudio: "voice" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
+    // Over the internal hop too (MCP video_remake relays a caller's arguments).
     expect(await seen({ videoUrl: "x", prismReferenceAudio: "voice" }, "/v1/cast-swap", SECRET)).toEqual({ videoUrl: "x" })
     h.choice = every("voice")
-    expect(await seen({ videoUrl: "x", engine: "motion-prism", prismReferenceAudio: "none" })).toEqual({
+    expect(await seen({ videoUrl: "x", engine: "nodaro-prism", prismReferenceAudio: "none" })).toEqual({
       videoUrl: "x",
-      engine: "motion-prism",
+      engine: "nodaro-prism",
       prismReferenceAudio: "voice",
     })
   })
@@ -259,7 +262,7 @@ describe("registerNodaroMotionPrismReferenceAudioHook — an engine that takes o
   })
 
   it("leaves other routes as sent", async () => {
-    const body = { engine: "motion-prism", prismReferenceAudio: "none" }
+    const body = { engine: "nodaro-prism", prismReferenceAudio: "none" }
     expect(await seen(body, "/v1/cast-swap/j-1/full-quality")).toEqual(body)
     expect(await seen(body, "/v1/generate-video")).toEqual(body)
   })
@@ -303,7 +306,7 @@ describe("registerNodaroMotionPrismReferenceAudioHook — a mode and a pitch shi
   it("never sends it on a Pulse run, and drops a caller's object form", async () => {
     setPluginSupports({ castSwap: PITCH })
     h.choice = parseNodaroMotionPrismReferenceAudio({ "480p": { mode: "full", semitones: 7 } })
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
     h.choice = null
     expect(await seen({ videoUrl: "x", prismReferenceAudio: { "480p": { mode: "none" } } })).toEqual({ videoUrl: "x" })
   })

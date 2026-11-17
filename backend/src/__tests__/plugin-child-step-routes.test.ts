@@ -5,7 +5,7 @@
  * two node gates a route can attach — the credit guard and
  * `requireNodeAvailable` — so a step route stays covered only while its node
  * is judged there. This holds:
- *  - each route Nodaro Motion's job sends a step to (read from the Cloud
+ *  - each route Video Remake's job sends a step to (read from the Cloud
  *    plugin's source) is registered here and judges no node by itself (an
  *    inline `isNodeDeniedForUser`, say), which would gate the step by its own
  *    node again;
@@ -21,7 +21,7 @@ import { nodeOfJobType } from "../lib/route-node-gate.js"
 
 const REPO_ROOT = join(__dirname, "..", "..", "..")
 
-/** Every route plugin 0.464.0's Nodaro Motion job (`tk.http.workerRequest`) sends a step to. */
+/** Every route plugin 0.464.0's Video Remake job (`tk.http.workerRequest`) sends a step to. */
 const STEP_ROUTES = [
   "POST /v1/generate-image",
   "POST /v1/generate-video",

@@ -399,44 +399,6 @@ Needs `workflows:execute`.
 | `max_stills` | integer |  | How many section stills at most (3–8, default 8). From 3 to 8. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
-## `cast_swap`
-
-Needs `workflows:execute` · Nodaro Cloud only.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a motion-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
-| `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
-| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
-| `roles[].images` | string (URL)[] or null |  | At most 3 items. |
-| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
-| `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
-| `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
-| `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
-| `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
-| `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
-| `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
-| `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
-| `references` | object[] |  | Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30. At most 5 items. |
-| `references[].images` | string (URL)[] | yes | From 1 to 3 items. |
-| `references[].line` | string | yes | From 1 to 500 characters. |
-| `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
-| `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
-| `preview` | boolean |  | true = render 4 s from preview_start. |
-| `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
-| `engine` | string |  | Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft, no Full Quality. One of `motion-prism`, `motion-pulse`. |
-| `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. An admin may force "motion" for the engine, which overrides this. One of `precise`, `motion`. |
-| `art_style` | string |  | An art style on Nodaro Motion Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |
-| `motion_length` | string |  | motion-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
-| `resolution` | string |  | Default "480p" (motion-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | true = a 480p draft (motion-prism only) that full_quality can finish at 1080p. Default false: plain. |
-| `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
-| `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
-| `session_id` | string |  | A generation session to file the result in. At least 1 character. |
-| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
-| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
-
 ## `chat_pipeline_stage`
 
 Needs `pipelines:approve` · Nodaro Cloud only.
@@ -823,7 +785,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | The finished draft's job id: a cast_swap or trend run made with draft: true. |
+| `job_id` | string | yes | The finished draft's job id: a video_remake or trend run made with draft: true. |
 
 ## `estimate_trend`
 
@@ -837,7 +799,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p (a motion-pulse trend has none). Default false: plain. |
+| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p (a nodaro-pulse trend has none). Default false: plain. |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 
 ## `estimate_use_case`
@@ -953,7 +915,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | The finished draft's job id: a cast_swap or trend run made with draft: true. |
+| `job_id` | string | yes | The finished draft's job id: a video_remake or trend run made with draft: true. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
 
@@ -2811,7 +2773,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
-| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p (a motion-pulse trend has none). Default false: plain. |
+| `draft` | boolean |  | true = a 480p draft that full_quality can finish at 1080p (a nodaro-pulse trend has none). Default false: plain. |
 | `preview_job_id` | string |  | For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over. |
 | `session_id` | string |  | A generation session; accepted, not yet applied (runs are not filed into sessions yet). At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
@@ -3672,6 +3634,44 @@ Needs `workflows:execute`.
 | `zone.bottom_pct` | number |  | From 0 to 49. |
 | `per_shot` | boolean |  | Detect the subject again in every shot after a scene cut (default false). |
 | `redetect_every_sec` | number |  | Also detect the subject again every N s (0 = off, default; or 1–10) — catches someone who appears or turns to camera mid-shot. Slower, same price. From 0 to 10. |
+
+## `video_remake`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) | yes | The source clip, 4–30 s. |
+| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
+| `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
+| `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
+| `roles[].images` | string (URL)[] or null |  | At most 3 items. |
+| `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
+| `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
+| `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
+| `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
+| `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
+| `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
+| `references` | object[] |  | Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30. At most 5 items. |
+| `references[].images` | string (URL)[] | yes | From 1 to 3 items. |
+| `references[].line` | string | yes | From 1 to 500 characters. |
+| `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
+| `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
+| `preview` | boolean |  | true = render 4 s from preview_start. |
+| `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
+| `engine` | string |  | Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality. One of `nodaro-prism`, `nodaro-pulse`. |
+| `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. An admin may force "motion" for the engine, which overrides this. One of `precise`, `motion`. |
+| `art_style` | string |  | An art style on Nodaro Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |
+| `motion_length` | string |  | nodaro-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
+| `resolution` | string |  | Default "480p" (nodaro-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
+| `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |
+| `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
+| `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
+| `session_id` | string |  | A generation session to file the result in. At least 1 character. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `video_upscale`
 

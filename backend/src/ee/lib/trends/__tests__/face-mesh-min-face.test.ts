@@ -14,7 +14,7 @@
  *    run and is part of the settings key, so changing it puts a stored clip
  *    out of date;
  *  - it reaches only an engine that declares `castSwap.faceMeshMinFaceHeightPct`
- *    (a run, the Nodaro Motion settings), and publishing never needs it: a
+ *    (a run, the Video Remake settings), and publishing never needs it: a
  *    run never draws the mesh, it cuts the stored clip.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -106,9 +106,9 @@ describe("the setting", () => {
       const trend = faceMaskingWithMarksSchema.safeParse(m)
       expect(trend.success, String(faceMeshMinFaceHeightPct)).toBe(true)
       expect(trend.data, String(faceMeshMinFaceHeightPct)).toEqual(m)
-      const motion = nodaroMotionMotionSchema.safeParse({ "motion-prism": { masking: m } })
+      const motion = nodaroMotionMotionSchema.safeParse({ "nodaro-prism": { masking: m } })
       expect(motion.success, String(faceMeshMinFaceHeightPct)).toBe(true)
-      expect(motion.data, String(faceMeshMinFaceHeightPct)).toEqual({ "motion-prism": { masking: m } })
+      expect(motion.data, String(faceMeshMinFaceHeightPct)).toEqual({ "nodaro-prism": { masking: m } })
     }
     // Full depth with the face mesh off keeps it (it draws nothing then: never sent nor hashed, below).
     expect(faceMaskingWithMarksSchema.safeParse({ ...CASES.fullDepth, faceMeshMinFaceHeightPct: 20 }).success).toBe(true)
@@ -118,7 +118,7 @@ describe("the setting", () => {
   it("refuses a value outside 0–100, or not a number", () => {
     for (const v of [-1, -0.5, 100.5, 101, "10", null, Number.NaN, Number.POSITIVE_INFINITY, true]) {
       expect(faceMaskingWithMarksSchema.safeParse({ ...MESH, faceMeshMinFaceHeightPct: v }).success, String(v)).toBe(false)
-      expect(nodaroMotionMotionSchema.safeParse({ "motion-pulse": { masking: { ...MESH, faceMeshMinFaceHeightPct: v } } }).success, String(v)).toBe(false)
+      expect(nodaroMotionMotionSchema.safeParse({ "nodaro-pulse": { masking: { ...MESH, faceMeshMinFaceHeightPct: v } } }).success, String(v)).toBe(false)
     }
   })
 
@@ -130,8 +130,8 @@ describe("the setting", () => {
       expect(parsed.error!.issues.some((i) => i.path.join(".") === "faceMeshMinFaceHeightPct"), JSON.stringify(m)).toBe(true)
     }
     expect(faceMaskingMotionSchema.safeParse(facesMesh).success).toBe(false)
-    expect(nodaroMotionMaskingSchema.safeParse({ "motion-prism": facesMesh }).success).toBe(false)
-    expect(nodaroMotionMaskingSchema.safeParse({ "motion-prism": { mode: "always", fill: "none", faceMesh: true, faceMeshMinFaceHeightPct: 0 } }).success).toBe(false)
+    expect(nodaroMotionMaskingSchema.safeParse({ "nodaro-prism": facesMesh }).success).toBe(false)
+    expect(nodaroMotionMaskingSchema.safeParse({ "nodaro-prism": { mode: "always", fill: "none", faceMesh: true, faceMeshMinFaceHeightPct: 0 } }).success).toBe(false)
   })
 
   it("a setting without it parses byte for byte as before, in every schema (outputs pinned before the field existed)", () => {
@@ -149,12 +149,12 @@ describe("the setting", () => {
       expect(parsed.success, name).toBe(true)
       expect(JSON.stringify(parsed.data), name).toBe(PARSED[name])
     }
-    const motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 12, faceMeshParts: "mouth" } }, "motion-pulse": { promptStyle: "precise" } }
+    const motion = { "nodaro-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 12, faceMeshParts: "mouth" } }, "nodaro-pulse": { promptStyle: "precise" } }
     expect(JSON.stringify(nodaroMotionMotionSchema.parse(motion))).toBe(
-      '{"motion-prism":{"masking":{"mode":"always","source":"full-depth","faceMesh":true,"depthBlur":12,"faceMeshParts":"mouth"}},"motion-pulse":{"promptStyle":"precise"}}',
+      '{"nodaro-prism":{"masking":{"mode":"always","source":"full-depth","faceMesh":true,"depthBlur":12,"faceMeshParts":"mouth"}},"nodaro-pulse":{"promptStyle":"precise"}}',
     )
-    const precise = { "motion-prism": { mode: "always", fill: "depth", faceMesh: true, depthColormap: "magma" }, "motion-pulse": { mode: "auto" } }
-    expect(JSON.stringify(nodaroMotionMaskingSchema.parse(precise))).toBe('{"motion-prism":{"mode":"always","fill":"depth","faceMesh":true,"depthColormap":"magma"},"motion-pulse":{"mode":"auto"}}')
+    const precise = { "nodaro-prism": { mode: "always", fill: "depth", faceMesh: true, depthColormap: "magma" }, "nodaro-pulse": { mode: "auto" } }
+    expect(JSON.stringify(nodaroMotionMaskingSchema.parse(precise))).toBe('{"nodaro-prism":{"mode":"always","fill":"depth","faceMesh":true,"depthColormap":"magma"},"nodaro-pulse":{"mode":"auto"}}')
   })
 
   it("is named where it applies only: on, Full depth, the face mesh on", () => {
@@ -321,7 +321,7 @@ describe("the engine", () => {
     }
   })
 
-  it("Nodaro Motion's shared settings: the environments whose engine does not declare it, a missing one included", () => {
+  it("Video Remake's shared settings: the environments whose engine does not declare it, a missing one included", () => {
     expect(environmentsThatCannotDrawFaceMeshMinFaceHeight([env("production", MIN_FACE), env("staging", MIN_FACE)])).toEqual([])
     expect(environmentsThatCannotDrawFaceMeshMinFaceHeight([env("production", MIN_FACE), env("staging", ENGINE)])).toEqual(["staging"])
     expect(environmentsThatCannotDrawFaceMeshMinFaceHeight([env("production", MIN_FACE)])).toEqual(["staging"])

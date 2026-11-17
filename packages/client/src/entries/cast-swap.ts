@@ -1,5 +1,7 @@
 /**
- * `@nodaro/sdk/cast-swap` — the `castSwap` resource (Nodaro Motion) and its types.
+ * `@nodaro/sdk/cast-swap` — the names the Video Remake resource had before
+ * (`CastSwapResource` and its `CastSwap*` types), each deprecated: the same
+ * resource and types as `@nodaro/sdk/video-remake`.
  *
  * One of the package's subpath entries (see `src/index.ts`). The root
  * re-exports every entry, so each name here is also importable from

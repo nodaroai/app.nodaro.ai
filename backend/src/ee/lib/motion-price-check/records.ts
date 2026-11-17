@@ -1,5 +1,5 @@
 /**
- * A Nodaro Motion run's price records, read for the admin's Motion price
+ * A Video Remake run's price records, read for the admin's Motion price
  * check. The engine writes three, all server-only (top-level `__` keys, which
  * every job read drops: lib/public-job-data.ts):
  *

@@ -1,5 +1,5 @@
 /**
- * Nodaro Motion's preparation steps (`steps`): the vocabulary and the settings
+ * Video Remake's preparation steps (`steps`): the vocabulary and the settings
  * shape the Cast Swap engine owns, mirrored here WITHOUT any text (pure, no
  * database). An admin sets them per trend (`TrendVersionData.steps`) and per
  * engine for direct runs (`nodaro_motion_steps`, `nodaro-motion-steps.ts`):

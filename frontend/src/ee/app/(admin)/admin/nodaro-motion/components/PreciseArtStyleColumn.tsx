@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion, Prism's Precise runs with an art style (the
+// Admin → Video Remake, Prism's Precise runs with an art style (the
 // `nodaro_motion_precise_art_style` setting's entry for the engine): how a
 // direct Precise run that carries an art style opens its prompt. Pulse takes
 // no art style, so it has none.

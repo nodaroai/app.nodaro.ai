@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/settings-sets` — named copies of every Nodaro
- * Motion setting, kept to load as a draft.
+ * `/v1/admin/video-remake/settings-sets` — named copies of every Video
+ * Remake setting, kept to load as a draft.
  *
  * What must hold:
  *  - every route is admin-only;
@@ -114,7 +114,7 @@ const { adminNodaroMotionRoutes } = await import("../admin-nodaro-motion.js")
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const BASE = "/v1/admin/nodaro-motion/settings-sets"
+const BASE = "/v1/admin/video-remake/settings-sets"
 
 let app: FastifyInstance
 
@@ -141,7 +141,7 @@ const send = (method: "GET" | "POST" | "PUT" | "DELETE", url: string, body?: unk
 const SETTINGS = {
   advanced: { show: true },
   "pulse-audio": { pulseAudio: "generated" },
-  style: { style: { "motion-prism": "precise", "motion-pulse": "user" } },
+  style: { style: { "nodaro-prism": "precise", "nodaro-pulse": "user" } },
   "precise-style-route": { preciseStyleRoute: { routing: "off", bypassEmails: ["Tester@Example.com"] } },
 }
 
@@ -175,7 +175,7 @@ describe("storing a set", () => {
     expect(set.settings).toEqual({
       advanced: { show: true },
       "pulse-audio": { pulseAudio: "generated" },
-      style: { style: { "motion-prism": "precise" } },
+      style: { style: { "nodaro-prism": "precise" } },
       "precise-style-route": { preciseStyleRoute: { routing: "off", bypassEmails: ["tester@example.com"] } },
     })
     expect(h.audits).toEqual([
@@ -184,7 +184,7 @@ describe("storing a set", () => {
     const list = (await send("GET", BASE)).json().data
     expect(list.sets.map((s: { name: string }) => s.name)).toEqual(["Launch look"])
     expect(list.format).toBe("nodaro-motion-settings")
-    expect(list.version).toBe(1)
+    expect(list.version).toBe(2)
     expect(list.sections.map((s: { key: string }) => s.key)).toContain("precise-style-route")
     expect(h.appSettingsWrites).toBe(0)
   })
@@ -195,7 +195,7 @@ describe("storing a set", () => {
       settings: {
         nope: { x: 1 },
         advanced: { show: "yes" },
-        "precise-art-style": { preciseArtStyle: { "motion-pulse": { opener: "edit" } } },
+        "precise-art-style": { preciseArtStyle: { "nodaro-pulse": { opener: "edit" } } },
       },
     })
     expect(res.statusCode).toBe(400)
@@ -208,7 +208,7 @@ describe("storing a set", () => {
 
   it("answers what the engines cannot run yet as a warning, and stores the set", async () => {
     // No environment recorded: a forced style waits for every environment's engine.
-    const res = await send("POST", BASE, { name: "Forced", settings: { style: { style: { "motion-prism": "flex" } } } })
+    const res = await send("POST", BASE, { name: "Forced", settings: { style: { style: { "nodaro-prism": "flex" } } } })
     expect(res.statusCode).toBe(201)
     expect(res.json().data.warnings).toEqual([expect.objectContaining({ section: "style", label: "Style choice" })])
     expect(h.sets).toHaveLength(1)
@@ -252,13 +252,13 @@ describe("storing a set", () => {
 })
 
 describe("export and import", () => {
-  const doc = (over: Record<string, unknown> = {}) => ({ format: "nodaro-motion-settings", version: 1, name: "Shared look", settings: SETTINGS, ...over })
+  const doc = (over: Record<string, unknown> = {}) => ({ format: "nodaro-motion-settings", version: 2, name: "Shared look", settings: SETTINGS, ...over })
 
   it("exports the file without people's data, naming what it left out", async () => {
     const res = await send("POST", `${BASE}/export`, { name: "Shared look", settings: SETTINGS })
     expect(res.statusCode).toBe(200)
     const file = res.json().data
-    expect(file).toMatchObject({ format: "nodaro-motion-settings", version: 1, name: "Shared look", exportedAt: expect.any(String) })
+    expect(file).toMatchObject({ format: "nodaro-motion-settings", version: 2, name: "Shared look", exportedAt: expect.any(String) })
     expect(file.settings["precise-style-route"]).toEqual({ preciseStyleRoute: { routing: "off" } })
     expect(file.omitted).toEqual(["precise-style-route.preciseStyleRoute.bypassEmails"])
     expect(JSON.stringify(file)).not.toContain("example.com")
@@ -288,6 +288,35 @@ describe("export and import", () => {
     expect(res.json().data.notes.join(" ")).not.toMatch(/bypassEmails/)
   })
 
+  it("imports a version 1 file, keyed by the engines' earlier ids, under the current ids", async () => {
+    const v1 = doc({
+      version: 1,
+      settings: { style: { style: { "motion-prism": "precise", "motion-pulse": "user" } }, "pulse-audio": { pulseAudio: "generated" } },
+    })
+    const res = await send("POST", `${BASE}/check`, { document: v1 })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.valid).toBe(true)
+    expect(res.json().data.settings.style).toEqual({ style: { "nodaro-prism": "precise" } })
+    expect(res.json().data.settings["pulse-audio"]).toEqual({ pulseAudio: "generated" })
+  })
+
+  it("lists a set stored at version 1 under the current engine ids", async () => {
+    h.sets.push({
+      id: "00000000-0000-4000-8000-0000000000aa",
+      name: "Before the new ids",
+      format_version: 1,
+      settings: { style: { style: { "motion-prism": "flex", "motion-pro": "precise" } }, advanced: { show: true } },
+      created_by: null,
+      updated_by: null,
+      created_at: "2026-11-01T00:00:00.000Z",
+      updated_at: "2026-11-01T00:00:00.000Z",
+      live_at: null,
+    })
+    const list = (await send("GET", BASE)).json().data
+    expect(list.sets[0].settings).toEqual({ style: { style: { "nodaro-prism": "flex" } }, advanced: { show: true } })
+    expect(list.sets[0].unreadable).toBeNull()
+  })
+
   it("imports an older file whose route section holds only the photographic path", async () => {
     const res = await send("POST", `${BASE}/check`, { document: doc({ settings: { "precise-style-route": { preciseStyleRoute: { photographicStyles: "precise" } } } }) })
     expect(res.statusCode).toBe(200)
@@ -310,7 +339,7 @@ describe("export and import", () => {
     expect(bad.errors.map((e: { path: string }) => e.path)).toEqual(["settings.pulse-audio.pulseAudio", "settings.colour"])
     const other = (await send("POST", `${BASE}/check`, { document: { format: "something-else", version: 1, settings: {} } })).json().data
     expect(other.valid).toBe(false)
-    expect(other.errors[0].message).toMatch(/Not a Nodaro Motion settings file/)
+    expect(other.errors[0].message).toMatch(/Not a Video Remake settings file/)
     const newer = (await send("POST", `${BASE}/check`, { document: doc({ version: 99 }) })).json().data
     expect(newer.errors).toEqual([{ path: "version", message: expect.stringMatching(/newer than this app reads/) }])
     const extra = (await send("POST", `${BASE}/check`, { document: doc({ secret: "x" }) })).json().data

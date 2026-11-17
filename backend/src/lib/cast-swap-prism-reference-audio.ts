@@ -1,5 +1,5 @@
 /**
- * Prism reference audio: what audio the reference video a Nodaro Motion Prism
+ * Prism reference audio: what audio the reference video a Nodaro Prism
  * run (internal id `"seedance-2-5"`, also the engine of a run that names none)
  * sends to the video model carries, chosen PER OUTPUT RESOLUTION (the engine
  * may take a reference with the song's audio at one resolution and refuse it
@@ -33,7 +33,7 @@
  * (`TrendVersionData.prismReferenceAudio`, sent by `composeTrendRun`), and for
  * every DIRECT run by the `nodaro_motion_prism_reference_audio` app setting
  * (this module's key; written by
- * `PUT /v1/admin/nodaro-motion/prism-reference-audio`, read by the
+ * `PUT /v1/admin/video-remake/prism-reference-audio`, read by the
  * `/v1/cast-swap` hook, middleware/nodaro-motion-prism-reference-audio.ts).
  * Both were one id for every resolution at first: a stored plain id is read
  * as that id at every resolution (`prismReferenceAudioByResolutionOf`).

@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Style choice: per engine, whether people choose a
- * direct run's style or it is Precise in Nodaro Motion / always Flex
- * (GET/PUT /v1/admin/nodaro-motion/style). Never saved (`style: null`) =
+ * Admin → Video Remake's Style choice: per engine, whether people choose a
+ * direct run's style or it is Precise in Video Remake / always Flex
+ * (GET/PUT /v1/admin/video-remake/style). Never saved (`style: null`) =
  * people choose on every engine.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

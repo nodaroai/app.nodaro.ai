@@ -1,0 +1,34 @@
+/**
+ * `@nodaro/sdk/video-remake` — the `videoRemake` resource (Video Remake) and its types.
+ *
+ * One of the package's subpath entries (see `src/index.ts`). The root
+ * re-exports every entry, so each name here is also importable from
+ * `@nodaro/sdk`.
+ */
+export {
+  VideoRemakeResource,
+  type VideoRemakeEngine,
+  type VideoRemakeEngineLegacyId,
+  type VideoRemakeStyle,
+  type VideoRemakeMotionLength,
+  type VideoRemakeTraitSource,
+  type VideoRemakeRolePreviewSettings,
+  type VideoRemakePersonRole,
+  type VideoRemakeLocationRole,
+  type VideoRemakePetRole,
+  type VideoRemakeProductRole,
+  type VideoRemakeRole,
+  type VideoRemakeReference,
+  type VideoRemakeFaceMaskingZone,
+  type VideoRemakeFaceMasking,
+  type VideoRemakeParams,
+  type VideoRemakeEstimate,
+  type VideoRemakeRunOptions,
+  type VideoRemakeFullQualityKind,
+  type VideoRemakeFullQualityEstimate,
+  type VideoRemakeFullQualityParams,
+  type VideoRemakeFullQualityResult,
+  type VideoRemakeFullQualityRefusalCode,
+  type VideoRemakeStyleChoiceOption,
+  type VideoRemakeStyleChoice,
+} from "../resources/cast-swap.js"

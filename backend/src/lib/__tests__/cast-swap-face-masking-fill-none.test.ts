@@ -18,7 +18,7 @@ import {
   type FaceMasking,
 } from "../cast-swap-face-masking.js"
 
-// The Nodaro Motion settings (decided 2026-11-02): a third Faces hidden fill, "none" (the faces found but kept as
+// The Video Remake settings (decided 2026-11-02): a third Faces hidden fill, "none" (the faces found but kept as
 // filmed, only the face mesh drawn on them), and the depth blur on a Faces hidden depth fill. A trend's setting takes
 // neither; every setting without them validates and is sent exactly as before.
 

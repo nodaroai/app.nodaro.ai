@@ -1,7 +1,7 @@
 /**
  * When the Precise art-style setting may be saved.
  *
- * The Nodaro Motion settings are one row each, which staging and production
+ * The Video Remake settings are one row each, which staging and production
  * share (one database, `engine-environments.ts`). The Precise art-style row
  * (`nodaro_motion_precise_art_style`) is read only by an engine that declares
  * `castSwap.preciseArtStyle`; an engine without the flag never reads it and
@@ -29,8 +29,8 @@ export function noEnvironmentRunsPreciseArtStyle(environments: readonly EngineEn
   })
 }
 
-/** The refusal (400 `precise_art_style_engine`) of a change for Nodaro Motion Pulse: it takes no art style, so the entry would never be read. */
-export const PULSE_TAKES_NO_PRECISE_ART_STYLE_MESSAGE = "Nodaro Motion Pulse takes no art style, so it has no Precise art-style setting."
+/** The refusal (400 `precise_art_style_engine`) of a change for Nodaro Pulse: it takes no art style, so the entry would never be read. */
+export const PULSE_TAKES_NO_PRECISE_ART_STYLE_MESSAGE = "Nodaro Pulse takes no art style, so it has no Precise art-style setting."
 
 /** The row's refusal while `noEnvironmentRunsPreciseArtStyle`. */
 export const NO_ENGINE_RUNS_PRECISE_ART_STYLE_MESSAGE =

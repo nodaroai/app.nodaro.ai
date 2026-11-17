@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/masking` — the admin's face masking per Nodaro
- * Motion engine (for direct runs). Admin-only; a save is validated per engine
+ * `/v1/admin/video-remake/masking` — the admin's face masking per Video
+ * Remake engine (for direct runs). Admin-only; a save is validated per engine
  * by the Cast Swap `faceMasking` schema, written whole, clears the settings
  * cache and leaves an `admin_actions` row.
  */
@@ -72,57 +72,57 @@ beforeEach(async () => {
 
 const as = { "x-user": "00000000-0000-4000-8000-0000000000ad" }
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 
-describe("GET /v1/admin/nodaro-motion/masking", () => {
+describe("GET /v1/admin/video-remake/masking", () => {
   it("is admin-only", async () => {
-    expect((await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking" })).statusCode).toBe(401)
+    expect((await app.inject({ method: "GET", url: "/v1/admin/video-remake/masking" })).statusCode).toBe(401)
     h.admin = false
-    expect((await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking", headers: as })).statusCode).toBe(403)
+    expect((await app.inject({ method: "GET", url: "/v1/admin/video-remake/masking", headers: as })).statusCode).toBe(403)
   })
 
   it("answers null until it is saved, with both engines named", async () => {
-    const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking", headers: as })
+    const res = await app.inject({ method: "GET", url: "/v1/admin/video-remake/masking", headers: as })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ masking: null, updatedAt: null, engines: ENGINES })
   })
 
   it("answers the stored setting, an invalid engine entry left out", async () => {
-    h.row = { value: { "motion-prism": { mode: "auto" }, "motion-pulse": { mode: "nope" } }, updated_at: "2026-10-25T10:00:00.000Z" }
-    const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking", headers: as })
-    expect(res.json().data).toEqual({ masking: { "motion-prism": { mode: "auto" } }, updatedAt: "2026-10-25T10:00:00.000Z", engines: ENGINES })
+    h.row = { value: { "nodaro-prism": { mode: "auto" }, "nodaro-pulse": { mode: "nope" } }, updated_at: "2026-10-25T10:00:00.000Z" }
+    const res = await app.inject({ method: "GET", url: "/v1/admin/video-remake/masking", headers: as })
+    expect(res.json().data).toEqual({ masking: { "nodaro-prism": { mode: "auto" } }, updatedAt: "2026-10-25T10:00:00.000Z", engines: ENGINES })
   })
 
   it("answers a setting saved under the earlier ids by the current ones", async () => {
     h.row = { value: { "motion-pro": { mode: "always" }, "motion-lite": { mode: "auto", target: "face" } }, updated_at: "2026-10-25T10:00:00.000Z" }
-    const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/masking", headers: as })
-    expect(res.json().data.masking).toEqual({ "motion-prism": { mode: "always" }, "motion-pulse": { mode: "auto", target: "face" } })
+    const res = await app.inject({ method: "GET", url: "/v1/admin/video-remake/masking", headers: as })
+    expect(res.json().data.masking).toEqual({ "nodaro-prism": { mode: "always" }, "nodaro-pulse": { mode: "auto", target: "face" } })
     expect(res.body).not.toMatch(/motion-pro|motion-lite/)
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/masking", () => {
+describe("PUT /v1/admin/video-remake/masking", () => {
   const masking = {
-    "motion-prism": { mode: "always", target: "head", fill: "blur", minFaceHeightPct: 10, maxFaceHeightPct: 0, zone: { leftPct: 5, rightPct: 5 }, blurStrengthPct: 2.5, threshold: 0.4 },
-    "motion-pulse": { mode: "auto", target: "face", fill: "depth", zone: null },
+    "nodaro-prism": { mode: "always", target: "head", fill: "blur", minFaceHeightPct: 10, maxFaceHeightPct: 0, zone: { leftPct: 5, rightPct: 5 }, blurStrengthPct: 2.5, threshold: 0.4 },
+    "nodaro-pulse": { mode: "auto", target: "face", fill: "depth", zone: null },
   }
 
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(403)
     expect(h.upserts).toEqual([])
   })
 
   it("saves the whole setting with who and when, clears the cache, audits before and after, and answers what is now stored", async () => {
-    h.row = { value: { "motion-prism": { mode: "off" } }, updated_at: "2026-10-24T10:00:00.000Z" }
+    h.row = { value: { "nodaro-prism": { mode: "off" } }, updated_at: "2026-10-24T10:00:00.000Z" }
     const before = Date.now()
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     // Under both key sets: an environment still on the app before the rename reads only the earlier ones.
-    const stored = { ...masking, "motion-pro": masking["motion-prism"], "motion-lite": masking["motion-pulse"] }
+    const stored = { ...masking, "motion-prism": masking["nodaro-prism"], "motion-pro": masking["nodaro-prism"], "motion-pulse": masking["nodaro-pulse"], "motion-lite": masking["nodaro-pulse"] }
     expect(h.upserts).toEqual([{ key: "nodaro_motion_masking", value: stored, updated_at: expect.any(String), updated_by: as["x-user"] }])
     expect(h.invalidated).toBe(1)
     // The "Saved" time moves with every save.
@@ -136,29 +136,29 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
         action: "update_nodaro_motion_masking",
         target_type: "app_setting",
         target_id: NODARO_MOTION_MASKING_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_masking", before: { "motion-prism": { mode: "off" } }, after: masking },
+        payload: { key: "nodaro_motion_masking", before: { "nodaro-prism": { mode: "off" } }, after: masking },
       },
     ])
   })
 
   it("takes one engine alone, or none (no engine masks)", async () => {
-    for (const m of [{ "motion-pulse": { mode: "auto" } }, {}]) {
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+    for (const m of [{ "nodaro-pulse": { mode: "auto" } }, {}]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: m } })
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.upserts).toHaveLength(2)
   })
 
   it("saves Body (the whole person hidden, either fill) once every environment's engine can hide whole people", async () => {
-    const body = { "motion-prism": { mode: "always", target: "body" }, "motion-pulse": { mode: "auto", target: "body", fill: "depth" } }
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: body } })
+    const body = { "nodaro-prism": { mode: "always", target: "body" }, "nodaro-pulse": { mode: "auto", target: "body", fill: "depth" } }
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: body } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(body)
     expect(h.envReads).toBe(1)
   })
 
   it("refuses Body while any environment's engine cannot hide whole people (the row is shared), writing nothing", async () => {
-    const body = { "motion-pulse": { mode: "always", target: "body" } }
+    const body = { "nodaro-pulse": { mode: "always", target: "body" } }
     // An engine from before the declaration lists "body" for keep people only; a missing row is unknown.
     for (const [envs, blocked] of [
       [[envRow("production", { castSwap: { faceMaskTargets: ["face", "head", "body"] } }), envRow("staging", HIDES)], ["production"]],
@@ -166,7 +166,7 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
       [[envRow("production", { castSwap: { faceMaskHideTargets: ["face", "head"] } }), envRow("staging", {})], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: body } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: body } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot hide whole people/) })
     }
@@ -176,20 +176,20 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
 
   it("saves the face mesh only once every environment's engine draws it (the row is shared), naming those that cannot", async () => {
     const MESH = { castSwap: { ...HIDES.castSwap, faceMesh: true } }
-    const masking = { "motion-pulse": { mode: "always", fill: "depth", faceMesh: true } }
+    const masking = { "nodaro-pulse": { mode: "always", fill: "depth", faceMesh: true } }
     for (const [envs, blocked] of [
       [[envRow("production", HIDES), envRow("staging", MESH)], ["production"]],
       [[envRow("staging", MESH)], ["production"]],
       [[envRow("production", { castSwap: { ...HIDES.castSwap, faceMesh: false } }), envRow("staging", {})], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot draw the face mesh/) })
     }
     expect(h.upserts).toEqual([])
     h.envs = [envRow("production", MESH), envRow("staging", MESH)]
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(masking)
   })
@@ -197,19 +197,19 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
   it("saves the face mesh's parts only once every environment's engine draws them (the row is shared), naming those that cannot", async () => {
     const MESH = { castSwap: { ...HIDES.castSwap, faceMesh: true } }
     const PARTS = { castSwap: { ...MESH.castSwap, faceMeshParts: ["full", "features", "mouth"] } }
-    const masking = { "motion-pulse": { mode: "always", fill: "depth", faceMesh: true, faceMeshParts: "mouth" } }
+    const masking = { "nodaro-pulse": { mode: "always", fill: "depth", faceMesh: true, faceMeshParts: "mouth" } }
     for (const [envs, blocked] of [
       [[envRow("production", MESH), envRow("staging", PARTS)], ["production"]],
       [[envRow("production", { castSwap: { ...MESH.castSwap, faceMeshParts: ["full", "features"] } }), envRow("staging", PARTS)], ["production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot draw only the mouth of the face mesh/) })
     }
     expect(h.upserts).toEqual([])
     h.envs = [envRow("production", PARTS), envRow("staging", PARTS)]
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(masking)
   })
@@ -217,25 +217,25 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
   it("saves the fill none only once every environment's engine draws it (the row is shared), naming those that cannot", async () => {
     const MESH = { castSwap: { ...HIDES.castSwap, faceMesh: true } }
     const NONE = { castSwap: { ...MESH.castSwap, maskFillNone: true } }
-    const masking = { "motion-pulse": { mode: "always", fill: "none", faceMesh: true, target: "face" } }
+    const masking = { "nodaro-pulse": { mode: "always", fill: "none", faceMesh: true, target: "face" } }
     for (const [envs, blocked] of [
       [[envRow("production", MESH), envRow("staging", NONE)], ["production"]],
       [[envRow("production", NONE), envRow("staging", { castSwap: { ...MESH.castSwap, maskFillNone: false } })], ["staging"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot keep the faces as filmed with only the face mesh/) })
     }
     expect(h.upserts).toEqual([])
     h.envs = [envRow("production", NONE), envRow("staging", NONE)]
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(masking)
   })
 
   it("refuses the fill none without the face mesh (400 fill_none_needs_face_mesh), writing nothing", async () => {
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: { "motion-pulse": { mode: "always", fill: "none" } } } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: { "nodaro-pulse": { mode: "always", fill: "none" } } } })
     expect(res.statusCode).toBe(400)
     expect(JSON.stringify(res.json())).toMatch(/needs the face mesh on/)
     expect(h.upserts).toEqual([])
@@ -243,26 +243,26 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
 
   it("saves a depth fill's blur only once every environment's engine blurs a depth fill (not Full depth's declaration); 0 asks no engine", async () => {
     const FILL_BLUR = { castSwap: { ...HIDES.castSwap, depthFillBlur: true } }
-    const masking = { "motion-pulse": { mode: "always", fill: "depth", depthBlur: 12 } }
+    const masking = { "nodaro-pulse": { mode: "always", fill: "depth", depthBlur: 12 } }
     for (const [envs, blocked] of [
       [[envRow("production", { castSwap: { ...HIDES.castSwap, depthBlur: true } }), envRow("staging", FILL_BLUR)], ["production"]],
       [[envRow("staging", FILL_BLUR)], ["production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot blur the depth fill/) })
     }
     expect(h.upserts).toEqual([])
     h.envs = [envRow("production", FILL_BLUR), envRow("staging", FILL_BLUR)]
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(masking)
     // 0 (off), or the masking off, asks no engine.
     h.envs = []
     const reads = h.envReads
     for (const m of [{ mode: "always", fill: "depth", depthBlur: 0 }, { mode: "off", fill: "depth", depthBlur: 12 }]) {
-      const r = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: { "motion-pulse": m } } })
+      const r = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: { "nodaro-pulse": m } } })
       expect(r.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.envReads).toBe(reads)
@@ -270,20 +270,20 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
 
   it("saves a depth colormap only once every environment's engine draws that map (the row is shared), naming those that cannot", async () => {
     const MAPS = { castSwap: { ...HIDES.castSwap, depthColormaps: ["grayscale", "inferno"] } }
-    const masking = { "motion-pulse": { mode: "always", fill: "depth", depthColormap: "inferno" } }
+    const masking = { "nodaro-pulse": { mode: "always", fill: "depth", depthColormap: "inferno" } }
     for (const [envs, blocked] of [
       [[envRow("production", HIDES), envRow("staging", MAPS)], ["production"]],
       [[envRow("staging", MAPS)], ["production"]],
       [[envRow("production", { castSwap: { ...HIDES.castSwap, depthColormaps: ["grayscale"] } }), envRow("staging", {})], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/cannot draw the depth in inferno/) })
     }
     expect(h.upserts).toEqual([])
     h.envs = [envRow("production", MAPS), envRow("staging", MAPS)]
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(masking)
   })
@@ -291,11 +291,11 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
   it("never asks the environments for a colormap that changes nothing drawn (the default, a blur fill, the masking off)", async () => {
     h.envs = []
     for (const m of [
-      { "motion-prism": { mode: "always", fill: "depth", depthColormap: "turbo" } },
-      { "motion-prism": { mode: "always", depthColormap: "inferno" } },
-      { "motion-prism": { mode: "off", fill: "depth", depthColormap: "inferno" } },
+      { "nodaro-prism": { mode: "always", fill: "depth", depthColormap: "turbo" } },
+      { "nodaro-prism": { mode: "always", depthColormap: "inferno" } },
+      { "nodaro-prism": { mode: "off", fill: "depth", depthColormap: "inferno" } },
     ]) {
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: m } })
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.envReads).toBe(0)
@@ -303,20 +303,20 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
 
   it("saves a depth model size only once every environment's engine draws with it (the row is shared), naming those that cannot", async () => {
     const SIZES = { castSwap: { ...HIDES.castSwap, depthModelSizes: ["small", "large"] } }
-    const masking = { "motion-pulse": { mode: "always", fill: "depth", depthModelSize: "small" } }
+    const masking = { "nodaro-pulse": { mode: "always", fill: "depth", depthModelSize: "small" } }
     for (const [envs, blocked] of [
       [[envRow("production", HIDES), envRow("staging", SIZES)], ["production"]],
       [[envRow("staging", SIZES)], ["production"]],
       [[envRow("production", { castSwap: { ...HIDES.castSwap, depthModelSizes: ["large"] } }), envRow("staging", {})], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: blocked, message: expect.stringMatching(/small depth model/) })
     }
     expect(h.upserts).toEqual([])
     h.envs = [envRow("production", SIZES), envRow("staging", SIZES)]
-    const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking } })
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.masking).toEqual(masking)
   })
@@ -324,11 +324,11 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
   it("never asks the environments for a depth model size that changes no render (large, a blur fill, the masking off)", async () => {
     h.envs = []
     for (const m of [
-      { "motion-prism": { mode: "always", fill: "depth", depthModelSize: "large" } },
-      { "motion-prism": { mode: "always", depthModelSize: "small" } },
-      { "motion-prism": { mode: "off", fill: "depth", depthModelSize: "small" } },
+      { "nodaro-prism": { mode: "always", fill: "depth", depthModelSize: "large" } },
+      { "nodaro-prism": { mode: "always", depthModelSize: "small" } },
+      { "nodaro-prism": { mode: "off", fill: "depth", depthModelSize: "small" } },
     ]) {
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: m } })
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.envReads).toBe(0)
@@ -336,8 +336,8 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
 
   it("never asks the environments for a face mesh that is off (false, or the masking off)", async () => {
     h.envs = []
-    for (const m of [{ "motion-prism": { mode: "always", faceMesh: false } }, { "motion-prism": { mode: "off", faceMesh: true } }]) {
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+    for (const m of [{ "nodaro-prism": { mode: "always", faceMesh: false } }, { "nodaro-prism": { mode: "off", faceMesh: true } }]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: m } })
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.envReads).toBe(0)
@@ -345,8 +345,8 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
 
   it("never asks the environments for a setting that hides no whole person (head, face, or Body left off)", async () => {
     h.envs = []
-    for (const m of [{ "motion-prism": { mode: "always", target: "face" } }, { "motion-prism": { mode: "off", target: "body" } }]) {
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload: { masking: m } })
+    for (const m of [{ "nodaro-prism": { mode: "always", target: "face" } }, { "nodaro-prism": { mode: "off", target: "body" } }]) {
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: m } })
       expect(res.statusCode, JSON.stringify(m)).toBe(200)
     }
     expect(h.envReads).toBe(0)
@@ -356,17 +356,17 @@ describe("PUT /v1/admin/nodaro-motion/masking", () => {
     for (const payload of [
       {},
       { masking: null },
-      { masking: { "motion-prism": { mode: "sometimes" } } },
-      { masking: { "motion-prism": { mode: "auto", threshold: 2 } } },
-      { masking: { "motion-pulse": { mode: "auto", minFaceHeightPct: 40, maxFaceHeightPct: 20 } } },
-      { masking: { "motion-pulse": { mode: "auto", zone: { leftPct: 60 } } } },
-      { masking: { "motion-pulse": { mode: "auto", fill: "pixelate" } } },
-      { masking: { "motion-pulse": { mode: "auto", tresh: 0.4 } } },
+      { masking: { "nodaro-prism": { mode: "sometimes" } } },
+      { masking: { "nodaro-prism": { mode: "auto", threshold: 2 } } },
+      { masking: { "nodaro-pulse": { mode: "auto", minFaceHeightPct: 40, maxFaceHeightPct: 20 } } },
+      { masking: { "nodaro-pulse": { mode: "auto", zone: { leftPct: 60 } } } },
+      { masking: { "nodaro-pulse": { mode: "auto", fill: "pixelate" } } },
+      { masking: { "nodaro-pulse": { mode: "auto", tresh: 0.4 } } },
       { masking: { "kling-4": { mode: "auto" } } },
       { masking: { "motion-pro": { mode: "auto" } } },
       { masking: {}, extra: 1 },
     ]) {
-      const res = await app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: as, payload })
+      const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload })
       expect(res.statusCode, JSON.stringify(payload)).toBe(400)
       expect(res.json().error.code).toBe("validation_error")
     }

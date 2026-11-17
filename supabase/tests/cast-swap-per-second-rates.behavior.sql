@@ -1,5 +1,5 @@
 -- ============================================================================
--- Behavioral proof: migration 591 seeds Nodaro Motion's two per-second fee
+-- Behavioral proof: migration 591 seeds Video Remake's two per-second fee
 -- rates as admin-editable `model_pricing` rows — `cast-swap:per-second` at 2
 -- and `cast-swap-full-quality:per-second` at 4 base credits a second, the
 -- rows the cast-swap plugin reads through `tk.http.unitRatePrice` — and a

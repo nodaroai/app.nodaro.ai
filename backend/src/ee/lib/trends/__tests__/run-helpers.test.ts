@@ -477,22 +477,22 @@ describe("engineSupports — what the masks cover", () => {
 })
 
 /**
- * Nodaro Motion's engine ids (renamed 2026-10-26): every path that reads what
+ * Video Remake's engine ids (renamed 2026-10-26): every path that reads what
  * a plugin advertises or records works on plugin 0.397.0's ids (the earlier
  * public ids beside the internal ones) AND on a plugin that names only the
  * new ids, before that plugin is ever pinned.
  */
 const DECLARED = {
   "0.397.0": ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"],
-  "new ids only": ["motion-prism", "motion-pulse"],
+  "new ids only": ["nodaro-prism", "nodaro-pulse"],
 } as const
 /** What each generation records as a run's engine (a plugin with engine aliases records the public id). */
 const RECORDED = {
   "0.397.0": { prism: "motion-pro", pulse: "motion-lite" },
-  "new ids only": { prism: "motion-prism", pulse: "motion-pulse" },
+  "new ids only": { prism: "nodaro-prism", pulse: "nodaro-pulse" },
 } as const
 
-describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion engine ids on a plugin that names %s", (gen) => {
+describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Video Remake engine ids on a plugin that names %s", (gen) => {
   beforeEach(() => _resetPluginSupportsForTests())
   const BASE = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const, "720p" as const], trendRun: true, faceMasking: true }
   const onEngine = (engine: "seedance-2-5" | "kling-4", resolution: "480p" | "720p") => {
@@ -532,7 +532,7 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
       id: "j-1",
       status: "failed",
       progress: 25,
-      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "motion-pulse", resolution: "720p" },
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "nodaro-pulse", resolution: "720p" },
       output_data: {},
       error_message: "The video model declined this run as it is. Change the pictures or the settings.",
       error_hint: error_hint as RunJobRow["error_hint"],
@@ -557,7 +557,7 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
       id: "j-1",
       status: "completed",
       progress: 100,
-      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "motion-prism", resolution: "480p", draft: true },
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "nodaro-prism", resolution: "480p", draft: true },
       output_data: { videoUrl: "https://cdn.example/out.mp4" },
       error_message: null,
       error_hint: null,
@@ -591,7 +591,7 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
       id: "fq-1",
       status: "failed",
       progress: 25,
-      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "motion-prism", resolution: "1080p", ...over },
+      input_data: { type: "cast-swap", trend: { id: "t", slug: "s", version: 1, name: "N" }, engine: "nodaro-prism", resolution: "1080p", ...over },
       output_data: {},
       error_message: "x",
       error_hint: error_hint as RunJobRow["error_hint"],
@@ -631,12 +631,12 @@ describe.each(Object.keys(DECLARED) as (keyof typeof DECLARED)[])("Nodaro Motion
       usage_log_id: null,
     })
     const pulse = toTrendRun(row(RECORDED[gen].pulse), undefined, NO_RUN_CREDITS)!
-    expect(pulse).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse" })
+    expect(pulse).toMatchObject({ engine: "nodaro-pulse", engineName: "Nodaro Pulse" })
     // Pulse has no Full Quality (Full Quality finishes a Prism draft only).
     expect(pulse.fullQualityUntil).toBeNull()
     expect(toTrendRun(row(RECORDED[gen].prism), undefined, NO_RUN_CREDITS)).toMatchObject({
-      engine: "motion-prism",
-      engineName: "Nodaro Motion Prism",
+      engine: "nodaro-prism",
+      engineName: "Nodaro Prism",
       fullQualityUntil: null,
     })
   })

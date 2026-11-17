@@ -1,5 +1,5 @@
 /**
- * One setting on the Admin → Nodaro Motion page, as the stored settings sets
+ * One setting on the Admin → Video Remake page, as the stored settings sets
  * (`admin-nodaro-motion-settings-sets.ts`) see it: the body its save route
  * takes, and the parts of that route's save that read no other setting.
  *
@@ -11,7 +11,7 @@
  * met when the set is saved, through the route.
  *
  * `NODARO_MOTION_SETTINGS_SECTIONS` (admin-nodaro-motion.ts) lists them, and
- * `nodaro-motion-settings-sections.test.ts` fails when a Nodaro Motion admin
+ * `nodaro-motion-settings-sections.test.ts` fails when a Video Remake admin
  * route saves something that list does not include.
  */
 import type { z } from "zod"

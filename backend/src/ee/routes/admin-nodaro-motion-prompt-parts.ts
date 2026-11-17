@@ -1,11 +1,11 @@
 /**
- * Nodaro Motion's prompt part overrides for direct runs, per engine and style
+ * Video Remake's prompt part overrides for direct runs, per engine and style
  * (registered by `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it
  * shares its edition gate). Admin-only.
  *
- *   GET  /v1/admin/nodaro-motion/prompt-parts           the overrides (null = never saved), the engines and the keys (`styles`)
- *   PUT  /v1/admin/nodaro-motion/prompt-parts           { promptParts }: save the whole setting, each entry checked by the engine first; audit-logged
- *   POST /v1/admin/nodaro-motion/prompt-parts/preview   { engine, style, overrides?, promptWording? }: the engine's parts, assembled prompt and problems
+ *   GET  /v1/admin/video-remake/prompt-parts           the overrides (null = never saved), the engines and the keys (`styles`)
+ *   PUT  /v1/admin/video-remake/prompt-parts           { promptParts }: save the whole setting, each entry checked by the engine first; audit-logged
+ *   POST /v1/admin/video-remake/prompt-parts/preview   { engine, style, overrides?, promptWording? }: the engine's parts, assembled prompt and problems
  *
  * The setting (`nodaro_motion_prompt_parts`, lib/nodaro-motion-prompt-parts.ts)
  * is read by the Cast Swap engine for every DIRECT run of the engine and style
@@ -235,12 +235,12 @@ async function view() {
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the non-empty texts only. */
 export const NODARO_MOTION_PROMPT_PARTS_SECTION = defineNodaroMotionSettingsSection({
   key: "prompt-parts",
-  path: "/v1/admin/nodaro-motion/prompt-parts",
+  path: "/v1/admin/video-remake/prompt-parts",
   label: "Engine prompt",
   body: putBody,
   prepare: (body) => {
     const next = savedFrom(body.promptParts)
-    if (next["motion-pulse"]?.styleOnly) return { refusal: PULSE_RUNS_NO_STYLE_ONLY }
+    if (next["nodaro-pulse"]?.styleOnly) return { refusal: PULSE_RUNS_NO_STYLE_ONLY }
     return { value: { promptParts: next } }
   },
   // A new or changed style-only entry waits for every environment's engine (an older app drops the entry it holds).
@@ -257,20 +257,20 @@ export const NODARO_MOTION_PROMPT_PARTS_SECTION = defineNodaroMotionSettingsSect
 })
 
 export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/prompt-parts", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/prompt-parts", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion prompt parts")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake prompt parts")
     }
   })
 
-  app.post("/v1/admin/nodaro-motion/prompt-parts/preview", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/video-remake/prompt-parts/preview", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = previewBody.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
       const { engine, style: s } = parsed.data
-      if (s === "styleOnly" && engine === "motion-pulse") return pulseRunsNoStyleOnly(reply)
+      if (s === "styleOnly" && engine === "nodaro-pulse") return pulseRunsNoStyleOnly(reply)
       if (s === "styleOnly" && !loadedEngineTakesStyleOnly()) return styleOnlyUnsupported(reply)
       const overrides = parsed.data.overrides
         ? nonEmptyTexts(parsed.data.overrides)
@@ -291,11 +291,11 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       if (!answer) return reply
       return { data: answer }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to preview the Nodaro Motion prompt")
+      return sendInternalError(reply, req, e, "Failed to preview the Video Remake prompt")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/prompt-parts", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/prompt-parts", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_PROMPT_PARTS_SECTION.body.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
@@ -342,7 +342,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion prompt parts")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake prompt parts")
     }
   })
 }

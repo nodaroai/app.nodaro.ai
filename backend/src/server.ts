@@ -138,7 +138,7 @@ async function main() {
   // A switched-off template's kept example run, 30 days on — ALL editions (one query where no
   // template ever kept a run).
   stopTemplateKeptSweep = startTemplateKeptSweep((message) => app.log.warn(message))
-  // Nodaro Motion's coloured depth maps of finished runs, past their Full Quality window — ALL editions
+  // Video Remake's coloured depth maps of finished runs, past their Full Quality window — ALL editions
   // (the prefix never exists where the plugin does not run; a trend's stored clip is never one it deletes).
   stopCastSwapDepthClipsSweep = startCastSwapDepthClipsSweep((message) => app.log.warn(message))
   // Temporary provider uploads a job's end did not empty (a crashed attempt,

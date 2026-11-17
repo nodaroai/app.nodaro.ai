@@ -29,7 +29,7 @@
  * The `__` keys are server-only: every normal job read strips them
  * (`withoutServerOnlyKeys`, lib/job-output-visibility.ts), so this route reads
  * the row raw with the service role. Admins only; nothing here is reachable by
- * a user. A job that is not a Cast Swap run (a Nodaro Motion or trend run, or
+ * a user. A job that is not a Cast Swap run (a Video Remake or trend run, or
  * a Full Quality version of one) is a 404, as a missing one is.
  *
  * Everything is read tolerantly: the record is the engine's, so a value

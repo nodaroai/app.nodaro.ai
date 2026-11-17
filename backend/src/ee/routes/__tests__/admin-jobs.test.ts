@@ -227,7 +227,7 @@ describe("GET /v1/admin/jobs", () => {
 
   it("shows each job's settled charge beside its hold, and a parent's run total with its steps (never jobs.credits alone)", async () => {
     cfg.credits = true
-    // The production Nodaro Motion preview: the parent and its video step,
+    // The production Video Remake preview: the parent and its video step,
     // both on the page (an admin list shows child jobs too).
     const page = [
       { id: "run", status: "completed", credits: 44, usage_log_id: "ul-run", user_id: VALID_UUID },

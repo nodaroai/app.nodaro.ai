@@ -1,4 +1,4 @@
-// The face mesh's lines in a Nodaro Motion masking (FaceMaskingEditor, while
+// The face mesh's lines in a Video Remake masking (FaceMaskingEditor, while
 // the mesh is on): the full mesh, the eye and lip outlines, the lip outline —
 // each offered once every environment's engine draws it — and, in the Motion
 // column, "Choose the layers": one switch per layer (`faceMeshLayers`), a set no

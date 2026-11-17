@@ -204,7 +204,7 @@ describe("the schema", () => {
     expect(issues({ mode: "always", source: "depth" })).not.toEqual([])
   })
 
-  it("Nodaro Motion's direct-run setting takes faces only", () => {
+  it("Video Remake's direct-run setting takes faces only", () => {
     expect(faceMaskingSchema.safeParse(MASKING).success).toBe(true)
     expect(faceMaskingSchema.safeParse({ ...MASKING, source: "faces" }).success).toBe(true)
     expect(faceMaskingSchema.safeParse(FULL).success).toBe(false)

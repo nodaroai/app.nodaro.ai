@@ -474,10 +474,10 @@ describe("trendVersionDataSchema — engine", () => {
     }
   })
 
-  it("takes Nodaro Motion's public ids too (and their earlier ids), and stores the internal id each names", () => {
+  it("takes Video Remake's public ids too (and their earlier ids), and stores the internal id each names", () => {
     for (const [engine, stored] of [
-      ["motion-prism", "seedance-2-5"],
-      ["motion-pulse", "kling-4"],
+      ["nodaro-prism", "seedance-2-5"],
+      ["nodaro-pulse", "kling-4"],
       ["motion-pro", "seedance-2-5"],
       ["motion-lite", "kling-4"],
     ] as const) {

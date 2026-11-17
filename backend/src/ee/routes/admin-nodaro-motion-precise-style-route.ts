@@ -1,14 +1,14 @@
 /**
- * Nodaro Motion's Precise art-style route (registered by
+ * Video Remake's Precise art-style route (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/precise-style-route   { preciseStyleRoute, updatedAt, supported } (preciseStyleRoute null = never saved: routing on, nobody bypassed)
- *   PUT /v1/admin/nodaro-motion/precise-style-route   { preciseStyleRoute }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/precise-style-route   { preciseStyleRoute, updatedAt, supported } (preciseStyleRoute null = never saved: routing on, nobody bypassed)
+ *   PUT /v1/admin/video-remake/precise-style-route   { preciseStyleRoute }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_precise_style_route`,
  * lib/nodaro-motion-precise-style-route.ts) says whether a DIRECT run on Nodaro
- * Motion Prism that resolves to Precise and carries an art style runs as Flex
+ * Prism that resolves to Precise and carries an art style runs as Flex
  * (`routing`, on by default), which accounts' emails skip that
  * (`bypassEmails`), and the depth blur of a run it makes Flex
  * (`routedDepthBlur`, 0–40, absent or 0: none; every other Flex run keeps the
@@ -52,7 +52,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_PRECISE_STYLE_ROUTE_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0fc"
 
 const putBody = z.strictObject({ preciseStyleRoute: nodaroMotionPreciseStyleRouteSchema })
@@ -64,7 +64,7 @@ const putBody = z.strictObject({ preciseStyleRoute: nodaroMotionPreciseStyleRout
  */
 export const NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION = defineNodaroMotionSettingsSection({
   key: "precise-style-route",
-  path: "/v1/admin/nodaro-motion/precise-style-route",
+  path: "/v1/admin/video-remake/precise-style-route",
   label: "Precise art-style route",
   body: putBody,
   prepare: (body) => ({ value: { preciseStyleRoute: withoutDefaultPreciseStyleRoute(body.preciseStyleRoute) } }),
@@ -89,15 +89,15 @@ async function view(): Promise<NodaroMotionPreciseStyleRouteView> {
 }
 
 export function registerNodaroMotionPreciseStyleRouteRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/precise-style-route", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/precise-style-route", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion Precise art-style route")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake Precise art-style route")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/precise-style-route", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/precise-style-route", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -113,7 +113,7 @@ export function registerNodaroMotionPreciseStyleRouteRoutes(app: FastifyInstance
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion Precise art-style route")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake Precise art-style route")
     }
   })
 }

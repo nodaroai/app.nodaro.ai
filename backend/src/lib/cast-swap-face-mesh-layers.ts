@@ -1,5 +1,5 @@
 /**
- * The face mesh's layers in a Nodaro Motion masking setting
+ * The face mesh's layers in a Video Remake masking setting
  * (`FaceMasking.faceMeshLayers`, the Motion setting's alone: the Flex runs) —
  * how a setting is sent to an engine and saved. Pure.
  *

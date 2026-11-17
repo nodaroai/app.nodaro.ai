@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion → runs with no person, on BOTH engines:
+ * Admin → Video Remake → runs with no person, on BOTH engines:
  *
- * - The switch (GET/PUT /v1/admin/nodaro-motion/no-person) sits under each
+ * - The switch (GET/PUT /v1/admin/video-remake/no-person) sits under each
  *   engine's Precise column, on until an admin turns it off. Save sends only
  *   what differs from the default; going back sends `{}`.
  * - Turning it off is offered once ANY environment's engine reads the setting
@@ -27,14 +27,14 @@ import { ADVANCED_SWITCH_LABEL } from "../components/AdvancedSwitch"
 import { NO_ENVIRONMENT_READS_NO_PERSON, NO_PERSON_UNSUPPORTED_HERE, noPersonMissingNote, noPersonToSaved } from "../components/NoPersonColumn"
 import { environmentsThatCannotSendSourceClip } from "../../trends/clip-preparation"
 
-const URL_ = "/v1/admin/nodaro-motion/no-person"
+const URL_ = "/v1/admin/video-remake/no-person"
 const LEGEND = "Runs with no person: send the clip as it is"
 const HINT =
   "A Precise run with no person role with pictures sends the clip unprepared. If the model refuses the clip or what it would make, the clip is prepared and retried once, charged only then. A run with an art style may run as Flex instead."
 const NOTE = "This setting is shared by every environment."
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const reads = (env: string, yes: boolean): TrendEngineEnvironment => ({
   ...ENVIRONMENTS[0]!,
@@ -51,41 +51,41 @@ beforeEach(() => {
   resetRoutes()
   vi.mocked(toast.success).mockClear()
   vi.stubGlobal("fetch", fetchMock)
-  routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
-  routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
-  routes["POST /v1/admin/nodaro-motion/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })
-  routes["GET /v1/admin/nodaro-motion/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
-  routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
-  routes["GET /v1/admin/nodaro-motion/style-only"] = () => ({ body: { data: { styleOnly: null, updatedAt: null, engines: ENGINES, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/precise-art-style"] = () => ({ body: { data: { preciseArtStyle: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
+  routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })
+  routes["GET /v1/admin/video-remake/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/style-only"] = () => ({ body: { data: { styleOnly: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/precise-art-style"] = () => ({ body: { data: { preciseArtStyle: null, updatedAt: null, engines: ENGINES, supported: true } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: BOTH } })
   routes[`GET ${URL_}`] = () => view(null)
   routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).noPerson)
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const preciseGroup = (name: string) => screen.findByRole("group", { name: `Nodaro Motion ${name} Precise` })
+const preciseGroup = (name: string) => screen.findByRole("group", { name: `Nodaro ${name} Precise` })
 const switchOf = async (name: string) => within(await preciseGroup(name)).findByRole("switch", { name: LEGEND })
 const columnOf = async (name: string) => (await switchOf(name)).closest("[data-testid='no-person-column']") as HTMLElement
 const saveButton = () => screen.getByRole("button", { name: "Save" })
 
-describe("Admin → Nodaro Motion → runs with no person", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → runs with no person", { timeout: 20_000 }, () => {
   it("noPersonToSaved keeps only an engine switched off, in the engines' order, as new objects", () => {
     expect(noPersonToSaved(null)).toEqual({})
     expect(noPersonToSaved(undefined)).toEqual({})
-    expect(noPersonToSaved({ "motion-prism": {}, "motion-pulse": {} })).toEqual({})
+    expect(noPersonToSaved({ "nodaro-prism": {}, "nodaro-pulse": {} })).toEqual({})
     const entry = { sourceClip: false } as const
-    const saved = noPersonToSaved({ "motion-pulse": entry })
-    expect(saved).toEqual({ "motion-pulse": { sourceClip: false } })
-    expect(saved["motion-pulse"]).not.toBe(entry)
+    const saved = noPersonToSaved({ "nodaro-pulse": entry })
+    expect(saved).toEqual({ "nodaro-pulse": { sourceClip: false } })
+    expect(saved["nodaro-pulse"]).not.toBe(entry)
     // Compared as JSON with what the server answers, so the order an admin clicked in is never a change.
-    expect(JSON.stringify(noPersonToSaved({ "motion-pulse": entry, "motion-prism": entry }))).toBe(
-      JSON.stringify({ "motion-prism": { sourceClip: false }, "motion-pulse": { sourceClip: false } }),
+    expect(JSON.stringify(noPersonToSaved({ "nodaro-pulse": entry, "nodaro-prism": entry }))).toBe(
+      JSON.stringify({ "nodaro-prism": { sourceClip: false }, "nodaro-pulse": { sourceClip: false } }),
     )
   })
 
@@ -117,9 +117,9 @@ describe("Admin → Nodaro Motion → runs with no person", { timeout: 20_000 },
     expect(toggle).not.toBeChecked()
     expect(await switchOf("Prism")).toBeChecked()
     await user.click(saveButton())
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ noPerson: { "motion-pulse": { sourceClip: false } } }]))
-    expect(sentTo("PUT /v1/admin/nodaro-motion/masking")).toEqual([])
-    expect(sentTo("PUT /v1/admin/nodaro-motion/precise-art-style")).toEqual([])
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ noPerson: { "nodaro-pulse": { sourceClip: false } } }]))
+    expect(sentTo("PUT /v1/admin/video-remake/masking")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/precise-art-style")).toEqual([])
     await waitFor(() => expect(saveButton()).toBeDisabled())
     await user.click(await switchOf("Pulse"))
     await user.click(saveButton())
@@ -140,7 +140,7 @@ describe("Admin → Nodaro Motion → runs with no person", { timeout: 20_000 },
   })
 
   it("shows a saved off on that engine alone", async () => {
-    routes[`GET ${URL_}`] = () => view({ "motion-pulse": { sourceClip: false } })
+    routes[`GET ${URL_}`] = () => view({ "nodaro-pulse": { sourceClip: false } })
     renderWith(<AdminNodaroMotionPage />)
     await waitFor(async () => expect(await switchOf("Pulse")).not.toBeChecked())
     expect(await switchOf("Prism")).toBeChecked()
@@ -171,7 +171,7 @@ describe("Admin → Nodaro Motion → runs with no person", { timeout: 20_000 },
   it("a saved off can be taken back while no environment's engine reads it", async () => {
     const user = userEvent.setup()
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: NEITHER } })
-    routes[`GET ${URL_}`] = () => view({ "motion-pulse": { sourceClip: false } })
+    routes[`GET ${URL_}`] = () => view({ "nodaro-pulse": { sourceClip: false } })
     renderWith(<AdminNodaroMotionPage />)
     await waitFor(async () => expect(await switchOf("Pulse")).not.toBeChecked())
     const toggle = await switchOf("Pulse")
@@ -224,7 +224,7 @@ describe("Admin → Nodaro Motion → runs with no person", { timeout: 20_000 },
 
   it("Advanced saved with it keeps the runs' toast: a run reads this setting", async () => {
     const user = userEvent.setup()
-    routes["PUT /v1/admin/nodaro-motion/advanced"] = (init) => ({ body: { data: { show: JSON.parse(String(init?.body)).show, updatedAt: "2026-11-05T12:00:00.000Z" } } })
+    routes["PUT /v1/admin/video-remake/advanced"] = (init) => ({ body: { data: { show: JSON.parse(String(init?.body)).show, updatedAt: "2026-11-05T12:00:00.000Z" } } })
     renderWith(<AdminNodaroMotionPage />)
     await user.click(await screen.findByRole("switch", { name: ADVANCED_SWITCH_LABEL }))
     const toggle = await switchOf("Pulse")
@@ -233,7 +233,7 @@ describe("Admin → Nodaro Motion → runs with no person", { timeout: 20_000 },
     await user.click(saveButton())
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(SAVED_TOAST))
     expect(toast.success).not.toHaveBeenCalledWith(SAVED_PAGE_ONLY_TOAST)
-    expect(sentTo(`PUT ${URL_}`)).toEqual([{ noPerson: { "motion-pulse": { sourceClip: false } } }])
-    expect(sentTo("PUT /v1/admin/nodaro-motion/advanced")).toEqual([{ show: true }])
+    expect(sentTo(`PUT ${URL_}`)).toEqual([{ noPerson: { "nodaro-pulse": { sourceClip: false } } }])
+    expect(sentTo("PUT /v1/admin/video-remake/advanced")).toEqual([{ show: true }])
   })
 })

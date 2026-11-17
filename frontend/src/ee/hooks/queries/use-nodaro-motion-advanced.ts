@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Advanced switch: whether the Nodaro Motion page
+ * Admin → Video Remake's Advanced switch: whether the Video Remake page
  * shows its Advanced chip (Prepare references and the pre-prompt), one switch
- * for the whole page (GET/PUT /v1/admin/nodaro-motion/advanced). Never saved
+ * for the whole page (GET/PUT /v1/admin/video-remake/advanced). Never saved
  * (`updatedAt: null`) = hidden.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

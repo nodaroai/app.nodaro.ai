@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from "vitest"
 import Fastify from "fastify"
 
 /**
- * The Nodaro Motion settings sections (`NODARO_MOTION_SETTINGS_SECTIONS`,
- * admin-nodaro-motion.ts) are every setting the Admin → Nodaro Motion page
+ * The Video Remake settings sections (`NODARO_MOTION_SETTINGS_SECTIONS`,
+ * admin-nodaro-motion.ts) are every setting the Admin → Video Remake page
  * edits: a stored settings set, an exported file and a loaded draft hold
  * exactly these, so a setting missing here would be silently left out of all
  * three.
  *
  * What must hold:
- *  - every PUT the Nodaro Motion admin routes register saves a section, and
+ *  - every PUT the Video Remake admin routes register saves a section, and
  *    every section is a PUT and a GET they register;
  *  - every other route they register is named below as not a setting (a new
  *    one has to be classified, never just left out);
@@ -28,37 +28,37 @@ vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: 
 
 const { adminNodaroMotionRoutes, NODARO_MOTION_SETTINGS_SECTIONS } = await import("../admin-nodaro-motion.js")
 
-const PREFIX = "/v1/admin/nodaro-motion/"
+const PREFIX = "/v1/admin/video-remake/"
 
 /** The routes under the prefix that save no setting, and why. */
 const NOT_SETTINGS: Readonly<Record<string, string>> = {
-  "POST /v1/admin/nodaro-motion/prompt-parts/preview": "asks the engine for a sample prompt; writes nothing",
-  "GET /v1/admin/nodaro-motion/steps/defaults": "the engine's defaults for the steps editor",
-  "POST /v1/admin/nodaro-motion/steps/check": "asks the engine to check a steps draft; writes nothing",
-  "GET /v1/admin/nodaro-motion/settings-sets": "the stored sets themselves",
-  "POST /v1/admin/nodaro-motion/settings-sets": "the stored sets themselves",
-  "PUT /v1/admin/nodaro-motion/settings-sets/:id": "the stored sets themselves",
-  "DELETE /v1/admin/nodaro-motion/settings-sets/:id": "the stored sets themselves",
-  "POST /v1/admin/nodaro-motion/settings-sets/:id/live": "the stored sets themselves",
-  "POST /v1/admin/nodaro-motion/settings-sets/check": "checks an imported file; writes nothing",
-  "POST /v1/admin/nodaro-motion/settings-sets/export": "writes the file of a set; writes nothing",
+  "POST /v1/admin/video-remake/prompt-parts/preview": "asks the engine for a sample prompt; writes nothing",
+  "GET /v1/admin/video-remake/steps/defaults": "the engine's defaults for the steps editor",
+  "POST /v1/admin/video-remake/steps/check": "asks the engine to check a steps draft; writes nothing",
+  "GET /v1/admin/video-remake/settings-sets": "the stored sets themselves",
+  "POST /v1/admin/video-remake/settings-sets": "the stored sets themselves",
+  "PUT /v1/admin/video-remake/settings-sets/:id": "the stored sets themselves",
+  "DELETE /v1/admin/video-remake/settings-sets/:id": "the stored sets themselves",
+  "POST /v1/admin/video-remake/settings-sets/:id/live": "the stored sets themselves",
+  "POST /v1/admin/video-remake/settings-sets/check": "checks an imported file; writes nothing",
+  "POST /v1/admin/video-remake/settings-sets/export": "writes the file of a set; writes nothing",
 }
 
 /** A body each section's route takes, away from its defaults where it has any. */
 const SAMPLES: Readonly<Record<string, unknown>> = {
-  masking: { masking: { "motion-prism": { mode: "auto" }, "motion-pulse": { mode: "always", fill: "none", faceMesh: true } } },
-  motion: { motion: { "motion-prism": { promptStyle: "precise" } } },
+  masking: { masking: { "nodaro-prism": { mode: "auto" }, "nodaro-pulse": { mode: "always", fill: "none", faceMesh: true } } },
+  motion: { motion: { "nodaro-prism": { promptStyle: "precise" } } },
   steps: { steps: {} },
-  style: { style: { "motion-prism": "precise", "motion-pulse": "user" } },
-  "prompt-wording": { promptWording: { "motion-prism": "new", "motion-pulse": "current" } },
+  style: { style: { "nodaro-prism": "precise", "nodaro-pulse": "user" } },
+  "prompt-wording": { promptWording: { "nodaro-prism": "new", "nodaro-pulse": "current" } },
   "pulse-audio": { pulseAudio: "generated" },
   "prism-reference-audio": { prismReferenceAudio: { "720p": "voice" } },
   "style-only": { styleOnly: {} },
-  "precise-art-style": { preciseArtStyle: { "motion-prism": { opener: "edit" } } },
+  "precise-art-style": { preciseArtStyle: { "nodaro-prism": { opener: "edit" } } },
   "no-person": { noPerson: {} },
   "precise-style-route": { preciseStyleRoute: { routing: "off", bypassEmails: [" Tester@Example.com ", "tester@example.com"] } },
   advanced: { show: true },
-  "prompt-parts": { promptParts: { "motion-prism": { precise: { face: "Keep the faces.", avoid: "" } } } },
+  "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces.", avoid: "" } } } },
 }
 
 async function registeredRoutes(): Promise<string[]> {
@@ -74,8 +74,8 @@ async function registeredRoutes(): Promise<string[]> {
   return routes.filter((r) => r.split(" ")[1]!.startsWith(PREFIX))
 }
 
-describe("the Nodaro Motion settings sections", () => {
-  it("cover every PUT of the Nodaro Motion admin routes, and each is a PUT and a GET they register", async () => {
+describe("the Video Remake settings sections", () => {
+  it("cover every PUT of the Video Remake admin routes, and each is a PUT and a GET they register", async () => {
     const routes = await registeredRoutes()
     const sectionRoutes = new Set(NODARO_MOTION_SETTINGS_SECTIONS.flatMap((s) => [`PUT ${s.path}`, `GET ${s.path}`]))
     const unclassified = routes.filter((r) => !sectionRoutes.has(r) && !Object.hasOwn(NOT_SETTINGS, r))

@@ -171,7 +171,7 @@
   {
     "label": "K: a Pulse run taken above its recorded quote",
     "jobs": [
-      { "key": "run", "id": "00000000-0000-4000-8000-000000593211", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p", "engine": "motion-pulse", "__castSwapQuote": { "v": 1, "totalCredits": 100, "expectedCredits": 90, "breakdown": { "base": 40, "motion": 60 } } } },
+      { "key": "run", "id": "00000000-0000-4000-8000-000000593211", "parent": null, "jobType": "cast-swap", "type": "cast-swap", "credits": 40, "log": { "status": "committed", "used": 40, "charged": 40 }, "status": "completed", "input": { "resolution": "720p", "engine": "nodaro-pulse", "__castSwapQuote": { "v": 1, "totalCredits": 100, "expectedCredits": 90, "breakdown": { "base": 40, "motion": 60 } } } },
       { "key": "render", "id": "00000000-0000-4000-8000-000000593212", "parent": "00000000-0000-4000-8000-000000593211", "type": "image-to-video", "credits": 120, "log": { "status": "committed", "used": 120, "charged": 120 }, "status": "completed", "providerCost": 0.10 }
     ],
     "expect": {

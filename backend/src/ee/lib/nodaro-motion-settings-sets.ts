@@ -1,5 +1,5 @@
 /**
- * Nodaro Motion's stored settings sets, the rules (pure, beside the sections'
+ * Video Remake's stored settings sets, the rules (pure, beside the sections'
  * own reads): what a set holds, how an exported file is written and read
  * back, and what an imported or stored set is checked against.
  *
@@ -12,24 +12,38 @@
  *
  * The exported file is `{ format: "nodaro-motion-settings", version, exportedAt,
  * name, settings, omitted }`. `version` is the shape of `settings`; a file of an
- * older version is read through `SETTINGS_UPGRADES` (none yet), a newer one is
- * refused. `omitted` names the fields left out because they hold people's data
+ * older version is read through `SETTINGS_UPGRADES`, a newer one is refused. `omitted` names the fields left out because they hold people's data
  * (a section's `privateFields`: the accounts that skip the Precise art-style
  * route); loading such a file keeps the live value of each field it names.
  */
 import { z } from "zod"
 import type { AnyNodaroMotionSettingsSection } from "./nodaro-motion-settings-section.js"
+import { isKeyedByEngine, withCurrentEngineKeys } from "../../lib/nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_SETTINGS_FORMAT = "nodaro-motion-settings"
 
-/** The shape of `settings` written today. Raise it only with an entry in `SETTINGS_UPGRADES` from the version before. */
-export const NODARO_MOTION_SETTINGS_VERSION = 1
+/**
+ * The shape of `settings` written today. Raise it only with an entry in `SETTINGS_UPGRADES` from the version before.
+ *
+ * - 1: each section's engine maps keyed by the engines' ids before 2026-11-17 (`"motion-prism"`, `"motion-pulse"`).
+ * - 2: keyed by the current ids (`"nodaro-prism"`, `"nodaro-pulse"`).
+ */
+export const NODARO_MOTION_SETTINGS_VERSION = 2
+
+/** A section's body with each of its fields that is a map keyed by engine read under the current ids. A new object. */
+function withCurrentEngineIds(body: unknown): unknown {
+  if (!isRecord(body)) return body
+  return Object.fromEntries(Object.entries(body).map(([field, value]) => [field, isKeyedByEngine(value) ? withCurrentEngineKeys(value) : value]))
+}
 
 /**
  * How an older `settings` becomes the next version's, by the version it is read at. A file or a stored set of version
  * n is passed through n → n+1 → … → `NODARO_MOTION_SETTINGS_VERSION`. Pure; new objects.
  */
-export const SETTINGS_UPGRADES: Readonly<Record<number, (settings: Readonly<Record<string, unknown>>) => Record<string, unknown>>> = {}
+export const SETTINGS_UPGRADES: Readonly<Record<number, (settings: Readonly<Record<string, unknown>>) => Record<string, unknown>>> = {
+  // 1 → 2: the engine maps' keys become the current engine ids.
+  1: (settings) => Object.fromEntries(Object.entries(settings).map(([section, body]) => [section, withCurrentEngineIds(body)])),
+}
 
 /** A set's settings: section key → that section's PUT body. */
 export type NodaroMotionSettings = Record<string, unknown>
@@ -51,7 +65,7 @@ export interface SettingsWarning {
 export const settingsSetNameSchema = z.string().trim().min(1, "Give the set a name.").max(120, "A set's name is at most 120 characters.")
 
 const documentSchema = z.strictObject({
-  format: z.literal(NODARO_MOTION_SETTINGS_FORMAT, { error: `Not a Nodaro Motion settings file (its "format" is not "${NODARO_MOTION_SETTINGS_FORMAT}").` }),
+  format: z.literal(NODARO_MOTION_SETTINGS_FORMAT, { error: `Not a Video Remake settings file (its "format" is not "${NODARO_MOTION_SETTINGS_FORMAT}").` }),
   version: z.int().min(1),
   exportedAt: z.string().optional(),
   name: z.string().optional(),
@@ -106,7 +120,7 @@ export function checkSettings(
   for (const [key, body] of Object.entries(raw)) {
     const section = byKey.get(key)
     if (!section) {
-      errors.push({ path: `settings.${key}`, message: `Not a Nodaro Motion setting (the sections are ${sections.map((s) => s.key).join(", ")}).` })
+      errors.push({ path: `settings.${key}`, message: `Not a Video Remake setting (the sections are ${sections.map((s) => s.key).join(", ")}).` })
       continue
     }
     const parsed = section.body.safeParse(body)

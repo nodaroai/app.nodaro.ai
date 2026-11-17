@@ -70,7 +70,7 @@ export type PolicyBlockHint = {
 
 /**
  * The job ran out of credits partway: a step that reserves its own credits
- * (for example, the video a Cast Swap or trend run dispatches) was refused —
+ * (for example, the video a Video Remake or trend run dispatches) was refused —
  * the balance could not cover it, or a plan or workspace cap was reached. The
  * job failed and its credits were refunded; ask the person to top up (or raise
  * the cap), then run it again.
@@ -116,7 +116,7 @@ export type QueueTimeoutHint = {
  * setting, a file's format or size, the prompt's length). The same request is
  * refused the same way, so do not run it again unchanged: change the input
  * images, the video, the prompt or the settings. Not a content-policy block. On a
- * job made of steps (a Nodaro Motion or trend run), one step's refusal.
+ * job made of steps (a Video Remake or trend run), one step's refusal.
  * `subject: "input_video"`: the provider's words name the input video as the
  * fault (its length or size, or no character found in it), so a different clip
  * is what can change.
@@ -238,12 +238,12 @@ export interface Job {
   credits: number | null
   /**
    * What the job actually cost once its hold settled, INCLUDING the steps it
-   * ran: a job that runs other jobs for you (a Nodaro Motion run's reference
+   * ran: a job that runs other jobs for you (a Video Remake run's reference
    * preparation, mask and video) is charged for each, and they are not listed
    * on their own. A step adds its charge once it settles. Can be lower than
    * {@link Job.credits_held} (the unused part goes back to the balance). `0`
    * when the run's own hold was refunded, plus any settled steps (a refunded
-   * Nodaro Motion run whose reference and mask steps committed reads
+   * Video Remake run whose reference and mask steps committed reads
    * `credit_status: "refunded"` with `credits_charged: 165`). `null` while the
    * job's own hold is still open (even when some steps have settled), when
    * nothing in the run was reserved, or when its steps could not be read for a

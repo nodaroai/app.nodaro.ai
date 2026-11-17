@@ -10,9 +10,9 @@
  *  - where a name is needed, the deployment's name (`Nodaro had a server
  *    error` → `Acme had a server error`, `NODARO` in capitals);
  *  - a product built on the platform's name is said as the deployment's own
- *    screens say it: Nodaro Motion is "Motion" and its engines "Motion Prism"
- *    and "Motion Pulse" (the shared header's `whiteLabel.motion`, the tools
- *    app's brand words); a house model is offered under the deployment's own
+ *    screens say it: Video Remake is Video Remake, and its engines keep their
+ *    names, Nodaro Prism and Nodaro Pulse, on every deployment (never
+ *    rewritten); a house model is offered under the deployment's own
  *    label ("Acme Image Upscale", as the tools app names it); a product the
  *    screens have no word for is said generically, never as a brand of the
  *    deployment's: Studio, the Video Director, the Film Director, the Workflow
@@ -143,8 +143,6 @@ const RULES: ReadonlyArray<readonly [RegExp, Replace]> = [
   // An example picture on the platform's media host (a placeholder a client may copy).
   [/https:\/\/cdn\.nodaro\.ai\/uploads\//g, () => "https://example.com/uploads/"],
   // ── a product built on the name ──
-  [/\bNodaro (Motion)\b/g, (_n, _m, [w]) => w!],
-  [/\bNODARO (MOTION)\b/g, (_n, _m, [w]) => w!],
   [/\bNodaro (Studio|Video Director|Film Director|Workflow Editor)\b/g, (_n, _m, [w]) => w!],
   [/\b([Aa]n?|[Tt]he) Nodaro Cloud\b/g, (_n, _m, [a]) => `${/^[Tt]/.test(a!) ? a : a![0]} Cloud edition`],
   [/\b([Oo]n|[Ii]n) Nodaro Cloud\b/g, (_n, _m, [p]) => `${p} the Cloud edition`],
@@ -180,8 +178,22 @@ export function statedName(text: string, opts: { json?: boolean } = {}): string 
   return rewritten(text, written)
 }
 
-/** The rules applied to `text`, the name already escaped for it. */
+/** Video Remake's engines, named alike on every deployment: never rewritten. */
+const KEPT_NAMES = /(\bNodaro (?:Prism|Pulse)\b|\bNODARO (?:PRISM|PULSE)\b)/
+
+/** The rules applied to `text`, the name already escaped for it; the engines' names (odd parts) are left as they are. */
 function rewritten(text: string, written: string): string {
+  if (!/nodaro/i.test(text)) return text
+  if (KEPT_NAMES.test(text)) {
+    return text
+      .split(KEPT_NAMES)
+      .map((part, i) => (i % 2 === 1 ? part : rewrittenPart(part, written)))
+      .join("")
+  }
+  return rewrittenPart(text, written)
+}
+
+function rewrittenPart(text: string, written: string): string {
   if (!/nodaro/i.test(text)) return text
   let out = text
   for (const [pattern, replace] of RULES) {

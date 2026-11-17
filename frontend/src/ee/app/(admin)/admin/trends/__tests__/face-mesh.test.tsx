@@ -5,7 +5,7 @@
  *
  * - The pure rules: saved only as `true` (off = no key), dropped on the way
  *   to Keep people, refused there; the environments that cannot draw it
- *   (Admin → Nodaro Motion's shared setting); its publish need as a sentence.
+ *   (Admin → Video Remake's shared setting); its publish need as a sentence.
  * - The editor: shown while masking with Faces hidden or Full depth, and only
  *   once some environment's engine draws it (a switch already on stays, to be
  *   turned off); never for Keep people or with the mode Off; unticking
@@ -51,7 +51,7 @@ describe("the face mesh's rules", () => {
     expect(clipPreparationIssues({ mode: "always", source: "full-depth", faceMesh: true })).toEqual([])
   })
 
-  it("Nodaro Motion's shared setting: the environments that cannot draw it, a missing one included", () => {
+  it("Video Remake's shared setting: the environments that cannot draw it, a missing one included", () => {
     expect(environmentsThatCannotDrawFaceMesh(undefined)).toBeUndefined()
     expect(environmentsThatCannotDrawFaceMesh([])).toEqual(["staging", "production"])
     expect(environmentsThatCannotDrawFaceMesh([meshAt("production", true)])).toEqual(["staging"])

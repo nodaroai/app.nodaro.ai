@@ -22,29 +22,29 @@ afterEach(() => _resetPluginSupportsForTests())
 describe("a direct run's prompt-parts request, fill none", () => {
   it("says maskFill none (with the face mesh) to an engine that declares castSwap.maskFillNone: Precise's setting, Motion's own", () => {
     setPluginSupports({ castSwap: NONE_ENGINE } as never)
-    const precise = forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, NONE))
+    const precise = forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, NONE))
     expect(precise).toMatchObject({ faceMesh: true, maskFill: "none" })
     expect(precise).not.toHaveProperty("depthColormap")
-    expect(forLoadedEngine(directRunRequest("motion-pulse", "motion", { masking: NONE }, body))).toMatchObject({ faceMesh: true, maskFill: "none" })
+    expect(forLoadedEngine(directRunRequest("nodaro-pulse", "motion", { masking: NONE }, body))).toMatchObject({ faceMesh: true, maskFill: "none" })
     // A colormap left on the setting draws nothing under none: never sent.
-    expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, { ...NONE, depthColormap: "inferno" }))).not.toHaveProperty("depthColormap")
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, { ...NONE, depthColormap: "inferno" }))).not.toHaveProperty("depthColormap")
   })
 
   it("never says it to an engine without castSwap.maskFillNone, nor for a masking off", () => {
     setPluginSupports({ castSwap: ENGINE } as never)
-    const older = forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, NONE))
+    const older = forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, NONE))
     expect(older).not.toHaveProperty("maskFill")
     expect(older).toMatchObject({ faceMesh: true })
     setPluginSupports({ castSwap: NONE_ENGINE } as never)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, { ...NONE, mode: "off" }))).not.toHaveProperty("maskFill")
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, { ...NONE, mode: "off" }))).not.toHaveProperty("maskFill")
   })
 
   it("absent = before: a depth fill's request is unchanged by the declaration", () => {
     const depth = { mode: "always", fill: "depth", depthColormap: "viridis" } as const
     setPluginSupports({ castSwap: { ...NONE_ENGINE, maskFillNone: undefined } } as never)
-    const before = forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, depth))
+    const before = forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, depth))
     setPluginSupports({ castSwap: NONE_ENGINE } as never)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, depth))).toEqual(before)
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, depth))).toEqual(before)
     expect(before).toMatchObject({ depthColormap: "viridis", maskFill: "depth" })
   })
 })

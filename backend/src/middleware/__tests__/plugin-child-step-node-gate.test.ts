@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } 
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * Nodaro Motion's steps through the REAL auth hook and the REAL credit guard
+ * Video Remake's steps through the REAL auth hook and the REAL credit guard
  * at each step route's REAL path (decided 2026-11-10): a step the engine's job
  * sends — `tk.http.workerRequest`, internal auth plus a parent job in the
  * server-only scope — is gated as `cast-swap`, the node the user ran, so a
@@ -73,7 +73,7 @@ const USER = "00000000-0000-4000-8000-000000000001"
 const PARENT = "00000000-0000-4000-8000-0000000000aa"
 const SECRET = process.env.INTERNAL_ORCHESTRATOR_SECRET as string
 
-/** The four routes Nodaro Motion's job sends its steps to, each with the node it is its own run of. */
+/** The four routes Video Remake's job sends its steps to, each with the node it is its own run of. */
 const STEP_ROUTES = [
   { url: "/v1/video-depth", node: "video-depth" },
   { url: "/v1/mask-composite", node: "mask-composite" },
@@ -125,7 +125,7 @@ const step = (url: string, parentJobId = PARENT) =>
 /** The same route reached without a parent job (an internal hop, or a body naming a user). */
 const direct = (url: string) => app.inject({ method: "POST", url, headers: internalHeaders, payload: {} })
 
-describe("a Nodaro Motion step is gated as cast-swap", () => {
+describe("a Video Remake step is gated as cast-swap", () => {
   it("has a secret to test with", () => {
     expect(SECRET?.length).toBeGreaterThanOrEqual(32)
   })

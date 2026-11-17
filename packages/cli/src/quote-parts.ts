@@ -1,5 +1,5 @@
 /**
- * Nodaro Motion quotes, as the CLI shows them. The engine's vendor-named keys
+ * Video Remake quotes, as the CLI shows them. The engine's vendor-named keys
  * are being renamed to neutral ones: Cast Swap 0.394.0
  * answers both, 0.395.0 the new ones only, 0.393.0 and older the old ones
  * only. The CLI reads the new key first, falls back to the old one, and never
@@ -51,7 +51,7 @@ export function neutralQuote<T extends { breakdown?: unknown }>(quote: T): T {
 }
 
 const PART_LABELS: Readonly<Record<string, string>> = {
-  base: "Nodaro Motion",
+  base: "Video Remake",
   references: "reference pictures",
   motion: "video",
   motionExpected: "video, expected",

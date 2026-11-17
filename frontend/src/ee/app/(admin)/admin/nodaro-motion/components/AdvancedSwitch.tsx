@@ -1,5 +1,5 @@
-// Admin → Nodaro Motion, the page's Advanced switch (the `nodaro_motion_advanced`
-// setting): whether the Nodaro Motion page shows its Advanced chip, which holds
+// Admin → Video Remake, the page's Advanced switch (the `nodaro_motion_advanced`
+// setting): whether the Video Remake page shows its Advanced chip, which holds
 // Prepare references and the pre-prompt. One switch for the whole page, not per
 // engine; off (hidden) until it is turned on.
 //
@@ -11,10 +11,10 @@ import { useId } from "react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 
-export const ADVANCED_SWITCH_LABEL = "Advanced in Nodaro Motion"
+export const ADVANCED_SWITCH_LABEL = "Advanced in Video Remake"
 
 export const ADVANCED_SWITCH_HINT =
-  "Shows the Advanced chip (Prepare references and the pre-prompt) on the Nodaro Motion page. Hidden by default. Only the page changes: runs through the API, the SDK and MCP can still set both."
+  "Shows the Advanced chip (Prepare references and the pre-prompt) on the Video Remake page. Hidden by default. Only the page changes: runs through the API, the SDK and MCP can still set both."
 
 interface Props {
   /** The draft: on = shown. */

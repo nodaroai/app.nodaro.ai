@@ -152,7 +152,7 @@ export const NODE_AVAILABILITY_GATE: unique symbol = Symbol.for("nodaro.nodeAvai
  * A preHandler that refuses (403 `node_not_available`, the credit guard's
  * shape) when `type` is not available to the caller — for a route that starts
  * a node's run without passing that node's credit guard itself (a trend run is
- * composed here and dispatched to Nodaro Motion, `cast-swap`, as an internal
+ * composed here and dispatched to Video Remake, `cast-swap`, as an internal
  * request). Asked as a door of route gating (`ROUTE_GATES_GENERATION`): an
  * override stored before such doors existed never decided it.
  */

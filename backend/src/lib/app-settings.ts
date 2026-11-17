@@ -92,32 +92,32 @@ export interface AppSettings {
    */
   model_maker_logos: ModelMakerId[]
   /**
-   * Nodaro Motion's face masking per engine (nodaro-motion-masking.ts), for
+   * Video Remake's face masking per engine (nodaro-motion-masking.ts), for
    * direct runs. null = never saved (no masking). Each engine's entry is
    * validated on its own; an invalid one is dropped.
    */
   nodaro_motion_masking: NodaroMotionMasking | null
   /**
-   * Nodaro Motion's prompt part overrides per engine and style
+   * Video Remake's prompt part overrides per engine and style
    * (nodaro-motion-prompt-parts.ts), for direct runs. null = never saved (the
    * engine's defaults). Each engine's entry is validated on its own; an
    * invalid one is dropped.
    */
   nodaro_motion_prompt_parts: NodaroMotionPromptParts | null
   /**
-   * Nodaro Motion's Motion setting per engine (nodaro-motion-motion.ts), for
+   * Video Remake's Motion setting per engine (nodaro-motion-motion.ts), for
    * direct runs with `style: "motion"`. null = never saved (Full depth with
    * its scene from a description, the Flexible prompt). Each engine's entry
    * is validated on its own; an invalid one is dropped.
    */
   nodaro_motion_motion: NodaroMotionMotion | null
   /**
-   * The audio of every DIRECT Nodaro Motion Pulse run (cast-swap-pulse-audio.ts).
+   * The audio of every DIRECT Nodaro Pulse run (cast-swap-pulse-audio.ts).
    * null = never saved (or not a value this app knows): the original audio.
    */
   nodaro_motion_pulse_audio: CastSwapPulseAudio | null
   /**
-   * The reference audio of every DIRECT Nodaro Motion Prism run, a mode and a
+   * The reference audio of every DIRECT Nodaro Prism run, a mode and a
    * pitch shift per output resolution, as stored (cast-swap-prism-reference-audio.ts:
    * an id where one says the value; a plain id saved earlier reads as that id
    * at every resolution). null = never saved (or not a value this app knows):
@@ -125,41 +125,41 @@ export interface AppSettings {
    */
   nodaro_motion_prism_reference_audio: CastSwapPrismReferenceAudio | null
   /**
-   * Nodaro Motion's preparation steps per engine (nodaro-motion-steps.ts), for
+   * Video Remake's preparation steps per engine (nodaro-motion-steps.ts), for
    * direct runs. null = never saved (today's run). Each engine's entry is
    * validated on its own; an invalid or empty one is dropped.
    */
   nodaro_motion_steps: NodaroMotionSteps | null
   /**
-   * Nodaro Motion's Style choice per engine (nodaro-motion-style.ts), for
+   * Video Remake's Style choice per engine (nodaro-motion-style.ts), for
    * direct runs: the engines whose style an admin forced. null = never saved
    * (people choose). Each engine's choice is validated on its own; an invalid
    * one is dropped.
    */
   nodaro_motion_style: NodaroMotionStyle | null
   /**
-   * Nodaro Motion's Flex prompt wording per engine
+   * Video Remake's Flex prompt wording per engine
    * (nodaro-motion-prompt-wording.ts), for direct runs: the engines an admin
    * put on the new wording. null = never saved (the current wording). Each
    * engine's wording is validated on its own; an invalid one is dropped.
    */
   nodaro_motion_prompt_wording: NodaroMotionPromptWording | null
   /**
-   * Nodaro Motion's style-only setting per engine (nodaro-motion-style-only.ts),
+   * Video Remake's style-only setting per engine (nodaro-motion-style-only.ts),
    * for direct style-only runs: each engine's path and engine-prompt step where
    * an admin changed them. null = never saved (the original path, the template).
    * Each engine's entry is validated on its own; an invalid one is dropped.
    */
   nodaro_motion_style_only: NodaroMotionStyleOnly | null
   /**
-   * Nodaro Motion's setting for a Precise run with an art style per engine
+   * Video Remake's setting for a Precise run with an art style per engine
    * (nodaro-motion-precise-art-style.ts): each engine's opener where an admin
    * changed it. null = never saved ("restyle"). Each engine's entry is
    * validated on its own; an invalid one is dropped.
    */
   nodaro_motion_precise_art_style: NodaroMotionPreciseArtStyle | null
   /**
-   * Nodaro Motion's no-person setting per engine (nodaro-motion-no-person.ts):
+   * Video Remake's no-person setting per engine (nodaro-motion-no-person.ts):
    * the engines an admin switched off, whose direct Precise runs with no
    * pictured person do not send the source clip. null = never saved (on for
    * every engine). Each engine's entry is validated on its own; an invalid one
@@ -167,13 +167,13 @@ export interface AppSettings {
    */
   nodaro_motion_no_person: NodaroMotionNoPerson | null
   /**
-   * Whether a direct Nodaro Motion Prism Precise run with an art style runs as
+   * Whether a direct Nodaro Prism Precise run with an art style runs as
    * Flex, and the accounts that skip it (nodaro-motion-precise-style-route.ts).
    * null = never saved (routing on, nobody bypassed). Read field by field.
    */
   nodaro_motion_precise_style_route: NodaroMotionPreciseStyleRoute | null
   /**
-   * Whether a Nodaro Motion page shows its Advanced options (Prepare
+   * Whether a Video Remake page shows its Advanced options (Prepare
    * references and the pre-prompt; nodaro-motion-advanced.ts): one switch for
    * the whole page. null = never saved, or not a value this app knows: hidden.
    * A page option only: no run or quote reads it.

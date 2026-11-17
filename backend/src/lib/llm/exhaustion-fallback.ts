@@ -9,7 +9,8 @@ import { directLaneLatch } from "../llm-platform-exhaustion.js"
 import { anthropicDirectUsable, anthropicKeySet, kieKeySet } from "./anthropic-availability.js"
 import { callKie, streamKie } from "./kie-lane.js"
 import { serveFromFallback, type LaneFallbackCtx } from "./lane-fallback.js"
-import type { LlmRequest, LlmResponse } from "./types.js"
+import { KIE_INLINE_DATA_URL_MAX_CHARS } from "../kie-inline-image.js"
+import type { LlmContentBlock, LlmRequest, LlmResponse } from "./types.js"
 
 /**
  * Can KIE carry this request as it stands? Every registry model but a
@@ -21,11 +22,28 @@ import type { LlmRequest, LlmResponse } from "./types.js"
  * image URLs (`inlineImagesForKie`); the Claude wire sends them as URLs, which
  * KIE fetches itself — a caller that needs them inline converts them first
  * (`inlineImagesForClaudeKie`).
+ A document travels only as its model's declared shape
+ * ({@link kieCanCarryFile}).
  */
-export function kieCanCarry(req: LlmRequest): boolean {
+export function kieCanCarry(req: LlmRequest, model: Pick<LlmModelDef, "fileWire"> | undefined = req.modelId ? getLlmModel(req.modelId) : undefined): boolean {
+  const fileWire = model?.fileWire?.kie
   return req.messages.every((m) =>
-    typeof m.content === "string" || m.content.every((b) => b.type !== "video_base64" && b.type !== "video" && b.type !== "audio"),
+    typeof m.content === "string" || m.content.every((b) =>
+      b.type !== "video_base64" && b.type !== "video" && b.type !== "audio" && (b.type !== "file_base64" || kieCanCarryFile(b, fileWire)),
+    ),
   )
+}
+
+/**
+ * A document travels to KIE only in the shape its model declares for that
+ * lane. On the chat-completions dialect (`image-url`) that is inline up to the
+ * part's limit or by a stored link, so a larger file with no link (a call
+ * built for the vendor's own API, which takes the bytes) cannot be carried.
+ */
+function kieCanCarryFile(b: Extract<LlmContentBlock, { type: "file_base64" }>, wire: "input-file" | "image-url" | undefined): boolean {
+  if (wire === "input-file") return true
+  if (wire !== "image-url") return false
+  return b.hostedUrl !== undefined || `data:${b.mediaType};base64,`.length + b.data.length <= KIE_INLINE_DATA_URL_MAX_CHARS
 }
 
 /** The KIE model id a registry model is served as there — its own `kieSlugOrModel`;
@@ -54,7 +72,7 @@ export function kieEquivalentOf(modelId: string): string | undefined {
  */
 export function exhaustionKieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmResponse>) | undefined {
   // Advanced mode is the vendor's own API: never served from KIE (advancedModeRefusalOf names it instead).
-  if (!kieKeySet() || model.directOnly || req.requireLane === "kie" || req.advancedMode || !kieCanCarry(req)) return undefined
+  if (!kieKeySet() || model.directOnly || req.requireLane === "kie" || req.advancedMode || !kieCanCarry(req, model)) return undefined
   return () => {
     if (req.reasoningEffort !== undefined) {
       console.warn(`[llm-lane-fallback] ${model.id}: reasoning effort ${req.reasoningEffort} runs as KIE's on/off thinkingFlag, not at its level`)
@@ -130,7 +148,7 @@ export async function streamWithExhaustionFallback(
 export function exhaustionKieStreamFallback(
   model: LlmModelDef, req: LlmRequest, signal?: AbortSignal,
 ): ((onToken: (chunk: string) => void) => Promise<LlmResponse>) | undefined {
-  if (!kieKeySet() || model.directOnly || req.requireLane === "kie" || req.advancedMode || !kieCanCarry(req)) return undefined
+  if (!kieKeySet() || model.directOnly || req.requireLane === "kie" || req.advancedMode || !kieCanCarry(req, model)) return undefined
   return (cb) => streamKie(model, req, cb, signal)
 }
 

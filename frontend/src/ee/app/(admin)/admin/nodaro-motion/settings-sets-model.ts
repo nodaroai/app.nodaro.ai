@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion's stored settings sets, the page's side (pure, over
+// Admin → Video Remake's stored settings sets, the page's side (pure, over
 // the page's section bindings, settings-sections.ts): the page's values as a
 // set, which sections differ from live, which stored set is live, and saving
 // a loaded draft section by section through each section's own route.
@@ -122,5 +122,5 @@ export function exportFileName(name: string, now: Date = new Date()): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
-  return `nodaro-motion-${slug || "settings"}-${now.toISOString().slice(0, 10)}.json`
+  return `video-remake-${slug || "settings"}-${now.toISOString().slice(0, 10)}.json`
 }

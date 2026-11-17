@@ -1,5 +1,5 @@
 /**
- * The retention of Nodaro Motion's coloured depth maps
+ * The retention of Video Remake's coloured depth maps
  * (`cast-swap/depth-clips/<jobId>-<attempt>-<nonce>.mp4`, cast-swap 0.426.0):
  * a finished run's (or Full Quality version's) map goes once both it and its
  * job are past the Full Quality window plus a margin; a finished make's (its

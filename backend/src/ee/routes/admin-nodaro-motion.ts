@@ -1,37 +1,37 @@
 /**
- * Nodaro Motion's admin settings (Cloud: registered under `hasAdmin() &&
+ * Video Remake's admin settings (Cloud: registered under `hasAdmin() &&
  * hasCredits()`, beside the trends admin). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/masking   the face masking per engine (null = never saved)
- *   PUT /v1/admin/nodaro-motion/masking   save it (the whole setting), audit-logged
- *   GET/PUT /v1/admin/nodaro-motion/prompt-parts, POST …/prompt-parts/preview
+ *   GET /v1/admin/video-remake/masking   the face masking per engine (null = never saved)
+ *   PUT /v1/admin/video-remake/masking   save it (the whole setting), audit-logged
+ *   GET/PUT /v1/admin/video-remake/prompt-parts, POST …/prompt-parts/preview
  *                                         the direct runs' prompt part overrides (admin-nodaro-motion-prompt-parts.ts)
- *   GET/PUT /v1/admin/nodaro-motion/motion
+ *   GET/PUT /v1/admin/video-remake/motion
  *                                         the Motion style's masking and prompt style per engine (admin-nodaro-motion-motion.ts)
- *   GET/PUT /v1/admin/nodaro-motion/pulse-audio
+ *   GET/PUT /v1/admin/video-remake/pulse-audio
  *                                         the direct Pulse runs' audio (admin-nodaro-motion-pulse-audio.ts)
- *   GET/PUT /v1/admin/nodaro-motion/prism-reference-audio
+ *   GET/PUT /v1/admin/video-remake/prism-reference-audio
  *                                         the direct Prism runs' reference audio (admin-nodaro-motion-prism-reference-audio.ts)
- *   GET/PUT /v1/admin/nodaro-motion/steps, GET …/steps/defaults, POST …/steps/check
+ *   GET/PUT /v1/admin/video-remake/steps, GET …/steps/defaults, POST …/steps/check
  *                                         the direct runs' preparation steps per engine (admin-nodaro-motion-steps.ts)
- *   GET/PUT /v1/admin/nodaro-motion/style
- *                                         who chooses a direct run's style per engine: people, or Precise in Nodaro Motion / always Flex (admin-nodaro-motion-style.ts)
- *   GET/PUT /v1/admin/nodaro-motion/style-only
+ *   GET/PUT /v1/admin/video-remake/style
+ *                                         who chooses a direct run's style per engine: people, or Precise in Video Remake / always Flex (admin-nodaro-motion-style.ts)
+ *   GET/PUT /v1/admin/video-remake/style-only
  *                                         what a direct style-only run does per engine: its path and engine prompt (admin-nodaro-motion-style-only.ts)
- *   GET/PUT /v1/admin/nodaro-motion/precise-art-style
+ *   GET/PUT /v1/admin/video-remake/precise-art-style
  *                                         how a direct Precise run with an art style opens its prompt per engine: "restyle" or "edit" (admin-nodaro-motion-precise-art-style.ts)
- *   GET/PUT /v1/admin/nodaro-motion/no-person
+ *   GET/PUT /v1/admin/video-remake/no-person
  *                                         whether a direct Precise run with no pictured person sends its source clip, per engine (admin-nodaro-motion-no-person.ts)
- *   GET/PUT /v1/admin/nodaro-motion/precise-style-route
+ *   GET/PUT /v1/admin/video-remake/precise-style-route
  *                                         whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it (admin-nodaro-motion-precise-style-route.ts)
- *   GET/PUT /v1/admin/nodaro-motion/advanced
- *                                         whether a Nodaro Motion page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
- *   GET/POST /v1/admin/nodaro-motion/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
+ *   GET/PUT /v1/admin/video-remake/advanced
+ *                                         whether a Video Remake page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
+ *   GET/POST /v1/admin/video-remake/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
  *                                         named copies of every setting above, kept to load as a draft (admin-nodaro-motion-settings-sets.ts)
  *
  * The setting (`nodaro_motion_masking`, lib/nodaro-motion-masking.ts) is how
  * the Cast Swap engine masks faces on every DIRECT run of each engine —
- * people running Nodaro Motion never set it, and a trend run keeps its own
+ * people running Video Remake never set it, and a trend run keeps its own
  * trend's setting. Until an admin saves it, no engine masks.
  *
  * A save whose entry hides whole people (faces hidden, target "body") is 409
@@ -122,7 +122,7 @@ const putBody = z.strictObject({ masking: nodaroMotionMaskingSchema })
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): saved as sent. */
 export const NODARO_MOTION_MASKING_SECTION = defineNodaroMotionSettingsSection({
   key: "masking",
-  path: "/v1/admin/nodaro-motion/masking",
+  path: "/v1/admin/video-remake/masking",
   label: "Precise masking",
   body: putBody,
   prepare: (body) => ({ value: { masking: body.masking } }),
@@ -179,11 +179,11 @@ export const NODARO_MOTION_MASKING_SECTION = defineNodaroMotionSettingsSection({
 })
 
 /**
- * Every setting the Admin → Nodaro Motion page edits, one section per save route, in the order a loaded settings set
+ * Every setting the Admin → Video Remake page edits, one section per save route, in the order a loaded settings set
  * saves them (admin-nodaro-motion-settings-sets.ts): the Flex wording first (the prompt checks word a Flex run as it
  * will run), the engine prompt last (its check reads the masking, Motion and steps settings it runs with). A set that
  * holds both a longer prompt and a masking that makes it longer is saved again once the others are; the page reports
- * each section's result. `nodaro-motion-settings-sections.test.ts` fails when a Nodaro Motion admin PUT is missing here.
+ * each section's result. `nodaro-motion-settings-sections.test.ts` fails when a Video Remake admin PUT is missing here.
  */
 export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSection[] = [
   NODARO_MOTION_PROMPT_WORDING_SECTION,
@@ -244,15 +244,15 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPreciseStyleRouteRoutes(app)
   registerNodaroMotionAdvancedRoutes(app)
   registerNodaroMotionSettingsSetsRoutes(app, NODARO_MOTION_SETTINGS_SECTIONS)
-  app.get("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion masking")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake masking")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/masking", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/masking", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_MASKING_SECTION.body.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
@@ -299,7 +299,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
           return directRunPromptPartsInvalid(
             reply,
             problems,
-            `${meshTurnsOn ? "With the face mesh on" : "With this masking"}, the saved Nodaro Motion prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
+            `${meshTurnsOn ? "With the face mesh on" : "With this masking"}, the saved Video Remake prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
           )
         }
       }
@@ -311,7 +311,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion masking")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake masking")
     }
   })
 }

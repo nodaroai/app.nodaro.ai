@@ -1,19 +1,23 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  CastSwapResource,
+  VideoRemakeResource,
   createClient,
   NodaroError,
   StaticTokenAuth,
   type CastSwapEngine,
-  type CastSwapEstimate,
-  type CastSwapFullQualityEstimate,
-  type CastSwapFullQualityKind,
-  type CastSwapFullQualityRefusalCode,
-  type CastSwapFullQualityResult,
-  type CastSwapFaceMasking,
   type CastSwapParams,
-  type CastSwapStyle,
-  type CastSwapStyleChoice,
-  type CastSwapStyleChoiceOption,
+  type VideoRemakeEngine,
+  type VideoRemakeEstimate,
+  type VideoRemakeFullQualityEstimate,
+  type VideoRemakeFullQualityKind,
+  type VideoRemakeFullQualityRefusalCode,
+  type VideoRemakeFullQualityResult,
+  type VideoRemakeFaceMasking,
+  type VideoRemakeParams,
+  type VideoRemakeStyle,
+  type VideoRemakeStyleChoice,
+  type VideoRemakeStyleChoiceOption,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
@@ -32,7 +36,7 @@ function make(fetchMock: ReturnType<typeof vi.fn>) {
   })
 }
 
-const params: CastSwapParams = {
+const params: VideoRemakeParams = {
   videoUrl: "https://cdn.example.com/clip.mp4",
   roles: [
     {
@@ -54,14 +58,14 @@ const params: CastSwapParams = {
   origin: "tools",
 }
 
-describe("castSwap resource", () => {
-  it("run posts the body to /v1/cast-swap", async () => {
+describe("videoRemake resource", () => {
+  it("run posts the body to /v1/video-remake", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }, 202))
     const client = make(fetchMock)
 
-    await expect(client.castSwap.run(params)).resolves.toEqual({ jobId: "job-1" })
+    await expect(client.videoRemake.run(params)).resolves.toEqual({ jobId: "job-1" })
 
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-remake")
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
     expect(init.method).toBe("POST")
     expect(JSON.parse(init.body)).toEqual(params)
@@ -71,7 +75,7 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }, 202))
     const client = make(fetchMock)
 
-    await client.castSwap.run(params, { idempotencyKey: "retry-key-0001" })
+    await client.videoRemake.run(params, { idempotencyKey: "retry-key-0001" })
 
     const init = fetchMock.mock.calls[0][1] as { headers: Record<string, string>; body: string }
     expect(init.headers["Idempotency-Key"]).toBe("retry-key-0001")
@@ -82,8 +86,8 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValue(mockOk({ jobId: "job-1" }, 202))
     const client = make(fetchMock)
 
-    await client.castSwap.run(params)
-    await client.castSwap.run(params, {})
+    await client.videoRemake.run(params)
+    await client.videoRemake.run(params, {})
 
     for (const call of fetchMock.mock.calls) {
       const init = call[1] as { headers: Record<string, string> }
@@ -95,12 +99,12 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1", deduped: true }, 200))
     const client = make(fetchMock)
 
-    const out: { jobId: string; deduped?: boolean } = await client.castSwap.run(params)
+    const out: { jobId: string; deduped?: boolean } = await client.videoRemake.run(params)
     expect(out).toEqual({ jobId: "job-1", deduped: true })
   })
 
   it("run posts pet and product roles, the resolution and the preparation switch unchanged", async () => {
-    const v1: CastSwapParams = {
+    const v1: VideoRemakeParams = {
       videoUrl: "https://cdn.example.com/clip.mp4",
       roles: [
         { kind: "person", name: "the runner", images: ["https://cdn.example.com/me.png"], hair: "original" },
@@ -115,7 +119,7 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-2" }, 202))
     const client = make(fetchMock)
 
-    await expect(client.castSwap.run(v1)).resolves.toEqual({ jobId: "job-2" })
+    await expect(client.videoRemake.run(v1)).resolves.toEqual({ jobId: "job-2" })
 
     const init = fetchMock.mock.calls[0][1] as { body: string }
     expect(JSON.parse(init.body)).toEqual(v1)
@@ -124,7 +128,7 @@ describe("castSwap resource", () => {
   // faceMasking is deprecated and ignored by the server (Nodaro sets it per engine); the SDK
   // still types and sends it as given, so older code compiles and runs unchanged.
   it("still sends a deprecated faceMasking as given (the server ignores it)", async () => {
-    const faceMasking: CastSwapFaceMasking = {
+    const faceMasking: VideoRemakeFaceMasking = {
       mode: "auto",
       fill: "depth",
       minFaceHeightPct: 10,
@@ -133,11 +137,11 @@ describe("castSwap resource", () => {
       blurStrengthPct: 3,
       threshold: 0.4,
     }
-    const withMasking: CastSwapParams = { ...params, faceMasking }
+    const withMasking: VideoRemakeParams = { ...params, faceMasking }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-3" }, 202))
     const client = make(fetchMock)
 
-    await client.castSwap.run(withMasking)
+    await client.videoRemake.run(withMasking)
 
     const init = fetchMock.mock.calls[0][1] as { body: string }
     expect(JSON.parse(init.body).faceMasking).toEqual(faceMasking)
@@ -146,27 +150,27 @@ describe("castSwap resource", () => {
   // vitest does not typecheck: the `@ts-expect-error` lines below are held by
   // CI's "SDK type tests" step (`tsc -p packages/client/tsconfig.type-tests.json`).
   it("types faceMasking: mode is required, the rest optional, and only the documented values", () => {
-    const minimal: CastSwapFaceMasking = { mode: "always" }
-    const zoneOnly: CastSwapFaceMasking = { mode: "always", zone: { leftPct: 10 } }
+    const minimal: VideoRemakeFaceMasking = { mode: "always" }
+    const zoneOnly: VideoRemakeFaceMasking = { mode: "always", zone: { leftPct: 10 } }
     // null = no margins (left out = the default margins).
-    const noMargins: CastSwapFaceMasking = { mode: "always", zone: null }
+    const noMargins: VideoRemakeFaceMasking = { mode: "always", zone: null }
     // @ts-expect-error — mode is required
-    const noMode: CastSwapFaceMasking = { fill: "blur" }
+    const noMode: VideoRemakeFaceMasking = { fill: "blur" }
     // @ts-expect-error — not a mode
-    const badMode: CastSwapFaceMasking = { mode: "sometimes" }
+    const badMode: VideoRemakeFaceMasking = { mode: "sometimes" }
     // @ts-expect-error — not a fill
-    const badFill: CastSwapFaceMasking = { mode: "auto", fill: "pixelate" }
+    const badFill: VideoRemakeFaceMasking = { mode: "auto", fill: "pixelate" }
     expect([minimal, zoneOnly, noMargins, noMode, badMode, badFill]).toHaveLength(6)
   })
 
-  it("run and estimate post engine unchanged, Nodaro Motion Pulse at 720p with no draft", async () => {
+  it("run and estimate post engine unchanged, Nodaro Pulse at 720p with no draft", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-k" }, 202)).mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: { castSwap: 1, motion: 0, references: 0 }, settlesLower: false }))
     const client = make(fetchMock)
-    const lite: CastSwapParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "motion-pulse", resolution: "720p", draft: false, motionLength: "cut-start" }
-    await client.castSwap.run(lite)
-    await client.castSwap.estimate(lite)
+    const lite: VideoRemakeParams = { videoUrl: params.videoUrl, roles: params.roles, engine: "nodaro-pulse", resolution: "720p", draft: false, motionLength: "cut-start" }
+    await client.videoRemake.run(lite)
+    await client.videoRemake.estimate(lite)
     for (const call of fetchMock.mock.calls) {
-      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "motion-pulse", resolution: "720p", draft: false, motionLength: "cut-start" })
+      expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine: "nodaro-pulse", resolution: "720p", draft: false, motionLength: "cut-start" })
     }
   })
 
@@ -177,67 +181,72 @@ describe("castSwap resource", () => {
       .mockReturnValueOnce(mockOk({ totalCredits: 1, breakdown: {}, settlesLower: false }))
       .mockReturnValueOnce(mockOk({ jobId: "job-p" }, 202))
     const client = make(fetchMock)
-    const motion: CastSwapParams = { ...params, style: "motion" }
-    await client.castSwap.run(motion)
-    await client.castSwap.estimate(motion)
-    await client.castSwap.run(params)
+    const motion: VideoRemakeParams = { ...params, style: "motion" }
+    await client.videoRemake.run(motion)
+    await client.videoRemake.estimate(motion)
+    await client.videoRemake.run(params)
     const bodies = fetchMock.mock.calls.map((call) => JSON.parse((call[1] as { body: string }).body) as { style?: string })
     expect(bodies.map((b) => b.style)).toEqual(["motion", "motion", undefined])
-    const styles: CastSwapStyle[] = ["precise", "motion"]
+    const styles: VideoRemakeStyle[] = ["precise", "motion"]
     // @ts-expect-error — not a style
-    const bad: CastSwapStyle = "loose"
+    const bad: VideoRemakeStyle = "loose"
     expect([styles, bad]).toHaveLength(2)
   })
 
   it("answers an estimate's engine by its public id, whichever id the server named it by", async () => {
     for (const [answered, engine] of [
-      ["motion-pro", "motion-prism"],
-      ["motion-lite", "motion-pulse"],
-      ["kling-4", "motion-pulse"],
-      ["motion-pulse", "motion-pulse"],
+      ["motion-prism", "nodaro-prism"],
+      ["motion-pro", "nodaro-prism"],
+      ["seedance-2-5", "nodaro-prism"],
+      ["motion-pulse", "nodaro-pulse"],
+      ["motion-lite", "nodaro-pulse"],
+      ["kling-4", "nodaro-pulse"],
+      ["nodaro-pulse", "nodaro-pulse"],
     ] as const) {
       const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ engine: answered, totalCredits: 1, breakdown: {}, settlesLower: false }))
-      await expect(make(fetchMock).castSwap.estimate(params)).resolves.toMatchObject({ engine, totalCredits: 1 })
+      await expect(make(fetchMock).videoRemake.estimate(params)).resolves.toMatchObject({ engine, totalCredits: 1 })
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ totalCredits: 2, breakdown: {}, settlesLower: false }))
-    expect(await make(fetchMock).castSwap.estimate(params)).not.toHaveProperty("engine")
+    expect(await make(fetchMock).videoRemake.estimate(params)).not.toHaveProperty("engine")
   })
 
-  it("leaves engine out of the body when it is not given (the route runs Nodaro Motion Prism)", async () => {
+  it("leaves engine out of the body when it is not given (the route runs Nodaro Prism)", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-s" }, 202))
     const client = make(fetchMock)
-    await client.castSwap.run(params)
+    await client.videoRemake.run(params)
     expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).not.toHaveProperty("engine")
   })
 
   it("types engine and the Full Quality kind: only the documented values", () => {
-    const engines: CastSwapEngine[] = ["motion-prism", "motion-pulse"]
+    const engines: VideoRemakeEngine[] = ["nodaro-prism", "nodaro-pulse"]
     // @ts-expect-error — not an engine
-    const badEngine: CastSwapEngine = "kling-3"
+    const badEngine: VideoRemakeEngine = "kling-3"
     // @ts-expect-error — an old id is not a public engine (it is never returned)
-    const oldId: CastSwapEngine = "kling-4"
+    const oldId: VideoRemakeEngine = "kling-4"
     // @ts-expect-error — nor is an earlier public id
-    const earlierId: CastSwapEngine = "motion-lite"
-    // …but a request still takes it (deprecated).
-    const legacy: CastSwapParams["engine"][] = ["seedance-2-5", "kling-4", "motion-pro", "motion-lite", "motion-prism"]
+    const earlierId: VideoRemakeEngine = "motion-lite"
+    // @ts-expect-error — nor the one before the current ids
+    const previousId: VideoRemakeEngine = "motion-prism"
+    // …but a request still takes them (deprecated).
+    const legacy: VideoRemakeParams["engine"][] = ["seedance-2-5", "kling-4", "motion-pro", "motion-lite", "motion-prism", "motion-pulse", "nodaro-prism"]
     // @ts-expect-error — not a length fit ("pad" would stretch the motion)
-    const badLength: CastSwapParams["motionLength"] = "pad"
-    const kinds: CastSwapFullQualityKind[] = ["same-take", "new-take"]
+    const badLength: VideoRemakeParams["motionLength"] = "pad"
+    const kinds: VideoRemakeFullQualityKind[] = ["same-take", "new-take"]
     // @ts-expect-error — not a kind
-    const badKind: CastSwapFullQualityKind = "remaster"
+    const badKind: VideoRemakeFullQualityKind = "remaster"
     // kind is optional: an older engine answers none (a same take).
-    const older: CastSwapFullQualityEstimate = { totalCredits: 1, breakdown: { castSwap: 1, motionHd: 0 }, availableUntil: "x" }
-    expect([engines, badEngine, oldId, earlierId, legacy, badLength, kinds, badKind, older]).toHaveLength(9)
+    const older: VideoRemakeFullQualityEstimate = { totalCredits: 1, breakdown: { castSwap: 1, motionHd: 0 }, availableUntil: "x" }
+    expect([engines, badEngine, oldId, earlierId, previousId, legacy, badLength, kinds, badKind, older]).toHaveLength(10)
   })
 
   it("types the base fee as base, with castSwap (an older server's name) still accepted", async () => {
-    // castSwap only (a server before Cast Swap 0.396.0), both (0.396.0), base only (0.397.0).
-    const quotes: CastSwapEstimate[] = [
+    // castSwap only (an older server), both, base only (the current one).
+    const quotes: VideoRemakeEstimate[] = [
       { totalCredits: 12, breakdown: { castSwap: 5, references: 0, motion: 7 }, settlesLower: false },
       { totalCredits: 12, breakdown: { base: 5, castSwap: 5, references: 0, motion: 7 }, settlesLower: false },
       { totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false },
     ]
-    const fq: CastSwapFullQualityEstimate[] = [
+    const fq: VideoRemakeFullQualityEstimate[] = [
       { totalCredits: 12, breakdown: { castSwap: 5, motionHd: 7 }, availableUntil: "x" },
       { totalCredits: 12, breakdown: { base: 5, castSwap: 5, motionHd: 7 }, availableUntil: "x" },
       { totalCredits: 12, breakdown: { base: 5, motionHd: 7 }, availableUntil: "x" },
@@ -245,7 +254,7 @@ describe("castSwap resource", () => {
     for (const q of [...quotes, ...fq]) {
       const fetchMock = vi.fn().mockReturnValueOnce(mockOk(q))
       const client = make(fetchMock)
-      const out = "settlesLower" in q ? await client.castSwap.estimate(params) : await client.castSwap.fullQualityEstimate("draft-1")
+      const out = "settlesLower" in q ? await client.videoRemake.estimate(params) : await client.videoRemake.fullQualityEstimate("draft-1")
       // The SDK passes the quote through unchanged; a reader takes base, else castSwap.
       expect(out).toEqual(q)
       const base: number | undefined = out.breakdown.base ?? out.breakdown.castSwap
@@ -254,8 +263,8 @@ describe("castSwap resource", () => {
   })
 
   it("estimate passes the privacy credits and the neutral breakdown through", async () => {
-    const estimate: CastSwapEstimate = {
-      engine: "motion-prism",
+    const estimate: VideoRemakeEstimate = {
+      engine: "nodaro-prism",
       totalCredits: 15,
       breakdown: { base: 5, motion: 7, references: 3, privacy: 2 },
       privacyCredits: 2,
@@ -264,14 +273,14 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
     const client = make(fetchMock)
 
-    const out = await client.castSwap.estimate(params)
+    const out = await client.videoRemake.estimate(params)
     expect(out.privacyCredits).toBe(2)
     expect(out.breakdown.privacy).toBe(2)
     expect(out.breakdown.motion).toBe(7)
   })
 
   it("estimate passes the expected charge through beside the hold", async () => {
-    const estimate: CastSwapEstimate = {
+    const estimate: VideoRemakeEstimate = {
       totalCredits: 40,
       expectedCredits: 31,
       breakdown: { base: 5, motion: 32, motionExpected: 23, references: 3 },
@@ -280,7 +289,7 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
     const client = make(fetchMock)
 
-    const out = await client.castSwap.estimate(params)
+    const out = await client.videoRemake.estimate(params)
     expect(out).toEqual(estimate)
     expect(out.expectedCredits).toBe(31)
     expect(out.breakdown.motionExpected).toBe(23)
@@ -288,22 +297,22 @@ describe("castSwap resource", () => {
     expect(out.totalCredits - out.breakdown.motion! + out.breakdown.motionExpected!).toBe(out.expectedCredits)
   })
 
-  it("estimate posts to /v1/cast-swap/estimate", async () => {
+  it("estimate posts to /v1/video-remake/estimate", async () => {
     const estimate = { totalCredits: 15, breakdown: { castSwap: 5, motion: 7, references: 3 }, settlesLower: true }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(estimate))
     const client = make(fetchMock)
 
-    const out: CastSwapEstimate = await client.castSwap.estimate(params)
+    const out: VideoRemakeEstimate = await client.videoRemake.estimate(params)
     expect(out).toEqual(estimate)
     expect(out.breakdown.references).toBe(3)
 
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/estimate")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-remake/estimate")
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
     expect(init.method).toBe("POST")
     expect(JSON.parse(init.body)).toEqual(params)
   })
   it("run posts fixed references unchanged", async () => {
-    const withReferences: CastSwapParams = {
+    const withReferences: VideoRemakeParams = {
       videoUrl: "https://cdn.example.com/clip.mp4",
       roles: [{ kind: "person", name: "the woman", images: null }],
       references: [
@@ -314,14 +323,14 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-3" }, 202))
     const client = make(fetchMock)
 
-    await client.castSwap.run(withReferences)
+    await client.videoRemake.run(withReferences)
 
     const init = fetchMock.mock.calls[0][1] as { body: string }
     expect(JSON.parse(init.body).references).toEqual(withReferences.references)
   })
 
   it("fullQualityEstimate posts to the draft's /full-quality/estimate", async () => {
-    const quote: CastSwapFullQualityEstimate = {
+    const quote: VideoRemakeFullQualityEstimate = {
       totalCredits: 12,
       breakdown: { castSwap: 5, motionHd: 7 },
       availableUntil: "2026-10-28T10:00:00.000Z",
@@ -329,9 +338,9 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote))
     const client = make(fetchMock)
 
-    await expect(client.castSwap.fullQualityEstimate("draft-1")).resolves.toEqual(quote)
+    await expect(client.videoRemake.fullQualityEstimate("draft-1")).resolves.toEqual(quote)
 
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/draft-1/full-quality/estimate")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-remake/draft-1/full-quality/estimate")
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
     expect(init.method).toBe("POST")
     // An empty JSON object, never an empty body: a JSON content type with no body is refused.
@@ -339,24 +348,24 @@ describe("castSwap resource", () => {
   })
 
   it("fullQualityEstimate passes the kind through (a Kling 4 new take)", async () => {
-    const quote: CastSwapFullQualityEstimate = {
+    const quote: VideoRemakeFullQualityEstimate = {
       kind: "new-take",
       totalCredits: 400,
       breakdown: { castSwap: 40, kling: 360 },
       availableUntil: "2026-10-28T10:00:00.000Z",
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote))
-    await expect(make(fetchMock).castSwap.fullQualityEstimate("run-720")).resolves.toEqual(quote)
+    await expect(make(fetchMock).videoRemake.fullQualityEstimate("run-720")).resolves.toEqual(quote)
   })
 
   it("fullQuality posts the session to the draft's /full-quality and returns the job", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "fq-1" }, 202))
     const client = make(fetchMock)
 
-    const out: CastSwapFullQualityResult = await client.castSwap.fullQuality("draft-1", { sessionId: "session-1" })
+    const out: VideoRemakeFullQualityResult = await client.videoRemake.fullQuality("draft-1", { sessionId: "session-1" })
     expect(out).toEqual({ jobId: "fq-1" })
 
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/draft-1/full-quality")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-remake/draft-1/full-quality")
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string; headers: Record<string, string> }
     expect(init.method).toBe("POST")
     expect(JSON.parse(init.body)).toEqual({ sessionId: "session-1" })
@@ -368,7 +377,7 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "fq-1" }, 202))
     const client = make(fetchMock)
 
-    await client.castSwap.fullQuality("draft-1")
+    await client.videoRemake.fullQuality("draft-1")
 
     expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({})
   })
@@ -377,18 +386,18 @@ describe("castSwap resource", () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "fq-0", existing: true }, 200))
     const client = make(fetchMock)
 
-    await expect(client.castSwap.fullQuality("draft-1")).resolves.toEqual({ jobId: "fq-0", existing: true })
+    await expect(client.videoRemake.fullQuality("draft-1")).resolves.toEqual({ jobId: "fq-0", existing: true })
   })
 
   it("encodes the job id into the path", async () => {
     const fetchMock = vi.fn().mockReturnValue(mockOk({ jobId: "fq-1" }, 202))
     const client = make(fetchMock)
 
-    await client.castSwap.fullQuality("a/b?c")
-    await client.castSwap.fullQualityEstimate("a/b?c")
+    await client.videoRemake.fullQuality("a/b?c")
+    await client.videoRemake.fullQualityEstimate("a/b?c")
 
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/cast-swap/a%2Fb%3Fc/full-quality")
-    expect(fetchMock.mock.calls[1][0]).toBe("https://api.example.com/v1/cast-swap/a%2Fb%3Fc/full-quality/estimate")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-remake/a%2Fb%3Fc/full-quality")
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.example.com/v1/video-remake/a%2Fb%3Fc/full-quality/estimate")
   })
 
   it("a Full Quality refusal throws a NodaroError carrying the route's code", async () => {
@@ -397,9 +406,9 @@ describe("castSwap resource", () => {
     )
     const client = make(fetchMock)
 
-    const err = await client.castSwap.fullQuality("draft-1").catch((e: unknown) => e)
+    const err = await client.videoRemake.fullQuality("draft-1").catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NodaroError)
-    const code: CastSwapFullQualityRefusalCode = (err as NodaroError).code
+    const code: VideoRemakeFullQualityRefusalCode = (err as NodaroError).code
     expect(code).toBe("full_quality_unavailable")
     expect((err as NodaroError).status).toBe(409)
   })
@@ -410,78 +419,98 @@ describe("castSwap resource", () => {
     )
     const client = make(fetchMock)
 
-    const err = await client.castSwap.fullQualityEstimate("draft-1").catch((e: unknown) => e)
+    const err = await client.videoRemake.fullQualityEstimate("draft-1").catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NodaroError)
-    const code: CastSwapFullQualityRefusalCode = (err as NodaroError).code
+    const code: VideoRemakeFullQualityRefusalCode = (err as NodaroError).code
     expect(code).toBe("full_quality_pending")
     expect((err as NodaroError).status).toBe(409)
     expect((err as NodaroError).details.retryable).toBe(true)
   })
 
-  it("styleChoice GETs /v1/cast-swap/style-choice and answers every engine's choice", async () => {
-    const answer: CastSwapStyleChoice = { engines: { "motion-prism": "flex", "motion-pulse": "user" } }
+  it("styleChoice GETs /v1/video-remake/style-choice and answers every engine's choice", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "flex", "nodaro-pulse": "user" } }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))
     const client = make(fetchMock)
 
-    const got = await client.castSwap.styleChoice()
+    const got = await client.videoRemake.styleChoice()
     expect(got).toEqual(answer)
-    const option: CastSwapStyleChoiceOption = got.engines["motion-prism"]
+    const option: VideoRemakeStyleChoiceOption = got.engines["nodaro-prism"]
     expect(option).toBe("flex")
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe("https://api.example.com/v1/cast-swap/style-choice")
+    expect(url).toBe("https://api.example.com/v1/video-remake/style-choice")
     expect(init.method).toBe("GET")
     expect(init.body).toBeUndefined()
   })
 
   it("styleChoice passes styleOnly through, per engine, typed", async () => {
-    const answer: CastSwapStyleChoice = {
-      engines: { "motion-prism": "user", "motion-pulse": "user" },
-      styleOnly: { "motion-prism": true, "motion-pulse": false },
+    const answer: VideoRemakeStyleChoice = {
+      engines: { "nodaro-prism": "user", "nodaro-pulse": "user" },
+      styleOnly: { "nodaro-prism": true, "nodaro-pulse": false },
     }
     const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
-    const got = await client.castSwap.styleChoice()
+    const got = await client.videoRemake.styleChoice()
     expect(got).toEqual(answer)
-    const prism: boolean | undefined = got.styleOnly?.["motion-prism"]
+    const prism: boolean | undefined = got.styleOnly?.["nodaro-prism"]
     expect(prism).toBe(true)
-    expect(got.styleOnly?.["motion-pulse"]).toBe(false)
+    expect(got.styleOnly?.["nodaro-pulse"]).toBe(false)
   })
 
   it("styleChoice from an older server has no styleOnly: every engine reads as false", async () => {
-    const answer = { engines: { "motion-prism": "user", "motion-pulse": "user" } }
+    const answer = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" } }
     const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
-    const got = await client.castSwap.styleChoice()
+    const got = await client.videoRemake.styleChoice()
     expect(got).toEqual(answer)
     expect(got.styleOnly).toBeUndefined()
-    expect(got.styleOnly?.["motion-prism"] === true).toBe(false)
-    expect(got.preciseArtStyle?.["motion-prism"] === true).toBe(false)
-    expect(got.preciseArtStyleAlone?.["motion-prism"] === true).toBe(false)
+    expect(got.styleOnly?.["nodaro-prism"] === true).toBe(false)
+    expect(got.preciseArtStyle?.["nodaro-prism"] === true).toBe(false)
+    expect(got.preciseArtStyleAlone?.["nodaro-prism"] === true).toBe(false)
   })
 
   it("styleChoice passes preciseArtStyle through, per engine, typed", async () => {
-    const answer: CastSwapStyleChoice = {
-      engines: { "motion-prism": "user", "motion-pulse": "user" },
-      styleOnly: { "motion-prism": true, "motion-pulse": false },
-      preciseArtStyle: { "motion-prism": true, "motion-pulse": false },
+    const answer: VideoRemakeStyleChoice = {
+      engines: { "nodaro-prism": "user", "nodaro-pulse": "user" },
+      styleOnly: { "nodaro-prism": true, "nodaro-pulse": false },
+      preciseArtStyle: { "nodaro-prism": true, "nodaro-pulse": false },
     }
     const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
-    const got = await client.castSwap.styleChoice()
+    const got = await client.videoRemake.styleChoice()
     expect(got).toEqual(answer)
-    const prism: boolean | undefined = got.preciseArtStyle?.["motion-prism"]
+    const prism: boolean | undefined = got.preciseArtStyle?.["nodaro-prism"]
     expect(prism).toBe(true)
-    expect(got.preciseArtStyle?.["motion-pulse"]).toBe(false)
+    expect(got.preciseArtStyle?.["nodaro-pulse"]).toBe(false)
   })
 
   it("styleChoice passes preciseArtStyleAlone through, per engine, typed", async () => {
-    const answer: CastSwapStyleChoice = {
-      engines: { "motion-prism": "user", "motion-pulse": "user" },
-      preciseArtStyleAlone: { "motion-prism": true, "motion-pulse": false },
+    const answer: VideoRemakeStyleChoice = {
+      engines: { "nodaro-prism": "user", "nodaro-pulse": "user" },
+      preciseArtStyleAlone: { "nodaro-prism": true, "nodaro-pulse": false },
     }
     const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
-    const got = await client.castSwap.styleChoice()
+    const got = await client.videoRemake.styleChoice()
     expect(got).toEqual(answer)
-    const prism: boolean | undefined = got.preciseArtStyleAlone?.["motion-prism"]
+    const prism: boolean | undefined = got.preciseArtStyleAlone?.["nodaro-prism"]
     expect(prism).toBe(true)
-    expect(got.preciseArtStyleAlone?.["motion-pulse"]).toBe(false)
+    expect(got.preciseArtStyleAlone?.["nodaro-pulse"]).toBe(false)
+  })
+})
+
+describe("the resource's former names (deprecated)", () => {
+  it("client.castSwap is the videoRemake resource itself, calling the same routes", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }, 202))
+    const client = make(fetchMock)
+    expect(client.castSwap).toBe(client.videoRemake)
+    expect(client.videoRemake).toBeInstanceOf(VideoRemakeResource)
+    expect(CastSwapResource).toBe(VideoRemakeResource)
+    await client.castSwap.run(params)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/video-remake")
+  })
+
+  it("keeps the CastSwap* types as the VideoRemake* ones", () => {
+    const body: CastSwapParams = params
+    const same: VideoRemakeParams = body
+    const engine: CastSwapEngine = "nodaro-prism"
+    const current: VideoRemakeEngine = engine
+    expect([same, current]).toHaveLength(2)
   })
 })

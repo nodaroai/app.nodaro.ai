@@ -29,12 +29,12 @@ import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
 const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: string }> = [
   {
     value: "seedance-2-5",
-    label: "Nodaro Motion Prism (Seedance 2.5, default)",
+    label: "Nodaro Prism (Seedance 2.5, default)",
     hint: "Edits the clip itself. Runs at 480p, 720p or 1080p; a 480p draft (\"1080p, preview first\") can be finished as the same take at 1080p with Full Quality.",
   },
   {
     value: "kling-4",
-    label: "Nodaro Motion Pulse (Kling 4)",
+    label: "Nodaro Pulse (Kling 4)",
     hint: "Makes a new take guided by the clip and the pictures. Runs at 720p or 1080p, with no draft and no Full Quality.",
   },
 ]

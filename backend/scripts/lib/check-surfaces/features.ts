@@ -81,8 +81,9 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "models", cli: ["models"], routePrefixes: ["/v1/models", "/v1/model-makers"], mcpFiles: ["models.ts"] },
   { id: "shots", cli: ["shots"], routePrefixes: ["/v1/shots"], mcpFiles: ["shot-shapes.ts"] },
   { id: "recast", cli: ["recast"], routePrefixes: ["/v1/recast"], mcpFiles: ["recast.ts"] },
-  // Cast Swap: the routes are the Cloud plugin's; the CLI group has Full Quality only.
-  { id: "castSwap", cli: ["cast-swap"], routePrefixes: ["/v1/cast-swap"], mcpFiles: ["cast-swap.ts", "cast-swap-full-quality.ts"] },
+  // Video Remake: the routes are the Cloud plugin's (the host's own Style choice and Advanced switch beside them),
+  // under /v1/video-remake and its /v1/cast-swap alias; the CLI group has Full Quality only (`cast-swap` its hidden alias).
+  { id: "videoRemake", cli: ["video-remake", "cast-swap"], routePrefixes: ["/v1/video-remake", "/v1/cast-swap"], mcpFiles: ["cast-swap.ts", "cast-swap-full-quality.ts"] },
   // Trends: the catalog, trend runs and favorites (Cloud, ee/routes/trends.ts).
   { id: "trends", cli: ["trends"], routePrefixes: ["/v1/trends"], mcpFiles: ["trends.ts"] },
   // Trend Radar: the admin-session-only candidate finder (Cloud, ee/routes/trend-radar.ts); no CLI or MCP by design.
@@ -112,6 +113,7 @@ export const PLUGIN_ROUTE_PREFIXES: readonly string[] = [
   "/v1/ugc",
   "/v1/recast",
   "/v1/cast-swap",
+  "/v1/video-remake",
   "/v1/video-analysis/import",
   "/v1/video-analysis/authoring-skill",
   "/v1/competitors",
@@ -185,8 +187,8 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "video-analysis": "video analysis",
   "video-audit": "the Video Audit route",
   "video-director": "the Video Director",
-  "video-face-mesh": "an internal step of Nodaro Motion's face masking (refuses every caller but the platform's own jobs)",
-  "video-scene-cuts": "an internal step of Nodaro Motion's shot list (refuses every caller but the platform's own jobs)",
+  "video-face-mesh": "an internal step of Video Remake's face masking (refuses every caller but the platform's own jobs)",
+  "video-scene-cuts": "an internal step of Video Remake's shot list (refuses every caller but the platform's own jobs)",
   "webhook-output": "the Webhook Output node's route",
   "workflow-triggers": "workflow triggers",
   "youtube-audio": "YouTube audio downloads",

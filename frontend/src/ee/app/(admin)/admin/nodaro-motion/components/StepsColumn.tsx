@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion, one engine's preparation steps (the
+// Admin → Video Remake, one engine's preparation steps (the
 // `nodaro_motion_steps` setting's entry for the engine): the trend editor's
 // StepsEditor, for every run people start themselves on that engine. Its
 // scene description applies to every Flex run: Flex is always Full depth with

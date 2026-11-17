@@ -10,7 +10,7 @@ import { STATIC_CREDIT_COSTS, CreditsService } from "../credits.js"
  * second of video with no minimum (`providers/fal/pricing.ts`), which is 20
  * base credits a second at `CREDIT_BASE_USD`. Every surface picks the row
  * through `videoDepthCreditId` — the route's guard and reservation, the
- * workflow run's stamp and reservation, the workflow estimate (a Nodaro Motion
+ * workflow run's stamp and reservation, the workflow estimate (a Video Remake
  * quote included), the editor's badge and estimate — so the price of a length
  * is the row it names. The bare id stays the 300 s ceiling.
  */
@@ -130,7 +130,7 @@ describe("Depth Anything per frame: 2 credits per second of the clip, rounded up
 })
 
 describe("the workflow estimate prices a Video Depth node per second of its clip", () => {
-  // The shape a Nodaro Motion quote asks for: an upload that declares the
+  // The shape a Video Remake quote asks for: an upload that declares the
   // clip's length, wired into the Video Depth node's `video` input.
   const clip = (duration: number) => ({ id: "clip", type: "upload-video", data: { url: "https://cdn.example/clip.mp4", duration } })
   const depth = { id: "depth", type: "video-depth", data: { provider: FAL, modelSize: "large", colormap: "grayscale" } }

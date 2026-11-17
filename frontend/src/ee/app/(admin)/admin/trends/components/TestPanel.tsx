@@ -481,7 +481,7 @@ function RunCard({
             {run.resolution}
             {run.draft ? " draft" : ""}
           </span>
-          {castSwapEngineFrom(run.engine) === "kling-4" && <span>{run.engineName ?? "Nodaro Motion Pulse"} (Kling 4)</span>}
+          {castSwapEngineFrom(run.engine) === "kling-4" && <span>{run.engineName ?? "Nodaro Pulse"} (Kling 4)</span>}
           {run.fullQualityOf && (
             <Badge variant="secondary" title={`Full Quality version of run ${run.fullQualityOf}`}>
               Full Quality

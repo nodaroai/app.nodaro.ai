@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's Prism reference audio for direct runs (registered by
+ * Video Remake's Prism reference audio for direct runs (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/prism-reference-audio   the setting (null = never saved: the default) and what the engine takes of it
- *   PUT /v1/admin/nodaro-motion/prism-reference-audio   { prismReferenceAudio: { "480p"?, "720p"?, "1080p"? } }: save it; audit-logged; 422 for a value an environment's platform does not read, 409 for one its engine lacks
+ *   GET /v1/admin/video-remake/prism-reference-audio   the setting (null = never saved: the default) and what the engine takes of it
+ *   PUT /v1/admin/video-remake/prism-reference-audio   { prismReferenceAudio: { "480p"?, "720p"?, "1080p"? } }: save it; audit-logged; 422 for a value an environment's platform does not read, 409 for one its engine lacks
  *
  * The setting (`nodaro_motion_prism_reference_audio`,
  * lib/cast-swap-prism-reference-audio.ts) is what audio the reference video of
@@ -17,7 +17,7 @@
  * where one says the value (`castSwapPrismReferenceAudioSchema`); a plain id
  * (the setting's first shape) is still taken, and read, as that id at every
  * resolution. The original audio always goes back on the result. People
- * running Nodaro Motion never set it; a trend run keeps its own trend's
+ * running Video Remake never set it; a trend run keeps its own trend's
  * choice. The `/v1/cast-swap` hook sends it
  * (middleware/nodaro-motion-prism-reference-audio.ts), only to an engine that
  * declares `castSwap.prismReferenceAudioPitch` (the object form),
@@ -65,7 +65,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_PRISM_REFERENCE_AUDIO_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f5"
 
 const putBody = z.strictObject({ prismReferenceAudio: castSwapPrismReferenceAudioSchema })
@@ -73,7 +73,7 @@ const putBody = z.strictObject({ prismReferenceAudio: castSwapPrismReferenceAudi
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): saved as sent. */
 export const NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION = defineNodaroMotionSettingsSection({
   key: "prism-reference-audio",
-  path: "/v1/admin/nodaro-motion/prism-reference-audio",
+  path: "/v1/admin/video-remake/prism-reference-audio",
   label: "Prism reference audio",
   body: putBody,
   prepare: (body) => ({ value: { prismReferenceAudio: body.prismReferenceAudio } }),
@@ -106,15 +106,15 @@ async function view() {
 }
 
 export function registerNodaroMotionPrismReferenceAudioRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/prism-reference-audio", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/prism-reference-audio", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion Prism reference audio")
+      return sendInternalError(reply, req, e, "Failed to read the Nodaro Prism reference audio")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/prism-reference-audio", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/prism-reference-audio", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -131,7 +131,7 @@ export function registerNodaroMotionPrismReferenceAudioRoutes(app: FastifyInstan
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion Prism reference audio")
+      return sendInternalError(reply, req, e, "Failed to save the Nodaro Prism reference audio")
     }
   })
 }

@@ -1,10 +1,10 @@
 /**
- * A staging-only script (scripts/compare-mcp-built-once.ts) runs only where the
- * operator has named this deployment's host, and never on a production host
- * (scripts/lib/staging-only.ts): it checks before it loads the app.
+ * A staging-only script (src/scripts/compare-mcp-built-once.ts) runs only where
+ * the operator has named this deployment's host, and never on a production host
+ * (src/scripts/lib/staging-only.ts): it checks before it loads the app.
  */
 import { describe, expect, it } from "vitest"
-import { PRODUCTION_HOSTS, STAGING_CONFIRM_VARIABLE, stagingOnlyRefusal } from "../../scripts/lib/staging-only.js"
+import { PRODUCTION_HOSTS, STAGING_CONFIRM_VARIABLE, stagingOnlyRefusal } from "../scripts/lib/staging-only.js"
 
 const STAGING = "https://next.example.test"
 

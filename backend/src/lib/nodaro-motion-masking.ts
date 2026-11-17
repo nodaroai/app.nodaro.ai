@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's face masking, per engine — set by an admin for the whole
+ * Video Remake's face masking, per engine — set by an admin for the whole
  * deployment, never by the person running it (decided 2026-10-25).
  *
  * The `app_settings` row `nodaro_motion_masking`:
- * `{ "motion-prism"?: FaceMasking, "motion-pulse"?: FaceMasking }`, keyed by
- * Nodaro Motion's PUBLIC engine ids, each entry a Cast Swap `faceMasking`
+ * `{ "nodaro-prism"?: FaceMasking, "nodaro-pulse"?: FaceMasking }`, keyed by
+ * Video Remake's PUBLIC engine ids, each entry a Cast Swap `faceMasking`
  * setting (`faceMaskingSchema`). No row = never saved: every direct run is
  * unmasked ("off", what a run that sends no masking always did). A row saved
  * before the 2026-10-26 rename is keyed by the earlier ids (`"motion-pro"`,
@@ -18,7 +18,7 @@
  * (no `trendRun`) and its estimate. That read answers each entry under both
  * its current and its earlier key (`withEarlierMaskingKeys`, a transition shim
  * for plugins up to 0.397.0, which look only for the earlier keys). A trend run keeps its own trend's setting.
- * Written only by `PUT /v1/admin/nodaro-motion/masking` (ee/routes), through
+ * Written only by `PUT /v1/admin/video-remake/masking` (ee/routes), through
  * `nodaro-motion-masking-store.ts`. This module is pure (no database).
  *
  * Read through `getAppSettings()` (its 60 s cache, its stampede guard, and
@@ -27,7 +27,7 @@
 import { z } from "zod"
 import type { NodaroMotionEngine, NodaroMotionLegacyEngine } from "@nodaro/shared/models"
 import { faceMaskingSchema, type FaceMasking } from "./cast-swap-face-masking.js"
-import { parseByEngine, withEarlierEngineKeys } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_MASKING_KEY = "nodaro_motion_masking"
 
@@ -35,10 +35,7 @@ export const NODARO_MOTION_MASKING_KEY = "nodaro_motion_masking"
 export type NodaroMotionMasking = Partial<Record<NodaroMotionEngine, FaceMasking>>
 
 /** What an admin saves: each engine's setting, strict (an unknown engine key is refused). */
-export const nodaroMotionMaskingSchema: z.ZodType<NodaroMotionMasking> = z.strictObject({
-  "motion-prism": faceMaskingSchema.optional(),
-  "motion-pulse": faceMaskingSchema.optional(),
-})
+export const nodaroMotionMaskingSchema: z.ZodType<NodaroMotionMasking> = byEngineSchema(faceMaskingSchema)
 
 /**
  * What `tk.settings.nodaroMotionMasking()` answers: each engine's entry under

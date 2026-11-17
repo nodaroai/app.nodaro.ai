@@ -1,6 +1,6 @@
 /**
- * Admin → Nodaro Motion's Pulse audio: what sound every Pulse run people
- * start themselves delivers (GET/PUT /v1/admin/nodaro-motion/pulse-audio).
+ * Admin → Video Remake's Pulse audio: what sound every Pulse run people
+ * start themselves delivers (GET/PUT /v1/admin/video-remake/pulse-audio).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { hasAdmin } from "@/lib/edition"

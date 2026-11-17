@@ -1,5 +1,5 @@
 /**
- * The `nodaro_motion_settings_sets` table (migration 606): Nodaro Motion's
+ * The `nodaro_motion_settings_sets` table (migration 606): Video Remake's
  * stored settings sets, read and written with the service-role client by the
  * admin routes only (RLS on, no client grants).
  *
@@ -38,7 +38,7 @@ export class SettingsSetNameTakenError extends Error {
 }
 
 function failed(what: string, error: { message: string }): Error {
-  return new Error(`Could not ${what} the Nodaro Motion settings sets: ${error.message}`)
+  return new Error(`Could not ${what} the Video Remake settings sets: ${error.message}`)
 }
 
 function isNameTaken(error: { code?: string } | null): boolean {

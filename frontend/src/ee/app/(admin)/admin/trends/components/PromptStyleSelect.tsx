@@ -20,9 +20,9 @@ interface Props {
   /** The form's face masking (its clip preparation picks the default). */
   readonly faceMasking: AdminTrendFaceMasking | undefined
   readonly envs?: readonly TrendEngineEnvironment[]
-  /** The label (Admin → Nodaro Motion names its own default). */
+  /** The label (Admin → Video Remake names its own default). */
   readonly label?: string
-  /** The default's name, when it is not the clip preparation's (Admin → Nodaro Motion: Flexible). */
+  /** The default's name, when it is not the clip preparation's (Admin → Video Remake: Flexible). */
   readonly defaultStyle?: CastSwapPromptStyleId
 }
 

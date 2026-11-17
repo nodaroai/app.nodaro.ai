@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion, each engine's runs with no person (the
+// Admin → Video Remake, each engine's runs with no person (the
 // `nodaro_motion_no_person` setting's entry for the engine): whether a direct
 // Precise run with no person role with pictures sends its clip as it is. On is
 // the default, left out of what is saved; off makes such a run prepare its clip

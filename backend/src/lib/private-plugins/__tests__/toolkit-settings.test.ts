@@ -25,8 +25,8 @@ import type { NodaroMotionNoPersonEntry } from "../../nodaro-motion-no-person.js
 import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
 
 /**
- * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Nodaro
- * Motion engine, which the Cast Swap engine applies to every DIRECT run. It is
+ * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Video
+ * Remake engine, which the Cast Swap engine applies to every DIRECT run. It is
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
@@ -73,36 +73,38 @@ describe("tk.settings.nodaroMotionMasking", () => {
   })
 
   it("answers each engine's setting under its current and its earlier key, each a copy the plugin may change", async () => {
-    const saved = { "motion-prism": { mode: "auto", zone: { leftPct: 5 } }, "motion-pulse": { mode: "always", target: "face" } }
+    const saved = { "nodaro-prism": { mode: "auto", zone: { leftPct: 5 } }, "nodaro-pulse": { mode: "always", target: "face" } }
     h.masking = saved
     const got = await buildToolkit().settings!.nodaroMotionMasking!()
     // The transition shim: a plugin up to 0.397.0 reads only "motion-pro" / "motion-lite".
-    expect(got).toEqual({ ...saved, "motion-pro": saved["motion-prism"], "motion-lite": saved["motion-pulse"] })
-    got!["motion-prism"]!.mode = "off"
-    got!["motion-prism"]!.zone!.leftPct = 40
+    expect(got).toEqual({ ...saved, "motion-prism": saved["nodaro-prism"], "motion-pro": saved["nodaro-prism"], "motion-pulse": saved["nodaro-pulse"], "motion-lite": saved["nodaro-pulse"] })
+    got!["nodaro-prism"]!.mode = "off"
+    got!["nodaro-prism"]!.zone!.leftPct = 40
     expect(got!["motion-pro"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
-    expect(saved["motion-prism"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
+    expect(saved["nodaro-prism"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
   })
 
   it("answers only the engines that were saved, under both keys", async () => {
-    h.masking = { "motion-pulse": { mode: "auto" } }
-    expect(await buildToolkit().settings!.nodaroMotionMasking!()).toEqual({ "motion-pulse": { mode: "auto" }, "motion-lite": { mode: "auto" } })
+    h.masking = { "nodaro-pulse": { mode: "auto" } }
+    expect(await buildToolkit().settings!.nodaroMotionMasking!()).toEqual({ "nodaro-pulse": { mode: "auto" }, "motion-pulse": { mode: "auto" }, "motion-lite": { mode: "auto" } })
   })
 
   it("answers the face mesh only to an engine that draws it, and only as true (an older engine's strict schema would refuse the entry)", async () => {
-    h.masking = { "motion-prism": { mode: "always", faceMesh: true }, "motion-pulse": { mode: "auto", faceMesh: false } }
+    h.masking = { "nodaro-prism": { mode: "always", faceMesh: true }, "nodaro-pulse": { mode: "auto", faceMesh: false } }
     try {
       meshEngine(true)
       expect(await buildToolkit().settings!.nodaroMotionMasking!()).toEqual({
+        "nodaro-prism": { mode: "always", faceMesh: true },
         "motion-prism": { mode: "always", faceMesh: true },
         "motion-pro": { mode: "always", faceMesh: true },
+        "nodaro-pulse": { mode: "auto" },
         "motion-pulse": { mode: "auto" },
         "motion-lite": { mode: "auto" },
       })
       for (const faceMesh of [undefined, false]) {
         meshEngine(faceMesh)
         const got = await buildToolkit().settings!.nodaroMotionMasking!()
-        expect(got, String(faceMesh)).toEqual({ "motion-prism": { mode: "always" }, "motion-pro": { mode: "always" }, "motion-pulse": { mode: "auto" }, "motion-lite": { mode: "auto" } })
+        expect(got, String(faceMesh)).toEqual({ "nodaro-prism": { mode: "always" }, "motion-prism": { mode: "always" }, "motion-pro": { mode: "always" }, "nodaro-pulse": { mode: "auto" }, "motion-pulse": { mode: "auto" }, "motion-lite": { mode: "auto" } })
         expect(Object.values(got!).some((m) => m && Object.hasOwn(m, "faceMesh"))).toBe(false)
       }
     } finally {
@@ -113,7 +115,7 @@ describe("tk.settings.nodaroMotionMasking", () => {
 
 /**
  * `tk.settings.nodaroMotionPromptParts()` — the admin's prompt part overrides
- * per Nodaro Motion engine and style, for every DIRECT run. Same rules as the
+ * per Video Remake engine and style, for every DIRECT run. Same rules as the
  * masking read: the settings cache's own read, a copy, null when never saved,
  * and a rejection (never null) when the settings could not be read.
  */
@@ -140,19 +142,19 @@ describe("tk.settings.nodaroMotionPromptParts", () => {
   })
 
   it("answers the saved overrides under each engine's current and earlier key, each a copy the plugin may change", async () => {
-    const saved = { "motion-prism": { motion: { avoid: "-" } }, "motion-pulse": { precise: { face: "Keep faces." } } }
+    const saved = { "nodaro-prism": { motion: { avoid: "-" } }, "nodaro-pulse": { precise: { face: "Keep faces." } } }
     h.promptParts = saved
     const got = await buildToolkit().settings!.nodaroMotionPromptParts!()
-    expect(got).toEqual({ ...saved, "motion-pro": saved["motion-prism"], "motion-lite": saved["motion-pulse"] })
-    got!["motion-prism"]!.motion!.avoid = "changed"
+    expect(got).toEqual({ ...saved, "motion-prism": saved["nodaro-prism"], "motion-pro": saved["nodaro-prism"], "motion-pulse": saved["nodaro-pulse"], "motion-lite": saved["nodaro-pulse"] })
+    got!["nodaro-prism"]!.motion!.avoid = "changed"
     expect(got!["motion-pro"]!.motion!.avoid).toBe("-")
-    expect(saved["motion-prism"].motion.avoid).toBe("-")
+    expect(saved["nodaro-prism"].motion.avoid).toBe("-")
   })
 })
 
 /**
- * `tk.settings.nodaroMotionMotion()` — the admin's Motion setting per Nodaro
- * Motion engine, for direct runs with `style: "motion"`. Same rules as the
+ * `tk.settings.nodaroMotionMotion()` — the admin's Motion setting per Video
+ * Remake engine, for direct runs with `style: "motion"`. Same rules as the
  * masking read.
  */
 describe("tk.settings.nodaroMotionMotion", () => {
@@ -178,30 +180,30 @@ describe("tk.settings.nodaroMotionMotion", () => {
   })
 
   it("answers the saved setting under each engine's current and earlier key, each a copy the plugin may change", async () => {
-    const saved = { "motion-prism": { masking: { mode: "always", source: "full-depth", scene: "none" }, promptStyle: "precise" }, "motion-pulse": { promptStyle: "flexible" } }
+    const saved = { "nodaro-prism": { masking: { mode: "always", source: "full-depth", scene: "none" }, promptStyle: "precise" }, "nodaro-pulse": { promptStyle: "flexible" } }
     h.motion = saved
     const got = await buildToolkit().settings!.nodaroMotionMotion!()
-    expect(got).toEqual({ ...saved, "motion-pro": saved["motion-prism"], "motion-lite": saved["motion-pulse"] })
-    ;(got!["motion-prism"]!.masking as { scene: string }).scene = "original"
+    expect(got).toEqual({ ...saved, "motion-prism": saved["nodaro-prism"], "motion-pro": saved["nodaro-prism"], "motion-pulse": saved["nodaro-pulse"], "motion-lite": saved["nodaro-pulse"] })
+    ;(got!["nodaro-prism"]!.masking as { scene: string }).scene = "original"
     expect(got!["motion-pro"]!.masking!.scene).toBe("none")
-    expect(saved["motion-prism"].masking.scene).toBe("none")
+    expect(saved["nodaro-prism"].masking.scene).toBe("none")
   })
 
   it("answers each masking's face mesh only to an engine that draws it, the rest of the entry as saved", async () => {
     h.motion = {
-      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true }, promptStyle: "precise" },
-      "motion-pulse": { promptStyle: "flexible" },
+      "nodaro-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true }, promptStyle: "precise" },
+      "nodaro-pulse": { promptStyle: "flexible" },
     }
     try {
       meshEngine(true)
       const drawn = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(drawn!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true }, promptStyle: "precise" })
-      expect(drawn!["motion-pro"]).toEqual(drawn!["motion-prism"])
+      expect(drawn!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true }, promptStyle: "precise" })
+      expect(drawn!["motion-pro"]).toEqual(drawn!["nodaro-prism"])
       meshEngine(undefined)
       const older = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(older!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" })
+      expect(older!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" })
       expect(older!["motion-pro"]).toEqual({ masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" })
-      expect(older!["motion-pulse"]).toEqual({ promptStyle: "flexible" })
+      expect(older!["nodaro-pulse"]).toEqual({ promptStyle: "flexible" })
     } finally {
       _resetPluginSupportsForTests()
     }
@@ -217,26 +219,26 @@ describe("tk.settings: the depth colormap", () => {
 
   it("answers a colormap only to an engine that lists the map, and only where it changes what is drawn", async () => {
     h.masking = {
-      "motion-prism": { mode: "always", fill: "depth", depthColormap: "inferno" },
+      "nodaro-prism": { mode: "always", fill: "depth", depthColormap: "inferno" },
       // The default of a depth fill: never answered, whatever the engine lists.
-      "motion-pulse": { mode: "always", fill: "depth", depthColormap: "turbo" },
+      "nodaro-pulse": { mode: "always", fill: "depth", depthColormap: "turbo" },
     }
-    h.motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", depthColormap: "magma" } } }
+    h.motion = { "nodaro-prism": { masking: { mode: "always", source: "full-depth", depthColormap: "magma" } } }
     try {
       setPluginSupports({ castSwap: { ...CS, depthColormaps: ["turbo", "inferno", "magma"] } } as never)
       const masking = await buildToolkit().settings!.nodaroMotionMasking!()
-      expect(masking!["motion-prism"]).toEqual({ mode: "always", fill: "depth", depthColormap: "inferno" })
-      expect(masking!["motion-pro"]).toEqual(masking!["motion-prism"])
-      expect(masking!["motion-pulse"]).toEqual({ mode: "always", fill: "depth" })
+      expect(masking!["nodaro-prism"]).toEqual({ mode: "always", fill: "depth", depthColormap: "inferno" })
+      expect(masking!["motion-pro"]).toEqual(masking!["nodaro-prism"])
+      expect(masking!["nodaro-pulse"]).toEqual({ mode: "always", fill: "depth" })
       const motion = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthColormap: "magma" } })
+      expect(motion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthColormap: "magma" } })
       for (const castSwap of [CS, { ...CS, depthColormaps: ["grayscale"] }]) {
         setPluginSupports({ castSwap } as never)
         const older = await buildToolkit().settings!.nodaroMotionMasking!()
-        expect(older!["motion-prism"], JSON.stringify(castSwap)).toEqual({ mode: "always", fill: "depth" })
+        expect(older!["nodaro-prism"], JSON.stringify(castSwap)).toEqual({ mode: "always", fill: "depth" })
         expect(Object.values(older!).some((m) => m && Object.hasOwn(m, "depthColormap"))).toBe(false)
         const olderMotion = await buildToolkit().settings!.nodaroMotionMotion!()
-        expect(olderMotion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+        expect(olderMotion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
       }
     } finally {
       _resetPluginSupportsForTests()
@@ -253,31 +255,31 @@ describe("tk.settings: the depth model size", () => {
 
   it("answers a size only to an engine that lists it, and only where it changes the render", async () => {
     h.masking = {
-      "motion-prism": { mode: "always", fill: "depth", depthModelSize: "small" },
+      "nodaro-prism": { mode: "always", fill: "depth", depthModelSize: "small" },
       // Large (the default): never answered, whatever the engine lists.
-      "motion-pulse": { mode: "always", fill: "depth", depthModelSize: "large" },
+      "nodaro-pulse": { mode: "always", fill: "depth", depthModelSize: "large" },
     }
     h.motion = {
-      "motion-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "base" } },
+      "nodaro-prism": { masking: { mode: "always", source: "full-depth", depthModelSize: "base" } },
       // A blur fill draws no depth: never answered.
-      "motion-pulse": { masking: { mode: "always", depthModelSize: "small" } },
+      "nodaro-pulse": { masking: { mode: "always", depthModelSize: "small" } },
     }
     try {
       setPluginSupports({ castSwap: { ...CS, depthModelSizes: ["small", "base", "large"] } } as never)
       const masking = await buildToolkit().settings!.nodaroMotionMasking!()
-      expect(masking!["motion-prism"]).toEqual({ mode: "always", fill: "depth", depthModelSize: "small" })
-      expect(masking!["motion-pulse"]).toEqual({ mode: "always", fill: "depth" })
-      expect(masking!["motion-pro"]).toEqual(masking!["motion-prism"])
+      expect(masking!["nodaro-prism"]).toEqual({ mode: "always", fill: "depth", depthModelSize: "small" })
+      expect(masking!["nodaro-pulse"]).toEqual({ mode: "always", fill: "depth" })
+      expect(masking!["motion-pro"]).toEqual(masking!["nodaro-prism"])
       const motion = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthModelSize: "base" } })
-      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always" } })
+      expect(motion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthModelSize: "base" } })
+      expect(motion!["nodaro-pulse"]).toEqual({ masking: { mode: "always" } })
       for (const castSwap of [CS, { ...CS, depthModelSizes: ["large"] }]) {
         setPluginSupports({ castSwap } as never)
         const older = await buildToolkit().settings!.nodaroMotionMasking!()
-        expect(older!["motion-prism"], JSON.stringify(castSwap)).toEqual({ mode: "always", fill: "depth" })
+        expect(older!["nodaro-prism"], JSON.stringify(castSwap)).toEqual({ mode: "always", fill: "depth" })
         expect(Object.values(older!).some((m) => m && Object.hasOwn(m, "depthModelSize"))).toBe(false)
         const olderMotion = await buildToolkit().settings!.nodaroMotionMotion!()
-        expect(olderMotion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+        expect(olderMotion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
       }
     } finally {
       _resetPluginSupportsForTests()
@@ -308,8 +310,8 @@ describe("the plugin-side types mirror the host's", () => {
 })
 
 /**
- * `tk.settings.nodaroMotionSteps()` — the admin's preparation steps per Nodaro
- * Motion engine, for every DIRECT run: only to an engine that takes steps
+ * `tk.settings.nodaroMotionSteps()` — the admin's preparation steps per Video
+ * Remake engine, for every DIRECT run: only to an engine that takes steps
  * (`castSwap.steps`), null otherwise and when never saved.
  */
 describe("tk.settings.nodaroMotionSteps", () => {
@@ -321,7 +323,7 @@ describe("tk.settings.nodaroMotionSteps", () => {
   })
   const stepsEngine = (steps: boolean | undefined) =>
     setPluginSupports({ castSwap: { ...CS, ...(steps === undefined ? {} : { steps }) } } as never)
-  const saved = { "motion-prism": { enginePrompt: { mode: "template" } }, "motion-pulse": { sceneDescription: { mode: "template" } } }
+  const saved = { "nodaro-prism": { enginePrompt: { mode: "template" } }, "nodaro-pulse": { sceneDescription: { mode: "template" } } }
 
   it("is advertised", () => {
     expect(buildToolkit().capabilities?.nodaroMotionSteps).toBe(true)
@@ -337,7 +339,7 @@ describe("tk.settings.nodaroMotionSteps", () => {
   it("answers null when it was never saved, or nothing is set", async () => {
     stepsEngine(true)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
-    h.steps = { "motion-prism": {} }
+    h.steps = { "nodaro-prism": {} }
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
   })
 
@@ -345,59 +347,66 @@ describe("tk.settings.nodaroMotionSteps", () => {
     stepsEngine(true)
     h.steps = saved
     const got = await buildToolkit().settings!.nodaroMotionSteps!()
-    expect(got).toEqual({ ...saved, "motion-pro": saved["motion-prism"], "motion-lite": saved["motion-pulse"] })
-    ;(got!["motion-prism"] as { enginePrompt?: unknown }).enginePrompt = undefined
-    expect(saved["motion-prism"]).toEqual({ enginePrompt: { mode: "template" } })
+    expect(got).toEqual({ ...saved, "motion-prism": saved["nodaro-prism"], "motion-pro": saved["nodaro-prism"], "motion-pulse": saved["nodaro-pulse"], "motion-lite": saved["nodaro-pulse"] })
+    ;(got!["nodaro-prism"] as { enginePrompt?: unknown }).enginePrompt = undefined
+    expect(saved["nodaro-prism"]).toEqual({ enginePrompt: { mode: "template" } })
   })
 
   it("answers clipBody only to an engine that declares castSwap.clipBodySheet, dropping an entry left empty", async () => {
     h.steps = {
-      "motion-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
-      "motion-pulse": { clipBody: { mode: "on", prompt: "A test prompt." } },
+      "nodaro-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
+      "nodaro-pulse": { clipBody: { mode: "on", prompt: "A test prompt." } },
     }
     setPluginSupports({ castSwap: { ...CS, steps: true, clipBodySheet: true } } as never)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "nodaro-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
       "motion-prism": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
       "motion-pro": { enginePrompt: { mode: "template" }, clipBody: { mode: "off" } },
+      "nodaro-pulse": { clipBody: { mode: "on", prompt: "A test prompt." } },
       "motion-pulse": { clipBody: { mode: "on", prompt: "A test prompt." } },
       "motion-lite": { clipBody: { mode: "on", prompt: "A test prompt." } },
     })
     stepsEngine(true)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "nodaro-prism": { enginePrompt: { mode: "template" } },
       "motion-prism": { enginePrompt: { mode: "template" } },
       "motion-pro": { enginePrompt: { mode: "template" } },
     })
-    h.steps = { "motion-pulse": { clipBody: { mode: "off" } } }
+    h.steps = { "nodaro-pulse": { clipBody: { mode: "off" } } }
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
   })
 
   it("answers shotList only to an engine that declares castSwap.shotList", async () => {
-    h.steps = { "motion-prism": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } } }
+    h.steps = { "nodaro-prism": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } } }
     setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } } as never)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "nodaro-prism": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } },
       "motion-prism": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } },
       "motion-pro": { enginePrompt: { mode: "template" }, shotList: { precise: { mode: "on" } } },
     })
     stepsEngine(true)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "nodaro-prism": { enginePrompt: { mode: "template" } },
       "motion-prism": { enginePrompt: { mode: "template" } },
       "motion-pro": { enginePrompt: { mode: "template" } },
     })
   })
 
   it("answers styleRefs only to an engine that declares castSwap.styleRefs", async () => {
-    h.steps = { "motion-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } } }
+    h.steps = { "nodaro-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } } }
     setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } } as never)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "nodaro-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } },
       "motion-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } },
       "motion-pro": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } },
     })
     stepsEngine(true)
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({
+      "nodaro-prism": { enginePrompt: { mode: "template" } },
       "motion-prism": { enginePrompt: { mode: "template" } },
       "motion-pro": { enginePrompt: { mode: "template" } },
     })
-    h.steps = { "motion-pulse": { styleRefs: { mode: "off" } } }
+    h.steps = { "nodaro-pulse": { styleRefs: { mode: "off" } } }
     expect(await buildToolkit().settings!.nodaroMotionSteps!()).toBeNull()
   })
 
@@ -411,8 +420,8 @@ describe("tk.settings.nodaroMotionSteps", () => {
 })
 
 /**
- * `tk.settings.nodaroMotionStyle()` — the admin's Style choice per Nodaro
- * Motion engine, which the Cast Swap engine enforces on every DIRECT run and
+ * `tk.settings.nodaroMotionStyle()` — the admin's Style choice per Video
+ * Remake engine, which the Cast Swap engine enforces on every DIRECT run and
  * quote: null when never saved or nothing is forced (the request's `style`
  * decides, exactly as before), else only the forced engines.
  */
@@ -441,11 +450,11 @@ describe("tk.settings.nodaroMotionStyle", () => {
   })
 
   it("answers each forced engine under the current and the earlier key, a copy the plugin may change", async () => {
-    h.style = { "motion-pulse": "flex" }
+    h.style = { "nodaro-pulse": "flex" }
     const got = await buildToolkit().settings!.nodaroMotionStyle!()
-    expect(got).toEqual({ "motion-pulse": "flex", "motion-lite": "flex" })
-    ;(got as Record<string, string>)["motion-pulse"] = "precise"
-    expect(h.style).toEqual({ "motion-pulse": "flex" })
+    expect(got).toEqual({ "nodaro-pulse": "flex", "motion-pulse": "flex", "motion-lite": "flex" })
+    ;(got as Record<string, string>)["nodaro-pulse"] = "precise"
+    expect(h.style).toEqual({ "nodaro-pulse": "flex" })
   })
 
   it("what the host answers is the plugin's PluginNodaroMotionStyle", () => {
@@ -455,7 +464,7 @@ describe("tk.settings.nodaroMotionStyle", () => {
 
 /**
  * `tk.settings.nodaroMotionPromptWording()` — the admin's Flex prompt wording
- * per Nodaro Motion engine, which the Cast Swap engine reads for every DIRECT
+ * per Video Remake engine, which the Cast Swap engine reads for every DIRECT
  * Flex run: null when never saved or every engine is current (today's
  * wording, exactly as before), else only the engines on the new wording.
  */
@@ -480,17 +489,17 @@ describe("tk.settings.nodaroMotionPromptWording", () => {
     expect(await buildToolkit().settings!.nodaroMotionPromptWording!()).toBeNull()
     h.wording = {}
     expect(await buildToolkit().settings!.nodaroMotionPromptWording!()).toBeNull()
-    h.wording = { "motion-prism": "current" }
+    h.wording = { "nodaro-prism": "current" }
     expect(await buildToolkit().settings!.nodaroMotionPromptWording!()).toBeNull()
     expect(h.reads).toBe(3)
   })
 
   it("answers each engine on the new wording under the current and the earlier key, a copy the plugin may change", async () => {
-    h.wording = { "motion-pulse": "new" }
+    h.wording = { "nodaro-pulse": "new" }
     const got = await buildToolkit().settings!.nodaroMotionPromptWording!()
-    expect(got).toEqual({ "motion-pulse": "new", "motion-lite": "new" })
-    ;(got as Record<string, string>)["motion-pulse"] = "current"
-    expect(h.wording).toEqual({ "motion-pulse": "new" })
+    expect(got).toEqual({ "nodaro-pulse": "new", "motion-pulse": "new", "motion-lite": "new" })
+    ;(got as Record<string, string>)["nodaro-pulse"] = "current"
+    expect(h.wording).toEqual({ "nodaro-pulse": "new" })
   })
 
   it("what the host answers is the plugin's PluginNodaroMotionPromptWording", () => {
@@ -500,7 +509,7 @@ describe("tk.settings.nodaroMotionPromptWording", () => {
 
 /**
  * `tk.settings.nodaroMotionStyleOnly()` — the admin's style-only setting per
- * Nodaro Motion engine (its path and its engine-prompt step), read by the Cast
+ * Video Remake engine (its path and its engine-prompt step), read by the Cast
  * Swap engine for a DIRECT style-only run: null when never saved, nothing
  * differs from the defaults, or this host's engine does not declare
  * `castSwap.styleOnly`.
@@ -517,7 +526,7 @@ describe("tk.settings.nodaroMotionStyleOnly", () => {
   it("advertises nodaroMotionStyleOnly and answers null to an engine without castSwap.styleOnly", async () => {
     expect(buildToolkit().capabilities?.nodaroMotionStyleOnly).toBe(true)
     expect(typeof buildToolkit().settings?.nodaroMotionStyleOnly).toBe("function")
-    h.styleOnly = { "motion-prism": { path: "flex" } }
+    h.styleOnly = { "nodaro-prism": { path: "flex" } }
     expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
     setPluginSupports({ castSwap: { ...CS, styleOnly: false } } as never)
     expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
@@ -535,18 +544,18 @@ describe("tk.settings.nodaroMotionStyleOnly", () => {
     expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
     h.styleOnly = {}
     expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
-    h.styleOnly = { "motion-prism": { path: "original", enginePrompt: { mode: "template" } } }
+    h.styleOnly = { "nodaro-prism": { path: "original", enginePrompt: { mode: "template" } } }
     expect(await buildToolkit().settings!.nodaroMotionStyleOnly!()).toBeNull()
   })
 
   it("answers each changed engine under its current and its earlier key, a copy the plugin may change", async () => {
     styleOnlyEngine()
     const llm = { mode: "llm", llm: { model: "gemini-3.8-flash", inputs: ["clip"], maxChars: 900 } }
-    h.styleOnly = { "motion-prism": { path: "flex", enginePrompt: llm } }
+    h.styleOnly = { "nodaro-prism": { path: "flex", enginePrompt: llm } }
     const got = await buildToolkit().settings!.nodaroMotionStyleOnly!()
-    expect(got).toStrictEqual({ "motion-prism": { path: "flex", enginePrompt: llm }, "motion-pro": { path: "flex", enginePrompt: llm } })
-    ;(got as Record<string, { path?: string }>)["motion-prism"]!.path = "original"
-    expect(h.styleOnly).toEqual({ "motion-prism": { path: "flex", enginePrompt: llm } })
+    expect(got).toStrictEqual({ "nodaro-prism": { path: "flex", enginePrompt: llm }, "motion-prism": { path: "flex", enginePrompt: llm }, "motion-pro": { path: "flex", enginePrompt: llm } })
+    ;(got as Record<string, { path?: string }>)["nodaro-prism"]!.path = "original"
+    expect(h.styleOnly).toEqual({ "nodaro-prism": { path: "flex", enginePrompt: llm } })
     expect(got!["motion-pro"]!.path).toBe("flex")
   })
 
@@ -557,7 +566,7 @@ describe("tk.settings.nodaroMotionStyleOnly", () => {
 
 /**
  * `tk.settings.nodaroMotionNoPerson()` — whether a DIRECT Precise run with no
- * pictured person sends its source clip, per Nodaro Motion engine: null when
+ * pictured person sends its source clip, per Video Remake engine: null when
  * never saved, nothing is switched off, or this host's engine does not declare
  * `castSwap.noPersonSourceClip`.
  */
@@ -573,7 +582,7 @@ describe("tk.settings.nodaroMotionNoPerson", () => {
   it("advertises nodaroMotionNoPerson and answers null to an engine without castSwap.noPersonSourceClip", async () => {
     expect(buildToolkit().capabilities?.nodaroMotionNoPerson).toBe(true)
     expect(typeof buildToolkit().settings?.nodaroMotionNoPerson).toBe("function")
-    h.noPerson = { "motion-prism": { sourceClip: false } }
+    h.noPerson = { "nodaro-prism": { sourceClip: false } }
     expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
     setPluginSupports({ castSwap: { ...CS, noPersonSourceClip: false } } as never)
     expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
@@ -591,17 +600,17 @@ describe("tk.settings.nodaroMotionNoPerson", () => {
     expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
     h.noPerson = {}
     expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
-    h.noPerson = { "motion-prism": {} }
+    h.noPerson = { "nodaro-prism": {} }
     expect(await buildToolkit().settings!.nodaroMotionNoPerson!()).toBeNull()
   })
 
   it("answers each engine switched off under its current and its earlier key, a copy the plugin may change", async () => {
     noPersonEngine()
-    h.noPerson = { "motion-pulse": { sourceClip: false } }
+    h.noPerson = { "nodaro-pulse": { sourceClip: false } }
     const got = await buildToolkit().settings!.nodaroMotionNoPerson!()
-    expect(got).toStrictEqual({ "motion-pulse": { sourceClip: false }, "motion-lite": { sourceClip: false } })
-    delete (got as Record<string, { sourceClip?: false }>)["motion-pulse"]!.sourceClip
-    expect(h.noPerson).toEqual({ "motion-pulse": { sourceClip: false } })
+    expect(got).toStrictEqual({ "nodaro-pulse": { sourceClip: false }, "motion-pulse": { sourceClip: false }, "motion-lite": { sourceClip: false } })
+    delete (got as Record<string, { sourceClip?: false }>)["nodaro-pulse"]!.sourceClip
+    expect(h.noPerson).toEqual({ "nodaro-pulse": { sourceClip: false } })
     expect(got!["motion-lite"]!.sourceClip).toBe(false)
   })
 
@@ -616,7 +625,7 @@ describe("tk.settings.nodaroMotionNoPerson", () => {
 })
 
 /**
- * `tk.settings.nodaroMotionPreciseArtStyle()` — the admin's opener per Nodaro Motion engine for a DIRECT Precise run
+ * `tk.settings.nodaroMotionPreciseArtStyle()` — the admin's opener per Video Remake engine for a DIRECT Precise run
  * with an art style: null when never saved, nothing differs from the default ("restyle"), or this host's engine does
  * not declare `castSwap.preciseArtStyle`.
  */
@@ -636,7 +645,7 @@ describe("tk.settings.nodaroMotionPreciseArtStyle", () => {
   it("advertises nodaroMotionPreciseArtStyle and answers null to an engine without castSwap.preciseArtStyle", async () => {
     expect(buildToolkit().capabilities?.nodaroMotionPreciseArtStyle).toBe(true)
     expect(typeof buildToolkit().settings?.nodaroMotionPreciseArtStyle).toBe("function")
-    h.preciseArtStyle = { "motion-prism": { opener: "edit" } }
+    h.preciseArtStyle = { "nodaro-prism": { opener: "edit" } }
     expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
     setPluginSupports({ castSwap: { ...CS, preciseArtStyle: false } } as never)
     expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
@@ -652,20 +661,21 @@ describe("tk.settings.nodaroMotionPreciseArtStyle", () => {
   it("answers null when it was never saved, or nothing differs from the default", async () => {
     preciseArtStyleEngine()
     expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
-    h.preciseArtStyle = { "motion-prism": { opener: "restyle" } }
+    h.preciseArtStyle = { "nodaro-prism": { opener: "restyle" } }
     expect(await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()).toBeNull()
   })
 
   it("answers each changed engine under its current and its earlier key, a copy the plugin may change", async () => {
     preciseArtStyleEngine()
-    h.preciseArtStyle = { "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } }
+    h.preciseArtStyle = { "nodaro-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } }
     const got = await buildToolkit().settings!.nodaroMotionPreciseArtStyle!()
     expect(got).toStrictEqual({
+      "nodaro-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } },
       "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } },
       "motion-pro": { opener: "edit", styleRefs: { mode: "on", send: "styled" } },
     })
-    ;(got as Record<string, { opener?: string }>)["motion-prism"]!.opener = "restyle"
-    expect(h.preciseArtStyle).toEqual({ "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } })
+    ;(got as Record<string, { opener?: string }>)["nodaro-prism"]!.opener = "restyle"
+    expect(h.preciseArtStyle).toEqual({ "nodaro-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } })
   })
 
   it("what the host answers is the plugin's PluginNodaroMotionPreciseArtStyle", () => {
@@ -682,24 +692,24 @@ describe("tk.settings: the face mesh's layers", () => {
 
   it("answers layers only to an engine that declares them; a set a parts value names as that value; none with the mesh off", async () => {
     h.motion = {
-      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } } },
-      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { lips: true } } },
+      "nodaro-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } } },
+      "nodaro-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { lips: true } } },
     }
     try {
       setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshParts: ["full", "features", "mouth"], faceMeshLayers: true } } as never)
       const motion = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } } })
-      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } })
+      expect(motion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshLayers: { eyes: true, irises: true, bold: true } } })
+      expect(motion!["nodaro-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } })
       // An engine without layers: no key (it draws the full mesh), a parts set still as its value where it draws parts.
       setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshParts: ["full", "features", "mouth"] } } as never)
       const older = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(older!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true } })
-      expect(older!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } })
+      expect(older!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true } })
+      expect(older!["nodaro-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } })
       // The mesh off: never answered.
-      h.motion = { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMeshLayers: { irises: true } } } }
+      h.motion = { "nodaro-prism": { masking: { mode: "always", source: "full-depth", faceMeshLayers: { irises: true } } } }
       setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshLayers: true } } as never)
       const off = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(off!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+      expect(off!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
     } finally {
       _resetPluginSupportsForTests()
     }
@@ -734,21 +744,21 @@ describe("tk.settings: the depth blur and the face mesh's parts", () => {
 
   it("answers each only to an engine that declares it, and only where it changes what is drawn", async () => {
     h.motion = {
-      "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "features" } },
+      "nodaro-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "features" } },
       // 0 and the full mesh: never answered, whatever the engine declares.
-      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 0, faceMeshParts: "full" } },
+      "nodaro-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 0, faceMeshParts: "full" } },
     }
     try {
       setPluginSupports({ castSwap: { ...CS, faceMesh: true, depthBlur: true, faceMeshParts: ["full", "features", "mouth"] } } as never)
       const motion = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "features" } })
-      expect(motion!["motion-pro"]).toEqual(motion!["motion-prism"])
-      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true } })
+      expect(motion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "features" } })
+      expect(motion!["motion-pro"]).toEqual(motion!["nodaro-prism"])
+      expect(motion!["nodaro-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth", faceMesh: true } })
       // An engine from before them (or one without the mesh): the setting as it was before the keys existed.
       for (const castSwap of [{ ...CS, faceMesh: true }, { ...CS, faceMesh: true, depthBlur: true, faceMeshParts: ["full", "mouth"] }, CS]) {
         setPluginSupports({ castSwap } as never)
         const older = await buildToolkit().settings!.nodaroMotionMotion!()
-        const m = (older!["motion-prism"] as unknown as { masking: Record<string, unknown> }).masking
+        const m = (older!["nodaro-prism"] as unknown as { masking: Record<string, unknown> }).masking
         expect(Object.hasOwn(m, "faceMeshParts"), JSON.stringify(castSwap)).toBe(false)
         expect(Object.hasOwn(m, "depthBlur"), JSON.stringify(castSwap)).toBe((castSwap as { depthBlur?: boolean }).depthBlur === true)
       }
@@ -768,25 +778,25 @@ describe("tk.settings: Full depth's smallest face with mesh lines", () => {
   it("answers it only to an engine that declares it, and only where it applies (Full depth, the face mesh on)", async () => {
     const MIN = { mode: "always", source: "full-depth", faceMesh: true, faceMeshMinFaceHeightPct: 20 }
     h.motion = {
-      "motion-prism": { masking: MIN },
+      "nodaro-prism": { masking: MIN },
       // The face mesh off: it draws nothing, so it is never answered.
-      "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMeshMinFaceHeightPct: 20 } },
+      "nodaro-pulse": { masking: { mode: "always", source: "full-depth", faceMeshMinFaceHeightPct: 20 } },
     }
     // A Precise row never holds it (its schema refuses it); one that did is answered without it.
-    h.masking = { "motion-prism": { mode: "always", faceMesh: true, faceMeshMinFaceHeightPct: 20 } }
+    h.masking = { "nodaro-prism": { mode: "always", faceMesh: true, faceMeshMinFaceHeightPct: 20 } }
     try {
       setPluginSupports({ castSwap: { ...CS, faceMesh: true, faceMeshMinFaceHeightPct: true } } as never)
       const motion = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(motion!["motion-prism"]).toEqual({ masking: MIN })
+      expect(motion!["nodaro-prism"]).toEqual({ masking: MIN })
       expect(motion!["motion-pro"]).toEqual({ masking: MIN })
-      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
-      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-prism"]).toEqual({ mode: "always", faceMesh: true })
+      expect(motion!["nodaro-pulse"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["nodaro-prism"]).toEqual({ mode: "always", faceMesh: true })
       // An engine from before it (0.436.1), or one without the mesh: the setting as it was before the key existed.
       for (const castSwap of [{ ...CS, faceMesh: true }, { ...CS, faceMesh: true, faceMeshMinFaceHeightPct: false }, CS]) {
         setPluginSupports({ castSwap } as never)
         const older = await buildToolkit().settings!.nodaroMotionMotion!()
         const mesh = (castSwap as { faceMesh?: boolean }).faceMesh === true ? { faceMesh: true } : {}
-        expect(older!["motion-prism"], JSON.stringify(castSwap)).toEqual({ masking: { mode: "always", source: "full-depth", ...mesh } })
+        expect(older!["nodaro-prism"], JSON.stringify(castSwap)).toEqual({ masking: { mode: "always", source: "full-depth", ...mesh } })
       }
     } finally {
       _resetPluginSupportsForTests()
@@ -805,19 +815,19 @@ describe("tk.settings: the fill none and a depth fill's blur", () => {
   const FILL_BLUR = { mode: "always", fill: "depth", depthBlur: 12 }
 
   it("answers the fill none only to an engine that draws it (and the mesh); any other gets that entry as Off, never a blur", async () => {
-    h.masking = { "motion-prism": NONE, "motion-pulse": FILL_BLUR }
-    h.motion = { "motion-prism": { masking: NONE, promptStyle: "precise" } }
+    h.masking = { "nodaro-prism": NONE, "nodaro-pulse": FILL_BLUR }
+    h.motion = { "nodaro-prism": { masking: NONE, promptStyle: "precise" } }
     try {
       setPluginSupports({ castSwap: { ...CS, faceMesh: true, maskFillNone: true, depthFillBlur: true } } as never)
       const masking = await buildToolkit().settings!.nodaroMotionMasking!()
-      expect(masking!["motion-prism"]).toEqual(NONE)
-      expect(masking!["motion-pulse"]).toEqual(FILL_BLUR)
-      expect((await buildToolkit().settings!.nodaroMotionMotion!())!["motion-prism"]).toEqual({ masking: NONE, promptStyle: "precise" })
+      expect(masking!["nodaro-prism"]).toEqual(NONE)
+      expect(masking!["nodaro-pulse"]).toEqual(FILL_BLUR)
+      expect((await buildToolkit().settings!.nodaroMotionMotion!())!["nodaro-prism"]).toEqual({ masking: NONE, promptStyle: "precise" })
       for (const castSwap of [{ ...CS, faceMesh: true }, { ...CS, maskFillNone: true }, CS]) {
         setPluginSupports({ castSwap } as never)
-        expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-prism"], JSON.stringify(castSwap)).toEqual({ mode: "off" })
+        expect((await buildToolkit().settings!.nodaroMotionMasking!())!["nodaro-prism"], JSON.stringify(castSwap)).toEqual({ mode: "off" })
         // The Motion entry keeps a masking of its own (Off), never "Same as Precise".
-        expect((await buildToolkit().settings!.nodaroMotionMotion!())!["motion-prism"], JSON.stringify(castSwap)).toEqual({ masking: { mode: "off" }, promptStyle: "precise" })
+        expect((await buildToolkit().settings!.nodaroMotionMotion!())!["nodaro-prism"], JSON.stringify(castSwap)).toEqual({ masking: { mode: "off" }, promptStyle: "precise" })
       }
     } finally {
       _resetPluginSupportsForTests()
@@ -825,17 +835,17 @@ describe("tk.settings: the fill none and a depth fill's blur", () => {
   })
 
   it("answers a depth fill's blur only to an engine that declares castSwap.depthFillBlur (Full depth's castSwap.depthBlur is not it)", async () => {
-    h.masking = { "motion-pulse": FILL_BLUR }
-    h.motion = { "motion-pulse": { masking: FILL_BLUR }, "motion-prism": { masking: { mode: "always", source: "full-depth", depthBlur: 28 } } }
+    h.masking = { "nodaro-pulse": FILL_BLUR }
+    h.motion = { "nodaro-pulse": { masking: FILL_BLUR }, "nodaro-prism": { masking: { mode: "always", source: "full-depth", depthBlur: 28 } } }
     try {
       setPluginSupports({ castSwap: { ...CS, depthBlur: true } } as never)
-      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-pulse"]).toEqual({ mode: "always", fill: "depth" })
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["nodaro-pulse"]).toEqual({ mode: "always", fill: "depth" })
       const motion = await buildToolkit().settings!.nodaroMotionMotion!()
-      expect(motion!["motion-pulse"]).toEqual({ masking: { mode: "always", fill: "depth" } })
-      expect(motion!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthBlur: 28 } })
+      expect(motion!["nodaro-pulse"]).toEqual({ masking: { mode: "always", fill: "depth" } })
+      expect(motion!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth", depthBlur: 28 } })
       setPluginSupports({ castSwap: { ...CS, depthFillBlur: true } } as never)
-      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["motion-pulse"]).toEqual(FILL_BLUR)
-      expect((await buildToolkit().settings!.nodaroMotionMotion!())!["motion-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["nodaro-pulse"]).toEqual(FILL_BLUR)
+      expect((await buildToolkit().settings!.nodaroMotionMotion!())!["nodaro-prism"]).toEqual({ masking: { mode: "always", source: "full-depth" } })
     } finally {
       _resetPluginSupportsForTests()
     }
@@ -843,7 +853,7 @@ describe("tk.settings: the fill none and a depth fill's blur", () => {
 
   it("absent = before: a setting without either is answered exactly as before, whatever the engine declares", async () => {
     const before = { mode: "auto", fill: "depth", faceMesh: true, depthColormap: "inferno" }
-    h.masking = { "motion-pulse": before, "motion-prism": { mode: "always" } }
+    h.masking = { "nodaro-pulse": before, "nodaro-prism": { mode: "always" } }
     try {
       const answers = []
       for (const castSwap of [
@@ -854,7 +864,7 @@ describe("tk.settings: the fill none and a depth fill's blur", () => {
         answers.push(await buildToolkit().settings!.nodaroMotionMasking!())
       }
       expect(answers[1]).toEqual(answers[0])
-      expect(answers[0]!["motion-pulse"]).toEqual(before)
+      expect(answers[0]!["nodaro-pulse"]).toEqual(before)
     } finally {
       _resetPluginSupportsForTests()
     }

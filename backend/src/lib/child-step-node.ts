@@ -1,6 +1,6 @@
 /**
  * A step a plugin engine's job sends to another route is gated as the node
- * the user ran (decided 2026-11-10): Nodaro Motion's depth, mask, composite
+ * the user ran (decided 2026-11-10): Video Remake's depth, mask, composite
  * and audio-separation steps, and every other request its job sends, follow
  * `cast-swap`, so a deployment that allows Motion does not refuse its run
  * partway through. Only the NODE gate follows the parent: each step's models

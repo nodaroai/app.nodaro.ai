@@ -3,7 +3,7 @@
  * engine) is saved only once every environment's engine words it
  * (`castSwap.promptWordings` lists "new").
  *
- * The Nodaro Motion settings are one row each, which staging and production
+ * The Video Remake settings are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * list the wording never reads the setting, so its direct Flex runs would
  * quietly stay on today's wording while the admin screen says "new". So the

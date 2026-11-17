@@ -1,9 +1,11 @@
 [
+  { "engine": "nodaro-prism", "expected": "prism" },
   { "engine": "motion-prism", "expected": "prism" },
   { "engine": "motion-pro", "expected": "prism" },
   { "engine": "seedance-2-5", "expected": "prism" },
   { "engine": null, "expected": "prism" },
   { "engine": "unknown", "expected": "prism" },
+  { "engine": "nodaro-pulse", "expected": "pulse" },
   { "engine": "motion-pulse", "expected": "pulse" },
   { "engine": "motion-lite", "expected": "pulse" },
   { "engine": "kling-4", "expected": "pulse" }

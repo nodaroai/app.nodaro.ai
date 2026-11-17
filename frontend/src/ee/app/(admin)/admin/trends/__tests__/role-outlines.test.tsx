@@ -143,7 +143,7 @@ describe("the switch", () => {
     expect(Object.hasOwn(seen.at(-1)!, "roleOutlines")).toBe(false)
   })
 
-  it("is not shown off, without an engine that draws them, or on Admin → Nodaro Motion; one already on stays shown", () => {
+  it("is not shown off, without an engine that draws them, or on Admin → Video Remake; one already on stays shown", () => {
     for (const props of [
       { initial: { mode: "off" as const }, envs: OUTLINE_ENVS },
       { initial: { mode: "always" as const }, envs: OLD_ENVS },

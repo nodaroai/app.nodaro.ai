@@ -25,7 +25,7 @@ import { unitRouteFiles } from "../unit-source-files.js"
  * content) must NOT be policed — a modesty clause inside a mask target or a
  * structured-output system prompt is corruption, not enforcement.
  *
- * The PLUGIN lane (Cloud plugins: the gvp/evp pipelines, Nodaro Motion,
+ * The PLUGIN lane (Cloud plugins: the gvp/evp pipelines, Video Remake,
  * trends) assembles its prompts in the private plugin package, which this
  * repo cannot scan. Its door into the same registry is the toolkit member
  * `tk.prompts.applyPolicies` (`lib/private-plugins/toolkit.ts`), which runs

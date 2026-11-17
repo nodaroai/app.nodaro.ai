@@ -160,8 +160,8 @@ describe("getAppSettings", () => {
 
 
   it("reads the no-person setting per engine: an earlier key as the current one, a bad entry dropped, no row or a failed read as never saved", async () => {
-    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_no_person", value: { "motion-pro": { sourceClip: false }, "motion-pulse": { sourceClip: true } } }], error: null })
-    expect((await getAppSettings()).nodaro_motion_no_person).toEqual({ "motion-prism": { sourceClip: false } })
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_no_person", value: { "motion-pro": { sourceClip: false }, "nodaro-pulse": { sourceClip: true } } }], error: null })
+    expect((await getAppSettings()).nodaro_motion_no_person).toEqual({ "nodaro-prism": { sourceClip: false } })
 
     invalidateSettingsCache()
     mockSelect.mockResolvedValueOnce({ data: [], error: null })

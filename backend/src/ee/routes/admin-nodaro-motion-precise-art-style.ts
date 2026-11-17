@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's setting for a Precise run with an art style, per engine
+ * Video Remake's setting for a Precise run with an art style, per engine
  * (registered by `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it
  * shares its edition gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/precise-art-style   { preciseArtStyle, updatedAt, engines, supported } (preciseArtStyle null = never saved: the default)
- *   PUT /v1/admin/nodaro-motion/precise-art-style   { preciseArtStyle }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/precise-art-style   { preciseArtStyle, updatedAt, engines, supported } (preciseArtStyle null = never saved: the default)
+ *   PUT /v1/admin/video-remake/precise-art-style   { preciseArtStyle }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_precise_art_style`,
  * lib/nodaro-motion-precise-art-style.ts) says, per engine, how a DIRECT
@@ -56,7 +56,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal, type NodaroMotionSaveRe
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_PRECISE_ART_STYLE_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0fb"
 
 /** The body key: every refusal's path starts here. */
@@ -75,13 +75,13 @@ function problemsRefusal(problems: CastSwapStepsProblem[]): NodaroMotionSaveRefu
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the defaults. */
 export const NODARO_MOTION_PRECISE_ART_STYLE_SECTION = defineNodaroMotionSettingsSection({
   key: "precise-art-style",
-  path: "/v1/admin/nodaro-motion/precise-art-style",
+  path: "/v1/admin/video-remake/precise-art-style",
   label: "Precise runs with an art style",
   body: putBody,
   prepare: (body) => {
     const preciseArtStyle = withoutDefaultPreciseArtStyle(body[BODY_KEY])
     // Art styles are Prism's: a Pulse entry would never be read.
-    if (preciseArtStyle["motion-pulse"]) {
+    if (preciseArtStyle["nodaro-pulse"]) {
       return { refusal: { status: 400, error: { code: "precise_art_style_engine", message: PULSE_TAKES_NO_PRECISE_ART_STYLE_MESSAGE } } }
     }
     // The store validates nothing: the save-time step rules (the style-refs instruction's) are applied here.
@@ -123,15 +123,15 @@ async function view(): Promise<NodaroMotionPreciseArtStyleView> {
 }
 
 export function registerNodaroMotionPreciseArtStyleRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/precise-art-style", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/precise-art-style", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion Precise art-style setting")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake Precise art-style setting")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/precise-art-style", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/precise-art-style", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_PRECISE_ART_STYLE_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -149,7 +149,7 @@ export function registerNodaroMotionPreciseArtStyleRoutes(app: FastifyInstance):
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion Precise art-style setting")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake Precise art-style setting")
     }
   })
 }

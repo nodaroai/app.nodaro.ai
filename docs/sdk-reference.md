@@ -18,7 +18,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.llm`](#clientllm)
   - [`client.videoPro`](#clientvideopro)
   - [`client.recast`](#clientrecast)
-  - [`client.castSwap`](#clientcastswap)
+  - [`client.videoRemake`](#clientvideoremake)
   - [`client.trends`](#clienttrends)
   - [`client.trendRadar`](#clienttrendradar)
   - [`client.studio`](#clientstudio)
@@ -72,7 +72,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/cast-swap`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/video-remake`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -152,7 +152,7 @@ The instance exposes 38 resource objects: `workflows`, `projects`, `jobs`,
 `videoPro`, `executions`, `nodes`, `characters`, `locations`, `objects`,
 `creatures`, `pipelines`, `reduce`, `promptHelper`, `apps`, `developerApps`,
 `oauth`, `voices`, `dubbing`, `llm`, `media`, `audio`, `credits`, `uploads`, `library`,
-`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `castSwap`,
+`presets`, `pickerCatalogs`, `catalogs`, `models`, `shots`, `recast`, `videoRemake`,
 `trends`, `studio`, `community`, `templates`, `tutorials`, `organizations`, `workspaces`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
@@ -1432,10 +1432,10 @@ from the usage log), `credits_charged`, `credits_held` and `credits_released`.
 `credits` is the amount the job itself **held** when it was accepted and never
 changes; `credits_charged` is what the job actually cost once that hold
 settled, **including the steps it ran** (a job that runs other jobs for you —
-a Nodaro Motion run's reference preparation, mask and video — is charged for
+a Video Remake run's reference preparation, mask and video — is charged for
 each; a step adds its charge once it settles) — it can be lower than the hold
 (the rest goes back to the balance); `0` when the run's own hold was refunded,
-plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads `credit_status: "refunded"` with `credits_charged: 165`); `null` while the job's own hold is open (even when
+plus any settled steps (a refunded Video Remake run whose reference and mask steps committed reads `credit_status: "refunded"` with `credits_charged: 165`); `null` while the job's own hold is open (even when
 some steps have settled), when nothing in the run was reserved, or when its
 steps could not be read for a moment (unknown, never a lower figure). `credits_held` is the run's hold
 (`credits` plus the steps' holds) and `credits_released` what went back from
@@ -1464,7 +1464,7 @@ request the provider refused as it was sent, naming a fault of it, so the same
 request is refused again (`kind: "request-refused"` — change the input images,
 the video, the prompt or the settings; with `subject: "input_video"` when the
 provider's words name the clip as the fault (its length or size, or no character
-found in it), so a different clip is what can change; on a Nodaro Motion or trend run this is one step's refusal), or that never
+found in it), so a different clip is what can change; on a Video Remake or trend run this is one step's refusal), or that never
 got one of the account's concurrency slots and did not run (`kind:
 "queue-timeout"`, carrying `reason` — `"timeout"`, `"lost"` or `"live-wait"` —
 and `waitedMinutes`; the job was refunded, so run it again — it only occurs
@@ -2178,25 +2178,25 @@ returns `409 legacy_mix_mismatch`.
 
 ---
 
-### `client.castSwap`
+### `client.videoRemake`
 
-Nodaro Motion: replace the people, pets, products and/or the location in a
+Video Remake: replace the people, pets, products and/or the location in a
 short video with your own reference images, keeping its motion, framing, timing and
 sound (the clip's audio is kept, and the result is the clip's length). **Cloud
 edition only**: these routes 404 on self-hosted installs. Also importable as
-`@nodaro/sdk/cast-swap`. Routes: [Nodaro Motion](./api-integration.md#13f-nodaro-motion-cloud-edition);
-MCP: `cast_swap`, `estimate_full_quality`, `full_quality`.
+`@nodaro/sdk/video-remake`. Routes: [Video Remake](./api-integration.md#13f-video-remake-cloud-edition);
+MCP: `video_remake`, `estimate_full_quality`, `full_quality`.
 
 ```ts
-run(params: CastSwapParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/cast-swap → 202 (200 + deduped on a keyed repeat)
-estimate(params: CastSwapParams): Promise<CastSwapEstimate> // POST /v1/cast-swap/estimate, free
-fullQualityEstimate(jobId: string): Promise<CastSwapFullQualityEstimate> // POST /v1/cast-swap/:jobId/full-quality/estimate, free
-fullQuality(jobId: string, params?: { sessionId?: string }): Promise<CastSwapFullQualityResult> // POST /v1/cast-swap/:jobId/full-quality → 202 (200 + existing)
-styleChoice(): Promise<CastSwapStyleChoice> // GET /v1/cast-swap/style-choice, public
+run(params: VideoRemakeParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/video-remake → 202 (200 + deduped on a keyed repeat)
+estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> // POST /v1/video-remake/estimate, free
+fullQualityEstimate(jobId: string): Promise<VideoRemakeFullQualityEstimate> // POST /v1/video-remake/:jobId/full-quality/estimate, free
+fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemakeFullQualityResult> // POST /v1/video-remake/:jobId/full-quality → 202 (200 + existing)
+styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
 ```
 
 ```ts
-interface CastSwapParams {
+interface VideoRemakeParams {
   videoUrl: string                 // the source clip, 4–30 s
   roles: Array<
     | { kind: "person"; name: string; images: string[] | null
@@ -2214,27 +2214,27 @@ interface CastSwapParams {
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
-  engine?: CastSwapEngine          // "motion-prism" (default) | "motion-pulse" (see below)
-  style?: CastSwapStyle            // "precise" (default) | "motion" (see below)
-  direction?: { style: string }    // an art style, a `style` picker id, motion-prism only: Flex (see Style only), or Precise where styleChoice() says so
-  motionLength?: "cut-end" | "cut-start" // CastSwapMotionLength, motion-pulse only; default "cut-end"
-  resolution?: "480p" | "720p" | "1080p" // default "480p"; motion-pulse: "720p" (default) or "1080p"
+  engine?: VideoRemakeEngine          // "nodaro-prism" (default) | "nodaro-pulse" (see below)
+  style?: VideoRemakeStyle            // "precise" (default) | "motion" (see below)
+  direction?: { style: string }    // an art style, a `style` picker id, nodaro-prism only: Flex (see Style only), or Precise where styleChoice() says so
+  motionLength?: "cut-end" | "cut-start" // VideoRemakeMotionLength, nodaro-pulse only; default "cut-end"
+  resolution?: "480p" | "720p" | "1080p" // default "480p"; nodaro-pulse: "720p" (default) or "1080p"
   draft?: boolean                  // default false (480p is plain); true = a 480p draft whose same take
                                    // Full Quality can finish at 1080p; true above 480p is a 400;
-                                   // motion-pulse has no draft (true = 400 draft_unsupported)
+                                   // nodaro-pulse has no draft (true = 400 draft_unsupported)
   prepareReferences?: boolean      // default true: prepare the reference pictures first (see below)
-  faceMasking?: CastSwapFaceMasking // @deprecated: accepted and ignored (Nodaro sets it per engine)
+  faceMasking?: VideoRemakeFaceMasking // @deprecated: accepted and ignored (Nodaro sets it per engine)
   quality?: "draft"                // @deprecated: "draft" = 480p draft; use resolution + draft
   sessionId?: string
   origin?: string
 }
 
-type CastSwapEngine = "motion-prism" | "motion-pulse" // Nodaro Motion Prism / Pulse: what the trend routes and estimate() answer
-type CastSwapStyle = "precise" | "motion"            // how the run follows the clip (see below)
-type CastSwapEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
+type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse" // Nodaro Prism / Pulse: what the trend routes and estimate() answer
+type VideoRemakeStyle = "precise" | "motion"            // how the run follows the clip (see below)
+type VideoRemakeEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
 
-interface CastSwapEstimate {
-  engine?: CastSwapEngine // the engine quoted
+interface VideoRemakeEstimate {
+  engine?: VideoRemakeEngine // the engine quoted
   totalCredits: number    // held when the run starts
   expectedCredits?: number // what it is expected to be charged; never above totalCredits
   breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number; referenceAudio?: number } & Record<string, number>
@@ -2248,9 +2248,9 @@ interface CastSwapEstimate {
   settlesLower: boolean   // Auto length (Prism): the final charge is expected to be lower
 }
 
-interface CastSwapFullQualityEstimate {
-  kind?: "same-take" | "new-take" // CastSwapFullQualityKind: "same-take" (absent from an older server
-                                  // = "same-take"); "new-take" was Nodaro Motion Pulse's, which has none now
+interface VideoRemakeFullQualityEstimate {
+  kind?: "same-take" | "new-take" // VideoRemakeFullQualityKind: "same-take" (absent from an older server
+                                  // = "same-take"); "new-take" was Nodaro Pulse's, which has none now
   totalCredits: number // base + the render
   breakdown: { base?: number; motionHd?: number; motion?: number } & Record<string, number>
                        // base: the Full Quality job's own steps; motionHd: the draft's 1080p
@@ -2258,7 +2258,7 @@ interface CastSwapFullQualityEstimate {
   availableUntil: string // ISO time: 7 days after the run completed
 }
 
-interface CastSwapFullQualityResult {
+interface VideoRemakeFullQualityResult {
   jobId: string
   existing?: boolean // true: this draft's Full Quality was already running or done; nothing new started or charged
 }
@@ -2270,11 +2270,11 @@ stays as in the video. A person, pet or product role of a direct run may leave
 subject in the video it fits best, and needs at least one image (`400
 unnamed_role_needs_picture` otherwise); a trend run's roles are always named. At least one role with images, a reference, a
 `prePrompt` or `postPrompt`, or an art style (`direction`, Flex on Nodaro
-Motion Prism; see Style only below) is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+Prism; see Style only below) is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
 kept from the video.
 
-**Fixed references** (`references`, `CastSwapReference[]`, at most 5): things
+**Fixed references** (`references`, `VideoRemakeReference[]`, at most 5): things
 the video should show that no role replaces, each 1–3 images of ONE thing and
 the `line` that says what it is (1–500 characters, e.g.
 `"the glass she drinks from"`). `{image}` in a line stands for that
@@ -2302,7 +2302,7 @@ video then fails; it adds about a minute, and falls back to your own images
 for a role whose picture could not be made. Locations are not prepared.
 Pass `prepareReferences: false` to use your images as they are.
 
-**Style** (`style`, `CastSwapStyle`): `"precise"`, the default, follows the
+**Style** (`style`, `VideoRemakeStyle`): `"precise"`, the default, follows the
 clip exactly; `"motion"` follows the clip's movement and takes the looks from
 your images, more freely than Precise. Motion may cost a different amount than
 Precise: `estimate()` with the same `style` shows the exact price. The job
@@ -2311,10 +2311,10 @@ While the way Nodaro prepares Motion runs for the engine limits the clip, a
 full Motion run of a clip over 27.9 s is refused as `400
 clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 
-**A forced style** (`styleChoice()`, `CastSwapStyleChoice`): Nodaro may fix
+**A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "motion-prism": CastSwapStyleChoiceOption, "motion-pulse": CastSwapStyleChoiceOption }, styleOnly?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyle?: { "motion-prism"?: boolean, "motion-pulse"?: boolean }, preciseArtStyleAlone?: { "motion-prism"?: boolean, "motion-pulse"?: boolean } }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean } }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2326,22 +2326,22 @@ runs (below), `preciseArtStyle` whether a Precise run takes an art style there
 run's change there, with no role, reference or prompt (Nodaro may run such a
 request as a Motion run, which this does not say: see An art style on a Precise
 run below); it answers `false` until the engine takes such runs. All three follow the engine alone, so read them
-with `engines`: on an engine answered `"flex"` every run is a Motion run. Nodaro Motion Pulse is always
+with `engines`: on an engine answered `"flex"` every run is a Motion run. Nodaro Pulse is always
 `false` in all three, and an older server leaves them out (read them as `false`
 for every engine). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
 ```ts
-const { engines, styleOnly, preciseArtStyle, preciseArtStyleAlone } = await client.castSwap.styleChoice()
-const showStyle = engines["motion-pulse"] === "user"
-const offerStyleOnly = styleOnly?.["motion-prism"] === true
-const offerPreciseArtStyle = preciseArtStyle?.["motion-prism"] === true
-const offerPreciseArtStyleAlone = preciseArtStyleAlone?.["motion-prism"] === true
+const { engines, styleOnly, preciseArtStyle, preciseArtStyleAlone } = await client.videoRemake.styleChoice()
+const showStyle = engines["nodaro-pulse"] === "user"
+const offerStyleOnly = styleOnly?.["nodaro-prism"] === true
+const offerPreciseArtStyle = preciseArtStyle?.["nodaro-prism"] === true
+const offerPreciseArtStyleAlone = preciseArtStyleAlone?.["nodaro-prism"] === true
 ```
 
 **Style only** (`direction`): a Motion run (`style: "motion"`) on Nodaro
-Motion Prism may take an art style, `direction: { style: "<id>" }`, an id of
+Prism may take an art style, `direction: { style: "<id>" }`, an id of
 the `style` picker catalog. With an art style and nothing to swap (no role
 with images and no fixed reference) the run is still accepted: the art style
 is its change, and a `prePrompt` or `postPrompt` is still added. It restyles
@@ -2357,13 +2357,13 @@ A preview takes the same path as its full run: whether a run is style only is
 judged on all its roles, so a preview that leaves out every role with images
 takes its full run's path, with the art style counting as the preview's
 change. Offer it only where `styleChoice()` answers `styleOnly` `true` for the
-engine; while Nodaro Motion Prism is answered `false`, an art style with
+engine; while Nodaro Prism is answered `false`, an art style with
 nothing else to change answers `400 validation_error`, and one with a
 `prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
 not as described here. `styleOnly` `true` says the engine takes such runs, and a
 run must still be Motion; an engine answered `"precise"` changes no request, so
 a Motion run there restyles the clip as on an engine answered `"user"` (see A
-forced style). Nodaro Motion Pulse takes no art style
+forced style). Nodaro Pulse takes no art style
 (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers an art style
 on a trend run, on a Motion run whose prompt is made Precise by Nodaro's
 setting for how Motion runs are prepared, and on a Precise run where the engine
@@ -2371,7 +2371,7 @@ takes none there (below). That setting is not the forced style, and
 `styleChoice()` does not show it.
 
 ```ts
-await client.castSwap.run({
+await client.videoRemake.run({
   videoUrl,
   roles: [],
   style: "motion",
@@ -2380,7 +2380,7 @@ await client.castSwap.run({
 ```
 
 **An art style on a Precise run** (`direction`): where `styleChoice()`
-answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
+answers `preciseArtStyle` `true` for the engine (Nodaro Prism only), a
 Precise run (no `style`, or `style: "precise"`) also takes an art style,
 `direction: { style: "<id>" }`, from the same catalog and refused the same way
 (`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may make it the way a
@@ -2402,13 +2402,13 @@ only, above). The price changes only where Nodaro's setting for these runs
 first redraws the role pictures in the art style (its own setting, not the one
 Motion runs use); `estimate()` with the same params shows it. The job records it in `input_data.direction`. Where
 `preciseArtStyle` is `false` (or a server from before it leaves it out), a
-Precise run with an art style answers `400 art_style_needs_flex`. Nodaro Motion
+Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
 
-**The Advanced options on the Nodaro Motion page**
-(`GET /v1/cast-swap/advanced`, public): `{ show: boolean }`, whether the
-Nodaro Motion page shows `prepareReferences` and `prePrompt` under its
+**The Advanced options on the Video Remake page**
+(`GET /v1/video-remake/advanced`, public): `{ show: boolean }`, whether the
+Video Remake page shows `prepareReferences` and `prePrompt` under its
 Advanced options; `false` until Nodaro turns them on, one setting for the
 whole page. It describes the page only: `run()` and `estimate()` take both
 fields whatever it says. The answer may be up to a minute old. The SDK has no
@@ -2417,7 +2417,7 @@ method for it yet; read it with `client.request()`.
 **Preparing the clip.** How the source clip is prepared for the video model
 (for one, whether faces are hidden first, and whether a clip the model
 refuses is retried once) is set by Nodaro for each engine; a run cannot
-change it. `faceMasking` (`CastSwapFaceMasking`) is deprecated: it is still
+change it. `faceMasking` (`VideoRemakeFaceMasking`) is deprecated: it is still
 typed and sent, so older code keeps working, and the server ignores it.
 
 Both routes answer `400` before charging for more roles of a kind than allowed
@@ -2434,10 +2434,10 @@ clip whose length cannot be read (`video_unreadable`). Other refusals: `401`,
 `402 insufficient_credits` (`run()` only), `404` (a `sessionId` you may not use),
 `422 job_blocked`, `503 host_too_old` (both), `503 estimate_unavailable`
 (`estimate()` only). The full table is in the
-[route reference](./api-integration.md#13f-nodaro-motion-cloud-edition).
+[route reference](./api-integration.md#13f-video-remake-cloud-edition).
 
 `run()` returns a job id; follow it with `client.jobs.get(jobId)`. Pass
-`{ idempotencyKey }` (`CastSwapRunOptions`) to make a retry safe: `run()` sends
+`{ idempotencyKey }` (`VideoRemakeRunOptions`) to make a retry safe: `run()` sends
 it unchanged as the `Idempotency-Key` header (the server takes 8–200
 characters and answers `400` otherwise). A repeat with the same key within the
 credit guard's dedup window (about 10 s) answers `200 { jobId, deduped: true }`
@@ -2447,21 +2447,21 @@ A preview's job keeps every input in its `input_data`, so rerunning it with
 `preview: false` renders the full clip with the same choices.
 
 ```ts
-const params: CastSwapParams = {
+const params: VideoRemakeParams = {
   videoUrl,
   roles: [{ kind: "person", name: "the woman dancing", images: [myPhotoUrl], outfit: "original" }],
   preview: true,
 }
-const quote = await client.castSwap.estimate(params)
-const { jobId } = await client.castSwap.run(params, { idempotencyKey: crypto.randomUUID() })
+const quote = await client.videoRemake.estimate(params)
+const { jobId } = await client.videoRemake.run(params, { idempotencyKey: crypto.randomUUID() })
 ```
 
-**Engines** (`engine`, `CastSwapEngine`). Left out, a run is made on
-Nodaro Motion Prism (`"motion-prism"`), as before. `"motion-pulse"` (Nodaro Motion
+**Engines** (`engine`, `VideoRemakeEngine`). Left out, a run is made on
+Nodaro Prism (`"nodaro-prism"`), as before. `"nodaro-pulse"` (Nodaro
 Pulse) makes a new take guided by the clip and the pictures: 720p (its default)
 or 1080p, no draft (`draft: true` is a `400 draft_unsupported`, 480p is
 refused) and so no Full Quality (run it again at 1080p instead), and a 4 s
-preview as on Prism. `motionLength` (`CastSwapMotionLength`) says where a Pulse run cuts the
+preview as on Prism. `motionLength` (`VideoRemakeMotionLength`) says where a Pulse run cuts the
 clip to whole seconds: `"cut-end"` (default) or `"cut-start"` drops the
 fraction of a second at that end. A Pulse quote names `engine`, with
 `expectedCredits` = `totalCredits` and `settlesLower: false`. Its own
@@ -2469,17 +2469,17 @@ refusals: `draft_unsupported`, `resolution_unsupported`,
 `output_format_unsupported`, `too_many_images` (over 10 images) and, past its
 8,000-character prompt cap, `prompt_too_long`. The job records it in
 `input_data.engine`, and a completed job's output in its `engine`. The ids an
-older client sent (`CastSwapEngineLegacyId`) are still accepted in a request
+older client sent (`VideoRemakeEngineLegacyId`) are still accepted in a request
 and read as Prism and Pulse. The trend routes and `estimate()` answer the
 public ids above; for now a job's `input_data.engine` (and its output's
 `engine`) may still name the engine by the id it had before the rename.
 
-**Full Quality.** A finished Nodaro Motion Prism draft (a Nodaro Motion or
+**Full Quality.** A finished Nodaro Prism draft (a Video Remake or
 trend run made at 480p with `draft: true`) can be finished at Full Quality
 within 7 days: `fullQuality(jobId)` re-renders the same take at 1080p, with the
 clip's audio, as a new job linked to the draft. Only a draft can: a plain run
 (480p without `draft: true` included) is refused with `409 not_a_draft`, so
-pass `draft: true` when you want to finish the take later. Nodaro Motion Pulse
+pass `draft: true` when you want to finish the take later. Nodaro Pulse
 makes no drafts and has no Full Quality: run it again at 1080p instead. The
 quote's `kind` is `"same-take"` (`"new-take"` was Pulse's). It spends credits;
 quote it first with `fullQualityEstimate(jobId)` (free), whose `totalCredits`
@@ -2487,7 +2487,7 @@ is `breakdown.base` plus `breakdown.motionHd` (0 when an earlier failed try of
 this draft already finished the 1080p render, which is then reused). One Full Quality per draft: a repeat answers the same job with
 `existing: true` and charges nothing; the server keys it by the draft, so no
 idempotency key is taken. The new job keeps the draft's origin; `sessionId`
-files it in a session. Refusals carry a `CastSwapFullQualityRefusalCode`:
+files it in a session. Refusals carry a `VideoRemakeFullQualityRefusalCode`:
 `401 unauthorized`, `404 not_found`, `409 not_completed`, `409 not_a_draft`,
 `410 draft_expired`, `409 full_quality_pending`, `409 full_quality_unavailable`,
 `402 insufficient_credits` (or a workspace cap), `422 job_blocked`,
@@ -2501,15 +2501,15 @@ started yet, both calls refuse with it; try again later.
 refuses the draft, every try failed). Tell them apart by `err.code`.
 
 ```ts
-const quote = await client.castSwap.fullQualityEstimate(draftJobId) // free
-const { jobId, existing } = await client.castSwap.fullQuality(draftJobId)
+const quote = await client.videoRemake.fullQualityEstimate(draftJobId) // free
+const { jobId, existing } = await client.videoRemake.fullQuality(draftJobId)
 ```
 
 ---
 
 ### `client.trends`
 
-Trends: ready-made Nodaro Motion recipes. A trend is a short clip with slots (the
+Trends: ready-made Video Remake recipes. A trend is a short clip with slots (the
 people, pets, products and place you can replace); fill its slots with your own
 pictures and run it. **Cloud edition only**: these routes 404 on self-hosted
 installs. Only published trends exist: a draft, unpublished, archived or unknown
@@ -2576,9 +2576,9 @@ interface TrendCard {
 interface TrendDetail extends TrendCard {
   version: number
   previewSec: 4 | null                   // 4 when a 4 s preview run is offered
-  engine?: "motion-prism" | "motion-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = motion-prism
-  engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
-  resolutions: ("480p" | "720p" | "1080p")[] // default first: motion-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), motion-pulse ["720p", "1080p"]
+  engine?: "nodaro-prism" | "nodaro-pulse" // TrendEngine: the engine every run uses (the trend's choice); absent = nodaro-prism
+  engineName?: string                   // "Nodaro Prism" | "Nodaro Pulse"
+  resolutions: ("480p" | "720p" | "1080p")[] // default first: nodaro-prism ["480p", "720p", "1080p"] (480p plain; a draft only with draft: true), nodaro-pulse ["720p", "1080p"]
   original?: TrendOriginal               // the clip every run starts from, to show; absent only on a version without a display copy; the first example on a trend that hides its original
   slots: TrendDetailSlot[]
   examples: Array<TrendVideo & { slots: Record<string, string[]> }> // may be []; an optional slot the example kept as in the original has no key in its slots; from the second example on a trend that hides its original
@@ -2603,7 +2603,7 @@ interface TrendRunRequest {
   details?: string      // ≤ 1,000 characters; mention a slot as {slot:<key>}
   preview?: boolean     // 4 s run, when previewSec is 4
   resolution?: "480p" | "720p" | "1080p" // one of the trend's resolutions, default its first; else 400 resolution_unsupported
-  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, motion-prism only; motion-pulse: true = 400 draft_unsupported
+  draft?: boolean       // default false (480p is plain); true = a 480p draft Full Quality can finish at 1080p, nodaro-prism only; nodaro-pulse: true = 400 draft_unsupported
   sessionId?: string    // accepted (and checked), not yet applied: trend runs are not filed into sessions yet
   projectId?: string    // accepted, but not used by the run today
   previewJobId?: string // a full run: the jobId of your own completed preview of this trend (uuid; any other job is ignored)
@@ -2613,8 +2613,8 @@ interface TrendRunRequest {
 interface TrendEstimate {
   expectedCredits: number            // what the run is expected to be charged
   holdCredits: number                // what is reserved when it starts
-  engine?: "motion-prism" | "motion-pulse" // the engine it was priced on, the trend's own; absent from an older server
-  engineName?: string                // its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; absent from an older server
+  engine?: "nodaro-prism" | "nodaro-pulse" // the engine it was priced on, the trend's own; absent from an older server
+  engineName?: string                // its name: "Nodaro Prism" or "Nodaro Pulse"; absent from an older server
   breakdown: Record<string, number>  // the parts of the quote, for display (some sit outside the totals: read the totals)
   privacyCredits?: number            // charged only if the clip is refused and the trend's retry runs; not in the totals
                                      // (0 on a trend whose clip was prepared ahead of time)
@@ -2629,15 +2629,15 @@ interface TrendRun {
   slots: Array<{ key: string; label: string; kind: TrendSlotKind; images: string[]; fromExample: boolean; fromDefault?: true } & TrendChips>
   details?: string
   preview: boolean; resolution: string; draft: boolean
-  engine?: "motion-prism" | "motion-pulse" // the engine it was made on; absent = motion-prism
-  engineName?: string                   // "Nodaro Motion Prism" | "Nodaro Motion Pulse"
+  engine?: "nodaro-prism" | "nodaro-pulse" // the engine it was made on; absent = nodaro-prism
+  engineName?: string                   // "Nodaro Prism" | "Nodaro Pulse"
   videoUrl: string | null; posterUrl: string | null  // once completed
   creditsCharged: number | null      // once settled, every step of the run included (reference preparation, mask, video)
   creditsHeld?: number | null        // the run's hold, its steps' included
   creditsReleased?: number | null    // what went back from creditsHeld once every hold in the run settled; null until then
   fullQualityOf: string | null       // a Full Quality version: the draft run it was made from; else null
   fullQuality: { jobId: string; status: string; refused?: true } | null // a draft's newest Full Quality try: a pointer only; refused: the provider refused it, or blocked it for a copyright or a likeness, so another try fails the same way
-  fullQualityUntil: string | null    // until when a completed draft can be finished in Full Quality; null for a plain run and every motion-pulse run
+  fullQualityUntil: string | null    // until when a completed draft can be finished in Full Quality; null for a plain run and every nodaro-pulse run
 }
 
 interface TrendTag {

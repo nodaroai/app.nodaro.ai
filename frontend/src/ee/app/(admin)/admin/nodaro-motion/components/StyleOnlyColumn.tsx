@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion, Prism's style-only runs (the `nodaro_motion_style_only`
+// Admin → Video Remake, Prism's style-only runs (the `nodaro_motion_style_only`
 // setting's entry for the engine): what a direct run does that has a video
 // and an art style and nothing to swap (no role with pictures, no fixed
 // reference). Pulse takes no art style, so it has none.

@@ -374,7 +374,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     promptWording: z.enum(CAST_SWAP_PROMPT_WORDINGS).optional(),
     // Absent = Seedance 2.5 (`engineOf`). Stored as given: a version that
     // names none is kept without the key, so re-saving an old draft is no change.
-    // Nodaro Motion's public ids are taken too and stored as the internal id
+    // Video Remake's public ids are taken too and stored as the internal id
     // they name (`castSwapEngineFrom`), the vocabulary every stored version uses.
     engine: z
       .enum(CAST_SWAP_ENGINE_IDS_ACCEPTED)

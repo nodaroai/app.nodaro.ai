@@ -11,6 +11,7 @@ import {
 } from "./availability-override.js"
 import { isCapabilityHost } from "./surface-deny.js"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
+import { castSwapSpelling } from "./video-remake-paths.js"
 
 /**
  * Which node a credit-guarded route RUNS — the name `creditGuard`
@@ -149,7 +150,8 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   "/v1/locations/:id/llm-caption": "location",
   "/v1/locations/:id/approve-main-image": "location",
 
-  // ── Nodaro Motion (cast-swap): its own routes and its engine's helpers ──
+  // ── Video Remake (cast-swap): its own routes and its engine's helpers. Each
+  //    is also served under /v1/video-remake, read in this spelling. ──
   "/v1/cast-swap/:jobId/full-quality": "cast-swap",
   // A trend's face mask, made once by the same engine (the platform's own
   // internal call from the trend editor).
@@ -222,6 +224,11 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/camera-switch",
   "/v1/cast-swap",
   "/v1/cast-swap/:jobId/full-quality",
+  // The same routes under Video Remake's own prefix (an engine that declares
+  // castSwap.videoRemakeRoutes registers both; routeNodeGate reads them alike).
+  "/v1/video-remake",
+  "/v1/video-remake/:jobId/full-quality",
+  "/v1/video-remake/face-mask",
   "/v1/competitor-scan",
   "/v1/content-ideas",
   "/v1/content-recipe",
@@ -275,7 +282,7 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
  * (lib/child-step-node.ts). Read from the Cloud plugin's source.
  */
 export const PLUGIN_JOB_NODES: Readonly<Record<string, string>> = Object.freeze({
-  // Nodaro Motion's Full Quality render and a trend's face-mask make.
+  // Video Remake's Full Quality render and a trend's face-mask make.
   "cast-swap-full-quality": "cast-swap",
   "cast-swap-face-mask": "cast-swap",
 })
@@ -327,8 +334,13 @@ function nodeGate(route: string, types: readonly string[]): RouteNodeGate {
   return { kind: "node", types, since }
 }
 
-/** The node `route` (a route PATTERN, `req.routeOptions.url`) runs for `body`. */
-export function routeNodeGate(route: string, body: unknown): RouteNodeGate {
+/**
+ * The node `route` (a route PATTERN, `req.routeOptions.url`) runs for `body`.
+ * A Video Remake route is read in its `/v1/cast-swap` spelling, the one these
+ * tables name (lib/video-remake-paths.ts), so both prefixes are one door.
+ */
+export function routeNodeGate(asked: string, body: unknown): RouteNodeGate {
+  const route = castSwapSpelling(asked)
   const key = routeKey(route)
   const exempt = EXEMPT_BY_KEY.get(key)
   if (exempt !== undefined) return { kind: "exempt", reason: exempt }

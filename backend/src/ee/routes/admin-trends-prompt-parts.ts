@@ -68,7 +68,7 @@ export function registerTrendPromptPartRoutes(app: FastifyInstance, deps: TrendF
         if (!answer) return reply
         if (answer.problems.length > 0) return promptPartsInvalid(reply, answer)
         const stored = storedOverridesFrom(texts, answer)
-        if (!stored) return reply.status(502).send({ error: { code: "engine_error", message: "Nodaro Motion answered unexpectedly." } })
+        if (!stored) return reply.status(502).send({ error: { code: "engine_error", message: "Video Remake answered unexpectedly." } })
         promptParts = stored
       }
       const { promptParts: before, ...rest } = draft

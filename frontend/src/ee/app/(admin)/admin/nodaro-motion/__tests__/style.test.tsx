@@ -1,6 +1,6 @@
 /**
- * Admin → Nodaro Motion → Style: per engine, people choose Precise or Flex
- * (the default, never saved), or the style is Precise in Nodaro Motion or
+ * Admin → Video Remake → Style: per engine, people choose Precise or Flex
+ * (the default, never saved), or the style is Precise in Video Remake or
  * always Flex. The forced choices are greyed out, naming the environments, until
  * every environment's engine enforces them (`castSwap.styleChoice`); "Users
  * choose" is always offered. Save sends only the forced engines, keyed by
@@ -21,10 +21,10 @@ import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from
 import AdminNodaroMotionPage from "../page"
 import { STYLE_CHOICE_HINT, styleToSaved } from "../components/StyleChoiceSelect"
 
-const STYLE_URL = "/v1/admin/nodaro-motion/style"
+const STYLE_URL = "/v1/admin/video-remake/style"
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const enforces = (env: string, styleChoice?: boolean): TrendEngineEnvironment => ({
   ...ENVIRONMENTS[0]!,
@@ -37,33 +37,33 @@ const view = (style: unknown) => ({ body: { data: { style, updatedAt: style ? "2
 beforeEach(() => {
   resetRoutes()
   vi.stubGlobal("fetch", fetchMock)
-  routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
-  routes["POST /v1/admin/nodaro-motion/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })
-  routes["GET /v1/admin/nodaro-motion/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
-  routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
+  routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })
+  routes["GET /v1/admin/video-remake/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: BOTH } })
   routes[`GET ${STYLE_URL}`] = () => view(null)
   // The page's Advanced switch (advanced.test.tsx): never saved, hidden.
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 
 const section = async (name: RegExp) =>
-  (await screen.findByRole("heading", { name: new RegExp(`^Nodaro Motion ${name.source}`) })).closest("section") as HTMLElement
+  (await screen.findByRole("heading", { name: new RegExp(`^Nodaro ${name.source}`) })).closest("section") as HTMLElement
 const styleSelect = async (name: RegExp) => within(await section(name)).findByRole("combobox", { name: "Style" })
 
-describe("Admin → Nodaro Motion → Style", () => {
-  it("offers Users choose, Precise in Nodaro Motion and Always Flex, with its hint word for word", async () => {
+describe("Admin → Video Remake → Style", () => {
+  it("offers Users choose, Precise in Video Remake and Always Flex, with its hint word for word", async () => {
     const user = userEvent.setup()
     expect(STYLE_CHOICE_HINT).toBe(
-      "Hides the Style choice in Nodaro Motion. Always Flex also makes API and agent runs Flex; with Precise in Nodaro Motion, an API or agent request that asks for Flex gets Flex. Trends keep their own style.",
+      "Hides the Style choice in Video Remake. Always Flex also makes API and agent runs Flex; with Precise in Video Remake, an API or agent request that asks for Flex gets Flex. Trends keep their own style.",
     )
     renderWith(<AdminNodaroMotionPage />)
     await user.click(await styleSelect(/Prism/))
-    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["Users choose (Precise or Flex)", "Precise in Nodaro Motion", "Always Flex"])
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["Users choose (Precise or Flex)", "Precise in Video Remake", "Always Flex"])
   })
 
   it("shows Users choose on each engine until saved, with the hint, and Save off", async () => {
@@ -83,34 +83,34 @@ describe("Admin → Nodaro Motion → Style", () => {
     await user.click(await styleSelect(/Pulse/))
     await user.click(await screen.findByRole("option", { name: "Always Flex" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${STYLE_URL}`)).toEqual([{ style: { "motion-pulse": "flex" } }]))
+    await waitFor(() => expect(sentTo(`PUT ${STYLE_URL}`)).toEqual([{ style: { "nodaro-pulse": "flex" } }]))
     // Only the Style setting changed: nothing else is sent.
-    expect(sentTo("PUT /v1/admin/nodaro-motion/masking")).toEqual([])
-    expect(sentTo("PUT /v1/admin/nodaro-motion/steps")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/masking")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/steps")).toEqual([])
   })
 
   it("puts a forced engine back to Users choose (saved as left out)", async () => {
     const user = userEvent.setup()
-    routes[`GET ${STYLE_URL}`] = () => view({ "motion-prism": "precise", "motion-pulse": "flex" })
+    routes[`GET ${STYLE_URL}`] = () => view({ "nodaro-prism": "precise", "nodaro-pulse": "flex" })
     routes[`PUT ${STYLE_URL}`] = (init) => view(JSON.parse(String(init?.body)).style)
     renderWith(<AdminNodaroMotionPage />)
-    expect(await styleSelect(/Prism/)).toHaveTextContent("Precise in Nodaro Motion")
+    expect(await styleSelect(/Prism/)).toHaveTextContent("Precise in Video Remake")
     await user.click(await styleSelect(/Prism/))
     await user.click(await screen.findByRole("option", { name: "Users choose (Precise or Flex)" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${STYLE_URL}`)).toEqual([{ style: { "motion-pulse": "flex" } }]))
+    await waitFor(() => expect(sentTo(`PUT ${STYLE_URL}`)).toEqual([{ style: { "nodaro-pulse": "flex" } }]))
   })
 
   it("greys out the forced choices, naming the environments, while one's engine cannot enforce them; Users choose stays", async () => {
     const user = userEvent.setup()
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [enforces("production", true)] } })
-    routes[`GET ${STYLE_URL}`] = () => view({ "motion-pulse": "flex" })
+    routes[`GET ${STYLE_URL}`] = () => view({ "nodaro-pulse": "flex" })
     routes[`PUT ${STYLE_URL}`] = (init) => view(JSON.parse(String(init?.body)).style)
     renderWith(<AdminNodaroMotionPage />)
     const pulse = await styleSelect(/Pulse/)
-    await waitFor(() => expect(pulse).toHaveAccessibleDescription(`${STYLE_CHOICE_HINT} Precise in Nodaro Motion and Always Flex wait for the engine in staging: this setting is shared by every environment.`))
+    await waitFor(() => expect(pulse).toHaveAccessibleDescription(`${STYLE_CHOICE_HINT} Precise in Video Remake and Always Flex wait for the engine in staging: this setting is shared by every environment.`))
     await user.click(pulse)
-    expect(await screen.findByRole("option", { name: "Precise in Nodaro Motion (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true")
+    expect(await screen.findByRole("option", { name: "Precise in Video Remake (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true")
     expect(screen.getByRole("option", { name: "Always Flex (not supported yet: staging)" })).toHaveAttribute("aria-disabled", "true")
     const users = screen.getByRole("option", { name: "Users choose (Precise or Flex)" })
     expect(users).not.toHaveAttribute("aria-disabled", "true")
@@ -121,6 +121,6 @@ describe("Admin → Nodaro Motion → Style", () => {
 
   it("styleToSaved keeps only the forced engines", () => {
     expect(styleToSaved(null)).toEqual({})
-    expect(styleToSaved({ "motion-prism": "user", "motion-pulse": "precise" })).toEqual({ "motion-pulse": "precise" })
+    expect(styleToSaved({ "nodaro-prism": "user", "nodaro-pulse": "precise" })).toEqual({ "nodaro-pulse": "precise" })
   })
 })

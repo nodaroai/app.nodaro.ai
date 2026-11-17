@@ -1765,7 +1765,7 @@ All errors share the same shape:
 | 403 | `api_tokens_payer_only` | — | On a deployment-payer instance only the billing account may create a personal API token; every other user is refused. Existing tokens stay listable and revocable by their owner. |
 | 403 | `payer_balance_jwt_only` | — | (Deployment-payer instances only) A credit-balance read (`GET /v1/credits/balance`, `GET /v1/user/credits`, `GET /v1/credits/check`) authenticated **as the billing account** with an API token or an OAuth app token. The deployment's pool is the operator's number and is answered only to that account's own browser session — see [§3](#3-public-api-endpoints). No other identity is affected. |
 | 403 | `subscription_required` | — | (Cloud edition only) A pay-as-you-go account tried to spend from a first-party consumer surface (browser session in the studio or another Nodaro app). Payg credits are redeemable via the API/SDK/CLI/MCP — this never fires for token-authenticated calls. Rollout-gated: availability may lag this document. |
-| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Nodaro Motion; `POST /v1/video-director/run` as `video-director`, the Video Director; `POST /v1/pipelines` and the pipeline routes that start or continue work as `film-pipeline`, the film pipeline — see [§14](#14-pipelines)). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
+| 403 | `node_not_available` | — | A run of a node this deployment does not offer you (it is hidden or not yet released). Every route that spends credits is checked as the node it runs, whatever its path (`POST /v1/suno/generate` as `suno-generate`; a trend run, `POST /v1/trends/:slug/runs` and `/estimate`, as `cast-swap`, Video Remake; `POST /v1/video-director/run` as `video-director`, the Video Director; `POST /v1/pipelines` and the pipeline routes that start or continue work as `film-pipeline`, the film pipeline — see [§14](#14-pipelines)). On Tighten Episode, Trailer, Clip Pack and Speaker Layout (`POST /v1/tighten-episode`, `POST /v1/episode-trailer`, `POST /v1/clip-pack`, `POST /v1/speaker-layout` and their `/estimate`) also a request with several recordings (`mediaUrls`) or a Master audio (`masterAudioUrl`) while Speaker Map, which they need, is not available to you. Refused before anything is probed or charged; send one recording. See [Tighten Episode → Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras), [Trailer → Several cameras](./nodes/processing-video/episode-trailer.md#several-cameras) and [Clip Pack → Several cameras](./nodes/processing-video/clip-pack.md#several-cameras) and [Speaker Layout → Several cameras](./nodes/processing-video/speaker-layout.md#several-cameras). |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 404 | `workspace_not_found` | — | (Cloud edition, organizations) The workspace named by workspace-paid work does not exist (or was deleted mid-flight). Rollout-gated. |
 | 409 | `workspace_archived` | — | (Cloud edition, organizations) Workspace-paid work into an archived workspace. Unarchive it or move the work. Rollout-gated. |
@@ -1779,7 +1779,7 @@ All errors share the same shape:
 | 422 | `job_blocked` | — | A job policy or content guard registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
-| 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. When a request is answered this way because a job or a run could not be queued to start, that job or run is failed at once — a job with its credits refunded (the jobs of a batch are refunded and removed: an [image batch](#4g-several-images-in-one-call-count-models), or the candidates or versions of `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location`, `/v1/generate-object` and `/v1/video-sfx`) — and its `Idempotency-Key` is freed, so a retry with the same key starts a new job or run. A batch whose jobs only partly started names the running ones in `error.startedJobIds`: follow those, and send the same request with the same key again, which returns them and starts only the rest. In the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job or run (if it then fails, send the request again with a new key), or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new one. The use-case runs (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`, and their `/continue`) do the same: the run's job is failed with its fee refunded and its key freed, so a retry with the same key starts a new run. Only when it is not known whether the queue took the run (the rare unconfirmed case) is the request answered `202` like a started run, with the key kept, so the retry answers that run and never starts a second one beside it. Routes served by the Nodaro Cloud plugin, such as [Nodaro Motion](#13f-nodaro-motion-cloud-edition) and the trend runs that start it, answer a repeated key as their own sections say. |
+| 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. When a request is answered this way because a job or a run could not be queued to start, that job or run is failed at once — a job with its credits refunded (the jobs of a batch are refunded and removed: an [image batch](#4g-several-images-in-one-call-count-models), or the candidates or versions of `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location`, `/v1/generate-object` and `/v1/video-sfx`) — and its `Idempotency-Key` is freed, so a retry with the same key starts a new job or run. A batch whose jobs only partly started names the running ones in `error.startedJobIds`: follow those, and send the same request with the same key again, which returns them and starts only the rest. In the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job or run (if it then fails, send the request again with a new key), or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new one. The use-case runs (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`, and their `/continue`) do the same: the run's job is failed with its fee refunded and its key freed, so a retry with the same key starts a new run. Only when it is not known whether the queue took the run (the rare unconfirmed case) is the request answered `202` like a started run, with the key kept, so the retry answers that run and never starts a second one beside it. Routes served by the Nodaro Cloud plugin, such as [Video Remake](#13f-video-remake-cloud-edition) and the trend runs that start it, answer a repeated key as their own sections say. |
 | 503 | `provider_key_missing` | — | A use-case run or its estimate (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`, and their `/estimate`) whose chain transcribes (its Transcribe step, or Add Captions set to transcribe) on a self-hosted install that has no key for that transcription provider and no nodaro.ai connection covering it. The message names the key. Refused before anything is created. |
 | 503 | `job_start_failed` | — | A synchronous metered LLM request could not record that its call is starting. The call was not sent and nothing was charged (the hold is refunded). Retry it. |
 | 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
@@ -1817,7 +1817,7 @@ Or, on a deployment that registers a job policy, a rejection by that policy:
 ```
 
 Or, when the job ran out of credits partway — a step that reserves its own
-credits (for example the video a Nodaro Motion or trend run dispatches) was
+credits (for example the video a Video Remake or trend run dispatches) was
 refused:
 
 ```json
@@ -1855,7 +1855,7 @@ what can change.
 
 The same request is refused the same way, so do not run it again unchanged:
 change the input images, the video, the prompt or the settings. It is not a
-content-policy block. On a job made of steps (a Nodaro Motion or trend run) this
+content-policy block. On a job made of steps (a Video Remake or trend run) this
 is one step's refusal.
 
 Or, when the job never got one of your account's concurrency slots, so it did
@@ -1996,7 +1996,7 @@ number | null` — what the job actually cost once its hold settled, read from
 the same usage log. It can be lower than `credits` (some jobs hold more than
 they end up using — a possible re-render, a length measured after the run —
 and the rest goes back to your balance). When the job's own hold was refunded
-it is `0` plus any steps that settled (below: a refunded Nodaro Motion run whose
+it is `0` plus any steps that settled (below: a refunded Video Remake run whose
 reference and mask steps committed reads `credit_status: "refunded"` with
 `credits_charged: 165`). It is `null` while the job's own hold is still open
 (`credit_status: "reserved"`) — even when some of its steps have already
@@ -2005,7 +2005,7 @@ settled — and when nothing in the run was reserved. To total what jobs cost, s
 444 reads `credits: 888`, `credits_charged: 444`, `credit_status: "committed"`.
 
 `credits_charged` is the charge of the job **as a run, its steps included**.
-Some jobs run other jobs for you — a Nodaro Motion run prepares its references,
+Some jobs run other jobs for you — a Video Remake run prepares its references,
 makes a mask and renders the video, each as a step of its own that is never
 listed on its own — and each step is charged once it settles. A step whose
 hold is still open adds nothing yet; a refunded step adds `0`;
@@ -2014,7 +2014,7 @@ hold is still open adds nothing yet; a refunded step adds `0`;
 holds; the same as `credits` for a job with no steps), and `credits_released`
 is what went back from it (`credits_held − credits_charged`) once every hold in
 the run has settled — `null` until then. `credits` and `credit_status` stay the
-job's own. Example: a Nodaro Motion preview whose own hold was 44, with two
+job's own. Example: a Video Remake preview whose own hold was 44, with two
 reference steps at 66, a mask at 33 and a video held at 3,564 and settled at
 854, reads `credits: 44`, `credits_charged: 1063`, `credits_held: 3773`,
 `credits_released: 2710`. If the steps cannot be read for a moment,
@@ -3396,7 +3396,7 @@ page for the token syntax and worked examples.
 > that is a resized display copy of a Nodaro CDN image
 > (`https://cdn.nodaro.ai/cdn-cgi/image/<options>/<path>`) is recorded and sent
 > as the original file, `https://cdn.nodaro.ai/<path>`. The same applies to the
-> pictures of a trend run and of a Nodaro Motion run. Other hosts' URLs are
+> pictures of a trend run and of a Video Remake run. Other hosts' URLs are
 > used as sent.
 >
 > **Embedded metadata is removed before a model sees an image.** An input image
@@ -5473,22 +5473,22 @@ figure: that balance is the deployment's own). What a published UGC video carrie
 and the photo an app set to My photo needs, are in
 [UGC videos in a published app or template](#ugc-videos-in-a-published-app-or-template).
 
-## 13f. Nodaro Motion (Cloud edition)
+## 13f. Video Remake (Cloud edition)
 
-Nodaro Motion replaces the people, pets, products and/or the location in a
+Video Remake replaces the people, pets, products and/or the location in a
 short video with your own reference images, keeping its motion, framing,
 timing and sound: the clip's audio is kept, and the result is the clip's
-length. Its routes keep their original path, `/v1/cast-swap`. Both are
-served by the Nodaro Cloud plugin and answer 404 on self-hosted installs
-(SDK: [`client.castSwap`](./sdk-reference.md#clientcastswap), MCP: the
-[`cast_swap`](./mcp/tools.md) verb).
+length. Its routes are served by the Nodaro Cloud plugin and answer 404 on
+self-hosted installs
+(SDK: [`client.videoRemake`](./sdk-reference.md#clientvideoremake), MCP: the
+[`video_remake`](./mcp/tools.md) verb).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
-| `POST` | `/v1/cast-swap` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/cast-swap/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
-| `GET` | `/v1/cast-swap/advanced` | Whether the Nodaro Motion page shows its Advanced options (see below). Public: no sign-in needed. |
+| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
+| `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
 `{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
@@ -5507,17 +5507,17 @@ words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `style` (see below), `direction` (an art
 style, see below), `resolution` (`"480p"` — the default —
-`"720p"` or `"1080p"`; on Nodaro Motion Pulse `"720p"` — its default — or
+`"720p"` or `"1080p"`; on Nodaro Pulse `"720p"` — its default — or
 `"1080p"`), `draft` (off by default, so a 480p run is plain; `true` makes a
 480p draft whose same take [Full Quality](#full-quality) can finish at 1080p;
-`true` above 480p is refused, and Nodaro Motion Pulse has no draft), `prepareReferences` (default
+`true` above 480p is refused, and Nodaro Pulse has no draft), `prepareReferences` (default
 `true`, see below), `sessionId` and `origin`.
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
-[SDK reference](./sdk-reference.md#clientcastswap).
+[SDK reference](./sdk-reference.md#clientvideoremake).
 
-**Engines.** `engine` chooses the engine: `"motion-prism"` (Nodaro Motion Prism,
-the default when `engine` is left out) or `"motion-pulse"` (Nodaro Motion
+**Engines.** `engine` chooses the engine: `"nodaro-prism"` (Nodaro Prism,
+the default when `engine` is left out) or `"nodaro-pulse"` (Nodaro
 Pulse). Prism renders 480p (plain unless `draft: true`), 720p or 1080p, and
 its Full Quality re-renders a draft's own take at 1080p. Pulse makes a new take
 guided by the clip and your images: it renders 720p (the default) or 1080p,
@@ -5551,32 +5551,32 @@ run ignores it: the trend decides.
 
 **A forced style.** Nodaro may fix the style of an engine for everyone as
 Motion: every run and estimate on that engine then uses it, whatever `style`
-says. `GET /v1/cast-swap/style-choice` (public, no
+says. `GET /v1/video-remake/style-choice` (public, no
 sign-in needed) says which, per engine:
-`{ engines: { "motion-prism": Choice, "motion-pulse": Choice } }`, where
+`{ engines: { "nodaro-prism": Choice, "nodaro-pulse": Choice } }`, where
 `Choice` is `"user"` (you choose, as above), `"precise"` or `"flex"` (Motion,
 `style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style choice, and every run
 and estimate there takes the `style` it sends, as on an engine answered
 `"user"`. An app shows its style choice only for an engine answered
 `"user"`. The same answer carries
-`styleOnly: { "motion-prism": boolean, "motion-pulse": boolean }`: whether the
+`styleOnly: { "nodaro-prism": boolean, "nodaro-pulse": boolean }`: whether the
 engine takes style-only runs (below),
-`preciseArtStyle: { "motion-prism": boolean, "motion-pulse": boolean }`:
+`preciseArtStyle: { "nodaro-prism": boolean, "nodaro-pulse": boolean }`:
 whether a Precise run takes an art style there (below), and
-`preciseArtStyleAlone: { "motion-prism": boolean, "motion-pulse": boolean }`:
+`preciseArtStyleAlone: { "nodaro-prism": boolean, "nodaro-pulse": boolean }`:
 whether an art style alone is a Precise run's change there, with no role,
 reference or prompt (Nodaro may run such a request as a Motion run, which this
 does not say: see An art style on a Precise run below); it answers `false`
 until the engine takes such runs. All three follow the engine alone, so read them with `engines`: on an
 engine answered `"flex"` every run is a Motion run.
-Nodaro Motion Pulse is always `false` in all three, and a server from before
+Nodaro Pulse is always `false` in all three, and a server from before
 them leaves them out: read that as `false` for every engine.
 The answer may be up to a minute old. Trends are not
 affected.
 
 **Restyling a whole clip (style only).** A Motion run (`style: "motion"`) on
-Nodaro Motion Prism may take an art style, `direction: { style: "<id>" }`,
+Nodaro Prism may take an art style, `direction: { style: "<id>" }`,
 where the id is one of the `style` picker catalog's (the same ids an image's
 `direction.style` takes). With an art style and nothing to swap (no role with
 images and no fixed reference), the run is still accepted: the art style is
@@ -5592,22 +5592,22 @@ and not made monochrome.
 A preview takes the same path as its full run: whether a run is style only is
 judged on all its roles, so a preview that leaves out every role with images
 (`inPreview: false`) takes its full run's path, with the art style counting as
-the preview's change. Read `styleOnly` from `GET /v1/cast-swap/style-choice`
-before offering it: while Nodaro Motion Prism is answered `false`, an art style
+the preview's change. Read `styleOnly` from `GET /v1/video-remake/style-choice`
+before offering it: while Nodaro Prism is answered `false`, an art style
 with nothing else to change is refused as `400 validation_error`, and one with
 a `prePrompt` or `postPrompt` is accepted but runs as any other art-style run,
 not as described here. `styleOnly: true` says the engine takes such runs, and a
 run must still be Motion; an engine answered `"precise"` changes no request, so
 a Motion run there restyles the clip as on an engine answered `"user"` (see A
-forced style). Nodaro Motion Pulse takes no art style
+forced style). Nodaro Pulse takes no art style
 (`400 art_style_needs_prism`). `400 art_style_needs_flex` answers an art style
 on a trend run, on a Motion run whose prompt is made Precise by Nodaro's
 setting for how Motion runs are prepared, and on a Precise run where the engine
 takes none there (below). That setting is not the forced style, and
 `style-choice` does not show it.
 
-**An art style on a Precise run.** Where `GET /v1/cast-swap/style-choice`
-answers `preciseArtStyle` `true` for the engine (Nodaro Motion Prism only), a
+**An art style on a Precise run.** Where `GET /v1/video-remake/style-choice`
+answers `preciseArtStyle` `true` for the engine (Nodaro Prism only), a
 Precise run (no `style`, or `style: "precise"`) also takes an art style,
 `direction: { style: "<id>" }`, from the same catalog and refused the same way
 (`400 unknown_art_style`, `400 art_style_not_supported`). Nodaro may make it the
@@ -5629,15 +5629,15 @@ only, above). The price changes only where Nodaro's setting for these runs
 first redraws the role pictures in the art style (its own setting, not the one
 Motion runs use); the estimate (sent with the same body) shows it. The job records it in `input_data.direction`. Where
 `preciseArtStyle` is `false` (or a server from before it leaves it out), a
-Precise run with an art style answers `400 art_style_needs_flex`. Nodaro Motion
+Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
 
-**The Advanced options on the Nodaro Motion page.** The Nodaro Motion page
+**The Advanced options on the Video Remake page.** The Video Remake page
 offers two of the body's fields, `prepareReferences` (see Reference
 preparation below) and `prePrompt`, only under its Advanced options, which
 stay hidden unless Nodaro turns them on: one setting for the whole page, the
-same for every engine. `GET /v1/cast-swap/advanced` (public, no sign-in
+same for every engine. `GET /v1/video-remake/advanced` (public, no sign-in
 needed) answers `{ show: boolean }`, so an app built on this API can show or
 hide the same options. It describes the page only: every run and estimate
 takes `prepareReferences` and `prePrompt` as described here, whatever it
@@ -5665,11 +5665,11 @@ whose picture could not be made. Locations are not prepared.
 
 The quote names two totals. `totalCredits` is what is held when the run
 starts; `expectedCredits` is the charge the run is expected to come to, never
-above `totalCredits`. On Nodaro Motion Prism the video's length is left to the
+above `totalCredits`. On Nodaro Prism the video's length is left to the
 model (Auto), so the video is held at its longest output but is expected to
 be charged for about the clip in and as much out; `settlesLower: true` says
 so (the final charge is expected to come out lower than `totalCredits`, at
-about `expectedCredits`). On Nodaro Motion Pulse the two totals are equal and
+about `expectedCredits`). On Nodaro Pulse the two totals are equal and
 `settlesLower` is `false`: Pulse renders exactly the length asked for. The run
 is charged what it actually costs. `breakdown` names the quote's parts, for
 display only: `base` (the run itself), `references` (the reference
@@ -5699,11 +5699,11 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images, no reference, no `prePrompt` or `postPrompt` and no art style ("Add images to at least one role, a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)."; an art style counts only where `styleOnly` is answered `true`, and an engine from before style-only runs words this message without it), more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, an invalid `origin`, or a `style` other than `"precise"` or `"motion"`. |
-| `400` | `draft_unsupported` | `draft: true` with `engine: "motion-pulse"`, which has no draft. |
-| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "motion-pulse"`. |
-| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "motion-pulse"` (only a Nodaro Motion Prism edit can be one). |
-| `400` | `too_many_images` | More than 10 images in an `engine: "motion-pulse"` run, across every role and fixed reference. |
+| `400` | `validation_error` | The body does not validate: no role with images, no reference, no `prePrompt` or `postPrompt` and no art style ("Add images to at least one role, a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Prism)."; an art style counts only where `styleOnly` is answered `true`, and an engine from before style-only runs words this message without it), more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, an invalid `origin`, or a `style` other than `"precise"` or `"motion"`. |
+| `400` | `draft_unsupported` | `draft: true` with `engine: "nodaro-pulse"`, which has no draft. |
+| `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "nodaro-pulse"`. |
+| `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "nodaro-pulse"` (only a Nodaro Prism edit can be one). |
+| `400` | `too_many_images` | More than 10 images in an `engine: "nodaro-pulse"` run, across every role and fixed reference. |
 | `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
@@ -5711,42 +5711,42 @@ Refusals, all before anything is charged (bodies are
 | `400` | `clip_out_of_range` | The clip is shorter than 4 s or longer than 30 s. |
 | `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
 | `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
-| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Motion Prism)." |
-| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Motion Pulse's is 8,000 characters). |
-| `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Motion Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
+| `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Prism)." |
+| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Pulse's is 8,000 characters). |
+| `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
 | `400` | `prompt_parts_not_allowed` | The body sends `promptParts`: only the Nodaro platform itself may (a trend's engine prompt). |
 | `400` | `prompt_style_not_allowed` | The body sends `promptStyle`: only the Nodaro platform itself may. A run's wording follows its `style`. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/cast-swap` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
-| `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/cast-swap` only). |
-| `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/cast-swap` only). |
-| `503` | `host_too_old` | This platform version cannot run Nodaro Motion (both routes). |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/video-remake` only). |
+| `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/video-remake` only). |
+| `503` | `host_too_old` | This platform version cannot run Video Remake (both routes). |
 | `503` | `estimate_unavailable` | The price cannot be quoted right now (`/estimate` only); try again shortly. |
 
 ### Full Quality
 
-A finished Nodaro Motion Prism DRAFT run (a Nodaro Motion or trend run made
+A finished Nodaro Prism DRAFT run (a Video Remake or trend run made
 at 480p with `draft: true`) can be finished at Full Quality: the same take
 re-rendered at 1080p, fitted to the clip and given its original audio back, as
 a new job linked to it. The draft itself stays.
 
 Only a draft has one. A plain run (a 480p run made without `draft: true`
 included) is refused with `409 not_a_draft`; to finish a 480p take at 1080p
-later, make it with `draft: true`. Nodaro Motion Pulse makes no drafts, so it
+later, make it with `draft: true`. Nodaro Pulse makes no drafts, so it
 has no Full Quality: run it again at 1080p instead. A Pulse Full Quality made
 before that changed stays listed as a run of its own.
 
 The quote's `kind` is `"same-take"` (an older server leaves it out: a same
 take; `"new-take"` was Pulse's). It is available for 7 days after the draft completed
-(SDK: [`client.castSwap.fullQuality`](./sdk-reference.md#clientcastswap),
+(SDK: [`client.videoRemake.fullQuality`](./sdk-reference.md#clientvideoremake),
 MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
-`nodaro cast-swap full-quality estimate|run`).
+`nodaro video-remake full-quality estimate|run`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/cast-swap/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil }`. |
-| `POST` | `/v1/cast-swap/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
+| `POST` | `/v1/video-remake/:jobId/full-quality/estimate` | Quote it. Free: nothing is created or reserved. Returns `{ kind, totalCredits, breakdown, availableUntil }`. |
+| `POST` | `/v1/video-remake/:jobId/full-quality` | Start it. Returns `202 { jobId }`, or `200 { jobId, existing: true }` when this run's Full Quality is already running or done (nothing new is started or charged). Optional body `{ sessionId }`. |
 
 `:jobId` is the draft's job id. The quote
 is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
@@ -5770,9 +5770,9 @@ Refusals, all before anything is charged (bodies are
 |---|---|---|
 | `401` | `unauthorized` | No authenticated user. |
 | `402` | `insufficient_credits` | Your credits cannot cover it (start only). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
-| `404` | `not_found` | Not your job, or not a Nodaro Motion run; also a `sessionId` you may not use (start only). |
+| `404` | `not_found` | Not your job, or not a Video Remake run; also a `sessionId` you may not use (start only). |
 | `409` | `not_completed` | The run has not finished. |
-| `409` | `not_a_draft` | The run is not a Nodaro Motion Prism draft: a plain run (480p made without `draft: true` included; make a draft with `draft: true`), or any Nodaro Motion Pulse run (Pulse makes no drafts: run it again at 1080p). |
+| `409` | `not_a_draft` | The run is not a Nodaro Prism draft: a plain run (480p made without `draft: true` included; make a draft with `draft: true`), or any Nodaro Pulse run (Pulse makes no drafts: run it again at 1080p). |
 | `409` | `full_quality_pending` | **Not final — try again later** (`retryable: true`): an earlier try's 1080p render of this draft is being reviewed (try again once the review ends), or has not started yet. |
 | `409` | `full_quality_unavailable` | **Final:** the run cannot be finished at Full Quality — nothing kept to re-render, no readable completion time, or the 1080p finalize refuses this draft. On the start only, also when every try failed ("failed too many times") or no try can be started for this run. |
 | `410` | `draft_expired` | More than 7 days after the draft completed, or the draft can no longer be finished at Full Quality. |
@@ -5783,7 +5783,7 @@ Refusals, all before anything is charged (bodies are
 
 ## 13g. Trends (Cloud edition)
 
-A trend is a ready-made [Nodaro Motion](#13f-nodaro-motion-cloud-edition) recipe: a
+A trend is a ready-made [Video Remake](#13f-video-remake-cloud-edition) recipe: a
 short clip with slots (the people, pets, products and place you can replace).
 Fill its slots with your own pictures and run it to get the clip back with
 them in it. The routes are part of Nodaro Cloud and answer 404 on self-hosted
@@ -5821,8 +5821,8 @@ answered as a guest. Every other route below needs a signed-in caller.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Every video (`cover`, `original`, each of `examples`, and the page's `original` and `examples`) may also carry `webUrl` and `webSizeBytes`: a light copy the platform made for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s), to play as it is with no CDN transform, and its size in bytes; both are absent until it is made (a version published before it), and `videoUrl` is then the one to play. A trend can hide its original clip: its `original` is then its first example, and `examples` starts from its second example, so the original clip is never sent. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
-| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"motion-prism"` or `"motion-pulse"`, with its name in `engineName`: "Nodaro Motion Prism" or "Nodaro Motion Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Motion Prism (480p is plain; a run makes a draft only with `draft: true`), `["720p", "1080p"]` on Nodaro Motion Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
-| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"motion-prism"` or `"motion-pulse"`, as on its page), with its name in `engineName` ("Nodaro Motion Prism" or "Nodaro Motion Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
+| `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"nodaro-prism"` or `"nodaro-pulse"`, with its name in `engineName`: "Nodaro Prism" or "Nodaro Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Prism (480p is plain; a run makes a draft only with `draft: true`), `["720p", "1080p"]` on Nodaro Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"nodaro-prism"` or `"nodaro-pulse"`, as on its page), with its name in `engineName` ("Nodaro Prism" or "Nodaro Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
 | `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
@@ -5861,11 +5861,11 @@ The estimate and run body is
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
 - `resolution`: one of the trend's `resolutions`, default its first
-  (`"480p"`, or `"720p"` on a Nodaro Motion Pulse trend); another is a `400`
+  (`"480p"`, or `"720p"` on a Nodaro Pulse trend); another is a `400`
   `resolution_unsupported`. `draft` (default `false`, so a 480p run is plain):
   `true` makes a 480p draft whose same take [Full Quality](#full-quality) can
-  finish at 1080p, only on a Nodaro Motion Prism trend; `draft: true` on a
-  Nodaro Motion Pulse trend is a `400` `draft_unsupported`.
+  finish at 1080p, only on a Nodaro Prism trend; `draft: true` on a
+  Nodaro Pulse trend is a `400` `draft_unsupported`.
 - `sessionId`: one of your generation sessions. Accepted (one you may not
   use is still a `404`), but not yet applied: trend runs are not filed into
   sessions yet.
@@ -5916,9 +5916,9 @@ anything is charged:
 | `400` | `missing_slot` | A required slot has no images. (An optional slot left empty whose chosen example has no pictures for it is not refused: it stays as in the original.) |
 | `400` | `unknown_slot` | `slots` names a key the trend does not have. |
 | `400` | `invalid_choice` | A chip the slot's kind does not take (a `coat` on a person, any chip on a location). |
-| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Motion Pulse). |
-| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Motion Pulse trend). |
-| `400` | `too_many_images` | A Nodaro Motion Pulse trend's run would send more than 10 pictures (yours, the example's — or, in a Full depth trend, the default image — for slots you left empty, and the trend's own): send fewer per slot. |
+| `400` | `draft_unsupported` | `draft: true` on a trend whose engine has no draft (Nodaro Pulse). |
+| `400` | `resolution_unsupported` | A `resolution` the trend does not offer (480p on a Nodaro Pulse trend). |
+| `400` | `too_many_images` | A Nodaro Pulse trend's run would send more than 10 pictures (yours, the example's — or, in a Full depth trend, the default image — for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `role_name_required` | A role of the trend has no name (the trend's own data; a trend's roles are always named). |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
 | `400` | `example_out_of_range` | `example` names an example the trend page does not list (any `example` on a trend with none; on a trend that hides its original, more than the length of its `examples`). |
@@ -5930,12 +5930,12 @@ anything is charged:
 | `404` | `not_found` | The trend is not published, or `sessionId` names a session you may not use (`/runs` only). |
 | `429` | `rate_limit_exceeded` | More than 60 catalog, tag or page reads in a minute from one address (a guest) or one account. |
 | `409` | `trend_unavailable` | (estimate and run) The trend's setup is out of date: it cannot run until it is updated. A retry gets the same answer. |
-| `502` | `engine_error` | Nodaro Motion answered unexpectedly (estimate and run). |
+| `502` | `engine_error` | Video Remake answered unexpectedly (estimate and run). |
 | `503` | `engine_unsupported` | This platform version cannot run trends yet. |
 | `503` | `trend_unavailable` | The trend cannot be run right now. |
 | `503` | `not_available` | This server has no trend catalog yet (every route but `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`). |
 
-When Nodaro Motion refuses an estimate or a run, the trend routes answer
+When Video Remake refuses an estimate or a run, the trend routes answer
 with their OWN codes and fixed messages; the engine's message and any
 `issues` are never passed on (they would describe the trend's hidden recipe):
 
@@ -5974,10 +5974,10 @@ ran on (`trend.version`); `0` means none was used. On a version that hides its
 original, a run that used the example shown as the original has no `example`
 key.
 
-Each run carries its `engine` (`"motion-prism"` or `"motion-pulse"`) and
-`engineName`. A completed Nodaro Motion Prism draft (a run made with
+Each run carries its `engine` (`"nodaro-prism"` or `"nodaro-pulse"`) and
+`engineName`. A completed Nodaro Prism draft (a run made with
 `draft: true`) has `fullQualityUntil` (the end of its 7 days) and can be
-finished at [Full Quality](#full-quality). A plain run and every Nodaro Motion
+finished at [Full Quality](#full-quality). A plain run and every Nodaro
 Pulse run have `fullQualityUntil: null`.
 
 A run's `creditsCharged` is what the whole run cost once settled: its own
@@ -5987,7 +5987,7 @@ settles. `creditsHeld` is the run's hold (its own plus its steps'), and
 `creditsReleased` what went back from it once every hold in the run settled
 (`null` until then).
 
-A Full Quality version of a draft run (or of a Nodaro Motion Pulse 720p run, made while Pulse had Full Quality) is a run of its own in
+A Full Quality version of a draft run (or of a Nodaro Pulse 720p run, made while Pulse had Full Quality) is a run of its own in
 `GET /v1/trends/runs` and `GET /v1/trends/runs/:jobId`: its own `jobId`,
 `status`, `videoUrl` and `creditsCharged` (at `resolution: "1080p"`,
 `draft: false`), with `fullQualityOf` set to the draft's job id (`null` on any

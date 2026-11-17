@@ -1,5 +1,5 @@
 /**
- * Admin → Nodaro Motion's Motion column (2026-11-06): the face mesh's lines
+ * Admin → Video Remake's Motion column (2026-11-06): the face mesh's lines
  * chosen layer by layer ("Choose the layers": one switch per layer, any
  * combination). A set a parts value names is saved as that value, exactly as
  * before the switches existed; any other as `faceMeshLayers`, which every

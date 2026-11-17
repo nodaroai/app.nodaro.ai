@@ -1,5 +1,5 @@
 /**
- * The named parts of the prompt Nodaro Motion (Cast Swap) writes for a run,
+ * The named parts of the prompt Video Remake (Cast Swap) writes for a run,
  * each overridable by an admin — per trend (`TrendVersionData.promptParts`)
  * and per engine and style for direct runs (the `nodaro_motion_prompt_parts`
  * setting). The engine owns each part's default text and validates every
@@ -86,7 +86,7 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
  * How the engine words a Flexible prompt (`"current"`, today's, or `"new"`:
  * the movement lock, the picture roles, the closing restatement and the
  * avoid part as a failure list). Absent = `"current"`. Read only by the
- * Flexible prompt set: every Precise set ignores it. Set per Nodaro Motion
+ * Flexible prompt set: every Precise set ignores it. Set per Video Remake
  * engine for direct runs (`nodaro_motion_prompt_wording`) and per trend
  * (`TrendVersionData.promptWording`); sent only to an engine whose
  * `castSwap.promptWordings` lists it.

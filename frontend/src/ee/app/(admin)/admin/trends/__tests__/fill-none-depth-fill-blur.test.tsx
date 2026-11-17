@@ -1,5 +1,5 @@
 /**
- * Admin → Nodaro Motion's Precise column (never the Motion column, whose
+ * Admin → Video Remake's Precise column (never the Motion column, whose
  * direct runs do not draw them; decided 2026-11-02): a third fill, None (the faces
  * found but kept as filmed, only the face mesh drawn on them), and the depth
  * blur on a depth fill.

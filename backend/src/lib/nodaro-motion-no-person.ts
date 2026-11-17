@@ -1,12 +1,12 @@
 /**
- * Nodaro Motion's no-person setting, per engine: whether a DIRECT Precise run
+ * Video Remake's no-person setting, per engine: whether a DIRECT Precise run
  * with no pictured person sends its source clip as it is (masking only when
  * the provider refuses that clip). Set by an admin for the whole deployment,
  * never by the person running it.
  *
  * The `app_settings` row `nodaro_motion_no_person`:
- * `{ "motion-prism"?: Entry, "motion-pulse"?: Entry }`, keyed by Nodaro
- * Motion's PUBLIC engine ids, `Entry = { sourceClip?: false }`.
+ * `{ "nodaro-prism"?: Entry, "nodaro-pulse"?: Entry }`, keyed by Video
+ * Remake's PUBLIC engine ids, `Entry = { sourceClip?: false }`.
  *
  * - `sourceClip`: on is the default, and absent means it; `false` turns it off
  *   for that engine, whose runs then prepare their clip as any Precise run
@@ -27,7 +27,7 @@
  */
 import { z } from "zod"
 import { NODARO_MOTION_ENGINES } from "@nodaro/shared/models"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_NO_PERSON_KEY = "nodaro_motion_no_person"
 
@@ -48,10 +48,7 @@ export const nodaroMotionNoPersonEntrySchema: z.ZodType<NodaroMotionNoPersonEntr
 })
 
 /** What an admin saves: strict over the current engine ids (an unknown engine, value or key is refused). */
-export const nodaroMotionNoPersonSchema: z.ZodType<NodaroMotionNoPerson> = z.strictObject({
-  "motion-prism": nodaroMotionNoPersonEntrySchema.optional(),
-  "motion-pulse": nodaroMotionNoPersonEntrySchema.optional(),
-})
+export const nodaroMotionNoPersonSchema: z.ZodType<NodaroMotionNoPerson> = byEngineSchema(nodaroMotionNoPersonEntrySchema)
 
 /**
  * The setting with every empty entry left out: what is stored and sent. Unset
@@ -72,7 +69,7 @@ export function anyNoPersonChange(setting: NodaroMotionNoPerson | null | undefin
 
 /**
  * What the plugin is answered: each changed entry, also under its earlier key
- * (the TRANSITION SHIM every Nodaro Motion setting's accessor answers,
+ * (the TRANSITION SHIM every Video Remake setting's accessor answers,
  * `withEarlierEngineKeys`), new objects; null when nothing is changed.
  */
 export function noPersonForPlugin(setting: NodaroMotionNoPerson | null | undefined): NodaroMotionNoPersonForPlugin | null {

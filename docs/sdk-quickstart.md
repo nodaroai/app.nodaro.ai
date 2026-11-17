@@ -671,7 +671,7 @@ manifest semantics, and conflict handling.
 
 ### Run a trend with your own picture (Cloud)
 
-A trend is a ready-made Nodaro Motion recipe with slots to fill. Pick one, put your
+A trend is a ready-made Video Remake recipe with slots to fill. Pick one, put your
 pictures in its slots, quote the run, then start it and follow the job:
 
 ```ts
@@ -696,10 +696,10 @@ const job = await client.jobs.get(jobId)
 Your past runs, with their pictures and results, come back from
 `client.trends.runs({ trend: trend.slug })`, and one of them from
 `client.trends.getRun(jobId)`. A run is plain at 480p too; pass `draft: true`
-(Nodaro Motion Prism trends, 480p) for a draft whose same take
-`client.castSwap.fullQuality(jobId)` can finish at 1080p. A draft's newest Full
+(Nodaro Prism trends, 480p) for a draft whose same take
+`client.videoRemake.fullQuality(jobId)` can finish at 1080p. A draft's newest Full
 Quality try is a run of its own there (`fullQualityOf` names the draft).
-Nodaro Motion Pulse trends have no draft and no Full Quality. `client.trends.tags()` lists
+Nodaro Pulse trends have no draft and no Full Quality. `client.trends.tags()` lists
 the catalog's tags with their labels in your language, to filter `list({ tag })`
 by. See [SDK Reference → client.trends](./sdk-reference.md#clienttrends).
 

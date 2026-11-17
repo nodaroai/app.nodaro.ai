@@ -485,11 +485,11 @@ export const queryKeys = {
     trendRadarSettings: () => ["admin", "trend-radar", "settings"] as const,
     /** The content rights declaration an admin confirms before a candidate's top post is downloaded. */
     trendRadarDeclaration: () => ["admin", "trend-radar", "declaration"] as const,
-    /** Admin → Nodaro Motion: the face masking per engine. */
+    /** Admin → Video Remake: the face masking per engine. */
     nodaroMotionMasking: () => ["admin", "nodaro-motion", "masking"] as const,
     /** A trend's engine prompt, as the engine reads the saved draft at `revision` (each write moves it, so a draft save refreshes it). */
     trendPromptParts: (id: string, revision: string) => ["admin", "trends", "one", id, "prompt-parts", revision] as const,
-    /** Admin → Nodaro Motion: the direct runs' prompt part overrides, and one engine and style's preview of them. */
+    /** Admin → Video Remake: the direct runs' prompt part overrides, and one engine and style's preview of them. */
     nodaroMotionPromptParts: () => ["admin", "nodaro-motion", "prompt-parts"] as const,
     nodaroMotionMotion: () => ["admin", "nodaro-motion", "motion"] as const,
     nodaroMotionPulseAudio: () => ["admin", "nodaro-motion", "pulse-audio"] as const,

@@ -46,6 +46,7 @@ import {
   LLM_REFERENCE_FILES_MAX_PAGES,
   LLM_REFERENCE_FILE_MIME_TYPES,
   llmAcceptsFiles,
+  llmFileWire,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 import { PIPELINE_ACCEPTED_SCRIPT_LLMS, PIPELINE_LEGACY_PINNED_SCRIPT_LLMS, PIPELINE_PINNABLE_SCRIPT_LLMS, PipelineConfigSchema } from "../pipeline-types.js"
@@ -1203,9 +1204,17 @@ describe("gemini-4-hydrogen exposure", () => {
     expect(getLlmTier("gemini-4-hydrogen")).toBe("premium")
   })
 
-  it("reads images, video and audio on the LLM nodes (decided 2026-11-16; probed 2026-11-17) — no files", () => {
-    expect(getLlmModalityCaps("gemini-4-hydrogen")).toEqual({ image: true, video: true, audio: true })
-    expect(llmAcceptsFiles("gemini-4-hydrogen")).toBe(false)
+  it("reads images, video, audio and PDF files on the LLM nodes (decided 2026-11-16 and 2026-11-17)", () => {
+    expect(getLlmModalityCaps("gemini-4-hydrogen")).toEqual({ image: true, video: true, audio: true, file: true })
+    expect(llmAcceptsFiles("gemini-4-hydrogen")).toBe(true)
+    // The shape probed on its aggregator lane (2026-11-17), and an inline part on Google's own API.
+    expect(llmFileWire("gemini-4-hydrogen")).toEqual({ kie: "image-url", direct: "inline-data" })
+  })
+
+  it("the file cap enrols it in nothing outside the LLM nodes", () => {
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-hydrogen")
+    expect(readsVideoOutsideLlmNodes("gemini-4-hydrogen")).toBe(false)
+    expect(readsAudioOutsideLlmNodes("gemini-4-hydrogen")).toBe(false)
   })
 
   it("its media caps are for the LLM nodes only: no Video Analysis list, tier, legacy row or passthrough", () => {
@@ -1283,15 +1292,49 @@ describe("gpt-6.1-terra exposure", () => {
 })
 
 describe("the `file` modality cap (documents, decided 2026-11-13)", () => {
-  it("is declared on GPT-6.1 Terra alone, and never derived for another model", () => {
-    expect(LLM_FILE_MODELS.map((m) => m.id)).toEqual(["gpt-6.1-terra"])
-    expect(Object.entries(LLM_MODALITY_CAPS).filter(([, c]) => c.file).map(([id]) => id)).toEqual(["gpt-6.1-terra"])
-    for (const m of LLM_MODELS) expect(llmAcceptsFiles(m.id), m.id).toBe(m.id === "gpt-6.1-terra")
+  it("is declared on GPT-6.1 Terra and Gemini 4 Hydrogen, and never derived for another model", () => {
+    const readers = ["gemini-4-hydrogen", "gpt-6.1-terra"]
+    expect(LLM_FILE_MODELS.map((m) => m.id)).toEqual(readers)
+    expect(Object.entries(LLM_MODALITY_CAPS).filter(([, c]) => c.file).map(([id]) => id).sort()).toEqual(readers)
+    for (const m of LLM_MODELS) expect(llmAcceptsFiles(m.id), m.id).toBe(readers.includes(m.id))
     expect(llmAcceptsFiles(undefined)).toBe(false)
     expect(llmAcceptsFiles("no-such-model")).toBe(false)
     // Its siblings on the same endpoint do not read files here.
     expect(llmAcceptsFiles("gpt-6.1-sol")).toBe(false)
     expect(llmAcceptsFiles("gpt-5.6-terra")).toBe(false)
+  })
+
+  // Every declaration, by model. A shape is never derived from a model's
+  // dialect: a new model gets a row here only with its own probe, whose date
+  // goes on its registry entry.
+  const FILE_WIRES: Record<string, unknown> = {
+    // Probed 2026-11-13: an inline `input_file` part on the responses dialect.
+    "gpt-6.1-terra": { kie: "input-file" },
+    // Probed 2026-11-17 on both lanes: an `image_url` part on the aggregator's
+    // chat-completions dialect, an inline part on Google's own API.
+    "gemini-4-hydrogen": { kie: "image-url", direct: "inline-data" },
+  }
+
+  it("a model reads files exactly when it is listed with how each of its lanes is sent one (`fileWire`)", () => {
+    for (const m of LLM_MODELS) {
+      expect(m.fileWire, m.id).toEqual(FILE_WIRES[m.id])
+      expect(llmAcceptsFiles(m.id), m.id).toBe(m.id in FILE_WIRES)
+      expect(llmFileWire(m.id), m.id).toEqual(FILE_WIRES[m.id])
+    }
+    expect(Object.keys(FILE_WIRES).sort()).toEqual(LLM_FILE_MODELS.map((m) => m.id).sort())
+    // A sibling on the same dialect has no shape of its own.
+    for (const id of ["gemini-4-carbon", "gemini-4-argon", "gemini-3.8-flash", "gpt-6.1-sol", "gpt-5.6-terra"]) expect(llmFileWire(id), id).toBeUndefined()
+    expect(llmFileWire(undefined)).toBeUndefined()
+  })
+
+  it("a declared shape fits the lanes its model has", () => {
+    for (const m of LLM_FILE_MODELS) {
+      // The aggregator's shape is one its dialect can carry.
+      expect(m.kieFormat, m.id).toBe(m.fileWire!.kie === "input-file" ? "responses" : "chat-completions")
+      // A direct Google lane is declared a shape, and only a model with one has it.
+      expect(Boolean(m.fileWire!.direct), m.id).toBe(Boolean(m.directGeminiModel))
+      expect(m.directFallbackModel, m.id).toBeUndefined()
+    }
   })
 
   it("PDF only, up to 5 files, 6 MB in all and 100 pages in all", () => {

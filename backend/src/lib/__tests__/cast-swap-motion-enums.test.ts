@@ -1,5 +1,5 @@
 /**
- * Nodaro Motion's depth-mode vocabularies, shared by the backend, the admin
+ * Video Remake's depth-mode vocabularies, shared by the backend, the admin
  * editor and the Cast Swap engine's contract (which keeps its own copies).
  * Pinned, so a change is a decision taken with the engine.
  */
@@ -21,7 +21,7 @@ import {
   faceMaskMarkSlot,
 } from "@nodaro/render-rules"
 
-describe("Nodaro Motion enums", () => {
+describe("Video Remake enums", () => {
   it("styles, targets, source modes and mark labels", () => {
     expect(CAST_SWAP_STYLES).toEqual(["precise", "motion"])
     expect(CAST_SWAP_FACE_MASK_TARGETS).toEqual(["face", "head", "body"])

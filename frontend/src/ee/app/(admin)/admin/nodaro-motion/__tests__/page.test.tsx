@@ -1,5 +1,5 @@
 /**
- * Admin → Nodaro Motion: the face masking per engine (Prism, Pulse) for every
+ * Admin → Video Remake: the face masking per engine (Prism, Pulse) for every
  * run people start themselves. Off until saved; each engine edited with the
  * trend editor's controls; Save sends the whole setting, keyed by the public
  * engine ids, and is held while a value is out of range.
@@ -19,11 +19,11 @@ import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from
 import AdminNodaroMotionPage from "../page"
 import { motionEngineGaps, motionIssues, motionToSaved, toSaved } from "../model"
 
-const URL = "/v1/admin/nodaro-motion/masking"
-const PROMPT_URL = "/v1/admin/nodaro-motion/prompt-parts"
-const MOTION_URL = "/v1/admin/nodaro-motion/motion"
-const PULSE_AUDIO_URL = "/v1/admin/nodaro-motion/pulse-audio"
-const PRISM_AUDIO_URL = "/v1/admin/nodaro-motion/prism-reference-audio"
+const URL = "/v1/admin/video-remake/masking"
+const PROMPT_URL = "/v1/admin/video-remake/prompt-parts"
+const MOTION_URL = "/v1/admin/video-remake/motion"
+const PULSE_AUDIO_URL = "/v1/admin/video-remake/pulse-audio"
+const PRISM_AUDIO_URL = "/v1/admin/video-remake/prism-reference-audio"
 const ANSWER = {
   set: "precise",
   parts: [{ id: "face", default: "Keep the faces.", defaultHash: "0123456789abcdef", placeholders: [], required: [], applies: true }],
@@ -33,8 +33,8 @@ const ANSWER = {
   problems: [],
 }
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const ENVS_URL = "/v1/admin/trends/engine-environments"
 /** An engine that hides whole people with faces hidden (`faceMaskHideTargets`), and one from before (keeps them only). */
@@ -74,9 +74,9 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock)
   routes[`GET ${URL}`] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
   // The Style choice (style.test.tsx): never saved, people choose on every engine.
-  routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
   // The page's Advanced switch (advanced.test.tsx): never saved, hidden.
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
   routes[`GET ${PROMPT_URL}`] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
   routes[`POST ${PROMPT_URL}/preview`] = () => ({ body: { data: ANSWER } })
   routes[`GET ${MOTION_URL}`] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
@@ -84,20 +84,20 @@ beforeEach(() => {
   routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${ENVS_URL}`] = () => ({ body: { data: ENVIRONMENTS } })
   // The preparation steps (steps.test.tsx): never saved; these environments' engines take none.
-  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 
 const section = async (name: RegExp) =>
-  (await screen.findByRole("heading", { name: new RegExp(`^Nodaro Motion ${name.source}`) })).closest("section") as HTMLElement
+  (await screen.findByRole("heading", { name: new RegExp(`^Nodaro ${name.source}`) })).closest("section") as HTMLElement
 /** An engine's Precise column (the Motion column beside it always shows Full depth's own face mesh and depth controls). */
 const preciseOf = async (name: RegExp) => within(await section(name)).getByRole("group", { name: new RegExp(`${name.source} Precise$`) })
 
-describe("Admin → Nodaro Motion", () => {
+describe("Admin → Video Remake", () => {
   it("shows both engines by name, with the model each runs on, Off until saved", async () => {
     renderWith(<AdminNodaroMotionPage />)
-    expect(await screen.findByRole("heading", { name: "Nodaro Motion Prism (Seedance 2.5)" })).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "Nodaro Motion Pulse (Kling 4)" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Nodaro Prism (Seedance 2.5)" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Nodaro Pulse (Kling 4)" })).toBeInTheDocument()
     expect(screen.getByText(/never saved: no engine masks faces/i)).toBeInTheDocument()
     for (const name of [/Prism/, /Pulse/]) {
       expect(within(await section(name)).getByRole("combobox", { name: "Mode" })).toHaveTextContent("Off")
@@ -117,7 +117,7 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(within(lite).getByRole("combobox", { name: "Covers" }))
     await user.click(screen.getByRole("option", { name: "Face" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-pulse": { mode: "auto", target: "face" } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-pulse": { mode: "auto", target: "face" } } }]))
     expect(await screen.findByText(/^Saved /)).toBeInTheDocument()
   })
 
@@ -169,11 +169,11 @@ describe("Admin → Nodaro Motion", () => {
     expect(mesh).toBeEnabled()
     await user.click(mesh)
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", faceMesh: true } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-prism": { mode: "always", faceMesh: true } } }]))
     await user.click(within(prism).getByRole("checkbox", { name: "Face mesh" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() => expect(sentTo(`PUT ${URL}`)).toHaveLength(2))
-    expect(sentTo(`PUT ${URL}`)[1]).toEqual({ masking: { "motion-prism": { mode: "always" } } })
+    expect(sentTo(`PUT ${URL}`)[1]).toEqual({ masking: { "nodaro-prism": { mode: "always" } } })
   })
 
   it("the Precise column offers what the face mesh draws once every environment's engine lists the parts, and saves it", async () => {
@@ -194,7 +194,7 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(within(precise).getByRole("combobox", { name: "Face mesh lines" }))
     await user.click(screen.getByRole("option", { name: "Mouth only" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", faceMesh: true, faceMeshParts: "mouth" } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-prism": { mode: "always", faceMesh: true, faceMeshParts: "mouth" } } }]))
   })
 
   it("the Precise column offers the fill None and a depth fill's blur once every environment's engine draws them, and saves them", async () => {
@@ -215,16 +215,16 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(screen.getByRole("option", { name: "None (faces as filmed, face mesh only)" }))
     expect(within(precise).getByRole("checkbox", { name: "Face mesh" })).toBeDisabled()
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", fill: "none", faceMesh: true } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-prism": { mode: "always", fill: "none", faceMesh: true } } }]))
     await user.click(within(precise).getByRole("combobox", { name: "Fill" }))
     await user.click(screen.getByRole("option", { name: "Depth colors" }))
     await user.type(within(precise).getByRole("spinbutton", { name: "Depth blur" }), "6")
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`).at(-1)).toEqual({ masking: { "motion-prism": { mode: "always", fill: "depth", faceMesh: true, depthBlur: 6 } } }))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`).at(-1)).toEqual({ masking: { "nodaro-prism": { mode: "always", fill: "depth", faceMesh: true, depthBlur: 6 } } }))
   })
 
   it("a face mesh saved on stays shown and can be turned off while an environment lacks it", async () => {
-    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", faceMesh: true } }, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } } })
+    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "nodaro-prism": { mode: "always", faceMesh: true } }, updatedAt: "2026-10-31T12:00:00.000Z", engines: ENGINES } } })
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [meshes("production")] } })
     renderWith(<AdminNodaroMotionPage />)
     const prism = await preciseOf(/Prism/)
@@ -250,12 +250,12 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(within(prism).getByRole("combobox", { name: "Depth colormap" }))
     await user.click(await screen.findByRole("option", { name: "Inferno" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", fill: "depth", depthColormap: "inferno" } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-prism": { mode: "always", fill: "depth", depthColormap: "inferno" } } }]))
   })
 
   it("greys out a colormap an environment's engine cannot draw, naming it", async () => {
     const user = userEvent.setup()
-    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } } })
+    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "nodaro-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-01T12:00:00.000Z", engines: ENGINES } } })
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [maps("production"), maps("staging", ["inferno"])] } })
     renderWith(<AdminNodaroMotionPage />)
     const prism = await preciseOf(/Prism/)
@@ -280,12 +280,12 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(within(prism).getAllByRole("combobox", { name: "Depth model" })[0]!)
     await user.click(await screen.findByRole("option", { name: "Small" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", fill: "depth", depthModelSize: "small" } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-prism": { mode: "always", fill: "depth", depthModelSize: "small" } } }]))
   })
 
   it("greys out a model size an environment's engine cannot draw with, naming it", async () => {
     const user = userEvent.setup()
-    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-02T12:00:00.000Z", engines: ENGINES } } })
+    routes[`GET ${URL}`] = () => ({ body: { data: { masking: { "nodaro-prism": { mode: "always", fill: "depth" } }, updatedAt: "2026-11-02T12:00:00.000Z", engines: ENGINES } } })
     routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [sizes("production"), sizes("staging", ["small"])] } })
     renderWith(<AdminNodaroMotionPage />)
     const prism = await section(/Prism/)
@@ -307,13 +307,13 @@ describe("Admin → Nodaro Motion", () => {
     await user.click(within(prism).getByRole("combobox", { name: "Covers" }))
     await user.click(await screen.findByRole("option", { name: "Body" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "motion-prism": { mode: "always", target: "body" } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ masking: { "nodaro-prism": { mode: "always", target: "body" } } }]))
   })
 
   it("starts from what is stored, and holds Save while a value is out of range", async () => {
     const user = userEvent.setup()
     routes[`GET ${URL}`] = () => ({
-      body: { data: { masking: { "motion-prism": { mode: "always", threshold: 0.4 } }, updatedAt: "2026-10-25T10:00:00.000Z", engines: ENGINES } },
+      body: { data: { masking: { "nodaro-prism": { mode: "always", threshold: 0.4 } }, updatedAt: "2026-10-25T10:00:00.000Z", engines: ENGINES } },
     })
     renderWith(<AdminNodaroMotionPage />)
     const pro = await section(/Prism/)
@@ -322,12 +322,12 @@ describe("Admin → Nodaro Motion", () => {
     expect(threshold).toHaveValue(0.4)
     await user.clear(threshold)
     await user.type(threshold, "2")
-    expect(screen.getByText(/Nodaro Motion Prism: Face masking: the detection threshold/)).toBeInTheDocument()
+    expect(screen.getByText(/Nodaro Prism: Face masking: the detection threshold/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 })
 
-describe("Admin → Nodaro Motion → Pulse audio", () => {
+describe("Admin → Video Remake → Pulse audio", () => {
   it("shows the select in the Pulse section only, Original audio until it is saved", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const pulse = await section(/Pulse/)
@@ -364,7 +364,7 @@ describe("Admin → Nodaro Motion → Pulse audio", () => {
   })
 })
 
-describe("Admin → Nodaro Motion → Prism reference audio", () => {
+describe("Admin → Video Remake → Prism reference audio", () => {
   const HINT = "What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."
   const RESOLUTIONS = ["480p", "720p", "1080p"]
   const audioGroup = async (prism: HTMLElement) => within(prism).findByRole("group", { name: "Prism reference audio" })
@@ -618,12 +618,12 @@ describe("Admin → Nodaro Motion → Prism reference audio", () => {
 
 describe("toSaved", () => {
   it("cleans each engine's setting and leaves out an engine with none", () => {
-    expect(toSaved({ "motion-prism": { mode: "auto", zone: {}, fill: undefined }, "motion-pulse": undefined })).toEqual({ "motion-prism": { mode: "auto" } })
+    expect(toSaved({ "nodaro-prism": { mode: "auto", zone: {}, fill: undefined }, "nodaro-pulse": undefined })).toEqual({ "nodaro-prism": { mode: "auto" } })
     expect(toSaved({})).toEqual({})
   })
 })
 
-describe("Admin → Nodaro Motion → Motion column", () => {
+describe("Admin → Video Remake → Motion column", () => {
   const motionOf = async (name: RegExp) => within(await section(name)).findByRole("group", { name: new RegExp(`${name.source} Motion$`) })
 
   it("reads Full depth, the scene from a description, Flexible prompt until it is set, with no masking choice", async () => {
@@ -658,7 +658,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     await user.click(screen.getByRole("option", { name: "Precise" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
-      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } } }]),
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "nodaro-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } } }]),
     )
     expect(sentTo(`PUT ${URL}`)).toEqual([])
   })
@@ -671,7 +671,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
   ] as const)("a saved %s is shown as saved and ignored, and can be cleared to Full depth", async (label, entry) => {
     const user = userEvent.setup()
     routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": entry }, updatedAt: "2026-10-20T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+      body: { data: { motion: { "nodaro-prism": entry }, updatedAt: "2026-10-20T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
     routes[`PUT ${MOTION_URL}`] = (init) => ({
       body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-06T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
@@ -688,7 +688,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
     const promptStyle = "promptStyle" in entry ? { promptStyle: entry.promptStyle } : {}
     await waitFor(() =>
-      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-prism": { masking: { mode: "always", source: "full-depth" }, ...promptStyle } } }]),
+      expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "nodaro-prism": { masking: { mode: "always", source: "full-depth" }, ...promptStyle } } }]),
     )
   })
 
@@ -696,7 +696,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     const user = userEvent.setup()
     const legacy = { masking: { mode: "always", target: "body", fill: "depth" } } as const
     routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": legacy }, updatedAt: "2026-10-20T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+      body: { data: { motion: { "nodaro-prism": legacy }, updatedAt: "2026-10-20T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
     routes[`PUT ${MOTION_URL}`] = (init) => ({
       body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-06T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
@@ -711,7 +711,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     await user.click(save)
     await waitFor(() =>
       expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
-        { motion: { "motion-prism": legacy, "motion-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } } },
+        { motion: { "nodaro-prism": legacy, "nodaro-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } } },
       ]),
     )
   })
@@ -748,7 +748,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
       expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
-        { motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" }, promptStyle: "precise" } } },
+        { motion: { "nodaro-pulse": { masking: { mode: "always", source: "full-depth", scene: "description-and-original" }, promptStyle: "precise" } } },
       ]),
     )
   })
@@ -788,7 +788,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
       expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([
-        { motion: { "motion-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "mouth" } } } },
+        { motion: { "nodaro-pulse": { masking: { mode: "always", source: "full-depth", faceMesh: true, depthBlur: 28, faceMeshParts: "mouth" } } } },
       ]),
     )
   })
@@ -804,8 +804,8 @@ describe("Admin → Nodaro Motion → Motion column", () => {
       body: {
         data: {
           motion: {
-            "motion-prism": { masking: { mode: "always", source: "full-depth", scene: "original" } },
-            "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "none" } },
+            "nodaro-prism": { masking: { mode: "always", source: "full-depth", scene: "original" } },
+            "nodaro-pulse": { masking: { mode: "always", source: "full-depth", scene: "none" } },
           },
           updatedAt: null,
           engines: ENGINES,
@@ -822,7 +822,7 @@ describe("Admin → Nodaro Motion → Motion column", () => {
     routes[`GET ${MOTION_URL}`] = () => ({
       body: {
         data: {
-          motion: { "motion-prism": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } },
+          motion: { "nodaro-prism": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } },
           updatedAt: null,
           engines: ENGINES,
           promptStyles: ["precise", "flexible"],
@@ -858,10 +858,10 @@ describe("motionToSaved and motionIssues", () => {
   it("cleans each engine's masking, keeps its prompt style, and leaves out an engine with neither", () => {
     expect(
       motionToSaved({
-        "motion-prism": { masking: { mode: "always", source: "full-depth", scene: "original", threshold: 0.4 }, promptStyle: "flexible" },
-        "motion-pulse": {},
+        "nodaro-prism": { masking: { mode: "always", source: "full-depth", scene: "original", threshold: 0.4 }, promptStyle: "flexible" },
+        "nodaro-pulse": {},
       }),
-    ).toEqual({ "motion-prism": { masking: { mode: "always", source: "full-depth", scene: "original", threshold: 0.4 }, promptStyle: "flexible" } })
+    ).toEqual({ "nodaro-prism": { masking: { mode: "always", source: "full-depth", scene: "original", threshold: 0.4 }, promptStyle: "flexible" } })
   })
 
   it("names what the server would refuse", () => {

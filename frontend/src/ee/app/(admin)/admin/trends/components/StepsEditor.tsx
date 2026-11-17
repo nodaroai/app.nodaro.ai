@@ -1,7 +1,7 @@
-// The preparation steps of a Nodaro Motion run (`steps`, beside the face
+// The preparation steps of a Video Remake run (`steps`, beside the face
 // masking, never inside it): a trend's (Admin → Trends, saved with the draft)
-// or one engine's for the runs people start themselves (Admin → Nodaro
-// Motion). Left out, or `{}`, every run is today's exactly.
+// or one engine's for the runs people start themselves (Admin → Video
+// Remake). Left out, or `{}`, every run is today's exactly.
 //
 // Four sections:
 // 1. Reference sheets: "Today's sheet" (the key left out) or "By the photos

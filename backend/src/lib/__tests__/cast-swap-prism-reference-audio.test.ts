@@ -341,7 +341,7 @@ describe("on the wire", () => {
     // Every resolution at the default: no key, as before.
     expect(prismReferenceAudioSent({}, STORED_TODAY[4])).toEqual({})
     // Never on a Pulse run.
-    expect(prismReferenceAudioSent({ engine: "motion-pulse" }, STORED_TODAY[0])).toEqual({})
+    expect(prismReferenceAudioSent({ engine: "nodaro-pulse" }, STORED_TODAY[0])).toEqual({})
   })
 
   it("a pitch engine that does not list a one-tone mode is sent the full audio for it", () => {

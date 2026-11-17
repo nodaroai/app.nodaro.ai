@@ -1115,7 +1115,7 @@ const CLIP_PACK_RECORDINGS_BYTES = 2_373
 // continue_use_case's label list + 16 B ("Trailer or Clip Pack" → "Trailer, Clip Pack or Speaker
 // Layout"). The 103 B of headroom carry across.
 const SPEAKER_LAYOUT_TOOL_BYTES = 6_217
-// RAISED 2026-10-20 by one NEW tool, `cast_swap` (the MCP face of POST /v1/cast-swap: the quote
+// RAISED 2026-10-20 by one NEW tool, `video_remake` (the MCP face of POST /v1/cast-swap: the quote
 // without `confirm`, the run with `confirm: true`, as retry_app_run), and nothing else. It is
 // gated by workflows:execute and registered inside hasCredits() (the routes are the Cloud
 // plugin's), so only the cloud/all fixture moves, by that one name. Measured by this suite on the
@@ -1145,7 +1145,7 @@ const UGC_QUOTE_ESTIMATE_FLAGS_BYTES = 127
 const LIST_MODELS_PRICE_IDS_BYTES = 401
 // RAISED 2026-10-20 by four NEW tools, the trend verbs (the MCP face of /v1/trends): list_trends
 // and get_trend (jobs:read, read-only) and estimate_trend / run_trend (workflows:execute; run_trend
-// quotes without `confirm`, as cast_swap), and nothing else. All four are registered inside
+// quotes without `confirm`, as video_remake), and nothing else. All four are registered inside
 // hasCredits() (the routes are Cloud-only), so the cloud/all fixture gains the four names and
 // cloud/jobs the two reads. Measured by this suite on the same tree with and without them:
 // 483_972 total − 478_015 = 5_957 B (list_trends 763, get_trend 587, estimate_trend 1_913,
@@ -1182,7 +1182,7 @@ const SUNO_SEPARATE_ANY_AUDIO_BYTES = 864
 // before is carried across.
 const MODIFY_VIDEO_SEEDANCE_REFS_BYTES = 396
 
-// RAISED 2026-10-20 by `cast_swap` taking pet and product roles (`coat`, `shape`, `finish` chips),
+// RAISED 2026-10-20 by `video_remake` taking pet and product roles (`coat`, `shape`, `finish` chips),
 // `resolution`, `draft` and `prepare_references` (the deprecated `quality` kept, its description
 // saying so), and its description naming the reference preparation, and nothing else. No tool was
 // added, so the fixture does NOT move. Measured by this suite on the same tree with and without the
@@ -1229,7 +1229,7 @@ const VIDEO_MASK_ZONE_PER_SHOT_BYTES = 502
 // Measured by this suite with and without the change: 505_594 total − 505_367 = 227 B; the 58 B of headroom carry across.
 const VIDEO_MASK_REDETECT_BYTES = 227
 
-// RAISED 2026-10-21 by `cast_swap` taking `pre_prompt` (instructions placed before the role
+// RAISED 2026-10-21 by `video_remake` taking `pre_prompt` (instructions placed before the role
 // instructions, mentioning roles as post_prompt does) — one arg, and its `roles` description
 // saying a pre_prompt alone is enough too — and nothing else. No tool was added, so the fixture
 // does NOT move. Measured by this suite on the same tree with and without the change:
@@ -1237,13 +1237,13 @@ const VIDEO_MASK_REDETECT_BYTES = 227
 // 103 B of headroom carry across.
 const CAST_SWAP_PRE_PROMPT_BYTES = 161
 
-// RAISED 2026-10-21 by `cast_swap` roles taking the preview-only `preview_name` and `in_preview`
+// RAISED 2026-10-21 by `video_remake` roles taking the preview-only `preview_name` and `in_preview`
 // (on each of the four role kinds, so four times in the schema), and nothing else. No tool was
 // added, so the fixture does NOT move. Measured by this suite on the same tree with and without
 // the change: 486_898 total − 485_946 = 952 B; the 103 B of headroom carry across.
 const CAST_SWAP_PREVIEW_ROLE_SETTINGS_BYTES = 952
 
-// RAISED 2026-10-21 by `cast_swap` taking `face_masking` (mode off / always / auto, fill, the
+// RAISED 2026-10-21 by `video_remake` taking `face_masking` (mode off / always / auto, fill, the
 // face-size and zone filters, blur strength and detection threshold), and nothing else. No tool
 // was added, so the fixture does NOT move. Measured by this suite on the same tree with and
 // without the change: 489_029 total − 487_791 = 1_238 B; the 103 B of headroom carry across.
@@ -1256,10 +1256,10 @@ const CAST_SWAP_FACE_MASKING_BYTES = 1_238
 // headroom carry across.
 const TRENDS_PREVIEW_JOB_ID_BYTES = 472
 
-// RAISED 2026-10-21 by `cast_swap` taking `references` (fixed references no role replaces: 1–3 images
+// RAISED 2026-10-21 by `video_remake` taking `references` (fixed references no role replaces: 1–3 images
 // of one thing and the line naming it, at most 5) and its `roles` description naming a reference as
 // enough on its own, and nothing else. No tool was added, so the fixture does NOT move. Measured by
-// this suite on the same tree with and without the change: cast_swap 5_798 → 6_275 B = 477 B, then
+// this suite on the same tree with and without the change: video_remake 5_798 → 6_275 B = 477 B, then
 // 6_275 → 6_292 B = 17 B more when the reference images took the route's 4096-character cap
 // (`maxLength`; the http(s)-only rule and the trimmed line add no bytes): 494 B in all; the
 // headroom the list had before carries across.
@@ -1274,7 +1274,7 @@ const CAST_SWAP_REFERENCES_BYTES = 494
 // before carries across.
 const CAST_SWAP_FULL_QUALITY_TOOLS_BYTES = 1_767
 
-// RAISED 2026-10-23 by `cast_swap`'s `face_masking.zone` taking `null` (no margins) and its
+// RAISED 2026-10-23 by `video_remake`'s `face_masking.zone` taking `null` (no margins) and its
 // description stating the default margins (left out = 10 % at the left and right), and nothing
 // else. No tool was added, so the fixture does NOT move. Measured by this suite on the same tree
 // with and without the change: 496_133 total − 495_994 = 139 B; the 73 B of headroom carry across.
@@ -1295,7 +1295,7 @@ const KLING_4_MODELS_BYTES = 317
 // the 73 B of headroom carry across.
 const LIST_JOBS_SOURCES_BYTES = 188
 
-// RAISED 2026-10-25 by Cast Swap's second engine and nothing else: `cast_swap` takes `engine`
+// RAISED 2026-10-25 by Cast Swap's second engine and nothing else: `video_remake` takes `engine`
 // ("seedance-2-5" | "kling-4") with its resolutions named in `resolution` / `draft` and the
 // description, and `kling_length` (how a kling-4 run fits the clip to whole seconds); `estimate_full_quality` / `full_quality` say a kling-4 720p run's Full Quality is
 // a new take; `get_trend` / `estimate_trend` / `run_trend` name the trend's engine and its
@@ -1320,16 +1320,16 @@ const USER_REQUEST_ARG_TOTAL_BYTES = 7_755
 // does NOT move. Measured: 505_576 total − 505_352 = 224 B; the 73 B of headroom carry across.
 const TRENDS_ORIGINAL_BYTES = 224
 
-// RAISED 2026-10-25 by Cast Swap's face mask target and nothing else: `cast_swap`'s
+// RAISED 2026-10-25 by Cast Swap's face mask target and nothing else: `video_remake`'s
 // `face_masking` takes `target` ("face" | "head", default "head") with a one-clause description of
 // each. No tool was added, so the fixture does NOT move. Measured by this suite: 505_985 total −
 // 505_812 = 173 B; the 64 B of headroom carry across.
 const FACE_MASK_TARGET_BYTES = 173
 
-// LOWERED 2026-10-25 by Nodaro Motion: `cast_swap` no longer lists `face_masking` (Nodaro sets it
+// LOWERED 2026-10-25 by Video Remake: `video_remake` no longer lists `face_masking` (Nodaro sets it
 // per engine) or `kling_length` (an older client's is still read, unlisted, as `motion_length`), its
-// engines were "motion-pro" / "motion-lite" (renamed since, below), and the cast_swap / trend / Full Quality descriptions
-// name Nodaro Motion. No tool was added or removed, so the fixture does NOT move. Measured by this
+// engines were "motion-pro" / "motion-lite" (renamed since, below), and the video_remake / trend / Full Quality descriptions
+// name Video Remake. No tool was added or removed, so the fixture does NOT move. Measured by this
 // suite: 504_667 total − 505_985 = −1_318 B; the 64 B of headroom carry across.
 const NODARO_MOTION_BYTES = -1_318
 // Topaz video upscale moved to Replicate (decided 2026-10-25), whose lever is an absolute target:
@@ -1347,14 +1347,14 @@ const TOPAZ_VIDEO_TARGET_BYTES = 299
 // 505_812 = 3_662 B.
 const SESSIONS_TRASH_BYTES = 3_662
 
-// RAISED 2026-10-26 by the Nodaro Motion engine rename: "motion-pro" / "motion-lite" became
-// "motion-prism" / "motion-pulse" ("Nodaro Motion Prism" / "Nodaro Motion Pulse") in the
-// cast_swap, trend and Full Quality descriptions and the engine enum (the earlier ids are still
+// RAISED 2026-10-26 by the Video Remake engine rename: "motion-pro" / "motion-lite" became
+// "nodaro-prism" / "nodaro-pulse" ("Nodaro Prism" / "Nodaro Pulse") in the
+// video_remake, trend and Full Quality descriptions and the engine enum (the earlier ids are still
 // read, unlisted). No tool was added, so the fixture does NOT move. Measured by this suite:
 // 508_641 total − 508_613 = 28 B; the 79 B of headroom carry across.
 const NODARO_MOTION_RENAME_BYTES = 28
 
-// RAISED 2026-10-27 by Nodaro Motion's style and nothing else: `cast_swap` takes `style`
+// RAISED 2026-10-27 by Video Remake's style and nothing else: `video_remake` takes `style`
 // ("precise" | "motion") with a one-sentence description. No tool was added, so the fixture does
 // NOT move. Measured by this suite: 509_243 total − 508_981 = 262 B; the headroom carries across.
 const CAST_SWAP_STYLE_BYTES = 262
@@ -1389,22 +1389,22 @@ const TRENDS_EXAMPLE_NUMBERING_BYTES = 66
 // (no headroom left).
 const JOB_QUEUE_WORDING_BYTES = 191
 
-// RAISED 2026-11-02 by Nodaro Motion's Style choice, and nothing else: `cast_swap`'s `style` says
+// RAISED 2026-11-02 by Video Remake's Style choice, and nothing else: `video_remake`'s `style` says
 // a style an admin forced for the engine overrides it. No tool was added, so the fixture does NOT
 // move. Measured by this suite: 509_723 total − 509_682 = 41 B (no headroom left).
 const CAST_SWAP_STYLE_FORCED_BYTES = 41
 
-// RAISED 2026-11-03 by Nodaro Motion's art style, and nothing else: `cast_swap` takes `art_style`
+// RAISED 2026-11-03 by Video Remake's art style, and nothing else: `video_remake` takes `art_style`
 // (a `style` picker catalog id of 1–100 characters, sent as `direction.style`) with a
 // three-sentence description. No tool was added, so the fixture does NOT move. Measured by this
-// suite: 510_229 total − 509_914 = 315 B, all of it cast_swap's (7_394 → 7_709 B, under the
+// suite: 510_229 total − 509_914 = 315 B, all of it video_remake's (7_394 → 7_709 B, under the
 // per-tool budget; no headroom left).
 const CAST_SWAP_ART_STYLE_BYTES = 315
 
-// RAISED 2026-11-03 by Nodaro Motion's style-only runs, and nothing else: `cast_swap`'s `roles`
-// says an art style alone is enough on a motion-prism Flex run where the engine takes style-only
+// RAISED 2026-11-03 by Video Remake's style-only runs, and nothing else: `video_remake`'s `roles`
+// says an art style alone is enough on a nodaro-prism Flex run where the engine takes style-only
 // runs, and `art_style` says it then restyles the whole clip. No tool was added, so the fixture
-// does NOT move. Measured by this suite: 510_450 total − 510_229 = 221 B, all of it cast_swap's
+// does NOT move. Measured by this suite: 510_450 total − 510_229 = 221 B, all of it video_remake's
 // (under the per-tool budget; no headroom left).
 const CAST_SWAP_STYLE_ONLY_BYTES = 221
 

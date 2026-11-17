@@ -4,16 +4,23 @@
  * it drops an `engine` it does not know, so a body naming another engine must
  * be held back rather than sent, or it would silently run on Seedance.
  *
- * Declared in any vocabulary: an engine that knows Nodaro Motion's public ids
- * declares those — the current ones (`"motion-prism"`, `"motion-pulse"`), or
- * the earlier ones (`"motion-pro"`, `"motion-lite"`, 0.394.0 – 0.397.0, with
- * `engineAliases`) — and may list the internal ids beside them; an older one
+ * Declared in any vocabulary: an engine that knows Video Remake's public ids
+ * declares those — the current ones (`"nodaro-prism"`, `"nodaro-pulse"`), or
+ * earlier ones (`"motion-prism"`, `"motion-pulse"`; `"motion-pro"`,
+ * `"motion-lite"`, 0.394.0 – 0.397.0, with `engineAliases`) — and may list
+ * the internal ids beside them; an older one
  * declares the internal ids only. Every form reads as the internal ids here,
  * the ones the platform stores and sends (`castSwapEngineFrom`), so a list of
  * the new ids alone still names both engines; a value that names no engine is
  * dropped.
  */
-import { CAST_SWAP_ENGINE_WHEN_OMITTED, castSwapEngineFrom, type CastSwapEngine } from "@nodaro/shared/models"
+import {
+  CAST_SWAP_ENGINE_WHEN_OMITTED,
+  NODARO_MOTION_LEGACY_ENGINE_OF,
+  castSwapEngineFrom,
+  type CastSwapEngine,
+  type NodaroMotionEngine,
+} from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export function castSwapEnginesOf(cs: { readonly engines?: readonly string[] } | undefined): readonly CastSwapEngine[] {
@@ -42,8 +49,8 @@ export function loadedEngineTakesArtStyle(): boolean {
 }
 
 /**
- * The request key for a Nodaro Motion Pulse run's length fit: `motionLength`
- * where the loaded engine takes Nodaro Motion's names (`engineAliases`,
+ * The request key for a Nodaro Pulse run's length fit: `motionLength`
+ * where the loaded engine takes Video Remake's names (`engineAliases`,
  * 0.394.0+), else the old `klingLength` (an older engine knows only that one
  * and would drop the other silently, cutting the clip's end).
  */
@@ -63,4 +70,16 @@ export function withWireLengthKey<T extends object>(body: T): T {
   if (value === undefined) return body
   const { motionLength: _m, klingLength: _k, ...rest } = b
   return { ...rest, [castSwapLengthKey()]: value } as T
+}
+
+/**
+ * The public id to send the loaded Cast Swap engine for `engine`, where a
+ * route of the engine takes a public id (the steps route): the current id
+ * once the engine declares it among its `engines`, else the id before it
+ * (`"motion-prism"`, `"motion-pulse"`), the only one an engine from before the
+ * 2026-11-17 rename takes.
+ */
+export function publicEngineIdForLoadedEngine(engine: NodaroMotionEngine): NodaroMotionEngine | (typeof NODARO_MOTION_LEGACY_ENGINE_OF)[NodaroMotionEngine] {
+  const declared = getPluginSupports().castSwap?.engines ?? []
+  return (declared as readonly string[]).includes(engine) ? engine : NODARO_MOTION_LEGACY_ENGINE_OF[engine]
 }

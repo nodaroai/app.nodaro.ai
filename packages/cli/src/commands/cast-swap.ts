@@ -8,12 +8,12 @@ interface GlobalOpts extends OutputOpts {
 }
 
 /**
- * `nodaro cast-swap full-quality estimate|run <jobId>`: spending is its own
+ * `nodaro video-remake full-quality estimate|run <jobId>`: spending is its own
  * subcommand (as in `nodaro trends`), so a quote can never start a run.
  */
 function fullQualityCommand(): Command {
   const cmd = new Command("full-quality").description(
-    "finish a Nodaro Motion Prism draft (a Nodaro Motion or trend run made with draft: true) at Full Quality: its same take at 1080p, as a new job; Nodaro Motion Pulse has none — `estimate` quotes it (free), `run` SPENDS CREDITS",
+    "finish a Nodaro Prism draft (a Video Remake or trend run made with draft: true) at Full Quality: its same take at 1080p, as a new job; Nodaro Pulse has none — `estimate` quotes it (free), `run` SPENDS CREDITS",
   )
 
   cmd
@@ -23,7 +23,7 @@ function fullQualityCommand(): Command {
     .option("--json")
     .action(async (jobId: string, opts: GlobalOpts) => {
       try {
-        const quote = neutralQuote(await buildClient(opts.profile).castSwap.fullQualityEstimate(jobId))
+        const quote = neutralQuote(await buildClient(opts.profile).videoRemake.fullQualityEstimate(jobId))
         if (opts.json) {
           emit(quote, opts)
           return
@@ -51,7 +51,7 @@ function fullQualityCommand(): Command {
     .option("--json")
     .action(async (jobId: string, opts: { session?: string } & GlobalOpts) => {
       try {
-        const result = await buildClient(opts.profile).castSwap.fullQuality(
+        const result = await buildClient(opts.profile).videoRemake.fullQuality(
           jobId,
           opts.session !== undefined ? { sessionId: opts.session } : {},
         )
@@ -71,8 +71,17 @@ function fullQualityCommand(): Command {
   return cmd
 }
 
-export function castSwapCommand(): Command {
-  const cmd = new Command("cast-swap").description("Nodaro Motion — replace who and what is in a short video (Cloud edition)")
+/** `nodaro video-remake`: Video Remake's commands. */
+export function videoRemakeCommand(name = "video-remake"): Command {
+  const cmd = new Command(name).description("Video Remake — replace who and what is in a short video (Cloud edition)")
   cmd.addCommand(fullQualityCommand())
   return cmd
+}
+
+/**
+ * `nodaro cast-swap`: the same commands under the name they had before, kept
+ * for scripts that still call it. Hidden from the help.
+ */
+export function castSwapCommand(): Command {
+  return videoRemakeCommand("cast-swap")
 }

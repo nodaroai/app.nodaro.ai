@@ -1,9 +1,9 @@
 /**
- * Admin → Nodaro Motion's style-only setting: per engine, what a direct
+ * Admin → Video Remake's style-only setting: per engine, what a direct
  * style-only run does (a Prism Flex run with an art style and nothing to
  * swap): the original clip restyled (the default) or the path of any
  * art-style Flex run, and its own engine prompt (the template by default)
- * (GET/PUT /v1/admin/nodaro-motion/style-only). Never saved
+ * (GET/PUT /v1/admin/video-remake/style-only). Never saved
  * (`styleOnly: null`) = the defaults on every engine.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

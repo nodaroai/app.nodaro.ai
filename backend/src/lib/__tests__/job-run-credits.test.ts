@@ -9,7 +9,7 @@
  * settles, a step adds its charge only once the step settles too; a refunded
  * step adds 0. "Released" is shown only when every hold in the run settled.
  *
- * The case "Nodaro Motion 4 s preview" is the production run of 2026-10-26:
+ * The case "Video Remake 4 s preview" is the production run of 2026-10-26:
  * Cast Swap 44, two reference preps at 66, a mask at 33 and the video held
  * 3,564 and charged 854.
  */
@@ -40,7 +40,7 @@ const rowOf = (j: Job) => ({ id: j.id, usage_log_id: j.usage_log_id, credits: j.
 
 beforeEach(() => resetDb())
 
-/** The production Nodaro Motion preview: a Cast Swap parent and its four steps. */
+/** The production Video Remake preview: a Cast Swap parent and its four steps. */
 function motionPreview(): Job {
   const parent = job("run", null, 44)
   h.jobs = [parent, job("ref-1", "run", 66), job("ref-2", "run", 66), job("mask", "run", 33), job("video", "run", 3564)]
@@ -67,7 +67,7 @@ describe("runCreditsFor — a run's charge includes its steps", () => {
     expect(publicCreditFieldsOf("solo", credits)).toEqual({ credits_charged: 90, credits_held: 120, credits_released: 30 })
   })
 
-  it("Nodaro Motion 4 s preview: the parent's 44 plus its four settled steps = 1,063", async () => {
+  it("Video Remake 4 s preview: the parent's 44 plus its four settled steps = 1,063", async () => {
     const parent = motionPreview()
     const credits = await runCreditsFor([rowOf(parent)], OWNER)
     expect(creditsChargedOf("run", credits)).toBe(1063)

@@ -51,9 +51,9 @@ function addRunFlags(cmd: Command): Command {
     .option("--details <text>", "your own words (at most 1,000 characters); mention a slot as {slot:<key>}")
     .option("--preview", "a 4-second preview run (only when the trend offers one)")
     .addOption(
-      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Motion Pulse trend").choices([...RESOLUTIONS]),
+      new Option("--resolution <r>", "one the trend offers (`trends get`); default its first: 480p, or 720p on a Nodaro Pulse trend").choices([...RESOLUTIONS]),
     )
-    .option("--draft", "make a 480p draft that Full Quality can finish at 1080p (Nodaro Motion Prism only; without it a run is plain)")
+    .option("--draft", "make a 480p draft that Full Quality can finish at 1080p (Nodaro Prism only; without it a run is plain)")
     .option("--no-draft", "a plain run, the default (still accepted)")
 }
 
@@ -135,7 +135,7 @@ function buildRequest(flags: RunFlags): TrendRunRequest {
 
 export function trendsCommand(): Command {
   const cmd = new Command("trends").description(
-    "trends — ready-made Nodaro Motion recipes: browse, quote, run with your own pictures, favorite (Cloud edition)",
+    "trends — ready-made Video Remake recipes: browse, quote, run with your own pictures, favorite (Cloud edition)",
   )
 
   cmd

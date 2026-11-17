@@ -606,7 +606,7 @@ describe("MCP job reads carry the settled charge", () => {
   })
 
   it("get_job: a run's charge includes its steps (child jobs), and the envelope carries the run's hold", async () => {
-    // The production Nodaro Motion preview: Cast Swap 44 and its video step,
+    // The production Video Remake preview: Cast Swap 44 and its video step,
     // held 3,564 and charged 854 (the reference preps and mask left out here).
     const run = { ...settled, job_type: "cast-swap", credits: 44, usage_log_id: "ul-run" }
     runSteps.map = new Map([[JOB, [{ id: "video", parent_job_id: JOB, usage_log_id: "ul-video", credits: 3564 }]]])

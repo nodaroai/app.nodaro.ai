@@ -1,5 +1,5 @@
 /**
- * Nodaro Motion's quote and completion keys, as people read them: the
+ * Video Remake's quote and completion keys, as people read them: the
  * engine's vendor-named keys are renamed to neutral ones.
  * Cast Swap 0.394.0 answers the new keys BESIDE the old ones, 0.395.0 the new
  * ones only, 0.393.0 and older the old ones only — so every reader here takes

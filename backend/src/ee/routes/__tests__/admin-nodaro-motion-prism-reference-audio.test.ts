@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/prism-reference-audio` — the admin's Prism
- * reference audio for every direct Nodaro Motion Prism run, a mode per output
+ * `/v1/admin/video-remake/prism-reference-audio` — the admin's Prism
+ * reference audio for every direct Nodaro Prism run, a mode per output
  * resolution. Admin-only; never saved reads as null (the full audio); a plain
  * mode (the setting's first shape) reads, and saves, as that mode at every
  * resolution; a save is strict, clears the settings cache and leaves an
@@ -91,13 +91,13 @@ beforeEach(async () => {
 })
 
 const as = { "x-user": "00000000-0000-4000-8000-0000000000ad" }
-const URL = "/v1/admin/nodaro-motion/prism-reference-audio"
+const URL = "/v1/admin/video-remake/prism-reference-audio"
 const put = (prismReferenceAudio: unknown, headers: Record<string, string> = as) =>
   app.inject({ method: "PUT", url: URL, headers, payload: { prismReferenceAudio } })
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["480p" as const], trendRun: true }
 const ALL_IDS = ["full", "voice", "none", "one-tone", "octave"] as const
 
-describe("GET /v1/admin/nodaro-motion/prism-reference-audio", () => {
+describe("GET /v1/admin/video-remake/prism-reference-audio", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -159,7 +159,7 @@ describe("GET /v1/admin/nodaro-motion/prism-reference-audio", () => {
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/prism-reference-audio", () => {
+describe("PUT /v1/admin/video-remake/prism-reference-audio", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
     expect((await put({ "720p": "voice" })).statusCode).toBe(403)
@@ -379,7 +379,7 @@ describe("PUT /v1/admin/nodaro-motion/prism-reference-audio", () => {
       expect((await put(v)).statusCode, JSON.stringify(v)).toBe(400)
     }
     expect(
-      (await app.inject({ method: "PUT", url: URL, headers: as, payload: { prismReferenceAudio: { "720p": "voice" }, engine: "motion-prism" } }))
+      (await app.inject({ method: "PUT", url: URL, headers: as, payload: { prismReferenceAudio: { "720p": "voice" }, engine: "nodaro-prism" } }))
         .statusCode,
     ).toBe(400)
     expect(h.upserts).toEqual([])

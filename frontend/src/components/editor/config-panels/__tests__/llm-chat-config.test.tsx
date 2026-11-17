@@ -336,7 +336,21 @@ describe("LLMChatConfig — documents (referenceFileUrls)", () => {
     expect(within(refs).getByText("1/5")).toBeInTheDocument()
   })
 
-  it.each(["gemini-3.6-flash", "claude-sonnet-5.5", "gpt-6.1-sol"])("shows no file input for %s", (llmModel) => {
+  it("shows the file input for Gemini 4 Hydrogen too (decided 2026-11-17)", () => {
+    renderConfig({ llmModel: "gemini-4-hydrogen", referenceFileUrls: ["https://media.example/uploads/documents/report.pdf"] })
+    openReferences()
+    const refs = screen.getByTestId("llm-file-refs")
+    expect(within(refs).getByText("Files (PDF)")).toBeInTheDocument()
+    expect(within(refs).getByText("report.pdf")).toBeInTheDocument()
+    expect(within(refs).getByText("Upload PDF")).toBeInTheDocument()
+  })
+
+  it("keeps the node's files on Gemini 4 Hydrogen", () => {
+    const { onUpdate } = renderConfig({ llmModel: "gemini-4-hydrogen", referenceFileUrls: ["https://media.example/a.pdf"] })
+    expect(onUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ referenceFileUrls: undefined }))
+  })
+
+  it.each(["gemini-3.6-flash", "gemini-4-carbon", "claude-sonnet-5.5", "gpt-6.1-sol"])("shows no file input for %s", (llmModel) => {
     renderConfig({ llmModel })
     openReferences()
     expect(screen.queryByTestId("llm-file-refs")).toBeNull()

@@ -126,7 +126,7 @@ describe("the address arguments, derived from every tool's schema", () => {
     const has = (tool: string, path: string, form: string) => derived.get(tool)?.args.some((a) => a.path === path && a.form === form)
     expect(has("generate_image", "reference_image_urls[]", "address")).toBe(true)
     expect(has("generate_video", "character_references[].extra_image_urls[]", "address")).toBe(true)
-    expect(has("cast_swap", "roles[].images[]", "address")).toBe(true)
+    expect(has("video_remake", "roles[].images[]", "address")).toBe(true)
     expect(has("build_ugc_clips", "identity_images[]", "text")).toBe(true)
     expect(has("add_competitor", "website", "address")).toBe(true)
     expect(has("add_competitor", "accounts.instagram", "text")).toBe(true)

@@ -231,7 +231,7 @@ describe("the film pipeline and the Video Director are gated features, not exemp
 })
 
 describe("the trend run paths follow cast-swap", () => {
-  it("estimate and run carry Nodaro Motion's node gate", () => {
+  it("estimate and run carry Video Remake's node gate", () => {
     for (const url of ["/v1/trends/:slug/estimate", "/v1/trends/:slug/runs"]) {
       const route = h.routes.find((r) => r.method === "POST" && r.url === url)
       expect(route, url).toBeDefined()

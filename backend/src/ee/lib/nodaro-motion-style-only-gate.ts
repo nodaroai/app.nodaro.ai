@@ -1,7 +1,7 @@
 /**
  * When the style-only settings may be saved: two rules, for two kinds of row.
  *
- * The Nodaro Motion settings are one row each, which staging and production
+ * The Video Remake settings are one row each, which staging and production
  * share (one database, `engine-environments.ts`).
  *
  * - The style-only row itself (`nodaro_motion_style_only`, its path and its
@@ -12,8 +12,8 @@
  *   environment in `TREND_PUBLISH_ENVIRONMENTS` has a recorded engine that
  *   declares it (`noEnvironmentRunsStyleOnly`): one reader is enough.
  * - A key inside a row an older engine also reads (the prompt parts'
- *   `styleOnly` key) keeps the every-environment rule of the other Nodaro
- *   Motion settings (`nodaro-motion-prompt-wording-gate.ts`): saved only once
+ *   `styleOnly` key) keeps the every-environment rule of the other Video
+ *   Remake settings (`nodaro-motion-prompt-wording-gate.ts`): saved only once
  *   every environment's engine declares it (`environmentsThatCannotRunStyleOnly`).
  *
  * The defaults need neither: they are what every engine does today.
@@ -37,11 +37,11 @@ export function noEnvironmentRunsStyleOnly(environments: readonly EngineEnvironm
 
 /**
  * The refusal (400 `style_only_engine`) of anything style-only for Nodaro
- * Motion Pulse: art styles are Prism's, so Pulse never gets a style-only run
+ * Pulse: art styles are Prism's, so Pulse never gets a style-only run
  * and a setting or prompt-parts entry for it would never be read. One
  * sentence for the switch route and the prompt-parts route.
  */
-export const PULSE_RUNS_NO_STYLE_ONLY_MESSAGE = "Nodaro Motion Pulse takes no art style, so it runs no style-only runs."
+export const PULSE_RUNS_NO_STYLE_ONLY_MESSAGE = "Nodaro Pulse takes no art style, so it runs no style-only runs."
 
 /** The style-only row's refusal while `noEnvironmentRunsStyleOnly`. */
 export const NO_ENGINE_RUNS_STYLE_ONLY_MESSAGE = "No Cast Swap engine runs style-only runs yet: keep the defaults (Original clip, Template), or wait for the engine."

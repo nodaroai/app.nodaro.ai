@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's Motion setting for direct runs, per engine (registered by
+ * Video Remake's Motion setting for direct runs, per engine (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/motion   the setting (null = never saved), the engines, the prompt styles and the engine's supports
- *   PUT /v1/admin/nodaro-motion/motion   { motion }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/motion   the setting (null = never saved), the engines, the prompt styles and the engine's supports
+ *   PUT /v1/admin/video-remake/motion   { motion }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_motion`, lib/nodaro-motion-motion.ts) is how
  * the Cast Swap engine prepares the clip and words the prompt of every DIRECT
@@ -161,7 +161,7 @@ function canonicalLayersOf(motion: NodaroMotionMotion): NodaroMotionMotion {
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): face mesh layers saved canonically. */
 export const NODARO_MOTION_MOTION_SECTION = defineNodaroMotionSettingsSection({
   key: "motion",
-  path: "/v1/admin/nodaro-motion/motion",
+  path: "/v1/admin/video-remake/motion",
   label: "Motion style",
   body: putBody,
   prepare: (body) => {
@@ -264,15 +264,15 @@ export const NODARO_MOTION_MOTION_SECTION = defineNodaroMotionSettingsSection({
 })
 
 export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/motion", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion Motion setting")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake Motion setting")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/motion", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/motion", { preHandler: requireAdmin }, async (req, reply) => {
     const raw = NODARO_MOTION_MOTION_SECTION.body.safeParse(req.body)
     if (!raw.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(raw.error) } })
     const prepared = NODARO_MOTION_MOTION_SECTION.prepare(raw.data)
@@ -325,7 +325,7 @@ export function registerNodaroMotionMotionRoutes(app: FastifyInstance): void {
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion Motion setting")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake Motion setting")
     }
   })
 }

@@ -20,8 +20,10 @@ import type { LlmContentBlock, LlmRequest, LlmResponse } from "../lib/llm-client
 import { LLM_VIDEO_FPS_MAX } from "../lib/llm/types.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { abortOnClientDisconnect, addCallToSpend, billedEvidence, meteredFailureMessage, meteredTextPrecheck, recordMeteredJobOutput } from "../lib/metered-text-route.js"
-import { LLM_FILE_MODELS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_REFERENCE_FILES_MAX, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, llmAcceptsFiles } from "@nodaro/shared/llm-models"
+import { LLM_FILE_MODELS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_REFERENCE_FILES_MAX, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, llmAcceptsFiles, llmFileWire } from "@nodaro/shared/llm-models"
 import { LlmFileError, prepareLlmFiles, type LlmFileBlock } from "../lib/llm-files.js"
+import { discardLlmFileLinks, planLlmFileLinks, storeLlmFileLinks, type LlmFileLinkStep } from "../lib/llm-file-link.js"
+import { kieKeySet } from "../lib/llm/anthropic-availability.js"
 import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 import { LLM_TEXT_INPUT_MAX } from "@nodaro/shared/models"
 import { advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
@@ -59,7 +61,7 @@ const llmChatBody = z.object({
   // `advancedMode` (`videoFpsError`). It does not change how the sound is read.
   referenceVideoFps: z.number().gt(0).max(LLM_VIDEO_FPS_MAX).optional(),
   referenceAudioUrls: z.array(z.string().url()).max(3).optional(),
-  // Documents (PDF), read by a model whose caps say `file` (GPT-6.1 Terra).
+  // Documents (PDF), read by a model whose caps say `file` (`llmAcceptsFiles`).
   // Each is fetched, checked and its pages counted before anything is held
   // (`prepareLlmFiles`).
   referenceFileUrls: z.array(z.string().url()).max(LLM_REFERENCE_FILES_MAX).optional(),
@@ -131,6 +133,62 @@ async function filesOrRefusal(
       return { status: err.code === "file_reader_busy" ? 503 : 400, error: { code: err.code, message: err.message } }
     }
     throw err
+  }
+}
+
+/** The pages of the call's documents in all, as a reader shows them. */
+function filePagesOf(files: readonly LlmFileBlock[]): number {
+  return files.reduce((n, f) => n + f.pages, 0)
+}
+
+/**
+ * How the call's documents reach the aggregator's lane, decided before
+ * anything is held (`planLlmFileLinks`, which stores nothing). A model whose
+ * aggregator lane reads documents inline only up to a limit and the rest by
+ * link (`fileWire.kie: "image-url"`) gets a plan whenever that lane can serve
+ * the call, as its first lane or as a fallback; where a link cannot be given
+ * the file is refused here, `400`, rather than failing a held call. No plan
+ * (the bytes go as they are) for every other model, for a call pinned to the
+ * vendor's own API (`pinnedDirect`: Advanced mode, which the aggregator never
+ * serves, or a video or audio pin, which it cannot carry), and on an install
+ * with no aggregator key.
+ */
+async function fileLinkPlanOrRefusal(
+  llmModel: string,
+  urls: string[] | undefined,
+  files: LlmFileBlock[],
+  pinnedDirect: boolean,
+  owner: string,
+): Promise<{ plan?: LlmFileLinkStep[] } | { status: number; error: { code: string; message: string } }> {
+  if (!files.length || pinnedDirect || !kieKeySet() || llmFileWire(llmModel)?.kie !== "image-url") return {}
+  try {
+    return { plan: await planLlmFileLinks(urls ?? [], files, { owner }) }
+  } catch (err) {
+    if (err instanceof LlmFileError) return { status: 400, error: { code: err.code, message: err.message } }
+    throw err
+  }
+}
+
+/**
+ * Runs `call` with the request's documents as `plan` sends them: a file that
+ * goes by link carries it, and a copy the plan asks for is stored in the
+ * job's own scratch folder first and deleted when the call ends, however it
+ * ends. With no plan, or one that sends every file inline, `call` gets the
+ * request as it is. The hold was sized from `request` before this: a link
+ * changes nothing it counts.
+ */
+async function withFileLinks<T>(jobId: string, request: LlmRequest, plan: LlmFileLinkStep[] | undefined, call: (request: LlmRequest) => Promise<T>): Promise<T> {
+  if (!plan || plan.every((step) => step.via === "inline")) return call(request)
+  const stored: string[] = []
+  try {
+    const files = await storeLlmFileLinks(plan, jobId, stored)
+    let next = 0
+    const messages = request.messages.map((m) =>
+      typeof m.content === "string" ? m : { ...m, content: m.content.map((b) => (b.type === "file_base64" ? files[next++] ?? b : b)) },
+    )
+    return await call({ ...request, messages })
+  } finally {
+    await discardLlmFileLinks(stored, jobId)
   }
 }
 
@@ -314,6 +372,12 @@ export async function llmChatRoutes(app: FastifyInstance) {
       // by their pages, and a file that cannot be read is a 400, not a charge.
       const prepared = await filesOrRefusal(referenceFileUrls, clientGoneSignal(reply), userId)
       if ("error" in prepared) return sendFilesRefusal(reply, prepared)
+      // Where the call runs is settled before the way its documents reach
+      // that lane, and both before anything is held.
+      const mediaLane = mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, filePages: filePagesOf(prepared.files), text: [systemPrompt, userInput], cheapLanesOnly: parsed.data.cheapLanesOnly })
+      const llmParams = resolveLlmParams(parsed.data, { maxTokens, temperature })
+      const links = await fileLinkPlanOrRefusal(llmModel, referenceFileUrls, prepared.files, { ...mediaLane, ...llmParams }.requireLane === "direct", userId)
+      if ("error" in links) return sendFilesRefusal(reply, links)
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
       // Built once: the metered hold is sized from the very request the lane is sent.
       const request: LlmRequest = {
@@ -321,8 +385,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
         system: systemPrompt,
         messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, videoFps: referenceVideoFps, audios: referenceAudioUrls, files: prepared.files }) }],
         // A video or audio reference runs where it is surely read (lib/llm-media-lane.ts). Advanced mode's own pin follows and wins.
-        ...mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, text: [systemPrompt, userInput], cheapLanesOnly: parsed.data.cheapLanesOnly }),
-        ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
+        ...mediaLane,
+        ...llmParams,
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,
       }
@@ -376,7 +440,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         const spend = new LlmSpend()
         let response: LlmResponse
         try {
-          response = await llmComplete(request)
+          response = await withFileLinks(job.id, request, links.plan, llmComplete)
         } catch (err) {
           const message = isMediaNotRead(err) ? MEDIA_NOT_READ_MESSAGE : userFacingMessage(err, "LLM API call failed")
           const recorded = addCallToSpend(spend, llmModel, request, { error: err })
@@ -407,7 +471,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
-        const response = await llmComplete(request)
+        const response = await withFileLinks(job.id, request, links.plan, llmComplete)
 
         const generatedText = response.text
 
@@ -527,7 +591,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       // its handler: one user's calls never queue more document reads than
       // their slots allow. The stream's own take below then holds it.
       if (referenceFileUrls?.length) {
-        const laneProvider = primaryProviderOfLlm({ modelId: llmModel, system: "", messages: [], ...resolveLlmParams(parsed.data, { maxTokens, temperature }), ...cheapLanesParam(parsed.data), reasoningEffort: parsed.data.reasoningEffort })
+        const laneProvider = primaryProviderOfLlm({ modelId: llmModel, system: "", messages: [], ...mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, filePages: referenceFileUrls.length, text: [], cheapLanesOnly: parsed.data.cheapLanesOnly }), ...resolveLlmParams(parsed.data, { maxTokens, temperature }), ...cheapLanesParam(parsed.data), reasoningEffort: parsed.data.reasoningEffort })
         try {
           await acquireLiveLane(req, { lane: "llm", provider: laneProvider, onWaiting: () => {} })
         } catch (err) {
@@ -537,6 +601,12 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
       const prepared = await filesOrRefusal(referenceFileUrls, clientGoneSignal(reply), userId)
       if ("error" in prepared) return sendFilesRefusal(reply, prepared)
+      // Where the call runs is settled before the way its documents reach
+      // that lane, and both before anything is held.
+      const mediaLane = mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, filePages: filePagesOf(prepared.files), text: [systemPrompt, userInput], cheapLanesOnly: parsed.data.cheapLanesOnly })
+      const llmParams = resolveLlmParams(parsed.data, { maxTokens, temperature })
+      const links = await fileLinkPlanOrRefusal(llmModel, referenceFileUrls, prepared.files, { ...mediaLane, ...llmParams }.requireLane === "direct", userId)
+      if ("error" in links) return sendFilesRefusal(reply, links)
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel, parsed.data.reasoningEffort, parsed.data.advancedMode)
       // Built once: the metered hold is sized from the very request the lane is sent.
       const request: LlmRequest = {
@@ -544,8 +614,8 @@ export async function llmChatRoutes(app: FastifyInstance) {
         system: systemPrompt,
         messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, videoFps: referenceVideoFps, audios: referenceAudioUrls, files: prepared.files }) }],
         // A video or audio reference runs where it is surely read (lib/llm-media-lane.ts). Advanced mode's own pin follows and wins.
-        ...mediaLaneParams({ modelId: llmModel, videos: referenceVideoUrls, audios: referenceAudioUrls, text: [systemPrompt, userInput], cheapLanesOnly: parsed.data.cheapLanesOnly }),
-        ...resolveLlmParams(parsed.data, { maxTokens, temperature }),
+        ...mediaLane,
+        ...llmParams,
         ...cheapLanesParam(parsed.data),
         reasoningEffort: parsed.data.reasoningEffort,
       }
@@ -582,26 +652,26 @@ export async function llmChatRoutes(app: FastifyInstance) {
         const spend = new LlmSpend()
         let finalResponse: LlmResponse
         try {
-          finalResponse = await llmStream(
-            request,
+          finalResponse = await withFileLinks(job.id, request, links.plan, (sent) => llmStream(
+            sent,
             (delta) => {
               if (sse.isClosed) return
               fullText += delta
               sse.sendEvent({ type: "token", data: delta })
             },
             abortController.signal,
-          )
+          ))
         } catch (err) {
           // A stream the person stopped is charged its estimated usage (D2:
           // `LlmStreamAbortedError`); one stopped before it was sent billed
           // nothing and is refunded.
-          const message = userFacingMessage(err, "LLM API stream failed")
+          const message = isMediaNotRead(err) ? MEDIA_NOT_READ_MESSAGE : userFacingMessage(err, "LLM API stream failed")
           const recorded = addCallToSpend(spend, llmModel, request, { error: err })
           if (err instanceof Error && err.message !== message) console.error("[llm-chat-stream] Error:", err.message)
           await recordMeteredJobOutput(job.id, { error: message }, billedEvidence(spend, billedProviderCost(err)))
           const shown = await failMetered(job.id, reserve, spend, recorded, err, message)
           if (!sse.isClosed) {
-            sse.sendEvent({ type: "error", data: { code: llmErrorCode(err), message: shown } })
+            sse.sendEvent({ type: "error", data: { code: isMediaNotRead(err) ? MEDIA_NOT_READ_CODE : llmErrorCode(err), message: shown } })
             sse.close()
           }
           return
@@ -649,15 +719,15 @@ export async function llmChatRoutes(app: FastifyInstance) {
       let fullText = ""
 
       try {
-        const finalResponse = await llmStream(
-          request,
+        const finalResponse = await withFileLinks(job.id, request, links.plan, (sent) => llmStream(
+          sent,
           (delta) => {
             if (sse.isClosed) return
             fullText += delta
             sse.sendEvent({ type: "token", data: delta })
           },
           abortController.signal,
-        )
+        ))
 
         await supabase
           .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
@@ -691,7 +761,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       } catch (err) {
         // The person reads a model-lane failure's user-safe sentence; the full
         // diagnostic goes to the log.
-        const message = userFacingMessage(err, "LLM API stream failed")
+        const message = isMediaNotRead(err) ? MEDIA_NOT_READ_MESSAGE : userFacingMessage(err, "LLM API stream failed")
         if (err instanceof Error && err.message !== message) console.error("[llm-chat-stream] Error:", err.message)
 
         await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message }, provider_cost: billedProviderCost(err) } })
@@ -703,7 +773,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         if (!sse.isClosed) {
           sse.sendEvent({
             type: "error",
-            data: { code: llmErrorCode(err), message },
+            data: { code: isMediaNotRead(err) ? MEDIA_NOT_READ_CODE : llmErrorCode(err), message },
           })
           sse.close()
         }

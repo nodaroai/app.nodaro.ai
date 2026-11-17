@@ -94,7 +94,7 @@ describe("the clip preparation's rules", () => {
     expect(supportedTargetsFor([...ENVIRONMENTS, ...HIDE_ENVS], "faces")).toEqual(["head", "face", "body"])
   })
 
-  it("Nodaro Motion's shared setting: the environments that cannot hide whole people, a missing one included", () => {
+  it("Video Remake's shared setting: the environments that cannot hide whole people, a missing one included", () => {
     const at = (env: string, list: TrendEngineEnvironment[]) => list.map((e) => ({ ...e, env }))
     expect(environmentsThatCannotHideBodies(undefined)).toBeUndefined()
     expect(environmentsThatCannotHideBodies([])).toEqual(["staging", "production"])
@@ -103,7 +103,7 @@ describe("the clip preparation's rules", () => {
     expect(environmentsThatCannotHideBodies([...at("production", HIDE_ENVS), ...at("staging", HIDE_ENVS)])).toEqual([])
   })
 
-  it("Nodaro Motion's Precise style route: the environments that cannot take a flag of it (engine or platform without it), a missing one included", () => {
+  it("Video Remake's Precise style route: the environments that cannot take a flag of it (engine or platform without it), a missing one included", () => {
     for (const flag of ["preciseStyleRoutePerStyle", "preciseStyleRoutePhotographic"] as const) {
       const other = flag === "preciseStyleRoutePerStyle" ? "preciseStyleRoutePhotographic" : "preciseStyleRoutePerStyle"
       const at = (env: string, engine: boolean, platform = engine): TrendEngineEnvironment => ({

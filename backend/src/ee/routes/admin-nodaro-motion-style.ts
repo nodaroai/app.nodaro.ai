@@ -1,16 +1,16 @@
 /**
- * Nodaro Motion's Style choice for direct runs, per engine (registered by
+ * Video Remake's Style choice for direct runs, per engine (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/style   { style, updatedAt, engines, supported } (style null = never saved: people choose)
- *   PUT /v1/admin/nodaro-motion/style   { style }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/style   { style, updatedAt, engines, supported } (style null = never saved: people choose)
+ *   PUT /v1/admin/video-remake/style   { style }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_style`, lib/nodaro-motion-style.ts) says, per
  * engine, whether people choose a direct run's style (`"user"`, the default)
  * or it is forced. `"flex"` (Always Flex): every direct run and quote of that
  * engine is Flex, whatever the request's `style` says — the API, the SDK and
- * MCP alike. `"precise"` (Precise in Nodaro Motion): clients run Precise, and
+ * MCP alike. `"precise"` (Precise in Video Remake): clients run Precise, and
  * the engine (from plugin 0.456.0) makes a request that asks for Flex a Flex
  * run. Clients read it through `GET /v1/cast-swap/style-choice` to hide their
  * Style control. A trend run keeps its own trend's style.
@@ -38,7 +38,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-mo
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_STYLE_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f7"
 
 const putBody = z.strictObject({ style: nodaroMotionStyleSchema })
@@ -46,7 +46,7 @@ const putBody = z.strictObject({ style: nodaroMotionStyleSchema })
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the forced engines only. */
 export const NODARO_MOTION_STYLE_SECTION = defineNodaroMotionSettingsSection({
   key: "style",
-  path: "/v1/admin/nodaro-motion/style",
+  path: "/v1/admin/video-remake/style",
   label: "Style choice",
   body: putBody,
   prepare: (body) => ({ value: { style: forcedStyles(body.style) } }),
@@ -82,15 +82,15 @@ async function view(): Promise<NodaroMotionStyleView> {
 }
 
 export function registerNodaroMotionStyleRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/style", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/style", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion Style choice")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake Style choice")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/style", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/style", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_STYLE_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -108,7 +108,7 @@ export function registerNodaroMotionStyleRoutes(app: FastifyInstance): void {
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion Style choice")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake Style choice")
     }
   })
 }

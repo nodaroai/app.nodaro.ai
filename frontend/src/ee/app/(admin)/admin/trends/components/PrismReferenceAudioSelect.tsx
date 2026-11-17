@@ -1,4 +1,4 @@
-// What audio the reference video a Nodaro Motion Prism run sends to the video
+// What audio the reference video a Nodaro Prism run sends to the video
 // model carries, per output resolution: a mode (no audio, the clip's whole
 // mix, only the vocals, or either flattened to one steady tone) and a pitch
 // shift in semitones (-24 to 24 in steps of 0.5; 0 = none; none for No audio),
@@ -11,7 +11,7 @@
 // platform's claim, each named apart while one is missing (`envs`). Until then
 // it is greyed out, unless a resolution already has it (it stays, to be set to
 // another). The trend editor shows it under the Model while the model is
-// Prism; Admin → Nodaro Motion shows it in the Prism engine's section, for
+// Prism; Admin → Video Remake shows it in the Prism engine's section, for
 // direct runs.
 
 import { useId, useState } from "react"
@@ -81,7 +81,7 @@ interface Props {
   readonly envs?: readonly TrendEngineEnvironment[]
   /** The environments could not be read: said in words, naming none (nothing is said while they are only loading). */
   readonly envsUnreadable?: boolean
-  /** What the reasons say is shared by every environment: Admin → Nodaro Motion's setting (the default), or a trend. */
+  /** What the reasons say is shared by every environment: Admin → Video Remake's setting (the default), or a trend. */
   readonly sharedBy?: keyof typeof SHARED_BY
 }
 

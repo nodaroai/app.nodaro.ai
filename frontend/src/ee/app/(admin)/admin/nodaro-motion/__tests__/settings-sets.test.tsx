@@ -1,5 +1,5 @@
 /**
- * Admin → Nodaro Motion → Stored settings: named copies of every setting on
+ * Admin → Video Remake → Stored settings: named copies of every setting on
  * the page. A set (or an imported file) loads as a DRAFT — the page fills with
  * its values, marked, and nothing is sent — and Save all sends each section
  * that differs through its own route. "Live: <name>" names the set the live
@@ -22,11 +22,11 @@ import { ADVANCED_SWITCH_LABEL } from "../components/AdvancedSwitch"
 import { MOTION_SETTINGS_KEYS } from "../settings-sections"
 import type { MotionSettingsSet } from "@/ee/lib/nodaro-motion-settings-sets-api"
 
-const BASE = "/v1/admin/nodaro-motion"
+const BASE = "/v1/admin/video-remake"
 const SETS = `${BASE}/settings-sets`
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const SECTIONS = MOTION_SETTINGS_KEYS.map((key) => ({ key, label: `Label of ${key}`, path: `${BASE}/${key}`, privateFields: [] }))
 
@@ -87,7 +87,7 @@ const panel = async () => (await screen.findByRole("heading", { name: "Stored se
 const advancedSwitch = () => screen.findByRole("switch", { name: ADVANCED_SWITCH_LABEL })
 const everyPut = () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([url]) => url)
 
-describe("Admin → Nodaro Motion → Stored settings", () => {
+describe("Admin → Video Remake → Stored settings", () => {
   it("names the set the live settings match, and marks it live once", async () => {
     sets = [set({ settings: { advanced: { show: false } } })]
     renderWith(<AdminNodaroMotionPage />)

@@ -1,6 +1,6 @@
 // @test-watches supabase/tests/fixtures/motion-price-run-cases.json supabase/tests/fixtures/motion-engine-cases.json
 /**
- * The admin Motion price check reads every Nodaro Motion run's figures in SQL
+ * The admin Motion price check reads every Video Remake run's figures in SQL
  * (`public.admin_motion_runs` and `public.admin_motion_engine`, migration 593),
  * proved against two case tables in supabase/tests/admin-motion-price-check.behavior.sql.
  * This file holds the same tables to the TypeScript every other surface reads,

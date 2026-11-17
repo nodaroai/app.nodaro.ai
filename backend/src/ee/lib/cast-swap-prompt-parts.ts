@@ -103,7 +103,7 @@ export async function requestPromptParts(
 export function replyPromptPartsFailure(reply: FastifyReply, failure: PromptPartsFailure) {
   if (failure.kind === "unsupported") return promptPartsUnsupported(reply)
   if (failure.kind === "refused") return relay(reply, failure.res)
-  return reply.status(502).send({ error: { code: "engine_error", message: "Nodaro Motion answered unexpectedly." } })
+  return reply.status(502).send({ error: { code: "engine_error", message: "Video Remake answered unexpectedly." } })
 }
 
 /** Ask the engine. Null after replying (`replyPromptPartsFailure`). */

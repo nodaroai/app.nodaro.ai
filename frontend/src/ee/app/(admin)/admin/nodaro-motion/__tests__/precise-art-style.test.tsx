@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion → Precise runs with an art style, Prism only:
+ * Admin → Video Remake → Precise runs with an art style, Prism only:
  *
- * - The switch (GET/PUT /v1/admin/nodaro-motion/precise-art-style) sits under
+ * - The switch (GET/PUT /v1/admin/video-remake/precise-art-style) sits under
  *   Prism's Precise column: the prompt's opener, "Restyle" (the default) or
  *   "Edit". Save sends only what differs from the default; going back sends `{}`.
  * - A change is offered once ANY environment's engine takes an art style on a
@@ -30,11 +30,11 @@ import {
 } from "../components/PreciseArtStyleColumn"
 import { environmentsThatCannotTakePreciseArtStyle } from "../../trends/clip-preparation"
 
-const URL_ = "/v1/admin/nodaro-motion/precise-art-style"
-const PARTS = "/v1/admin/nodaro-motion/prompt-parts"
+const URL_ = "/v1/admin/video-remake/precise-art-style"
+const PARTS = "/v1/admin/video-remake/prompt-parts"
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const RULE = { "head-body": "collage", "body-only": "collage", "head-only": "collage", unclear: "none" } as const
 const DEFAULTS = {
@@ -69,40 +69,40 @@ const partsView = (promptParts: unknown, styles: string[] = ["precise", "motion"
 beforeEach(() => {
   resetRoutes()
   vi.stubGlobal("fetch", fetchMock)
-  routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
-  routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
   routes[`GET ${PARTS}`] = () => partsView(null)
   routes[`POST ${PARTS}/preview`] = (init) => {
     const body = JSON.parse(String(init?.body)) as { style: string }
     const parts = [{ id: "opener", default: `${body.style} opener`, defaultHash: "0123456789abcdef", placeholders: ["{video}"], required: [], applies: true }]
     return { body: { data: { set: body.style, parts, assembled: `${body.style} assembled`, length: 10, max: 8000, problems: [] } } }
   }
-  routes["GET /v1/admin/nodaro-motion/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
-  routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
-  for (const e of ENGINES) routes[`GET /v1/admin/nodaro-motion/steps/defaults?engine=${e.id}`] = () => ({ body: { data: DEFAULTS } })
+  routes["GET /v1/admin/video-remake/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+  for (const e of ENGINES) routes[`GET /v1/admin/video-remake/steps/defaults?engine=${e.id}`] = () => ({ body: { data: DEFAULTS } })
   routes["GET /v1/admin/llm-models"] = () => ({ body: { data: { models: MODELS, tierCosts: {}, featureCosts: {} } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: BOTH } })
   routes[`GET ${URL_}`] = () => view(null)
   routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseArtStyle)
-  routes["GET /v1/admin/nodaro-motion/style-only"] = () => ({ body: { data: { styleOnly: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/style-only"] = () => ({ body: { data: { styleOnly: null, updatedAt: null, engines: ENGINES, supported: true } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const preciseGroup = (name: string) => screen.findByRole("group", { name: `Nodaro Motion ${name} Precise` })
+const preciseGroup = (name: string) => screen.findByRole("group", { name: `Nodaro ${name} Precise` })
 const openerOf = async (name: string) => within(await preciseGroup(name)).findByRole("group", { name: PRECISE_ART_STYLE_LEGEND })
 const columnOf = async () => (await openerOf("Prism")).closest("[data-testid='precise-art-style-column']") as HTMLElement
 
-describe("Admin → Nodaro Motion → Precise runs with an art style", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → Precise runs with an art style", { timeout: 20_000 }, () => {
   it("preciseArtStyleToSaved leaves the default opener out and keeps the style-refs step as picked", () => {
     expect(preciseArtStyleToSaved(null)).toEqual({})
-    expect(preciseArtStyleToSaved({ "motion-prism": { opener: "restyle" }, "motion-pulse": {} })).toEqual({})
-    expect(preciseArtStyleToSaved({ "motion-prism": { opener: "edit" } })).toEqual({ "motion-prism": { opener: "edit" } })
-    expect(preciseArtStyleToSaved({ "motion-prism": { opener: "restyle", styleRefs: { mode: "off", send: "styled" } } })).toEqual({
-      "motion-prism": { styleRefs: { mode: "off", send: "styled" } },
+    expect(preciseArtStyleToSaved({ "nodaro-prism": { opener: "restyle" }, "nodaro-pulse": {} })).toEqual({})
+    expect(preciseArtStyleToSaved({ "nodaro-prism": { opener: "edit" } })).toEqual({ "nodaro-prism": { opener: "edit" } })
+    expect(preciseArtStyleToSaved({ "nodaro-prism": { opener: "restyle", styleRefs: { mode: "off", send: "styled" } } })).toEqual({
+      "nodaro-prism": { styleRefs: { mode: "off", send: "styled" } },
     })
   })
 
@@ -115,19 +115,19 @@ describe("Admin → Nodaro Motion → Precise runs with an art style", { timeout
     await waitFor(() => expect(toggle).toBeEnabled())
     await user.click(toggle)
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseArtStyle: { "motion-prism": { styleRefs: { mode: "on", send: "styled-and-original" } } } }]))
-    expect(sentTo("PUT /v1/admin/nodaro-motion/steps")).toEqual([])
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseArtStyle: { "nodaro-prism": { styleRefs: { mode: "on", send: "styled-and-original" } } } }]))
+    expect(sentTo("PUT /v1/admin/video-remake/steps")).toEqual([])
   })
 
   it("a saved step shows On; turning it off saves Off with its send kept", async () => {
     const user = userEvent.setup()
-    routes[`GET ${URL_}`] = () => view({ "motion-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } })
+    routes[`GET ${URL_}`] = () => view({ "nodaro-prism": { opener: "edit", styleRefs: { mode: "on", send: "styled" } } })
     renderWith(<AdminNodaroMotionPage />)
     const toggle = within(within(await columnOf()).getByRole("group", { name: PRECISE_STYLE_REFS_LABEL })).getByRole("switch", { name: "Style the role pictures" })
     await waitFor(() => expect(toggle).toBeChecked())
     await user.click(toggle)
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseArtStyle: { "motion-prism": { opener: "edit", styleRefs: { mode: "off", send: "styled" } } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseArtStyle: { "nodaro-prism": { opener: "edit", styleRefs: { mode: "off", send: "styled" } } } }]))
   })
 
   it("the switch cannot be turned on while no environment's engine takes it", async () => {
@@ -163,9 +163,9 @@ describe("Admin → Nodaro Motion → Precise runs with an art style", { timeout
     renderWith(<AdminNodaroMotionPage />)
     await user.click(within(await openerOf("Prism")).getByRole("radio", { name: "Edit" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseArtStyle: { "motion-prism": { opener: "edit" } } }]))
-    expect(sentTo("PUT /v1/admin/nodaro-motion/masking")).toEqual([])
-    expect(sentTo("PUT /v1/admin/nodaro-motion/style-only")).toEqual([])
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ preciseArtStyle: { "nodaro-prism": { opener: "edit" } } }]))
+    expect(sentTo("PUT /v1/admin/video-remake/masking")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/style-only")).toEqual([])
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled())
     await user.click(within(await openerOf("Prism")).getByRole("radio", { name: "Restyle (default)" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
@@ -173,7 +173,7 @@ describe("Admin → Nodaro Motion → Precise runs with an art style", { timeout
   })
 
   it("shows a saved Edit", async () => {
-    routes[`GET ${URL_}`] = () => view({ "motion-prism": { opener: "edit" } })
+    routes[`GET ${URL_}`] = () => view({ "nodaro-prism": { opener: "edit" } })
     renderWith(<AdminNodaroMotionPage />)
     const group = await openerOf("Prism")
     await waitFor(() => expect(within(group).getByRole("radio", { name: "Edit" })).toBeChecked())

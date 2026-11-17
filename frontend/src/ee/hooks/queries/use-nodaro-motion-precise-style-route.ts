@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Precise art-style route: whether a direct Prism Precise
+ * Admin → Video Remake's Precise art-style route: whether a direct Prism Precise
  * run with an art style runs as Flex, and the accounts that skip it
- * (GET/PUT /v1/admin/nodaro-motion/precise-style-route). Never saved
+ * (GET/PUT /v1/admin/video-remake/precise-style-route). Never saved
  * (`preciseStyleRoute: null`) = routing on, nobody bypassed.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

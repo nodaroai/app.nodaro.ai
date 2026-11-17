@@ -7,7 +7,7 @@
  * - today's stored ids read as the values they always were, and save as they
  *   were (an id where one says the value, else `{ mode, semitones }`);
  * - staging and production share one database, so in a trend's editor and in
- *   Admin → Nodaro Motion's setting alike, what only some environments take is
+ *   Admin → Video Remake's setting alike, what only some environments take is
  *   offered once EVERY environment takes it: the one-tone modes, and the pitch
  *   field, which needs every engine's flag and every platform's claim (a value
  *   no id says is what older code cannot read). Elsewhere it is greyed out,

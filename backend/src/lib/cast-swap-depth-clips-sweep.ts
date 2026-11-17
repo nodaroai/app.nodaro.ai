@@ -4,7 +4,7 @@ import { deleteKeysRecordingFailures } from "./storage-delete.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 
 /**
- * The retention of Nodaro Motion's durable coloured depth maps (cast-swap
+ * The retention of Video Remake's durable coloured depth maps (cast-swap
  * 0.426.0): `cast-swap/depth-clips/<jobId>-<attempt>-<nonce>.mp4`.
  *
  * The Cast Swap engine (the private cloud plugins package) colours a Full
@@ -228,7 +228,7 @@ export function startCastSwapDepthClipsSweep(report: (message: string) => void):
     pending = (async () => {
       const result = await sweepCastSwapDepthClips()
       if (result.failed > 0) {
-        report(`Nodaro Motion depth map cleanup: ${result.failed} failed; they will be retried on the next run`)
+        report(`Video Remake depth map cleanup: ${result.failed} failed; they will be retried on the next run`)
       }
     })().finally(() => {
       pending = undefined

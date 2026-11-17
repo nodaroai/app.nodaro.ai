@@ -253,17 +253,19 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   { method: "GET", path: "/v1/trends" },
   { method: "GET", path: "/v1/trends/tags" },
   { method: "GET", path: "/v1/trends/:slug", pattern: /^\/v1\/trends\/(?!(?:runs|tags)$)[a-z0-9][a-z0-9-]{0,63}$/ },
-  // Nodaro Motion's Style choice per engine (ee/routes/cast-swap-style-choice.ts,
+  // Video Remake's Style choice per engine (ee/routes/cast-swap-style-choice.ts,
   // Cloud): whether people choose a direct run's style or an admin forced one —
   // the same answer for every caller, no user data, so a guest's page hides its
-  // Style control too. Exact path, GET only: every other /v1/cast-swap route
-  // stays behind a credential.
+  // Style control too. Exact path (and its /v1/cast-swap alias), GET only: every
+  // other Video Remake route stays behind a credential.
+  { method: "GET", path: "/v1/video-remake/style-choice" },
   { method: "GET", path: "/v1/cast-swap/style-choice" },
-  // Whether a Nodaro Motion page shows its Advanced options
+  // Whether a Video Remake page shows its Advanced options
   // (ee/routes/cast-swap-advanced.ts, Cloud): one switch an admin sets — the
   // same answer for every caller, no user data, so a guest's page shows or
-  // hides them too. Exact path, GET only: every other /v1/cast-swap route
-  // stays behind a credential.
+  // hides them too. Exact path (and its /v1/cast-swap alias), GET only: every
+  // other Video Remake route stays behind a credential.
+  { method: "GET", path: "/v1/video-remake/advanced" },
   { method: "GET", path: "/v1/cast-swap/advanced" },
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- Behavioral proof: the admin Motion price check (migration 593) — every
--- Nodaro Motion run's hold, taken, taken in USD, paid in USD, the difference
+-- Video Remake run's hold, taken, taken in USD, paid in USD, the difference
 -- and its flags, over a date range.
 --
 -- Runs AFTER the whole migration chain, as `postgres`, in a transaction that
@@ -18,7 +18,7 @@
 --      a run's figures: the SQL cannot drift from it. A job no case expects
 --      (a trend's face-mask make) is not a run, nor is a job of a run's own
 --      type below another job, by its id, in a range or for a range's tasks.
---   2. `public.admin_motion_engine` answers every case of
+--   2. `public.admin_motion_engine` (migration 660's) answers every case of
 --      supabase/tests/fixtures/motion-engine-cases.json (the twin holds the same
 --      table to `castSwapEngineFrom`).
 --   3. `public.admin_motion_style`: a hand run is Flex when it picked it; a

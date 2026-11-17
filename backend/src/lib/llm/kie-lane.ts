@@ -193,7 +193,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
   const promptJson = kieChatPromptJsonFormat(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
-    messages: buildChatCompletionsMessages(promptJson ? { ...req, system: promptJson.system } : req),
+    messages: buildChatCompletionsMessages(promptJson ? { ...req, system: promptJson.system } : req, model),
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(topP !== undefined ? { top_p: topP } : {}),
@@ -250,7 +250,7 @@ async function streamKieChatCompletions(
   const promptJson = kieChatPromptJsonFormat(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
-    messages: buildChatCompletionsMessages(promptJson ? { ...req, system: promptJson.system } : req),
+    messages: buildChatCompletionsMessages(promptJson ? { ...req, system: promptJson.system } : req, model),
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(topP !== undefined ? { top_p: topP } : {}),
@@ -273,6 +273,11 @@ async function streamKieChatCompletions(
   }
 
   const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens, undefined, false, abort, requestChars(req))
+  // The stream bypasses `buildResponse`, so the not-read floor is applied
+  // here on the final usage the stream reported (decided 2026-11-17): an
+  // answer given without its media is discarded on the stream as on the
+  // one-shot call. Silent when the stream reported no usage or an estimate.
+  assertMediaIngested(model, req, streamed.usage)
   const format = responseFormat ?? promptJson
   return format ? { ...streamed, text: format.restoreText(streamed.text) } : streamed
 }
@@ -467,7 +472,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   const { eff, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
-    input: buildResponsesInput(req),
+    input: buildResponsesInput(req, model),
     stream: false,
     ...(eff !== undefined ? { reasoning: { effort: eff } } : {}),
   }
@@ -521,7 +526,7 @@ async function streamKieResponses(
   const { eff, maxTokens } = deriveParams(model, req)
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
-    input: buildResponsesInput(req),
+    input: buildResponsesInput(req, model),
     stream: true,
     ...(eff !== undefined ? { reasoning: { effort: eff } } : {}),
   }

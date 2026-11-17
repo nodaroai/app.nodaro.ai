@@ -448,7 +448,7 @@ export function creditGuard(
           },
         })
       }
-      // A step a plugin engine's job sends (Nodaro Motion's depth, mask or
+      // A step a plugin engine's job sends (Video Remake's depth, mask or
       // audio-separation step) is gated as the node the user ran, its parent
       // job's (lib/child-step-node.ts) — only the NODE: its models were judged
       // above as this route's own. A door that opened with that rule, like

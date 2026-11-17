@@ -1,9 +1,9 @@
 /**
- * A Nodaro Motion steps setting is saved, and a trend that sets `steps` is
+ * A Video Remake steps setting is saved, and a trend that sets `steps` is
  * published, only once every environment's engine takes steps
  * (`castSwap.steps`).
  *
- * The Nodaro Motion settings are one row each, which staging and production
+ * The Video Remake settings are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare `castSwap.steps` is answered no steps setting (`tk.settings`,
  * toolkit.ts), so its direct runs would quietly run as today. So the save is

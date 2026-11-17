@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/pulse-audio` — the admin's Pulse audio for every
- * direct Nodaro Motion Pulse run. Admin-only; never saved reads as null (the
+ * `/v1/admin/video-remake/pulse-audio` — the admin's Pulse audio for every
+ * direct Nodaro Pulse run. Admin-only; never saved reads as null (the
  * original audio); a save is strict, clears the settings cache and leaves an
  * `admin_actions` row; `supported` is whether the loaded engine declares
  * `castSwap.pulseAudio`.
@@ -66,11 +66,11 @@ beforeEach(async () => {
 })
 
 const as = { "x-user": "00000000-0000-4000-8000-0000000000ad" }
-const URL = "/v1/admin/nodaro-motion/pulse-audio"
+const URL = "/v1/admin/video-remake/pulse-audio"
 const put = (pulseAudio: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { pulseAudio } })
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 
-describe("GET /v1/admin/nodaro-motion/pulse-audio", () => {
+describe("GET /v1/admin/video-remake/pulse-audio", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -93,7 +93,7 @@ describe("GET /v1/admin/nodaro-motion/pulse-audio", () => {
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/pulse-audio", () => {
+describe("PUT /v1/admin/video-remake/pulse-audio", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
     expect((await put("generated")).statusCode).toBe(403)
@@ -120,7 +120,7 @@ describe("PUT /v1/admin/nodaro-motion/pulse-audio", () => {
 
   it("refuses any other value, and an extra key", async () => {
     for (const v of ["mute", "", null, 1]) expect((await put(v)).statusCode, JSON.stringify(v)).toBe(400)
-    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { pulseAudio: "generated", engine: "motion-pulse" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { pulseAudio: "generated", engine: "nodaro-pulse" } })).statusCode).toBe(400)
     expect(h.upserts).toEqual([])
   })
 

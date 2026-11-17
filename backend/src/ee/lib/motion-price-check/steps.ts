@@ -1,5 +1,5 @@
 /**
- * What each step of a Nodaro Motion run is, for the admin's Motion price
+ * What each step of a Video Remake run is, for the admin's Motion price
  * check: its name, its role, its kind, its round, and the line of the run's
  * recorded quote that covers it.
  *

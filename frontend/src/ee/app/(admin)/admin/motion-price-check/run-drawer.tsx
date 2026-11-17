@@ -396,7 +396,7 @@ function DrawerContent({ runId, kie }: { runId: string; kie: KieRealResult | nul
           <div className="min-w-0 flex-1 space-y-1">
             <SheetTitle className="break-words text-lg">
               {run === null ? (
-                "Motion run"
+                "Video Remake run"
               ) : (
                 <>
                   {runName(run)}

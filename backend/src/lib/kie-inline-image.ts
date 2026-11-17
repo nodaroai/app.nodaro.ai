@@ -321,7 +321,8 @@ export async function inlineImagesForKie(req: LlmRequest, opts: KieInlineOptions
     if (typeof m.content === "string") return
     m.content.forEach((block, index) => {
       if (block.type === "image" || block.type === "image_base64") slots.push({ message, index, block })
-      else if (block.type === "file_base64") documentChars += block.data.length
+      // A document sent by its stored link carries no characters inline.
+      else if (block.type === "file_base64" && block.hostedUrl === undefined) documentChars += block.data.length
     })
   })
   if (slots.length === 0) return req

@@ -15,6 +15,14 @@
 
 export type LlmTier = "economy" | "standard" | "premium"
 export type KieApiFormat = "chat-completions" | "messages" | "responses"
+
+/** How a document is sent to a model, per lane (see `LlmModelDef.fileWire`). */
+export interface LlmFileWire {
+  /** The shape on the aggregator's lane: `input-file` (responses dialect) or `image-url` (chat-completions dialect). */
+  kie: "input-file" | "image-url"
+  /** The shape on the vendor's own API, for a model that has one. */
+  direct?: "inline-data"
+}
 export type LlmVendor = "anthropic" | "deepseek" | "google" | "moonshot" | "openai" | "xai"
 
 export const LLM_REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const
@@ -118,6 +126,30 @@ export interface LlmModelDef {
    * and `kieSlugOrModel` (`gemini-3.1-pro` → `gemini-3.1-pro-preview`).
    */
   directGeminiModel?: string
+  /**
+   * How a document (PDF) is sent to this model on each lane that can serve it
+   * (decided 2026-11-17). Declared by exactly the models whose modality caps
+   * say `file` ({@link llmAcceptsFiles}); a lane's builder sends a document
+   * only in the shape named here and refuses one on a model that names none,
+   * so a file is never dropped on the way.
+   *
+   * `kie`:
+   *  - `"input-file"`: an inline `input_file` part on the responses dialect.
+   *  - `"image-url"`: an `image_url` part on the chat-completions dialect,
+   *    holding a `data:application/pdf;base64,…` URL or an https link whose
+   *    path ends in `.pdf`. That dialect silently drops the `file` and
+   *    `input_file` shapes (a billed answer about no file), so this is the one
+   *    shape sent there.
+   *
+   * `direct`: `"inline-data"`, an `application/pdf` inline part on the vendor's
+   * own API. Set on every file model that declares a direct lane, and on no
+   * other.
+   *
+   * Never derived from the dialect: a model gets a shape only by its own
+   * probe, recorded with its date on the entry, and
+   * `llm-models.test.ts` lists every declaration by model.
+   */
+  fileWire?: LlmFileWire
   /**
    * Try the direct-vendor lane FIRST for this model, with KIE as the failure
    * fallback. Absent (while `directGeminiModel` is set) = KIE first, direct
@@ -725,6 +757,19 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // `models/gemini-4-hydrogen` (models.list, 2026-11-16: input 1,048,576,
     // output 65,536).
     directGeminiModel: "gemini-4-hydrogen",
+    // Reads PDF files (decided 2026-11-17). Measured on KIE 2026-11-17: a PDF
+    // is read only as an `image_url` part (a `data:application/pdf` URL, or an
+    // https link ending in `.pdf`); the `file` and `input_file` shapes are
+    // dropped, billed. Read correctly at 1, 5, 14 and 15 pages (facts from
+    // pages 2, 8 and 11), up to 2.2 MB by link and 1.36 million characters
+    // inline; 1,280 to 2,670 prompt tokens a page. Google's own API reads an
+    // inline `application/pdf` part (probed 2026-11-17, thinking LOW): the
+    // same three documents answered correctly with almost the same counts —
+    // 5 pages 13,332 prompt tokens (KIE 13,357), 14 pages 28,048 (28,068),
+    // 15 pages and 2.2 MB 19,207 (19,220) — 520 image tokens a page plus the
+    // page's text. Not measured on either lane: a blank or scanned page, more
+    // than 15 pages, more than 2.2 MB, several files in one call.
+    fileWire: { kie: "image-url", direct: "inline-data" },
     // KIE accepted reasoning_effort low / medium / high / xhigh (xhigh reasons
     // clearly deeper); Google 400s thinkingLevel MINIMAL on this model ("not
     // supported") and answers LOW / MEDIUM / HIGH / XHIGH (probed 2026-11-16).
@@ -1012,6 +1057,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // `effortPriced`. The charge follows what KIE states or reports.
     kieSlugOrModel: "gpt-6-1-terra",
     vendor: "openai",
+    // A PDF goes inline as an `input_file` part (probed 2026-11-13).
+    fileWire: { kie: "input-file" },
     structuredOutputMode: "responses-json-schema",
     supportsImages: true,
     maxOutputTokens: 16384,
@@ -1634,9 +1681,10 @@ export function defaultReasoningEffort(feature: string, modelId?: string): LlmRe
  * input requires a separate audio-capable model we don't route to today.
  *
  * `file` (decided 2026-11-13): the model reads documents (PDF) sent with the
- * call. Declared on the one model that does — GPT-6.1 Terra — and never
- * derived for any other: absent means no. Read it through
- * {@link llmAcceptsFiles}.
+ * call. Declared on each model that does — GPT-6.1 Terra, and Gemini 4
+ * Hydrogen from 2026-11-17 — and never derived for any other: absent means
+ * no. Read it through {@link llmAcceptsFiles}. A model that declares it also
+ * declares how a file is sent to it (`fileWire` on its registry entry).
  */
 export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // Keeps full caps after KIE dropped its channel (2026-11-13): it stays a
@@ -1686,7 +1734,10 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // audio were not probed. Google's own API (where a media call is pinned
   // when this install has a Gemini key, as Carbon's) lists video and audio
   // input for it; not probed with media.
-  "gemini-4-hydrogen": { image: true,  video: true,  audio: true  },
+  // It also reads documents (PDF, decided 2026-11-17; `fileWire` on its
+  // registry entry says how each lane is sent one). The `file` cap is read only
+  // by the LLM nodes (`llmAcceptsFiles`), so it enrols the model in nothing else.
+  "gemini-4-hydrogen": { image: true,  video: true,  audio: true,  file: true },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -1767,6 +1818,11 @@ export interface LlmModalityCaps {
 /** Does `modelId` read documents sent with the call (`file` in its modality caps)? An unknown model does not. */
 export function llmAcceptsFiles(modelId: string | undefined): boolean {
   return Boolean(modelId && LLM_MODALITY_CAPS[modelId]?.file)
+}
+
+/** How `modelId` is sent a document on each lane (`fileWire` on its registry entry); `undefined` for a model that reads none. */
+export function llmFileWire(modelId: string | undefined): LlmFileWire | undefined {
+  return llmAcceptsFiles(modelId) ? LLM_MODELS.find((m) => m.id === modelId)?.fileWire : undefined
 }
 
 /** The models that read documents, in registry order — what a refusal names. */

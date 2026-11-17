@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Precise art-style setting: per engine, how a direct
+ * Admin → Video Remake's Precise art-style setting: per engine, how a direct
  * Precise run with an art style opens its prompt — "restyle" (the default) or
- * the edit opener of before (GET/PUT /v1/admin/nodaro-motion/precise-art-style).
+ * the edit opener of before (GET/PUT /v1/admin/video-remake/precise-art-style).
  * Never saved (`preciseArtStyle: null`) = the default on every engine.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

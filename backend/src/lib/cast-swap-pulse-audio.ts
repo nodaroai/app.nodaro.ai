@@ -1,5 +1,5 @@
 /**
- * Pulse audio: what sound a Nodaro Motion Pulse run (the Kling engine,
+ * Pulse audio: what sound a Nodaro Pulse run (the Kling engine,
  * internal id `"kling-4"`) delivers. Pure (no database).
  *
  * - `"original"` (the default, and what every run did before the setting):
@@ -10,7 +10,7 @@
  * Set by an admin, never by the person running it: per trend
  * (`TrendVersionData.pulseAudio`, sent by `composeTrendRun`), and for every
  * DIRECT run by the `nodaro_motion_pulse_audio` app setting (this module's
- * key; written by `PUT /v1/admin/nodaro-motion/pulse-audio`, read by the
+ * key; written by `PUT /v1/admin/video-remake/pulse-audio`, read by the
  * `/v1/cast-swap` hook, middleware/nodaro-motion-pulse-audio.ts).
  *
  * On the wire the run body carries `pulseAudio: "generated"` only, and only to an

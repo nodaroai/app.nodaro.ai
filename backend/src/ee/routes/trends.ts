@@ -48,7 +48,7 @@
  * run `workflows:execute` (as the Cast Swap MCP verb); favorites
  * `assets:write` (as the gallery's).
  *
- * Estimate and run follow the availability of `cast-swap` (Nodaro Motion, the
+ * Estimate and run follow the availability of `cast-swap` (Video Remake, the
  * engine every trend run is): where this deployment does not offer it to the
  * caller, both answer 403 `node_not_available`, as the engine's own route does.
  */
@@ -182,15 +182,15 @@ export interface TrendDetail extends TrendCard {
   original?: TrendOriginal
   /**
    * The engine every run of this trend uses, by its public id (the person
-   * never chooses it): `"motion-prism"` or `"motion-pulse"`.
+   * never chooses it): `"nodaro-prism"` or `"nodaro-pulse"`.
    */
   engine: NodaroMotionEngine
-  /** Its name: "Nodaro Motion Prism" or "Nodaro Motion Pulse". */
+  /** Its name: "Nodaro Prism" or "Nodaro Pulse". */
   engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:
-   * Nodaro Motion Prism `["480p", "720p", "1080p"]` (480p is plain; a run
-   * makes a draft only with `draft: true`, at 480p), Nodaro Motion Pulse
+   * Nodaro Prism `["480p", "720p", "1080p"]` (480p is plain; a run
+   * makes a draft only with `draft: true`, at 480p), Nodaro Pulse
    * `["720p", "1080p"]` (no draft).
    */
   resolutions: TrendResolution[]
@@ -682,7 +682,7 @@ export async function trendRoutes(app: FastifyInstance) {
     }
   })
 
-  // A trend run IS a Nodaro Motion run (dispatched to POST /v1/cast-swap below):
+  // A trend run IS a Video Remake run (dispatched to POST /v1/cast-swap below):
   // a deployment that does not offer cast-swap refuses its quote and its run
   // here, with the node's own refusal, before anything is composed.
   const runsNodaroMotion = requireNodeAvailable("cast-swap")
@@ -700,7 +700,7 @@ export async function trendRoutes(app: FastifyInstance) {
         const parsed = parseJson(res.body)
         const quote = isRec(parsed) && isRec(parsed.data) ? parsed.data : parsed
         if (!isRec(quote) || typeof quote.totalCredits !== "number") {
-          return err(reply, 502, "engine_error", "Nodaro Motion answered unexpectedly.")
+          return err(reply, 502, "engine_error", "Video Remake answered unexpectedly.")
         }
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : quote.totalCredits
         // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
@@ -766,7 +766,7 @@ export async function trendRoutes(app: FastifyInstance) {
         )
         if (res.statusCode < 200 || res.statusCode >= 300) return publicRefusal(reply, res)
         const jobId = jobIdOf(res.body)
-        if (!jobId) return err(reply, 502, "engine_error", "Nodaro Motion did not return a job id.")
+        if (!jobId) return err(reply, 502, "engine_error", "Video Remake did not return a job id.")
         return reply.status(202).send({ data: { jobId } })
       } catch (e) {
         return unavailableOrInternal(reply, req, e, "Failed to start the trend run")

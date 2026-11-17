@@ -1683,7 +1683,7 @@ function assertNotLeaseKey(key: string): void {
 }
 
 /**
- * A Nodaro Motion masking setting as this process's Cast Swap engine is
+ * A Video Remake masking setting as this process's Cast Swap engine is
  * answered it (`tk.settings`): the face mesh only for an engine that draws it
  * (`withFaceMeshFor`), and the depth colormap, the depth model size, the
  * depth blur, the face mesh's parts (or its layers) and Full depth's smallest face with mesh
@@ -1714,15 +1714,15 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionPromptParts: true,
   nodaroMotionMotion: true,
   nodaroMotionSteps: true,
-  // tk.settings.nodaroMotionStyle(): the admin's Style choice per Nodaro Motion engine.
+  // tk.settings.nodaroMotionStyle(): the admin's Style choice per Video Remake engine.
   nodaroMotionStyle: true,
-  // tk.settings.nodaroMotionPromptWording(): the admin's Flex prompt wording per Nodaro Motion engine.
+  // tk.settings.nodaroMotionPromptWording(): the admin's Flex prompt wording per Video Remake engine.
   nodaroMotionPromptWording: true,
-  // tk.settings.nodaroMotionStyleOnly(): the admin's style-only setting (path, engine prompt) per Nodaro Motion engine.
+  // tk.settings.nodaroMotionStyleOnly(): the admin's style-only setting (path, engine prompt) per Video Remake engine.
   nodaroMotionStyleOnly: true,
-  // tk.settings.nodaroMotionPreciseArtStyle(): the admin's opener for a Precise run with an art style per Nodaro Motion engine.
+  // tk.settings.nodaroMotionPreciseArtStyle(): the admin's opener for a Precise run with an art style per Video Remake engine.
   nodaroMotionPreciseArtStyle: true,
-  // tk.settings.nodaroMotionNoPerson(): whether a direct Precise run with no pictured person sends its source clip, per Nodaro Motion engine.
+  // tk.settings.nodaroMotionNoPerson(): whether a direct Precise run with no pictured person sends its source clip, per Video Remake engine.
   nodaroMotionNoPerson: true,
   // A safety-block error_hint carries `subject: "prompt"` or `"audio"` when the provider's own words named the prompt or blamed the generated audio (lib/safety-block.ts).
   errorHintPromptSubject: true,
@@ -1754,6 +1754,12 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   pitchTempoTwoOctaves: true,
   // /v1/generate-video takes `referenceTaskType` for Seedance 2.5 (lib/video-request-norm.ts resolves it).
   seedanceReferenceTaskType: true,
+  // Video Remake's engine ids nodaro-prism / nodaro-pulse are read and answered (every earlier id still read):
+  // a plugin answers them only where this is set.
+  nodaroEngineIds: true,
+  // Video Remake: the /v1/video-remake prefix beside /v1/cast-swap in every route-keyed gate, guard and hook
+  // (lib/video-remake-paths.ts): a plugin registers its /v1/video-remake routes only where this is set.
+  videoRemake: true,
 })
 
 export interface BuildToolkitOptions {

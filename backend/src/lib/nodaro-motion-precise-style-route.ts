@@ -1,6 +1,6 @@
 /**
- * Nodaro Motion's Precise art-style route: whether a DIRECT run on Nodaro
- * Motion Prism that resolves to Precise and carries an art style
+ * Video Remake's Precise art-style route: whether a DIRECT run on Nodaro
+ * Prism that resolves to Precise and carries an art style
  * (`direction.style`) runs as Flex, its estimate alike. A whole-world art style
  * holds only when the video model gets a full-frame depth map, which is the
  * Flex path. Set by an admin for the whole deployment, never by the person
@@ -80,7 +80,7 @@
  * from the defaults, or null when nothing does (routing on, nobody bypassed) or
  * the engine does not declare `castSwap.preciseStyleRoute`. An engine without
  * the flag never reads the row and runs such a run as Precise, so no value can
- * be wrong there: unlike the other Nodaro Motion settings, no save waits for an
+ * be wrong there: unlike the other Video Remake settings, no save waits for an
  * engine. Written only through `nodaro-motion-precise-style-route-store.ts`.
  * This module is pure (no database).
  */
