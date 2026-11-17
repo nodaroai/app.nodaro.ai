@@ -1,5 +1,31 @@
 # @nodaro/sdk
 
+## 2.75.0
+
+### Minor Changes
+
+- f8353e9: Buy inside your own page. `billing.checkout()` and `billing.loadCredits()` take `uiMode: "embedded"` (the new `BillingUiMode`; absent or `"hosted"` is the Stripe Checkout page, as before) and then answer `{ url: null, clientSecret, sessionId }` (a load adds `credits`) for Stripe's embedded Checkout, which never redirects. `billing.plans()` gains `stripePublishableKey` (`string | null`; `null` means the deployment has no embedded form: use the page). The new `billing.checkoutStatus(sessionId)` answers `{ status, paymentStatus, mode, granted }` (`BillingCheckoutStatus`) for one of your own sessions; poll it after the form completes until `granted` is true.
+- 97adf73: `billing.checkout()` and `billing.loadCredits()` take `replacesSessionId`: an earlier Checkout session of yours (an embedded form's `sessionId`) that the new one replaces. The platform expires it first, so the two are never payable at once. A `NodaroError` with status 409 and code `checkout_already_complete` (that purchase is paid) or `checkout_in_progress` (its payment is being confirmed) means nothing new was started.
+- 35eaf48: `billing.checkoutStatus()` answers `paymentUnderWay`. `true` means a `checkout()` or `loadCredits()` naming that session as `replacesSessionId` would be refused `checkout_in_progress`. `false` means no submitted payment is seen on the session; a replacement can still be refused, so after a `checkout_in_progress` ask again once the status reads `open` with `paymentUnderWay: false`, or `expired`, and then only on the person's action or with spaced retries. The field is optional in `BillingCheckoutStatus`: an older platform leaves it out. A `replacesSessionId` that names a session of another purchase (a pack's session for a plan, another pack, another load amount) is now a `NotFoundError` with code `checkout_session_not_found`, as for a session that is not yours.
+- 4dfc210: `nodes.run("video-to-video", …)` accepts `provider: "seedance-2-5-flash"`, the Seedance 2.5 Flash edit: it edits the whole clip by instruction, takes up to 10 reference images, 5 reference videos and 5 reference audio clips, and a request over those caps is refused before any credits are held.
+- 77e190d: The welcome popup can open again after a close without an answer. `balance().welcomeOffer` gains the optional `popupDue`: open the popup by itself now, decided by the server (the grant is unclaimed, "Maybe later" was never answered, and the popup has opened by itself fewer than three times, none of them in the last 24 hours). `popupSeen` stays, as `!popupDue`, for apps written before it; a server released before `popupDue` leaves it out, so read `popupDue ?? popupSeen === false`. `client.credits.markWelcomeOfferSeen(event?)` takes the new `WelcomeOfferSeenEvent`: `"shown"` when the popup opened by itself (counts one showing while the popup is due; a second within 24 hours, or one after "Maybe later" or the third showing, is not counted), `"later"` when the user answered "Maybe later" (it does not open by itself again). A close without an answer (the ×, Escape, a click outside) is reported by not calling it, and an app should not open the popup by itself twice in one visit. Called with no event it sends no body, which the server reads as `"later"`, so existing calls keep their meaning. To adopt: open the popup on `popupDue ?? popupSeen === false` instead of `!popupSeen`, call `markWelcomeOfferSeen("shown")` when it opens by itself and `markWelcomeOfferSeen("later")` on "Maybe later", and stop calling it on other closes.
+
+### Patch Changes
+
+- 85c61d0: `BillingSubscription.status` can be `"unpaid"`: a subscription whose payment retries ended without payment.
+- Updated dependencies [d8585f8]
+- Updated dependencies [977e316]
+- Updated dependencies [c237040]
+- Updated dependencies [c237040]
+- Updated dependencies [81d852e]
+- Updated dependencies [cb7abbe]
+- Updated dependencies [dfc544b]
+- Updated dependencies [dfc544b]
+- Updated dependencies [4dfc210]
+- Updated dependencies [4dfc210]
+  - @nodaro/shared@3.69.0
+  - @nodaro/prompts@1.59.0
+
 ## 2.74.0
 
 ### Minor Changes

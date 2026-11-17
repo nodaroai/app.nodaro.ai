@@ -1,5 +1,66 @@
 # @nodaro/shared
 
+## 3.69.0
+
+### Minor Changes
+
+- d8585f8: `gemini-4-hydrogen` now reads video and audio (`LLM_MODALITY_CAPS`: `{ image: true, video: true, audio: true }`), so LLM Chat and `generate_text` take video and audio references on it.
+
+  Its media caps are for the LLM nodes only. New exports in `@nodaro/shared/llm-models`:
+
+  - `LLM_NODE_ONLY_MEDIA_MODELS`: the models whose video and audio caps enrol them in no other product. Today it lists `gemini-4-hydrogen`.
+  - `readsMediaOnLlmNodesOnly(modelId)`: whether a model is in that list.
+  - `readsVideoOutsideLlmNodes(modelId)` and `readsAudioOutsideLlmNodes(modelId)`: whether a model reads video (or audio) for a product other than the LLM nodes — its cap, less that list. A product that derives "the models that read video" asks these instead of the caps table.
+
+  `VIDEO_ANALYSIS_LLM_MODELS` leaves those models out, so Gemini 4 Hydrogen is not a video-analysis model. No tier, price or stored `llmModel` passthrough reaches it. Every other model's caps and video-analysis membership are unchanged.
+
+- 977e316: LLM catalog gains `gemini-4-hydrogen` (`@nodaro/shared/llm-models`): Gemini 4 Hydrogen, premium, vendor `google`, a fast multimodal Gemini 4 with a 1M-token context, taking text and image input.
+
+  - Reasoning `low | medium | high | xhigh` on both lanes, and it reasons by default. There is no `none` level: a `none` request runs at Auto, and `max` runs at `xhigh`.
+  - Served on the aggregator first, with Google's own API as its fallback and under Advanced mode.
+  - It has no trusted structured-output mode, so it is not a `STRUCTURED_VISION_MODELS` member. Its schema is still sent on both lanes as a hint (`structuredOutputHint`), and every answer is validated and re-asked.
+  - Image-only modality caps for now; it is not a video-analysis model.
+
+  New registry field `directXhighThinking`: the model's own Google API takes thinking level `XHIGH`, so an `xhigh` effort on that lane is sent as `XHIGH`. Every other Gemini model still sends `HIGH` for `xhigh` and `max`.
+
+  No feature default, role or existing entry changes.
+
+- c237040: A new Extend Video provider: **Gemini Omni Flash 1.2 Extend** (`gemini-omni-flash-1-2-extend`), made by Google. It continues a 16:9 or 9:16 video from its last 10 seconds and joins the new seconds onto the original clip.
+
+  - Catalog entry `gemini-omni-flash-1-2-extend` (mode `extend`): 3–10 s added (default 8), `360p` / `720p` / `1080p` / `4k`. It joins `EXTEND_VIDEO_PROVIDERS`, `TailExtendProvider` / `CatalogExtendProvider` (no reference images, no sound switch: its sound is always on) and `MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER` (20,000).
+  - A run is charged per second of video sent and added, and is priced under ONE id that names both lengths and the resolution: `gemini-omni-flash-1-2-extend:<resolution>:sent-<S>s:added-<A>s`. New `geminiOmniExtendQuoteCreditId({ sourcePictureSec, duration, resolution })` builds it (the seconds sent counted as the charge counts them; no known source: the whole 10 s window), `parseGeminiOmniExtendQuoteCreditId()` reads it back, with the type `GeminiOmniExtendQuoteCreditIdParts`. `GET /v1/credits/model-cost` and `POST /v1/credits/model-costs` answer it with exactly what the run is charged. `tailExtendCreditId()` / `buildVideoCreditModelIdentifier()` name the whole-window id for this provider, and its catalog figures are such ids.
+
+- cb7abbe: Gemini Omni Flash 1.2 (`gemini-omni-flash-1-2`) takes character references.
+
+  - `VIDEO_REF_LIMITS_BY_PROVIDER["gemini-omni-flash-1-2"]` now declares `characters: 2`, so `videoCharacterRefCap()`, `videoCharacterRefProviders()` and `videoCharacterRefProblem()` accept up to two `characterReferences` on it. `VIDEO_CHARACTER_REFS_WIRE_MAX` is unchanged.
+  - New optional limits key `charactersOutsideImageBudget`: the model's characters count toward no input budget. `videoCharacterRefProblem()` skips the 7-unit Gemini Omni budget for such a model and still refuses a start or end frame beside characters (with a sentence that says the platform does not combine them on that model) and a `voice` on a model with no `voices` cap.
+  - New optional limits key `characterIdScope`: a scope the provider layer adds to its cached character ids, so an id minted for that model is never served to another. Set on Gemini Omni Flash 1.2.
+  - The `character_voice_unsupported` message now names the models that take a pinned voice.
+
+- dfc544b: A new Extend Video provider: **Seedance 2.5 Flash Extend** (`seedance-2-5-flash-extend`), made by ByteDance — Seedance 2.5 Extend's recipe on Seedance 2.5 Flash.
+
+  - Catalog entry `seedance-2-5-flash-extend` (mode `extend`): 4–30 s added (default 8), `480p` / `720p` (no 1080p), listed at its default run (8 s added at 720p to a source of 10 s or more, `seedance-2-5-flash-extend:720p:per-2s:9u`). It joins `EXTEND_VIDEO_PROVIDERS`, `SeedanceExtendProvider` (reference images, the sound switch) and so `TailExtendProvider` / `CatalogExtendProvider`, and `MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER` (20,000).
+  - It is priced like Seedance 2.5 Extend: per second of video sent and added, on its own two-second rate rows `seedance-2-5-flash-extend:<480p|720p>:per-2s`. New exports `SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS` and `SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER` (each sent-priced provider's rows, read from its catalog resolutions); `SentPricedSeedanceExtendProvider` now names both providers, `isSeedanceExtendPricedBySecondsSent()` and `isSeedanceExtendRateCreditId()` answer for both, and `tailExtendCreditId()` / `buildVideoCreditModelIdentifier()` name the Flash whole-run quote.
+  - `seedanceExtendRateCreditId()`, `seedanceExtendSourceCreditId()` and `seedanceExtendFullWindowCreditId()` take an optional trailing `provider` (default `seedance-2-5-extend`, so existing calls are unchanged). `SEEDANCE_EXTEND_SENT_PRICED_PROVIDER` and `SEEDANCE_EXTEND_RATE_CREDIT_IDS` keep naming Seedance 2.5 Extend.
+  - New export `VIDEO_REF_VIDEO_PICTURE_LIMITS` (type `RefVideoPictureLimit`): the picture a model takes for a reference video — total pixels, width ÷ height and frames per second (Seedance 2.5 Flash: 409,600–927,408 pixels, 0.4–2.5, 24–60 fps). New `refVideoAspectProblem()`: why a model cannot take a reference video of a given size for its shape, as a sentence, or undefined.
+  - New `SEEDANCE_EXTEND_MIN_SOURCE_SEC` and `seedanceExtendSourceRefused(provider, sourcePictureSec)`: the shortest source each sent-priced extend continues (1.8 s; 2 s on Seedance 2.5 Flash Extend). `seedanceExtendRefusesSource()` keeps answering for Seedance 2.5 Extend, and `seedanceExtendSourceCreditId()` names no id for a Flash source under 2 s.
+
+- 4dfc210: A new KIE video model in the catalog: **Seedance 2.5 Flash** (`seedance-2-5-flash`), made by ByteDance — the faster, lower-cost tier of Seedance 2.5, listed beside it.
+
+  - Catalog entry `seedance-2-5-flash`: modes `i2v`, `t2v` and `v2v` (a video edit by instruction, as on `seedance-2-5`), 4–30 s (default 8, Auto length accepted), `480p` / `720p` (an omitted resolution prices and renders 720p; no 1080p), aspect ratios as the Seedance 2 family with `adaptive` forced for a start frame or a start and end frame, native audio on by default, reference task types `reference` / `edit` / `extend`, no seed, prompts up to 20,480 characters. Price rows `seedance-2-5-flash:<N>s:<res>` and `…-ref` (a reference-video run, billed on input + output seconds), one per second.
+  - It joins `SEEDANCE_2_PROVIDERS`, so it takes the family's frames, references and reference-video billing; its own limits are per-model rows: `VIDEO_REF_LIMITS_BY_PROVIDER` (10 images / 5 videos / 5 audio — new export `SEEDANCE_2_5_FLASH_REF_LIMITS`), `VIDEO_REF_VIDEO_DURATION_LIMITS` (2–30 s each, 30 s together), `VIDEO_REF_AUDIO_RULES` (2–30 s a clip and 30 s together; a clip that is not WAV or MP3 is converted to MP3 — new `RefAudioRule` fields `convertsTo` and `maxTotalSec`, and the check code `audio_total_too_long`), `FRAME_MODE_ADAPTIVE_ONLY_ASPECT`, `PRICING_DEFAULT_RESOLUTION` (720p) and `MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER`.
+  - It is a Seedance edit model (`SEEDANCE_VIDEO_EDIT_PROVIDERS`, `VIDEO_TO_VIDEO_NODE_PROVIDERS`) and a lip-sync model (`LIP_SYNC_PROVIDERS`, `SEEDANCE_LIP_SYNC_PROVIDERS`). It has no draft mode (`SEEDANCE_DRAFT_MODELS` is unchanged). It derives into `GVP_SUPPORTED_PROVIDERS`, `GVP_EXTEND_PROVIDERS` and `GVP_END_FRAME_PROVIDERS` (Generate Video Pro at 480p / 720p).
+  - New exports `EDIT_VIDEO_PRO_HELD_BACK_PROVIDERS` and `isEditVideoProProvider()`: Edit Video Pro does not offer Seedance 2.5 Flash, while the rest of the Seedance 2 family stays on offer there.
+  - New `requestRefusesOverLimit` on a `VIDEO_REF_LIMITS_BY_PROVIDER` row (set for Seedance 2.5 Flash), with `videoReferencesOverLimitProblem()` and `trimVideoReferencesToLimits()`: a direct request over the caps is refused, while the editor sends the first references up to them.
+  - New `editVideoProProviderRefusal()`: an Edit Video Pro run on a model it does not offer is refused before it is priced.
+  - New `seedanceLipSyncCreditId()`, `seedanceLipSyncResolution()`, `isSeedanceLipSyncProvider()` and `SEEDANCE_LIP_SYNC_SECONDS`: a Seedance Lip Sync run (no reference video) is priced on the model's plain 8-second row at the resolution it sends, a resolution the model does not render clamped to its top tier.
+  - `checkRefAudioRules()` takes an optional `{ canConvert }`: where a converted copy cannot reach the provider, a clip outside the rule's formats is refused as before.
+  - New `referenceAudioLipSyncCreditId()` and `MINIMAX_H3_LIP_SYNC_CREDIT_ID`: the one Lip Sync credit id for the models that take the voice line as reference audio — the Seedance family's plain 8-second row, and `minimax-h3:8s` for MiniMax Hailuo 3.
+
+### Patch Changes
+
+- 81d852e: `@nodaro/shared/models` exports `GROK_EXTEND_SOURCE_NODE_TYPES`: the video node types whose run Grok Extend can continue (Generate Video, Text to Video, Image to Video, set to a Grok Imagine model). It was a private copy in two places; the Grok Extend quote reads the same list as before.
+
 ## 3.68.0
 
 ### Minor Changes
