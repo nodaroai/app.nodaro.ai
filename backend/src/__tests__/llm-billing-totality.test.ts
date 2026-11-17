@@ -240,9 +240,10 @@ const CHAIN_PINS: ReadonlyMap<string, readonly string[]> = new Map<string, reado
   ["routes/scene-helpers.ts", ["app.ts"]],
   ["lib/mcp/tools/pipelines.ts", ["lib/mcp/server.ts"]],
   // the MCP tools: built per request, or once per build shape (MCP_TOOLS_BUILT_ONCE),
-  // by the same registration body either way
-  ["lib/mcp/server.ts", ["routes/mcp.ts", "ee/copilot/turn-runner.ts", "lib/mcp/tools-built-once.ts"]],
-  ["lib/mcp/tools-built-once.ts", ["routes/mcp.ts"]],
+  // by the same registration body either way. The staging-only comparison builds
+  // a server both ways and reads only the listings: it calls no tool, so no LLM.
+  ["lib/mcp/server.ts", ["routes/mcp.ts", "ee/copilot/turn-runner.ts", "lib/mcp/tools-built-once.ts", "scripts/compare-mcp-built-once.ts"]],
+  ["lib/mcp/tools-built-once.ts", ["routes/mcp.ts", "scripts/compare-mcp-built-once.ts"]],
   ["routes/mcp.ts", ["app.ts"]],
   // plugins: the loader and the daemons. The listing backfill loads them only for the
   // estimate seam and the plugin-priced ids; it starts no plugin and makes no LLM call.

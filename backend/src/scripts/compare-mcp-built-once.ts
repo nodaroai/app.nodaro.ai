@@ -19,11 +19,18 @@
  * which differs where the Availability override hides nodes from users.
  *
  * It refuses to run unless MCP_COMPARE_STAGING_HOST names this deployment's
- * PUBLIC_URL host, and on a production host whatever is set
- * (scripts/lib/staging-only.ts).
+ * PUBLIC_URL host, and on a production host or a local address whatever is
+ * set (./lib/staging-only.ts). It checks before it loads anything else: its
+ * only static imports are dotenv and that check.
  *
- * Usage, on a staging container, from backend/:
- *   MCP_COMPARE_STAGING_HOST=<PUBLIC_URL's host> npx tsx scripts/compare-mcp-built-once.ts
+ * It lives under src/ so the backend build compiles it into dist/, which the
+ * image carries (the image has no src/ and no scripts/ but the migration
+ * runner); one set of relative imports is right both here and in dist/.
+ *
+ * Usage, on a staging container (e.g. over `railway ssh`):
+ *   cd /app/backend && MCP_COMPARE_STAGING_HOST=<PUBLIC_URL's host> node dist/scripts/compare-mcp-built-once.js
+ * From a checkout whose .env is the staging deployment's, from backend/:
+ *   MCP_COMPARE_STAGING_HOST=<PUBLIC_URL's host> npx tsx src/scripts/compare-mcp-built-once.ts
  * Exit 0: every shape answered the same. 1: a mismatch (named by grant and
  * first differing tool). 2: refused, or it could not run.
  */
@@ -79,11 +86,11 @@ async function main(): Promise<number> {
   }
 
   // Only now load the app: its config, its database client and its plugins.
-  const { buildApp } = await import("../src/app.js")
-  const { buildMcpServer } = await import("../src/lib/mcp/server.js")
-  const { mcpServerForRequest } = await import("../src/lib/mcp/tools-built-once.js")
-  const { mcpLaneAddresses } = await import("../src/lib/mcp-lane-addresses.js")
-  const { supabase } = await import("../src/lib/supabase.js")
+  const { buildApp } = await import("../app.js")
+  const { buildMcpServer } = await import("../lib/mcp/server.js")
+  const { mcpServerForRequest } = await import("../lib/mcp/tools-built-once.js")
+  const { mcpLaneAddresses } = await import("../lib/mcp-lane-addresses.js")
+  const { supabase } = await import("../lib/supabase.js")
 
   const app = await buildApp()
   await app.ready()

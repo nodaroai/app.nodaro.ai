@@ -82,11 +82,11 @@ describe("every MCP server a caller can reach asks the listed-clients funnel", (
         "Defines mcpServerForRequest — the other way a request's server is made (MCP_TOOLS_BUILT_ONCE) — and serves nothing itself. " +
         "Every file that calls it is a door named here, and the public endpoint asks before it calls it (both held below).",
     },
-    "scripts/compare-mcp-built-once.ts": {
+    "src/scripts/compare-mcp-built-once.ts": {
       kind: "in-process",
       why:
         "A staging-only, read-only comparison: it builds a server both ways in-process and reads their listings over an in-memory transport. " +
-        "It serves nobody and calls no tool.",
+        "It serves nobody and calls no tool. It lives under src/ so the image carries it compiled (dist/scripts/), not because it serves anything.",
     },
   }
 

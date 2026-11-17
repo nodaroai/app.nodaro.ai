@@ -104,8 +104,12 @@ export const READ_AT_REGISTRATION: Readonly<Record<string, string>> = {
   "addresses.uploadPageBase": "Varies per lane and declared host: the upload widget's allowed connection in the widget pages' policy.",
 }
 
-/** How many shared builds one server app keeps (each is tens of MB for a full grant). */
-export const MAX_SHARED_MCP_BUILDS = 6
+/**
+ * How many shared builds one server app keeps (each is tens of MB for a full
+ * grant). Twelve, because one deployment's connected clients held eight
+ * distinct grants: with six, the rarer grants were rebuilt on every use.
+ */
+export const MAX_SHARED_MCP_BUILDS = 12
 
 /** How many failed build shapes are remembered (each is served by its own builds, and logged once). */
 const MAX_REMEMBERED_FAILURES = 32

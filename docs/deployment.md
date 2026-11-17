@@ -3143,9 +3143,9 @@ tools, with their schemas and descriptions, for itself, and holds it until it
 has answered. On, the tools are built once for each kind of request and kept.
 A kind of request is: the scopes its token grants, whether the client sends the
 headers that identify its conversation, the address it came in on, and what
-the deployment offers that caller. At most six such sets are kept for each
+the deployment offers that caller. At most twelve such sets are kept for each
 server that serves the endpoint, the least recently used dropped first; the
-backend's API process serves it from one server, so that is six per API
+backend's API process serves it from one server, so that is twelve per API
 process. Each request still gets a server and a session of its own, which run
 those tools for that caller alone. A change that alters what the tools look
 like while the backend runs (an Availability change in the admin panel, a
@@ -3163,6 +3163,27 @@ A set whose build fails is never shared: its kind of request goes back to
 building per request until the API restarts. The failure is logged once as a
 warning (`[mcp-built-once] a shared build failed…`) and filed once to the admin
 panel's App Reports (kind `mcp-shared-build-failed`).
+
+Before turning it on, a staging deployment can check that both ways answer
+alike with its own plugins loaded. In a shell on the staging container (for
+example over `railway ssh`):
+
+```sh
+cd /app/backend && MCP_COMPARE_STAGING_HOST=<PUBLIC_URL's host> node dist/scripts/compare-mcp-built-once.js
+```
+
+For every grant the connected clients hold (and the empty grant of a browser
+or API token), it builds the MCP server both ways in-process and compares the
+handshake and the tool, resource and resource-template listings. It calls no
+tool and changes no data, and works with the setting on or off. It exits 0
+when every grant answered the same, 1 on a difference (naming the grant and
+the first differing tool), and 2 when it refused or could not run.
+`MCP_COMPARE_ADMIN_USER_ID=<an admin's user id>` also compares an admin's view.
+It refuses to run unless `MCP_COMPARE_STAGING_HOST` names the host of this
+deployment's `PUBLIC_URL`, and it always refuses on a production host or a
+local address, whatever is set. From a checkout whose `.env` is the staging
+deployment's, the same check runs from `backend/` as
+`npx tsx src/scripts/compare-mcp-built-once.ts`.
 
 For anyone writing an MCP tool: with this setting on, a tool's session answers
 the caller of the request the code is running for, which is found from where
