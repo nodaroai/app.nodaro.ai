@@ -356,6 +356,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
     "the delete funnel (decided 2026-10-08): deletes exactly the keys its callers pass and records what failed; every caller is in this census itself",
   "backend/src/lib/private-plugins/types.ts": "declares the plugin toolkit's deleter type; deletes nothing",
   "backend/src/ee/routes/admin.ts": "the app expunge deletes collectAppR2Keys' answer, which asks key-ownership itself",
+  "backend/src/routes/large-upload.ts":
+    "deletes only the object its own upload made: the key comes from the signed upload token minted at /start (a fresh random key), never from a row",
   "backend/src/lib/job-policy-outputs.ts": "deletes only keys in the blocked job's own key family (isOwnedObjectKey)",
   "backend/src/ee/lib/trends/run-delete.ts":
     "deletes only keys in the deleted run's own jobs' key family (ownedJobOutputKeys → isOwnedObjectKey), none a library row still names; the run's library rows go through permanentlyDeleteAsset, which asks key-ownership",

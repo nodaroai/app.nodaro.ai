@@ -11,8 +11,10 @@
  *                  market endpoint offers (`sunoSeparateMarket`);
  *   - market-url — any audio by URL on the market endpoint.
  *
- * The market endpoint caps input at 20 MB and refuses a commercially released
- * recording. With `fallbackToDemucs` on, either case runs the Demucs provider
+ * The market endpoint caps input at 20 MB, and Suno refuses audio it reads as
+ * protected material on every lane (a commercially released recording; on the
+ * old endpoint also one of its own tracks, for its lyrics). With
+ * `fallbackToDemucs` on and a URL to separate, either case runs the Demucs provider
  * Audio Separation uses instead, and the run is charged the Demucs price for
  * its mode, not Suno's. One-instrument mode never falls back — Demucs cannot
  * isolate a named instrument.
@@ -42,6 +44,11 @@ import { getR2ObjectSize, r2KeyFromOurUrl, uploadToR2 } from "../../lib/storage.
 import { sunoSeparate, type SunoSeparateResult } from "../../providers/kie/suno-client.js"
 import {
   SUNO_CATALOG_REFUSAL_SINGLE_MESSAGE,
+  SUNO_TRACK_REFUSAL_MESSAGE,
+  SUNO_TRACK_REFUSAL_SINGLE_MESSAGE,
+  SUNO_TRACK_UNAVAILABLE_MESSAGE,
+  SUNO_TRACK_UNAVAILABLE_SINGLE_MESSAGE,
+  SunoAudioUnreachableError,
   SunoCatalogRefusalError,
   SunoInputTooLargeError,
   sunoSeparateMarket,
@@ -336,14 +343,31 @@ export const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(j
   try {
     result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, call)
   } catch (err) {
+    // A Suno track (ids, no URL) whose audio Suno no longer holds: there is no
+    // file to check, so it gets its own sentence (decided 2026-11-17). Audio
+    // sent by URL keeps the unreachable sentence. Never a fallback either way.
+    if (err instanceof SunoAudioUnreachableError && !fallbackUrl) {
+      throw new SunoAudioUnreachableError(
+        type === "split_stem_advanced" ? SUNO_TRACK_UNAVAILABLE_SINGLE_MESSAGE : SUNO_TRACK_UNAVAILABLE_MESSAGE,
+        { cause: err },
+      )
+    }
     if (!(err instanceof SunoCatalogRefusalError)) throw err
     // The refused KIE task id stays on the row while Demucs runs, harmlessly:
     // reconcile never polls a separate row's task id, it only bumps the row
     // to exhaustion, so the stale id can never complete the job.
-    // On the ids lane there is no URL to fall back on — Suno does not refuse
-    // its own tracks, so a refusal there just fails and refunds.
+    // On the ids lanes there is no URL to fall back on, so a refusal there
+    // fails at once and refunds. Suno does refuse its own tracks: a track it
+    // had just generated was refused as protected lyrics (production,
+    // 2026-11-17). Such a track is no released recording and no fallback can
+    // run, so it gets its own sentence (decided 2026-11-17); audio sent by URL
+    // keeps the catalog sentences.
     if (fallbackOn && fallbackUrl) return runDemucsFallback(job, ctx, fallbackUrl, type, "catalog")
-    if (type === "split_stem_advanced") throw new SunoCatalogRefusalError(SUNO_CATALOG_REFUSAL_SINGLE_MESSAGE, { cause: err })
+    const oneInstrument = type === "split_stem_advanced"
+    if (!fallbackUrl) {
+      throw new SunoCatalogRefusalError(oneInstrument ? SUNO_TRACK_REFUSAL_SINGLE_MESSAGE : SUNO_TRACK_REFUSAL_MESSAGE, { cause: err })
+    }
+    if (oneInstrument) throw new SunoCatalogRefusalError(SUNO_CATALOG_REFUSAL_SINGLE_MESSAGE, { cause: err })
     throw err
   }
   await finalizeSunoSeparate(job, ctx, result, type, stemName, { engine: "suno", provider: "kie" })

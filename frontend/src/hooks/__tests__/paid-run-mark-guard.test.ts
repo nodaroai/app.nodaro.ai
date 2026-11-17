@@ -238,6 +238,7 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["components/nodes/reference-board-node.tsx", { refs: 3, why: REFINE_POLL, check: insideOf("pollImageRefineToNode") }],
   ["components/nodes/run-node-button.tsx", { refs: 1, why: "Stop on a Video Pro run: it acts on the run the node already shows, whose job's id holds the freeze back, and starts nothing" }],
   ["hooks/queries/use-competitors-queries.ts", { refs: 1, why: "Competitors: a page of its own, with no canvas" }],
+  ["hooks/queries/use-topics-queries.ts", { refs: 1, why: "Topics: a page of its own, with no canvas" }],
   ["ee/hooks/queries/use-admin-queries.ts", { refs: 3, why: "Admin → Trends' test run, its face mask and its upscales to 720p / 1080p: an admin page of its own, with no canvas; the test run's job is read back into the trend's test-run list, the face mask's into the face masking section, an upscale's into its example card or the source clip section" }],
   ["ee/app/(admin)/admin/trends/components/SlotDefaultImages.tsx", { refs: 1, why: "Admin → Trends' default-image upscale: an admin page of its own, with no canvas; the upscaled picture replaces the slot's default image in the trend draft" }],
   ["ee/lib/freecut-ai/run-ai-edit.ts", { refs: 1, why: `${EDIT_WITH_AI} (the planner's reading of the request)` }],

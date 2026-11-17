@@ -130,6 +130,7 @@ import { UNIT_ROUTES } from "./nodes/_generated/routes.js"
 import { UNIT_EE_ROUTES } from "./ee/nodes/_generated/routes.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
+import { largeUploadRoutes } from "./routes/large-upload.js"
 import { uploadProxyRoutes } from "./routes/upload-proxy.js"
 import { uploadHandoffRoutes } from "./routes/upload-handoff.js"
 import { mediaProcessRoutes } from "./routes/media-process.js"
@@ -743,6 +744,7 @@ export async function buildApp() {
   for (const route of Object.values(UNIT_ROUTES)) await app.register(route)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
+  await app.register(largeUploadRoutes)
   await app.register(uploadProxyRoutes)
   await app.register(uploadHandoffRoutes)
   await app.register(mediaProcessRoutes)

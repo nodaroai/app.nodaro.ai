@@ -41,6 +41,39 @@ export type CompetitorSearchKind = "own" | "about"
 export interface CompetitorSearch {
   readonly kind: CompetitorSearchKind
   readonly platform: SocialPlatform
+  /** The term an about-search searches (a search term, or the name when the brand has none). Absent from an older server. */
+  readonly term?: string
+}
+
+/** The most search terms any brand can have (the platform's own ceiling; a plan allows fewer). */
+export const COMPETITOR_SEARCH_TERMS_MAX = 15
+/** The longest a search term can be. */
+export const COMPETITOR_SEARCH_TERM_MAX_LENGTH = 100
+/** A brand scan is charged this id per Social Search page it runs, summed (a topic scan has its own, `TOPIC_SCAN_PAGE_CREDIT_ID`). */
+export const COMPETITOR_SCAN_PAGE_CREDIT_ID = "competitor-scan:per-page"
+
+/**
+ * Search terms as the server keeps them: trimmed, inner whitespace collapsed,
+ * a one-word `#tag` or `@handle` without its trailing punctuation (`#tag!` →
+ * `#tag`), empty ones dropped, deduplicated without regard to case (the first
+ * spelling wins). Lengths, the count and a term with no letter or digit are
+ * the server's to refuse, not this function's to cut.
+ */
+export function normalizeSearchTerms(terms: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of terms) {
+    const spaced = raw.trim().replace(/\s+/g, " ")
+    // Combining marks (\p{M}) are part of a word: Hindi and Thai vowel signs are not punctuation.
+    const stripped = /^[#@]\S+$/.test(spaced) ? spaced.replace(/[^\p{L}\p{M}\p{N}_]+$/u, "") : spaced
+    // A tag with no word left ("#!") stays as sent, for the server to refuse with its reason.
+    const term = /[\p{L}\p{N}]/u.test(stripped) ? stripped : spaced
+    const key = term.toLowerCase()
+    if (term === "" || seen.has(key)) continue
+    seen.add(key)
+    out.push(term)
+  }
+  return out
 }
 
 export interface TrackedCompetitor {
@@ -59,10 +92,18 @@ export interface TrackedCompetitor {
   readonly lastScanError: string | null
   /** A scan is running now. */
   readonly scanning: boolean
-  /** Searches one scan runs; a scan costs this many Social Search pages. */
+  /** Searches one scan runs. */
   readonly searches: number
   /** What the next scan searches. Absent from a server older than this field. */
   readonly searchPlan?: readonly CompetitorSearch[]
+  /**
+   * Phrases or #hashtags the searches for posts about the brand use instead
+   * of its name, and that a post must name to count as about it. Empty: the
+   * name. Absent from an older server.
+   */
+  readonly searchTerms?: readonly string[]
+  /** Social Search pages one scan runs: the scan costs this many pages. Absent from an older server (one page per search). */
+  readonly pages?: number
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -169,6 +210,14 @@ export interface CompetitorListResult {
   readonly data: readonly TrackedCompetitor[]
   /** How many months of scans your plan keeps (older scans are deleted at a brand's next scan). Absent from an older server. */
   readonly historyMonths?: number
+  /** Your plan's caps; null = no cap. Absent from an older server. */
+  readonly limits?: CompetitorLimits
+}
+
+/** What a plan allows a person on the Competitors page. */
+export interface CompetitorLimits {
+  /** Search terms per brand; 0 = the name only; null = no cap. */
+  readonly searchTerms: number | null
 }
 
 /** One platform as one scan found and read it. Numbers a scan stored before they were kept answer null. */
@@ -514,18 +563,41 @@ export type CreateCompetitorInput = {
   readonly isOwn?: boolean
   /** Default weekly. */
   readonly schedule?: CompetitorSchedule
+  /** Phrases or #hashtags to search instead of the name (see `TrackedCompetitor.searchTerms`); the plan caps how many. */
+  readonly searchTerms?: readonly string[]
 }
 
 export type UpdateCompetitorInput = Partial<CreateCompetitorInput>
 
-/** Searches a scan of this configuration runs. */
-export function competitorScanSearches(c: { readonly accounts?: CompetitorAccounts; readonly aboutPlatforms?: readonly string[] }): number {
+/**
+ * Searches a scan of this configuration runs: one per account, and one per
+ * about-platform per term (the name counts as the one term when there are
+ * none). `termCap` is the plan's cap (null = none): a scan searches only the
+ * first terms the plan allows.
+ */
+export function competitorScanSearches(c: {
+  readonly accounts?: CompetitorAccounts
+  readonly aboutPlatforms?: readonly string[]
+  readonly searchTerms?: readonly string[]
+  readonly termCap?: number | null
+}): number {
   const accounts = COMPETITOR_ACCOUNT_KEYS.filter((k) => (c.accounts?.[k] ?? "").trim() !== "").length
   const about = (c.aboutPlatforms ?? []).filter((p) => (COMPETITOR_ABOUT_PLATFORMS as readonly string[]).includes(p)).length
-  return accounts + about
+  const terms = normalizeSearchTerms(c.searchTerms ?? [])
+  const cap = c.termCap === undefined || c.termCap === null ? COMPETITOR_SEARCH_TERMS_MAX : c.termCap
+  const used = Math.min(terms.length, cap)
+  return accounts + about * Math.max(1, used)
 }
 
-/** The credit id of a scan of `n` searches. */
+/** Social Search pages a brand scan runs: every brand search reads one page. */
+export function competitorScanPages(c: Parameters<typeof competitorScanSearches>[0]): number {
+  return competitorScanSearches(c)
+}
+
+/**
+ * The credit id of a scan of `n` searches.
+ * @deprecated A scan is charged per page at `COMPETITOR_SCAN_PAGE_CREDIT_ID`; this id caps at twelve searches. Kept for a plugin that still reserves it.
+ */
 export function competitorScanCreditId(n: number): string {
   const clamped = Math.min(Math.max(Math.round(n), 1), COMPETITOR_SCAN_MAX_SEARCHES)
   return `${COMPETITOR_SCAN_NODE_TYPE}:${clamped}`
@@ -536,9 +608,9 @@ export const COMPETITOR_SCAN_CREDIT_COSTS: Readonly<Record<string, number>> = Ob
   Array.from({ length: COMPETITOR_SCAN_MAX_SEARCHES }, (_, i) => [competitorScanCreditId(i + 1), (i + 1) * SOCIAL_SEARCH_CREDITS_PER_PAGE] as const),
 )
 
-/** The credits a scan of this many searches costs. */
-export function competitorScanCredits(searches: number): number {
-  return searches <= 0 ? 0 : COMPETITOR_SCAN_CREDIT_COSTS[competitorScanCreditId(searches)] ?? 0
+/** The credits a scan of this many pages costs, before the live price table loads (the base price of a page × pages). */
+export function competitorScanCredits(pages: number): number {
+  return !Number.isFinite(pages) || pages <= 0 ? 0 : Math.round(pages) * SOCIAL_SEARCH_CREDITS_PER_PAGE
 }
 
 /** Whether a platform is one the about-search covers (used by pickers). */

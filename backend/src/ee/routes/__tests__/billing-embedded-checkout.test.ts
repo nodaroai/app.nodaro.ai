@@ -100,7 +100,7 @@ function mockTables(spec: Record<string, { single?: unknown; list?: unknown[] }>
     const conf = spec[table] ?? {}
     const chain: Record<string, unknown> = {}
     const self = () => chain
-    for (const m of ["select", "eq", "is", "in", "order", "limit", "insert", "upsert", "update"]) chain[m] = vi.fn(self)
+    for (const m of ["select", "eq", "is", "in", "not", "order", "limit", "insert", "upsert", "update"]) chain[m] = vi.fn(self)
     chain.single = vi.fn(() => Promise.resolve(conf.single === undefined ? { data: null, error: { message: "Not found" } } : { data: conf.single, error: null }))
     chain.maybeSingle = chain.single
     chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: conf.list ?? null, error: null }).then(resolve)

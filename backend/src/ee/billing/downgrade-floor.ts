@@ -14,6 +14,7 @@
  */
 
 import { supabase } from "../../lib/supabase.js"
+import { isMissingColumnError } from "../../lib/postgrest-errors.js"
 import { ENDED_SUBSCRIPTION_CREDITS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { resolveTierFrom, tierColumns } from "./tier-columns.js"
 
@@ -84,6 +85,46 @@ export async function downgradeToEffectiveFloor(
  */
 export const LIVE_SUBSCRIPTION_STATUSES: readonly string[] = ["active", "trialing", "past_due", "unpaid"]
 
+/**
+ * The statuses a subscription never leaves: Stripe's two terminal ones
+ * (`canceled`, `incomplete_expired`) and `expired`, which the hourly expiry
+ * gives a cancelled subscription past its period. Re-exported by
+ * subscription-grant.ts, where the webhook reads it.
+ */
+export const ENDED_STATUSES: readonly string[] = ["canceled", "expired", "incomplete_expired"]
+
+type SubscriptionRead = ReturnType<ReturnType<typeof supabase.from>["select"]>
+
+/**
+ * The subscriptions that hold an account's plan, for every "does another live
+ * subscription exist?" reader: a live status (LIVE_SUBSCRIPTION_STATUSES), or
+ * a plan grant claimed (`plan_claimed_at`, migration 663) on a subscription
+ * that has not ended. A claimed subscription is granted before the webhook
+ * writes its live status, so until then it is `incomplete`; it is the
+ * account's plan from its claim on, and the claim refuses any other
+ * subscription for the same reason. A row claimed before the marker existed
+ * carries none and is read by its status alone.
+ *
+ * `narrow` adds the caller's filters (the user, the rows to leave out) to each
+ * of the two reads. A database without the marker yet (staging runs ahead of
+ * main) answers the claimed read "no such column": that read then counts
+ * nothing. Any other error is returned, and the caller treats it as it treats
+ * a failed read today.
+ */
+export async function readLiveOrClaimedSubscriptions<T>(
+  columns: string,
+  narrow: (query: SubscriptionRead) => SubscriptionRead,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const live = await narrow(supabase.from("subscriptions").select(columns)).in("status", [...LIVE_SUBSCRIPTION_STATUSES])
+  if (live.error) return { data: [], error: live.error }
+  const claimed = await narrow(supabase.from("subscriptions").select(columns))
+    .not("plan_claimed_at", "is", null)
+    .not("status", "in", `(${ENDED_STATUSES.join(",")})`)
+  if (claimed.error && !isMissingColumnError(claimed.error)) return { data: [], error: claimed.error }
+  const rows = [...((live.data ?? []) as T[]), ...(claimed.error ? [] : ((claimed.data ?? []) as T[]))]
+  return { data: rows, error: null }
+}
+
 export type EndPlanOutcome =
   /** The plan ended now: tier free, the plan's credits ended; `removed` is exactly what the write took. */
   | { status: "ended"; removed: number; isPayg: boolean }
@@ -112,11 +153,7 @@ export type EndPlanOutcome =
  */
 export async function endPaidPlan(userId: string, extra: Record<string, unknown> = {}): Promise<EndPlanOutcome> {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const { data: live, error: liveError } = await supabase
-      .from("subscriptions")
-      .select("stripe_subscription_id")
-      .eq("user_id", userId)
-      .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
+    const { data: live, error: liveError } = await readLiveOrClaimedSubscriptions("stripe_subscription_id", (q) => q.eq("user_id", userId))
     if (liveError) throw new Error(`reading the live subscriptions of ${userId} failed: ${liveError.message}`)
     if (Array.isArray(live) && live.length > 0) return { status: "live-subscription" }
 

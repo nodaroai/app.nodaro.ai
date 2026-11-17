@@ -11,7 +11,7 @@ import { invalidateAuthCache } from "../../middleware/auth.js"
 import { invalidateAdminCache } from "../../lib/admin-check.js"
 import { ENDED_SUBSCRIPTION_CREDITS, TIER_CREDITS } from "../billing/stripe-config.js"
 import { tierColumns, resolveTierFrom } from "../billing/tier-columns.js"
-import { LIVE_SUBSCRIPTION_STATUSES } from "../billing/downgrade-floor.js"
+import { readLiveOrClaimedSubscriptions } from "../billing/downgrade-floor.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { allowanceFor, allowancesFor } from "../billing/deployment-allowance-service.js"
@@ -370,11 +370,8 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     // Refused while a subscription is still live — that plan is being paid,
     // so its credits must not end here: cancel the subscription instead.
     if (tier === "free") {
-      const { data: live, error: liveError } = await supabase
-        .from("subscriptions")
-        .select("stripe_subscription_id")
-        .eq("user_id", id)
-        .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
+      // A subscription claimed but not yet given its live status counts too.
+      const { data: live, error: liveError } = await readLiveOrClaimedSubscriptions("stripe_subscription_id", (q) => q.eq("user_id", id))
       if (liveError) return reply.code(500).send({ error: liveError.message })
       if (Array.isArray(live) && live.length > 0) {
         return reply.code(409).send({

@@ -420,6 +420,39 @@ export class JobBlockedError extends NodaroError {
 }
 
 /**
+ * `large_upload_unavailable`: `uploads.uploadLarge` was given a file over 500 MB
+ * (`UPLOAD_MAX_BYTES`) and the server offers no large-upload lane — HTTP 409
+ * when it closed it (a deployment that checks every upload's bytes with an
+ * upload policy), 404 when it has none (an older server). `POST /v1/upload`
+ * takes at most 500 MB, so there is no other way to send such a file there.
+ * Selected by `code` on a 409; any other 409 keeps its own class.
+ */
+export class LargeUploadUnavailableError extends NodaroError {
+  constructor(
+    message = "Files over 500 MB cannot be uploaded to this server: it does not offer large uploads",
+    /** 409 when the server closed the lane (it checks every upload's bytes), 404 when it has none (an older server). */
+    status: 409 | 404 = 409,
+  ) {
+    super(message, "large_upload_unavailable", status)
+    this.name = "LargeUploadUnavailableError"
+  }
+}
+
+/**
+ * HTTP 422 `media_too_long`: the file is longer than media imported into the
+ * editor may be (30 minutes). Sent by `uploads.uploadLarge` once a large upload
+ * is complete — the stored file is removed and nothing is counted against
+ * storage. Trim the file and upload it again. Selected by `code`, like
+ * {@link JobBlockedError}; any other 422 stays a plain `NodaroError`.
+ */
+export class MediaTooLongError extends NodaroError {
+  constructor(message = "This video is longer than 30 minutes") {
+    super(message, "media_too_long", 422)
+    this.name = "MediaTooLongError"
+  }
+}
+
+/**
  * A job reached a terminal `failed`/`cancelled` status while being awaited by
  * `nodes.runAndWait` / `nodes.runMany`. Not an HTTP-level error (the polls
  * themselves succeeded), so `status` is 0 — distinguish it by type/`code`.
@@ -725,6 +758,8 @@ function selectError(status: number, body: ApiErrorBody): never {
     throw new AppRunVersionChangedError(message, finite(parsed.runVersion), finite(parsed.appVersion))
   }
   if (status === 422 && code === "job_blocked") throw new JobBlockedError(read.message)
+  if (status === 422 && code === "media_too_long") throw new MediaTooLongError(read.message)
+  if (status === 409 && code === "large_upload_unavailable") throw new LargeUploadUnavailableError(read.message, 409)
   // The model, not the caller — before the scope line, so it gets its own
   // class (a plain ForbiddenError would carry the same code, as a ForbiddenError).
   const modelCode = read.code as ModelUnavailableCode | undefined

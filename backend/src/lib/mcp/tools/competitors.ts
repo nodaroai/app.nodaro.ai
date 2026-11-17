@@ -3,6 +3,8 @@ import {
   COMPETITOR_ABOUT_PLATFORMS,
   COMPETITOR_ACCOUNT_KEYS,
   COMPETITOR_SCHEDULES,
+  COMPETITOR_SEARCH_TERM_MAX_LENGTH,
+  COMPETITOR_SEARCH_TERMS_MAX,
   isMeasurableCard,
   type AdviceRecord,
   type CardActionResult,
@@ -38,10 +40,15 @@ export function competitorLine(c: TrackedCompetitor): string {
     .map(([k, v]) => `${k}: ${v}`)
     .join(", ")
   const last = c.lastScanAt ? `last scan ${c.lastScanAt.slice(0, 10)}` : "never scanned"
+  // What the next scan really searches (its plan, after the plan's cap), not every stored term.
+  const planned = [...new Set((c.searchPlan ?? []).flatMap((s) => (s.kind === "about" && s.term ? [s.term] : [])))]
+  const searched = planned.length > 0 ? planned : (c.searchTerms ?? [])
+  const terms = searched.length > 0 && !(searched.length === 1 && searched[0] === c.brand) ? `search terms ${searched.map((t) => `"${t}"`).join(", ")}` : "name"
+  const pages = c.pages ?? c.searches
   return [
     `${c.brand}${c.isOwn ? " (your brand)" : ""} — id ${c.id}`,
-    `   accounts: ${accounts || "none"} · name searched on: ${c.aboutPlatforms.join(", ") || "nothing"}`,
-    `   ${c.searches} searches per scan · schedule ${c.schedule} · ${c.scanning ? "scanning now" : last}${c.lastScanError ? ` · ${c.lastScanError}` : ""}`,
+    `   accounts: ${accounts || "none"} · ${terms} searched on: ${c.aboutPlatforms.join(", ") || "nothing"}`,
+    `   ${c.searches} searches (${pages} pages) per scan · schedule ${c.schedule} · ${c.scanning ? "scanning now" : last}${c.lastScanError ? ` · ${c.lastScanError}` : ""}`,
   ].join("\n")
 }
 
@@ -260,7 +267,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
       {
         title: "Add Competitor",
         description:
-          "Track a brand. Give its website and its accounts are found from the site (guesses are marked), or give the accounts yourself. Adding is free; each scan costs one Social Search page per search.",
+          "Track a brand. Give its website and its accounts are found from the site (guesses are marked), or give the accounts yourself; no website is needed. Adding is free; each scan costs one Social Search page per search.",
         inputSchema: {
           brand: z.string().max(100).optional().describe("Its name; read from the website when left out."),
           website: z.string().max(500).optional(),
@@ -269,6 +276,11 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
             .optional()
             .describe("Handles or links: tiktok, instagram, youtube, x, linkedin (page or profile), meta_ads (advertiser name)."),
           about_platforms: z.array(z.enum(COMPETITOR_ABOUT_PLATFORMS)).optional().describe("Where to search posts naming it."),
+          search_terms: z
+            .array(z.string().min(1).max(COMPETITOR_SEARCH_TERM_MAX_LENGTH))
+            .max(COMPETITOR_SEARCH_TERMS_MAX)
+            .optional()
+            .describe("Phrases or #hashtags searched instead of the name (a full name, a handle), one search per platform each; a post must name one. The plan caps how many."),
           is_own: z.boolean().optional().describe("The user's own brand."),
           schedule: z.enum(COMPETITOR_SCHEDULES).optional().describe("Default weekly."),
         },
@@ -301,6 +313,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
             ...(args.website ? { website: args.website } : {}),
             accounts,
             ...(args.about_platforms ? { aboutPlatforms: args.about_platforms } : {}),
+            ...(args.search_terms ? { searchTerms: args.search_terms } : {}),
             ...(args.is_own !== undefined ? { isOwn: args.is_own } : {}),
             ...(args.schedule ? { schedule: args.schedule } : {}),
             userId: session.userId,

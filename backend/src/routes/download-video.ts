@@ -15,6 +15,8 @@ import { firstHeaderValue } from "../lib/request-helpers.js"
 import { isImportRefusal, requireImportAllowed, spendImportConfirmation } from "../lib/import-gate.js"
 import { importViaOf } from "../lib/import-via.js"
 import { requireAppWriteScope } from "../lib/scope-prehandler.js"
+import { precheckRemoteVideo } from "../lib/media-import-precheck.js"
+import { MediaImportLengthError } from "../lib/media-import-length.js"
 
 const downloadVideoBody = z
   .object({
@@ -129,6 +131,24 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
           error: { code: "validation_error", message: "That address can't be fetched." },
         })
       }
+      // Read the remote file's header through the probe guard BEFORE anything
+      // is downloaded: over 30 minutes, over 10 GiB, or a size its length
+      // cannot explain is refused here. A link the guard refuses at any hop (a
+      // redirect to a private address) is refused too; anything it cannot
+      // read falls through to the check of the downloaded file.
+      try {
+        const pre = await precheckRemoteVideo(url)
+        if (pre.kind === "blocked") {
+          return reply.status(400).send({
+            error: { code: "validation_error", message: "That address can't be fetched." },
+          })
+        }
+      } catch (e) {
+        if (e instanceof MediaImportLengthError) {
+          return reply.status(422).send({ error: { code: e.code, message: e.message } })
+        }
+        throw e
+      }
     }
     // Clamp to a sane pixel range: 144p floor (anything smaller is unusable),
     // 8K ceiling. yt-dlp picks the best format under the cap; see
@@ -169,8 +189,10 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
       throw e
     }
 
-    // Start download in background. Direct files carry the 500MB cap; social
-    // fetches pass none (unchanged). The slot is given back when it ends.
+    // Start download in background. A direct file is limited by LENGTH (at
+    // most 30 minutes, probed again on disk before it is stored, with the
+    // bitrate its size implies) and carries the 10 GiB import ceiling; social
+    // fetches pass neither (unchanged). The slot is given back when it ends.
     const { downloadId } = startTrackedDownload(
       {
         url,
@@ -178,6 +200,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
         section,
         maxHeight,
         maxFilesizeBytes: isSocial ? undefined : DIRECT_FILE_MAX_BYTES,
+        holdToImportLength: !isSocial,
         requireAudio: requireAudio ?? true,
         rightsConfirmationId: spent,
       },

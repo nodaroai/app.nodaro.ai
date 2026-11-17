@@ -11,9 +11,18 @@ describe("scopeForPluginRoute", () => {
     expect(scopeForPluginRoute("POST", "/v1/competitor-discover")).toBe("assets:write")
   })
 
+  it("the topic routes are the user's own data the same way", () => {
+    expect(scopeForPluginRoute("GET", "/v1/topics")).toBe("assets:read")
+    expect(scopeForPluginRoute("GET", "/v1/topics/cards")).toBe("assets:read")
+    expect(scopeForPluginRoute("PATCH", "/v1/topics/abc")).toBe("assets:write")
+    expect(scopeForPluginRoute("DELETE", "/v1/topics/abc")).toBe("assets:write")
+  })
+
   it("covers nothing else (a prefix is a whole path segment)", () => {
     expect(scopeForPluginRoute("GET", "/v1/competitorsx")).toBeNull()
     expect(scopeForPluginRoute("POST", "/v1/competitor-scan")).toBeNull()
+    expect(scopeForPluginRoute("POST", "/v1/topic-scan")).toBeNull()
+    expect(scopeForPluginRoute("GET", "/v1/topicsx")).toBeNull()
     expect(scopeForPluginRoute("GET", "/v1/saved-posts")).toBeNull()
   })
 })

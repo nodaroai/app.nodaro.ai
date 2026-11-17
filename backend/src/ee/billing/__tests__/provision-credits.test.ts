@@ -109,7 +109,12 @@ const {
   }
 
   const mockFrom = vi.fn().mockImplementation((table: string) => createChain(table))
-  const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null })
+  // The plan-grant claim (migration 663) answers `claimed`; every other RPC answers nothing.
+  const mockRpc = vi.fn().mockImplementation(async (name: string) =>
+    name === "claim_subscription_grant"
+      ? { data: [{ outcome: "claimed", other_stripe_subscription_id: null }], error: null }
+      : { data: null, error: null },
+  )
   const mockLogTransaction = vi.fn().mockResolvedValue(undefined)
   const mockInvalidateBalanceCache = vi.fn()
 
@@ -850,7 +855,10 @@ describe("provision-credits", () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
       mockWriteRows("subscriptions", [{ plan_granted: true }])
       // The webhook's own check, then attempt 1 — nothing live yet — then
-      // attempt 2: subscription B was paid and granted in between.
+      // attempt 2: subscription B was paid and granted in between. Each check
+      // reads twice: the live statuses, then the claimed rows.
+      mockList("subscriptions", [])
+      mockList("subscriptions", [])
       mockList("subscriptions", [])
       mockList("subscriptions", [])
       mockList("subscriptions", [{ stripe_subscription_id: "sub_B" }])

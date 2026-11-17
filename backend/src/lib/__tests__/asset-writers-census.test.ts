@@ -27,6 +27,7 @@ import { eachSourceFile, SCAN_TIMEOUT_MS, walk } from "./source-scan.js"
  */
 const STORING_PATHS: Readonly<Record<string, string>> = {
   "routes/upload.ts": "stores the uploaded bytes under a key it mints (`uploads/<kind>s/<uuid>.<ext>`) and records them for the uploader",
+  "routes/large-upload.ts": "the large-upload lane: the browser sends the bytes in parts to a key the server mints (`uploads/<kind>s/<uuid>.<ext>`, named in its signed token), and /complete records them for the uploader",
   "lib/media-import.ts": "stores fetched bytes under a key it mints (`uploads/images/<uuid>.<ext>`) and records them for the importer",
   "lib/media-portability.ts": "re-hosts a bundle's media under a key it mints (`uploads/<kind>s/<uuid>.<ext>`) for the importer",
   "lib/media-url-import.ts": "fetches a recording by url and stores it under a key it mints (`uploads/<kind>s/<uuid>.<ext>`)",

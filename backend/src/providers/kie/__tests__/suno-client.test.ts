@@ -56,7 +56,15 @@ import {
   sunoMusicVideo, sunoMashup, sunoReplaceSection, sunoStyleBoost,
   sunoAddInstrumental, sunoAddVocals, sunoConvertWav, sunoUploadExtend,
 } from "../suno-client.js"
-import { KIE_API_BASE } from "../client.js"
+import { KIE_API_BASE, KieError } from "../client.js"
+import { DeterministicJobError, isDeterministicJobError } from "@/lib/deterministic-job-error.js"
+import { providerDetailOf } from "@/lib/provider-error-detail.js"
+import {
+  SUNO_AUDIO_UNREACHABLE_MESSAGE,
+  SUNO_CATALOG_REFUSAL_MESSAGE,
+  SunoAudioUnreachableError,
+  SunoCatalogRefusalError,
+} from "../suno-separate-market.js"
 
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -863,9 +871,173 @@ describe("sunoSeparate", () => {
         data: { taskId: "t", status: "FAILED", failReason: "bad audio" },
       }))
 
-    await expect(
-      withTimers(() => sunoSeparate({ taskId: "src", audioId: "a", type: "separate_vocal" })),
-    ).rejects.toThrow(/Stem separation/)
+    const err = await withTimers(() => sunoSeparate({ taskId: "src", audioId: "a", type: "separate_vocal" })).catch((e: unknown) => e)
+    expect((err as Error).message).toMatch(/Stem separation/)
+    // A failure the record states is final on the first attempt.
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(providerDetailOf(err)).toContain("bad audio")
+  })
+
+  it("a task that never ends is a timeout, and a timeout is NOT final (the queue and the reconcile keep it)", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      jsonResponse(String(url).includes("record-info")
+        ? { code: 200, data: { taskId: "t-sep", response: { originData: [] }, successFlag: "PENDING" } }
+        : { code: 200, data: { taskId: "t-sep" } }))
+
+    const err = await withTimers(() => sunoSeparate({ taskId: "src", audioId: "a", type: "separate_vocal" }), 3_600_000)
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect((err as KieError).internalDetails).toMatch(/timed out/)
+    expect(isDeterministicJobError(err)).toBe(false)
+  })
+
+  // The endpoint's real terminal state is `successFlag` (+ `errorCode` /
+  // `errorMessage`); it sends no `status`. This is the record production
+  // returned on 2026-11-17 for a refused track, ids shortened.
+  const REFUSED_RECORD = {
+    code: 200,
+    msg: "success",
+    data: {
+      taskId: "t-sep",
+      musicId: "m-1",
+      callbackUrl: "https://callback.placeholder",
+      musicIndex: 0,
+      completeTime: 1794940045000,
+      response: {
+        originUrl: null,
+        originData: [],
+        instrumentalUrl: null,
+        vocalUrl: null,
+        backingVocalsUrl: null,
+        drumsUrl: null,
+        bassUrl: null,
+        guitarUrl: null,
+        pianoUrl: null,
+        keyboardUrl: null,
+        percussionUrl: null,
+        stringsUrl: null,
+        synthUrl: null,
+        fxUrl: null,
+        brassUrl: null,
+        woodwindsUrl: null,
+      },
+      successFlag: "GENERATE_AUDIO_FAILED",
+      createTime: 1794940018000,
+      errorCode: 413,
+      errorMessage: "Uploaded audio contains copyrighted lyrics.",
+    },
+  }
+
+  /** A record-info answer carrying only the endpoint's state fields. */
+  const flagRecord = (successFlag: string, extra: Record<string, unknown> = {}) => ({
+    code: 200,
+    msg: "success",
+    data: { taskId: "t-sep", response: { originData: [] }, successFlag, errorCode: null, errorMessage: null, ...extra },
+  })
+
+  const separateErr = () =>
+    withTimers(() => sunoSeparate({ taskId: "src", audioId: "a", type: "separate_vocal" })).catch((e: unknown) => e)
+
+  it("the refused record (successFlag GENERATE_AUDIO_FAILED, errorCode 413) is the typed catalog refusal on the FIRST poll", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t-sep" } }))
+      .mockResolvedValueOnce(jsonResponse(REFUSED_RECORD))
+
+    const err = await separateErr()
+
+    expect(err).toBeInstanceOf(SunoCatalogRefusalError)
+    expect(err).toBeInstanceOf(DeterministicJobError)
+    expect((err as Error).message).toBe(SUNO_CATALOG_REFUSAL_MESSAGE)
+    // The provider's own code and words stay with the error, for the row's operator detail.
+    expect(providerDetailOf(err)).toContain("[413] Uploaded audio contains copyrighted lyrics.")
+    // The create call and ONE poll: no waiting to the poll limit.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1][0]).toBe(`${KIE_API_BASE}/api/v1/vocal-removal/record-info?taskId=t-sep`)
+  })
+
+  it("the unreachable-audio words are the typed unreachable error, whatever the code", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t-sep" } }))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("GENERATE_AUDIO_FAILED", {
+        errorCode: 400,
+        errorMessage: "The original song\u2019s audio has expired after the 14-day retention period.",
+      })))
+
+    const err = await separateErr()
+
+    expect(err).toBeInstanceOf(SunoAudioUnreachableError)
+    expect((err as Error).message).toBe(SUNO_AUDIO_UNREACHABLE_MESSAGE)
+    expect(providerDetailOf(err)).toContain("[400] The original song")
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ["CREATE_TASK_FAILED", 500, "Internal Error"],
+    ["GENERATE_AUDIO_FAILED", 500, "Internal Error"],
+    // Not documented: any flag naming a failure is terminal too.
+    ["SENSITIVE_WORD_ERROR", null, null],
+  ] as const)("successFlag %s is a terminal provider failure on the first poll", async (flag, errorCode, errorMessage) => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t-sep" } }))
+      .mockResolvedValueOnce(jsonResponse(flagRecord(flag, { errorCode, errorMessage })))
+
+    const err = await separateErr()
+
+    // The sanitized provider error, marked terminal — never a typed refusal.
+    expect(err).toBeInstanceOf(KieError)
+    expect(err).not.toBeInstanceOf(DeterministicJobError)
+    const kie = err as KieError
+    expect(kie.isUpstreamFailure).toBe(true)
+    expect(kie.context).toBe("Stem separation")
+    // Final on the first attempt: the worker fails + refunds now, no retry.
+    expect(isDeterministicJobError(err)).toBe(true)
+    // The provider's own state and words reach the operator's detail.
+    expect(kie.internalDetails).toContain(errorMessage ?? flag)
+    expect(providerDetailOf(err)).toContain(errorMessage ?? flag)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("successFlag PENDING keeps polling, then SUCCESS delivers the stems and their ids", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t-sep" } }))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("PENDING")))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("PENDING")))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("SUCCESS", {
+        response: {
+          originData: [
+            { stem_type_group_name: "Vocals", audio_url: "https://r2/v.mp3", id: "stem-v" },
+            { stem_type_group_name: "Instrumental", audio_url: "https://r2/i.mp3", id: "stem-i" },
+          ],
+        },
+      })))
+
+    const result = await withTimers(() =>
+      sunoSeparate({ taskId: "src", audioId: "a", type: "separate_vocal" }),
+    )
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(result).toEqual({
+      taskId: "t-sep",
+      vocalUrl: "https://r2/v.mp3",
+      instrumentalUrl: "https://r2/i.mp3",
+      stemIds: { vocalUrl: "stem-v", instrumentalUrl: "stem-i" },
+    })
+  })
+
+  it("CALLBACK_EXCEPTION is about the callback address, not the task: no stems keeps polling, stems succeed", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t-sep" } }))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("CALLBACK_EXCEPTION")))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("CALLBACK_EXCEPTION")))
+      .mockResolvedValueOnce(jsonResponse(flagRecord("CALLBACK_EXCEPTION", {
+        response: { originData: [{ stem_type_group_name: "Vocals", audio_url: "https://r2/v.mp3" }] },
+      })))
+
+    const result = await withTimers(() =>
+      sunoSeparate({ taskId: "src", audioId: "a", type: "separate_vocal" }),
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(result.vocalUrl).toBe("https://r2/v.mp3")
   })
 })
 
@@ -938,6 +1110,49 @@ describe("sunoMusicVideo", () => {
     await expect(
       withTimers(() => sunoMusicVideo({ taskId: "src", audioId: "a" })),
     ).rejects.toThrow(/Music video generation/)
+  })
+
+  // The endpoint's documented state field is `successFlag`, not `status`.
+  it.each(["CREATE_TASK_FAILED", "GENERATE_MP4_FAILED"])("successFlag %s is terminal on the first poll", async (flag) => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t", response: { videoUrl: null }, successFlag: flag, errorCode: 500, errorMessage: "render error" },
+      }))
+
+    const err = await withTimers(() => sunoMusicVideo({ taskId: "src", audioId: "a" })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect((err as KieError).isUpstreamFailure).toBe(true)
+    expect((err as KieError).context).toBe("Music video generation")
+    expect((err as KieError).internalDetails).toContain("render error")
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("CALLBACK_EXCEPTION with no video keeps polling; the video then succeeds", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t", response: { videoUrl: null }, successFlag: "CALLBACK_EXCEPTION" } }))
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t", response: { videoUrl: "https://r2/v.mp4" }, successFlag: "CALLBACK_EXCEPTION" } }))
+
+    const result = await withTimers(() => sunoMusicVideo({ taskId: "src", audioId: "a" }))
+    expect(result.videoUrl).toBe("https://r2/v.mp4")
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it("successFlag PENDING keeps polling; SUCCESS returns the documented response.videoUrl", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t", response: null, successFlag: "PENDING" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t", response: { videoUrl: "https://r2/v.mp4" }, successFlag: "SUCCESS", errorCode: null, errorMessage: null },
+      }))
+
+    const result = await withTimers(() => sunoMusicVideo({ taskId: "src", audioId: "a" }))
+    expect(result.videoUrl).toBe("https://r2/v.mp4")
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -1170,6 +1385,52 @@ describe("sunoConvertWav", () => {
     await expect(
       withTimers(() => sunoConvertWav({ taskId: "src", audioId: "a" })),
     ).rejects.toThrow(/WAV/)
+  })
+
+  // The endpoint's documented state field is `successFlag`, not `status`.
+  it.each(["CREATE_TASK_FAILED", "GENERATE_WAV_FAILED"])("successFlag %s is terminal on the first poll", async (flag) => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t", response: { audioWavUrl: null }, successFlag: flag, errorCode: 500, errorMessage: "encoding error" },
+      }))
+
+    const err = await withTimers(() => sunoConvertWav({ taskId: "src", audioId: "a" })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect((err as KieError).isUpstreamFailure).toBe(true)
+    expect((err as KieError).context).toBe("WAV conversion")
+    expect((err as KieError).internalDetails).toContain("encoding error")
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("successFlag PENDING keeps polling; SUCCESS returns the documented response.audioWavUrl", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t", response: null, successFlag: "PENDING" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t", response: { audioWavUrl: "https://example.com/s/song.wav" }, successFlag: "SUCCESS", errorCode: null, errorMessage: null },
+      }))
+
+    const result = await withTimers(() => sunoConvertWav({ taskId: "src", audioId: "a" }))
+    expect(result.audioUrl).toBe("https://example.com/s/song.wav")
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it("CALLBACK_EXCEPTION with no WAV keeps polling; the WAV then succeeds", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: { taskId: "t", response: { audioWavUrl: null }, successFlag: "CALLBACK_EXCEPTION" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t", response: { audioWavUrl: "https://example.com/s/song.wav" }, successFlag: "CALLBACK_EXCEPTION" },
+      }))
+
+    const result = await withTimers(() => sunoConvertWav({ taskId: "src", audioId: "a" }))
+    expect(result.audioUrl).toBe("https://example.com/s/song.wav")
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
 

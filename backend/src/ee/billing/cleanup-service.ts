@@ -2,7 +2,7 @@ import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError, isMissingFunctionError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
-import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups, LIVE_SUBSCRIPTION_STATUSES } from "./downgrade-floor.js"
+import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups, readLiveOrClaimedSubscriptions } from "./downgrade-floor.js"
 import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared/credits"
 /**
  * R2 prefix under which the video-analysis worker writes its transient
@@ -713,11 +713,8 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   // verify against live subscription status; skip + self-heal the stale marker
   // rather than delete a paying customer's entire media library.
   const candidateIds = users.map((u) => u.id)
-  const { data: activeSubs, error: activeSubsError } = await supabase
-    .from("subscriptions")
-    .select("user_id")
-    .in("user_id", candidateIds)
-    .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
+  // A subscription claimed but not yet given its live status counts too.
+  const { data: activeSubs, error: activeSubsError } = await readLiveOrClaimedSubscriptions("user_id", (q) => q.in("user_id", candidateIds))
   // A failed read cannot tell a paying customer from a former one: skip the
   // whole batch (it would demote accounts and delete their media) and let the
   // next run retry.
@@ -1027,11 +1024,8 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
     // reset to free tier / no plan credits / 1GB on the next hourly run.
     // A failed read cannot tell a re-subscriber from a former subscriber:
     // end nothing, mark nothing expired, and let the next hourly run retry.
-    const { data: activeSubs, error: activeSubsError } = await supabase
-      .from("subscriptions")
-      .select("user_id")
-      .in("user_id", userIds)
-      .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
+    // A subscription claimed but not yet given its live status counts too.
+    const { data: activeSubs, error: activeSubsError } = await readLiveOrClaimedSubscriptions("user_id", (q) => q.in("user_id", userIds))
     if (activeSubsError) {
       console.error("[cleanup] Expiry net: reading the live subscriptions failed, retrying next run:", activeSubsError.message)
       return { usersDowngraded: 0, errors: 1 }

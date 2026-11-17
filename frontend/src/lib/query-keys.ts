@@ -100,8 +100,18 @@ export const queryKeys = {
     lessons: (id: string) => ["competitors", "lessons", id] as const,
     history: (id: string) => ["competitors", "history", id] as const,
     compare: (id: string, key: string) => ["competitors", "compare", id, key] as const,
-    historyMonths: () => ["competitors", "historyMonths"] as const,
+    /** The list's whole answer: how long scans are kept, and the plan's caps. */
+    meta: () => ["competitors", "meta"] as const,
     marks: () => ["competitors", "marks"] as const,
+  },
+
+  // Topics (Cloud; per-user)
+  topics: {
+    all: ["topics"] as const,
+    list: () => ["topics", "list"] as const,
+    detail: (id: string) => ["topics", "detail", id] as const,
+    history: (id: string) => ["topics", "history", id] as const,
+    cards: () => ["topics", "cards"] as const,
   },
 
   // Node presets

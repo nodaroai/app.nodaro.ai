@@ -139,7 +139,7 @@ beforeEach(() => {
   api.competitorCompare.mockResolvedValue({ periods: [], posts: {} })
   api.lookupSavedPosts.mockResolvedValue(new Map())
   api.competitorCardActions.mockRejectedValue(Object.assign(new Error("not available"), { code: "not_available" }))
-  api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:3" ? 23 : 1 } }))
+  api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:per-page:3u" ? 23 : 1 } }))
 })
 
 describe("the brand window", () => {

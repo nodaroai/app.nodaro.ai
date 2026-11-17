@@ -41,6 +41,7 @@
     "/collections",
     "/collections/*",
     "/competitors",
+    "/topics",
     "/integrations",
     "/apps",
     "/apps/*",

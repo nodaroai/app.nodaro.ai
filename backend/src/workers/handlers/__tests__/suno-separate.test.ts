@@ -67,6 +67,7 @@ import type { SunoSeparateType } from "@nodaro/shared/models"
 import { sunoHandlers } from "../suno.js"
 import { config } from "@/lib/config.js"
 import { DeterministicJobError } from "@/lib/deterministic-job-error.js"
+import { providerDetailOf } from "@/lib/provider-error-detail.js"
 import {
   SunoCatalogRefusalError,
   SunoAudioUnreachableError,
@@ -74,6 +75,11 @@ import {
   SUNO_CATALOG_REFUSAL_MESSAGE,
   SUNO_CATALOG_REFUSAL_SINGLE_MESSAGE,
   SUNO_INPUT_TOO_LARGE_MESSAGE,
+  SUNO_TRACK_REFUSAL_MESSAGE,
+  SUNO_TRACK_REFUSAL_SINGLE_MESSAGE,
+  SUNO_TRACK_UNAVAILABLE_MESSAGE,
+  SUNO_TRACK_UNAVAILABLE_SINGLE_MESSAGE,
+  SUNO_AUDIO_UNREACHABLE_MESSAGE,
 } from "@/providers/kie/suno-separate-market.js"
 
 function makeJob(data: Record<string, unknown> = {}) {
@@ -412,29 +418,103 @@ describe("suno-separate handler", () => {
     expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
   })
 
-  it("one-instrument refusal with fallback off gets the one-instrument copy too", async () => {
+  it("one-instrument refusal of URL audio with fallback off gets the one-instrument copy too", async () => {
     mocks.mockSunoSeparateMarket.mockRejectedValue(new SunoCatalogRefusalError())
-    await expect(run({ taskId: "t", audioId: "a", separateType: "split_stem_advanced" })).rejects.toThrow(SUNO_CATALOG_REFUSAL_SINGLE_MESSAGE)
+    const err = await run({ audioUrl: "https://example.com/a.mp3", separateType: "split_stem_advanced" }).catch((e) => e)
+    expect((err as Error).message).toBe(SUNO_CATALOG_REFUSAL_SINGLE_MESSAGE)
+  })
+
+  it("one-instrument refusal of a Suno track (ids) is the short track sentence: Audio Separation cannot do one instrument", async () => {
+    mocks.mockSunoSeparateMarket.mockRejectedValue(new SunoCatalogRefusalError())
+    const err = await run({ taskId: "t", audioId: "a", separateType: "split_stem_advanced", fallbackToDemucs: true }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoCatalogRefusalError)
+    expect(err).toBeInstanceOf(DeterministicJobError)
+    expect((err as SunoCatalogRefusalError).code).toBe("suno_catalog_refusal")
+    expect((err as Error).message).toBe(SUNO_TRACK_REFUSAL_SINGLE_MESSAGE)
+    expect((err as Error).message).toBe("Suno won't separate this track.")
+    expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
   })
 
   it("an ids-lane job ignores a URL beside the ids: no size probe, and a refusal fails instead of falling back", async () => {
     mocks.mockSafeFetch.mockResolvedValue(headResponse(String(30 * MB)))
-    // Suno does not refuse its own tracks; a refusal here proves the fallback
-    // is gated on the URL lane, not on a URL being present.
+    // A refusal here proves the fallback is gated on the URL lane, not on a
+    // URL being present.
     mocks.mockSunoSeparate.mockRejectedValue(new SunoCatalogRefusalError())
-    await expect(run({
+    const err = await run({
       taskId: "t", audioId: "a", audioUrl: "https://example.com/a.mp3", separateType: "split_stem", fallbackToDemucs: true,
-    })).rejects.toBeInstanceOf(SunoCatalogRefusalError)
+    }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoCatalogRefusalError)
+    expect((err as Error).message).toBe(SUNO_TRACK_REFUSAL_MESSAGE)
     expect(mocks.mockSafeFetch).not.toHaveBeenCalled()
     expect(mocks.mockSunoSeparate).toHaveBeenCalledWith({ taskId: "t", audioId: "a", type: "split_stem" }, expect.anything())
     expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
   })
 
-  it("an unreachable-audio failure is never a fallback", async () => {
+  it("legacy lane: a refused Suno track fails at once with the refusal message, nothing settled", async () => {
+    // What the old endpoint's poller throws for its 413 record (suno-client.test.ts).
+    mocks.mockSunoSeparate.mockRejectedValue(new SunoCatalogRefusalError())
+    const err = await run({ taskId: "t", audioId: "a", separateType: "separate_vocal" }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoCatalogRefusalError)
+    // Deterministic: the worker fails + refunds on this attempt and never retries.
+    expect(err).toBeInstanceOf(DeterministicJobError)
+    expect((err as SunoCatalogRefusalError).code).toBe("suno_catalog_refusal")
+    // A Suno track's own sentence: no "released recording", no fallback advice.
+    expect((err as Error).message).toBe(SUNO_TRACK_REFUSAL_MESSAGE)
+    expect((err as Error).message).toBe("Suno won't separate this track. Use the Audio Separation node (Demucs) instead.")
+    expect(mocks.mockSunoSeparate).toHaveBeenCalledTimes(1)
+    expect(mocks.mockSunoSeparateMarket).not.toHaveBeenCalled()
+    expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCreditsAtChargedPrice).not.toHaveBeenCalled()
+  })
+
+  it("a refused Suno track keeps the provider's own reason for the row's operator detail", async () => {
+    const reason = Object.assign(new Error("raw"), { internalDetails: "Suno separate task failed: [413] Uploaded audio contains copyrighted lyrics." })
+    mocks.mockSunoSeparate.mockRejectedValue(new SunoCatalogRefusalError(undefined, { cause: reason }))
+    const err = await run({ taskId: "t", audioId: "a", separateType: "separate_vocal" }).catch((e) => e)
+    expect((err as Error).message).toBe(SUNO_TRACK_REFUSAL_MESSAGE)
+    expect(providerDetailOf(err)).toBe("Suno separate task failed: [413] Uploaded audio contains copyrighted lyrics.")
+  })
+
+  it("legacy lane: a refused Suno track never runs Demucs, even with the fallback on (no URL to separate)", async () => {
+    mocks.mockSunoSeparate.mockRejectedValue(new SunoCatalogRefusalError())
+    const err = await run({ taskId: "t", audioId: "a", separateType: "split_stem", fallbackToDemucs: true }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoCatalogRefusalError)
+    expect((err as Error).message).toBe(SUNO_TRACK_REFUSAL_MESSAGE)
+    expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("a Suno track (ids) Suno no longer holds fails with the track's own sentence, never a fallback", async () => {
+    const reason = Object.assign(new Error("raw"), { internalDetails: "Suno separate task failed: [400] expired after the 14-day retention period" })
+    mocks.mockSunoSeparate.mockRejectedValue(new SunoAudioUnreachableError(undefined, { cause: reason }))
+    const err = await run({ taskId: "t", audioId: "a", separateType: "separate_vocal", fallbackToDemucs: true }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoAudioUnreachableError)
+    expect(err).toBeInstanceOf(DeterministicJobError)
+    expect((err as SunoAudioUnreachableError).code).toBe("suno_audio_unreachable")
+    expect((err as Error).message).toBe(SUNO_TRACK_UNAVAILABLE_MESSAGE)
+    expect((err as Error).message).toBe("This Suno track is no longer available at Suno. Use the Audio Separation node (Demucs) instead.")
+    // The provider's own reason stays on the cause chain.
+    expect(providerDetailOf(err)).toBe("Suno separate task failed: [400] expired after the 14-day retention period")
+    expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("one instrument on a Suno track (ids) Suno no longer holds: the short track sentence", async () => {
     mocks.mockSunoSeparateMarket.mockRejectedValue(new SunoAudioUnreachableError())
-    await expect(
-      run({ audioUrl: "https://example.com/a.mp3", separateType: "split_stem", fallbackToDemucs: true }),
-    ).rejects.toBeInstanceOf(SunoAudioUnreachableError)
+    const err = await run({ taskId: "t", audioId: "a", separateType: "split_stem_advanced" }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoAudioUnreachableError)
+    expect((err as Error).message).toBe(SUNO_TRACK_UNAVAILABLE_SINGLE_MESSAGE)
+    expect((err as Error).message).toBe("This Suno track is no longer available at Suno.")
+  })
+
+  it.each(["split_stem", "split_stem_advanced"])("unreachable audio sent by URL keeps today's sentence and is never a fallback (%s)", async (separateType) => {
+    mocks.mockSunoSeparateMarket.mockRejectedValue(new SunoAudioUnreachableError())
+    const err = await run({ audioUrl: "https://example.com/a.mp3", separateType, fallbackToDemucs: true }).catch((e) => e)
+    expect(err).toBeInstanceOf(SunoAudioUnreachableError)
+    expect((err as Error).message).toBe(SUNO_AUDIO_UNREACHABLE_MESSAGE)
+    expect((err as Error).message).toBe("Suno couldn't download this audio. Check the file is reachable, or use the Audio Separation node.")
     expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
   })
 

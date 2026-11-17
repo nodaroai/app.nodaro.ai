@@ -1,9 +1,12 @@
 import type { TrackedCompetitor } from "@nodaro/shared/social"
 
-/** What the page remembers of each brand between two reads of the list. */
+/** What a scanning page reads of each thing it scans: a tracked brand, or a followed topic. */
+type Scanned = Pick<TrackedCompetitor, "id" | "scanning" | "lastScanId">
+
+/** What the page remembers of each brand (or topic) between two reads of the list. */
 export type ScanState = ReadonlyMap<string, { readonly scanning: boolean; readonly lastScanId: string | null }>
 
-export function scanStateOf(competitors: readonly TrackedCompetitor[]): ScanState {
+export function scanStateOf(competitors: readonly Scanned[]): ScanState {
   return new Map(competitors.map((c) => [c.id, { scanning: c.scanning, lastScanId: c.lastScanId }]))
 }
 
@@ -12,7 +15,7 @@ export function scanStateOf(competitors: readonly TrackedCompetitor[]): ScanStat
  * new last scan. One brand is enough, whatever the others are still doing,
  * so its new cards appear without waiting for every scan to finish.
  */
-export function scanLanded(before: ScanState, competitors: readonly TrackedCompetitor[]): boolean {
+export function scanLanded(before: ScanState, competitors: readonly Scanned[]): boolean {
   return competitors.some((c) => {
     const was = before.get(c.id)
     return was !== undefined && ((was.scanning && !c.scanning) || was.lastScanId !== c.lastScanId)

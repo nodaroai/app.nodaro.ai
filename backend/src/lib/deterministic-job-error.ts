@@ -19,7 +19,7 @@
  * that could succeed on a retry (network, provider, storage, a probe that
  * timed out) must NOT use it.
  *
- * Two deliberate exceptions:
+ * Three deliberate exceptions:
  * - A wait for a concurrency slot that ran past the queue timeout
  *   (`LaneWaitTimeoutError`, lib/concurrency-lanes/errors.ts) is a subclass.
  *   A retry would only stand in the same line for the whole timeout again, so
@@ -31,6 +31,13 @@
  *   user's credits are held, and the user can run it again. Do not turn it
  *   back into a retry. A probe of the extension that FAILED is not this case:
  *   it stays a plain, retryable error (`extensionPictureSeconds`).
+ *
+ * - A failure a Suno separation, WAV or music-video task's own record reports
+ *   carries the mark (`finalSunoRecordFailure`, providers/kie/suno-client.ts),
+ *   although it is the provider's failure and not the input's. A retry of
+ *   those job types never re-runs the handler (the row's saved task sends the
+ *   retry to the reconcile, which does not recover them), so waiting for one
+ *   only delays the failure and the refund.
  *
  * WHY A MARKER PROPERTY (not just `instanceof`): same reason as
  * `PostProcessingError` — a re-thrown or wrapped error can lose its prototype

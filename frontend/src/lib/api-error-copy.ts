@@ -133,6 +133,21 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   not_measurable: "apiErr.reason.notMeasurable",
   too_many_actions: "apiErr.reason.tooManyMarks",
   short_link: "apiErr.reason.shortLink",
+  // A brand with more search terms than the plan allows (none below Standard), and a topic beyond the plan's
+  // topics. The server's sentence names the plan's figure; the translated one says the plan is the limit.
+  search_terms_limit: "apiErr.reason.searchTermsLimit",
+  topic_limit: "apiErr.reason.topicLimit",
+  // The plan could not be read just now, so a plan-capped write or scan was not done (never treated as the free plan).
+  plan_unavailable: "apiErr.reason.planUnavailable",
+}
+
+/**
+ * The topic routes answer two refusals with the brand routes' codes; their
+ * translated reason names a topic, not a brand.
+ */
+export const TOPIC_REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
+  already_tracked: "apiErr.reason.topicAlreadyTracked",
+  scan_running: "apiErr.reason.topicScanRunning",
 }
 
 /** The translated reason for a server error code, if the code has a fixed meaning. */
@@ -161,6 +176,8 @@ export interface ApiErrorCopyInput {
   readonly fallbackVars?: Record<string, string | number>
   /** A 402's `required` (raw credits, beside `error`): the most the refused run can hold. */
   readonly required?: number
+  /** The translated reason, when the caller's routes mean `code` their own way (a topic, not a brand). */
+  readonly reasonKey?: MessageKey
 }
 
 /**
@@ -180,7 +197,7 @@ function needsUpToReason(code: string | undefined, serverMessage: string | undef
 }
 
 /** The message for a failed API call — see the module comment. */
-export function apiErrorMessage({ code, serverMessage, fallbackKey, fallbackVars, required }: ApiErrorCopyInput): string {
+export function apiErrorMessage({ code, serverMessage, fallbackKey, fallbackVars, required, reasonKey: ownReasonKey }: ApiErrorCopyInput): string {
   const context = tx(fallbackKey, fallbackVars)
   const needsUpTo = needsUpToReason(code, serverMessage, required)
   if (!speaksOwnLanguage(fallbackKey)) {
@@ -189,9 +206,24 @@ export function apiErrorMessage({ code, serverMessage, fallbackKey, fallbackVars
     const relabelled = needsUpTo !== undefined && (creditUnitLabel() !== "CR" || creditUnits(required) !== required)
     return relabelled ? needsUpTo : (serverMessage ?? context)
   }
-  const reasonKey = apiErrorReasonKey(code)
+  const reasonKey = ownReasonKey ?? apiErrorReasonKey(code)
   const reason = needsUpTo ?? (reasonKey ? tx(reasonKey) : serverMessage)
   return reason ? tx("apiErr.withReason", { context, reason }) : context
+}
+
+/**
+ * A failed call's error worded with the caller's own reason for its code
+ * (`reasons`, e.g. {@link TOPIC_REASON_KEY_BY_CODE}); any other error, a typed
+ * one (credits, storage) included, is returned as it is. The code and the
+ * server's words stay on the new error, as `throwApiError` leaves them.
+ */
+export function rewordApiError(err: unknown, fallbackKey: MessageKey, reasons: Readonly<Record<string, MessageKey>>): unknown {
+  if (!(err instanceof Error) || err.constructor !== Error) return err
+  const { code, serverMessage } = err as { code?: unknown; serverMessage?: unknown }
+  if (typeof code !== "string" || !Object.hasOwn(reasons, code)) return err
+  const server = typeof serverMessage === "string" ? serverMessage : undefined
+  const message = apiErrorMessage({ code, serverMessage: server, fallbackKey, reasonKey: reasons[code] })
+  return Object.assign(new Error(message), { code }, server !== undefined ? { serverMessage: server } : {})
 }
 
 /**

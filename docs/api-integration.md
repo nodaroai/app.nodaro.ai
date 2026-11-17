@@ -1781,6 +1781,11 @@ All errors share the same shape:
 | 409 | `batch_in_progress` | — | A batch route (an [image batch](#4g-several-images-in-one-call-count-models); `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location` and `/v1/generate-object` with `count` 2 or more; `/v1/video-sfx` with `versions` 2 or more) received a second request with the same `Idempotency-Key` while another request is still creating the batch's jobs (or took the batch over from this one). Nothing more was created or charged by this request. Retry it shortly: it returns the same jobs. |
 | 422 | `idempotency_key_reused` | — | A batch route's `Idempotency-Key` already belongs to a different request: another route's jobs, or the same route's jobs for a different body while any still waits. Nothing is created, charged or queued. Send the same request again, or use a new key. (Use-case runs answer the same situation as a `409`, above.) |
 | 422 | `job_blocked` | — | A job policy or content guard registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
+| 409 | `large_upload_unavailable` | — | `POST /v1/uploads/large/start` (or `/complete`) on a deployment that checks every upload's bytes with an upload policy: the large-upload lane would bypass it, so it is closed there. Send the file with `POST /v1/upload` instead. See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
+| 422 | `media_too_long` | — | The file is longer than 30 minutes, the most media imported into the editor may be (`POST /v1/uploads/large/complete`, and `POST /v1/download-video` for a direct file whose header says so). A stored copy was removed and nothing was counted against storage. A direct file that turns out too long once downloaded fails the same way, on its progress stream. |
+| 422 | `media_too_large` | — | The file is over 10 GiB, the most a file imported into the editor may be (`POST /v1/uploads/large/start`, `POST /v1/download-video`). |
+| 422 | `media_bitrate_implausible` | — | The file is far larger than its stated length allows (over 2,500 Mbit/s on average for video, 50 Mbit/s for audio, the first 16 MiB not counted). See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
+| 429 | `too_many_open_uploads` | — | `POST /v1/uploads/large/start` while 3 of your large uploads are still open. Complete or abort one; an abandoned one frees itself when its token expires. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. When a request is answered this way because a job or a run could not be queued to start, that job or run is failed at once — a job with its credits refunded (the jobs of a batch are refunded and removed: an [image batch](#4g-several-images-in-one-call-count-models), or the candidates or versions of `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location`, `/v1/generate-object` and `/v1/video-sfx`) — and its `Idempotency-Key` is freed, so a retry with the same key starts a new job or run. A batch whose jobs only partly started names the running ones in `error.startedJobIds`: follow those, and send the same request with the same key again, which returns them and starts only the rest. In the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job or run (if it then fails, send the request again with a new key), or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new one. The use-case runs (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`, and their `/continue`) do the same: the run's job is failed with its fee refunded and its key freed, so a retry with the same key starts a new run. Only when it is not known whether the queue took the run (the rare unconfirmed case) is the request answered `202` like a started run, with the key kept, so the retry answers that run and never starts a second one beside it. Routes served by the Nodaro Cloud plugin, such as [Video Remake](#13f-video-remake-cloud-edition) and the trend runs that start it, answer a repeated key as their own sections say. |
@@ -4289,6 +4294,79 @@ rewritten file is re-wrapped, the stored size can differ slightly from the
 number of bytes you sent: `sizeBytes` (and the byte count the upload returns) is
 always the stored object's final length, so do not compare it to your local
 file size or checksum. Files uploaded before this change are not rewritten. A self-hosted install can turn the rewrite off with `UPLOAD_FASTSTART_ENABLED=false` (see the deployment guide); every upload is then stored exactly as sent.
+
+#### Large uploads straight to storage
+
+`POST /v1/upload` holds the whole file on the server and takes at most 500 MB.
+For a long video or audio file there is a second lane, where the bytes go from
+the client **straight to object storage in parts** and never through the API
+server. Media imported this way is limited mainly by **length**: at most
+**30 minutes**. A file may also be at most **10 GB** (10 GiB).
+
+1. `POST /v1/uploads/large/start` with `{ filename, mimeType, sizeBytes }` —
+   video and audio only (the type is resolved as above). Answers
+   `{ token, partSize, partUrls }`. Nothing is counted against your storage
+   yet: the quota is only checked here. Refusals:
+   - `413 storage_limit_exceeded`: the file would not fit. Same body as
+     `POST /v1/upload`.
+   - `422 media_too_large`: the file is over 10 GiB.
+   - `429 too_many_open_uploads`: you already have 3 uploads open. An upload
+     stays open until it is completed or aborted, or its token expires.
+   - `429 rate_limited`: more than 20 starts in the current hour.
+   - `503 large_upload_busy`: the server cannot count open uploads right now.
+     Try again in a moment.
+2. Send part *i* — bytes `[(i-1)·partSize, i·partSize)` of the file (the last
+   part is the remainder) — as the body of a plain `PUT` to `partUrls[i-1]`.
+   Each URL has its part's **exact length** signed in. Storage refuses a part
+   of any other size, so cut the file at exactly `partSize`. Send no headers
+   of your own: a browser or HTTP client sets `Content-Length` from the body,
+   and that is the only signed header besides `Host`. You never read a
+   response header, because the server collects the parts itself. Parts may go
+   in parallel and in any order, and a failed part can be sent again to the
+   same URL. The part URLs stay valid for 6 hours, the token for 7. `partSize`
+   is max(16 MiB, ⌈`sizeBytes` / 9,000⌉), so a 10 GiB file is 640 parts.
+3. `POST /v1/uploads/large/complete` with `{ token }` joins the parts, checks
+   that the stored size equals `sizeBytes`, and reads the file's length. It
+   answers the same `data` as `POST /v1/upload` (`url`, `thumbnailUrl`,
+   `assetId`, `category`, `filename`, `mimeType`, `sizeBytes`, `metadata`,
+   `r2Key`), and only now is the file counted against your storage. Refusals
+   (each removes the stored file, and nothing is counted):
+   - `422 media_too_long`: over 30 minutes.
+   - `422 media_unreadable`: its length cannot be read, so it would not play in
+     the editor either.
+   - `422 media_bitrate_implausible`: the file is far larger than its stated
+     length allows, as with a short duration written into a big file's header.
+   - `400 size_mismatch`.
+   - `413 storage_limit_exceeded`: storage filled up meanwhile.
+
+   For the bitrate check, the average bitrate is size ÷ length, with the first
+   16 MiB of the file not counted (headers, cover art). It may be at most
+   **2,500 Mbit/s for video** and **50 Mbit/s for audio**. These ceilings are
+   generous. High-quality 4K60 phone or camera footage is 50–200 Mbit/s,
+   ProRes 422 HQ at 4K60 about 1,770, and ProRes 4444 at 4K30 about 2,000.
+   Uncompressed 24-bit/192 kHz stereo audio is about 9 Mbit/s, and 32-bit
+   float 8-channel audio at 192 kHz about 49.
+
+   `400 upload_incomplete` means parts are missing: send them and complete
+   again. Calling complete twice is safe. A repeat answers the first call's
+   result, or `409 upload_completing` while the first is still running, and
+   never stores or counts the file twice. A completed or refused upload frees
+   its open-upload slot; `upload_incomplete` keeps it.
+4. To give up, `POST /v1/uploads/large/abort` with `{ token }`. It is
+   best-effort, answers `{ data: { aborted } }`, and frees the slot. An upload
+   that is neither completed nor aborted frees its slot when its token expires,
+   and its parts are removed by the storage's expiry rule one day later.
+
+The token belongs to the account that started the upload (another account's
+answers `403`). A deployment that checks the bytes of every upload (an upload
+policy) cannot see this lane's bytes, so there `start` answers
+`409 large_upload_unavailable` — there, a file within 500 MB goes through
+`POST /v1/upload`, and a bigger one cannot be uploaded. A file sent this way is
+stored exactly as sent (no faststart rewrite, no HEIC conversion), so use this
+lane only for what `POST /v1/upload` cannot take. The SDK's
+`client.uploads.uploadLarge(file)` does exactly that: a file of 500 MB or less
+goes through `POST /v1/upload` as before, and only a bigger one through this
+lane (on a server without it, it throws `LargeUploadUnavailableError`).
 
 ### Your media library
 
@@ -7179,8 +7257,8 @@ Search page per search; see [Competitors](./features/competitors.md).
 
 | Method | Path | Body | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[], historyMonths }`, where `historyMonths` is how many months of scans your plan keeps (see **Over time**). Each lists in `searchPlan` what its next scan searches (`{ kind, platform }`: `own` for an account, `about` for the name searched on a platform). |
-| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, isOwn?, schedule? }` | Track a brand. `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (a company page, or a person's profile `linkedin.com/in/…`), `meta_ads` (advertiser). An account that cannot be read answers `400 invalid_account`, naming it and what its field takes. A repeated `aboutPlatforms` entry counts once. `201` with the brand; `409 too_many_competitors` past 50 brands. |
+| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[], historyMonths, limits }`, where `historyMonths` is how many months of scans your plan keeps (see **Over time**) and `limits.searchTerms` how many search terms your plan allows per brand (`0` = the name only, `null` = no cap). Each lists in `searchPlan` what its next scan searches (`{ kind, platform, term }`: `own` for an account, `about` for a term, or the name, searched on a platform), its `searchTerms` and the `pages` a scan runs. |
+| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, searchTerms?, isOwn?, schedule? }` | Track a brand. `brand` is its display name; `website` is optional (it only helps find the accounts). `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (a company page, or a person's profile `linkedin.com/in/…`), `meta_ads` (advertiser). An account that cannot be read answers `400 invalid_account`, naming it and what its field takes. A repeated `aboutPlatforms` entry counts once. `searchTerms` (phrases or `#hashtags`, up to 100 characters each, repeats ignored without regard to case) are searched instead of the name; more than your plan allows answers `403 search_terms_limit` with `limit`. `201` with the brand; `409 too_many_competitors` past 50 brands. |
 | `GET` | `/v1/competitors/:id` | `?scan=<id>` optional | One brand with its latest scan (posts and cards), that scan platform by platform (`platforms`, see **Who is where**; `null` before its first scan) and its scan history (counts only). With `scan`, the brand as of that scan (`404 scan_not_found` for a scan that is not this brand's). |
 | `GET` | `/v1/competitors/:id/history` | none | The brand's scans oldest first (free): `{ scans: [{ id, at, platforms: [{ platform, own, about, followers, usual, unit }] }] }` — per platform what each scan found and read; a scan stored before these were kept answers `null` for `own`, `about` and `followers`. |
 | `GET` | `/v1/competitors/:id/compare` | `?from&to[&vsFrom&vsTo]` (ISO datetimes) | The brand over a period, and a second one to compare with (free): `{ periods: [{ from, to, platforms: [{ platform, own, about, usual, unit, followers, change, lessons, best }] }], posts }`. See **Over time**. `400 validation_error` when a period ends before it starts, is longer than a year, or `vsFrom` comes without `vsTo`. |
@@ -7195,12 +7273,27 @@ Search page per search; see [Competitors](./features/competitors.md).
 | `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
 | `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
 
-**Price.** A scan of a brand with `n` searches (`TrackedCompetitor.searches`:
-one per account, one per platform its name is searched on) costs `n`
-Social Search pages, the credit id `competitor-scan:<n>`. The scan runs the
-searches it was priced on, even if the brand changes before it starts.
-Searches that fail are not charged; if every search fails the scan fails
-and nothing is charged. Adding, reading and website lookups are free.
+**Price.** A scan runs one Social Search page per account, and per platform
+for each search term (or for the name, without terms): `TrackedCompetitor.pages`.
+It is charged per page at the credit id `competitor-scan:per-page`,
+22 credits<!-- credits: competitor-scan:per-page --> a page, summed (a quote for
+`n` pages is `competitor-scan:per-page:<n>u`). The scan runs the searches it
+was priced on, even if the brand changes before it starts. Searches that
+fail are not charged; if every search fails the scan fails and nothing is
+charged. Adding, reading and website lookups are free. On a server whose
+per-page price is not set yet, a scan of up to 12 searches is charged at
+`competitor-scan:<n>` and a larger one answers `503 price_not_configured`.
+
+**Search terms.** With `searchTerms` set, the about-searches look for the
+terms instead of the name, and a post counts as about the brand only when
+it names one of them (or one of the brand's handles) as a whole word,
+phrase, hashtag or mention; without terms the name is used the same way.
+Plans allow Standard 3, Pro 5 and Business 10 terms; Free, Pay as you go and
+Basic search the name only. After a downgrade the stored terms stay and a
+scan uses the first ones the plan allows. When your plan cannot be read just
+then, a write with search terms and a scan of a brand with terms answer
+`503 plan_unavailable` (try again), and the list leaves out `limits` and
+`historyMonths`.
 
 **Schedule.** `weekly` (the default) or `daily` scans start on their own
 and are charged like a manual scan; `off` scans only on request. A scan
@@ -7273,6 +7366,41 @@ The same routes are wrapped by the SDK (`client.competitors`), the MCP tools
 (`list_competitors`, `competitor_cards`, `competitor_lessons`,
 `competitor_tried`, `mark_card_done`, `add_competitor`, `scan_competitor`)
 and the CLI (`nodaro competitors`).
+
+## 16d. Topics (Nodaro Cloud)
+
+Follow a hashtag or phrase with no brand around it ("ai video"): each scan
+searches it on the platforms you pick, keeps the posts that really name it,
+and makes cards about what is spreading. Topics share the Competitors
+schedule and history; see [Topics](./features/topics.md).
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/topics` | none | Your topics: `{ data: TrackedTopic[], limits: { topics }, historyMonths }`. `limits.topics` is how many your plan allows (`0` = none, `null` = no cap). Each topic has `name`, `term`, `platforms`, `postCount`, `schedule`, its last scan, and `pages` (Social Search pages one scan runs). |
+| `POST` | `/v1/topics` | `{ name, term?, platforms?, postCount?, schedule? }` | Follow a topic. `term` defaults to the name; `platforms` to TikTok, Instagram, YouTube and X (Reddit and LinkedIn too); `postCount` is `20` (the default), `40` or `60` posts per search; `schedule` `weekly` (the default), `daily` or `off`. `201` with the topic; `403 topic_limit` with `limit` past your plan's topics; `409 already_tracked` for a name you already follow. |
+| `GET` | `/v1/topics/:id` | none | One topic with its latest scan (`posts`, `cards`, `counts`) and its scans (counts only, newest first). |
+| `PATCH` | `/v1/topics/:id` | any field of the above | Change it; `409 scan_running` while a scan of it runs. |
+| `DELETE` | `/v1/topics/:id` | none | Stop following it (its scans go too). |
+| `GET` | `/v1/topics/:id/history` | none | Its scans oldest first (free): `{ scans: [{ id, at, platforms: [{ platform, posts, reach }] }] }`, the posts kept per platform and their summed reach (`null` where the platform gives none). |
+| `GET` | `/v1/topics/cards` | none | The cards of every topic's latest scan, most urgent first: `{ cards, posts }`. Cards are the Competitors kinds that read posts about a subject (`spreading`, `complaints`, `mentions_up`), with `subjectId` the topic's id. |
+| `POST` | `/v1/topic-scan` | `{ topicId }` | Scan now. Answers `{ jobId }` at once; poll the job. `403 topic_limit` when you follow more topics than your plan allows now (after a downgrade only the oldest ones scan). |
+
+**Price.** A topic scan searches the term once per platform, reading
+`postCount` posts: 20 is one Social Search page, 40 two, 60 three (YouTube
+and Reddit read one page whatever is asked). It is charged per page at the
+credit id `topic-scan:per-page`, 22 credits<!-- credits: topic-scan:per-page -->
+a page, summed: four platforms at 60 posts, where YouTube reads one page,
+is 3 + 3 + 3 + 1 = 10 pages, 220 credits<!-- credits: topic-scan:per-page@10 -->.
+Searches that fail are not charged.
+
+**Plans.** Standard follows up to 10 topics, Pro 30 and Business 50; Free,
+Pay as you go and Basic none. OAuth app tokens need `assets:read` for the
+reads and `assets:write` for the writes; a scan spends credits, so it also
+needs a `:write` or `:execute` scope. On a server whose database does not
+have topics yet, or whose topic price is not set, the routes answer
+`503 not_ready`. When your plan cannot be read just then, adding a topic and
+a scan answer `503 plan_unavailable` (try again), and the list leaves out
+`limits` and `historyMonths`.
 
 ## 17. Community
 
@@ -7713,7 +7841,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/download-video` | Import the video behind a link (the video's page, or a direct video file link) into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
+| `POST` | `/v1/download-video` | Import the video behind a link (the video's page, or a direct video file link) into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. A **direct video file** link is limited by length: at most **30 minutes**, and at most **10 GB**. The file's header is read first, before anything is downloaded, and a file whose header shows it is over either limit answers `422` right away. The codes are `media_too_long`, `media_too_large`, and `media_bitrate_implausible` for a size its stated length cannot explain (see [Large uploads straight to storage](#large-uploads-straight-to-storage) for the bitrate limits). A link that redirects to a private address answers `400`. Once downloaded, the file is checked again, and that check is the one that counts. A file over either limit, one whose length cannot be read, or one with an implausible bitrate fails before it is stored: the progress stream ends `failed` with the reason in `error` (for example "This video is longer than 30 minutes…"), and nothing is kept. A link to a video's page on a social site is not held to that length (fetch a section of a long one). At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
 | `GET` | `/v1/download-video/progress/:downloadId` | Live progress as **server-sent events** (`{ phase, percent, videoUrl?, error? }` every ~500ms; stream ends on `completed`/`failed`). |
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`). Leave `endTime` out to cut from `startTime` to the clip's end; an `endTime` you send must be after `startTime`. The clip is measured before the charge, within 90 seconds (its header in at most 30): a clip that cannot be read is a `400 invalid_video_duration`, and a link whose host does not exist or is a private address a `400 media_link_bad_host`; a measure that runs out of time is a `503 probe_timeout`, a host that cannot be looked up at that moment a `503 source_unreachable`, and a clip the server could not read just then a `503 probe_unavailable` (all three: run it again). Full rules and price: [Trim Video](./nodes/processing-video/trim-video.md). → job. |

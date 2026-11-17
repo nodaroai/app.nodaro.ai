@@ -161,6 +161,7 @@ function createSupabaseChain(overrides: Record<string, unknown> = {}) {
     eq: vi.fn(),
     is: vi.fn(),
     in: vi.fn(),
+    not: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
     single: vi.fn(),
@@ -189,7 +190,7 @@ function mockTables(spec: Record<string, { single?: unknown; list?: unknown[] }>
     const conf = spec[table] ?? {}
     const chain: Record<string, unknown> = {}
     const self = () => chain
-    for (const m of ["select", "eq", "is", "in", "order", "limit", "insert", "upsert"]) chain[m] = vi.fn(self)
+    for (const m of ["select", "eq", "is", "in", "not", "order", "limit", "insert", "upsert"]) chain[m] = vi.fn(self)
     chain.update = vi.fn((payload: Record<string, unknown>) => {
       recorded.push({ table, payload })
       return chain
@@ -568,6 +569,38 @@ describe("POST /v1/billing/change-plan", () => {
     expect(stripe.subscriptions.update).not.toHaveBeenCalled()
   })
 
+  it("a subscription claimed but not yet live (stored incomplete) is the one to change: Stripe's status decides, not a 404", async () => {
+    // The live-status read finds nothing; the claimed read finds the row.
+    let subscriptionReads = 0
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      for (const m of ["select", "eq", "is", "in", "not", "order", "limit", "insert", "upsert", "update"]) chain[m] = vi.fn(self)
+      const read = table === "subscriptions" ? ++subscriptionReads : 0
+      chain.single = vi.fn(() => Promise.resolve({ data: null, error: { message: "Not found" } }))
+      chain.maybeSingle = chain.single
+      chain.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: read === 2 ? [{ ...activeBasic, status: "incomplete" }] : [], error: null }).then(resolve)
+      return chain
+    }) as never)
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub({ status: "past_due" }) as never)
+
+    const res = await app.inject({ method: "POST", url: "/v1/billing/change-plan", payload: { userId: "user-123", newPriceId: "pri_pro" } })
+
+    expect(res.statusCode).toBe(409)
+    expect(stripe.subscriptions.retrieve).toHaveBeenCalledWith("sub_existing")
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled()
+  })
+
+  it("no live and no claimed subscription: 404", async () => {
+    mockTables({ subscriptions: { list: [] } })
+
+    const res = await app.inject({ method: "POST", url: "/v1/billing/change-plan", payload: { userId: "user-123", newPriceId: "pri_pro" } })
+
+    expect(res.statusCode).toBe(404)
+    expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled()
+  })
+
   it("refuses a subscription that is not active (past_due), before Stripe is touched", async () => {
     mockTables({ subscriptions: { single: { ...activeBasic, status: "past_due" } } })
 
@@ -658,8 +691,8 @@ describe("POST /v1/billing/change-plan — a few changes per account per day", (
 })
 
 describe("POST /v1/billing/create-checkout-session — one subscription per account, promotion codes on plans only", () => {
-  it("refuses a second subscription while one is active or past_due, before Stripe is touched", async () => {
-    for (const status of ["active", "past_due"]) {
+  it("refuses a second subscription while one is active, trialing or past_due, before Stripe is touched", async () => {
+    for (const status of ["active", "trialing", "past_due"]) {
       mockTables({ subscriptions: { list: [{ id: "sub-row", status }] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
       const res = await app.inject({
         method: "POST",
@@ -680,7 +713,28 @@ describe("POST /v1/billing/create-checkout-session — one subscription per acco
     })
 
     expect(res.statusCode).toBe(409)
-    expect(subscriptionStatusFilters()).toEqual([["active", "past_due", "unpaid"]])
+    expect(subscriptionStatusFilters()).toEqual([["active", "trialing", "past_due", "unpaid"]])
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
+  })
+
+  it("reads a subscription whose plan grant is claimed but not yet live as the account's, as the claim does", async () => {
+    mockTables({ subscriptions: { list: [{ id: "sub-row", status: "incomplete" }] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-checkout-session",
+      payload: { userId: "user-123", priceId: "pri_pro" },
+    })
+
+    expect(res.statusCode).toBe(409)
+    const notFilters = vi
+      .mocked(supabase.from)
+      .mock.calls.map((c, i) => ({ table: c[0], chain: vi.mocked(supabase.from).mock.results[i]?.value as { not: { mock: { calls: unknown[][] } } } }))
+      .filter((r) => r.table === "subscriptions")
+      .flatMap((r) => r.chain.not.mock.calls)
+    expect(notFilters).toEqual([
+      ["plan_claimed_at", "is", null],
+      ["status", "in", "(canceled,expired,incomplete_expired)"],
+    ])
     expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
   })
 

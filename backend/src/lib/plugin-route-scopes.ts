@@ -14,6 +14,8 @@ import { requireScope, type Scope } from "./scopes.js"
 const RULES: ReadonlyArray<{ readonly prefix: string; readonly read: Scope; readonly write: Scope }> = [
   // Tracked brands, their scans and cards: the user's own data.
   { prefix: "/v1/competitors", read: "assets:read", write: "assets:write" },
+  // Tracked topics, their scans and cards: the user's own data too.
+  { prefix: "/v1/topics", read: "assets:read", write: "assets:write" },
   // A website lookup on the user's behalf, feeding a brand they add.
   { prefix: "/v1/competitor-discover", read: "assets:write", write: "assets:write" },
 ]

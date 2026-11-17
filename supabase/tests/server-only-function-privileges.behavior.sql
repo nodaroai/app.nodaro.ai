@@ -132,6 +132,7 @@ INSERT INTO server_only (sig) VALUES
   ('claim_retained_image_gc(integer)'),
   ('claim_retained_video_gc(integer)'),
   ('claim_signup_grant(uuid,integer,boolean,boolean,boolean)'),
+  ('claim_subscription_grant(text,uuid)'),
   ('claim_webhook_deliveries(text,integer,integer,integer,integer,integer)'),
   ('claw_back_org_credits(uuid,integer,text)'),
   ('clawback_topup_credits(uuid,text,integer,numeric)'),

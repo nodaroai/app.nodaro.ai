@@ -19,7 +19,7 @@ import {
 import { tierColumns } from "./tier-columns.js"
 import { notifyPaidConversion, notifyCancellation } from "../notifications/founder-notify.js"
 import { getStripe } from "./stripe-client.js"
-import { endPaidPlan, LIVE_SUBSCRIPTION_STATUSES, raiseStorageFloorOnActivation, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
+import { endPaidPlan, raiseStorageFloorOnActivation, readLiveOrClaimedSubscriptions, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
 import { StripeEventRetryError } from "./stripe-event-retry.js"
 import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
@@ -29,21 +29,20 @@ import { releaseQuietStopOnPurchase } from "../lib/account-blocking.js"
 import { grantPaidPlanChange, notePlanCreditPeak, restartPlanCreditPeriod, type InvoicePriceLine } from "./plan-change-credits.js"
 import { HOLDING_STATUSES, holdRenewalCredits, settlePaidRenewal, type RenewalInvoiceLine } from "./subscription-renewal.js"
 import {
-  claimSubscriptionGrant,
+  claimAndGrantSubscription,
   ENDED_STATUS_LIST,
-  grantSubscriptionPlan,
   GRANTING_STATUSES,
   insertTransaction,
   isEndedStatus,
   PAID_TIER_STATUSES,
   planGranted,
-  readPreSubscribeProfile,
   readSubscriptionRow,
   recordAndGrantSubscription,
   recordUnpaidSubscription,
   SUBSCRIPTION_UPDATE_COLUMNS,
   type GrantMarker,
   type StoredSubscription,
+  writeGrantedStatus,
 } from "./subscription-grant.js"
 
 /**
@@ -156,9 +155,17 @@ export async function handleSubscriptionCreated(
 
   if (existing) {
     const regrant = !planGranted(existing) && GRANTING_STATUSES.has(data.status) && !isEndedStatus(existing.status)
-    if (regrant && (await claimSubscriptionGrant(data.subscriptionId))) {
-      const preProfile = await readPreSubscribeProfile(userId)
-      await grantSubscriptionPlan(userId, tier, data, preProfile, "subscription.created")
+    const claim = regrant ? await claimAndGrantSubscription(userId, tier, data, "subscription.created") : null
+    // Granted (then given this event's status, the row being recorded
+    // `incomplete` until its grant lands), or refused for another live
+    // subscription (logged by the claim).
+    if (claim?.outcome === "claimed") await writeGrantedStatus(data.subscriptionId, data.status, "subscription.created")
+    if (claim && claim.outcome !== "not_claimable") return
+    // Granted, but its status write failed (or was never reached): the row is
+    // still `incomplete`. This redelivery writes the status; the grant itself
+    // is never repeated.
+    if (planGranted(existing) && existing.status === "incomplete" && GRANTING_STATUSES.has(data.status)) {
+      await writeGrantedStatus(data.subscriptionId, data.status, "subscription.created")
       return
     }
     console.log("[stripe] subscription.created: already exists, skipping", data.subscriptionId)
@@ -266,9 +273,14 @@ export async function handleSubscriptionUpdated(
   // Stripe does not deliver events in order: a paid subscription's update can
   // arrive before its created event, which still says `incomplete` and would
   // record it unpaid. Record and grant it here; created then finds the row.
+  // `claimTried`: this event already asked for the grant (its own insert was
+  // claimed), so the claim below does not ask again.
   let grantedNow = false
+  let claimTried = false
   if (!existing && GRANTING_STATUSES.has(data.status)) {
-    grantedNow = await recordAndGrantSubscription(userId, getTierFromPriceId(data.priceId), data, "subscription.updated", true)
+    const recorded = await recordAndGrantSubscription(userId, getTierFromPriceId(data.priceId), data, "subscription.updated", true)
+    grantedNow = recorded?.outcome === "claimed"
+    claimTried = recorded !== null
     // When created recorded it first (the insert above lost), the claim below grants it.
     existing = await readSubscriptionRow<StoredSubscription>(data.subscriptionId, SUBSCRIPTION_UPDATE_COLUMNS)
   }
@@ -281,17 +293,29 @@ export async function handleSubscriptionUpdated(
   // A subscription that has ended (cancelled, expired) never comes back: an
   // event saying it is live is a late one (Stripe's order is not the order
   // things happened). It grants nothing, renews nothing and moves no status.
-  const lateForEnded = isEndedStatus(existing.status) && !isEndedStatus(data.status)
+  let lateForEnded = isEndedStatus(existing.status) && !isEndedStatus(data.status)
 
   // Paid at last: the first event to see the subscription active or trialing
   // claims its grant and gives it — the same grant a subscription paid at
   // creation gets, once. A claim the database could not answer throws before
   // anything is written, and the route asks Stripe to deliver the event again.
-  if (!grantedNow && !lateForEnded && !planGranted(existing) && GRANTING_STATUSES.has(data.status)) {
-    grantedNow = await claimSubscriptionGrant(data.subscriptionId)
-    if (grantedNow) {
-      const preProfile = await readPreSubscribeProfile(userId)
-      await grantSubscriptionPlan(userId, getTierFromPriceId(data.priceId), data, preProfile, "subscription.updated")
+  // A claim refused because another subscription of the account is granted and
+  // live (`other_live`, logged by the claim) grants nothing, and this
+  // subscription's live status is not written below: the row stays as
+  // recorded.
+  if (!claimTried && !grantedNow && !lateForEnded && !planGranted(existing) && GRANTING_STATUSES.has(data.status)) {
+    const claim = await claimAndGrantSubscription(userId, getTierFromPriceId(data.priceId), data, "subscription.updated")
+    grantedNow = claim.outcome === "claimed"
+    // Lost the claim to a concurrent event (a created that claimed it between
+    // this event's read and its claim), or the subscription ended meanwhile:
+    // read the row again and go on from what it is now, as for a plan granted
+    // before this event (its status write, its renewal hold).
+    if (claim.outcome === "not_claimable") {
+      const fresh = await readSubscriptionRow<StoredSubscription>(data.subscriptionId, SUBSCRIPTION_UPDATE_COLUMNS)
+      if (fresh) {
+        existing = fresh
+        lateForEnded = isEndedStatus(existing.status) && !isEndedStatus(data.status)
+      }
     }
   }
 
@@ -585,12 +609,10 @@ export async function handleSubscriptionCanceled(
 
   // Another subscription still live (a late or redelivered delete for an old
   // subscription after a re-subscribe): its plan is the account's, untouched.
-  const { data: otherLive, error: liveError } = await supabase
-    .from("subscriptions")
-    .select("stripe_subscription_id")
-    .eq("user_id", userId)
-    .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
-    .neq("stripe_subscription_id", data.subscriptionId)
+  // A subscription claimed but not yet given its live status counts too.
+  const { data: otherLive, error: liveError } = await readLiveOrClaimedSubscriptions("stripe_subscription_id", (q) =>
+    q.eq("user_id", userId).neq("stripe_subscription_id", data.subscriptionId),
+  )
   if (liveError) {
     throw new StripeEventRetryError(`subscription.canceled: reading the live subscriptions of ${userId} failed: ${liveError.message}`)
   }

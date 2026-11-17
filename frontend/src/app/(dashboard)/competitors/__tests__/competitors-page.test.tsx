@@ -197,7 +197,7 @@ beforeEach(() => {
   api.competitorCardActions.mockRejectedValue(Object.assign(new Error("not available"), { code: "not_available" }))
   // The live price differs from the static table (3 searches = 60), as it
   // does with a retuned price or a markup.
-  api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:3" ? 23 : 1 } }))
+  api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:per-page:3u" ? 23 : 1 } }))
 })
 
 describe("who is where", () => {
@@ -386,9 +386,161 @@ describe("a brand's row", () => {
     const row = await rowOf("Acme Paint")
     const scan = within(row).getByRole("button", { name: new RegExp(en["competitors.scanNow"]) })
     await waitFor(() => expect(scan).toHaveTextContent("23"))
-    expect(api.getModelCreditCost).toHaveBeenCalledWith("competitor-scan:3")
+    expect(api.getModelCreditCost).toHaveBeenCalledWith("competitor-scan:per-page:3u")
     fireEvent.click(scan)
     await waitFor(() => expect(api.scanCompetitor).toHaveBeenCalledWith(ACME.id))
+  })
+
+  it("prices a brand's scan by the pages the server says it reads", async () => {
+    api.listCompetitors.mockResolvedValue([{ ...ACME, searchTerms: ["#acme", "acme paint"], pages: 5 }])
+    api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:per-page:5u" ? 77 : 1 } }))
+    renderPage()
+    const row = await rowOf("Acme Paint")
+    const scan = within(row).getByRole("button", { name: new RegExp(en["competitors.scanNow"]) })
+    await waitFor(() => expect(scan).toHaveTextContent("77"))
+  })
+
+  it("adds a brand with only a name: the website is never required", async () => {
+    api.createCompetitor.mockResolvedValue({ ...ACME, id: "c3", brand: "Corvo" })
+    renderPage()
+    await rowOf("Acme Paint")
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.add"] }))
+    const dialog = await screen.findByRole("dialog")
+    const save = within(dialog).getByRole("button", { name: en["common.save"] })
+    expect(save).toBeDisabled()
+    fireEvent.change(within(dialog).getByLabelText(en["competitors.brand"]), { target: { value: "Corvo" } })
+    expect(save).toBeEnabled()
+    // A server that sends no limits takes no search terms: the field is not offered and none are sent.
+    expect(within(dialog).queryByText(en["competitors.searchTerms"])).toBeNull()
+    fireEvent.click(save)
+    await waitFor(() =>
+      expect(api.createCompetitor).toHaveBeenCalledWith({
+        brand: "Corvo",
+        website: "",
+        accounts: {},
+        aboutPlatforms: ["tiktok", "instagram", "youtube", "x", "reddit"],
+        schedule: "weekly",
+        isOwn: false,
+      }),
+    )
+  })
+
+  it("keeps a brand's search terms clean and within the plan's cap, prices them by pages, and sends them", async () => {
+    api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1, limits: { searchTerms: 2 } })
+    api.createCompetitor.mockResolvedValue({ ...ACME, id: "c4", brand: "Boltly" })
+    // Five about-platforms × two terms, no account: ten pages.
+    api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:per-page:10u" ? 150 : 1 } }))
+    renderPage()
+    await rowOf("Acme Paint")
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.add"] }))
+    const dialog = await screen.findByRole("dialog")
+    fireEvent.change(within(dialog).getByLabelText(en["competitors.brand"]), { target: { value: "Boltly" } })
+    const termInput = await within(dialog).findByLabelText(en["competitors.addTermLabel"])
+    fireEvent.change(termInput, { target: { value: " #boltly ,  bolt   ly, #BOLTLY, extra" } })
+    fireEvent.keyDown(termInput, { key: "Enter" })
+    const chips = within(dialog).getByRole("list", { name: en["competitors.searchTerms"] })
+    expect(within(chips).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["#boltly", "bolt ly"])
+    // At the cap, no more can be typed.
+    expect(within(dialog).queryByLabelText(en["competitors.addTermLabel"])).toBeNull()
+    expect(within(dialog).getByText("2 of 2 on your plan")).toBeInTheDocument()
+    await waitFor(() => expect(api.getModelCreditCost).toHaveBeenCalledWith("competitor-scan:per-page:10u"))
+    const price = within(dialog).getByText(en["competitors.priceLine"].replace("{n}", "10"))
+    await waitFor(() => expect(price).toHaveTextContent("150"))
+
+    fireEvent.click(within(dialog).getByRole("button", { name: en["common.save"] }))
+    await waitFor(() => expect(api.createCompetitor).toHaveBeenCalledWith(expect.objectContaining({ brand: "Boltly", website: "", searchTerms: ["#boltly", "bolt ly"] })))
+  })
+
+  it("adds the term still being typed when the brand is saved", async () => {
+    api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1, limits: { searchTerms: null } })
+    api.updateCompetitor.mockResolvedValue({ ...ACME, searchTerms: ["#acme"] })
+    renderPage()
+    const row = await rowOf("Acme Paint")
+    fireEvent.click(within(row).getByRole("button", { name: en["competitors.edit"] }))
+    const dialog = await screen.findByRole("dialog")
+    fireEvent.change(await within(dialog).findByLabelText(en["competitors.addTermLabel"]), { target: { value: "#acme" } })
+    fireEvent.click(within(dialog).getByRole("button", { name: en["common.save"] }))
+    await waitFor(() => expect(api.updateCompetitor).toHaveBeenCalledWith(ACME.id, { searchTerms: ["#acme"] }))
+  })
+
+  it("prices the chips and the term still being typed, as Save sends them", async () => {
+    api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1, limits: { searchTerms: 3 } })
+    renderPage()
+    await rowOf("Acme Paint")
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.add"] }))
+    const dialog = await screen.findByRole("dialog")
+    const termInput = await within(dialog).findByLabelText(en["competitors.addTermLabel"])
+    fireEvent.change(termInput, { target: { value: "#examplebakes" } })
+    fireEvent.keyDown(termInput, { key: "Enter" })
+    // One chip: five about-platforms × one term.
+    expect(within(dialog).getByText(en["competitors.priceLine"].replace("{n}", "5"))).toBeInTheDocument()
+    // A second term typed, not added: the price already counts it.
+    fireEvent.change(within(dialog).getByLabelText(en["competitors.addTermLabel"]), { target: { value: "example bakery" } })
+    expect(within(dialog).getByText(en["competitors.priceLine"].replace("{n}", "10"))).toBeInTheDocument()
+    await waitFor(() => expect(api.getModelCreditCost).toHaveBeenCalledWith("competitor-scan:per-page:10u"))
+  })
+
+  it("never adds a term on the Enter that confirms an IME composition (Japanese, Korean)", async () => {
+    api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1, limits: { searchTerms: 3 } })
+    renderPage()
+    await rowOf("Acme Paint")
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.add"] }))
+    const dialog = await screen.findByRole("dialog")
+    const termInput = await within(dialog).findByLabelText(en["competitors.addTermLabel"])
+    fireEvent.change(termInput, { target: { value: "検索" } })
+    fireEvent.keyDown(termInput, { key: "Enter", isComposing: true })
+    fireEvent.keyDown(termInput, { key: "Enter", keyCode: 229 })
+    expect(within(dialog).queryByRole("list", { name: en["competitors.searchTerms"] })).toBeNull()
+    expect(termInput).toHaveValue("検索")
+    fireEvent.keyDown(termInput, { key: "Enter" })
+    expect(within(dialog).getByRole("list", { name: en["competitors.searchTerms"] })).toHaveTextContent("検索")
+  })
+
+  it("moves focus to the add field when a chip is removed, even at the cap", async () => {
+    api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1, limits: { searchTerms: 1 } })
+    renderPage()
+    await rowOf("Acme Paint")
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.add"] }))
+    const dialog = await screen.findByRole("dialog")
+    const termInput = await within(dialog).findByLabelText(en["competitors.addTermLabel"])
+    fireEvent.change(termInput, { target: { value: "#examplebakes" } })
+    fireEvent.keyDown(termInput, { key: "Enter" })
+    // At the cap the field is gone; removing the chip brings it back, focused.
+    expect(within(dialog).queryByLabelText(en["competitors.addTermLabel"])).toBeNull()
+    fireEvent.click(within(dialog).getByRole("button", { name: en["competitors.removeTerm"].replace("{term}", "#examplebakes") }))
+    await waitFor(() => expect(within(dialog).getByLabelText(en["competitors.addTermLabel"])).toHaveFocus())
+  })
+
+  it("says search terms come with a higher plan, with the plans a press away, when the plan has none", async () => {
+    api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1, limits: { searchTerms: 0 } })
+    renderPage()
+    await rowOf("Acme Paint")
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.add"] }))
+    const dialog = await screen.findByRole("dialog")
+    expect(await within(dialog).findByRole("link", { name: en["credits.viewPlans"] })).toHaveAttribute("href", "/pricing")
+    expect(within(dialog).queryByLabelText(en["competitors.addTermLabel"])).toBeNull()
+  })
+
+  it("shows a brand's search terms in its window", async () => {
+    const withTerms: TrackedCompetitor = {
+      ...ACME,
+      searchTerms: ["#acme", "acme paint", "acmepaints"],
+      // The plan searches the first two.
+      searchPlan: [
+        { kind: "own", platform: "tiktok" },
+        { kind: "about", platform: "reddit", term: "#acme" },
+        { kind: "about", platform: "reddit", term: "acme paint" },
+      ],
+    }
+    api.listCompetitors.mockResolvedValue([withTerms])
+    api.getCompetitor.mockResolvedValue({ ...withTerms, latestScan: null, platforms: null, scans: [] })
+    api.competitorLessons.mockResolvedValue({ lessons: { minPosts: 8, platforms: [] }, posts: {} })
+    renderPage()
+    fireEvent.click(await screen.findByRole("button", { name: en["competitors.openBrand"].replace("{brand}", "Acme Paint") }))
+    const dialog = await screen.findByRole("dialog")
+    expect(await within(dialog).findByText("#acme")).toBeInTheDocument()
+    expect(within(dialog).getByText("acme paint")).toBeInTheDocument()
+    expect(within(dialog).queryByText("acmepaints")).toBeNull()
   })
 
   it("changes a brand's schedule from its row, and sends nothing for the one it already has", async () => {

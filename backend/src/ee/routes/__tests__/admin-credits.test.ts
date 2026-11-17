@@ -98,6 +98,7 @@ function supabaseChain(result: { data: unknown; error: unknown; count?: number }
   chain.eq = vi.fn().mockReturnValue(self())
   chain.in = vi.fn().mockReturnValue(self())
   chain.is = vi.fn().mockReturnValue(self())
+  chain.not = vi.fn().mockReturnValue(self())
   chain.or = vi.fn().mockReturnValue(self())
   chain.order = vi.fn().mockReturnValue(self())
   chain.range = vi.fn().mockReturnValue(self())

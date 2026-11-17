@@ -1,7 +1,7 @@
 "use client"
 
 import { MoreHorizontal, Pencil, Radar, Trash2 } from "lucide-react"
-import { COMPETITOR_SCHEDULES, competitorScanCreditId, competitorScanCredits, type CompetitorSchedule, type TrackedCompetitor } from "@nodaro/shared/social"
+import { COMPETITOR_SCAN_PAGE_CREDIT_ID, COMPETITOR_SCHEDULES, type CompetitorSchedule, type TrackedCompetitor } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { CreditCost } from "@/components/ui/credit-cost"
 import {
@@ -14,9 +14,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { useT } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"
+import { useScanPagesPrice } from "./scan-price"
 import { SCHEDULE_LABEL } from "./schedule-label"
 
 /** When the brand's counts are from, or that it has none yet. */
@@ -26,10 +26,9 @@ export function lastScanLine(c: TrackedCompetitor, t: ReturnType<typeof useT>): 
   return t("competitors.lastScan", { date: formatDate(Date.parse(c.lastScanAt), { month: "short", day: "numeric" }) })
 }
 
-/** The price a scan of the brand is charged: the live price, the static table until it loads. */
-export function useScanPrice(c: Pick<TrackedCompetitor, "searches"> | null): number | null {
-  const searches = c?.searches ?? 0
-  return useModelCredits(searches > 0 ? competitorScanCreditId(searches) : undefined, competitorScanCredits(searches))
+/** The price a scan of the brand is charged, by its pages (a server older than pages: one per search). */
+export function useScanPrice(c: Pick<TrackedCompetitor, "searches" | "pages"> | null): number | null {
+  return useScanPagesPrice(COMPETITOR_SCAN_PAGE_CREDIT_ID, c?.pages ?? c?.searches ?? 0)
 }
 
 /** A brand's actions: scan now (with its price), its schedule, edit, remove. */

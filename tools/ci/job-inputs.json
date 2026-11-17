@@ -213,6 +213,7 @@
         "backend/scripts/verify-compatible-writes-concurrency.mjs",
         "backend/scripts/verify-retained-image-copies-concurrency.mjs",
         "backend/scripts/verify-retained-images-concurrency.mjs",
+        "backend/scripts/verify-subscription-claim-concurrency.mjs",
         "backend/scripts/verify-yearly-monthly-credits-concurrency.mjs",
         "supabase/migrations/**",
         "supabase/tests/**"
@@ -921,6 +922,7 @@
         "backend/src/providers/kie/seedance-draft.ts",
         "backend/src/providers/kie/seedance-edit-mode.ts",
         "backend/src/providers/kie/suno-client.ts",
+        "backend/src/providers/kie/suno-separate-refusals.ts",
         "backend/src/providers/kie/suno-stem-fields.ts",
         "backend/src/providers/kie/video.ts",
         "backend/src/providers/nodaro/audio.ts",

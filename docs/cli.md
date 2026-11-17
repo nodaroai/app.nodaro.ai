@@ -270,8 +270,9 @@ nodaro moodboards delete <id> [--json]                      # the linked images 
 
 # Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
 nodaro competitors list [--json]
-nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--schedule off|weekly|daily] [--own] [--json]
-#   --website with no account flags finds the accounts from the site first (guesses are named)
+nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--terms <terms>] [--schedule off|weekly|daily] [--own] [--json]
+#   --website with no account flags finds the accounts from the site first (guesses are named); a website is optional
+#   --terms "Jane Example, @example_creator": searched instead of the name, comma separated; a post must name one (your plan caps how many; "" clears them)
 nodaro competitors discover <website> [--json]              # free
 nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
 nodaro competitors cards [--json]                           # what to do now (shows the id to mark a card done)

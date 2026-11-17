@@ -4,6 +4,7 @@ import {
   COMPETITOR_ACCOUNT_KEYS,
   COMPETITOR_SCHEDULES,
   isMeasurableCard,
+  normalizeSearchTerms,
   type AdviceRecord,
   type CardOutcome,
   type CompetitorAccountKey,
@@ -91,7 +92,14 @@ function withAccountFlags(cmd: Command): Command {
     .option("--linkedin <page>", "LinkedIn company page or person's profile (link or slug)")
     .option("--meta-ads <advertiser>", "Meta ads advertiser name or page id")
     .option("--about <platforms>", `where to search posts naming it, comma separated: ${COMPETITOR_ABOUT_PLATFORMS.join(",")}`)
+    .option("--terms <terms>", 'search terms used instead of the name, comma separated (a full name, a handle, a #hashtag; "" clears them; your plan caps how many)')
     .option("--schedule <when>", `${COMPETITOR_SCHEDULES.join(" | ")} (default weekly)`)
+}
+
+/** `--terms "Jane Example, @example_creator"` as the server keeps them; an empty value clears them. */
+export function parseTerms(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined
+  return normalizeSearchTerms(raw.split(","))
 }
 
 const FAMILY_LABEL: Readonly<Record<AdviceRecord["family"], string>> = {
@@ -197,7 +205,7 @@ export function competitorsCommand(): Command {
   )
     .option("--profile <name>")
     .option("--json")
-    .action(async (opts: AccountFlags & { brand?: string; website?: string; own?: boolean; about?: string; schedule?: string } & GlobalOpts) => {
+    .action(async (opts: AccountFlags & { brand?: string; website?: string; own?: boolean; about?: string; terms?: string; schedule?: string } & GlobalOpts) => {
       try {
         const client = buildClient(opts.profile)
         let accounts = accountsFromFlags(opts)
@@ -215,6 +223,7 @@ export function competitorsCommand(): Command {
           ...(opts.website ? { website: opts.website } : {}),
           accounts,
           ...(opts.about !== undefined ? { aboutPlatforms: parseAbout(opts.about) } : {}),
+          ...(opts.terms !== undefined ? { searchTerms: parseTerms(opts.terms) } : {}),
           ...(opts.own ? { isOwn: true } : {}),
           ...(opts.schedule !== undefined ? { schedule: parseSchedule(opts.schedule) } : {}),
         })
@@ -230,7 +239,7 @@ export function competitorsCommand(): Command {
     .option("--clear <platforms>", `accounts to remove, comma separated: ${COMPETITOR_ACCOUNT_KEYS.join(",")}`)
     .option("--profile <name>")
     .option("--json")
-    .action(async (id: string, opts: AccountFlags & { brand?: string; website?: string; about?: string; schedule?: string; clear?: string } & GlobalOpts) => {
+    .action(async (id: string, opts: AccountFlags & { brand?: string; website?: string; about?: string; terms?: string; schedule?: string; clear?: string } & GlobalOpts) => {
       try {
         const set = accountsFromFlags(opts)
         const clear = parseClear(opts.clear)
@@ -240,6 +249,7 @@ export function competitorsCommand(): Command {
           ...(opts.brand !== undefined ? { brand: opts.brand } : {}),
           ...(opts.website !== undefined ? { website: opts.website } : {}),
           ...(opts.about !== undefined ? { aboutPlatforms: parseAbout(opts.about) } : {}),
+          ...(opts.terms !== undefined ? { searchTerms: parseTerms(opts.terms) } : {}),
           ...(opts.schedule !== undefined ? { schedule: parseSchedule(opts.schedule) } : {}),
         }
         if (!changesAccounts && Object.keys(input).length === 0) throw new Error("nothing to change")

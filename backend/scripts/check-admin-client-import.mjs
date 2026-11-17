@@ -56,6 +56,13 @@ const ALLOWED_PATHS = [
   // nothing of another user's is returned.
   /^src\/routes\/media-discard\.ts$/,
 
+  // Large upload (/v1/uploads/large/complete): makes ONE write, the caller's
+  // own `assets` row (user_id = req.userId, the user the signed token names and
+  // the route checks), exactly the insert POST /v1/upload makes (that route is
+  // in the legacy baseline). It reads nothing; the quota reserve is the same
+  // service-role RPC every upload lane calls through utils/file-validation.
+  /^src\/routes\/large-upload\.ts$/,
+
   // Render final quote (#1922): reads the workflow and a prior execution's node
   // states for the caller, the same reads POST /v1/workflows/:id/run makes (that
   // route is in the legacy baseline). Ownership is checked explicitly before any
