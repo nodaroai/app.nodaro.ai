@@ -166,6 +166,20 @@ describe("Edit with AI panel: before a run", () => {
     expect(cta().disabled).toBe(true)
   })
 
+  it("with no video to edit yet, still shows everything it can do, with the note on which videos it works on", () => {
+    renderPanel({ videos: [], openedVideoUrl: undefined, noVideoNote: "Import a video from your library." })
+    expect(screen.getByText("Import a video from your library.")).toBeTruthy()
+    for (const name of ["Cut the pauses", "Add captions", "Visuals that follow the talk (b-roll)", "Phone version 9:16"]) expect(row(name)).toBeTruthy()
+    // A row can be picked ahead of the video, but nothing starts without one.
+    fireEvent.click(row("Cut the pauses"))
+    expect(cta().disabled).toBe(true)
+  })
+
+  it("shows no such note once there is a video", () => {
+    renderPanel({ noVideoNote: "Import a video from your library." })
+    expect(screen.queryByText("Import a video from your library.")).toBeNull()
+  })
+
   it("a row writes its words into the request, and the footer says what the request costs", () => {
     renderPanel()
     fireEvent.click(row("Cut the pauses"))

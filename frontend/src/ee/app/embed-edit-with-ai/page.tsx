@@ -41,7 +41,8 @@ export default function EditWithAiFramePage() {
 
   // Once shown, the panel stays: a later INIT (a list that changed, an editor reloading) never
   // unmounts it, which would end a run in progress and forget what it did and what it can undo.
-  const ready = host.kind === "ready" && !!user && aiPanelOffered(host.init.capabilities) && host.init.videos.length > 0
+  // It shows before the host has a video for it too: everything it can do, with a note on which videos it works on.
+  const ready = host.kind === "ready" && !!user && aiPanelOffered(host.init.capabilities)
   const [shown, setShown] = useState(false)
   useEffect(() => {
     if (ready) setShown(true)
@@ -63,6 +64,7 @@ export default function EditWithAiFramePage() {
           onLayout={layout}
           project={host.init.project ?? 0}
           className="w-full"
+          noVideoNote={t("freecutAi.frame.noVideos")}
         />
       </div>
     )
@@ -78,9 +80,7 @@ export default function EditWithAiFramePage() {
       ? <FrameNote text={t("freecutAi.frame.waitingEditor")} busy />
       : <FrameNote text={t("freecutAi.frame.editorTooOld")} />
   }
-  // The host can give an address for none of its videos: say which videos work (a file
-  // imported from the computer has no address the run could listen to).
-  return <FrameNote text={t("freecutAi.frame.noVideos")} />
+  return <FrameNote text={t("freecutAi.frame.connecting")} busy />
 }
 
 function FrameNote({ text, busy = false, link }: { readonly text: string; readonly busy?: boolean; readonly link?: { readonly href: string; readonly key: MessageKey } }) {
