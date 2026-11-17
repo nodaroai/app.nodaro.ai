@@ -48,7 +48,40 @@ function kieInlineDataUrl(b: Extract<LlmContentBlock, { type: "image_base64" }>,
 const KIE_IMAGE_URL_LANE_ERROR = (lane: string) =>
   `llm-client: an image URL reached the ${lane} builder — the request must pass through inlineImagesForKie first`
 
-export function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unknown>> {
+/**
+ * The `image_url` part a document rides on KIE's chat-completions dialect, for
+ * a model that declares that shape (`fileWire.kie: "image-url"`, measured on
+ * Gemini 4 Hydrogen 2026-11-17). KIE reads a PDF there ONLY as an `image_url`
+ * holding a `data:application/pdf;base64,…` URL or an https link whose path
+ * ends in `.pdf`; the OpenAI `file` part and the responses dialect's
+ * `input_file` are dropped (a billed 200 about no file), so neither is ever
+ * sent. A file whose bytes fit the inline limit goes inline; a larger one
+ * goes by the link the route stored for it (`hostedUrl`). One that is past
+ * the limit with no link means a call path skipped that step: refuse it.
+ */
+function kieChatFilePart(b: Extract<LlmContentBlock, { type: "file_base64" }>): Record<string, unknown> {
+  if (b.hostedUrl !== undefined) {
+    if (!/^https:\/\/[^?#]+\.pdf$/i.test(b.hostedUrl)) {
+      throw new Error("llm-client: a document's stored link must be an https link whose path ends in .pdf")
+    }
+    return { type: "image_url", image_url: { url: b.hostedUrl } }
+  }
+  const url = `data:${b.mediaType};base64,${b.data}`
+  if (url.length > KIE_INLINE_DATA_URL_MAX_CHARS) {
+    throw new Error(
+      `llm-client: a document over the ${KIE_INLINE_DATA_URL_MAX_CHARS}-character inline limit reached the KIE chat-completions ` +
+        `builder with no stored link — the request must pass through storeLlmFileLinks first`,
+    )
+  }
+  return { type: "image_url", image_url: { url } }
+}
+
+/**
+ * `model` is the model the body is for: it says whether a document may ride
+ * this dialect (`fileWire`). Left out, or a model that declares no such shape,
+ * a document throws, as it always has here.
+ */
+export function buildChatCompletionsMessages(req: LlmRequest, model?: Pick<LlmModelDef, "fileWire">): Array<Record<string, unknown>> {
   const msgs: Array<Record<string, unknown>> = []
   if (req.system) {
     msgs.push({ role: "system", content: req.system })
@@ -97,7 +130,10 @@ export function buildChatCompletionsMessages(req: LlmRequest): Array<Record<stri
         if (b.type === "video_base64") {
           throw new Error(INLINE_VIDEO_LANE_ERROR("KIE chat-completions"))
         }
-        if (b.type === "file_base64") throw new Error(FILE_LANE_ERROR("KIE chat-completions"))
+        if (b.type === "file_base64") {
+          if (model?.fileWire?.kie !== "image-url") throw new Error(FILE_LANE_ERROR("KIE chat-completions"))
+          return kieChatFilePart(b)
+        }
         const _exhaustive: never = b
         return _exhaustive
       })
@@ -197,7 +233,12 @@ export function anthropicStructuredTool(
   }
 }
 
-export function buildResponsesInput(req: LlmRequest): Array<Record<string, unknown>> {
+/**
+ * `model` is the model the body is for: a document rides this dialect only for
+ * a model that declares it (`fileWire.kie: "input-file"`). Left out, or a
+ * model that declares no such shape, a document throws.
+ */
+export function buildResponsesInput(req: LlmRequest, model?: Pick<LlmModelDef, "fileWire">): Array<Record<string, unknown>> {
   const input: Array<Record<string, unknown>> = []
   if (req.system) {
     input.push({ role: "developer", content: req.system })
@@ -217,9 +258,11 @@ export function buildResponsesInput(req: LlmRequest): Array<Record<string, unkno
         if (b.type === "video_base64") {
           throw new Error(INLINE_VIDEO_LANE_ERROR("GPT responses"))
         }
-        // A document, inline: the one lane that reads one (`input_file`, as
-        // `file_data` — KIE's doc names `file_url`; both answered, 2026-11-13).
+        // A document, inline (`input_file`, as `file_data` — KIE's doc names
+        // `file_url`; both answered, 2026-11-13). Always the bytes: a stored
+        // link (`hostedUrl`) is for the chat-completions dialect only.
         if (b.type === "file_base64") {
+          if (model?.fileWire?.kie !== "input-file") throw new Error(FILE_LANE_ERROR("KIE responses"))
           return { type: "input_file", filename: b.filename, file_data: `data:${b.mediaType};base64,${b.data}` }
         }
         const _exhaustive: never = b
@@ -254,7 +297,8 @@ export function llmBlockToAnthropic(b: LlmContentBlock): Anthropic.Messages.Cont
 }
 
 /**
- * A document on a lane that cannot carry one. The routes refuse files on a
+ * A document on a lane that cannot carry one, or to a model that declares no
+ * shape for that lane (`LlmModelDef.fileWire`). The routes refuse files on a
  * model without the `file` cap before anything is held (`llmAcceptsFiles`), so
  * reaching a builder that throws this means a new call site skipped that
  * check — throw rather than drop the file and answer about nothing.

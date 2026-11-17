@@ -32,8 +32,8 @@ export type LlmChatParams = {
   referenceAudioUrls?: string[]
   /**
    * Up to 5 public links to PDF documents (`LLM_REFERENCE_FILES_MAX`), on a
-   * model that reads files (`llmAcceptsFiles`: GPT-6.1 Terra). Up to 6 MB and
-   * 100 pages in all. Each file is read and checked before anything is
+   * model that reads files (`llmAcceptsFiles`: GPT-6.1 Terra, Gemini 4
+   * Hydrogen). Up to 6 MB and 100 pages in all. Each file is read and checked before anything is
    * held; a file that is not a PDF, cannot be read, or is past a limit, and
    * any file on another model, answers `400` before any credits are held.
    */

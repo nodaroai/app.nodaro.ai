@@ -54,6 +54,39 @@ describe("mediaLaneParams", () => {
     expect(mediaLaneParams({ modelId: "gemini-3.8-flash", videos: VIDEO, text: ["", ""], cheapLanesOnly: true })).toEqual({ minPromptTokens: 60 })
   })
 
+  // A document never moves a call (decided 2026-11-17): a file-only call runs
+  // on its own lane like a text call, with a floor for its pages on a model
+  // whose lane can drop a document and still answer (Gemini 4 Hydrogen).
+  it("never pins a call for its documents: a Hydrogen file-only call keeps its lane, with a floor of 450 tokens a page", () => {
+    // "summarise" is 9 characters: 1 token; 5 pages at 450 a page.
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 5, text: ["", "summarise"] })).toEqual({ minPromptTokens: 2251 })
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 14, text: ["", ""], cheapLanesOnly: true })).toEqual({ minPromptTokens: 6_300 })
+    env.geminiKey = ""
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 5, text: ["", "summarise"] })).toEqual({ minPromptTokens: 2251 })
+  })
+
+  it("the floor sits under what a read file reported, and above what a long prompt alone could reach", () => {
+    // Measured 2026-11-17: 13,357 prompt tokens for 5 pages, 28,068 for 14; a read page is never below its 520 image tokens.
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 5, text: ["", ""] }).minPromptTokens).toBeLessThan(13_357)
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 14, text: ["", ""] }).minPromptTokens).toBeLessThan(28_068)
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 1, text: ["", ""] }).minPromptTokens).toBeLessThan(520)
+    // A 3,000-character prompt is about 750 real tokens: with one unread page it stays under the floor (375 + 450).
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 1, text: ["", "x".repeat(3000)] }).minPromptTokens).toBe(825)
+  })
+
+  it("a call that also carries a video or an audio clip follows their rule: pinned where it can be, and the floor counts the pages too where it cannot", () => {
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", videos: VIDEO, filePages: 5, text: ["", "summarise"] })).toEqual({ requireLane: "direct" })
+    env.geminiKey = ""
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", videos: VIDEO, filePages: 5, text: ["", "summarise"] })).toEqual({ minPromptTokens: 2311 })
+  })
+
+  it("a model with no page floor is untouched by its documents: no pin, no floor (GPT-6.1 Terra)", () => {
+    expect(mediaLaneParams({ modelId: "gpt-6.1-terra", filePages: 40, text: ["", "summarise"] })).toEqual({})
+    expect(mediaLaneParams({ modelId: "gpt-6.1-terra", filePages: 40, text: ["", "summarise"], cheapLanesOnly: true })).toEqual({})
+    // No document and no media: nothing, on any model.
+    expect(mediaLaneParams({ modelId: "gemini-4-hydrogen", filePages: 0, text: ["", "hi"] })).toEqual({})
+  })
+
   it("a model with no vendor lane for media keeps its own, with the floor", () => {
     expect(mediaLaneParams({ modelId: "gpt-5.4", videos: VIDEO, text: ["", ""] })).toEqual({ minPromptTokens: 60 })
     expect(mediaLaneParams({ modelId: "no-such-model", videos: VIDEO, text: ["", ""] })).toEqual({ minPromptTokens: 60 })

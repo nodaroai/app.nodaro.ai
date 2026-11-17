@@ -44,7 +44,7 @@ export type LlmFileBlock = Extract<LlmContentBlock, { type: "file_base64" }>
 
 /** Why a document was refused — the `400`'s code and sentence. */
 export class LlmFileError extends Error {
-  readonly code: "file_unreachable" | "file_too_large" | "file_type_not_supported" | "file_unreadable" | "file_too_many_pages" | "link_imports_disabled" | "file_reader_busy"
+  readonly code: "file_unreachable" | "file_too_large" | "file_type_not_supported" | "file_unreadable" | "file_too_many_pages" | "link_imports_disabled" | "file_reader_busy" | "upload_blocked"
   constructor(code: LlmFileError["code"], message: string) {
     super(message)
     this.name = "LlmFileError"

@@ -26,7 +26,7 @@
  */
 
 import { createWriteStream } from "node:fs"
-import { mkdir, rm, stat } from "node:fs/promises"
+import { mkdir, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
@@ -40,6 +40,16 @@ import { LLM_VIDEO_FPS_MAX } from "../llm/types.js"
 
 /** Raw-bytes ceiling for inlining rather than uploading. See module docstring. */
 const INLINE_MAX_BYTES = 6 * 1024 * 1024
+
+/**
+ * The most raw bytes ONE request carries inline in all (decided 2026-11-17):
+ * 12 MiB, about 16 million characters once base64 inflates them, under the
+ * ~20 MB a request may total. A caller that passes a budget
+ * (`GeminiPartOptions.inlineBudget`, the LLM client does) has each part past
+ * what is left sent through the Files API instead, so a request that mixes
+ * documents with inlined images, audio and video stays under the limit.
+ */
+export const INLINE_REQUEST_MAX_BYTES = 12 * 1024 * 1024
 
 /** Refuse absurd inputs rather than streaming them to disk indefinitely. */
 const MAX_MEDIA_BYTES = 512 * 1024 * 1024
@@ -228,8 +238,8 @@ async function uploadViaTempFile(
  * metadata is attached. Attaching it inside would mean four edits today and a
  * silent drop the day a fifth source is added.
  */
-export async function blockToGeminiPart(ai: GoogleGenAI, block: LlmContentBlock): Promise<Part> {
-  const part = await resolveBlockPart(ai, block)
+export async function blockToGeminiPart(ai: GoogleGenAI, block: LlmContentBlock, opts: GeminiPartOptions = {}): Promise<Part> {
+  const part = await resolveBlockPart(ai, block, opts)
   // `videoMetadata` is a sibling of inlineData/fileData ON THE PART. Nesting it
   // inside either one is rejected outright by the SDK's own types and is the
   // entire content of google-gemini/cookbook#787.
@@ -305,9 +315,54 @@ function assertInlineVideoBytes(block: { mediaType: string; data: string }): voi
   }
 }
 
-async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock): Promise<Part> {
+/** What the model being called lets a part carry. */
+export interface GeminiPartOptions {
+  /**
+   * The model reads a document as an inline part on this lane
+   * (`LlmModelDef.fileWire.direct === "inline-data"`). Absent, a document
+   * throws.
+   */
+  inlineFiles?: boolean
+  /**
+   * The raw bytes the request may still carry inline, shared by every part
+   * of every message and counted down as parts are built
+   * ({@link INLINE_REQUEST_MAX_BYTES}). A fetched asset or a document that
+   * does not fit what is left goes through the Files API. Absent: each part
+   * is judged on its own, as before.
+   */
+  inlineBudget?: { left: number }
+}
+
+/** Raw bytes of canonical base64 `data`. */
+function base64Bytes(data: string): number {
+  return Math.floor((data.length * 3) / 4)
+}
+
+/** Count `bytes` against the request's inline budget, when it has one. */
+function spendInline(opts: GeminiPartOptions, bytes: number): void {
+  if (opts.inlineBudget) opts.inlineBudget.left -= bytes
+}
+
+/** Upload bytes we already hold through the Files API (a temp file, uploaded by path). */
+async function uploadBytes(ai: GoogleGenAI, bytes: Buffer, mimeType: string, label: string): Promise<Part> {
+  const workDir = join(tmpdir(), `gemini-upload-${randomUUID()}`)
+  await mkdir(workDir, { recursive: true })
+  const localPath = join(workDir, "media")
+  try {
+    await writeFile(localPath, bytes)
+    const uploaded = await ai.files.upload({ file: localPath, config: { mimeType } })
+    if (!uploaded.name || !uploaded.uri) throw new Error(`Gemini Files API: upload returned no name/uri for ${label}`)
+    await waitUntilActive(ai, uploaded.name, mimeType)
+    return { fileData: { fileUri: uploaded.uri, mimeType } }
+  } finally {
+    await rm(workDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock, opts: GeminiPartOptions): Promise<Part> {
   if (block.type === "text") return { text: block.text }
   if (block.type === "image_base64") {
+    spendInline(opts, base64Bytes(block.data))
     return { inlineData: { mimeType: block.mediaType, data: block.data } }
   }
   // Inline video bytes: validated, then passed through VERBATIM. Re-encoding
@@ -315,11 +370,28 @@ async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock): Promis
   // immutable payload, and the bytes it handed us are that payload's identity.
   if (block.type === "video_base64") {
     assertInlineVideoBytes(block)
+    spendInline(opts, base64Bytes(block.data))
     return { inlineData: { mimeType: block.mediaType, data: block.data } }
   }
-  // No Gemini model declares the `file` cap: a document reaching this lane is
-  // a call site that skipped the routes' check.
-  if (block.type === "file_base64") throw new Error(FILE_LANE_ERROR("direct Gemini"))
+  // A document: its bytes inline as an `application/pdf` part, for a model
+  // that declares that shape on this lane (decided 2026-11-17). The bytes are
+  // the ones the route fetched, checked and counted (`lib/llm-files.ts`); a
+  // call's documents total at most 6 MiB. Read correctly this way 2026-11-17
+  // (5, 14 and 15 pages, up to 2.2 MB). A document that does not fit what the
+  // request may still carry inline (`inlineBudget`: a request that also
+  // inlines large images, audio or video) is uploaded through the Files API
+  // instead, never dropped. A stored link (`hostedUrl`) is for the aggregator
+  // and is never sent here. On a model that declares no such shape a document
+  // is a call site that skipped the routes' check: refused, never dropped.
+  if (block.type === "file_base64") {
+    if (!opts.inlineFiles) throw new Error(FILE_LANE_ERROR("direct Gemini"))
+    const bytes = base64Bytes(block.data)
+    if (opts.inlineBudget && bytes > opts.inlineBudget.left) {
+      return uploadBytes(ai, Buffer.from(block.data, "base64"), block.mediaType, block.filename)
+    }
+    spendInline(opts, bytes)
+    return { inlineData: { mimeType: block.mediaType, data: block.data } }
+  }
 
   const declared = block.type === "image" ? undefined : block.mimeType
 
@@ -341,8 +413,9 @@ async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock): Promis
   const declaredLength = Number(response.headers.get("content-length") ?? Number.NaN)
 
   // Small and self-declared: inline it and skip the upload round-trip entirely.
-  if (Number.isFinite(declaredLength) && declaredLength > 0 && declaredLength <= INLINE_MAX_BYTES) {
+  if (Number.isFinite(declaredLength) && declaredLength > 0 && declaredLength <= INLINE_MAX_BYTES && (!opts.inlineBudget || declaredLength <= opts.inlineBudget.left)) {
     const bytes = Buffer.from(await response.arrayBuffer())
+    spendInline(opts, bytes.length)
     return { inlineData: { mimeType, data: bytes.toString("base64") } }
   }
 
@@ -355,9 +428,10 @@ async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock): Promis
 export async function blocksToGeminiParts(
   ai: GoogleGenAI,
   content: string | LlmContentBlock[],
+  opts: GeminiPartOptions = {},
 ): Promise<Part[]> {
   if (typeof content === "string") return [{ text: content }]
   const parts: Part[] = []
-  for (const block of content) parts.push(await blockToGeminiPart(ai, block))
+  for (const block of content) parts.push(await blockToGeminiPart(ai, block, opts))
   return parts
 }

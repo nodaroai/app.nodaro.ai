@@ -20,10 +20,20 @@
  *
  * A run kept to the cheap lanes (`cheapLanesOnly`) is never moved to the
  * vendor's API: it keeps the floor. Advanced mode pins the lane itself.
+ *
+ * A document never moves a call (decided 2026-11-17): a call whose only
+ * attachments beyond images are files runs on its own lane, like a text call,
+ * with the vendor's API as its fallback. On a model whose aggregator lane can
+ * drop a document and still answer (a per-model figure, `llmFileSizes`:
+ * Gemini 4 Hydrogen) the call carries the floor for its pages, so such an
+ * answer is discarded. A call that also carries a video or an audio clip
+ * follows the rule above for those. A model with no such figure (GPT-6.1
+ * Terra) is untouched: no pin, no floor.
  */
 import { getLlmModel } from "@nodaro/shared/llm-models"
 import { llmMeteredPricing } from "./config.js"
 import { geminiKeySet } from "./llm/anthropic-availability.js"
+import { llmFileSizes } from "./llm/file-sizes.js"
 import type { LlmRequest } from "./llm/types.js"
 
 /** The fewest prompt tokens one video stands for: under one frame of the smallest clip measured. */
@@ -35,27 +45,31 @@ export const MEDIA_FLOOR_CHARS_PER_TOKEN = 8
 
 /** What the person reads when the model answered without its media. */
 export const MEDIA_NOT_READ_MESSAGE =
-  "The model answered without reading the video or audio you sent, so the answer was discarded. Run it again, or turn Advanced mode on."
+  "The model answered without reading the video, audio or file you sent, so the answer was discarded. Run it again."
 export const MEDIA_NOT_READ_CODE = "media_not_ingested"
 
 export function mediaLaneParams(input: {
   modelId: string
   videos?: readonly string[]
   audios?: readonly string[]
+  /** The pages of the call's documents in all (0 or left out: none). Counted only for a model with a not-read floor for a page (`llmFileSizes`). */
+  filePages?: number
   /** The text sent with the media (system prompt and user input). */
   text: readonly string[]
   cheapLanesOnly?: boolean
 }): Pick<LlmRequest, "requireLane" | "minPromptTokens"> {
   const videos = input.videos?.length ?? 0
   const audios = input.audios?.length ?? 0
-  if (videos + audios === 0) return {}
+  const fileFloor = Math.max(0, input.filePages ?? 0) * (llmFileSizes(input.modelId).notReadPageTokens ?? 0)
+  if (videos + audios === 0 && fileFloor === 0) return {}
   const model = getLlmModel(input.modelId)
-  if (model?.directGeminiModel && geminiKeySet() && llmMeteredPricing() && input.cheapLanesOnly !== true) {
+  // Only a video or an audio clip moves the call; a document does not.
+  if (videos + audios > 0 && model?.directGeminiModel && geminiKeySet() && llmMeteredPricing() && input.cheapLanesOnly !== true) {
     return { requireLane: "direct" }
   }
   const chars = input.text.reduce((n, t) => n + t.length, 0)
   return {
-    minPromptTokens: Math.floor(chars / MEDIA_FLOOR_CHARS_PER_TOKEN) + videos * MEDIA_FLOOR_VIDEO_TOKENS + audios * MEDIA_FLOOR_AUDIO_TOKENS,
+    minPromptTokens: Math.floor(chars / MEDIA_FLOOR_CHARS_PER_TOKEN) + videos * MEDIA_FLOOR_VIDEO_TOKENS + audios * MEDIA_FLOOR_AUDIO_TOKENS + fileFloor,
   }
 }
 

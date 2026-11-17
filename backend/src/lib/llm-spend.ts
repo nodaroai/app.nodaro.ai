@@ -51,12 +51,14 @@ function attemptSource(a: LlmAttemptSpend): AttemptSource {
 /**
  * Whether an attempt's input is charged at its documents' floor (rule 3 of
  * {@link llmAttemptCostUsd}): it sent documents, its reply stated no charge,
- * its reported input is below the floor, and its usage is not a stopped
- * stream's estimate. Such an attempt is recorded as `document-floor`.
+ * its reported input is below the floor, its usage is not a stopped stream's
+ * estimate, and it ran on the aggregator's lane. Such an attempt is recorded as `document-floor`.
  */
 function documentFloorApplies(a: LlmAttemptSpend): a is LlmAttemptSpend & { fileInputFloor: number } {
-  return a.creditsUsd === undefined && !a.estimated && a.fileInputFloor !== undefined && a.inputTokens < a.fileInputFloor &&
-    !(a.lane === "kie" && kieInputUntrusted(a.modelId))
+  // Only on the aggregator's lane, whose replies have left documents out of
+  // the count: the vendor's own API reports what it read, and is counted as reported.
+  return a.lane === "kie" && a.creditsUsd === undefined && !a.estimated && a.fileInputFloor !== undefined && a.inputTokens < a.fileInputFloor &&
+    !kieInputUntrusted(a.modelId)
 }
 
 /**

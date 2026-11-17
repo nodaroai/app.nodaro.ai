@@ -27,7 +27,7 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai"
 import { structuredWireMode, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { config } from "../config.js"
 import { llmCostOrZero } from "../pricing/llm-cost.js"
-import { blocksToGeminiParts } from "./media.js"
+import { blocksToGeminiParts, INLINE_REQUEST_MAX_BYTES } from "./media.js"
 import { toGeminiResponseSchema } from "./response-schema.js"
 import { LlmStreamResponseError, assertNotContentRefusal, assertNotOutputCapped, isContentRefusalStop, type ReplyEnd } from "../llm-errors.js"
 import type { LlmRequest, LlmResponse } from "../llm-client.js"
@@ -114,11 +114,14 @@ function buildConfig(model: LlmModelDef, req: LlmRequest, p: GeminiCallParams, s
   }
 }
 
-async function buildContents(req: LlmRequest) {
+async function buildContents(model: LlmModelDef, req: LlmRequest) {
   const ai = getGeminiClient()
+  // A document is sent only to a model that declares its shape on this lane.
+  // One inline budget for the whole request: what does not fit goes through the Files API.
+  const opts = { inlineFiles: model.fileWire?.direct === "inline-data", inlineBudget: { left: INLINE_REQUEST_MAX_BYTES } }
   const contents = []
   for (const m of req.messages) {
-    contents.push({ role: geminiRole(m.role), parts: await blocksToGeminiParts(ai, m.content) })
+    contents.push({ role: geminiRole(m.role), parts: await blocksToGeminiParts(ai, m.content, opts) })
   }
   return contents
 }
@@ -214,7 +217,7 @@ export async function callGeminiDirect(
   const ai = getGeminiClient()
   const response = await ai.models.generateContent({
     model: geminiModelId(model),
-    contents: await buildContents(req),
+    contents: await buildContents(model, req),
     config: buildConfig(model, req, params),
   })
   return toResponse(
@@ -233,7 +236,7 @@ export async function streamGeminiDirect(
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const ai = getGeminiClient()
-  const contents = await buildContents(req)
+  const contents = await buildContents(model, req)
   // A stop before the request went out (during media preparation, or before
   // the call) spent nothing: its plain abort error, refunded.
   signal?.throwIfAborted()

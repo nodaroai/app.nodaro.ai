@@ -9,6 +9,7 @@ import { getLlmModel } from "@nodaro/shared/llm-models"
 import { calculateLlmCost } from "../pricing/llm-cost.js"
 import type { LlmFailureUsage } from "../llm-errors.js"
 import { extractActualUsd } from "./response.js"
+import { DEFAULT_FILE_SIZES, llmFileSizes } from "./file-sizes.js"
 import { sentSchemaText } from "./structured-schema.js"
 import type { LlmRequest } from "./types.js"
 
@@ -19,9 +20,10 @@ export const KIE_IMAGE_ESTIMATE_CHARS = 6_400
  * Characters one page of a document stands for in the size estimate — about
  * 500 tokens, what a dense text page measured on GPT-6.1 Terra (2026-11-13).
  * An estimate of what was spent (a stopped stream), not the hold's ceiling
- * (`LLM_FILE_PAGE_TOKENS`).
+ * (`LLM_FILE_PAGE_TOKENS`). The default: a model with its own measured page
+ * takes that (`llmFileSizes`, ./file-sizes.ts).
  */
-export const KIE_FILE_PAGE_ESTIMATE_CHARS = 2_000
+export const KIE_FILE_PAGE_ESTIMATE_CHARS = DEFAULT_FILE_SIZES.estimatePageChars
 
 /**
  * The fewest input tokens a document page is charged at when the reply states
@@ -29,12 +31,13 @@ export const KIE_FILE_PAGE_ESTIMATE_CHARS = 2_000
  * carry no stated charge, and a document call has reported 0 input): about
  * 500 a page measured on GPT-6.1 Terra (2026-11-13: 3 dense text pages, about
  * 1,500 tokens), plus a margin. The measured rate, never the hold's ceiling
- * (`LLM_FILE_PAGE_TOKENS`).
+ * (`LLM_FILE_PAGE_TOKENS`). The default: a model with its own measured page
+ * takes that (`llmFileSizes`, ./file-sizes.ts).
  */
-export const LLM_FILE_CHARGE_PAGE_TOKENS = 600
+export const LLM_FILE_CHARGE_PAGE_TOKENS = DEFAULT_FILE_SIZES.chargePageTokens
 
 /** The fewest input tokens a document is charged at beyond its pages: its name and wrapper. */
-export const LLM_FILE_CHARGE_FILE_TOKENS = 100
+export const LLM_FILE_CHARGE_FILE_TOKENS = DEFAULT_FILE_SIZES.chargeFileTokens
 
 /**
  * The fewest input tokens a call that sent documents is charged at when its
@@ -61,7 +64,8 @@ export function documentInputFloorTokens(req: LlmRequest): number {
     }
   }
   if (files === 0) return 0
-  return files * LLM_FILE_CHARGE_FILE_TOKENS + pages * LLM_FILE_CHARGE_PAGE_TOKENS + kieInputTokens(textChars)
+  const sizes = llmFileSizes(req.modelId)
+  return files * sizes.chargeFileTokens + pages * sizes.chargePageTokens + kieInputTokens(textChars)
 }
 
 /**
@@ -96,6 +100,7 @@ export function kieInputUntrusted(modelId: string): boolean {
  * {@link KIE_IMAGE_ESTIMATE_CHARS} per other media block.
  */
 export function requestChars(req: LlmRequest): number {
+  const pageChars = llmFileSizes(req.modelId).estimatePageChars
   let chars = req.system.length + sentSchemaText(req).length
   for (const message of req.messages) {
     if (typeof message.content === "string") {
@@ -103,7 +108,7 @@ export function requestChars(req: LlmRequest): number {
       continue
     }
     for (const block of message.content) {
-      chars += block.type === "text" ? block.text.length : block.type === "file_base64" ? block.pages * KIE_FILE_PAGE_ESTIMATE_CHARS : KIE_IMAGE_ESTIMATE_CHARS
+      chars += block.type === "text" ? block.text.length : block.type === "file_base64" ? block.pages * pageChars : KIE_IMAGE_ESTIMATE_CHARS
     }
   }
   return chars
