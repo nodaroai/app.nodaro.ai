@@ -1,5 +1,24 @@
 # @nodaro/prompts
 
+## 1.59.0
+
+### Minor Changes
+
+- c237040: Prompt-wizard capability line for the new Extend Video provider `gemini-omni-flash-1-2-extend` (Gemini Omni Flash 1.2: 3–10 s added at 360p–4K to a 16:9 or 9:16 video).
+- dfc544b: Prompt-wizard capability line for the new Extend Video provider `seedance-2-5-flash-extend` (Seedance 2.5 Flash: 4–30 s added at 480p / 720p).
+- 4dfc210: Seedance 2.5 Flash (`seedance-2-5-flash`) joins the Seedance 2 prompt doctrine, with a tip and a doctrine line on what sets it apart from Seedance 2.5 (480p / 720p only, 10 / 5 / 5 references, reference audio up to 30 s together (converted to MP3 when it is not WAV or MP3), a prompt with reference audio alone, no draft). Prompt-wizard capability lines for text-to-video and image-to-video.
+
+### Patch Changes
+
+- Updated dependencies [d8585f8]
+- Updated dependencies [977e316]
+- Updated dependencies [c237040]
+- Updated dependencies [81d852e]
+- Updated dependencies [cb7abbe]
+- Updated dependencies [dfc544b]
+- Updated dependencies [4dfc210]
+  - @nodaro/shared@3.69.0
+
 ## 1.58.1
 
 ### Patch Changes
