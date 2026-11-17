@@ -1,6 +1,6 @@
 /**
- * Gating generations (lib/availability-override.ts): `cast-swap` (Nodaro
- * Motion, every trend run) became gateable long after deployments started
+ * Gating generations (lib/availability-override.ts): `cast-swap` (Video
+ * Remake, every trend run) became gateable long after deployments started
  * storing Admin → Availability overrides. An override is an ENABLED-SET, so
  * one stored before that never lists cast-swap — read as it always was, it
  * would switch Motion off for every user of every deployment that ever saved
@@ -105,7 +105,7 @@ describe("an override stored BEFORE cast-swap was gateable (no generation)", () 
     expect([...(availabilityOverride("nodes") ?? [])].sort()).toEqual(["generate-image", "suno-generate"])
   })
 
-  it("does NOT switch Nodaro Motion off: cast-swap falls back to the factory set (available)", async () => {
+  it("does NOT switch Video Remake off: cast-swap falls back to the factory set (available)", async () => {
     await storedRow(OLD_ROW)
     expect(isNodeDenied("cast-swap", USER_VIEWER)).toBe(false)
     expect(isNodeDenied("cast-swap", ADMIN_VIEWER)).toBe(false)
@@ -262,7 +262,7 @@ describe("the admin page shows what users get", () => {
     }
   }
 
-  it("lists Nodaro Motion among the nodes", async () => {
+  it("lists Video Remake among the nodes", async () => {
     const body = await getAvailability()
     expect(body.nodes.items.find((i) => i.id === "cast-swap")).toMatchObject({ category: "ai-video", enabled: true, factoryEnabled: true })
     expect(body.nodes.items.find((i) => i.id === "sticky-note")).toBeUndefined()

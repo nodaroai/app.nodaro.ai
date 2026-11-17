@@ -83,7 +83,7 @@ export default function AdminTrendsPage() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold">Trends</h1>
           <p className="text-sm text-muted-foreground">
-            Ready-made Nodaro Motion recipes. Users only see a trend's published version.
+            Ready-made Video Remake recipes. Users only see a trend's published version.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

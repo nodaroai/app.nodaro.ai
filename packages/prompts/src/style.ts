@@ -76,7 +76,7 @@ export interface Style {
   /**
    * How the style makes its pictures (`StyleMedium`). Required, so a new style
    * classifies itself in the one place that adds it. A video prompt words its
-   * restyle by it: Nodaro Motion's art-style line says "drawn" for a 2D style
+   * restyle by it: Video Remake's art-style line says "drawn" for a 2D style
    * and "rendered" for a 3D one, and leaves a photographic style photographed.
    */
   readonly medium: StyleMedium
@@ -92,7 +92,7 @@ export interface Style {
   readonly media?: ReadonlyArray<StyleMedia>
   /**
    * `false` on a style that does not hold up as a RESTYLE of filmed footage
-   * (Nodaro Motion's Flex art style, a style-only restyle): in tests it came
+   * (Video Remake's Flex art style, a style-only restyle): in tests it came
    * out as the same plain 2D cartoon as Digital Art, without its own look.
    * Restyle style lists leave it out. Video GENERATION still offers it, and a
    * restyle that names it anyway still reads it. Absent: offered for restyle.

@@ -83,13 +83,13 @@ export function supportedTargetsFor(
 }
 
 /**
- * The environments every Nodaro Motion setting is shared by (the server's
+ * The environments every Video Remake setting is shared by (the server's
  * publish environments: one database, one settings row).
  */
 export const SHARED_SETTING_ENVIRONMENTS = ["staging", "production"] as const
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot hide whole people with faces hidden —
  * none recorded, or one whose `faceMaskHideTargets` lacks "body" (absent:
  * `faceMaskTargets` without "body"). Unknown while the environments are
@@ -105,7 +105,7 @@ export function environmentsThatCannotHideBodies(envs: readonly TrendEngineEnvir
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot draw the face mesh — none recorded, or
  * one that does not declare `castSwap.faceMesh`. Unknown while the
  * environments are (undefined). The setting is shared, so the switch is
@@ -122,7 +122,7 @@ export function environmentsThatCannotDrawFaceMesh(envs: readonly TrendEngineEnv
  * engine cannot take the preparation steps — none recorded, or one that does
  * not declare `castSwap.steps`. Unknown while the environments are
  * (undefined). The step editors are offered only when this is empty: Admin →
- * Nodaro Motion's setting is shared (the server refuses the save otherwise,
+ * Video Remake's setting is shared (the server refuses the save otherwise,
  * 409 `engine_unsupported`), and a trend that sets steps can't be published
  * to an environment that lacks them.
  */
@@ -132,10 +132,10 @@ export function environmentsThatCannotTakeSteps(envs: readonly TrendEngineEnviro
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot enforce a forced Style — none recorded,
  * or one that does not declare `castSwap.styleChoice`. Unknown while the
- * environments are (undefined). "Precise in Nodaro Motion" and "Always Flex" are
+ * environments are (undefined). "Precise in Video Remake" and "Always Flex" are
  * offered only when this is empty (the setting is shared: the server refuses
  * the save otherwise, 409 `engine_unsupported`); "Users choose" always is.
  */
@@ -145,7 +145,7 @@ export function environmentsThatCannotForceStyle(envs: readonly TrendEngineEnvir
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot run a style-only run — none recorded, or
  * one that does not declare `castSwap.styleOnly`. Unknown while the
  * environments are (undefined). Two rules read it (the server's):
@@ -162,7 +162,7 @@ export function environmentsThatCannotRunStyleOnly(envs: readonly TrendEngineEnv
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot take an art style on a Precise run —
  * none recorded, or one that does not declare `castSwap.preciseArtStyle`.
  * Unknown while the environments are (undefined). The Precise art-style
@@ -176,7 +176,7 @@ export function environmentsThatCannotTakePreciseArtStyle(envs: readonly TrendEn
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot send a run's clip as it is — none
  * recorded, or one that does not declare `castSwap.noPersonSourceClip`.
  * Unknown while the environments are (undefined). The no-person setting
@@ -318,7 +318,7 @@ export function someEngineDrawsRoleOutlines(envs: readonly TrendEngineEnvironmen
 }
 
 /**
- * The depth colormaps a setting may name: what Nodaro Motion's depth provider
+ * The depth colormaps a setting may name: what Video Remake's depth provider
  * offers (`videoDepthColormaps("video-depth-anything")`), in display order.
  */
 export const DEPTH_COLORMAPS: readonly VideoDepthColormap[] = videoDepthColormaps("video-depth-anything")
@@ -359,7 +359,7 @@ export function depthColormapsSomeEngineDraws(envs: readonly TrendEngineEnvironm
 }
 
 /**
- * Admin → Nodaro Motion: for each colormap, the environments (of
+ * Admin → Video Remake: for each colormap, the environments (of
  * `SHARED_SETTING_ENVIRONMENTS`, in that order) whose engine cannot draw it —
  * none recorded, or one whose `castSwap.depthColormaps` lacks it. Unknown
  * while the environments are (undefined). The setting is shared, so a map is
@@ -402,7 +402,7 @@ export function depthModelSizesSomeEngineDraws(envs: readonly TrendEngineEnviron
 }
 
 /**
- * Admin → Nodaro Motion: for each model size, the environments (of
+ * Admin → Video Remake: for each model size, the environments (of
  * `SHARED_SETTING_ENVIRONMENTS`, in that order) whose engine cannot draw with
  * it — none recorded, or one whose `castSwap.depthModelSizes` lacks it.
  * Unknown while the environments are (undefined). The setting is shared, so a
@@ -422,7 +422,7 @@ export function environmentsThatCannotDrawModelSizes(
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot blur a full-depth map — none recorded,
  * or one that does not declare `castSwap.depthBlur` (a Cast Swap engine
  * before 0.430.0). Unknown while the environments are (undefined). The
@@ -435,7 +435,7 @@ export function environmentsThatCannotBlurDepth(envs: readonly TrendEngineEnviro
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot blur a Faces hidden depth fill — none
  * recorded, or one that does not declare `castSwap.depthFillBlur` (apart from
  * Full depth's `castSwap.depthBlur`). Unknown while the environments are
@@ -448,7 +448,7 @@ export function environmentsThatCannotBlurDepthFill(envs: readonly TrendEngineEn
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot keep the faces as filmed with only the
  * face mesh (the fill "none") — none recorded, or one that does not declare
  * `castSwap.maskFillNone`, or does not draw the face mesh it needs
@@ -479,7 +479,7 @@ export function depthBlurKindOf(m: Pick<AdminTrendFaceMasking, "source" | "fill"
 export const FACE_MESH_PARTIAL = ["features", "mouth"] as const satisfies readonly AdminFaceMeshParts[]
 
 /**
- * Admin → Nodaro Motion: for each face mesh part other than the full mesh,
+ * Admin → Video Remake: for each face mesh part other than the full mesh,
  * the environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot draw it — none recorded, or one whose `castSwap.faceMeshParts`
  * lacks it (a Cast Swap engine before 0.430.0). Unknown while the environments
@@ -545,7 +545,7 @@ export function faceMeshMinFaceHeightSaved(m: AdminTrendFaceMasking | undefined)
  * engine cannot draw Full depth's face mesh from a smallest face — none
  * recorded, or one that does not declare `castSwap.faceMeshMinFaceHeightPct`
  * (a Cast Swap engine before 0.436.1). Unknown while the environments are
- * (undefined). Admin → Nodaro Motion's setting is shared, so a value is saved
+ * (undefined). Admin → Video Remake's setting is shared, so a value is saved
  * only when this is empty (the server refuses the save otherwise, 409
  * `engine_unsupported`); a trend's make is refused where the engine lacks it.
  */

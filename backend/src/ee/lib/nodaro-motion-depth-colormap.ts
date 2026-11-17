@@ -1,9 +1,9 @@
 /**
- * A Nodaro Motion setting that names a depth colormap (`depthColormap`,
+ * A Video Remake setting that names a depth colormap (`depthColormap`,
  * decided 2026-11-01: full depth, or a faces-hidden depth fill) is saved only
  * once every environment's engine can draw it.
  *
- * The Nodaro Motion settings (`nodaro_motion_masking`, and the Motion
+ * The Video Remake settings (`nodaro_motion_masking`, and the Motion
  * setting's own `masking`) are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare the map in `castSwap.depthColormaps` is answered the settings

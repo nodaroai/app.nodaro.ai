@@ -1,7 +1,7 @@
 /**
  * The `nodaro_motion_steps` row's admin read and write
  * (`nodaro-motion-steps.ts` defines and parses it). Lives in lib/, as the
- * other Nodaro Motion settings' stores do: app_settings is instance-global
+ * other Video Remake settings' stores do: app_settings is instance-global
  * config written with the service-role client.
  */
 import { supabase } from "./supabase.js"

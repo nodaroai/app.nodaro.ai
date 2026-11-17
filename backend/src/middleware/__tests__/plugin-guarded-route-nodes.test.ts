@@ -7,7 +7,7 @@ import Fastify, { type FastifyInstance } from "fastify"
  * patterns: under a `nodes.allow` whitelist each runs when the node it follows
  * is listed, and is refused as that node when it is not. Before they were
  * mapped, a whitelist refused every one of them as a route linked to no node,
- * whatever it listed: a deployment offering Nodaro Motion could not make a
+ * whatever it listed: a deployment offering Video Remake could not make a
  * trend's face mask (the trend editor's own internal call).
  *
  * The plugin's guard prices on the free id with dedup off; the edition here

@@ -95,6 +95,16 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.seedanceReferenceTaskType).toBe(true)
   })
 
+  it("advertises that it reads and answers the engine ids nodaro-prism / nodaro-pulse", () => {
+    // A plugin answers those ids only where this is true; an older host reads an id it does not know as Prism.
+    expect(buildToolkit().capabilities?.nodaroEngineIds).toBe(true)
+  })
+
+  it("advertises Video Remake's routes: /v1/video-remake beside /v1/cast-swap in every gate, guard and hook", () => {
+    // lib/__tests__/video-remake-paths.test.ts, route-node-gate.test.ts and the engine hook tests prove the host side.
+    expect(buildToolkit().capabilities?.videoRemake).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

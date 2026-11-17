@@ -7,11 +7,11 @@ import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 
 /**
- * `cast_swap` — the MCP face of `POST /v1/cast-swap` (Nodaro Motion, Cloud plugin).
+ * `video_remake` — the MCP face of `POST /v1/video-remake` (Video Remake, Cloud plugin).
  *
  * The contracts under test:
- *  - without `confirm` it quotes (`/v1/cast-swap/estimate`) and never runs;
- *  - with `confirm: true` it runs (`/v1/cast-swap`) and hands back the job id,
+ *  - without `confirm` it quotes (`/v1/video-remake/estimate`) and never runs;
+ *  - with `confirm: true` it runs (`/v1/video-remake`) and hands back the job id,
  *    without quoting again;
  *  - it is registered only on Nodaro Cloud (`hasCredits()`), and only for a
  *    session that may execute;
@@ -77,8 +77,8 @@ function serverWith(fastify: FastifyInstance, scopes: Scope[] = ["workflows:exec
 }
 
 const QUOTE = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0 }, settlesLower: false }
-/** What the tool adds to a quote that names no engine (an older engine's: Nodaro Motion Prism). */
-const PRO = { engine: "motion-prism", engineName: "Nodaro Motion Prism" }
+/** What the tool adds to a quote that names no engine (an older engine's: Nodaro Prism). */
+const PRO = { engine: "nodaro-prism", engineName: "Nodaro Prism" }
 
 const ARGS = {
   video_url: "https://cdn.example/clip.mp4",
@@ -109,13 +109,13 @@ const BODY = {
   sessionId: "s-1",
 }
 
-describe("cast_swap", () => {
+describe("video_remake", () => {
   it("quotes without confirm and does not run", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
 
     expect(res.isError).toBeFalsy()
-    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /v1/cast-swap/estimate"])
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /v1/video-remake/estimate"])
     expect(calls[0]!.payload).toEqual(BODY)
     expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
     expect(res.content[0]!.text).toContain("12 credits")
@@ -124,48 +124,48 @@ describe("cast_swap", () => {
 
   it("forwards style to the quote and the run, and sends none when it is left out", async () => {
     const { fastify, calls } = stubFastify({
-      "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-      "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000001" } },
+      "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/video-remake": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000001" } },
     })
     const server = serverWith(fastify)
     for (const style of ["precise", "motion"] as const) {
-      await callTool(server, "cast_swap", { ...ARGS, style })
-      await callTool(server, "cast_swap", { ...ARGS, style, confirm: true })
+      await callTool(server, "video_remake", { ...ARGS, style })
+      await callTool(server, "video_remake", { ...ARGS, style, confirm: true })
     }
     expect(calls.map((c) => `${c.url} ${(c.payload as { style?: string }).style}`)).toEqual([
-      "/v1/cast-swap/estimate precise",
-      "/v1/cast-swap precise",
-      "/v1/cast-swap/estimate motion",
-      "/v1/cast-swap motion",
+      "/v1/video-remake/estimate precise",
+      "/v1/video-remake precise",
+      "/v1/video-remake/estimate motion",
+      "/v1/video-remake motion",
     ])
     calls.length = 0
-    await callTool(server, "cast_swap", ARGS)
+    await callTool(server, "video_remake", ARGS)
     expect(calls[0]!.payload).not.toHaveProperty("style")
   })
 
   it("refuses a style it does not list", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, style: "loose" })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "loose" })
     expect(res.isError).toBe(true)
     expect(calls).toEqual([])
   })
 
   it("refuses art_style before any quote or run where the loaded engine takes none, and runs as before without it", async () => {
     const { fastify, calls } = stubFastify({
-      "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-      "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000004" } },
+      "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/video-remake": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000004" } },
     })
     try {
       // No declaration at all, an engine that predates art styles, and one that says it takes none.
       for (const castSwap of [
         undefined,
-        { engines: ["motion-prism", "motion-pulse"], engineAliases: true },
-        { engines: ["motion-prism", "motion-pulse"], engineAliases: true, artStyle: false },
+        { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true },
+        { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: false },
       ]) {
         _resetPluginSupportsForTests()
         if (castSwap) setPluginSupports({ castSwap: castSwap as never })
         for (const confirm of [undefined, true]) {
-          const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, style: "motion", art_style: "pop-art", ...(confirm ? { confirm } : {}) })
+          const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", art_style: "pop-art", ...(confirm ? { confirm } : {}) })
           expect(res.isError, JSON.stringify(castSwap)).toBe(true)
           // Its own sentence, not the generic 503 wording of a model outage.
           expect(res.content).toEqual([{ type: "text", text: "Nodaro: art styles are not available on this deployment yet. [art_style_unavailable]" }])
@@ -174,9 +174,9 @@ describe("cast_swap", () => {
       // An older engine would strip `direction` and run without the style: nothing is sent.
       expect(calls).toEqual([])
       // Without art_style the same engine quotes and runs as before.
-      await callTool(serverWith(fastify), "cast_swap", ARGS)
-      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, confirm: true })
-      expect(calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      await callTool(serverWith(fastify), "video_remake", ARGS)
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, confirm: true })
+      expect(calls.map((c) => c.url)).toEqual(["/v1/video-remake/estimate", "/v1/video-remake"])
       for (const c of calls) expect(c.payload).toEqual(BODY)
     } finally {
       _resetPluginSupportsForTests()
@@ -189,17 +189,17 @@ describe("cast_swap", () => {
 
     it("sends art_style to the quote and the run as direction.style, and no direction without it", async () => {
       const { fastify, calls } = stubFastify({
-        "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-        "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000002" } },
+        "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/video-remake": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000002" } },
       })
       const server = serverWith(fastify)
-      await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style: "pop-art" })
-      await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style: "pop-art", confirm: true })
-      expect(calls.map((c) => c.url)).toEqual(["/v1/cast-swap/estimate", "/v1/cast-swap"])
+      await callTool(server, "video_remake", { ...ARGS, style: "motion", art_style: "pop-art" })
+      await callTool(server, "video_remake", { ...ARGS, style: "motion", art_style: "pop-art", confirm: true })
+      expect(calls.map((c) => c.url)).toEqual(["/v1/video-remake/estimate", "/v1/video-remake"])
       for (const c of calls) expect(c.payload).toEqual({ ...BODY, style: "motion", direction: { style: "pop-art" } })
       calls.length = 0
-      await callTool(server, "cast_swap", ARGS)
-      await callTool(server, "cast_swap", { ...ARGS, confirm: true })
+      await callTool(server, "video_remake", ARGS)
+      await callTool(server, "video_remake", { ...ARGS, confirm: true })
       expect(calls).toHaveLength(2)
       // Without it the body is the one sent before art_style existed, byte for byte.
       for (const c of calls) {
@@ -210,8 +210,8 @@ describe("cast_swap", () => {
 
     it("refuses a direction of the agent's own (the REST field) before any quote or run, pointing at art_style", async () => {
       const { fastify, calls } = stubFastify({
-        "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-        "/v1/cast-swap": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000003" } },
+        "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/video-remake": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000003" } },
       })
       const server = serverWith(fastify)
       // Not a listed argument: the loose schema lets it reach the handler, where dropping it would run the clip unstyled.
@@ -222,10 +222,10 @@ describe("cast_swap", () => {
         { direction: null },
       ]) {
         for (const confirm of [undefined, true]) {
-          const res = await callTool(server, "cast_swap", { ...ARGS, style: "motion", ...extra, ...(confirm ? { confirm } : {}) })
+          const res = await callTool(server, "video_remake", { ...ARGS, style: "motion", ...extra, ...(confirm ? { confirm } : {}) })
           expect(res.isError, JSON.stringify(extra)).toBe(true)
           expect(res.content[0]!.text).toBe(
-            'Nodaro rejected the request (400 use_art_style): cast_swap takes no direction. Give an art style as art_style instead, a "style" picker catalog id (get_picker_catalog "style").',
+            'Nodaro rejected the request (400 use_art_style): video_remake takes no direction. Give an art style as art_style instead, a "style" picker catalog id (get_picker_catalog "style").',
           )
         }
       }
@@ -233,41 +233,41 @@ describe("cast_swap", () => {
     })
 
     it("refuses an empty art_style, one longer than a direction id, or not a string, before any call; one at the limit is sent", async () => {
-      const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
       const server = serverWith(fastify)
       // As the route parses a direction id: 1 to DIRECTION_ID_MAX_CHARS characters.
       for (const art_style of ["", "x".repeat(DIRECTION_ID_MAX_CHARS + 1), 7, { style: "pop-art" }]) {
-        const res = await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style })
+        const res = await callTool(server, "video_remake", { ...ARGS, style: "motion", art_style })
         expect(res.isError, JSON.stringify(art_style)).toBe(true)
       }
       expect(calls).toEqual([])
       const atLimit = "x".repeat(DIRECTION_ID_MAX_CHARS)
-      await callTool(server, "cast_swap", { ...ARGS, style: "motion", art_style: atLimit })
+      await callTool(server, "video_remake", { ...ARGS, style: "motion", art_style: atLimit })
       expect(calls).toHaveLength(1)
       expect(calls[0]!.payload).toMatchObject({ direction: { style: atLimit } })
     })
 
     it("leaves the art style's rules to the route: its refusal comes back as a tool error, quote and run alike", async () => {
       const refused = { statusCode: 400, body: { error: { code: "art_style_needs_flex", message: "An art style is only available on a Flex run." } } }
-      const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": refused, "/v1/cast-swap": refused })
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": refused, "/v1/video-remake": refused })
       const server = serverWith(fastify)
       // A Precise run (no style): sent as asked, for the route to refuse.
       for (const confirm of [undefined, true]) {
-        const res = await callTool(server, "cast_swap", { ...ARGS, art_style: "pop-art", ...(confirm ? { confirm } : {}) })
+        const res = await callTool(server, "video_remake", { ...ARGS, art_style: "pop-art", ...(confirm ? { confirm } : {}) })
         expect(res.isError).toBe(true)
         expect(res.content[0]!.text).toContain("art_style_needs_flex")
         expect(res.content[0]!.text).toContain("An art style is only available on a Flex run.")
       }
       expect(calls.map((c) => `${c.url} ${JSON.stringify((c.payload as { direction?: unknown }).direction)}`)).toEqual([
-        '/v1/cast-swap/estimate {"style":"pop-art"}',
-        '/v1/cast-swap {"style":"pop-art"}',
+        '/v1/video-remake/estimate {"style":"pop-art"}',
+        '/v1/video-remake {"style":"pop-art"}',
       ])
     })
   })
 
   it("says when the final charge is expected to come out lower", async () => {
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: { ...QUOTE, settlesLower: true } } })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: { ...QUOTE, settlesLower: true } } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
     expect(res.content[0]!.text).toMatch(/lower/)
   })
 
@@ -278,8 +278,8 @@ describe("cast_swap", () => {
       breakdown: { castSwap: 5, seedance: 32, seedanceExpected: 23, references: 3 },
       settlesLower: true,
     }
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: quote } })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
     expect(res.content[0]!.text).toContain("costs about 31 credits (up to 40 held while it runs).")
     // The expected charge already is the lower figure: no "lower than this quote" after it.
     expect(res.content[0]!.text).not.toMatch(/lower than this quote/)
@@ -296,8 +296,8 @@ describe("cast_swap", () => {
 
   it("names the reference preparation in the quote when it costs something", async () => {
     const withPrep = { totalCredits: 15, breakdown: { castSwap: 5, seedance: 7, references: 3 }, settlesLower: false }
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: withPrep } })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: withPrep } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
     expect(res.content[0]!.text).toContain("15 credits")
     expect(res.content[0]!.text).toMatch(/3 credits?[^.]*prepar/i)
     expect(res.content[0]!.text).toContain("prepare_references: false")
@@ -305,14 +305,14 @@ describe("cast_swap", () => {
   })
 
   it("says nothing of the preparation when it costs nothing", async () => {
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
     expect(res.content[0]!.text).not.toMatch(/prepar/i)
   })
 
   it("sends pet and product roles, their preview settings, resolution, draft and prepare_references to the route in camelCase", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "cast_swap", {
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "video_remake", {
       video_url: "https://cdn.example/clip.mp4",
       roles: [
         { kind: "pet", name: "the dog", images: ["https://cdn.example/dog.png"], coat: "original", preview_name: "  the puppy  " },
@@ -337,8 +337,8 @@ describe("cast_swap", () => {
   })
 
   it("sends an unnamed person as it is (named by its first image), and a blank location without its name (its default)", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "cast_swap", {
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "video_remake", {
       video_url: "https://cdn.example/clip.mp4",
       roles: [
         { kind: "person", images: ["https://cdn.example/me.png"] },
@@ -355,20 +355,20 @@ describe("cast_swap", () => {
   })
 
   it("sends fixed references to the route as given", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
     const references = [
       { images: ["https://cdn.example/glass.png"], line: "the glass she drinks from" },
       { images: ["https://cdn.example/sky.png", "https://cdn.example/sky2.png"], line: "Use {image} for the sky" },
     ]
-    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, references })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, references })
     expect(res.isError).toBeFalsy()
     expect(calls[0]!.payload).toEqual({ ...BODY, references })
   })
 
   it("trims a reference's line, as the route does", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
     const references = [{ images: ["https://cdn.example/glass.png"], line: "  the glass she drinks from \n" }]
-    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, references })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, references })
     expect(res.isError).toBeFalsy()
     expect(calls[0]!.payload).toEqual({
       ...BODY,
@@ -377,7 +377,7 @@ describe("cast_swap", () => {
   })
 
   it("refuses a reference the route would refuse, before any call", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
     const server = serverWith(fastify)
     const cases: Array<[string, { images: string[]; line: string }]> = [
       ["a whitespace-only line", { images: ["https://cdn.example/glass.png"], line: "   " }],
@@ -386,7 +386,7 @@ describe("cast_swap", () => {
       ["an image URL over 4096 characters", { images: [`https://cdn.example/${"a".repeat(4096)}.png`], line: "the glass" }],
     ]
     for (const [what, reference] of cases) {
-      const res = await callTool(server, "cast_swap", { ...ARGS, references: [reference] })
+      const res = await callTool(server, "video_remake", { ...ARGS, references: [reference] })
       expect(res.isError, what).toBe(true)
     }
     expect(calls).toHaveLength(0)
@@ -394,8 +394,8 @@ describe("cast_swap", () => {
 
   it("accepts face_masking from an older client and ignores it: nothing of it reaches the route (Nodaro sets it per engine)", async () => {
     const { fastify, calls } = stubFastify({
-      "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-      "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-fm" } },
+      "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/video-remake": { statusCode: 202, body: { jobId: "job-fm" } },
     })
     const server = serverWith(fastify)
     for (const face_masking of [
@@ -406,7 +406,7 @@ describe("cast_swap", () => {
       "on",
     ]) {
       for (const confirm of [undefined, true]) {
-        const res = await callTool(server, "cast_swap", { ...ARGS, face_masking, ...(confirm ? { confirm } : {}) })
+        const res = await callTool(server, "video_remake", { ...ARGS, face_masking, ...(confirm ? { confirm } : {}) })
         expect(res.isError, JSON.stringify(face_masking)).toBeFalsy()
       }
     }
@@ -419,26 +419,26 @@ describe("cast_swap", () => {
 
   it("lists no face_masking argument", async () => {
     const { fastify } = stubFastify({})
-    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
     expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).not.toContain("face_masking")
     expect(Object.keys((tool.inputSchema as { properties: Record<string, unknown> }).properties)).not.toContain("kling_length")
     expect(JSON.stringify(tool)).not.toMatch(/mask|blur|depth|seedance|kling|SAM\b|Motion (Pro|Lite)\b|motion-(pro|lite)\b/i)
   })
 
-  it("says an art style alone is enough on a motion-prism Flex run where the engine takes style-only runs, and what it does", async () => {
+  it("says an art style alone is enough on a nodaro-prism Flex run where the engine takes style-only runs, and what it does", async () => {
     const { fastify } = stubFastify({})
-    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
     const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
     expect(properties.roles.description).toContain("a pre_prompt or post_prompt")
-    expect(properties.roles.description).toContain("on a motion-prism Flex run where the engine takes style-only runs, an art_style alone")
+    expect(properties.roles.description).toContain("on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone")
     expect(properties.roles.description).toContain("restyles the whole clip")
     expect(properties.art_style.description).toContain("With no role images and no references it restyles the whole clip")
     expect(properties.art_style.description).toContain("where the engine takes style-only runs")
   })
 
-  it("says 480p is plain by default, a draft only with draft: true, and that motion-pulse has no Full Quality", async () => {
+  it("says 480p is plain by default, a draft only with draft: true, and that nodaro-pulse has no Full Quality", async () => {
     const { fastify } = stubFastify({})
-    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "cast_swap")!
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
     const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
     expect(properties.draft.description).toContain("Default false")
     expect(properties.draft.description).toContain("full_quality")
@@ -447,31 +447,31 @@ describe("cast_swap", () => {
   })
 
   it("takes an older client's kling_length as motion_length (unlisted), and refuses one that is not a length fit", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, kling_length: "cut-start" })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "video_remake", { ...ARGS, kling_length: "cut-start" })
     expect(calls[0]!.payload).toEqual({ ...BODY, klingLength: "cut-start" })
     // motion_length wins over it.
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, motion_length: "cut-end", kling_length: "cut-start" })
+    await callTool(serverWith(fastify), "video_remake", { ...ARGS, motion_length: "cut-end", kling_length: "cut-start" })
     expect(calls[1]!.payload).toEqual({ ...BODY, klingLength: "cut-end" })
-    const bad = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, kling_length: "pad" })
+    const bad = await callTool(serverWith(fastify), "video_remake", { ...ARGS, kling_length: "pad" })
     expect(bad.isError).toBe(true)
     expect(calls).toHaveLength(2)
   })
 
-  it("refuses a motion-pulse run (or an older id of it), sending nothing, where the loaded engine does not declare it (an older engine would run Prism)", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
+  it("refuses a nodaro-pulse run (or an older id of it), sending nothing, where the loaded engine does not declare it (an older engine would run Prism)", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
     try {
       for (const castSwap of [
         undefined,
         { engines: ["seedance-2-5" as const] },
         { engines: ["motion-pro" as const], engineAliases: true },
-        { engines: ["motion-prism" as const], engineAliases: true },
+        { engines: ["nodaro-prism" as const], engineAliases: true },
       ]) {
         _resetPluginSupportsForTests()
         if (castSwap) setPluginSupports({ castSwap: castSwap as never })
-        for (const engine of ["motion-pulse", "motion-lite", "kling-4"]) {
+        for (const engine of ["nodaro-pulse", "motion-lite", "kling-4"]) {
           for (const confirm of [undefined, true]) {
-            const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, ...(confirm ? { confirm } : {}) })
+            const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine, ...(confirm ? { confirm } : {}) })
             expect(res.isError).toBe(true)
             expect(res.content[0]!.text).toContain("engine_unavailable")
             expect(res.content[0]!.text).not.toMatch(/kling/i)
@@ -480,9 +480,9 @@ describe("cast_swap", () => {
       }
       expect(calls).toEqual([])
       // Prism named outright, by any id, still runs anywhere, sent as the internal id.
-      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-prism" })
-      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pro" })
-      await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "seedance-2-5" })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-prism" })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "motion-pro" })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "seedance-2-5" })
       expect(calls.map((c) => (c.payload as { engine?: string }).engine)).toEqual(["seedance-2-5", "seedance-2-5", "seedance-2-5"])
     } finally {
       _resetPluginSupportsForTests()
@@ -491,16 +491,16 @@ describe("cast_swap", () => {
 
   it("answers the quote's engine by its public id and name, whichever vocabulary the engine answered in", async () => {
     for (const [answered, engine, engineName] of [
-      [undefined, "motion-prism", "Nodaro Motion Prism"],
-      ["seedance-2-5", "motion-prism", "Nodaro Motion Prism"],
-      ["motion-pro", "motion-prism", "Nodaro Motion Prism"],
-      ["motion-prism", "motion-prism", "Nodaro Motion Prism"],
-      ["kling-4", "motion-pulse", "Nodaro Motion Pulse"],
-      ["motion-lite", "motion-pulse", "Nodaro Motion Pulse"],
-      ["motion-pulse", "motion-pulse", "Nodaro Motion Pulse"],
+      [undefined, "nodaro-prism", "Nodaro Prism"],
+      ["seedance-2-5", "nodaro-prism", "Nodaro Prism"],
+      ["motion-pro", "nodaro-prism", "Nodaro Prism"],
+      ["nodaro-prism", "nodaro-prism", "Nodaro Prism"],
+      ["kling-4", "nodaro-pulse", "Nodaro Pulse"],
+      ["motion-lite", "nodaro-pulse", "Nodaro Pulse"],
+      ["nodaro-pulse", "nodaro-pulse", "Nodaro Pulse"],
     ] as const) {
-      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: { ...QUOTE, ...(answered ? { engine: answered } : {}) } } })
-      const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+      const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: { ...QUOTE, ...(answered ? { engine: answered } : {}) } } })
+      const res = await callTool(serverWith(fastify), "video_remake", ARGS)
       expect(res.structuredContent).toMatchObject({ engine, engineName, confirmed: false })
       expect(res.content[0]!.text).toContain(`This ${engineName} preview costs`)
     }
@@ -511,47 +511,47 @@ describe("cast_swap", () => {
   for (const declared of [
     { engines: ["seedance-2-5", "kling-4"], answers: "kling-4" },
     { engines: ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"], engineAliases: true, answers: "motion-lite" },
-    { engines: ["motion-prism", "motion-pulse"], engineAliases: true, answers: "motion-pulse" },
+    { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, answers: "nodaro-pulse" },
   ]) {
     describe(`on an engine that declares ${declared.engines.join(" + ")}`, () => {
       beforeEach(() => setPluginSupports({ castSwap: declared as never }))
       afterEach(() => _resetPluginSupportsForTests())
 
-      it("quotes a motion-pulse run (expected = hold) as one price, named Nodaro Motion Pulse, with nothing held beside it", async () => {
+      it("quotes a nodaro-pulse run (expected = hold) as one price, named Nodaro Pulse, with nothing held beside it", async () => {
         const lite = { engine: declared.answers, totalCredits: 420, expectedCredits: 420, breakdown: { castSwap: 40, kling: 380, references: 0 }, settlesLower: false }
-        const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: lite } })
-        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, preview: false, engine: "motion-pulse" })
-        expect(res.structuredContent).toEqual({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse", totalCredits: 420, expectedCredits: 420, breakdown: { base: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
-        expect(res.content[0]!.text).toContain("This Nodaro Motion Pulse run costs about 420 credits.")
+        const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: lite } })
+        const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse" })
+        expect(res.structuredContent).toEqual({ engine: "nodaro-pulse", engineName: "Nodaro Pulse", totalCredits: 420, expectedCredits: 420, breakdown: { base: 40, references: 0, motion: 380 }, settlesLower: false, confirmed: false })
+        expect(res.content[0]!.text).toContain("This Nodaro Pulse run costs about 420 credits.")
         expect(res.content[0]!.text).not.toMatch(/held|lower|kling/i)
       })
 
       it("sends engine to the route as the internal id, public or older id alike (quote and run), and no engine key without it", async () => {
         const { fastify, calls } = stubFastify({
-          "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE },
-          "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-k" } },
+          "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+          "/v1/video-remake": { statusCode: 202, body: { jobId: "job-k" } },
         })
         // motion_length, or the deprecated kling_length from an older client.
-        for (const [engine, length] of [["motion-pulse", "motion_length"], ["motion-lite", "motion_length"], ["kling-4", "kling_length"]]) {
-          await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start" })
-          await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start", confirm: true })
+        for (const [engine, length] of [["nodaro-pulse", "motion_length"], ["motion-lite", "motion_length"], ["kling-4", "kling_length"]]) {
+          await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start" })
+          await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine, resolution: "1080p", [length!]: "cut-start", confirm: true })
         }
         expect(calls).toHaveLength(6)
-        // Sent as motionLength only where the engine takes Nodaro Motion's names; an older one knows klingLength alone.
+        // Sent as motionLength only where the engine takes Video Remake's names; an older one knows klingLength alone.
         const lengthKey = declared.engineAliases ? "motionLength" : "klingLength"
         for (const c of calls) expect(c.payload).toEqual({ ...BODY, engine: "kling-4", resolution: "1080p", [lengthKey]: "cut-start" })
         calls.length = 0
-        await callTool(serverWith(fastify), "cast_swap", ARGS)
+        await callTool(serverWith(fastify), "video_remake", ARGS)
         expect("engine" in (calls[0]!.payload as Record<string, unknown>)).toBe(false)
       })
 
-      it("refuses an engine it does not know before calling the route; leaves draft on motion-pulse to the route", async () => {
-        const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Nodaro Motion Pulse has no draft." } } } })
-        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "kling-3" })).isError).toBe(true)
-        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-max" })).isError).toBe(true)
-        expect((await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pulse", motion_length: "pad" })).isError).toBe(true)
+      it("refuses an engine it does not know before calling the route; leaves draft on nodaro-pulse to the route", async () => {
+        const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 400, body: { error: { code: "draft_unsupported", message: "Nodaro Pulse has no draft." } } } })
+        expect((await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "kling-3" })).isError).toBe(true)
+        expect((await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "motion-max" })).isError).toBe(true)
+        expect((await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse", motion_length: "pad" })).isError).toBe(true)
         expect(calls).toEqual([])
-        const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, engine: "motion-pulse", draft: true })
+        const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse", draft: true })
         expect(res.isError).toBe(true)
         expect(res.content[0]!.text).toContain("draft_unsupported")
         expect(calls[0]!.payload).toMatchObject({ engine: "kling-4", draft: true })
@@ -561,8 +561,8 @@ describe("cast_swap", () => {
 
   it("names the credits of a retry that Nodaro's setting charges only if the clip is refused, never naming masking", async () => {
     const auto = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
-    const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: auto } })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: auto } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
     expect(res.content[0]!.text).toContain("12 credits")
     expect(res.content[0]!.text).toMatch(/retried once, for 4 more credits charged only then/)
     expect(res.content[0]!.text).not.toMatch(/mask|blur|depth|seedance|kling/i)
@@ -579,8 +579,8 @@ describe("cast_swap", () => {
     // Before 0.396.0 the base fee is castSwap only.
     const castSwapOnly = { ...fresh, breakdown: { castSwap: 5, motion: 7, references: 0, privacy: 4 } }
     for (const body of [both, fresh, castSwapOnly]) {
-      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
-      const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+      const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body } })
+      const res = await callTool(serverWith(fastify), "video_remake", ARGS)
       expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, motion: 7, references: 0, privacy: 4 }, privacyCredits: 4, settlesLower: false, confirmed: false })
       expect(res.content[0]!.text).toMatch(/for 4 more credits/)
       expect(JSON.stringify(res.structuredContent)).not.toContain("castSwap")
@@ -590,24 +590,24 @@ describe("cast_swap", () => {
   it("says nothing more when the setting's charge is already in the totals, or there is none", async () => {
     const always = { totalCredits: 16, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, settlesLower: false }
     for (const body of [always, QUOTE, { ...QUOTE, maskingCredits: 0 }]) {
-      const { fastify } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body } })
-      const text = (await callTool(serverWith(fastify), "cast_swap", ARGS)).content[0]!.text
+      const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body } })
+      const text = (await callTool(serverWith(fastify), "video_remake", ARGS)).content[0]!.text
       expect(text).not.toMatch(/retried|mask/i)
     }
   })
 
   it("still passes the deprecated quality through", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap/estimate": { statusCode: 200, body: QUOTE } })
-    await callTool(serverWith(fastify), "cast_swap", { ...ARGS, quality: "draft" })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    await callTool(serverWith(fastify), "video_remake", { ...ARGS, quality: "draft" })
     expect(calls[0]!.payload).toEqual({ ...BODY, quality: "draft" })
   })
 
   it("runs with confirm and returns jobId", async () => {
-    const { fastify, calls } = stubFastify({ "/v1/cast-swap": { statusCode: 202, body: { jobId: "job-9" } } })
-    const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, confirm: true, client_request_id: "retry-token-1" })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake": { statusCode: 202, body: { jobId: "job-9" } } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, confirm: true, client_request_id: "retry-token-1" })
 
     expect(res.isError).toBeFalsy()
-    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /v1/cast-swap"])
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /v1/video-remake"])
     expect(calls[0]!.payload).toEqual(BODY)
     expect(calls[0]!.headers?.["idempotency-key"]).toBe("mcp:retry-token-1")
     expect(res.structuredContent).toEqual({ jobId: "job-9", confirmed: true })
@@ -617,12 +617,12 @@ describe("cast_swap", () => {
 
   it("passes a route refusal back as a tool error", async () => {
     const { fastify } = stubFastify({
-      "/v1/cast-swap/estimate": {
+      "/v1/video-remake/estimate": {
         statusCode: 400,
         body: { error: { code: "validation_error", message: "The clip must be 4–30 seconds long." } },
       },
     })
-    const res = await callTool(serverWith(fastify), "cast_swap", ARGS)
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
     expect(res.isError).toBe(true)
     expect(res.content[0]!.text).toContain("The clip must be 4–30 seconds long.")
   })
@@ -630,7 +630,7 @@ describe("cast_swap", () => {
   it("answers not_available where the plugin's routes are not served", async () => {
     const { fastify } = stubFastify({})
     for (const confirm of [false, true]) {
-      const res = await callTool(serverWith(fastify), "cast_swap", { ...ARGS, confirm })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, confirm })
       expect(res.isError).toBe(true)
       expect(res.content[0]!.text).toContain("not_available")
       expect(res.content[0]!.text).toContain("not served on this deployment")
@@ -640,16 +640,16 @@ describe("cast_swap", () => {
   it("is not offered to a session that may not execute", async () => {
     const { fastify } = stubFastify({})
     const names = (await listTools(serverWith(fastify, ["workflows:read"]))).map((t) => t.name)
-    expect(names).not.toContain("cast_swap")
+    expect(names).not.toContain("video_remake")
   })
 })
 
-describe("cast_swap's session_id reaches the job", () => {
+describe("video_remake's session_id reaches the job", () => {
   const OWN = "00000000-0000-4000-8000-0000000005e1"
   const FOREIGN = "00000000-0000-4000-8000-0000000005e2"
   db.ownSession = OWN
 
-  /** A real app: the internal hop as the auth hook sets it, and a /v1/cast-swap that files its job through the funnel's session read. */
+  /** A real app: the internal hop as the auth hook sets it, and a /v1/video-remake that files its job through the funnel's session read. */
   async function realApp(seen: { sessionId?: string | null }) {
     const app = Fastify({ logger: false })
     app.addHook("preHandler", async (req) => {
@@ -659,7 +659,7 @@ describe("cast_swap's session_id reaches the job", () => {
         req.userId = req.headers["x-internal-user-id"] as string
       }
     })
-    app.post("/v1/cast-swap", async (req, reply) => {
+    app.post("/v1/video-remake", async (req, reply) => {
       try {
         seen.sessionId = await resolveRequestSession(req)
       } catch (err) {
@@ -674,7 +674,7 @@ describe("cast_swap's session_id reaches the job", () => {
   it("files the run in the caller's own session", async () => {
     const seen: { sessionId?: string | null } = {}
     const app = await realApp(seen)
-    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: OWN, confirm: true })
+    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "video_remake", { ...ARGS, session_id: OWN, confirm: true })
     expect(res.isError).toBeFalsy()
     expect(seen.sessionId).toBe(OWN)
     await app.close()
@@ -683,7 +683,7 @@ describe("cast_swap's session_id reaches the job", () => {
   it("a session that is not the caller's is the route's 404, as a tool error", async () => {
     const seen: { sessionId?: string | null } = {}
     const app = await realApp(seen)
-    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "cast_swap", { ...ARGS, session_id: FOREIGN, confirm: true })
+    const res = await callTool(serverWith(app, ["workflows:execute", "assets:write"]), "video_remake", { ...ARGS, session_id: FOREIGN, confirm: true })
     expect(res.isError).toBe(true)
     expect(res.content[0]!.text).toContain("not_found")
     expect(seen.sessionId).toBeUndefined()
@@ -693,7 +693,7 @@ describe("cast_swap's session_id reaches the job", () => {
   it("a grant without assets:write may not file it, even in the caller's own session: the route's 404", async () => {
     const seen: { sessionId?: string | null } = {}
     const app = await realApp(seen)
-    const res = await callTool(serverWith(app, ["workflows:execute"]), "cast_swap", { ...ARGS, session_id: OWN, confirm: true })
+    const res = await callTool(serverWith(app, ["workflows:execute"]), "video_remake", { ...ARGS, session_id: OWN, confirm: true })
     expect(res.isError).toBe(true)
     expect(res.content[0]!.text).toContain("not_found")
     expect(seen.sessionId).toBeUndefined()
@@ -704,14 +704,14 @@ describe("cast_swap's session_id reaches the job", () => {
     const seen: { sessionId?: string | null } = {}
     const app = await realApp(seen)
     const { session_id: _s, ...noSession } = ARGS
-    const res = await callTool(serverWith(app), "cast_swap", { ...noSession, confirm: true })
+    const res = await callTool(serverWith(app), "video_remake", { ...noSession, confirm: true })
     expect(res.isError).toBeFalsy()
     expect(seen.sessionId).toBeNull()
     await app.close()
   })
 })
 
-describe("cast_swap is gated on the edition", () => {
+describe("video_remake is gated on the edition", () => {
   async function names(credits: boolean) {
     h.credits = credits
     const server = await buildMcpServer({ userId: "u1", scopes: ["workflows:execute"], clientName: "Claude", fastify: Fastify() })
@@ -720,11 +720,11 @@ describe("cast_swap is gated on the edition", () => {
 
   it("is not registered without credits", async () => {
     const off = await names(false)
-    expect(off).not.toContain("cast_swap")
+    expect(off).not.toContain("video_remake")
     expect(off).toContain("ping")
   })
 
   it("is registered on Nodaro Cloud", async () => {
-    expect(await names(true)).toContain("cast_swap")
+    expect(await names(true)).toContain("video_remake")
   })
 })

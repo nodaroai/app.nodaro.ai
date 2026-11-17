@@ -1,4 +1,4 @@
-// A text step of a Nodaro Motion run's preparation (`TextStepSetting`): the
+// A text step of a Video Remake run's preparation (`TextStepSetting`): the
 // engine prompt, or the Full depth scene description. Template (the engine's
 // own wording, today's run) or LLM (a model writes it, LlmStepEditor.tsx).
 //

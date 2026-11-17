@@ -131,6 +131,6 @@ describe("Save all", () => {
 })
 
 it("names an export after the set and the day", () => {
-  expect(exportFileName("Launch look: v2!", new Date("2026-11-06T10:00:00Z"))).toBe("nodaro-motion-launch-look-v2-2026-11-06.json")
-  expect(exportFileName("???", new Date("2026-11-06T10:00:00Z"))).toBe("nodaro-motion-settings-2026-11-06.json")
+  expect(exportFileName("Launch look: v2!", new Date("2026-11-06T10:00:00Z"))).toBe("video-remake-launch-look-v2-2026-11-06.json")
+  expect(exportFileName("???", new Date("2026-11-06T10:00:00Z"))).toBe("video-remake-settings-2026-11-06.json")
 })

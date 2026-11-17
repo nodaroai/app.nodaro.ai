@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion's settings, one section per save route, as the page
+// Admin → Video Remake's settings, one section per save route, as the page
 // holds them (pure): how a section's stored value becomes the page's draft,
 // and how a draft becomes the body its route saves. The stored settings sets
 // (settings-sets-model.ts) are built from these alone: a set's value for a

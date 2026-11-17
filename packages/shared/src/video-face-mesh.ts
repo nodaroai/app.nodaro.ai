@@ -2,7 +2,7 @@
  * Video Face Mesh (`POST /v1/video-face-mesh`, job type `video-face-mesh`):
  * thin GRAY face lines — a wireframe, and darker eye and lip outlines, each a
  * tone of the picture under it — drawn on the faces of a clip, frame for
- * frame. An internal step of Nodaro Motion's face masking: the lines go on
+ * frame. An internal step of Video Remake's face masking: the lines go on
  * the masked (or depth) clip so the video model still sees where the mouth
  * and the eyes are. A request may draw only the eye and lip outlines, only
  * the lip outline, or the face's contours (`parts`).

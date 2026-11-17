@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's style-only setting, per engine (registered by
+ * Video Remake's style-only setting, per engine (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/style-only   { styleOnly, updatedAt, engines, supported } (styleOnly null = never saved: the defaults)
- *   PUT /v1/admin/nodaro-motion/style-only   { styleOnly }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/style-only   { styleOnly, updatedAt, engines, supported } (styleOnly null = never saved: the defaults)
+ *   PUT /v1/admin/video-remake/style-only   { styleOnly }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_style_only`, lib/nodaro-motion-style-only.ts)
  * says, per engine, what a DIRECT style-only run does (a Prism Flex run with
@@ -47,7 +47,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal, type NodaroMotionSaveRe
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_STYLE_ONLY_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0fa"
 
 /** The body key: every refusal's path starts here. */
@@ -85,13 +85,13 @@ function problemsRefusal(problems: CastSwapStepsProblem[]): NodaroMotionSaveRefu
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the defaults. */
 export const NODARO_MOTION_STYLE_ONLY_SECTION = defineNodaroMotionSettingsSection({
   key: "style-only",
-  path: "/v1/admin/nodaro-motion/style-only",
+  path: "/v1/admin/video-remake/style-only",
   label: "Style-only runs",
   body: putBody,
   prepare: (body) => {
     const styleOnly = withoutDefaultStyleOnly(body[BODY_KEY])
     // Art styles are Prism's: Pulse never gets a style-only run, so a change for it would never be read.
-    if (styleOnly["motion-pulse"]) {
+    if (styleOnly["nodaro-pulse"]) {
       return { refusal: { status: 400, error: { code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE } } }
     }
     // The store validates nothing: the save-time step rules (a known model that can see what it is shown) are applied here.
@@ -114,15 +114,15 @@ export const NODARO_MOTION_STYLE_ONLY_SECTION = defineNodaroMotionSettingsSectio
 })
 
 export function registerNodaroMotionStyleOnlyRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/style-only", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/style-only", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion style-only setting")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake style-only setting")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/style-only", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/style-only", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_STYLE_ONLY_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -140,7 +140,7 @@ export function registerNodaroMotionStyleOnlyRoutes(app: FastifyInstance): void 
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion style-only setting")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake style-only setting")
     }
   })
 }

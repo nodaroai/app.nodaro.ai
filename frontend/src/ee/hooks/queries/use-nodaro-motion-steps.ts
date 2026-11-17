@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's preparation steps: per engine, how the reference
+ * Admin → Video Remake's preparation steps: per engine, how the reference
  * sheets, the engine prompt and the scene description of a run people start
- * themselves are made (GET/PUT /v1/admin/nodaro-motion/steps). Never saved
+ * themselves are made (GET/PUT /v1/admin/video-remake/steps). Never saved
  * (`steps: null`) = every direct run is today's.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

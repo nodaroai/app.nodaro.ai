@@ -8,7 +8,7 @@ import Fastify, { type FastifyInstance } from "fastify"
  * (lib/route-node-gate.ts). It used to ask about the path minus `/v1/`, so
  * `POST /v1/suno/generate` was checked as `suno/generate` — a name no allowlist
  * holds — and ran on a deployment that had withdrawn Suno, and `POST /v1/cast-swap`
- * (Nodaro Motion; every trend run) was refused by nothing at all.
+ * (Video Remake; every trend run) was refused by nothing at all.
  *
  * The REAL creditGuard on minimal routes mounted at the REAL paths (the node
  * key is `req.routeOptions.url`, the route pattern). Business edition, no
@@ -86,7 +86,7 @@ async function buildApp(): Promise<FastifyInstance> {
       return { ok: true }
     })
   }
-  // A trend run: composed by the platform and dispatched to Nodaro Motion, so
+  // A trend run: composed by the platform and dispatched to Video Remake, so
   // its route asks cast-swap's availability itself (ee/routes/trends.ts).
   app.post("/v1/trends/:slug/runs", { preHandler: requireNodeAvailable("cast-swap") }, async (req) => {
     ran.urls.push(req.url)
@@ -145,7 +145,7 @@ describe("nodes.allow is the server-side on-switch for nested routes too", () =>
     expect(ran.urls).toEqual([])
   })
 
-  it("refuses Nodaro Motion — the route, its nested routes and a guard run inside a handler", async () => {
+  it("refuses Video Remake — the route, its nested routes and a guard run inside a handler", async () => {
     for (const url of ["/v1/cast-swap", "/v1/cast-swap/abc/full-quality"]) {
       const res = await post(url)
       expect(res.statusCode, url).toBe(403)
@@ -213,7 +213,7 @@ describe("an override stored BEFORE these gates existed decides none of them", (
   // never listed cast-swap (it was not gateable) and left suno-generate off.
   const legacyOverride = () => __resetAvailabilityOverridesForTests({ nodes: new Set(["generate-image", "upscale-image"]) })
 
-  it("keeps Nodaro Motion running for users (cast-swap falls back to the factory set)", async () => {
+  it("keeps Video Remake running for users (cast-swap falls back to the factory set)", async () => {
     legacyOverride()
     expect((await post("/v1/cast-swap")).statusCode).toBe(200)
     expect((await post("/v1/cast-swap/abc/full-quality")).statusCode).toBe(200)
@@ -257,7 +257,7 @@ describe("an override saved by this code decides every gate it showed", () => {
   })
 })
 
-describe("a trend run follows cast-swap, as Nodaro Motion's own route does", () => {
+describe("a trend run follows cast-swap, as Video Remake's own route does", () => {
   it("is refused where cast-swap is not offered — before the run starts — and runs where it is", async () => {
     expect((await post("/v1/trends/dance/runs")).statusCode).toBe(200)
     expect(ran.urls).toEqual(["/v1/trends/dance/runs"])

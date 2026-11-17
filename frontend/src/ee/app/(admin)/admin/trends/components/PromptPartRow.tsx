@@ -2,7 +2,7 @@
 // engine's default (greyed, read-only), the override (empty = the default,
 // "-" removes the part), Reset, the placeholders it may use, and what the
 // engine found wrong with it. Shared by a trend's engine prompt
-// (EnginePromptParts.tsx) and Admin → Nodaro Motion's (PromptPartsTabs.tsx).
+// (EnginePromptParts.tsx) and Admin → Video Remake's (PromptPartsTabs.tsx).
 //
 // "Default changed" (a trend's only: it stores the hash of the default each
 // override replaced) says the engine's default moved since the override was

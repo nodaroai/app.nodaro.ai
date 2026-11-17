@@ -1,7 +1,7 @@
 /**
  * When the no-person setting may be saved.
  *
- * The Nodaro Motion settings are one row each, which staging and production
+ * The Video Remake settings are one row each, which staging and production
  * share (one database, `engine-environments.ts`). The no-person row
  * (`nodaro_motion_no_person`) is read only by an engine that declares
  * `castSwap.noPersonSourceClip`; an engine without the flag never reads it and

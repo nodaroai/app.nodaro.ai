@@ -1,5 +1,5 @@
 /**
- * Admin → Nodaro Motion's Motion column (decided 2026-11-02): a Full depth's
+ * Admin → Video Remake's Motion column (decided 2026-11-02): a Full depth's
  * depth blur (`faceMasking.depthBlur`, 0–40, 0 = off) and what the face mesh
  * draws (`faceMasking.faceMeshParts`: Full, Eyes and mouth, Mouth only).
  *

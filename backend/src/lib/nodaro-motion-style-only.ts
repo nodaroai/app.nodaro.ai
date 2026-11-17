@@ -1,12 +1,12 @@
 /**
- * Nodaro Motion's style-only setting, per engine — what a DIRECT style-only
+ * Video Remake's style-only setting, per engine — what a DIRECT style-only
  * run does: a Prism Flex run with an art style and nothing to swap (no role
  * with pictures, no fixed reference). Set by an admin for the whole
  * deployment, never by the person running it.
  *
  * The `app_settings` row `nodaro_motion_style_only`:
- * `{ "motion-prism"?: Entry, "motion-pulse"?: Entry }`, keyed by Nodaro
- * Motion's PUBLIC engine ids, `Entry = { path?: "original" | "flex";
+ * `{ "nodaro-prism"?: Entry, "nodaro-pulse"?: Entry }`, keyed by Video
+ * Remake's PUBLIC engine ids, `Entry = { path?: "original" | "flex";
  * enginePrompt?: TextStepSetting }`.
  *
  * - `path`: `"original"` (the default; absent means it) sends the original
@@ -41,7 +41,7 @@ import {
   type StyleOnlyPath,
   type TextStepSetting,
 } from "./cast-swap-steps.js"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_STYLE_ONLY_KEY = "nodaro_motion_style_only"
 
@@ -84,10 +84,7 @@ export const nodaroMotionStyleOnlyEntrySchema: z.ZodType<NodaroMotionStyleOnlyEn
   }) as unknown as z.ZodType<NodaroMotionStyleOnlyEntry>
 
 /** What an admin saves: strict over the current engine ids (an unknown engine, path or key is refused). */
-export const nodaroMotionStyleOnlySchema: z.ZodType<NodaroMotionStyleOnly> = z.strictObject({
-  "motion-prism": nodaroMotionStyleOnlyEntrySchema.optional(),
-  "motion-pulse": nodaroMotionStyleOnlyEntrySchema.optional(),
-})
+export const nodaroMotionStyleOnlySchema: z.ZodType<NodaroMotionStyleOnly> = byEngineSchema(nodaroMotionStyleOnlyEntrySchema)
 
 /**
  * An entry's save-time refusals (`castSwapStepsSaveSchema`: a known model
@@ -125,7 +122,7 @@ export function anyStyleOnlyChange(setting: NodaroMotionStyleOnly | null | undef
 
 /**
  * What the plugin is answered: each changed entry, also under its earlier key
- * (the TRANSITION SHIM every Nodaro Motion setting's accessor answers,
+ * (the TRANSITION SHIM every Video Remake setting's accessor answers,
  * `withEarlierEngineKeys`), new objects; null when nothing is changed.
  */
 export function styleOnlyForPlugin(setting: NodaroMotionStyleOnly | null | undefined): NodaroMotionStyleOnlyForPlugin | null {

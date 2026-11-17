@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion's form model (pure): the per-engine drafts as they are saved.
+// Admin → Video Remake's form model (pure): the per-engine drafts as they are saved.
 
 import type { AdminTrendFaceMasking, NodaroMotionEngine, NodaroMotionEngineSupports, NodaroMotionMasking, NodaroMotionMotion, NodaroMotionMotionEntry } from "@/lib/api"
 import { clipPreparationIssues, clipPreparationOf, depthBlurKindOf } from "../trends/clip-preparation"
@@ -48,7 +48,7 @@ export function motionIssues(entry: NodaroMotionMotionEntry | undefined): string
 
 /**
  * What this environment's Cast Swap engine cannot do yet of an engine's Motion
- * setting, as phrases (`supports` from GET /v1/admin/nodaro-motion/motion;
+ * setting, as phrases (`supports` from GET /v1/admin/video-remake/motion;
  * unknown when left out: nothing is said). The Motion style itself
  * (`styles`), Full depth (`sourceModes`), its scene (`fullDepthScenes`;
  * absent = the original only) and a prompt style other than Flexible

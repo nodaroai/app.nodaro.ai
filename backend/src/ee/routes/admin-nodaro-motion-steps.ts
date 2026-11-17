@@ -1,14 +1,14 @@
 /**
- * Nodaro Motion's preparation steps for direct runs, per engine, and the
+ * Video Remake's preparation steps for direct runs, per engine, and the
  * engine's defaults and check behind the step editors (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET  /v1/admin/nodaro-motion/steps            { steps, updatedAt, engines } (steps null = never saved: every direct run is today's)
- *   PUT  /v1/admin/nodaro-motion/steps            { steps }: save the whole setting; audit-logged
- *   GET  /v1/admin/nodaro-motion/steps/defaults?engine=<id>
+ *   GET  /v1/admin/video-remake/steps            { steps, updatedAt, engines } (steps null = never saved: every direct run is today's)
+ *   PUT  /v1/admin/video-remake/steps            { steps }: save the whole setting; audit-logged
+ *   GET  /v1/admin/video-remake/steps/defaults?engine=<id>
  *                                                 the engine's vocabulary, default texts and layout prompts (null: this engine takes no steps)
- *   POST /v1/admin/nodaro-motion/steps/check      { engine, steps }: { problems }, the platform's and the engine's; nothing is saved
+ *   POST /v1/admin/video-remake/steps/check      { engine, steps }: { problems }, the platform's and the engine's; nothing is saved
  *
  * The setting (`nodaro_motion_steps`, lib/nodaro-motion-steps.ts) is read by
  * the Cast Swap engine for every DIRECT run of the engine it names; a trend
@@ -37,7 +37,9 @@
  *
  * Defaults and check ask this environment's engine (`POST
  * /v1/cast-swap/steps`, internal only, as the admin through `engineRequest`)
- * with the engine's CURRENT public id, whatever form the admin sent. The
+ * with the engine's public id, whatever form the admin sent: the current one
+ * once the engine lists it in `castSwap.engines`, else the one before
+ * (`publicEngineIdForLoadedEngine`). The
  * default texts live in the engine and are only relayed here, never kept. An
  * engine that does not declare `castSwap.steps` is never asked: defaults
  * answers null, check the platform's problems alone; the engine's 404 reads
@@ -94,6 +96,7 @@ import { readNodaroMotionPromptParts } from "../../lib/nodaro-motion-prompt-part
 import { readNodaroMotionMotion } from "../../lib/nodaro-motion-motion-store.js"
 import { readNodaroMotionMasking } from "../../lib/nodaro-motion-masking-store.js"
 import type { CastSwapSteps } from "../../lib/cast-swap-steps.js"
+import { publicEngineIdForLoadedEngine } from "../../lib/cast-swap-engines.js"
 
 /** Whether an engine's steps turn its Precise shot list on (its marker in the Precise prompt). */
 const preciseShotListOn = (s: CastSwapSteps | undefined): boolean => s?.shotList?.precise?.mode === "on"
@@ -101,7 +104,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-mo
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_STEPS_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f6"
 
 /** The engine's steps route (internal only). */
@@ -147,7 +150,7 @@ function stepsRefused(reply: FastifyReply, problems: CastSwapStepsProblem[]) {
 }
 
 function engineError(reply: FastifyReply) {
-  return reply.status(502).send({ error: { code: "engine_error", message: "Nodaro Motion answered unexpectedly." } })
+  return reply.status(502).send({ error: { code: "engine_error", message: "Video Remake answered unexpectedly." } })
 }
 
 /**
@@ -161,7 +164,8 @@ async function askEngine(
   body: { engine: NodaroMotionEngine; steps?: unknown },
 ): Promise<{ kind: "answer"; answer: Record<string, unknown> } | { kind: "absent" } | { kind: "failed" }> {
   if (!loadedEngineTakesSteps()) return { kind: "absent" }
-  const res = await engineRequest(app, req, ENGINE_STEPS_ROUTE, body)
+  // The engine's route takes a public id: the one this engine knows (an engine that does not list the current ids takes the one before).
+  const res = await engineRequest(app, req, ENGINE_STEPS_ROUTE, { ...body, engine: publicEngineIdForLoadedEngine(body.engine) })
   if (res.statusCode === 404) return { kind: "absent" }
   if (res.statusCode < 200 || res.statusCode >= 300) {
     req.log.warn({ status: res.statusCode }, "cast-swap steps: the engine refused")
@@ -210,7 +214,7 @@ function forLoadedEngine(steps: unknown): unknown {
  */
 export const NODARO_MOTION_STEPS_SECTION = defineNodaroMotionSettingsSection({
   key: "steps",
-  path: "/v1/admin/nodaro-motion/steps",
+  path: "/v1/admin/video-remake/steps",
   label: "Preparation steps",
   body: z.strictObject({ steps: nodaroMotionStepsSaveSchema }),
   prepare: (body) => ({ value: { steps: withoutEmptySteps(body.steps) } }),
@@ -255,15 +259,15 @@ export const NODARO_MOTION_STEPS_SECTION = defineNodaroMotionSettingsSection({
 })
 
 export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/steps", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/steps", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion steps")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake steps")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/steps", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/steps", { preHandler: requireAdmin }, async (req, reply) => {
     const envelope = putBody.safeParse(req.body)
     if (!envelope.success) return badRequest(reply, envelope.error)
     const parsed = nodaroMotionStepsSaveSchema.safeParse(envelope.data.steps)
@@ -296,7 +300,7 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
           return directRunPromptPartsInvalid(
             reply,
             problems,
-            `With the Precise shot list on, the saved Nodaro Motion prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
+            `With the Precise shot list on, the saved Video Remake prompt no longer fits: ${problems[0]!.message} Shorten or reset the prompt overrides first.`,
           )
         }
       }
@@ -308,11 +312,11 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion steps")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake steps")
     }
   })
 
-  app.get("/v1/admin/nodaro-motion/steps/defaults", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/steps/defaults", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = defaultsQuery.safeParse(req.query)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
@@ -321,11 +325,11 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
       if (asked.kind === "failed") return engineError(reply)
       return { data: asked.kind === "answer" ? asked.answer : null }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion step defaults")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake step defaults")
     }
   })
 
-  app.post("/v1/admin/nodaro-motion/steps/check", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/video-remake/steps/check", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = checkBody.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
@@ -343,7 +347,7 @@ export function registerNodaroMotionStepsRoutes(app: FastifyInstance): void {
       }
       return { data: { problems: mergedProblems(platform, fromEngine) } }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to check the Nodaro Motion steps")
+      return sendInternalError(reply, req, e, "Failed to check the Video Remake steps")
     }
   })
 }

@@ -1,6 +1,6 @@
 /**
  * MCP trend verbs — the agent's face of `/v1/trends` (ee/routes/trends.ts): a
- * trend is a ready-made Nodaro Motion recipe, a short clip whose slots (people,
+ * trend is a ready-made Video Remake recipe, a short clip whose slots (people,
  * pets, products, the place) the user fills with their own pictures.
  *
  *   list_trends     GET  /v1/trends                 jobs:read
@@ -8,7 +8,7 @@
  *   estimate_trend  POST /v1/trends/:slug/estimate  workflows:execute
  *   run_trend       POST /v1/trends/:slug/runs      workflows:execute
  *
- * Price confirmation follows `cast_swap`: without `confirm`, `run_trend`
+ * Price confirmation follows `video_remake`: without `confirm`, `run_trend`
  * returns the quote (nothing is created or charged); `confirm: true`, only
  * after the user accepted it, runs, and the job is followed with `get_job` /
  * `wait_for_job` like any other.
@@ -18,7 +18,7 @@
  * so a field a route might add later does not reach the agent by accident.
  * The route is the authority on every rule (required slots, chips per kind,
  * image caps, the resolutions the trend's engine offers, draft only at 480p
- * on Nodaro Motion Prism); this file maps snake_case to its body.
+ * on Nodaro Prism); this file maps snake_case to its body.
  *
  * Cloud-only: registered behind `hasCredits()` in server.ts — off-cloud the
  * routes are not served and a call answers `not_available`.
@@ -94,7 +94,7 @@ export const trendRunShape = {
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
-  draft: z.boolean().optional().describe("true = a 480p draft that full_quality can finish at 1080p (a motion-pulse trend has none). Default false: plain."),
+  draft: z.boolean().optional().describe("true = a 480p draft that full_quality can finish at 1080p (a nodaro-pulse trend has none). Default false: plain."),
   preview_job_id: z.string().regex(JOB_ID_RE).optional().describe("For a full run: the job id of the user's own preview of this trend; it may carry the preview's settings over."),
 }
 
@@ -173,7 +173,7 @@ function originalView(v: unknown): Rec | undefined {
   }
 }
 
-/** The trend's engine by its public id and name: Nodaro Motion Prism when the route names none it knows. */
+/** The trend's engine by its public id and name: Nodaro Prism when the route names none it knows. */
 function engineView(v: unknown): { engine: NodaroMotionEngine; engineName: string } {
   const engine = castSwapEngineFrom(v) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
   return { engine: nodaroMotionEngineOf(engine), engineName: statedName(nodaroMotionEngineName(engine)) }
@@ -294,7 +294,7 @@ function refusal(statusCode: number, body: string) {
 // ── tools ───────────────────────────────────────────────────────────────────
 
 export function registerTrendTools({ server, session, fastify }: RegisterTrendToolsOpts): void {
-  // Every trend run is a Nodaro Motion run: what the deployment offers decides
+  // Every trend run is a Video Remake run: what the deployment offers decides
   // whether they are listed (lib/mcp/tool-needs.ts).
   if (passesGate(session, readGate)) {
     server.registerTool(
@@ -342,7 +342,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
         title: "Get Trend",
         description:
           "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, chips the user may set, their defaults), " +
-          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"motion-prism\" or \"motion-pulse\") with its engineName and resolutions (default first). Fill estimate_trend / run_trend `slots` by these keys and chips.",
+          "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"nodaro-prism\" or \"nodaro-pulse\") with its engineName and resolutions (default first). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),
         },

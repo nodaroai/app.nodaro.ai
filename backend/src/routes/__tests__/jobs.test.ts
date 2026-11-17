@@ -1302,7 +1302,7 @@ describe("credits_charged — the settled charge beside the hold", () => {
 })
 
 describe("credits_charged — a run's charge includes its steps (child jobs)", () => {
-  // The production Nodaro Motion preview of 2026-10-26: Cast Swap 44, two
+  // The production Video Remake preview of 2026-10-26: Cast Swap 44, two
   // reference preps at 66, a mask at 33, the video held 3,564 and charged 854.
   const RUN_LOGS = [
     { id: "ul-run", status: "committed", credits_used: 44, credits_charged: 44 },

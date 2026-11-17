@@ -42,10 +42,10 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const URL = "/v1/cast-swap/style-choice"
-const NO_STYLE_ONLY = { "motion-prism": false, "motion-pulse": false }
-const NO_PRECISE_ART_STYLE = { "motion-prism": false, "motion-pulse": false }
-const NO_PRECISE_ART_STYLE_ALONE = { "motion-prism": false, "motion-pulse": false }
-const USER = { engines: { "motion-prism": "user", "motion-pulse": "user" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE }
+const NO_STYLE_ONLY = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
+const NO_PRECISE_ART_STYLE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
+const NO_PRECISE_ART_STYLE_ALONE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
+const USER = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user", "motion-prism": "user", "motion-pulse": "user" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE }
 
 let app: FastifyInstance
 
@@ -74,14 +74,14 @@ describe("GET /v1/cast-swap/style-choice", () => {
   })
 
   it("answers each forced engine's choice, the other 'user'", async () => {
-    h.style = { "motion-pulse": "flex" }
-    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
-    h.style = { "motion-prism": "precise", "motion-pulse": "flex" }
-    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "motion-prism": "precise", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
+    h.style = { "nodaro-pulse": "flex" }
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
+    h.style = { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
   })
 
   it("answers 'user' everywhere while this environment's engine does not enforce it, without reading the settings", async () => {
-    h.style = { "motion-prism": "flex" }
+    h.style = { "nodaro-prism": "flex" }
     for (const castSwap of [CS, { ...CS, styleChoice: false }]) {
       setPluginSupports({ castSwap })
       expect((await app.inject({ method: "GET", url: URL })).json(), JSON.stringify(castSwap)).toEqual(USER)
@@ -92,7 +92,7 @@ describe("GET /v1/cast-swap/style-choice", () => {
   })
 
   it("answers 'user' everywhere, uncached, when the settings could not be read", async () => {
-    h.style = { "motion-prism": "flex" }
+    h.style = { "nodaro-prism": "flex" }
     h.failed = true
     let res = await app.inject({ method: "GET", url: URL })
     expect(res.statusCode).toBe(200)
@@ -108,14 +108,14 @@ describe("GET /v1/cast-swap/style-choice", () => {
 })
 
 describe("styleOnly: which engines take a style-only run", () => {
-  const STYLE_ONLY = { "motion-prism": true, "motion-pulse": false }
+  const STYLE_ONLY = { "nodaro-prism": true, "nodaro-pulse": false, "motion-prism": true, "motion-pulse": false }
 
   it("answers Prism true and Pulse false while the engine declares castSwap.styleOnly, in a fresh object", async () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, styleOnly: true } })
-    h.style = { "motion-pulse": "flex" }
+    h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
-    first.styleOnly["motion-pulse"] = true
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
+    first.styleOnly["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().styleOnly).toEqual(STYLE_ONLY)
   })
 
@@ -130,7 +130,7 @@ describe("styleOnly: which engines take a style-only run", () => {
 
   it("answers it on an engine that takes no style choice, still without reading the settings", async () => {
     setPluginSupports({ castSwap: { ...CS, styleOnly: true } })
-    h.style = { "motion-prism": "flex" }
+    h.style = { "nodaro-prism": "flex" }
     const res = await app.inject({ method: "GET", url: URL })
     expect(res.json()).toEqual({ ...USER, styleOnly: STYLE_ONLY })
     expect(res.headers["cache-control"]).toBe(`public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
@@ -139,7 +139,7 @@ describe("styleOnly: which engines take a style-only run", () => {
 
   it("keeps it in the uncached answer to a settings read that failed or threw", async () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, styleOnly: true } })
-    h.style = { "motion-prism": "flex" }
+    h.style = { "nodaro-prism": "flex" }
     for (const fail of [{ failed: true, throws: false }, { failed: false, throws: true }]) {
       Object.assign(h, fail)
       const res = await app.inject({ method: "GET", url: URL })
@@ -151,14 +151,14 @@ describe("styleOnly: which engines take a style-only run", () => {
 })
 
 describe("preciseArtStyle: which engines take an art style on a Precise run", () => {
-  const PRECISE_ART_STYLE = { "motion-prism": true, "motion-pulse": false }
+  const PRECISE_ART_STYLE = { "nodaro-prism": true, "nodaro-pulse": false, "motion-prism": true, "motion-pulse": false }
 
   it("answers Prism true and Pulse false while the engine declares castSwap.preciseArtStyle, in a fresh object", async () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyle: true } })
-    h.style = { "motion-pulse": "flex" }
+    h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
-    first.preciseArtStyle["motion-pulse"] = true
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE })
+    first.preciseArtStyle["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyle).toEqual(PRECISE_ART_STYLE)
   })
 
@@ -184,14 +184,14 @@ describe("preciseArtStyle: which engines take an art style on a Precise run", ()
 })
 
 describe("preciseArtStyleAlone: where an art style alone is a Precise run's change", () => {
-  const ALONE = { "motion-prism": true, "motion-pulse": false }
+  const ALONE = { "nodaro-prism": true, "nodaro-pulse": false, "motion-prism": true, "motion-pulse": false }
 
   it("answers Prism true and Pulse false while the engine declares castSwap.preciseArtStyleAlone, in a fresh object", async () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyleAlone: true } })
-    h.style = { "motion-pulse": "flex" }
+    h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: ALONE })
-    first.preciseArtStyleAlone["motion-pulse"] = true
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: ALONE })
+    first.preciseArtStyleAlone["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyleAlone).toEqual(ALONE)
   })
 
@@ -210,7 +210,7 @@ describe("preciseArtStyleAlone: where an art style alone is a Precise run's chan
 
   it("is in the answer of an engine that takes no style choice, without reading the settings", async () => {
     setPluginSupports({ castSwap: { ...CS, preciseArtStyleAlone: true } })
-    h.style = { "motion-prism": "flex" }
+    h.style = { "nodaro-prism": "flex" }
     const res = await app.inject({ method: "GET", url: URL })
     expect(res.json()).toEqual({ ...USER, preciseArtStyleAlone: ALONE })
     expect(res.headers["cache-control"]).toBe(`public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
@@ -219,7 +219,7 @@ describe("preciseArtStyleAlone: where an art style alone is a Precise run's chan
 
   it("is in the uncached answer to a settings read that failed or threw", async () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyleAlone: true } })
-    h.style = { "motion-prism": "flex" }
+    h.style = { "nodaro-prism": "flex" }
     for (const fail of [{ failed: true, throws: false }, { failed: false, throws: true }]) {
       Object.assign(h, fail)
       const res = await app.inject({ method: "GET", url: URL })
@@ -231,14 +231,14 @@ describe("preciseArtStyleAlone: where an art style alone is a Precise run's chan
 
   it("follows the engine alone: no saved choice changes it", async () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyleAlone: true } })
-    for (const style of [{ "motion-prism": "precise" }, { "motion-prism": "flex", "motion-pulse": "flex" }, null]) {
+    for (const style of [{ "nodaro-prism": "precise" }, { "nodaro-prism": "flex", "nodaro-pulse": "flex", "motion-prism": "flex", "motion-pulse": "flex" }, null]) {
       h.style = style
       expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyleAlone, JSON.stringify(style)).toEqual(ALONE)
     }
   })
 })
 
-describe("with nothing set, every Nodaro Motion request is as before", () => {
+describe("with nothing set, every Video Remake request is as before", () => {
   it("the host leaves a direct run's and a quote's body (its style included) to the engine exactly as sent", async () => {
     const seen: unknown[] = []
     const engine = Fastify({ logger: false })
@@ -247,7 +247,7 @@ describe("with nothing set, every Nodaro Motion request is as before", () => {
     await engine.ready()
     const bodies = [
       { videoUrl: "https://cdn.example.com/clip.mp4", roles: [], postPrompt: "x" },
-      { videoUrl: "https://cdn.example.com/clip.mp4", roles: [], postPrompt: "x", style: "motion", engine: "motion-pulse" },
+      { videoUrl: "https://cdn.example.com/clip.mp4", roles: [], postPrompt: "x", style: "motion", engine: "nodaro-pulse" },
       { videoUrl: "https://cdn.example.com/clip.mp4", roles: [], postPrompt: "x", style: "precise" },
     ]
     for (const url of ["/v1/cast-swap", "/v1/cast-swap/estimate"]) {
@@ -258,3 +258,14 @@ describe("with nothing set, every Nodaro Motion request is as before", () => {
   })
 })
 
+
+describe("the Video Remake route and its alias", () => {
+  it("answers the same at /v1/video-remake/style-choice and at its /v1/cast-swap alias", async () => {
+    h.style = { "nodaro-prism": "flex" }
+    const canonical = await app.inject({ method: "GET", url: "/v1/video-remake/style-choice" })
+    const alias = await app.inject({ method: "GET", url: URL })
+    expect(canonical.statusCode).toBe(200)
+    expect(canonical.json()).toEqual(alias.json())
+    expect(canonical.json().engines["nodaro-prism"]).toBe("flex")
+  })
+})

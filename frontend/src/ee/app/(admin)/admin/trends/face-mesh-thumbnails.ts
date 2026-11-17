@@ -1,4 +1,4 @@
-// The face mesh illustrations of Admin → Nodaro Motion: which picture shows a
+// The face mesh illustrations of Admin → Video Remake: which picture shows a
 // set of face mesh layers, and what it says. Every set that draws lines has its
 // own picture (`face-mesh-thumbnail-files.ts`, drawn by the platform's own face
 // mesh code on a depth face — backend/scripts/render-face-mesh-thumbnails.mts),

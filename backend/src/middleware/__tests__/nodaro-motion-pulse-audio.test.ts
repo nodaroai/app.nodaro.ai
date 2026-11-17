@@ -2,7 +2,7 @@ import Fastify from "fastify"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
- * A DIRECT Nodaro Motion run or quote gets its Pulse audio from the admin's
+ * A DIRECT Video Remake run or quote gets its Pulse audio from the admin's
  * setting, never from the caller: `pulseAudio: "generated"` only on a Pulse run,
  * when the setting says so and the engine declares `castSwap.pulseAudio`;
  * otherwise no key at all (the original audio, today's body). A trend run
@@ -36,6 +36,9 @@ async function seen(body: unknown, url = "/v1/cast-swap", headers: Record<string
     child.post("/v1/cast-swap", async (req) => req.body)
     child.post("/v1/cast-swap/estimate", async (req) => req.body)
     child.post("/v1/cast-swap/:jobId/full-quality", async (req) => req.body)
+    // The same routes under Video Remake's own prefix (castSwap.videoRemakeRoutes).
+    child.post("/v1/video-remake", async (req) => req.body)
+    child.post("/v1/video-remake/estimate", async (req) => req.body)
     child.post("/v1/generate-video", async (req) => req.body)
   })
   const res = await app.inject({ method: "POST", url, headers, payload: body as Record<string, unknown> })
@@ -52,8 +55,8 @@ beforeEach(() => {
 })
 
 describe("registerNodaroMotionPulseAudioHook", () => {
-  it.each(["motion-pulse", "motion-lite", "kling-4"])("a direct Pulse run or quote naming %s is sent pulseAudio: generated when the setting says so", async (engine) => {
-    for (const url of ["/v1/cast-swap", "/v1/cast-swap/estimate"]) {
+  it.each(["nodaro-pulse", "motion-pulse", "motion-lite", "kling-4"])("a direct Pulse run or quote naming %s is sent pulseAudio: generated when the setting says so", async (engine) => {
+    for (const url of ["/v1/video-remake", "/v1/video-remake/estimate", "/v1/cast-swap", "/v1/cast-swap/estimate"]) {
       expect(await seen({ videoUrl: "x", engine }, url)).toEqual({ videoUrl: "x", engine, pulseAudio: "generated" })
     }
   })
@@ -61,35 +64,35 @@ describe("registerNodaroMotionPulseAudioHook", () => {
   it("sends no key for the original audio, a setting never saved, or a failed settings read", async () => {
     for (const choice of ["original", null] as const) {
       h.choice = choice
-      expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+      expect(await seen({ videoUrl: "x", engine: "nodaro-pulse" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
     }
     h.choice = "generated"
     h.failed = true
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
   })
 
   it("sends no key to an engine that does not declare castSwap.pulseAudio, and does not read the setting", async () => {
     for (const castSwap of [CS, { ...CS, pulseAudio: false }]) {
       setPluginSupports({ castSwap })
-      expect(await seen({ videoUrl: "x", engine: "motion-pulse" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
+      expect(await seen({ videoUrl: "x", engine: "nodaro-pulse" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
     }
     expect(h.reads).toBe(0)
   })
 
   it("sends no key on a Prism run (named, or no engine at all), and does not read the setting", async () => {
-    expect(await seen({ videoUrl: "x", engine: "motion-prism" })).toEqual({ videoUrl: "x", engine: "motion-prism" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-prism" })).toEqual({ videoUrl: "x", engine: "nodaro-prism" })
     expect(await seen({ videoUrl: "x" })).toEqual({ videoUrl: "x" })
     expect(h.reads).toBe(0)
   })
 
   it("drops a caller-sent pulseAudio on a direct run: people never choose it", async () => {
     h.choice = "original"
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse", pulseAudio: "generated" })).toEqual({ videoUrl: "x", engine: "motion-pulse" })
-    expect(await seen({ videoUrl: "x", engine: "motion-prism", pulseAudio: "generated" })).toEqual({ videoUrl: "x", engine: "motion-prism" })
-    // Over the internal hop too (MCP cast_swap relays a caller's arguments).
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse", pulseAudio: "generated" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-prism", pulseAudio: "generated" })).toEqual({ videoUrl: "x", engine: "nodaro-prism" })
+    // Over the internal hop too (MCP video_remake relays a caller's arguments).
     expect(await seen({ videoUrl: "x", engine: "kling-4", pulseAudio: "generated" }, "/v1/cast-swap", SECRET)).toEqual({ videoUrl: "x", engine: "kling-4" })
     h.choice = "generated"
-    expect(await seen({ videoUrl: "x", engine: "motion-pulse", pulseAudio: "original" })).toEqual({ videoUrl: "x", engine: "motion-pulse", pulseAudio: "generated" })
+    expect(await seen({ videoUrl: "x", engine: "nodaro-pulse", pulseAudio: "original" })).toEqual({ videoUrl: "x", engine: "nodaro-pulse", pulseAudio: "generated" })
   })
 
   it("leaves a trend run (trendRun on an internal request) exactly as its trend composed it", async () => {
@@ -110,7 +113,7 @@ describe("registerNodaroMotionPulseAudioHook", () => {
   })
 
   it("leaves other routes as sent", async () => {
-    const body = { engine: "motion-pulse", pulseAudio: "original" }
+    const body = { engine: "nodaro-pulse", pulseAudio: "original" }
     expect(await seen(body, "/v1/cast-swap/j-1/full-quality")).toEqual(body)
     expect(await seen(body, "/v1/generate-video")).toEqual(body)
   })

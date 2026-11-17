@@ -216,7 +216,7 @@ function platformTakes(env: TrendEngineEnvironment | undefined): boolean {
 
 /**
  * What a screen offers of what only some environments take: every environment
- * must, in Admin → Nodaro Motion's setting and a trend's editor alike (one
+ * must, in Admin → Video Remake's setting and a trend's editor alike (one
  * database: an older app cannot read a value no id says, and an engine that
  * does not take a value is sent the full audio). Everything else is every
  * engine's.

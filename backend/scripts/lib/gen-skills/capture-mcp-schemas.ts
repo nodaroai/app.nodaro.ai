@@ -33,7 +33,7 @@ const DEFAULT_CAPTURE_SCOPES = [
 
 /**
  * A tool's listed fields: its raw shape, or the shape of the object schema it
- * declares instead (a loose object, `cast_swap`, so an older client's unlisted
+ * declares instead (a loose object, `video_remake`, so an older client's unlisted
  * arguments still reach its handler). Either way only the listed keys.
  */
 function shapeOf(schema: unknown): Record<string, unknown> {

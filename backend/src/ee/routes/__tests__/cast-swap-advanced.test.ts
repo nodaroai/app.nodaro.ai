@@ -5,7 +5,7 @@ import ts from "typescript"
 import { SCAN_TIMEOUT_MS, eachSourceFile, lineOf, parseText, walk } from "../../../lib/__tests__/source-scan.js"
 
 /**
- * `GET /v1/cast-swap/advanced` — what a Nodaro Motion page reads to show or
+ * `GET /v1/cast-swap/advanced` — what a Video Remake page reads to show or
  * hide its Advanced options (Prepare references and the pre-prompt): exactly
  * `{ show }`, from the settings cache, cacheable briefly, with no credential.
  *
@@ -51,6 +51,15 @@ describe("GET /v1/cast-swap/advanced", () => {
     expect(res.json()).toEqual({ show: false })
     expect(res.headers["cache-control"]).toBe(`public, max-age=${ADVANCED_MAX_AGE_SECONDS}`)
     expect(ADVANCED_MAX_AGE_SECONDS).toBeLessThanOrEqual(60)
+  })
+
+  it("answers the same at /v1/video-remake/advanced and at its /v1/cast-swap alias", async () => {
+    h.advanced = { show: true }
+    const canonical = await app.inject({ method: "GET", url: "/v1/video-remake/advanced" })
+    const alias = await app.inject({ method: "GET", url: URL })
+    expect(canonical.statusCode).toBe(200)
+    expect(canonical.json()).toEqual({ show: true })
+    expect(alias.json()).toEqual(canonical.json())
   })
 
   it("answers what the admin saved, and only show", async () => {

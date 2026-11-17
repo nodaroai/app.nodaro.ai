@@ -2,7 +2,7 @@
  * The smallest face with mesh lines (`faceMasking.faceMeshMinFaceHeightPct`,
  * decided 2026-11-03): Full depth's face mesh draws no lines on a face whose
  * box is smaller than this % of the frame's height (0–100; left empty, the
- * engine's 10). In the shared FaceMaskingEditor: Admin → Nodaro Motion's
+ * engine's 10). In the shared FaceMaskingEditor: Admin → Video Remake's
  * Motion column and a trend's editor (the Precise column is never Full depth).
  *
  * - The pure rules: saved only on Full depth with the face mesh on, and only
@@ -277,31 +277,31 @@ describe("both pages show it", { timeout: 20_000 }, () => {
     expect(screen.getByText("The platform in production does not take the smallest face with mesh lines yet, and trends are shared by every environment.")).toBeInTheDocument()
   })
 
-  it("Admin → Nodaro Motion's Motion column: Full depth with the face mesh offers it and saves it; the Precise column never does; greyed out while a platform does not take it", async () => {
+  it("Admin → Video Remake's Motion column: Full depth with the face mesh offers it and saves it; the Precise column never does; greyed out while a platform does not take it", async () => {
     const user = userEvent.setup()
     const ENGINES = [
-      { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-      { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+      { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+      { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
     ]
-    const MOTION_URL = "/v1/admin/nodaro-motion/motion"
-    routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: { "motion-prism": { mode: "always", faceMesh: true } }, updatedAt: null, engines: ENGINES } } })
-    routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
-    routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
-    routes["GET /v1/admin/nodaro-motion/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
-    routes["POST /v1/admin/nodaro-motion/prompt-parts/preview"] = () => ({
+    const MOTION_URL = "/v1/admin/video-remake/motion"
+    routes["GET /v1/admin/video-remake/masking"] = () => ({ body: { data: { masking: { "nodaro-prism": { mode: "always", faceMesh: true } }, updatedAt: null, engines: ENGINES } } })
+    routes["GET /v1/admin/video-remake/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+    routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+    routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
+    routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({
       body: { data: { set: "precise", parts: [], assembled: "edit {video:1} as follows:", length: 26, max: 8000, problems: [] } },
     })
     routes[`GET ${MOTION_URL}`] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: FDM } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+      body: { data: { motion: { "nodaro-prism": { masking: FDM } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
     routes[`PUT ${MOTION_URL}`] = (init) => ({
       body: { data: { motion: JSON.parse(String(init?.body)).motion, updatedAt: "2026-11-03T12:00:00.000Z", engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
-    routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-    routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
-    routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+    routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+    routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+    routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: ALL_NEW } })
-    const prismOf = async () => (await screen.findByRole("heading", { name: /^Nodaro Motion Prism/ })).closest("section") as HTMLElement
+    const prismOf = async () => (await screen.findByRole("heading", { name: /^Nodaro Prism/ })).closest("section") as HTMLElement
     const { unmount } = renderWith(<AdminNodaroMotionPage />)
     const prism = await prismOf()
     const motion = await within(prism).findByRole("group", { name: /Prism Motion$/ })
@@ -311,7 +311,7 @@ describe("both pages show it", { timeout: 20_000 }, () => {
     expect(within(within(prism).getByRole("group", { name: /Prism Precise$/ })).queryByRole("spinbutton", { name: LABEL })).toBeNull()
     await user.type(input, "15")
     await user.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "motion-prism": { masking: { ...FDM, faceMeshMinFaceHeightPct: 15 } } } }]))
+    await waitFor(() => expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([{ motion: { "nodaro-prism": { masking: { ...FDM, faceMeshMinFaceHeightPct: 15 } } } }]))
     unmount()
 
     // Staging's platform is older (its engine declares the field): greyed out, naming it.

@@ -1,7 +1,7 @@
-// What sound a Nodaro Motion Pulse (Kling 4) run delivers: the original audio
+// What sound a Nodaro Pulse (Kling 4) run delivers: the original audio
 // back on the result, exactly (the default), or Kling's own track as is. The
 // trend editor shows it beside the Length while the model is Pulse; Admin →
-// Nodaro Motion shows it in the Pulse engine's section, for direct runs.
+// Video Remake shows it in the Pulse engine's section, for direct runs.
 
 import { useId } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"

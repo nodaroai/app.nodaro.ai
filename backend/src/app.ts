@@ -407,6 +407,7 @@ import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
 import { registerServerOnlyBodyKeysHook } from "./middleware/server-only-body-keys.js"
 import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engine.js"
+import { videoRemakeRewriteUrl } from "./lib/video-remake-paths.js"
 import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
 import { registerNodaroMotionPrismReferenceAudioHook } from "./middleware/nodaro-motion-prism-reference-audio.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
@@ -549,6 +550,10 @@ export async function buildApp() {
     // signed-token route works. Same applies to `:token` in upload-proxy
     // and any future signed-token URLs.
     maxParamLength: 4096,
+    // Video Remake's silent aliases (lib/video-remake-paths.ts): the admin
+    // settings' former prefix, and the product's routes while the loaded Cast
+    // Swap engine serves only their former prefix.
+    rewriteUrl: videoRemakeRewriteUrl,
   })
 
   // Concurrency lanes: every route handler runs in a request scope, so the
@@ -655,10 +660,10 @@ export async function buildApp() {
   // A retired video model id in a request body runs as the model it became
   // (RETIRED_VIDEO_PROVIDERS), before any route prices or validates it.
   registerRetiredVideoProviderHook(app)
-  // A Nodaro Motion run or quote naming its engine by any id (public, earlier
+  // A Video Remake run or quote naming its engine by any id (public, earlier
   // or internal) reaches the plugin's route as the internal id every engine takes.
   registerNodaroMotionEngineHook(app)
-  // A direct Nodaro Motion run's Pulse audio is the admin's setting, never the caller's
+  // A direct Video Remake run's Pulse audio is the admin's setting, never the caller's
   // (a trend run keeps the one its trend composed).
   registerNodaroMotionPulseAudioHook(app)
   // Likewise its Prism reference audio (a trend run keeps the one its trend composed).
@@ -834,15 +839,15 @@ export async function buildApp() {
   if (hasCredits()) await app.register(consentRoutes)
   // Trends: the public catalog and trend runs (Cast Swap recipes; ee/lib/trends).
   if (hasCredits()) await app.register(trendRoutes)
-  // Nodaro Motion: whether people choose a direct run's style per engine (public; the admin's setting).
+  // Video Remake: whether people choose a direct run's style per engine (public; the admin's setting).
   if (hasCredits()) await app.register(castSwapStyleChoiceRoutes)
-  // Nodaro Motion: whether a Nodaro Motion page shows its Advanced options (public; the admin's setting, a page option only).
+  // Video Remake: whether a Video Remake page shows its Advanced options (public; the admin's setting, a page option only).
   if (hasCredits()) await app.register(castSwapAdvancedRoutes)
   // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
   if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
   // Trend Radar: the daily run's candidate queue and settings (admin session only; the cron's tick).
   if (hasAdmin() && hasCredits()) await app.register(trendRadarRoutes)
-// Nodaro Motion (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
+// Video Remake (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // Provider content filters, per model (admin read; platform operator write).
   if (hasAdmin()) await app.register(adminProviderSafetyRoutes)
@@ -856,7 +861,7 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminJobsRoutes)
   if (hasAdmin()) await app.register(adminCastSwapStepsRoutes)
-  // The Motion price check: every Nodaro Motion run's holds, charges and step costs (credits: the hold ledger).
+  // The Motion price check: every Video Remake run's holds, charges and step costs (credits: the hold ledger).
   if (hasAdmin() && hasCredits()) await app.register(adminMotionPriceCheckRoutes)
   if (hasAdmin()) await app.register(adminSsoRoutes)
   if (hasAdmin()) await app.register(adminLocationRoutes)

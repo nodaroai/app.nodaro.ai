@@ -103,7 +103,9 @@ const GRANTS: ReadonlyArray<readonly Scope[]> = [
  * page loads from — none is a sentence. Held both ways: a class nothing
  * matches is removed.
  */
-const PINNED: ReadonlyArray<{ id: string; token: RegExp; why: string }> = [
+const PINNED: ReadonlyArray<{ id: string; token: RegExp; why: string; followedBy?: RegExp }> = [
+  { id: "engine id", token: /^nodaro-(?:prism|pulse)$/, why: "a Video Remake engine's public id, which a client sends as `engine` and reads back" },
+  { id: "engine name", token: /^(?:Nodaro|NODARO)$/, followedBy: /^\s+(?:Prism|Pulse|PRISM|PULSE)\b/, why: "a Video Remake engine's name (Nodaro Prism, Nodaro Pulse), the same on every deployment" },
   { id: "widget resource URI", token: /^ui:\/\/nodaro\/widget\/(?:v[234]\/)?[a-z-]+$/, why: "the resource a tool's `_meta.ui.resourceUri` names: an id the host stores with the tool list and asks for by name" },
   { id: "house model id", token: /^nodaro-(?:image|video)-upscale$/, why: "a model id a client passes as `model` (its label is the deployment's: \"Acme Studio Image Upscale\")" },
   { id: "maker id", token: /^nodaro$/, why: "`maker.id` of the platform's own models in list_models, and the `_meta.nodaro` key of the Studio tools: ids, beside a maker name that says the deployment's" },
@@ -134,7 +136,8 @@ interface Found {
 function classify(found: Found, where: string, text: string) {
   for (const { token: raw, at } of mentions(text)) {
     const token = bare(raw)
-    const pin = PINNED.find((p) => p.token.test(token))
+    const after = text.slice(at + raw.length)
+    const pin = PINNED.find((p) => p.token.test(token) && (!p.followedBy || p.followedBy.test(after)))
     if (pin) {
       found.pinned.add(pin.id)
       continue
@@ -150,7 +153,7 @@ function classify(found: Found, where: string, text: string) {
 const PLUGIN_MARKDOWN = {
   recast: "## Budget\n\nOn Nodaro Cloud a 60 s movie is about 2970 credits. Open it at recast.nodaro.ai.\n",
   studioSkill: "# Nodaro Studio plan\n\nA Nodaro job id goes in `jobId`.\n",
-  studioCatalog: "# Catalog\n\n| Model | Credits |\n|---|---|\n| Nodaro Motion Prism | 83 |\n",
+  studioCatalog: "# Catalog\n\n| Model | Credits |\n|---|---|\n| Nodaro Prism | 83 |\n",
   studioOperating: "# Operating\n\nNodaro renders each take.\n",
 } as const
 
@@ -227,7 +230,7 @@ describe("on a deployment with its own name, nothing the lane says names the pla
 describe("the rules: what a sentence says instead", () => {
   it("with the platform's name every text is itself", () => {
     setProfile(undefined)
-    for (const text of ["Nodaro rejected the request (403): x", "a Nodaro job id", "Nodaro Motion Prism", "visible at recast.nodaro.ai, free"]) expect(statedName(text)).toBe(text)
+    for (const text of ["Nodaro rejected the request (403): x", "a Nodaro job id", "Nodaro Prism", "visible at recast.nodaro.ai, free"]) expect(statedName(text)).toBe(text)
     setProfile({ brand: { productName: "Nodaro" } })
     expect(deploymentName()).toBeNull()
     expect(statedName("Nodaro had a server error")).toBe("Nodaro had a server error")
@@ -242,8 +245,11 @@ describe("the rules: what a sentence says instead", () => {
     ["Publish as a Nodaro app", "Publish as an Acme Studio app"],
     ["{ \"brand\": \"NODARO\" }", "{ \"brand\": \"ACME STUDIO\" }"],
     // products, as the deployment's screens say them
-    ["Nodaro Motion: replace the people", "Motion: replace the people"],
-    ["\"motion-prism\" (Nodaro Motion Prism) or (Nodaro Motion Pulse)", "\"motion-prism\" (Motion Prism) or (Motion Pulse)"],
+    ["Video Remake: replace the people", "Video Remake: replace the people"],
+    // Video Remake's engines keep their names on every deployment
+    ["\"nodaro-prism\" (Nodaro Prism) or \"nodaro-pulse\" (Nodaro Pulse)", "\"nodaro-prism\" (Nodaro Prism) or \"nodaro-pulse\" (Nodaro Pulse)"],
+    ["This Nodaro Prism run is quoted by Nodaro.", "This Nodaro Prism run is quoted by Acme Studio."],
+    ["NODARO PULSE, by NODARO", "NODARO PULSE, by ACME STUDIO"],
     ["`nodaro-image-upscale` — Nodaro Image Upscale", "`nodaro-image-upscale` — Acme Studio Image Upscale"],
     ["a Nodaro Studio production", "a Studio production"],
     ["# Nodaro Video Director — Motion Director Skill", "# Video Director — Motion Director Skill"],
@@ -401,12 +407,11 @@ const NAME_FILES: Readonly<Record<string, { count: number; how: string; funnel?:
   "amounts.ts": { count: 2, how: `the balance refusals; ${REFUSALS}` },
   "flows/record.ts": { count: 1, how: "the flow's link sentence on a successful call: through statedName", funnel: true },
   "server.ts": { count: 1, how: LIST },
-  "tool-needs.ts": { count: 1, how: "the reason a needs row gives: read by no reply (a refusal names the node)" },
   "tools/_studio-helpers.ts": { count: 1, how: REFUSALS },
   "tools/_verb-helpers.ts": { count: 7, how: `the route refusals (${REFUSALS}); the card sentence of a started job through statedName`, funnel: true },
   "tools/apps.ts": { count: 4, how: LIST_AND_REFUSALS },
-  "tools/cast-swap-full-quality.ts": { count: 4, how: LIST_AND_REFUSALS },
-  "tools/cast-swap.ts": { count: 13, how: `${LIST_AND_REFUSALS}; the quote's engine and the started sentence through statedName`, funnel: true },
+  "tools/cast-swap-full-quality.ts": { count: 1, how: LIST_AND_REFUSALS },
+  "tools/cast-swap.ts": { count: 7, how: `${LIST_AND_REFUSALS}; the quote's engine and the started sentence through statedName`, funnel: true },
   "tools/characters.ts": { count: 1, how: LIST },
   "tools/components.ts": { count: 2, how: LIST_AND_REFUSALS },
   "tools/film-director.ts": { count: 16, how: `the doctrine's fallback (${DOCUMENT}); ${LIST}` },

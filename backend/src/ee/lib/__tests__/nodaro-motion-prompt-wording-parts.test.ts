@@ -41,38 +41,38 @@ describe("a prompt-parts request's wording", () => {
 describe("a direct run's request", () => {
   it("says 'new' on a Flex run worded Flexible, 'current' on one left current", () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "motion", undefined, body, undefined, undefined, "new"))).toMatchObject({
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "motion", undefined, body, undefined, undefined, "new"))).toMatchObject({
       style: "motion",
       promptStyle: "flexible",
       promptWording: "new",
     })
-    expect(forLoadedEngine(directRunRequest("motion-pulse", "motion", { promptStyle: "flexible" }, body, undefined, undefined, "new"))).toMatchObject({
+    expect(forLoadedEngine(directRunRequest("nodaro-pulse", "motion", { promptStyle: "flexible" }, body, undefined, undefined, "new"))).toMatchObject({
       promptWording: "new",
     })
-    expect(directRunRequest("motion-prism", "motion", undefined, body, undefined, undefined, "current")).toMatchObject({ promptWording: "current" })
-    expect(directRunRequest("motion-prism", "motion", undefined, body)).toMatchObject({ promptWording: "current" })
+    expect(directRunRequest("nodaro-prism", "motion", undefined, body, undefined, undefined, "current")).toMatchObject({ promptWording: "current" })
+    expect(directRunRequest("nodaro-prism", "motion", undefined, body)).toMatchObject({ promptWording: "current" })
   })
 
   it("never says 'new' on Precise, nor on a Motion setting worded Precise: the request of before", () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    const precise = directRunRequest("motion-prism", "precise", undefined, body, undefined, undefined, "new")
+    const precise = directRunRequest("nodaro-prism", "precise", undefined, body, undefined, undefined, "new")
     expect(precise).not.toHaveProperty("promptWording")
-    expect(precise).toEqual(directRunRequest("motion-prism", "precise", undefined, body))
-    expect(directRunRequest("motion-prism", "motion", { promptStyle: "precise" }, body, undefined, undefined, "new")).not.toHaveProperty("promptWording")
+    expect(precise).toEqual(directRunRequest("nodaro-prism", "precise", undefined, body))
+    expect(directRunRequest("nodaro-prism", "motion", { promptStyle: "precise" }, body, undefined, undefined, "new")).not.toHaveProperty("promptWording")
   })
 
   it("names 'current' on a Precise request only when its overrides hold a part of the new wording (so it can be seen and reset)", () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    expect(directRunRequest("motion-prism", "precise", undefined, { ...body, overrides: { motionLock: "x" } }, undefined, undefined, "new")).toMatchObject({
+    expect(directRunRequest("nodaro-prism", "precise", undefined, { ...body, overrides: { motionLock: "x" } }, undefined, undefined, "new")).toMatchObject({
       promptWording: "current",
     })
-    expect(directRunRequest("motion-prism", "precise", undefined, { ...body, overrides: { face: "x" } })).not.toHaveProperty("promptWording")
+    expect(directRunRequest("nodaro-prism", "precise", undefined, { ...body, overrides: { face: "x" } })).not.toHaveProperty("promptWording")
   })
 
   it("an engine without the wording is asked exactly as before", () => {
     setPluginSupports({ castSwap: ENGINE } as never)
-    const { promptWording: _w, ...before } = directRunRequest("motion-prism", "motion", undefined, body)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "motion", undefined, body, undefined, undefined, "new"))).toEqual(forLoadedEngine(before))
+    const { promptWording: _w, ...before } = directRunRequest("nodaro-prism", "motion", undefined, body)
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "motion", undefined, body, undefined, undefined, "new"))).toEqual(forLoadedEngine(before))
   })
 })
 

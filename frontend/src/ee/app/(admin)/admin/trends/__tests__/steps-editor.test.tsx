@@ -1,6 +1,6 @@
 /**
  * The preparation step editors (StepsEditor, SheetRulesTable, LlmStepEditor,
- * TextStepSwitch), shared by a trend's draft and Admin → Nodaro Motion.
+ * TextStepSwitch), shared by a trend's draft and Admin → Video Remake.
  *
  * - Offered only once every environment's engine takes the steps; otherwise
  *   greyed out naming the environments (nothing is asked of the engine), and
@@ -48,8 +48,8 @@ import { StepsEditor } from "../components/StepsEditor"
 import { layoutLabel } from "../components/SheetRulesTable"
 
 const ENGINE = "seedance-2-5"
-const DEFAULTS_URL = `/v1/admin/nodaro-motion/steps/defaults?engine=${ENGINE}`
-const CHECK_URL = "/v1/admin/nodaro-motion/steps/check"
+const DEFAULTS_URL = `/v1/admin/video-remake/steps/defaults?engine=${ENGINE}`
+const CHECK_URL = "/v1/admin/video-remake/steps/check"
 const MODELS_URL = "/v1/admin/llm-models"
 
 const RULES: SheetRules = {

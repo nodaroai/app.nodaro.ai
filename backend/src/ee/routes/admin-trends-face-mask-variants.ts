@@ -462,7 +462,7 @@ export function registerTrendFaceMaskVariantRoutes(app: FastifyInstance, deps: T
           )
           const makeJobId = res.statusCode >= 200 && res.statusCode < 300 ? jobIdOf(res.body) : null
           if (makeJobId) updates.push({ jobId: job.jobId, job: { ...job, makeJobId } })
-          else await fail(job, `Nodaro Motion did not start the person mask's fill (${res.statusCode}).`)
+          else await fail(job, `Video Remake did not start the person mask's fill (${res.statusCode}).`)
         } else {
           // With role outlines, a filled person mask only an engine that drew them made (one answer per outline sent).
           const outlines =

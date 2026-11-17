@@ -1,12 +1,12 @@
 /**
- * Nodaro Motion's Motion setting, per engine — how a DIRECT run with
+ * Video Remake's Motion setting, per engine — how a DIRECT run with
  * `style: "motion"` prepares its clip and words its prompt. Set by an admin
  * for the whole deployment, never by the person running it. A trend run keeps
  * its own trend's setting; a Precise direct run uses `nodaro_motion_masking`.
  *
  * The `app_settings` row `nodaro_motion_motion`:
- * `{ "motion-prism"?: Entry, "motion-pulse"?: Entry }`, keyed by Nodaro
- * Motion's PUBLIC engine ids, each entry
+ * `{ "nodaro-prism"?: Entry, "nodaro-pulse"?: Entry }`, keyed by Video
+ * Remake's PUBLIC engine ids, each entry
  * `{ masking?: FaceMasking (source "faces" | "full-depth"), promptStyle?: "precise" | "flexible" }`.
  *
  * - `masking`: on an engine with the shot list (`castSwap.shotList`, every
@@ -28,7 +28,7 @@
  * `tk.settings.nodaroMotionMotion()` (advertised as
  * `tk.capabilities.nodaroMotionMotion`), which answers each entry under both
  * its current and its earlier key (`withEarlierEngineKeys`). Written only by
- * `PUT /v1/admin/nodaro-motion/motion` (ee/routes), through
+ * `PUT /v1/admin/video-remake/motion` (ee/routes), through
  * `nodaro-motion-motion-store.ts`. This module is pure (no database).
  */
 import { z } from "zod"
@@ -46,7 +46,7 @@ import {
   type FaceMaskingDepthColormap,
   type FaceMaskingScene,
 } from "./cast-swap-face-masking.js"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_MOTION_KEY = "nodaro_motion_motion"
 
@@ -75,10 +75,7 @@ export const nodaroMotionMotionEntrySchema = z.strictObject({
 }) as unknown as z.ZodType<NodaroMotionMotionEntry>
 
 /** What an admin saves: strict (an unknown engine or key is refused). */
-export const nodaroMotionMotionSchema: z.ZodType<NodaroMotionMotion> = z.strictObject({
-  "motion-prism": nodaroMotionMotionEntrySchema.optional(),
-  "motion-pulse": nodaroMotionMotionEntrySchema.optional(),
-})
+export const nodaroMotionMotionSchema: z.ZodType<NodaroMotionMotion> = byEngineSchema(nodaroMotionMotionEntrySchema)
 
 /** The setting with each entry also under its earlier key (a fresh copy): what the toolkit answers. */
 export function withEarlierMotionKeys(motion: NodaroMotionMotion): NodaroMotionMotionForPlugin {

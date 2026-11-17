@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion → Engine prompt: the Cast Swap engine's own prompt
+// Admin → Video Remake → Engine prompt: the Cast Swap engine's own prompt
 // wording for every run people start themselves, per engine (Prism, Pulse)
 // and style (Precise, Motion), part by part (the trend editor's rows,
 // PromptPartRow.tsx). Empty uses the engine's default; "-" removes the part.
@@ -6,7 +6,7 @@
 // Each tab shows the engine's answer for a sample run (one person, a clip with
 // sound) with the tab's edits, asked again a moment after typing stops, so the
 // assembled prompt and the problems follow the edits. Save sends the WHOLE
-// setting (PUT /v1/admin/nodaro-motion/prompt-parts): the engine checks every
+// setting (PUT /v1/admin/video-remake/prompt-parts): the engine checks every
 // engine and style first, and any problem keeps everything unsaved, shown in
 // its own tab. The setting stores text only, so there is no "default changed"
 // flag here.
@@ -21,7 +21,7 @@
 // prompt wording (PromptWordingSelect.tsx, `nodaro_motion_prompt_wording`):
 // Current (the default) or New, for every direct Flex run of that engine.
 // The tab's preview follows the chosen wording before it is saved; Save saves
-// a changed wording first (PUT /v1/admin/nodaro-motion/prompt-wording), so the
+// a changed wording first (PUT /v1/admin/video-remake/prompt-wording), so the
 // overrides are then checked worded as the runs will be. "New" is greyed out
 // until every environment's engine words it (the setting is shared; the
 // server refuses the save otherwise). Precise never reads it.
@@ -83,7 +83,7 @@ export function STYLE_ONLY_TAB_UNOFFERED(missing: readonly string[]): string {
 
 /** The keys an engine's tabs show: Pulse takes no art style, so it has no Style only tab. */
 export function tabsOf(engine: NodaroMotionEngine, styles: readonly NodaroMotionPromptPartsKey[]): NodaroMotionPromptPartsKey[] {
-  return styles.filter((s) => s !== "styleOnly" || engine === "motion-prism")
+  return styles.filter((s) => s !== "styleOnly" || engine === "nodaro-prism")
 }
 
 const PROMPT_STYLE_NAMES: Readonly<Record<CastSwapPromptStyleId, string>> = { precise: "Precise", flexible: "Flexible" }

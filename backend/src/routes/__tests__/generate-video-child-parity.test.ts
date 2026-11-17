@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * Nodaro Motion's engine children move from `/v1/text-to-video` to
+ * Video Remake's engine children move from `/v1/text-to-video` to
  * `/v1/generate-video`. This file proves the move changes nothing the engine
  * receives: one representative child body is sent through BOTH routes, each
  * route's queued payload is run through its REAL worker handler and the REAL
@@ -153,7 +153,7 @@ const PROMPT =
   "Use {image:3:pet} as the dog, with {image:3} coat.\n" +
   "Keep the camera, the cuts and the timing of {video:1}."
 
-/** The fields every Nodaro Motion child sends, whatever its engine. */
+/** The fields every Video Remake child sends, whatever its engine. */
 const CHILD = {
   prompt: PROMPT,
   referenceVideoUrls: [VIDEO],

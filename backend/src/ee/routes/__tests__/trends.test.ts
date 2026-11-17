@@ -669,7 +669,7 @@ describe("GET /v1/trends/:slug", () => {
     const d = res.json().data
     expect(d).toMatchObject({
       id: T_PUB, slug: "neon-dance", version: 2, previewSec: 4,
-      engine: "motion-prism", engineName: "Nodaro Motion Prism", resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
+      engine: "nodaro-prism", engineName: "Nodaro Prism", resolutions: ["480p", "720p", "1080p"], durationSec: 12, isFavorite: false,
     })
     expect(d.slots).toEqual([
       { key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: ["body", "outfit", "hair"], defaults: { hair: "original" } },
@@ -1384,7 +1384,7 @@ describe("POST /v1/trends/:slug/estimate", () => {
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: RUN_BODY })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({
-      data: { expectedCredits: 120, holdCredits: 120, engine: "motion-prism", engineName: "Nodaro Motion Prism", breakdown: { base: 40, motion: 80 } },
+      data: { expectedCredits: 120, holdCredits: 120, engine: "nodaro-prism", engineName: "Nodaro Prism", breakdown: { base: 40, motion: 80 } },
     })
     expect(engine.calls[0]!.url).toBe("/v1/cast-swap/estimate")
     expect(engine.calls[0]!.headers["x-internal-user-id"]).toBe(USER)
@@ -1415,7 +1415,7 @@ describe("POST /v1/trends/:slug/estimate", () => {
   })
 })
 
-describe("a Nodaro Motion Prism trend at 480p", () => {
+describe("a Nodaro Prism trend at 480p", () => {
   it("plain 480p by default; draft: true makes a draft", async () => {
     const sent = async (payload: Record<string, unknown>) => {
       engine.calls = []
@@ -1438,7 +1438,7 @@ describe("a Nodaro Motion Prism trend at 480p", () => {
 
 describe("a Kling 4 trend", () => {
   const T_KLING = "00000000-0000-4000-8000-0000000000a5"
-  const KLING_ENGINE = { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], engines: ["seedance-2-5", "kling-4"] as Array<"seedance-2-5" | "kling-4" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite"> }
+  const KLING_ENGINE = { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], engines: ["seedance-2-5", "kling-4"] as Array<"seedance-2-5" | "kling-4" | "nodaro-prism" | "nodaro-pulse" | "motion-pro" | "motion-lite"> }
   beforeEach(() => {
     mem.trends.push(trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4" })))
     setPluginSupports({ castSwap: KLING_ENGINE })
@@ -1448,7 +1448,7 @@ describe("a Kling 4 trend", () => {
     mem.trends[mem.trends.length - 1] = trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4", klingLength: "cut-start" }))
     const res = await app.inject({ method: "GET", url: "/v1/trends/kling-dance", headers: as() })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse", resolutions: ["720p", "1080p"] })
+    expect(res.json().data).toMatchObject({ engine: "nodaro-pulse", engineName: "Nodaro Pulse", resolutions: ["720p", "1080p"] })
     expect(res.body).not.toContain("klingLength")
     expectNoHidden(res.body)
   })
@@ -1461,12 +1461,12 @@ describe("a Kling 4 trend", () => {
 
   it("its quote names the engine it priced: Pulse, or the engine's own answer when it names another", async () => {
     const quoted = async () => (await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).json().data
-    expect(await quoted()).toMatchObject({ engine: "motion-pulse", engineName: "Nodaro Motion Pulse" })
+    expect(await quoted()).toMatchObject({ engine: "nodaro-pulse", engineName: "Nodaro Pulse" })
     engine.estimateBody = { totalCredits: 120, breakdown: { castSwap: 40, seedance: 80 }, engine: "seedance-2-5" }
-    expect(await quoted()).toMatchObject({ engine: "motion-prism", engineName: "Nodaro Motion Prism" })
+    expect(await quoted()).toMatchObject({ engine: "nodaro-prism", engineName: "Nodaro Prism" })
   })
 
-  it("sends a Pulse trend's length fit as klingLength to an older engine, and as motionLength where the engine takes Nodaro Motion's names", async () => {
+  it("sends a Pulse trend's length fit as klingLength to an older engine, and as motionLength where the engine takes Video Remake's names", async () => {
     mem.trends[mem.trends.length - 1] = trend(T_KLING, "kling-dance", "published", 1, versionData({ engine: "kling-4", klingLength: "cut-start" }))
     expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
     expect(engine.calls.at(-1)!.body).toMatchObject({ klingLength: "cut-start" })
@@ -1477,8 +1477,8 @@ describe("a Kling 4 trend", () => {
     expect(engine.calls.at(-1)!.body).not.toHaveProperty("klingLength")
   })
 
-  for (const engines of [["motion-pro", "motion-lite"], ["motion-prism", "motion-pulse"]] as const) {
-    it(`still runs where the engine declares Nodaro Motion's public ids (${engines.join(" + ")}), and sends it the internal id it takes`, async () => {
+  for (const engines of [["motion-pro", "motion-lite"], ["nodaro-prism", "nodaro-pulse"]] as const) {
+    it(`still runs where the engine declares Video Remake's public ids (${engines.join(" + ")}), and sends it the internal id it takes`, async () => {
       setPluginSupports({ castSwap: { ...KLING_ENGINE, engines: [...engines], engineAliases: true } })
       expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })).statusCode).toBe(200)
       expect((await app.inject({ method: "POST", url: "/v1/trends/kling-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
@@ -1488,7 +1488,7 @@ describe("a Kling 4 trend", () => {
   }
 
   it("is held back (engine_unsupported) where the engine declares Prism alone, in any vocabulary", async () => {
-    for (const engines of [["seedance-2-5"], ["motion-pro"], ["motion-prism"]] as const) {
+    for (const engines of [["seedance-2-5"], ["motion-pro"], ["nodaro-prism"]] as const) {
       setPluginSupports({ castSwap: { ...KLING_ENGINE, engines: [...engines] } })
       const res = await app.inject({ method: "POST", url: "/v1/trends/kling-dance/estimate", headers: as(), payload: RUN_BODY })
       expect(res.statusCode).toBe(503)
@@ -1907,8 +1907,8 @@ describe("trend face masking and pre prompt", () => {
     const answered = {
       expectedCredits: 120,
       holdCredits: 120,
-      engine: "motion-prism",
-      engineName: "Nodaro Motion Prism",
+      engine: "nodaro-prism",
+      engineName: "Nodaro Prism",
       breakdown: { base: 40, motion: 80, privacy: 30 },
       privacyCredits: 30,
     }
@@ -2407,8 +2407,8 @@ describe("GET /v1/trends/runs", () => {
       preview: false,
       resolution: "1080p",
       draft: false,
-      engine: "motion-prism",
-      engineName: "Nodaro Motion Prism",
+      engine: "nodaro-prism",
+      engineName: "Nodaro Prism",
       videoUrl: null,
       posterUrl: null,
       creditsCharged: null,
@@ -2433,8 +2433,8 @@ describe("GET /v1/trends/runs", () => {
       preview: false,
       resolution: "480p",
       draft: true,
-      engine: "motion-prism",
-      engineName: "Nodaro Motion Prism",
+      engine: "nodaro-prism",
+      engineName: "Nodaro Prism",
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,
@@ -2473,7 +2473,7 @@ describe("GET /v1/trends/runs", () => {
   })
 
   // The job stores the engine as the engine recorded it: the internal id, or (an engine that knows them) a public one, earlier or current.
-  for (const stored of ["kling-4", "motion-lite", "motion-pulse"]) it(`a completed Nodaro Motion Pulse run (stored as ${stored}) has no Full Quality at any resolution; a 720p one made while Pulse had it still points at that try`, async () => {
+  for (const stored of ["kling-4", "motion-lite", "nodaro-pulse"]) it(`a completed Nodaro Pulse run (stored as ${stored}) has no Full Quality at any resolution; a 720p one made while Pulse had it still points at that try`, async () => {
     const KLING_720 = "00000000-0000-4000-8000-0000000000e7"
     const KLING_1080 = "00000000-0000-4000-8000-0000000000e8"
     const fqRow = jobRow(FQ_JOB, {
@@ -2492,15 +2492,15 @@ describe("GET /v1/trends/runs", () => {
     const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
     expect(res.statusCode).toBe(200)
     const runs = res.json().data
-    expect(runs[0]).toMatchObject({ jobId: FQ_JOB, engine: "motion-pulse", engineName: "Nodaro Motion Pulse", fullQualityOf: KLING_720, fullQuality: null, fullQualityUntil: null })
+    expect(runs[0]).toMatchObject({ jobId: FQ_JOB, engine: "nodaro-pulse", engineName: "Nodaro Pulse", fullQualityOf: KLING_720, fullQuality: null, fullQualityUntil: null })
     // Full Quality finishes a Prism draft only: nothing offers a new one here (no fullQualityUntil),
     // and the try made before stays listed as history, pointed at from its run.
     expect(runs[1]).toMatchObject({
-      jobId: KLING_720, engine: "motion-pulse", resolution: "720p", draft: false,
+      jobId: KLING_720, engine: "nodaro-pulse", resolution: "720p", draft: false,
       fullQuality: { jobId: FQ_JOB, status: "processing" },
       fullQualityUntil: null,
     })
-    expect(runs[2]).toMatchObject({ jobId: KLING_1080, engine: "motion-pulse", fullQuality: null, fullQualityUntil: null })
+    expect(runs[2]).toMatchObject({ jobId: KLING_1080, engine: "nodaro-pulse", fullQuality: null, fullQualityUntil: null })
     // The upgrades looked up are the 720p run's only.
     const lookups = db.log.filter((q) => q.table === "jobs" && q.ops.some((op) => op.m === "in"))
     expect(lookups.map((q) => argOf(q, "in"))).toEqual([
@@ -2510,7 +2510,7 @@ describe("GET /v1/trends/runs", () => {
     ])
   })
 
-  it("a completed plain Nodaro Motion Prism run at 480p (made without draft: true) has no Full Quality; a draft has", async () => {
+  it("a completed plain Nodaro Prism run at 480p (made without draft: true) has no Full Quality; a draft has", async () => {
     const PLAIN_480 = "00000000-0000-4000-8000-0000000000e9"
     feed([
       jobRow(PLAIN_480, { input_data: runInput({ resolution: "480p", draft: false }) }),
@@ -2519,7 +2519,7 @@ describe("GET /v1/trends/runs", () => {
     const res = await app.inject({ method: "GET", url: "/v1/trends/runs", headers: as() })
     expect(res.statusCode).toBe(200)
     const [plain, draft] = res.json().data
-    expect(plain).toMatchObject({ jobId: PLAIN_480, engine: "motion-prism", resolution: "480p", draft: false, fullQuality: null, fullQualityUntil: null })
+    expect(plain).toMatchObject({ jobId: PLAIN_480, engine: "nodaro-prism", resolution: "480p", draft: false, fullQuality: null, fullQualityUntil: null })
     expect(draft).toMatchObject({ jobId: DRAFT_JOB, resolution: "480p", draft: true, fullQuality: null })
     expect(draft.fullQualityUntil).toEqual(expect.any(String))
   })
@@ -2552,7 +2552,7 @@ describe("GET /v1/trends/runs", () => {
   })
 
   it("a run's charge includes every step it ran (child jobs), and only settled ones", async () => {
-    // The production Nodaro Motion preview of 2026-10-26: Cast Swap 44, two
+    // The production Video Remake preview of 2026-10-26: Cast Swap 44, two
     // reference preps at 66, a mask at 33, the video held 3,564 and charged 854.
     const RUN = HD_JOB
     feed(
@@ -2819,8 +2819,8 @@ describe("GET /v1/trends/runs/:jobId", () => {
       preview: false,
       resolution: "480p",
       draft: true,
-      engine: "motion-prism",
-      engineName: "Nodaro Motion Prism",
+      engine: "nodaro-prism",
+      engineName: "Nodaro Prism",
       videoUrl: `https://out.example/${DRAFT_JOB}.mp4`,
       posterUrl: null,
       creditsCharged: 95,

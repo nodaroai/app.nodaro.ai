@@ -12,7 +12,7 @@ import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plug
 /** What each plugin generation declares: 0.397.0 (production on 2026-10-26), and a plugin that lists only the new ids. */
 const DECLARED = {
   "0.397.0": ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"],
-  "new ids only": ["motion-prism", "motion-pulse"],
+  "new ids only": ["nodaro-prism", "nodaro-pulse"],
 } as const
 /**
  */
@@ -29,17 +29,17 @@ describe("castSwapEnginesOf", () => {
     expect(castSwapEnginesOf({ engines: ["motion-pro", "motion-lite"] })).toEqual(["seedance-2-5", "kling-4"])
     expect(castSwapEnginesOf({ engines: ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"] })).toEqual(["seedance-2-5", "kling-4"])
     expect(castSwapEnginesOf({ engines: ["motion-pro"] })).toEqual(["seedance-2-5"])
-    expect(castSwapEnginesOf({ engines: ["motion-prism", "motion-pulse"] })).toEqual(["seedance-2-5", "kling-4"])
-    expect(castSwapEnginesOf({ engines: ["motion-prism", "motion-pulse", "motion-pro", "motion-lite", "seedance-2-5", "kling-4"] })).toEqual([
+    expect(castSwapEnginesOf({ engines: ["nodaro-prism", "nodaro-pulse"] })).toEqual(["seedance-2-5", "kling-4"])
+    expect(castSwapEnginesOf({ engines: ["nodaro-prism", "nodaro-pulse", "motion-pro", "motion-lite", "seedance-2-5", "kling-4"] })).toEqual([
       "seedance-2-5",
       "kling-4",
     ])
-    expect(castSwapEnginesOf({ engines: ["motion-pulse"] })).toEqual(["kling-4"])
+    expect(castSwapEnginesOf({ engines: ["nodaro-pulse"] })).toEqual(["kling-4"])
   })
 
   it("drops a declared value that names no engine", () => {
     expect(castSwapEnginesOf({ engines: ["kling-5", "motion-lite"] })).toEqual(["kling-4"])
-    expect(castSwapEnginesOf({ engines: ["motion-max", "motion-pulse"] })).toEqual(["kling-4"])
+    expect(castSwapEnginesOf({ engines: ["motion-max", "nodaro-pulse"] })).toEqual(["kling-4"])
     expect(castSwapEnginesOf({ engines: [] })).toEqual([])
   })
 
@@ -62,11 +62,11 @@ describe("loadedEngineTakesArtStyle", () => {
 
   it("is true only where the loaded engine declares art styles (castSwap.artStyle, 0.417.0+)", () => {
     expect(loadedEngineTakesArtStyle()).toBe(false)
-    setPluginSupports({ castSwap: { engines: ["motion-prism", "motion-pulse"], engineAliases: true } as never })
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true } as never })
     expect(loadedEngineTakesArtStyle()).toBe(false)
-    setPluginSupports({ castSwap: { engines: ["motion-prism", "motion-pulse"], engineAliases: true, artStyle: false } as never })
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: false } as never })
     expect(loadedEngineTakesArtStyle()).toBe(false)
-    setPluginSupports({ castSwap: { engines: ["motion-prism", "motion-pulse"], engineAliases: true, artStyle: true } as never })
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: true } as never })
     expect(loadedEngineTakesArtStyle()).toBe(true)
   })
 })

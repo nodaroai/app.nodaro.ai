@@ -1,5 +1,5 @@
 /**
- * Admin → Nodaro Motion → the Precise art-style route, Prism only: whether a direct Precise run with an art style runs
+ * Admin → Video Remake → the Precise art-style route, Prism only: whether a direct Precise run with an art style runs
  * as Flex (On, the default when never saved, or Off), and the accounts' emails that skip it.
  *
  * - The switch and the list sit beside the Precise art-style settings, under Prism's Precise column.
@@ -40,10 +40,10 @@ import { STYLES, getStyleMedium } from "@nodaro/prompts/pickers"
 import { environmentsThatCannotRoutePreciseStyle, environmentsThatCannotRouteStyles, environmentsThatCannotSendFilmedFallback } from "../../trends/clip-preparation"
 import { FACE_MESH_THUMBNAIL_FILES } from "../../trends/face-mesh-thumbnail-files"
 
-const URL_ = "/v1/admin/nodaro-motion/precise-style-route"
+const URL_ = "/v1/admin/video-remake/precise-style-route"
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const routes_ = (env: string, yes: boolean): TrendEngineEnvironment => ({
   ...ENVIRONMENTS[0]!,
@@ -59,20 +59,20 @@ beforeEach(() => {
   resetRoutes()
   vi.stubGlobal("fetch", fetchMock)
   const none = (key: string) => () => ({ body: { data: { [key]: null, updatedAt: null, engines: ENGINES, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/masking"] = none("masking")
-  routes["GET /v1/admin/nodaro-motion/style"] = none("style")
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-wording"] = none("promptWording")
-  routes["GET /v1/admin/nodaro-motion/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion", "styleOnly"] } } })
-  routes["POST /v1/admin/nodaro-motion/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })
-  routes["GET /v1/admin/nodaro-motion/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
-  routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
-  for (const e of ENGINES) routes[`GET /v1/admin/nodaro-motion/steps/defaults?engine=${e.id}`] = () => ({ body: { data: { defaults: {}, problems: [] } } })
+  routes["GET /v1/admin/video-remake/masking"] = none("masking")
+  routes["GET /v1/admin/video-remake/style"] = none("style")
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/prompt-wording"] = none("promptWording")
+  routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion", "styleOnly"] } } })
+  routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })
+  routes["GET /v1/admin/video-remake/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
+  for (const e of ENGINES) routes[`GET /v1/admin/video-remake/steps/defaults?engine=${e.id}`] = () => ({ body: { data: { defaults: {}, problems: [] } } })
   routes["GET /v1/admin/llm-models"] = () => ({ body: { data: { models: [], tierCosts: {}, featureCosts: {} } } })
-  routes["GET /v1/admin/nodaro-motion/style-only"] = none("styleOnly")
-  routes["GET /v1/admin/nodaro-motion/precise-art-style"] = none("preciseArtStyle")
+  routes["GET /v1/admin/video-remake/style-only"] = none("styleOnly")
+  routes["GET /v1/admin/video-remake/precise-art-style"] = none("preciseArtStyle")
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: BOTH } })
   routes[`GET ${URL_}`] = () => view(null)
 })
@@ -304,8 +304,8 @@ describe("the routed mesh's picture", { timeout: 20_000 }, () => {
 
   it("beside the choice, its lines on a depth face; as the Motion masking, the Flex masking's own lines", async () => {
     const user = userEvent.setup()
-    routes["GET /v1/admin/nodaro-motion/motion"] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    routes["GET /v1/admin/video-remake/motion"] = () => ({
+      body: { data: { motion: { "nodaro-prism": { masking: { mode: "always", source: "full-depth", faceMesh: true, faceMeshParts: "mouth" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
     renderWith(<AdminNodaroMotionPage />)
     const route = await section()

@@ -1,12 +1,12 @@
 /**
  * The depth colormap (`faceMasking.depthColormap`): the depth map's colors
- * wherever Nodaro Motion draws depth (Full depth, Keep people, a Faces hidden
+ * wherever Video Remake draws depth (Full depth, Keep people, a Faces hidden
  * depth fill).
  *
  * - The pure rules: saved only where it changes what is drawn (depth drawn,
  *   not the source's default, not under role outlines), so a setting without
  *   one is saved exactly as before; the maps each environment's engine draws
- *   (a trend's: some; Admin → Nodaro Motion's shared setting: every one, per
+ *   (a trend's: some; Admin → Video Remake's shared setting: every one, per
  *   map); its publish need as a sentence.
  * - The editor ("Depth colormap"): shown wherever depth is drawn (never on a blur fill or with
  *   the mode Off); the default writes no key; a map no engine draws is greyed
@@ -76,7 +76,7 @@ describe("the depth colormap's rules", () => {
     expect(depthColormapsSomeEngineDraws([mapsAt("production", ["magma"]), mapsAt("staging", ["inferno", "grayscale"])])).toEqual(["grayscale", "inferno", "magma"])
   })
 
-  it("Nodaro Motion's shared setting: per map, the environments that cannot draw it, a missing one included", () => {
+  it("Video Remake's shared setting: per map, the environments that cannot draw it, a missing one included", () => {
     expect(environmentsThatCannotDrawColormaps(undefined)).toBeUndefined()
     const missing = environmentsThatCannotDrawColormaps([mapsAt("production", ["inferno", "magma"]), mapsAt("staging", ["inferno"])])!
     expect(missing.inferno).toEqual([])
@@ -196,7 +196,7 @@ describe("the face masking editor's depth colors", () => {
     }
   })
 
-  it("Admin → Nodaro Motion: a map is offered only once every environment's engine draws it, naming those that cannot", async () => {
+  it("Admin → Video Remake: a map is offered only once every environment's engine draws it, naming those that cannot", async () => {
     const user = userEvent.setup()
     const missingIn = environmentsThatCannotDrawColormaps([mapsAt("production", ["inferno", "magma"]), mapsAt("staging", ["inferno"])])!
     const { unmount } = render(<Harness initial={{ mode: "always", fill: "depth" }} missingIn={missingIn} />)
@@ -211,7 +211,7 @@ describe("the face masking editor's depth colors", () => {
     ).toBeInTheDocument()
   })
 
-  it("Admin → Nodaro Motion: greyed out while no environment draws another map, naming them", () => {
+  it("Admin → Video Remake: greyed out while no environment draws another map, naming them", () => {
     render(<Harness initial={{ mode: "always", source: "full-depth" }} source="full-depth" missingIn={environmentsThatCannotDrawColormaps([mapsAt("production")])!} />)
     expect(colormapSelect()).toBeDisabled()
     expect(screen.getByText(/The Cast Swap engine of staging, production cannot draw other depth colormaps yet/)).toBeInTheDocument()

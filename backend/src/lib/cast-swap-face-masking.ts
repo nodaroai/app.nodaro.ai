@@ -51,7 +51,7 @@ import { getPluginSupports } from "./private-plugins/supports-registry.js"
 export type FaceMaskingMode = "off" | "always" | "auto"
 /**
  * How faces hidden covers the faces it finds: `"blur"` (the default), `"depth"`
- * (depth colours), or `"none"` (decided 2026-11-02; the Nodaro Motion
+ * (depth colours), or `"none"` (decided 2026-11-02; the Video Remake
  * Precise setting's alone, never a trend's; the Motion setting's save
  * refuses it, `motionMaskingPreciseOnlyProblem`): found exactly the same way but NOT
  * covered — the clip keeps them as filmed and only the face mesh is drawn on
@@ -78,7 +78,7 @@ export type { FaceMaskMark, MaskEraseBox }
 
 /**
  * The depth map's colormap (`depthColormap`, decided 2026-11-01): what the
- * depth provider Nodaro Motion draws depth with offers
+ * depth provider Video Remake draws depth with offers
  * (`videoDepthColormaps("video-depth-anything")`: grayscale, turbo, inferno,
  * magma, viridis).
  */
@@ -102,7 +102,7 @@ export type FaceMaskingDepthModelSize = VideoDepthModelSize
 export const FACE_MASKING_FACE_MESH_PARTS = ["full", "features", "mouth"] as const satisfies readonly VideoFaceMeshParts[]
 export type FaceMaskingFaceMeshParts = (typeof FACE_MASKING_FACE_MESH_PARTS)[number]
 
-/** The provider Nodaro Motion draws its depth with: its colormaps are the ones a setting may name. */
+/** The provider Video Remake draws its depth with: its colormaps are the ones a setting may name. */
 const DEPTH_PROVIDER = "video-depth-anything"
 
 /** The colormaps a setting may name (`FaceMaskingDepthColormap`), in display order. */
@@ -195,7 +195,7 @@ export interface FaceMasking {
    */
   depthModelSize?: FaceMaskingDepthModelSize
   /**
-   * The depth blur (decided 2026-11-02; the Nodaro Motion settings' alone: a
+   * The depth blur (decided 2026-11-02; the Video Remake settings' alone: a
    * trend's setting refuses the key): the depth map is blurred before it is
    * coloured and before the face mesh is drawn on it, the number being the
    * blur's sigma at 1080 px tall (whole steps, `CAST_SWAP_DEPTH_BLUR_BOUNDS`).
@@ -211,7 +211,7 @@ export interface FaceMasking {
    */
   depthBlur?: number
   /**
-   * What the face mesh draws (decided 2026-11-02; the Nodaro Motion settings',
+   * What the face mesh draws (decided 2026-11-02; the Video Remake settings',
    * Precise and Motion, never a trend's): `"full"` (left out), `"features"` or
    * `"mouth"` (`FaceMaskingFaceMeshParts`). Read through `faceMeshPartsSent`
    * (the face mesh on, not `"full"`), so a full mesh is never sent the key.
@@ -264,7 +264,7 @@ export interface FaceMasking {
  * person empty — never of the base mask, its settings key or its make
  * (`erasedMarksOf`). Marks belong to a trend's STORED face
  * mask only: `faceMaskingWithMarksSchema` is the one schema that takes them
- * (Nodaro Motion's defaults, through `faceMaskingSchema`, refuse the key), the
+ * (Video Remake's defaults, through `faceMaskingSchema`, refuse the key), the
  * make route sends them to the engine, and a run never does (`withoutMarks`
  * gives the `FaceMasking` a run body carries, which has no such key).
  */
@@ -418,7 +418,7 @@ function fillNoneRules(m: FaceMasking, ctx: z.RefinementCtx): void {
   }
 }
 
-/** The Nodaro Motion settings' own keys (Precise and Motion; a trend's setting takes none of them). */
+/** The Video Remake settings' own keys (Precise and Motion; a trend's setting takes none of them). */
 const nodaroMotionShape = {
   // Beside the blur and the depth fill, `"none"`: the faces found but kept as filmed (`fillNoneRules`).
   fill: z.enum(["blur", "depth", "none"]).optional(),
@@ -447,7 +447,7 @@ function faceMeshLayersRules(m: FaceMasking, ctx: z.RefinementCtx): void {
 }
 
 /**
- * A face masking setting without marks: what a run takes, and Nodaro Motion's
+ * A face masking setting without marks: what a run takes, and Video Remake's
  * defaults (`nodaro_motion_masking`). A direct run's setting masks faces only:
  * a depth mode is a trend's (a direct run picks `style` instead), so any
  * `source` but `"faces"` is refused here. Beside the shared keys it takes the

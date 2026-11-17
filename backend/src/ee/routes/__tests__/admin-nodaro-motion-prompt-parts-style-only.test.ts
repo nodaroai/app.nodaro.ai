@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * The style-only prompt parts: `/v1/admin/nodaro-motion/prompt-parts` under
+ * The style-only prompt parts: `/v1/admin/video-remake/prompt-parts` under
  * its own `styleOnly` key, beside `precise` and `motion` (a style-only run is
  * a direct Prism Flex run with an art style and nothing to swap).
  *
@@ -146,13 +146,13 @@ beforeEach(async () => {
 })
 
 const as = { "x-user": ADMIN }
-const get = () => app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/prompt-parts", headers: as })
-const put = (promptParts: unknown) => app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/prompt-parts", headers: as, payload: { promptParts } })
-const previewOf = (payload: unknown) => app.inject({ method: "POST", url: "/v1/admin/nodaro-motion/prompt-parts/preview", headers: as, payload: payload as object })
+const get = () => app.inject({ method: "GET", url: "/v1/admin/video-remake/prompt-parts", headers: as })
+const put = (promptParts: unknown) => app.inject({ method: "PUT", url: "/v1/admin/video-remake/prompt-parts", headers: as, payload: { promptParts } })
+const previewOf = (payload: unknown) => app.inject({ method: "POST", url: "/v1/admin/video-remake/prompt-parts/preview", headers: as, payload: payload as object })
 
 describe("the motion and styleOnly overrides never cross", () => {
   it("a save holding both round-trips each under its own key, and the engine is answered both", async () => {
-    const promptParts = { "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }
+    const promptParts = { "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }
     const res = await put(promptParts)
     expect(res.statusCode).toBe(200)
     expect(h.upserts).toEqual([expect.objectContaining({ value: promptParts })])
@@ -162,11 +162,11 @@ describe("the motion and styleOnly overrides never cross", () => {
     const parsed = parseNodaroMotionPromptParts(h.row!.value, () => {
       throw new Error("the row should parse whole")
     })
-    expect(withEarlierPromptPartKeys(parsed!)).toEqual({ "motion-prism": promptParts["motion-prism"], "motion-pro": promptParts["motion-prism"] })
+    expect(withEarlierPromptPartKeys(parsed!)).toEqual({ "nodaro-prism": promptParts["nodaro-prism"], "motion-prism": promptParts["nodaro-prism"], "motion-pro": promptParts["nodaro-prism"] })
   })
 
   it("each key is checked on its own: the Flex check gets motion's texts, the style-only check styleOnly's", async () => {
-    await put({ "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })
+    await put({ "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })
     const flex = h.calls.filter((c) => c.styleOnly === undefined)
     const styleOnly = h.calls.filter((c) => c.styleOnly === true)
     expect(flex).toEqual([expect.objectContaining({ style: "motion", overrides: { avoid: "A" } })])
@@ -174,40 +174,40 @@ describe("the motion and styleOnly overrides never cross", () => {
   })
 
   it("a preview of one key reads that key's saved texts, never the other's", async () => {
-    h.row = { value: { "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }, updated_at: AT }
-    await previewOf({ engine: "motion-prism", style: "motion" })
-    await previewOf({ engine: "motion-prism", style: "styleOnly" })
+    h.row = { value: { "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }, updated_at: AT }
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
     expect(h.calls[0]).toMatchObject({ overrides: { avoid: "A" } })
     expect(h.calls[0]).not.toHaveProperty("styleOnly")
     expect(h.calls[1]).toMatchObject({ styleOnly: true, overrides: { avoid: "B" } })
 
     // A key with nothing saved previews the defaults, never the other key's texts.
-    h.row = { value: { "motion-prism": { motion: { avoid: "A" } } }, updated_at: AT }
-    await previewOf({ engine: "motion-prism", style: "styleOnly" })
+    h.row = { value: { "nodaro-prism": { motion: { avoid: "A" } } }, updated_at: AT }
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
     expect(h.calls[2]).not.toHaveProperty("overrides")
   })
 
   it("editing motion keeps the styleOnly texts as they were, and the reverse", async () => {
-    h.row = { value: { "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }, updated_at: AT }
-    expect((await put({ "motion-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B" } } })).statusCode).toBe(200)
-    expect(h.row!.value).toEqual({ "motion-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B" } } })
-    expect((await put({ "motion-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B2" } } })).statusCode).toBe(200)
-    expect(h.row!.value).toEqual({ "motion-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B2" } } })
+    h.row = { value: { "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }, updated_at: AT }
+    expect((await put({ "nodaro-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B" } } })).statusCode).toBe(200)
+    expect(h.row!.value).toEqual({ "nodaro-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B" } } })
+    expect((await put({ "nodaro-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B2" } } })).statusCode).toBe(200)
+    expect(h.row!.value).toEqual({ "nodaro-prism": { motion: { avoid: "A2" }, styleOnly: { avoid: "B2" } } })
   })
 })
 
 describe("the style-only request", () => {
   it("the preview sends the style-only set with no role and no wording, masking, mesh, scene or shot list, whatever the settings", async () => {
     setPluginSupports({ castSwap: EVERY_LEVER_ENGINE } as never)
-    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: AT }
-    h.maskingRow = { value: { "motion-prism": { mode: "always", faceMesh: true } }, updated_at: AT }
-    h.motionRow = { value: { "motion-prism": { masking: { mode: "always", source: "full-depth" } } }, updated_at: AT }
-    h.stepsRow = { value: { "motion-prism": { shotList: { precise: { mode: "on" } } } }, updated_at: AT }
+    h.wordingRow = { value: { "nodaro-prism": "new" }, updated_at: AT }
+    h.maskingRow = { value: { "nodaro-prism": { mode: "always", faceMesh: true } }, updated_at: AT }
+    h.motionRow = { value: { "nodaro-prism": { masking: { mode: "always", source: "full-depth" } } }, updated_at: AT }
+    h.stepsRow = { value: { "nodaro-prism": { shotList: { precise: { mode: "on" } } } }, updated_at: AT }
     // The same settings shape a Flex preview (so their absence below is the style-only set's own).
-    await previewOf({ engine: "motion-prism", style: "motion", promptWording: "new" })
+    await previewOf({ engine: "nodaro-prism", style: "motion", promptWording: "new" })
     expect(h.calls[0]).toMatchObject({ promptWording: "new", source: "full-depth", scene: "description" })
 
-    const res = await previewOf({ engine: "motion-prism", style: "styleOnly", promptWording: "new", overrides: { restate: "Again." } })
+    const res = await previewOf({ engine: "nodaro-prism", style: "styleOnly", promptWording: "new", overrides: { restate: "Again." } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual(answer())
     expect(h.calls[1]).toEqual({
@@ -223,8 +223,8 @@ describe("the style-only request", () => {
 
   it("a save checks styleOnly on the style-only set with room for the user's pre and post prompts, and no role or reference", async () => {
     setPluginSupports({ castSwap: EVERY_LEVER_ENGINE } as never)
-    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: AT }
-    expect((await put({ "motion-prism": { styleOnly: { opener: "Paint {video}." } } })).statusCode).toBe(200)
+    h.wordingRow = { value: { "nodaro-prism": "new" }, updated_at: AT }
+    expect((await put({ "nodaro-prism": { styleOnly: { opener: "Paint {video}." } } })).statusCode).toBe(200)
     expect(h.calls).toHaveLength(1)
     const call = h.calls[0]!
     expect(call).toMatchObject({ engine: "seedance-2-5", style: "motion", promptStyle: "flexible", styleOnly: true, hasAudio: true, roles: [], overrides: { opener: "Paint {video}." } })
@@ -249,12 +249,12 @@ describe("the engine's refusal of a style-only override", () => {
 
   it("is 422 naming the styleOnly key, and saves nothing", async () => {
     h.problemsFor = openerRequired
-    const res = await put({ "motion-prism": { styleOnly: { opener: "-" } } })
+    const res = await put({ "nodaro-prism": { styleOnly: { opener: "-" } } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error).toEqual({
       code: "prompt_parts_invalid",
       message: "The restyle block cannot be removed.",
-      problems: [{ part: "opener", code: "part_required", message: "The restyle block cannot be removed.", engine: "motion-prism", style: "styleOnly" }],
+      problems: [{ part: "opener", code: "part_required", message: "The restyle block cannot be removed.", engine: "nodaro-prism", style: "styleOnly" }],
     })
     expect(h.upserts).toEqual([])
     expect(h.audits).toEqual([])
@@ -262,10 +262,10 @@ describe("the engine's refusal of a style-only override", () => {
 
   it("is 422 naming the styleOnly key for a removed art style too, and saves nothing", async () => {
     h.problemsFor = openerRequired
-    const res = await put({ "motion-prism": { styleOnly: { artStyle: "-" } } })
+    const res = await put({ "nodaro-prism": { styleOnly: { artStyle: "-" } } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.problems).toEqual([
-      { part: "artStyle", code: "part_required", message: "The art style cannot be removed.", engine: "motion-prism", style: "styleOnly" },
+      { part: "artStyle", code: "part_required", message: "The art style cannot be removed.", engine: "nodaro-prism", style: "styleOnly" },
     ])
     expect(h.calls).toEqual([expect.objectContaining({ styleOnly: true, overrides: { artStyle: "-" } })])
     expect(h.upserts).toEqual([])
@@ -274,21 +274,21 @@ describe("the engine's refusal of a style-only override", () => {
 
   it("a clean motion edit beside a refused styleOnly one is not saved alone, and the problem is never put on motion", async () => {
     h.problemsFor = openerRequired
-    h.row = { value: { "motion-prism": { motion: { avoid: "A" } } }, updated_at: AT }
-    const res = await put({ "motion-prism": { motion: { avoid: "A2", opener: "-" }, styleOnly: { opener: "-" } } })
+    h.row = { value: { "nodaro-prism": { motion: { avoid: "A" } } }, updated_at: AT }
+    const res = await put({ "nodaro-prism": { motion: { avoid: "A2", opener: "-" }, styleOnly: { opener: "-" } } })
     expect(res.statusCode).toBe(422)
-    expect(res.json().error.problems).toEqual([expect.objectContaining({ part: "opener", engine: "motion-prism", style: "styleOnly" })])
+    expect(res.json().error.problems).toEqual([expect.objectContaining({ part: "opener", engine: "nodaro-prism", style: "styleOnly" })])
     expect(h.upserts).toEqual([])
-    expect(h.row!.value).toEqual({ "motion-prism": { motion: { avoid: "A" } } })
+    expect(h.row!.value).toEqual({ "nodaro-prism": { motion: { avoid: "A" } } })
   })
 })
 
 describe("Pulse takes no art style", () => {
   it("a Pulse styleOnly entry is 400 style_only_engine, before any environment read, engine call or save", async () => {
-    const res = await put({ "motion-prism": { motion: { avoid: "A" } }, "motion-pulse": { styleOnly: { avoid: "B" } } })
+    const res = await put({ "nodaro-prism": { motion: { avoid: "A" } }, "nodaro-pulse": { styleOnly: { avoid: "B" } } })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toEqual({ code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE })
-    expect(PULSE_RUNS_NO_STYLE_ONLY_MESSAGE).toBe("Nodaro Motion Pulse takes no art style, so it runs no style-only runs.")
+    expect(PULSE_RUNS_NO_STYLE_ONLY_MESSAGE).toBe("Nodaro Pulse takes no art style, so it runs no style-only runs.")
     expect(h.envReads).toBe(0)
     expect(h.calls).toEqual([])
     expect(h.upserts).toEqual([])
@@ -296,27 +296,27 @@ describe("Pulse takes no art style", () => {
   })
 
   it("a Pulse styleOnly entry of empty texts only (the defaults, dropped) saves, and its other keys as before", async () => {
-    const res = await put({ "motion-pulse": { motion: { avoid: "A" }, styleOnly: { avoid: "", opener: "  " } } })
+    const res = await put({ "nodaro-pulse": { motion: { avoid: "A" }, styleOnly: { avoid: "", opener: "  " } } })
     expect(res.statusCode).toBe(200)
     expect(h.envReads).toBe(0)
     expect(h.calls).toEqual([expect.objectContaining({ engine: "kling-4", style: "motion", overrides: { avoid: "A" } })])
-    expect(h.row!.value).toEqual({ "motion-pulse": { motion: { avoid: "A" } } })
+    expect(h.row!.value).toEqual({ "nodaro-pulse": { motion: { avoid: "A" } } })
   })
 
   it("a Pulse style-only preview is 400 style_only_engine, and the engine is never asked", async () => {
-    const res = await previewOf({ engine: "motion-pulse", style: "styleOnly" })
+    const res = await previewOf({ engine: "nodaro-pulse", style: "styleOnly" })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toEqual({ code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE })
     expect(h.calls).toEqual([])
     // Pulse's own styles preview as before.
-    expect((await previewOf({ engine: "motion-pulse", style: "motion" })).statusCode).toBe(200)
+    expect((await previewOf({ engine: "nodaro-pulse", style: "motion" })).statusCode).toBe(200)
   })
 })
 
 describe("the every-environment gate on the styleOnly key", () => {
   it("a new styleOnly entry while production's engine lacks the flag is 409, asks nothing and saves nothing", async () => {
     h.envs = PRODUCTION_BEHIND
-    const res = await put({ "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })
+    const res = await put({ "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })
     expect(res.statusCode).toBe(409)
     expect(res.json().error).toEqual({ code: "engine_unsupported", message: cannotRunStyleOnlyMessage(["production"]), envs: ["production"] })
     expect(h.calls).toEqual([])
@@ -325,44 +325,44 @@ describe("the every-environment gate on the styleOnly key", () => {
   })
 
   it("a changed styleOnly entry is held the same way; an environment not recorded at all cannot either", async () => {
-    h.row = { value: { "motion-prism": { styleOnly: { avoid: "B" } } }, updated_at: AT }
+    h.row = { value: { "nodaro-prism": { styleOnly: { avoid: "B" } } }, updated_at: AT }
     h.envs = [env("staging", STYLE_ONLY_ENGINE)]
-    const res = await put({ "motion-prism": { styleOnly: { avoid: "B2" } } })
+    const res = await put({ "nodaro-prism": { styleOnly: { avoid: "B2" } } })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.envs).toEqual(["production"])
     expect(h.upserts).toEqual([])
   })
 
   it("a save that leaves styleOnly as it is never reads the environments, whatever they run", async () => {
-    h.row = { value: { "motion-prism": { styleOnly: { avoid: "B" } } }, updated_at: AT }
+    h.row = { value: { "nodaro-prism": { styleOnly: { avoid: "B" } } }, updated_at: AT }
     h.envs = PRODUCTION_BEHIND
-    const res = await put({ "motion-prism": { precise: { face: "Keep faces." }, styleOnly: { avoid: "B" } } })
+    const res = await put({ "nodaro-prism": { precise: { face: "Keep faces." }, styleOnly: { avoid: "B" } } })
     expect(res.statusCode).toBe(200)
     expect(h.envReads).toBe(0)
-    expect(h.row!.value).toEqual({ "motion-prism": { precise: { face: "Keep faces." }, styleOnly: { avoid: "B" } } })
+    expect(h.row!.value).toEqual({ "nodaro-prism": { precise: { face: "Keep faces." }, styleOnly: { avoid: "B" } } })
   })
 
   it("a precise and motion save with no styleOnly at all never reads the environments", async () => {
     h.envs = PRODUCTION_BEHIND
-    expect((await put({ "motion-prism": { precise: { face: "a" }, motion: { avoid: "b" } } })).statusCode).toBe(200)
+    expect((await put({ "nodaro-prism": { precise: { face: "a" }, motion: { avoid: "b" } } })).statusCode).toBe(200)
     expect(h.envReads).toBe(0)
   })
 
   it("removing a styleOnly entry is never held (it gives back the row every app reads)", async () => {
-    h.row = { value: { "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }, updated_at: AT }
+    h.row = { value: { "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } }, updated_at: AT }
     h.envs = PRODUCTION_BEHIND
-    const res = await put({ "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "" } } })
+    const res = await put({ "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "" } } })
     expect(res.statusCode).toBe(200)
     expect(h.envReads).toBe(0)
-    expect(h.row!.value).toEqual({ "motion-prism": { motion: { avoid: "A" } } })
+    expect(h.row!.value).toEqual({ "nodaro-prism": { motion: { avoid: "A" } } })
   })
 
   it("once every environment runs style-only runs, the entry is checked and saved", async () => {
     h.envs = BOTH_RUN_IT
-    expect((await put({ "motion-prism": { styleOnly: { avoid: "B" } } })).statusCode).toBe(200)
+    expect((await put({ "nodaro-prism": { styleOnly: { avoid: "B" } } })).statusCode).toBe(200)
     expect(h.envReads).toBe(1)
     expect(h.calls).toEqual([expect.objectContaining({ styleOnly: true, overrides: { avoid: "B" } })])
-    expect(h.upserts).toEqual([expect.objectContaining({ value: { "motion-prism": { styleOnly: { avoid: "B" } } } })])
+    expect(h.upserts).toEqual([expect.objectContaining({ value: { "nodaro-prism": { styleOnly: { avoid: "B" } } } })])
   })
 })
 
@@ -375,7 +375,7 @@ describe("an engine that does not run style-only runs", () => {
 
   it("is 503 engine_unsupported for a style-only preview, and never asked", async () => {
     setPluginSupports({ castSwap: CS } as never)
-    const res = await previewOf({ engine: "motion-prism", style: "styleOnly" })
+    const res = await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
     expect(res.statusCode).toBe(503)
     expect(res.json().error.code).toBe("engine_unsupported")
     expect(h.calls).toEqual([])
@@ -383,7 +383,7 @@ describe("an engine that does not run style-only runs", () => {
 
   it("is 503 for a new styleOnly entry even when the recorded environments run them, and saves nothing", async () => {
     setPluginSupports({ castSwap: CS } as never)
-    const res = await put({ "motion-prism": { styleOnly: { avoid: "B" } } })
+    const res = await put({ "nodaro-prism": { styleOnly: { avoid: "B" } } })
     expect(res.statusCode).toBe(503)
     expect(h.calls).toEqual([])
     expect(h.upserts).toEqual([])
@@ -391,10 +391,10 @@ describe("an engine that does not run style-only runs", () => {
 
   it("keeps an unchanged styleOnly entry without asking for its set, and checks the other keys as before", async () => {
     setPluginSupports({ castSwap: CS } as never)
-    h.row = { value: { "motion-prism": { styleOnly: { avoid: "B" } } }, updated_at: AT }
-    expect((await put({ "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })).statusCode).toBe(200)
+    h.row = { value: { "nodaro-prism": { styleOnly: { avoid: "B" } } }, updated_at: AT }
+    expect((await put({ "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })).statusCode).toBe(200)
     expect(h.calls).toEqual([expect.objectContaining({ style: "motion", overrides: { avoid: "A" } })])
     expect(h.calls[0]).not.toHaveProperty("styleOnly")
-    expect(h.row!.value).toEqual({ "motion-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })
+    expect(h.row!.value).toEqual({ "nodaro-prism": { motion: { avoid: "A" }, styleOnly: { avoid: "B" } } })
   })
 })

@@ -211,7 +211,7 @@ describe("pin: the prompt-parts request with nothing new chosen", () => {
     for (const castSwap of [BASE_ENGINE, ENGINE_0426]) {
       setPluginSupports({ castSwap } as never)
       const body = { hasAudio: true, roles: [] }
-      expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, { mode: "always", fill: "depth" }))).toEqual({
+      expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, { mode: "always", fill: "depth" }))).toEqual({
         engine: "seedance-2-5",
         style: "precise",
         promptStyle: "precise",
@@ -219,12 +219,12 @@ describe("pin: the prompt-parts request with nothing new chosen", () => {
         hasAudio: true,
         roles: [],
       })
-      expect(forLoadedEngine(directRunRequest("motion-pulse", "motion", { masking: { mode: "always", source: "full-depth" } }, body))).toMatchObject({
+      expect(forLoadedEngine(directRunRequest("nodaro-pulse", "motion", { masking: { mode: "always", source: "full-depth" } }, body))).toMatchObject({
         engine: "kling-4",
         style: "motion",
         source: "full-depth",
       })
-      expect(forLoadedEngine(directRunRequest("motion-pulse", "motion", { masking: { mode: "always", source: "full-depth" } }, body))).not.toHaveProperty("depthColormap")
+      expect(forLoadedEngine(directRunRequest("nodaro-pulse", "motion", { masking: { mode: "always", source: "full-depth" } }, body))).not.toHaveProperty("depthColormap")
     }
   })
 })

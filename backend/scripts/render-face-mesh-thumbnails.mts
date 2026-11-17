@@ -1,5 +1,5 @@
 /**
- * Renders the face mesh illustrations of Admin → Nodaro Motion (the "Face mesh
+ * Renders the face mesh illustrations of Admin → Video Remake (the "Face mesh
  * lines" choices and the layer switches): one depth face per set of layers
  * that draws lines (the 62 sets of `VIDEO_FACE_MESH_LAYERS` with a layer other
  * than bold on), plus the depth face with no lines.

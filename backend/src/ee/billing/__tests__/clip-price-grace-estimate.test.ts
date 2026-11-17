@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 /**
  * THE QUOTE AND THE CHARGE OF A LENGTH-PRICED STEP ARE ONE FIGURE.
  *
- * The Nodaro Motion quote asks the workflow estimate for Video Mask, Video
+ * The Video Remake quote asks the workflow estimate for Video Mask, Video
  * Depth, Mask Composite and the face mesh on an `upload-video` that declares
  * the clip's length; each child run is then charged from the file its route
  * measures. A whole-second cut of a 29.97 or 23.976 fps clip can come out a

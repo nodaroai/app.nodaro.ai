@@ -85,22 +85,22 @@ describe("a direct run's prompt-parts request", () => {
 
   it("names the map its masking draws with: Precise's setting, Motion's own", () => {
     setPluginSupports({ castSwap: COLORMAPS } as never)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, { mode: "always", fill: "depth", depthColormap: "viridis" }))).toMatchObject({
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, { mode: "always", fill: "depth", depthColormap: "viridis" }))).toMatchObject({
       depthColormap: "viridis",
       maskFill: "depth",
     })
-    const flex = forLoadedEngine(directRunRequest("motion-pulse", "motion", { masking: { mode: "always", source: "full-depth", depthColormap: "inferno" } }, body))
+    const flex = forLoadedEngine(directRunRequest("nodaro-pulse", "motion", { masking: { mode: "always", source: "full-depth", depthColormap: "inferno" } }, body))
     expect(flex).toMatchObject({ depthColormap: "inferno" })
     expect(flex).not.toHaveProperty("maskFill")
   })
 
   it("adds nothing for a default map, and nothing to an engine that does not list it", () => {
     setPluginSupports({ castSwap: COLORMAPS } as never)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, { mode: "always", fill: "depth", depthColormap: "turbo" }))).not.toHaveProperty(
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, { mode: "always", fill: "depth", depthColormap: "turbo" }))).not.toHaveProperty(
       "depthColormap",
     )
     setPluginSupports({ castSwap: ENGINE } as never)
-    expect(forLoadedEngine(directRunRequest("motion-prism", "precise", undefined, body, { mode: "always", fill: "depth", depthColormap: "viridis" }))).not.toHaveProperty(
+    expect(forLoadedEngine(directRunRequest("nodaro-prism", "precise", undefined, body, { mode: "always", fill: "depth", depthColormap: "viridis" }))).not.toHaveProperty(
       "depthColormap",
     )
   })

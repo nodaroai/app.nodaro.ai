@@ -1,5 +1,5 @@
 /**
- * Whether a Nodaro Motion page shows its Advanced options — Prepare
+ * Whether a Video Remake page shows its Advanced options — Prepare
  * references and the pre-prompt (`prepareReferences`, `prePrompt`). One
  * switch for the whole page, not per engine. Set by an admin for the whole
  * deployment, never by the person running it.
@@ -14,7 +14,7 @@
  * SDK and MCP take `prepareReferences` and `prePrompt` exactly as before,
  * whatever it says, and no engine is told about it. Who reads it: the public
  * `GET /v1/cast-swap/advanced` (ee/routes/cast-swap-advanced.ts), through the
- * settings cache. Written only by `PUT /v1/admin/nodaro-motion/advanced`
+ * settings cache. Written only by `PUT /v1/admin/video-remake/advanced`
  * (ee/routes), through `nodaro-motion-advanced-store.ts`. This module is pure
  * (no database).
  */
@@ -22,7 +22,7 @@ import { z } from "zod"
 
 export const NODARO_MOTION_ADVANCED_KEY = "nodaro_motion_advanced"
 
-/** The saved setting: whether a Nodaro Motion page shows its Advanced options. */
+/** The saved setting: whether a Video Remake page shows its Advanced options. */
 export interface NodaroMotionAdvanced {
   show: boolean
 }

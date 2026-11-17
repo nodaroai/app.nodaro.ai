@@ -1,17 +1,17 @@
 /**
- * MCP `cast_swap` — the agent's face of Nodaro Motion (internally Cast Swap):
+ * MCP `video_remake` — the agent's face of Video Remake (internally Cast Swap):
  * replace the people, pets, products and/or the location in a short video
  * with the user's reference images, keeping its motion, framing, timing and
  * sound.
  *
  * Price confirmation follows `render_final` / `retry_app_run`: without
- * `confirm` the tool returns the quote (`POST /v1/cast-swap/estimate` —
+ * `confirm` the tool returns the quote (`POST /v1/video-remake/estimate` —
  * nothing is created or charged); `confirm: true`, only after the user
- * accepted it, runs (`POST /v1/cast-swap` → 202 `{ jobId }`), and the job is
+ * accepted it, runs (`POST /v1/video-remake` → 202 `{ jobId }`), and the job is
  * followed with `get_job` / `wait_for_job` like any other.
  *
- * Engines: the tool takes Nodaro Motion's public ids (`"motion-prism"`,
- * `"motion-pulse"`) and, unlisted, the ids an older client may still send (the
+ * Engines: the tool takes Video Remake's public ids (`"nodaro-prism"`,
+ * `"nodaro-pulse"`) and, unlisted, the ids an older client may still send (the
  * earlier public ids `"motion-pro"` / `"motion-lite"`, and the internal ones);
  * every form is sent to the route as the INTERNAL id (`castSwapEngineFrom`),
  * which every Cast Swap engine takes, and the quote — whichever id the engine
@@ -25,7 +25,7 @@
  *
  * The route is the authority on every rule (role counts, the 30-image total,
  * draft only at 480p and only with `draft: true` (480p is plain by default),
- * each engine's resolutions and Nodaro Motion Pulse's lack of a draft (and so
+ * each engine's resolutions and Nodaro Pulse's lack of a draft (and so
  * of Full Quality), the clip's length, the pre / post prompt's `{role:N}`
  * mentions, the preview-only role settings); this tool maps snake_case to
  * the route's body and leaves the rest to it. The user travels in
@@ -68,7 +68,7 @@ import { statedName } from "../deployment-name.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-const NOT_AVAILABLE = "Nodaro Motion is a Nodaro Cloud feature and is not served on this deployment."
+const NOT_AVAILABLE = "Video Remake is a Nodaro Cloud feature and is not served on this deployment."
 
 export interface RegisterCastSwapToolsOpts {
   server: McpServer
@@ -80,10 +80,10 @@ export interface RegisterCastSwapToolsOpts {
 interface CastSwapQuote {
   /** Held when the run starts. */
   totalCredits: number
-  /** The charge the run is expected to come to; on Nodaro Motion Pulse the hold itself; absent from an older engine. */
+  /** The charge the run is expected to come to; on Nodaro Pulse the hold itself; absent from an older engine. */
   expectedCredits?: number
   breakdown?: unknown
-  /** The engine, in any vocabulary (absent from an older engine = Nodaro Motion Prism); answered as the current public id. */
+  /** The engine, in any vocabulary (absent from an older engine = Nodaro Prism); answered as the current public id. */
   engine?: string
   settlesLower: boolean
 }
@@ -101,7 +101,7 @@ export const castSwapEngineArg = z.preprocess(
   z.enum(NODARO_MOTION_ENGINES),
 )
 
-/** A Nodaro Motion Pulse run's length fits. */
+/** A Nodaro Pulse run's length fits. */
 const LENGTHS = ["cut-end", "cut-start"] as const
 
 const trait = z.enum(["new", "original"]).optional()
@@ -129,16 +129,16 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
   // What the deployment offers decides whether its tools are listed (lib/mcp/tool-needs.ts).
 
   server.registerTool(
-    "cast_swap",
+    "video_remake",
     {
-      title: "Nodaro Motion",
+      title: "Video Remake",
       description:
-        "Nodaro Motion: replace the people, pets, products and/or the place in a 4–30 s video with the user's reference images, keeping its motion, framing, timing and sound. " +
+        "Video Remake: replace the people, pets, products and/or the place in a 4–30 s video with the user's reference images, keeping its motion, framing, timing and sound. " +
         "Each role names a subject (or the setting) in the video and takes 0–3 images of ONE subject or place; a role with none stays as in the video. " +
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
-        'engine picks the engine: "motion-prism" (Nodaro Motion Prism, the default; 480p, 720p, 1080p) or "motion-pulse" (Nodaro Motion Pulse; 720p default or 1080p, no draft). ' +
+        'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default; 480p, 720p, 1080p) or "nodaro-pulse" (Nodaro Pulse; 720p default or 1080p, no draft). ' +
         "Image and video URLs must be http(s): upload local files with the upload tools first." +
         amountsNote(),
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
@@ -182,7 +182,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a motion-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
+          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
         references: z
           .array(reference)
           .max(5)
@@ -202,7 +202,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
         preview_start: z.number().min(0).optional().describe("Seconds, default 0; preview_start + 4 must fit the clip."),
         engine: castSwapEngineArg
           .optional()
-          .describe('Default "motion-prism" (Nodaro Motion Prism). "motion-pulse" (Nodaro Motion Pulse): 720p or 1080p only, no draft, no Full Quality.'),
+          .describe('Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality.'),
         style: z
           .enum(CAST_SWAP_STYLES)
           .optional()
@@ -212,13 +212,13 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           .min(1)
           .max(DIRECTION_ID_MAX_CHARS)
           .optional()
-          .describe('An art style on Nodaro Motion Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none.'),
+          .describe('An art style on Nodaro Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none.'),
         motion_length: z
           .enum(LENGTHS)
           .optional()
-          .describe('motion-pulse only: cut the clip to whole seconds at its end (default) or start.'),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (motion-pulse: "720p"; no 480p).'),
-        draft: z.boolean().optional().describe("true = a 480p draft (motion-prism only) that full_quality can finish at 1080p. Default false: plain."),
+          .describe('nodaro-pulse only: cut the clip to whole seconds at its end (default) or start.'),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (nodaro-pulse: "720p"; no 480p).'),
+        draft: z.boolean().optional().describe("true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
@@ -248,7 +248,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           JSON.stringify({
             error: {
               code: "use_art_style",
-              message: 'cast_swap takes no direction. Give an art style as art_style instead, a "style" picker catalog id (get_picker_catalog "style").',
+              message: 'video_remake takes no direction. Give an art style as art_style instead, a "style" picker catalog id (get_picker_catalog "style").',
             },
           }),
         )
@@ -300,14 +300,14 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
       }
 
       if (args.confirm !== true) {
-        const est = await mcpInject(fastify, session, { method: "POST", url: "/v1/cast-swap/estimate", payload })
+        const est = await mcpInject(fastify, session, { method: "POST", url: "/v1/video-remake/estimate", payload })
         if (est.statusCode >= 400) return refusal(est.statusCode, est.body)
         let quote: CastSwapQuote
         try {
           const parsed = JSON.parse(est.body) as { data?: CastSwapQuote } & CastSwapQuote
           quote = parsed.data ?? parsed
         } catch {
-          return { content: [{ type: "text" as const, text: "The Nodaro Motion quote could not be read." }], isError: true as const }
+          return { content: [{ type: "text" as const, text: "The Video Remake quote could not be read." }], isError: true as const }
         }
         // The neutral key names only (an engine before 0.395.0 also, or only, sends the old ones).
         const breakdown = neutralBreakdown(quote.breakdown)
@@ -322,10 +322,10 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
           privacyCredits !== undefined && privacyCredits > 0
             ? ` If the video model refuses the clip, the run is retried once, for ${statedAmount(privacyCredits)} more ${amountWord()} charged only then.`
             : ""
-        // The quote's engine: absent from an older engine, which runs Nodaro Motion Prism.
+        // The quote's engine: absent from an older engine, which runs Nodaro Prism.
         const quotedEngine = castSwapEngineFrom(quote.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
         const publicEngine: NodaroMotionEngine = nodaroMotionEngineOf(quotedEngine)
-        // The engine as the deployment names it ("Motion Prism" on one with its own name, deployment-name.ts).
+        // The engine's name, the same on every deployment (deployment-name.ts keeps it).
         const engineName = statedName(nodaroMotionEngineName(quotedEngine))
         // The expected charge first, with the hold beside it (as estimate_trend words it);
         // an older engine answers only the hold, which settles lower.
@@ -341,7 +341,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               type: "text" as const,
               text:
                 `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower} ` +
-                "Present this to the user; call cast_swap again with the same arguments and confirm: true once they accept.",
+                "Present this to the user; call video_remake again with the same arguments and confirm: true once they accept.",
             },
           ],
           // Built field by field: the engine's old key names never reach the agent.
@@ -362,7 +362,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
 
       const res = await mcpInject(fastify, session, {
         method: "POST",
-        url: "/v1/cast-swap",
+        url: "/v1/video-remake",
         payload,
         headers: idempotencyHeaders(args.client_request_id),
         // The session reaches the job through the server-side scope (the
@@ -372,11 +372,11 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
       if (res.statusCode >= 400) return refusal(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) {
-        return { content: [{ type: "text" as const, text: "Nodaro Motion was submitted, but its job id could not be read." }], isError: true as const }
+        return { content: [{ type: "text" as const, text: "Video Remake was submitted, but its job id could not be read." }], isError: true as const }
       }
       registerTask({ taskId: jobId, userId: session.userId, kind: "video" })
       return {
-        content: [{ type: "text" as const, text: statedName(`Nodaro Motion started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) }],
+        content: [{ type: "text" as const, text: statedName(`Video Remake started (job ${jobId}). To follow it, ${GET_JOB_POLL_HINT}.`) }],
         structuredContent: { jobId, confirmed: true },
       }
     },

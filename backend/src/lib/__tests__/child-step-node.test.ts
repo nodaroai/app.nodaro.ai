@@ -68,7 +68,7 @@ const asStep = (req: FastifyRequest, parentJobId = PARENT, userId = USER) =>
   withJobSubmissionContext({ userId, method: "POST", url: req.url, parentJobId, trustedPluginCaller: true }, () => childStepNodeType(req))
 
 describe("childStepNodeType", () => {
-  it("a step of a running Nodaro Motion job is gated as cast-swap", async () => {
+  it("a step of a running Video Remake job is gated as cast-swap", async () => {
     expect(await asStep(request())).toBe("cast-swap")
   })
 

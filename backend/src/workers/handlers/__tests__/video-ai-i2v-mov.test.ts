@@ -55,7 +55,7 @@ import { KieError } from "../../../providers/kie/client.js"
 const handler = videoAIHandlers["image-to-video"]!
 const MP4 = { url: "https://provider.example.com/out/edit.mp4", providerUsed: "kie", cost: 0.4, displayCost: 0.5 }
 const MOV = { ...MP4, url: "https://provider.example.com/out/edit.mov?sig=abc" }
-/** A Nodaro Motion child: no start frame, one reference clip. */
+/** A Video Remake child: no start frame, one reference clip. */
 const CHILD = {
   jobId: "job-1",
   prompt: "edit @video_1 as follows:\nUse the person from @image_1 as the singer.",

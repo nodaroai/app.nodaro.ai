@@ -127,7 +127,7 @@ describe("the small offer: generate-image, generate-video, text-to-speech, uploa
   it.each([
     ["a node", ["generate_music", "suno_generate", "extract_frame", "transcribe"]],
     ["every lane of a tool", ["modify_video", "edit_image"]],
-    ["a feature (Nodaro Motion, the film pipeline, the Video Director)", ["cast_swap", "run_trend", "list_trends", "full_quality", "start_pipeline", "create_explainer"]],
+    ["a feature (Video Remake, the film pipeline, the Video Director)", ["video_remake", "run_trend", "list_trends", "full_quality", "start_pipeline", "create_explainer"]],
     ["a node a plan or quote prepares", ["resolve_shot_sequence", "import_recast_script", "estimate_use_case"]],
     ["link imports", ["download_youtube_audio", "capture_site"]],
   ])("withholds what needs %s", async (_class, tools) => {
@@ -170,7 +170,7 @@ describe("a call to a withheld tool", () => {
     const mcp = await session()
     expect(textOf(await mcp.callTool("download_youtube_audio", { youtube_url: "https://www.youtube.com/watch?v=x" }))).toMatch(/403 link_imports_disabled/)
     expect(textOf(await mcp.callTool("create_studio_production", {}))).toMatch(/403 world_not_available/)
-    expect(textOf(await mcp.callTool("cast_swap", {}))).toMatch(/403 node_not_available\): .*cast-swap/)
+    expect(textOf(await mcp.callTool("video_remake", {}))).toMatch(/403 node_not_available\): .*cast-swap/)
   })
 
   it("of a model family the deployment withholds every model of answers model_not_available", async () => {
@@ -216,7 +216,7 @@ describe("who is asking", () => {
     expect(await names("u1")).not.toContain("suno_generate")
     const forAdmin = await names("admin-1")
     expect(forAdmin).toContain("suno_generate")
-    expect(forAdmin).toContain("cast_swap")
+    expect(forAdmin).toContain("video_remake")
   })
 
   it("an admin is not handed back a node the profile itself removes", async () => {

@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's no-person setting: per engine, whether a direct
+ * Admin → Video Remake's no-person setting: per engine, whether a direct
  * Precise run with no person role with pictures sends its clip as it is — on
- * (the default) or `sourceClip: false` (GET/PUT /v1/admin/nodaro-motion/no-person).
+ * (the default) or `sourceClip: false` (GET/PUT /v1/admin/video-remake/no-person).
  * Never saved (`noPerson: null`) = the default on every engine.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

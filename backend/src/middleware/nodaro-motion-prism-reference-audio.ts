@@ -8,10 +8,11 @@ import {
 } from "../lib/cast-swap-prism-reference-audio.js"
 import { internalSecretMatches } from "../lib/internal-caller.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
+import { castSwapSpelling } from "../lib/video-remake-paths.js"
 
 /**
- * A DIRECT Nodaro Motion run or quote (`POST /v1/cast-swap`, `POST
- * /v1/cast-swap/estimate`, both served by the Cast Swap engine of the cloud
+ * A DIRECT Video Remake run or quote (`POST /v1/video-remake`, `POST
+ * /v1/video-remake/estimate`, or the same under `/v1/cast-swap`, all served by the Cast Swap engine of the cloud
  * plugin) gets its Prism reference audio from the admin's setting
  * (`nodaro_motion_prism_reference_audio`,
  * lib/cast-swap-prism-reference-audio.ts), never from the caller: any
@@ -44,7 +45,7 @@ function isTrendRun(req: FastifyRequest, body: Record<string, unknown>): boolean
 
 export function registerNodaroMotionPrismReferenceAudioHook(app: FastifyInstance): void {
   app.addHook("preValidation", async (req) => {
-    if (req.method !== "POST" || !ENGINE_ROUTES.has(req.routeOptions?.url ?? "")) return
+    if (req.method !== "POST" || !ENGINE_ROUTES.has(castSwapSpelling(req.routeOptions?.url ?? ""))) return
     const body = req.body
     if (!body || typeof body !== "object" || Array.isArray(body)) return
     const rec = body as Record<string, unknown>

@@ -94,11 +94,11 @@ const EXEMPT_BODY = "the body of a route that is exempt (a stored graph, a listi
 const SUBTREES: Readonly<Record<string, string>> = {
   // Taken by routes that are exempt (EXEMPT_ROUTES), or by none from outside.
   "lib/nodaro-motion-style-only.ts enginePrompt": EXEMPT_BODY,
-  "lib/nodaro-motion-style-only.ts motion-prism.enginePrompt": EXEMPT_BODY,
-  "lib/nodaro-motion-style-only.ts motion-pulse.enginePrompt": EXEMPT_BODY,
+  "lib/nodaro-motion-engine-keys.ts nodaro-prism.enginePrompt": EXEMPT_BODY,
+  "lib/nodaro-motion-engine-keys.ts nodaro-pulse.enginePrompt": EXEMPT_BODY,
   "lib/nodaro-motion-precise-art-style.ts styleRefs": EXEMPT_BODY,
-  "lib/nodaro-motion-precise-art-style.ts motion-prism.styleRefs": EXEMPT_BODY,
-  "lib/nodaro-motion-precise-art-style.ts motion-pulse.styleRefs": EXEMPT_BODY,
+  "lib/nodaro-motion-engine-keys.ts nodaro-prism.styleRefs": EXEMPT_BODY,
+  "lib/nodaro-motion-engine-keys.ts nodaro-pulse.styleRefs": EXEMPT_BODY,
   "lib/plugin-account-secrets.ts metadata": "a plugin's own stored records, never a request body",
   "lib/plugin-daemons/client.ts body": "a request this server sends to its own daemon host, never one it receives",
   "lib/http-credentials.ts config": EXEMPT_BODY,

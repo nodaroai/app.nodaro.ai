@@ -308,6 +308,7 @@ export {
   CAST_SWAP_ENGINE_IDS_ACCEPTED,
   NODARO_MOTION_LEGACY_ENGINES,
   NODARO_MOTION_LEGACY_ENGINE_OF,
+  NODARO_MOTION_EARLIER_ENGINES_OF,
   nodaroMotionEngineFrom,
   nodaroMotionEngineOf,
   nodaroMotionEngineName,

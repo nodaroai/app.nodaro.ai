@@ -14,7 +14,7 @@
 // decides which fields apply. Faces hidden: all of them. Full depth: none (it
 // always runs, and nothing else is read). Keep people: always runs, no fill;
 // what is kept is the whole person by default (Body, offered only there), the
-// head or the face. Admin → Nodaro Motion's Precise setting masks faces only
+// head or the face. Admin → Video Remake's Precise setting masks faces only
 // and passes none; its Motion setting may pass Full depth.
 //
 // Full depth shows where the run's scene comes from (FullDepthSceneSelect):
@@ -23,7 +23,7 @@
 // The face mesh (Faces hidden and Full depth, never Keep people): thin face
 // lines drawn on the masked heads, so the video model keeps the mouth and the
 // blinks. Offered once the engine draws it: a trend's, some environment's
-// engine; Admin → Nodaro Motion's (a setting every environment shares), shown
+// engine; Admin → Video Remake's (a setting every environment shares), shown
 // but greyed out, naming the environments that lack it. Off is no key.
 //
 // Full depth's face mesh, while it is on (decided 2026-11-03): the smallest
@@ -48,19 +48,19 @@
 // (grayscale, turbo, inferno, magma, viridis). The default (grayscale; turbo
 // for a depth fill) is no key, exactly as before the choice existed. A map is
 // offered once the engine draws it (a trend's: some environment's engine;
-// Admin → Nodaro Motion's: every environment's, naming those that lack it);
+// Admin → Video Remake's: every environment's, naming those that lack it);
 // with none offered the select is greyed out and says why. While role
 // outlines are on, a depth fill is fixed at grayscale, and says so.
 //
 // Depth model (wherever the setting draws depth, role outlines or not): the
 // size of the model that draws the depth (small, base, large). Large, the
 // default, is no key, exactly as before the choice existed. A size is offered
-// as a colormap is (a trend's: some environment's engine; Admin → Nodaro
-// Motion's: every environment's, naming those that lack it); with none
+// as a colormap is (a trend's: some environment's engine; Admin → Video
+// Remake's: every environment's, naming those that lack it); with none
 // offered the select is greyed out and says why. A size already chosen
 // stays, to be set back to the default.
 //
-// Admin → Nodaro Motion's Precise column only (never a trend's, nor the Motion
+// Admin → Video Remake's Precise column only (never a trend's, nor the Motion
 // column's Faces hidden): a third fill,
 // None — the faces are found as for the other fills but kept as filmed, and
 // only the face mesh is drawn on them. Choosing it turns the face mesh on,
@@ -138,7 +138,7 @@ const KEEP_TARGETS: ReadonlyArray<{ value: AdminTrendFaceMaskingTarget; label: s
 const FILLS: ReadonlyArray<{ value: AdminTrendFaceMaskingFill; label: string }> = [
   { value: "blur", label: "Blur (default)" },
   { value: "depth", label: "Depth colors" },
-  // Admin → Nodaro Motion only (`fillNoneMissingIn`): never offered in a trend's editor.
+  // Admin → Video Remake only (`fillNoneMissingIn`): never offered in a trend's editor.
   { value: "none", label: "None (faces as filmed, face mesh only)" },
 ]
 
@@ -168,11 +168,11 @@ interface Props {
   readonly value: AdminTrendFaceMasking | undefined
   readonly onChange: (next: AdminTrendFaceMasking | undefined) => void
   /**
-   * The line under Auto, where it differs from a trend's (Admin → Nodaro
-   * Motion: a direct run has no preview that carries over).
+   * The line under Auto, where it differs from a trend's (Admin → Video
+   * Remake: a direct run has no preview that carries over).
    */
   readonly autoHint?: string
-  /** The trend's clip preparation (left out: Faces hidden, the only one Admin → Nodaro Motion has). */
+  /** The trend's clip preparation (left out: Faces hidden, the only one Admin → Video Remake has). */
   readonly source?: AdminTrendFaceMaskingSource
   /**
    * The targets some environment's engine masks under this source
@@ -182,14 +182,14 @@ interface Props {
    */
   readonly supportedTargets?: readonly AdminTrendFaceMaskingTarget[]
   /**
-   * Admin → Nodaro Motion (a setting every environment shares): the
+   * Admin → Video Remake (a setting every environment shares): the
    * environments whose engine cannot hide whole people
    * (`environmentsThatCannotHideBodies`). When given it decides Body instead
    * of `supportedTargets`: greyed out, naming them, while any is listed.
    */
   readonly bodyMissingIn?: readonly string[]
   /**
-   * Admin → Nodaro Motion (a setting every environment shares): the
+   * Admin → Video Remake (a setting every environment shares): the
    * environments whose engine cannot draw the face mesh
    * (`environmentsThatCannotDrawFaceMesh`). When given, the switch is shown,
    * greyed out and naming them while any is listed; left out, it is offered
@@ -197,7 +197,7 @@ interface Props {
    */
   readonly faceMeshMissingIn?: readonly string[]
   /**
-   * Admin → Nodaro Motion (a setting every environment shares): for each
+   * Admin → Video Remake (a setting every environment shares): for each
    * depth colormap, the environments whose engine cannot draw it
    * (`environmentsThatCannotDrawColormaps`). When given, a map is offered only
    * while its list is empty; left out, once some environment's engine in
@@ -205,7 +205,7 @@ interface Props {
    */
   readonly depthColormapsMissingIn?: Readonly<Record<VideoDepthColormap, readonly string[]>>
   /**
-   * Admin → Nodaro Motion (a setting every environment shares): for each
+   * Admin → Video Remake (a setting every environment shares): for each
    * depth model size, the environments whose engine cannot draw with it
    * (`environmentsThatCannotDrawModelSizes`). When given, a size is offered
    * only while its list is empty; left out, once some environment's engine in
@@ -213,21 +213,21 @@ interface Props {
    */
   readonly depthModelSizesMissingIn?: Readonly<Record<VideoDepthModelSize, readonly string[]>>
   /**
-   * Admin → Nodaro Motion's Motion column (a setting every environment
+   * Admin → Video Remake's Motion column (a setting every environment
    * shares): offer Full depth's depth blur, naming the environments whose
    * engine cannot blur the map (`environmentsThatCannotBlurDepth`). Left out
    * (a trend's editor, the Precise column): no such control.
    */
   readonly depthBlurMissingIn?: readonly string[]
   /**
-   * Admin → Nodaro Motion's Motion column: offer what the face mesh draws
+   * Admin → Video Remake's Motion column: offer what the face mesh draws
    * (Full, Eyes and mouth, Mouth only) while it is on, with, for each part but
    * the full mesh, the environments whose engine cannot draw it
    * (`environmentsThatCannotDrawFaceMeshParts`). Left out: no such control.
    */
   readonly faceMeshPartsMissingIn?: Readonly<Record<"features" | "mouth", readonly string[]>>
   /**
-   * Admin → Nodaro Motion's Motion column: also offer "Choose the layers"
+   * Admin → Video Remake's Motion column: also offer "Choose the layers"
    * (one switch per face mesh layer, `faceMeshLayers`) in the face mesh lines'
    * choice, with the environments that cannot take a set no parts value names
    * yet — by their engine and by their platform
@@ -235,7 +235,7 @@ interface Props {
    */
   readonly faceMeshLayersMissing?: { readonly engine: readonly string[]; readonly platform: readonly string[] }
   /**
-   * Admin → Nodaro Motion's Motion column and a trend's editor: offer Full
+   * Admin → Video Remake's Motion column and a trend's editor: offer Full
    * depth's smallest face with mesh lines while the face mesh is on, with the
    * environments that cannot take it yet (`faceMeshMinFaceHeightMissing`): by
    * their engine, and by their platform (the app itself; the database is
@@ -246,14 +246,14 @@ interface Props {
    */
   readonly faceMeshMinFaceHeightMissing?: FaceMeshMinFaceHeightMissing
   /**
-   * Admin → Nodaro Motion's Precise column: offer the fill None (the faces kept as filmed,
+   * Admin → Video Remake's Precise column: offer the fill None (the faces kept as filmed,
    * only the face mesh drawn), naming the environments whose engine cannot
    * draw it (`environmentsThatCannotFillNone`). Left out (a trend's editor):
    * not offered.
    */
   readonly fillNoneMissingIn?: readonly string[]
   /**
-   * Admin → Nodaro Motion's Precise column: offer the depth blur on a depth
+   * Admin → Video Remake's Precise column: offer the depth blur on a depth
    * fill, naming the environments whose engine cannot blur a depth fill
    * (`environmentsThatCannotBlurDepthFill`). Left out (a trend's editor): no
    * such control.
@@ -263,9 +263,9 @@ interface Props {
   readonly clipSec?: number
   /** Each environment's engine, as reported (Full depth's scene names those that can't take it). */
   readonly envs?: readonly TrendEngineEnvironment[]
-  /** A trend's editor: offer role outlines (Faces hidden only; Admin → Nodaro Motion never does). */
+  /** A trend's editor: offer role outlines (Faces hidden only; Admin → Video Remake never does). */
   readonly offerRoleOutlines?: boolean
-  /** Full depth's scenes offered (left out: every one the environments allow); Admin → Nodaro Motion's Flex column narrows them. */
+  /** Full depth's scenes offered (left out: every one the environments allow); Admin → Video Remake's Flex column narrows them. */
   readonly scenes?: readonly AdminTrendFullDepthScene[]
 }
 
@@ -323,7 +323,7 @@ export function FaceMaskingEditor({
   const target = value?.target ?? (keepPeople ? defaultTargetFor(source) : FACE_MASKING_DEFAULTS.target)
   const targetHint = targets.find((t) => t.value === target)?.hint
   // Only the whole person is ever greyed out: the head is every engine's, and the face is held at publish.
-  // Admin → Nodaro Motion names the environments that lack it (every one must have it there).
+  // Admin → Video Remake names the environments that lack it (every one must have it there).
   const bodyUnsupported = bodyMissingIn ? bodyMissingIn.length > 0 : !!supportedTargets && !supportedTargets.includes("body")
   const missingIn = bodyMissingIn && bodyMissingIn.length > 0 ? `: ${bodyMissingIn.join(", ")}` : ""
   const word = keepPeople ? "person" : "face"
@@ -332,7 +332,7 @@ export function FaceMaskingEditor({
   const meshOn = value?.faceMesh === true
   const meshUnsupported = faceMeshMissingIn ? faceMeshMissingIn.length > 0 : !someEngineDrawsFaceMesh(envs)
   const meshShown = mode !== "off" && !keepPeople && (meshOn || faceMeshMissingIn !== undefined || !meshUnsupported)
-  // The fill None (Admin → Nodaro Motion's Faces hidden): the face mesh is all it draws, so the mesh stays on with it.
+  // The fill None (Admin → Video Remake's Faces hidden): the face mesh is all it draws, so the mesh stays on with it.
   // Offered once every environment's engine draws it; one already chosen stays shown, to be set back.
   const fillNone = source === "faces" && fill === "none"
   const fillNoneShown = source === "faces" && (fillNoneMissingIn !== undefined || fill === "none")
@@ -366,7 +366,7 @@ export function FaceMaskingEditor({
   const modelSizeLacking = depthModelSizesMissingIn
     ? [...new Set(DEPTH_MODEL_SIZES.filter((s) => s !== DEPTH_MODEL_SIZE_DEFAULT).flatMap((s) => depthModelSizesMissingIn[s]))]
     : []
-  // The depth blur (Admin → Nodaro Motion): Full depth's (the Motion column) and a Faces hidden depth fill's (the
+  // The depth blur (Admin → Video Remake): Full depth's (the Motion column) and a Faces hidden depth fill's (the
   // Precise column), each its own engine declaration. One already set stays shown (and can be set back to 0) whatever the
   // engines say; 0 is off, saved as no key.
   const depthBlur = value?.depthBlur
@@ -376,7 +376,7 @@ export function FaceMaskingEditor({
   const depthBlurShown = blurKind !== null && (blurMissingIn !== undefined || depthBlurOn)
   const depthBlurUnsupported = (blurMissingIn?.length ?? 0) > 0
   const blurred = blurKind === "depth-fill" ? "depth fill" : "depth map"
-  // What the face mesh draws (Admin → Nodaro Motion's Motion column), under its switch while it is on.
+  // What the face mesh draws (Admin → Video Remake's Motion column), under its switch while it is on.
   const meshPartsShown = meshOn && !keepPeople && (faceMeshPartsMissingIn !== undefined || (value?.faceMeshParts ?? "full") !== "full" || value?.faceMeshLayers !== undefined)
   // Full depth's smallest face with mesh lines, under the switch while it is on. One already set stays shown (and can be
   // emptied) whatever the engines say; empty is the engine's default, saved as no key.

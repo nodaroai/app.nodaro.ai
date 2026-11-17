@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/advanced` — whether a Nodaro Motion page shows its
+ * `/v1/admin/video-remake/advanced` — whether a Video Remake page shows its
  * Advanced options (Prepare references and the pre-prompt). One switch for
  * the whole page, not per engine; hidden until an admin turns it on.
  *
@@ -67,7 +67,7 @@ const { invalidateSettingsCache } = await import("../../../lib/app-settings.js")
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/advanced"
+const URL = "/v1/admin/video-remake/advanced"
 const PUBLIC_URL = "/v1/cast-swap/advanced"
 
 let app: FastifyInstance
@@ -93,7 +93,7 @@ const put = (body: unknown, headers: Record<string, string> = as) =>
 const adminGet = (headers: Record<string, string> = as) => app.inject({ method: "GET", url: URL, headers })
 const publicGet = () => app.inject({ method: "GET", url: PUBLIC_URL })
 
-describe("GET /v1/admin/nodaro-motion/advanced", () => {
+describe("GET /v1/admin/video-remake/advanced", () => {
   it("is admin-only", async () => {
     expect((await adminGet({})).statusCode).toBe(401)
     h.admin = false
@@ -114,7 +114,7 @@ describe("GET /v1/admin/nodaro-motion/advanced", () => {
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/advanced", () => {
+describe("PUT /v1/admin/video-remake/advanced", () => {
   it("is admin-only, and writes nothing for a refused caller", async () => {
     expect((await put({ show: true }, {})).statusCode).toBe(401)
     h.admin = false
@@ -140,7 +140,7 @@ describe("PUT /v1/admin/nodaro-motion/advanced", () => {
   })
 
   it("refuses anything but { show: boolean }, writing nothing", async () => {
-    for (const body of [{}, { show: "true" }, { show: 1 }, { show: null }, { show: true, engine: "motion-prism" }, { advanced: { show: true } }, true, null, "show", []]) {
+    for (const body of [{}, { show: "true" }, { show: 1 }, { show: null }, { show: true, engine: "nodaro-prism" }, { advanced: { show: true } }, true, null, "show", []]) {
       const res = await put(body)
       expect(res.statusCode, JSON.stringify(body)).toBe(400)
       expect(res.json().error.code, JSON.stringify(body)).toBe("validation_error")

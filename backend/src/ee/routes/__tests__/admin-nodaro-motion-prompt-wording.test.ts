@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/prompt-wording` — how every direct Flex run's
+ * `/v1/admin/video-remake/prompt-wording` — how every direct Flex run's
  * prompt is worded, per engine: "current" (today's, the default) or "new".
  *
  * What must hold:
@@ -68,14 +68,14 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/prompt-wording"
+const URL = "/v1/admin/video-remake/prompt-wording"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, ...castSwap } }, updatedAt: "2026-11-01T00:00:00.000Z" })
 const NEW = { promptWordings: ["current", "new"] as ("current" | "new")[] }
 const BOTH_ENFORCE = [envRow("production", NEW), envRow("staging", NEW)]
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 
 let app: FastifyInstance
@@ -99,7 +99,7 @@ beforeEach(async () => {
 
 const put = (promptWording: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { promptWording } })
 
-describe("GET /v1/admin/nodaro-motion/prompt-wording", () => {
+describe("GET /v1/admin/video-remake/prompt-wording", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -117,49 +117,49 @@ describe("GET /v1/admin/nodaro-motion/prompt-wording", () => {
   })
 
   it("answers the stored row, an earlier engine key read as the current one and a value it does not know dropped", async () => {
-    h.row = { value: { "motion-lite": "new", "motion-prism": "newest" }, updated_at: "2026-11-01T10:00:00.000Z" }
+    h.row = { value: { "motion-lite": "new", "nodaro-prism": "newest" }, updated_at: "2026-11-01T10:00:00.000Z" }
     expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({
-      promptWording: { "motion-pulse": "new" },
+      promptWording: { "nodaro-pulse": "new" },
       updatedAt: "2026-11-01T10:00:00.000Z",
     })
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/prompt-wording", () => {
+describe("PUT /v1/admin/video-remake/prompt-wording", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    expect((await put({ "motion-prism": "new" })).statusCode).toBe(403)
+    expect((await put({ "nodaro-prism": "new" })).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
   })
 
   it("saves the engines on the new wording, clears the cache and audits before and after", async () => {
-    const res = await put({ "motion-prism": "new", "motion-pulse": "current" })
+    const res = await put({ "nodaro-prism": "new", "nodaro-pulse": "current" })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_prompt_wording", value: { "motion-prism": "new" }, updated_at: expect.any(String), updated_by: ADMIN }])
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_prompt_wording", value: { "nodaro-prism": "new" }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toMatchObject({ promptWording: { "motion-prism": "new" }, engines: ENGINES })
+    expect(res.json().data).toMatchObject({ promptWording: { "nodaro-prism": "new" }, engines: ENGINES })
     expect(h.audits).toEqual([
       {
         admin_user_id: ADMIN,
         action: "update_nodaro_motion_prompt_wording",
         target_type: "app_setting",
         target_id: NODARO_MOTION_PROMPT_WORDING_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_prompt_wording", before: null, after: { "motion-prism": "new" } },
+        payload: { key: "nodaro_motion_prompt_wording", before: null, after: { "nodaro-prism": "new" } },
       },
     ])
-    expect((await put({ "motion-prism": "new", "motion-pulse": "new" })).json().data.promptWording).toEqual({ "motion-prism": "new", "motion-pulse": "new" })
+    expect((await put({ "nodaro-prism": "new", "nodaro-pulse": "new" })).json().data.promptWording).toEqual({ "nodaro-prism": "new", "nodaro-pulse": "new" })
     expect(h.audits[1]!.payload).toEqual({
       key: "nodaro_motion_prompt_wording",
-      before: { "motion-prism": "new" },
-      after: { "motion-prism": "new", "motion-pulse": "new" },
+      before: { "nodaro-prism": "new" },
+      after: { "nodaro-prism": "new", "nodaro-pulse": "new" },
     })
   })
 
   it("refuses an unknown engine, an unknown value or an extra key", async () => {
-    for (const w of [{ "motion-pro": "new" }, { "motion-prism": "New" }, { "motion-prism": "" }, { "motion-prism": null }, "new", null]) {
+    for (const w of [{ "motion-pro": "new" }, { "nodaro-prism": "New" }, { "nodaro-prism": "" }, { "nodaro-prism": null }, "new", null]) {
       expect((await put(w)).statusCode, JSON.stringify(w)).toBe(400)
     }
-    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { promptWording: {}, engine: "motion-pulse" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { promptWording: {}, engine: "nodaro-pulse" } })).statusCode).toBe(400)
     expect(h.upserts).toEqual([])
   })
 
@@ -171,7 +171,7 @@ describe("PUT /v1/admin/nodaro-motion/prompt-wording", () => {
       [[], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await put({ "motion-pulse": "new" })
+      const res = await put({ "nodaro-pulse": "new" })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: named })
       expect(res.json().error.message).toContain(named.join(" and "))
@@ -181,16 +181,16 @@ describe("PUT /v1/admin/nodaro-motion/prompt-wording", () => {
   })
 
   it("always saves 'current', whatever the engines, so the new wording can be taken back", async () => {
-    h.row = { value: { "motion-prism": "new" }, updated_at: "2026-11-01T10:00:00.000Z" }
+    h.row = { value: { "nodaro-prism": "new" }, updated_at: "2026-11-01T10:00:00.000Z" }
     h.envs = []
-    for (const w of [{}, { "motion-prism": "current" }, { "motion-prism": "current", "motion-pulse": "current" }]) {
+    for (const w of [{}, { "nodaro-prism": "current" }, { "nodaro-prism": "current", "nodaro-pulse": "current" }]) {
       const res = await put(w)
       expect(res.statusCode, JSON.stringify(w)).toBe(200)
       expect(res.json().data.promptWording).toEqual({})
     }
     expect(h.envReads).toBe(0)
     expect(h.upserts.map((u) => (u as { value: unknown }).value)).toEqual([{}, {}, {}])
-    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_prompt_wording", before: { "motion-prism": "new" }, after: {} })
+    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_prompt_wording", before: { "nodaro-prism": "new" }, after: {} })
   })
 
   it("files its audit rows under an id of its own", () => {

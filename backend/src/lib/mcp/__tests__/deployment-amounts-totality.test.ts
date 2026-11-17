@@ -83,7 +83,7 @@ const AMOUNT_FILES: Readonly<Record<string, { count: number } & ({ funnel: true 
   "tools/apps.ts": { count: 11, funnel: true }, // list_apps, retry_app_run, run_app's refusal
   "tools/components.ts": { count: 1, funnel: true }, // list_components
   "tools/render-final.ts": { count: 12, funnel: true }, // render_final's quote
-  "tools/cast-swap.ts": { count: 17, funnel: true }, // cast_swap's quote
+  "tools/cast-swap.ts": { count: 17, funnel: true }, // video_remake's quote
   "tools/cast-swap-full-quality.ts": { count: 8, funnel: true }, // estimate_full_quality, full_quality
   "tools/trends.ts": { count: 22, funnel: true }, // estimate_trend, run_trend
   "tools/recast.ts": { count: 4, funnel: true }, // start_recast's quote

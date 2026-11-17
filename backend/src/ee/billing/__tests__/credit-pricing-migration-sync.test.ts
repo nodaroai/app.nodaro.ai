@@ -199,7 +199,7 @@ const INSERTED_VALUES = extractInsertedValues()
 // (migration 595's row list; the 15/30/60 s ones seeded by 502 at the same
 // values), the rows past its cap (`:120s`, `:300s`, both 502) and the bare row
 // (repriced 600 → 160 by 595's guarded UPDATE).
-// `cast-swap` / `cast-swap-full-quality`: Nodaro Motion's two per-second fee
+// `cast-swap` / `cast-swap-full-quality`: Video Remake's two per-second fee
 // rates (migration 591), which the plugin reads through `tk.http.unitRatePrice`.
 // `pixverse-v6-extend`: Extend Video's PixVerse V6 rows (migration 642), 1-15 s
 // × 360p/540p/720p/1080p, each with an `:audio` twin; no bare id.
@@ -565,7 +565,7 @@ describe("row-list model_pricing inserts: Depth Anything per frame's per-second 
   })
 })
 
-describe("Nodaro Motion's per-second fee rates (migration 591)", () => {
+describe("Video Remake's per-second fee rates (migration 591)", () => {
   const SQL_MOTION_RATES = readFileSync(join(MIGRATIONS_DIR, "591_cast_swap_per_second_rates.sql"), "utf8")
 
   it("seeds the two rate rows the plugin reads, at 2 and 4 credits a second, and the static table holds the same", () => {

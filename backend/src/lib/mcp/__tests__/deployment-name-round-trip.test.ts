@@ -73,7 +73,7 @@ const NODES = [
     id: "t1",
     type: "text",
     position: { x: 0, y: 0 },
-    data: { label: "Nodaro intro", text: "Made with Nodaro — a Nodaro job id, Nodaro Motion, NODARO, on Nodaro Cloud, at studio.nodaro.ai: https://nodaro.ai/docs" },
+    data: { label: "Nodaro intro", text: "Made with Nodaro — a Nodaro job id, Video Remake, NODARO, on Nodaro Cloud, at studio.nodaro.ai: https://nodaro.ai/docs" },
   },
   { id: "g1", type: "generate-image", position: { x: 300, y: 0 }, data: { prompt: "a Nodaro logo on a shirt", provider: "gpt-image-2" } },
 ]

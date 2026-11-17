@@ -1,5 +1,5 @@
 /**
- * Nodaro Motion's Flex prompt wording, per engine — how the Flexible prompt
+ * Video Remake's Flex prompt wording, per engine — how the Flexible prompt
  * of every DIRECT run of that engine is worded: `"current"` (today's) or
  * `"new"` (the movement lock, the picture roles, the closing restatement and
  * the avoid part as a failure list). Set by an admin for the whole
@@ -8,8 +8,8 @@
  * ignores it.
  *
  * The `app_settings` row `nodaro_motion_prompt_wording`:
- * `{ "motion-prism"?: Wording, "motion-pulse"?: Wording }`, keyed by Nodaro
- * Motion's PUBLIC engine ids, `Wording = "current" | "new"`.
+ * `{ "nodaro-prism"?: Wording, "nodaro-pulse"?: Wording }`, keyed by Video
+ * Remake's PUBLIC engine ids, `Wording = "current" | "new"`.
  *
  * - No row, an engine left out, or `"current"`: today's wording, exactly as
  *   before the setting.
@@ -23,13 +23,13 @@
  * each engine on the new wording under its current AND its earlier key, or
  * null when every engine is current; and
  * the admin's prompt previews and override checks. Written only by
- * `PUT /v1/admin/nodaro-motion/prompt-wording` (ee/routes), through
+ * `PUT /v1/admin/video-remake/prompt-wording` (ee/routes), through
  * `nodaro-motion-prompt-wording-store.ts`. This module is pure (no database).
  */
 import { z } from "zod"
 import { CAST_SWAP_PROMPT_WORDINGS, type CastSwapPromptWording } from "@nodaro/render-rules"
 import { NODARO_MOTION_ENGINES, type NodaroMotionEngine } from "@nodaro/shared/models"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_PROMPT_WORDING_KEY = "nodaro_motion_prompt_wording"
 
@@ -42,10 +42,7 @@ export type NodaroMotionPromptWordingForPlugin = ByEngineForPlugin<CastSwapPromp
 const wordingSchema = z.enum(CAST_SWAP_PROMPT_WORDINGS)
 
 /** What an admin saves: strict (an unknown engine or value is refused). */
-export const nodaroMotionPromptWordingSchema: z.ZodType<NodaroMotionPromptWording> = z.strictObject({
-  "motion-prism": wordingSchema.optional(),
-  "motion-pulse": wordingSchema.optional(),
-})
+export const nodaroMotionPromptWordingSchema: z.ZodType<NodaroMotionPromptWording> = byEngineSchema(wordingSchema)
 
 /** The setting with every `"current"` entry left out (the same as never set): what is stored. A new object. */
 export function newWordings(setting: NodaroMotionPromptWording | null | undefined): NodaroMotionPromptWording {
@@ -68,7 +65,7 @@ export function promptWordingOf(setting: NodaroMotionPromptWording | null | unde
 
 /**
  * What the plugin is answered: each engine on the new wording, also under its
- * earlier key (the TRANSITION SHIM every Nodaro Motion setting's accessor
+ * earlier key (the TRANSITION SHIM every Video Remake setting's accessor
  * answers, `withEarlierEngineKeys`), a new object; null when every engine is
  * current.
  */

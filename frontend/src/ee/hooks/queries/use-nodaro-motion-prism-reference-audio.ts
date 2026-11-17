@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Prism reference audio: what audio the reference
+ * Admin → Video Remake's Prism reference audio: what audio the reference
  * video of every Prism run people start themselves carries
- * (GET/PUT /v1/admin/nodaro-motion/prism-reference-audio).
+ * (GET/PUT /v1/admin/video-remake/prism-reference-audio).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { hasAdmin } from "@/lib/edition"

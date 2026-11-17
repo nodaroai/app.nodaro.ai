@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/style` — who chooses a direct Nodaro Motion run's
- * style, per engine: people ("user", the default), or Precise in Nodaro Motion / always Flex.
+ * `/v1/admin/video-remake/style` — who chooses a direct Video Remake run's
+ * style, per engine: people ("user", the default), or Precise in Video Remake / always Flex.
  *
  * What must hold:
  *  - both routes are admin-only;
@@ -67,13 +67,13 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/style"
+const URL = "/v1/admin/video-remake/style"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, ...castSwap } }, updatedAt: "2026-11-01T00:00:00.000Z" })
 const BOTH_ENFORCE = [envRow("production", { styleChoice: true }), envRow("staging", { styleChoice: true })]
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 
 let app: FastifyInstance
@@ -97,7 +97,7 @@ beforeEach(async () => {
 
 const put = (style: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { style } })
 
-describe("GET /v1/admin/nodaro-motion/style", () => {
+describe("GET /v1/admin/video-remake/style", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -113,45 +113,45 @@ describe("GET /v1/admin/nodaro-motion/style", () => {
   })
 
   it("answers the stored row, an earlier engine key read as the current one and a value it does not know dropped", async () => {
-    h.row = { value: { "motion-lite": "flex", "motion-prism": "sometimes" }, updated_at: "2026-11-01T10:00:00.000Z" }
+    h.row = { value: { "motion-lite": "flex", "nodaro-prism": "sometimes" }, updated_at: "2026-11-01T10:00:00.000Z" }
     expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({
-      style: { "motion-pulse": "flex" },
+      style: { "nodaro-pulse": "flex" },
       updatedAt: "2026-11-01T10:00:00.000Z",
     })
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/style", () => {
+describe("PUT /v1/admin/video-remake/style", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    expect((await put({ "motion-prism": "flex" })).statusCode).toBe(403)
+    expect((await put({ "nodaro-prism": "flex" })).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
   })
 
   it("saves the forced engines, clears the cache and audits before and after", async () => {
-    const res = await put({ "motion-prism": "flex", "motion-pulse": "user" })
+    const res = await put({ "nodaro-prism": "flex", "nodaro-pulse": "user" })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_style", value: { "motion-prism": "flex" }, updated_at: expect.any(String), updated_by: ADMIN }])
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_style", value: { "nodaro-prism": "flex" }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toMatchObject({ style: { "motion-prism": "flex" }, engines: ENGINES })
+    expect(res.json().data).toMatchObject({ style: { "nodaro-prism": "flex" }, engines: ENGINES })
     expect(h.audits).toEqual([
       {
         admin_user_id: ADMIN,
         action: "update_nodaro_motion_style",
         target_type: "app_setting",
         target_id: NODARO_MOTION_STYLE_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_style", before: null, after: { "motion-prism": "flex" } },
+        payload: { key: "nodaro_motion_style", before: null, after: { "nodaro-prism": "flex" } },
       },
     ])
-    expect((await put({ "motion-prism": "precise", "motion-pulse": "precise" })).json().data.style).toEqual({ "motion-prism": "precise", "motion-pulse": "precise" })
-    expect(h.audits[1]!.payload).toEqual({ key: "nodaro_motion_style", before: { "motion-prism": "flex" }, after: { "motion-prism": "precise", "motion-pulse": "precise" } })
+    expect((await put({ "nodaro-prism": "precise", "nodaro-pulse": "precise" })).json().data.style).toEqual({ "nodaro-prism": "precise", "nodaro-pulse": "precise" })
+    expect(h.audits[1]!.payload).toEqual({ key: "nodaro_motion_style", before: { "nodaro-prism": "flex" }, after: { "nodaro-prism": "precise", "nodaro-pulse": "precise" } })
   })
 
   it("refuses an unknown engine, an unknown value or an extra key", async () => {
-    for (const style of [{ "motion-pro": "flex" }, { "motion-prism": "motion" }, { "motion-prism": "" }, { "motion-prism": null }, "flex", null]) {
+    for (const style of [{ "motion-pro": "flex" }, { "nodaro-prism": "motion" }, { "nodaro-prism": "" }, { "nodaro-prism": null }, "flex", null]) {
       expect((await put(style)).statusCode, JSON.stringify(style)).toBe(400)
     }
-    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { style: {}, engine: "motion-pulse" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { style: {}, engine: "nodaro-pulse" } })).statusCode).toBe(400)
     expect(h.upserts).toEqual([])
   })
 
@@ -163,7 +163,7 @@ describe("PUT /v1/admin/nodaro-motion/style", () => {
       [[], ["staging", "production"]],
     ] as const) {
       h.envs = [...envs]
-      const res = await put({ "motion-pulse": "precise" })
+      const res = await put({ "nodaro-pulse": "precise" })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: named })
       expect(res.json().error.message).toContain(named.join(" and "))
@@ -173,9 +173,9 @@ describe("PUT /v1/admin/nodaro-motion/style", () => {
   })
 
   it("always saves 'Users choose', whatever the engines, so a forced style can be taken back", async () => {
-    h.row = { value: { "motion-prism": "flex" }, updated_at: "2026-11-01T10:00:00.000Z" }
+    h.row = { value: { "nodaro-prism": "flex" }, updated_at: "2026-11-01T10:00:00.000Z" }
     h.envs = []
-    for (const style of [{}, { "motion-prism": "user" }, { "motion-prism": "user", "motion-pulse": "user" }]) {
+    for (const style of [{}, { "nodaro-prism": "user" }, { "nodaro-prism": "user", "nodaro-pulse": "user" }]) {
       const res = await put(style)
       expect(res.statusCode, JSON.stringify(style)).toBe(200)
       expect(res.json().data.style).toEqual({})

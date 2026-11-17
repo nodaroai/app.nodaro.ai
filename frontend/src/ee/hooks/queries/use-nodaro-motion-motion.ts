@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Motion setting: per engine, how a run people start
+ * Admin → Video Remake's Motion setting: per engine, how a run people start
  * themselves with the Motion style prepares its clip and words its prompt
- * (GET/PUT /v1/admin/nodaro-motion/motion). A save also re-asks the engine
+ * (GET/PUT /v1/admin/video-remake/motion). A save also re-asks the engine
  * prompt previews: the Motion tab's parts follow the saved setting.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

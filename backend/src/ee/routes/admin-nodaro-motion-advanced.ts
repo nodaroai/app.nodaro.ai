@@ -1,10 +1,10 @@
 /**
- * Whether a Nodaro Motion page shows its Advanced options — Prepare
+ * Whether a Video Remake page shows its Advanced options — Prepare
  * references and the pre-prompt (registered by `adminNodaroMotionRoutes`,
  * admin-nodaro-motion.ts, so it shares its edition gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/advanced   { show, updatedAt } (updatedAt null = never saved: hidden)
- *   PUT /v1/admin/nodaro-motion/advanced   { show }: save it; audit-logged
+ *   GET /v1/admin/video-remake/advanced   { show, updatedAt } (updatedAt null = never saved: hidden)
+ *   PUT /v1/admin/video-remake/advanced   { show }: save it; audit-logged
  *
  * The setting (`nodaro_motion_advanced`, lib/nodaro-motion-advanced.ts) is
  * one switch for the whole page, not per engine, off until an admin turns it
@@ -24,13 +24,13 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
 import { audit } from "./admin-trends-lifecycle.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_ADVANCED_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f9"
 
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the switch alone. */
 export const NODARO_MOTION_ADVANCED_SECTION = defineNodaroMotionSettingsSection({
   key: "advanced",
-  path: "/v1/admin/nodaro-motion/advanced",
+  path: "/v1/admin/video-remake/advanced",
   label: "Advanced options",
   body: nodaroMotionAdvancedSchema,
   prepare: (body) => ({ value: { show: body.show } }),
@@ -38,7 +38,7 @@ export const NODARO_MOTION_ADVANCED_SECTION = defineNodaroMotionSettingsSection(
 })
 
 export interface NodaroMotionAdvancedView {
-  /** Whether a Nodaro Motion page shows its Advanced options; false until an admin turns them on. */
+  /** Whether a Video Remake page shows its Advanced options; false until an admin turns them on. */
   show: boolean
   /** null = never saved. */
   updatedAt: string | null
@@ -50,15 +50,15 @@ async function view(): Promise<NodaroMotionAdvancedView> {
 }
 
 export function registerNodaroMotionAdvancedRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/advanced", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/advanced", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion Advanced setting")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake Advanced setting")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/advanced", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/advanced", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_ADVANCED_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -74,7 +74,7 @@ export function registerNodaroMotionAdvancedRoutes(app: FastifyInstance): void {
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion Advanced setting")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake Advanced setting")
     }
   })
 }

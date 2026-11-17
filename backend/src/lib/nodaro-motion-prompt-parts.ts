@@ -1,12 +1,12 @@
 /**
- * Nodaro Motion's prompt part overrides for DIRECT runs, per engine and per
+ * Video Remake's prompt part overrides for DIRECT runs, per engine and per
  * style — set by an admin for the whole deployment, never by the person
  * running it. A trend run keeps its own trend's overrides
  * (`TrendVersionData.promptParts`).
  *
  * The `app_settings` row `nodaro_motion_prompt_parts`:
- * `{ "motion-prism"?: { precise?: Parts, motion?: Parts, styleOnly?: Parts }, "motion-pulse"?: … }`,
- * keyed by Nodaro Motion's PUBLIC engine ids, `Parts` the override text per
+ * `{ "nodaro-prism"?: { precise?: Parts, motion?: Parts, styleOnly?: Parts }, "nodaro-pulse"?: … }`,
+ * keyed by Video Remake's PUBLIC engine ids, `Parts` the override text per
  * Cast Swap prompt part (1–2000 characters; `"-"` removes the part). No row
  * = never saved: every direct run uses the engine's defaults. A row keyed by
  * the earlier ids (`"motion-pro"`, `"motion-lite"`) reads as the new ones.
@@ -29,7 +29,7 @@
  * engine and style it names. That read answers each entry under both its
  * current and its earlier key (`withEarlierEngineKeys`, a transition shim for
  * plugins that look up the earlier ids). Written only by
- * `PUT /v1/admin/nodaro-motion/prompt-parts` (ee/routes), through
+ * `PUT /v1/admin/video-remake/prompt-parts` (ee/routes), through
  * `nodaro-motion-prompt-parts-store.ts`. This module is pure (no database).
  *
  * Read through `getAppSettings()` (its 60 s cache, and
@@ -39,7 +39,7 @@ import { z } from "zod"
 import type { CastSwapPromptPartId } from "@nodaro/render-rules"
 import { CAST_SWAP_STYLES } from "@nodaro/shared/models"
 import { promptPartTextsSchema } from "./cast-swap-prompt-parts-contract.js"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_PROMPT_PARTS_KEY = "nodaro_motion_prompt_parts"
 
@@ -67,10 +67,7 @@ export const nodaroMotionEnginePromptPartsSchema = z.strictObject(
 ) as unknown as z.ZodType<NodaroMotionEnginePromptParts>
 
 /** What an admin saves: strict (an unknown engine, key or part is refused). */
-export const nodaroMotionPromptPartsSchema: z.ZodType<NodaroMotionPromptParts> = z.strictObject({
-  "motion-prism": nodaroMotionEnginePromptPartsSchema.optional(),
-  "motion-pulse": nodaroMotionEnginePromptPartsSchema.optional(),
-})
+export const nodaroMotionPromptPartsSchema: z.ZodType<NodaroMotionPromptParts> = byEngineSchema(nodaroMotionEnginePromptPartsSchema)
 
 /** The setting with each entry also under its earlier key (a fresh copy): what the toolkit answers. */
 export function withEarlierPromptPartKeys(parts: NodaroMotionPromptParts): NodaroMotionPromptPartsForPlugin {

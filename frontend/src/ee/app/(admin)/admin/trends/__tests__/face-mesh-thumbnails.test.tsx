@@ -1,6 +1,6 @@
 // @test-watches frontend/public/face-mesh-art/**
 /**
- * The face mesh illustrations of Admin → Nodaro Motion: every set of layers
+ * The face mesh illustrations of Admin → Video Remake: every set of layers
  * that draws lines has its own picture (drawn by the platform's face mesh code,
  * backend/scripts/render-face-mesh-thumbnails.mts), every picture listed is
  * shipped, and each choice and switch shows its own — without changing any

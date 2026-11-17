@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * The two fields a server-side CHILD job sends `/v1/generate-video` (Nodaro
- * Motion's engine children moved here from `/v1/text-to-video`):
+ * The two fields a server-side CHILD job sends `/v1/generate-video` (Video
+ * Remake's engine children moved here from `/v1/text-to-video`):
  *
  * - `outputFormat: "mov"` — Seedance 2.5's mov container, honoured ONLY for a
  *   child job (internal auth plus a server-only parent job id) on seedance-2-5,
@@ -56,7 +56,7 @@ const USER = "00000000-0000-4000-8000-000000000001"
 const PARENT = "00000000-0000-4000-8000-0000000000b2"
 const VIDEO = "https://cdn.nodaro.ai/videos/clip.mp4"
 const IMAGE = "https://cdn.nodaro.ai/images/face.jpg"
-/** A Seedance 2.5 edit child, the way Nodaro Motion sends it (no start frame). */
+/** A Seedance 2.5 edit child, the way Video Remake sends it (no start frame). */
 const BODY = {
   prompt: "edit {video:1} as follows:\nUse {image:1:person} as the singer.",
   provider: "seedance-2-5",

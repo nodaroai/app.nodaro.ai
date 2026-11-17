@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `PUT /v1/admin/nodaro-motion/masking` with the face mesh newly on: the mesh
+ * `PUT /v1/admin/video-remake/masking` with the face mesh newly on: the mesh
  * adds its line to the engine's direct runs' prompt, so the saved prompt
  * overrides of those runs (Precise, and Motion where it falls back to this
  * masking) are checked again on a large run, and the save is refused (422
@@ -84,16 +84,16 @@ beforeEach(async () => {
   await app.ready()
 })
 
-const put = (masking: unknown) => app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/masking", headers: { "x-user": ADMIN }, payload: { masking } })
-const MESH_ON = { "motion-prism": { mode: "always", faceMesh: true } }
+const put = (masking: unknown) => app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: { "x-user": ADMIN }, payload: { masking } })
+const MESH_ON = { "nodaro-prism": { mode: "always", faceMesh: true } }
 const savedOverrides = () => {
   h.rows.nodaro_motion_prompt_parts = {
-    value: { "motion-prism": { precise: { face: "Keep the face." }, motion: { opener: "Use {video}." } }, "motion-pulse": { precise: { face: "Other." } } },
+    value: { "nodaro-prism": { precise: { face: "Keep the face." }, motion: { opener: "Use {video}." } }, "nodaro-pulse": { precise: { face: "Other." } } },
     updated_at: "2026-10-31T00:00:00.000Z",
   }
 }
 
-describe("PUT /v1/admin/nodaro-motion/masking — the face mesh and the saved prompt overrides", () => {
+describe("PUT /v1/admin/video-remake/masking — the face mesh and the saved prompt overrides", () => {
   it("re-checks the saved overrides of the engine whose mesh turns on (both styles; Motion falls back to this masking), with the mesh", async () => {
     savedOverrides()
     const res = await put(MESH_ON)
@@ -109,7 +109,7 @@ describe("PUT /v1/admin/nodaro-motion/masking — the face mesh and the saved pr
     h.problemsFor = (b) => (b.faceMesh === true ? [{ code: "prompt_too_long", message: "The prompt is 2,600 characters; the most is 2,500." }] : [])
     const res = await put(MESH_ON)
     expect(res.statusCode).toBe(422)
-    expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/With the face mesh on, the saved Nodaro Motion prompt no longer fits/) })
+    expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/With the face mesh on, the saved Video Remake prompt no longer fits/) })
     expect(h.upserts).toEqual([])
   })
 
@@ -117,7 +117,7 @@ describe("PUT /v1/admin/nodaro-motion/masking — the face mesh and the saved pr
     savedOverrides()
     h.rows.nodaro_motion_masking = { value: MESH_ON, updated_at: "2026-10-31T00:00:00.000Z" }
     expect((await put(MESH_ON)).statusCode).toBe(200)
-    expect((await put({ "motion-prism": { mode: "always" } })).statusCode).toBe(200)
+    expect((await put({ "nodaro-prism": { mode: "always" } })).statusCode).toBe(200)
     h.rows = {}
     expect((await put(MESH_ON)).statusCode).toBe(200)
     expect(h.calls).toEqual([])
@@ -126,25 +126,25 @@ describe("PUT /v1/admin/nodaro-motion/masking — the face mesh and the saved pr
   it("re-checks whenever the prompt may grow: the fill changed (None back to a blur or depth fill, the mesh still on), the masking turned on", async () => {
     setPluginSupports({ castSwap: { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, faceMesh: true, maskFillNone: true } as never })
     savedOverrides()
-    h.rows.nodaro_motion_masking = { value: { "motion-prism": { mode: "always", fill: "none", faceMesh: true } }, updated_at: "2026-11-02T00:00:00.000Z" }
+    h.rows.nodaro_motion_masking = { value: { "nodaro-prism": { mode: "always", fill: "none", faceMesh: true } }, updated_at: "2026-11-02T00:00:00.000Z" }
     h.problemsFor = (b) => (b.maskFill === undefined ? [{ code: "prompt_too_long", message: "The prompt is 2,600 characters; the most is 2,500." }] : [])
-    const res = await put({ "motion-prism": { mode: "always", fill: "depth", faceMesh: true } })
+    const res = await put({ "nodaro-prism": { mode: "always", fill: "depth", faceMesh: true } })
     expect(res.statusCode).toBe(422)
-    expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/^With this masking, the saved Nodaro Motion prompt no longer fits/) })
+    expect(res.json().error).toMatchObject({ code: "prompt_parts_invalid", message: expect.stringMatching(/^With this masking, the saved Video Remake prompt no longer fits/) })
     expect(h.calls.map((c) => c.style).sort()).toEqual(["motion", "precise"])
     expect(h.upserts).toEqual([])
     // Off → on (no mesh) is checked too; the fill none asks with maskFill "none".
     h.problemsFor = null
     h.calls = []
-    h.rows.nodaro_motion_masking = { value: { "motion-prism": { mode: "off" } }, updated_at: "2026-11-02T00:00:00.000Z" }
-    expect((await put({ "motion-prism": { mode: "always" } })).statusCode).toBe(200)
+    h.rows.nodaro_motion_masking = { value: { "nodaro-prism": { mode: "off" } }, updated_at: "2026-11-02T00:00:00.000Z" }
+    expect((await put({ "nodaro-prism": { mode: "always" } })).statusCode).toBe(200)
     expect(h.calls).toHaveLength(2)
     h.calls = []
     // Every environment's engine draws the fill none (the save's own gate).
     const cs = MESH_SUPPORTS.castSwap as Record<string, unknown>
     cs.maskFillNone = true
     try {
-      expect((await put({ "motion-prism": { mode: "always", fill: "none", faceMesh: true } })).statusCode).toBe(200)
+      expect((await put({ "nodaro-prism": { mode: "always", fill: "none", faceMesh: true } })).statusCode).toBe(200)
     } finally {
       delete cs.maskFillNone
     }

@@ -13,7 +13,7 @@ import {
 
 /**
  * `nodaro_motion_prompt_wording` (pure): how a DIRECT Flex run's prompt is
- * worded, per Nodaro Motion engine. Nothing set, an engine left out, or
+ * worded, per Video Remake engine. Nothing set, an engine left out, or
  * "current" = today's wording, exactly as before the setting.
  */
 describe("nodaro_motion_prompt_wording", () => {
@@ -24,32 +24,32 @@ describe("nodaro_motion_prompt_wording", () => {
 
   it("an admin's save is strict: the current engine ids, the two wordings", () => {
     expect(nodaroMotionPromptWordingSchema.safeParse({}).success).toBe(true)
-    expect(nodaroMotionPromptWordingSchema.safeParse({ "motion-prism": "new", "motion-pulse": "current" }).success).toBe(true)
-    for (const bad of [{ "motion-pro": "new" }, { "seedance-2-5": "new" }, { "motion-prism": "New" }, { "motion-prism": "old" }, { "motion-prism": null }, null, "new"]) {
+    expect(nodaroMotionPromptWordingSchema.safeParse({ "nodaro-prism": "new", "nodaro-pulse": "current" }).success).toBe(true)
+    for (const bad of [{ "motion-pro": "new" }, { "seedance-2-5": "new" }, { "nodaro-prism": "New" }, { "nodaro-prism": "old" }, { "nodaro-prism": null }, null, "new"]) {
       expect(nodaroMotionPromptWordingSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false)
     }
   })
 
   it("stores only the engines on the new wording ('current' is the same as left out)", () => {
-    expect(newWordings({ "motion-prism": "current", "motion-pulse": "new" })).toEqual({ "motion-pulse": "new" })
-    expect(newWordings({ "motion-prism": "current" })).toEqual({})
+    expect(newWordings({ "nodaro-prism": "current", "nodaro-pulse": "new" })).toEqual({ "nodaro-pulse": "new" })
+    expect(newWordings({ "nodaro-prism": "current" })).toEqual({})
     expect(newWordings(null)).toEqual({})
-    expect(anyNewWording({ "motion-prism": "current" })).toBe(false)
+    expect(anyNewWording({ "nodaro-prism": "current" })).toBe(false)
     expect(anyNewWording(null)).toBe(false)
-    expect(anyNewWording({ "motion-pulse": "new" })).toBe(true)
+    expect(anyNewWording({ "nodaro-pulse": "new" })).toBe(true)
   })
 
   it("reads each engine's wording, 'current' when none is set", () => {
-    expect(promptWordingOf(null, "motion-prism")).toBe("current")
-    expect(promptWordingOf({}, "motion-prism")).toBe("current")
-    expect(promptWordingOf({ "motion-pulse": "new" }, "motion-prism")).toBe("current")
-    expect(promptWordingOf({ "motion-pulse": "new" }, "motion-pulse")).toBe("new")
+    expect(promptWordingOf(null, "nodaro-prism")).toBe("current")
+    expect(promptWordingOf({}, "nodaro-prism")).toBe("current")
+    expect(promptWordingOf({ "nodaro-pulse": "new" }, "nodaro-prism")).toBe("current")
+    expect(promptWordingOf({ "nodaro-pulse": "new" }, "nodaro-pulse")).toBe("new")
   })
 
   it("reads the stored row tolerantly: an earlier engine key as the current one, an unknown value dropped", () => {
     const warn = vi.fn()
-    expect(parseNodaroMotionPromptWording({ "motion-pro": "new", "motion-lite": "current" }, warn)).toEqual({ "motion-prism": "new" })
-    expect(parseNodaroMotionPromptWording({ "motion-prism": "newer", "motion-pulse": "new" }, warn)).toEqual({ "motion-pulse": "new" })
+    expect(parseNodaroMotionPromptWording({ "motion-pro": "new", "motion-lite": "current" }, warn)).toEqual({ "nodaro-prism": "new" })
+    expect(parseNodaroMotionPromptWording({ "nodaro-prism": "newer", "nodaro-pulse": "new" }, warn)).toEqual({ "nodaro-pulse": "new" })
     expect(parseNodaroMotionPromptWording("new", warn)).toBeNull()
     expect(parseNodaroMotionPromptWording(undefined, warn)).toBeNull()
     expect(warn).toHaveBeenCalled()
@@ -58,12 +58,12 @@ describe("nodaro_motion_prompt_wording", () => {
   it("answers the plugin null when every engine is current, else each engine on the new wording under its current and earlier key (a fresh copy)", () => {
     expect(promptWordingForPlugin(null)).toBeNull()
     expect(promptWordingForPlugin({})).toBeNull()
-    expect(promptWordingForPlugin({ "motion-prism": "current" })).toBeNull()
-    const saved = { "motion-prism": "new" as const }
+    expect(promptWordingForPlugin({ "nodaro-prism": "current" })).toBeNull()
+    const saved = { "nodaro-prism": "new" as const }
     const got = promptWordingForPlugin(saved)
-    expect(got).toEqual({ "motion-prism": "new", "motion-pro": "new" })
-    got!["motion-prism"] = "current"
-    expect(saved).toEqual({ "motion-prism": "new" })
+    expect(got).toEqual({ "nodaro-prism": "new", "motion-prism": "new", "motion-pro": "new" })
+    got!["nodaro-prism"] = "current"
+    expect(saved).toEqual({ "nodaro-prism": "new" })
   })
 
   it("an engine takes a wording only when its castSwap.promptWordings lists it", () => {

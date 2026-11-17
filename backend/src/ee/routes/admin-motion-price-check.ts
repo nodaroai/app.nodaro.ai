@@ -1,5 +1,5 @@
 /**
- * The admin Motion price check: every Nodaro Motion run of a date range —
+ * The admin Motion price check: every Video Remake run of a date range —
  * what it held, what it took, that in USD, and what its steps cost us — with
  * a run's steps laid out against the quote it was admitted on.
  *
@@ -166,7 +166,7 @@ export async function adminMotionPriceCheckRoutes(app: FastifyInstance): Promise
       const errors = [runs.error, tree.error].filter((e) => e !== null && e !== undefined)
       if (errors.length > 0) return readFailed(reply, req, errors)
       const [run] = rowsOf(runs.data)
-      if (!run) return reply.status(404).send({ error: { code: "not_found", message: "Motion run not found" } })
+      if (!run) return reply.status(404).send({ error: { code: "not_found", message: "Video Remake run not found" } })
       return reply.send({ data: runDetailOf(run, rowsOf(tree.data)) })
     } catch (err) {
       return sendInternalError(reply, req, err, FAILED)

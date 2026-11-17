@@ -1,6 +1,6 @@
 /**
- * Admin → Nodaro Motion: each engine's preparation steps for the runs people
- * start themselves (GET/PUT /v1/admin/nodaro-motion/steps).
+ * Admin → Video Remake: each engine's preparation steps for the runs people
+ * start themselves (GET/PUT /v1/admin/video-remake/steps).
  *
  * - One editor per engine, greyed out naming the environments whose engine
  *   cannot take them (the setting is shared by every environment).
@@ -24,10 +24,10 @@ import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from
 import AdminNodaroMotionPage from "../page"
 import { stepsToSaved } from "../components/StepsColumn"
 
-const STEPS_URL = "/v1/admin/nodaro-motion/steps"
+const STEPS_URL = "/v1/admin/video-remake/steps"
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const RULES: SheetRules = {
   person: { "head-body": "head-3q-body-cut", "body-only": "head-3q-body-cut", "head-only": "head-3q-body-cut", unclear: "none" },
@@ -61,18 +61,18 @@ beforeEach(() => {
   resetRoutes()
   vi.mocked(toast.error).mockClear()
   vi.stubGlobal("fetch", fetchMock)
-  routes["GET /v1/admin/nodaro-motion/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
+  routes["GET /v1/admin/video-remake/masking"] = () => ({ body: { data: { masking: null, updatedAt: null, engines: ENGINES } } })
   // The Style choice (style.test.tsx): never saved, people choose on every engine.
-  routes["GET /v1/admin/nodaro-motion/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
+  routes["GET /v1/admin/video-remake/style"] = () => ({ body: { data: { style: null, updatedAt: null, engines: ENGINES, supported: true } } })
   // The page's Advanced switch (advanced.test.tsx): never saved, hidden.
-  routes["GET /v1/admin/nodaro-motion/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
-  routes["GET /v1/admin/nodaro-motion/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
-  routes["POST /v1/admin/nodaro-motion/prompt-parts/preview"] = () => ({
+  routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
+  routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
+  routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({
     body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } },
   })
-  routes["GET /v1/admin/nodaro-motion/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
-  routes["GET /v1/admin/nodaro-motion/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
-  routes["GET /v1/admin/nodaro-motion/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/motion"] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
+  routes["GET /v1/admin/video-remake/pulse-audio"] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
+  routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [stepsAt("production", true), stepsAt("staging", true)] } })
   routes[`GET ${STEPS_URL}`] = () => view(null)
   for (const e of ENGINES) routes[`GET ${STEPS_URL}/defaults?engine=${e.id}`] = () => ({ body: { data: DEFAULTS } })
@@ -81,19 +81,19 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const stepsOf = async (name: string) => screen.findByRole("group", { name: `Nodaro Motion ${name} preparation steps` })
+const stepsOf = async (name: string) => screen.findByRole("group", { name: `Nodaro ${name} preparation steps` })
 
-describe("Admin → Nodaro Motion → preparation steps", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → preparation steps", { timeout: 20_000 }, () => {
   it("leaves out an engine with nothing set", () => {
     expect(stepsToSaved(null)).toEqual({})
-    expect(stepsToSaved({ "motion-prism": {}, "motion-pulse": { enginePrompt: { mode: "template" } } })).toEqual({
-      "motion-pulse": { enginePrompt: { mode: "template" } },
+    expect(stepsToSaved({ "nodaro-prism": {}, "nodaro-pulse": { enginePrompt: { mode: "template" } } })).toEqual({
+      "nodaro-pulse": { enginePrompt: { mode: "template" } },
     })
     // Body from the clip alone is a setting of its own.
-    expect(stepsToSaved({ "motion-prism": { clipBody: { mode: "off" } } })).toEqual({ "motion-prism": { clipBody: { mode: "off" } } })
+    expect(stepsToSaved({ "nodaro-prism": { clipBody: { mode: "off" } } })).toEqual({ "nodaro-prism": { clipBody: { mode: "off" } } })
     // Style the role pictures Off is kept as picked: the row is shared by environments.
     const off = { styleRefs: { mode: "off" as const, send: "styled-and-original" as const } }
-    expect(stepsToSaved({ "motion-pulse": off })).toEqual({ "motion-pulse": off })
+    expect(stepsToSaved({ "nodaro-pulse": off })).toEqual({ "nodaro-pulse": off })
   })
 
   it("saving sends exactly the edited object, keyed by the public engine id", async () => {
@@ -108,18 +108,18 @@ describe("Admin → Nodaro Motion → preparation steps", { timeout: 20_000 }, (
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() =>
       expect(sentTo(`PUT ${STEPS_URL}`)).toEqual([
-        { steps: { "motion-pulse": { enginePrompt: { mode: "llm", llm: { model: "gemini-3.1-pro", inputs: ["rolePhotos"], maxChars: 3000 } } } } },
+        { steps: { "nodaro-pulse": { enginePrompt: { mode: "llm", llm: { model: "gemini-3.1-pro", inputs: ["rolePhotos"], maxChars: 3000 } } } } },
       ]),
     )
     // Only the setting that changed is sent.
-    expect(sentTo("PUT /v1/admin/nodaro-motion/masking")).toEqual([])
+    expect(sentTo("PUT /v1/admin/video-remake/masking")).toEqual([])
   })
 
   it("the scene description applies to every Flex run, a Motion masking saved as Faces hidden included (Flex is always Full depth)", async () => {
-    routes["GET /v1/admin/nodaro-motion/motion"] = () => ({
-      body: { data: { motion: { "motion-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
+    routes["GET /v1/admin/video-remake/motion"] = () => ({
+      body: { data: { motion: { "nodaro-prism": { masking: { mode: "auto", target: "face" } } }, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } },
     })
-    routes[`GET ${STEPS_URL}`] = () => view({ "motion-prism": { sceneDescription: { mode: "template" } } })
+    routes[`GET ${STEPS_URL}`] = () => view({ "nodaro-prism": { sceneDescription: { mode: "template" } } })
     renderWith(<AdminNodaroMotionPage />)
     const prism = await stepsOf("Prism")
     expect(await within(prism).findByRole("region", { name: "Scene description step" })).toBeInTheDocument()
@@ -128,7 +128,7 @@ describe("Admin → Nodaro Motion → preparation steps", { timeout: 20_000 }, (
 
   it("removing every step sends an empty setting", async () => {
     const user = userEvent.setup()
-    const saved = { "motion-prism": { sheets: { rules: RULES } } }
+    const saved = { "nodaro-prism": { sheets: { rules: RULES } } }
     routes[`GET ${STEPS_URL}`] = () => view(saved)
     routes[`PUT ${STEPS_URL}`] = (init) => view(JSON.parse(String(init?.body)).steps)
     renderWith(<AdminNodaroMotionPage />)

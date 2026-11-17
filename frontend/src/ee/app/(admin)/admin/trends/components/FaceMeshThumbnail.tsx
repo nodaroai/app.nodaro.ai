@@ -1,4 +1,4 @@
-// A face mesh illustration (Admin → Nodaro Motion: the "Face mesh lines"
+// A face mesh illustration (Admin → Video Remake: the "Face mesh lines"
 // choices and the layer switches): a depth face with the lines drawn
 // (`face-mesh-thumbnails.ts`). Opaque gray on a border, so it reads the same in
 // the light and dark themes. Beside a label that already names it, it is

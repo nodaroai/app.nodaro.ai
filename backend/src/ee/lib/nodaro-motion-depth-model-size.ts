@@ -1,9 +1,9 @@
 /**
- * A Nodaro Motion setting that names a depth model size (`depthModelSize`,
+ * A Video Remake setting that names a depth model size (`depthModelSize`,
  * decided 2026-11-02: small or base, wherever it draws depth) is saved only
  * once every environment's engine can draw with it.
  *
- * The Nodaro Motion settings (`nodaro_motion_masking`, and the Motion
+ * The Video Remake settings (`nodaro_motion_masking`, and the Motion
  * setting's own `masking`) are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare the size in `castSwap.depthModelSizes` is answered the settings

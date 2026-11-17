@@ -3782,7 +3782,7 @@ export interface PluginCapabilities {
   readonly internalRequestProvenance?: boolean
   /**
    * `tk.settings.nodaroMotionMasking()` exists: the face masking an admin set
-   * per Nodaro Motion engine, for every DIRECT Cast Swap run. An older host has
+   * per Video Remake engine, for every DIRECT Cast Swap run. An older host has
    * no `tk.settings` at all: a plugin reads that as never saved (no masking).
    */
   readonly nodaroMotionMasking?: boolean
@@ -3795,14 +3795,14 @@ export interface PluginCapabilities {
   readonly seedanceRefVideoQuote?: boolean
   /**
    * `tk.settings.nodaroMotionPromptParts()` exists: the prompt part overrides
-   * an admin set per Nodaro Motion engine and style, for every DIRECT Cast
+   * an admin set per Video Remake engine and style, for every DIRECT Cast
    * Swap run. An older host has no such member: a plugin reads that as never
    * saved (the defaults).
    */
   readonly nodaroMotionPromptParts?: boolean
   /**
    * `tk.settings.nodaroMotionMotion()` exists: the setting an admin chose per
-   * Nodaro Motion engine for DIRECT runs with `style: "motion"` (its masking,
+   * Video Remake engine for DIRECT runs with `style: "motion"` (its masking,
    * which may be full depth, and its prompt style). An older host has no such
    * member: a plugin reads that as never saved (the Precise masking with the
    * Flexible prompt).
@@ -3810,27 +3810,27 @@ export interface PluginCapabilities {
   readonly nodaroMotionMotion?: boolean
   /**
    * `tk.settings.nodaroMotionSteps()` exists: the preparation steps an admin
-   * set per Nodaro Motion engine, for every DIRECT Cast Swap run. An older
+   * set per Video Remake engine, for every DIRECT Cast Swap run. An older
    * host has no such member: a plugin reads that as never saved (today's run).
    */
   readonly nodaroMotionSteps?: boolean
   /**
    * `tk.settings.nodaroMotionStyle()` exists: the Style choice an admin set
-   * per Nodaro Motion engine for DIRECT runs (people choose, or Precise in
-   * Nodaro Motion / always Flex). An older host has no such member: a plugin reads
+   * per Video Remake engine for DIRECT runs (people choose, or Precise in
+   * Video Remake / always Flex). An older host has no such member: a plugin reads
    * that as never saved (people choose, the request's `style`).
    */
   readonly nodaroMotionStyle?: boolean
   /**
    * `tk.settings.nodaroMotionPromptWording()` exists: the Flex prompt wording
-   * an admin set per Nodaro Motion engine for DIRECT runs ("current" or
+   * an admin set per Video Remake engine for DIRECT runs ("current" or
    * "new"). An older host has no such member: a plugin reads that as never
    * saved (the current wording everywhere).
    */
   readonly nodaroMotionPromptWording?: boolean
   /**
    * `tk.settings.nodaroMotionStyleOnly()` exists: the style-only setting an
-   * admin set per Nodaro Motion engine for DIRECT style-only runs (the path,
+   * admin set per Video Remake engine for DIRECT style-only runs (the path,
    * "original" or "flex", and the engine-prompt step). An older host has no
    * such member: a plugin reads that as never saved (the original path, the
    * template).
@@ -3838,7 +3838,7 @@ export interface PluginCapabilities {
   readonly nodaroMotionStyleOnly?: boolean
   /**
    * `tk.settings.nodaroMotionPreciseArtStyle()` exists: the opener an admin set
-   * per Nodaro Motion engine for a DIRECT Precise run with an art style
+   * per Video Remake engine for a DIRECT Precise run with an art style
    * ("restyle" or "edit"). An older host has no such member: a plugin reads
    * that as never saved ("restyle").
    */
@@ -3846,7 +3846,7 @@ export interface PluginCapabilities {
   /**
    * `tk.settings.nodaroMotionNoPerson()` exists: whether a DIRECT Precise run
    * with no pictured person sends its source clip, as an admin set it per
-   * Nodaro Motion engine. An older host has no such member: its runs stay as
+   * Video Remake engine. An older host has no such member: its runs stay as
    * they were (off).
    */
   readonly nodaroMotionNoPerson?: boolean
@@ -3859,7 +3859,7 @@ export interface PluginCapabilities {
   readonly errorHintPromptSubject?: boolean
   /**
    * `tk.settings.nodaroMotionPreciseStyleRoute()` exists: whether a DIRECT run
-   * on Nodaro Motion Prism that resolves to Precise and carries an art style
+   * on Nodaro Prism that resolves to Precise and carries an art style
    * runs as Flex, and which accounts skip that. An older host has no such
    * member: a plugin routes nothing there.
    */
@@ -3963,6 +3963,25 @@ export interface PluginCapabilities {
    * silently, so the child runs undeclared.
    */
   readonly seedanceReferenceTaskType?: boolean
+  /**
+   * The host reads and answers Video Remake's engine ids `"nodaro-prism"` /
+   * `"nodaro-pulse"` (Nodaro Prism, Nodaro Pulse) wherever an engine is read
+   * or named, every earlier id still read. A plugin answers the `nodaro-*`
+   * ids (a quote, a job's input and output) only where this is true: an
+   * older host reads an id it does not know as Prism. The host sends a plugin
+   * route that takes a public id the `nodaro-*` ids only when the plugin lists
+   * them in `castSwap.engines`.
+   */
+  readonly nodaroEngineIds?: boolean
+  /**
+   * The host serves Video Remake's routes under `/v1/video-remake/*` as well
+   * as `/v1/cast-swap/*`: its node gate, credit-guarded route list, public
+   * routes and engine hooks read both prefixes alike. A plugin registers the
+   * `/v1/video-remake` copy of its routes only where this is true (an older
+   * host keys all of those on `/v1/cast-swap`), and then declares
+   * `castSwap.videoRemakeRoutes`.
+   */
+  readonly videoRemake?: boolean
 }
 
 /**
@@ -3988,7 +4007,7 @@ export interface PluginFaceMasking {
   target?: "face" | "head" | "body"
   /**
    * Faces hidden's fill: `"blur"` (the default), `"depth"`, or `"none"` (the
-   * Nodaro Motion Precise setting's alone, with `faceMesh: true`): the faces found
+   * Video Remake Precise setting's alone, with `faceMesh: true`): the faces found
    * the same way but kept as filmed, only the face mesh drawn on them, on the
    * original clip. Answered by `tk.settings` only to an engine that declares
    * `supports.castSwap.maskFillNone` (and draws the face mesh); any other
@@ -4043,7 +4062,7 @@ export interface PluginFaceMasking {
    */
   faceMeshParts?: "full" | "features" | "mouth"
   /**
-   * What the face mesh draws, layer by layer (the Nodaro Motion Motion
+   * What the face mesh draws, layer by layer (the Video Remake Motion
    * setting's alone), in place of `faceMeshParts` (`capabilities.videoFaceMeshLayers`'s
    * layers, only those on). Answered by `tk.settings` only when the face mesh
    * is on and the set is not one a `faceMeshParts` value names (that one is
@@ -4052,7 +4071,7 @@ export interface PluginFaceMasking {
    */
   faceMeshLayers?: { readonly wireframe?: boolean; readonly eyes?: boolean; readonly lips?: boolean; readonly contours?: boolean; readonly irises?: boolean; readonly bold?: boolean }
   /**
-   * Full depth's face mesh (the Nodaro Motion Motion setting's, and a
+   * Full depth's face mesh (the Video Remake Motion setting's, and a
    * trend's make): the smallest face it draws lines on, the face box's height
    * as a % of the frame's (0–100; 0 = no minimum); left out = the engine's
    * default. Never on a Faces hidden setting. Answered by `tk.settings` (and
@@ -4064,18 +4083,19 @@ export interface PluginFaceMasking {
 }
 
 /**
- * Nodaro Motion's face masking per engine, keyed by the PUBLIC engine ids
- * (`"motion-prism"` = Seedance 2.5, `"motion-pulse"` = Kling 4). An engine
+ * Video Remake's face masking per engine, keyed by the PUBLIC engine ids
+ * (`"nodaro-prism"` = Seedance 2.5, `"nodaro-pulse"` = Kling 4). An engine
  * left out masks nothing.
  *
- * TRANSITION SHIM (the 2026-10-26 rename): every entry is answered under BOTH
- * its current key and its earlier one (`"motion-pro"` beside `"motion-prism"`,
- * `"motion-lite"` beside `"motion-pulse"`, the same value), because a plugin
- * up to 0.397.0 looks only for the earlier keys. Drop the earlier keys once
- * every environment pins a plugin that reads the new ones.
+ * TRANSITION SHIM (the engine renames): every entry is answered under its
+ * current key and each of its earlier ones (`"motion-prism"` and
+ * `"motion-pro"` beside `"nodaro-prism"`, `"motion-pulse"` and
+ * `"motion-lite"` beside `"nodaro-pulse"`, the same value), because a plugin
+ * from before a rename looks only for the keys it knew. Drop the earlier keys
+ * once every environment pins a plugin that reads the current ones.
  */
 export type PluginNodaroMotionMasking = Partial<
-  Record<"motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite", PluginFaceMasking>
+  Record<"nodaro-prism" | "nodaro-pulse" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite", PluginFaceMasking>
 >
 
 /** A Cast Swap prompt part's id (`@nodaro/render-rules` `CAST_SWAP_PROMPT_PART_IDS`; a mirror, pinned by a type test). */
@@ -4104,14 +4124,13 @@ export type PluginPromptPartId =
   | "postHeader"
 
 /**
- * Nodaro Motion's prompt part overrides per engine and style, keyed by the
+ * Video Remake's prompt part overrides per engine and style, keyed by the
  * PUBLIC engine ids, each style's entry the override text per part
  * (1–2000 characters; `"-"` removes the part). An engine or style left out
  * uses the engine's defaults.
  *
  * TRANSITION SHIM (as `PluginNodaroMotionMasking`): every entry is answered
- * under BOTH its current key and its earlier one (`"motion-pro"` beside
- * `"motion-prism"`, `"motion-lite"` beside `"motion-pulse"`, the same value).
+ * under its current key and each of its earlier ones, the same value.
  */
 export type NodaroMotionPromptParts = {
   readonly [publicEngineId: string]: {
@@ -4123,7 +4142,7 @@ export type NodaroMotionPromptParts = {
 }
 
 /**
- * A direct Motion run's setting for one Nodaro Motion engine: its masking (a
+ * A direct Motion run's setting for one Video Remake engine: its masking (a
  * face mask, or full depth with its `scene`; never keep people) and its prompt
  * style. `masking` left out = the engine's Precise masking
  * (`nodaroMotionMasking`); `promptStyle` left out = `"flexible"`.
@@ -4134,7 +4153,7 @@ export interface NodaroMotionMotionEntry {
 }
 
 /**
- * Nodaro Motion's Motion setting per engine, keyed by the PUBLIC engine ids.
+ * Video Remake's Motion setting per engine, keyed by the PUBLIC engine ids.
  * An engine left out runs Motion on its Precise masking with the Flexible
  * prompt. TRANSITION SHIM (as `PluginNodaroMotionMasking`): every entry is
  * answered under BOTH its current key and its earlier one.
@@ -4151,7 +4170,7 @@ export type NodaroMotionMotion = {
  */
 export interface PluginSettingsToolkit {
   /**
-   * The admin's face masking per Nodaro Motion engine, for direct runs (a
+   * The admin's face masking per Video Remake engine, for direct runs (a
    * trend run keeps its own trend's setting): each entry validated by the host
    * (an invalid one is dropped and logged), or null when it was never saved
    * (then no engine masks). Returns a copy the plugin may change freely.
@@ -4160,7 +4179,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionMasking?(): Promise<PluginNodaroMotionMasking | null>
   /**
-   * The admin's prompt part overrides per Nodaro Motion engine and style, for
+   * The admin's prompt part overrides per Video Remake engine and style, for
    * direct runs (a trend run sends its own trend's): each engine's entry
    * validated by the host (an invalid one is dropped and logged), or null
    * when it was never saved (then every run uses the defaults). Returns a copy
@@ -4169,7 +4188,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionPromptParts?(): Promise<NodaroMotionPromptParts | null>
   /**
-   * The admin's Motion setting per Nodaro Motion engine, for direct runs with
+   * The admin's Motion setting per Video Remake engine, for direct runs with
    * `style: "motion"`: each engine's entry validated by the host (an invalid
    * one is dropped and logged), or null when it was never saved. Returns a
    * copy the plugin may change freely. REJECTS when the settings could not
@@ -4177,7 +4196,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionMotion?(): Promise<NodaroMotionMotion | null>
   /**
-   * The admin's preparation steps per Nodaro Motion engine, for direct runs
+   * The admin's preparation steps per Video Remake engine, for direct runs
    * (a trend run carries its own trend's `steps`): each engine's entry
    * validated by the host (an invalid or empty one is dropped and logged),
    * answered under its current AND its earlier key, or null when it was never
@@ -4188,7 +4207,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionSteps?(): Promise<PluginNodaroMotionSteps | null>
   /**
-   * The admin's Style choice per Nodaro Motion engine, for direct runs and
+   * The admin's Style choice per Video Remake engine, for direct runs and
    * their quotes (a trend run keeps its own trend's style): only the engines
    * whose style is forced, each answered under its current AND its earlier
    * key, or null when it was never saved or nothing is forced (then the
@@ -4202,7 +4221,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionStyle?(): Promise<PluginNodaroMotionStyle | null>
   /**
-   * The admin's Flex prompt wording per Nodaro Motion engine, for direct runs
+   * The admin's Flex prompt wording per Video Remake engine, for direct runs
    * (a trend run sends its own trend's `promptWording`): only the engines on
    * the new wording, each answered under its current AND its earlier key, or
    * null when it was never saved or every engine is current (then every Flex
@@ -4213,7 +4232,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionPromptWording?(): Promise<PluginNodaroMotionPromptWording | null>
   /**
-   * The admin's style-only setting per Nodaro Motion engine, for DIRECT
+   * The admin's style-only setting per Video Remake engine, for DIRECT
    * style-only runs (a Prism Flex run with an art style and nothing to swap):
    * only the engines that differ from the defaults (the original path, the
    * engine prompt on the template), each answered under its current AND its
@@ -4225,7 +4244,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionStyleOnly?(): Promise<PluginNodaroMotionStyleOnly | null>
   /**
-   * The admin's setting per Nodaro Motion engine for a DIRECT Precise run with
+   * The admin's setting per Video Remake engine for a DIRECT Precise run with
    * an art style (its opener, and its own "Style the role pictures"): only the
    * engines with something saved (an opener "edit", a style-refs step), each answered under its current AND its earlier key, or null
    * when it was never saved, nothing differs, or this host's engine does not
@@ -4235,7 +4254,7 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionPreciseArtStyle?(): Promise<PluginNodaroMotionPreciseArtStyle | null>
   /**
-   * The admin's no-person setting per Nodaro Motion engine, for a DIRECT
+   * The admin's no-person setting per Video Remake engine, for a DIRECT
    * Precise run with no pictured person: only the engines switched off, each
    * answered under its current AND its earlier key, or null when it was never
    * saved, nothing is switched off, or this host's engine does not declare
@@ -4257,7 +4276,7 @@ export interface PluginSettingsToolkit {
 }
 
 /**
- * Nodaro Motion's no-person setting per engine, keyed by the PUBLIC engine ids
+ * Video Remake's no-person setting per engine, keyed by the PUBLIC engine ids
  * (current and earlier): an engine listed is switched off; one left out sends
  * the source clip on a Precise run with no pictured person. `sourceClip` is
  * only ever `false`.
@@ -4268,7 +4287,7 @@ export type PluginNodaroMotionNoPerson = {
   }
 }
 
-/** Nodaro Motion's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
+/** Video Remake's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
 export type PluginNodaroMotionPreciseStyleRoute = {
   readonly routing?: "on" | "off"
   readonly bypassEmails?: readonly string[]
@@ -4297,7 +4316,7 @@ export type PluginNodaroMotionPreciseStyleRoute = {
 }
 
 /**
- * Nodaro Motion's setting for a Precise run with an art style per engine,
+ * Video Remake's setting for a Precise run with an art style per engine,
  * keyed by the PUBLIC engine ids (current and earlier): an engine listed
  * differs from the default; one left out opens with "restyle". Absent
  * `opener`: "restyle".
@@ -4311,7 +4330,7 @@ export type PluginNodaroMotionPreciseArtStyle = {
 }
 
 /**
- * Nodaro Motion's style-only setting per engine, keyed by the PUBLIC engine
+ * Video Remake's style-only setting per engine, keyed by the PUBLIC engine
  * ids (current and earlier): an engine listed differs from the defaults; one
  * left out takes the original path with the template engine prompt. Absent
  * `path`: "original"; absent `enginePrompt`: the template.
@@ -4324,7 +4343,7 @@ export type PluginNodaroMotionStyleOnly = {
 }
 
 /**
- * Nodaro Motion's Flex prompt wording per engine, keyed by the PUBLIC engine
+ * Video Remake's Flex prompt wording per engine, keyed by the PUBLIC engine
  * ids (current and earlier): an engine listed is on that wording; one left
  * out is on the current wording (`"current"` is never answered).
  */
@@ -4333,7 +4352,7 @@ export type PluginNodaroMotionPromptWording = {
 }
 
 /**
- * Nodaro Motion's Style choice per engine, keyed by the PUBLIC engine ids
+ * Video Remake's Style choice per engine, keyed by the PUBLIC engine ids
  * (current and earlier): an engine listed is forced to that style; one left
  * out lets people choose. (`"user"`, people choose, is never answered.)
  */
@@ -4342,7 +4361,7 @@ export type PluginNodaroMotionStyle = {
 }
 
 /**
- * Nodaro Motion's preparation steps per engine, keyed by the PUBLIC engine
+ * Video Remake's preparation steps per engine, keyed by the PUBLIC engine
  * ids (current and earlier), each entry the engine's own `steps` shape
  * (lib/cast-swap-steps.ts `CastSwapSteps`, which mirrors it).
  */
@@ -4417,13 +4436,20 @@ export interface PluginSupports {
    *   absent ⇒ an engine that predates the choice, read as `["seedance-2-5"]`
    *   (such an engine drops an `engine` it does not know and runs Seedance,
    *   so a run on any other engine is held back until it is declared here).
-   *   Any vocabulary: Nodaro Motion's public ids (`"motion-prism"`,
-   *   `"motion-pulse"`), their earlier ids (`"motion-pro"`, `"motion-lite"`,
-   *   what 0.394.0 – 0.397.0 declare, with the internal ids as their aliases)
+   *   Any vocabulary: Video Remake's public ids (`"nodaro-prism"`,
+   *   `"nodaro-pulse"`, listed first by an engine that answers them), their
+   *   earlier ids (`"motion-prism"`, `"motion-pulse"`; `"motion-pro"`,
+   *   `"motion-lite"`, what 0.394.0 – 0.397.0 declare, with the internal ids
+   *   as their aliases)
    *   or the internal ones. The host reads every form as the internal ids
    *   (`castSwapEnginesOf`: two engines, however many ids are listed, so a
    *   list of the new ids alone names both) and keeps sending the internal
    *   ids, which every engine takes (0.393.0 and older refuse the public ones).
+   * - `videoRemakeRoutes`: the engine registers every one of its routes under
+   *   `/v1/video-remake` as well as `/v1/cast-swap` (where the host
+   *   advertises `PluginCapabilities.videoRemake`). Additive-optional: absent
+   *   ⇒ the old prefix alone, which the host also answers `/v1/video-remake`
+   *   with (lib/video-remake-paths.ts).
    * - `engineAliases`: the engine takes `engine` in either vocabulary (the
    *   public ids and the internal ones, normalised to the public ids at parse
    *   time) and records the public id. Additive-optional: absent ⇒ an engine
@@ -4445,7 +4471,7 @@ export interface PluginSupports {
    *   (it strips a `target` it does not know), so a trend that masks `"face"`
    *   is held back from publishing and running there (`faceMaskTargetsOf`).
    * - `faceMaskHideTargets`: the targets a faces-hidden setting (source
-   *   `"faces"`: a trend's, or the Nodaro Motion setting) may name — `"body"`
+   *   `"faces"`: a trend's, or the Video Remake setting) may name — `"body"`
    *   there hides the whole person under the setting's fill. Additive-optional:
    *   absent ⇒ `faceMaskTargets` without `"body"` (an engine from before it
    *   declared `"body"` for keep people while refusing it with `"faces"`), read
@@ -4580,7 +4606,7 @@ export interface PluginSupports {
    *   byte-identical (lib/cast-swap-prism-reference-audio.ts
    *   `prismReferenceAudioWire`).
    * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
-   *   the Nodaro Motion settings read through `tk.settings`) takes
+   *   the Video Remake settings read through `tk.settings`) takes
    *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
    *   outlines) drawn through the core `video-face-mesh` job on the masked
    *   heads (faces hidden) or on every face of the depth clip (full depth),
@@ -4588,7 +4614,7 @@ export interface PluginSupports {
    *   with keep people. Additive-optional: absent ⇒ `false` — the platform
    *   never sends `faceMesh` (it strips the key from a run, refuses a make,
    *   holds a trend that draws it back from publishing there, answers the
-   *   settings without it, and refuses to save a shared Nodaro Motion setting
+   *   settings without it, and refuses to save a shared Video Remake setting
    *   with it while any environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMesh`).
    * - `roleOutlines`: a trend's stored face mask make
@@ -4612,7 +4638,7 @@ export interface PluginSupports {
    * - `depthColormaps`: the colormaps a `faceMasking.depthColormap` may name
    *   for this engine (of Video Depth Anything's: grayscale, turbo, inferno,
    *   magma, viridis) — on a run, a stored clip's make (and its person
-   *   variants) and the Nodaro Motion settings read through `tk.settings`.
+   *   variants) and the Video Remake settings read through `tk.settings`.
    *   Absent, the key means the source's default (grayscale for full depth
    *   and keep people, turbo for a faces-hidden depth fill) and the engine
    *   behaves exactly as before. Present: the engine renders the depth GRAY
@@ -4626,13 +4652,13 @@ export interface PluginSupports {
    *   Additive-optional: absent ⇒ none — the platform never sends
    *   `depthColormap` (it strips it from a run and the settings, refuses a
    *   make, holds a trend that names one back from publishing there, and
-   *   refuses to save a shared Nodaro Motion setting with one while any
+   *   refuses to save a shared Video Remake setting with one while any
    *   environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsDepthColormap`).
    * - `depthModelSizes`: the model sizes a `faceMasking.depthModelSize` may
    *   name for this engine (of Video Depth Anything's: small, base, large) —
-   *   on a run, a stored clip's make (and its person variants) and the Nodaro
-   *   Motion settings read through `tk.settings`. Absent, the key means
+   *   on a run, a stored clip's make (and its person variants) and the Video
+   *   Remake settings read through `tk.settings`. Absent, the key means
    *   `"large"` and the engine behaves exactly as before. Present: the engine
    *   renders every depth it draws (full depth, keep people, a faces-hidden
    *   depth fill, the gray one under role outlines too) with that model size
@@ -4642,7 +4668,7 @@ export interface PluginSupports {
    *   same size. Additive-optional: absent ⇒ none — the platform never sends
    *   `depthModelSize` (it strips it from a run and the settings, refuses a
    *   make, holds a trend that names one back from publishing there, and
-   *   refuses to save a shared Nodaro Motion setting with one while any
+   *   refuses to save a shared Video Remake setting with one while any
    *   environment lacks it), so the wire is byte-identical
    *   (lib/cast-swap-face-masking.ts `engineDrawsDepthModelSize`).
    * - `artStyle`: a DIRECT Flex run (`style: "motion"`) and its estimate take
@@ -4711,13 +4737,13 @@ export interface PluginSupports {
    *   and refuses to save a forced style while any environment lacks it
    *   (lib/nodaro-motion-style.ts `engineTakesStyleChoice`).
    * - `depthBlur` (Cast Swap engine ≥ 0.430.0): a full-depth masking setting
-   *   (the Nodaro Motion Motion setting's, read through `tk.settings`) takes
+   *   (the Video Remake Motion setting's, read through `tk.settings`) takes
    *   `depthBlur` (whole, 0–40; absent or 0 = off): the engine blurs the gray
    *   depth map (a Gaussian blur of that sigma at 1080 px tall, scaled to the
    *   map's own height) before it colours it and before the face mesh is
    *   drawn on it. No child, no price, no prompt word. Additive-optional:
    *   absent ⇒ `false` — the platform answers the settings without the key
-   *   and refuses to save a shared Nodaro Motion setting with it while any
+   *   and refuses to save a shared Video Remake setting with it while any
    *   environment lacks it (lib/cast-swap-face-masking.ts `engineBlursDepth`).
    * - `faceMeshParts` (Cast Swap engine ≥ 0.430.0): what a masking setting's
    *   face mesh may draw (`faceMeshParts`): `"full"`, `"features"` (the eye
@@ -4726,16 +4752,16 @@ export interface PluginSupports {
    *   (`capabilities.videoFaceMeshParts`) and words its `faceMesh` prompt
    *   line by what was drawn. Additive-optional: absent ⇒ the full mesh only
    *   — the platform answers the settings without the key and refuses to save
-   *   a shared Nodaro Motion setting with one while any environment lacks it
+   *   a shared Video Remake setting with one while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshParts`).
    * - `faceMeshLayers`: a Motion masking setting's face mesh may draw a set of
    *   layers (`faceMeshLayers`) in place of its parts; the engine sends
    *   `layers` to `/v1/video-face-mesh` (`capabilities.videoFaceMeshLayers`)
    *   and words its `faceMesh` prompt line by what was drawn. Additive-optional:
    *   absent ⇒ the platform answers the settings without the key and refuses
-   *   to save a shared Nodaro Motion setting with one while any environment
+   *   to save a shared Video Remake setting with one while any environment
    *   lacks it (lib/cast-swap-face-mesh-layers.ts `engineDrawsFaceMeshLayers`).
-   * - `maskFillNone`: a faces hidden masking setting (the Nodaro Motion
+   * - `maskFillNone`: a faces hidden masking setting (the Video Remake
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
    *   faces exactly as for a blur or depth fill, but covers none of them —
@@ -4744,20 +4770,20 @@ export interface PluginSupports {
    *   `maskUrl` the mask), and the run's motion video is that clip, its
    *   prompt worded for faces seen as filmed. Additive-optional: absent ⇒
    *   `false` — the platform answers such an entry as `{ mode: "off" }` (never
-   *   as a blur) and refuses to save a shared Nodaro Motion setting with it
+   *   as a blur) and refuses to save a shared Video Remake setting with it
    *   while any environment lacks it (lib/cast-swap-face-masking.ts
    *   `engineDrawsFillNone`).
-   * - `depthFillBlur`: a faces hidden DEPTH fill (the Nodaro Motion Precise
+   * - `depthFillBlur`: a faces hidden DEPTH fill (the Video Remake Precise
    *   setting) takes `depthBlur` (whole,
    *   0–40; absent or 0 = off) as full depth does: the engine blurs the depth
    *   render used for the fill before it colours it and before the face mesh
    *   is drawn on it. Apart from full depth's `depthBlur` declaration.
    *   Additive-optional: absent ⇒ `false` — the platform answers a depth
-   *   fill's setting without the key and refuses to save a shared Nodaro
-   *   Motion setting with it while any environment lacks it
+   *   fill's setting without the key and refuses to save a shared Video
+   *   Remake setting with it while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineBlursDepthFill`).
    * - `faceMeshMinFaceHeightPct` (Cast Swap engine ≥ 0.436.1): a full-depth
-   *   masking setting (the Nodaro Motion Motion setting's, read through
+   *   masking setting (the Video Remake Motion setting's, read through
    *   `tk.settings`, and a trend's make) takes `faceMeshMinFaceHeightPct`
    *   (0–100, the face box's height as a % of the frame's; absent = the
    *   engine's default, 10; 0 = no minimum): the full-depth face mesh draws no
@@ -4766,7 +4792,7 @@ export interface PluginSupports {
    *   mesh (it cuts the stored clip). Additive-optional: absent ⇒ `false` —
    *   the platform answers the settings and sends a run without the key,
    *   refuses a trend's make that sets it, and refuses to save a shared
-   *   Nodaro Motion setting with it while any environment lacks it
+   *   Video Remake setting with it while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshMinFaceHeight`).
    * - `promptWordings`: how the engine may word a FLEXIBLE prompt —
    *   `"current"` (today's) and `"new"` (a movement lock, the picture roles,
@@ -4792,7 +4818,7 @@ export interface PluginSupports {
    *   answers it the setting as null, and never saves the setting while no
    *   environment declares it (lib/nodaro-motion-style-only.ts
    *   `engineTakesStyleOnly`).
-   * - `preciseArtStyle`: a DIRECT Precise run on Nodaro Motion Prism takes an
+   * - `preciseArtStyle`: a DIRECT Precise run on Nodaro Prism takes an
    *   art style (`direction.style`), as a Flex run does: the Precise prompt
    *   with the art style's lines, its opener the admin's per-engine setting
    *   (`tk.settings.nodaroMotionPreciseArtStyle`: "restyle", the default, or
@@ -4810,10 +4836,10 @@ export interface PluginSupports {
    *   environment declares it (lib/nodaro-motion-no-person.ts
    *   `engineTakesNoPersonSourceClip`).
    * - `preciseArtStyleAlone`: an art style is a change on its own on a DIRECT
-   *   Precise run on Nodaro Motion Prism, so such a run needs no role, reference
+   *   Precise run on Nodaro Prism, so such a run needs no role, reference
    *   or prompt. Additive-optional: absent ⇒ the engine refuses that run as
    *   having nothing to change, and the platform does not offer it.
-   * - `preciseStyleRoute`: the engine runs a DIRECT run on Nodaro Motion Prism
+   * - `preciseStyleRoute`: the engine runs a DIRECT run on Nodaro Prism
    *   that resolves to Precise and carries an art style as Flex, its estimate
    *   alike, while the admin's switch is on
    *   (`tk.settings.nodaroMotionPreciseStyleRoute`; never saved reads as on), an
@@ -4848,8 +4874,9 @@ export interface PluginSupports {
     readonly trendRun: boolean
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
-    readonly engines?: readonly ("motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
+    readonly engines?: readonly ("nodaro-prism" | "nodaro-pulse" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
     readonly engineAliases?: boolean
+    readonly videoRemakeRoutes?: boolean
     readonly storedFaceMask?: boolean
     readonly faceMaskRecipe?: string
     readonly faceMaskTargets?: readonly ("face" | "head" | "body")[]

@@ -7,7 +7,7 @@ import { MOTION_SETTINGS_KEYS } from "../settings-sections"
 /**
  * The page's settings sections are the server's: a stored set holds the
  * sections the server declares (`defineNodaroMotionSettingsSection`, beside
- * each Nodaro Motion admin route; their own guard fails a route missing from
+ * each Video Remake admin route; their own guard fails a route missing from
  * the list), and the page loads and saves the ones it knows. A key on one side
  * only would be a setting a set leaves out, or one the page cannot load.
  */
@@ -22,7 +22,7 @@ function serverKeys(): string[] {
   return keys
 }
 
-describe("the Nodaro Motion settings sections", () => {
+describe("the Video Remake settings sections", () => {
   it("are the server's, each once", () => {
     const server = serverKeys()
     expect(server.length).toBeGreaterThan(0)

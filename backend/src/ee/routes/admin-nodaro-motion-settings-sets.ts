@@ -1,14 +1,14 @@
 /**
- * Nodaro Motion's stored settings sets (registered by `adminNodaroMotionRoutes`,
+ * Video Remake's stored settings sets (registered by `adminNodaroMotionRoutes`,
  * admin-nodaro-motion.ts, so they share its edition gate). Admin-only.
  *
- *   GET    /v1/admin/nodaro-motion/settings-sets              every set, and the sections a set holds
- *   POST   /v1/admin/nodaro-motion/settings-sets              { name, settings }: store a new set (201)
- *   PUT    /v1/admin/nodaro-motion/settings-sets/:id          { name?, settings? }: rename and/or overwrite it
- *   DELETE /v1/admin/nodaro-motion/settings-sets/:id          delete it
- *   POST   /v1/admin/nodaro-motion/settings-sets/:id/live     the live settings match it now (the page saw it)
- *   POST   /v1/admin/nodaro-motion/settings-sets/check        { document }: an exported file, checked as an import
- *   POST   /v1/admin/nodaro-motion/settings-sets/export       { name, settings }: the file to export
+ *   GET    /v1/admin/video-remake/settings-sets              every set, and the sections a set holds
+ *   POST   /v1/admin/video-remake/settings-sets              { name, settings }: store a new set (201)
+ *   PUT    /v1/admin/video-remake/settings-sets/:id          { name?, settings? }: rename and/or overwrite it
+ *   DELETE /v1/admin/video-remake/settings-sets/:id          delete it
+ *   POST   /v1/admin/video-remake/settings-sets/:id/live     the live settings match it now (the page saw it)
+ *   POST   /v1/admin/video-remake/settings-sets/check        { document }: an exported file, checked as an import
+ *   POST   /v1/admin/video-remake/settings-sets/export       { name, settings }: the file to export
  *
  * A set is a named copy of every setting the page edits (`NODARO_MOTION_SETTINGS_SECTIONS`):
  * `settings` keyed by section, each value the body of that section's PUT, as it
@@ -130,7 +130,7 @@ function nameTaken(reply: FastifyReply, e: SettingsSetNameTakenError) {
 export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sections: readonly AnyNodaroMotionSettingsSection[]): void {
   const sectionList = sections.map((s) => ({ key: s.key, label: s.label, path: s.path, privateFields: [...(s.privateFields ?? [])] }))
 
-  app.get("/v1/admin/nodaro-motion/settings-sets", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/settings-sets", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return {
         data: {
@@ -141,11 +141,11 @@ export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sec
         },
       }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion settings sets")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake settings sets")
     }
   })
 
-  app.post("/v1/admin/nodaro-motion/settings-sets", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/video-remake/settings-sets", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     const checked = checkSettings(sections, parsed.data.settings)
@@ -162,11 +162,11 @@ export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sec
       return reply.status(201).send({ data: { set: (await viewsOf([row]))[0], warnings } })
     } catch (e) {
       if (e instanceof SettingsSetNameTakenError) return nameTaken(reply, e)
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion settings set")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake settings set")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/settings-sets/:id", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/settings-sets/:id", { preHandler: requireAdmin }, async (req, reply) => {
     const { id } = req.params as { id: string }
     if (!UUID_RE.test(id)) return notFound(reply)
     const parsed = updateBody.safeParse(req.body)
@@ -191,11 +191,11 @@ export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sec
       return { data: { set: (await viewsOf([row]))[0], warnings } }
     } catch (e) {
       if (e instanceof SettingsSetNameTakenError) return nameTaken(reply, e)
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion settings set")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake settings set")
     }
   })
 
-  app.delete("/v1/admin/nodaro-motion/settings-sets/:id", { preHandler: requireAdmin }, async (req, reply) => {
+  app.delete("/v1/admin/video-remake/settings-sets/:id", { preHandler: requireAdmin }, async (req, reply) => {
     const { id } = req.params as { id: string }
     if (!UUID_RE.test(id)) return notFound(reply)
     try {
@@ -209,11 +209,11 @@ export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sec
       })
       return { data: { id } }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to delete the Nodaro Motion settings set")
+      return sendInternalError(reply, req, e, "Failed to delete the Video Remake settings set")
     }
   })
 
-  app.post("/v1/admin/nodaro-motion/settings-sets/:id/live", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/video-remake/settings-sets/:id/live", { preHandler: requireAdmin }, async (req, reply) => {
     const { id } = req.params as { id: string }
     if (!UUID_RE.test(id)) return notFound(reply)
     try {
@@ -221,12 +221,12 @@ export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sec
       if (!row) return notFound(reply)
       return { data: { set: (await viewsOf([row]))[0] } }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to mark the Nodaro Motion settings set")
+      return sendInternalError(reply, req, e, "Failed to mark the Video Remake settings set")
     }
   })
 
   // An imported file, checked: the page loads it as a draft or stores it only after this. Writes nothing.
-  app.post("/v1/admin/nodaro-motion/settings-sets/check", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/video-remake/settings-sets/check", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = checkBody.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     try {
@@ -244,12 +244,12 @@ export function registerNodaroMotionSettingsSetsRoutes(app: FastifyInstance, sec
       const warnings = await engineWarnings(sections, settings, live)
       return { data: { valid: true, name: doc.name, settings, errors: [], warnings, notes } }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to check the Nodaro Motion settings file")
+      return sendInternalError(reply, req, e, "Failed to check the Video Remake settings file")
     }
   })
 
   // The file of a set (or of the page's live settings): people's data left out. Writes nothing.
-  app.post("/v1/admin/nodaro-motion/settings-sets/export", { preHandler: requireAdmin }, async (req, reply) => {
+  app.post("/v1/admin/video-remake/settings-sets/export", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = exportBody.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     const checked = checkSettings(sections, parsed.data.settings)

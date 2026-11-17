@@ -1,4 +1,4 @@
-// One Nodaro Motion setting's draft on the admin page: it starts from the
+// One Video Remake setting's draft on the admin page: it starts from the
 // live setting and again whenever the live setting changes, except while a
 // stored set or an imported file is loaded (`held`), so a refetch never wipes
 // a loaded draft. Its binding (settings-sections.ts) is how the stored sets

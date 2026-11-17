@@ -93,7 +93,7 @@ export function skippedStepLine(step: SkippableStep, reason: SkipReason, role?: 
 
 /**
  * The steps a run went on without (`output_data.skippedSteps`: a step that
- * never fails a run — Nodaro Motion's face mesh, its preparation steps — is
+ * never fails a run — Video Remake's face mesh, its preparation steps — is
  * skipped and named here, with why). A step and reason of the fixed
  * vocabulary read by name, with its role; anything else (an older engine's
  * own words) is shown as written. Nothing when there are none.

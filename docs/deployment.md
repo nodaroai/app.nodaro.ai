@@ -1039,10 +1039,10 @@ optional; each array empty = "keep the default"):
   sequence generation as `generate-video`.
   Three gateable ids have no canvas node, and are listed in `nodes.allow` /
   `nodes.deny` and Admin → Availability exactly like a node:
-  - `cast-swap` is Nodaro Motion — `POST /v1/cast-swap` and its routes (a
+  - `cast-swap` is Video Remake — `POST /v1/video-remake` and its routes (a
     trend's face mask included), and every trend run (`POST /v1/trends/:slug/estimate`
     and `/runs` answer `node_not_available` where it is not offered, and the MCP
-    tools `cast_swap`, the Full Quality pair and the trend tools are not listed).
+    tools `video_remake`, the Full Quality pair and the trend tools are not listed).
   - `film-pipeline` is the film pipeline (Story → Video, Cloud) — `POST /v1/pipelines`
     and every pipeline route that starts or continues a pipeline's work (branch,
     fork, stage approvals, edits and rejections, scene and shot regenerations,
@@ -1072,7 +1072,7 @@ optional; each array empty = "keep the default"):
   once; the one route that runs no node (Copilot, which `features.hide`
   governs) is not node-gated. Also with `nodes.allow` set, a step a Cloud plugin engine's job
   sends to another route is gated as the node the user ran, the engine's own:
-  Nodaro Motion's depth, mask, composite and audio-separation steps, and the
+  Video Remake's depth, mask, composite and audio-separation steps, and the
   image, video and text generations its job asks for, follow `cast-swap`, so
   allowing Motion is enough. Each step's models are still judged as the
   step's own, and a direct call to one of those routes is gated by its own
@@ -1210,7 +1210,9 @@ optional; each array empty = "keep the default"):
   server says it too: its name, its tool descriptions, its refusals, the
   documents its tools serve and its widget pages name the deployment instead
   of the platform, and a product named after the platform is said the way the
-  deployment's screens say it (Nodaro Motion is "Motion"). Tool names and other
+  deployment's screens say it (the house upscalers carry the deployment's
+  name), while Video Remake's engines keep their names, Nodaro Prism and Nodaro
+  Pulse, on every deployment. Tool names and other
   identifiers a client stores stay as they are
   ([MCP: a deployment's own name](mcp/tools.md#deployment-name)).
 - `brand.wordmark`: short lockup text rendered **beside your own logo mark** in
@@ -2197,7 +2199,7 @@ logo is dropped with a warning and the rest of `brand` is kept.
   nothing of Nodaro's in it:
   - the worlds the profile's `worlds` offers, in its order, narrowed for each
     viewer by `GET /v1/surface/availability`, each at its path on the same site
-    (`/image`, `/video`, `/music`, `/trends`, `/video/nodaro-motion`,
+    (`/image`, `/video`, `/music`, `/trends`, `/video/remake`,
     `/voice-changer`, and the editor at `/projects`). Explore and Studio are
     not drawn. Before that answer, and when the request fails, the profile's
     own node lists narrow them: a world whose node types `nodes.allow` leaves

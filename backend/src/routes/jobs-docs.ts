@@ -54,7 +54,7 @@ const JobSummary = z
       .nullable()
       .optional()
       .describe(
-        "Credits actually charged once the hold settled, the steps the job ran included (child jobs such as a Nodaro Motion run's reference preparation, mask and video; a step adds its charge once it settles) — can be below `credits_held` (the unused part goes back to the balance). 0 when the run's own hold was refunded, plus any settled steps (a refunded Nodaro Motion run whose reference and mask steps committed reads 165). null while the job's own hold is open (even with steps settled), when nothing in the run was reserved, or when its steps could not be read (unknown, never a lower figure).",
+        "Credits actually charged once the hold settled, the steps the job ran included (child jobs such as a Video Remake run's reference preparation, mask and video; a step adds its charge once it settles) — can be below `credits_held` (the unused part goes back to the balance). 0 when the run's own hold was refunded, plus any settled steps (a refunded Video Remake run whose reference and mask steps committed reads 165). null while the job's own hold is open (even with steps settled), when nothing in the run was reserved, or when its steps could not be read (unknown, never a lower figure).",
       ),
     credits_held: z
       .number()

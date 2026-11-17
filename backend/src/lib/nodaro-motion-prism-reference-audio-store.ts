@@ -1,7 +1,7 @@
 /**
  * The `nodaro_motion_prism_reference_audio` row's admin read and write
  * (`cast-swap-prism-reference-audio.ts` defines and parses it). Lives in lib/,
- * as the other Nodaro Motion settings' stores do: app_settings is
+ * as the other Video Remake settings' stores do: app_settings is
  * instance-global config written with the service-role client.
  */
 import { supabase } from "./supabase.js"

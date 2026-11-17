@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/prompt-parts` — the admin's prompt part overrides
- * per Nodaro Motion engine and style (for direct runs). Admin-only. A save is
+ * `/v1/admin/video-remake/prompt-parts` — the admin's prompt part overrides
+ * per Video Remake engine and style (for direct runs). Admin-only. A save is
  * checked by this environment's engine (`POST /v1/cast-swap/prompt-parts`,
  * internal only) for every engine and style it changes: any problem is 422
  * and nothing is saved; a clean save is written whole, clears the settings
@@ -125,24 +125,24 @@ beforeEach(async () => {
 })
 
 const as = { "x-user": ADMIN }
-const put = (promptParts: unknown) => app.inject({ method: "PUT", url: "/v1/admin/nodaro-motion/prompt-parts", headers: as, payload: { promptParts } })
-const previewOf = (payload: unknown) => app.inject({ method: "POST", url: "/v1/admin/nodaro-motion/prompt-parts/preview", headers: as, payload: payload as object })
+const put = (promptParts: unknown) => app.inject({ method: "PUT", url: "/v1/admin/video-remake/prompt-parts", headers: as, payload: { promptParts } })
+const previewOf = (payload: unknown) => app.inject({ method: "POST", url: "/v1/admin/video-remake/prompt-parts/preview", headers: as, payload: payload as object })
 
-describe("GET /v1/admin/nodaro-motion/prompt-parts", () => {
+describe("GET /v1/admin/video-remake/prompt-parts", () => {
   it("is admin-only", async () => {
-    expect((await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/prompt-parts" })).statusCode).toBe(401)
+    expect((await app.inject({ method: "GET", url: "/v1/admin/video-remake/prompt-parts" })).statusCode).toBe(401)
     h.admin = false
-    expect((await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/prompt-parts", headers: as })).statusCode).toBe(403)
+    expect((await app.inject({ method: "GET", url: "/v1/admin/video-remake/prompt-parts", headers: as })).statusCode).toBe(403)
   })
 
   it("answers null until it is saved, with the engines and the styles", async () => {
-    const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/prompt-parts", headers: as })
+    const res = await app.inject({ method: "GET", url: "/v1/admin/video-remake/prompt-parts", headers: as })
     expect(res.json().data).toEqual({
       promptParts: null,
       updatedAt: null,
       engines: [
-        { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-        { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+        { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+        { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
       ],
       styles: ["precise", "motion"],
     })
@@ -150,14 +150,14 @@ describe("GET /v1/admin/nodaro-motion/prompt-parts", () => {
 
   it("reads a row keyed by an earlier engine id as the current one", async () => {
     h.row = { value: { "motion-lite": { motion: { avoid: "-" } } }, updated_at: "2026-10-27T00:00:00Z" }
-    const res = await app.inject({ method: "GET", url: "/v1/admin/nodaro-motion/prompt-parts", headers: as })
-    expect(res.json().data.promptParts).toEqual({ "motion-pulse": { motion: { avoid: "-" } } })
+    const res = await app.inject({ method: "GET", url: "/v1/admin/video-remake/prompt-parts", headers: as })
+    expect(res.json().data.promptParts).toEqual({ "nodaro-pulse": { motion: { avoid: "-" } } })
   })
 })
 
-describe("POST /v1/admin/nodaro-motion/prompt-parts/preview", () => {
+describe("POST /v1/admin/video-remake/prompt-parts/preview", () => {
   it("asks the engine with a sample one-person run, the internal engine id and the style, and relays its answer", async () => {
-    const res = await previewOf({ engine: "motion-pulse", style: "motion", overrides: { avoid: "-", face: "" } })
+    const res = await previewOf({ engine: "nodaro-pulse", style: "motion", overrides: { avoid: "-", face: "" } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual(answer())
     expect(h.calls).toEqual([
@@ -176,8 +176,8 @@ describe("POST /v1/admin/nodaro-motion/prompt-parts/preview", () => {
     setPluginSupports({
       castSwap: { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, promptStyles: ["precise", "flexible"], fullDepthScenes: ["description", "original", "none"] },
     })
-    await previewOf({ engine: "motion-pulse", style: "precise" })
-    await previewOf({ engine: "motion-pulse", style: "motion" })
+    await previewOf({ engine: "nodaro-pulse", style: "precise" })
+    await previewOf({ engine: "nodaro-pulse", style: "motion" })
     expect(h.calls[0]).toMatchObject({ style: "precise", promptStyle: "precise", source: "faces" })
     expect(h.calls[0]).not.toHaveProperty("scene")
     // Never saved: Motion is the Flexible prompt on the Precise masking.
@@ -185,20 +185,20 @@ describe("POST /v1/admin/nodaro-motion/prompt-parts/preview", () => {
     expect(h.calls[1]).not.toHaveProperty("scene")
 
     // The saved Motion setting: full depth (its scene resolved), and the prompt style it names.
-    h.motionRow = { value: { "motion-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } }, updated_at: "2026-10-27T00:00:00Z" }
-    await previewOf({ engine: "motion-pulse", style: "motion" })
+    h.motionRow = { value: { "nodaro-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } }, updated_at: "2026-10-27T00:00:00Z" }
+    await previewOf({ engine: "nodaro-pulse", style: "motion" })
     expect(h.calls[2]).toMatchObject({ style: "motion", promptStyle: "precise", source: "full-depth", scene: "description" })
-    h.motionRow = { value: { "motion-pulse": { masking: { mode: "always", source: "full-depth", scene: "original" } } }, updated_at: "2026-10-27T00:00:00Z" }
-    await previewOf({ engine: "motion-pulse", style: "motion" })
+    h.motionRow = { value: { "nodaro-pulse": { masking: { mode: "always", source: "full-depth", scene: "original" } } }, updated_at: "2026-10-27T00:00:00Z" }
+    await previewOf({ engine: "nodaro-pulse", style: "motion" })
     expect(h.calls[3]).toMatchObject({ promptStyle: "flexible", source: "full-depth", scene: "original" })
     // The Precise style never reads the Motion setting.
-    await previewOf({ engine: "motion-pulse", style: "precise" })
+    await previewOf({ engine: "nodaro-pulse", style: "precise" })
     expect(h.calls[4]).toMatchObject({ promptStyle: "precise", source: "faces" })
   })
 
   it("asks an engine without prompt styles exactly as before, whatever the Motion setting", async () => {
-    h.motionRow = { value: { "motion-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } }, updated_at: "2026-10-27T00:00:00Z" }
-    await previewOf({ engine: "motion-pulse", style: "motion" })
+    h.motionRow = { value: { "nodaro-pulse": { masking: { mode: "always", source: "full-depth" }, promptStyle: "precise" } }, updated_at: "2026-10-27T00:00:00Z" }
+    await previewOf({ engine: "nodaro-pulse", style: "motion" })
     expect(h.calls[0]).not.toHaveProperty("source")
     expect(h.calls[0]).not.toHaveProperty("promptStyle")
     expect(h.calls[0]).not.toHaveProperty("scene")
@@ -208,39 +208,39 @@ describe("POST /v1/admin/nodaro-motion/prompt-parts/preview", () => {
     setPluginSupports({
       castSwap: { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, promptStyles: ["precise", "flexible"] },
     })
-    h.motionRow = { value: { "motion-prism": { promptStyle: "precise" } }, updated_at: "2026-10-27T00:00:00Z" }
-    expect((await put({ "motion-prism": { motion: { avoid: "-" } } })).statusCode).toBe(200)
+    h.motionRow = { value: { "nodaro-prism": { promptStyle: "precise" } }, updated_at: "2026-10-27T00:00:00Z" }
+    expect((await put({ "nodaro-prism": { motion: { avoid: "-" } } })).statusCode).toBe(200)
     expect(h.calls).toEqual([expect.objectContaining({ engine: "seedance-2-5", style: "motion", promptStyle: "precise", source: "faces", overrides: { avoid: "-" } })])
   })
 
   it("uses the saved overrides for that engine and style when none are sent", async () => {
-    h.row = { value: { "motion-prism": { precise: { face: "Keep faces." } } }, updated_at: "2026-10-27T00:00:00Z" }
-    await previewOf({ engine: "motion-prism", style: "precise" })
-    await previewOf({ engine: "motion-prism", style: "motion" })
+    h.row = { value: { "nodaro-prism": { precise: { face: "Keep faces." } } }, updated_at: "2026-10-27T00:00:00Z" }
+    await previewOf({ engine: "nodaro-prism", style: "precise" })
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
     expect(h.calls[0]).toMatchObject({ engine: "seedance-2-5", style: "precise", overrides: { face: "Keep faces." } })
     expect(h.calls[1]).not.toHaveProperty("overrides")
   })
 
   it("is 503 engine_unsupported for an engine without the route, and refuses an unknown engine or style", async () => {
     setPluginSupports({ castSwap: { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true } })
-    const res = await previewOf({ engine: "motion-prism", style: "motion" })
+    const res = await previewOf({ engine: "nodaro-prism", style: "motion" })
     expect(res.statusCode).toBe(503)
     expect(res.json().error.code).toBe("engine_unsupported")
     expect((await previewOf({ engine: "motion-pro", style: "motion" })).statusCode).toBe(400)
-    expect((await previewOf({ engine: "motion-prism", style: "fast" })).statusCode).toBe(400)
+    expect((await previewOf({ engine: "nodaro-prism", style: "fast" })).statusCode).toBe(400)
     expect(h.calls).toHaveLength(0)
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/prompt-parts", () => {
+describe("PUT /v1/admin/video-remake/prompt-parts", () => {
   it("checks every engine and style it saves, then saves the whole setting, clears the cache and audits it", async () => {
-    h.row = { value: { "motion-prism": { precise: { face: "old" } } }, updated_at: "2026-10-26T00:00:00Z" }
+    h.row = { value: { "nodaro-prism": { precise: { face: "old" } } }, updated_at: "2026-10-26T00:00:00Z" }
     const res = await put({
-      "motion-prism": { precise: { face: "Keep faces.", avoid: "" }, motion: { avoid: "-" } },
-      "motion-pulse": { motion: { face: "" } },
+      "nodaro-prism": { precise: { face: "Keep faces.", avoid: "" }, motion: { avoid: "-" } },
+      "nodaro-pulse": { motion: { face: "" } },
     })
     expect(res.statusCode).toBe(200)
-    const saved = { "motion-prism": { precise: { face: "Keep faces." }, motion: { avoid: "-" } } }
+    const saved = { "nodaro-prism": { precise: { face: "Keep faces." }, motion: { avoid: "-" } } }
     expect(h.calls.map((c) => [c.engine, c.style, c.overrides])).toEqual([
       ["seedance-2-5", "precise", { face: "Keep faces." }],
       ["seedance-2-5", "motion", { avoid: "-" }],
@@ -252,7 +252,7 @@ describe("PUT /v1/admin/nodaro-motion/prompt-parts", () => {
         action: "update_nodaro_motion_prompt_parts",
         target_type: "app_setting",
         target_id: NODARO_MOTION_PROMPT_PARTS_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_prompt_parts", before: { "motion-prism": { precise: { face: "old" } } }, after: saved },
+        payload: { key: "nodaro_motion_prompt_parts", before: { "nodaro-prism": { precise: { face: "old" } } }, after: saved },
       }),
     ])
     expect(res.json().data.promptParts).toEqual(saved)
@@ -261,11 +261,11 @@ describe("PUT /v1/admin/nodaro-motion/prompt-parts", () => {
   it("is 422 with every problem, each naming its engine and style, and saves nothing", async () => {
     h.problemsFor = (body) =>
       body.style === "motion" ? [{ part: "keep", code: "part_not_used", message: "Motion does not use the keep line." }] : []
-    const res = await put({ "motion-prism": { precise: { face: "Keep faces." } }, "motion-pulse": { motion: { keep: "{video} stays." } } })
+    const res = await put({ "nodaro-prism": { precise: { face: "Keep faces." } }, "nodaro-pulse": { motion: { keep: "{video} stays." } } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error).toMatchObject({
       code: "prompt_parts_invalid",
-      problems: [{ part: "keep", code: "part_not_used", message: "Motion does not use the keep line.", engine: "motion-pulse", style: "motion" }],
+      problems: [{ part: "keep", code: "part_not_used", message: "Motion does not use the keep line.", engine: "nodaro-pulse", style: "motion" }],
     })
     expect(h.upserts).toEqual([])
     expect(h.audits).toEqual([])
@@ -275,45 +275,45 @@ describe("PUT /v1/admin/nodaro-motion/prompt-parts", () => {
     expect((await put({})).statusCode).toBe(200)
     expect(h.calls).toHaveLength(0)
     expect(h.upserts).toEqual([expect.objectContaining({ value: {} })])
-    for (const bad of [{ "motion-turbo": {} }, { "motion-prism": { fast: {} } }, { "motion-prism": { precise: { faces: "x" } } }]) {
+    for (const bad of [{ "motion-turbo": {} }, { "nodaro-prism": { fast: {} } }, { "nodaro-prism": { precise: { faces: "x" } } }]) {
       expect((await put(bad)).statusCode, JSON.stringify(bad)).toBe(400)
     }
   })
 
   it("is admin-only", async () => {
     h.admin = false
-    expect((await put({ "motion-prism": { precise: { face: "x" } } })).statusCode).toBe(403)
+    expect((await put({ "nodaro-prism": { precise: { face: "x" } } })).statusCode).toBe(403)
     expect(h.calls).toHaveLength(0)
   })
 })
 
 describe("the face mesh in a direct run's check", () => {
   const MESH_ENGINE = { roleKinds: ["person"], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, promptParts: true, faceMesh: true }
-  const maskingWithMesh = { "motion-prism": { mode: "always", faceMesh: true } }
+  const maskingWithMesh = { "nodaro-prism": { mode: "always", faceMesh: true } }
 
   it("a Precise run whose masking draws the mesh says so, to an engine that draws it", async () => {
     setPluginSupports({ castSwap: MESH_ENGINE as never })
     h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
-    expect((await previewOf({ engine: "motion-prism", style: "precise" })).statusCode).toBe(200)
+    expect((await previewOf({ engine: "nodaro-prism", style: "precise" })).statusCode).toBe(200)
     expect(h.calls.at(-1)).toMatchObject({ faceMesh: true })
     // The other engine's masking draws none.
-    await previewOf({ engine: "motion-pulse", style: "precise" })
+    await previewOf({ engine: "nodaro-pulse", style: "precise" })
     expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
   })
 
   it("a Motion run with no masking of its own falls back to it; one with its own masking reads that", async () => {
     setPluginSupports({ castSwap: MESH_ENGINE as never })
     h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
-    await previewOf({ engine: "motion-prism", style: "motion" })
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
     expect(h.calls.at(-1)).toMatchObject({ faceMesh: true })
-    h.motionRow = { value: { "motion-prism": { masking: { mode: "always", source: "full-depth" } } }, updated_at: "2026-10-31T00:00:00.000Z" }
-    await previewOf({ engine: "motion-prism", style: "motion" })
+    h.motionRow = { value: { "nodaro-prism": { masking: { mode: "always", source: "full-depth" } } }, updated_at: "2026-10-31T00:00:00.000Z" }
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
     expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
   })
 
   it("never to an engine that does not draw the mesh", async () => {
     h.maskingRow = { value: maskingWithMesh, updated_at: "2026-10-31T00:00:00.000Z" }
-    await previewOf({ engine: "motion-prism", style: "precise" })
+    await previewOf({ engine: "nodaro-prism", style: "precise" })
     expect(h.calls.at(-1)).not.toHaveProperty("faceMesh")
   })
 })
@@ -331,40 +331,40 @@ describe("the Flex prompt wording", () => {
 
   it("the preview passes the chosen wording on a Flex run, and never on Precise", async () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    expect((await previewOf({ engine: "motion-prism", style: "motion", promptWording: "new" })).statusCode).toBe(200)
+    expect((await previewOf({ engine: "nodaro-prism", style: "motion", promptWording: "new" })).statusCode).toBe(200)
     expect(h.calls.at(-1)).toMatchObject({ style: "motion", promptStyle: "flexible", promptWording: "new" })
-    expect((await previewOf({ engine: "motion-prism", style: "motion", promptWording: "current" })).statusCode).toBe(200)
+    expect((await previewOf({ engine: "nodaro-prism", style: "motion", promptWording: "current" })).statusCode).toBe(200)
     expect(h.calls.at(-1)).toMatchObject({ style: "motion", promptWording: "current" })
-    expect((await previewOf({ engine: "motion-prism", style: "precise", promptWording: "new" })).statusCode).toBe(200)
+    expect((await previewOf({ engine: "nodaro-prism", style: "precise", promptWording: "new" })).statusCode).toBe(200)
     expect(h.calls.at(-1)).not.toHaveProperty("promptWording")
   })
 
   it("the preview left without a wording takes the saved one", async () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    h.wordingRow = { value: { "motion-pulse": "new" }, updated_at: "2026-11-03T00:00:00Z" }
-    await previewOf({ engine: "motion-pulse", style: "motion" })
+    h.wordingRow = { value: { "nodaro-pulse": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    await previewOf({ engine: "nodaro-pulse", style: "motion" })
     expect(h.calls.at(-1)).toMatchObject({ engine: "kling-4", promptWording: "new" })
-    await previewOf({ engine: "motion-prism", style: "motion" })
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
     expect(h.calls.at(-1)).toMatchObject({ engine: "seedance-2-5", promptWording: "current" })
   })
 
   it("refuses a wording it does not know", async () => {
-    expect((await previewOf({ engine: "motion-prism", style: "motion", promptWording: "newer" })).statusCode).toBe(400)
+    expect((await previewOf({ engine: "nodaro-prism", style: "motion", promptWording: "newer" })).statusCode).toBe(400)
   })
 
   it("never sends a wording to an engine that does not list it", async () => {
     setPluginSupports({ castSwap: CS } as never)
-    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
-    await previewOf({ engine: "motion-prism", style: "motion", promptWording: "new" })
+    h.wordingRow = { value: { "nodaro-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    await previewOf({ engine: "nodaro-prism", style: "motion", promptWording: "new" })
     expect(h.calls.at(-1)).not.toHaveProperty("promptWording")
-    await previewOf({ engine: "motion-prism", style: "motion" })
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
     expect(h.calls.at(-1)).not.toHaveProperty("promptWording")
   })
 
   it("a save checks a Flex run's overrides worded as saved, a Precise run's never worded", async () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    h.wordingRow = { value: { "motion-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
-    const res = await put({ "motion-prism": { precise: { face: "a" }, motion: { avoid: "b" } }, "motion-pulse": { motion: { avoid: "c" } } })
+    h.wordingRow = { value: { "nodaro-prism": "new" }, updated_at: "2026-11-03T00:00:00Z" }
+    const res = await put({ "nodaro-prism": { precise: { face: "a" }, motion: { avoid: "b" } }, "nodaro-pulse": { motion: { avoid: "c" } } })
     expect(res.statusCode).toBe(200)
     const by = (engine: string, style: string) => h.calls.find((c) => c.engine === engine && c.style === style)
     expect(by("seedance-2-5", "precise")).not.toHaveProperty("promptWording")
@@ -374,7 +374,7 @@ describe("the Flex prompt wording", () => {
 
   it("a stale override of a new-wording part on Precise names the current wording, so the engine lists it", async () => {
     setPluginSupports({ castSwap: NEW_ENGINE } as never)
-    await previewOf({ engine: "motion-prism", style: "precise", overrides: { restate: "Again." } })
+    await previewOf({ engine: "nodaro-prism", style: "precise", overrides: { restate: "Again." } })
     expect(h.calls.at(-1)).toMatchObject({ style: "precise", promptWording: "current", overrides: { restate: "Again." } })
   })
 })

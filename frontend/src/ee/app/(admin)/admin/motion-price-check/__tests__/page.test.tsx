@@ -1,5 +1,5 @@
 /**
- * Admin → Motion price check: every Nodaro Motion run of a range, filtered,
+ * Admin → Motion price check: every Video Remake run of a range, filtered,
  * sorted and paged, with the totals over the filtered runs, and KIE's own
  * figures read once with a pasted dashboard token.
  *
@@ -236,7 +236,7 @@ describe("Admin → Motion price check", () => {
     expect(kieUsd).toBeUndefined()
     expect(screen.getByRole("heading", { level: 1, name: "Motion price check" })).toBeInTheDocument()
     expect(
-      screen.getByText("Each Nodaro Motion run: what it held, what it took, what that is worth, and what we paid for its steps."),
+      screen.getByText("Each Video Remake run: what it held, what it took, what that is worth, and what we paid for its steps."),
     ).toBeInTheDocument()
   })
 
@@ -473,7 +473,7 @@ describe("Admin → Motion price check", () => {
   it("says so when the range has no run", async () => {
     h.fetchMotionPriceRuns.mockResolvedValue({ ...LIST, total: 0, runs: [], totals: [figures({ runs: 0, held: null, taken: null, takenUsd: null, paidUsd: null, marginUsd: null, marginPct: null })] })
     renderPage()
-    expect(await screen.findByText("No Motion runs match these filters.")).toBeInTheDocument()
+    expect(await screen.findByText("No Video Remake runs match these filters.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
   })
 
@@ -578,7 +578,7 @@ describe("Admin → Motion price check", () => {
 
       expect(await screen.findByText("1–30 of 30")).toBeInTheDocument()
       expect(screen.getByRole("button", { name: "Run 1" })).toBeInTheDocument()
-      expect(screen.queryByText("No Motion runs match these filters.")).toBeNull()
+      expect(screen.queryByText("No Video Remake runs match these filters.")).toBeNull()
       expect(screen.getByRole("button", { name: "Prev" })).toBeDisabled()
       // Asked once with the figures, and never for a page past the end.
       expect(listCalls().filter(([, kieUsd]) => kieUsd !== undefined).map(([params]) => params.offset)).toEqual([0])

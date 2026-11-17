@@ -78,8 +78,8 @@ const DETAIL = {
   ...CARD,
   version: 3,
   previewSec: 4,
-  engine: "motion-prism",
-  engineName: "Nodaro Motion Prism",
+  engine: "nodaro-prism",
+  engineName: "Nodaro Prism",
   resolutions: ["480p", "720p", "1080p"],
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example/hint-lead.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
@@ -170,16 +170,16 @@ describe("get_trend", () => {
     expect(JSON.parse(res.content[0]!.text!)).toEqual(DETAIL)
   })
 
-  it("hands back a Nodaro Motion Pulse trend's engine and its resolutions, from any vocabulary; an unknown or missing engine reads as Prism", async () => {
-    const lite = { ...DETAIL, engine: "motion-pulse", engineName: "Nodaro Motion Pulse", resolutions: ["720p", "1080p"] }
-    for (const answered of ["motion-pulse", "motion-lite", "kling-4"]) {
+  it("hands back a Nodaro Pulse trend's engine and its resolutions, from any vocabulary; an unknown or missing engine reads as Prism", async () => {
+    const lite = { ...DETAIL, engine: "nodaro-pulse", engineName: "Nodaro Pulse", resolutions: ["720p", "1080p"] }
+    for (const answered of ["nodaro-pulse", "motion-lite", "kling-4"]) {
       const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: { ...lite, engine: answered } } } })
       expect((await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent).toEqual(lite)
     }
     const { engine: _e, engineName: _n, ...older } = DETAIL
     for (const body of [older, { ...older, engine: "kling-3" }]) {
       const { fastify: f2 } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: body } } })
-      expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "motion-prism", engineName: "Nodaro Motion Prism" })
+      expect((await callTool(serverWith(f2), "get_trend", { slug: "dance-off" })).structuredContent).toMatchObject({ engine: "nodaro-prism", engineName: "Nodaro Prism" })
     }
   })
 
@@ -508,7 +508,7 @@ describe("trend verbs are gated on the edition", () => {
   })
 })
 
-describe("trend verbs follow Nodaro Motion's availability (cast-swap)", () => {
+describe("trend verbs follow Video Remake's availability (cast-swap)", () => {
   const TREND_TOOLS = ["estimate_trend", "get_trend", "list_trends", "run_trend"]
   afterEach(async () => {
     delete process.env.NODARO_SURFACE_PROFILE
@@ -524,14 +524,14 @@ describe("trend verbs follow Nodaro Motion's availability (cast-swap)", () => {
     return (await listTools(server)).map((t) => t.name)
   }
 
-  it("are not listed — nor cast_swap and its Full Quality — where the deployment does not offer cast-swap", async () => {
+  it("are not listed — nor video_remake and its Full Quality — where the deployment does not offer cast-swap", async () => {
     const names = await namesUnder({ nodes: { allow: ["generate-image"] } })
-    for (const t of [...TREND_TOOLS, "cast_swap", "estimate_full_quality", "full_quality"]) expect(names).not.toContain(t)
+    for (const t of [...TREND_TOOLS, "video_remake", "estimate_full_quality", "full_quality"]) expect(names).not.toContain(t)
     expect(names).toContain("ping")
   })
 
   it("are listed where it does", async () => {
     const names = await namesUnder({ nodes: { allow: ["generate-image", "cast-swap"] } })
-    for (const t of [...TREND_TOOLS, "cast_swap"]) expect(names).toContain(t)
+    for (const t of [...TREND_TOOLS, "video_remake"]) expect(names).toContain(t)
   })
 })

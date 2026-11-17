@@ -370,7 +370,7 @@ describe("/v1/text-to-video Seedance 2 reference-video billing", () => {
     await app.close()
   })
 
-  // Production 2026-10-26 (a Nodaro Motion preview's child): seedance-2-5,
+  // Production 2026-10-26 (a Video Remake preview's child): seedance-2-5,
   // 720p, Auto, one 4.1 s clip. It held 4.1 + 30 s and delivered ≈ 4.1 s.
   // The hold is now the clip rounded up plus a second — and the quote
   // endpoint's figure is that very reservation.

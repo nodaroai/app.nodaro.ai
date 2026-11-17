@@ -15,7 +15,7 @@ describe("jobCreditsShown — the charge once settled, the hold until then", () 
     expect(jobCreditsShown({ credits: 1080, credits_actual: 126 }).shown).toBe(126)
   })
   it("a run with steps: the run's charge and hold (its steps' included), and what went back", () => {
-    // The production Nodaro Motion preview: the job's own hold 44, the run's 3,773.
+    // The production Video Remake preview: the job's own hold 44, the run's 3,773.
     expect(jobCreditsShown({ credits: 44, credits_charged: 1063, credits_held: 3773, credits_released: 2710 })).toEqual({
       shown: 1063, held: 3773, charged: 1063, released: 2710, open: false,
     })

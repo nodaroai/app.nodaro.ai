@@ -36,7 +36,7 @@ export function environmentsLackingNewWording(envs: readonly TrendEngineEnvironm
 }
 
 /**
- * Admin → Nodaro Motion: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
+ * Admin → Video Remake: the environments (of `SHARED_SETTING_ENVIRONMENTS`,
  * in that order) whose engine cannot word it the new way — none recorded, or
  * one that does not list it. Unknown while the environments are
  * (undefined). "New" is offered only when this is empty: the setting is

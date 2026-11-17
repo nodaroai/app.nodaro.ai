@@ -80,7 +80,7 @@ describe("trends command", () => {
     mocks.estimate.mockResolvedValueOnce({ expectedCredits: 31, holdCredits: 40, breakdown: { castSwap: 5, seedance: 32, seedanceExpected: 23, references: 3, other: 1 } })
     await runCmd("trends", "estimate", "dance", "--slot", "person=https://a")
     const out = vi.mocked(dim).mock.calls.flat().join("\n")
-    expect(out).toContain("Nodaro Motion: 5")
+    expect(out).toContain("Video Remake: 5")
     expect(out).toContain("video: 32")
     expect(out).toContain("video, expected: 23")
     expect(out).toContain("reference pictures: 3")

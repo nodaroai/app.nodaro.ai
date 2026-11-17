@@ -43,7 +43,7 @@ import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
 import { ShotsResource } from "./resources/shots.js"
 import { RecastResource } from "./resources/recast.js"
-import { CastSwapResource } from "./resources/cast-swap.js"
+import { VideoRemakeResource } from "./resources/cast-swap.js"
 import { TrendsResource } from "./resources/trends.js"
 import { TrendRadarResource } from "./resources/trend-radar.js"
 import { StudioResource } from "./resources/studio.js"
@@ -121,9 +121,11 @@ export class NodaroClient extends NodaroClientCore {
   readonly models: ModelsResource
   readonly shots: ShotsResource
   readonly recast: RecastResource
-  /** Cast Swap: replace the people and/or location in a short video (Cloud). */
-  readonly castSwap: CastSwapResource
-  /** Trends: ready-made Cast Swap recipes you fill with your own pictures (Cloud). */
+  /** Video Remake: replace the people, pets, products and/or location in a short video (Cloud). */
+  readonly videoRemake: VideoRemakeResource
+  /** @deprecated use {@link videoRemake} (the same resource, its former name). */
+  readonly castSwap: VideoRemakeResource
+  /** Trends: ready-made Video Remake recipes you fill with your own pictures (Cloud). */
   readonly trends: TrendsResource
   /** Trend Radar: the daily run's candidate trends and the admin's decisions (Cloud, admin session only). */
   readonly trendRadar: TrendRadarResource
@@ -184,7 +186,8 @@ export class NodaroClient extends NodaroClientCore {
     this.models = new ModelsResource(this)
     this.shots = new ShotsResource(this)
     this.recast = new RecastResource(this)
-    this.castSwap = new CastSwapResource(this)
+    this.videoRemake = new VideoRemakeResource(this)
+    this.castSwap = this.videoRemake
     this.trends = new TrendsResource(this)
     this.trendRadar = new TrendRadarResource(this)
     this.studio = new StudioResource(this)

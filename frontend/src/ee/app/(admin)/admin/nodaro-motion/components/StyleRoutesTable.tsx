@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion → the Precise art-style route's per-style table
+// Admin → Video Remake → the Precise art-style route's per-style table
 // (`styleRoutes` of `nodaro_motion_precise_style_route`): how a Precise run
 // with each art style is made while the route is on — the Flex way (the
 // default, never saved), Precise, or Precise in black and white

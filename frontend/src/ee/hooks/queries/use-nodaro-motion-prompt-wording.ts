@@ -1,7 +1,7 @@
 /**
- * Admin → Nodaro Motion's Flex prompt wording: per engine, how every direct
+ * Admin → Video Remake's Flex prompt wording: per engine, how every direct
  * Flex run's prompt is worded, the current wording or the new one
- * (GET/PUT /v1/admin/nodaro-motion/prompt-wording). Never saved
+ * (GET/PUT /v1/admin/video-remake/prompt-wording). Never saved
  * (`promptWording: null`) = the current wording on every engine.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

@@ -295,6 +295,11 @@
       "import": "./dist/entries/video-pro.js",
       "require": "./dist/entries/video-pro.cjs"
     },
+    "./video-remake": {
+      "types": "./dist/entries/video-remake.d.ts",
+      "import": "./dist/entries/video-remake.js",
+      "require": "./dist/entries/video-remake.cjs"
+    },
     "./voices": {
       "types": "./dist/entries/voices.d.ts",
       "import": "./dist/entries/voices.js",

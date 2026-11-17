@@ -2539,7 +2539,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // Mask Outline (an internal step of a trend face mask's role outlines): local
   // drawing, ONE pricing unit = 5 s of the clip (`maskOutlineUnits`), the video-utility unit.
   "mask-outline": 10,
-  // Video Face Mesh (an internal step of Nodaro Motion's face masking): local
+  // Video Face Mesh (an internal step of Video Remake's face masking): local
   // drawing, ONE base credit per second of the clip's bucket at the 30 fps
   // basis (`videoFaceMeshCreditId` in @nodaro/shared; a run past 300 s, Video
   // Mask's own cap, is refused).
@@ -2800,7 +2800,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // commits the translation model's measured usage, never below this row.
   // The per-tier ceilings live in ee/billing/voice-changer-pro-credits.ts.
   "voice-changer-pro-translate": 2,
-  // Nodaro Motion's per-second fee rates (the cast-swap plugin): BASE credits
+  // Video Remake's per-second fee rates (the cast-swap plugin): BASE credits
   // per second, admin-tunable rows the plugin reads through
   // `tk.http.unitRatePrice` (decided 2026-11-03). Seeded by migration 591 and
   // repeated here at the same values, so its rows are not ghosts and a host

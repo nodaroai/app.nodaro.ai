@@ -198,7 +198,7 @@ export function RunsTable({
     <div className="space-y-2">
       {runs.length === 0 ? (
         <p className="rounded-lg border border-border p-6 text-center text-sm text-muted-foreground">
-          No Motion runs match these filters.
+          No Video Remake runs match these filters.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">

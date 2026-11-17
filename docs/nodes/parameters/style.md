@@ -10,7 +10,7 @@ The Style parameter node sets the overarching visual treatment of a generated im
 
 **Video-only styles.** Five styles are offered for video alone: `felt-puppet`, `knitted-yarn`, `toy-figure-3d`, `painterly-3d` and `painted-clay`. They restyle a whole clip into a handmade or 3D-animated look, the people and the set alike. Image style lists (the inline Style dropdown on image nodes) leave them out. A Style node offers them, because it can feed either kind of node; wired into an image node, a video-only style still works and the image receives its image wording.
 
-**Restyling filmed footage.** Three styles are left out of restyle lists (restyling a filmed clip, such as Nodaro Motion's art style): `fantasy`, `surrealism` and `concept-art`. In tests each came out as the same plain 2D cartoon, without its own look. Video generation still offers them, and a restyle that names one still uses it.
+**Restyling filmed footage.** Three styles are left out of restyle lists (restyling a filmed clip, such as Video Remake's art style): `fantasy`, `surrealism` and `concept-art`. In tests each came out as the same plain 2D cartoon, without its own look. Video generation still offers them, and a restyle that names one still uses it.
 
 **Medium.** Every style declares its medium: filmed (`photo`), rendered in 3D (`3d`) or drawn (`2d`). A video restyle words its instructions by it, so a 3D style is rendered rather than drawn and a photographic style stays photographed.
 

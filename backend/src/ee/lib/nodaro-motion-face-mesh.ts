@@ -1,9 +1,9 @@
 /**
- * A Nodaro Motion setting that draws the face mesh (`faceMesh: true`, faces
+ * A Video Remake setting that draws the face mesh (`faceMesh: true`, faces
  * hidden or full depth) is saved only once every environment's engine can
  * draw it.
  *
- * The Nodaro Motion settings (`nodaro_motion_masking`, and the Motion
+ * The Video Remake settings (`nodaro_motion_masking`, and the Motion
  * setting's own `masking`) are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare `castSwap.faceMesh` is answered the settings without the key
@@ -145,7 +145,7 @@ export function environmentsWhosePlatformCannotTakeFaceMeshMinFaceHeight(environ
   return TREND_PUBLISH_ENVIRONMENTS.filter((name) => platformOf(environments.find((e) => e.env === name), now)?.faceMeshMinFaceHeightPct !== true)
 }
 
-/** Where a held value was going: the shared Nodaro Motion setting, a trend's draft, or a trend's publish. */
+/** Where a held value was going: the shared Video Remake setting, a trend's draft, or a trend's publish. */
 export type PlatformHoldContext = "setting" | "trend" | "publish"
 
 /** The hold's sentence, naming the environments whose platform does not take the field yet. */

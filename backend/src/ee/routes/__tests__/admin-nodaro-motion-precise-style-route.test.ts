@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/precise-style-route`: whether a direct Prism Precise run with an art style runs as Flex, and
+ * `/v1/admin/video-remake/precise-style-route`: whether a direct Prism Precise run with an art style runs as Flex, and
  * the accounts that skip it.
  *
  * What must hold:
@@ -54,7 +54,7 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/precise-style-route"
+const URL = "/v1/admin/video-remake/precise-style-route"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 
 let app: FastifyInstance
@@ -77,7 +77,7 @@ beforeEach(async () => {
 const put = (preciseStyleRoute: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { preciseStyleRoute } })
 const get = (headers: Record<string, string> = as) => app.inject({ method: "GET", url: URL, headers })
 
-describe("GET /v1/admin/nodaro-motion/precise-style-route", () => {
+describe("GET /v1/admin/video-remake/precise-style-route", () => {
   it("is admin-only", async () => {
     h.admin = false
     expect((await get()).statusCode).toBe(403)
@@ -101,7 +101,7 @@ describe("GET /v1/admin/nodaro-motion/precise-style-route", () => {
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route", () => {
   it("is admin-only", async () => {
     h.admin = false
     expect((await put({ routing: "off" })).statusCode).toBe(403)
@@ -158,7 +158,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route", () => {
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed depth blur", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route: the routed depth blur", () => {
   it("saves it, and 0 stores nothing", async () => {
     expect((await put({ routedDepthBlur: 10 })).json().data.preciseStyleRoute).toEqual({ routedDepthBlur: 10 })
     expect(h.upserts[0]!.value).toEqual({ routedDepthBlur: 10 })
@@ -173,7 +173,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed depth blur
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed colour switch", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route: the routed colour switch", () => {
   it("saves off, and on stores nothing", async () => {
     expect((await put({ describeColours: false })).json().data.preciseStyleRoute).toEqual({ describeColours: false })
     await put({ describeColours: true })
@@ -186,7 +186,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed colour swi
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed face mesh", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route: the routed face mesh", () => {
   it("saves on, and off stores nothing", async () => {
     expect((await put({ faceMesh: true })).json().data.preciseStyleRoute).toEqual({ faceMesh: true })
     await put({ faceMesh: false })
@@ -199,7 +199,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed face mesh"
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed mesh's parts and wording", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route: the routed mesh's parts and wording", () => {
   it("saves them; Motion stores nothing", async () => {
     expect((await put({ faceMeshParts: "contours", faceMeshWording: "shape" })).json().data.preciseStyleRoute).toEqual({ faceMeshParts: "contours", faceMeshWording: "shape" })
     await put({ faceMeshWording: "motion" })
@@ -213,7 +213,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the routed mesh's par
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route: the photographic styles' path", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route: the photographic styles' path", () => {
   it("saves Precise whatever the engines (one without the flag routes every style, as today); Flex stores nothing", async () => {
     expect((await put({ photographicStyles: "precise" })).json().data.preciseStyleRoute).toEqual({ photographicStyles: "precise" })
     expect(h.upserts[0]!.value).toEqual({ photographicStyles: "precise" })
@@ -228,7 +228,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-style-route: the photographic styl
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-style-route: the route of each art style", () => {
+describe("PUT /v1/admin/video-remake/precise-style-route: the route of each art style", () => {
   it("saves a style's route, and GET answers it", async () => {
     const res = await put({ styleRoutes: { cyberpunk: "precise-gray" } })
     expect(res.statusCode).toBe(200)

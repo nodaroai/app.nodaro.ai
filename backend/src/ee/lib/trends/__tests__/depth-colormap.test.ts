@@ -1,6 +1,6 @@
 /**
  * The depth colormap (`faceMasking.depthColormap`, decided 2026-11-01): the
- * admin's choice of the depth map's colors wherever Nodaro Motion draws depth
+ * admin's choice of the depth map's colors wherever Video Remake draws depth
  * (Full depth, Keep people, a Faces hidden depth fill). What must hold:
  *
  *  - nothing stored today changes meaning: absent, a value equal to the
@@ -128,8 +128,8 @@ describe("the setting", () => {
       expect(faceMaskingWithMarksSchema.safeParse({ ...CASES.keepPeople, depthColormap }).success, depthColormap).toBe(true)
       expect(faceMaskingSchema.safeParse({ mode: "always", fill: "depth", depthColormap }).success, depthColormap).toBe(true)
     }
-    expect(nodaroMotionMaskingSchema.safeParse({ "motion-prism": { mode: "always", fill: "depth", depthColormap: "magma" } }).success).toBe(true)
-    expect(nodaroMotionMotionSchema.safeParse({ "motion-pulse": { masking: { mode: "always", source: "full-depth", depthColormap: "viridis" } } }).success).toBe(true)
+    expect(nodaroMotionMaskingSchema.safeParse({ "nodaro-prism": { mode: "always", fill: "depth", depthColormap: "magma" } }).success).toBe(true)
+    expect(nodaroMotionMotionSchema.safeParse({ "nodaro-pulse": { masking: { mode: "always", source: "full-depth", depthColormap: "viridis" } } }).success).toBe(true)
   })
 
   it("refuses a colormap the provider does not offer", () => {
@@ -298,7 +298,7 @@ describe("the engine", () => {
     }
   })
 
-  it("Nodaro Motion's shared settings: the environments that cannot draw every map asked, a missing one included", () => {
+  it("Video Remake's shared settings: the environments that cannot draw every map asked, a missing one included", () => {
     const envs = [env("production", COLORMAPS), env("staging", { ...ENGINE, depthColormaps: ["inferno"] })]
     expect(environmentsThatCannotDrawColormaps(envs, [])).toEqual([])
     expect(environmentsThatCannotDrawColormaps(envs, ["inferno"])).toEqual([])

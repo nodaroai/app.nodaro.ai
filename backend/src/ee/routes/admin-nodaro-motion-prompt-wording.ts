@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's Flex prompt wording for direct runs, per engine (registered
+ * Video Remake's Flex prompt wording for direct runs, per engine (registered
  * by `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its
  * edition gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/prompt-wording   { promptWording, updatedAt, engines, supported } (promptWording null = never saved: current everywhere)
- *   PUT /v1/admin/nodaro-motion/prompt-wording   { promptWording }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/prompt-wording   { promptWording, updatedAt, engines, supported } (promptWording null = never saved: current everywhere)
+ *   PUT /v1/admin/video-remake/prompt-wording   { promptWording }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_prompt_wording`, lib/nodaro-motion-prompt-wording.ts)
  * says, per engine, how every DIRECT Flex run's prompt is worded: `"current"`
@@ -41,7 +41,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-mo
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_PROMPT_WORDING_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0f8"
 
 const putBody = z.strictObject({ promptWording: nodaroMotionPromptWordingSchema })
@@ -49,7 +49,7 @@ const putBody = z.strictObject({ promptWording: nodaroMotionPromptWordingSchema 
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): the engines on "new" only. */
 export const NODARO_MOTION_PROMPT_WORDING_SECTION = defineNodaroMotionSettingsSection({
   key: "prompt-wording",
-  path: "/v1/admin/nodaro-motion/prompt-wording",
+  path: "/v1/admin/video-remake/prompt-wording",
   label: "Flex prompt wording",
   body: putBody,
   prepare: (body) => ({ value: { promptWording: newWordings(body.promptWording) } }),
@@ -85,15 +85,15 @@ async function view(): Promise<NodaroMotionPromptWordingView> {
 }
 
 export function registerNodaroMotionPromptWordingRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/prompt-wording", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/prompt-wording", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion prompt wording")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake prompt wording")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/prompt-wording", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/prompt-wording", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_PROMPT_WORDING_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -111,7 +111,7 @@ export function registerNodaroMotionPromptWordingRoutes(app: FastifyInstance): v
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion prompt wording")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake prompt wording")
     }
   })
 }

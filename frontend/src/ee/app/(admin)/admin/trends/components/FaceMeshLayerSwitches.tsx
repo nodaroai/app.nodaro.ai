@@ -1,4 +1,4 @@
-// One switch per face mesh layer (Admin → Nodaro Motion: the Motion column's
+// One switch per face mesh layer (Admin → Video Remake: the Motion column's
 // masking and the Precise art-style route), any combination. Bold changes the
 // other layers' lines and draws nothing on its own, so a set of bold alone (or
 // nothing) is said in place and cannot be saved. Each switch shows its layer

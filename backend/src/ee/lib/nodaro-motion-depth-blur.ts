@@ -1,11 +1,11 @@
 /**
- * A Nodaro Motion setting whose depth is blurred (`depthBlur`, decided
+ * A Video Remake setting whose depth is blurred (`depthBlur`, decided
  * 2026-11-02) is saved only once every environment's engine can blur it:
  * Full depth's map (the Motion setting; `castSwap.depthBlur`) and a Faces
  * hidden depth fill (the Precise and the Motion setting;
  * `castSwap.depthFillBlur`), each its own declaration.
  *
- * The Nodaro Motion settings (`nodaro_motion_masking`, and the Motion
+ * The Video Remake settings (`nodaro_motion_masking`, and the Motion
  * setting's own `masking`) are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare the blur is answered the setting without the key (`tk.settings`,

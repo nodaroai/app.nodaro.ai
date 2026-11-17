@@ -1,6 +1,6 @@
 // The Flex prompt wording control: "Current" (the default) or "New". Shared
 // by a trend's 4. Prompts (`TrendVersionData.promptWording`) and Admin →
-// Nodaro Motion's engine prompt, per engine (`nodaro_motion_prompt_wording`).
+// Video Remake's engine prompt, per engine (`nodaro_motion_prompt_wording`).
 // Read only by the Flexible prompt: a Precise prompt ignores it.
 //
 // "New" is greyed out with the reason while it is not offered (a trend: no

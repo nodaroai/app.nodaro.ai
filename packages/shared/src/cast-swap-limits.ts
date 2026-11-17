@@ -58,7 +58,7 @@ export const CAST_SWAP_FACE_MASK_TARGETS = ["face", "head", "body"] as const
 export type CastSwapFaceMaskTarget = (typeof CAST_SWAP_FACE_MASK_TARGETS)[number]
 
 /**
- * How a direct Nodaro Motion run follows its clip (`style`, a public run
+ * How a direct Video Remake run follows its clip (`style`, a public run
  * field): `"precise"` (the default) follows the clip exactly; `"motion"`
  * follows only the clip's movement and takes every look from the photos. A
  * trend run ignores it (its trend decides).
@@ -100,10 +100,9 @@ export type CastSwapEngine = (typeof CAST_SWAP_ENGINES)[number]
 export const CAST_SWAP_ENGINE_WHEN_OMITTED: CastSwapEngine = "seedance-2-5"
 
 /**
- * Nodaro Motion — what people see of Cast Swap. Its two engines' PUBLIC ids,
+ * Video Remake — what people see of Cast Swap. Its two engines' PUBLIC ids,
  * the only ones documented and returned (a trend's `engine`, a run record, a
- * quote): `"motion-prism"` (Nodaro Motion Prism) and `"motion-pulse"` (Nodaro
- * Motion Pulse).
+ * quote): `"nodaro-prism"` (Nodaro Prism) and `"nodaro-pulse"` (Nodaro Pulse).
  *
  * `CAST_SWAP_ENGINES` stays the INTERNAL vocabulary: what a stored trend
  * version names, and what the platform sends the Cast Swap engine (which takes
@@ -112,28 +111,41 @@ export const CAST_SWAP_ENGINE_WHEN_OMITTED: CastSwapEngine = "seedance-2-5"
  * (`nodaroMotionEngineOf`). The engines' earlier public ids
  * (`NODARO_MOTION_LEGACY_ENGINES`) are read the same way and never returned.
  */
-export const NODARO_MOTION_ENGINES = ["motion-prism", "motion-pulse"] as const
+export const NODARO_MOTION_ENGINES = ["nodaro-prism", "nodaro-pulse"] as const
 
 export type NodaroMotionEngine = (typeof NODARO_MOTION_ENGINES)[number]
 
 /**
- * The public ids the engines had before (renamed 2026-10-26), each with the
- * id it became. Still read wherever an engine is read — a request, a stored
- * run, an engine's declared engines, an admin setting's keys — and never
- * returned or documented.
+ * The public ids the engines had before, each with the id it became:
+ * `"motion-prism"` / `"motion-pulse"` (until 2026-11-17) and, before them,
+ * `"motion-pro"` / `"motion-lite"` (until 2026-10-26). Still read wherever an
+ * engine is read — a request, a stored run, an engine's declared engines, an
+ * admin setting's keys — and never returned or documented.
  */
 export const NODARO_MOTION_LEGACY_ENGINES = {
-  "motion-pro": "motion-prism",
-  "motion-lite": "motion-pulse",
+  "motion-prism": "nodaro-prism",
+  "motion-pulse": "nodaro-pulse",
+  "motion-pro": "nodaro-prism",
+  "motion-lite": "nodaro-pulse",
 } as const satisfies Record<string, NodaroMotionEngine>
 
 export type NodaroMotionLegacyEngine = keyof typeof NODARO_MOTION_LEGACY_ENGINES
 
-/** Each public id's earlier id (the inverse of `NODARO_MOTION_LEGACY_ENGINES`). */
+/**
+ * Each public id's previous id (`"nodaro-prism"` → `"motion-prism"`): the key
+ * a Cast Swap engine from before the latest rename reads an admin setting by.
+ * Every earlier id, newest first, is in `NODARO_MOTION_EARLIER_ENGINES_OF`.
+ */
 export const NODARO_MOTION_LEGACY_ENGINE_OF = {
-  "motion-prism": "motion-pro",
-  "motion-pulse": "motion-lite",
+  "nodaro-prism": "motion-prism",
+  "nodaro-pulse": "motion-pulse",
 } as const satisfies Record<NodaroMotionEngine, NodaroMotionLegacyEngine>
+
+/** Each public id's earlier ids, newest first (the inverse of `NODARO_MOTION_LEGACY_ENGINES`). */
+export const NODARO_MOTION_EARLIER_ENGINES_OF = {
+  "nodaro-prism": ["motion-prism", "motion-pro"],
+  "nodaro-pulse": ["motion-pulse", "motion-lite"],
+} as const satisfies Record<NodaroMotionEngine, readonly NodaroMotionLegacyEngine[]>
 
 /**
  * Each public engine's name, as people read it. The earlier ids are keys too,
@@ -142,10 +154,12 @@ export const NODARO_MOTION_LEGACY_ENGINE_OF = {
  * not these keys.
  */
 export const NODARO_MOTION_ENGINE_NAMES = {
-  "motion-prism": "Nodaro Motion Prism",
-  "motion-pulse": "Nodaro Motion Pulse",
-  "motion-pro": "Nodaro Motion Prism",
-  "motion-lite": "Nodaro Motion Pulse",
+  "nodaro-prism": "Nodaro Prism",
+  "nodaro-pulse": "Nodaro Pulse",
+  "motion-prism": "Nodaro Prism",
+  "motion-pulse": "Nodaro Pulse",
+  "motion-pro": "Nodaro Prism",
+  "motion-lite": "Nodaro Pulse",
 } as const satisfies Record<NodaroMotionEngine | NodaroMotionLegacyEngine, string>
 
 /**
@@ -153,6 +167,8 @@ export const NODARO_MOTION_ENGINE_NAMES = {
  * earlier ids are keys too, as in `NODARO_MOTION_ENGINE_NAMES`.
  */
 export const CAST_SWAP_ENGINE_OF_NODARO_MOTION = {
+  "nodaro-prism": "seedance-2-5",
+  "nodaro-pulse": "kling-4",
   "motion-prism": "seedance-2-5",
   "motion-pulse": "kling-4",
   "motion-pro": "seedance-2-5",
@@ -161,8 +177,8 @@ export const CAST_SWAP_ENGINE_OF_NODARO_MOTION = {
 
 /** The public id of each internal engine. */
 export const NODARO_MOTION_ENGINE_OF_CAST_SWAP = {
-  "seedance-2-5": "motion-prism",
-  "kling-4": "motion-pulse",
+  "seedance-2-5": "nodaro-prism",
+  "kling-4": "nodaro-pulse",
 } as const satisfies Record<CastSwapEngine, NodaroMotionEngine>
 
 /** The public id of an internal engine. */
@@ -170,17 +186,17 @@ export function nodaroMotionEngineOf(engine: CastSwapEngine): NodaroMotionEngine
   return NODARO_MOTION_ENGINE_OF_CAST_SWAP[engine]
 }
 
-/** The name people read for an internal engine ("Nodaro Motion Prism" / "Nodaro Motion Pulse"). */
+/** The name people read for an internal engine ("Nodaro Prism" / "Nodaro Pulse"). */
 export function nodaroMotionEngineName(engine: CastSwapEngine): string {
   return NODARO_MOTION_ENGINE_NAMES[nodaroMotionEngineOf(engine)]
 }
 
 /**
  * The internal engine a value names, in any vocabulary: a public id
- * (`"motion-prism"`, `"motion-pulse"`), an earlier public id (`"motion-pro"`,
- * `"motion-lite"`) or an internal one (`"seedance-2-5"`, `"kling-4"`), the
- * last two still accepted from older clients, older engines and stored data.
- * Undefined for anything else.
+ * (`"nodaro-prism"`, `"nodaro-pulse"`), an earlier public id
+ * (`NODARO_MOTION_LEGACY_ENGINES`) or an internal one (`"seedance-2-5"`,
+ * `"kling-4"`), the last ones still accepted from older clients, older
+ * engines and stored data. Undefined for anything else.
  */
 export function castSwapEngineFrom(value: unknown): CastSwapEngine | undefined {
   if (typeof value !== "string") return undefined
@@ -203,6 +219,8 @@ export function nodaroMotionEngineFrom(value: unknown): NodaroMotionEngine | und
  */
 export const CAST_SWAP_ENGINE_IDS_ACCEPTED = [
   ...NODARO_MOTION_ENGINES,
+  "motion-prism",
+  "motion-pulse",
   "motion-pro",
   "motion-lite",
   ...CAST_SWAP_ENGINES,

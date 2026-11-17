@@ -28,7 +28,7 @@ import {
  * routes only read/write the override.
  *
  * The node list is the canvas nodes plus the gateable features with no node
- * (Nodaro Motion). An id whose gate is newer than the stored override shows
+ * (Video Remake). An id whose gate is newer than the stored override shows
  * its FACTORY state — what users get until the next save decides it
  * (`gating`: the generation the override was saved at, and this code's).
  */

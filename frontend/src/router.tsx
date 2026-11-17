@@ -215,7 +215,9 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
         ? [
             { path: "trends", element: <SuspenseWrapper><AdminTrends /></SuspenseWrapper> },
             { path: "trends/:id", element: <SuspenseWrapper><AdminTrendEditor /></SuspenseWrapper> },
-            { path: "nodaro-motion", element: <SuspenseWrapper><AdminNodaroMotion /></SuspenseWrapper> },
+            { path: "video-remake", element: <SuspenseWrapper><AdminNodaroMotion /></SuspenseWrapper> },
+            // Its former address.
+            { path: "nodaro-motion", element: <Navigate to="/admin/video-remake" replace /> },
             { path: "motion-price-check", element: <SuspenseWrapper><AdminMotionPriceCheck /></SuspenseWrapper> },
             // The radar's queue, its settings and one candidate: Cloud only, like the trends it feeds.
             { path: "trend-radar", element: <SuspenseWrapper><AdminTrendRadar /></SuspenseWrapper> },

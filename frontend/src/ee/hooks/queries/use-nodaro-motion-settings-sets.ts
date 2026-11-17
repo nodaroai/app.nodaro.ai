@@ -1,6 +1,6 @@
 /**
- * Admin → Nodaro Motion's stored settings sets
- * (/v1/admin/nodaro-motion/settings-sets): the list, and its writes. A write
+ * Admin → Video Remake's stored settings sets
+ * (/v1/admin/video-remake/settings-sets): the list, and its writes. A write
  * changes the stored sets only, never a live setting; each refreshes the list.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"

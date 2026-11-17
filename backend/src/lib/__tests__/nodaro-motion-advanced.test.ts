@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { NODARO_MOTION_ADVANCED_KEY, advancedShown, nodaroMotionAdvancedSchema, parseNodaroMotionAdvanced } from "../nodaro-motion-advanced.js"
 
 /**
- * `nodaro_motion_advanced` (pure): whether a Nodaro Motion page shows its
+ * `nodaro_motion_advanced` (pure): whether a Video Remake page shows its
  * Advanced options (Prepare references and the pre-prompt). One switch for
  * the whole page. Nothing saved, or anything but `{ show: true }`, = hidden.
  */
@@ -14,7 +14,7 @@ describe("nodaro_motion_advanced", () => {
   it("an admin's save is strict: one boolean, nothing else", () => {
     expect(nodaroMotionAdvancedSchema.safeParse({ show: true }).success).toBe(true)
     expect(nodaroMotionAdvancedSchema.safeParse({ show: false }).success).toBe(true)
-    for (const bad of [{}, { show: "true" }, { show: 1 }, { show: null }, { show: true, engine: "motion-prism" }, { "motion-prism": true }, true, null, "show", []]) {
+    for (const bad of [{}, { show: "true" }, { show: 1 }, { show: null }, { show: true, engine: "nodaro-prism" }, { "nodaro-prism": true }, true, null, "show", []]) {
       expect(nodaroMotionAdvancedSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false)
     }
   })

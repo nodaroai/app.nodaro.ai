@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/precise-art-style` — how a direct Precise run with
+ * `/v1/admin/video-remake/precise-art-style` — how a direct Precise run with
  * an art style opens its prompt, per engine ("restyle", the default, or
  * "edit").
  *
@@ -76,13 +76,13 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/precise-art-style"
+const URL = "/v1/admin/video-remake/precise-art-style"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, ...castSwap } }, updatedAt: "2026-11-01T00:00:00.000Z" })
 const RUNS = { preciseArtStyle: true }
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 
 let app: FastifyInstance
@@ -106,7 +106,7 @@ beforeEach(async () => {
 
 const put = (preciseArtStyle: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { preciseArtStyle } })
 
-describe("GET /v1/admin/nodaro-motion/precise-art-style", () => {
+describe("GET /v1/admin/video-remake/precise-art-style", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -126,32 +126,32 @@ describe("GET /v1/admin/nodaro-motion/precise-art-style", () => {
   it("answers the stored row, an earlier engine key read as the current one and the default left out", async () => {
     h.row = { value: { "motion-pro": { opener: "edit" }, "motion-lite": { opener: "restyle" } }, updated_at: "2026-11-04T10:00:00.000Z" }
     expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({
-      preciseArtStyle: { "motion-prism": { opener: "edit" } },
+      preciseArtStyle: { "nodaro-prism": { opener: "edit" } },
       updatedAt: "2026-11-04T10:00:00.000Z",
     })
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
+describe("PUT /v1/admin/video-remake/precise-art-style", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    expect((await put({ "motion-prism": { opener: "edit" } })).statusCode).toBe(403)
+    expect((await put({ "nodaro-prism": { opener: "edit" } })).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
   })
 
   it("saves the change, clears the cache and audits before and after", async () => {
-    const res = await put({ "motion-prism": { opener: "edit" } })
+    const res = await put({ "nodaro-prism": { opener: "edit" } })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_precise_art_style", value: { "motion-prism": { opener: "edit" } }, updated_at: expect.any(String), updated_by: ADMIN }])
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_precise_art_style", value: { "nodaro-prism": { opener: "edit" } }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toMatchObject({ preciseArtStyle: { "motion-prism": { opener: "edit" } }, engines: ENGINES })
+    expect(res.json().data).toMatchObject({ preciseArtStyle: { "nodaro-prism": { opener: "edit" } }, engines: ENGINES })
     expect(h.audits).toEqual([
       {
         admin_user_id: ADMIN,
         action: "update_nodaro_motion_precise_art_style",
         target_type: "app_setting",
         target_id: NODARO_MOTION_PRECISE_ART_STYLE_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_precise_art_style", before: null, after: { "motion-prism": { opener: "edit" } } },
+        payload: { key: "nodaro_motion_precise_art_style", before: null, after: { "nodaro-prism": { opener: "edit" } } },
       },
     ])
   })
@@ -159,10 +159,10 @@ describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
   it("refuses an unknown engine, opener or key", async () => {
     for (const s of [
       { "motion-pro": { opener: "edit" } },
-      { "motion-prism": { opener: "Edit" } },
-      { "motion-prism": { opener: "edit", extra: 1 } },
-      { "motion-prism": "edit" },
-      { "motion-prism": null },
+      { "nodaro-prism": { opener: "Edit" } },
+      { "nodaro-prism": { opener: "edit", extra: 1 } },
+      { "nodaro-prism": "edit" },
+      { "nodaro-prism": null },
       "edit",
       null,
     ]) {
@@ -170,23 +170,23 @@ describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
       expect(res.statusCode, JSON.stringify(s)).toBe(400)
       expect(res.json().error.code).toBe("validation_error")
     }
-    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { preciseArtStyle: {}, engine: "motion-prism" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { preciseArtStyle: {}, engine: "nodaro-prism" } })).statusCode).toBe(400)
     expect(h.upserts).toEqual([])
   })
 
   it("refuses a changed Pulse entry (art styles are Prism's), and saves a Pulse entry on the default", async () => {
-    const res = await put({ "motion-pulse": { opener: "edit" } })
+    const res = await put({ "nodaro-pulse": { opener: "edit" } })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error).toEqual({ code: "precise_art_style_engine", message: "Nodaro Motion Pulse takes no art style, so it has no Precise art-style setting." })
+    expect(res.json().error).toEqual({ code: "precise_art_style_engine", message: "Nodaro Pulse takes no art style, so it has no Precise art-style setting." })
     expect(h.upserts).toEqual([])
-    const ok = await put({ "motion-pulse": { opener: "restyle" } })
+    const ok = await put({ "nodaro-pulse": { opener: "restyle" } })
     expect(ok.statusCode).toBe(200)
     expect(ok.json().data.preciseArtStyle).toEqual({})
   })
 
   it("saves a change once one environment's engine takes it", async () => {
     h.envs = [envRow("production", {}), envRow("staging", RUNS)]
-    const res = await put({ "motion-prism": { opener: "edit" } })
+    const res = await put({ "nodaro-prism": { opener: "edit" } })
     expect(res.statusCode).toBe(200)
     expect(h.upserts).toHaveLength(1)
   })
@@ -194,7 +194,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
   it("refuses a change (409 engine_unsupported) while no environment's engine takes it", async () => {
     for (const envs of [[], [envRow("production", {})], [envRow("production", { preciseArtStyle: false }), envRow("staging", {})], [envRow("dev", RUNS)]]) {
       h.envs = envs
-      const res = await put({ "motion-prism": { opener: "edit" } })
+      const res = await put({ "nodaro-prism": { opener: "edit" } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toEqual({ code: "engine_unsupported", message: NO_ENGINE_RUNS_PRECISE_ART_STYLE_MESSAGE, envs: [] })
     }
@@ -203,35 +203,35 @@ describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
   })
 
   it("always saves the default, whatever the engines, so a change can be taken back", async () => {
-    h.row = { value: { "motion-prism": { opener: "edit" } }, updated_at: "2026-11-04T10:00:00.000Z" }
+    h.row = { value: { "nodaro-prism": { opener: "edit" } }, updated_at: "2026-11-04T10:00:00.000Z" }
     h.envs = []
-    for (const s of [{}, { "motion-prism": {} }, { "motion-prism": { opener: "restyle" } }]) {
+    for (const s of [{}, { "nodaro-prism": {} }, { "nodaro-prism": { opener: "restyle" } }]) {
       const res = await put(s)
       expect(res.statusCode, JSON.stringify(s)).toBe(200)
       expect(res.json().data.preciseArtStyle).toEqual({})
     }
     expect(h.envReads).toBe(0)
     expect(h.upserts.map((u) => (u as { value: unknown }).value)).toEqual([{}, {}, {}])
-    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_precise_art_style", before: { "motion-prism": { opener: "edit" } }, after: {} })
+    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_precise_art_style", before: { "nodaro-prism": { opener: "edit" } }, after: {} })
   })
 
   it("saves the Precise runs' own style-refs step as picked, Off included (no engine needed for Off)", async () => {
     h.envs = []
     const off = { mode: "off", send: "styled", prompt: "Draw the person as {style}." }
-    const res = await put({ "motion-prism": { styleRefs: off } })
+    const res = await put({ "nodaro-prism": { styleRefs: off } })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_precise_art_style", value: { "motion-prism": { styleRefs: off } }, updated_at: expect.any(String), updated_by: ADMIN }])
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_precise_art_style", value: { "nodaro-prism": { styleRefs: off } }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.envReads).toBe(0)
-    expect(res.json().data.preciseArtStyle).toEqual({ "motion-prism": { styleRefs: off } })
+    expect(res.json().data.preciseArtStyle).toEqual({ "nodaro-prism": { styleRefs: off } })
   })
 
   it("the step On is a change: saved once one environment's engine takes it, 409 engine_unsupported while none does", async () => {
     h.envs = [envRow("production", {}), envRow("staging", RUNS)]
-    const res = await put({ "motion-prism": { opener: "edit", styleRefs: { mode: "on" } } })
+    const res = await put({ "nodaro-prism": { opener: "edit", styleRefs: { mode: "on" } } })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.preciseArtStyle).toEqual({ "motion-prism": { opener: "edit", styleRefs: { mode: "on" } } })
+    expect(res.json().data.preciseArtStyle).toEqual({ "nodaro-prism": { opener: "edit", styleRefs: { mode: "on" } } })
     h.envs = []
-    const refused = await put({ "motion-prism": { styleRefs: { mode: "on" } } })
+    const refused = await put({ "nodaro-prism": { styleRefs: { mode: "on" } } })
     expect(refused.statusCode).toBe(409)
     expect(refused.json().error.code).toBe("engine_unsupported")
     expect(h.upserts).toHaveLength(1)
@@ -239,7 +239,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
 
   it("refuses a style-refs step with an unknown key, mode or send, or a blank or over-long instruction", async () => {
     for (const styleRefs of [{ mode: "maybe" }, { mode: "on", send: "nope" }, { mode: "on", extra: 1 }, "on", { mode: "on", prompt: " " }, { mode: "on", prompt: "x".repeat(4001) }]) {
-      const res = await put({ "motion-prism": { styleRefs } })
+      const res = await put({ "nodaro-prism": { styleRefs } })
       expect(res.statusCode, JSON.stringify(styleRefs).slice(0, 60)).toBe(400)
       expect(res.json().error.code).toBe("validation_error")
     }
@@ -248,7 +248,7 @@ describe("PUT /v1/admin/nodaro-motion/precise-art-style", () => {
 
   it("refuses any Pulse style-refs step (Pulse takes no art style)", async () => {
     for (const styleRefs of [{ mode: "on" }, { mode: "off" }]) {
-      const res = await put({ "motion-pulse": { styleRefs } })
+      const res = await put({ "nodaro-pulse": { styleRefs } })
       expect(res.statusCode).toBe(400)
       expect(res.json().error.code).toBe("precise_art_style_engine")
     }

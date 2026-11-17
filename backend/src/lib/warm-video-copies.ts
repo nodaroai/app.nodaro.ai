@@ -221,7 +221,7 @@ export function warmVideoCopies(url: string, sourceWidth?: number | null): void 
 
 /**
  * The job types whose finished video the clients play from its light copies:
- * Nodaro Motion runs, trend runs and their Full Quality versions. A job the
+ * Video Remake runs, trend runs and their Full Quality versions. A job the
  * video worker picked up carries its queue name in `job_type`, which for a
  * Full Quality version is its own (`cast-swap-full-quality`).
  */

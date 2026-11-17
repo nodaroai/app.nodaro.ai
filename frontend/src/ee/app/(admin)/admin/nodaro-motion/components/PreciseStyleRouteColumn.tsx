@@ -1,4 +1,4 @@
-// Admin → Nodaro Motion, Prism's Precise art-style route (the
+// Admin → Video Remake, Prism's Precise art-style route (the
 // `nodaro_motion_precise_style_route` setting), beside the Precise art-style
 // settings: whether a direct Precise run that carries an art style runs as Flex
 // (On, the default when never saved) or stays Precise (Off), and the accounts'

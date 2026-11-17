@@ -6,7 +6,7 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
 
 /**
  * `estimate_full_quality` / `full_quality` — the MCP face of
- * `POST /v1/cast-swap/:jobId/full-quality(/estimate)` (Cloud plugin): a
+ * `POST /v1/video-remake/:jobId/full-quality(/estimate)` (Cloud plugin): a
  * finished Cast Swap or trend DRAFT re-rendered as the same take at 1080p.
  *
  * The contracts under test:
@@ -21,7 +21,7 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
  *    `full_quality_pending` (it ends on its own) says to try again later;
  *  - `session_id` reaches the job through the server-side scope, never the
  *    body: the route files it in the caller's own session, and refuses one
- *    that is not theirs, or a grant without `assets:write`, as `cast_swap`'s
+ *    that is not theirs, or a grant without `assets:write`, as `video_remake`'s
  *    route does;
  *  - registered only on Nodaro Cloud, for a session that may execute.
  *
@@ -85,8 +85,8 @@ function serverWith(fastify: FastifyInstance, scopes: Scope[] = ["workflows:exec
 const QUOTE = { totalCredits: 12, breakdown: { base: 5, motionHd: 7 }, availableUntil: "2026-10-28T10:00:00.000Z" }
 /** The same quote from an engine before 0.394.0 (the old key names), answered by the neutral ones. */
 const OLD_QUOTE = { ...QUOTE, breakdown: { castSwap: 5, seedanceHd: 7 } }
-const EST_URL = "/v1/cast-swap/draft-1/full-quality/estimate"
-const RUN_URL = "/v1/cast-swap/draft-1/full-quality"
+const EST_URL = "/v1/video-remake/draft-1/full-quality/estimate"
+const RUN_URL = "/v1/video-remake/draft-1/full-quality"
 
 describe("estimate_full_quality", () => {
   it("quotes the draft and never runs", async () => {
@@ -130,17 +130,17 @@ describe("estimate_full_quality", () => {
     expect(res.content[0]!.text).toMatch(/could not be read/i)
   })
 
-  it("offers Full Quality on a draft only: neither tool offers a motion-pulse run one", async () => {
+  it("offers Full Quality on a draft only: neither tool offers a nodaro-pulse run one", async () => {
     const { fastify } = stubFastify({})
     for (const name of ["estimate_full_quality", "full_quality"]) {
       const text = JSON.stringify((await listTools(serverWith(fastify))).find((t) => t.name === name))
       expect(text, name).toContain("draft: true")
-      expect(text, name).not.toMatch(/new take|motion-pulse at 720p|motion-pulse 720p/)
+      expect(text, name).not.toMatch(/new take|nodaro-pulse at 720p|nodaro-pulse 720p/)
     }
   })
 
-  // An engine from before Nodaro Motion Pulse's Full Quality was withdrawn may still answer one.
-  it("words a Nodaro Motion Pulse new take as one, and passes its kind and every numeric part through", async () => {
+  // An engine from before Nodaro Pulse's Full Quality was withdrawn may still answer one.
+  it("words a Nodaro Pulse new take as one, and passes its kind and every numeric part through", async () => {
     const newTake = { kind: "new-take", totalCredits: 420, breakdown: { castSwap: 40, kling: 380, note: "x" }, availableUntil: "2026-10-28T10:00:00.000Z" }
     const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: newTake } })
     const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
@@ -312,7 +312,7 @@ describe("full_quality's session_id reaches the job", () => {
         req.userId = req.headers["x-internal-user-id"] as string
       }
     })
-    app.post("/v1/cast-swap/:jobId/full-quality", async (req, reply) => {
+    app.post("/v1/video-remake/:jobId/full-quality", async (req, reply) => {
       seen.body = req.body
       try {
         seen.sessionId = await resolveRequestSession(req)
@@ -345,7 +345,7 @@ describe("full_quality's session_id reaches the job", () => {
     await app.close()
   })
 
-  it("a grant without assets:write may not file it, even in the caller's own session: the route's 404, as cast_swap's", async () => {
+  it("a grant without assets:write may not file it, even in the caller's own session: the route's 404, as video_remake's", async () => {
     const seen: { sessionId?: string | null } = {}
     const app = await realApp(seen)
     const res = await callTool(serverWith(app, ["workflows:execute"]), "full_quality", { job_id: "draft-1", session_id: OWN, confirm: true })

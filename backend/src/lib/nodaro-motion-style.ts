@@ -1,12 +1,12 @@
 /**
- * Nodaro Motion's Style choice, per engine — whether people choose a DIRECT
+ * Video Remake's Style choice, per engine — whether people choose a DIRECT
  * run's style (Precise or Flex) or every direct run of that engine is forced
  * to one. Set by an admin for the whole deployment, never by the person
  * running it. A trend run keeps its own trend's style.
  *
  * The `app_settings` row `nodaro_motion_style`:
- * `{ "motion-prism"?: Choice, "motion-pulse"?: Choice }`, keyed by Nodaro
- * Motion's PUBLIC engine ids, `Choice = "user" | "precise" | "flex"`.
+ * `{ "nodaro-prism"?: Choice, "nodaro-pulse"?: Choice }`, keyed by Video
+ * Remake's PUBLIC engine ids, `Choice = "user" | "precise" | "flex"`.
  *
  * - No row, an engine left out, or `"user"`: people choose (the request's
  *   `style`, left out = Precise), exactly as before the setting.
@@ -14,7 +14,7 @@
  *   direct run and quote of that engine, API and agents too, whatever the
  *   request's `style` says. The Cast Swap engine enforces it, and clients hide
  *   their Style control (`GET /v1/cast-swap/style-choice`).
- * - `"precise"` ("Precise in Nodaro Motion"): clients hide their Style control
+ * - `"precise"` ("Precise in Video Remake"): clients hide their Style control
  *   and run Precise; the engine (from plugin 0.456.0) makes a request that asks
  *   for Flex (`style: "motion"`) a Flex run, so an API or agent caller that
  *   asks for Flex gets it. An engine before it runs every direct run of that
@@ -27,16 +27,16 @@
  * `tk.capabilities.nodaroMotionStyle`), which answers each forced entry under
  * both its current and its earlier key (`withEarlierEngineKeys`), or null when
  * nothing is forced; and the public route above. Written only by
- * `PUT /v1/admin/nodaro-motion/style` (ee/routes), through
+ * `PUT /v1/admin/video-remake/style` (ee/routes), through
  * `nodaro-motion-style-store.ts`. This module is pure (no database).
  */
 import { z } from "zod"
 import { NODARO_MOTION_ENGINES, type NodaroMotionEngine } from "@nodaro/shared/models"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_STYLE_KEY = "nodaro_motion_style"
 
-/** Who decides a direct run's style: people (`"user"`), or Precise in Nodaro Motion (`"precise"`) / always Flex (`"flex"`). */
+/** Who decides a direct run's style: people (`"user"`), or Precise in Video Remake (`"precise"`) / always Flex (`"flex"`). */
 export const NODARO_MOTION_STYLE_CHOICES = ["user", "precise", "flex"] as const
 export type NodaroMotionStyleChoice = (typeof NODARO_MOTION_STYLE_CHOICES)[number]
 
@@ -52,10 +52,7 @@ export type NodaroMotionStyleChoices = Record<NodaroMotionEngine, NodaroMotionSt
 const choiceSchema = z.enum(NODARO_MOTION_STYLE_CHOICES)
 
 /** What an admin saves: strict (an unknown engine or value is refused). */
-export const nodaroMotionStyleSchema: z.ZodType<NodaroMotionStyle> = z.strictObject({
-  "motion-prism": choiceSchema.optional(),
-  "motion-pulse": choiceSchema.optional(),
-})
+export const nodaroMotionStyleSchema: z.ZodType<NodaroMotionStyle> = byEngineSchema(choiceSchema)
 
 /** The setting with every `"user"` entry left out (the same as never set): what is stored. A new object. */
 export function forcedStyles(style: NodaroMotionStyle | null | undefined): NodaroMotionStyle {

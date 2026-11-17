@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's preparation steps per engine — set by an admin for the
+ * Video Remake's preparation steps per engine — set by an admin for the
  * whole deployment, never by the person running it.
  *
  * The `app_settings` row `nodaro_motion_steps`:
- * `{ "motion-prism"?: CastSwapSteps, "motion-pulse"?: CastSwapSteps }`, keyed
- * by Nodaro Motion's PUBLIC engine ids, each entry a Cast Swap `steps`
+ * `{ "nodaro-prism"?: CastSwapSteps, "nodaro-pulse"?: CastSwapSteps }`, keyed
+ * by Video Remake's PUBLIC engine ids, each entry a Cast Swap `steps`
  * setting (`castSwapStepsSchema`, cast-swap-steps.ts). No row, or an engine
  * left out, = today's run for that engine. A save writes both the current and
  * the earlier engine keys (as the masking row does); the read prefers the
@@ -17,13 +17,13 @@
  * that does not declare `castSwap.clipBodySheet` (and likewise `shotList` /
  * `styleRefs` without `castSwap.shotList` / `castSwap.styleRefs`,
  * `stepsForLoadedEngine`). A trend run carries its own trend's `steps`. Written
- * only by `PUT /v1/admin/nodaro-motion/steps` through
+ * only by `PUT /v1/admin/video-remake/steps` through
  * `nodaro-motion-steps-store.ts`. This module is pure (no database).
  */
 import { z } from "zod"
 import { castSwapStepsSaveSchema, castSwapStepsSchema, normaliseSteps, stepsForEngine, type CastSwapSteps } from "./cast-swap-steps.js"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_STEPS_KEY = "nodaro_motion_steps"
 
@@ -34,16 +34,10 @@ export type NodaroMotionSteps = ByEngine<CastSwapSteps>
 export type NodaroMotionStepsForPlugin = ByEngineForPlugin<CastSwapSteps>
 
 /** The stored shape: each engine's entry read by the stored-data schema (any model name). */
-export const nodaroMotionStepsSchema: z.ZodType<NodaroMotionSteps> = z.strictObject({
-  "motion-prism": castSwapStepsSchema.optional(),
-  "motion-pulse": castSwapStepsSchema.optional(),
-})
+export const nodaroMotionStepsSchema: z.ZodType<NodaroMotionSteps> = byEngineSchema(castSwapStepsSchema)
 
 /** What an admin saves: strict, each entry checked as a save (a known model that can see what it is shown). */
-export const nodaroMotionStepsSaveSchema: z.ZodType<NodaroMotionSteps> = z.strictObject({
-  "motion-prism": castSwapStepsSaveSchema.optional(),
-  "motion-pulse": castSwapStepsSaveSchema.optional(),
-})
+export const nodaroMotionStepsSaveSchema: z.ZodType<NodaroMotionSteps> = byEngineSchema(castSwapStepsSaveSchema)
 
 /** The setting with every empty entry (`{}`, nothing set) left out: what is stored. A new object. */
 export function withoutEmptySteps(steps: NodaroMotionSteps): NodaroMotionSteps {

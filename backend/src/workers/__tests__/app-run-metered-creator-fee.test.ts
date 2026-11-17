@@ -138,7 +138,7 @@ describe("an app run's creator fee on metered LLM spend", () => {
 
   it("a node whose job ran steps (child jobs): the creator fee is on the node's charge with its steps", async () => {
     // node-executor reports a node's charge with its settled steps included
-    // (`withRunCharges`, llm-metered-dag.test.ts): a Nodaro Motion-like job of
+    // (`withRunCharges`, llm-metered-dag.test.ts): a Video Remake-like job of
     // 44 whose steps were charged 1,019 reports 1,063, and the fee follows it.
     mocks.reported.motion = 1063
     try {

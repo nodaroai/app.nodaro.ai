@@ -1,10 +1,10 @@
 /**
- * Nodaro Motion's no-person setting, per engine (registered by
+ * Video Remake's no-person setting, per engine (registered by
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET /v1/admin/nodaro-motion/no-person   { noPerson, updatedAt, engines, supported } (noPerson null = never saved: the default)
- *   PUT /v1/admin/nodaro-motion/no-person   { noPerson }: save the whole setting; audit-logged
+ *   GET /v1/admin/video-remake/no-person   { noPerson, updatedAt, engines, supported } (noPerson null = never saved: the default)
+ *   PUT /v1/admin/video-remake/no-person   { noPerson }: save the whole setting; audit-logged
  *
  * The setting (`nodaro_motion_no_person`, lib/nodaro-motion-no-person.ts) says,
  * per engine, whether a DIRECT Precise run with no pictured person sends its
@@ -42,7 +42,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-mo
 import { audit } from "./admin-trends-lifecycle.js"
 import type { NodaroMotionAdminEngine } from "./admin-nodaro-motion.js"
 
-/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Nodaro Motion settings'). */
+/** Every save of this deployment-wide setting is filed under this fixed id (its own, beside the other Video Remake settings'). */
 export const NODARO_MOTION_NO_PERSON_AUDIT_TARGET = "00000000-0000-4000-8000-00000000a0fc"
 
 const putBody = z.strictObject({ noPerson: nodaroMotionNoPersonSchema })
@@ -50,7 +50,7 @@ const putBody = z.strictObject({ noPerson: nodaroMotionNoPersonSchema })
 /** The setting as a stored settings set holds it (admin-nodaro-motion-settings-sets.ts): what differs from the default. */
 export const NODARO_MOTION_NO_PERSON_SECTION = defineNodaroMotionSettingsSection({
   key: "no-person",
-  path: "/v1/admin/nodaro-motion/no-person",
+  path: "/v1/admin/video-remake/no-person",
   label: "Runs with no person",
   body: putBody,
   prepare: (body) => ({ value: { noPerson: withoutDefaultNoPerson(body.noPerson) } }),
@@ -85,15 +85,15 @@ async function view(): Promise<NodaroMotionNoPersonView> {
 }
 
 export function registerNodaroMotionNoPersonRoutes(app: FastifyInstance): void {
-  app.get("/v1/admin/nodaro-motion/no-person", { preHandler: requireAdmin }, async (req, reply) => {
+  app.get("/v1/admin/video-remake/no-person", { preHandler: requireAdmin }, async (req, reply) => {
     try {
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to read the Nodaro Motion no-person setting")
+      return sendInternalError(reply, req, e, "Failed to read the Video Remake no-person setting")
     }
   })
 
-  app.put("/v1/admin/nodaro-motion/no-person", { preHandler: requireAdmin }, async (req, reply) => {
+  app.put("/v1/admin/video-remake/no-person", { preHandler: requireAdmin }, async (req, reply) => {
     const parsed = NODARO_MOTION_NO_PERSON_SECTION.body.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
@@ -111,7 +111,7 @@ export function registerNodaroMotionNoPersonRoutes(app: FastifyInstance): void {
       })
       return { data: await view() }
     } catch (e) {
-      return sendInternalError(reply, req, e, "Failed to save the Nodaro Motion no-person setting")
+      return sendInternalError(reply, req, e, "Failed to save the Video Remake no-person setting")
     }
   })
 }

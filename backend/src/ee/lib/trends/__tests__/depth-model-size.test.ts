@@ -1,7 +1,7 @@
 /**
  * The depth model size (`faceMasking.depthModelSize`, decided 2026-11-02):
  * the admin's choice of Video Depth Anything's model size (small, base,
- * large) wherever Nodaro Motion draws depth (Full depth, Keep people, a Faces
+ * large) wherever Video Remake draws depth (Full depth, Keep people, a Faces
  * hidden depth fill, role outlines' gray one too). What must hold:
  *
  *  - nothing stored today changes meaning: absent, `"large"`, an unknown
@@ -128,8 +128,8 @@ describe("the setting", () => {
       expect(faceMaskingWithMarksSchema.safeParse({ ...CASES.facesDepthOutlines, depthModelSize }).success, depthModelSize).toBe(true)
       expect(faceMaskingSchema.safeParse({ mode: "always", fill: "depth", depthModelSize }).success, depthModelSize).toBe(true)
     }
-    expect(nodaroMotionMaskingSchema.safeParse({ "motion-prism": { mode: "always", fill: "depth", depthModelSize: "small" } }).success).toBe(true)
-    expect(nodaroMotionMotionSchema.safeParse({ "motion-pulse": { masking: { mode: "always", source: "full-depth", depthModelSize: "base" } } }).success).toBe(true)
+    expect(nodaroMotionMaskingSchema.safeParse({ "nodaro-prism": { mode: "always", fill: "depth", depthModelSize: "small" } }).success).toBe(true)
+    expect(nodaroMotionMotionSchema.safeParse({ "nodaro-pulse": { masking: { mode: "always", source: "full-depth", depthModelSize: "base" } } }).success).toBe(true)
   })
 
   it("refuses a size the model does not come in", () => {
@@ -310,7 +310,7 @@ describe("the engine", () => {
     }
   })
 
-  it("Nodaro Motion's shared settings: the environments that cannot draw with every size asked, a missing one included", () => {
+  it("Video Remake's shared settings: the environments that cannot draw with every size asked, a missing one included", () => {
     const envs = [env("production", SIZES), env("staging", { ...ENGINE, depthModelSizes: ["small"] })]
     expect(environmentsThatCannotDrawModelSizes(envs, [])).toEqual([])
     expect(environmentsThatCannotDrawModelSizes(envs, ["small"])).toEqual([])

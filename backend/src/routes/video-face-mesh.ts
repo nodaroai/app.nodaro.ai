@@ -9,7 +9,7 @@
  * outline; or, by `layers`, any set of the wireframe, the eye outlines, the lip
  * outline, the contours, the irises and bold lines), each a tone of the picture under it — gray, or, on a coloured
  * depth map (`colormap` + `depthUrl`), a colour of that map — so the video
- * model still sees where the mouth and the eyes are under a mask. Nodaro Motion's face masking reaches it as a
+ * model still sees where the mouth and the eyes are under a mask. Video Remake's face masking reaches it as a
  * CHILD job of its own (`tk.http.workerRequest` with a parent job); nothing
  * else may — a browser, an API key, an app token, MCP and every other
  * internal hop are refused 403 before the clip is probed or anything is

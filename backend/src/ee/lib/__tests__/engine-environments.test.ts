@@ -260,7 +260,7 @@ describe("recordThisEngineEnvironment (boot hook)", () => {
 
   it.each([
     ["0.397.0", ["motion-pro", "motion-lite", "seedance-2-5", "kling-4"]],
-    ["new ids only", ["motion-prism", "motion-pulse"]],
+    ["new ids only", ["nodaro-prism", "nodaro-pulse"]],
   ] as const)("records a plugin's declared engines (%s) as it declares them, read as both engines", async (_gen, engines) => {
     process.env.RAILWAY_ENVIRONMENT_NAME = "production"
     const supports: PluginSupports = { castSwap: { ...SUPPORTS.castSwap!, engines, engineAliases: true } }

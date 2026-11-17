@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { CAST_SWAP_ENGINE_OF_NODARO_MOTION } from "@nodaro/shared/models"
 
 /**
- * `/v1/admin/nodaro-motion/no-person` — whether a direct Precise run with no
+ * `/v1/admin/video-remake/no-person` — whether a direct Precise run with no
  * pictured person sends its source clip, per engine.
  *
  * What must hold:
@@ -77,13 +77,13 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/no-person"
+const URL = "/v1/admin/video-remake/no-person"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, ...castSwap } }, updatedAt: "2026-11-05T00:00:00.000Z" })
 const READS = { noPersonSourceClip: true }
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: CAST_SWAP_ENGINE_OF_NODARO_MOTION["motion-prism"] },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: CAST_SWAP_ENGINE_OF_NODARO_MOTION["motion-pulse"] },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: CAST_SWAP_ENGINE_OF_NODARO_MOTION["nodaro-prism"] },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: CAST_SWAP_ENGINE_OF_NODARO_MOTION["nodaro-pulse"] },
 ]
 const REFUSAL = "No Cast Swap engine reads this setting yet: keep the default (on), or wait for the engine."
 
@@ -108,7 +108,7 @@ beforeEach(async () => {
 
 const put = (noPerson: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { noPerson } })
 
-describe("GET /v1/admin/nodaro-motion/no-person", () => {
+describe("GET /v1/admin/video-remake/no-person", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -128,64 +128,64 @@ describe("GET /v1/admin/nodaro-motion/no-person", () => {
   it("answers the stored row, an earlier engine key read as the current one and an empty entry left out", async () => {
     h.row = { value: { "motion-pro": { sourceClip: false }, "motion-lite": {} }, updated_at: "2026-11-05T10:00:00.000Z" }
     expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({
-      noPerson: { "motion-prism": { sourceClip: false } },
+      noPerson: { "nodaro-prism": { sourceClip: false } },
       updatedAt: "2026-11-05T10:00:00.000Z",
     })
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/no-person", () => {
+describe("PUT /v1/admin/video-remake/no-person", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    expect((await put({ "motion-prism": { sourceClip: false } })).statusCode).toBe(403)
+    expect((await put({ "nodaro-prism": { sourceClip: false } })).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
     expect(h.audits).toEqual([])
   })
 
   it("saves the change, clears the cache and audits before and after", async () => {
-    const res = await put({ "motion-prism": { sourceClip: false } })
+    const res = await put({ "nodaro-prism": { sourceClip: false } })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_no_person", value: { "motion-prism": { sourceClip: false } }, updated_at: expect.any(String), updated_by: ADMIN }])
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_no_person", value: { "nodaro-prism": { sourceClip: false } }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toMatchObject({ noPerson: { "motion-prism": { sourceClip: false } }, engines: ENGINES })
+    expect(res.json().data).toMatchObject({ noPerson: { "nodaro-prism": { sourceClip: false } }, engines: ENGINES })
     expect(h.audits).toEqual([
       {
         admin_user_id: ADMIN,
         action: "update_nodaro_motion_no_person",
         target_type: "app_setting",
         target_id: "00000000-0000-4000-8000-00000000a0fc",
-        payload: { key: "nodaro_motion_no_person", before: null, after: { "motion-prism": { sourceClip: false } } },
+        payload: { key: "nodaro_motion_no_person", before: null, after: { "nodaro-prism": { sourceClip: false } } },
       },
     ])
-    const second = await put({ "motion-pulse": { sourceClip: false } })
+    const second = await put({ "nodaro-pulse": { sourceClip: false } })
     expect(second.statusCode).toBe(200)
     expect(h.audits[1]!.payload).toEqual({
       key: "nodaro_motion_no_person",
-      before: { "motion-prism": { sourceClip: false } },
-      after: { "motion-pulse": { sourceClip: false } },
+      before: { "nodaro-prism": { sourceClip: false } },
+      after: { "nodaro-pulse": { sourceClip: false } },
     })
   })
 
   it("accepts a Pulse entry that is switched off", async () => {
-    const res = await put({ "motion-pulse": { sourceClip: false } })
+    const res = await put({ "nodaro-pulse": { sourceClip: false } })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.noPerson).toEqual({ "motion-pulse": { sourceClip: false } })
-    expect((h.upserts[0] as { value: unknown }).value).toEqual({ "motion-pulse": { sourceClip: false } })
+    expect(res.json().data.noPerson).toEqual({ "nodaro-pulse": { sourceClip: false } })
+    expect((h.upserts[0] as { value: unknown }).value).toEqual({ "nodaro-pulse": { sourceClip: false } })
   })
 
   it("leaves an empty entry out of what is stored", async () => {
-    await put({ "motion-prism": {}, "motion-pulse": { sourceClip: false } })
+    await put({ "nodaro-prism": {}, "nodaro-pulse": { sourceClip: false } })
     const stored = (h.upserts[0] as { value: Record<string, unknown> }).value
-    expect(Object.keys(stored)).toEqual(["motion-pulse"])
+    expect(Object.keys(stored)).toEqual(["nodaro-pulse"])
   })
 
   it("is strict: a value other than off, an unknown key or engine, or a stray body key is 400", async () => {
     for (const bad of [
-      { "motion-prism": { sourceClip: true } },
-      { "motion-prism": { sourceClip: null } },
-      { "motion-prism": { sourceClip: false, extra: true } },
+      { "nodaro-prism": { sourceClip: true } },
+      { "nodaro-prism": { sourceClip: null } },
+      { "nodaro-prism": { sourceClip: false, extra: true } },
       { "motion-pro": { sourceClip: false } },
-      { [CAST_SWAP_ENGINE_OF_NODARO_MOTION["motion-prism"]]: { sourceClip: false } },
+      { [CAST_SWAP_ENGINE_OF_NODARO_MOTION["nodaro-prism"]]: { sourceClip: false } },
       "off",
       null,
     ]) {
@@ -201,16 +201,16 @@ describe("PUT /v1/admin/nodaro-motion/no-person", () => {
 
   it("saves a change once one environment's engine reads it", async () => {
     h.envs = [envRow("production", {}), envRow("staging", READS)]
-    const res = await put({ "motion-prism": { sourceClip: false } })
+    const res = await put({ "nodaro-prism": { sourceClip: false } })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.noPerson).toEqual({ "motion-prism": { sourceClip: false } })
+    expect(res.json().data.noPerson).toEqual({ "nodaro-prism": { sourceClip: false } })
     expect(h.upserts).toHaveLength(1)
   })
 
   it("refuses a change (409 engine_unsupported) while no environment's engine reads it", async () => {
     for (const envs of [[], [envRow("production", {})], [envRow("production", { noPersonSourceClip: false }), envRow("staging", {})], [envRow("dev", READS)]]) {
       h.envs = envs
-      const res = await put({ "motion-prism": { sourceClip: false } })
+      const res = await put({ "nodaro-prism": { sourceClip: false } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toEqual({ code: "engine_unsupported", message: REFUSAL, envs: [] })
     }
@@ -219,16 +219,16 @@ describe("PUT /v1/admin/nodaro-motion/no-person", () => {
   })
 
   it("always saves the default, whatever the engines, so a change can be taken back", async () => {
-    h.row = { value: { "motion-prism": { sourceClip: false } }, updated_at: "2026-11-05T10:00:00.000Z" }
+    h.row = { value: { "nodaro-prism": { sourceClip: false } }, updated_at: "2026-11-05T10:00:00.000Z" }
     h.envs = []
-    for (const s of [{}, { "motion-prism": {} }, { "motion-pulse": {} }]) {
+    for (const s of [{}, { "nodaro-prism": {} }, { "nodaro-pulse": {} }]) {
       const res = await put(s)
       expect(res.statusCode, JSON.stringify(s)).toBe(200)
       expect(res.json().data.noPerson).toEqual({})
     }
     expect(h.envReads).toBe(0)
     expect(h.upserts.map((u) => (u as { value: unknown }).value)).toEqual([{}, {}, {}])
-    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_no_person", before: { "motion-prism": { sourceClip: false } }, after: {} })
+    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_no_person", before: { "nodaro-prism": { sourceClip: false } }, after: {} })
   })
 
   it("files its audit rows under an id of its own", () => {

@@ -1,9 +1,9 @@
 /**
- * A Nodaro Motion setting whose Faces hidden fill is `"none"` (decided
+ * A Video Remake setting whose Faces hidden fill is `"none"` (decided
  * 2026-11-02: the faces found but kept as filmed, only the face mesh drawn on
  * them) is saved only once every environment's engine can draw it.
  *
- * The Nodaro Motion settings (`nodaro_motion_masking`, and the Motion
+ * The Video Remake settings (`nodaro_motion_masking`, and the Motion
  * setting's own `masking`) are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare `castSwap.maskFillNone` is answered such an entry as

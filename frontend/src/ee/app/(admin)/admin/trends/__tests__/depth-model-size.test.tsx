@@ -1,13 +1,13 @@
 /**
  * The depth model size (`faceMasking.depthModelSize`): the size of the model
- * that draws the depth wherever Nodaro Motion draws depth (Full depth, Keep
+ * that draws the depth wherever Video Remake draws depth (Full depth, Keep
  * people, a Faces hidden depth fill, under role outlines too).
  *
  * - The pure rules: saved only where it changes the render (depth drawn, not
  *   large), so a setting without one is saved exactly as before; role
  *   outlines do not drop it (unlike the colormap); the sizes each
- *   environment's engine draws with (a trend's: some; Admin → Nodaro
- *   Motion's shared setting: every one, per size); its publish need as a
+ *   environment's engine draws with (a trend's: some; Admin → Video
+ *   Remake's shared setting: every one, per size); its publish need as a
  *   sentence.
  * - The editor ("Depth model"): shown wherever depth is drawn (never on a
  *   blur fill or with the mode Off); Large, the default, writes no key; a
@@ -67,7 +67,7 @@ describe("the depth model size's rules", () => {
     expect(depthModelSizesSomeEngineDraws([sizesAt("production", ["base"]), sizesAt("staging", ["small", "large"])])).toEqual(["small", "base", "large"])
   })
 
-  it("Nodaro Motion's shared setting: per size, the environments that cannot draw with it, a missing one included", () => {
+  it("Video Remake's shared setting: per size, the environments that cannot draw with it, a missing one included", () => {
     expect(environmentsThatCannotDrawModelSizes(undefined)).toBeUndefined()
     const missing = environmentsThatCannotDrawModelSizes([sizesAt("production", ["small", "base"]), sizesAt("staging", ["small"])])!
     expect(missing.small).toEqual([])
@@ -178,7 +178,7 @@ describe("the face masking editor's depth model", () => {
     expect(seen.at(-1)).toEqual({ mode: "always", fill: "depth" })
   })
 
-  it("Admin → Nodaro Motion: a size is offered only once every environment's engine draws with it, naming those that cannot", async () => {
+  it("Admin → Video Remake: a size is offered only once every environment's engine draws with it, naming those that cannot", async () => {
     const user = userEvent.setup()
     const missingIn = environmentsThatCannotDrawModelSizes([sizesAt("production", ["small", "base"]), sizesAt("staging", ["small"])])!
     const { unmount } = render(<Harness initial={{ mode: "always", fill: "depth" }} missingIn={missingIn} />)
@@ -193,7 +193,7 @@ describe("the face masking editor's depth model", () => {
     ).toBeInTheDocument()
   })
 
-  it("Admin → Nodaro Motion: greyed out while no environment draws with another size, naming them", () => {
+  it("Admin → Video Remake: greyed out while no environment draws with another size, naming them", () => {
     render(<Harness initial={{ mode: "always", source: "full-depth" }} source="full-depth" missingIn={environmentsThatCannotDrawModelSizes([sizesAt("production")])!} />)
     expect(sizeSelect()).toBeDisabled()
     expect(screen.getByText(/The Cast Swap engine of staging, production cannot draw the depth with other model sizes yet/)).toBeInTheDocument()

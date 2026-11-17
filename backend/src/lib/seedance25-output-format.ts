@@ -22,7 +22,7 @@ export function seedance25OutputFormatFor(
 }
 
 /**
- * The fields a server-side CHILD job sends /v1/generate-video (Nodaro Motion's
+ * The fields a server-side CHILD job sends /v1/generate-video (Video Remake's
  * engine children) beyond its public body. Neither is a public field: no SDK,
  * MCP, docs or OpenAPI entry (the route registers its body without them).
  *

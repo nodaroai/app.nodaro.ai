@@ -14,7 +14,7 @@ export const WHITE_LABEL_WORLD_PATHS: Readonly<Partial<Record<SiteWorldId, `/${s
   video: "/video",
   music: "/music",
   trends: "/trends",
-  motion: "/video/nodaro-motion",
+  motion: "/video/remake",
   voice: "/voice-changer",
   app: "/projects",
 })

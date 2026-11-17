@@ -1,57 +1,57 @@
-// Admin → Nodaro Motion: how each engine covers the faces in a clip before
+// Admin → Video Remake: how each engine covers the faces in a clip before
 // the video model sees it, on every run a person starts themselves (the API,
-// the SDK, MCP `cast_swap`). People never set it. A trend keeps its own
+// the SDK, MCP `video_remake`). People never set it. A trend keeps its own
 // setting (Admin → Trends). Until an admin saves here, no engine masks.
 //
 // Each engine (Prism, Pulse) has two columns, edited with the trend editor's
 // own controls:
-// - Precise: the face masking of a Precise run (PUT /v1/admin/nodaro-motion/masking).
+// - Precise: the face masking of a Precise run (PUT /v1/admin/video-remake/masking).
 // - Motion: a Flex run's masking — always Full depth with a shot list, its
 //   scene a description or a description + the original; a masking saved
 //   before that is shown as ignored, to be cleared — and its prompt style
-//   (left out: Flexible), PUT /v1/admin/nodaro-motion/motion (MotionColumn.tsx).
+//   (left out: Flexible), PUT /v1/admin/video-remake/motion (MotionColumn.tsx).
 // Pulse also has its audio, for every direct Pulse run of either style: the
 // original audio back on the result (the default) or Kling's own track
-// (PUT /v1/admin/nodaro-motion/pulse-audio).
+// (PUT /v1/admin/video-remake/pulse-audio).
 // Prism has its reference audio, for every direct Prism run of either style:
 // what the reference video sent to the video model carries, per output
 // resolution (the full audio, the default; the voice only; or none), the
 // original audio always back on the result
-// (PUT /v1/admin/nodaro-motion/prism-reference-audio).
+// (PUT /v1/admin/video-remake/prism-reference-audio).
 // Each engine also has its Style choice (StyleChoiceSelect.tsx): people choose
-// Precise or Flex (the default), or Precise in Nodaro Motion (an API or agent
+// Precise or Flex (the default), or Precise in Video Remake (an API or agent
 // request that asks for Flex still gets Flex) or Always Flex (every direct
-// run), each of which hides the Style choice in Nodaro Motion
-// (PUT /v1/admin/nodaro-motion/style); the forced choices are greyed out until
+// run), each of which hides the Style choice in Video Remake
+// (PUT /v1/admin/video-remake/style); the forced choices are greyed out until
 // every environment's engine enforces them.
 // Prism also has its style-only runs (StyleOnlyColumn.tsx, under its Motion
 // column): what a direct run with a video and an art style and nothing to
 // swap sends — the original clip (the default) or the path of any art-style
-// run — and its own engine prompt (PUT /v1/admin/nodaro-motion/style-only); a
+// run — and its own engine prompt (PUT /v1/admin/video-remake/style-only); a
 // change is offered once one environment's engine runs such runs, and the
 // server's refusal is said in place. Pulse takes no art style.
 // Prism also has its Precise runs with an art style (PreciseArtStyleColumn.tsx,
 // under its Precise column): the opener of such a run's prompt, "Restyle" (the
 // default) or "Edit", and their OWN "Style the role pictures" (Off by
 // default; the preparation steps' switch stays the Flex runs')
-// (PUT /v1/admin/nodaro-motion/precise-art-style); a change is offered once one
+// (PUT /v1/admin/video-remake/precise-art-style); a change is offered once one
 // environment's engine takes such runs, and the server's refusal is said in place.
 // Each engine also has its runs with no person (NoPersonColumn.tsx, under its
 // Precise column): whether a Precise run with no person role with pictures sends
-// the clip as it is, on by default (PUT /v1/admin/nodaro-motion/no-person); a change
+// the clip as it is, on by default (PUT /v1/admin/video-remake/no-person); a change
 // is offered once one environment's engine reads it, and the server's refusal is
 // said in place.
 // Beside them, whether such a run runs as Flex at all (PreciseStyleRouteColumn.tsx,
-// PUT /v1/admin/nodaro-motion/precise-style-route): On (the default) or Off, and the
+// PUT /v1/admin/video-remake/precise-style-route): On (the default) or Off, and the
 // accounts' emails that skip it. It saves whatever the engines, and a note names
 // the environments that do not route yet.
 // Each engine also has its preparation steps (StepsColumn.tsx: the reference
 // sheets, the engine prompt and the scene description), for every direct run
-// of either style (PUT /v1/admin/nodaro-motion/steps), greyed out until every
+// of either style (PUT /v1/admin/video-remake/steps), greyed out until every
 // environment's engine takes them.
 // Above the engines, one switch for the whole page (AdvancedSwitch.tsx): whether
-// the Nodaro Motion page shows its Advanced chip (Prepare references and the
-// pre-prompt), off until turned on (PUT /v1/admin/nodaro-motion/advanced). A page
+// the Video Remake page shows its Advanced chip (Prepare references and the
+// pre-prompt), off until turned on (PUT /v1/admin/video-remake/advanced). A page
 // option only: no run reads it.
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
@@ -152,7 +152,7 @@ const PRISM_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not ta
 export const SAVED_TOAST = "Saved. Runs pick it up within a minute."
 
 /** Said after a save of the page's Advanced switch alone: no run reads it; the page reads it through a cached public answer. */
-export const SAVED_PAGE_ONLY_TOAST = "Saved. The Nodaro Motion page picks it up within a couple of minutes."
+export const SAVED_PAGE_ONLY_TOAST = "Saved. The Video Remake page picks it up within a couple of minutes."
 
 const AUTO_HINT =
   "Only when the video model refuses the clip: one retry with the faces covered, charged only then (the quote names it apart)."
@@ -365,7 +365,7 @@ export default function AdminNodaroMotionPage() {
     <div className="mx-auto max-w-3xl p-4 sm:p-6">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold">Nodaro Motion</h1>
+          <h1 className="text-xl font-bold">Video Remake</h1>
           <p className="text-sm text-muted-foreground">
             How each engine prepares the clip for every run people start themselves (the API, the SDK and MCP), in the
             Precise and the Motion style. People never see or set these engine settings. A trend keeps its own setting.
@@ -396,7 +396,7 @@ export default function AdminNodaroMotionPage() {
 
       <SettingsSetsManager bindings={bindings} origin={origin} onOrigin={setOrigin} />
 
-      <div role="group" aria-label="Nodaro Motion page" className="mb-6 rounded-lg border p-4">
+      <div role="group" aria-label="Video Remake page" className="mb-6 rounded-lg border p-4">
         {advancedQuery.data ? (
           <AdvancedSwitch checked={advancedDraft} onChange={setAdvancedDraft} />
         ) : advancedQuery.error ? (
@@ -463,7 +463,7 @@ export default function AdminNodaroMotionPage() {
                         })
                       }
                     />
-                    {engine.id === "motion-prism" && (
+                    {engine.id === "nodaro-prism" && (
                       <div className="mt-2 border-t pt-3">
                         {preciseStyleRouteQuery.data ? (
                           <PreciseStyleRouteColumn
@@ -484,7 +484,7 @@ export default function AdminNodaroMotionPage() {
                         )}
                       </div>
                     )}
-                    {engine.id === "motion-prism" && (
+                    {engine.id === "nodaro-prism" && (
                       <div className="mt-2 border-t pt-3">
                         {preciseArtStyleQuery.data ? (
                           <PreciseArtStyleColumn
@@ -546,7 +546,7 @@ export default function AdminNodaroMotionPage() {
                     ) : (
                       <p className="text-xs text-muted-foreground">Loading…</p>
                     )}
-                    {engine.id === "motion-prism" && (
+                    {engine.id === "nodaro-prism" && (
                       <div className="mt-2 border-t pt-3">
                         {styleOnlyQuery.data ? (
                           <StyleOnlyColumn
@@ -591,7 +591,7 @@ export default function AdminNodaroMotionPage() {
                     <p className="text-xs text-muted-foreground">Loading…</p>
                   )}
                 </div>
-                {engine.id === "motion-pulse" && (
+                {engine.id === "nodaro-pulse" && (
                   <div role="group" aria-label={`${engine.name} audio`} className="mt-4 max-w-sm">
                     {pulseQuery.data ? (
                       <PulseAudioSelect
@@ -606,7 +606,7 @@ export default function AdminNodaroMotionPage() {
                     )}
                   </div>
                 )}
-                {engine.id === "motion-prism" && (
+                {engine.id === "nodaro-prism" && (
                   <div role="group" aria-label={`${engine.name} reference audio`} className="mt-4 max-w-md">
                     {prismAudioQuery.data ? (
                       <PrismReferenceAudioSelect

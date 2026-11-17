@@ -1,7 +1,7 @@
 /**
  * A style's medium, tones and media (`Style.medium` / `tones` / `media`):
  * - every style classifies itself; the 49 styles offered for images and video
- *   keep exactly the medium and tones Nodaro Motion's art-style line has read
+ *   keep exactly the medium and tones Video Remake's art-style line has read
  *   them with so far (its own id lists), so moving them into the catalog
  *   changes no prompt;
  * - the video-only styles are rendered 3D looks, offered for video alone;
@@ -26,7 +26,7 @@ import {
 
 afterEach(() => resetCatalogPacks())
 
-/** Nodaro Motion's lists as they read the 49 styles before the catalog carried a medium. */
+/** Video Remake's lists as they read the 49 styles before the catalog carried a medium. */
 const PHOTOGRAPHIC = ["photorealistic", "cinematic", "noir", "early-color-photo", "retro-vintage", "cyberpunk", "steampunk", "glitch-art"]
 const RENDERED = ["3d-render", "low-poly", "isometric", "pixar-3d", "claymation"]
 const BLACK_AND_WHITE = ["noir", "manga", "pencil-sketch", "charcoal", "etching", "woodcut", "ink-wash"]
@@ -42,7 +42,7 @@ describe("medium and tones", () => {
     for (const s of STYLES) expect(STYLE_MEDIUMS, s.id).toContain(s.medium)
   })
 
-  it("the 49 styles for images and video keep the medium Nodaro Motion read them with", () => {
+  it("the 49 styles for images and video keep the medium Video Remake read them with", () => {
     expect(both).toHaveLength(49)
     for (const s of both) {
       const expected = PHOTOGRAPHIC.includes(s.id) ? "photo" : RENDERED.includes(s.id) ? "3d" : "2d"

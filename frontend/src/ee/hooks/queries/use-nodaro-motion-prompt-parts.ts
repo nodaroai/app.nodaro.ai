@@ -1,7 +1,7 @@
 /**
  * The Cast Swap engine's prompt parts, as the admin screens read and save
  * them: a trend's engine prompt (Admin → Trends → one trend → 4. Prompts) and
- * the direct runs' overrides per engine and style (Admin → Nodaro Motion).
+ * the direct runs' overrides per engine and style (Admin → Video Remake).
  * The engine owns every default and checks every override; a refused save is
  * a `PromptPartsInvalidError` with its problems, for the screen to show.
  */

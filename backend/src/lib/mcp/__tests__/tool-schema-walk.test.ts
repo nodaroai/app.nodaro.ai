@@ -140,7 +140,7 @@ const SCHEMA_FRAGMENTS: Record<string, readonly string[]> = {
   framingSourceInputShape: Object.keys(framingSourceInputShape),
   // estimate_trend / run_trend: a trend run's inputs (slug, slots, example, …).
   trendRunShape: Object.keys(trendRunShape),
-  // cast_swap: every role kind's preview-only settings (preview_name, in_preview),
+  // video_remake: every role kind's preview-only settings (preview_name, in_preview),
   // read by name where the roles are mapped, so they need no mapper below.
   castSwapRolePreviewArgs: Object.keys(castSwapRolePreviewArgs),
   // overlay_images: a layer's box (anchor, x, y, width, height, fit), forwarded

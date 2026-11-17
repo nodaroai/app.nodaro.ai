@@ -2,7 +2,7 @@
  * What a job cost, for display. A job's `credits` is its own HOLD, taken when
  * it was accepted, and never changes; the job can settle below it (a re-render
  * ceiling, a measured length) and the rest goes back to the balance. A job is
- * also a RUN: the steps it ran (child jobs — a Nodaro Motion run's reference
+ * also a RUN: the steps it ran (child jobs — a Video Remake run's reference
  * preparation, mask and video) are billed on their own, so the server reports
  * the run's figures: `credits_charged` (its settled charge, the steps'
  * included), `credits_held` (its hold, the steps' included) and

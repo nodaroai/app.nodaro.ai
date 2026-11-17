@@ -80,8 +80,8 @@ const DIAGNOSTIC = "a connectivity check"
 
 /** Recast renders a Generate Video Pro run; every Recast route follows that node (lib/route-node-gate.ts). */
 const RECAST = needs(["generate-video-pro"], "prepares a Recast run, which Generate Video Pro renders")
-/** Every trend run is a Nodaro Motion run (`requireNodeAvailable("cast-swap")` on its run route). */
-const TREND = needs(["cast-swap"], "browses or quotes trends, and every trend run is a Nodaro Motion (cast-swap) run")
+/** Every trend run is a Video Remake run (`requireNodeAvailable("cast-swap")` on its run route). */
+const TREND = needs(["cast-swap"], "browses or quotes trends, and every trend run is a Video Remake (cast-swap) run")
 const PIPELINE = needs([FILM_PIPELINE_FEATURE], "calls the film pipeline's services directly, past every route door")
 const STUDIO: ToolNeed = { world: "studio" }
 
@@ -340,10 +340,10 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   suno_style_boost: runs("/v1/suno/style-boost"),
   suno_convert_wav: runs("/v1/suno/convert-wav"),
 
-  // ── Nodaro Motion (cast-swap) and trends ────────────────────────────────
-  cast_swap: runs("/v1/cast-swap"),
-  estimate_full_quality: runs("/v1/cast-swap/:jobId/full-quality"),
-  full_quality: runs("/v1/cast-swap/:jobId/full-quality"),
+  // ── Video Remake (cast-swap) and trends ────────────────────────────────
+  video_remake: runs("/v1/video-remake"),
+  estimate_full_quality: runs("/v1/video-remake/:jobId/full-quality"),
+  full_quality: runs("/v1/video-remake/:jobId/full-quality"),
   list_trends: TREND,
   get_trend: TREND,
   estimate_trend: TREND,

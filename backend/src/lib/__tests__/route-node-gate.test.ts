@@ -55,7 +55,7 @@ describe("routeNodeGate — a nested route runs the node it is the run of", () =
     expect(nodeOf("/v1/voice-changer-pro/translate").types).toEqual(["voice-changer-pro"])
   })
 
-  it("Nodaro Motion's routes and the trend run's engine follow cast-swap", () => {
+  it("Video Remake's routes and the trend run's engine follow cast-swap", () => {
     expect(nodeOf("/v1/cast-swap").types).toEqual(["cast-swap"])
     expect(nodeOf("/v1/cast-swap/:jobId/full-quality").types).toEqual(["cast-swap"])
     expect(nodeOf("/v1/video-face-mesh").types).toEqual(["cast-swap"])
@@ -138,6 +138,10 @@ const PLUGIN_GUARDED_ROUTE_NODES: Readonly<Record<string, string>> = {
   "/v1/cast-swap": "cast-swap",
   "/v1/cast-swap/:jobId/full-quality": "cast-swap",
   "/v1/cast-swap/face-mask": "cast-swap",
+  // The same routes under Video Remake's own prefix (castSwap.videoRemakeRoutes).
+  "/v1/video-remake": "cast-swap",
+  "/v1/video-remake/:jobId/full-quality": "cast-swap",
+  "/v1/video-remake/face-mask": "cast-swap",
   "/v1/competitor-scan": "competitor-scan",
   "/v1/content-ideas": "content-ideas",
   "/v1/content-recipe": "content-recipe",
@@ -190,6 +194,18 @@ describe("routeNodeGate — the Cloud plugin's credit-guarded routes", () => {
   it("lists no route the plugin does not guard (the table above is the whole record)", () => {
     expect(PLUGIN_CREDIT_GUARDED_ROUTES.filter((r) => !Object.hasOwn(PLUGIN_GUARDED_ROUTE_NODES, r))).toEqual([])
     expect(new Set(PLUGIN_CREDIT_GUARDED_ROUTES).size).toBe(PLUGIN_CREDIT_GUARDED_ROUTES.length)
+  })
+
+  it("resolves a Video Remake route under either prefix to the same door: cast-swap, from the first gating generation", () => {
+    for (const [remake, cast] of [
+      ["/v1/video-remake", "/v1/cast-swap"],
+      ["/v1/video-remake/estimate", "/v1/cast-swap/estimate"],
+      ["/v1/video-remake/:jobId/full-quality", "/v1/cast-swap/:jobId/full-quality"],
+      ["/v1/video-remake/face-mask", "/v1/cast-swap/face-mask"],
+    ]) {
+      expect(routeNodeGate(remake!, {}), remake).toEqual(routeNodeGate(cast!, {}))
+    }
+    expect(routeNodeGate("/v1/video-remake", {})).toEqual({ kind: "node", types: ["cast-swap"], since: 0 })
   })
 
   it("every one resolves to a node the availability funnel knows", () => {

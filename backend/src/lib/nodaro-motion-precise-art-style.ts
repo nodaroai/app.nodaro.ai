@@ -1,12 +1,12 @@
 /**
- * Nodaro Motion's setting for a Precise run with an art style, per engine —
+ * Video Remake's setting for a Precise run with an art style, per engine —
  * how a DIRECT Precise run that carries an art style (`direction.style`, on
- * Nodaro Motion Prism) opens its prompt. Set by an admin for the whole
+ * Nodaro Prism) opens its prompt. Set by an admin for the whole
  * deployment, never by the person running it.
  *
  * The `app_settings` row `nodaro_motion_precise_art_style`:
- * `{ "motion-prism"?: Entry, "motion-pulse"?: Entry }`, keyed by Nodaro
- * Motion's PUBLIC engine ids, `Entry = { opener?: "edit" | "restyle";
+ * `{ "nodaro-prism"?: Entry, "nodaro-pulse"?: Entry }`, keyed by Video
+ * Remake's PUBLIC engine ids, `Entry = { opener?: "edit" | "restyle";
  * styleRefs?: StyleRefsSetting }`.
  *
  * - `opener`: `"restyle"` (the default; absent means it) opens the prompt
@@ -23,7 +23,7 @@
  * without one, every Flex run and every trend run are as before. Pulse takes
  * no art style, so its entry is never read (the admin route refuses one).
  *
- * Its OWN row, not a key of another Nodaro Motion setting: those entries'
+ * Its OWN row, not a key of another Video Remake setting: those entries'
  * schemas are strict, so an older app on the shared database would drop an
  * engine's whole entry on a key it does not know. That is also why the
  * Precise runs' "Style the role pictures" lives here rather than as a new key
@@ -43,7 +43,7 @@
 import { z } from "zod"
 import { NODARO_MOTION_ENGINES } from "@nodaro/shared/models"
 import { castSwapStepsSaveSchema, castSwapStepsSchema, stepsProblems, styleRefsNeedsEngine, type CastSwapStepsProblem, type StyleRefsSetting } from "./cast-swap-steps.js"
-import { parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
+import { byEngineSchema, parseByEngine, withEarlierEngineKeys, type ByEngine, type ByEngineForPlugin } from "./nodaro-motion-engine-keys.js"
 
 export const NODARO_MOTION_PRECISE_ART_STYLE_KEY = "nodaro_motion_precise_art_style"
 
@@ -100,10 +100,7 @@ export function preciseArtStyleEntryProblems(prefix: string, entry: NodaroMotion
 }
 
 /** What an admin saves: strict over the current engine ids (an unknown engine, opener or key is refused). */
-export const nodaroMotionPreciseArtStyleSchema: z.ZodType<NodaroMotionPreciseArtStyle> = z.strictObject({
-  "motion-prism": nodaroMotionPreciseArtStyleEntrySchema.optional(),
-  "motion-pulse": nodaroMotionPreciseArtStyleEntrySchema.optional(),
-})
+export const nodaroMotionPreciseArtStyleSchema: z.ZodType<NodaroMotionPreciseArtStyle> = byEngineSchema(nodaroMotionPreciseArtStyleEntrySchema)
 
 /**
  * The setting as stored and sent: an opener only when `"edit"` (`"restyle"` is
@@ -138,7 +135,7 @@ export function preciseArtStyleOpenerOf(setting: NodaroMotionPreciseArtStyle | n
 
 /**
  * What the plugin is answered: each changed entry, also under its earlier key
- * (the TRANSITION SHIM every Nodaro Motion setting's accessor answers,
+ * (the TRANSITION SHIM every Video Remake setting's accessor answers,
  * `withEarlierEngineKeys`), new objects; null when nothing is changed.
  */
 export function preciseArtStyleForPlugin(setting: NodaroMotionPreciseArtStyle | null | undefined): NodaroMotionPreciseArtStyleForPlugin | null {

@@ -1,8 +1,8 @@
 import type { NodaroClientCore } from "../core.js"
-import type { CastSwapEngine } from "./cast-swap.js"
+import type { VideoRemakeEngine } from "./cast-swap.js"
 
 /**
- * Trends — ready-made Nodaro Motion recipes. A trend is a short clip with slots
+ * Trends — ready-made Video Remake recipes. A trend is a short clip with slots
  * (the people, pets, products and place you can replace); fill its slots with
  * your own pictures and run it to get the clip back with them in it.
  *
@@ -36,9 +36,9 @@ import type { CastSwapEngine } from "./cast-swap.js"
  *   sent at all on a trend with none), `preview_unavailable` (the trend offers no
  *   preview), `invalid_slot_mention` (a `{slot:<key>}` in `details` naming no
  *   slot), `prompt_too_long` (shorten `details`), `draft_unsupported`
- *   (`draft: true` on a trend whose `engine` has no draft: Nodaro Motion Pulse),
+ *   (`draft: true` on a trend whose `engine` has no draft: Nodaro Pulse),
  *   `resolution_unsupported` (a `resolution` not in the trend's
- *   `resolutions`), `too_many_images` (a Nodaro Motion Pulse trend's run would send more
+ *   `resolutions`), `too_many_images` (a Nodaro Pulse trend's run would send more
  *   than 10 pictures: send fewer per slot). The slot errors carry the
  *   slot's key as `slot` (in `NodaroError.details`), and `chip_not_offered`
  *   the chip as `chip` too.
@@ -104,11 +104,11 @@ export type TrendChipKey = keyof TrendChips
 export type TrendResolution = "480p" | "720p" | "1080p"
 
 /**
- * The engine a trend runs on, by its public id ({@link CastSwapEngine}):
- * `"motion-prism"` (Nodaro Motion Prism) or `"motion-pulse"` (Nodaro Motion Pulse).
+ * The engine a trend runs on, by its public id ({@link VideoRemakeEngine}):
+ * `"nodaro-prism"` (Nodaro Prism) or `"nodaro-pulse"` (Nodaro Pulse).
  * The trend chooses it, never the person running it.
  */
-export type TrendEngine = CastSwapEngine
+export type TrendEngine = VideoRemakeEngine
 
 /**
  * One of a trend's videos as a list or page shows it: the card's
@@ -238,14 +238,14 @@ export interface TrendDetail extends TrendCard {
    * On a trend that hides its original, its first example (see {@link TrendOriginal}).
    */
   original?: TrendOriginal
-  /** The engine every run of this trend uses. Absent (an older server) = `"motion-prism"`. */
+  /** The engine every run of this trend uses. Absent (an older server) = `"nodaro-prism"`. */
   engine?: TrendEngine
-  /** Its name to show: "Nodaro Motion Prism" or "Nodaro Motion Pulse". Absent from an older server. */
+  /** Its name to show: "Nodaro Prism" or "Nodaro Pulse". Absent from an older server. */
   engineName?: string
   /**
-   * The resolutions a run may ask for, the default first. Nodaro Motion Prism:
+   * The resolutions a run may ask for, the default first. Nodaro Prism:
    * `["480p", "720p", "1080p"]`, where 480p is plain unless the run asks for a
-   * draft ({@link TrendRunRequest.draft}); Nodaro Motion Pulse: `["720p", "1080p"]`,
+   * draft ({@link TrendRunRequest.draft}); Nodaro Pulse: `["720p", "1080p"]`,
    * no draft. Offer exactly these.
    */
   resolutions: TrendResolution[]
@@ -288,14 +288,14 @@ export interface TrendRunRequest {
   preview?: boolean
   /**
    * One of the trend's {@link TrendDetail.resolutions}; default its first
-   * (`"480p"` on Nodaro Motion Prism, `"720p"` on Nodaro Motion Pulse). Another answers 400
+   * (`"480p"` on Nodaro Prism, `"720p"` on Nodaro Pulse). Another answers 400
    * `resolution_unsupported`.
    */
   resolution?: TrendResolution
   /**
    * `true` makes a draft: a 480p run whose same take Full Quality can finish at
-   * 1080p (Nodaro Motion Prism trends only). Default `false`: a plain run, at
-   * 480p too. `true` on a Nodaro Motion Pulse trend answers 400
+   * 1080p (Nodaro Prism trends only). Default `false`: a plain run, at
+   * 480p too. `true` on a Nodaro Pulse trend answers 400
    * `draft_unsupported`.
    */
   draft?: boolean
@@ -333,7 +333,7 @@ export interface TrendEstimate {
   holdCredits: number
   /** The engine the run was priced on: the trend's own. Absent from an older server. */
   engine?: TrendEngine
-  /** Its name to show: "Nodaro Motion Prism" or "Nodaro Motion Pulse". Absent from an older server. */
+  /** Its name to show: "Nodaro Prism" or "Nodaro Pulse". Absent from an older server. */
   engineName?: string
   /**
    * The parts of the quote, by name, for display only: some are alternatives
@@ -423,9 +423,9 @@ export interface TrendRun {
   preview: boolean
   resolution: string
   draft: boolean
-  /** The engine the run was made on. Absent (an older server) = `"motion-prism"`. */
+  /** The engine the run was made on. Absent (an older server) = `"nodaro-prism"`. */
   engine?: TrendEngine
-  /** Its name to show: "Nodaro Motion Prism" or "Nodaro Motion Pulse". Absent from an older server. */
+  /** Its name to show: "Nodaro Prism" or "Nodaro Pulse". Absent from an older server. */
   engineName?: string
   /** The result, once completed. */
   videoUrl: string | null
@@ -442,12 +442,12 @@ export interface TrendRun {
   creditsReleased?: number | null
   /**
    * A Full Quality version: the job id of the run it was made from (a draft,
-   * or a Nodaro Motion Pulse 720p run from when Pulse had Full Quality). `null`
+   * or a Nodaro Pulse 720p run from when Pulse had Full Quality). `null`
    * for any other run.
    */
   fullQualityOf: string | null
   /**
-   * A draft's newest Full Quality try (or a Nodaro Motion Pulse 720p run's, made
+   * A draft's newest Full Quality try (or a Nodaro Pulse 720p run's, made
    * when Pulse had Full Quality), if one was started: a pointer only,
    * to know an upgrade exists and how it is going. Its video and charge are on
    * that run, listed on its own (its `fullQualityOf` is this run's `jobId`) —
@@ -460,8 +460,8 @@ export interface TrendRun {
   fullQuality: { jobId: string; status: string; refused?: true } | null
   /**
    * Until when a completed run can be finished in Full Quality — a Nodaro
-   * Motion Prism draft only (the same take at 1080p); `null` otherwise, a plain
-   * run and every Nodaro Motion Pulse run included.
+   * Prism draft only (the same take at 1080p); `null` otherwise, a plain
+   * run and every Nodaro Pulse run included.
    */
   fullQualityUntil: string | null
 }

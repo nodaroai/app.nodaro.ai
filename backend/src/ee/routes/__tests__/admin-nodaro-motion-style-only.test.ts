@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * `/v1/admin/nodaro-motion/style-only` — what a direct style-only run does,
+ * `/v1/admin/video-remake/style-only` — what a direct style-only run does,
  * per engine (a Prism Flex run with an art style and nothing to swap).
  *
  * What must hold:
@@ -78,13 +78,13 @@ const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
-const URL = "/v1/admin/nodaro-motion/style-only"
+const URL = "/v1/admin/video-remake/style-only"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
 const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, ...castSwap } }, updatedAt: "2026-11-01T00:00:00.000Z" })
 const RUNS = { styleOnly: true }
 const ENGINES = [
-  { id: "motion-prism", name: "Nodaro Motion Prism", internal: "seedance-2-5" },
-  { id: "motion-pulse", name: "Nodaro Motion Pulse", internal: "kling-4" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4" },
 ]
 const llm = (model: string) => ({ mode: "llm", llm: { model, instructions: "test instructions", inputs: ["extraPrompt"], maxChars: 1000 } })
 
@@ -109,7 +109,7 @@ beforeEach(async () => {
 
 const put = (styleOnly: unknown, headers: Record<string, string> = as) => app.inject({ method: "PUT", url: URL, headers, payload: { styleOnly } })
 
-describe("GET /v1/admin/nodaro-motion/style-only", () => {
+describe("GET /v1/admin/video-remake/style-only", () => {
   it("is admin-only", async () => {
     expect((await app.inject({ method: "GET", url: URL })).statusCode).toBe(401)
     h.admin = false
@@ -129,58 +129,58 @@ describe("GET /v1/admin/nodaro-motion/style-only", () => {
   it("answers the stored row, an earlier engine key read as the current one and the defaults left out", async () => {
     h.row = { value: { "motion-pro": { path: "flex" }, "motion-lite": { path: "original" } }, updated_at: "2026-11-01T10:00:00.000Z" }
     expect((await app.inject({ method: "GET", url: URL, headers: as })).json().data).toMatchObject({
-      styleOnly: { "motion-prism": { path: "flex" } },
+      styleOnly: { "nodaro-prism": { path: "flex" } },
       updatedAt: "2026-11-01T10:00:00.000Z",
     })
   })
 })
 
-describe("PUT /v1/admin/nodaro-motion/style-only", () => {
+describe("PUT /v1/admin/video-remake/style-only", () => {
   it("is admin-only, and writes nothing for a non-admin", async () => {
     h.admin = false
-    expect((await put({ "motion-prism": { path: "flex" } })).statusCode).toBe(403)
+    expect((await put({ "nodaro-prism": { path: "flex" } })).statusCode).toBe(403)
     expect(h.upserts).toEqual([])
   })
 
   it("saves the change, the defaults left out, clears the cache and audits before and after", async () => {
-    const res = await put({ "motion-prism": { path: "flex", enginePrompt: { mode: "template" } } })
+    const res = await put({ "nodaro-prism": { path: "flex", enginePrompt: { mode: "template" } } })
     expect(res.statusCode).toBe(200)
-    expect(h.upserts).toEqual([{ key: "nodaro_motion_style_only", value: { "motion-prism": { path: "flex" } }, updated_at: expect.any(String), updated_by: ADMIN }])
+    expect(h.upserts).toEqual([{ key: "nodaro_motion_style_only", value: { "nodaro-prism": { path: "flex" } }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(h.invalidated).toBe(1)
-    expect(res.json().data).toMatchObject({ styleOnly: { "motion-prism": { path: "flex" } }, engines: ENGINES })
+    expect(res.json().data).toMatchObject({ styleOnly: { "nodaro-prism": { path: "flex" } }, engines: ENGINES })
     expect(h.audits).toEqual([
       {
         admin_user_id: ADMIN,
         action: "update_nodaro_motion_style_only",
         target_type: "app_setting",
         target_id: NODARO_MOTION_STYLE_ONLY_AUDIT_TARGET,
-        payload: { key: "nodaro_motion_style_only", before: null, after: { "motion-prism": { path: "flex" } } },
+        payload: { key: "nodaro_motion_style_only", before: null, after: { "nodaro-prism": { path: "flex" } } },
       },
     ])
     const prompt = llm("gemini-3.8-flash")
-    const second = await put({ "motion-prism": { enginePrompt: prompt } })
+    const second = await put({ "nodaro-prism": { enginePrompt: prompt } })
     expect(second.statusCode).toBe(200)
-    expect(second.json().data.styleOnly).toEqual({ "motion-prism": { enginePrompt: prompt } })
+    expect(second.json().data.styleOnly).toEqual({ "nodaro-prism": { enginePrompt: prompt } })
     expect(h.audits[1]!.payload).toEqual({
       key: "nodaro_motion_style_only",
-      before: { "motion-prism": { path: "flex" } },
-      after: { "motion-prism": { enginePrompt: prompt } },
+      before: { "nodaro-prism": { path: "flex" } },
+      after: { "nodaro-prism": { enginePrompt: prompt } },
     })
   })
 
   it("never stores an unset key, not even as null", async () => {
-    await put({ "motion-prism": { path: "flex" } })
+    await put({ "nodaro-prism": { path: "flex" } })
     const stored = (h.upserts[0] as { value: Record<string, Record<string, unknown>> }).value
-    expect(Object.keys(stored)).toEqual(["motion-prism"])
-    expect(Object.keys(stored["motion-prism"]!)).toEqual(["path"])
+    expect(Object.keys(stored)).toEqual(["nodaro-prism"])
+    expect(Object.keys(stored["nodaro-prism"]!)).toEqual(["path"])
   })
 
   it("refuses an unknown engine, path or key", async () => {
     for (const s of [
       { "motion-pro": { path: "flex" } },
-      { "motion-prism": { path: "depth" } },
-      { "motion-prism": { path: "flex", extra: 1 } },
-      { "motion-prism": null },
+      { "nodaro-prism": { path: "depth" } },
+      { "nodaro-prism": { path: "flex", extra: 1 } },
+      { "nodaro-prism": null },
       "flex",
       null,
     ]) {
@@ -188,45 +188,45 @@ describe("PUT /v1/admin/nodaro-motion/style-only", () => {
       expect(res.statusCode, JSON.stringify(s)).toBe(400)
       expect(res.json().error.code).toBe("validation_error")
     }
-    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { styleOnly: {}, engine: "motion-prism" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PUT", url: URL, headers: as, payload: { styleOnly: {}, engine: "nodaro-prism" } })).statusCode).toBe(400)
     expect(h.upserts).toEqual([])
   })
 
   it("refuses an engine prompt on a model it does not know, with its path, and saves nothing", async () => {
-    const res = await put({ "motion-prism": { path: "flex", enginePrompt: llm("no-such-model") } })
+    const res = await put({ "nodaro-prism": { path: "flex", enginePrompt: llm("no-such-model") } })
     expect(res.statusCode).toBe(400)
     const error = res.json().error
     expect(error.code).toBe("validation_error")
-    expect(error.issues[0]).toEqual({ path: "styleOnly.motion-prism.enginePrompt.llm.model", code: "unknown_model", message: expect.any(String) })
-    expect(error.message).toMatch(/^styleOnly\.motion-prism\.enginePrompt\.llm\.model: /)
+    expect(error.issues[0]).toEqual({ path: "styleOnly.nodaro-prism.enginePrompt.llm.model", code: "unknown_model", message: expect.any(String) })
+    expect(error.message).toMatch(/^styleOnly\.nodaro-prism\.enginePrompt\.llm\.model: /)
     expect(h.upserts).toEqual([])
     expect(h.audits).toEqual([])
   })
 
   it("refuses a changed Pulse entry (art styles are Prism's), and saves a Pulse entry on the defaults", async () => {
-    for (const s of [{ "motion-pulse": { path: "flex" } }, { "motion-pulse": { enginePrompt: llm("gemini-3.8-flash") } }]) {
+    for (const s of [{ "nodaro-pulse": { path: "flex" } }, { "nodaro-pulse": { enginePrompt: llm("gemini-3.8-flash") } }]) {
       const res = await put(s)
       expect(res.statusCode, JSON.stringify(s)).toBe(400)
-      expect(res.json().error).toEqual({ code: "style_only_engine", message: "Nodaro Motion Pulse takes no art style, so it runs no style-only runs." })
+      expect(res.json().error).toEqual({ code: "style_only_engine", message: "Nodaro Pulse takes no art style, so it runs no style-only runs." })
     }
     expect(h.upserts).toEqual([])
-    const res = await put({ "motion-pulse": { path: "original", enginePrompt: { mode: "template" } } })
+    const res = await put({ "nodaro-pulse": { path: "original", enginePrompt: { mode: "template" } } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.styleOnly).toEqual({})
   })
 
   it("saves a change once one environment's engine runs style-only runs", async () => {
     h.envs = [envRow("production", {}), envRow("staging", RUNS)]
-    const res = await put({ "motion-prism": { path: "flex" } })
+    const res = await put({ "nodaro-prism": { path: "flex" } })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.styleOnly).toEqual({ "motion-prism": { path: "flex" } })
+    expect(res.json().data.styleOnly).toEqual({ "nodaro-prism": { path: "flex" } })
     expect(h.upserts).toHaveLength(1)
   })
 
   it("refuses a change (409 engine_unsupported) while no environment's engine runs style-only runs", async () => {
     for (const envs of [[], [envRow("production", {})], [envRow("production", { styleOnly: false }), envRow("staging", {})], [envRow("dev", RUNS)]]) {
       h.envs = envs
-      const res = await put({ "motion-prism": { path: "flex" } })
+      const res = await put({ "nodaro-prism": { path: "flex" } })
       expect(res.statusCode, JSON.stringify(envs)).toBe(409)
       expect(res.json().error).toEqual({ code: "engine_unsupported", message: NO_ENGINE_RUNS_STYLE_ONLY_MESSAGE, envs: [] })
     }
@@ -235,16 +235,16 @@ describe("PUT /v1/admin/nodaro-motion/style-only", () => {
   })
 
   it("always saves the defaults, whatever the engines, so a change can be taken back", async () => {
-    h.row = { value: { "motion-prism": { path: "flex" } }, updated_at: "2026-11-01T10:00:00.000Z" }
+    h.row = { value: { "nodaro-prism": { path: "flex" } }, updated_at: "2026-11-01T10:00:00.000Z" }
     h.envs = []
-    for (const s of [{}, { "motion-prism": { path: "original" } }, { "motion-prism": { enginePrompt: { mode: "template" } } }]) {
+    for (const s of [{}, { "nodaro-prism": { path: "original" } }, { "nodaro-prism": { enginePrompt: { mode: "template" } } }]) {
       const res = await put(s)
       expect(res.statusCode, JSON.stringify(s)).toBe(200)
       expect(res.json().data.styleOnly).toEqual({})
     }
     expect(h.envReads).toBe(0)
     expect(h.upserts.map((u) => (u as { value: unknown }).value)).toEqual([{}, {}, {}])
-    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_style_only", before: { "motion-prism": { path: "flex" } }, after: {} })
+    expect(h.audits[0]!.payload).toEqual({ key: "nodaro_motion_style_only", before: { "nodaro-prism": { path: "flex" } }, after: {} })
   })
 
   it("files its audit rows under an id of its own", () => {

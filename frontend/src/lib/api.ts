@@ -6561,8 +6561,8 @@ export interface Job {
   credits?: number | null        // Credits HELD when the job was accepted (all users); never changes — the job's own hold
   /** Credits actually charged once the hold settled (all users), the run's
    *  steps (child jobs) included — can be below `credits_held`. 0 when the
-   *  run's own hold was refunded, plus any settled steps (a refunded Nodaro
-   *  Motion run whose reference and mask steps committed reads 165). null
+   *  run's own hold was refunded, plus any settled steps (a refunded Video
+   *  Remake run whose reference and mask steps committed reads 165). null
    *  while the job's own hold is open (even with steps settled), with no
    *  reservation in the run, or when its steps could not be read (unknown). */
   credits_charged?: number | null
@@ -11752,7 +11752,7 @@ export interface AdminTrendSource {
 export type AdminTrendFaceMaskingMode = "off" | "always" | "auto"
 /**
  * How Faces hidden covers the faces it finds: "blur" (the default), "depth"
- * (depth colours), or "none" (Admin → Nodaro Motion only, never a trend's:
+ * (depth colours), or "none" (Admin → Video Remake only, never a trend's:
  * the faces found but kept as filmed, only the face mesh drawn on them, so it
  * needs `faceMesh: true`).
  */
@@ -11794,7 +11794,7 @@ export interface AdminTrendFaceMaskingZone {
  */
 export interface AdminTrendFaceMasking {
   mode: AdminTrendFaceMaskingMode
-  /** A trend's clip preparation; left out = "faces". Admin → Nodaro Motion never sets it. */
+  /** A trend's clip preparation; left out = "faces". Admin → Video Remake never sets it. */
   source?: AdminTrendFaceMaskingSource
   /** Full depth only: where the scene comes from (left out = "description"). */
   scene?: AdminTrendFullDepthScene
@@ -11848,7 +11848,7 @@ export interface AdminTrendFaceMasking {
    */
   depthModelSize?: VideoDepthModelSize
   /**
-   * Admin → Nodaro Motion only (a trend's setting does not take it yet): the
+   * Admin → Video Remake only (a trend's setting does not take it yet): the
    * depth map blurred before it is coloured and before the face mesh is drawn
    * on it, the blur's sigma at 1080 px tall, whole steps 0–40 — Full depth's
    * (the Motion setting), or a Faces hidden depth fill's (the Precise
@@ -11858,7 +11858,7 @@ export interface AdminTrendFaceMasking {
    */
   depthBlur?: number
   /**
-   * What the face mesh draws (Admin → Nodaro Motion's Motion setting, as
+   * What the face mesh draws (Admin → Video Remake's Motion setting, as
    * `depthBlur`): left out = the full mesh; `"features"` the eye and lip
    * outlines only; `"mouth"` the lip outline only. Saved only when the face
    * mesh is on and it is not `"full"`, offered only where the engine lists it
@@ -11874,7 +11874,7 @@ export interface AdminTrendFaceMasking {
    */
   faceMeshLayers?: VideoFaceMeshLayers
   /**
-   * Full depth's face mesh (Admin → Nodaro Motion's Motion setting and a
+   * Full depth's face mesh (Admin → Video Remake's Motion setting and a
    * trend's): the smallest face it draws lines on, the face box's height as a
    * % of the frame's, 0–100 (0 = no size minimum; the side margins still
    * apply). Left out = the engine's default (10). Saved only with Full depth
@@ -12161,7 +12161,7 @@ export type AdminTrendPreviewClipOutOfDate = "source" | "start" | "recipe" | "fa
 export type AdminTrendKlingLength = "cut-end" | "cut-start"
 
 /**
- * What sound a Nodaro Motion Pulse (Kling 4) run delivers (admin only): the
+ * What sound a Nodaro Pulse (Kling 4) run delivers (admin only): the
  * original audio back on the result, exactly (the default), or Kling's own
  * track as is.
  */
@@ -12177,7 +12177,7 @@ export type CastSwapPulseAudioId = "original" | "generated"
 export type CastSwapPrismReferenceAudioId = "full" | "voice" | "none" | "one-tone" | "octave"
 
 /**
- * What a Nodaro Motion Prism run's reference video carries (admin only): no
+ * What a Nodaro Prism run's reference video carries (admin only): no
  * audio, the clip's whole mix, only the vocals split from the music, or either
  * flattened to one steady tone. The original audio always goes back on the
  * result.
@@ -12206,16 +12206,16 @@ export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolu
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
- * 2.5 (Nodaro Motion Prism: 480p draft, 720p, 1080p) or Kling 4 (Nodaro Motion
+ * 2.5 (Nodaro Prism: 480p draft, 720p, 1080p) or Kling 4 (Nodaro
  * Pulse: 720p, 1080p; no draft). People see the public ids (`NodaroMotionEngine`).
  */
 export type AdminTrendEngine = "seedance-2-5" | "kling-4"
 
-/** Nodaro Motion's public engine ids, as every user-facing response names them. */
-export type NodaroMotionEngine = "motion-prism" | "motion-pulse"
+/** Video Remake's public engine ids, as every user-facing response names them. */
+export type NodaroMotionEngine = "nodaro-prism" | "nodaro-pulse"
 
-/** The public ids the engines had before (2026-10-26); an older server may still answer one. */
-export type NodaroMotionLegacyEngine = "motion-pro" | "motion-lite"
+/** The public ids the engines had before; an older server may still answer one. */
+export type NodaroMotionLegacyEngine = "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite"
 
 /** `archived`: put away by an admin — off the catalog, kept with its runs. */
 export type TrendStatus = "draft" | "published" | "unpublished" | "archived"
@@ -12357,12 +12357,12 @@ export interface AdminTrendRun {
   resolution: string
   draft: boolean
   /**
-   * The engine it was made on, by its PUBLIC id (Nodaro Motion Prism for every
+   * The engine it was made on, by its PUBLIC id (Nodaro Prism for every
    * run before the choice); an older server answered the internal id or an
    * earlier public id.
    */
   engine?: NodaroMotionEngine | NodaroMotionLegacyEngine | AdminTrendEngine
-  /** Its name, "Nodaro Motion Prism" or "Nodaro Motion Pulse" (absent from an older server). */
+  /** Its name, "Nodaro Prism" or "Nodaro Pulse" (absent from an older server). */
   engineName?: string
   videoUrl: string | null
   posterUrl: string | null
@@ -12521,9 +12521,9 @@ export class TrendPublishBlockedError extends Error {
   }
 }
 
-// ---- Admin: Nodaro Motion (EE; /v1/admin/nodaro-motion, backend/src/ee/routes/admin-nodaro-motion.ts) ----
+// ---- Admin: Video Remake (EE; /v1/admin/video-remake, backend/src/ee/routes/admin-nodaro-motion.ts) ----
 
-/** Nodaro Motion's face masking per engine, keyed by public id; an engine left out masks nothing. */
+/** Video Remake's face masking per engine, keyed by public id; an engine left out masks nothing. */
 export type NodaroMotionMasking = Partial<Record<NodaroMotionEngine, AdminTrendFaceMasking>>
 
 export interface NodaroMotionMaskingView {
@@ -12534,7 +12534,7 @@ export interface NodaroMotionMaskingView {
   engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
 }
 
-const ADMIN_NODARO_MOTION_MASKING = "/v1/admin/nodaro-motion/masking"
+const ADMIN_NODARO_MOTION_MASKING = "/v1/admin/video-remake/masking"
 
 export async function fetchNodaroMotionMasking(): Promise<NodaroMotionMaskingView> {
   return (await apiRequest<{ data: NodaroMotionMaskingView }>(ADMIN_NODARO_MOTION_MASKING, "apiErr.loadNodaroMotion")).data
@@ -12549,7 +12549,7 @@ export async function saveNodaroMotionMasking(masking: NodaroMotionMasking): Pro
   ).data
 }
 
-// ---- Admin: Nodaro Motion preparation steps (EE; mirrors backend/src/lib/cast-swap-steps.ts, no texts) ----
+// ---- Admin: Video Remake preparation steps (EE; mirrors backend/src/lib/cast-swap-steps.ts, no texts) ----
 
 export const SHEET_KINDS = ["person", "pet", "product", "location"] as const
 export type SheetKind = (typeof SHEET_KINDS)[number]
@@ -12720,7 +12720,7 @@ export interface CastSwapStepDefaults {
   problems: CastSwapStepsProblem[]
 }
 
-/** Nodaro Motion's preparation steps per engine, keyed by public id; an engine left out runs as today. */
+/** Video Remake's preparation steps per engine, keyed by public id; an engine left out runs as today. */
 export type NodaroMotionSteps = Partial<Record<NodaroMotionEngine, CastSwapSteps>>
 
 export interface NodaroMotionStepsView {
@@ -12744,7 +12744,7 @@ export interface JobCastSwapSteps {
   preciseStyleSentGray?: true
 }
 
-const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/nodaro-motion/steps"
+const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/video-remake/steps"
 
 export async function fetchNodaroMotionSteps(): Promise<NodaroMotionStepsView> {
   return (await apiRequest<{ data: NodaroMotionStepsView }>(ADMIN_NODARO_MOTION_STEPS, "apiErr.loadNodaroMotion")).data
@@ -13310,7 +13310,7 @@ export interface PromptPartProblem {
   part?: CastSwapPromptPartId
   code: string
   message: string
-  /** Admin → Nodaro Motion's save: the engine and key (a style, or `styleOnly`) it is about. */
+  /** Admin → Video Remake's save: the engine and key (a style, or `styleOnly`) it is about. */
   engine?: NodaroMotionEngine
   style?: NodaroMotionPromptPartsKey
 }
@@ -13384,7 +13384,7 @@ export type CastSwapStyleId = "precise" | "motion"
  */
 export type NodaroMotionPromptPartsKey = CastSwapStyleId | "styleOnly"
 
-/** Nodaro Motion's direct-run overrides: per engine (public id), per key, the text per part. */
+/** Video Remake's direct-run overrides: per engine (public id), per key, the text per part. */
 export type NodaroMotionPromptParts = Partial<Record<NodaroMotionEngine, Partial<Record<NodaroMotionPromptPartsKey, PromptPartTexts>>>>
 
 export interface NodaroMotionPromptPartsView {
@@ -13396,7 +13396,7 @@ export interface NodaroMotionPromptPartsView {
   styles: NodaroMotionPromptPartsKey[]
 }
 
-const ADMIN_NODARO_MOTION_PROMPT_PARTS = "/v1/admin/nodaro-motion/prompt-parts"
+const ADMIN_NODARO_MOTION_PROMPT_PARTS = "/v1/admin/video-remake/prompt-parts"
 
 export async function fetchNodaroMotionPromptParts(): Promise<NodaroMotionPromptPartsView> {
   return (await apiRequest<{ data: NodaroMotionPromptPartsView }>(ADMIN_NODARO_MOTION_PROMPT_PARTS, "apiErr.loadNodaroMotion")).data
@@ -13428,7 +13428,7 @@ export async function previewNodaroMotionPromptParts(input: {
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Motion setting (/v1/admin/nodaro-motion/motion, admin-nodaro-motion-motion.ts) ----
+// ---- Admin: Video Remake's Motion setting (/v1/admin/video-remake/motion, admin-nodaro-motion-motion.ts) ----
 
 /** One engine's Motion setting: its masking (a face mask, or full depth) and prompt style; each left out takes its default. */
 export interface NodaroMotionMotionEntry {
@@ -13458,7 +13458,7 @@ export interface NodaroMotionEngineSupports {
   fullDepthScenes?: AdminTrendFullDepthScene[]
 }
 
-const ADMIN_NODARO_MOTION_MOTION = "/v1/admin/nodaro-motion/motion"
+const ADMIN_NODARO_MOTION_MOTION = "/v1/admin/video-remake/motion"
 
 export async function fetchNodaroMotionMotion(): Promise<NodaroMotionMotionView> {
   return (await apiRequest<{ data: NodaroMotionMotionView }>(ADMIN_NODARO_MOTION_MOTION, "apiErr.loadNodaroMotion")).data
@@ -13474,9 +13474,9 @@ export async function saveNodaroMotionMotion(motion: NodaroMotionMotion): Promis
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Style choice for direct runs (/v1/admin/nodaro-motion/style, admin-nodaro-motion-style.ts) ----
+// ---- Admin: Video Remake's Style choice for direct runs (/v1/admin/video-remake/style, admin-nodaro-motion-style.ts) ----
 
-/** Who decides a direct run's style on an engine: people (the default), or Precise in Nodaro Motion (`"precise"`) / always Flex (`"flex"`). */
+/** Who decides a direct run's style on an engine: people (the default), or Precise in Video Remake (`"precise"`) / always Flex (`"flex"`). */
 export type NodaroMotionStyleChoice = "user" | "precise" | "flex"
 
 /** The Style choice per engine, keyed by public id; an engine left out (or "user") lets people choose. */
@@ -13491,7 +13491,7 @@ export interface NodaroMotionStyleView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_STYLE = "/v1/admin/nodaro-motion/style"
+const ADMIN_NODARO_MOTION_STYLE = "/v1/admin/video-remake/style"
 
 export async function fetchNodaroMotionStyle(): Promise<NodaroMotionStyleView> {
   return (await apiRequest<{ data: NodaroMotionStyleView }>(ADMIN_NODARO_MOTION_STYLE, "apiErr.loadNodaroMotion")).data
@@ -13507,7 +13507,7 @@ export async function saveNodaroMotionStyle(style: NodaroMotionStyle): Promise<N
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Flex prompt wording for direct runs (/v1/admin/nodaro-motion/prompt-wording, admin-nodaro-motion-prompt-wording.ts) ----
+// ---- Admin: Video Remake's Flex prompt wording for direct runs (/v1/admin/video-remake/prompt-wording, admin-nodaro-motion-prompt-wording.ts) ----
 
 /** The Flex prompt wording per engine, keyed by public id; an engine left out (or "current") is on today's wording. */
 export type NodaroMotionPromptWording = Partial<Record<NodaroMotionEngine, CastSwapPromptWordingId>>
@@ -13521,7 +13521,7 @@ export interface NodaroMotionPromptWordingView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_PROMPT_WORDING = "/v1/admin/nodaro-motion/prompt-wording"
+const ADMIN_NODARO_MOTION_PROMPT_WORDING = "/v1/admin/video-remake/prompt-wording"
 
 export async function fetchNodaroMotionPromptWording(): Promise<NodaroMotionPromptWordingView> {
   return (await apiRequest<{ data: NodaroMotionPromptWordingView }>(ADMIN_NODARO_MOTION_PROMPT_WORDING, "apiErr.loadNodaroMotion")).data
@@ -13537,7 +13537,7 @@ export async function saveNodaroMotionPromptWording(promptWording: NodaroMotionP
   ).data
 }
 
-// ---- Admin: Nodaro Motion's style-only setting (/v1/admin/nodaro-motion/style-only, admin-nodaro-motion-style-only.ts) ----
+// ---- Admin: Video Remake's style-only setting (/v1/admin/video-remake/style-only, admin-nodaro-motion-style-only.ts) ----
 
 /** What a style-only run sends: the original clip restyled, with no depth (the default), or the depth path of any art-style Flex run. */
 export type NodaroMotionStyleOnlyPath = "original" | "flex"
@@ -13561,7 +13561,7 @@ export interface NodaroMotionStyleOnlyView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_STYLE_ONLY = "/v1/admin/nodaro-motion/style-only"
+const ADMIN_NODARO_MOTION_STYLE_ONLY = "/v1/admin/video-remake/style-only"
 
 export async function fetchNodaroMotionStyleOnly(): Promise<NodaroMotionStyleOnlyView> {
   return (await apiRequest<{ data: NodaroMotionStyleOnlyView }>(ADMIN_NODARO_MOTION_STYLE_ONLY, "apiErr.loadNodaroMotion")).data
@@ -13580,7 +13580,7 @@ export async function saveNodaroMotionStyleOnly(styleOnly: NodaroMotionStyleOnly
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Precise art-style setting (/v1/admin/nodaro-motion/precise-art-style, admin-nodaro-motion-precise-art-style.ts) ----
+// ---- Admin: Video Remake's Precise art-style setting (/v1/admin/video-remake/precise-art-style, admin-nodaro-motion-precise-art-style.ts) ----
 
 /** How a Precise run with an art style opens its prompt: "restyle {video:1} as follows:" (the default) or the edit opener of before. */
 export type NodaroMotionPreciseOpener = "edit" | "restyle"
@@ -13604,7 +13604,7 @@ export interface NodaroMotionPreciseArtStyleView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_PRECISE_ART_STYLE = "/v1/admin/nodaro-motion/precise-art-style"
+const ADMIN_NODARO_MOTION_PRECISE_ART_STYLE = "/v1/admin/video-remake/precise-art-style"
 
 export async function fetchNodaroMotionPreciseArtStyle(): Promise<NodaroMotionPreciseArtStyleView> {
   return (await apiRequest<{ data: NodaroMotionPreciseArtStyleView }>(ADMIN_NODARO_MOTION_PRECISE_ART_STYLE, "apiErr.loadNodaroMotion")).data
@@ -13624,7 +13624,7 @@ export async function saveNodaroMotionPreciseArtStyle(preciseArtStyle: NodaroMot
   ).data
 }
 
-// ---- Admin: Nodaro Motion's no-person setting (/v1/admin/nodaro-motion/no-person, admin-nodaro-motion-no-person.ts) ----
+// ---- Admin: Video Remake's no-person setting (/v1/admin/video-remake/no-person, admin-nodaro-motion-no-person.ts) ----
 
 /** One engine's no-person setting. Absent `sourceClip` means on (the default); `false` is the only value stored. */
 export interface NodaroMotionNoPersonEntry {
@@ -13643,7 +13643,7 @@ export interface NodaroMotionNoPersonView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_NO_PERSON = "/v1/admin/nodaro-motion/no-person"
+const ADMIN_NODARO_MOTION_NO_PERSON = "/v1/admin/video-remake/no-person"
 
 export async function fetchNodaroMotionNoPerson(): Promise<NodaroMotionNoPersonView> {
   return (await apiRequest<{ data: NodaroMotionNoPersonView }>(ADMIN_NODARO_MOTION_NO_PERSON, "apiErr.loadNodaroMotion")).data
@@ -13659,7 +13659,7 @@ export async function saveNodaroMotionNoPerson(noPerson: NodaroMotionNoPerson): 
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Precise art-style route (/v1/admin/nodaro-motion/precise-style-route, admin-nodaro-motion-precise-style-route.ts) ----
+// ---- Admin: Video Remake's Precise art-style route (/v1/admin/video-remake/precise-style-route, admin-nodaro-motion-precise-style-route.ts) ----
 
 /** Whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it. A key left out takes its default (on; nobody). */
 export interface NodaroMotionPreciseStyleRoute {
@@ -13691,7 +13691,7 @@ export interface NodaroMotionPreciseStyleRouteView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE = "/v1/admin/nodaro-motion/precise-style-route"
+const ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE = "/v1/admin/video-remake/precise-style-route"
 
 export async function fetchNodaroMotionPreciseStyleRoute(): Promise<NodaroMotionPreciseStyleRouteView> {
   return (await apiRequest<{ data: NodaroMotionPreciseStyleRouteView }>(ADMIN_NODARO_MOTION_PRECISE_STYLE_ROUTE, "apiErr.loadNodaroMotion")).data
@@ -13707,16 +13707,16 @@ export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: Nodar
   ).data
 }
 
-// ---- Admin: whether the Nodaro Motion page shows its Advanced options (/v1/admin/nodaro-motion/advanced, admin-nodaro-motion-advanced.ts) ----
+// ---- Admin: whether the Video Remake page shows its Advanced options (/v1/admin/video-remake/advanced, admin-nodaro-motion-advanced.ts) ----
 
 export interface NodaroMotionAdvancedView {
-  /** Whether the Nodaro Motion page shows its Advanced chip (Prepare references and the pre-prompt); false until an admin turns it on. */
+  /** Whether the Video Remake page shows its Advanced chip (Prepare references and the pre-prompt); false until an admin turns it on. */
   show: boolean
   /** null = never saved (hidden). */
   updatedAt: string | null
 }
 
-const ADMIN_NODARO_MOTION_ADVANCED = "/v1/admin/nodaro-motion/advanced"
+const ADMIN_NODARO_MOTION_ADVANCED = "/v1/admin/video-remake/advanced"
 
 export async function fetchNodaroMotionAdvanced(): Promise<NodaroMotionAdvancedView> {
   return (await apiRequest<{ data: NodaroMotionAdvancedView }>(ADMIN_NODARO_MOTION_ADVANCED, "apiErr.loadNodaroMotion")).data
@@ -13732,7 +13732,7 @@ export async function saveNodaroMotionAdvanced(show: boolean): Promise<NodaroMot
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Pulse audio for direct runs (/v1/admin/nodaro-motion/pulse-audio, admin-nodaro-motion-pulse-audio.ts) ----
+// ---- Admin: Video Remake's Pulse audio for direct runs (/v1/admin/video-remake/pulse-audio, admin-nodaro-motion-pulse-audio.ts) ----
 
 export interface NodaroMotionPulseAudioView {
   /** null = never saved: every direct Pulse run delivers the original audio. */
@@ -13742,7 +13742,7 @@ export interface NodaroMotionPulseAudioView {
   supported: boolean
 }
 
-const ADMIN_NODARO_MOTION_PULSE_AUDIO = "/v1/admin/nodaro-motion/pulse-audio"
+const ADMIN_NODARO_MOTION_PULSE_AUDIO = "/v1/admin/video-remake/pulse-audio"
 
 export async function fetchNodaroMotionPulseAudio(): Promise<NodaroMotionPulseAudioView> {
   return (await apiRequest<{ data: NodaroMotionPulseAudioView }>(ADMIN_NODARO_MOTION_PULSE_AUDIO, "apiErr.loadNodaroMotion")).data
@@ -13757,7 +13757,7 @@ export async function saveNodaroMotionPulseAudio(pulseAudio: CastSwapPulseAudioI
   ).data
 }
 
-// ---- Admin: Nodaro Motion's Prism reference audio for direct runs (/v1/admin/nodaro-motion/prism-reference-audio, admin-nodaro-motion-prism-reference-audio.ts) ----
+// ---- Admin: Video Remake's Prism reference audio for direct runs (/v1/admin/video-remake/prism-reference-audio, admin-nodaro-motion-prism-reference-audio.ts) ----
 
 export interface NodaroMotionPrismReferenceAudioView {
   /** Per output resolution, a resolution left out being the full audio. null = never saved: every direct Prism run sends the clip's full audio. */
@@ -13773,7 +13773,7 @@ export interface NodaroMotionPrismReferenceAudioView {
   modes?: CastSwapPrismReferenceAudioMode[]
 }
 
-const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/nodaro-motion/prism-reference-audio"
+const ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO = "/v1/admin/video-remake/prism-reference-audio"
 
 export async function fetchNodaroMotionPrismReferenceAudio(): Promise<NodaroMotionPrismReferenceAudioView> {
   return (

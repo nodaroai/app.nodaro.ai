@@ -825,6 +825,7 @@
         "backend/src/lib/video-frame-dispatch.ts",
         "backend/src/lib/video-frame-fit.ts",
         "backend/src/lib/video-output-length.ts",
+        "backend/src/lib/video-remake-paths.ts",
         "backend/src/lib/video-request-norm.ts",
         "backend/src/lib/video-utility-credits.ts",
         "backend/src/lib/voice-clone-consent.ts",

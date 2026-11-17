@@ -1,4 +1,4 @@
-// The shot list step of a Nodaro Motion run's preparation (`steps.shotList`):
+// The shot list step of a Video Remake run's preparation (`steps.shotList`):
 // the clip described shot by shot (the platform measures where the cuts are),
 // per style.
 //

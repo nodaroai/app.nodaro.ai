@@ -281,7 +281,7 @@ export function maskingUsesBlur(m: Pick<AdminTrendFaceMasking, "fill">): boolean
   return (m.fill ?? FACE_MASKING_DEFAULTS.fill) === "blur"
 }
 
-/** The setting as saved: the mode, then only the keys that are set (the engine fills the rest). Also Admin → Nodaro Motion's. */
+/** The setting as saved: the mode, then only the keys that are set (the engine fills the rest). Also Admin → Video Remake's. */
 export function cleanMasking(m: AdminTrendFaceMasking): AdminTrendFaceMasking {
   const zone = cleanZone(m.zone)
   const num = (v: number | undefined) => typeof v === "number" && Number.isFinite(v)
@@ -556,7 +556,7 @@ export function formIssues(form: TrendForm): string[] {
   if (images > most) {
     out.push(
       form.engine === "kling-4"
-        ? `${images} images: at most ${most} on Nodaro Motion Pulse (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
+        ? `${images} images: at most ${most} on Nodaro Pulse (Kling 4) (1 prepared picture per person, pet or product slot, 3 per location, plus the reference pictures).`
         : `${images} images: at most ${most} (3 per slot plus the reference pictures).`,
     )
   }
@@ -575,7 +575,7 @@ function promptIssues(form: TrendForm, where: string): string[] {
   if (form.prePrompt.length > MAX_PRE_PROMPT) {
     if (!where) out.push(`Pre prompt: at most ${MAX_PRE_PROMPT} characters.`)
   } else if (form.trendPrompt.length <= budget.trendPromptMax && budget.room < 0) {
-    const on = form.engine === "kling-4" ? " on Nodaro Motion Pulse (Kling 4)" : ""
+    const on = form.engine === "kling-4" ? " on Nodaro Pulse (Kling 4)" : ""
     out.push(
       `Pre and trend prompts${where}: at most ${Math.max(0, budget.promptsMax)} characters together${on}, to leave room for the engine's text and the user's details.`,
     )
@@ -612,7 +612,7 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
 }
 
 /** What the server would refuse in a face masking setting, as sentences. */
-/** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Nodaro Motion's. */
+/** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Video Remake's. */
 export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   const out: string[] = []
   // Full depth reads the mode (its depth blur, and its face mesh's smallest face) only: whatever else is kept (from Faces
@@ -642,14 +642,14 @@ export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   // Keep people has no fill (outside the people is always depth): no blur strength either.
   if (clipPreparationOf(m) !== "keep-people" && maskingUsesBlur(m) && outside(m.blurStrengthPct, blurStrengthPct)) out.push(`Face masking: the blur strength is ${range(blurStrengthPct)} %.`)
   if (outside(m.threshold, threshold)) out.push(`Face masking: the detection threshold is ${range(threshold)}.`)
-  // A depth fill's depth blur (Admin → Nodaro Motion), as Full depth's.
+  // A depth fill's depth blur (Admin → Video Remake), as Full depth's.
   if (depthBlurKindOf(m) === "depth-fill") {
     const { min, max } = CAST_SWAP_DEPTH_BLUR_BOUNDS
     if (m.depthBlur !== undefined && !(Number.isInteger(m.depthBlur) && m.depthBlur >= min && m.depthBlur <= max)) {
       out.push(`Face masking: the depth blur is a whole number from ${min} to ${max}.`)
     }
   }
-  // The fill "None" (Admin → Nodaro Motion) keeps the faces as filmed: only the face mesh changes anything.
+  // The fill "None" (Admin → Video Remake) keeps the faces as filmed: only the face mesh changes anything.
   if (clipPreparationOf(m) === "faces" && m.fill === "none" && m.faceMesh !== true) {
     out.push('Face masking: the fill "None" draws only the face mesh, so it needs the face mesh on.')
   }
@@ -678,7 +678,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   prismReferenceAudioPitch: "the Prism reference audio pitch shift",
-  "kling-4": "Nodaro Motion Pulse (Kling 4)",
+  "kling-4": "Nodaro Pulse (Kling 4)",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
   castSwap: "Cast Swap",

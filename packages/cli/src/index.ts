@@ -28,7 +28,7 @@ import { modelsCommand } from "./commands/models.js"
 import { shotsCommand } from "./commands/shots.js"
 import { recastCommand } from "./commands/recast.js"
 import { trendsCommand } from "./commands/trends.js"
-import { castSwapCommand } from "./commands/cast-swap.js"
+import { castSwapCommand, videoRemakeCommand } from "./commands/cast-swap.js"
 import { registerLocationsCommands } from "./commands/locations.js"
 import { registerObjectsCommands } from "./commands/objects.js"
 import { orgCommand } from "./commands/org.js"
@@ -94,7 +94,9 @@ program.addCommand(modelsCommand())
 program.addCommand(shotsCommand())
 program.addCommand(recastCommand())
 program.addCommand(trendsCommand())
-program.addCommand(castSwapCommand())
+program.addCommand(videoRemakeCommand())
+// Its former name, for scripts that still call it (hidden from the help).
+program.addCommand(castSwapCommand(), { hidden: true })
 program.addCommand(orgCommand())
 program.addCommand(workspaceCommand())
 program.addCommand(editCommand())

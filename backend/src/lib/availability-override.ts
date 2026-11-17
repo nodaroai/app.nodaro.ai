@@ -88,7 +88,7 @@ export interface GateableFeature {
  */
 export const GATEABLE_FEATURES: readonly GateableFeature[] = Object.freeze([
   // `POST /v1/cast-swap` and the routes of the same engine; every trend run is one.
-  Object.freeze({ type: "cast-swap", label: "Nodaro Motion (Cast Swap)", category: "ai-video" }),
+  Object.freeze({ type: "cast-swap", label: "Video Remake (Cast Swap)", category: "ai-video" }),
   // The film pipeline (Story → Video): `POST /v1/pipelines` and every route that
   // starts or continues a pipeline's work, and the MCP pipeline tools. The canvas
   // node that opens one (`generative-pipeline`) is a node of its own.
@@ -128,7 +128,7 @@ export const NOT_OVERRIDE_GATED_NODE_TYPES: ReadonlySet<string> = new Set(["site
 // users until an admin ticks it — and it is right for an id that is new. It is
 // wrong for a gate that is new on something already LIVE: an override stored
 // before `cast-swap` was gateable does not list it, so reading it as an
-// enabled-set would switch Nodaro Motion off on every deployment that ever
+// enabled-set would switch Video Remake off on every deployment that ever
 // saved Admin → Availability. Same for a route that was never refused before
 // and now follows its node (lib/route-node-gate.ts): an override stored before
 // that never decided the route.
@@ -157,7 +157,7 @@ export const ROUTE_GATES_GENERATION = 1
 
 /** Ids that joined the gateable universe while live, by generation. */
 const GATED_SINCE: ReadonlyMap<string, number> = new Map([
-  // Nodaro Motion (POST /v1/cast-swap, every trend run): live long before it was gateable.
+  // Video Remake (POST /v1/cast-swap, every trend run): live long before it was gateable.
   ["cast-swap", 1],
   // The film pipeline and the Video Director (decided 2026-11-11): both served
   // REST and MCP callers long before either was gateable, so an override saved

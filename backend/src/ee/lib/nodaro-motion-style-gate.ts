@@ -1,8 +1,8 @@
 /**
- * A forced Nodaro Motion Style (Precise in Nodaro Motion / Always Flex) is saved only
+ * A forced Video Remake Style (Precise in Video Remake / Always Flex) is saved only
  * once every environment's engine enforces it (`castSwap.styleChoice`).
  *
- * The Nodaro Motion settings are one row each, which staging and production
+ * The Video Remake settings are one row each, which staging and production
  * share (one database, `engine-environments.ts`). An engine that does not
  * declare `castSwap.styleChoice` never reads the setting, so its direct runs
  * would quietly take the request's `style` while clients, told the style is
