@@ -11,6 +11,7 @@ import { ConfigPanel as unit_shot_cuts } from "../shot-cuts/config" // unit:shot
 import { ConfigPanel as unit_speaker_layout } from "../speaker-layout/config" // unit:speaker-layout
 import { ConfigPanel as unit_speaker_map } from "../speaker-map/config" // unit:speaker-map
 import { ConfigPanel as unit_split_into_layers } from "../split-into-layers/config" // unit:split-into-layers
+import { ConfigPanel as unit_suno_speech } from "../suno-speech/config" // unit:suno-speech
 import { ConfigPanel as unit_tighten_episode } from "../tighten-episode/config" // unit:tighten-episode
 
 export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.assign(Object.create(null), {
@@ -23,5 +24,6 @@ export const UNIT_CONFIGS: Readonly<Record<string, UnitConfigPanel>> = Object.as
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

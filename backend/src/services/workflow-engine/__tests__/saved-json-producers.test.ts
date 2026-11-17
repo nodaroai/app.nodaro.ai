@@ -76,6 +76,8 @@ const SAVED: Record<string, unknown> = {
   sourceImageUrl: url("png"),
   splitResults: [MARK],
   summary: MARK,
+  sunoStemIds: { vocalUrl: MARK },
+  sunoTaskId: MARK,
   url: url("bin"),
   vocalUrl: url("mp3"),
 }

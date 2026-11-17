@@ -159,6 +159,57 @@ export type SunoSeparateResultField = (typeof SUNO_SEPARATE_RESULT_FIELDS)[numbe
 /** Non-URL fields a run's output records about how it ran. */
 export const SUNO_SEPARATE_META_FIELDS = ["separateType", "stemName", "engineUsed", "sunoRefused", "fallbackReason"] as const
 
+/**
+ * The Suno ids a run's output carries for its stems: `sunoTaskId`, the
+ * separation task, and `sunoStemIds`, each stem's or take's own id by its
+ * result field (`{ vocalUrl: "<id>", … }`). Suno Convert to WAV takes a stem
+ * by the separation's task id and the stem's id. A run that Demucs or the
+ * connected cloud delivered has none, and neither has an output written before
+ * the ids were kept.
+ */
+export const SUNO_SEPARATE_ID_FIELDS = ["sunoTaskId", "sunoStemIds"] as const
+
+/** The result field behind a handle (old spellings included); the primary field for any other handle, or none. */
+export function sunoSeparateHandleField(
+  output: Readonly<Record<string, unknown>>,
+  handle: string | null | undefined,
+): SunoSeparateResultField | undefined {
+  switch (handle) {
+    case "vocals":
+    case "vocal":
+    case "vocal-out":
+      return "vocalUrl"
+    case "instrumental":
+    case "instrumental-out":
+      return "instrumentalUrl"
+    case "isolated":
+      return "isolatedUrl"
+    case "without":
+      return "withoutUrl"
+    default: {
+      const primary = sunoSeparatePrimaryUrl(output)
+      return primary === undefined ? undefined : SUNO_SEPARATE_RESULT_FIELDS.find((field) => str(output[field]) === primary)
+    }
+  }
+}
+
+/**
+ * The Suno ids of the stem behind one handle — the separation's task id and
+ * that stem's own id — or undefined when the output does not carry both (a
+ * Demucs or cloud run, an older output, a stem that did not come back).
+ */
+export function sunoSeparateHandleIds(
+  output: Readonly<Record<string, unknown>>,
+  handle: string | null | undefined,
+): { readonly taskId: string; readonly audioId: string } | undefined {
+  const taskId = str(output.sunoTaskId)
+  const ids = output.sunoStemIds
+  if (!taskId || typeof ids !== "object" || ids === null || Array.isArray(ids)) return undefined
+  const field = sunoSeparateHandleField(output, handle)
+  const audioId = field ? str((ids as Record<string, unknown>)[field]) : undefined
+  return audioId ? { taskId, audioId } : undefined
+}
+
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v !== "" ? v : undefined
 }

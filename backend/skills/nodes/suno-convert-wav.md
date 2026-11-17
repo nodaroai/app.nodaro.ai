@@ -1,7 +1,7 @@
 ---
 node_type: suno-convert-wav
-generated_at: 2026-10-14T00:02:32.985Z
-generated_from: b83a9467d
+generated_at: 2026-11-17T08:57:46.348Z
+generated_from: cb7abbeec4
 ---
 
 # Suno Convert WAV
@@ -46,6 +46,7 @@ generated_from: b83a9467d
 
 **Input parameters:**
 - `audio_asset_id`
+- `stem`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

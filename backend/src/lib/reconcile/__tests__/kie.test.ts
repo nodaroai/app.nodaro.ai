@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
   const pollRunwayTaskMock = vi.fn()
   const pollAlephTaskMock = vi.fn()
   const pollSunoTaskMock = vi.fn()
+  const pollSunoMarketTracksMock = vi.fn()
   const uploadToR2Mock = vi.fn()
   const finalizeMock = vi.fn().mockResolvedValue({ ok: true })
   const refundMock = vi.fn().mockResolvedValue(undefined)
@@ -88,6 +89,7 @@ const mocks = vi.hoisted(() => {
     pollRunwayTaskMock,
     pollAlephTaskMock,
     pollSunoTaskMock,
+    pollSunoMarketTracksMock,
     uploadToR2Mock,
     finalizeMock,
     refundMock,
@@ -137,6 +139,12 @@ vi.mock("../../../providers/kie/runway-client.js", () => ({
 
 vi.mock("../../../providers/kie/suno-client.js", () => ({
   pollSunoTask: mocks.pollSunoTaskMock,
+}))
+
+// The market lane's poll (Suno Speech, a cover by id): only ever a poll here.
+vi.mock("../../../providers/kie/suno-market.js", () => ({
+  pollSunoMarketTracks: mocks.pollSunoMarketTracksMock,
+  SUNO_SPEECH_PROVIDER_COST_USD: 0.06,
 }))
 
 vi.mock("../../storage.js", () => ({
@@ -922,6 +930,64 @@ describe("reconcileKieJob", () => {
         result: expect.objectContaining({ providerUsed: "kie" }),
       }),
     )
+  })
+
+  it("a Suno Speech job whose worker died after its task was created is finished from that task: polled where it was made, both takes kept, marked as speech (decided 2026-11-17)", async () => {
+    mocks.pollSunoMarketTracksMock.mockResolvedValueOnce({
+      taskId: "t-speech",
+      tracks: [
+        { id: "take-1", duration: 12, audioUrl: "https://suno.example/a.mp3" },
+        { id: "take-2", duration: 11, audioUrl: "https://suno.example/b.mp3" },
+      ],
+    })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-speech.mp3").mockResolvedValueOnce("https://r2.example/audio/j-speech-1.mp3")
+    mocks.finalizeMock.mockResolvedValueOnce({ ok: true })
+    const row: KieJobRow = {
+      id: "j-speech",
+      provider_kind: "kie-suno-market",
+      provider_task_id: "t-speech",
+      reconcile_attempts: 0,
+      // A node unit's job: not one of the music types, and recovered all the same — the lane says it delivers tracks.
+      job_type: "suno-speech",
+      input_data: { type: "suno-speech", mode: "brief", prompt: "A short morning news intro" },
+    }
+
+    await reconcileKieJob(row)
+
+    // The saved task is polled on the market lane; the old Suno endpoint is never asked.
+    expect(mocks.pollSunoMarketTracksMock).toHaveBeenCalledTimes(1)
+    expect(mocks.pollSunoMarketTracksMock.mock.calls[0]).toEqual(["t-speech", "Speech generation"])
+    expect(mocks.pollSunoTaskMock).not.toHaveBeenCalled()
+    expect(mocks.finalizeMock).toHaveBeenCalledTimes(1)
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: "j-speech",
+      // The provider's flat charge for a speech request, as the worker records it.
+      result: expect.objectContaining({ cost: 0.06, providerUsed: "kie" }),
+      mediaUrl: "https://r2.example/audio/j-speech.mp3",
+      extraOutputData: expect.objectContaining({
+        audioUrls: ["https://r2.example/audio/j-speech.mp3", "https://r2.example/audio/j-speech-1.mp3"],
+        sunoTaskId: "t-speech",
+        trackCount: 2,
+        sunoTrackKind: "speech",
+      }),
+    }))
+  })
+
+  it("a cover that ran by id is recovered from its market task, and says which lane ran; a file cover's task stays on the old endpoint", async () => {
+    mocks.pollSunoMarketTracksMock.mockResolvedValueOnce({ taskId: "t-cover", tracks: [{ id: "c1", audioUrl: "https://suno.example/c.mp3" }] })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-cover.mp3")
+    await reconcileKieJob({ id: "j-cover", provider_kind: "kie-suno-market", provider_task_id: "t-cover", reconcile_attempts: 0, job_type: "suno-cover", input_data: { taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" } })
+    expect(mocks.pollSunoTaskMock).not.toHaveBeenCalled()
+    const extra = mocks.finalizeMock.mock.calls.at(-1)![0].extraOutputData as Record<string, unknown>
+    expect(extra).toMatchObject({ coverLane: "id" })
+    expect(extra).not.toHaveProperty("sunoTrackKind")
+
+    mocks.pollSunoTaskMock.mockResolvedValueOnce({ taskId: "t-file", tracks: [{ id: "c1", audioUrl: "https://suno.example/c.mp3" }] })
+    mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-file.mp3")
+    // The same saved request (ids beside the file): the lane the task was made on decides, never the request.
+    await reconcileKieJob({ id: "j-file", provider_kind: "kie-suno", provider_task_id: "t-file", reconcile_attempts: 0, job_type: "suno-cover", input_data: { taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" } })
+    expect(mocks.pollSunoMarketTracksMock).toHaveBeenCalledTimes(1)
+    expect(mocks.finalizeMock.mock.calls.at(-1)![0].extraOutputData).not.toHaveProperty("coverLane")
   })
 
   it("kie-suno music: track upload throws → bumps reconcile_attempts, no finalize, no refund", async () => {

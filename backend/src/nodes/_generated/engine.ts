@@ -7,6 +7,7 @@ import { payload as unit_remove_audio } from "../remove-audio/payload.js" // uni
 import { payload as unit_shot_cuts } from "../shot-cuts/payload.js" // unit:shot-cuts
 import { payload as unit_speaker_map } from "../speaker-map/payload.js" // unit:speaker-map
 import { payload as unit_split_into_layers } from "../split-into-layers/payload.js" // unit:split-into-layers
+import { payload as unit_suno_speech } from "../suno-speech/payload.js" // unit:suno-speech
 
 export const UNIT_PAYLOADS: Readonly<Record<string, UnitPayload>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
@@ -14,4 +15,5 @@ export const UNIT_PAYLOADS: Readonly<Record<string, UnitPayload>> = Object.assig
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
 })

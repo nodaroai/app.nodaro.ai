@@ -4269,7 +4269,7 @@ describe("suno-separate", () => {
       engineUsed: "demucs", sunoRefused: true, fallbackReason: "too_large", separateType: "split_stem", sunoTaskId: "t",
     })).toEqual({
       vocalUrl: "V", backingVocalsUrl: "B", otherUrl: "O", isolatedUrl: "I", without2Url: "W2",
-      engineUsed: "demucs", sunoRefused: true, fallbackReason: "too_large", separateType: "split_stem",
+      engineUsed: "demucs", sunoRefused: true, fallbackReason: "too_large", separateType: "split_stem", sunoTaskId: "t",
     })
     // …and every field this run did not return goes as undefined, clearing the last run's.
     const fields = extra({ audioUrl: "I", isolatedUrl: "I", withoutUrl: "W" })
@@ -5287,6 +5287,20 @@ describe("suno-convert-wav", () => {
     promise.catch(() => {})
     await expect(promise).rejects.toThrow("Missing taskId/audioId")
     expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("a wired stem with no Suno ids is refused, as the server refuses it — never the ids typed into the node (decided 2026-11-17)", async () => {
+    for (const why of ["demucs", "no-ids"] as const) {
+      mockPollJobWithNodeUpdate.mockClear()
+      mockSunoConvertWavApi.mockClear()
+      mockResolveNodeInputs.mockReturnValue({ sunoStemUnavailable: why })
+      const promise = executeNode(makeNode("suno-convert-wav", { taskId: "pasted-task", audioId: "pasted-audio" }), makeCtx())
+      promise.catch(() => {})
+      await expect(promise).rejects.toThrow()
+      expect(mockToastError).toHaveBeenCalled()
+      expect(mockPollJobWithNodeUpdate).not.toHaveBeenCalled()
+      expect(mockSunoConvertWavApi).not.toHaveBeenCalled()
+    }
   })
 
   it("calls pollJobWithNodeUpdate with taskId/audioId", async () => {

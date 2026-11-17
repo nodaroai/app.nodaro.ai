@@ -4975,6 +4975,13 @@ function executeNodeCore(
     })();
     const uploadUrl =
       coverTrack ?? inputs.uploadUrl ?? inputs.audioUrl ?? d.uploadUrl?.trim();
+    // A wired Suno track's ids go beside its URL; the server decides which it
+    // covers. Today that is always the URL (a cover by id is for ids sent
+    // alone, until the server's gate is lifted).
+    const coverIds =
+      inputs.sunoTaskId && inputs.sunoTrackId
+        ? { taskId: inputs.sunoTaskId, audioId: inputs.sunoTrackId }
+        : {};
     if (!uploadUrl) {
       toast.error(nodeRunError(d.label, "nodeRun.noSourceAudioURLFound"));
       return Promise.reject(new Error("No upload URL"));
@@ -4993,6 +5000,7 @@ function executeNodeCore(
         sunoCoverApi({
           prompt,
           uploadUrl,
+          ...coverIds,
           model: d.model || undefined,
           lyrics: d.lyrics || undefined,
           style: d.style || undefined,
@@ -5395,6 +5403,13 @@ function executeNodeCore(
 
   if (node.type === "suno-convert-wav") {
     const d = node.data as SunoConvertWavData;
+    // A wired Suno Separate stem with no Suno ids cannot be converted: refused
+    // here, as the server's payload refuses it — never the ids typed into the node.
+    if (inputs.sunoStemUnavailable) {
+      const message = nodeRunError(d.label, inputs.sunoStemUnavailable === "demucs" ? "nodeRun.sunoStemFromDemucs" : "nodeRun.sunoStemNoIds");
+      toast.error(message);
+      return Promise.reject(new Error(message));
+    }
     const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
     if (!ids) {
       toast.error(

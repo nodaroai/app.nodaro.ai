@@ -29,7 +29,7 @@ export type { SunoModel, SunoAddTrackModel, SunoSeparateType }
 
 const SUNO_POLL_INTERVAL_MS = 5000 // kept for timeout calculations
 const DEBUG = config.NODE_ENV === "development"
-const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
+export const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
 
 /**
  * OUR Nodaro credit key for a Suno operation. The implementation lives in
@@ -188,6 +188,12 @@ export interface SunoSeparateResult {
   /** One-instrument mode, take 2 (kept with the result, not wireable). */
   isolated2Url?: string
   without2Url?: string
+  /**
+   * Each stem's or take's own Suno id, by its result field (`vocalUrl` → id):
+   * with the separation's `taskId`, what Suno Convert to WAV takes a stem by.
+   * Only the ids the provider returned; absent on a Demucs or cloud run.
+   */
+  stemIds?: Partial<Record<string, string>>
 }
 
 export interface SunoMusicVideoParams {
@@ -467,7 +473,7 @@ async function createSunoTask(opts: CreateSunoTaskOpts): Promise<string> {
   return taskId
 }
 
-interface PollSunoEndpointOpts<T> {
+export interface PollSunoEndpointOpts<T> {
   /** record-info path after KIE_API_BASE, e.g. "/api/v1/generate/record-info" */
   path: string
   /**
@@ -497,7 +503,7 @@ interface PollSunoEndpointOpts<T> {
  * NOT used by pollSunoMusicVideoTask / pollSunoWavTask — those use a different
  * `for`-loop / `!ok` / timeout-logging shape and stay hand-written.
  */
-async function pollSunoEndpoint<T>(
+export async function pollSunoEndpoint<T>(
   taskId: string,
   opts: PollSunoEndpointOpts<T>
 ): Promise<T> {
@@ -970,9 +976,15 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
           const audioUrl = stem.audio_url
           if (typeof stemName !== "string" || typeof audioUrl !== "string" || !audioUrl) return []
           const resultKey = sunoStemFieldFor(stemName)
-          return resultKey ? [[resultKey, audioUrl] as const] : []
+          return resultKey ? [{ field: resultKey, url: audioUrl, id: typeof stem.id === "string" && stem.id ? stem.id : undefined }] : []
         })
-        const result: SunoSeparateResult = { taskId, ...Object.fromEntries(stems) }
+        // Each stem's own id (`originData[].id`), kept for Suno Convert to WAV.
+        const stemIds = Object.fromEntries(stems.flatMap((s) => (s.id ? [[s.field, s.id] as const] : [])))
+        const result: SunoSeparateResult = {
+          taskId,
+          ...Object.fromEntries(stems.map((s) => [s.field, s.url] as const)),
+          ...(Object.keys(stemIds).length > 0 ? { stemIds } : {}),
+        }
 
         const stemCount = Object.values(result).filter((v) => typeof v === "string" && v.startsWith("http")).length
         if (DEBUG) console.log(

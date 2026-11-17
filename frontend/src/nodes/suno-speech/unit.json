@@ -1,0 +1,58 @@
+{
+  "$schema": "../../../../tools/units/unit.schema.json",
+  "schemaVersion": 1,
+  "type": "suno-speech",
+  "label": "Suno Speech",
+  "category": "ai",
+  "position": {
+    "after": "suno-upload-extend"
+  },
+  "picker": {
+    "family": "audio-music",
+    "after": "suno-convert-wav",
+    "pickerCategory": "AI",
+    "keywords": ["suno", "speech", "voice", "voiceover", "narration", "narrator", "spoken", "dialogue", "monologue", "announcer", "podcast", "script", "read aloud"]
+  },
+  "handles": {
+    "inputs": [
+      { "id": "prompt", "label": "Prompt", "accepts": ["text"], "field": "prompt" }
+    ],
+    "outputs": [
+      { "id": "audio", "label": "Audio", "kind": "audio", "from": "generatedAudioUrl" }
+    ]
+  },
+  "defaultData": {
+    "label": "Suno Speech",
+    "mode": "brief",
+    "prompt": "",
+    "script": "",
+    "tone": "",
+    "backgroundMusic": false,
+    "fieldMappings": {}
+  },
+  "execution": {
+    "kind": "worker",
+    "queue": "video"
+  },
+  "capabilities": [
+    "panel:generate-button",
+    "finalize:own-writer",
+    "lane:provider",
+    "provider:kie"
+  ],
+  "registry": {
+    "description": "Generate spoken audio with Suno Speech: from a one-line brief (Suno writes and performs the script) or from your own script with tone, variety, voice gender and optional background music. Returns two takes.",
+    "outputType": "audio",
+    "category": "ai-audio"
+  },
+  "contract": {
+    "producer": "audio"
+  },
+  "mcp": {
+    "widgetModelFor": ["suno_speech"]
+  },
+  "docs": {
+    "page": "docs/nodes/suno-music/suno-speech.md",
+    "useCase": "Voice a scene in Suno's expressive speech — from a one-line brief it scripts itself, or from your own words with a tone, a voice and optional background music"
+  }
+}

@@ -180,3 +180,54 @@ describe("suno_separate_stems", () => {
     expect(demucs.description).not.toMatch(/no Suno track is\s+needed/i)
   })
 })
+
+describe("suno_convert_wav — a track, or a named stem (decided 2026-11-17)", () => {
+  const separation = {
+    user_id: "u1",
+    is_public: false,
+    status: "completed",
+    output_data: {
+      audioUrl: "https://cdn.example/v.mp3", vocalUrl: "https://cdn.example/v.mp3", drumsUrl: "https://cdn.example/d.mp3",
+      sunoTaskId: "sep-task", sunoStemIds: { vocalUrl: "id-v", drumsUrl: "id-d" },
+    },
+  }
+  const track = { user_id: "u1", is_public: false, status: "completed", output_data: { sunoTaskId: "task-1", sunoTrackId: "track-1" } }
+  const convert = async (args: Record<string, unknown>) => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/convert-wav", { jobId: "j-wav" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    return { result: await callTool(server, "suno_convert_wav", args), received }
+  }
+
+  it("a pip or a result field names that stem; none, the separation's main stem", async () => {
+    db.jobs["sep-job"] = separation
+    expect((await convert({ audio_asset_id: "sep-job", stem: "vocals" })).received.body).toMatchObject({ taskId: "sep-task", audioId: "id-v" })
+    expect((await convert({ audio_asset_id: "sep-job", stem: "drumsUrl" })).received.body).toMatchObject({ taskId: "sep-task", audioId: "id-d" })
+    expect((await convert({ audio_asset_id: "sep-job" })).received.body).toMatchObject({ taskId: "sep-task", audioId: "id-v" })
+  })
+
+  it("a stem is one of the listed names: anything else is an error, and so is a stem the separation does not have — never the main stem in its place", async () => {
+    db.jobs["sep-job"] = separation
+    const unknown = await convert({ audio_asset_id: "sep-job", stem: "kazoo" })
+    expect(unknown.result.isError).toBe(true)
+    expect(unknown.received.body).toBeUndefined()
+    const absent = await convert({ audio_asset_id: "sep-job", stem: "bassUrl" })
+    expect(absent.result.isError).toBe(true)
+    expect(absent.received.body).toBeUndefined()
+  })
+
+  it("a stem named on a track's job is an error, never the track; a track with no stem converts as before", async () => {
+    db.jobs["suno-job"] = track
+    const withStem = await convert({ audio_asset_id: "suno-job", stem: "vocals" })
+    expect(withStem.result.isError).toBe(true)
+    expect(withStem.received.body).toBeUndefined()
+    expect((await convert({ audio_asset_id: "suno-job" })).received.body).toMatchObject({ taskId: "task-1", audioId: "track-1" })
+  })
+
+  it("a Suno Speech job's takes are never read as a track's ids", async () => {
+    db.jobs["speech-job"] = { user_id: "u1", is_public: false, status: "completed", output_data: { sunoTaskId: "sp", sunoTrackId: "take-1", sunoTrackKind: "speech" } }
+    const speech = await convert({ audio_asset_id: "speech-job" })
+    expect(speech.result.isError).toBe(true)
+    expect(speech.received.body).toBeUndefined()
+  })
+})

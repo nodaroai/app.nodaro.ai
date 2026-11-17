@@ -11,6 +11,7 @@ import { NodeComponent as unit_shot_cuts } from "../shot-cuts/node" // unit:shot
 import { NodeComponent as unit_speaker_layout } from "../speaker-layout/node" // unit:speaker-layout
 import { NodeComponent as unit_speaker_map } from "../speaker-map/node" // unit:speaker-map
 import { NodeComponent as unit_split_into_layers } from "../split-into-layers/node" // unit:split-into-layers
+import { NodeComponent as unit_suno_speech } from "../suno-speech/node" // unit:suno-speech
 import { NodeComponent as unit_tighten_episode } from "../tighten-episode/node" // unit:tighten-episode
 
 export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Object.assign(Object.create(null), {
@@ -23,5 +24,6 @@ export const UNIT_COMPONENTS: Readonly<Record<string, UnitNodeComponent>> = Obje
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

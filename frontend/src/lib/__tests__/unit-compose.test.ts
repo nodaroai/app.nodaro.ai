@@ -445,7 +445,11 @@ describe("connection rule of a unit input", () => {
     expect(unitInputAccepts(["audio"])).toBe(ACCEPTS_AUDIO)
     expect(unitInputAccepts(["video", "audio"])).toBe(ACCEPTS_MEDIA)
     expect(typeof unitInputAccepts(["image"])).toBe("function") // equal to ACCEPTS_IMAGE_OR_DYN: unit-connections.test.ts
-    expect(() => unitInputAccepts(["text"])).toThrow(/ACCEPTS_KINDS/)
+    // A text input takes a text producer or a run-time-decided one, never media.
+    expect(unitInputAccepts(["text"])("text-prompt")).toBe(true)
+    expect(unitInputAccepts(["text"])("list")).toBe(true)
+    expect(unitInputAccepts(["text"])("upload-video")).toBe(false)
+    expect(() => unitInputAccepts(["mask"])).toThrow(/ACCEPTS_KINDS/)
   })
 })
 

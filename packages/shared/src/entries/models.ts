@@ -468,8 +468,11 @@ export {
   SUNO_SEPARATE_TAKE_FIELDS,
   SUNO_SEPARATE_RESULT_FIELDS,
   SUNO_SEPARATE_META_FIELDS,
+  SUNO_SEPARATE_ID_FIELDS,
   sunoSeparateHandleUrl,
   sunoSeparatePrimaryUrl,
+  sunoSeparateHandleField,
+  sunoSeparateHandleIds,
 } from "../suno-separate.js"
 export type {
   SunoSeparateType,

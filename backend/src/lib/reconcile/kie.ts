@@ -32,6 +32,8 @@ import { pollKontextTask } from "../../providers/kie/kontext-client.js"
 import { pollLumaTask } from "../../providers/kie/luma-client.js"
 import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client.js"
 import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
+import { SUNO_SPEECH_PROVIDER_COST_USD, pollSunoMarketTracks } from "../../providers/kie/suno-market.js"
+import { SUNO_TRACK_KIND_FIELD, SUNO_TRACK_KIND_SPEECH } from "../suno-id-source.js"
 import {
   finalizeJobWithMedia,
   isFinalizeJobType,
@@ -252,7 +254,13 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
  */
 async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
-  if (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type)) {
+  // A task of the market lane always delivers tracks (Suno Speech's two takes,
+  // a cover by id's), whatever job made it; on the old lane only the music
+  // jobs do.
+  const market = row.provider_kind === "kie-suno-market"
+  // On the market lane a music job is a cover that ran by id; any other job's tracks are Suno Speech's spoken takes.
+  const speech = market && !SUNO_MUSIC_JOB_TYPES.has(row.job_type ?? "")
+  if (!market && (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type))) {
     // Suno variant we don't recover (lyrics, separate, music-video, wav).
     await bumpAttemptsOrExhaust(row.id, `suno variant not recoverable: ${row.job_type}`)
     return
@@ -269,7 +277,12 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
 
   let result: SunoTaskResult
   try {
-    result = await pollSunoTask(row.provider_task_id)
+    // A market-lane task (suno-market.ts) is unknown to the old record-info
+    // endpoint: poll it where it was made. Only ever a poll — a recovered job
+    // never creates a second task.
+    result = market
+      ? await pollSunoMarketTracks(row.provider_task_id, speech ? "Speech generation" : "Music generation")
+      : await pollSunoTask(row.provider_task_id)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     // Same shared classifier as reconcileKieJob — pollSunoTask sets the flag via
@@ -287,7 +300,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
 
   const validTracks = result.tracks.filter((t) => t.audioUrl)
   if (validTracks.length === 0) {
-    await markFailed(row.id, "Suno returned no tracks")
+    await markFailed(row.id, speech ? "Suno Speech returned no takes" : "Suno returned no tracks")
     await refundReservedCreditsForJob(row.id)
     return
   }
@@ -315,7 +328,8 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
       // instance's own key. "suno" named the model vendor and split Suno
       // attribution three ways ("kie"/"nodaro"/"suno") depending on which
       // machinery completed the job (#753 review).
-      result: { url: r2Urls[0]!, cost: null, providerUsed: "kie" },
+      // A speech request has one flat provider charge, the one its worker records; a song's is not read here.
+      result: { url: r2Urls[0]!, cost: speech ? SUNO_SPEECH_PROVIDER_COST_USD : null, providerUsed: "kie" },
       mediaUrl: r2Urls[0]!,
       extraOutputData: {
         ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
@@ -332,6 +346,10 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
           audioUrl: r2Urls[i]!,
         })),
         trackCount: validTracks.length,
+        // The run facts the worker saves beside a market task's tracks: a
+        // music job on this lane is a cover that ran by id; any other job's
+        // tracks are spoken takes, which no Suno tool takes by their ids.
+        ...(market ? (speech ? { [SUNO_TRACK_KIND_FIELD]: SUNO_TRACK_KIND_SPEECH } : { coverLane: "id" }) : {}),
       },
     })
   } catch (err) {
@@ -534,7 +552,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
   if (!row.provider_task_id) return
 
   // Suno is a special case: multi-track output, dedicated upload + finalize path.
-  if (row.provider_kind === "kie-suno") {
+  if (row.provider_kind === "kie-suno" || row.provider_kind === "kie-suno-market") {
     return reconcileKieSunoJob(row, opts)
   }
 
