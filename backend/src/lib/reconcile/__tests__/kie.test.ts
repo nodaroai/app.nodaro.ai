@@ -202,6 +202,16 @@ vi.mock("../../seedance-draft-audio-apply.js", async (importOriginal) => ({
   applyDraftAudioMux: draft.apply,
 }))
 
+// A recovered lip sync's voice-line step (probe + ffmpeg stubbed; which rows
+// reach it is the real rule).
+const voiceLine = vi.hoisted(() => ({
+  add: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "muxed"; url: string } | { kind: "has-audio" } | { kind: "probe-failed" } | { kind: "voice-unreadable" }> => ({ kind: "has-audio" })),
+}))
+vi.mock("../../lip-sync-voice-line.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lip-sync-voice-line.js")>()),
+  addVoiceLineIfSilent: voiceLine.add,
+}))
+
 vi.mock("../entity-recovery.js", async (importOriginal) => {
   // Keep the REAL `isEntityMediaJobType` (the narrowing under test) and stub
   // only the recovery itself — its own behavior is covered end-to-end in
@@ -439,6 +449,89 @@ describe("reconcileKieJob", () => {
     const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
     expect(arg).not.toHaveProperty("mediaUrl")
     expect(arg).not.toHaveProperty("extraOutputData")
+  })
+
+  describe("a recovered Lip Sync sent its voice as reference audio (decided 2026-11-17)", () => {
+    const lipSyncRow = (provider: string, input: Record<string, unknown> = {}): KieJobRow => ({
+      id: "j-ls", provider_kind: "kie-standard", provider_task_id: "t-ls", reconcile_attempts: 0, job_type: "lip-sync",
+      input_data: { provider, imageUrl: "https://a/face.png", audioUrl: "https://a/voice.mp3", ...input },
+    })
+    const polled = () => mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/talk.mp4"] }, providerMs: 1, taskId: "t-ls" })
+
+    it.each(["seedance-2", "seedance-2-5-flash", "minimax-h3"])("%s: a silent clip is finalized with the caller's voice line on it", async (provider) => {
+      polled()
+      mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
+      voiceLine.add.mockResolvedValueOnce({ kind: "muxed", url: "https://r2/talk-voiced.mp4" })
+      await reconcileKieJob(lipSyncRow(provider))
+      expect(voiceLine.add).toHaveBeenCalledWith({ videoUrl: "https://kie.example/talk.mp4", voiceUrl: "https://a/voice.mp3", jobId: "j-ls", userId: "u1", watermark: true })
+      expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({
+        jobType: "lip-sync",
+        mediaUrl: "https://r2/talk-voiced.mp4",
+        extraOutputData: { voiceLineMuxed: true },
+      })
+    })
+
+    it("a clip that already has audio is finalized as it came", async () => {
+      polled()
+      await reconcileKieJob(lipSyncRow("seedance-2-5"))
+      expect(voiceLine.add).toHaveBeenCalledTimes(1)
+      const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("extraOutputData")
+    })
+
+    it.each([
+      ["could not be probed (fail-open)", { kind: "probe-failed" } as const, { voiceLineProbeFailed: true }],
+      ["is silent and its voice line cannot be read", { kind: "voice-unreadable" } as const, { voiceLineUnreadable: true }],
+    ])("a clip that %s is finalized as it came, flagged — never parked", async (_why, outcome, flag) => {
+      polled()
+      voiceLine.add.mockResolvedValueOnce(outcome)
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
+      const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg.extraOutputData).toEqual(flag)
+      expect(mocks.jobsUpdateMock).not.toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: expect.any(Number) }))
+    })
+
+    it("a clip that already has audio finalizes as before even when the job's input names no voice line (the probe decides first)", async () => {
+      polled()
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash", { audioUrl: undefined }))
+      expect(voiceLine.add).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: "https://kie.example/talk.mp4", voiceUrl: undefined }))
+      const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
+      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("extraOutputData")
+    })
+
+    it("when the voice cannot be added (a retryable failure) the silent clip is never finalized: the row bumps", async () => {
+      polled()
+      mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: false, reconcile_attempts: 2 }, error: null })
+      voiceLine.add.mockRejectedValueOnce(new Error("The voice could not be added to the lip-sync video."))
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
+      expect(mocks.finalizeMock).not.toHaveBeenCalled()
+      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 3 }))
+    })
+
+    it.each([
+      ["errors", { data: null, error: { message: "connection reset" } }],
+      ["returns nothing", { data: null, error: null }],
+    ])("when the job-row read %s nothing is muxed without its owner and watermark flag: the row bumps for the next tick", async (_why, read) => {
+      polled()
+      // The step's read fails; the bump's own read of the row then answers.
+      mocks.jobsSingleMock.mockResolvedValueOnce(read).mockResolvedValue({ data: { reconcile_attempts: 2 }, error: null })
+      await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
+      expect(voiceLine.add).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock).not.toHaveBeenCalled()
+      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: 3 }))
+    })
+
+    it("every other row never reaches the step: another lip-sync model, and a Seedance run that is not a lip sync", async () => {
+      mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/avatar.mp4"] }, providerMs: 1, taskId: "t-a" })
+      await reconcileKieJob({ ...lipSyncRow("kling-avatar"), provider_kind: "kie-lip-sync" })
+      mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/i2v.mp4"] }, providerMs: 1, taskId: "t-b" })
+      await reconcileKieJob({ ...lipSyncRow("seedance-2-5-flash"), job_type: "image-to-video" })
+      expect(voiceLine.add).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock).toHaveBeenCalledTimes(2)
+    })
   })
 
   it("inline (stall re-pick) caller: claimant 'worker' is threaded through to finalize", async () => {

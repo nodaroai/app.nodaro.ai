@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   downloadFile: vi.fn().mockResolvedValue(undefined),
   runFfmpeg: vi.fn().mockResolvedValue(""),
   needsTranscode: vi.fn().mockResolvedValue(false),
+  getVideoStreamDuration: vi.fn().mockResolvedValue(8.041667),
   createWorkDir: vi.fn().mockResolvedValue("/tmp/work"),
   cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
 }))
@@ -22,6 +23,7 @@ vi.mock("../ffmpeg-utils.js", () => ({
   needsTranscode: mocks.needsTranscode,
   // The merge probes the "video" input's streams first; a real video here.
   probeMediaStreams: vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true }),
+  getVideoStreamDuration: mocks.getVideoStreamDuration,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
   BROWSER_SAFE_VIDEO_ARGS: ["-c:v", "libx264"],
@@ -97,5 +99,35 @@ describe("mergeVideoAudio sumTracks", () => {
     expect(f).not.toContain("amix")
     expect(f).not.toContain("normalize=0")
     expect(f).toContain("[aout]")
+  })
+})
+
+describe("mergeVideoAudio fitAudioToVideo", () => {
+  const voice = [{ url: "https://r2/voice.mp3", startTime: 0, volume: 100, sourceType: "audio" as const }]
+  const argsOf = () => mocks.runFfmpeg.mock.calls[0][0] as string[]
+
+  it("fits the audio to the picture: silence appended, output stopped at the video stream's end, picture copied", async () => {
+    mocks.getVideoStreamDuration.mockResolvedValue(8.041667)
+    await mergeVideoAudio({ videoUrl: "https://r2/v.mp4", audioTracks: voice, fitAudioToVideo: true })
+    const args = argsOf()
+    expect(mocks.getVideoStreamDuration).toHaveBeenCalledWith("/tmp/work/input.mp4")
+    expect(filterOf()).toBe("[1:a]volume=1[aout];[aout]apad[afit]")
+    expect(args.slice(args.indexOf("-map"))).toEqual(["-map", "0:v", "-map", "[afit]", "-c:v", "copy", "-c:a", "aac", "-t", "8.042", "-movflags", "+faststart", "/tmp/work/output.mp4"])
+    // No tempo or stretch filter anywhere.
+    expect(args.join(" ")).not.toMatch(/atempo|rubberband|setpts/)
+  })
+
+  it("is off by default: the arguments are exactly what they were", async () => {
+    await mergeVideoAudio({ videoUrl: "https://r2/v.mp4", audioTracks: voice })
+    const args = argsOf()
+    expect(mocks.getVideoStreamDuration).not.toHaveBeenCalled()
+    expect(filterOf()).toBe("[1:a]volume=1[aout]")
+    expect(args.slice(args.indexOf("-map"))).toEqual(["-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "/tmp/work/output.mp4"])
+  })
+
+  it("refuses to merge when the video's length cannot be read", async () => {
+    mocks.getVideoStreamDuration.mockResolvedValue(Number.NaN)
+    await expect(mergeVideoAudio({ videoUrl: "https://r2/v.mp4", audioTracks: voice, fitAudioToVideo: true })).rejects.toThrow("Could not read the video's length")
+    expect(mocks.runFfmpeg).not.toHaveBeenCalled()
   })
 })
