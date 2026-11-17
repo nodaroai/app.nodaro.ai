@@ -130,6 +130,7 @@ import { stampVideoOverlayLength, videoOverlayBaseCredits, videoOverlayReserveId
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { seedanceExtendStampedBaseCredits, stampSeedanceExtendSource } from "../../lib/seedance-extend-credits.js"
 import { grokExtendReserveId, stampGrokExtendSource } from "../../lib/grok-extend-stamp.js"
+import { stampSunoIdSource } from "../../lib/suno-id-source.js"
 import { lipSyncBucketReserveId, lipSyncRateBaseCredits, stampLipSyncInputs, stampedLipSyncBilledSeconds } from "../../lib/lip-sync-inputs.js"
 import { stampTopazVideoUpscale, topazVideoStampedBaseCredits } from "../../lib/topaz-video-plan.js"
 import { isNodaroVideoUpscaleJob, nodaroVideoUpscaleReserveId, nodaroVideoUpscaleStampedBaseCredits, stampNodaroVideoUpscale } from "../../lib/nodaro-video-upscale-plan.js"
@@ -2622,6 +2623,27 @@ async function executeWorkerNode(
     throw err
   }
   if (Object.keys(grokExtendStamp.patch).length > 0) payload = { ...payload, ...grokExtendStamp.patch }
+
+  // 2b'++. Suno tracks named by their ids (lib/suno-id-source.ts), by the
+  // routes' own rule: Suno Cover keeps its ids only for a cover that goes by
+  // id (its file URL, when it has one, stays beside them); Suno Convert to WAV
+  // names its lane (a stem of a Suno separation); a Suno Speech take handed to
+  // a track tool is refused. A refusal — or a lookup that throws — leaves no
+  // placeholder row behind.
+  let sunoIdStamp: Awaited<ReturnType<typeof stampSunoIdSource>>
+  try {
+    sunoIdStamp = await stampSunoIdSource(jobName, payload, ctx.userId)
+  } catch (err) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    throw err
+  }
+  if (!sunoIdStamp.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(sunoIdStamp.refusal.message) as Error & { errorCode?: string }
+    err.errorCode = sunoIdStamp.refusal.code
+    throw err
+  }
+  if (Object.keys(sunoIdStamp.patch).length > 0) payload = { ...payload, ...sunoIdStamp.patch }
 
   // 2b'++. Topaz video upscale: measure the source by the route's own rule
   // (lib/topaz-video-plan.ts), stamp the resolved target and the units it

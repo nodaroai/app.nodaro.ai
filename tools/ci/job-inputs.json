@@ -867,6 +867,8 @@
         "backend/src/nodes/speaker-map/price.ee.ts",
         "backend/src/nodes/split-into-layers/descriptor.generated.ts",
         "backend/src/nodes/split-into-layers/price.ee.ts",
+        "backend/src/nodes/suno-speech/descriptor.generated.ts",
+        "backend/src/nodes/suno-speech/price.ee.ts",
         "backend/src/nodes/tighten-episode/descriptor.generated.ts",
         "backend/src/nodes/tighten-episode/price.ee.ts",
         "backend/src/nodes/tighten-episode/use-case.ts",

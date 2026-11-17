@@ -128,6 +128,20 @@ describe("parseSeparateVocalsResult", () => {
     expect(r.without2Url).toContain("662e50ab-4efb-4e09-bf80-66aefffbaf16")
   })
 
+  it("keeps each stem's and take's own id (origin_data[].id; extract / remove .id) for Convert to WAV", () => {
+    const vocal = parseSeparateVocalsResult(resultJsonOf(fixture("separate_vocal")), "separate_vocal", "t")
+    expect(vocal.stemIds).toStrictEqual({ vocalUrl: "38873a68-53f3-4a32-ace2-111130066b99", instrumentalUrl: "5f4a1275-08d2-40fc-a097-2e8953621fc7" })
+    const takes = parseSeparateVocalsResult(resultJsonOf(fixture("split_stem_advanced")), "split_stem_advanced", "t")
+    expect(takes.stemIds).toStrictEqual({
+      isolatedUrl: "9eb0233a-5e6c-4714-9ba3-e29b85b426ef",
+      withoutUrl: "d9669123-42ea-4dba-bc6d-28268bd8bb02",
+      isolated2Url: "76928861-fd4c-40a3-bc26-dd9f294bd6ee",
+      without2Url: "662e50ab-4efb-4e09-bf80-66aefffbaf16",
+    })
+    const stems = parseSeparateVocalsResult(resultJsonOf(fixture("split_stem")), "split_stem", "t")
+    expect(Object.keys(stems.stemIds ?? {})).toHaveLength(12)
+  })
+
   it("encodes only literal spaces — existing escapes and query strings pass through unchanged", () => {
     const signed = "https://x/r/a%2Fb.mp3?sig=ab%2Bcd%3D&exp=1"
     const r = parseSeparateVocalsResult(

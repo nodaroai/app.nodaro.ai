@@ -14,7 +14,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, dialogueProblem, SUNO_SEPARATE_TYPES, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider, GEMINI_3_1_TTS_ACCENTS, GEMINI_3_1_TTS_PACES, GEMINI_3_1_TTS_STYLES, TTS_DIRECTION_MAX_CHARS, REPLICA_CONSENT_SENTENCE, REPLICA_CONSENT_ATTESTATION } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, dialogueProblem, SUNO_SEPARATE_TYPES, SUNO_SEPARATE_RESULT_FIELDS, sunoSeparateHandleIds, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider, GEMINI_3_1_TTS_ACCENTS, GEMINI_3_1_TTS_PACES, GEMINI_3_1_TTS_STYLES, TTS_DIRECTION_MAX_CHARS, REPLICA_CONSENT_SENTENCE, REPLICA_CONSENT_ATTESTATION } from "@nodaro/shared/models"
 import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
@@ -55,6 +55,8 @@ import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../.
 import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
 import { TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { jobReadableBy } from "../../public-job-read.js"
+import { registerSunoSpeechVerb } from "./verbs-suno-speech.js"
+import { isSunoSpeechOutput } from "../../suno-id-source.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -83,12 +85,47 @@ async function resolveSunoIds(
   // own only where public work is not allowed — lib/public-job-read.ts).
   if (!jobReadableBy(data, userId)) return null
   const out = (data.output_data ?? {}) as Record<string, unknown>
+  // A Suno Speech run's takes carry Suno ids and are not songs: no track tool takes one by its ids.
+  if (isSunoSpeechOutput(out)) return null
   const sunoTaskId = out.sunoTaskId as string | undefined
   const sunoTrackId = out.sunoTrackId as string | undefined
   if (!sunoTaskId || !sunoTrackId) return null
   // The track's own audio too, for a caller that can also send it by URL.
   const audioUrl = typeof out.audioUrl === "string" && /^https?:\/\//.test(out.audioUrl) ? out.audioUrl : undefined
   return { sunoTaskId, sunoTrackId, ...(audioUrl ? { audioUrl } : {}) }
+}
+
+const SUNO_STEM_PIPS = ["vocals", "instrumental", "isolated", "without"] as const
+/** Every stem `suno_convert_wav` can name: the four pips, then each result field of a separation. */
+const SUNO_WAV_STEMS = [...SUNO_STEM_PIPS, ...SUNO_SEPARATE_RESULT_FIELDS] as const
+
+/**
+ * One stem of a Suno separation job, by the pip it leaves on (`vocals`,
+ * `instrumental`, `isolated`, `without`) or its result field (`drumsUrl`);
+ * none named, the separation's main stem. Null when the job is not a readable
+ * Suno separation with that stem's id (a Demucs run, an older one).
+ */
+
+async function resolveSunoStemIds(
+  jobId: string,
+  userId: string,
+  stem: string | undefined,
+): Promise<{ sunoTaskId: string; sunoTrackId: string } | null> {
+  const { data } = await supabase
+    .from("jobs")
+    .select("output_data, user_id, is_public, status")
+    .eq("id", jobId)
+    .is(TRASHED_JOB_COLUMN, null)
+    .maybeSingle()
+  if (!data || !jobReadableBy(data, userId)) return null
+  const out = (data.output_data ?? {}) as Record<string, unknown>
+  const field = stem && (SUNO_SEPARATE_RESULT_FIELDS as readonly string[]).includes(stem) ? stem : undefined
+  const viaField = field && typeof out.sunoTaskId === "string" && out.sunoStemIds && typeof out.sunoStemIds === "object"
+    ? (out.sunoStemIds as Record<string, unknown>)[field]
+    : undefined
+  if (field) return typeof viaField === "string" && viaField ? { sunoTaskId: out.sunoTaskId as string, sunoTrackId: viaField } : null
+  const ids = sunoSeparateHandleIds(out, stem)
+  return ids ? { sunoTaskId: ids.taskId, sunoTrackId: ids.audioId } : null
 }
 // Audio enums stay hardcoded for now — Suno music + ElevenLabs dialogue
 // route through different backends than the standard /v1/generate-music
@@ -1943,11 +1980,18 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`prompt` describing the cover style.\n\n" +
         "Set `instrumental: true` for a vocal-stripped instrumental cover. " +
         "Provide `lyrics` to override the lyrics; otherwise Suno reuses what " +
-        "it transcribes from the source.",
+        "it transcribes from the source.\n\n" +
+        "A cover is made from the audio you pass (`audio_url` or `audio_asset_id`). One of your own finished Suno " +
+        "songs (generate, extend, cover, upload-extend, mashup, replace-section, add vocals / instrumental) can " +
+        "instead be named by `task_id` + `audio_id` alone, with no audio: it is then covered by its ids with no " +
+        "re-upload, when the prompt fits (no style beside it, at most a style's length; in custom mode no lyrics " +
+        "beside it). With audio passed, the audio is covered.",
       inputSchema: {
         prompt: z.string().min(1).max(SUNO_TEXT_MAX).describe("Style description for the cover."),
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
+        task_id: z.string().max(200).optional().describe("Your own Suno song made here: its task id (with audio_id)."),
+        audio_id: z.string().max(200).optional().describe("Your own Suno song made here: its track id (with task_id)."),
         lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
         style: z.string().max(500).optional(),
         title: z.string().max(SUNO_TITLE_MAX).optional(),
@@ -1976,6 +2020,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
+      if (!args.task_id !== !args.audio_id) {
+        return { content: [{ type: "text", text: "Pass task_id and audio_id together." }], isError: true }
+      }
       const audioUrl =
         args.audio_url ??
         (args.audio_asset_id
@@ -1985,17 +2032,25 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               expectedKind: "audio",
             })
           : null)
-      if (!audioUrl) {
+      // A Suno job's ids ride beside its audio; the route decides which it
+      // covers — the audio, whenever there is one (its gate), and the caller's
+      // own song by id when `task_id` + `audio_id` come alone.
+      const assetIds = !args.task_id && args.audio_asset_id ? await resolveSunoIds(args.audio_asset_id, session.userId) : null
+      const ids = args.task_id && args.audio_id
+        ? { taskId: args.task_id, audioId: args.audio_id }
+        : assetIds ? { taskId: assetIds.sunoTaskId, audioId: assetIds.sunoTrackId } : {}
+      if (!audioUrl && !("taskId" in ids)) {
         return {
           content: [
-            { type: "text", text: "Pass audio_url or audio_asset_id." },
+            { type: "text", text: "Pass audio_url, audio_asset_id, or task_id with audio_id." },
           ],
           isError: true,
         }
       }
       const payload = {
         prompt: args.prompt,
-        uploadUrl: audioUrl,
+        ...(audioUrl ? { uploadUrl: audioUrl } : {}),
+        ...ids,
         model: args.model ?? DEFAULT_SUNO_MODEL,
         lyrics: args.lyrics,
         style: args.style,
@@ -2903,10 +2958,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Suno Convert to WAV",
       description:
-        "Convert a Suno-generated track to lossless WAV format. " +
-        "Pass the Nodaro audio_asset_id of a Suno generation. Returns a job_id with WAV output.",
+        "Convert a Suno-generated track, or one stem of a Suno separation, to lossless WAV format. " +
+        "Pass the Nodaro audio_asset_id of a Suno generation — or of a `suno_separate_stems` job with `stem` naming which stem " +
+        "(`vocals`, `instrumental`, `isolated`, `without`, or a result field such as `drumsUrl`; default its main stem). " +
+        "A separation Demucs made has no Suno stems to convert. Returns a job_id with WAV output.",
       inputSchema: {
-        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
+        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track, or of a Suno separation."),
+        stem: z.enum(SUNO_WAV_STEMS).optional().describe("A separation's stem: a pip (vocals, instrumental, isolated, without) or a result field. Only with a separation's audio_asset_id."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -2916,11 +2974,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
-      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
-      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
+      // A named stem is that stem or an error: never the asset's track, and never the main stem in its place.
+      const ids = args.stem
+        ? await resolveSunoStemIds(args.audio_asset_id, session.userId, args.stem)
+        : (await resolveSunoIds(args.audio_asset_id, session.userId)) ?? (await resolveSunoStemIds(args.audio_asset_id, session.userId, undefined))
+      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}${args.stem ? ` (stem ${args.stem})` : ""}.` }], isError: true }
       return dispatchJob(fastify, session, { url: "/v1/suno/convert-wav", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, mcp_client: session.clientName, userId: session.userId }, label: "Suno convert WAV", widgetKind: "audio", widgetData: { prompt: "(convert to WAV)", model: "suno-convert-wav" } })
     },
   )
+
+  // ── suno_speech (Suno Speech) — its own module ──
+  registerSunoSpeechVerb({ server, session, fastify })
 
   // ── suno_upload_extend ──
   server.registerTool(

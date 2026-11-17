@@ -108,9 +108,11 @@ describe("NOT_GENERIC_RECOVERABLE", () => {
   // and Shot Cuts (a worker unit declaring finalize:own-writer: a local analysis
   // that writes its own completion) to 75, and Split into Layers (a worker unit
   // declaring finalize:own-writer: the generic media finalize would keep only the
-  // base picture and settle the hold, losing the layers and the per-image row) to 76.
-  it("has exactly 76 members", () => {
-    expect(NOT_GENERIC_RECOVERABLE.size).toBe(76)
+  // base picture and settle the hold, losing the layers and the per-image row) to 76,
+  // and Suno Speech (a worker unit declaring finalize:own-writer: the Suno tail
+  // stores both takes, which the generic media finalize would cut to one) to 77.
+  it("has exactly 77 members", () => {
+    expect(NOT_GENERIC_RECOVERABLE.size).toBe(77)
   })
 
   it("denies generate-script and no other entity handler key", () => {

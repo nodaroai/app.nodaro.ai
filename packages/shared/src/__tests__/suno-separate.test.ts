@@ -10,6 +10,9 @@ import {
   sunoSeparateCreditId,
   sunoSeparateHandleUrl,
   sunoSeparatePrimaryUrl,
+  SUNO_SEPARATE_ID_FIELDS,
+  sunoSeparateHandleField,
+  sunoSeparateHandleIds,
 } from "../entries/models.js"
 
 describe("sunoSeparateCreditId", () => {
@@ -75,4 +78,33 @@ it("sunoSeparatePrimaryUrl", () => {
   expect(sunoSeparatePrimaryUrl({ instrumentalUrl: "N" })).toBe("N")
   expect(sunoSeparatePrimaryUrl({ isolatedUrl: "I", withoutUrl: "W" })).toBe("I")
   expect(sunoSeparatePrimaryUrl({ drumsUrl: "D" })).toBe("D")
+})
+
+describe("sunoSeparateHandleIds — the Suno ids of the stem behind a handle", () => {
+  const out = {
+    sunoTaskId: "sep-task",
+    vocalUrl: "https://cdn/v.mp3",
+    instrumentalUrl: "https://cdn/i.mp3",
+    isolatedUrl: "https://cdn/x.mp3",
+    withoutUrl: "https://cdn/w.mp3",
+    sunoStemIds: { vocalUrl: "id-v", instrumentalUrl: "id-i", isolatedUrl: "id-x", withoutUrl: "id-w" },
+  }
+
+  it.each([
+    ["vocals", "id-v"], ["vocal-out", "id-v"], ["instrumental", "id-i"], ["instrumental-out", "id-i"],
+    ["isolated", "id-x"], ["without", "id-w"], [undefined, "id-v"],
+  ])("%s → %s", (handle, audioId) => {
+    expect(sunoSeparateHandleIds(out, handle)).toStrictEqual({ taskId: "sep-task", audioId })
+  })
+
+  it("no task id, no stem ids (a Demucs or cloud run, an older output), or no id for that stem: none", () => {
+    expect(sunoSeparateHandleIds({ ...out, sunoTaskId: undefined }, "vocals")).toBeUndefined()
+    expect(sunoSeparateHandleIds({ ...out, sunoStemIds: undefined }, "vocals")).toBeUndefined()
+    expect(sunoSeparateHandleIds({ ...out, sunoStemIds: { vocalUrl: "id-v" } }, "instrumental")).toBeUndefined()
+  })
+
+  it("the primary handle follows the primary stem", () => {
+    expect(sunoSeparateHandleField({ drumsUrl: "https://cdn/d.mp3" }, undefined)).toBe("drumsUrl")
+    expect(SUNO_SEPARATE_ID_FIELDS).toEqual(["sunoTaskId", "sunoStemIds"])
+  })
 })

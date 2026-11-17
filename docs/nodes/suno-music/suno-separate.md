@@ -59,6 +59,8 @@ A finished job's `output_data` holds one URL field per result:
 
 A stem Suno did not return is absent. When the run fell back to Demucs, `engineUsed` is `"demucs"` and `sunoRefused` is `true`.
 
+A separation Suno made also keeps its Suno ids: `sunoTaskId` (the separation's task) and `sunoStemIds` (each stem's own id, under the name of its URL field, such as `vocalUrl` or `drumsUrl`). They are what [Suno Convert WAV](./suno-convert-wav.md#stems) takes a stem by: wire a stem output into it, or pass `sunoTaskId` as `taskId` and the stem's id as `audioId`. A run Demucs delivered, and a separation made before the ids were kept, has none.
+
 ## When Suno refuses
 
 Suno will not separate a recording it recognises as **commercially released**. Audio sent by URL must also be **20 MB** or smaller.

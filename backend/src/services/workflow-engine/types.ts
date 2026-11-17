@@ -100,6 +100,8 @@ export interface NodeOutput {
   separateType?: string
   stemName?: string
   engineUsed?: string
+  /** A suno-separate run's stem ids by result field (`SUNO_SEPARATE_ID_FIELDS`); its task is `sunoTaskId`. */
+  sunoStemIds?: Record<string, string>
   sunoRefused?: boolean
   fallbackReason?: string
   splitResults?: string[]
@@ -743,6 +745,12 @@ export interface ResolvedInputs {
   scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>
   sunoTrackId?: string
   sunoTaskId?: string
+  /**
+   * Suno Convert to WAV, wired from a Suno Separate stem that has no Suno ids to
+   * convert by: Demucs made the separation, or it was saved before stem ids were
+   * kept. The payload refuses the run on it, before anything is held.
+   */
+  sunoStemUnavailable?: "demucs" | "no-ids"
   /** Custom Suno voice persona id wired from an upstream suno-voice node. */
   personaId?: string
   /** Persona kind, defaults to "voice_persona" when personaId is set. */

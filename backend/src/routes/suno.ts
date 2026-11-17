@@ -44,6 +44,7 @@ import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { resolveSunoCoverSource, resolveSunoWavSource, sunoSpeechTakeRefusal } from "../lib/suno-id-source.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -119,7 +120,15 @@ const sunoGenerateBody = z.object({
 const sunoCoverBody = z.object({
   prompt: z.string().min(1).max(SUNO_HARD_CEILING),
   userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
-  uploadUrl: safeUrlSchema,
+  // The source: any audio by URL, or a Suno song of the caller's own by its
+  // ids alone (`taskId` + `audioId`, both or neither; decided 2026-11-17) —
+  // covered by id, with no re-upload, when the task is provably the caller's
+  // finished song and the cover's fields fit a by-id body. With a URL beside
+  // the ids the URL is covered and the ids are not used, while the gate
+  // `SUNO_COVER_BY_ID_WHEN_FILE_PRESENT` is closed (lib/suno-id-source.ts).
+  uploadUrl: safeUrlSchema.optional(),
+  taskId: z.string().min(1).max(200).optional(),
+  audioId: z.string().min(1).max(200).optional(),
   model: sunoModelEnum,
   lyrics: z.string().max(SUNO_HARD_CEILING).optional(),
   style: z.string().max(1000).optional(),
@@ -136,6 +145,12 @@ const sunoCoverBody = z.object({
   // worker right before the fetch. Optional until `content_rights_required` is
   // on; a direct file needs none.
   confirmationId: z.string().uuid().optional(),
+}).superRefine((body, ctx) => {
+  if (!body.taskId !== !body.audioId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [body.taskId ? "audioId" : "taskId"], message: "Pass a Suno track's taskId and audioId together" })
+  } else if (!body.uploadUrl && !body.taskId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["uploadUrl"], message: "Pass the audio to cover as uploadUrl, or a Suno track made here as taskId and audioId" })
+  }
 })
 
 const sunoExtendBody = z.object({
@@ -478,7 +493,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const clamped = clampSunoFields(parsed.data)
 
       const {
-        prompt, uploadUrl, model, lyrics, style,
+        prompt, model, lyrics, style,
         title, negativeStyle, vocalGender, customMode,
         instrumental, personaId, personaModel,
       } = clamped
@@ -490,10 +505,29 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      // By id or by URL, before the row and the hold. A request with a URL
+      // covers the URL, as it always did (the gate in lib/suno-id-source.ts);
+      // ids alone go by id only for the caller's own finished song, with
+      // fields a by-id body can say, and are refused otherwise.
+      const source = await resolveSunoCoverSource({
+        taskId: parsed.data.taskId, audioId: parsed.data.audioId, uploadUrl: parsed.data.uploadUrl, userId,
+        fields: { model, prompt, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel },
+      })
+      if (!source) {
+        return reply.status(400).send({ error: { code: "validation_error", message: "Pass the audio to cover as uploadUrl, or a Suno track made here as taskId and audioId" } })
+      }
+      if (!source.ok) return reply.status(source.status).send({ error: { code: source.code, message: source.message } })
+      // The file, whenever the request carries one: what a by-file run covers,
+      // and what a by-id run falls back to. Its import is judged as before.
+      const uploadUrl = source.uploadUrl
+
       const confirmationId = parsed.data.confirmationId
-      if (await refusedSourceImport(req, reply, uploadUrl, userId, confirmationId)) return reply
+      if (uploadUrl && await refusedSourceImport(req, reply, uploadUrl, userId, confirmationId)) return reply
 
       const mcpClient = extractMcpClient(req.body)
+      // The request as the run will send it: the ids only when the run goes by id.
+      const { taskId: _taskId, audioId: _audioId, uploadUrl: _uploadUrl, ...rest } = parsed.data
+      const recorded = { ...rest, ...(source.byId ? { taskId: source.taskId, audioId: source.audioId } : {}), ...(uploadUrl ? { uploadUrl } : {}) }
 
       const { data: job, error } = await insertJob(req, {
           workflow_id: extractWorkflowId(req.body),
@@ -501,7 +535,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-cover"), "suno-cover"),
+          input_data: withResolvedModel(buildJobInputData(recorded, "suno-cover"), "suno-cover"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -518,10 +552,11 @@ export async function sunoRoutes(app: FastifyInstance) {
         jobId: job.id,
         // A link as the source is an import of the link: the confirmation, the
         // way in (and the connected app), for the worker's gate (`importRightsOf`).
-        ...(confirmationId ? { confirmationId } : {}),
+        ...(confirmationId && uploadUrl ? { confirmationId } : {}),
         ...importJobFields(req),
         prompt,
-        uploadUrl,
+        ...(source.byId ? { taskId: source.taskId, audioId: source.audioId } : {}),
+        ...(uploadUrl ? { uploadUrl } : {}),
         model,
         lyrics,
         style,
@@ -574,6 +609,10 @@ export async function sunoRoutes(app: FastifyInstance) {
           error: { code: "unauthorized", message: "Authentication required" },
         })
       }
+
+      // A Suno Speech take is not a song: its id is refused before the row and the hold.
+      const notATrack = await sunoSpeechTakeRefusal({ audioId, userId })
+      if (notATrack) return reply.status(notATrack.status).send({ error: { code: notATrack.code, message: notATrack.message } })
 
       const mcpClient = extractMcpClient(req.body)
 
@@ -703,6 +742,12 @@ export async function sunoRoutes(app: FastifyInstance) {
         return reply.status(401).send({
           error: { code: "unauthorized", message: "Authentication required" },
         })
+      }
+
+      // A Suno Speech take is not a song: its ids are refused before the row and the hold.
+      if ("taskId" in source) {
+        const notATrack = await sunoSpeechTakeRefusal({ taskId: source.taskId, userId })
+        if (notATrack) return reply.status(notATrack.status).send({ error: { code: notATrack.code, message: notATrack.message } })
       }
 
       const mcpClient = extractMcpClient(req.body)
@@ -1154,6 +1199,13 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      // A track, or one stem of a Suno separation (decided 2026-11-17), before
+      // the row and the hold. Whose task it is is not asked, as it never was;
+      // refused are a separation Demucs made, an id that is not one of its
+      // stems, and a Suno Speech take.
+      const wav = await resolveSunoWavSource({ taskId, audioId, userId })
+      if (!wav.ok) return reply.status(wav.status).send({ error: { code: wav.code, message: wav.message } })
+
       const mcpClient = extractMcpClient(req.body)
 
       const { data: job, error } = await insertJob(req, {
@@ -1162,7 +1214,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
-          input_data: buildJobInputData(parsed.data, "suno-convert-wav"),
+          input_data: buildJobInputData({ ...parsed.data, ...(wav.stem ? { stem: true } : {}) }, "suno-convert-wav"),
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
 
@@ -1178,6 +1230,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         jobId: job.id,
         taskId,
         audioId,
+        ...(wav.stem ? { stem: true } : {}),
         usageLogId,
       }))
       if (reply.sent) return

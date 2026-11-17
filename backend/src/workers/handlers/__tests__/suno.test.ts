@@ -52,6 +52,12 @@ vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2 }))
 vi.mock("@/lib/nodaro-connect.js", () => ({ isNodaroConnected: mocks.mockIsNodaroConnected }))
 vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ runJobOnCloud: mocks.mockRunJobOnCloud }))
+const market = vi.hoisted(() => ({ coverById: vi.fn() }))
+vi.mock("@/providers/kie/suno-market.js", async (importOriginal) => ({
+  // The real refusal class and the rest; only the by-id call is stubbed.
+  ...(await importOriginal<typeof import("@/providers/kie/suno-market.js")>()),
+  sunoCoverById: market.coverById,
+}))
 vi.mock("@/providers/kie/suno-client.js", () => ({
   sunoGenerate: mocks.mockSunoGenerate,
   sunoCover: mocks.mockSunoCover,
@@ -83,7 +89,7 @@ vi.mock("../../shared.js", async (importOriginal) => ({
   withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
 }))
 
-import { sunoHandlers } from "../suno.js"
+import { runSunoTracksJob, sunoHandlers } from "../suno.js"
 import { config } from "@/lib/config.js"
 import { registerPromptPolicy, clearPromptPolicies } from "../../../lib/prompt-policy.js"
 import { withLinkImportsOff } from "@/test/link-imports-off.js"
@@ -245,6 +251,58 @@ describe("suno-generate handler", () => {
 
 describe("suno-cover handler", () => {
   const handler = sunoHandlers["suno-cover"]
+  const TAKES = { taskId: "t-id", tracks: [{ id: "c1", audioUrl: "https://kie/a.mp3" }, { id: "c2", audioUrl: "https://kie/b.mp3" }] }
+  const refusedAtCreate = async () => {
+    const { SunoCoverByIdRefusedError } = await import("@/providers/kie/suno-market.js")
+    const { KieError } = await import("@/providers/kie/client.js")
+    return new SunoCoverByIdRefusedError(new KieError("Suno refused this request", "audio not found", "Generation"))
+  }
+
+  describe("by id (decided 2026-11-17)", () => {
+    beforeEach(() => {
+      market.coverById.mockReset().mockResolvedValue(TAKES)
+    })
+
+    it("my own song goes by its ids: nothing is uploaded, and the output says which lane ran", async () => {
+      await handler(makeJob("suno-cover", { prompt: "jazz cover", taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" }) as never, makeCtx())
+      expect(market.coverById).toHaveBeenCalledWith(expect.objectContaining({ taskId: "gen", audioId: "trk", prompt: "jazz cover" }), expect.objectContaining({ onTaskCreated: expect.any(Function) }))
+      expect(mocks.mockSunoCover).not.toHaveBeenCalled()
+      expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({ output_data: expect.objectContaining({ coverLane: "id", sunoTaskId: "t-id", trackCount: 2 }) }))
+      expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+    })
+
+    it("when Suno refuses to create the cover by id, the same job covers the file: one hold, one commit", async () => {
+      market.coverById.mockRejectedValueOnce(await refusedAtCreate())
+      await handler(makeJob("suno-cover", { prompt: "jazz cover", taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" }) as never, makeCtx())
+      expect(market.coverById).toHaveBeenCalledTimes(1)
+      expect(mocks.mockSunoCover).toHaveBeenCalledWith(expect.objectContaining({ prompt: "jazz cover", uploadUrl: "https://example.com/song.mp3" }), expect.anything())
+      expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({ output_data: expect.objectContaining({ coverLane: "file" }) }))
+      expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+    })
+
+    it("a refusal with no file to fall back on fails the job with Suno's own refusal; any other failure is never retried on the file", async () => {
+      market.coverById.mockRejectedValueOnce(await refusedAtCreate())
+      await expect(handler(makeJob("suno-cover", { prompt: "jazz cover", taskId: "gen", audioId: "trk" }) as never, makeCtx())).rejects.toThrow("Suno refused this request")
+      market.coverById.mockRejectedValueOnce(new Error("Suno Music generation task failed"))
+      await expect(handler(makeJob("suno-cover", { prompt: "jazz cover", taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" }) as never, makeCtx())).rejects.toThrow("task failed")
+      expect(mocks.mockSunoCover).not.toHaveBeenCalled()
+      expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("a prompt a cover by id cannot say (beside a style) covers the file with the whole prompt, and no by-id call is made", async () => {
+      await handler(makeJob("suno-cover", { prompt: "jazz cover", style: "folk", taskId: "gen", audioId: "trk", uploadUrl: "https://example.com/song.mp3" }) as never, makeCtx())
+      expect(market.coverById).not.toHaveBeenCalled()
+      expect(mocks.mockSunoCover).toHaveBeenCalledWith(expect.objectContaining({ prompt: "jazz cover", style: "folk", uploadUrl: "https://example.com/song.mp3" }), expect.anything())
+      expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({ output_data: expect.objectContaining({ coverLane: "file" }) }))
+    })
+
+    it("a cover of a plain file is untouched: no by-id call, no lane in its output", async () => {
+      await handler(makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://example.com/song.mp3" }) as never, makeCtx())
+      expect(market.coverById).not.toHaveBeenCalled()
+      const saved = mocks.mockMarkJobCompleted.mock.calls.at(-1)![1] as { output_data: Record<string, unknown> }
+      expect(saved.output_data).not.toHaveProperty("coverLane")
+    })
+  })
 
   it("happy path with non-social URL", async () => {
     const job = makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://example.com/song.mp3" })
@@ -507,6 +565,18 @@ describe("bespoke operations replay on the connected cloud when this install has
   afterEach(() => {
     config.KIE_API_KEY = originalKieKey
     mocks.mockIsNodaroConnected.mockResolvedValue(false)
+  })
+
+  it("a node unit's tracks job (Suno Speech) is never relayed: its own call runs, so a keyless install hears the missing-key message, not a relay refusal", async () => {
+    const call = vi.fn().mockResolvedValue(SUNO_RESULT)
+    await runSunoTracksJob(makeJob("suno-speech", { mode: "brief", prompt: "x" }) as never, makeCtx() as never, "Suno Speech returned no takes", call, 0.06, { sunoTrackKind: "speech" })
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      provider: "kie",
+      provider_cost: 0.06,
+      output_data: expect.objectContaining({ sunoTrackKind: "speech" }),
+    }))
   })
 
   it("suno-lyrics: cloud text passes straight through — no media, no R2", async () => {

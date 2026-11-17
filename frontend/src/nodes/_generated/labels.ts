@@ -11,6 +11,7 @@ import { labels as unit_shot_cuts } from "../shot-cuts/labels.generated" // unit
 import { labels as unit_speaker_layout } from "../speaker-layout/labels.generated" // unit:speaker-layout
 import { labels as unit_speaker_map } from "../speaker-map/labels.generated" // unit:speaker-map
 import { labels as unit_split_into_layers } from "../split-into-layers/labels.generated" // unit:split-into-layers
+import { labels as unit_suno_speech } from "../suno-speech/labels.generated" // unit:suno-speech
 import { labels as unit_tighten_episode } from "../tighten-episode/labels.generated" // unit:tighten-episode
 
 export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(Object.create(null), {
@@ -23,5 +24,6 @@ export const UNIT_LABELS: Readonly<Record<string, UnitLabels>> = Object.assign(O
   "speaker-layout": unit_speaker_layout, // unit:speaker-layout
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
   "tighten-episode": unit_tighten_episode, // unit:tighten-episode
 })

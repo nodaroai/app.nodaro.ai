@@ -7,6 +7,7 @@ import { worker as unit_remove_audio } from "../remove-audio/worker.js" // unit:
 import { worker as unit_shot_cuts } from "../shot-cuts/worker.js" // unit:shot-cuts
 import { worker as unit_speaker_map } from "../speaker-map/worker.js" // unit:speaker-map
 import { worker as unit_split_into_layers } from "../split-into-layers/worker.js" // unit:split-into-layers
+import { worker as unit_suno_speech } from "../suno-speech/worker.js" // unit:suno-speech
 
 export const UNIT_WORKERS: Readonly<Record<string, UnitWorker>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
@@ -14,4 +15,5 @@ export const UNIT_WORKERS: Readonly<Record<string, UnitWorker>> = Object.assign(
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
 })

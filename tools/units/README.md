@@ -278,8 +278,11 @@ never the workflow store or a composer itself (G5).
 
 **A unit's connection rule.** A unit declares what each input takes in its
 manifest, `handles.inputs[].accepts` (kinds from `ACCEPTS_KINDS`: `video`,
-`audio`, `image`; several = any of them; or `look` alone, a JSON input that
-takes any JSON producer, `ACCEPTS_JSON`), and writes no predicate of its own.
+`audio`, `image`; several = any of them; `look` alone, a JSON input that
+takes any JSON producer, `ACCEPTS_JSON`; or `text`, a text input that takes
+any text producer or a node whose output is decided at run time, its value
+landing in the input's `field` as every prompt pip's does — Suno Speech's,
+decided 2026-11-17), and writes no predicate of its own.
 The canvas validator (`connectionTypesAccepted`) asks
 `frontend/src/lib/unit-connections.ts` for every wire into a unit, after the
 rules every node shares (JSON kinds, composition/lottie/picker-json pips, UGC)

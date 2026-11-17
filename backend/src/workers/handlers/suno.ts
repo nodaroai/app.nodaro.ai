@@ -27,9 +27,12 @@ import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { requireImportAllowed, spendImportConfirmation } from "../../lib/import-gate.js"
 import { assertLinkImportAllowed } from "../../lib/link-imports.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
-import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
+import { providerKindForSuno, providerKindForSunoMarket } from "../../lib/reconcile/provider-kind.js"
 import { cloudTaskId, maybeSunoCloudOutput, shouldRunSunoOnCloud, type SunoProviderUsed } from "./suno-cloud.js"
 import { handleSunoSeparate } from "./suno-separate.js"
+import { SunoCoverByIdRefusedError, sunoConvertWavStem, sunoCoverById } from "../../providers/kie/suno-market.js"
+import { sunoCoverByIdInput } from "../../providers/kie/suno-cover-by-id.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 
 /**
  * Upload every Suno track to R2 in parallel under variant-suffixed keys and
@@ -128,13 +131,19 @@ async function finalizeSunoJob(
   result: SunoTaskResult,
   emptyTracksLabel: string,
   provider: SunoProviderUsed,
+  /** What the provider charged for the run, when known (a run on this install's own key). */
+  providerCostUsd?: number,
+  /** Facts about the run saved beside its tracks (which lane a cover ran on, that the takes are speech). */
+  runFacts?: Readonly<Record<string, unknown>>,
 ): Promise<void> {
   await setJobProgress(job, ctx.jobId, 50)
-  const outputData = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!outputData) throw new Error(emptyTracksLabel)
+  const tracksOutput = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
+  if (!tracksOutput) throw new Error(emptyTracksLabel)
+  const outputData = runFacts ? { ...tracksOutput, ...runFacts } : tracksOutput
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  if (!await markJobCompleted(ctx.jobId, { output_data: outputData, provider })) return
+  const cost = provider === "kie" && providerCostUsd !== undefined ? { provider_cost: providerCostUsd } : {}
+  if (!await markJobCompleted(ctx.jobId, { output_data: outputData, provider, ...cost })) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${outputData.audioUrl as string} (${outputData.trackCount as number} tracks)`)
 }
@@ -163,6 +172,30 @@ async function maybeRunSunoOnCloud(
   )
   await finalizeSunoJob(job, ctx, result, emptyTracksLabel, "nodaro")
   return true
+}
+
+/**
+ * A Suno run that delivers tracks, end to end, for a handler outside this file
+ * (a node unit's worker — Suno Speech): run `call` under the progress ramp,
+ * then the shared tail (every track stored, the first as the node's audio,
+ * `runFacts` saved beside them, credits committed).
+ *
+ * Never relayed to a connected cloud: the relay knows only the job types it
+ * lists (providers/nodaro/run-on-cloud.ts), so an install with no KIE key of
+ * its own hears the plain missing-key message from `call` instead of "cannot
+ * run on the connection".
+ */
+export async function runSunoTracksJob(
+  job: Job,
+  ctx: JobContext,
+  emptyTracksLabel: string,
+  call: () => Promise<SunoTaskResult>,
+  /** The provider's charge for a run on this install's own key (`jobs.provider_cost`). */
+  providerCostUsd?: number,
+  runFacts?: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  const result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, call)
+  await finalizeSunoJob(job, ctx, result, emptyTracksLabel, "kie", providerCostUsd, runFacts)
 }
 
 /**
@@ -213,20 +246,65 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
 }
 
 const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
-  const { prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel } = job.data as {
-    jobId: string; prompt: string; uploadUrl: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
+  const { prompt, uploadUrl, taskId, audioId, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel } = job.data as {
+    jobId: string; prompt: string; uploadUrl?: string; taskId?: string; audioId?: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
     negativeStyle?: string; vocalGender?: string; customMode?: boolean; instrumental?: boolean
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
-  // The deployment's switch, for a run (which reaches the worker without the route): a post or a direct file alike.
-  assertLinkImportAllowed(uploadUrl)
-  // BEFORE the social-URL download below: the cloud's own handler performs the
-  // same download, and the local copy's URL is on a private host it could not
-  // fetch anyway — downloading here first would cost bandwidth for a file we
-  // then never send.
-  const relay = await admitRelayedSource(job, ctx, uploadUrl)
+  console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""}${taskId && audioId ? ", by id" : ""})`)
+  const byIds = taskId && audioId ? { taskId, audioId } : undefined
+  if (!uploadUrl && !byIds) throw new DeterministicJobError("Suno Cover needs the audio to cover, or a Suno track's ids.")
+  let relay: boolean | undefined
+  if (uploadUrl) {
+    // The deployment's switch, for a run (which reaches the worker without the route): a post or a direct file alike.
+    assertLinkImportAllowed(uploadUrl)
+    // BEFORE the social-URL download below: the cloud's own handler performs the
+    // same download, and the local copy's URL is on a private host it could not
+    // fetch anyway — downloading here first would cost bandwidth for a file we
+    // then never send.
+    relay = await admitRelayedSource(job, ctx, uploadUrl)
+  }
   if (await maybeRunSunoOnCloud(job, ctx, "suno-cover", "Suno cover returned no tracks", relay)) return
+
+  // B4b: audio PromptPolicy — same convergence hook as suno-generate.
+  const _ap = applyPromptPolicies({ prompt, negativePrompt: negativeStyle ?? "", kind: "audio", vocalGender })
+  const _prompt = _ap.prompt
+  const _negativeStyle = _ap.negativePrompt || undefined
+  const _vocalGender = _ap.vocalGender
+
+  // The caller's own Suno song, by its ids (decided 2026-11-17): the route or
+  // the workflow run kept the ids only for a song the run may cover by id —
+  // today only a request of ids alone, so `uploadUrl` is absent here until the
+  // gate in lib/suno-id-source.ts is lifted; the file branches below are for
+  // that day. No file is fetched. It goes by id only when the by-id body says everything
+  // the file lane would (the policed prompt included); and when Suno refuses
+  // to create it — a track it no longer keeps — the run covers the file
+  // instead, in this same job and on the same hold. With no file to fall back
+  // on, either case fails the job, which is refunded.
+  if (byIds) {
+    const byIdParams = { ...byIds, prompt: _prompt, model, lyrics, style, title, negativeStyle: _negativeStyle, vocalGender: _vocalGender, customMode, instrumental, personaId, personaModel }
+    if (sunoCoverByIdInput(byIdParams)) {
+      try {
+        const result = await withProgressRamp(
+          job,
+          ctx.jobId,
+          { start: 5, cap: 45 },
+          () => sunoCoverById(byIdParams, { onTaskCreated: makeOnTaskCreated(ctx.jobId, providerKindForSunoMarket()), modelKey: sunoCreditType(model, "suno-cover") }),
+        )
+        console.log(`[worker] suno-cover ${ctx.jobId} ran by id`)
+        await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks", "kie", undefined, { coverLane: "id" })
+        return
+      } catch (err) {
+        if (!(err instanceof SunoCoverByIdRefusedError) || !uploadUrl) throw err instanceof SunoCoverByIdRefusedError ? err.refusal : err
+        console.warn(`[worker] suno-cover ${ctx.jobId}: Suno refused the cover by id (${err.message}); covering the file instead`)
+      }
+    } else if (!uploadUrl) {
+      throw new DeterministicJobError("This cover cannot go by the song's ids alone: a prompt beside a style, or a prompt longer than a style may be, needs the song's audio. Connect the audio itself.")
+    } else {
+      console.log(`[worker] suno-cover ${ctx.jobId}: its prompt does not fit a cover by id; covering the file`)
+    }
+  }
+  if (!uploadUrl) throw new DeterministicJobError("Suno Cover needs the audio to cover, or a Suno track's ids.")
 
   // If upload_url is a social media URL, download audio to R2 first
   let resolvedUploadUrl = uploadUrl
@@ -234,11 +312,6 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     console.log(`[worker] Social URL detected for cover, downloading audio first...`)
     resolvedUploadUrl = await downloadAudioToR2(uploadUrl, importRightsOf(job, ctx), { scratchJobId: ctx.jobId })
   }
-  // B4b: audio PromptPolicy — same convergence hook as suno-generate.
-  const _ap = applyPromptPolicies({ prompt, negativePrompt: negativeStyle ?? "", kind: "audio", vocalGender })
-  const _prompt = _ap.prompt
-  const _negativeStyle = _ap.negativePrompt || undefined
-  const _vocalGender = _ap.vocalGender
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
@@ -246,7 +319,8 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoCover({ prompt: _prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle: _negativeStyle, vocalGender: _vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated, modelKey: sunoCreditType(model, "suno-cover") }),
   )
-  await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks", "kie")
+  // A cover that was handed ids says which lane ran; a plain file cover's output is as it always was.
+  await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks", "kie", undefined, byIds ? { coverLane: "file" } : undefined)
 }
 
 const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
@@ -436,8 +510,8 @@ async function finalizeSunoConvertWav(job: Job, ctx: JobContext, result: SunoCon
 }
 
 const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job, ctx) {
-  const { taskId: sunoTaskId, audioId } = job.data as { jobId: string; taskId: string; audioId: string; usageLogId?: string }
-  console.log(`[worker] suno-convert-wav ${ctx.jobId}`)
+  const { taskId: sunoTaskId, audioId, stem } = job.data as { jobId: string; taskId: string; audioId: string; stem?: boolean; usageLogId?: string }
+  console.log(`[worker] suno-convert-wav ${ctx.jobId}${stem ? " (a separated stem)" : ""}`)
   const cloud = await maybeSunoCloudOutput(job, ctx, "suno-convert-wav")
   if (cloud) {
     if (typeof cloud.audioUrl !== "string" || !cloud.audioUrl) throw new Error("nodaro.ai returned no WAV")
@@ -448,7 +522,11 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated, modelKey: "suno-convert-wav" }),
+    // A stem of a Suno separation runs on the endpoint that documents stems;
+    // a track keeps its own, as before (decided 2026-11-17).
+    () => stem
+      ? sunoConvertWavStem({ taskId: sunoTaskId, audioId }, { onTaskCreated, modelKey: "suno-convert-wav" })
+      : sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated, modelKey: "suno-convert-wav" }),
   )
   await finalizeSunoConvertWav(job, ctx, result, "kie")
 }

@@ -11,6 +11,7 @@ import { definition as unit_shot_cuts } from "../shot-cuts/definition.generated"
 import { definition as unit_speaker_layout } from "../speaker-layout/definition.generated" // unit:speaker-layout
 import { definition as unit_speaker_map } from "../speaker-map/definition.generated" // unit:speaker-map
 import { definition as unit_split_into_layers } from "../split-into-layers/definition.generated" // unit:split-into-layers
+import { definition as unit_suno_speech } from "../suno-speech/definition.generated" // unit:suno-speech
 import { definition as unit_tighten_episode } from "../tighten-episode/definition.generated" // unit:tighten-episode
 import type { ClipPackData as unit_clip_pack_data } from "../clip-pack/types" // unit:clip-pack
 import type { EpisodeChaptersData as unit_episode_chapters_data } from "../episode-chapters/types" // unit:episode-chapters
@@ -21,6 +22,7 @@ import type { ShotCutsData as unit_shot_cuts_data } from "../shot-cuts/types" //
 import type { SpeakerLayoutData as unit_speaker_layout_data } from "../speaker-layout/types" // unit:speaker-layout
 import type { SpeakerMapData as unit_speaker_map_data } from "../speaker-map/types" // unit:speaker-map
 import type { SplitIntoLayersData as unit_split_into_layers_data } from "../split-into-layers/types" // unit:split-into-layers
+import type { SunoSpeechData as unit_suno_speech_data } from "../suno-speech/types" // unit:suno-speech
 import type { TightenEpisodeData as unit_tighten_episode_data } from "../tighten-episode/types" // unit:tighten-episode
 
 export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
@@ -33,6 +35,7 @@ export const UNIT_DEFINITIONS: ReadonlyArray<UnitDefinition> = [
   unit_speaker_layout, // unit:speaker-layout
   unit_speaker_map, // unit:speaker-map
   unit_split_into_layers, // unit:split-into-layers
+  unit_suno_speech, // unit:suno-speech
   unit_tighten_episode, // unit:tighten-episode
 ]
 
@@ -47,6 +50,7 @@ export type UnitNodeType =
   | "speaker-layout" // unit:speaker-layout
   | "speaker-map" // unit:speaker-map
   | "split-into-layers" // unit:split-into-layers
+  | "suno-speech" // unit:suno-speech
   | "tighten-episode" // unit:tighten-episode
 
 export type UnitNodeData =
@@ -60,6 +64,7 @@ export type UnitNodeData =
   | unit_speaker_layout_data // unit:speaker-layout
   | unit_speaker_map_data // unit:speaker-map
   | unit_split_into_layers_data // unit:split-into-layers
+  | unit_suno_speech_data // unit:suno-speech
   | unit_tighten_episode_data // unit:tighten-episode
 
 // Each unit's app fields (unit.json appFields) against its data type (types.ts): a value it does not take fails typecheck at its line.

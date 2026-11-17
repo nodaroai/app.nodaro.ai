@@ -65,6 +65,7 @@ const NO_APP_FIELDS: Readonly<Record<string, string>> = {
   "audio-isolation": "one fixed model and no setting: the audio is its whole input",
   "suno-music-video": "no setting: it renders the wired Suno track as it is",
   "suno-convert-wav": "no setting: it converts the wired Suno track as it is",
+  "suno-speech": "its text arrives by wire (expose the Text node that feeds it); a unit's app field is a list or a number, and its mode alone would let an app pick Script with no script",
   "forced-alignment": "no setting: its transcript is an input (expose the Text node that feeds it)",
   "pro-3d-render":
     "its quality, aspect and length are what the deployment's 3D engine serves (read at run time, not a static list), and a scene source carries its own timing",

@@ -1590,4 +1590,27 @@ describe("resolveNodeInputs — suno-separate handles", () => {
     const target = makeNode("t1", "trim-audio")
     expect(resolveNodeInputs(target, [sep, target], [edge("instrumental")]).audioUrl).toBeUndefined()
   })
+
+  it("into Suno Convert to WAV a stem hands on the separation's task and its own id; a wire with no handle, the main stem (as the server reads it)", () => {
+    const withIds = makeNode("s1", "suno-separate", {
+      generatedAudioUrl: "https://cdn.test/v.mp3",
+      vocalUrl: "https://cdn.test/v.mp3",
+      instrumentalUrl: "https://cdn.test/i.mp3",
+      sunoTaskId: "sep-task",
+      sunoStemIds: { vocalUrl: "id-v", instrumentalUrl: "id-i" },
+    })
+    const target = makeNode("t1", "suno-convert-wav")
+    const byPip = resolveNodeInputs(target, [withIds, target], [edge("instrumental")])
+    expect([byPip.sunoTaskId, byPip.sunoTrackId]).toEqual(["sep-task", "id-i"])
+    const noHandle = resolveNodeInputs(target, [withIds, target], [{ id: "s1-t1", source: "s1", target: "t1" }])
+    expect([noHandle.sunoTaskId, noHandle.sunoTrackId]).toEqual(["sep-task", "id-v"])
+    expect(byPip.sunoStemUnavailable).toBeUndefined()
+    // A separation that kept no stem ids hands on none, and says so: the Run refuses, as the server does.
+    const idless = resolveNodeInputs(target, [sep, target], [edge("isolated")])
+    expect(idless.sunoTrackId).toBeUndefined()
+    expect(idless.sunoStemUnavailable).toBe("no-ids")
+    const demucs = makeNode("s1", "suno-separate", { generatedAudioUrl: "https://cdn.test/v.mp3", vocalUrl: "https://cdn.test/v.mp3", engineUsed: "demucs" })
+    expect(resolveNodeInputs(target, [demucs, target], [edge("vocals")]).sunoStemUnavailable).toBe("demucs")
+    expect(resolveNodeInputs(target, [demucs, target], [{ id: "s1-t1", source: "s1", target: "t1" }]).sunoStemUnavailable).toBe("demucs")
+  })
 })

@@ -20,6 +20,7 @@
 import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { HANDLE_COLORS } from "./handle-colors"
 import { ACCEPTS_JSON } from "./data-handles"
+import { TEXT_PRODUCER_TYPES } from "./generate-image-handles"
 import { ugcMayFeedPlanInput } from "./ugc-plan-inputs"
 import { UNIT_NODE_DEFINITIONS, unitDefinitionOf } from "./unit-definitions"
 import { composeSet, unitsWith } from "./unit-compose"
@@ -92,6 +93,10 @@ const UNIT_ACCEPT_RULES: Readonly<Record<string, (sourceType: string) => boolean
   // validator guarantees a look input accepts nothing else
   // (tools/units/manifest.mjs), so this rule is never or-ed with a media rule.
   look: ACCEPTS_JSON,
+  // A text input: any text producer, or a node whose output is decided at run
+  // time (a List, a sub-workflow) — what every prompt pip takes. Its value
+  // lands in the input's field, routed by the source's type on both engines.
+  text: (sourceType: string): boolean => TEXT_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType),
 }
 
 export function unitInputAccepts(kinds: ReadonlyArray<UnitHandleKind>): (sourceType: string) => boolean {

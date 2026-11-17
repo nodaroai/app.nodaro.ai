@@ -78,3 +78,8 @@ export function providerKindForVideoToVideoModel(model: string): ProviderKind {
 export function providerKindForSuno(): ProviderKind {
   return "kie-suno"
 }
+
+/** A Suno task made on KIE's market lane (Suno Speech, a cover by id): polled where it was made. */
+export function providerKindForSunoMarket(): ProviderKind {
+  return "kie-suno-market"
+}

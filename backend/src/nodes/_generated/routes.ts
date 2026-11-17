@@ -7,6 +7,7 @@ import { route as unit_remove_audio } from "../remove-audio/route.js" // unit:re
 import { route as unit_shot_cuts } from "../shot-cuts/route.js" // unit:shot-cuts
 import { route as unit_speaker_map } from "../speaker-map/route.js" // unit:speaker-map
 import { route as unit_split_into_layers } from "../split-into-layers/route.js" // unit:split-into-layers
+import { route as unit_suno_speech } from "../suno-speech/route.js" // unit:suno-speech
 
 export const UNIT_ROUTES: Readonly<Record<string, UnitRoute>> = Object.assign(Object.create(null), {
   "gif-to-video": unit_gif_to_video, // unit:gif-to-video
@@ -14,4 +15,5 @@ export const UNIT_ROUTES: Readonly<Record<string, UnitRoute>> = Object.assign(Ob
   "shot-cuts": unit_shot_cuts, // unit:shot-cuts
   "speaker-map": unit_speaker_map, // unit:speaker-map
   "split-into-layers": unit_split_into_layers, // unit:split-into-layers
+  "suno-speech": unit_suno_speech, // unit:suno-speech
 })

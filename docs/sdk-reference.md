@@ -3041,7 +3041,7 @@ workflow engine calls the same routes):
 | `image-to-text` | `/v1/image-to-text/describe` |
 | `video-composer` | `/v1/scene-graph/generate` |
 | `telegram-channel-feed` | `/v1/telegram-channel/fetch` |
-| `suno-generate`, `suno-cover`, `suno-extend`, … (every `suno-*` node) | `/v1/suno/<name>`; `suno-voice` → `/v1/suno/voice/generate` |
+| `suno-generate`, `suno-cover`, `suno-extend`, … (every `suno-*` node but Suno Speech) | `/v1/suno/<name>`; `suno-voice` → `/v1/suno/voice/generate`; `suno-speech` takes the default, `/v1/suno-speech` |
 | `instagram-post`, `tiktok-post`, `youtube-upload`, `linkedin-post`, `x-post`, `facebook-post`, `telegram-post`, `publish-social` | `/v1/social/publish` |
 | `ugc-creator`, `ugc-script`, `ugc-clips`, `ugc-clip`, `ugc-cards` | `/v1/ugc/creator`, `/v1/ugc/script`, … (Cloud plugin) |
 | `render-video` with a `planType` | `/v1/render-video/plan` |

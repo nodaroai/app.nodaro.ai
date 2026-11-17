@@ -44,7 +44,7 @@ import {
   videoOverlaySlotOfHandle
 } from "@nodaro/shared/video"
 import { SOCIAL_POST_NODE_TYPES, socialSearchPostVideo } from "@nodaro/shared/social"
-import { SUNO_TRACK_SOURCE_TYPES } from "@nodaro/shared/models"
+import { SUNO_TRACK_SOURCE_TYPES, sunoSeparateHandleIds } from "@nodaro/shared/models"
 import type { ConnectedReference } from "@nodaro/shared/types"
 import { editPlanTranscriptOrigin } from "@nodaro/shared/edl"
 import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, cameraSwitchSpeakerMapLanding, isUseCaseNodeType } from "@nodaro/render-rules"
@@ -756,6 +756,12 @@ export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResol
   scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>;
   sunoTrackId?: string;
   sunoTaskId?: string;
+  /**
+   * Suno Convert to WAV, wired from a Suno Separate stem that has no Suno ids
+   * to convert by: Demucs made the separation, or it kept none. The Run refuses
+   * on it, as the server's payload does, and never converts ids typed into the node.
+   */
+  sunoStemUnavailable?: "demucs" | "no-ids";
   /** Custom Suno voice persona id wired from an upstream suno-voice node. */
   personaId?: string;
   /** Persona kind, defaults to "voice_persona" when personaId is set. */
@@ -3234,6 +3240,28 @@ export function resolveNodeInputs(
         } else {
           inputs.audioUrl = stemUrl;
         }
+      }
+      // A stem into Suno Convert to WAV only: the separation's task and the
+      // stem's own id (the server's resolver applies the same rule). Separate
+      // is no track source, so no other Suno node chains off a stem.
+      if (node.type === "suno-convert-wav") {
+        const stem = sunoSeparateHandleIds(srcData, resolvedSourceHandle);
+        if (stem) {
+          inputs.sunoTaskId = stem.taskId;
+          inputs.sunoTrackId = stem.audioId;
+        } else {
+          inputs.sunoStemUnavailable = srcData.engineUsed === "demucs" ? "demucs" : "no-ids";
+        }
+      }
+    } else if (src.type === "suno-separate" && node.type === "suno-convert-wav") {
+      // A wire with no handle, or one the node does not name: the separation's
+      // main stem, as the server's resolver reads it (`sunoSeparateHandleIds`).
+      const stem = sunoSeparateHandleIds(src.data as Record<string, unknown>, resolvedSourceHandle);
+      if (stem) {
+        inputs.sunoTaskId = stem.taskId;
+        inputs.sunoTrackId = stem.audioId;
+      } else {
+        inputs.sunoStemUnavailable = (src.data as Record<string, unknown>).engineUsed === "demucs" ? "demucs" : "no-ids";
       }
     } else if (
       src.type === "audio-separation" &&

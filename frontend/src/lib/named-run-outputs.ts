@@ -1,4 +1,4 @@
-import { SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "@nodaro/shared/models"
+import { SUNO_SEPARATE_ID_FIELDS, SUNO_SEPARATE_META_FIELDS, SUNO_SEPARATE_RESULT_FIELDS } from "@nodaro/shared/models"
 
 /**
  * A finished node's NAMED side outputs, under the keys its card and its output
@@ -83,7 +83,7 @@ export function splitMediaRunOutputFields(nodeType: string | null | undefined, o
  * that is the node's instrument SETTING; the run only echoes the value it was
  * sent, and writing it back would undo an instrument changed mid-run.
  */
-export const SUNO_SEPARATE_RUN_FACTS: readonly string[] = SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName")
+export const SUNO_SEPARATE_RUN_FACTS: readonly string[] = [...SUNO_SEPARATE_META_FIELDS.filter((key) => key !== "stemName"), ...SUNO_SEPARATE_ID_FIELDS]
 
 /**
  * Suno Separate: every stem, both one-instrument takes and the run's facts, under

@@ -1058,6 +1058,23 @@ export {
   type LayerSplitSize,
   type LayerSplitTier,
 } from "./layer-split"
+// Suno Speech's modes, limits and the allow-listed provider input (route, payload, worker, panel, Run).
+export {
+  DEFAULT_SUNO_SPEECH_MODE,
+  SUNO_SPEECH_LIMITS,
+  SUNO_SPEECH_MODES,
+  SUNO_SPEECH_VOCAL_GENDERS,
+  sunoSpeechMode,
+  sunoSpeechProblem,
+  sunoSpeechProviderInput,
+  sunoSpeechRun,
+  sunoSpeechVariety,
+  sunoSpeechVocalGender,
+  type SunoSpeechMode,
+  type SunoSpeechRun,
+  type SunoSpeechSettings,
+  type SunoSpeechVocalGender,
+} from "./suno-speech"
 // Generate Video Pro's resolution rule: the tier a run renders, and the menus derived from it.
 export { gvpOfferedResolutions, gvpRenderResolution, gvpRendersResolutionAsNamed } from "./gvp-resolution"
 // The audio a Generate Video Pro segment is sent with and priced at (the plugin toolkit, the pro pricing, the editor's estimate).
