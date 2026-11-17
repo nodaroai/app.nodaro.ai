@@ -102,6 +102,7 @@ import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
 import { LIP_SYNC_AUDIO_RATES, OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID } from "@nodaro/shared/credits"
 import { buildToolkit } from "../../../lib/private-plugins/toolkit.js"
+import { SCAN_PAGE_CREDIT_COSTS } from "@nodaro/shared/social"
 import { SRC, parseText, walk } from "../../../lib/__tests__/source-ast.js"
 
 /** An admin row for every rate: the code's row plus 3, and one fractional row. */
@@ -207,6 +208,15 @@ const CHARGES: Readonly<Record<string, Charge>> = {
         { units: 6.25, charge: async () => markedUp(id, await seedanceExtendBaseCredits({ provider, duration: 8, resolution, sourcePictureSec: 4.5 })) },
       ]),
     ),
+  ),
+  // The cloud plugin's brand and topic scans (POST /v1/competitor-scan, /v1/topic-scan):
+  // creditGuard(rate, { computeCredits: tk.http.unitRatePrice(rate, pages).baseCredits }),
+  // marked up once by the guard. Seven Social Search pages each.
+  ...Object.fromEntries(
+    Object.keys(SCAN_PAGE_CREDIT_COSTS).map((id): [string, Charge] => [
+      id,
+      { units: 7, charge: async () => markedUp(id, (await buildToolkit().http.unitRatePrice!(id, 7)).baseCredits) },
+    ]),
   ),
 }
 

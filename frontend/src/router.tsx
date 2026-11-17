@@ -45,6 +45,7 @@ const InspirationPage = lazy(() => import("@/app/(dashboard)/inspiration/page"))
 const CollectionsPage = lazy(() => import("@/app/(dashboard)/collections/page"))
 const CollectionDetailPage = lazy(() => import("@/app/(dashboard)/collections/detail/page"))
 const CompetitorsPage = lazy(() => import("@/app/(dashboard)/competitors/page"))
+const TopicsPage = lazy(() => import("@/app/(dashboard)/topics/page"))
 const SharedWithMePage = lazy(() => import("@/app/(dashboard)/shared/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
@@ -506,6 +507,10 @@ export const router = createBrowserRouter([
       {
         path: "/competitors",
         element: <SuspenseWrapper><CompetitorsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/topics",
+        element: <SuspenseWrapper><TopicsPage /></SuspenseWrapper>,
       },
       {
         path: "/library/locations",

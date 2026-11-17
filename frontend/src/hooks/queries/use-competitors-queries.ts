@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { ActionCard, CardAction, CompetitorActionsResult, CompetitorCompareInput, CreateCompetitorInput, UpdateCompetitorInput } from "@nodaro/shared/social"
+import type {
+  ActionCard,
+  CardAction,
+  CompetitorActionsResult,
+  CompetitorCompareInput,
+  CompetitorListResult,
+  CreateCompetitorInput,
+  UpdateCompetitorInput,
+} from "@nodaro/shared/social"
 import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -70,16 +78,29 @@ export function useCompetitorCompare(id: string | null, input: CompetitorCompare
   })
 }
 
-/** How many months of scans the plan keeps; null until known. */
-export function useCompetitorHistoryMonths(enabled: boolean) {
+/** The list's whole answer, read once for what the plan allows; the two readers below share it. */
+function useCompetitorMeta<T>(enabled: boolean, select: (result: CompetitorListResult) => T) {
   const { user } = useAuth()
   return useQuery({
-    queryKey: queryKeys.competitors.historyMonths(),
+    queryKey: queryKeys.competitors.meta(),
     queryFn: () => competitorList(),
-    select: (result) => result.historyMonths ?? null,
+    select,
     enabled: enabled && !!user,
     staleTime: 5 * 60_000,
   })
+}
+
+const historyMonthsOf = (result: CompetitorListResult) => result.historyMonths ?? null
+const limitsOf = (result: CompetitorListResult) => result.limits ?? null
+
+/** How many months of scans the plan keeps; null until known. */
+export function useCompetitorHistoryMonths(enabled: boolean) {
+  return useCompetitorMeta(enabled, historyMonthsOf)
+}
+
+/** What the plan allows per brand (search terms); null from a server older than the limits. */
+export function useCompetitorLimits(enabled: boolean) {
+  return useCompetitorMeta(enabled, limitsOf)
 }
 
 /** What works for a brand; read when its tab opens, re-read after each scan lands. */

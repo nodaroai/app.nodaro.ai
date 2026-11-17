@@ -6,11 +6,14 @@ Competitors) on Nodaro Cloud, in preview for admins.
 
 ## Adding a brand
 
-Press **Add a brand** and paste its website, then **Find accounts**. Nodaro
-reads the site and fills in the accounts it links: TikTok, Instagram,
-YouTube, X, a LinkedIn company page. Accounts the site does not link may be
-filled in as guesses, marked **Guess, check it**. Check every account, and
-add a Meta advertiser if you want their ads read too.
+Press **Add a brand** and give it a name: the name is how the brand is shown
+to you. Then type its accounts, or paste its website and press **Find
+accounts**. The website is optional: a creator with no site is added by
+typing the accounts. Find accounts reads the site and fills in the accounts
+it links: TikTok, Instagram, YouTube, X, a LinkedIn company page. Accounts
+the site does not link may be filled in as guesses, marked **Guess, check
+it**. Check every account, and add a Meta advertiser if you want their ads
+read too.
 
 A LinkedIn account is a company page (`linkedin.com/company/…`) or a
 person's profile (`linkedin.com/in/…`), for a brand that is a person. Find
@@ -28,6 +31,15 @@ Then choose:
 - **Search posts that name it on:** the platforms where a scan also looks
   for other people's posts that name the brand (TikTok, Instagram, YouTube,
   X and Reddit by default; LinkedIn too).
+- **Search terms:** what those searches look for instead of the name:
+  a full name, a handle, a #hashtag ("Jane Example", "@example_creator",
+  "#examplebakes"). Without terms the name is searched. A post counts as about
+  the brand only when it names one of the terms (or the name, without terms)
+  as a whole word, phrase, hashtag or mention, never as part of another word
+  or handle. A short or common name finds strangers' posts that use the same
+  word; give a fuller term to keep them out. Each term is searched on each
+  platform you picked, so it adds a search per platform. Standard plans can
+  set 3 terms, Pro 5 and Business 10; Free and Basic search the name only.
 - **Schedule:** weekly (the default), daily, or no schedule (scan only when
   you press **Scan now**).
 - **This is my brand:** track yourself. Cards about your own brand speak to
@@ -38,9 +50,12 @@ Adding a brand is free.
 
 ## What a scan costs
 
-A scan runs one Social Search page (up to 20 posts) per account and per
-platform its name is searched on. A brand with two accounts and five
-platforms is seven searches, so a scan costs seven Social Search pages.
+A scan runs one Social Search page (up to 20 posts) per account, and per
+platform for each search term (or for the name, without terms). Each page
+costs 22 credits<!-- credits: competitor-scan:per-page -->. A brand with two
+accounts and five platforms is seven pages,
+154 credits<!-- credits: competitor-scan:per-page@7 -->; with two search terms
+it is 2 + 5 × 2 = 12 pages, 264 credits<!-- credits: competitor-scan:per-page@12 -->.
 The window shows the price before you save, and every scan button on the
 page shows it. Searches that fail are not charged; if every search
 fails, nothing is charged. Scheduled scans cost the same as manual ones.
@@ -231,3 +246,6 @@ The same brands, scans, cards, lessons and marks are available over the API
 the SDK (`client.competitors`), the CLI (`nodaro competitors`) and MCP
 (`list_competitors`, `competitor_cards`, `competitor_lessons`,
 `competitor_tried`, `mark_card_done`, `add_competitor`, `scan_competitor`).
+
+To follow a hashtag or phrase with no brand around it, see
+[Topics](topics.md).

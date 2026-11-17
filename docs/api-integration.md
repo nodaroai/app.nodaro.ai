@@ -7179,8 +7179,8 @@ Search page per search; see [Competitors](./features/competitors.md).
 
 | Method | Path | Body | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[], historyMonths }`, where `historyMonths` is how many months of scans your plan keeps (see **Over time**). Each lists in `searchPlan` what its next scan searches (`{ kind, platform }`: `own` for an account, `about` for the name searched on a platform). |
-| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, isOwn?, schedule? }` | Track a brand. `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (a company page, or a person's profile `linkedin.com/in/…`), `meta_ads` (advertiser). An account that cannot be read answers `400 invalid_account`, naming it and what its field takes. A repeated `aboutPlatforms` entry counts once. `201` with the brand; `409 too_many_competitors` past 50 brands. |
+| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[], historyMonths, limits }`, where `historyMonths` is how many months of scans your plan keeps (see **Over time**) and `limits.searchTerms` how many search terms your plan allows per brand (`0` = the name only, `null` = no cap). Each lists in `searchPlan` what its next scan searches (`{ kind, platform, term }`: `own` for an account, `about` for a term, or the name, searched on a platform), its `searchTerms` and the `pages` a scan runs. |
+| `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, searchTerms?, isOwn?, schedule? }` | Track a brand. `brand` is its display name; `website` is optional (it only helps find the accounts). `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (a company page, or a person's profile `linkedin.com/in/…`), `meta_ads` (advertiser). An account that cannot be read answers `400 invalid_account`, naming it and what its field takes. A repeated `aboutPlatforms` entry counts once. `searchTerms` (phrases or `#hashtags`, up to 100 characters each, repeats ignored without regard to case) are searched instead of the name; more than your plan allows answers `403 search_terms_limit` with `limit`. `201` with the brand; `409 too_many_competitors` past 50 brands. |
 | `GET` | `/v1/competitors/:id` | `?scan=<id>` optional | One brand with its latest scan (posts and cards), that scan platform by platform (`platforms`, see **Who is where**; `null` before its first scan) and its scan history (counts only). With `scan`, the brand as of that scan (`404 scan_not_found` for a scan that is not this brand's). |
 | `GET` | `/v1/competitors/:id/history` | none | The brand's scans oldest first (free): `{ scans: [{ id, at, platforms: [{ platform, own, about, followers, usual, unit }] }] }` — per platform what each scan found and read; a scan stored before these were kept answers `null` for `own`, `about` and `followers`. |
 | `GET` | `/v1/competitors/:id/compare` | `?from&to[&vsFrom&vsTo]` (ISO datetimes) | The brand over a period, and a second one to compare with (free): `{ periods: [{ from, to, platforms: [{ platform, own, about, usual, unit, followers, change, lessons, best }] }], posts }`. See **Over time**. `400 validation_error` when a period ends before it starts, is longer than a year, or `vsFrom` comes without `vsTo`. |
@@ -7195,12 +7195,27 @@ Search page per search; see [Competitors](./features/competitors.md).
 | `POST` | `/v1/competitor-discover` | `{ website }` | Find a brand's accounts from its website (free). Each account says whether the site linked it or it is a guess to check. |
 | `POST` | `/v1/competitor-scan` | `{ competitorId }` | Scan now. Answers `{ jobId }` at once; poll the job. |
 
-**Price.** A scan of a brand with `n` searches (`TrackedCompetitor.searches`:
-one per account, one per platform its name is searched on) costs `n`
-Social Search pages, the credit id `competitor-scan:<n>`. The scan runs the
-searches it was priced on, even if the brand changes before it starts.
-Searches that fail are not charged; if every search fails the scan fails
-and nothing is charged. Adding, reading and website lookups are free.
+**Price.** A scan runs one Social Search page per account, and per platform
+for each search term (or for the name, without terms): `TrackedCompetitor.pages`.
+It is charged per page at the credit id `competitor-scan:per-page`,
+22 credits<!-- credits: competitor-scan:per-page --> a page, summed (a quote for
+`n` pages is `competitor-scan:per-page:<n>u`). The scan runs the searches it
+was priced on, even if the brand changes before it starts. Searches that
+fail are not charged; if every search fails the scan fails and nothing is
+charged. Adding, reading and website lookups are free. On a server whose
+per-page price is not set yet, a scan of up to 12 searches is charged at
+`competitor-scan:<n>` and a larger one answers `503 price_not_configured`.
+
+**Search terms.** With `searchTerms` set, the about-searches look for the
+terms instead of the name, and a post counts as about the brand only when
+it names one of them (or one of the brand's handles) as a whole word,
+phrase, hashtag or mention; without terms the name is used the same way.
+Plans allow Standard 3, Pro 5 and Business 10 terms; Free, Pay as you go and
+Basic search the name only. After a downgrade the stored terms stay and a
+scan uses the first ones the plan allows. When your plan cannot be read just
+then, a write with search terms and a scan of a brand with terms answer
+`503 plan_unavailable` (try again), and the list leaves out `limits` and
+`historyMonths`.
 
 **Schedule.** `weekly` (the default) or `daily` scans start on their own
 and are charged like a manual scan; `off` scans only on request. A scan
@@ -7273,6 +7288,41 @@ The same routes are wrapped by the SDK (`client.competitors`), the MCP tools
 (`list_competitors`, `competitor_cards`, `competitor_lessons`,
 `competitor_tried`, `mark_card_done`, `add_competitor`, `scan_competitor`)
 and the CLI (`nodaro competitors`).
+
+## 16d. Topics (Nodaro Cloud)
+
+Follow a hashtag or phrase with no brand around it ("ai video"): each scan
+searches it on the platforms you pick, keeps the posts that really name it,
+and makes cards about what is spreading. Topics share the Competitors
+schedule and history; see [Topics](./features/topics.md).
+
+| Method | Path | Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/topics` | none | Your topics: `{ data: TrackedTopic[], limits: { topics }, historyMonths }`. `limits.topics` is how many your plan allows (`0` = none, `null` = no cap). Each topic has `name`, `term`, `platforms`, `postCount`, `schedule`, its last scan, and `pages` (Social Search pages one scan runs). |
+| `POST` | `/v1/topics` | `{ name, term?, platforms?, postCount?, schedule? }` | Follow a topic. `term` defaults to the name; `platforms` to TikTok, Instagram, YouTube and X (Reddit and LinkedIn too); `postCount` is `20` (the default), `40` or `60` posts per search; `schedule` `weekly` (the default), `daily` or `off`. `201` with the topic; `403 topic_limit` with `limit` past your plan's topics; `409 already_tracked` for a name you already follow. |
+| `GET` | `/v1/topics/:id` | none | One topic with its latest scan (`posts`, `cards`, `counts`) and its scans (counts only, newest first). |
+| `PATCH` | `/v1/topics/:id` | any field of the above | Change it; `409 scan_running` while a scan of it runs. |
+| `DELETE` | `/v1/topics/:id` | none | Stop following it (its scans go too). |
+| `GET` | `/v1/topics/:id/history` | none | Its scans oldest first (free): `{ scans: [{ id, at, platforms: [{ platform, posts, reach }] }] }`, the posts kept per platform and their summed reach (`null` where the platform gives none). |
+| `GET` | `/v1/topics/cards` | none | The cards of every topic's latest scan, most urgent first: `{ cards, posts }`. Cards are the Competitors kinds that read posts about a subject (`spreading`, `complaints`, `mentions_up`), with `subjectId` the topic's id. |
+| `POST` | `/v1/topic-scan` | `{ topicId }` | Scan now. Answers `{ jobId }` at once; poll the job. `403 topic_limit` when you follow more topics than your plan allows now (after a downgrade only the oldest ones scan). |
+
+**Price.** A topic scan searches the term once per platform, reading
+`postCount` posts: 20 is one Social Search page, 40 two, 60 three (YouTube
+and Reddit read one page whatever is asked). It is charged per page at the
+credit id `topic-scan:per-page`, 22 credits<!-- credits: topic-scan:per-page -->
+a page, summed: four platforms at 60 posts, where YouTube reads one page,
+is 3 + 3 + 3 + 1 = 10 pages, 220 credits<!-- credits: topic-scan:per-page@10 -->.
+Searches that fail are not charged.
+
+**Plans.** Standard follows up to 10 topics, Pro 30 and Business 50; Free,
+Pay as you go and Basic none. OAuth app tokens need `assets:read` for the
+reads and `assets:write` for the writes; a scan spends credits, so it also
+needs a `:write` or `:execute` scope. On a server whose database does not
+have topics yet, or whose topic price is not set, the routes answer
+`503 not_ready`. When your plan cannot be read just then, adding a topic and
+a scan answer `503 plan_unavailable` (try again), and the list leaves out
+`limits` and `historyMonths`.
 
 ## 17. Community
 

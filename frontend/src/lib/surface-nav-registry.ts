@@ -84,6 +84,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // Competitor tracking (Cloud). Admin-only sidebar entry while Social Search
   // is in preview; no surface NavKey hides it.
   "/competitors",
+  // Topic tracking (Cloud): a hashtag or phrase followed with no brand. Admin-only
+  // sidebar entry, like Competitors; no surface NavKey hides it.
+  "/topics",
   "/library/locations",
   "/billing",
   // Track A — the deployment BILLING ACCOUNT's own page (spec §9.3).

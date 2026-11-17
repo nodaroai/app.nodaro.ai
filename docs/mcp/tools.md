@@ -1362,9 +1362,9 @@ The cards the user marked done, newest first, how each went (their post against 
 
 **Scope:** `assets:write` · Nodaro Cloud only
 
-**Input:** `brand`, `website`, `accounts` (`tiktok`, `instagram`, `youtube`, `x`, `linkedin`, `meta_ads`), `about_platforms`, `is_own`, `schedule` — all optional, but a brand or a website is needed.
+**Input:** `brand`, `website`, `accounts` (`tiktok`, `instagram`, `youtube`, `x`, `linkedin`, `meta_ads`), `about_platforms`, `search_terms`, `is_own`, `schedule` — all optional, but a brand or a website is needed.
 
-Track a brand. Given only a website, its accounts are found from the site first (the reply names the ones that are guesses). Adding is free.
+Track a brand. Given only a website, its accounts are found from the site first (the reply names the ones that are guesses); no website is needed when the accounts are given. `search_terms` (a full name, a handle, a #hashtag) are searched instead of the name, one search per platform each, and a post must name one of them to count as about the brand; the user's plan caps how many (Free and Basic search the name only). Adding is free.
 
 ### `scan_competitor`
 
@@ -1372,7 +1372,7 @@ Track a brand. Given only a website, its accounts are found from the site first 
 
 **Input:** `competitor_id`.
 
-Scan a tracked brand now. Returns a `job_id`; read the new cards with `competitor_cards` once it completes. Costs one Social Search page per search (`list_competitors` shows the count); searches that fail are not charged.
+Scan a tracked brand now. Returns a `job_id`; read the new cards with `competitor_cards` once it completes. Costs one Social Search page per search (`list_competitors` shows the searches and pages); searches that fail are not charged.
 
 ## Character tools
 

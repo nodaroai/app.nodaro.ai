@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest"
-import { apiErrorMessage, apiErrorReasonKey, refusalMessage } from "../api-error-copy"
+import { TOPIC_REASON_KEY_BY_CODE, apiErrorMessage, apiErrorReasonKey, refusalMessage, rewordApiError } from "../api-error-copy"
 import { translate } from "@/lib/i18n"
 import { useLocaleStore } from "@/lib/locale-store"
 
@@ -30,6 +30,12 @@ describe("apiErrorReasonKey", () => {
     expect(apiErrorReasonKey("card_not_found")).toBe("apiErr.reason.cardGone")
     expect(apiErrorReasonKey("not_measurable")).toBe("apiErr.reason.notMeasurable")
     expect(apiErrorReasonKey("too_many_actions")).toBe("apiErr.reason.tooManyMarks")
+  })
+
+  it("maps the plan-limit refusals of search terms and topics", () => {
+    expect(apiErrorReasonKey("search_terms_limit")).toBe("apiErr.reason.searchTermsLimit")
+    expect(apiErrorReasonKey("topic_limit")).toBe("apiErr.reason.topicLimit")
+    expect(apiErrorReasonKey("plan_unavailable")).toBe("apiErr.reason.planUnavailable")
   })
 
   it("maps the admin expunge's two internal failures", () => {
@@ -162,6 +168,37 @@ describe("refusalMessage", () => {
     expect(refusalMessage(undefined, "apiErr.nameTaken")).toBe(translate("en", "apiErr.nameTaken"))
     useLocaleStore.setState({ locale: "he" })
     expect(refusalMessage("A character named Maya exists", "apiErr.nameTaken")).toBe(translate("he", "apiErr.nameTaken"))
+  })
+})
+
+describe("plan limits and topic refusals", () => {
+  it("a plan limit: the server's words (with its figure) in English, a translated reason elsewhere", () => {
+    const serverMessage = "Your plan allows up to 3 search terms per brand."
+    expect(apiErrorMessage({ code: "search_terms_limit", serverMessage, fallbackKey: "apiErr.saveCompetitor" })).toBe(serverMessage)
+    useLocaleStore.setState({ locale: "ja" })
+    expect(apiErrorMessage({ code: "topic_limit", serverMessage: "Your plan allows up to 10 topics.", fallbackKey: "apiErr.saveTopic" })).toBe(
+      translate("ja", "apiErr.withReason", { context: translate("ja", "apiErr.saveTopic"), reason: translate("ja", "apiErr.reason.topicLimit") }),
+    )
+  })
+
+  it("a topic route's refusal that shares a brand route's code names a topic", () => {
+    useLocaleStore.setState({ locale: "he" })
+    const err = Object.assign(new Error("x"), { code: "already_tracked", serverMessage: "You already track this topic." })
+    const reworded = rewordApiError(err, "apiErr.saveTopic", TOPIC_REASON_KEY_BY_CODE) as Error & { code?: string; serverMessage?: string }
+    expect(reworded.message).toBe(
+      translate("he", "apiErr.withReason", { context: translate("he", "apiErr.saveTopic"), reason: translate("he", "apiErr.reason.topicAlreadyTracked") }),
+    )
+    expect(reworded.code).toBe("already_tracked")
+    expect(reworded.serverMessage).toBe("You already track this topic.")
+  })
+
+  it("leaves every other error as it is", () => {
+    const other = Object.assign(new Error("x"), { code: "validation_error" })
+    expect(rewordApiError(other, "apiErr.saveTopic", TOPIC_REASON_KEY_BY_CODE)).toBe(other)
+    class Typed extends Error {}
+    const typed = Object.assign(new Typed("x"), { code: "already_tracked" })
+    expect(rewordApiError(typed, "apiErr.saveTopic", TOPIC_REASON_KEY_BY_CODE)).toBe(typed)
+    expect(rewordApiError("boom", "apiErr.saveTopic", TOPIC_REASON_KEY_BY_CODE)).toBe("boom")
   })
 })
 

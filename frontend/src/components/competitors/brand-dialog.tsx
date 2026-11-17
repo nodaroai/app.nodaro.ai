@@ -15,7 +15,7 @@ import { AdviceRecordList } from "./advice-record"
 import { BrandOverTime } from "./brand-over-time"
 import { BrandPlatformCards, BrandPlatformTable, type BrandPlatformChoice } from "./brand-platform-table"
 import { BrandPlatformDetail } from "./brand-platform-detail"
-import { brandTallies } from "./brand-platforms"
+import { aboutTermsOf, brandTallies } from "./brand-platforms"
 import { useScanPrice } from "./brand-row-menu"
 import { useSaveControls } from "./use-save-controls"
 
@@ -106,6 +106,8 @@ export function BrandDialog({
     ? about === 1 ? t("competitors.aboutYouCountOne") : t("competitors.aboutYouCount", { n: about })
     : about === 1 ? t("competitors.aboutThemCountOne") : t("competitors.aboutThemCount", { n: about })
   const platforms = tallies.length === 1 ? t("competitors.platformsCountOne") : t("competitors.platformsCount", { n: tallies.length })
+  // What its searches for posts about it look for, when that is not its name.
+  const terms = competitor ? aboutTermsOf(competitor) : []
 
   return (
     <Dialog open={target !== null} onOpenChange={onOpenChange}>
@@ -121,6 +123,16 @@ export function BrandDialog({
             <DialogDescription className="text-[14px]">
               {scan ? t("competitors.dialogScanLine", { date: formatDate(Date.parse(scan.at), { month: "short", day: "numeric" }), theirs, about: aboutPhrase, platforms }) : ""}
             </DialogDescription>
+            {terms.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span>{t("competitors.searchTerms")}</span>
+                {terms.map((term) => (
+                  <span key={term} dir="auto" className="rounded-full bg-muted px-2 py-0.5 font-semibold text-foreground/80">
+                    {term}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           {competitor && (
             <div className="me-8 flex shrink-0 flex-wrap items-center gap-1.5">

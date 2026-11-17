@@ -11,6 +11,7 @@ import {
   Bookmark,
   Database,
   Radar,
+  Hash,
   History,
   Plug,
   Rocket,
@@ -98,6 +99,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/inspiration", label: "nav.inspiration", icon: Bookmark, adminOnly: true },
       { href: "/collections", label: "nav.collections", icon: Database, adminOnly: true },
       { href: "/competitors", label: "nav.competitors", icon: Radar, adminOnly: true },
+      { href: "/topics", label: "nav.topics", icon: Hash, adminOnly: true },
       { href: "/_gallery", label: "nav.gallery", icon: Images },
     ]
   },

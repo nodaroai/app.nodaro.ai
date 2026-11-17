@@ -143,6 +143,7 @@ const PLUGIN_GUARDED_ROUTE_NODES: Readonly<Record<string, string>> = {
   "/v1/video-remake/:jobId/full-quality": "cast-swap",
   "/v1/video-remake/face-mask": "cast-swap",
   "/v1/competitor-scan": "competitor-scan",
+  "/v1/topic-scan": "topic-scan",
   "/v1/content-ideas": "content-ideas",
   "/v1/content-recipe": "content-recipe",
   "/v1/edit-plan": "edit-plan",

@@ -197,6 +197,12 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   "/v1/competitors/actions/:p",
   "/v1/competitor-scan",
   "/v1/competitor-discover",
+  // Topic tracking: the same plugin's routes, for the same reasons.
+  "/v1/topics",
+  "/v1/topics/:p",
+  "/v1/topics/cards",
+  "/v1/topics/:p/history",
+  "/v1/topic-scan",
   // UGC video: Cloud-only nodes (CLOUD_ONLY_NODE_TYPES, no relay), every route
   // served by the Nodaro Cloud plugin — registered at runtime by the
   // cloud-plugins `registerRoutes()` and deliberately absent from core. Off

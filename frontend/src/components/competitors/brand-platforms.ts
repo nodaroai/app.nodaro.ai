@@ -1,4 +1,4 @@
-import type { ActionCard, CompetitorDetail, CompetitorPlatformTally, CompetitorPost, SocialPlatform } from "@nodaro/shared/social"
+import type { ActionCard, CompetitorDetail, CompetitorPlatformTally, CompetitorPost, SocialPlatform, SocialPost, TrackedCompetitor } from "@nodaro/shared/social"
 import { MATRIX_PLATFORMS } from "./platform-matrix"
 
 /**
@@ -35,8 +35,21 @@ export function readsOf(tally: CompetitorPlatformTally): { readonly own: boolean
 }
 
 /** A post's reach, for ordering a grid: views, else points, else likes. */
-export function reachOf(post: CompetitorPost): number {
+export function reachOf(post: Pick<SocialPost, "metrics">): number {
   return post.metrics.views ?? post.metrics.score ?? post.metrics.likes ?? 0
+}
+
+/**
+ * The terms the brand's searches for posts about it use, as the next scan
+ * runs them: the plan's when the server names them (only the ones the plan
+ * allows), else the brand's own. Empty when the brand has none: its name is
+ * searched.
+ */
+export function aboutTermsOf(c: Pick<TrackedCompetitor, "searchPlan" | "searchTerms">): string[] {
+  const own = c.searchTerms ?? []
+  if (own.length === 0) return []
+  const planned = (c.searchPlan ?? []).flatMap((s) => (s.kind === "about" && s.term ? [s.term] : []))
+  return [...new Set(planned.length > 0 ? planned : own)]
 }
 
 /** The scan's posts on a platform with a role, most reached first. */

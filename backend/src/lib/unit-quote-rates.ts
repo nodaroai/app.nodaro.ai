@@ -56,6 +56,7 @@ import {
   TOPAZ_VIDEO_UNIT_CREDIT_ID,
 } from "@nodaro/render-rules"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { SCAN_PAGE_CREDIT_COSTS } from "@nodaro/shared/social"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
@@ -77,6 +78,12 @@ const ANY_UNITS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: f
 const DUB_MINUTES: UnitQuoteRule = { maxUnits: DUBBING_MAX_MINUTES, wholeUnits: true }
 /** Speaker Frames: started blocks of 1,000 sampled frames — whole blocks only. */
 const FRAME_BLOCKS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: true }
+/**
+ * A scan: whole Social Search pages. A brand scan reads one page per search,
+ * at most 6 accounts + 6 platforms × 15 terms = 96; a topic scan at most 6
+ * platforms × 3 pages. 300 bounds both with room to spare.
+ */
+const SCAN_PAGES: UnitQuoteRule = { maxUnits: 300, minUnits: 1, wholeUnits: true }
 /**
  * A sent-priced extend (Seedance 2.5 / 2.5 Flash Extend): half a unit per
  * second sent and added. The fewest a run has is the shortest source it takes
@@ -120,6 +127,8 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   ),
   ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
+  // A brand's or a topic's scan: whole Social Search pages.
+  ...Object.keys(SCAN_PAGE_CREDIT_COSTS).map((id) => [id, SCAN_PAGES] as const),
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.
   ...Object.values(LIP_SYNC_AUDIO_RATES).map(
     (rate) => [rate.rateId, { maxUnits: rate.maxSeconds, minUnits: rate.minSeconds, wholeUnits: true }] as const,

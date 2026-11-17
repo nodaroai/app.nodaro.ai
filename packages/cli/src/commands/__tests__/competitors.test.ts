@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { Command } from "commander"
-import { accountsFromFlags, competitorsCommand, mergeAccounts, outcomeLine, parseAbout, parseClear, parseSchedule, recordLines } from "../competitors.js"
+import { accountsFromFlags, competitorsCommand, mergeAccounts, outcomeLine, parseAbout, parseClear, parseSchedule, parseTerms, recordLines } from "../competitors.js"
 import { info, success } from "../../output.js"
 
 const mocks = {
@@ -162,6 +162,12 @@ describe("flag parsing", () => {
     expect(() => parseAbout("reddit,myspace")).toThrow("myspace")
     expect(parseSchedule("off")).toBe("off")
     expect(() => parseSchedule("hourly")).toThrow("--schedule")
+  })
+
+  it("reads search terms comma separated, as the server keeps them; an empty value clears them", () => {
+    expect(parseTerms(" Jane  Example, @example_creator ,#ExampleBakes, jane example")).toEqual(["Jane Example", "@example_creator", "#ExampleBakes"])
+    expect(parseTerms("")).toEqual([])
+    expect(parseTerms(undefined)).toBeUndefined()
   })
 })
 

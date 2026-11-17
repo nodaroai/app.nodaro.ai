@@ -55,7 +55,7 @@ import { noteServerDate } from "@/lib/server-clock"
 import { runtimeApiUrl } from "@/lib/runtime-config"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { usecaseBody, usecaseLabelVars, type UseCaseApiParams } from "@/lib/use-case-request-body"
-import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
+import { TOPIC_REASON_KEY_BY_CODE, apiErrorMessage, refusalMessage, rewordApiError } from "@/lib/api-error-copy"
 import { continuationRefusalOf } from "@/lib/run-workflow-errors"
 import { dispatchConsentRequired } from "@/lib/consent-required-event"
 import { dispatchAccessBlocked } from "@/lib/access-blocked-event"
@@ -424,6 +424,15 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
  */
 export function isNotFoundError(err: unknown): boolean {
   return err instanceof Error && (err as { code?: unknown }).code === "not_found"
+}
+
+/**
+ * 503 `not_ready` — the server has the feature but its database does not yet
+ * (Topics before their migration reaches the database). A page says the
+ * feature is not available yet; asking again soon will not change that.
+ */
+export function isNotReadyError(err: unknown): boolean {
+  return err instanceof Error && (err as { code?: unknown }).code === "not_ready"
 }
 
 /** 503 `encryption_key_missing` — this install has no instance encryption key, so a secret cannot be stored. */
@@ -5760,6 +5769,82 @@ export async function discoverCompetitor(website: string): Promise<import("@noda
 /** Starts a paid scan; answers with the job id at once. */
 export async function scanCompetitor(id: string): Promise<{ jobId: string }> {
   return apiJson("/v1/competitor-scan", { body: { competitorId: id }, label: "apiErr.scanCompetitor" })
+}
+
+// ---- Topics (Cloud: a hashtag or phrase followed on chosen platforms) ----
+
+type TrackedTopic = import("@nodaro/shared/social").TrackedTopic
+
+/** A topic route's call: its refusals that share a brand route's code are worded for a topic. */
+async function topicJson<T>(path: string, opts: Parameters<typeof apiJson>[1]): Promise<T> {
+  try {
+    return await apiJson<T>(path, opts)
+  } catch (err) {
+    throw rewordApiError(err, opts.label, TOPIC_REASON_KEY_BY_CODE)
+  }
+}
+
+/** A failed topic call's response, thrown the way `topicJson` throws it. */
+async function throwTopicError(res: Response, label: MessageKey): Promise<never> {
+  const body = await res.json().catch(() => null)
+  try {
+    throwApiError(body, label)
+  } catch (err) {
+    throw rewordApiError(err, label, TOPIC_REASON_KEY_BY_CODE)
+  }
+}
+
+/**
+ * The person's topics and their plan's caps; null when this server has no
+ * topic routes (an older server, or an edition without them). A server whose
+ * database is not ready for topics throws `not_ready` (`isNotReadyError`).
+ */
+export async function listTopics(): Promise<import("@nodaro/shared/social").TopicListResult | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/topics`, { method: "GET", headers: await getAuthHeaders() })
+  if (res.status === 404) return null
+  if (!res.ok) return throwTopicError(res, "apiErr.loadTopics")
+  // A non-JSON 200 (the dev proxy serving the page while the API restarts): the headline, as apiJson words it.
+  try {
+    return (await res.json()) as import("@nodaro/shared/social").TopicListResult
+  } catch {
+    throw new Error(tx("apiErr.unexpectedResponse", { context: tx("apiErr.loadTopics") }))
+  }
+}
+
+/** A topic with its latest scan and its scans, newest first. */
+export async function getTopic(id: string): Promise<import("@nodaro/shared/social").TopicDetail> {
+  return topicJson(`/v1/topics/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadTopic" })
+}
+
+/** A topic's scans as a series, oldest first. */
+export async function topicHistory(id: string): Promise<import("@nodaro/shared/social").TopicHistory> {
+  return topicJson(`/v1/topics/${encodeURIComponent(id)}/history`, { method: "GET", label: "apiErr.loadTopicHistory" })
+}
+
+/** The cards of every topic's latest scan, most urgent first, and the posts they rest on. */
+export async function topicCards(): Promise<import("@nodaro/shared/social").TopicCardsResult> {
+  return topicJson("/v1/topics/cards", { method: "GET", label: "apiErr.loadTopicCards" })
+}
+
+/** Follows a topic. Refused with 403 `topic_limit` past the plan's topics, 409 `already_tracked` for a name already followed. */
+export async function createTopic(input: import("@nodaro/shared/social").CreateTopicInput): Promise<TrackedTopic> {
+  return topicJson("/v1/topics", { body: { ...input }, label: "apiErr.saveTopic" })
+}
+
+/** Changes a topic: only the fields given (an unchanged schedule is best left out, it restarts the schedule). */
+export async function updateTopic(id: string, input: import("@nodaro/shared/social").UpdateTopicInput): Promise<TrackedTopic> {
+  return topicJson(`/v1/topics/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.saveTopic" })
+}
+
+/** Stops following a topic. The server answers 204 with no body, so this reads no JSON on success. */
+export async function deleteTopic(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/topics/${encodeURIComponent(id)}`, { method: "DELETE", headers: await getAuthHeaders() })
+  if (!res.ok) await throwTopicError(res, "apiErr.deleteTopic")
+}
+
+/** Starts a paid scan of a topic; answers with the job id at once. */
+export async function scanTopic(id: string): Promise<{ jobId: string }> {
+  return topicJson("/v1/topic-scan", { body: { topicId: id }, label: "apiErr.scanTopic" })
 }
 
 

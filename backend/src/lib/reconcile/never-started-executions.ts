@@ -37,12 +37,26 @@
  * install settles its own runs, and production also settles unstamped rows,
  * those written before the stamp existed (on a shared database that includes
  * another install's, which are four hours past being claimed by then).
+ *
+ * Another install's runs. An install sharing the database can fire a schedule
+ * (schedules fire by default off Railway) and then stop before its
+ * orchestrator claims the run, or run no orchestrator at all. Nothing else
+ * will ever settle that row: the install that owns it is gone, or its sweep
+ * sees the job still waiting in its own queue. Production's schedule cron and
+ * webhook trigger still read it as "already running", so one such row
+ * silenced a schedule for good (seen 2026-11-15). Production therefore settles
+ * a never-started run stamped by another install too (`scopeToOtherInstalls`),
+ * once it is past the same backstop plus `OTHER_INSTALL_GRACE_MS`: the owning
+ * install's own sweep gets the first chance, and production cannot look into
+ * that install's queue. If that install's orchestrator does pick the job up
+ * later, its claim (a compare-and-set from `pending`) finds the row failed and
+ * the run never starts.
  */
 import { supabase } from "../supabase.js"
 import { orchestrationQueue } from "../orchestration-queue.js"
 import { ORCHESTRATOR_ALIVE_STATES } from "../orchestration-queue-config.js"
 import { BullCallTimeoutError, bounded } from "../bull-call-timeout.js"
-import { scopeToRuntimeEnv } from "../runtime-env.js"
+import { scopeToOtherInstalls, scopeToRuntimeEnv } from "../runtime-env.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "../job-budget.js"
 import { executionQueuedMs } from "../concurrency-lanes/execution-wait.js"
 import { failWaitingExecution } from "../concurrency-lanes/run-failure.js"
@@ -54,27 +68,46 @@ export const NEVER_STARTED_MESSAGE = "Execution failed — it was created but ne
 /** Per-tick cap; the next tick (90 s later) takes any leftovers, oldest first. */
 const BATCH_LIMIT = 200
 
+/**
+ * How much longer than its own runs production waits before it settles a
+ * never-started run another install created: one more backstop, so that
+ * install's own sweep (which can see its queue) acts first when it is alive.
+ */
+export const OTHER_INSTALL_GRACE_MS = STALE_EXECUTION_THRESHOLD_MS
+
 interface NeverStartedRow {
   readonly id: string
   readonly user_id: string
   readonly created_at: string
+  readonly runtime_env: string | null
 }
 
 /**
  * One pass: fail every never-started run this install owns that is past the
- * backstop. Answers how many it failed. One row's failed write or failed queue
- * call never stops the batch; that row stays `pending` and the next tick tries
- * it again. A queue call that does not answer ends the pass.
+ * backstop, and on production also another install's that is past the backstop
+ * plus `OTHER_INSTALL_GRACE_MS`. Answers how many it failed. One row's failed
+ * write or failed queue call never stops the batch; that row stays `pending`
+ * and the next tick tries it again. A queue call that does not answer ends the
+ * pass over this install's own runs.
  */
 export async function sweepNeverStartedExecutions(nowMs: number = Date.now()): Promise<number> {
-  const cutoff = new Date(nowMs - STALE_EXECUTION_THRESHOLD_MS).toISOString()
-  const scan = supabase
+  const settled = (await settleOwnRuns(nowMs)) + (await settleForeignRuns(nowMs))
+  if (settled > 0) console.warn(`[reconcile/never-started] ${processIdentity()} tick: failed ${settled} execution(s) that were created but never started`)
+  return settled
+}
+
+/** Never-claimed `pending` runs created more than `olderThanMs` ago (the scan both passes share). */
+function neverStartedScan(nowMs: number, olderThanMs: number) {
+  return supabase
     .from("workflow_executions")
-    .select("id, user_id, created_at")
+    .select("id, user_id, created_at, runtime_env")
     .eq("status", "pending")
     .is("started_at", null)
-    .lt("created_at", cutoff)
-  const { data, error } = await scopeToRuntimeEnv(scan)
+    .lt("created_at", new Date(nowMs - olderThanMs).toISOString())
+}
+
+async function settleOwnRuns(nowMs: number): Promise<number> {
+  const { data, error } = await scopeToRuntimeEnv(neverStartedScan(nowMs, STALE_EXECUTION_THRESHOLD_MS))
     .order("created_at", { ascending: true })
     .limit(BATCH_LIMIT)
   if (error) {
@@ -92,8 +125,51 @@ export async function sweepNeverStartedExecutions(nowMs: number = Date.now()): P
       if (err instanceof BullCallTimeoutError) break
     }
   }
-  if (settled > 0) console.warn(`[reconcile/never-started] ${processIdentity()} tick: failed ${settled} execution(s) that were created but never started`)
   return settled
+}
+
+/**
+ * Production only (`scopeToOtherInstalls` answers null elsewhere): runs another
+ * install stamped. That install's queue is out of reach, so there is no queue
+ * lookup; the longer threshold stands in for it.
+ */
+async function settleForeignRuns(nowMs: number): Promise<number> {
+  const scoped = scopeToOtherInstalls(neverStartedScan(nowMs, STALE_EXECUTION_THRESHOLD_MS + OTHER_INSTALL_GRACE_MS))
+  if (!scoped) return 0
+  const { data, error } = await scoped.order("created_at", { ascending: true }).limit(BATCH_LIMIT)
+  if (error) {
+    console.error(`[reconcile/never-started] query of other installs' runs failed: ${error.message}`)
+    return 0
+  }
+
+  let settled = 0
+  for (const row of (data ?? []) as NeverStartedRow[]) {
+    try {
+      if (await settleForeignRun(row, nowMs)) settled++
+    } catch (err) {
+      console.error(`[reconcile/never-started] could not settle execution ${row.id}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  return settled
+}
+
+async function settleForeignRun(row: NeverStartedRow, nowMs: number): Promise<boolean> {
+  const createdAt = Date.parse(row.created_at)
+  if (!Number.isFinite(createdAt)) return false
+
+  // The waits it recorded never count against it. Its own run-slot wait does not
+  // count here: only its own install's queue sweep can end that wait, and an
+  // install that stopped never will, so it would grow until the longest cap.
+  const waitedMs = await executionQueuedMs(row.id, row.user_id, { includeOwnWait: false, nowMs })
+  if (nowMs - createdAt <= staleExecutionThresholdMs(0, waitedMs) + OTHER_INSTALL_GRACE_MS) return false
+
+  const failed = await failWaitingExecution(row.id, NEVER_STARTED_MESSAGE)
+  if (failed) {
+    console.warn(
+      `[reconcile/never-started] ${processIdentity()} failed execution ${row.id} (created_at=${row.created_at}) that install "${row.runtime_env}" created and never started.`,
+    )
+  }
+  return failed
 }
 
 async function settleIfNeverStarted(row: NeverStartedRow, nowMs: number): Promise<boolean> {

@@ -9072,6 +9072,9 @@ const brand = await client.competitors.create({
   website: found.website,
   accounts: Object.fromEntries(Object.entries(found.accounts).map(([k, v]) => [k, v!.value])),
 })
+// A creator with no website: type the accounts, and search a fuller term than a short name
+// (the plan caps the terms; `(await client.competitors.listWithPlan()).limits?.searchTerms`).
+await client.competitors.create({ brand: "Jane", accounts: { tiktok: "example_creator" }, searchTerms: ["Jane Example", "@example_creator"] })
 const { jobId } = await client.competitors.scan(brand.id)
 // …poll client.jobs.getStatus(jobId) until completed, then:
 const { cards, posts } = await client.competitors.cards()

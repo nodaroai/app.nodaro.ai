@@ -157,7 +157,7 @@ import { captionRoutesToRemotion, captionsNeedTranscription } from "@nodaro/shar
 import { getLlmModel, getLlmTier, defaultReasoningEffort, llmDefaultsFeature, LLM_FEATURE_DEFAULTS, buildLlmCreditIdentifier, llmPriceKey, motionGraphicsFeature, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, type LlmFeature } from "@nodaro/shared/llm-models"
 import { FLUX2_RES_MP, MODEL_CATALOG, type Flux2Model } from "@nodaro/shared/model-catalog"
 import { renderVideoCreditId, scene3DRenderTierCredits } from "@nodaro/shared/scene3d"
-import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS } from "@nodaro/shared/social"
+import { META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SCRAPE_ANALYSIS_FEATURE, scrapeAnalysisPriceParts, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, SCAN_PAGE_CREDIT_COSTS } from "@nodaro/shared/social"
 import { countImageInputEdges, countRefModalityEdges, nodeIsMasked, referenceModalityForHandle, wiredImageSize } from "@nodaro/shared/workflow"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
@@ -2578,8 +2578,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...SOCIAL_SEARCH_CREDIT_COSTS,
   // Competitor scan: one Social Search page per search the scan runs
   // (competitor-scan:<n> = n pages). Cloud-only, like Social Search
-  // (packages/shared competitors.ts is the table). Migration 447.
+  // (packages/shared competitors.ts is the table). Migration 447. Kept for a
+  // plugin that still reserves them; scans are now charged per page:
   ...COMPETITOR_SCAN_CREDIT_COSTS,
+  // A brand's or a topic's scan: one row per Social Search page it runs,
+  // summed (competitor-scan:per-page, topic-scan:per-page). Migration 664.
+  ...SCAN_PAGE_CREDIT_COSTS,
   "qa-check": 20,
   "qa-check:economy": 10,
   "qa-check:premium": 40,

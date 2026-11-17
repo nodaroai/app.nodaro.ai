@@ -21,6 +21,8 @@ interface Row {
 const mocks = vi.hoisted(() => ({
   rows: [] as Row[],
   filters: [] as Array<[string, string, unknown]>,
+  /** Each scan's own filters, in the order the scans ran. */
+  scans: [] as Array<Array<[string, string, unknown]>>,
   queueState: new Map<string, string>(),
   /** Runs whose job lookup fails / never answers / whose job's state read never answers. */
   queueRejects: new Set<string>(),
@@ -41,6 +43,8 @@ vi.mock("../../supabase.js", () => {
       filters.every(([kind, col, value]) => {
         const v = (r as unknown as Record<string, unknown>)[col]
         if (kind === "eq") return v === value
+        // SQL: `runtime_env <> 'production'` is not true for NULL, so `neq` never matches an unstamped row.
+        if (kind === "neq") return v !== null && v !== value
         if (kind === "is") return v === value
         if (kind === "lt") return typeof v === "string" && v < (value as string)
         if (kind === "or") {
@@ -54,12 +58,14 @@ vi.mock("../../supabase.js", () => {
     const builder: Record<string, unknown> = {
       select: () => builder,
       eq: (col: string, value: unknown) => (filters.push(["eq", col, value]), builder),
+      neq: (col: string, value: unknown) => (filters.push(["neq", col, value]), builder),
       is: (col: string, value: unknown) => (filters.push(["is", col, value]), builder),
       lt: (col: string, value: unknown) => (filters.push(["lt", col, value]), builder),
       or: (value: string) => (filters.push(["or", "", value]), builder),
       order: () => builder,
       limit: () => {
         mocks.filters.push(...filters)
+        mocks.scans.push([...filters])
         return Promise.resolve({ data: mocks.rows.filter(keep), error: null })
       },
     }
@@ -108,7 +114,7 @@ vi.mock("../../concurrency-lanes/run-failure.js", () => ({
   },
 }))
 
-import { NEVER_STARTED_MESSAGE, sweepNeverStartedExecutions } from "../never-started-executions.js"
+import { NEVER_STARTED_MESSAGE, OTHER_INSTALL_GRACE_MS, sweepNeverStartedExecutions } from "../never-started-executions.js"
 import { STALE_EXECUTION_THRESHOLD_MS } from "../../job-budget.js"
 import { BULL_CALL_TIMEOUT_MS } from "../../bull-call-timeout.js"
 
@@ -132,6 +138,7 @@ const saved: Record<string, string | undefined> = {}
 beforeEach(() => {
   mocks.rows = []
   mocks.filters = []
+  mocks.scans = []
   mocks.queueState.clear()
   mocks.queueRejects.clear()
   mocks.queueHangs.clear()
@@ -280,7 +287,7 @@ describe("sweepNeverStartedExecutions — a run that never started stops blockin
     expect(mocks.lookedUp).toEqual(["first"])
   })
 
-  it("production sweeps its own runs and unstamped (older) rows, never another install's", async () => {
+  it("production sweeps its own runs and unstamped (older) rows, and leaves another install's while that install's own sweep can still act", async () => {
     mocks.rows = [
       pending("own", { runtime_env: "production" }),
       pending("unstamped", { runtime_env: null }),
@@ -292,16 +299,143 @@ describe("sweepNeverStartedExecutions — a run that never started stops blockin
     expect(mocks.failed.map((f) => f.id).sort()).toEqual(["own", "unstamped"])
   })
 
-  it("any other install sweeps only the runs it created", async () => {
+  it("any other install sweeps only the runs it created, however old another install's are", async () => {
     process.env.RUNTIME_ENV = "staging"
     mocks.rows = [
       pending("own", { runtime_env: "staging" }),
       pending("unstamped", { runtime_env: null }),
       pending("production", { runtime_env: "production" }),
+      pending("local", { runtime_env: "local", created_at: hoursAgo(50) }),
     ]
 
     await sweepNeverStartedExecutions(NOW)
 
     expect(mocks.failed.map((f) => f.id)).toEqual(["own"])
+  })
+})
+
+// The case that silenced a schedule for two and a half days (2026-11-15): an
+// install sharing the database fired the schedule, wrote the run `pending`
+// stamped "local", and never ran it. Its own sweep was gone or saw the job
+// waiting in its own queue; production's sweep looked only at its own and
+// unstamped rows, while its schedule cron read the row as "already running"
+// every two hours.
+describe("sweepNeverStartedExecutions — production settles a run another install created and never started", () => {
+  const PAST_GRACE_H = (STALE_EXECUTION_THRESHOLD_MS + OTHER_INSTALL_GRACE_MS) / HOUR + 1
+
+  it("fails another install's never-started run once it is past the backstop and the grace", async () => {
+    mocks.rows = [pending("local-run", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H) })]
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(1)
+    expect(mocks.failed).toEqual([{ id: "local-run", message: NEVER_STARTED_MESSAGE }])
+    const perRow = vi.mocked(console.warn).mock.calls.map((c) => String(c[0])).filter((l) => l.includes("failed execution"))
+    expect(perRow).toEqual([expect.stringContaining('install "local" created and never started')])
+  })
+
+  it("does not look for it in production's queue, which never holds another install's job", async () => {
+    mocks.rows = [pending("local-run", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H) })]
+    mocks.queueState.set("local-run", "waiting")
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(1)
+    expect(mocks.lookedUp).toEqual([])
+  })
+
+  it("scans production's own rows, then another install's never-claimed pending rows with their own, longer cutoff", async () => {
+    await sweepNeverStartedExecutions(NOW)
+
+    expect(mocks.scans).toEqual([
+      [
+        ["eq", "status", "pending"],
+        ["is", "started_at", null],
+        ["lt", "created_at", new Date(NOW - STALE_EXECUTION_THRESHOLD_MS).toISOString()],
+        ["or", "", "runtime_env.eq.production,runtime_env.is.null"],
+      ],
+      [
+        ["eq", "status", "pending"],
+        ["is", "started_at", null],
+        ["lt", "created_at", new Date(NOW - STALE_EXECUTION_THRESHOLD_MS - OTHER_INSTALL_GRACE_MS).toISOString()],
+        ["neq", "runtime_env", "production"],
+      ],
+    ])
+  })
+
+  it("any install but production runs only the one scan, of its own rows", async () => {
+    process.env.RUNTIME_ENV = "local"
+
+    await sweepNeverStartedExecutions(NOW)
+
+    expect(mocks.scans).toHaveLength(1)
+    expect(mocks.scans[0]).toContainEqual(["eq", "runtime_env", "local"])
+  })
+
+  it("an unstamped row stays with production's own pass: past the grace, a job still in production's queue keeps it", async () => {
+    mocks.rows = [pending("legacy", { runtime_env: null, created_at: hoursAgo(PAST_GRACE_H) })]
+    mocks.queueState.set("legacy", "waiting")
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(0)
+    expect(mocks.failed).toEqual([])
+    expect(mocks.lookedUp).toEqual(["legacy"])
+  })
+
+  it("never touches another install's run that was claimed or has finished, however old", async () => {
+    mocks.rows = [
+      pending("claimed", { runtime_env: "local", created_at: hoursAgo(50), started_at: hoursAgo(49) }),
+      pending("running", { runtime_env: "local", created_at: hoursAgo(50), status: "running", started_at: hoursAgo(49) }),
+      pending("done", { runtime_env: "staging", created_at: hoursAgo(50), status: "completed" }),
+    ]
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(0)
+    expect(mocks.failed).toEqual([])
+  })
+
+  it("leaves it while the install that created it could still settle it itself", async () => {
+    const insideGraceH = (STALE_EXECUTION_THRESHOLD_MS + OTHER_INSTALL_GRACE_MS) / HOUR - 1
+    mocks.rows = [pending("local-run", { runtime_env: "local", created_at: hoursAgo(insideGraceH) })]
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(0)
+    expect(mocks.failed).toEqual([])
+  })
+
+  it("the waits it recorded do not count against it", async () => {
+    mocks.rows = [pending("parked", { runtime_env: "staging", created_at: hoursAgo(PAST_GRACE_H) })]
+    mocks.waitedMs.set("parked", 2 * HOUR)
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(0)
+  })
+
+  it("its own run-slot wait is not credited: only its own install could end it, and a stopped one never will", async () => {
+    mocks.rows = [pending("stopped", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H) })]
+
+    await sweepNeverStartedExecutions(NOW)
+
+    expect(mocks.waitOpts).toEqual([expect.objectContaining({ includeOwnWait: false, nowMs: NOW })])
+  })
+
+  it("is counted only when its compare-and-set wins, and one failed write does not stop the rest", async () => {
+    mocks.rows = [
+      pending("claimed-meanwhile", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H + 2) }),
+      pending("bad", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H + 1) }),
+      pending("good", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H) }),
+    ]
+    mocks.failLoses.add("claimed-meanwhile")
+    mocks.failThrows.add("bad")
+
+    expect(await sweepNeverStartedExecutions(NOW)).toBe(1)
+    expect(mocks.failed.map((f) => f.id)).toEqual(["good"])
+  })
+
+  it("a queue that does not answer for production's own runs still lets it settle another install's", async () => {
+    vi.useFakeTimers()
+    mocks.rows = [
+      pending("own", { runtime_env: "production", created_at: hoursAgo(PAST_GRACE_H + 1) }),
+      pending("local-run", { runtime_env: "local", created_at: hoursAgo(PAST_GRACE_H) }),
+    ]
+    mocks.queueHangs.add("own")
+
+    const pass = sweepNeverStartedExecutions(NOW)
+    await vi.advanceTimersByTimeAsync(BULL_CALL_TIMEOUT_MS)
+
+    expect(await pass).toBe(1)
+    expect(mocks.failed.map((f) => f.id)).toEqual(["local-run"])
   })
 })

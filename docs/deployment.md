@@ -2354,7 +2354,11 @@ only reconcile its own. That includes a run that was created but never
 started: once it is 4 hours old (time spent waiting for a free run slot
 does not count) and its install's queue no longer holds it, that install
 marks it failed, so it cannot block its workflow's schedule or webhook
-trigger. Without distinct names, each install looks for the other's
+trigger. The install named `production` also marks failed a run that
+another install created and never started, once it is 8 hours old (time
+spent waiting for a free run slot does not count), so an install that
+stopped cannot block a schedule either; a later pick-up of that run by its
+own install does nothing. Without distinct names, each install looks for the other's
 orchestration jobs in its own Redis, fails to find them, and marks
 perfectly healthy runs failed with "Execution orphaned". Rows written
 before an install recorded its name carry none; the install named

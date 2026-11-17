@@ -75,8 +75,7 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   // Colour palettes and moodboards (migration 522). MCP has no delete on purpose.
   { id: "palettes", cli: ["palettes"], routePrefixes: ["/v1/palettes"], mcpFiles: ["palettes-moodboards.ts"] },
   { id: "moodboards", cli: ["moodboards"], routePrefixes: ["/v1/moodboards"], mcpFiles: ["palettes-moodboards.ts"] },
-  { id: "competitors", cli: ["competitors"], routePrefixes: ["/v1/competitors", "/v1/competitor-scan", "/v1/competitor-discover"], mcpFiles: ["competitors.ts"] },
-  { id: "pickerCatalogs", cli: ["pickers"], routePrefixes: ["/v1/picker-catalogs"], mcpFiles: ["picker-catalogs.ts"] },
+  { id: "competitors", cli: ["competitors"], routePrefixes: ["/v1/competitors", "/v1/competitor-scan", "/v1/competitor-discover"], mcpFiles: ["competitors.ts"] },  { id: "pickerCatalogs", cli: ["pickers"], routePrefixes: ["/v1/picker-catalogs"], mcpFiles: ["picker-catalogs.ts"] },
   { id: "catalogs", cli: ["catalog"], routePrefixes: ["/v1/catalogs"], mcpFiles: [] },
   { id: "models", cli: ["models"], routePrefixes: ["/v1/models", "/v1/model-makers"], mcpFiles: ["models.ts"] },
   { id: "shots", cli: ["shots"], routePrefixes: ["/v1/shots"], mcpFiles: ["shot-shapes.ts"] },
@@ -119,6 +118,8 @@ export const PLUGIN_ROUTE_PREFIXES: readonly string[] = [
   "/v1/competitors",
   "/v1/competitor-scan",
   "/v1/competitor-discover",
+  "/v1/topics",
+  "/v1/topic-scan",
   "/v1/social-search",
   "/v1/voice-changer-pro",
   "/v1/moderate-image",

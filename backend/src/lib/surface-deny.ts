@@ -181,6 +181,8 @@ const GOVERNED_CAPABILITIES: ReadonlyMap<
   // A competitor scan is Social Search run once per account and per platform:
   // withholding the node withholds the scans (manual and scheduled) too.
   ["competitor-scan", (_data: Readonly<Record<string, unknown>>) => ({ governedBy: "social-search", label: "competitor-scan" })],
+  // A topic scan is Social Search run once per platform for one term: the same.
+  ["topic-scan", (_data: Readonly<Record<string, unknown>>) => ({ governedBy: "social-search", label: "topic-scan" })],
   ["text-to-speech", (data) => (asksClone(data.replica) ? ONE_OFF_CLONE : undefined)],
   [
     "text-to-dialogue",

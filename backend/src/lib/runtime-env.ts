@@ -31,6 +31,9 @@
  * abandoned row costs a user real money, and staging's stale legacy rows are
  * harmless, so production takes them. Both environments touching them would
  * reintroduce the exact cross-environment kill this module fixes.
+ *
+ * It is also the one environment that settles another install's runs, and
+ * only those that never started (`scopeToOtherInstalls`).
  */
 export const PRODUCTION_RUNTIME_ENV = "production"
 
@@ -73,9 +76,9 @@ export interface RuntimeEnvScopableQuery {
 /**
  * Narrow a `workflow_executions` scan to the rows this environment owns.
  *
- * The ONE place the scope predicate is decided — both the boot sweep and the
- * 90-second cron call it, so they cannot drift apart into "one environment
- * still kills the other's executions".
+ * With `scopeToOtherInstalls` below, the only place the scope predicate is
+ * decided — both the boot sweep and the 90-second cron call it, so they cannot
+ * drift apart into "one environment still kills the other's executions".
  */
 export function scopeToRuntimeEnv<Q extends RuntimeEnvScopableQuery>(
   query: Q,
@@ -83,4 +86,30 @@ export function scopeToRuntimeEnv<Q extends RuntimeEnvScopableQuery>(
 ): Q {
   if (env === PRODUCTION_RUNTIME_ENV) return query.or(LEGACY_PRODUCTION_SCAN_FILTER)
   return query.eq("runtime_env", env)
+}
+
+/** The slice of the PostgREST filter builder `scopeToOtherInstalls` needs. */
+export interface OtherInstallsScopableQuery {
+  neq(column: string, value: string): this
+}
+
+/**
+ * Narrow a `workflow_executions` scan to the rows ANOTHER install stamped, for
+ * production's never-started sweep only (`lib/reconcile/never-started-executions.ts`):
+ * an install sharing the database can create a run and stop before any worker
+ * claims it, and the schedule cron and the webhook trigger read that `pending`
+ * row as "already running" whichever install wrote it. Use it only for runs
+ * that never started: a run that never started holds no work anywhere, while a
+ * claimed run belongs to its own install's sweeps.
+ *
+ * `null` on every install but production: no other install settles another's
+ * rows. `neq` never matches NULL, so unstamped rows stay in
+ * `scopeToRuntimeEnv`'s production scope and the two scopes never overlap.
+ */
+export function scopeToOtherInstalls<Q extends OtherInstallsScopableQuery>(
+  query: Q,
+  env: string = getRuntimeEnv(),
+): Q | null {
+  if (env !== PRODUCTION_RUNTIME_ENV) return null
+  return query.neq("runtime_env", PRODUCTION_RUNTIME_ENV)
 }
