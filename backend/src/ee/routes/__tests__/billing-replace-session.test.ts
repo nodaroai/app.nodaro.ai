@@ -167,6 +167,7 @@ beforeEach(() => {
   sessions.expire.mockReset()
 })
 
+/** The first session, as the checkout route creates a pack's (`pri_pack`). */
 const firstOpen = (o: Record<string, unknown> = {}) => ({
   id: "cs_first",
   customer: "cus_1",
@@ -175,8 +176,13 @@ const firstOpen = (o: Record<string, unknown> = {}) => ({
   payment_status: "unpaid",
   payment_intent: null,
   subscription: null,
+  metadata: { userId: "u1", topupPriceId: "pri_pack" },
   ...o,
 })
+/** As the load route creates a load's ($20). */
+const firstLoad = (o: Record<string, unknown> = {}) => firstOpen({ metadata: { userId: "u1", kind: "load", loadUsd: "20" }, ...o })
+/** As the checkout route creates a plan's. */
+const firstPlan = (o: Record<string, unknown> = {}) => firstOpen({ mode: "subscription", metadata: { userId: "u1" }, ...o })
 
 const refused = () =>
   Object.assign(
@@ -248,7 +254,7 @@ describe("replacing a session", () => {
   })
 
   it("an open first session waiting on a 3-D Secure challenge is expired, not waited on", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ payment_intent: { id: "pi_1", status: "requires_action" } }))
+    sessions.retrieve.mockResolvedValue(firstLoad({ payment_intent: { id: "pi_1", status: "requires_action" } }))
     sessions.expire.mockResolvedValue(firstOpen({ status: "expired" }))
     const res = await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(200)
@@ -257,7 +263,7 @@ describe("replacing a session", () => {
   })
 
   it("an open first plan session whose subscription is incomplete is expired, then the plan session created", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ mode: "subscription", subscription: { id: "sub_1", status: "incomplete" } }))
+    sessions.retrieve.mockResolvedValue(firstPlan({ subscription: { id: "sub_1", status: "incomplete" } }))
     sessions.expire.mockResolvedValue(firstOpen({ status: "expired" }))
     const res = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(200)
@@ -266,7 +272,7 @@ describe("replacing a session", () => {
   })
 
   it("an expired first session: created without an expire", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ status: "expired" }))
+    sessions.retrieve.mockResolvedValueOnce(firstOpen({ status: "expired" })).mockResolvedValueOnce(firstLoad({ status: "expired" }))
     for (const res of [
       await checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }),
       await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" }),
@@ -286,7 +292,7 @@ describe("replacing a session", () => {
   })
 
   it("a complete first session still settling: 409 checkout_already_complete on a load too", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ status: "complete", payment_status: "unpaid" }))
+    sessions.retrieve.mockResolvedValue(firstLoad({ status: "complete", payment_status: "unpaid" }))
     const res = await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(409)
     expect(res.json()).toEqual(COMPLETE)
@@ -294,7 +300,7 @@ describe("replacing a session", () => {
   })
 
   it("a submitted payment: 409 checkout_in_progress, nothing expired or created", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ payment_intent: { id: "pi_1", status: "processing" } }))
+    sessions.retrieve.mockResolvedValue(firstLoad({ payment_intent: { id: "pi_1", status: "processing" } }))
     const res = await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(409)
     expect(res.json()).toEqual(IN_PROGRESS)
@@ -310,7 +316,7 @@ describe("replacing a session", () => {
   })
 
   it("a plan session whose subscription is already active: 409 checkout_in_progress", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ mode: "subscription", subscription: { id: "sub_1", status: "active" } }))
+    sessions.retrieve.mockResolvedValue(firstPlan({ subscription: { id: "sub_1", status: "active" } }))
     const res = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("checkout_in_progress")
@@ -327,7 +333,7 @@ describe("replacing a session", () => {
   })
 
   it("a refused expire whose re-read still says open: 409 checkout_in_progress, nothing created", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen())
+    sessions.retrieve.mockResolvedValue(firstLoad())
     sessions.expire.mockRejectedValue(refused())
     const res = await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(409)
@@ -344,7 +350,8 @@ describe("replacing a session", () => {
   })
 
   it("another customer's session: 404 with the status read's body, nothing expired or created", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ customer: "cus_other" }))
+    // Each of the request's own purchase, so only the owner differs.
+    sessions.retrieve.mockResolvedValueOnce(firstOpen({ customer: "cus_other" })).mockResolvedValueOnce(firstLoad({ customer: "cus_other" }))
     for (const res of [
       await checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }),
       await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" }),
@@ -357,7 +364,11 @@ describe("replacing a session", () => {
   })
 
   it("the create routes' 404 and the status read's 404 are the same body", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen({ customer: "cus_other" }))
+    // The status read, the pack checkout, then the load: each of its own purchase, so only the owner differs.
+    sessions.retrieve
+      .mockResolvedValueOnce(firstOpen({ customer: "cus_other" }))
+      .mockResolvedValueOnce(firstOpen({ customer: "cus_other" }))
+      .mockResolvedValueOnce(firstLoad({ customer: "cus_other" }))
     const signedIn = await buildApp((req) => {
       req.userId = "u1"
     })
@@ -399,7 +410,7 @@ describe("replacing a session", () => {
 
   it("a first plan session that completed and was already recorded: checkout_already_complete, not the subscriber 409", async () => {
     mockTables({ ...DEFAULT_TABLES, subscriptions: { list: [{ id: "s1", status: "active" }] } })
-    sessions.retrieve.mockResolvedValue(firstOpen({ mode: "subscription", status: "complete", payment_intent: null, subscription: "sub_1" }))
+    sessions.retrieve.mockResolvedValue(firstPlan({ status: "complete", payment_intent: null, subscription: "sub_1" }))
     const res = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(409)
     expect(res.json()).toEqual(COMPLETE)
@@ -408,7 +419,7 @@ describe("replacing a session", () => {
 
   it("a subscriber replacing an open session: the subscriber 409, and the first session is NOT expired", async () => {
     mockTables({ ...DEFAULT_TABLES, subscriptions: { list: [{ id: "s1", status: "active" }] } })
-    sessions.retrieve.mockResolvedValue(firstOpen({ mode: "subscription" }))
+    sessions.retrieve.mockResolvedValue(firstPlan())
     const res = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(409)
     expect(res.json()).toEqual({
@@ -443,7 +454,7 @@ describe("replacing a session", () => {
   })
 
   it("Stripe failing on the expire: the route's 500, nothing created", async () => {
-    sessions.retrieve.mockResolvedValue(firstOpen())
+    sessions.retrieve.mockResolvedValueOnce(firstOpen()).mockResolvedValueOnce(firstLoad())
     sessions.expire.mockRejectedValue(new Stripe.errors.StripeAPIError({ message: "server error" } as never))
     const pack = await checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" })
     expect(pack.statusCode).toBe(500)
@@ -461,6 +472,116 @@ describe("replacing a session", () => {
     const res = await checkout({ priceId: "pri_pack", uiMode: "embedded", replacesSessionId: "cs_first", userId: "u1" })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ data: { url: null, clientSecret: "sec_1", sessionId: "cs_test_1" } })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The same purchase
+// ---------------------------------------------------------------------------
+
+describe("the named session must be of the same purchase", () => {
+  /** A session of another purchase, in each state it can be in. */
+  const STATES: Array<Record<string, unknown>> = [
+    {},
+    { status: "expired" },
+    { status: "complete", payment_status: "paid" },
+    { payment_intent: { id: "pi_1", status: "processing" }, subscription: { id: "sub_1", status: "active" } },
+  ]
+
+  async function notFound(first: Record<string, unknown>, ask: () => ReturnType<typeof checkout>) {
+    for (const state of STATES) {
+      sessions.retrieve.mockReset()
+      sessions.retrieve.mockResolvedValue({ ...first, ...state })
+      const res = await ask()
+      expect(res.statusCode, JSON.stringify(state)).toBe(404)
+      expect(res.body).toBe(JSON.stringify(CHECKOUT_SESSION_NOT_FOUND))
+      // The session already read decides: no second Stripe call.
+      expect(sessions.retrieve).toHaveBeenCalledTimes(1)
+    }
+    nothingStarted()
+  }
+
+  it("a plan request naming a pack session, and a pack request naming a plan session: 404", async () => {
+    await notFound(firstOpen(), () => checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" }))
+    await notFound(firstPlan(), () => checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }))
+  })
+
+  it("a pack request naming a session of another pack price, or of no pack price: 404", async () => {
+    await notFound(firstOpen({ metadata: { userId: "u1", topupPriceId: "pri_other" } }), () =>
+      checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }),
+    )
+    await notFound(firstOpen({ metadata: { userId: "u1" } }), () => checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }))
+    await notFound(firstOpen({ metadata: null }), () => checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }))
+  })
+
+  it("a load request naming a load session of another amount: 404", async () => {
+    await notFound(firstLoad(), () => load({ amountUsd: 25, replacesSessionId: "cs_first", userId: "u1" }))
+    await notFound(firstLoad({ metadata: { userId: "u1", kind: "load", loadUsd: "200" } }), () =>
+      load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" }),
+    )
+  })
+
+  it("a load request naming a checkout session, and a checkout request naming a load session: 404", async () => {
+    await notFound(firstOpen(), () => load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" }))
+    await notFound(firstPlan(), () => load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" }))
+    await notFound(firstLoad(), () => checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" }))
+    await notFound(firstLoad(), () => checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" }))
+  })
+
+  it("a subscriber's plan request naming a pack session: the 404, before the subscriber 409", async () => {
+    mockTables({ ...DEFAULT_TABLES, subscriptions: { list: [{ id: "s1", status: "active" }] } })
+    sessions.retrieve.mockResolvedValue(firstOpen())
+    const res = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
+    expect(res.statusCode).toBe(404)
+    expect(res.json()).toEqual(NOT_FOUND)
+    nothingStarted()
+  })
+
+  it("a match is replaced as before: the same pack, the same load amount, a plan", async () => {
+    sessions.expire.mockResolvedValue(firstOpen({ status: "expired" }))
+    sessions.retrieve.mockResolvedValueOnce(firstOpen())
+    const pack = await checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" })
+    sessions.retrieve.mockResolvedValueOnce(firstLoad())
+    const loaded = await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })
+    sessions.retrieve.mockResolvedValueOnce(firstPlan())
+    const plan = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
+    for (const res of [pack, loaded, plan]) expect(res.statusCode).toBe(200)
+    expect(sessions.retrieve).toHaveBeenCalledTimes(3)
+    expect(sessions.expire).toHaveBeenCalledTimes(3)
+    expect(sessions.create).toHaveBeenCalledTimes(3)
+  })
+
+  it("a plan session is matched by its mode: the route stores no plan price on it", async () => {
+    // What the route stores on a plan session, read back from its own create call.
+    await checkout({ priceId: "pri_basic", userId: "u1" })
+    const stored = createParams().metadata as Record<string, unknown>
+    expect(Object.keys(stored)).toEqual(["userId"])
+    sessions.retrieve.mockResolvedValue(firstPlan({ metadata: stored }))
+    sessions.expire.mockResolvedValue(firstPlan({ status: "expired" }))
+    const res = await checkout({ priceId: "pri_basic", replacesSessionId: "cs_first", userId: "u1" })
+    expect(res.statusCode).toBe(200)
+    expect(sessions.expire).toHaveBeenCalledWith("cs_first")
+  })
+
+  it("the metadata the routes store is what the comparison reads", async () => {
+    await checkout({ priceId: "pri_pack", userId: "u1" })
+    const packStored = sessions.create.mock.calls[0][0].metadata as Record<string, unknown>
+    await load({ amountUsd: 20, userId: "u1" })
+    const loadStored = sessions.create.mock.calls[1][0].metadata as Record<string, unknown>
+    sessions.create.mockClear()
+    sessions.expire.mockResolvedValue(firstOpen({ status: "expired" }))
+
+    sessions.retrieve.mockResolvedValueOnce(firstOpen({ metadata: packStored }))
+    expect((await checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" })).statusCode).toBe(200)
+    sessions.retrieve.mockResolvedValueOnce(firstOpen({ metadata: loadStored }))
+    expect((await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })).statusCode).toBe(200)
+    // Crossed, each is another purchase.
+    sessions.retrieve.mockResolvedValueOnce(firstOpen({ metadata: loadStored }))
+    expect((await checkout({ priceId: "pri_pack", replacesSessionId: "cs_first", userId: "u1" })).statusCode).toBe(404)
+    sessions.retrieve.mockResolvedValueOnce(firstOpen({ metadata: packStored }))
+    expect((await load({ amountUsd: 20, replacesSessionId: "cs_first", userId: "u1" })).statusCode).toBe(404)
+    expect(sessions.create).toHaveBeenCalledTimes(2)
+    expect(sessions.expire).toHaveBeenCalledTimes(2)
   })
 })
 

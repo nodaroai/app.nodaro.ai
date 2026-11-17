@@ -14,12 +14,21 @@ import { getStripe } from "./stripe-client.js"
 import { stripeCustomerIdOf } from "./stripe-customer.js"
 import { isMissingColumnError } from "../../lib/postgrest-errors.js"
 import { planGranted, type GrantMarker } from "./subscription-grant.js"
+import { checkoutSessionState, REPLACE_EXPAND } from "./checkout-session-state.js"
 
 export interface CheckoutStatus {
   status: "open" | "complete" | "expired"
   paymentStatus: "paid" | "unpaid" | "no_payment_required"
   mode: "payment" | "subscription"
   granted: boolean
+  /**
+   * True when the session is open and its payment has been submitted: a
+   * create that names it as the one it replaces is refused
+   * `checkout_in_progress`. False means no submitted payment is seen on the
+   * session; such a create can still be refused (Stripe may refuse the
+   * expire), so false is not a promise that it goes through.
+   */
+  paymentUnderWay: boolean
 }
 
 /**
@@ -135,7 +144,8 @@ async function subscriptionGranted(userId: string, session: Stripe.Checkout.Sess
  * never a "not found".
  */
 export async function readCheckoutStatus(userId: string, sessionId: string): Promise<CheckoutStatus | null> {
-  const session = await retrieveOwnSession(userId, sessionId)
+  // One read, with what the under-way rule reads expanded.
+  const session = await retrieveOwnSession(userId, sessionId, REPLACE_EXPAND)
   if (!session) return null
   // Repeats retrieveOwnSession's check on purpose: it narrows `mode` for the type.
   if (session.mode !== "payment" && session.mode !== "subscription") return null
@@ -146,5 +156,6 @@ export async function readCheckoutStatus(userId: string, sessionId: string): Pro
     paymentStatus: session.payment_status,
     mode: session.mode,
     granted,
+    paymentUnderWay: checkoutSessionState(session) === "under-way",
   }
 }

@@ -63,6 +63,7 @@ import {
   CHECKOUT_STATUS_RATE_LIMIT,
 } from "../billing-checkout-status.js"
 import { CHECKOUT_SESSION_ID } from "../../billing/checkout-status.js"
+import { readReplacedSession, REPLACE_EXPAND, type ReplacingPurchase } from "../../billing/replace-checkout-session.js"
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -225,24 +226,26 @@ describe("a pack", () => {
     transactions.row = { id: "t1" }
     const res = await read("cs_test_1", "u1")
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "paid", mode: "payment", granted: true } })
+    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "paid", mode: "payment", granted: true, paymentUnderWay: false } })
     expect(transactions.eqs).toEqual(
       expect.arrayContaining([["stripe_transaction_id", "pi_1"], ["user_id", "u1"], ["type", "topup"]]),
     )
     expect(res.headers["cache-control"]).toBe("no-store")
-    expect(retrieve).toHaveBeenCalledWith("cs_test_1")
+    // One Stripe read, with what the replace rule reads expanded.
+    expect(retrieve).toHaveBeenCalledTimes(1)
+    expect(retrieve).toHaveBeenCalledWith("cs_test_1", { expand: [...REPLACE_EXPAND] })
   })
 
   it("a paid pack before its webhook: complete, paid, not granted", async () => {
     transactions.row = null
     const res = await read("cs_test_1", "u1")
-    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "paid", mode: "payment", granted: false } })
+    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "paid", mode: "payment", granted: false, paymentUnderWay: false } })
   })
 
   it("a pack still settling (async method): complete, unpaid, not granted", async () => {
     retrieve.mockResolvedValue(pack({ payment_status: "unpaid" }))
     const res = await read("cs_test_1", "u1")
-    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "unpaid", mode: "payment", granted: false } })
+    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "unpaid", mode: "payment", granted: false, paymentUnderWay: false } })
   })
 
   it("a session with no payment intent is keyed on its own id; an expanded intent on its id", async () => {
@@ -273,7 +276,7 @@ describe("a plan", () => {
     retrieve.mockResolvedValue(plan())
     subscriptions.row = null
     const res = await read("cs_test_1", "u1")
-    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "paid", mode: "subscription", granted: false } })
+    expect(res.json()).toStrictEqual({ data: { status: "complete", paymentStatus: "paid", mode: "subscription", granted: false, paymentUnderWay: false } })
     expect(subscriptions.eqs).toEqual([["stripe_subscription_id", "sub_1"]])
   })
 
@@ -294,7 +297,7 @@ describe("a plan", () => {
     retrieve.mockResolvedValue(plan())
     subscriptions.row = { id: "s1", user_id: "u1", plan_granted: true }
     expect((await read("cs_test_1", "u1")).json()).toStrictEqual({
-      data: { status: "complete", paymentStatus: "paid", mode: "subscription", granted: true },
+      data: { status: "complete", paymentStatus: "paid", mode: "subscription", granted: true, paymentUnderWay: false },
     })
 
     subscriptions.row = { id: "s1", user_id: "u2", plan_granted: true }
@@ -341,13 +344,56 @@ describe("a plan", () => {
 describe("status", () => {
   it("an open session reads open; Stripe's null status reads open; an expired one reads expired", async () => {
     retrieve.mockResolvedValue(pack({ status: "open", payment_status: "unpaid" }))
-    expect((await read("cs_test_1", "u1")).json().data).toStrictEqual({ status: "open", paymentStatus: "unpaid", mode: "payment", granted: false })
+    expect((await read("cs_test_1", "u1")).json().data).toStrictEqual({ status: "open", paymentStatus: "unpaid", mode: "payment", granted: false, paymentUnderWay: false })
 
     retrieve.mockResolvedValue(pack({ status: null, payment_status: "unpaid" }))
     expect((await read("cs_test_1", "u1")).json().data.status).toBe("open")
 
     retrieve.mockResolvedValue(pack({ status: "expired", payment_status: "unpaid" }))
     expect((await read("cs_test_1", "u1")).json().data.status).toBe("expired")
+  })
+
+  it("paymentUnderWay is what the replace read answers for the same session: under way or not", async () => {
+    const pi = (status: string) => ({ id: "pi_1", object: "payment_intent", status })
+    const sub = (status: string) => ({ id: "sub_1", object: "subscription", status })
+    const packMeta = { userId: "u1", topupPriceId: "pri_pack" }
+    const openPack = (o: Record<string, unknown> = {}) => pack({ status: "open", payment_status: "unpaid", payment_intent: null, metadata: packMeta, ...o })
+    const openPlan = (o: Record<string, unknown> = {}) => plan({ status: "open", payment_status: "unpaid", subscription: null, metadata: { userId: "u1" }, ...o })
+    const PACK: ReplacingPurchase = { kind: "pack", priceId: "pri_pack" }
+    const PLAN: ReplacingPurchase = { kind: "plan" }
+    const rows: Array<[string, Record<string, unknown>, ReplacingPurchase, boolean]> = [
+      ["open, payment processing", openPack({ payment_intent: pi("processing") }), PACK, true],
+      ["open, payment awaiting capture", openPack({ payment_intent: pi("requires_capture") }), PACK, true],
+      ["open, payment succeeded", openPack({ payment_intent: pi("succeeded") }), PACK, true],
+      ["null status, payment processing", openPack({ status: null, payment_intent: pi("processing") }), PACK, true],
+      ["open, nothing started", openPack(), PACK, false],
+      ["open, a challenge pending", openPack({ payment_intent: pi("requires_action") }), PACK, false],
+      ["open, no method yet", openPack({ payment_intent: pi("requires_payment_method") }), PACK, false],
+      ["open, payment canceled", openPack({ payment_intent: pi("canceled") }), PACK, false],
+      ["complete", pack({ metadata: packMeta, payment_intent: pi("succeeded") }), PACK, false],
+      ["complete, still settling", pack({ metadata: packMeta, payment_status: "unpaid", payment_intent: pi("processing") }), PACK, false],
+      ["expired", openPack({ status: "expired" }), PACK, false],
+      ["expired, a payment once processing", openPack({ status: "expired", payment_intent: pi("processing") }), PACK, false],
+      ["open plan, subscription active", openPlan({ subscription: sub("active") }), PLAN, true],
+      ["open plan, subscription past due", openPlan({ subscription: sub("past_due") }), PLAN, true],
+      ["open plan, subscription incomplete", openPlan({ subscription: sub("incomplete") }), PLAN, false],
+      ["open plan, nothing started", openPlan(), PLAN, false],
+      ["complete plan", plan({ metadata: { userId: "u1" }, subscription: sub("active") }), PLAN, false],
+      ["expired plan", openPlan({ status: "expired", subscription: sub("active") }), PLAN, false],
+    ]
+    for (const [name, session, purchase, want] of rows) {
+      retrieve.mockResolvedValue(session)
+      const data = (await read("cs_test_1", "u1")).json().data
+      // The replace rule's own answer for the same session.
+      const replaced = await readReplacedSession("u1", "cs_test_1", purchase)
+      expect(data.paymentUnderWay, name).toBe(replaced.kind === "under-way")
+      expect(data.paymentUnderWay, name).toBe(want)
+    }
+  })
+
+  it("an id Stripe did not expand reads as not under way", async () => {
+    retrieve.mockResolvedValue(pack({ status: "open", payment_status: "unpaid" }))
+    expect((await read("cs_test_1", "u1")).json().data.paymentUnderWay).toBe(false)
   })
 
   it("declares its limit: 60 a minute per account, after auth", () => {

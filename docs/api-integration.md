@@ -4549,7 +4549,7 @@ that calls these through the SDK (`client.billing`).
 |---|---|---|
 | `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath?, uiMode?, replacesSessionId?, gaClientId?, gaSessionId? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
 | `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath?, uiMode?, replacesSessionId?, gaClientId?, gaSessionId? }` → `{ data: { url, credits } }`. |
-| `GET` | `/v1/billing/checkout-session/:sessionId` | The status of one of your own Checkout sessions: `{ data: { status, paymentStatus, mode, granted } }`; `status` `open` / `complete` / `expired`, `paymentStatus` `paid` / `unpaid` / `no_payment_required`, `mode` `payment` / `subscription`. `granted` is true once the purchase's credits (or the plan) have been recorded, which happens when Stripe tells the platform, usually seconds after payment and later for a payment method that settles later. After `granted`, read the balance again (a plan's `granted` can lead its credits by a moment). `404 checkout_session_not_found` for a session that is not yours or does not exist; `429` past 60 reads a minute. |
+| `GET` | `/v1/billing/checkout-session/:sessionId` | The status of one of your own Checkout sessions: `{ data: { status, paymentStatus, mode, granted, paymentUnderWay } }`; `status` `open` / `complete` / `expired`, `paymentStatus` `paid` / `unpaid` / `no_payment_required`, `mode` `payment` / `subscription`. `paymentUnderWay` `true` means a create naming this session as `replacesSessionId` would answer `409 checkout_in_progress` (the session is open and its payment has been submitted). `false` means no submitted payment is seen on the session (also once it is complete or expired); a replacement can still be refused, so a client asks again only on the person's action or spaces its retries, and a create for another purchase than the session's answers the `404` whatever it reads. `granted` is true once the purchase's credits (or the plan) have been recorded, which happens when Stripe tells the platform, usually seconds after payment and later for a payment method that settles later. After `granted`, read the balance again (a plan's `granted` can lead its credits by a moment). `404 checkout_session_not_found` for a session that is not yours or does not exist; `429` past 60 reads a minute. |
 | `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. **Upgrade:** the price difference for the rest of the billing period is charged at once, and the new plan applies only when that payment succeeds; the credits added are the difference between the two plans' monthly credits, once per billing period — moving down and back up within one period adds nothing more. An upgrade invoice settled for 0 (a 100%-off coupon, or a balance that covered it) adds no credits. If the payment does not go through, the plan is unchanged and the answer is `409` with `{ error: { code: "plan_change_payment_required", message, invoiceUrl } }` — `invoiceUrl` is Stripe's page for paying that invoice, and the change applies if it is paid before it expires; the same answer comes back while an earlier change is still waiting for its payment. **Downgrade:** the unused time is credited on the next invoice and the current credits stay until the period ends. **Monthly ↔ yearly:** switching restarts the billing period but adds no credits; the next monthly credits come a month after the switch. `409` when the subscription is not active (for example a failed renewal payment); `404` with no subscription; `429` after 5 plan-change requests from one account in 24 hours (refused ones count). |
 | `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
 | `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
@@ -4576,13 +4576,22 @@ this request replaces, for example when an embedded form is given up for the
 Checkout page. Before creating anything the platform reads that session:
 - already paid (or paying by a method that settles later):
   `409 checkout_already_complete`;
-- its payment submitted and still being confirmed: `409 checkout_in_progress`;
+- its payment submitted and still being confirmed: `409 checkout_in_progress`
+  (read `GET /v1/billing/checkout-session/:sessionId` and ask again once its
+  status reads `open` with `paymentUnderWay: false`, or `expired`; it can
+  still be refused then, so ask again on the person's action or space the
+  retries);
 - open and not being paid: expired, then the new session is created;
 - expired: the new session is created;
-- not yours or not found: `404 checkout_session_not_found`.
+- not yours or not found: `404 checkout_session_not_found`;
+- not a session of this same purchase (a plan request names a plan's session;
+  a pack request a session for the same pack; a load request a load session
+  of the same amount): the same `404 checkout_session_not_found`, whatever
+  state it is in, and it is left as it is.
 
-A `replacesSessionId` that is not a string (or is empty) is a `400` with the
-route's usual validation message. Any other failure while reading or expiring
+A `replacesSessionId` that is not a string, is empty, or is longer than 255
+characters is a `400` with
+`{ error: "replacesSessionId must be a Checkout session id" }`. Any other failure while reading or expiring
 that session is the route's ordinary `500`, and nothing is created. Absent,
 nothing changes.
 

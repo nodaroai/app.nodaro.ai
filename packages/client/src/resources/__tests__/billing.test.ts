@@ -237,6 +237,17 @@ describe("the signed-in-session methods", () => {
     expect(call(g).url).toBe("https://api.example.com/v1/billing/checkout-session/cs%2F..%2Fx")
   })
 
+  it("checkoutStatus() passes paymentUnderWay through, and an older platform leaves it out", async () => {
+    const f = vi.fn<typeof fetch>().mockReturnValueOnce(mockOk({ data: { status: "open", paymentStatus: "unpaid", mode: "payment", granted: false, paymentUnderWay: true } }))
+    const now = await client(f).billing.checkoutStatus("cs_test_1")
+    expect(now.paymentUnderWay).toBe(true)
+
+    const g = vi.fn<typeof fetch>().mockReturnValueOnce(mockOk({ data: { status: "open", paymentStatus: "unpaid", mode: "payment", granted: false } }))
+    const older = await client(g).billing.checkoutStatus("cs_test_1")
+    expect(older.paymentUnderWay).toBeUndefined()
+    expect("paymentUnderWay" in older).toBe(false)
+  })
+
   it("checkoutStatus(): a session that is not the caller's is a NotFoundError", async () => {
     const f = vi.fn<typeof fetch>().mockReturnValueOnce(mockErr(404, { error: { code: "checkout_session_not_found", message: "Checkout session not found." } }))
     const err = await client(f).billing.checkoutStatus("cs_test_other").catch((e: unknown) => e)
@@ -276,8 +287,17 @@ describe("the signed-in-session methods", () => {
       granted: false,
     }
     expectTypeOf(billing.checkoutStatus).returns.toEqualTypeOf<Promise<BillingCheckoutStatus>>()
+    expectTypeOf<BillingCheckoutStatus["paymentUnderWay"]>().toEqualTypeOf<boolean | undefined>()
+    const underWay: BillingCheckoutStatus = {
+      status: "open",
+      paymentStatus: "unpaid",
+      mode: "payment",
+      granted: false,
+      // @ts-expect-error — paymentUnderWay is a boolean
+      paymentUnderWay: "yes",
+    }
     expectTypeOf<BillingPlansResult["stripePublishableKey"]>().toEqualTypeOf<string | null | undefined>()
-    expect([popupCheckout, popupLoad, pending]).toHaveLength(3)
+    expect([popupCheckout, popupLoad, pending, underWay]).toHaveLength(4)
   })
 
   describe("replacesSessionId", () => {

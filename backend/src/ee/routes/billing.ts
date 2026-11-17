@@ -38,7 +38,7 @@ import { stripeCustomerIdOf } from "../billing/stripe-customer.js"
 import { grantPaidPlanChange, invoicePriceLines, notePlanCreditPeak } from "../billing/plan-change-credits.js"
 import { billingCheckoutStatusRoutes } from "./billing-checkout-status.js"
 import { gaClientIdField, gaSessionIdField, gaVisitMetadata } from "../billing/analytics/visit-ids.js"
-import { beginReplacement, finishReplacement, REPLACEMENT_HANDLED } from "../billing/replace-checkout-session.js"
+import { beginReplacement, finishReplacement, REPLACEMENT_HANDLED, type ReplacingPurchase } from "../billing/replace-checkout-session.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -365,7 +365,10 @@ export async function billingRoutes(app: FastifyInstance) {
     // The session this one replaces: refused when it is paid or being paid,
     // else expired just before the create. Read before the one-subscription
     // check, so a first plan session already paid says so rather than 409.
-    const replacing = replacesSessionId === undefined ? null : await beginReplacement(userId, replacesSessionId, reply, "Failed to create checkout session")
+    // It must be of this same purchase (a plan's session, or this pack's),
+    // else it reads as not found.
+    const purchase: ReplacingPurchase = checkoutMode === "subscription" ? { kind: "plan" } : { kind: "pack", priceId }
+    const replacing = replacesSessionId === undefined ? null : await beginReplacement(userId, replacesSessionId, purchase, reply, "Failed to create checkout session")
     if (replacing === REPLACEMENT_HANDLED) return reply
     const expireFirst = replacing?.expire ?? null
 
@@ -505,8 +508,8 @@ export async function billingRoutes(app: FastifyInstance) {
     if (uiMode === "embedded" && stripePublishableKey() === null) {
       return reply.status(503).send(EMBEDDED_CHECKOUT_UNAVAILABLE)
     }
-    // The session this one replaces, as on checkout.
-    const replacing = replacesSessionId === undefined ? null : await beginReplacement(userId, replacesSessionId, reply, "Failed to create load session")
+    // The session this one replaces, as on checkout: a load of this amount.
+    const replacing = replacesSessionId === undefined ? null : await beginReplacement(userId, replacesSessionId, { kind: "load", amountUsd }, reply, "Failed to create load session")
     if (replacing === REPLACEMENT_HANDLED) return reply
     const expireFirst = replacing?.expire ?? null
     const credits = creditsForLoadUsd(amountUsd)

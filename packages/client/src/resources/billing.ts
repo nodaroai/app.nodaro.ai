@@ -312,9 +312,12 @@ export class BillingResource {
    * With it, a `NodaroError` with `status` 409 and `code`
    * `checkout_already_complete` means that purchase is paid, so do not ask
    * again; `checkout_in_progress` means its payment is being confirmed, so
-   * read {@link BillingResource.checkoutStatus} and ask again only once it
-   * reads `open`; a `NotFoundError` (`checkout_session_not_found`) means it is
-   * not yours. **Signed-in session only.**
+   * read {@link BillingResource.checkoutStatus} and ask again once its status
+   * reads `open` with `paymentUnderWay: false`, or `expired` (it can still be
+   * refused then: ask again on the person's action, or space the retries); a
+   * `NotFoundError` (`checkout_session_not_found`) means it is not yours, or
+   * is not a session of this same purchase (the same plan checkout, pack or
+   * load amount). **Signed-in session only.**
    */
   async checkout(input: BillingCheckoutInput): Promise<BillingCheckoutSession> {
     const res = await this.client.request<{ data: BillingCheckoutSession }>("POST", "/v1/billing/create-checkout-session", { body: input })
@@ -345,7 +348,9 @@ export class BillingResource {
    * Checkout sessions stands: `status`, `paymentStatus`, `mode`, and
    * `granted` once its credits or plan are on the account. After Stripe's
    * embedded form completes, poll it until `granted` is true, then read the
-   * balance again. A session that is not yours (or does not exist) is a
+   * balance again. `paymentUnderWay: true` means replacing the session
+   * (`replacesSessionId`) would be refused `checkout_in_progress`; `false`
+   * means no submitted payment is seen on it. A session that is not yours (or does not exist) is a
    * `NotFoundError` with the code `checkout_session_not_found`; limited to
    * 60 reads a minute per account. **Signed-in session only.**
    */
@@ -500,7 +505,10 @@ export interface BillingCheckoutInput {
    * The id of an earlier Checkout session of yours that this one replaces (the embedded form's `sessionId`).
    * With it, a `NodaroError` with `status` 409 and `code` `checkout_already_complete` means that purchase is paid,
    * so do not ask again; `checkout_in_progress` means its payment is being confirmed, so read `checkoutStatus` and
-   * ask again only once it reads `open`; a `NotFoundError` (`checkout_session_not_found`) means it is not yours.
+   * ask again once its status reads `open` with `paymentUnderWay: false`, or `expired` (it can still be refused
+   * then: ask again on the person's action, or space the retries); a `NotFoundError`
+   * (`checkout_session_not_found`) means it is not yours, or is not a session of this same purchase (the same
+   * plan checkout, pack or load amount).
    */
   replacesSessionId?: string
 }
@@ -547,6 +555,14 @@ export interface BillingCheckoutStatus {
   mode: "payment" | "subscription"
   /** True once the purchase's credits or plan have been granted to the account. */
   granted: boolean
+  /**
+   * `true`: the session is open and its payment has been submitted, so a `checkout()` or `loadCredits()` naming
+   * it as `replacesSessionId` would be refused `checkout_in_progress`. `false`: no submitted payment is seen on
+   * the session (also once it is complete or expired). A replacement can still be refused then, so ask again
+   * only on the person's action, or space the retries; and a request for another purchase than the session's
+   * answers `checkout_session_not_found` whatever this reads. Absent on a platform that does not send it yet.
+   */
+  paymentUnderWay?: boolean
 }
 
 /** What `billing.portal()` sends. */

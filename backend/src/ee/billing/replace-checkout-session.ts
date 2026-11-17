@@ -4,7 +4,9 @@
  * Checkout page).
  *
  * The rule: the named session is read first, and only when it is the caller's
- * own. A session that is complete (paid, or paying by a method that settles
+ * own and of the same purchase as the request (the same plan checkout, pack
+ * or load amount); any other reads as a session that does not exist, and is
+ * left as it is. A session that is complete (paid, or paying by a method that settles
  * later) or whose payment has been submitted is never replaced. A session
  * that is open and not being paid is expired just before the new one is
  * created; expiring it cancels its payment, so nothing finished in it later
@@ -19,40 +21,40 @@ import Stripe from "stripe"
 import type { FastifyReply } from "fastify"
 import { getStripe } from "./stripe-client.js"
 import { CHECKOUT_SESSION_NOT_FOUND, retrieveOwnSession } from "./checkout-status.js"
+import {
+  checkoutSessionState,
+  PAYMENT_UNDER_WAY,
+  paymentUnderWay,
+  REPLACE_EXPAND,
+  SUBSCRIPTION_PAID,
+} from "./checkout-session-state.js"
 
-/** What the read expands: the payment of a pack or a load, the subscription of a plan. */
-export const REPLACE_EXPAND = ["payment_intent", "subscription"] as const
-
-/** A plan session's subscription in one of these has been paid for. */
-export const SUBSCRIPTION_PAID: ReadonlySet<Stripe.Subscription.Status> = new Set<Stripe.Subscription.Status>([
-  "active",
-  "trialing",
-  "past_due",
-  "unpaid",
-])
-
-/** A pack or load session's payment in one of these has been submitted. */
-export const PAYMENT_UNDER_WAY: ReadonlySet<Stripe.PaymentIntent.Status> = new Set<Stripe.PaymentIntent.Status>([
-  "processing",
-  "requires_capture",
-  "succeeded",
-])
+export { PAYMENT_UNDER_WAY, paymentUnderWay, REPLACE_EXPAND, SUBSCRIPTION_PAID }
 
 /**
- * Whether the session's payment has been submitted (a pack or a load) or its
- * subscription paid for (a plan). Reads the expanded objects; a bare id,
- * which the read never leaves unexpanded, reads as not under way.
+ * What the request that names a session to replace is buying, in the terms
+ * the create routes store on a session: a plan (a subscription session), a
+ * pack (its price id), a load (its whole-dollar amount).
  */
-export function paymentUnderWay(session: Stripe.Checkout.Session): boolean {
-  if (session.mode === "payment") {
-    const intent = session.payment_intent
-    return typeof intent === "object" && intent !== null && PAYMENT_UNDER_WAY.has(intent.status)
-  }
-  if (session.mode === "subscription") {
-    const subscription = session.subscription
-    return typeof subscription === "object" && subscription !== null && SUBSCRIPTION_PAID.has(subscription.status)
-  }
-  return false
+export type ReplacingPurchase =
+  | { readonly kind: "plan" }
+  | { readonly kind: "pack"; readonly priceId: string }
+  | { readonly kind: "load"; readonly amountUsd: number }
+
+/**
+ * Whether `session` is of the purchase the request makes, from its `mode`
+ * and the metadata its create route stored: a plan's session is a
+ * subscription session (no plan price is stored on it, so the mode decides);
+ * a pack's is a payment session with the pack's price as `topupPriceId`; a
+ * load's is a payment session of `kind: "load"` with the amount as `loadUsd`.
+ */
+export function samePurchase(session: Stripe.Checkout.Session, purchase: ReplacingPurchase): boolean {
+  if (purchase.kind === "plan") return session.mode === "subscription"
+  if (session.mode !== "payment") return false
+  const metadata = session.metadata ?? {}
+  const isLoad = metadata.kind === "load"
+  if (purchase.kind === "load") return isLoad && metadata.loadUsd === String(purchase.amountUsd)
+  return !isLoad && metadata.topupPriceId === purchase.priceId
 }
 
 export type ReplacedSession =
@@ -64,19 +66,20 @@ export type ReplacedSession =
 
 /**
  * The named session, classified: `not-found` when it is not the caller's own
- * pack, load or plan session; `complete`; `expired`; `under-way` when it is
+ * pack, load or plan session, or is of another purchase than `purchase`
+ * (whatever state it is in); `complete`; `expired`; `under-way` when it is
  * open and its payment submitted; else `open`, to be expired before the new
  * one is created. Throws on a Stripe or database failure.
  */
-export async function readReplacedSession(userId: string, sessionId: string): Promise<ReplacedSession> {
+export async function readReplacedSession(
+  userId: string,
+  sessionId: string,
+  purchase: ReplacingPurchase,
+): Promise<ReplacedSession> {
   const session = await retrieveOwnSession(userId, sessionId, REPLACE_EXPAND)
   if (!session) return { kind: "not-found" }
-  // Stripe's `null` status reads `open`, as the status read reads it.
-  const status = session.status ?? "open"
-  if (status === "complete") return { kind: "complete" }
-  if (status === "expired") return { kind: "expired" }
-  if (paymentUnderWay(session)) return { kind: "under-way" }
-  return { kind: "open" }
+  if (!samePurchase(session, purchase)) return { kind: "not-found" }
+  return { kind: checkoutSessionState(session) }
 }
 
 /**
@@ -148,8 +151,9 @@ type Refusal = ReturnType<typeof replacementRefusal>
 export async function startReplacement(
   userId: string,
   sessionId: string,
+  purchase: ReplacingPurchase,
 ): Promise<{ refusal: Refusal } | { expire: string | null }> {
-  const replaced = await readReplacedSession(userId, sessionId)
+  const replaced = await readReplacedSession(userId, sessionId, purchase)
   if (replaced.kind === "expired") return { expire: null }
   if (replaced.kind === "open") return { expire: sessionId }
   return { refusal: replacementRefusal(replaced.kind) }
@@ -160,7 +164,8 @@ export const REPLACEMENT_HANDLED = "handled"
 
 /**
  * A create route's first step for `replacesSessionId`, as one call: reads and
- * classifies the session and, when it may not be replaced, sends the refusal
+ * classifies the session against the `purchase` the request makes and, when
+ * it may not be replaced, sends the refusal
  * (or, on a Stripe or database failure, the route's own 500 with
  * `failureMessage`) on `reply` and answers `REPLACEMENT_HANDLED`. Otherwise
  * it answers the session to expire just before the create (`null`: none).
@@ -168,12 +173,13 @@ export const REPLACEMENT_HANDLED = "handled"
 export async function beginReplacement(
   userId: string,
   sessionId: string,
+  purchase: ReplacingPurchase,
   reply: FastifyReply,
   failureMessage: string,
 ): Promise<typeof REPLACEMENT_HANDLED | { expire: string | null }> {
   let start: Awaited<ReturnType<typeof startReplacement>>
   try {
-    start = await startReplacement(userId, sessionId)
+    start = await startReplacement(userId, sessionId, purchase)
   } catch (err) {
     console.error("[billing] Failed to read the checkout session being replaced:", (err as Error).message)
     reply.status(500).send({ error: failureMessage })
