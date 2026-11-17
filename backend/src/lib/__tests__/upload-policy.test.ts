@@ -158,6 +158,27 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
             expect(source.match(/getSignedUrl\(/g) ?? []).toHaveLength(1)
             continue
           }
+          // The large-upload lane (a browser's long video straight to storage
+          // in parts). Its bytes never reach us, so no policy could read them:
+          // allowed on the PROOF that the lane is closed while any policy is
+          // registered — every function that signs a PUT, opens an upload or
+          // finishes one asks `assertLargeUploadLaneOpen()` (which asks
+          // `hasUploadPolicies()`) first, and the only other signature is a
+          // GET. The behaviour is pinned in routes/__tests__/large-upload.test.ts.
+          if (file === resolve(SRC, "lib/large-upload-storage.ts")) {
+            const source = readFileSync(file, "utf8")
+            expect(source).toMatch(/function assertLargeUploadLaneOpen\(\): void \{\s*if \(hasUploadPolicies\(\)\) throw/)
+            for (const fn of ["createLargeUpload", "presignLargeUploadParts", "completeLargeUpload"]) {
+              const body = source.slice(source.indexOf(`export async function ${fn}(`))
+              const firstStatement = body.slice(body.indexOf("{") + 1).trimStart()
+              expect(firstStatement.startsWith("assertLargeUploadLaneOpen()"), `${fn} must close with the lane`).toBe(true)
+            }
+            // Two signing sites: the part PUTs (inside presignLargeUploadParts) and one GET.
+            expect(source.match(/getSignedUrl\(/g) ?? []).toHaveLength(2)
+            expect(source.match(/new UploadPartCommand\(/g) ?? []).toHaveLength(1)
+            expect(source).not.toMatch(/(?:PutObject|CopyObject)Command/)
+            continue
+          }
           offenders.push(file)
         }
       }

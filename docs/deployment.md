@@ -431,6 +431,53 @@ honor byte-range requests (`Range` / `206 Partial Content`) so seeking works.
 Configure this on the bucket or CDN, and verify it against an actual generated
 audio-layer URL; API `CORS_ORIGIN` does not configure object-storage CORS.
 
+**Large uploads (browser → storage in parts).** `POST /v1/uploads/large/*`
+(the SDK's `uploads.uploadLarge`, see
+[Large uploads straight to storage](./api-integration.md#large-uploads-straight-to-storage))
+has the browser `PUT` each part of a long video straight to the bucket through
+a presigned URL on the storage's S3 endpoint (`R2_ENDPOINT`, or
+`https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com`) — not through the app. Two
+things must be configured on the bucket, outside the app:
+
+1. **CORS for `PUT`.** Allow method `PUT` from every web origin that uploads
+   this way (the app's `PUBLIC_URL`, each `CORS_ORIGIN` entry, and any other
+   site of yours that uses the SDK in a browser), with request header
+   `content-type` allowed (the SDK sends none, but other clients may). No response
+   header needs to be exposed — the server collects the parts' ETags itself.
+   Each part URL signs only `host` and the part's exact `content-length`, both
+   of which a browser sets itself, so no further request header is needed;
+   the store refuses a part of any other length.
+   On Cloudflare R2 this is the bucket's **Settings → CORS policy**, e.g.:
+
+   ```json
+   [{ "AllowedOrigins": ["https://app.example.com"], "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["content-type"], "MaxAgeSeconds": 3600 }]
+   ```
+
+   For MinIO, set the bucket's CORS (or the server's `MINIO_API_CORS_ALLOW_ORIGIN`).
+   Without it the browser's parts fail at the preflight. Servers and the SDK
+   outside a browser need nothing.
+2. **Required: a lifecycle rule that aborts incomplete multipart uploads after
+   1 day.** A browser that goes away mid-upload leaves parts in the bucket, and
+   nothing in the app removes them: an upload's slot frees itself when its
+   token expires (7 hours), but its parts stay. They never count against
+   anyone's storage, because the quota is reserved only when an upload
+   completes. They do occupy the bucket, at most 3 open uploads of up to
+   10 GiB per account at a time. On R2: **Settings → Object lifecycle rules →
+   Abort incomplete multipart uploads**, after 1 day. MinIO removes stale
+   incomplete uploads by itself (its `api` setting `stale_uploads_expiry`,
+   24 hours by default); check that it is at most 1 day. On any other store,
+   set its equivalent rule.
+
+The browser must also be able to reach the S3 endpoint itself: on the bundled
+MinIO of the community compose that endpoint is internal (`http://minio:9000`),
+so a browser cannot upload this way there unless you expose it. Only files
+over 500 MB take this lane (the SDK sends smaller ones through
+`POST /v1/upload`, which needs none of this), so on such an install leave
+those large files to clients outside the browser. A deployment that registers
+an upload policy has the lane closed (`409 large_upload_unavailable`): its
+policy could not read bytes that never pass through the app.
+
 ### 2e. Start the stack
 
 ```bash

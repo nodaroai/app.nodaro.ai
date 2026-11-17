@@ -12,6 +12,7 @@ import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
 import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
 import type { DownloadSlot } from "./download-slots.js"
 import { downloadSlots } from "./download-slots-instance.js"
+import { MEDIA_IMPORT_MAX_BYTES, assertLocalVideoImportable } from "./media-import-length.js"
 
 /**
  * The server's ONE video downloader: a social link (or a direct file) becomes
@@ -25,11 +26,16 @@ import { downloadSlots } from "./download-slots-instance.js"
  * `MAX_ACTIVE_DOWNLOADS_PER_USER`).
  */
 
-/** Size cap for DIRECT-file downloads — parity with /v1/upload's and
- *  save-to-storage's 500MB video limit (file-validation SIZE_LIMITS.video).
- *  Social fetches stay uncapped: their sources are duration-bounded flows whose
- *  behavior must not change. */
-export const DIRECT_FILE_MAX_BYTES = 500 * 1024 * 1024
+/**
+ * Byte ceiling for DIRECT-file downloads: the editor's import ceiling
+ * (`MEDIA_IMPORT_MAX_BYTES`, 10 GiB), the same one the large-upload lane holds.
+ * A direct file is limited by LENGTH first — at most `MEDIA_IMPORT_MAX_SEC`
+ * (30 minutes), checked before the download when the remote file can be read
+ * (`lib/media-import-precheck.ts`) and always once it is on disk, before it is
+ * stored, together with the bitrate its size and length imply (decided
+ * 2026-11-17; it used to be a 500 MB size cap). Social fetches stay uncapped.
+ */
+export const DIRECT_FILE_MAX_BYTES = MEDIA_IMPORT_MAX_BYTES
 
 /**
  * Downloads one account may have RUNNING at once. Each one is a yt-dlp process,
@@ -113,6 +119,7 @@ async function runDownloadWithProgress(
   maxFilesizeBytes?: number,
   requireAudio = true,
   rightsConfirmationId: string | null = null,
+  holdToImportLength = false,
 ): Promise<void> {
   const state = activeDownloads.get(downloadId)
   if (!state) return
@@ -150,6 +157,13 @@ async function runDownloadWithProgress(
         state.percent = 90
       },
     })
+
+    // A direct file is limited by length: probe it while it is on disk,
+    // before anything is stored — the authority, whatever the pre-check read.
+    // Over 30 minutes, over 10 GiB, unreadable, or a size its length cannot
+    // explain fails the download like any other failure — the catch below
+    // records the confirmation's end, reports the error and removes the temp file.
+    if (holdToImportLength) await assertLocalVideoImportable(outPath, (await fs.stat(outPath)).size)
 
     state.phase = "uploading"
     state.percent = 95
@@ -236,8 +250,14 @@ export interface TrackedDownloadRequest {
   readonly userId: string
   readonly section?: VideoSection
   readonly maxHeight?: number
-  /** Direct files carry the 500MB cap; social fetches pass none (unchanged). */
+  /** Direct files carry the import ceiling (`DIRECT_FILE_MAX_BYTES`, 10 GiB); social fetches pass none (unchanged). */
   readonly maxFilesizeBytes?: number
+  /**
+   * Hold the downloaded file to the editor's import length
+   * (`MEDIA_IMPORT_MAX_SEC`, 30 minutes) before it is stored: the route sets it
+   * for a direct file. Absent = no length check (social links, a run's fetch).
+   */
+  readonly holdToImportLength?: boolean
   /** Default TRUE — see `runDownloadWithProgress`. */
   readonly requireAudio?: boolean
   /**
@@ -280,7 +300,7 @@ export function startTrackedDownload(request: TrackedDownloadRequest, slot: Down
   const done = runDownloadWithProgress(
     downloadId, request.url, outputId, baseName, outPath, request.userId,
     request.section, request.maxHeight, request.maxFilesizeBytes, request.requireAudio ?? true,
-    request.rightsConfirmationId ?? null,
+    request.rightsConfirmationId ?? null, request.holdToImportLength === true,
   ).finally(() => slot.release())
   return { downloadId, state, done }
 }

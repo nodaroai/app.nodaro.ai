@@ -5,6 +5,6 @@
  * re-exports every entry, so each name here is also importable from
  * `@nodaro/sdk`.
  */
-export { UploadsResource } from "../resources/uploads.js"
+export { UploadsResource, UPLOAD_MAX_BYTES } from "../resources/uploads.js"
 
-export type { UploadResult, UploadJsonResult, ImportUrlResult } from "../resources/uploads.js"
+export type { UploadResult, UploadJsonResult, ImportUrlResult, UploadLargeOptions } from "../resources/uploads.js"

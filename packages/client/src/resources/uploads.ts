@@ -1,4 +1,35 @@
 import type { NodaroClientCore } from "../core.js"
+import { LargeUploadUnavailableError, NodaroError } from "../errors.js"
+
+/**
+ * The most `POST /v1/upload` ({@link UploadsResource.upload}) takes: 500 MB.
+ * {@link UploadsResource.uploadLarge} sends a file of this size or less through
+ * that same route, and only a bigger one through the large-upload lane.
+ */
+export const UPLOAD_MAX_BYTES = 500 * 1024 * 1024
+/** Tries per part: the first, and two retries. */
+const PART_ATTEMPTS = 3
+/** `/complete` reads the stored file's length and makes its poster before it answers. */
+const COMPLETE_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Options of {@link UploadsResource.uploadLarge}. */
+export interface UploadLargeOptions {
+  /** The name to store the file under; defaults to the file's own name, else `upload`. */
+  readonly filename?: string
+  /** Called as parts finish, with the bytes sent so far and the file's size. */
+  readonly onProgress?: (sentBytes: number, totalBytes: number) => void
+  /** Cancels the upload; the server's copy of the parts is aborted. */
+  readonly signal?: AbortSignal
+  /** Parts sent at once (default 3). */
+  readonly concurrency?: number
+}
+
+/** `POST /v1/uploads/large/start`'s answer. */
+interface LargeUploadStart {
+  readonly token: string
+  readonly partSize: number
+  readonly partUrls: readonly string[]
+}
 
 /**
  * Result of a successful `POST /v1/upload`. Mirrors the route's `data` envelope
@@ -38,14 +69,133 @@ export class UploadsResource {
    * errors on the usual statuses.
    */
   async upload(file: File): Promise<UploadResult> {
+    return this.uploadMultipart(file)
+  }
+
+  private async uploadMultipart(file: Blob, filename?: string, signal?: AbortSignal): Promise<UploadResult> {
     const form = new FormData()
-    form.append("file", file)
+    if (filename !== undefined) form.append("file", file, filename)
+    else form.append("file", file)
     const res = await this.client.request<{ data: UploadResult }>(
       "POST",
       "/v1/upload",
-      { body: form },
+      { body: form, ...(signal ? { signal } : {}) },
     )
     return res.data
+  }
+
+  /**
+   * Upload a file of any size, choosing the lane by size:
+   *
+   * - **{@link UPLOAD_MAX_BYTES} (500 MB) or less:** exactly {@link upload}
+   *   (`POST /v1/upload`) — the path every file of that size takes today, with
+   *   everything it does on the server (faststart, HEIC conversion, upload
+   *   policies, thumbnails). The large-upload lane is never touched.
+   * - **Bigger (video or audio only):** the bytes go straight from here to the
+   *   platform's object storage in parts (`POST /v1/uploads/large/start` → one
+   *   `PUT` per part → `POST /v1/uploads/large/complete`), never through the
+   *   API server. What limits such a file is length: one longer than 30
+   *   minutes is refused once it has arrived, with `MediaTooLongError` (the
+   *   stored copy is removed and nothing counts against storage).
+   *
+   * Returns the same result as {@link upload}. Parts are sent `concurrency` at
+   * a time (default 3); a part that fails is tried twice more before the
+   * upload fails. `onProgress(sentBytes, totalBytes)` is called as parts
+   * finish (once at the end on the small path). Aborting `signal`, or any
+   * failure, aborts the upload on the server (best-effort).
+   *
+   * A file over 500 MB on a deployment without the lane — one that checks every
+   * upload's bytes (409 `large_upload_unavailable`), or an older server (404) —
+   * throws `LargeUploadUnavailableError`: `POST /v1/upload` would refuse it
+   * anyway. Throws `StorageExceededError` (413) when the file does not fit in
+   * the account's storage, and the SDK's other typed errors on the usual
+   * statuses.
+   *
+   * In a browser, storage must allow cross-origin `PUT` from the page's origin
+   * for the large lane (the platform's own deployments do).
+   */
+  async uploadLarge(file: Blob & { readonly name?: string }, options: UploadLargeOptions = {}): Promise<UploadResult> {
+    const filename = options.filename ?? (file.name && file.name.length > 0 ? file.name : "upload")
+    const signal = options.signal
+    if (file.size <= UPLOAD_MAX_BYTES) {
+      const result = await this.uploadMultipart(file, filename, signal)
+      options.onProgress?.(file.size, file.size)
+      return result
+    }
+    let started: LargeUploadStart
+    try {
+      started = await this.client.request<LargeUploadStart>("POST", "/v1/uploads/large/start", {
+        body: { filename, mimeType: file.type || "application/octet-stream", sizeBytes: file.size },
+        ...(signal ? { signal } : {}),
+      })
+    } catch (err) {
+      if (err instanceof NodaroError && err.status === 404) throw new LargeUploadUnavailableError(undefined, 404)
+      throw err
+    }
+
+    const { token, partSize, partUrls } = started
+    try {
+      await this.sendParts(file, partSize, partUrls, options)
+      const res = await this.client.request<{ data: UploadResult }>("POST", "/v1/uploads/large/complete", {
+        body: { token },
+        timeoutMs: COMPLETE_TIMEOUT_MS,
+        ...(signal ? { signal } : {}),
+      })
+      return res.data
+    } catch (err) {
+      // Best-effort, and never under the caller's (possibly aborted) signal.
+      await this.client.request("POST", "/v1/uploads/large/abort", { body: { token } }).catch(() => undefined)
+      throw err
+    }
+  }
+
+  /**
+   * PUT every part, `concurrency` at a time, each tried up to
+   * {@link PART_ATTEMPTS} times. Each part is EXACTLY `partSize` bytes (the
+   * last one the remainder): its URL has that length signed in, so storage
+   * refuses any other. The runtime sets Content-Length from the slice itself.
+   */
+  private async sendParts(file: Blob, partSize: number, partUrls: readonly string[], options: UploadLargeOptions): Promise<void> {
+    const total = file.size
+    const concurrency = Math.max(1, Math.floor(options.concurrency ?? 3))
+    let next = 0
+    let sent = 0
+    let failed: unknown
+    const worker = async (): Promise<void> => {
+      while (failed === undefined && next < partUrls.length) {
+        const index = next++
+        const start = index * partSize
+        const part = file.slice(start, Math.min(start + partSize, total))
+        try {
+          await this.putPart(partUrls[index]!, part, index + 1, options.signal)
+        } catch (err) {
+          failed ??= err
+          return
+        }
+        sent += part.size
+        options.onProgress?.(sent, total)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, partUrls.length) }, () => worker()))
+    if (failed !== undefined) throw failed
+  }
+
+  private async putPart(url: string, part: Blob, partNumber: number, signal: AbortSignal | undefined): Promise<void> {
+    let lastStatus = 0
+    for (let attempt = 1; attempt <= PART_ATTEMPTS; attempt++) {
+      signal?.throwIfAborted()
+      try {
+        const res = await this.client.fetch(url, { method: "PUT", body: part, ...(signal ? { signal } : {}) })
+        if (res.ok) return
+        lastStatus = res.status
+        // A refusal (expired link, wrong signature) will not change on a retry.
+        if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) break
+      } catch (err) {
+        if (signal?.aborted) throw err
+        lastStatus = 0
+      }
+    }
+    throw new NodaroError(`Uploading part ${partNumber} failed${lastStatus ? ` (HTTP ${lastStatus})` : ""}`, "upload_part_failed", lastStatus)
   }
 
   /**

@@ -708,6 +708,27 @@ policy's business. Only occurs on deployments that register a job policy (see
 - **Constructor:** `new JobBlockedError(message?: string)`
 - `code = "job_blocked"`, `status = 422`
 
+### `class MediaTooLongError extends NodaroError`
+
+HTTP 422 `media_too_long`. The file is longer than 30 minutes, the most media
+imported into the editor may be. Thrown by `uploads.uploadLarge` once the upload
+is complete: the stored copy was removed and nothing counts against storage.
+Trim the file and upload it again.
+
+- **Constructor:** `new MediaTooLongError(message?: string)`
+- `code = "media_too_long"`, `status = 422`
+
+### `class LargeUploadUnavailableError extends NodaroError`
+
+`code = "large_upload_unavailable"`. `uploads.uploadLarge` was given a file
+over 500 MB (`UPLOAD_MAX_BYTES`), and the server offers no large-upload lane:
+`status` 409 when the deployment closed it (it checks every upload's bytes
+with an upload policy), 404 when it has none (an older server). `POST
+/v1/upload` takes at most 500 MB, so such a file cannot be sent to that
+server. Shrink or split it.
+
+- **Constructor:** `new LargeUploadUnavailableError(message?: string, status?: 409 | 404)`
+
 ### `class JobHeldError extends NodaroError`
 
 Not an HTTP error — thrown by `nodes.runAndWait()` / `runMany()` on the first
@@ -8392,6 +8413,68 @@ Returns the persisted asset's public URL and storage metadata. Throws
 const result = await client.uploads.upload(file)
 console.log(result.url)        // use as sourceImageUrl / audioUrl / videoUrl
 console.log(result.assetId)    // reference back to the storage row
+```
+
+#### `uploadLarge(file, options?)`
+
+```ts
+uploadLarge(
+  file: Blob & { name?: string },
+  options?: {
+    filename?: string
+    onProgress?: (sentBytes: number, totalBytes: number) => void
+    signal?: AbortSignal
+    concurrency?: number
+  },
+): Promise<UploadResult>
+```
+
+Upload a file of **any size**, choosing the lane by size:
+
+- **`UPLOAD_MAX_BYTES` (500 MB) or less:** exactly `upload` (`POST
+  /v1/upload`). This is the path every file of that size takes today, with
+  everything the server does on it (faststart, HEIC conversion, upload
+  policies, thumbnails), and the large-upload lane is never touched.
+- **Bigger (video or audio only):** the bytes go straight to the platform's
+  object storage in parts, never through the API server (see
+  [Large uploads straight to storage](./api-integration.md#large-uploads-straight-to-storage)).
+  Such a file is limited mainly by **length**, with a size ceiling too. A file
+  longer than 30 minutes rejects with `MediaTooLongError` once it has arrived;
+  the stored copy is removed and nothing counts against storage. A file may
+  also be at most 10 GiB (`NodaroError` 422 `media_too_large`, before anything
+  is sent). A file far larger than its stated length allows is refused too
+  (422 `media_bitrate_implausible`). Each part is cut at exactly `partSize`,
+  because storage refuses a part of any other length. An account may have 3
+  large uploads open at once and start 20 an hour; past either, the SDK throws
+  `RateLimitedError` (`code` `too_many_open_uploads` or `rate_limited`). The
+  file is stored exactly as sent.
+
+Either way it returns the same `UploadResult` as `upload`. `UPLOAD_MAX_BYTES`
+is exported from `@nodaro/sdk` (and `@nodaro/sdk/uploads`).
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `filename` | the file's own name, else `upload` | The name to store the file under. |
+| `onProgress` | — | Called as parts finish, with the bytes sent so far and the file's size (once, at the end, for a file sent with `upload`). |
+| `signal` | — | Cancels the upload. On the large lane, the server's copy of the parts is aborted. |
+| `concurrency` | `3` | Parts sent at once on the large lane. A part that fails is tried twice more. |
+
+On the large lane, any failure or a cancel aborts the upload on the server
+(best-effort). A file over 500 MB on a deployment without the lane throws
+`LargeUploadUnavailableError` (`code` `large_upload_unavailable`). That
+happens on a deployment that checks every upload's bytes (`status` 409) and on
+an older server (`status` 404). `upload` is not tried for such a file, because
+`POST /v1/upload` would refuse it anyway. `StorageExceededError` (413) is
+thrown when the file does not fit in the account's storage. In a browser, the
+large lane needs the storage to allow cross-origin `PUT` from the page's
+origin. The platform's own deployments allow it; a self-hosted install sets it
+up as the deployment guide describes.
+
+```ts
+const result = await client.uploads.uploadLarge(file, {
+  onProgress: (sent, total) => console.log(`${Math.round((sent / total) * 100)}%`),
+})
+console.log(result.url)
 ```
 
 #### `uploadJson(json)`

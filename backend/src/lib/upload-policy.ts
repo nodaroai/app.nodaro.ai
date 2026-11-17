@@ -32,6 +32,11 @@
  * mint DIRECT presigned R2 PUTs whose bytes never pass through us — so when
  * any upload policy is registered they mint proxy-lane URLs instead (same
  * PUT contract for the caller, policed bytes for the deployment).
+ *
+ * The large-upload lane (/v1/uploads/large/*, lib/large-upload-storage.ts)
+ * sends a browser's file straight to storage in presigned parts, so no policy
+ * could read its bytes: while any policy is registered that lane is CLOSED
+ * (409 `large_upload_unavailable`) and the client falls back to /v1/upload.
  */
 
 export type UploadKind = "image" | "video" | "audio" | "json" | "other"

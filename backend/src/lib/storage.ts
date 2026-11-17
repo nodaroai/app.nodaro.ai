@@ -1,5 +1,5 @@
 // @reads-none streams only the local media files its callers produced (job work dirs, temp files)
-import type { CopyObjectCommandInput, ObjectCannedACL, PutObjectCommandInput } from "@aws-sdk/client-s3"
+import type { CopyObjectCommandInput, CreateMultipartUploadCommandInput, ObjectCannedACL, PutObjectCommandInput } from "@aws-sdk/client-s3"
 import { type S3ClientConfig, S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command, CreateBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import { randomUUID } from "node:crypto"
@@ -79,9 +79,10 @@ export function isStorageConfigured(): boolean {
   )
 }
 
-/** The storage clients' options — ONE factory, so the job client and the
- *  viewer client below can never drift apart. */
-function storageClientOptions(): S3ClientConfig {
+/** The storage clients' options — ONE factory, so the job client, the
+ *  viewer client below and the large-upload signer (`lib/large-upload-storage.ts`)
+ *  can never drift apart. */
+export function storageClientOptions(): S3ClientConfig {
   return {
     // "auto" is R2's value and MinIO ignores it; Supabase-local ("local") and
     // DO Spaces / AWS ("nyc3", "us-east-1", …) reject it. See R2_REGION.
@@ -122,7 +123,7 @@ export const viewerS3 = new S3Client(storageClientOptions())
  * them — and the eighth call site somebody adds is the one that silently
  * writes an unreadable object. See STORAGE_OBJECT_ACL.
  */
-export function withObjectAcl<T extends PutObjectCommandInput | CopyObjectCommandInput>(
+export function withObjectAcl<T extends PutObjectCommandInput | CopyObjectCommandInput | CreateMultipartUploadCommandInput>(
   params: T,
 ): T {
   const acl = config.STORAGE_OBJECT_ACL

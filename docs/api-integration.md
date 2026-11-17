@@ -1781,6 +1781,11 @@ All errors share the same shape:
 | 409 | `batch_in_progress` | — | A batch route (an [image batch](#4g-several-images-in-one-call-count-models); `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location` and `/v1/generate-object` with `count` 2 or more; `/v1/video-sfx` with `versions` 2 or more) received a second request with the same `Idempotency-Key` while another request is still creating the batch's jobs (or took the batch over from this one). Nothing more was created or charged by this request. Retry it shortly: it returns the same jobs. |
 | 422 | `idempotency_key_reused` | — | A batch route's `Idempotency-Key` already belongs to a different request: another route's jobs, or the same route's jobs for a different body while any still waits. Nothing is created, charged or queued. Send the same request again, or use a new key. (Use-case runs answer the same situation as a `409`, above.) |
 | 422 | `job_blocked` | — | A job policy or content guard registered by this deployment refused the generation before it ran. `message` is user-facing text written by the deployment's policy (or by the platform, when the policy supplies none) — show it as-is. No job was created and nothing was charged. The platform does not retry a refused request; whether the same request would be judged differently is the deployment's policy's business. Only occurs on deployments that register a job policy — see [deployment.md](./deployment.md#surface-profile-nodaro_surface_profile). Two bookkeeping inserts are the honest exception: the Suno voice-persona ownership rows and the connected-cloud LLM mirror row treat a block as best-effort — the operation proceeds and its row is simply not recorded — so a policy blocking one of those neither stops the call nor reaches you as a 422. |
+| 409 | `large_upload_unavailable` | — | `POST /v1/uploads/large/start` (or `/complete`) on a deployment that checks every upload's bytes with an upload policy: the large-upload lane would bypass it, so it is closed there. Send the file with `POST /v1/upload` instead. See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
+| 422 | `media_too_long` | — | The file is longer than 30 minutes, the most media imported into the editor may be (`POST /v1/uploads/large/complete`, and `POST /v1/download-video` for a direct file whose header says so). A stored copy was removed and nothing was counted against storage. A direct file that turns out too long once downloaded fails the same way, on its progress stream. |
+| 422 | `media_too_large` | — | The file is over 10 GiB, the most a file imported into the editor may be (`POST /v1/uploads/large/start`, `POST /v1/download-video`). |
+| 422 | `media_bitrate_implausible` | — | The file is far larger than its stated length allows (over 2,500 Mbit/s on average for video, 50 Mbit/s for audio, the first 16 MiB not counted). See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
+| 429 | `too_many_open_uploads` | — | `POST /v1/uploads/large/start` while 3 of your large uploads are still open. Complete or abort one; an abandoned one frees itself when its token expires. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. When a request is answered this way because a job or a run could not be queued to start, that job or run is failed at once — a job with its credits refunded (the jobs of a batch are refunded and removed: an [image batch](#4g-several-images-in-one-call-count-models), or the candidates or versions of `/v1/generate-character`, `/v1/generate-creature`, `/v1/generate-location`, `/v1/generate-object` and `/v1/video-sfx`) — and its `Idempotency-Key` is freed, so a retry with the same key starts a new job or run. A batch whose jobs only partly started names the running ones in `error.startedJobIds`: follow those, and send the same request with the same key again, which returns them and starts only the rest. In the rare case that the failure cannot be confirmed, either it did not land, and a retry with the same key is answered with that job or run (if it then fails, send the request again with a new key), or it landed with only its answer lost, and the key was freed with it, so a retry with the same key starts a new one. The use-case runs (`POST /v1/tighten-episode`, `/v1/episode-chapters`, `/v1/episode-trailer`, `/v1/clip-pack`, `/v1/speaker-layout`, and their `/continue`) do the same: the run's job is failed with its fee refunded and its key freed, so a retry with the same key starts a new run. Only when it is not known whether the queue took the run (the rare unconfirmed case) is the request answered `202` like a started run, with the key kept, so the retry answers that run and never starts a second one beside it. Routes served by the Nodaro Cloud plugin, such as [Video Remake](#13f-video-remake-cloud-edition) and the trend runs that start it, answer a repeated key as their own sections say. |
@@ -4289,6 +4294,79 @@ rewritten file is re-wrapped, the stored size can differ slightly from the
 number of bytes you sent: `sizeBytes` (and the byte count the upload returns) is
 always the stored object's final length, so do not compare it to your local
 file size or checksum. Files uploaded before this change are not rewritten. A self-hosted install can turn the rewrite off with `UPLOAD_FASTSTART_ENABLED=false` (see the deployment guide); every upload is then stored exactly as sent.
+
+#### Large uploads straight to storage
+
+`POST /v1/upload` holds the whole file on the server and takes at most 500 MB.
+For a long video or audio file there is a second lane, where the bytes go from
+the client **straight to object storage in parts** and never through the API
+server. Media imported this way is limited mainly by **length**: at most
+**30 minutes**. A file may also be at most **10 GB** (10 GiB).
+
+1. `POST /v1/uploads/large/start` with `{ filename, mimeType, sizeBytes }` —
+   video and audio only (the type is resolved as above). Answers
+   `{ token, partSize, partUrls }`. Nothing is counted against your storage
+   yet: the quota is only checked here. Refusals:
+   - `413 storage_limit_exceeded`: the file would not fit. Same body as
+     `POST /v1/upload`.
+   - `422 media_too_large`: the file is over 10 GiB.
+   - `429 too_many_open_uploads`: you already have 3 uploads open. An upload
+     stays open until it is completed or aborted, or its token expires.
+   - `429 rate_limited`: more than 20 starts in the current hour.
+   - `503 large_upload_busy`: the server cannot count open uploads right now.
+     Try again in a moment.
+2. Send part *i* — bytes `[(i-1)·partSize, i·partSize)` of the file (the last
+   part is the remainder) — as the body of a plain `PUT` to `partUrls[i-1]`.
+   Each URL has its part's **exact length** signed in. Storage refuses a part
+   of any other size, so cut the file at exactly `partSize`. Send no headers
+   of your own: a browser or HTTP client sets `Content-Length` from the body,
+   and that is the only signed header besides `Host`. You never read a
+   response header, because the server collects the parts itself. Parts may go
+   in parallel and in any order, and a failed part can be sent again to the
+   same URL. The part URLs stay valid for 6 hours, the token for 7. `partSize`
+   is max(16 MiB, ⌈`sizeBytes` / 9,000⌉), so a 10 GiB file is 640 parts.
+3. `POST /v1/uploads/large/complete` with `{ token }` joins the parts, checks
+   that the stored size equals `sizeBytes`, and reads the file's length. It
+   answers the same `data` as `POST /v1/upload` (`url`, `thumbnailUrl`,
+   `assetId`, `category`, `filename`, `mimeType`, `sizeBytes`, `metadata`,
+   `r2Key`), and only now is the file counted against your storage. Refusals
+   (each removes the stored file, and nothing is counted):
+   - `422 media_too_long`: over 30 minutes.
+   - `422 media_unreadable`: its length cannot be read, so it would not play in
+     the editor either.
+   - `422 media_bitrate_implausible`: the file is far larger than its stated
+     length allows, as with a short duration written into a big file's header.
+   - `400 size_mismatch`.
+   - `413 storage_limit_exceeded`: storage filled up meanwhile.
+
+   For the bitrate check, the average bitrate is size ÷ length, with the first
+   16 MiB of the file not counted (headers, cover art). It may be at most
+   **2,500 Mbit/s for video** and **50 Mbit/s for audio**. These ceilings are
+   generous. High-quality 4K60 phone or camera footage is 50–200 Mbit/s,
+   ProRes 422 HQ at 4K60 about 1,770, and ProRes 4444 at 4K30 about 2,000.
+   Uncompressed 24-bit/192 kHz stereo audio is about 9 Mbit/s, and 32-bit
+   float 8-channel audio at 192 kHz about 49.
+
+   `400 upload_incomplete` means parts are missing: send them and complete
+   again. Calling complete twice is safe. A repeat answers the first call's
+   result, or `409 upload_completing` while the first is still running, and
+   never stores or counts the file twice. A completed or refused upload frees
+   its open-upload slot; `upload_incomplete` keeps it.
+4. To give up, `POST /v1/uploads/large/abort` with `{ token }`. It is
+   best-effort, answers `{ data: { aborted } }`, and frees the slot. An upload
+   that is neither completed nor aborted frees its slot when its token expires,
+   and its parts are removed by the storage's expiry rule one day later.
+
+The token belongs to the account that started the upload (another account's
+answers `403`). A deployment that checks the bytes of every upload (an upload
+policy) cannot see this lane's bytes, so there `start` answers
+`409 large_upload_unavailable` — there, a file within 500 MB goes through
+`POST /v1/upload`, and a bigger one cannot be uploaded. A file sent this way is
+stored exactly as sent (no faststart rewrite, no HEIC conversion), so use this
+lane only for what `POST /v1/upload` cannot take. The SDK's
+`client.uploads.uploadLarge(file)` does exactly that: a file of 500 MB or less
+goes through `POST /v1/upload` as before, and only a bigger one through this
+lane (on a server without it, it throws `LargeUploadUnavailableError`).
 
 ### Your media library
 
@@ -7763,7 +7841,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/download-video` | Import the video behind a link (the video's page, or a direct video file link) into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
+| `POST` | `/v1/download-video` | Import the video behind a link (the video's page, or a direct video file link) into storage (`{ url, maxHeight?, sectionStartSec?, sectionEndSec?, exactSection?, requireAudio? }`). A section is fetched with a few seconds of margin on each side, for a client that trims it afterwards; `exactSection: true` cuts it at exactly the requested range instead. A result with no audio stream fails unless `requireAudio: false`. A **direct video file** link is limited by length: at most **30 minutes**, and at most **10 GB**. The file's header is read first, before anything is downloaded, and a file whose header shows it is over either limit answers `422` right away. The codes are `media_too_long`, `media_too_large`, and `media_bitrate_implausible` for a size its stated length cannot explain (see [Large uploads straight to storage](#large-uploads-straight-to-storage) for the bitrate limits). A link that redirects to a private address answers `400`. Once downloaded, the file is checked again, and that check is the one that counts. A file over either limit, one whose length cannot be read, or one with an implausible bitrate fails before it is stored: the progress stream ends `failed` with the reason in `error` (for example "This video is longer than 30 minutes…"), and nothing is kept. A link to a video's page on a social site is not held to that length (fetch a section of a long one). At most 4 downloads run per account at once — a fifth answers `429 too_many_downloads`. Returns `{ downloadId }` — not a job. |
 | `GET` | `/v1/download-video/progress/:downloadId` | Live progress as **server-sent events** (`{ phase, percent, videoUrl?, error? }` every ~500ms; stream ends on `completed`/`failed`). |
 | `POST` | `/v1/video-metadata` | Probe duration/dimensions/title without downloading (`{ url }`). Direct read, not a job. |
 | `POST` | `/v1/trim-video` | Trim a video (`{ videoUrl, startTime?/endTime? \| keepFirstSeconds? \| keepLastSeconds? \| trim*Frames/Seconds }`). Leave `endTime` out to cut from `startTime` to the clip's end; an `endTime` you send must be after `startTime`. The clip is measured before the charge, within 90 seconds (its header in at most 30): a clip that cannot be read is a `400 invalid_video_duration`, and a link whose host does not exist or is a private address a `400 media_link_bad_host`; a measure that runs out of time is a `503 probe_timeout`, a host that cannot be looked up at that moment a `503 source_unreachable`, and a clip the server could not read just then a `503 probe_unavailable` (all three: run it again). Full rules and price: [Trim Video](./nodes/processing-video/trim-video.md). → job. |

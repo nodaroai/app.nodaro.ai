@@ -48,6 +48,19 @@ vi.mock("@/utils/thumbnail.js", () => ({
   thumbnailFromLocalVideo: vi.fn().mockResolvedValue(Buffer.from("fake-png")),
 }))
 
+// The duration probe a direct file is held to (lib/media-import-length.ts) —
+// mocked; the harness's downloaded "video" is fake bytes ffprobe cannot read.
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
+  getVideoDuration: vi.fn().mockResolvedValue(60),
+}))
+
+// The pre-download check (lib/media-import-precheck.ts, its own tests) — a
+// fake that reads nothing, so the download goes ahead unless a test says so.
+vi.mock("@/lib/media-import-precheck.js", () => ({
+  precheckRemoteVideo: vi.fn().mockResolvedValue({ kind: "ok" }),
+}))
+
 vi.mock("@/lib/dynamic-origins.js", () => ({
   isOriginAllowedDynamic: vi.fn().mockResolvedValue(false),
 }))
@@ -108,6 +121,18 @@ import { makeFakeDownloadClient, makeFakeDownloadStore } from "../../lib/__tests
 import { ContentRightsError, checkRightsConfirmation, consumeRightsConfirmation, deriveAndConsumeConfirmation, recordEvent } from "../../lib/content-rights.js"
 import { recordUnconfirmedImport } from "../../lib/unconfirmed-imports.js"
 import { withLinkImportsOff } from "@/test/link-imports-off.js"
+import { getVideoDuration } from "../../providers/video/ffmpeg-utils.js"
+import {
+  MEDIA_BITRATE_IMPLAUSIBLE_MESSAGE,
+  MEDIA_IMPORT_MAX_BYTES,
+  MEDIA_IMPORT_MAX_SEC,
+  MEDIA_LENGTH_UNREADABLE_MESSAGE,
+  MEDIA_TOO_LARGE_MESSAGE,
+  MEDIA_TOO_LONG_MESSAGE,
+  MediaImportLengthError,
+} from "../../lib/media-import-length.js"
+import { precheckRemoteVideo } from "../../lib/media-import-precheck.js"
+import { activeDownloads } from "../../lib/video-download.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -489,26 +514,137 @@ describe("POST /v1/download-video — the account's slots are shared with the or
 const DIRECT_URL = "https://cdn.nodaro.ai/uploads/videos/5b3f3a3b.mp4"
 
 describe("POST /v1/download-video — direct video-file URLs", () => {
-  it("accepts a direct .mp4 URL and passes the 500MB size cap to the provider", async () => {
+  it("accepts a direct .mp4 URL with no 500 MB cap: the 10 GiB import ceiling reaches the provider", async () => {
     const res = await post({ url: DIRECT_URL })
     expect(res.statusCode).toBe(200)
 
     await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
     const opts = vi.mocked(downloadYouTubeVideo).mock.calls[0][0]
     expect(opts.url).toBe(DIRECT_URL)
-    expect(opts.maxFilesizeBytes).toBe(500 * 1024 * 1024)
+    expect(opts.maxFilesizeBytes).toBe(MEDIA_IMPORT_MAX_BYTES)
+    expect(MEDIA_IMPORT_MAX_BYTES).toBe(10 * 1024 ** 3)
 
     await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
   })
 
-  it("social URLs pass NO size cap (behavior unchanged)", async () => {
-    const res = await post({ url: YT_URL })
+  it("the link is pre-checked through the probe guard before anything is downloaded", async () => {
+    await post({ url: DIRECT_URL })
+    expect(precheckRemoteVideo).toHaveBeenCalledWith(DIRECT_URL)
+    expect(vi.mocked(precheckRemoteVideo).mock.invocationCallOrder[0]!).toBeLessThan(
+      (await vi.waitFor(() => vi.mocked(downloadYouTubeVideo).mock.invocationCallOrder[0]!)),
+    )
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it.each([
+    ["media_too_long", MEDIA_TOO_LONG_MESSAGE],
+    ["media_too_large", MEDIA_TOO_LARGE_MESSAGE],
+    ["media_bitrate_implausible", MEDIA_BITRATE_IMPLAUSIBLE_MESSAGE],
+  ] as const)("a pre-check refusal (%s) answers 422 before any slot, confirmation or download", async (code, message) => {
+    vi.mocked(precheckRemoteVideo).mockRejectedValueOnce(new MediaImportLengthError(code, message))
+    const res = await post({ url: DIRECT_URL })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toEqual({ code, message })
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+    expect(consumeRightsConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("a link the guard refuses at any hop (a redirect to a private address) is refused before downloading", async () => {
+    vi.mocked(precheckRemoteVideo).mockResolvedValueOnce({ kind: "blocked" })
+    const res = await post({ url: DIRECT_URL })
+    expect(res.statusCode).toBe(400)
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+  })
+
+  it("a social link is never pre-checked", async () => {
+    await post({ url: YT_URL })
+    expect(precheckRemoteVideo).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("after download, a size the length cannot explain is refused (the downloaded file is the authority)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      // 64 MiB claiming 0.1 s: (64 − 16) MiB × 8 / 0.1 s ≈ 4,000 Mbit/s, past the 2,500 Mbit/s video ceiling.
+      vi.mocked(downloadYouTubeVideo).mockImplementationOnce(async (opts) => {
+        await fs.writeFile(opts.outPath, Buffer.alloc(64 * 1024 * 1024))
+      })
+      vi.mocked(getVideoDuration).mockResolvedValueOnce(0.1)
+      const res = await post({ url: DIRECT_URL })
+      const { downloadId } = res.json() as { downloadId: string }
+      await vi.waitFor(() => expect(activeDownloads.get(downloadId)?.phase).toBe("failed"))
+      expect(activeDownloads.get(downloadId)?.error).toBe(MEDIA_BITRATE_IMPLAUSIBLE_MESSAGE)
+      expect(uploadFileWithKeyToR2).not.toHaveBeenCalled()
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+
+  it("a direct file under 30 minutes is probed on disk and stored", async () => {
+    vi.mocked(getVideoDuration).mockResolvedValueOnce(MEDIA_IMPORT_MAX_SEC - 1)
+    const res = await post({ url: DIRECT_URL })
     expect(res.statusCode).toBe(200)
 
-    await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
-    expect(vi.mocked(downloadYouTubeVideo).mock.calls[0][0].maxFilesizeBytes).toBeUndefined()
-
+    await vi.waitFor(() => expect(uploadFileWithKeyToR2).toHaveBeenCalledTimes(1))
+    expect(getVideoDuration).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(getVideoDuration).mock.calls[0][0]).toMatch(/yt-video-[0-9a-f-]+\.mp4$/)
     await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+  })
+
+  it("a direct file over 30 minutes fails before anything is stored, removes the temp file and notes the failure", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      vi.mocked(getVideoDuration).mockResolvedValueOnce(MEDIA_IMPORT_MAX_SEC + 1)
+      const confirmationId = "22222222-2222-4222-8222-222222222222"
+      vi.mocked(checkRightsConfirmation).mockResolvedValueOnce({ id: confirmationId } as never)
+      const res = await post({ url: DIRECT_URL, confirmationId })
+      expect(res.statusCode).toBe(200)
+      const { downloadId } = res.json() as { downloadId: string }
+
+      await vi.waitFor(() => expect(activeDownloads.get(downloadId)?.phase).toBe("failed"))
+      expect(activeDownloads.get(downloadId)?.error).toBe(MEDIA_TOO_LONG_MESSAGE)
+      await vi.waitFor(() =>
+        expect(recordEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ confirmationId, kind: "download_failed", detail: { error: MEDIA_TOO_LONG_MESSAGE } }),
+        ),
+      )
+      expect(uploadFileWithKeyToR2).not.toHaveBeenCalled()
+      expect(insertSpy).not.toHaveBeenCalled()
+      const outPath = vi.mocked(downloadYouTubeVideo).mock.calls[0][0].outPath
+      await vi.waitFor(async () => expect(await fs.access(outPath).then(() => true, () => false)).toBe(false))
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+
+  it("a direct file whose length cannot be read is refused too", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      vi.mocked(getVideoDuration).mockRejectedValueOnce(new Error("Could not determine duration"))
+      const res = await post({ url: DIRECT_URL })
+      const { downloadId } = res.json() as { downloadId: string }
+      await vi.waitFor(() => expect(activeDownloads.get(downloadId)?.phase).toBe("failed"))
+      expect(activeDownloads.get(downloadId)?.error).toBe(MEDIA_LENGTH_UNREADABLE_MESSAGE)
+      expect(uploadFileWithKeyToR2).not.toHaveBeenCalled()
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+
+  it("social URLs pass NO size cap and are not held to the 30-minute length (behavior unchanged)", async () => {
+    vi.mocked(getVideoDuration).mockResolvedValue(MEDIA_IMPORT_MAX_SEC * 4)
+    try {
+      const res = await post({ url: YT_URL })
+      expect(res.statusCode).toBe(200)
+
+      await vi.waitFor(() => expect(downloadYouTubeVideo).toHaveBeenCalledTimes(1))
+      expect(vi.mocked(downloadYouTubeVideo).mock.calls[0][0].maxFilesizeBytes).toBeUndefined()
+
+      await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalled())
+      expect(getVideoDuration).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(getVideoDuration).mockResolvedValue(60)
+    }
   })
 
   it("400 when a direct URL's host resolves to a private/reserved address", async () => {

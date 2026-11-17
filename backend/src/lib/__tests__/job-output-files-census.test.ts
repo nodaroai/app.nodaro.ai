@@ -122,6 +122,7 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "lib/audio-soundtrack.ts :: args.key":
     `${CACHE} (a Kling 4.0 soundtrack clip, \`uploads/video/<userId>/soundtrack-<digest>.mp4\`, keyed by the audio, frame and length it is made of: a quote and its run, or a run done again, read one copy)`,
   "lib/character-lora.ts :: key": `${NOT_A_JOB} (a character's LoRA training zip)`,
+  "lib/large-upload-storage.ts :: key": `${UPLOAD} (the large-upload lane's multipart object, \`uploads/<kind>s/<uuid>.<ext>\`)`,
   "lib/media-import.ts :: r2Key": UPLOAD,
   "lib/media-import.ts :: thumbKey": UPLOAD,
   "lib/media-portability.ts :: r2Key": UPLOAD,
@@ -133,6 +134,7 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "lib/video-frame-fit.ts :: key": `${CACHE} (frame-fit, by source url + plan)`,
   "providers/audio/youtube-extractor.ts :: `yt-extract-${outputId}`": `${NOT_A_JOB} (extracted source audio)`,
   "providers/video/edl-timeline.ts :: key": "the render's own resumable chunk checkpoints, deleted by the render itself",
+  "routes/large-upload.ts :: thumbKey": `${UPLOAD} (the large-upload lane's poster, beside its video)`,
   "routes/media-process.ts :: r2Key": UPLOAD,
   "routes/media-process.ts :: thumbKey": UPLOAD,
   "routes/split-image.ts :: key": `${NOT_A_JOB} (a character sheet split into images)`,

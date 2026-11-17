@@ -21,6 +21,8 @@ export {
   StorageExceededError,
   WorkflowConflictError,
   JobBlockedError,
+  MediaTooLongError,
+  LargeUploadUnavailableError,
   JobFailedError,
   JobTimeoutError,
   JobAbortedError,
