@@ -5,7 +5,8 @@
 //
 // - Model: the admin LLM models list (enabled ones only). While the step is
 //   shown a picture (the clip, the role pictures or the references), only the
-//   models that take images are offered. A saved model that is no longer
+//   models that take images are offered; while it is shown the clip, a model
+//   that reads video on the LLM nodes only (Gemini 4 Hydrogen) is not. A saved model that is no longer
 //   offered stays shown as it is, marked, so the screen never says otherwise
 //   than what is saved; the check names it.
 // - Instructions: empty = the engine's default, shown as the placeholder and
@@ -17,7 +18,7 @@
 // The defaults' texts are the engine's, read at run time: none is written here.
 
 import { useId } from "react"
-import { getLlmModalityCaps } from "@nodaro/shared/llm-models"
+import { getLlmModalityCaps, readsMediaOnLlmNodesOnly } from "@nodaro/shared/llm-models"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
@@ -51,10 +52,16 @@ export function seesPictures(inputs: readonly LlmInput[]): boolean {
   return inputs.some((i) => PICTURE_INPUTS.has(i))
 }
 
-/** The models offered for a step: enabled ones, and only those that take images while it sees a picture. */
+/**
+ * The models offered for a step: enabled ones, only those that take images
+ * while it sees a picture, and — while it is shown the clip — none whose video
+ * reading is for the LLM nodes only (`readsMediaOnLlmNodesOnly`: Gemini 4
+ * Hydrogen), which the save refuses for a clip step (`model_cannot_read_clip`).
+ */
 export function offeredModels(models: readonly AdminLlmModel[], inputs: readonly LlmInput[]): AdminLlmModel[] {
   const pictures = seesPictures(inputs)
-  return models.filter((m) => m.isEnabled && (!pictures || getLlmModalityCaps(m.id).image))
+  const clip = inputs.includes("clip")
+  return models.filter((m) => m.isEnabled && (!pictures || getLlmModalityCaps(m.id).image) && !(clip && readsMediaOnLlmNodesOnly(m.id)))
 }
 
 interface Props {

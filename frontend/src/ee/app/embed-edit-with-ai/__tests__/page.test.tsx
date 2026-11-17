@@ -148,12 +148,14 @@ describe("/embed/edit-with-ai", () => {
     unmount()
   })
 
-  it("says which videos it works on when its host has none it can give an address for", () => {
+  it("shows the panel before its host has a video for it, with a note on which videos it works on", () => {
     render(<EditWithAiFramePage />)
     deliver(init({ videos: [], openedVideoUrl: undefined }))
-    // A file imported from the computer has no address the run could listen to: the note says so.
-    expect(screen.getByText(/works on videos from your Nodaro library or from this production/)).toBeTruthy()
-    expect(screen.getByText(/imported from your computer cannot be edited with AI yet/)).toBeTruthy()
+    // Everything the panel can do is on show; a file imported from the computer has no address the run could listen to, and the note says so.
+    expect(screen.getByTestId("panel")).toBeTruthy()
+    expect(panelProps.last?.videos).toEqual([])
+    expect(String(panelProps.last?.noVideoNote)).toMatch(/works on videos from your Nodaro library or from this production/)
+    expect(String(panelProps.last?.noVideoNote)).toMatch(/imported from your computer cannot be edited with AI yet/)
   })
 
   it("says where to open it when nobody frames it, or nobody answers", () => {

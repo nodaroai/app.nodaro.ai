@@ -87,6 +87,7 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 | `seedance-2-fast` | Seedance 2.0 Fast | 4–15s | 480p / 720p | Keyframes + Extend |
 | `seedance-2-mini` | Seedance 2.0 Mini | 4–15s | 480p / 720p | Keyframes + Extend |
 | `seedance-2-5` | Seedance 2.5 | 4–30s | 480p / 720p / 1080p | Keyframes + Extend |
+| `seedance-2-5-flash` | Seedance 2.5 Flash | 4–30s | 480p / 720p | Keyframes + Extend |
 | `minimax-h3` | minimax-h3 | 4–15s | 2K (default) / 768P | Keyframes + Extend |
 | `veo3.1` | VEO 3.1 Fast | 4 / 6 / 8s | 720p / 1080p / 4K | Keyframes |
 | `veo3_lite` | VEO 3.1 Lite | 4 / 6 / 8s | 720p / 1080p / 4K | Keyframes |

@@ -16,7 +16,10 @@
  *     quote included — lib/unit-quote-rates.ts;
  *   - `voice-changer-pro:<slots>`: a whole Voice Changer Pro convert, priced by
  *     `priceVoiceChangerProFromUnits` — the function the convert route's
- *     reservation prices through (`computeVoiceChangerProPricing`).
+ *     reservation prices through (`computeVoiceChangerProPricing`);
+ *   - `gemini-omni-flash-1-2-extend:<res>:sent-<S>s:added-<A>s`: a whole
+ *     Gemini Omni Flash 1.2 Extend run, priced from its two rows by
+ *     `geminiOmniExtendQuoteBase` — the rule its hold reads (decided 2026-11-17).
  *
  * The id is marked up at `priceMarginKey(id)` (lib/speech-credits.ts): the id
  * the request's guard marks up at.
@@ -24,6 +27,12 @@
 import { parseVoiceChangerProQuoteCreditId, type VoiceChangerProQuoteCreditIdParts } from "@nodaro/shared/credits"
 import { speechLengthPricingEnabled } from "../../lib/config.js"
 import { parseQuoteCreditId, quoteBaseCredits } from "../../lib/unit-quote-rates.js"
+import {
+  GEMINI_OMNI_EXTEND_SOURCE_CREDIT_ID,
+  geminiOmniExtendAddedCreditId,
+  geminiOmniExtendQuoteBase,
+  pricedGeminiOmniExtendQuote,
+} from "@nodaro/render-rules"
 import {
   VOICE_CHANGER_PRO_MINUTE_MODEL,
   VOICE_CHANGER_PRO_UNIT_ROWS,
@@ -108,5 +117,16 @@ export function wholeRequestQuoteOf(id: string): WholeRequestQuote | undefined {
     }
   }
   const convert = parsePricedVoiceChangerProQuote(id)
-  return convert ? voiceChangerProQuote(convert) : undefined
+  if (convert) return voiceChangerProQuote(convert)
+  const extend = pricedGeminiOmniExtendQuote(id)
+  if (extend) {
+    const added = geminiOmniExtendAddedCreditId(extend.resolution)
+    return {
+      rows: [GEMINI_OMNI_EXTEND_SOURCE_CREDIT_ID, added],
+      // The id the route's guard and a workflow run hold the run at.
+      gateRow: added,
+      base: (rowOf) => geminiOmniExtendQuoteBase(extend, rowOf),
+    }
+  }
+  return undefined
 }

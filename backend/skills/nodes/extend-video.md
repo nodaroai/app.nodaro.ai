@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-11-13T13:09:37.882Z
-generated_from: 69fd86aa98
+generated_at: 2026-11-17T01:35:13.288Z
+generated_from: e4205ffe81
 ---
 
 # Extend Video
@@ -28,7 +28,7 @@ generated_from: 69fd86aa98
 - `quality?: "720p" | "1080p"`
 - `extendMode?: "start" | "end"`
 - `duration?: number`
-- `resolution?: "360p" | "480p" | "540p" | "720p" | "1080p"`
+- `resolution?: "360p" | "480p" | "540p" | "720p" | "1080p" | "4k"`
 - `generateAudio?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

@@ -82,7 +82,7 @@ export function generateTextDescription(): string {
     "Ask any LLM, with media for it to read: images, videos (picture and sound), audio and PDFs, each a link or a Nodaro id. " +
     "The whole answer is this call's result, nothing cut, no workflow to build. " +
     `A call still running after ${GENERATE_TEXT_INLINE_WAIT_MS / 1000} s answers with its job_id instead: \`wait_for_job\` then gives the whole answer. ` +
-    "Video and audio need a Gemini model; a PDF needs a model that reads documents. " +
+    "Video and audio need a model that reads video or audio; a PDF needs a model that reads documents. " +
     "To judge sound alone, pass the recording in `audio_urls` rather than its video. " +
     meteredLlmPriceSentence("llm-chat")
   )

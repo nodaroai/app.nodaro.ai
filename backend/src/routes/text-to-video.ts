@@ -32,7 +32,7 @@ import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, applyAudioSoundtrackPreHandler, pricedReferenceVideoCount, pricedRefVideoDurations } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, refuseVideoReferencesOverLimitPreHandler, applyAudioSoundtrackPreHandler, pricedReferenceVideoCount, pricedRefVideoDurations } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { videoRunModel } from "../lib/run-model.js"
 import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
@@ -136,7 +136,7 @@ export const textToVideoBody = z.object({
 export const textToVideoPricing: RoutePricing = {
   // Reference audio the provider would refuse (format, length) is refused here,
   // before the reservation — the same check /v1/generate-video runs.
-  prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })

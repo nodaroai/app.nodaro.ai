@@ -28,7 +28,8 @@
    "topaz-video:per-unit": 40,
    "omnihuman-2-0:per-second": 35,
    "nodaro-video-upscale:2k:per-4s": 30,
-   "seedance-2-5-extend:720p:per-2s": 190
+   "seedance-2-5-extend:720p:per-2s": 190,
+   "seedance-2-5-flash-extend:720p:per-2s": 128
   }
  },
  "cases": [
@@ -892,6 +893,31 @@
     "servedUnit": 219,
     "credits": 1967,
     "perUnitQuote": 1971
+   }
+  },
+  {
+   "name": "Extend (Seedance 2.5 Flash): no source known \u2014 the whole 10 s window, 8 s added at 720p \u2014 9 two-second units of its own row",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "extend-video",
+     "data": {
+      "provider": "seedance-2-5-flash-extend",
+      "duration": 8,
+      "resolution": "720p",
+      "prompt": "keep going"
+     }
+    }
+   ],
+   "edges": [],
+   "node": "x",
+   "expect": {
+    "rateId": "seedance-2-5-flash-extend:720p:per-2s",
+    "units": 9,
+    "quoteId": "seedance-2-5-flash-extend:720p:per-2s:9u",
+    "servedUnit": 148,
+    "credits": 1325,
+    "perUnitQuote": 1332
    }
   },
   {

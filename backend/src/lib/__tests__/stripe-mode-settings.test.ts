@@ -39,6 +39,7 @@ describe("liveStripeKeyProblem", () => {
       ["STRIPE_SECRET_KEY", fakeKey("sk", "live")],
       ["STRIPE_SECRET_KEY", fakeKey("rk", "live")],
       ["VITE_STRIPE_PUBLISHABLE_KEY", fakeKey("pk", "live")],
+      ["STRIPE_PUBLISHABLE_KEY", fakeKey("pk", "live")],
       ["PLUGIN_CONFIG", JSON.stringify({ stripe: fakeKey("sk", "live") })],
     ]
     for (const [name, value] of cases) {

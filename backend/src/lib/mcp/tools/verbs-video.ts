@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
+import { creditHint, creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
 import { unitFields } from "../amounts.js"
 import { MAX_LIP_SYNC_AUDIO_SEC } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
@@ -27,11 +27,11 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, motionTransferResolution } from "@nodaro/shared/credits"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, geminiOmniExtendQuoteCreditId, motionTransferResolution } from "@nodaro/shared/credits"
 import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
@@ -120,8 +120,10 @@ const EXTEND_SOURCE_INPUT: Readonly<Record<ExtendVideoProvider, "task" | "url" |
   // LTX 2.3 Pro Extend (prepend or append, its `extendMode`) is not offered by this tool.
   "ltx-2.3-pro": null,
   "seedance-2-5-extend": "url",
+  "seedance-2-5-flash-extend": "url",
   "seedance-2-0-extend": "url",
   "kling-4-extend": "url",
+  "gemini-omni-flash-1-2-extend": "url",
   "pixverse-v6-extend": "url",
   // Grok continues only a Grok Imagine video made here, by its task (as VEO's).
   "grok-extend": "task",
@@ -140,9 +142,11 @@ const TASK_EXTEND_LABEL = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] ===
  */
 const LENGTH_EXTEND_MODELS = EXTEND_MODELS.filter((p) => EXTEND_SOURCE_INPUT[p] === "url" || isGrokExtendProvider(p))
 const LENGTH_EXTEND_SECONDS = LENGTH_EXTEND_MODELS.flatMap((p) => EXTEND_DURATION_SECONDS[p])
-/** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p"). */
+/** A resolution's lines of picture, for the order: "4k" is 2160. */
+const resolutionLines = (r: string): number => (r.toLowerCase() === "4k" ? 2160 : parseInt(r, 10))
+/** The resolutions the URL models render, as their catalog entries declare them, ascending ("360p" < "1080p" < "4k"). */
 const URL_EXTEND_RESOLUTIONS = [...new Set(URL_EXTEND_MODELS.flatMap((p) => MODEL_CATALOG[p]?.resolutions ?? []))]
-  .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
+  .sort((a, b) => resolutionLines(a) - resolutionLines(b))
 /** "a or b", "a, b or c". */
 const orList = (items: readonly string[]): string =>
   items.length > 1 ? `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}` : (items[0] ?? "")
@@ -177,6 +181,19 @@ const LENGTH_EXTEND_WINDOWS = LENGTH_EXTEND_MODELS.map((p) => {
  * required: a preprocess alone is listed as optional, its input being anything.
  */
 const extendModelArg = z.preprocess((v) => canonicalVideoProvider(v), z.enum(EXTEND_MODELS)).nonoptional()
+
+/**
+ * The reference caps an MCP video call cuts its lists at: the model's own
+ * (`VIDEO_REF_LIMITS_BY_PROVIDER`), except on a model that refuses an
+ * over-limit request (`requestRefusesOverLimit`, Seedance 2.5 Flash — decided
+ * 2026-11-16), whose lists go to the route uncut (up to the route's own body
+ * limit) so the route refuses them with the limit named.
+ */
+function mcpVideoRefCaps(provider: string): { images?: number; videos?: number; audio?: number } {
+  const row = VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}
+  if (!row.requestRefusesOverLimit) return row
+  return { images: SEEDANCE_2_5_REF_LIMITS.images, videos: SEEDANCE_2_5_REF_LIMITS.videos, audio: SEEDANCE_2_5_REF_LIMITS.audio }
+}
 
 /** A-14 (audit 2026-09-06): the lip_sync model list derives from LIP_SYNC_PROVIDERS and
  *  its prices from `lipSyncPriceSuffix` (`_credit-hint.ts`) — a flat price, a per-second
@@ -269,7 +286,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
-            "limit (seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
+            "limit (seedance-2-5 30, seedance-2-5-flash 10/5/5 img/vid/audio, more refused, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
             "gemini-omni-video / gemini-omni-flash 7, gemini-omni-flash-1-2 6, veo3/veo3.1 3, ...). " +
             "Dropped on models with no reference path, except where the model's image-to-video " +
             "id takes them: grok then runs as grok-i2v (7). Accepts an array; a lone URL or " +
@@ -280,7 +297,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer, capped at the model's own limit " +
-            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) 5, " +
+            "(seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime / kling-4(-flash) / seedance-2-5-flash 5, " +
             "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1). Wan 3.0 takes each clip at 1-15s and " +
             "≤15s combined, and input video seconds + output duration must stay ≤30s. " +
             "Dropped on models without video-reference support.",
@@ -465,7 +482,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       // SENT, from the shared table (same source the route enforces), so the
       // route prices and runs what it is sent. Models absent from the table
       // have no reference path — args dropped, matching route behavior.
-      const t2vRefLimits = VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}
+      const t2vRefLimits = mcpVideoRefCaps(provider)
       const t2vRefImages = t2vRefLimits.images ? await resolveRefArray(args.reference_image_urls, session.userId, "image", t2vRefLimits.images) : []
       const t2vRefVideos = t2vRefLimits.videos ? await resolveRefArray(args.reference_video_urls, session.userId, "video", t2vRefLimits.videos) : []
       const t2vRefAudio = t2vRefLimits.audio ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", t2vRefLimits.audio) : []
@@ -608,7 +625,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Identity/reference images (URLs or Nodaro asset IDs), capped at the model's own " +
-            "limit: seedance-2-5 30, seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
+            "limit: seedance-2-5 30, seedance-2-5-flash 10 (more is refused), seedance-2 family + minimax-h3 9, wan-3 / wan-3-prime 10, " +
             "gemini-omni-video / gemini-omni-flash / kling-3-omni / grok-i2v 7, gemini-omni-flash-1-2 6, " +
             "happyhorse-ref2v 9, veo3/veo3.1 3. Resolved server-side; " +
             "silently dropped on models with no reference path. " +
@@ -619,7 +636,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference videos for style/motion transfer (URLs or Nodaro asset IDs). " +
-            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
+            "seedance-2-5 up to 10, seedance-2-5-flash up to 5 (more is refused), seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
             "up to 5 (each clip 1-15s, ≤15s combined; input seconds + output duration ≤30s), " +
             "gemini-omni-video / gemini-omni-flash / gemini-omni-flash-1-2 1; " +
             "dropped on models without video-reference support. Ignored in 'frames' mode. " +
@@ -630,7 +647,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Reference audio for soundtrack-driven motion (URLs or Nodaro asset IDs). " +
-            "seedance-2-5 up to 10, seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
+            "seedance-2-5 up to 10, seedance-2-5-flash up to 5 (more is refused), seedance-2 family + minimax-h3 up to 3, wan-3 / wan-3-prime " +
             "up to 5 (each clip 1-15s, ≤15s combined); dropped on models " +
             "without audio-reference support. Ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
@@ -752,7 +769,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       // family + Hailuo 3 9/3/3, gemini-omni 7 images, VEO 3.x 3 images, etc.
       // Models absent from the table have no reference-forwarding path —
       // their args are dropped here, matching route behavior.
-      const refLimits = VIDEO_REF_LIMITS_BY_PROVIDER[model] ?? {}
+      const refLimits = mcpVideoRefCaps(model)
       const refImageUrls = refLimits.images ? await resolveRefArray(args.reference_image_urls, session.userId, "image", refLimits.images) : []
       const refVideoUrls = refLimits.videos ? await resolveRefArray(args.reference_video_urls, session.userId, "video", refLimits.videos) : []
       const refAudioUrls = refLimits.audio ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", refLimits.audio) : []
@@ -836,6 +853,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the task_id from that job (NOT the URL). " +
         "grok-extend continues a Grok Imagine video you made here (from text or an image) by its task_id the same way, adding 6 or 10 s at that video's own resolution; any other video is refused before anything is charged. " +
         `${URL_EXTEND_LABEL} extend ANY video by URL (or asset id) — they generate what happens next and join it to the source (2.5: from its last 10 s, billed per second sent + added); ` +
+        `gemini-omni-flash-1-2-extend continues only a 16:9 or 9:16 video (any other shape is refused before anything is charged), from its last 10 s, billed per second sent + added (8 s at 720p on a 10 s+ source: ${creditHint(geminiOmniExtendQuoteCreditId({ duration: 8, resolution: "720p" }))}); it does not continue dialogue. ` +
         "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
@@ -1668,11 +1686,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
-            "An unknown model is refused. `seedance-2-5` edits the clip by instruction and keeps its " +
+            "An unknown model is refused. `seedance-2-5` (and `seedance-2-5-flash`) edits the clip by instruction and keeps its " +
             "length and ratio (clip 4-30s; billed on input + output seconds, settled to the delivered length).",
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Wan / Wan Flash (720p/1080p), seedance-2-5 (480p-1080p)."),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Wan / Wan Flash (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p)."),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()

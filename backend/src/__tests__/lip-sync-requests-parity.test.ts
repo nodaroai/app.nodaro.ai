@@ -28,6 +28,11 @@
  * our prepared copy of the audio, and a workflow build no longer prices a
  * length at all (the run measures before it holds). Every other case is held
  * byte for byte.
+ *
+ * The Seedance models were then priced on their PLAIN row at the resolution
+ * they send, and sent that resolution (decided 2026-11-16): their cases change
+ * in exactly that way (`seedancePlainNow`). A MiniMax Hailuo 3 workflow run
+ * then held the route's own `minimax-h3:8s` row (decided 2026-11-16).
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -149,6 +154,7 @@ import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/typ
 import { videoAIHandlers } from "../workers/handlers/video-ai.js"
 import { LIP_SYNC_REQUESTS_BEFORE_CATALOG_ENTRIES } from "./fixtures/lip-sync-requests.js"
 import { retiredLipSyncProviderMessage } from "@nodaro/shared/models"
+import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://cdn.example.com/face.png"
@@ -324,6 +330,24 @@ function measuredNow(lane: "route" | "workflow", run: Json, provider: string): J
   }
 }
 
+/**
+ * A Seedance case as it runs since 2026-11-16: priced on the model's PLAIN
+ * 8-second row at the resolution it sends (`seedanceLipSyncCreditId` — the run
+ * sends no reference video, and is billed the plain rate), on the route and in
+ * a workflow, and sent that same resolution (a 1080p asked of Seedance 2 Fast
+ * renders 720p, as it is billed). Everything else as recorded.
+ */
+function seedancePlainNow(lane: "route" | "workflow", run: Json, provider: string): Json {
+  const asked = lane === "route" ? (run.queued as Json | undefined)?.resolution : (run.payload as Json | undefined)?.resolution
+  const id = seedanceLipSyncCreditId(provider, asked)
+  const res = seedanceLipSyncResolution(provider, asked)
+  const sent = JSON.parse(JSON.stringify(run.sent)) as Json
+  const args = sent.args as unknown[] | undefined
+  if (sent.via === "imageToVideo" && args) args[5] = { ...(args[5] as Json), resolution: res }
+  if (lane === "route") return { ...run, check: id, debit: id, sent }
+  return { ...run, modelIdentifier: id, payload: { ...(run.payload as Json), resolution: res }, sent }
+}
+
 async function record(): Promise<Recorded> {
   const route: Record<string, Json> = {}
   for (const c of CASES) route[c.name] = JSON.parse(JSON.stringify(await routeCase(c))) as Json
@@ -357,6 +381,11 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
         if (provider) {
           expect(now[lane][c.name], `${lane}: ${c.name}`).toEqual(measuredNow(lane, before[lane][c.name]!, provider))
           measured += 1
+        } else if (isSeedanceLipSyncProvider(c.provider)) {
+          expect(now[lane][c.name], `${lane}: ${c.name}`).toEqual(seedancePlainNow(lane, before[lane][c.name]!, c.provider))
+        } else if (c.provider === "minimax-h3" && lane === "workflow") {
+          // MiniMax Hailuo 3: a workflow run holds the route's own `minimax-h3:8s` (decided 2026-11-16).
+          expect(now[lane][c.name], `${lane}: ${c.name}`).toEqual({ ...before[lane][c.name]!, modelIdentifier: MINIMAX_H3_LIP_SYNC_CREDIT_ID })
         } else {
           expect(now[lane][c.name], `${lane}: ${c.name}`).toEqual(before[lane][c.name])
         }

@@ -24,7 +24,7 @@
  * ran in this run hands on its output's task directly.
  */
 import { isSeedanceDraftCapable, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
-import { canonicalVideoProvider, isGrokExtendProvider, isGrokExtendSourceModel, isVeoProvider } from "@nodaro/shared/models"
+import { canonicalVideoProvider, GROK_EXTEND_SOURCE_NODE_TYPES, isGrokExtendProvider, isGrokExtendSourceModel, isVeoProvider } from "@nodaro/shared/models"
 import { EXTEND_VIDEO_DEFAULT_PROVIDER } from "./node-default-models"
 
 /** The node types whose `kieTaskId` is an INPUT — the task they work on — never their own run's output task. */
@@ -199,9 +199,6 @@ export function runOutputTaskFields(type: string | undefined, outputTask: unknow
   const task = str(outputTask)
   return task !== undefined && type !== undefined && TASK_CONSUMER_NODE_TYPES.has(type) ? { [RUN_OUTPUT_TASK_FIELD]: task } : {}
 }
-
-/** The video node types whose run a Grok Extend continues (a Grok Imagine text- or image-to-video node). */
-const GROK_EXTEND_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set(["generate-video", "text-to-video", "image-to-video"])
 
 /**
  * What a RESULT row records of the job that made it, on the take of a Grok

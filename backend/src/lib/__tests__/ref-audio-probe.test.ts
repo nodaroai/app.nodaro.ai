@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const mocks = vi.hoisted(() => ({ probe: vi.fn() }))
+const mocks = vi.hoisted(() => ({ probe: vi.fn(), reachable: true }))
 
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   probeMediaFormatAndDuration: mocks.probe,
 }))
+vi.mock("../own-media-reachability.js", () => ({ providersCanFetchOwnMedia: () => mocks.reachable }))
 
 import { probeAndCheckRefAudio } from "../ref-audio-probe.js"
 
 beforeEach(() => {
   mocks.probe.mockReset()
+  mocks.reachable = true
 })
 
 describe("probeAndCheckRefAudio", () => {
@@ -67,5 +69,22 @@ describe("probeAndCheckRefAudio", () => {
     mocks.probe.mockResolvedValue({ formatNames: ["mp3"], durationSec: 5 })
     await probeAndCheckRefAudio({ provider: "vidu-q4", referenceAudioUrls: ["a", "b", "c", "d", "e"].map((x) => `https://x/${x}.mp3`) })
     expect(mocks.probe).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe("probeAndCheckRefAudio — Seedance 2.5 Flash converts other formats where it can", () => {
+  it("lets an M4A through where the provider can fetch our converted copy", async () => {
+    mocks.probe.mockResolvedValue({ formatNames: ["mov", "mp4", "m4a"], durationSec: 6 })
+    expect(await probeAndCheckRefAudio({ provider: "seedance-2-5-flash", referenceAudioUrls: ["https://x/a.m4a"] })).toEqual({ ok: true })
+  })
+
+  it("refuses an M4A with the format message, before anything is held, on an install no provider can fetch from", async () => {
+    mocks.reachable = false
+    mocks.probe.mockResolvedValue({ formatNames: ["mov", "mp4", "m4a"], durationSec: 6 })
+    const r = await probeAndCheckRefAudio({ provider: "seedance-2-5-flash", referenceAudioUrls: ["https://x/a.m4a"] })
+    expect(r).toEqual({ ok: false, code: "audio_format_unsupported", message: "Reference audio 1 must be WAV or MP3 for this model. Convert the clip to WAV or MP3 and try again." })
+    // A WAV or MP3 still runs there.
+    mocks.probe.mockResolvedValue({ formatNames: ["mp3"], durationSec: 6 })
+    expect(await probeAndCheckRefAudio({ provider: "seedance-2-5-flash", referenceAudioUrls: ["https://x/a.mp3"] })).toEqual({ ok: true })
   })
 })

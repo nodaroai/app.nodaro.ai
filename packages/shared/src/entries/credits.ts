@@ -58,6 +58,9 @@ export {
 export type { NormalizedImageGen, PricedVideoSelection, GrokExtendSourceResolution } from "../credit-identifiers.js"
 export {
   SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER,
+  SEEDANCE_EXTEND_MIN_SOURCE_SEC,
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
   SEEDANCE_EXTEND_RATE_SECONDS,
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
@@ -65,11 +68,17 @@ export {
   isSeedanceExtendRateCreditId,
   seedanceExtendAddedSec,
   seedanceExtendRefusesSource,
+  seedanceExtendSourceRefused,
   seedanceExtendSourceSec,
   seedanceExtendSentSec,
   seedanceExtendUnits,
   type SentPricedSeedanceExtendProvider,
 } from "../seedance-extend-rate.js"
+export {
+  geminiOmniExtendQuoteCreditId,
+  parseGeminiOmniExtendQuoteCreditId,
+  type GeminiOmniExtendQuoteCreditIdParts,
+} from "../gemini-omni-extend-quote.js"
 export * from "../credit-estimators/index.js"
 export {
   resolveTopazUpscale,
@@ -109,6 +118,14 @@ export {
   LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS,
 } from "../lip-sync-pricing.js"
 export type { LipSyncDurationBucket, LipSyncAudioRate } from "../lip-sync-pricing.js"
+export {
+  SEEDANCE_LIP_SYNC_SECONDS,
+  isSeedanceLipSyncProvider,
+  seedanceLipSyncResolution,
+  seedanceLipSyncCreditId,
+  MINIMAX_H3_LIP_SYNC_CREDIT_ID,
+  referenceAudioLipSyncCreditId,
+} from "../seedance-lip-sync.js"
 export {
   AI_AVATAR_MAX_DURATION_SEC,
   AI_AVATAR_MAX_AUDIO_SEC,

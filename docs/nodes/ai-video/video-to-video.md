@@ -16,10 +16,12 @@ The Video to Video node applies AI-powered transformations to an existing video 
 
 ### Seedance 2.5 Edit — additional fields
 
+These fields apply to **Seedance 2.5 Edit** and **Seedance 2.5 Flash Edit** (`seedance-2-5-flash`, the faster, lower-cost tier), except where a row says otherwise.
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p output |
-| Draft (`draft`) | Toggle | off | Render a 480p **draft** of the edit; finalize the take you like at 1080p with Video Upscale → **Seedance 2.5 HD (from draft)**. Locks Resolution to 480p. See [Draft mode](generate-video.md#seedance-25-draft-mode). |
+| Resolution (`v2vResolution`) | Select | 480p | 480p / 720p / 1080p output (Flash: 480p / 720p) |
+| Draft (`draft`) | Toggle | off | Seedance 2.5 only (Flash has no draft). Render a 480p **draft** of the edit; finalize the take you like at 1080p with Video Upscale → **Seedance 2.5 HD (from draft)**. Locks Resolution to 480p. See [Draft mode](generate-video.md#seedance-25-draft-mode). |
 | Generate Audio (`generateAudio`) | Checkbox | on | Native audio on the generated clip |
 
 Seedance 2.5 deliberately exposes **no** Duration, Aspect Ratio, Audio Setting,
@@ -46,8 +48,8 @@ node is cleared once the node is set to Seedance 2.5 in the editor.
 - Cinematography (optional) — parameter pickers whose hints join the prompt
 - Text Prompt (optional) — from upstream node
 - Negative (optional) — text-only; ignored on the Seedance 2.5 Edit lane
-- Image Refs (optional) — **Seedance 2.5 Edit only**; up to 30 reference images
-- Audio Refs (optional) — **Seedance 2.5 Edit only**; up to 10 reference audio clips
+- Image Refs (optional) — **Seedance 2.5 Edit / Flash Edit only**; up to 30 reference images (Flash: 10)
+- Audio Refs (optional) — **Seedance 2.5 Edit / Flash Edit only**; up to 10 reference audio clips (Flash: 5, WAV or MP3)
 
 The two reference handles are always visible but dimmed on every other model —
 those endpoints take at most one reference image and no reference audio, so the
@@ -133,6 +135,7 @@ avoided into the instruction itself.
 | Provider | Credits | Notes |
 |----------|---------|-------|
 | **Seedance 2.5 Edit** (`seedance-2-5`) | dynamic — see below | Whole-clip prompt-driven edit; keeps source length + ratio; 30 image / 10 audio references; native audio |
+| **Seedance 2.5 Flash Edit** (`seedance-2-5-flash`) | dynamic — see below | The same edit, faster and lower-cost: 480p / 720p, 10 image / 5 audio references (WAV or MP3), no draft; native audio |
 | **Wan 2.6** (`wan`) | 193 cr<!-- credits: wan --> | General-purpose V2V, reliable results |
 | **Wan 2.6 Flash** (`wan-flash`) | 110 cr<!-- credits: wan-flash --> | Fast V2V with optional audio & multi-shot |
 | **Wan 2.7 VideoEdit** (`wan-videoedit`) | 352 cr<!-- credits: wan-videoedit --> | Guided editing with reference image, audio control, prompt extend |
@@ -140,7 +143,13 @@ avoided into the instruction itself.
 | **Runway Aleph** (`runway-aleph`) | 385 cr<!-- credits: runway-aleph --> | High-quality transformations, flexible aspect ratio |
 | **HappyHorse Edit** (`happyhorse-edit`) | 385 cr<!-- credits: happyhorse-edit --> | Up to 60s input, 720p (default) or 1080p output |
 
+On Seedance 2.5 Flash the clip you edit, and every reference video, is fitted to what the model takes before it is sent: its size is scaled, shape kept, to a 480p- or 720p-class picture (a picture at exactly 2.5:1 or 1:2.5 may lose up to 2 pixels of its long side to stay inside them) (a 1080p or 4K clip down, a small one up), and its frame rate is set to stay between 24 and 60 frames a second — a constant rate outside that range moved to 24 or 60, and a clip with a variable rate (as phones record) made constant at its nominal rate, held in that range — over the same seconds, so its length and price do not change. A clip wider than 2.5:1 or taller than 1:2.5 is refused before any credits are held (`video_aspect_unsupported`): crop it to a less extreme shape.
+
 ### Seedance 2.5 Edit — credits
+
+Seedance 2.5 Flash Edit is billed the same way on its own `-ref` ladder (480p and
+720p). For example, a 5 s clip edited at 480p into a 5 s clip is billed 10 s at
+Flash's 480p `-ref` rate: **317**<!-- credits: seedance-2-5-flash:8s:480p-ref@1.25 --> credits.
 
 Because the lane *is* a Seedance reference-video run, it is billed exactly like
 one on Generate Video: the price of `clip_seconds + delivered_seconds` seconds

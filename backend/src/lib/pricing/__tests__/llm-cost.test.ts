@@ -114,6 +114,8 @@ describe("calculateLlmCost", () => {
     ["kimi-k3.1-pro", 0.80, 4.00],
     ["gpt-6.1-terra", 0.30, 1.50],
     ["gemini-4-carbon", 0.80, 4.00],
+    // 2026-11-16 addition — KIE list credits/M × $0.005, read that day.
+    ["gemini-4-hydrogen", 0.60, 3.00],
   ])("prices %s at KIE list rates ($%s / $%s per M)", (id, inUsd, outUsd) => {
     expect(calculateLlmCost(id, { inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(inUsd, 10)
     expect(calculateLlmCost(id, { inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(outUsd, 10)

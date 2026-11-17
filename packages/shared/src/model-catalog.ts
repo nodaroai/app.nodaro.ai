@@ -3040,6 +3040,42 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5:30s:1080p", credits: 11850, note: "30s 1080p (max)" },
     ],
   },
+  // Seedance 2.5 Flash — the fast tier of Seedance 2.5, listed beside it (no
+  // default, preset or role moves to it). Its own facts, never the sibling's:
+  // 480p/720p only (no 1080p), 10 images / 5 videos / 5 audio references
+  // (SEEDANCE_2_5_FLASH_REF_LIMITS), WAV/MP3 reference audio only, a prompt plus
+  // reference audio alone is a valid request, and no draft mode or HD finalize.
+  "seedance-2-5-flash": {
+    id: "seedance-2-5-flash",
+    kind: "video",
+    // `v2v`: it edits a clip by instruction through the same Seedance reference
+    // lane as Seedance 2.5 (SEEDANCE_VIDEO_EDIT_PROVIDERS).
+    modes: ["i2v", "t2v", "v2v"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedance 2.5 Flash",
+    series: "Seedance",
+    description: "Seedance 2.5 Flash — the faster, lower-cost tier of Seedance 2.5: 4–30s with native sound at 480p or 720p, from text, a first frame or first and last frames, up to 10 image / 5 video / 5 audio references (audio alone works too), and video edits by instruction.",
+    useCases: ["fast", "narrative", "long-form"],
+    features: ["end-frame", "audio", "reference-image", "video-reference", "reference-to-video"],
+    aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
+    autoDuration: true,
+    referenceTaskTypes: ["reference", "edit", "extend"],
+    resolutions: ["480p", "720p"],
+    // No seed in KIE's schema for Flash either — the provider config omits it.
+    noSeed: true,
+    pricing: [
+      { identifier: "seedance-2-5-flash", credits: 820, note: "default 8s 720p — see :Ns:res variants for exact" },
+      { identifier: "seedance-2-5-flash:8s:480p", credits: 370, note: "8s 480p" },
+      { identifier: "seedance-2-5-flash:8s:720p", credits: 820, note: "8s 720p" },
+      { identifier: "seedance-2-5-flash:8s:480p-ref", credits: 230, note: "8s 480p with reference video" },
+      { identifier: "seedance-2-5-flash:8s:720p-ref", credits: 510, note: "8s 720p with reference video" },
+      { identifier: "seedance-2-5-flash:30s:480p", credits: 1390, note: "30s 480p (max)" },
+      { identifier: "seedance-2-5-flash:30s:720p", credits: 3080, note: "30s 720p (max)" },
+    ],
+  },
 
   // ── Wan ──
   // Wan 3.0 (standard + Prime) — a NEW generation, not a tier of the 2.x ladder.
@@ -3652,6 +3688,33 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-5-extend:1080p:per-2s:9u", credits: 4275, note: "8s added at 1080p to a source of 10s or more" },
     ],
   },
+  // Seedance 2.5 Flash extends ANY video the way Seedance 2.5 does (the
+  // source's last 10 s declared as an extension, no start image), generated
+  // on Seedance 2.5 Flash: its own entry, so a deployment can withhold or
+  // release it apart from Flash generation, at Flash's own 480p / 720p and
+  // 4–30 s. Charged per second of video sent and added, at its resolution's
+  // row, the price of two seconds (decided 2026-11-16).
+  "seedance-2-5-flash-extend": {
+    id: "seedance-2-5-flash-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Bytedance",
+    maker: "bytedance",
+    label: "Seedance 2.5 Flash Extend",
+    series: "Seedance",
+    description: "Extend ANY video with Seedance 2.5 Flash, the faster and lower-cost tier: a 4–30s continuation (audio included) of the source's last 10 seconds at 480p or 720p, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
+    useCases: ["extend", "fast"],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
+    resolutions: ["480p", "720p"],
+    pricing: [
+      // The default run (8 s added to a source of 10 s or more: 18 s sent and
+      // added, 9 units of the two-second row) at each resolution. A run is
+      // charged its own seconds: `seedance-2-5-flash-extend:<res>:per-2s` × (sent + added) ÷ 2.
+      { identifier: "seedance-2-5-flash-extend:720p:per-2s:9u", credits: 1152, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
+      { identifier: "seedance-2-5-flash-extend:480p:per-2s:9u", credits: 522, note: "8s added at 480p to a source of 10s or more" },
+    ],
+  },
   "seedance-2-0-extend": {
     id: "seedance-2-0-extend",
     kind: "video",
@@ -3692,6 +3755,38 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [
       { identifier: "kling-4-extend:5s:720p", credits: 425, note: "default 5s 720p — see :Ns:res variants for exact" },
       { identifier: "kling-4-extend:5s:1080p", credits: 638, note: "5s 1080p" },
+    ],
+  },
+  // Gemini Omni Flash 1.2 extends ANY 16:9 or 9:16 video from its tail
+  // (decided 2026-11-17): the source's last 10 s go to fal's extend, which
+  // returns them with the new seconds joined on; the run keeps the user's own
+  // source and joins only the new seconds to it. Its own entry, so a
+  // deployment can withhold it apart from Gemini Omni Flash 1.2 generation.
+  // Charged per second sent and added on its own rows; each figure below is
+  // a whole run's quote id (the whole 10 s window sent).
+  "gemini-omni-flash-1-2-extend": {
+    id: "gemini-omni-flash-1-2-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Google",
+    maker: "google",
+    label: "Gemini Omni Flash 1.2 Extend",
+    series: "Gemini",
+    description: "Extend ANY 16:9 or 9:16 video with Gemini Omni Flash 1.2: a 3–10s continuation with sound, from 360p to 4K, of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more.",
+    useCases: ["extend", "fast"],
+    durations: [3, 4, 5, 6, 7, 8, 9, 10],
+    defaultDuration: 8,
+    resolutions: ["360p", "720p", "1080p", "4k"],
+    pricing: [
+      // Whole-run quotes (`geminiOmniExtendQuoteCreditId`) of runs that send
+      // the whole 10 s window. A run is charged its own seconds: its sent row
+      // per second sent plus its resolution's row per second added, the total
+      // rounded up to the next 10.
+      { identifier: "gemini-omni-flash-1-2-extend:720p:sent-10s:added-8s", credits: 390, note: "default run: 8s added at 720p to a source of 10s or more — priced per second sent and added" },
+      { identifier: "gemini-omni-flash-1-2-extend:360p:sent-10s:added-3s", credits: 100, note: "3s added at 360p to a source of 10s or more (min)" },
+      { identifier: "gemini-omni-flash-1-2-extend:1080p:sent-10s:added-8s", credits: 560, note: "8s added at 1080p to a source of 10s or more" },
+      { identifier: "gemini-omni-flash-1-2-extend:4k:sent-10s:added-8s", credits: 1050, note: "8s added at 4K to a source of 10s or more" },
+      { identifier: "gemini-omni-flash-1-2-extend:4k:sent-10s:added-10s", credits: 1300, note: "10s added at 4K to a source of 10s or more (max)" },
     ],
   },
   // PixVerse V6 extends ANY video natively (no tail recipe): the whole source

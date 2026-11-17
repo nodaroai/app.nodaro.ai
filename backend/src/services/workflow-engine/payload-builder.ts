@@ -65,7 +65,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -123,6 +123,9 @@ import {
   buildMotionCreditModelIdentifier,
   motionTransferResolution,
   lipSyncAudioRateOf,
+  isSeedanceLipSyncProvider,
+  referenceAudioLipSyncCreditId,
+  seedanceLipSyncResolution,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
   buildVideoAuditCreditId,
@@ -207,6 +210,7 @@ import {
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   retiredLipSyncProviderMessage,
+  editVideoProProviderRefusal,
 } from "@nodaro/shared/models"
 import {
   isRenderNodeType,
@@ -5734,7 +5738,12 @@ function buildPayloadOf(
       // length rides the payload as before, read for no price: the stamp
       // replaces it with the measured one for a bucketed model.
       const lipSyncResolution = (data.resolution as string | undefined) ?? "720p"
-      const lipSyncIdentifier = provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider
+      // The Seedance 2 family: its plain 8-second row at the resolution the run
+      // sends (decided 2026-11-16; `seedanceLipSyncCreditId`, the route's own).
+      // MiniMax Hailuo 3 holds `minimax-h3:8s`, the route's row (decided 2026-11-16).
+      const seedanceLipSync = isSeedanceLipSyncProvider(provider)
+      const lipSyncIdentifier = referenceAudioLipSyncCreditId(provider, data.resolution)
+        ?? (provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider)
       return {
         jobName: "lip-sync",
         queueName: "video-generation",
@@ -5746,7 +5755,7 @@ function buildPayloadOf(
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
           prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
           provider,
-          resolution: data.resolution,
+          resolution: seedanceLipSync ? seedanceLipSyncResolution(provider, data.resolution) : data.resolution,
           audioDurationSec: typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined,
           guidanceScale: data.guidanceScale,
           inferenceSteps: data.inferenceSteps,
@@ -6148,17 +6157,31 @@ function buildPayloadOf(
       if (isTailExtendProvider(tailProvider)) {
         const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
         const resolution = typeof data.resolution === "string" ? data.resolution : undefined
+        const prompt = buildExtendPrompt()
+        // Gemini Omni Flash 1.2 Extend sends the prompt as written and fal
+        // refuses an empty one: refused here, before the reservation, in the
+        // route's words.
+        if (isGeminiOmniExtendProvider(tailProvider) && !prompt?.trim()) {
+          throw new Error(`prompt (what happens next) is required for ${tailProvider}`)
+        }
         return {
           jobName: "extend-video",
           queueName: "video-generation",
+          // Gemini Omni Flash 1.2 Extend: its resolution's per-second-added
+          // row, at which node-executor marks up the run's base computed on
+          // the source it measured — the route's id
+          // (`resolveExtendVideoIdentifier`), and the id its whole-run quote is
+          // marked up at.
           modelIdentifier: isSeedanceExtendPricedBySecondsSent(tailProvider)
-            ? seedanceExtendRateCreditId(resolution)
-            : tailExtendCreditId(tailProvider, duration, resolution),
+            ? seedanceExtendRateCreditId(resolution, tailProvider)
+            : isGeminiOmniExtendProvider(tailProvider)
+              ? geminiOmniExtendAddedCreditId(resolution)
+              : tailExtendCreditId(tailProvider, duration, resolution),
           payload: {
             jobId,
             provider: tailProvider,
             video: resolvedInputs.videoUrl || data.videoUrl,
-            prompt: buildExtendPrompt(),
+            prompt,
             duration: tailRecipeSeconds(tailProvider, duration),
             resolution: tailExtendResolution(tailProvider, resolution),
             generateAudio: data.generateAudio,
@@ -6847,6 +6870,10 @@ function buildPayloadOf(
       // node-executor's computeEditVideoProCreditOverride probes + clamps +
       // stamps proPricing on this same payload object before reserving.
       // `type: "edit-video-pro"` is the payload marker that override gates on.
+      // A model Edit Video Pro does not offer (Seedance 2.5 Flash) is refused
+      // here, before any job row or hold (a stored or imported node).
+      const evpRefusal = editVideoProProviderRefusal((data.provider as string | undefined) ?? "seedance-2")
+      if (evpRefusal) throw new Error(evpRefusal)
       return simpleResult("edit-video-pro", "edit-video-pro", {
         jobId,
         type: "edit-video-pro",

@@ -28,7 +28,7 @@ describe("Extend Video on Seedance 2.5 — the units the editor quotes", () => {
       const sec = tenths / 10
       for (let duration = 4; duration <= 30; duration++) {
         const x = extend({ duration })
-        const charged = seedanceExtendPrice({ duration, resolution: "720p", sourcePictureSec: sec }).units
+        const charged = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution: "720p", sourcePictureSec: sec }).units
         expect(extendVideoPricingUnits(x, [upload(sec), x], wire)).toBe(charged)
         const unmade = extendVideoPricingUnits(x, [generation({}), x], wire)
         expect(unmade).toBe((10 + duration) / 2)
@@ -59,5 +59,16 @@ describe("Extend Video on Seedance 2.5 — the units the editor quotes", () => {
     expect(extendVideoPricingUnits(x20, [upload(4), x20], wire)).toBe(1)
     const ltx = extend({ provider: "ltx-2.3-pro", duration: 12 })
     expect(extendVideoPricingUnits(ltx, [ltx], [])).toBe(12)
+  })
+})
+
+// Gemini Omni Flash 1.2 Extend (decided 2026-11-17) is quoted under ONE
+// whole-run id that already names the source's seconds (`getModelIdentifier`),
+// so it is one of that id, whatever the source.
+describe("Extend Video on Gemini Omni Flash 1.2 — the units the editor quotes", () => {
+  it("is one of its whole-run quote id, a known source or not", () => {
+    const x = extend({ provider: "gemini-omni-flash-1-2-extend", duration: 5, resolution: "4k" })
+    expect(extendVideoPricingUnits(x, [upload(4), x], wire)).toBe(1)
+    expect(extendVideoPricingUnits(x, [generation({}), x], wire)).toBe(1)
   })
 })

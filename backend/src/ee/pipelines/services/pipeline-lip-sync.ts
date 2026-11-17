@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { buildLipSyncCreditId } from "@nodaro/shared/credits"
-import { SEEDANCE_LIP_SYNC_PROVIDERS, isMinimaxH3Provider } from "@nodaro/shared/models"
+import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, buildLipSyncCreditId, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
+import { isMinimaxH3Provider } from "@nodaro/shared/models"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineLipSyncArgs {
@@ -64,19 +64,7 @@ export async function pipelineLipSync(
     throw new Error("pipelineLipSync requires either videoUrl or imageUrl")
   }
 
-  // Mirror routes/lip-sync.ts credit-identifier construction. (minimax-h3
-  // reserves the 2K-rate 8s composite — the lip-sync surface never sends
-  // H3's own 768P tier, and KIE renders 2K when the param is omitted.)
-  const modelIdentifier =
-    provider === "infinitalk"
-      ? `infinitalk:${resolution ?? "720p"}`
-      : isMinimaxH3Provider(provider)
-        ? "minimax-h3:8s"
-        : SEEDANCE_LIP_SYNC_PROVIDERS.has(provider)
-          ? `${provider}:8s:${resolution ?? "720p"}-ref`
-          : provider === "kling-avatar" || provider === "kling-avatar-pro"
-            ? buildLipSyncCreditId(provider, audioDurationSec)
-            : provider
+  const { modelIdentifier, resolution: sentResolution } = pipelineLipSyncPricing(provider, resolution, audioDurationSec)
 
   return runPipelineWorkerJob({
     supabase,
@@ -88,7 +76,7 @@ export async function pipelineLipSync(
       imageUrl,
       audioUrl,
       provider,
-      resolution,
+      resolution: sentResolution,
       audioDurationSec,
       type: "lip-sync",
     },
@@ -100,7 +88,7 @@ export async function pipelineLipSync(
       videoUrl,
       audioUrl,
       provider,
-      resolution,
+      resolution: sentResolution,
       audioDurationSec,
       usageLogId,
     }),
@@ -110,4 +98,28 @@ export async function pipelineLipSync(
       (output.videoUrl as string | undefined) ?? (output.url as string | undefined),
     missingOutputError: "lip-sync job completed without videoUrl in output_data",
   })
+}
+
+/**
+ * The credit id a pipeline Lip Sync run reserves and the resolution it sends —
+ * the route's own rule (routes/lip-sync.ts). minimax-h3 reserves the 2K-rate
+ * 8s composite (the lip-sync surface never sends H3's own 768P tier, and KIE
+ * renders 2K when the param is omitted). The Seedance family is priced on its
+ * plain 8-second row at the resolution it sends (`seedanceLipSyncCreditId`,
+ * decided 2026-11-16), and sends that resolution.
+ */
+export function pipelineLipSyncPricing(
+  provider: string,
+  resolution: string | undefined,
+  audioDurationSec: number | undefined,
+): { modelIdentifier: string; resolution: string | undefined } {
+  if (provider === "infinitalk") return { modelIdentifier: `infinitalk:${resolution ?? "720p"}`, resolution }
+  if (isMinimaxH3Provider(provider)) return { modelIdentifier: MINIMAX_H3_LIP_SYNC_CREDIT_ID, resolution }
+  if (isSeedanceLipSyncProvider(provider)) {
+    return { modelIdentifier: seedanceLipSyncCreditId(provider, resolution), resolution: seedanceLipSyncResolution(provider, resolution) }
+  }
+  if (provider === "kling-avatar" || provider === "kling-avatar-pro") {
+    return { modelIdentifier: buildLipSyncCreditId(provider, audioDurationSec), resolution }
+  }
+  return { modelIdentifier: provider, resolution }
 }

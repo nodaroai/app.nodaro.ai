@@ -1,8 +1,8 @@
 import { supabase } from "../../lib/supabase.js"
-import { isMissingColumnError, isMissingTableError } from "../../lib/postgrest-errors.js"
+import { isMissingColumnError, isMissingFunctionError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
-import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups } from "./downgrade-floor.js"
+import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups, LIVE_SUBSCRIPTION_STATUSES } from "./downgrade-floor.js"
 import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared/credits"
 /**
  * R2 prefix under which the video-analysis worker writes its transient
@@ -717,7 +717,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     .from("subscriptions")
     .select("user_id")
     .in("user_id", candidateIds)
-    .in("status", ["active", "trialing", "past_due"])
+    .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
   // A failed read cannot tell a paying customer from a former one: skip the
   // whole batch (it would demote accounts and delete their media) and let the
   // next run retry.
@@ -1031,7 +1031,7 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
       .from("subscriptions")
       .select("user_id")
       .in("user_id", userIds)
-      .in("status", ["active", "trialing", "past_due"])
+      .in("status", [...LIVE_SUBSCRIPTION_STATUSES])
     if (activeSubsError) {
       console.error("[cleanup] Expiry net: reading the live subscriptions failed, retrying next run:", activeSubsError.message)
       return { usersDowngraded: 0, errors: 1 }
@@ -1156,6 +1156,10 @@ export async function renewSubscriptionCredits(): Promise<RenewalResult> {
 
   const profilesById = new Map((profiles ?? []).map(p => [p.id, p]))
 
+  // Until migration 656 reaches the database (staging runs ahead of main),
+  // the grant falls back to the conditional update below; said once a run.
+  let grantFunctionMissing = false
+
   for (const sub of subs) {
     try {
       // Skip if credits were already reset after the period end
@@ -1167,28 +1171,56 @@ export async function renewSubscriptionCredits(): Promise<RenewalResult> {
 
       const newCredits = TIER_CREDITS[sub.tier] ?? TIER_CREDITS.free
 
-      // The "not reset since the period ended" check is repeated in the write
-      // itself: a paid renewal invoice (its catch-up) or the webhook can reset
-      // the pool between the read above and this write, and a second SET would
-      // refill what was spent since.
       const periodEnd = new Date(sub.current_period_end)
       if (Number.isNaN(periodEnd.getTime())) continue
-      const { data: resetRows, error: resetError } = await supabase
-        .from("profiles")
-        .update({
-          subscription_credits: newCredits,
-          credits_reset_at: now,
-        })
-        .eq("id", sub.user_id)
-        .or(`credits_reset_at.is.null,credits_reset_at.lt.${periodEnd.toISOString()}`)
-        .select("id")
 
-      if (resetError) {
-        console.error(`[cleanup] Failed to renew credits for user ${sub.user_id}:`, resetError.message)
-        errors++
-        continue
+      // Everything read above is checked again where the grant is written, under
+      // the profile's row lock: a paid renewal invoice (its catch-up) or the
+      // webhook can reset the pool between that read and this write, and a
+      // failed renewal charge can put the period's credits on hold — a second
+      // SET would refill what was spent, or what is held.
+      let renewed: boolean | null = null
+      if (!grantFunctionMissing) {
+        const { data: didGrant, error: rpcError } = await supabase.rpc("renew_subscription_credits_safety_net", {
+          p_user_id: sub.user_id,
+          p_subscription_id: sub.id,
+          // As stored: the function compares it with the row's period end exactly.
+          p_period_end: sub.current_period_end,
+          p_credits: newCredits,
+        })
+        if (rpcError && isMissingFunctionError(rpcError)) {
+          grantFunctionMissing = true
+          console.warn("[cleanup] Renewal safety net: migration 656 (renew_subscription_credits_safety_net) is not on this database yet, granting with the conditional update")
+        } else if (rpcError) {
+          console.error(`[cleanup] Failed to renew credits for user ${sub.user_id}:`, rpcError.message)
+          errors++
+          continue
+        } else {
+          renewed = didGrant === true
+        }
       }
-      if (Array.isArray(resetRows) && resetRows.length === 0) continue // reset by someone else meanwhile
+
+      if (renewed === null) {
+        // The fallback: the "not reset since the period ended" check repeated in
+        // the write itself (a hold landing in between is not seen here).
+        const { data: resetRows, error: resetError } = await supabase
+          .from("profiles")
+          .update({
+            subscription_credits: newCredits,
+            credits_reset_at: now,
+          })
+          .eq("id", sub.user_id)
+          .or(`credits_reset_at.is.null,credits_reset_at.lt.${periodEnd.toISOString()}`)
+          .select("id")
+
+        if (resetError) {
+          console.error(`[cleanup] Failed to renew credits for user ${sub.user_id}:`, resetError.message)
+          errors++
+          continue
+        }
+        renewed = !(Array.isArray(resetRows) && resetRows.length === 0)
+      }
+      if (!renewed) continue // reset, held, moved or ended meanwhile
 
       invalidateBalanceCache(sub.user_id)
 

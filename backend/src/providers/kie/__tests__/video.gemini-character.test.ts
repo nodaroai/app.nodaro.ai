@@ -35,6 +35,11 @@ vi.mock("../../../lib/safe-fetch.js", () => ({
   safeFetch: vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(16) })),
 }))
 vi.mock("../../../lib/image-metadata.js", () => ({ imageHasMetadata: () => false }))
+// Omni Flash 1.2 edits probe the source clip: a 5 s clip fits, so it is sent as it is.
+vi.mock("../../video/ffmpeg-utils.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../video/ffmpeg-utils.js")>()),
+  probeMediaDuration: vi.fn(async () => 5),
+}))
 vi.mock("sharp", () => {
   const mockSharp = () => ({ metadata: async () => ({ format: "png", width: 64, height: 64 }) })
   mockSharp.default = mockSharp
@@ -318,6 +323,94 @@ describe("gemini-omni — voice personas → audio_ids", () => {
     await expect(
       provider.textToVideo("a prompt", "gemini-omni-video", 8, "16:9", { characterReferences: [V] }),
     ).rejects.toThrow(/Voice creation/)
+    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+  })
+})
+
+describe("gemini-omni-flash-1-2 — characterReferences → character_ids (decided 2026-11-17)", () => {
+  const M = "gemini-omni-flash-1-2"
+
+  it.each([[[A]], [[A, B]]])("text mode: mints the characters and sends character_ids (%#)", async (refs) => {
+    await provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: refs })
+    expect(mocks.mockResolve).toHaveBeenCalledOnce()
+    expect(mocks.mockResolve.mock.calls[0]![1]).toEqual({ modelKey: M })
+    const input = sentInput()
+    expect(input.character_ids).toEqual(refs.map((_, i) => `char-${i + 1}`))
+    expect(input.duration).toBe(8)
+    expect(input).not.toHaveProperty("audio_ids")
+    expect(input).not.toHaveProperty("first_frame_url")
+    const reconcile = mocks.mockRunKieTask.mock.calls[0]![4] as { dimensions?: Record<string, unknown> }
+    expect(reconcile.dimensions?.characterRefs).toBe(refs.length)
+  })
+
+  it("characters ride beside 6 reference images (they take no image slot)", async () => {
+    const urls = Array.from({ length: 6 }, (_, i) => `https://x/r${i}.png`)
+    await provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: [A, B], referenceImageUrls: urls })
+    expect(sentInput().image_urls).toEqual(urls)
+    expect(sentInput().character_ids).toEqual(["char-1", "char-2"])
+  })
+
+  it.each([[[A]], [[A, B]]])("video edit: character_ids beside video_list, no duration (%#)", async (refs) => {
+    await provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: refs, referenceVideoUrls: ["https://x/v.mp4"] })
+    const input = sentInput()
+    expect(input.video_list).toEqual(["https://x/v.mp4"])
+    expect(input).not.toHaveProperty("duration")
+    expect(input.character_ids).toEqual(refs.map((_, i) => `char-${i + 1}`))
+  })
+
+  it("without characters: no create call and no character_ids key", async () => {
+    await provider.textToVideo("a prompt", M, 8, "16:9", {})
+    expect(mocks.mockResolve).not.toHaveBeenCalled()
+    expect(sentInput()).not.toHaveProperty("character_ids")
+  })
+
+  it.each([
+    ["a start frame", "https://x/start.png", undefined],
+    ["an end frame", undefined, "https://x/end.png"],
+    ["both frames", "https://x/start.png", "https://x/end.png"],
+  ])("refuses characters beside %s, before any create or task", async (_label, start, end) => {
+    await expect(
+      provider.imageToVideo(start as unknown as string, "a prompt", M, 8, end, { characterReferences: [A] }),
+    ).rejects.toThrow()
+    expect(mocks.mockResolve).not.toHaveBeenCalled()
+    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+  })
+
+  it("refuses a third character, before any create or task", async () => {
+    await expect(provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: [A, B, { ...A, name: "C" }] })).rejects.toThrow(/at most 2/)
+    expect(mocks.mockResolve).not.toHaveBeenCalled()
+    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+  })
+
+  it("refuses a pinned voice (no audio_ids on this model), before any create", async () => {
+    await expect(
+      provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: [{ ...A, voice: { preset: "kore" as const } }] }),
+    ).rejects.toThrow()
+    expect(mocks.mockResolve).not.toHaveBeenCalled()
+  })
+
+  it("a CACHED id KIE rejects is recreated once and the task resubmitted, as on 1.1", async () => {
+    mocks.mockResolve
+      .mockResolvedValueOnce({ ids: ["stale"], fromCache: [true], audioIds: [] })
+      .mockResolvedValueOnce({ ids: ["fresh"], fromCache: [false], audioIds: [] })
+    mocks.mockRunKieTask.mockRejectedValueOnce(staleErr()).mockResolvedValueOnce(okRun)
+    const res = await provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: [A] })
+    expect(res.url).toBe("https://x/out.mp4")
+    expect(sentInput(0).character_ids).toEqual(["stale"])
+    expect(sentInput(1).character_ids).toEqual(["fresh"])
+    // Forgotten in 1.2's own cache scope, never 1.1's.
+    expect(mocks.mockForget).toHaveBeenCalledWith([A], M)
+  })
+
+  it("a FRESH id KIE rejects is not retried", async () => {
+    mocks.mockRunKieTask.mockRejectedValue(staleErr())
+    await expect(provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: [A] })).rejects.toBeDefined()
+    expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(1)
+  })
+
+  it("a create failure fails the job: no task, no fallback to image_urls", async () => {
+    mocks.mockResolve.mockRejectedValueOnce(new Error("[Character creation] failed"))
+    await expect(provider.textToVideo("a prompt", M, 8, "16:9", { characterReferences: [A] })).rejects.toThrow(/Character creation/)
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
 })

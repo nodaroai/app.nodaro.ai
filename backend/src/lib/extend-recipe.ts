@@ -11,12 +11,22 @@
  *   the stitch is a hard cut at the source's end with a sound crossfade.
  *   Charged per second sent and added (@nodaro/render-rules
  *   `seedance-extend-pricing.ts`).
+ * - Seedance 2.5 Flash (decided 2026-11-16): Seedance 2.5's recipe on the
+ *   Flash model, MP4 only, from a source of at least 2 s. Charged per second
+ *   sent and added on its own rows.
  * - Seedance 2.0 (unchanged since the 2026-07-12 spike): the last 2 seconds
  *   and the source's last frame as the opening image, undeclared; the stitch
  *   finds and drops the duplicated boundary frame. Priced on its per-length rows.
  * - Kling 4: the last 3 seconds and the source's last frame as the opening
  *   image, with its own prompt, and the same stitch as Seedance 2.0. Priced on
  *   its per-length rows.
+ * - Gemini Omni Flash 1.2 (decided 2026-11-17, on fal): the last 10 seconds
+ *   (all of a shorter source) as the clip to continue, the user's prompt as
+ *   written. The model returns the clip it was sent, its last frames
+ *   re-rendered for the join, with the new seconds after it: only the new
+ *   seconds are kept (cut at the sent clip's length) and joined onto the
+ *   original source by PixVerse V6's native-extend stitch. Charged per second
+ *   sent and added on its own rows (`gemini-omni-extend-rate.ts`).
  *
  * The tail length lives here and nowhere else (2.5's is the window its price
  * counts, `SEEDANCE_EXTEND_CONTEXT_MAX_SEC`): the run cuts it, and the
@@ -37,8 +47,8 @@ import {
   type SeedanceExtendProvider,
   type TailExtendProvider,
 } from "@nodaro/shared/models"
-import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC } from "@nodaro/shared/credits"
-import { TAIL_RECIPE_WINDOWS } from "@nodaro/render-rules"
+import { SEEDANCE_EXTEND_CONTEXT_MAX_SEC, SEEDANCE_EXTEND_MIN_SOURCE_SEC } from "@nodaro/shared/credits"
+import { GEMINI_OMNI_EXTEND_MIN_SOURCE_SEC, TAIL_RECIPE_WINDOWS } from "@nodaro/render-rules"
 
 export { isTailRecipeProvider, tailRecipeSeconds } from "@nodaro/render-rules"
 
@@ -50,11 +60,32 @@ export interface TailRecipeStitch {
   fallbackTrims: { trimEndFrames: number; trimStartFrames: number }
   /** The sound's crossfade at the join, in seconds. */
   audioFadeSec: number
+  /** Drop the new part's leading repeated frames after the cut (a brief hold it can open on). */
+  dropLeadingRepeats?: boolean
 }
 
 export interface TailRecipe {
   /** The video model that generates the continuation. */
-  genModel: "seedance-2-5" | "seedance-2" | "kling-4"
+  genModel: "seedance-2-5" | "seedance-2-5-flash" | "seedance-2" | "kling-4" | "gemini-omni-flash-1-2"
+  /**
+   * Where the continuation is generated: KIE through the capability router
+   * (absent, every Seedance and Kling recipe), or fal's extend endpoint called
+   * directly (`providers/fal/gemini-omni-extend.ts`).
+   */
+  transport?: "fal"
+  /**
+   * Whether the model returns the clip it was sent with the new seconds after
+   * it (true), rather than the new seconds alone: the run then keeps only what
+   * follows the sent clip's picture (`cutNativeExtension`) before the stitch.
+   */
+  returnsSentClip?: boolean
+  /**
+   * Whether the run asks the model for a MOV extension (`seedance25OutputFormat`)
+   * and, when the source is an earlier MOV extension of ours, sends that MOV's
+   * last seconds instead of the cut tail (`findChainedMovReference`). Seedance
+   * 2.5 only: Seedance 2.5 Flash renders MP4 only.
+   */
+  movChain?: boolean
   /**
    * Seconds of the source's end sent as the `@video_1` reference — at most:
    * a source with less picture sends all of it (`tailCutSec`).
@@ -97,6 +128,9 @@ const seedance25Prompt = (userPrompt: string | null | undefined, addedSec: numbe
 const klingPrompt = (userPrompt: string | null | undefined): string =>
   "Continue @video_1 as one continuous shot, starting exactly where it ends: " + userText(userPrompt)
 
+/** Gemini Omni Flash 1.2's prompt: the user's, as written (fal's extend has no reference syntax). */
+const geminiOmniPrompt = (userPrompt: string | null | undefined): string => userText(userPrompt)
+
 /** The stitch of a recipe whose extension opens on the source's last frame: find and drop the duplicate. */
 const ANCHORED_STITCH: TailRecipeStitch = {
   smartCut: { framesFromPrev: 8, framesFromNext: 8 },
@@ -110,6 +144,7 @@ const ANCHORED_STITCH: TailRecipeStitch = {
 export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
   "seedance-2-5-extend": {
     genModel: "seedance-2-5",
+    movChain: true,
     tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
     minSourceSec: SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC,
     window: TAIL_RECIPE_WINDOWS["seedance-2-5-extend"],
@@ -121,6 +156,25 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     // is searched for or trimmed (a smart cut would "match" two neighbouring
     // frames and cut real footage): a hard cut at the source's end, the sound
     // crossfaded across it.
+    stitch: {
+      fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+      audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+    },
+  },
+  // Seedance 2.5's recipe on Seedance 2.5 Flash (decided 2026-11-16): the
+  // same 10 s window declared as an extension, no start image, the same hard
+  // cut. MP4 only (no `movChain`). Its shortest source is Flash's documented
+  // 2 s reference video, not the 2.0 family's measured 1.8 s. The tail is
+  // fitted to the size and frame rate Flash takes for a reference video by the
+  // provider's reference-video re-encode, as every Flash reference video is.
+  "seedance-2-5-flash-extend": {
+    genModel: "seedance-2-5-flash",
+    tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+    minSourceSec: SEEDANCE_EXTEND_MIN_SOURCE_SEC["seedance-2-5-flash-extend"],
+    window: TAIL_RECIPE_WINDOWS["seedance-2-5-flash-extend"],
+    startImage: false,
+    referenceTaskType: "extend",
+    prompt: seedance25Prompt,
     stitch: {
       fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
       audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
@@ -148,6 +202,31 @@ export const TAIL_RECIPES: Record<TailExtendProvider, TailRecipe> = {
     startImage: true,
     prompt: klingPrompt,
     stitch: ANCHORED_STITCH,
+  },
+  // Gemini Omni Flash 1.2 on fal (decided 2026-11-17): the source's last 10 s
+  // (the context the model reads), no start image, no declared task type. It
+  // returns the clip it was sent with the new seconds joined on, the sent
+  // clip's last frames re-rendered for the join, so only what follows the sent
+  // clip's picture is kept. That new part is joined onto the source the way
+  // PixVerse V6's native extend joins its new seconds: the 8 × 8 smart cut
+  // (the re-rendered join can repeat or nearly repeat the source's last
+  // frames), no trims when it finds no match, then the new part's leading
+  // repeats dropped, with the extends' sound crossfade.
+  "gemini-omni-flash-1-2-extend": {
+    genModel: "gemini-omni-flash-1-2",
+    transport: "fal",
+    returnsSentClip: true,
+    tailSec: SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
+    minSourceSec: GEMINI_OMNI_EXTEND_MIN_SOURCE_SEC,
+    window: TAIL_RECIPE_WINDOWS["gemini-omni-flash-1-2-extend"],
+    startImage: false,
+    prompt: geminiOmniPrompt,
+    stitch: {
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+      fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+      audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+      dropLeadingRepeats: true,
+    },
   },
 }
 
@@ -202,3 +281,4 @@ export function extensionTooShortMessage(pictureSec: number | undefined, billedS
 export function tailCutSec(provider: keyof typeof TAIL_RECIPES, pictureSec: number): number {
   return Math.min(TAIL_RECIPES[provider].tailSec, pictureSec)
 }
+

@@ -169,6 +169,43 @@ describe("ExtendVideoConfig — Seedance 2.5 and Seedance 2.0", () => {
   })
 })
 
+// Decided 2026-11-16: Seedance 2.5 Flash Extend, on its own rows, 480p / 720p only.
+describe("ExtendVideoConfig — Seedance 2.5 Flash", () => {
+  const flash = (overrides: Partial<ExtendVideoData> = {}) => data({ provider: "seedance-2-5-flash-extend", ...overrides })
+
+  it("offers 4–30 s and 480p/720p, its 8 s default shown", () => {
+    const { container } = render(<ExtendVideoConfig data={flash()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(menuValues(container, "Seconds to add")).toEqual(seconds(4, 30))
+    expect(menuValues(container, "Resolution")).toEqual(["480p", "720p"])
+    expect(container.querySelector('output[aria-label="Seconds to add"]')!.textContent).toBe("8")
+  })
+
+  it("labels each resolution with its own rows, never Seedance 2.5's", () => {
+    const prefetched = () => credits.prefetchModelCredits.mock.calls.flatMap(([ids]) => ids as string[])
+    render(<ExtendVideoConfig data={flash()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(prefetched()).toEqual([
+      "seedance-2-5-flash-extend:480p:per-2s", "seedance-2-5-flash-extend:480p:per-2s:9u",
+      "seedance-2-5-flash-extend:720p:per-2s", "seedance-2-5-flash-extend:720p:per-2s:9u",
+    ])
+  })
+
+  it("switching from Seedance 2.5 at 1080p clears the resolution Flash does not render, and keeps the length and sound", () => {
+    const onUpdate = vi.fn()
+    const { rerender } = render(<ExtendVideoConfig data={data({ duration: 25, resolution: "1080p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).not.toHaveBeenCalled()
+    rerender(<ExtendVideoConfig data={flash({ duration: 25, resolution: "1080p", generateAudio: false })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+    expect(onUpdate.mock.calls[0]![0]).toMatchObject({ resolution: undefined })
+    expect(onUpdate.mock.calls[0]![0]).not.toHaveProperty("duration")
+    expect(onUpdate.mock.calls[0]![0]).not.toHaveProperty("generateAudio")
+  })
+
+  it("has the sound switch, as every Seedance extend", () => {
+    const { container } = render(<ExtendVideoConfig data={flash()} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(container.querySelector("#extendGenerateAudio")).not.toBeNull()
+  })
+})
+
 describe("ExtendVideoConfig — Kling 4", () => {
   const kling = (overrides: Partial<ExtendVideoData> = {}) => data({ provider: "kling-4-extend", ...overrides })
 

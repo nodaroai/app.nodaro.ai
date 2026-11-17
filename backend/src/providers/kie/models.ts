@@ -1365,6 +1365,38 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     endFrameParam: "last_frame_url",
   },
 
+  // Seedance 2.5 Flash — docs.kie.ai/market/bytedance/seedance-2-5-flash.
+  // The fast tier of Seedance 2.5 on the same request shape, with its own
+  // limits: resolution 480p/720p (default 720p, no 1080p), duration 4-30s
+  // (the schema has NO default — an omitted duration lets the model pick and
+  // bill the real length, so `duration: 8` is always sent and every run names
+  // its length), 10 images / 5 videos / 5 audio references, reference audio
+  // WAV/MP3 only, and no `draft` field (never sent: the draft path is keyed
+  // to SEEDANCE_DRAFT_MODELS, which Flash is not in). First-frame and
+  // first+last-frame requests take `adaptive` only (documented; see
+  // FRAME_MODE_ADAPTIVE_ONLY_ASPECT). KIE rates, KIE cr/s: 480p 18.5 no-ref /
+  // 11.5 with a reference video; 720p 41 / 25.5. Per-second composites in
+  // credits.ts are authoritative.
+  "seedance-2-5-flash": {
+    model: "bytedance/seedance-2-5-flash",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
+    credits: 82,
+    cost: 0.41,  // nominal 8s/720p/no-ref fallback, on the same scale as seedance-2-5's entry; composites override
+    imageParam: "first_frame_url",
+    omitSeed: true,
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "adaptive",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+  },
+
   // MiniMax Hailuo 3 — docs.kie.ai/market/minimax-h3/image-to-video (+
   // reference-to-video / text-to-video siblings; video.ts swaps the task model
   // per input mode via minimaxH3TaskModel). Resolution enum 768P | 2K
@@ -1879,6 +1911,26 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 126,
     cost: 0.63,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
+    omitSeed: true,
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "adaptive",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  },
+
+  // Seedance 2.5 Flash T2V — docs.kie.ai/market/bytedance/seedance-2-5-flash;
+  // see the i2v entry above. One KIE model for every mode; t2v keeps the full
+  // ratio enum. `duration: 8` is always sent (the schema has no default).
+  "seedance-2-5-flash": {
+    model: "bytedance/seedance-2-5-flash",
+    safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
+    credits: 82,
+    cost: 0.41,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
     omitSeed: true,
     extraParams: {
       resolution: "720p",

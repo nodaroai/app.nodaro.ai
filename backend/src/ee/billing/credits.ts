@@ -2,6 +2,7 @@ import {
   usdToCredits,
   buildLipSyncCreditId,
   isPerSecondLipSyncProvider,
+  referenceAudioLipSyncCreditId,
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
@@ -59,6 +60,7 @@ import {
   parseUnitQuoteCreditId,
   VIDEO_OVERLAY_PRICING,
   videoOverlayVideoUnits,
+  geminiOmniExtendQuoteCreditId,
 } from "@nodaro/shared/credits"
 import {
   videoMaskCreditId,
@@ -118,7 +120,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
-import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
+import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -726,6 +728,21 @@ const SEEDANCE_25_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
 }
 
 /**
+ * Seedance 2.5 Flash Extend's rate rows (decided 2026-11-16): priced by the
+ * same rule as Seedance 2.5 Extend's (the run's seconds sent and added, each
+ * row the price of two seconds), at Seedance 2.5 Flash's own reference-video
+ * rate — two seconds of its `seedance-2-5-flash:<N>s:<res>-ref` rate, rounded
+ * up to a whole credit (57.5 → 58, 127.5 → 128). 480p and 720p only: Flash
+ * renders no 1080p. extend-price-rows.test.ts holds them to the Flash -ref
+ * rows, so a reprice of those fails it until these follow (with a migration).
+ * No earlier per-length rows: no client was ever built naming one.
+ */
+const SEEDANCE_25_FLASH_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
+  "seedance-2-5-flash-extend:480p:per-2s": 58,
+  "seedance-2-5-flash-extend:720p:per-2s": 128,
+}
+
+/**
  * Seedance 2.5 Extend's earlier per-length rows, `seedance-2-5-extend:<N>s:<res>`
  * (N = each length the catalog offers, 4–30 s, at 480p / 720p / 1080p). No run
  * of ours is priced on them, but a client built on an earlier `@nodaro/shared`
@@ -740,13 +757,33 @@ const SEEDANCE_25_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
 const SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS: Readonly<Record<string, number>> = Object.fromEntries(
   (MODEL_CATALOG[SEEDANCE_EXTEND_SENT_PRICED_PROVIDER]?.durations ?? []).flatMap((seconds) =>
     (MODEL_CATALOG[SEEDANCE_EXTEND_SENT_PRICED_PROVIDER]?.resolutions ?? []).map((resolution) => {
-      const price = seedanceExtendPrice({ duration: seconds, resolution, sourcePictureSec: undefined })
+      const price = seedanceExtendPrice({ provider: SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, duration: seconds, resolution, sourcePictureSec: undefined })
       const rate = SEEDANCE_25_EXTEND_RATE_ROWS[price.rateId]
       if (rate === undefined) throw new Error(`Seedance 2.5 Extend: no rate row ${price.rateId}`)
       return [`${SEEDANCE_EXTEND_SENT_PRICED_PROVIDER}:${seconds}s:${resolution}`, quoteBaseCredits(rate, price.units)] as const
     }),
   ),
 )
+
+/**
+ * Gemini Omni Flash 1.2 Extend's rows (decided 2026-11-17, @nodaro/render-rules
+ * `gemini-omni-extend-pricing.ts`): 5 credits per second of the source sent
+ * (at every resolution), and per second added 15 / 42 / 63 / 125 at 360p /
+ * 720p / 1080p / 4K (decided 2026-11-17). A run is (sent × the first) + (added × its resolution's),
+ * rounded up to the next 10 once, then marked up once; its whole-run quote id
+ * (`geminiOmniExtendQuoteCreditId`) is priced from these same two rows
+ * (whole-request-quotes.ts), so it has no rows of its own.
+ * `extend-price-rows.test.ts` holds the rows to these figures and compares
+ * every run they price with the provider figure recorded for it
+ * (`falGeminiOmniExtendCostUsd`).
+ */
+const GEMINI_OMNI_EXTEND_RATE_ROWS: Readonly<Record<string, number>> = {
+  "gemini-omni-flash-1-2-extend:source:per-second": 5,
+  "gemini-omni-flash-1-2-extend:360p:per-second": 15,
+  "gemini-omni-flash-1-2-extend:720p:per-second": 42,
+  "gemini-omni-flash-1-2-extend:1080p:per-second": 63,
+  "gemini-omni-flash-1-2-extend:4k:per-second": 125,
+}
 
 export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC_CREDIT_COSTS", {
   // Credits = ceil(kieCredits / 4) at 0% markup.
@@ -1298,6 +1335,130 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "seedance-2-5:28s:1080p-ref":  6650,
   "seedance-2-5:29s:1080p-ref":  6890,
   "seedance-2-5:30s:1080p-ref":  7130,
+  // ── Seedance 2.5 Flash — per-second billing, resolution × video-ref, 4-30s ──
+  // KIE rates (kie.ai/model/bytedance/seedance-2-5-flash), KIE cr/s:
+  //   480p 18.5 no-video-ref / 11.5 with-video-ref; 720p 41 / 25.5 (no 1080p).
+  // Nodaro = ceil(rate x duration / 4) x 10 — the Seedance 2.5 conversion, at
+  // Flash's OWN rates (every row derived from them, never scaled from 2.5's).
+  // One tier per second for the same reason as 2.5. "with video ref" rows carry
+  // the per-second rate seedance2RefVideoBaseCredits reads from the 8s `-ref`
+  // row; the billed span is input + output seconds.
+  //
+  // Base fallback = 8s/720p/no-ref, KIE's default resolution with the 8s the
+  // provider config always sends (PRICING_DEFAULT_RESOLUTION).
+  "seedance-2-5-flash": 820,
+  // 480p no video ref (/s)
+  "seedance-2-5-flash:4s:480p": 190,
+  "seedance-2-5-flash:5s:480p": 240,
+  "seedance-2-5-flash:6s:480p": 280,
+  "seedance-2-5-flash:7s:480p": 330,
+  "seedance-2-5-flash:8s:480p": 370,
+  "seedance-2-5-flash:9s:480p": 420,
+  "seedance-2-5-flash:10s:480p": 470,
+  "seedance-2-5-flash:11s:480p": 510,
+  "seedance-2-5-flash:12s:480p": 560,
+  "seedance-2-5-flash:13s:480p": 610,
+  "seedance-2-5-flash:14s:480p": 650,
+  "seedance-2-5-flash:15s:480p": 700,
+  "seedance-2-5-flash:16s:480p": 740,
+  "seedance-2-5-flash:17s:480p": 790,
+  "seedance-2-5-flash:18s:480p": 840,
+  "seedance-2-5-flash:19s:480p": 880,
+  "seedance-2-5-flash:20s:480p": 930,
+  "seedance-2-5-flash:21s:480p": 980,
+  "seedance-2-5-flash:22s:480p": 1020,
+  "seedance-2-5-flash:23s:480p": 1070,
+  "seedance-2-5-flash:24s:480p": 1110,
+  "seedance-2-5-flash:25s:480p": 1160,
+  "seedance-2-5-flash:26s:480p": 1210,
+  "seedance-2-5-flash:27s:480p": 1250,
+  "seedance-2-5-flash:28s:480p": 1300,
+  "seedance-2-5-flash:29s:480p": 1350,
+  "seedance-2-5-flash:30s:480p": 1390,
+  // 480p with video ref (/s)
+  "seedance-2-5-flash:4s:480p-ref": 120,
+  "seedance-2-5-flash:5s:480p-ref": 150,
+  "seedance-2-5-flash:6s:480p-ref": 180,
+  "seedance-2-5-flash:7s:480p-ref": 210,
+  "seedance-2-5-flash:8s:480p-ref": 230,
+  "seedance-2-5-flash:9s:480p-ref": 260,
+  "seedance-2-5-flash:10s:480p-ref": 290,
+  "seedance-2-5-flash:11s:480p-ref": 320,
+  "seedance-2-5-flash:12s:480p-ref": 350,
+  "seedance-2-5-flash:13s:480p-ref": 380,
+  "seedance-2-5-flash:14s:480p-ref": 410,
+  "seedance-2-5-flash:15s:480p-ref": 440,
+  "seedance-2-5-flash:16s:480p-ref": 460,
+  "seedance-2-5-flash:17s:480p-ref": 490,
+  "seedance-2-5-flash:18s:480p-ref": 520,
+  "seedance-2-5-flash:19s:480p-ref": 550,
+  "seedance-2-5-flash:20s:480p-ref": 580,
+  "seedance-2-5-flash:21s:480p-ref": 610,
+  "seedance-2-5-flash:22s:480p-ref": 640,
+  "seedance-2-5-flash:23s:480p-ref": 670,
+  "seedance-2-5-flash:24s:480p-ref": 690,
+  "seedance-2-5-flash:25s:480p-ref": 720,
+  "seedance-2-5-flash:26s:480p-ref": 750,
+  "seedance-2-5-flash:27s:480p-ref": 780,
+  "seedance-2-5-flash:28s:480p-ref": 810,
+  "seedance-2-5-flash:29s:480p-ref": 840,
+  "seedance-2-5-flash:30s:480p-ref": 870,
+  // 720p no video ref (/s)
+  "seedance-2-5-flash:4s:720p": 410,
+  "seedance-2-5-flash:5s:720p": 520,
+  "seedance-2-5-flash:6s:720p": 620,
+  "seedance-2-5-flash:7s:720p": 720,
+  "seedance-2-5-flash:8s:720p": 820,
+  "seedance-2-5-flash:9s:720p": 930,
+  "seedance-2-5-flash:10s:720p": 1030,
+  "seedance-2-5-flash:11s:720p": 1130,
+  "seedance-2-5-flash:12s:720p": 1230,
+  "seedance-2-5-flash:13s:720p": 1340,
+  "seedance-2-5-flash:14s:720p": 1440,
+  "seedance-2-5-flash:15s:720p": 1540,
+  "seedance-2-5-flash:16s:720p": 1640,
+  "seedance-2-5-flash:17s:720p": 1750,
+  "seedance-2-5-flash:18s:720p": 1850,
+  "seedance-2-5-flash:19s:720p": 1950,
+  "seedance-2-5-flash:20s:720p": 2050,
+  "seedance-2-5-flash:21s:720p": 2160,
+  "seedance-2-5-flash:22s:720p": 2260,
+  "seedance-2-5-flash:23s:720p": 2360,
+  "seedance-2-5-flash:24s:720p": 2460,
+  "seedance-2-5-flash:25s:720p": 2570,
+  "seedance-2-5-flash:26s:720p": 2670,
+  "seedance-2-5-flash:27s:720p": 2770,
+  "seedance-2-5-flash:28s:720p": 2870,
+  "seedance-2-5-flash:29s:720p": 2980,
+  "seedance-2-5-flash:30s:720p": 3080,
+  // 720p with video ref (/s)
+  "seedance-2-5-flash:4s:720p-ref": 260,
+  "seedance-2-5-flash:5s:720p-ref": 320,
+  "seedance-2-5-flash:6s:720p-ref": 390,
+  "seedance-2-5-flash:7s:720p-ref": 450,
+  "seedance-2-5-flash:8s:720p-ref": 510,
+  "seedance-2-5-flash:9s:720p-ref": 580,
+  "seedance-2-5-flash:10s:720p-ref": 640,
+  "seedance-2-5-flash:11s:720p-ref": 710,
+  "seedance-2-5-flash:12s:720p-ref": 770,
+  "seedance-2-5-flash:13s:720p-ref": 830,
+  "seedance-2-5-flash:14s:720p-ref": 900,
+  "seedance-2-5-flash:15s:720p-ref": 960,
+  "seedance-2-5-flash:16s:720p-ref": 1020,
+  "seedance-2-5-flash:17s:720p-ref": 1090,
+  "seedance-2-5-flash:18s:720p-ref": 1150,
+  "seedance-2-5-flash:19s:720p-ref": 1220,
+  "seedance-2-5-flash:20s:720p-ref": 1280,
+  "seedance-2-5-flash:21s:720p-ref": 1340,
+  "seedance-2-5-flash:22s:720p-ref": 1410,
+  "seedance-2-5-flash:23s:720p-ref": 1470,
+  "seedance-2-5-flash:24s:720p-ref": 1530,
+  "seedance-2-5-flash:25s:720p-ref": 1600,
+  "seedance-2-5-flash:26s:720p-ref": 1660,
+  "seedance-2-5-flash:27s:720p-ref": 1730,
+  "seedance-2-5-flash:28s:720p-ref": 1790,
+  "seedance-2-5-flash:29s:720p-ref": 1850,
+  "seedance-2-5-flash:30s:720p-ref": 1920,
   // ── Seedance 2.5 HD (from draft) — the 1080p finalize of a Seedance 2.5 draft ──
   // Per-second rows over the draft's OUTPUT length (4-30s), same conversion
   // as the generation ladder above: ceil(rate x seconds / 4) x 10. The `-ref`
@@ -1708,6 +1869,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   //    STATIC_CREDIT_COSTS). ──
   ...SEEDANCE_25_EXTEND_RATE_ROWS,
   ...SEEDANCE_25_EXTEND_FULL_WINDOW_ROWS,
+  ...SEEDANCE_25_FLASH_EXTEND_RATE_ROWS,
+  ...GEMINI_OMNI_EXTEND_RATE_ROWS,
   // ── Seedance 2.0 Extend — one row per second added (4–15s) × resolution,
   //    held to the seedance-2 reference-video price the same way. ──
   "seedance-2-0-extend:4s:480p": 173,
@@ -6101,6 +6264,22 @@ function estimateNodeCredits(
     const runs = withWiredSettings(node, nodes, edges)
     if (isNodaroVideoUpscaleNode(runs) && nodaroVideoUpscaleRefusesLength(videoUpscaleWireSec(node, edges, wires.knownSec))) return 0
   }
+  // Gemini Omni Flash 1.2 Extend (decided 2026-11-17): the whole-run quote id
+  // of the run on the source the graph knows (`geminiOmniExtendEstimateSource`,
+  // the editor's reading: its length, never below what the hold counts, else
+  // the whole 10 s window; its size, which caps the tier), priced from its two
+  // rows by the rule its hold reads (whole-request-quotes.ts).
+  if (node.type === "extend-video") {
+    const wired = withWiredSettings(node, nodes, edges ?? [])
+    const data = wired.data ?? {}
+    if (isGeminiOmniExtendProvider(canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER)))) {
+      const source = edges && node.id ? geminiOmniExtendEstimateSource({ id: node.id }, listingGateNodes(nodes), listingGateEdges(edges), rerunIds) : {}
+      const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
+      const resolution = geminiOmniExtendResolution(data.resolution, source.frame)
+      const credits = chargedCredits(prices, geminiOmniExtendQuoteCreditId({ sourcePictureSec: source.sourcePictureSec, duration, resolution }))
+      if (credits !== undefined) return credits
+    }
+  }
   // Image Overlay is base + 2 per extra platform render — the shared formula,
   // marked up once as a whole, the way its route's creditGuard reserves it.
   if (node.type === "image-overlay") {
@@ -7142,11 +7321,12 @@ export function graphPricingUnits(
   // run measures the source before it holds anything.
   if (node.type === "extend-video") {
     const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
-    if (isSeedanceExtendPricedBySecondsSent(canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER)))) {
+    const extendProvider = canonicalVideoProvider(String(data.provider ?? EXTEND_VIDEO_DEFAULT_PROVIDER))
+    if (isSeedanceExtendPricedBySecondsSent(extendProvider)) {
       const sourceSec = edges && node.id
         ? extendSourceEstimateSec({ id: node.id }, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
         : undefined
-      return seedanceExtendPrice({ duration: data.duration, resolution: data.resolution, sourcePictureSec: sourceSec }).units
+      return seedanceExtendPrice({ provider: extendProvider, duration: data.duration, resolution: data.resolution, sourcePictureSec: sourceSec }).units
     }
   }
   if (!isRenderNodeType(node.type)) return estimatePricingUnits(withWiredSettings(node, nodes, edges ?? []))
@@ -7936,6 +8116,10 @@ export function getNodeModelIdentifier(
     if (rate) return rate.rateId
     const lipSyncModel = typeof data.provider === "string" && data.provider !== "" ? data.provider : LIP_SYNC_DEFAULT_PROVIDER
     if (isPerSecondLipSyncProvider(lipSyncModel)) return buildLipSyncCreditId(lipSyncModel, graph.lipSyncAudioSec)
+    // The Seedance 2 family (the plain 8-second row) and MiniMax Hailuo 3
+    // (`minimax-h3:8s`): the row the run holds (decided 2026-11-16).
+    const referenceAudioId = referenceAudioLipSyncCreditId(lipSyncModel, data.resolution)
+    if (referenceAudioId) return referenceAudioId
   }
 
   // A node naming no model whose default is priced per input image: the node-type
@@ -7978,7 +8162,7 @@ export function getNodeModelIdentifier(
   // follow the reservation or the quote lies. A retired id
   // (`seedance-2-extend`) is quoted as the provider it runs as.
   const catalogExtend = nodeType === "extend-video" ? canonicalVideoProvider(provider) : undefined
-  if (isSeedanceExtendPricedBySecondsSent(catalogExtend)) return seedanceExtendRateCreditId(data.resolution)
+  if (isSeedanceExtendPricedBySecondsSent(catalogExtend)) return seedanceExtendRateCreditId(data.resolution, catalogExtend)
   if (isCatalogExtendProvider(catalogExtend)) {
     const duration = typeof data.duration === "number" || typeof data.duration === "string" ? data.duration : undefined
     const resolution = typeof data.resolution === "string" ? data.resolution : undefined

@@ -1,5 +1,7 @@
 /**
- * How a Seedance 2.5 Extend Video run is priced (decided 2026-11-12).
+ * How a Seedance 2.5 Extend Video run is priced (decided 2026-11-12), and a
+ * Seedance 2.5 Flash Extend run by the same rule on its own rows (decided
+ * 2026-11-16).
  *
  * The run sends the model the source's last {@link SEEDANCE_EXTEND_CONTEXT_MAX_SEC}
  * seconds of picture (the whole source when it is shorter) as `@video_1`, and
@@ -29,11 +31,11 @@
  * Seedance 2.0 Extend is not priced here: it keeps its per-length rows.
  */
 import {
-  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
   seedanceExtendAddedSec,
   seedanceExtendRateCreditId,
   seedanceExtendSentSec,
   seedanceExtendUnits,
+  type SentPricedSeedanceExtendProvider,
 } from "@nodaro/shared/credits"
 import { resolveGraphOrigin, type EstimateGraphEdge, type EstimateGraphNode } from "./apply-edl-estimate"
 import { forwardedVideoLengthSec } from "./utility-wire-length"
@@ -51,6 +53,9 @@ export {
   SEEDANCE_EXTEND_RATE_CREDIT_IDS,
   SEEDANCE_EXTEND_RATE_SECONDS,
   SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER,
+  SEEDANCE_EXTEND_MIN_SOURCE_SEC,
   isSeedanceExtendPricedBySecondsSent,
   isSeedanceExtendRateCreditId,
   seedanceExtendRateCreditId,
@@ -109,7 +114,7 @@ export function extendSourceEstimateSec(
   return Math.max(...(lengths as number[]))
 }
 
-/** What one Seedance 2.5 Extend run is priced at: the rate row, and how many of it. */
+/** What one sent-priced Extend Video run (Seedance 2.5 / 2.5 Flash Extend) is priced at: the rate row, and how many of it. */
 export interface SeedanceExtendPrice {
   /** The rate row (`<provider>:<resolution>:per-2s`). */
   readonly rateId: string
@@ -122,21 +127,23 @@ export interface SeedanceExtendPrice {
 }
 
 /**
- * The price of one Seedance 2.5 Extend run — the ONE rule the route's hold,
+ * The price of one sent-priced Extend Video run (`provider`: Seedance 2.5
+ * Extend or Seedance 2.5 Flash Extend, each on its own rows) — the ONE rule the route's hold,
  * the workflow run's hold, the worker's settlement, the server's run estimate
  * and the editor's quote all read. `sourcePictureSec` is the length of the
  * source's picture when it is known (measured, or what the graph records),
  * else undefined: the whole window is counted.
  */
 export function seedanceExtendPrice(args: {
+  readonly provider: SentPricedSeedanceExtendProvider
   readonly duration: unknown
   readonly resolution: unknown
   readonly sourcePictureSec: number | null | undefined
 }): SeedanceExtendPrice {
   const sentSec = seedanceExtendSentSec(args.sourcePictureSec)
-  const addedSec = seedanceExtendAddedSec(SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, args.duration)
+  const addedSec = seedanceExtendAddedSec(args.provider, args.duration)
   return {
-    rateId: seedanceExtendRateCreditId(args.resolution),
+    rateId: seedanceExtendRateCreditId(args.resolution, args.provider),
     units: seedanceExtendUnits(sentSec, addedSec),
     sentSec,
     addedSec,

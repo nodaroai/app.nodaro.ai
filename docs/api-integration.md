@@ -2764,13 +2764,29 @@ count no run of it can have, lands in `missing`.
 
 A Seedance 2.5 Extend Video run is priced the same way, on its resolution's
 two-second row (`seedance-2-5-extend:<resolution>:per-2s`), at units =
-(seconds of the source sent + seconds added) ÷ 2. `@nodaro/shared`'s
-`seedanceExtendSourceCreditId(sourcePictureSec, duration, resolution)` builds
-that identifier for a source whose picture length you have measured, by the
+(seconds of the source sent + seconds added) ÷ 2, and so is a Seedance 2.5
+Flash Extend run, on its own rows (`seedance-2-5-flash-extend:<resolution>:per-2s`,
+480p or 720p). `@nodaro/shared`'s
+`seedanceExtendSourceCreditId(sourcePictureSec, duration, resolution, provider)`
+(`provider` defaults to `seedance-2-5-extend`) builds that identifier for a source whose picture length you have measured, by the
 rule the charge reads; with no known length it names the whole 10-second
 window, the most a run of that length costs, and for a source shorter than
-the 1.8 seconds an extend needs it names none (the extend refuses it) (see
+the 1.8 seconds an extend needs (2 seconds on Seedance 2.5 Flash Extend) it names none (the extend refuses it) (see
 [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)).
+
+A Gemini Omni Flash 1.2 Extend run (`gemini-omni-flash-1-2-extend`) is
+charged per second sent and added on two rows of its own — the seconds of the
+source sent (`gemini-omni-flash-1-2-extend:source:per-second`) and the seconds
+added at its resolution (`gemini-omni-flash-1-2-extend:<resolution>:per-second`),
+the total rounded up to the next 10 before the pricing settings apply — so a
+whole run is priced under its own identifier,
+`gemini-omni-flash-1-2-extend:<resolution>:sent-<S>s:added-<A>s` (`<S>` the
+seconds of the source sent, at most 10; `<A>` the seconds added), which both
+endpoints answer with exactly what the run is charged. `@nodaro/shared`'s
+`geminiOmniExtendQuoteCreditId({ sourcePictureSec, duration, resolution })`
+builds it (no known length: the whole 10 seconds) and
+`parseGeminiOmniExtendQuoteCreditId` reads it back (see
+[Extend Video](nodes/ai-video/extend-video.md#gemini-omni-flash-12-extend-credits)).
 
 So `GET /v1/credits/model-cost?model=speaker-frames` answers ONE block's
 price, 3<!-- credits: speaker-frames --> — the least a run is charged, never
@@ -2992,6 +3008,18 @@ so a value the model doesn't support is ignored, never a 400:
   `aspectRatio` is coerced to `adaptive` rather than sent. `referenceTaskType`
   says what its reference media is for (see
   [Seedance 2.5 reference task type](#seedance-25-reference-task-type)).
+- **`seedance-2-5-flash`** (Seedance 2.5 Flash) is the faster, lower-cost tier
+  of Seedance 2.5: also up to **30s in one call**, at **480p / 720p** (default
+  720p; `1080p` renders and bills 720p), with **10 images / 5 videos / 5 audio**
+  references — more is a `400 too_many_references` naming the limit, before
+  anything is reserved (a node run in the editor or a workflow run sends the
+  first ones instead). Reference audio is 2–30s a clip and 30s in total (a
+  `400` otherwise, before anything is reserved); a clip that is not WAV or MP3
+  is converted to MP3 before it is sent. A prompt with reference audio alone
+  is a valid request. A
+  start frame forces `adaptive` as on `seedance-2-5`, and `referenceTaskType`
+  works the same. It has no `draft` (ignored) and takes no seed. On
+  `POST /v1/video-to-video` it is the edit model beside `seedance-2-5`.
 - **`minimax-h3`** (MiniMax H3) takes the same reference fields with the
   same 9 / 3 / 3 caps and renders at `resolution: "2K"` (default) or `"768P"`
   (the cheaper per-second rate) — any other resolution value renders and bills
@@ -3344,13 +3372,14 @@ orchestrator already use):
 - **Extend Video: the Seedance providers only, with one seat reserved.** On
   `POST /v1/extend-video` both `connectedReferences` and the flat
   `referenceImageUrls` are accepted when `provider` is `seedance-2-5-extend`
-  (Seedance 2.5) or `seedance-2-0-extend` (Seedance 2.0) — the only extend
+  (Seedance 2.5), `seedance-2-5-flash-extend` (Seedance 2.5 Flash) or
+  `seedance-2-0-extend` (Seedance 2.0) — the only extend
   transports with a reference path; any other extend provider refuses them with
   a 400 rather than silently dropping. The image budget, on both, is the
   Seedance 2.0 cap **minus one** (up to **8** user references): Seedance 2.0's
   extension itself occupies one reference seat with the source's last frame (the
   continuation anchor), appended AFTER the user references so `@image_1…@image_8`
-  ordinals never shift; Seedance 2.5 sends no anchor and keeps the same budget.
+  ordinals never shift; Seedance 2.5 and 2.5 Flash send no anchor and keep the same budget.
   The source's end rides as `@video_1`: its last 10 seconds on Seedance 2.5
   (declared as an extension, priced per second sent and added — see
   [Extend Video](nodes/ai-video/extend-video.md#seedance-25-extend-credits)),
@@ -3427,19 +3456,22 @@ IS, for this run only:
   references that actually ship, so a caption can never bind a slot the payload
   dropped. Leave an entry blank to skip it without breaking the alignment.
 - **`characterReferences` (`POST /v1/generate-video` and `POST /v1/text-to-video`,
-  up to 3 on Gemini Omni, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
+  up to 3 on `gemini-omni-video` / `gemini-omni-flash`, 2 on `gemini-omni-flash-1-2`, 7 on Kling 4.0 and Kling 4.0 Flash).** Identity inputs that keep a real person's face on models with a
   dedicated character channel — today `gemini-omni-video`,
-  `gemini-omni-flash`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
+  `gemini-omni-flash`, `gemini-omni-flash-1-2`, `kling-4` and `kling-4-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
   extraImageUrls?, name?, voice?, videoUrl? }`: a portrait URL, a description of the person (appearance, clothing,
   style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
   chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
   context, this is the input that holds the face. Any other model answers `400`
   `character_references_unsupported`; combining it with a start frame (`imageUrl`) or an end frame (`endFrameUrl`)
   answers `400` `character_references_with_start_frame` /
-  `character_references_with_end_frame` (a current Nodaro limit); and the request must fit
+  `character_references_with_end_frame` (a current Nodaro limit: the platform does not
+  combine characters with a start or end frame on the Gemini Omni models); and on `gemini-omni-video` /
+  `gemini-omni-flash` the request must fit
   the model's 7-unit input budget — `images + 2 × videos + characters ≤ 7`, a
   character counting 1 unit (2 with a `bodyImageUrl`) — or it answers `400`
-  `character_references_quota`. It adds no credit charge. The references are
+  `character_references_quota` (on `gemini-omni-flash-1-2` characters count toward
+  no budget, and a `voice` answers `400` `character_voice_unsupported`). It adds no credit charge. The references are
   recorded on the job's input. `voice` — `{ preset, description?, exampleLine? }`, `preset` one of the 30
   Gemini voice ids — pins one voice to that character across clips (up to 3
   distinct voices a request, else `400` `character_voices_over_limit`; `description` ≤ 2000 chars, `exampleLine`
@@ -4515,8 +4547,9 @@ that calls these through the SDK (`client.billing`).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath?, gaClientId?, gaSessionId? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
-| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath?, gaClientId?, gaSessionId? }` → `{ data: { url, credits } }`. |
+| `POST` | `/v1/billing/create-checkout-session` | Opens Stripe Checkout for a plan or a credit pack: `{ priceId, mode?, embedded?, returnPath?, uiMode?, replacesSessionId?, gaClientId?, gaSessionId? }` → `{ data: { url } }`. A plan's Checkout accepts promotion codes; a credit pack's does not, and a pack purchase that settles for nothing grants no credits. `409` for a plan while the account already has a subscription (active or past due): change it with `change-plan` instead. |
+| `POST` | `/v1/billing/create-load-session` | Opens Stripe Checkout to load a whole amount as credits: `{ amountUsd, embedded?, returnPath?, uiMode?, replacesSessionId?, gaClientId?, gaSessionId? }` → `{ data: { url, credits } }`. |
+| `GET` | `/v1/billing/checkout-session/:sessionId` | The status of one of your own Checkout sessions: `{ data: { status, paymentStatus, mode, granted, paymentUnderWay } }`; `status` `open` / `complete` / `expired`, `paymentStatus` `paid` / `unpaid` / `no_payment_required`, `mode` `payment` / `subscription`. `paymentUnderWay` `true` means a create naming this session as `replacesSessionId` would answer `409 checkout_in_progress` (the session is open and its payment has been submitted). `false` means no submitted payment is seen on the session (also once it is complete or expired); a replacement can still be refused, so a client asks again only on the person's action or spaces its retries, and a create for another purchase than the session's answers the `404` whatever it reads. `granted` is true once the purchase's credits (or the plan) have been recorded, which happens when Stripe tells the platform, usually seconds after payment and later for a payment method that settles later. After `granted`, read the balance again (a plan's `granted` can lead its credits by a moment). `404 checkout_session_not_found` for a session that is not yours or does not exist; `429` past 60 reads a minute. |
 | `POST` | `/v1/billing/change-plan` | Moves an active subscription to another plan: `{ newPriceId }` → `{ data: { subscriptionId, tier } }`. **Upgrade:** the price difference for the rest of the billing period is charged at once, and the new plan applies only when that payment succeeds; the credits added are the difference between the two plans' monthly credits, once per billing period — moving down and back up within one period adds nothing more. An upgrade invoice settled for 0 (a 100%-off coupon, or a balance that covered it) adds no credits. If the payment does not go through, the plan is unchanged and the answer is `409` with `{ error: { code: "plan_change_payment_required", message, invoiceUrl } }` — `invoiceUrl` is Stripe's page for paying that invoice, and the change applies if it is paid before it expires; the same answer comes back while an earlier change is still waiting for its payment. **Downgrade:** the unused time is credited on the next invoice and the current credits stay until the period ends. **Monthly ↔ yearly:** switching restarts the billing period but adds no credits; the next monthly credits come a month after the switch. `409` when the subscription is not active (for example a failed renewal payment); `404` with no subscription; `429` after 5 plan-change requests from one account in 24 hours (refused ones count). |
 | `POST` | `/v1/billing/manage-subscription` | A link to the Stripe Customer Portal: `{ returnPath? }` → `{ data: { url } }`. `404` before a first purchase (Stripe does not know the account yet). |
 | `GET` | `/v1/billing/auto-recharge` | The automatic top-up setting: `{ data: { enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard } }`. |
@@ -4524,6 +4557,43 @@ that calls these through the SDK (`client.billing`).
 | `GET` | `/v1/billing/transactions` | Purchase history, newest first (the latest 50): `{ data: [{ id, stripe_transaction_id, type, amount_usd, credits_granted, tier, created_at, receipt_url }] }`; `type` is `subscription`, `topup` or `refund` (`credits_granted` negative). |
 | `GET` | `/v1/billing/payment-method` | What is on file with Stripe: `{ data: { card, billingDetails } }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Never an error for an account that has not bought yet: both `null`. |
 | `GET` | `/v1/billing/invoices` | Every payment as a document, newest first (the latest 100 of each source): `{ data: [{ id, kind, number, at, amount: { amount, currency }, credits, status, description, pdfUrl, url }] }`. `kind` is `"invoice"` (a subscription payment: `number`, `pdfUrl` and the hosted `url` are Stripe's) or `"receipt"` (a credit pack or a load: `credits` granted and the hosted receipt as `url`; no PDF; a refund is a receipt with `status` `"refunded"`, `amount` and `credits` negative). `status` is `"paid"`, `"open"`, `"void"`, `"uncollectible"` or `"refunded"`. Every document Stripe writes (the invoice PDF and page, the receipt) is in English, whatever language the person paid in. |
+
+`uiMode` (checkout, load) is `"hosted"` (the default: Stripe's Checkout page)
+or `"embedded"`, which opens Stripe's embedded Checkout inside the app's own
+page instead: the answer is `{ data: { url: null, clientSecret, sessionId } }`
+(load: plus `credits`). Mount it with Stripe.js and the `stripePublishableKey`
+from `GET /v1/billing/plans`. The form never redirects (payment methods that
+need a redirect are not offered), so `returnPath` and `embedded` are not used
+(they are still validated: an invalid `returnPath` is still a `400`), and the
+purchase is granted by Stripe's webhook as usual — read
+`GET /v1/billing/checkout-session/:sessionId` for `granted`. Any other value is a
+`400`. Where the deployment has no publishable key the answer is
+`503 { error: { code: "embedded_checkout_unavailable", message } }`: use the
+page.
+
+`replacesSessionId` (checkout, load) names a Checkout session of yours that
+this request replaces, for example when an embedded form is given up for the
+Checkout page. Before creating anything the platform reads that session:
+- already paid (or paying by a method that settles later):
+  `409 checkout_already_complete`;
+- its payment submitted and still being confirmed: `409 checkout_in_progress`
+  (read `GET /v1/billing/checkout-session/:sessionId` and ask again once its
+  status reads `open` with `paymentUnderWay: false`, or `expired`; it can
+  still be refused then, so ask again on the person's action or space the
+  retries);
+- open and not being paid: expired, then the new session is created;
+- expired: the new session is created;
+- not yours or not found: `404 checkout_session_not_found`;
+- not a session of this same purchase (a plan request names a plan's session;
+  a pack request a session for the same pack; a load request a load session
+  of the same amount): the same `404 checkout_session_not_found`, whatever
+  state it is in, and it is left as it is.
+
+A `replacesSessionId` that is not a string, is empty, or is longer than 255
+characters is a `400` with
+`{ error: "replacesSessionId must be a Checkout session id" }`. Any other failure while reading or expiring
+that session is the route's ordinary `500`, and nothing is created. Absent,
+nothing changes.
 
 `returnPath` (checkout, load, portal) is a path on the **calling origin**
 (`/billing`, `/settings/credits?tab=history`) that Stripe sends the person back
@@ -4696,7 +4766,8 @@ account's runs. The shape, with placeholders for the figures:
     { "id": "topup-10", "credits": <credits>, "price": { "amount": <amount>, "currency": "USD" } },
     …
   ],
-  "topUpRange": { "min": <amount>, "max": <amount>, "currency": "USD" }
+  "topUpRange": { "min": <amount>, "max": <amount>, "currency": "USD" },
+  "stripePublishableKey": "<key>" | null
 }
 ```
 
@@ -4710,6 +4781,7 @@ account's runs. The shape, with placeholders for the figures:
 | `storageBytes` | Storage for your media, in bytes. |
 | `topUps` | The credit packs, `{ id, credits, price }`, smallest first. Top-up credits are valid for 12 months. `price` is `null` when it cannot be stated right now. |
 | `topUpRange` | `{ min, max, currency }`: any whole amount in this range can be loaded as credits in the app, at the same rate as the packs. |
+| `stripePublishableKey` | The Stripe publishable key for the in-page payment form (Stripe's embedded Checkout), or `null` where the deployment has none, in which case an app sends the person to the Stripe Checkout page. |
 
 | Status | `error.code` | When |
 |---|---|---|
@@ -4725,7 +4797,7 @@ answers a signed-in session, a personal API token without a workflow limit, or
 an app's OAuth token; a workflow-limited key gets `403 forbidden` and a billing
 integration key `403 billing_key_scope`. It answers `{ data, effectiveTier }`.
 `data` is the account's latest subscription — `tier`, `status` (`active`,
-`trialing`, `past_due`, `paused`, `canceled`, `incomplete`, `incomplete_expired` or `expired`),
+`trialing`, `past_due`, `unpaid` (payment retries ended without payment), `paused`, `canceled`, `incomplete`, `incomplete_expired` or `expired`),
 `current_period_start`, `current_period_end`, `cancel_at_period_end`,
 `cancel_at`, `canceled_at` and its Stripe ids — or `null` when it never
 subscribed. `effectiveTier` is the tier the account's entitlements follow:

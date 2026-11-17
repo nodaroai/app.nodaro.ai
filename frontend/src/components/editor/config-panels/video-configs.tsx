@@ -61,7 +61,7 @@ import {
   videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
 import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
-import { isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
+import { geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from "@/lib/motion-transfer-sizes"
@@ -71,7 +71,7 @@ import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
-import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
+import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
@@ -5206,8 +5206,10 @@ export const EditVideoProConfig = memo(EditVideoProConfigImpl)
 /** What each catalog Extend Video provider says it does — one per provider, so a new one names its own. */
 const CATALOG_EXTEND_DESCRIPTION: Readonly<Record<CatalogExtendProvider, MessageKey>> = {
   "seedance-2-5-extend": "vidcfg.descSeedanceExtend",
+  "seedance-2-5-flash-extend": "vidcfg.descSeedanceExtend",
   "seedance-2-0-extend": "vidcfg.descSeedanceExtend",
   "kling-4-extend": "vidcfg.descKlingExtend",
+  "gemini-omni-flash-1-2-extend": "vidcfg.descGeminiOmniExtend",
   "pixverse-v6-extend": "vidcfg.descPixverseExtend",
 }
 
@@ -5262,9 +5264,25 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   const sentUnits = sentPriced
     ? extendVideoPricingUnits({ id: nodeId ?? "", type: "extend-video", position: { x: 0, y: 0 }, data } as unknown as WorkflowNode, nodes, edges ?? [])
     : 1
+  // Gemini Omni Flash 1.2 Extend (decided 2026-11-17): each resolution's
+  // whole-run quote on the source the canvas knows (the whole 10 s window
+  // when it does not), the id the node's pill and the Run button price.
+  // A tier above the source's is priced (and runs) at the source's.
+  const geminiSource = isGeminiOmniExtendProvider(catalogProvider) && nodeId
+    ? geminiOmniExtendEstimateSource({ id: nodeId }, (nodes ?? []) as never, (edges ?? []) as never, new Set())
+    : {}
+  const geminiSourceSec = geminiSource.sourcePictureSec
+  // The source's size caps the tier each resolution is priced at, so the
+  // prices are fetched again when it changes (a 720p clip swapped for a
+  // 1080p one of the same length).
+  const geminiSourceWidth = geminiSource.frame?.width
+  const geminiSourceHeight = geminiSource.frame?.height
   const catalogPriceIds = (r: string): { rateId: string; quoteId: string | undefined } => {
+    if (isGeminiOmniExtendProvider(catalogProvider)) {
+      return { rateId: geminiOmniExtendQuoteCreditId({ sourcePictureSec: geminiSourceSec, duration: catalogDuration, resolution: geminiOmniExtendResolution(r, geminiSource.frame) }), quoteId: undefined }
+    }
     if (sentPriced) {
-      const rateId = seedanceExtendRateCreditId(r)
+      const rateId = seedanceExtendRateCreditId(r, catalogProvider)
       return { rateId, quoteId: unitQuoteIdFor(rateId, sentUnits) }
     }
     return { rateId: catalogProvider ? catalogExtendCreditId(catalogProvider, catalogDuration, r, catalogSound) : "", quoteId: undefined }
@@ -5291,7 +5309,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       const { rateId, quoteId } = catalogPriceIds(r)
       return quoteId ? [rateId, quoteId] : [rateId]
     }))
-  }, [catalogProvider, catalogDuration, catalogSound, sentUnits]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [catalogProvider, catalogDuration, catalogSound, sentUnits, geminiSourceSec, geminiSourceWidth, geminiSourceHeight]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap
   // a stale length into the new provider's window (a catalog model's lengths;

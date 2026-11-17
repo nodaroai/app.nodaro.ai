@@ -7,9 +7,11 @@
  *   - first and last frame: both URLs, `duration` 3-10, no other image
  *   - video edit: `video_list` (one plain URL, up to 15 s), NO `duration`
  *
- * It shares the family's routing but not 1.1's wire: no `character_ids` or
- * `audio_ids`, `seeds` (10000-99999) instead of `seed`, an integer `duration`,
- * and a source clip with no trim window. The body is an explicit allow-list.
+ * It shares the family's routing but not 1.1's wire: no `audio_ids`, `seeds`
+ * (10000-99999) instead of `seed`, an integer `duration`, and a source clip with
+ * no trim window. `character_ids` (max 2, outside the image quota) go only in
+ * the reference and video-edit modes — never beside a first or last frame
+ * (decided 2026-11-17). The body is an explicit allow-list.
  *
  * The frames follow the Seedance rule: only frames wired, they go in as real
  * frames; anything else wired, they join `image_urls` after the caller's own
@@ -19,7 +21,7 @@
 import { dirname } from "node:path"
 import sharp from "sharp"
 import { placeFramesAfterReferences } from "@nodaro/prompts/assembly"
-import { videoProviderReferenceSyntax } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderReferenceSyntax } from "@nodaro/shared/models"
 import { resolveFrameFitAspect } from "@nodaro/shared/video"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
@@ -36,6 +38,8 @@ const MAX_IMAGES = 6
 /** images + {@link VIDEO_QUOTA_UNITS} for a source video must stay within this. */
 const INPUT_QUOTA = 7
 const VIDEO_QUOTA_UNITS = 2
+/** Most `character_ids`; they do not count toward {@link INPUT_QUOTA}. */
+const MAX_CHARACTERS = VIDEO_REF_LIMITS_BY_PROVIDER[MODEL_KEY]?.characters ?? 0
 /** The real first + last frame mode's longest clip. */
 const FIRST_LAST_MAX_SEC = 10
 const SEED_MIN = 10000
@@ -62,6 +66,12 @@ export interface GeminiOmni12RequestArgs {
   referenceImageUrls?: readonly (string | undefined)[]
   /** The source clip, already within KIE's limit. */
   sourceVideoUrl?: string
+  /**
+   * Minted character ids (`resolveOmniCharacterIds`), already checked against
+   * the cap. KIE takes none beside a first or last frame, so a request carrying
+   * both is refused here (the routes and the runner refuse it first).
+   */
+  characterIds?: readonly string[]
 }
 
 export type GeminiOmni12Mode = "reference" | "first-frame" | "first-last-frame" | "video-edit"
@@ -112,6 +122,14 @@ export async function geminiOmni12FrameAspect(modelKey: string, frameUrl: string
 export function buildGeminiOmni12Request(args: GeminiOmni12RequestArgs): GeminiOmni12Request {
   const refs = (args.referenceImageUrls ?? []).filter((u): u is string => typeof u === "string" && u.trim().length > 0)
   const { startFrameUrl, endFrameUrl, sourceVideoUrl, durationSec, seed } = args
+  // De-duplicated: two identical references resolve to one id.
+  const characterIds = [...new Set((args.characterIds ?? []).filter((id) => typeof id === "string" && id.length > 0))]
+  if (characterIds.length > MAX_CHARACTERS) {
+    throw createSanitizedError(`Gemini Omni Flash 1.2 takes at most ${MAX_CHARACTERS} characters; got ${characterIds.length}`, "Video generation")
+  }
+  if (characterIds.length > 0 && (startFrameUrl || endFrameUrl)) {
+    throw createSanitizedError("Gemini Omni Flash 1.2 takes no characters beside a start or end frame", "Video generation")
+  }
   const base = {
     resolution: args.resolution,
     aspect_ratio: args.aspectRatio,
@@ -148,6 +166,7 @@ export function buildGeminiOmni12Request(args: GeminiOmni12RequestArgs): GeminiO
       ...base,
       ...(sourceVideoUrl ? { video_list: [sourceVideoUrl] } : { duration: durationSec }),
       ...(placed.imageUrls.length > 0 ? { image_urls: placed.imageUrls } : {}),
+      ...(characterIds.length > 0 ? { character_ids: characterIds } : {}),
     },
     droppedRefImages: placed.droppedRefImages,
   }

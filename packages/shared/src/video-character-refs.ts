@@ -231,6 +231,13 @@ export function videoCharacterVoiceCap(provider: string | undefined): number {
   return provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.voices ?? 0) : 0
 }
 
+/** Every provider that takes a pinned voice persona (a positive `voices` cap), in declaration order. */
+function videoCharacterVoiceProviders(): string[] {
+  return Object.entries(VIDEO_REF_LIMITS_BY_PROVIDER)
+    .filter(([, l]) => (l?.voices ?? 0) > 0)
+    .map(([id]) => id)
+}
+
 /**
  * Identity of a voice persona — what makes two voices "the same voice". The
  * persona is minted per (preset, description, example line) AND the character's
@@ -307,7 +314,7 @@ export function videoCharacterVoiceProblem(args: {
       code: "character_voice_unsupported",
       message:
         `A character voice is not supported by ${args.provider ?? "the selected model"}. ` +
-        "Drop the voice, or pick a model that takes characterReferences.",
+        `Drop the voice, or pick a model that takes one: ${videoCharacterVoiceProviders().join(", ")}.`,
     }
   }
   if (distinct > cap) {
@@ -325,7 +332,8 @@ export function videoCharacterVoiceProblem(args: {
  *
  * The shared budget: for a model that declares `characters`, its `images` cap
  * IS the total input budget (images + 2×videos + character units ≤ images cap —
- * 7 for Gemini Omni). Callers pass the ASSEMBLED image count, after any
+ * 7 for Gemini Omni), unless it declares `charactersOutsideImageBudget`
+ * (Gemini Omni Flash 1.2: characters spend no unit). Callers pass the ASSEMBLED image count, after any
  * `connectedReferences` expansion, so the budget is measured on what ships.
  */
 export function videoCharacterRefProblem(args: {
@@ -387,13 +395,22 @@ export function videoCharacterRefProblem(args: {
   // the upstream would take it beside `character_ids`. We reject the pair
   // because the frame / identity roles are not yet bound in the prompt
   // (and the frame would need to be budgeted against the shared input quota).
+  // A model whose characters sit outside its image budget (Gemini Omni Flash
+  // 1.2): the platform does not combine characters with a start or end frame
+  // on it (decided 2026-11-17, mirroring 1.1). Its upstream refuses characters
+  // beside a real first/last frame, but would take a frame sent as a reference
+  // image beside references — so the sentence names no budget and no upstream
+  // rule, only what the platform does.
+  const outsideBudget = limits?.charactersOutsideImageBudget === true
   if (args.hasStartFrame) {
     return {
       code: "character_references_with_start_frame",
-      message:
-        `${provider} does not yet support combining characterReferences with a start frame (imageUrl) — ` +
-        "the frame and the characters would compete for the same input slots without a defined role. " +
-        "Drop the start frame (the character's portrait carries the face), or drop characterReferences.",
+      message: outsideBudget
+        ? `Nodaro does not combine characterReferences with a start frame (imageUrl) on ${provider}. ` +
+          "Drop the start frame (the character's portrait carries the face), or drop characterReferences."
+        : `${provider} does not yet support combining characterReferences with a start frame (imageUrl) — ` +
+          "the frame and the characters would compete for the same input slots without a defined role. " +
+          "Drop the start frame (the character's portrait carries the face), or drop characterReferences.",
     }
   }
   // Gemini Omni has no end-frame input; without this the frame would be dropped
@@ -406,6 +423,9 @@ export function videoCharacterRefProblem(args: {
         "Drop the end frame, or drop characterReferences.",
     }
   }
+  // Characters outside the image budget spend nothing from it: the image +
+  // video quota is the request builder's, as on a run with no characters.
+  if (outsideBudget) return videoCharacterVoiceProblem({ provider, characterReferences })
   const budget = VIDEO_REF_LIMITS_BY_PROVIDER[provider as string]?.images ?? 7
   const used = args.imageCount + args.videoCount * 2 + videoCharacterRefUnits(characterReferences)
   if (used > budget) {

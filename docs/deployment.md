@@ -34,8 +34,12 @@ You need:
   - [ElevenLabs](https://elevenlabs.io) — voice features (TTS, dubbing,
     voice changer, forced alignment).
   - [fal.ai](https://fal.ai) — optional; enables fal-hosted models (e.g.
-    the Sync Lipsync v3 lip-sync model). Without `FAL_KEY` those models
-    are inert and the rest of the app is unaffected.
+    the Sync Lipsync v3 lip-sync model and the Gemini Omni Flash 1.2
+    engine of Extend Video). Without `FAL_KEY` those models are inert
+    (a run on one is refused with a message naming the key, and nothing
+    is charged; Extend Video's Gemini Omni Flash 1.2 engine refuses it
+    before anything is held)
+    and the rest of the app is unaffected.
 
 Optional:
 
@@ -231,6 +235,7 @@ here for each one anyway.
 | `EXTERNAL_SSO_LINK_EXISTING` | `false` | Whether a verified-email assertion may link to a **pre-existing** account not already SSO-linked. Default `false` is takeover-safe; `true` links only when the IdP also asserts a verified email. One account is outside the flag: a deployment's own `billing.payerAccount` links on its first verified assertion either way. See [External SSO](./sso.md#account-linking-rules) |
 | `KIE_UNIQUE_ID` | `""` | Cloud — KIE account id for the credit audit |
 | `STRIPE_SECRET_KEY` · `STRIPE_WEBHOOK_SECRET` | `""` | Cloud only — billing; ignored on community/business |
+| `STRIPE_PUBLISHABLE_KEY` | `""` | Cloud only: the Stripe publishable key (`pk_live_…` / `pk_test_…`, the same mode as `STRIPE_SECRET_KEY`) that `GET /v1/billing/plans` hands to apps for the in-page payment form; unset, `VITE_STRIPE_PUBLISHABLE_KEY` is read; neither (or a value that is not a publishable key of the secret key's mode): `stripePublishableKey` is `null` and apps use the Stripe Checkout page. Restart to apply. Covered by `STRIPE_REQUIRE_TEST_MODE`. |
 | `PAYG_WEB_BLOCK_ENABLED` · `PAYG_WEB_BLOCK_EXEMPT_USER_IDS` | off · `""` | Cloud only — pay-as-you-go web block and its grandfathered accounts, comma-separated. Not combinable with a `billing.payerAccount` whose effective grade is `free` or `payg`: the pool is resolved at the payer's tier, so the API refuses to boot (`PAYG_WEB_BLOCK_ENABLED is on and the deployment payer's effective tier is …`) rather than refuse every run — put the payer on a paid subscription or leave the flag off |
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch: it guards the trigger + charge path only, while webhook provisioning stays on so in-flight payments still settle |
 | `HOSTED_DEPLOYMENTS` | unset | Cloud only — the dedicated deployments whose billing status `/admin/hosted-deployments` shows: a JSON array of `{ "name", "url", "key" }`, where `url` is the deployment's https origin and `key` a **read-only** billing integration key (`ndr_bill_ro_…`) minted on that deployment's `/billing-admin`. An entry with any other key, or a non-https URL, is refused and shown as misconfigured — never called. The page reads each deployment's `GET /v1/deployment-billing/balance` (pool, monthly spend, low balance, auto top-up), cached for a minute. |
@@ -2687,6 +2692,7 @@ not by a global switch:
 | `gemini-3.1-pro` | Direct Google | always (KIE is the fallback) |
 | `gemini-4-argon` | Direct Google — ONLY | always; it has no KIE lane, so without the key it fails as provider-unavailable |
 | `gemini-4-carbon` | KIE | KIE fails |
+| `gemini-4-hydrogen` | KIE | KIE fails |
 | **video-analysis (any tier)** | **Direct Google — ONLY** | **always; there is no fallback** |
 
 > **`GEMINI_API_KEY` is REQUIRED if you use video-analysis.** That node is

@@ -48,6 +48,34 @@ export function seedance25CostUsd(o: {
 }
 
 /**
+ * Seedance 2.5 Flash's per-second rate, in KIE credits, by resolution — its
+ * own figures (the `seedance-2-5-flash` model entry in models.ts), never 2.5's:
+ * `plain` without a reference video (billed on the output seconds), `ref` with
+ * one (billed on input + output seconds). 480p and 720p only.
+ */
+export const SEEDANCE_25_FLASH_KIE_CREDITS_PER_SEC: Readonly<Record<"480p" | "720p", { plain: number; ref: number }>> = {
+  "480p": { plain: 18.5, ref: 11.5 },
+  "720p": { plain: 41, ref: 25.5 },
+}
+
+/**
+ * The USD KIE bills for a Seedance 2.5 Flash render. Flash has no draft mode;
+ * any resolution but 480p renders (and bills) at 720p, its default and top
+ * tier. With a reference video the `ref` rate covers `inputSec + outputSec`;
+ * without one the `plain` rate covers `outputSec`.
+ */
+export function seedance25FlashCostUsd(o: {
+  resolution: string | undefined
+  hasVideoRef: boolean
+  outputSec: number
+  inputSec: number
+}): number {
+  const rate = SEEDANCE_25_FLASH_KIE_CREDITS_PER_SEC[o.resolution === "480p" ? "480p" : "720p"]
+  const kieCredits = o.hasVideoRef ? rate.ref * (o.inputSec + o.outputSec) : rate.plain * o.outputSec
+  return kieCredits * KIE_CREDIT_USD
+}
+
+/**
  * The 1080p HD finalize of a Seedance 2.5 draft (`bytedance/seedance-2-5-draft`):
  * its own per-second rate, in KIE credits — `plain` for a draft made without a
  * reference video (billed on the draft's output seconds), `ref` for one made

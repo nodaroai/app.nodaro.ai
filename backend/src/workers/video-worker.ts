@@ -623,7 +623,10 @@ export function createVideoWorker() {
           `[worker] Job ${jobId} failed (KIE.ai): ${internalDetails ?? message} | context: ${err.context}${envNote} | user message: ${message}`,
         )
       } else {
-        console.error(`[worker] Job ${jobId} failed:`, message)
+        // Any other provider's raw reply (a Replicate refusal, wrapped or
+        // not) on the same one line — redacted, as `error_detail` stores it.
+        const detail = providerDetailOf(err)
+        console.error(`[worker] Job ${jobId} failed:`, detail ? `${message} | provider: ${detail}` : message)
       }
 
       // A provider content-policy block gets its OWN bounded retry policy

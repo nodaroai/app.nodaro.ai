@@ -18,7 +18,10 @@
  * - every frame is passed through as it is (`-fps_mode passthrough`): same
  *   frame count, same timestamps, same frame rate, same length; no trim, no
  *   scale, no filter (a phone clip's rotation is applied, so it is stored the
- *   way it is shown);
+ *   way it is shown) — except on a model that takes reference videos only
+ *   within a window of sizes and frame rates (Seedance 2.5 Flash), whose clip
+ *   is fitted into it (`reference-video-fit.ts`: its size scaled, shape kept,
+ *   and a frame rate outside the window moved to it, over the same seconds);
  * - the picture keeps the source's quality (the house rule for a re-encode,
  *   `../video/matched-encode.ts`):
  *   H.264 at the source's own picture bitrate, in two passes (one pass aims
@@ -30,7 +33,7 @@
  * - a QuickTime source stays a MOV (its PCM sound and 4:4:4 picture are what
  *   that container was chosen for), anything else becomes an MP4;
  * - the copy stays within the provider's size limit a reference video
- *   (`referenceVideoMaxBytes`: 200 MB on Seedance 2.5, 50 MB on the 2.0
+ *   (`referenceVideoMaxBytes`: 200 MB on Seedance 2.5 and 2.5 Flash, 50 MB on the 2.0
  *   family): a source that fits keeps its own bitrate; only one over the limit is encoded at
  *   the bitrate that fits (`SIZE_HEADROOM` below it), and a copy that two
  *   passes land just over the limit is encoded once more at that bitrate.
@@ -46,6 +49,7 @@ import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "../video
 import { MATCHED_FALLBACK_CRF, matchedPictureArgs, probeMatched, type MatchedProbe } from "../video/matched-encode.js"
 import { reencodePeakMemoryMiB } from "../video/video-file-stages.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
+import { referenceVideoFitFilter, referenceVideoFitPeakShape } from "./reference-video-fit.js"
 import { createSanitizedError } from "./client.js"
 import { atInputStep, urlForLog } from "./input-label.js"
 
@@ -55,7 +59,11 @@ export const SEEDANCE_2_REF_VIDEO_MAX_BYTES = 50_000_000
 /** Seedance 2.5's largest reference video, in bytes (200 MB). */
 export const SEEDANCE_2_5_REF_VIDEO_MAX_BYTES = 200_000_000
 
-const REF_VIDEO_MAX_BYTES: Readonly<Record<string, number>> = { "seedance-2-5": SEEDANCE_2_5_REF_VIDEO_MAX_BYTES }
+// Seedance 2.5 Flash documents the same 200 MB per reference video.
+const REF_VIDEO_MAX_BYTES: Readonly<Record<string, number>> = {
+  "seedance-2-5": SEEDANCE_2_5_REF_VIDEO_MAX_BYTES,
+  "seedance-2-5-flash": SEEDANCE_2_5_REF_VIDEO_MAX_BYTES,
+}
 
 /**
  * The largest reference video `provider` takes, in bytes, as the provider
@@ -165,7 +173,8 @@ export function referenceVideoPictureArgs(probe: ReferenceVideoProbe, maxBytes: 
  * dropped), the picture re-encoded (`referenceVideoPictureArgs`), the sound copied or, with
  * `audio: "aac"`, encoded to AAC. `maxBytes`: the provider's size limit
  * (`referenceVideoMaxBytes`). `passLog`: the second of two passes, which reads
- * the first pass's measurements (`reencodeFirstPassArgs`).
+ * the first pass's measurements (`reencodeFirstPassArgs`). `pictureFilter`:
+ * the model's fit (`referenceVideoFitFilter`); without one, no filter at all.
  */
 export function reencodeReferenceVideoArgs(
   input: string,
@@ -174,11 +183,13 @@ export function reencodeReferenceVideoArgs(
   maxBytes: number,
   audio: "copy" | "aac",
   passLog?: string,
+  pictureFilter?: string,
 ): string[] {
   return [
     "-y", "-i", input,
     "-map", "0:v:0", "-map", "0:a:0?",
     "-map_metadata", "-1", "-map_chapters", "-1",
+    ...(pictureFilter ? ["-vf", pictureFilter] : []),
     ...referenceVideoPictureArgs(probe, maxBytes, passLog ? { n: 2, log: passLog } : undefined),
     ...(audio === "copy" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "192k"]),
     "-movflags", "+faststart",
@@ -186,11 +197,12 @@ export function reencodeReferenceVideoArgs(
   ]
 }
 
-/** The first of the two passes: the picture only, measured into `passLog`, nothing written. */
-export function reencodeFirstPassArgs(input: string, probe: ReferenceVideoProbe, maxBytes: number, passLog: string): string[] {
+/** The first of the two passes: the picture only (through `pictureFilter`, as the second pass), measured into `passLog`, nothing written. */
+export function reencodeFirstPassArgs(input: string, probe: ReferenceVideoProbe, maxBytes: number, passLog: string, pictureFilter?: string): string[] {
   return [
     "-y", "-i", input,
     "-map", "0:v:0", "-an",
+    ...(pictureFilter ? ["-vf", pictureFilter] : []),
     ...referenceVideoPictureArgs(probe, maxBytes, { n: 1, log: passLog }),
     "-f", "null", "-",
   ]
@@ -230,22 +242,26 @@ export async function reencodeReferenceVideo(
     const probe = await probeMatched(inputPath)
     const container = referenceVideoContainer(probe, videoUrl)
     const outputPath = join(workDir, `reencoded.${container}`)
-    // Admitted like every ffmpeg, at the clip's own size (unknown = assumed 4K).
-    const launch = {
-      peakMemoryMiB: reencodePeakMemoryMiB(probe.width && probe.height ? { width: probe.width, height: probe.height } : undefined),
-    }
+    // The model's fit, when it takes reference videos only within a window of
+    // sizes and frame rates (Seedance 2.5 Flash); none for any other model.
+    const pictureFilter = referenceVideoFitFilter(provider, probe)
+    // Admitted like every ffmpeg, at the clip's own size (unknown = assumed
+    // 4K), or at the fitted size when that is larger (a small clip scaled up).
+    const fitShape = pictureFilter ? referenceVideoFitPeakShape(provider) : undefined
+    const sourcePeak = reencodePeakMemoryMiB(probe.width && probe.height ? { width: probe.width, height: probe.height } : undefined)
+    const launch = { peakMemoryMiB: fitShape ? Math.max(sourcePeak, reencodePeakMemoryMiB(fitShape)) : sourcePeak }
     const rate = referenceVideoTargetBitRate(probe, maxBytes)
     const passLog = rate ? join(workDir, "pass") : undefined
     await atInputStep(label, videoUrl, "encode", async () => {
-      if (passLog) await runFfmpeg(reencodeFirstPassArgs(inputPath, probe, maxBytes, passLog), undefined, launch)
+      if (passLog) await runFfmpeg(reencodeFirstPassArgs(inputPath, probe, maxBytes, passLog, pictureFilter), undefined, launch)
       let audio = referenceVideoAudio(probe, container)
       const writeCopy = async (at: ReferenceVideoProbe) => {
         try {
-          await runFfmpeg(reencodeReferenceVideoArgs(inputPath, outputPath, at, maxBytes, audio, passLog), undefined, launch)
+          await runFfmpeg(reencodeReferenceVideoArgs(inputPath, outputPath, at, maxBytes, audio, passLog, pictureFilter), undefined, launch)
         } catch (e) {
           if (audio !== "copy" || !isAudioCopyRefused(e)) throw e
           audio = "aac"
-          await runFfmpeg(reencodeReferenceVideoArgs(inputPath, outputPath, at, maxBytes, audio, passLog), undefined, launch)
+          await runFfmpeg(reencodeReferenceVideoArgs(inputPath, outputPath, at, maxBytes, audio, passLog, pictureFilter), undefined, launch)
         }
       }
       await writeCopy(probe)
@@ -262,7 +278,7 @@ export async function reencodeReferenceVideo(
     const url = await atInputStep(label, videoUrl, "upload", () =>
       uploadJobScratchFile(outputPath, "provider-reencoded", container, CONTENT_TYPE[container]))
     console.log(
-      `[KIE.ai] ${provider}: ${inputLabel} re-encoded (${container}, ${rate ? `${rate} b/s, two passes` : `crf ${REFERENCE_VIDEO_FALLBACK_CRF}`}) from ${urlForLog(videoUrl)}`,
+      `[KIE.ai] ${provider}: ${inputLabel} re-encoded (${container}, ${rate ? `${rate} b/s, two passes` : `crf ${REFERENCE_VIDEO_FALLBACK_CRF}`}${pictureFilter ? ", fitted to the model's size and frame rate" : ""}) from ${urlForLog(videoUrl)}`,
     )
     return url
   } catch (err) {

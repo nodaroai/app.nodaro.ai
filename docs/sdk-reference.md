@@ -3227,7 +3227,8 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > 16:9 / 9:16-only aspect, same 7-unit input quota.
 > **Gemini Omni Flash 1.2** (`gemini-omni-flash-1-2`) is priced per second: any
 > whole-second `duration` from 3 to 15, 360p / 720p / 1080p / 4K, and `auto` beside
-> 16:9 and 9:16. No `characterReferences`. A source video is edited and charged by
+> 16:9 and 9:16. Up to 2 `characterReferences` (no `voice`, never with a start or
+> end frame, outside its input quota). A source video is edited and charged by
 > its own length, up to 15 s (`videoTrimStart` / `videoTrimEnd` pick a window of
 > up to 15 s). See
 > [Gemini Omni Flash 1.2](nodes/ai-video/generate-video.md#gemini-omni-flash-12).
@@ -3494,11 +3495,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
 > `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
 > to that character across clips).
-> Only `gemini-omni-video` / `gemini-omni-flash`, `kling-4` and `kling-4-flash` accept them (any
+> Only `gemini-omni-video` / `gemini-omni-flash`, `gemini-omni-flash-1-2` (up to 2,
+> no `voice`), `kling-4` and `kling-4-flash` accept them (any
 > other model answers `400`). On Gemini Omni they cannot be combined with a
-> start frame (`imageUrl`), and they share the model's 7-unit input budget with
+> start frame (`imageUrl`); on `gemini-omni-video` / `gemini-omni-flash` they share the model's 7-unit input budget with
 > reference images and a source video (a character is 1 unit, 2 with a
-> `bodyImageUrl`). On `kling-4` (up to 7) each one is a named subject built from
+> `bodyImageUrl`), while on `gemini-omni-flash-1-2` they use none of it. On `kling-4` (up to 7) each one is a named subject built from
 > `imageUrl`, `bodyImageUrl` and up to 3 `extraImageUrls`, a start frame is
 > allowed, and `voice` is refused; `kling-4-flash` takes them the same way, with
 > `referenceAudioUrls` clip N as entry N's voice when that entry has 2–4 images
@@ -3710,7 +3712,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 
 `video-to-video` takes `VideoToVideoParams`: `videoUrl` (required), `prompt`,
 `provider` (`wan`, `wan-flash`, `wan-videoedit`, `luma-modify`, `runway-aleph`,
-`happyhorse-edit` or the Seedance edit model `seedance-2-5`), `duration`
+`happyhorse-edit` or a Seedance edit model, `seedance-2-5` or `seedance-2-5-flash`), `duration`
 (`"5"` | `"10"`), `resolution`, `audio`, `multiShots`, `aspectRatio`, `seed`,
 `referenceImageUrl`, `negativePrompt`, `videoEditDuration`, `audioSetting`,
 `promptExtend`, `draft`, plus `sessionId` / `origin`. A `seedance-2-5` edit also takes
@@ -8303,7 +8305,7 @@ const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-y
 
 | Method | Returns | Notes |
 |--------|---------|-------|
-| `plans()` | `Promise<BillingPlansResult>` | `GET /v1/billing/plans`. **Public** — no credential needed, the same answer for every caller where the deployment sells to its users; elsewhere only its billing account (signed in) gets the list. `{ data: BillingPlan[], topUps: BillingTopUp[], topUpRange }`. Nodaro Cloud only (`NotFoundError` on a self-hosted instance). Throws `ForbiddenError` on a deployment that does not sell to its users (the server's code is `self_serve_disabled`), and a `NodaroError` with `status` 503 and `code` `stripe_not_configured`, or `plan_prices_unavailable` for a moment. |
+| `plans()` | `Promise<BillingPlansResult>` | `GET /v1/billing/plans`. **Public** — no credential needed, the same answer for every caller where the deployment sells to its users; elsewhere only its billing account (signed in) gets the list. `{ data: BillingPlan[], topUps: BillingTopUp[], topUpRange, stripePublishableKey }`; `stripePublishableKey` (`string \| null`) is the Stripe publishable key to mount the embedded Checkout form with (`uiMode: "embedded"`), `null` when the deployment has none: use the Checkout page. Nodaro Cloud only (`NotFoundError` on a self-hosted instance). Throws `ForbiddenError` on a deployment that does not sell to its users (the server's code is `self_serve_disabled`), and a `NodaroError` with `status` 503 and `code` `stripe_not_configured`, or `plan_prices_unavailable` for a moment. |
 | `subscription()` | `Promise<BillingSubscriptionResult>` | `GET /v1/billing/subscription`. `{ data: BillingSubscription \| null, effectiveTier }` — `data` is `null` when the account never subscribed. `effectiveTier` is the tier its entitlements follow: usually a `BillingPlan` `id`; `"payg"` (no subscription, credits bought); or a tier not on sale, such as `"enterprise"`. Needs a signed-in session, a personal API token without a workflow limit, or an app's OAuth token (a workflow-limited key gets `ForbiddenError`). Nodaro Cloud only. |
 | `surface()` | `Promise<BillingSurface>` | `GET /v1/billing/surface`. Public, every edition: whether the deployment meters usage at all (`providerId` is `"none"` when it does not) and the unit costs display in (`displayUnit`). |
 | `account()` | `Promise<BillingAccountSummary \| null>` | `GET /v1/billing/account`. The caller's `plan`, `balance` and `dailyAllowance` as the deployment's billing provider reports them, in its `unit`, plus optional fields a provider may add ([§ 12b](./api-integration.md#12b-billing-surface)). `null` when the provider could not answer — not a zero balance. Every edition. |
@@ -8312,8 +8314,9 @@ const current = plans.find((p) => p.id === effectiveTier) // undefined: pay-as-y
 | `paymentMethod()` | `Promise<BillingPaymentMethod>` | `GET /v1/billing/payment-method`. **Session only.** `{ card, billingDetails }` — `card` is `{ brand, last4, expMonth, expYear }` or `null`; `billingDetails` is `{ name, email, country }` or `null`. Both `null` for an account that has not bought yet; never an error. |
 | `autoRecharge()` | `Promise<BillingAutoRecharge>` | `GET /v1/billing/auto-recharge`. **Session only.** `{ enabled, thresholdCredits, amountUsd, failureCount, lastAttemptAt, hasSavedCard }` — when the balance falls under the threshold, the amount is loaded from the saved card. |
 | `setAutoRecharge(input)` | `Promise<BillingAutoRechargeSaved>` | `PUT /v1/billing/auto-recharge`. **Session only.** `{ enabled, thresholdCredits?, amountUsd? }`; enabling needs both figures (`thresholdCredits` 100–100,000; `amountUsd` a whole amount within `topUpRange`), else a `NodaroError` with status 400. Saving clears the failure count. |
-| `checkout(input)` | `Promise<BillingCheckoutSession>` | `POST /v1/billing/create-checkout-session`. **Session only.** `{ priceId, mode?, returnPath?, embedded? }` → `{ url }`, a Stripe Checkout page for a plan's price or a credit pack (`BillingTopUp.id`): send the person there. Promotion codes apply to plans only; a pack purchase that settles for nothing grants no credits. Status 409 for a plan while the account already has a subscription — use `changePlan()`. `returnPath` is a path on your own origin (`"/billing"`, a query allowed; one leading `/`, no host, no `#`) Stripe brings them back to, with `checkout=success` or `checkout=cancelled` in the query; it wins over `embedded`, and without it the Nodaro app's pages are used. `ForbiddenError` with code `self_serve_disabled` where the deployment does not sell to its users. |
-| `loadCredits(input)` | `Promise<BillingLoadSession>` | `POST /v1/billing/create-load-session`. **Session only.** `{ amountUsd, returnPath?, embedded? }` → `{ url, credits }`: a Checkout page loading a whole amount within `topUpRange` as credits at the packs' rate, `credits` being what it grants. The card is saved for the automatic top-up. |
+| `checkout(input)` | `Promise<BillingCheckoutSession>` | `POST /v1/billing/create-checkout-session`. **Session only.** `{ priceId, mode?, returnPath?, embedded?, uiMode?, replacesSessionId? }` → `{ url }`, a Stripe Checkout page for a plan's price or a credit pack (`BillingTopUp.id`): send the person there. Promotion codes apply to plans only; a pack purchase that settles for nothing grants no credits. Status 409 for a plan while the account already has a subscription — use `changePlan()`. `returnPath` is a path on your own origin (`"/billing"`, a query allowed; one leading `/`, no host, no `#`) Stripe brings them back to, with `checkout=success` or `checkout=cancelled` in the query; it wins over `embedded`, and without it the Nodaro app's pages are used. `ForbiddenError` with code `self_serve_disabled` where the deployment does not sell to its users. With `uiMode: "embedded"` (`BillingUiMode`: `"hosted"`, the default, or `"embedded"`) the answer is `{ url: null, clientSecret, sessionId }` for Stripe's embedded Checkout, which never redirects: mount it with `clientSecret` and the plans' `stripePublishableKey`, then poll `checkoutStatus(sessionId)`; `returnPath` and `embedded` are not used, but still validated (an invalid `returnPath` is still a 400). A `NodaroError` with status 503 and code `embedded_checkout_unavailable` means the deployment has no embedded form: use the page. `replacesSessionId` is the id of an earlier Checkout session of yours that this one replaces (the embedded form's `sessionId`), so the two are never payable at once. With it, a `NodaroError` with `status` 409 and `code` `checkout_already_complete` means that purchase is paid, so do not ask again; `checkout_in_progress` means its payment is being confirmed, so read `checkoutStatus` and ask again once its status reads `open` with `paymentUnderWay: false`, or `expired` (it can still be refused then: ask again on the person's action, or space the retries); a `NotFoundError` (`checkout_session_not_found`) means it is not yours, or is not a session of this same purchase (a plan checkout for a plan, the same pack, the same load amount). |
+| `loadCredits(input)` | `Promise<BillingLoadSession>` | `POST /v1/billing/create-load-session`. **Session only.** `{ amountUsd, returnPath?, embedded?, uiMode?, replacesSessionId? }` → `{ url, credits }`: a Checkout page loading a whole amount within `topUpRange` as credits at the packs' rate, `credits` being what it grants. The card is saved for the automatic top-up. With `uiMode: "embedded"`, `{ url: null, clientSecret, sessionId, credits }`, as for `checkout()` (`returnPath` and `embedded` not used, but still validated; the same 503 when there is no embedded form). `replacesSessionId` and its three answers (409 `checkout_already_complete`, 409 `checkout_in_progress`, `NotFoundError` `checkout_session_not_found`) as for `checkout()`. |
+| `checkoutStatus(sessionId)` | `Promise<BillingCheckoutStatus>` | `GET /v1/billing/checkout-session/:sessionId`. **Session only.** `{ status, paymentStatus, mode, granted, paymentUnderWay? }` for one of your own Checkout sessions: `status` `"open"`, `"complete"` or `"expired"`; `paymentStatus` `"paid"`, `"unpaid"` or `"no_payment_required"`; `mode` `"payment"` or `"subscription"`; `granted` true once its credits or plan are on the account; `paymentUnderWay` `true` means naming the session as `replacesSessionId` would be refused `checkout_in_progress` (it is open and its payment has been submitted); `false` means no submitted payment is seen on the session, and a replacement can still be refused, so ask again only on the person's action or space the retries (a request for another purchase than the session's answers `checkout_session_not_found` whatever it reads); absent on a platform that does not send it yet. After the embedded form completes, poll it until `granted`, then read the balance again (a plan's `granted` can lead its credits by a moment). A session that is not yours, or does not exist, is a `NotFoundError` with code `checkout_session_not_found`; `RateLimitedError` past 60 reads a minute per account. |
 | `portal(input?)` | `Promise<BillingPortalSession>` | `POST /v1/billing/manage-subscription`. **Session only.** `{ returnPath? }` → `{ url }`, a Stripe Customer Portal page (the card, the billing address, the invoices, cancelling); `returnPath` is where its Back goes. `NotFoundError` before a first purchase. |
 | `changePlan(input)` | `Promise<BillingChangePlanResult>` | `POST /v1/billing/change-plan`. **Session only.** `{ newPriceId }` → `{ subscriptionId, tier }`: moves the active subscription to another plan's price. An upgrade charges the price difference for the rest of the billing period at once and applies only when that payment succeeds; it adds the difference between the two plans' monthly credits, once per billing period (moving down and back up within a period adds nothing more). An upgrade invoice settled for 0 adds no credits. A downgrade applies at once, credits the unused time on the next invoice, and keeps the current credits until the period ends; a monthly ↔ yearly switch adds no credits (the next monthly credits come a month after it). `NotFoundError` with no active subscription; status 400 on a pack's price or the current one; status 409 when the subscription is not active; a `NodaroError` with status 409 and code `plan_change_payment_required` when the upgrade waits on its payment (the plan is unchanged; `details.invoiceUrl` is Stripe's page for paying it); `RateLimitedError` after 5 plan-change requests from one account in 24 hours. |
 
@@ -8327,6 +8330,12 @@ const [method, docs, auto] = await Promise.all([
 // Buy a pack and come back to this screen.
 const { url } = await client.billing.checkout({ priceId: pack.id, returnPath: "/settings/credits" })
 window.location.assign(url!)
+
+// Or buy inside this screen with Stripe's embedded Checkout.
+const { stripePublishableKey } = await client.billing.plans()
+const { clientSecret, sessionId } = await client.billing.checkout({ priceId: pack.id, uiMode: "embedded" })
+// mount Stripe's embedded Checkout with stripePublishableKey + clientSecret; when it completes:
+const { granted } = await client.billing.checkoutStatus(sessionId!)
 ```
 
 **`BillingPlan`:**
@@ -10323,7 +10332,7 @@ Every type used in a public method signature is re-exported from
 - `BillingSurface` / `BillingAccountSummary` / `BillingUsageCategory` — `billing.surface()` / `billing.account()`
 - `BillingPurchase` / `BillingDocument` / `BillingCard` / `BillingDetails` / `BillingPaymentMethod` — `billing.purchases()` / `billing.invoices()` / `billing.paymentMethod()`
 - `BillingAutoRecharge` / `BillingAutoRechargeInput` / `BillingAutoRechargeSaved` — `billing.autoRecharge()` / `billing.setAutoRecharge()`
-- `BillingCheckoutInput` / `BillingCheckoutSession` / `BillingLoadInput` / `BillingLoadSession` / `BillingPortalInput` / `BillingPortalSession` / `BillingChangePlanInput` / `BillingChangePlanResult` — the hand-offs to Stripe: `billing.checkout()` / `billing.loadCredits()` / `billing.portal()` / `billing.changePlan()`
+- `BillingUiMode` / `BillingCheckoutInput` / `BillingCheckoutSession` / `BillingCheckoutStatus` / `BillingLoadInput` / `BillingLoadSession` / `BillingPortalInput` / `BillingPortalSession` / `BillingChangePlanInput` / `BillingChangePlanResult` — the hand-offs to Stripe: `billing.checkout()` / `billing.loadCredits()` / `billing.checkoutStatus()` / `billing.portal()` / `billing.changePlan()`
 
 ### User settings
 

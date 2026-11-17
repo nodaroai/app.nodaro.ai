@@ -58,6 +58,21 @@ describe("free-credit video locks in the editor", () => {
     expect(lockedVideoModel(LIMITS, "kling-4-flash", { extend: true })).toBe(lockedVideoModel(LIMITS, "seedance-2-5-extend"))
   })
 
+  it("Seedance 2.5 Flash is open at 4 s / 480p while Seedance 2.5 and its variants stay locked", () => {
+    expect(lockedVideoModel(LIMITS, "seedance-2-5-flash")).toBeNull()
+    expect(lockedVideoModel(LIMITS, "seedance-2-5")).not.toBeNull()
+    expect(lockedVideoModel(LIMITS, "seedance-2-5-hd")).not.toBeNull()
+    expect(lockedVideoModel(LIMITS, "seedance-2-5-extend")).not.toBeNull()
+    // Its extend is locked like every extend (decided 2026-11-16): the exact open id never covers it.
+    expect(lockedVideoModel(LIMITS, "seedance-2-5-flash-extend")).toEqual(lockedVideoModel(LIMITS, "seedance-2-5-flash-extend", { extend: true }))
+    expect(lockedVideoModel(LIMITS, "seedance-2-5-flash-extend")).not.toBeNull()
+    expect(lockedVideoDuration(LIMITS, "seedance-2-5-flash", 4)).toBeNull()
+    expect(lockedVideoDuration(LIMITS, "seedance-2-5-flash", 5)).not.toBeNull()
+    expect(lockedVideoResolution(LIMITS, "seedance-2-5-flash", "480p")).toBeNull()
+    expect(lockedVideoResolution(LIMITS, "seedance-2-5-flash", "720p")).not.toBeNull()
+    expect(openVideoResolution(LIMITS, "seedance-2-5-flash", ["720p", "480p", "720p"])).toBe("480p")
+  })
+
   it("PixVerse V6 Max is open within the limits: 360p for 1-4 s, every other quality and length locked", () => {
     expect(lockedVideoModel(LIMITS, "pixverse-v6-max")).toBeNull()
     for (const d of [1, 2, 3, 4]) expect(lockedVideoDuration(LIMITS, "pixverse-v6-max", d), `${d}s`).toBeNull()

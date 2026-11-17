@@ -118,6 +118,7 @@ vi.mock("@/utils/file-validation.js", () => ({ updateStorageUsage: h.updateStora
 vi.mock("@/ee/billing/downgrade-floor.js", () => ({
   downgradeToEffectiveFloor: vi.fn().mockResolvedValue({ error: null }),
   fetchLifetimeTopups: vi.fn().mockResolvedValue(new Map()),
+  LIVE_SUBSCRIPTION_STATUSES: ["active", "trialing", "past_due", "unpaid"],
 }))
 vi.mock("@/ee/billing/credits.js", () => ({ CreditsService: { logTransaction: vi.fn() } }))
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))

@@ -47,14 +47,16 @@ import {
   NODARO_VIDEO_UPSCALE_CREDIT_IDS,
   NODARO_VIDEO_UPSCALE_RATE_SECONDS,
   SEEDANCE_EXTEND_CONTEXT_MAX_SEC,
-  SEEDANCE_EXTEND_RATE_CREDIT_IDS,
+  SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER,
+  SEEDANCE_EXTEND_MIN_SOURCE_SEC,
   SEEDANCE_EXTEND_RATE_SECONDS,
-  SEEDANCE_EXTEND_SENT_PRICED_PROVIDER,
+  SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS,
+  type SentPricedSeedanceExtendProvider,
   SPEAKER_FRAMES_CREDIT_ID,
   TOPAZ_VIDEO_UNIT_CREDIT_ID,
 } from "@nodaro/render-rules"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { NODARO_VIDEO_UPSCALE_MAX_SEC, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC } from "@nodaro/shared/models"
+import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
 
@@ -75,18 +77,20 @@ const ANY_UNITS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: f
 const DUB_MINUTES: UnitQuoteRule = { maxUnits: DUBBING_MAX_MINUTES, wholeUnits: true }
 /** Speaker Frames: started blocks of 1,000 sampled frames — whole blocks only. */
 const FRAME_BLOCKS: UnitQuoteRule = { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: true }
-/** The seconds a Seedance 2.5 Extend run can add: its catalog window. */
-const SEEDANCE_EXTEND_ADDED_SEC: readonly number[] = MODEL_CATALOG[SEEDANCE_EXTEND_SENT_PRICED_PROVIDER]?.durations ?? []
 /**
- * Seedance 2.5 Extend: half a unit per second sent and added. The fewest a run
- * has is the shortest source it takes (`SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC`, the
- * floor the route and the worker refuse under) plus the fewest seconds it
- * adds; the most, the whole 10-second window plus the most it adds.
+ * A sent-priced extend (Seedance 2.5 / 2.5 Flash Extend): half a unit per
+ * second sent and added. The fewest a run has is the shortest source it takes
+ * (`SEEDANCE_EXTEND_MIN_SOURCE_SEC`, the floor the route and the worker
+ * refuse under: 1.8 s, 2 s on Flash) plus the fewest seconds it adds (its catalog window); the
+ * most, the whole 10-second window plus the most it adds.
  */
-const SEEDANCE_EXTEND_UNITS: UnitQuoteRule = {
-  minUnits: (SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC + Math.min(...SEEDANCE_EXTEND_ADDED_SEC)) / SEEDANCE_EXTEND_RATE_SECONDS,
-  maxUnits: (SEEDANCE_EXTEND_CONTEXT_MAX_SEC + Math.max(...SEEDANCE_EXTEND_ADDED_SEC)) / SEEDANCE_EXTEND_RATE_SECONDS,
-  wholeUnits: false,
+function seedanceExtendUnits(provider: SentPricedSeedanceExtendProvider): UnitQuoteRule {
+  const added: readonly number[] = MODEL_CATALOG[provider]?.durations ?? []
+  return {
+    minUnits: (SEEDANCE_EXTEND_MIN_SOURCE_SEC[provider] + Math.min(...added)) / SEEDANCE_EXTEND_RATE_SECONDS,
+    maxUnits: (SEEDANCE_EXTEND_CONTEXT_MAX_SEC + Math.max(...added)) / SEEDANCE_EXTEND_RATE_SECONDS,
+    wholeUnits: false,
+  }
 }
 
 /** Every rate a whole-run quote may name, with the unit counts it accepts. */
@@ -107,11 +111,13 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
     id,
     { maxUnits: NODARO_VIDEO_UPSCALE_MAX_SEC / NODARO_VIDEO_UPSCALE_RATE_SECONDS, wholeUnits: false },
   ] as const),
-  // Seedance 2.5 Extend: each resolution's row prices two seconds, so a run is
+  // Seedance 2.5 and 2.5 Flash Extend: each resolution's row prices two seconds, so a run is
   // half a unit per second sent and added (any fraction: the source's seconds
   // are measured), from the shortest source a run takes plus the fewest
   // seconds it adds, up to the 10-second window plus the most it adds.
-  ...Object.values(SEEDANCE_EXTEND_RATE_CREDIT_IDS).map((id) => [id, SEEDANCE_EXTEND_UNITS] as const),
+  ...SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS.flatMap((provider) =>
+    Object.values(SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER[provider]).map((id) => [id, seedanceExtendUnits(provider)] as const),
+  ),
   ...DUBBING_MODEL_IDENTIFIERS.map((id) => [id, DUB_MINUTES] as const),
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.

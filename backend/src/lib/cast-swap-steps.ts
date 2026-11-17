@@ -52,7 +52,7 @@
  */
 import { createHash } from "node:crypto"
 import { z } from "zod"
-import { getLlmModalityCaps, LLM_MODEL_IDS } from "@nodaro/shared/llm-models"
+import { getLlmModalityCaps, LLM_MODEL_IDS, readsVideoOutsideLlmNodes } from "@nodaro/shared/llm-models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 // ---- 0.1 Vocabulary --------------------------------------------------------
@@ -342,9 +342,14 @@ function stepRules(s: z.output<typeof stepsShape>, ctx: Ctx): void {
   }
 }
 
-/** Whether `model` reads the clip: a model that takes video, or one that reads it as a picture (`CLIP_AS_IMAGE_MODELS`). */
+/**
+ * Whether `model` reads the clip: a model that takes video, or one that reads
+ * it as a picture (`CLIP_AS_IMAGE_MODELS`). A model that reads video on the LLM
+ * nodes only (`LLM_NODE_ONLY_MEDIA_MODELS`: Gemini 4 Hydrogen, decided
+ * 2026-11-16) is not offered to a trend's clip step.
+ */
 export function modelReadsClip(model: string): boolean {
-  return getLlmModalityCaps(model).video || (CLIP_AS_IMAGE_MODELS as readonly string[]).includes(model)
+  return readsVideoOutsideLlmNodes(model) || (CLIP_AS_IMAGE_MODELS as readonly string[]).includes(model)
 }
 
 /** The save-time rules: a known model that can see what it is shown; an image prompt naming only the engine's placeholders. */

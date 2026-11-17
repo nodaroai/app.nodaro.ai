@@ -357,6 +357,10 @@ export const envSchema = z.object({
   CORS_ORIGIN: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  /** The Stripe publishable key (same mode as STRIPE_SECRET_KEY) that `GET /v1/billing/plans` hands to apps for the embedded payment form (ee/billing/embedded-checkout.ts). */
+  STRIPE_PUBLISHABLE_KEY: z.string().default(""),
+  /** The frontend build's name for the same key, read when the first is unset. */
+  VITE_STRIPE_PUBLISHABLE_KEY: z.string().default(""),
   /** A test-mode deployment's own Stripe catalogue (JSON; ee/billing/stripe-catalog.ts), read from the environment by stripe-config.ts at load. Used only with an sk_test_ key; a live key always sells the live catalogue. */
   STRIPE_TEST_CATALOG: z.string().default(""),
   /** `true`: refuse to start while any setting holds a live Stripe key (lib/stripe-mode-settings.ts), for a deployment that must stay on Stripe's test mode. */

@@ -140,6 +140,12 @@ describe("castSwapStepsSaveSchema", () => {
     expect(codesOf(castSwapStepsSaveSchema, { sceneDescription: { mode: "llm", llm: llm({ model: "gemini-3.1-pro" }) } })).toEqual([])
   })
 
+  it("refuses the clip for Gemini 4 Hydrogen, whose video reading is for the LLM nodes only (decided 2026-11-16)", () => {
+    expect(codesOf(castSwapStepsSaveSchema, { sceneDescription: { mode: "llm", llm: llm({ model: "gemini-4-hydrogen" }) } })).toEqual(["model_cannot_read_clip"])
+    // Carbon, which reads video everywhere, still may.
+    expect(codesOf(castSwapStepsSaveSchema, { sceneDescription: { mode: "llm", llm: llm({ model: "gemini-4-carbon" }) } })).toEqual([])
+  })
+
   it("names where each problem is", () => {
     const r = castSwapStepsSaveSchema.safeParse({ sceneDescription: { mode: "llm", llm: llm({ model: "claude-sonnet-5" }) } })
     expect(r.success).toBe(false)

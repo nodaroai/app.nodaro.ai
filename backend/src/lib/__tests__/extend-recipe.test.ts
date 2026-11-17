@@ -227,3 +227,79 @@ describe("the Kling 4 Extend prompt cap", () => {
     expect(sent.endsWith("Use @image_1 as the opening (first) frame of the video.")).toBe(true)
   })
 })
+
+// Decided 2026-11-16: Seedance 2.5 Flash Extend is Seedance 2.5's recipe on
+// the Flash model, MP4 only, its tail fitted into Flash's pixel window.
+describe("seedance-2-5-flash-extend's recipe", () => {
+  const flash = TAIL_RECIPES["seedance-2-5-flash-extend"]
+  const sibling = TAIL_RECIPES["seedance-2-5-extend"]
+
+  it("is Seedance 2.5's recipe on seedance-2-5-flash, without the MOV chain (its shortest source apart)", () => {
+    expect(flash.genModel).toBe("seedance-2-5-flash")
+    expect(flash.movChain).toBeUndefined()
+    expect(sibling.movChain).toBe(true)
+    const { genModel: _g, movChain: _m, prompt: _p, minSourceSec: _f, ...rest } = flash
+    const { genModel: _sg, movChain: _sm, prompt: _sp, minSourceSec: _sf, ...siblingRest } = sibling
+    expect(rest).toEqual(siblingRest)
+    expect(flash.prompt("x", 8)).toBe(sibling.prompt("x", 8))
+  })
+
+  it("its prompt ceiling fits under Seedance 2.5 Flash's own, with room for the recipe's wrapper", () => {
+    const ceiling = getMaxVideoPromptChars("seedance-2-5-flash-extend")
+    expect(ceiling).toBe(getMaxVideoPromptChars("seedance-2-5-extend"))
+    expect(flash.prompt("x".repeat(ceiling), 30).length).toBeLessThanOrEqual(getMaxVideoPromptChars("seedance-2-5-flash"))
+  })
+
+  // Decided 2026-11-16: Flash's documented 2 s, never the 2.0 family's measured 1.8 s.
+  it("continues a source of at least Flash's documented 2 s; Seedance 2.5 keeps its 1.8 s", () => {
+    expect(flash.minSourceSec).toBe(2)
+    expect(flash.minSourceSec).toBe(VIDEO_REF_VIDEO_DURATION_LIMITS["seedance-2-5-flash"]!.minSec)
+    expect(sibling.minSourceSec).toBe(SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC)
+    expect(extendSourceTooShortMessage("seedance-2-5-flash-extend", 1.9)).toContain("at least 2s")
+  })
+})
+
+// Decided 2026-11-17: Gemini Omni Flash 1.2 on fal — the source's last 10 s,
+// the prompt as written, the model's clip of the tail + the new seconds cut
+// to the new seconds, joined by PixVerse V6's native-extend stitch.
+describe("Gemini Omni Flash 1.2 Extend's recipe", () => {
+  const gemini = TAIL_RECIPES["gemini-omni-flash-1-2-extend"]
+
+  it("sends the last 10 s (all of a shorter source) from a source of about 4 s or more, adding 3–10 s on fal", () => {
+    expect(gemini.genModel).toBe("gemini-omni-flash-1-2")
+    expect(gemini.transport).toBe("fal")
+    expect(gemini.returnsSentClip).toBe(true)
+    expect(gemini.tailSec).toBe(10)
+    // About 4 s: 4 less the quarter second the sent-seconds rule allows (decided 2026-11-17).
+    expect(gemini.minSourceSec).toBe(3.75)
+    expect(gemini.window).toEqual({ min: 3, max: 10 })
+    expect(gemini.startImage).toBe(false)
+    expect(gemini.referenceTaskType).toBeUndefined()
+    expect(gemini.movChain).toBeUndefined()
+    expect(tailCutSec("gemini-omni-flash-1-2-extend", 42)).toBe(10)
+    expect(tailCutSec("gemini-omni-flash-1-2-extend", 6.5)).toBe(6.5)
+    expect(extendSourceTooShortMessage("gemini-omni-flash-1-2-extend", 3.5)).toContain("at least 3.75s")
+  })
+
+  it("sends the user's prompt as written: no reference syntax, nothing wrapped around it", () => {
+    expect(gemini.prompt("  she turns and runs  ", 8)).toBe("she turns and runs")
+    expect(gemini.prompt(undefined, 8)).toBe("")
+  })
+
+  it("joins the new seconds as the native extend does: an 8 × 8 smart cut, no trims without a match, leading repeats dropped", () => {
+    expect(gemini.stitch).toEqual({
+      smartCut: { framesFromPrev: 8, framesFromNext: 8 },
+      fallbackTrims: { trimEndFrames: 0, trimStartFrames: 0 },
+      audioFadeSec: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+      dropLeadingRepeats: true,
+    })
+  })
+
+  it("every other recipe is generated on KIE and returns the new seconds alone (byte-identical recipes)", () => {
+    for (const provider of ["seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend"] as const) {
+      expect(TAIL_RECIPES[provider].transport, provider).toBeUndefined()
+      expect(TAIL_RECIPES[provider].returnsSentClip, provider).toBeUndefined()
+      expect(TAIL_RECIPES[provider].stitch.dropLeadingRepeats, provider).toBeUndefined()
+    }
+  })
+})

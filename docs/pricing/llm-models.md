@@ -36,6 +36,8 @@ Workflow Copilot is priced separately and is not charged by these rates.
 | Gemini 4 Argon | `gemini-4-argon` | Provider's own API (default) | 2,200<!-- credits-llm-rate: gemini-4-argon:direct:input --> | 11,000<!-- credits-llm-rate: gemini-4-argon:direct:output --> |
 | Gemini 4 Carbon | `gemini-4-carbon` | Aggregator (default) | 440<!-- credits-llm-rate: gemini-4-carbon:kie:input --> | 2,200<!-- credits-llm-rate: gemini-4-carbon:kie:output --> |
 | Gemini 4 Carbon | `gemini-4-carbon` | Provider's own API | 2,200<!-- credits-llm-rate: gemini-4-carbon:direct:input --> | 11,000<!-- credits-llm-rate: gemini-4-carbon:direct:output --> |
+| Gemini 4 Hydrogen | `gemini-4-hydrogen` | Aggregator (default) | 330<!-- credits-llm-rate: gemini-4-hydrogen:kie:input --> | 1,650<!-- credits-llm-rate: gemini-4-hydrogen:kie:output --> |
+| Gemini 4 Hydrogen | `gemini-4-hydrogen` | Provider's own API | 825<!-- credits-llm-rate: gemini-4-hydrogen:direct:input --> | 4,125<!-- credits-llm-rate: gemini-4-hydrogen:direct:output --> |
 | Claude Opus 4.7 | `claude-opus-4.7` | Aggregator (default) | 785<!-- credits-llm-rate: claude-opus-4.7:kie:input --> | 3,933<!-- credits-llm-rate: claude-opus-4.7:kie:output --> |
 | Claude Opus 4.7 | `claude-opus-4.7` | Provider's own API | 2,750<!-- credits-llm-rate: claude-opus-4.7:direct:input --> | 13,750<!-- credits-llm-rate: claude-opus-4.7:direct:output --> |
 | GPT-5.4 | `gpt-5.4` | Aggregator (default) | 385<!-- credits-llm-rate: gpt-5.4:kie:input --> | 3,080<!-- credits-llm-rate: gpt-5.4:kie:output --> |

@@ -34,10 +34,10 @@
  * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER, SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazVideoHoldBaseCredits } from "@/lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "@/lib/nodaro-video-upscale-plan.js"
-import { seedanceExtendBaseCredits } from "@/lib/seedance-extend-credits.js"
+import { geminiOmniExtendRunBaseCredits, seedanceExtendBaseCredits } from "@/lib/seedance-extend-credits.js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -198,13 +198,15 @@ const CHARGES: Readonly<Record<string, Charge>> = {
     ]),
   ),
   // routes/extend-video.ts (computeCredits), the workflow run's computeSeedanceExtendCreditOverride
-  // and the worker's settlement: Seedance 2.5 on a 4.5 s source with 8 s added — (4.5 + 8) ÷ 2
-  // = 6.25 units of its resolution's two-second row.
+  // and the worker's settlement: Seedance 2.5 (and 2.5 Flash, on its own rows) on a 4.5 s source
+  // with 8 s added — (4.5 + 8) ÷ 2 = 6.25 units of its resolution's two-second row.
   ...Object.fromEntries(
-    Object.entries(SEEDANCE_EXTEND_RATE_CREDIT_IDS).map(([resolution, id]): [string, Charge] => [
-      id,
-      { units: 6.25, charge: async () => markedUp(id, await seedanceExtendBaseCredits({ duration: 8, resolution, sourcePictureSec: 4.5 })) },
-    ]),
+    SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS.flatMap((provider) =>
+      Object.entries(SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER[provider]).map(([resolution, id]): [string, Charge] => [
+        id,
+        { units: 6.25, charge: async () => markedUp(id, await seedanceExtendBaseCredits({ provider, duration: 8, resolution, sourcePictureSec: 4.5 })) },
+      ]),
+    ),
   ),
 }
 
@@ -254,6 +256,22 @@ describe("an admin retune of a per-unit rate moves the charge and the quote toge
       expect(charged, rateId).toBe(await markedUp(rateId, quoteBaseCredits(STATIC_CREDIT_COSTS[rateId]!, units)))
       expect(await CreditsService.getModelCreditCost(unitQuoteCreditId(rateId, units)), rateId).toBe(charged)
     }
+  })
+})
+
+// Gemini Omni Flash 1.2 Extend (decided 2026-11-17) is held on two rows, not a
+// unit rate: its hold (route, workflow run, worker settlement — one function)
+// reads both rows as an administrator left them.
+describe("Gemini Omni Flash 1.2 Extend's hold reads its admin rows", () => {
+  it("an admin retune of either row moves the hold", async () => {
+    rows.set("gemini-omni-flash-1-2-extend:source:per-second", 6)
+    rows.set("gemini-omni-flash-1-2-extend:720p:per-second", 50)
+    invalidateModelPricingCache()
+    // 10 s × 6 + 5 s × 50 = 310 → 310; at the code's rows it would be 260.
+    expect(await geminiOmniExtendRunBaseCredits({ duration: 5, resolution: "720p", sourcePictureSec: 12 })).toBe(310)
+    rows.clear()
+    invalidateModelPricingCache()
+    expect(await geminiOmniExtendRunBaseCredits({ duration: 5, resolution: "720p", sourcePictureSec: 12 })).toBe(260)
   })
 })
 
@@ -339,7 +357,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/apply-edl.ts": ["unitRateBaseCredits"],
     "routes/mask-composite.ts": ["maskCompositeBaseCredits"],
     "routes/video-overlay.ts": ["videoOverlayBaseCredits"],
-    "routes/extend-video.ts": ["ltxExtendBaseCredits", "seedanceExtendBaseCredits"],
+    "routes/extend-video.ts": ["ltxExtendBaseCredits", "sentChargedExtendBaseCredits"],
     "routes/video-retake.ts": ["ltxRetakeBaseCredits"],
     "routes/dubbing.ts": ["dubbingBaseCredits"],
     "routes/lip-sync.ts": ["lipSyncRateBaseCredits"],
@@ -355,7 +373,7 @@ describe("each charge site prices through the function this suite drives", () =>
       "lipSyncRateBaseCredits",
       "seedanceExtendStampedBaseCredits",
     ],
-    "workers/handlers/video-ai.ts": ["seedanceExtendBaseCredits"],
+    "workers/handlers/video-ai.ts": ["sentChargedExtendBaseCredits"],
     // The library functions the sites call: each reads the row through the shared lookup.
     "lib/video-utility-credits.ts": ["unitRateBaseCredits"],
     "lib/video-utility-length.ts": ["unitRateBaseCredits"],
@@ -370,7 +388,8 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
     "lib/lip-sync-inputs.ts": ["unitRateBaseCredits"],
     "lib/nodaro-video-upscale-plan.ts": ["unitRateBaseCredits"],
-    "lib/seedance-extend-credits.ts": ["unitRateBaseCredits"],
+    // Seedance's sent-priced extends through the unit rate; Gemini Omni Flash 1.2 Extend's two rows through the shared lookup.
+    "lib/seedance-extend-credits.ts": ["unitRateBaseCredits", "baseCreditCostFor", "seedanceExtendBaseCredits", "geminiOmniExtendRunBaseCredits"],
   }
 
   it("this file's @test-watches name every site it reads, so a change to one selects it", () => {

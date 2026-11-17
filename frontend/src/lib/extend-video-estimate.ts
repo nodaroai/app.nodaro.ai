@@ -8,13 +8,15 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  * How many of its price row an Extend Video run is charged:
  * - LTX 2.3 Pro: the seconds it adds (its row, `ltx-2.3-pro-extend:per-second`,
  *   is per second — the same product the route and a workflow run reserve);
- * - Seedance 2.5: (seconds sent + seconds added) ÷ 2 of its resolution's
+ * - Seedance 2.5 and 2.5 Flash: (seconds sent + seconds added) ÷ 2 of its resolution's
  *   two-second row (`seedanceExtendPrice`, the rule the route, the workflow
  *   run and the server's run estimate read): the source's last 10 s at the
  *   length the graph knows it (`extendSourceEstimateSec`: an upload's, a made
  *   generation's recorded length), the whole window while it does not — the
  *   run measures the source before it holds anything;
- * - every other provider: one.
+ * - every other provider: one — Gemini Omni Flash 1.2 included, whose one
+ *   whole-run quote id already names the seconds sent and added
+ *   (`getModelIdentifier`, decided 2026-11-17).
  * A wired Settings node can set the model, the length and the resolution, so
  * they are read the way the run reads them.
  */
@@ -29,7 +31,7 @@ export function extendVideoPricingUnits(
   const provider = canonicalVideoProvider(typeof data.provider === "string" ? data.provider : EXTEND_VIDEO_DEFAULT_PROVIDER)
   if (isSeedanceExtendPricedBySecondsSent(provider)) {
     const sourceSec = extendSourceEstimateSec(node, allNodes, edges, rerunIds)
-    return seedanceExtendPrice({ duration: data.duration, resolution: data.resolution, sourcePictureSec: sourceSec }).units
+    return seedanceExtendPrice({ provider, duration: data.duration, resolution: data.resolution, sourcePictureSec: sourceSec }).units
   }
   return 1
 }

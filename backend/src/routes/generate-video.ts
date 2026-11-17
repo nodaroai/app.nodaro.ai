@@ -33,7 +33,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoStartFrameOnlyProblem, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { videoReferencesOverLimitProblem, type VideoReferenceCounts, VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoStartFrameOnlyProblem, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature, ttsNamedVoices } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -306,6 +306,14 @@ export function assembleVideoConnectedReferences(args: {
    * refs went in, so the budget must bound the assembly itself.
    */
   imageCapOverride?: number
+  /**
+   * Count what the request would send with NO image cap (a provider that takes
+   * image references at all): the over-limit pre-check of a model that refuses
+   * rather than trims (`requestRefusesOverLimit`) judges the assembled,
+   * de-duplicated, blank-free list, never the raw entry count — a connected
+   * reference can expand to several images. Never used to build a request.
+   */
+  uncappedForCount?: true
 }): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
   const {
     prompt,
@@ -320,8 +328,9 @@ export function assembleVideoConnectedReferences(args: {
     referenceAudioCaptions,
   } = args
   const providerCap = provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) : 0
-  const imageCap =
-    args.imageCapOverride !== undefined ? Math.min(Math.max(0, args.imageCapOverride), providerCap) : providerCap
+  const imageCap = args.uncappedForCount && providerCap > 0
+    ? Number.MAX_SAFE_INTEGER
+    : args.imageCapOverride !== undefined ? Math.min(Math.max(0, args.imageCapOverride), providerCap) : providerCap
 
   // Every reference the caller named, by ITS id → display name — built from the
   // FULL list, before any cap, so a `{ref:<id>}` for a reference that never
@@ -712,6 +721,59 @@ export async function applyAudioSoundtrackPreHandler(
   if (outcome.applied) req.body = outcome.request
 }
 
+/**
+ * A request that sends more references than its model takes is refused before
+ * anything is held, on a model that refuses rather than trims
+ * (`requestRefusesOverLimit`: Seedance 2.5 Flash, decided 2026-11-16). The
+ * editor's Run trims what it sends first, and a workflow run keeps the
+ * provider's trim, so this answers a direct API or MCP request. Counted on the
+ * body as sent: images (with the prompt's `connectedReferences`, and a start
+ * or end frame once any reference is sent), videos and audio clips.
+ */
+export async function refuseVideoReferencesOverLimitPreHandler(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const provider = typeof body.provider === "string" ? body.provider : undefined
+  const problem = videoReferencesOverLimitProblem(provider, sentVideoReferenceCounts(body))
+  if (problem) {
+    return reply.status(400).send({ error: { code: "too_many_references", message: problem } })
+  }
+}
+
+/**
+ * The references a video request SENDS, counted the way they are sent: the
+ * image list as the reference assembly builds it (a connected reference can
+ * expand to several images; duplicates and blank entries are dropped), the
+ * videos and audio clips that are not blank, and the start / end frame. Only
+ * assembled for a model that refuses an over-limit request — every other one
+ * is never judged on it.
+ */
+export function sentVideoReferenceCounts(body: Record<string, unknown>): VideoReferenceCounts {
+  const provider = typeof body.provider === "string" ? body.provider : undefined
+  const present = (v: unknown) => (Array.isArray(v) ? v.filter((u): u is string => typeof u === "string" && u.trim().length > 0) : [])
+  const baseImages = present(body.referenceImageUrls)
+  const connected = Array.isArray(body.connectedReferences) ? (body.connectedReferences as ConnectedReference[]) : []
+  const videos = present(body.referenceVideoUrls)
+  const audio = present(body.referenceAudioUrls)
+  const refuses = !!provider && VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.requestRefusesOverLimit === true
+  const images = refuses && connected.length > 0
+    ? (assembleVideoConnectedReferences({
+        prompt: typeof body.prompt === "string" ? body.prompt : undefined,
+        provider,
+        connectedReferences: connected,
+        baseReferenceImageUrls: baseImages,
+        referenceOrder: Array.isArray(body.referenceOrder) ? (body.referenceOrder as string[]) : undefined,
+        referenceVideoCount: videos.length,
+        referenceAudioCount: audio.length,
+        uncappedForCount: true,
+      }).referenceImageUrls ?? []).length
+    : new Set(baseImages).size
+  const frame = (v: unknown) => (typeof v === "string" && v.trim().length > 0 ? 1 : 0)
+  return { images, videos: videos.length, audio: audio.length, frames: frame(body.imageUrl) + frame(body.endFrameUrl) }
+}
+
 export async function validateSeedance2AudioPreHandler(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -854,7 +916,7 @@ export async function validateRefVideoDurationPreHandler(
  * is what the run reserves).
  */
 export const generateVideoPricing: RoutePricing = {
-  prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })

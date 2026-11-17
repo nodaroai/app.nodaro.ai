@@ -50,7 +50,7 @@ describe("nodes.run — the typed video lanes take an Idempotency-Key", () => {
     expectTypeOf(nodes.run("text-to-video", { prompt: "x" }, { idempotencyKey: "k" })).toEqualTypeOf<Promise<RunNodeResult>>()
     expectTypeOf(nodes.run("generate-video", {}, { idempotencyKey: "k" })).toEqualTypeOf<Promise<RunNodeResult>>()
     expectTypeOf<VideoToVideoParams["provider"]>().toEqualTypeOf<
-      "wan" | "wan-flash" | "wan-videoedit" | "luma-modify" | "runway-aleph" | "happyhorse-edit" | "seedance-2-5" | undefined
+      "wan" | "wan-flash" | "wan-videoedit" | "luma-modify" | "runway-aleph" | "happyhorse-edit" | "seedance-2-5" | "seedance-2-5-flash" | undefined
     >()
     expectTypeOf<VideoToVideoParams["videoUrl"]>().toEqualTypeOf<string>()
   })

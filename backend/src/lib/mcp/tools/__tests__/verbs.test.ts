@@ -545,7 +545,7 @@ describe("extend_video verb", () => {
     const schema = tool.inputSchema as { required?: string[]; properties: Record<string, { enum?: unknown[]; minimum?: number; maximum?: number }> }
     const properties = schema.properties
     // Every Extend Video provider but LTX 2.3 Pro, which this tool does not offer; still a required argument.
-    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-0-extend", "kling-4-extend", "pixverse-v6-extend", "grok-extend"])
+    expect(properties.model.enum).toEqual(["veo-extend", "runway-extend", "seedance-2-5-extend", "seedance-2-5-flash-extend", "seedance-2-0-extend", "kling-4-extend", "gemini-omni-flash-1-2-extend", "pixverse-v6-extend", "grok-extend"])
     expect(schema.required).toEqual(expect.arrayContaining(["prompt", "model"]))
     // The retired id is accepted, never offered or named.
     expect(JSON.stringify(tool)).not.toContain("seedance-2-extend")
@@ -553,13 +553,17 @@ describe("extend_video verb", () => {
     expect([properties.duration.minimum, properties.duration.maximum]).toEqual([1, 30])
     expect(tool.description).toContain("seedance-2-5-extend")
     expect(tool.description).toContain("seedance-2-0-extend")
-    // The resolutions the route takes, ascending: no 4k.
-    expect(properties.resolution.enum).toEqual(["360p", "480p", "540p", "720p", "1080p"])
+    expect(tool.description).toContain("seedance-2-5-flash-extend")
+    // The resolutions the route takes, ascending: 4k (Gemini Omni Flash 1.2's) last.
+    expect(properties.resolution.enum).toEqual(["360p", "480p", "540p", "720p", "1080p", "4k"])
+    // Gemini Omni Flash 1.2 (decided 2026-11-17): named, with the two shapes it takes.
+    expect(tool.description).toContain("gemini-omni-flash-1-2-extend continues only a 16:9 or 9:16 video")
 
     for (const [model, provider] of [
       ["seedance-2-extend", "seedance-2-5-extend"],
       ["seedance-2-5-extend", "seedance-2-5-extend"],
       ["seedance-2-0-extend", "seedance-2-0-extend"],
+      ["seedance-2-5-flash-extend", "seedance-2-5-flash-extend"],
     ] as const) {
       const { fastify, received } = stubRoute("POST", "/v1/extend-video", { jobId: "j-ex" })
       const calling = buildServer()
@@ -580,12 +584,14 @@ describe("extend_video verb", () => {
     const tool = (await listTools(server)).find((t) => t.name === "extend_video")!
     const properties = (tool.inputSchema as { properties: Record<string, { description?: string }> }).properties
     const seedance = EXTEND_REFERENCE_IMAGE_PROVIDERS.join(" / ")
-    expect(seedance).toBe("seedance-2-5-extend / seedance-2-0-extend")
+    expect(seedance).toBe("seedance-2-5-extend / seedance-2-5-flash-extend / seedance-2-0-extend")
     expect(properties.reference_image_urls.description).toContain(`(${seedance} only`)
     expect(properties.reference_image_urls.description).not.toContain("kling-4-extend")
     expect(properties.generate_audio.description).toContain(`(${seedance} / pixverse-v6-extend only`)
     expect(properties.generate_audio.description).not.toContain("kling-4-extend")
     expect(properties.resolution.description).toContain("seedance-2-5-extend / seedance-2-0-extend: 480p, 720p or 1080p")
+    expect(properties.resolution.description).toContain("seedance-2-5-flash-extend: 480p or 720p")
+    expect(properties.duration.description).toContain("seedance-2-5-flash-extend 4–30 seconds (default 8)")
     expect(properties.resolution.description).toContain("kling-4-extend: 720p or 1080p")
     expect(properties.duration.description).toContain("kling-4-extend 3–30 seconds (default 5)")
     expect(properties.video_url.description).toContain("kling-4-extend")

@@ -31,6 +31,8 @@ vi.mock("@fal-ai/client", () => ({
 vi.mock("@/lib/reconcile/fire-on-task-created.js", () => ({ fireOnTaskCreated: mockFire }))
 
 import {
+  FalSubmitAmbiguousError,
+  submitOnceFetch,
   runFalRequest,
   extractFalUrl,
   fetchFalRequestStatus,
@@ -46,6 +48,66 @@ beforeEach(() => {
   mockFire.mockResolvedValue(undefined)
   // Reset the module's one-shot config guard so each spec starts unconfigured.
   __resetFalConfiguredForTests()
+})
+
+// ---------------------------------------------------------------------------
+// submitOnceFetch — a submit that creates a billed run is sent once
+// (decided 2026-11-17). The SDK re-sends a submit by itself after a 429 / 502
+// / 503 / 504 or a network failure; for an endpoint a caller marked
+// `submitOnce`, the transport turns an outcome it cannot read into an error
+// the SDK does not retry.
+// ---------------------------------------------------------------------------
+
+describe("submitOnceFetch", () => {
+  const ONCE = "google/once-model/v1/extend"
+  const OTHER = "fal-ai/sync-lipsync/v3"
+  const submitUrl = (endpoint: string) => `https://queue.fal.run/${endpoint}`
+  const respond = (status: number) => new Response("{}", { status })
+  /** Marks ONCE as a send-once endpoint, the way its caller does. */
+  async function markOnce(): Promise<void> {
+    mockSubmit.mockResolvedValue({ request_id: "req-once" })
+    mockStatus.mockResolvedValue({ status: "COMPLETED" })
+    mockResult.mockResolvedValue({ data: {} })
+    await runFalRequest({ endpoint: ONCE, input: {}, label: "[fal:once]", pollIntervalMs: 0, submitOnce: true })
+  }
+
+  it.each([502, 503, 504])("a %s answered to a send-once submit becomes an error the SDK does not retry", async (status) => {
+    await markOnce()
+    const inner = vi.fn(async () => respond(status))
+    const err = await submitOnceFetch(inner as never)(submitUrl(ONCE), { method: "POST" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(FalSubmitAmbiguousError)
+    expect((err as FalSubmitAmbiguousError).status).toBe(status)
+    expect(inner).toHaveBeenCalledTimes(1)
+  })
+
+  it("a network failure of a send-once submit carries nothing the SDK's retry reads (no cause, no code, no TypeError)", async () => {
+    await markOnce()
+    const failure = Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error("reset"), { code: "ECONNRESET" }) })
+    const err = await submitOnceFetch((async () => { throw failure }) as never)(submitUrl(ONCE), { method: "POST" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(FalSubmitAmbiguousError)
+    expect(err).not.toBeInstanceOf(TypeError)
+    expect((err as Error).cause).toBeUndefined()
+    expect((err as { code?: unknown }).code).toBeUndefined()
+    expect((err as Error).message).not.toMatch(/^fetch failed$/i)
+  })
+
+  it("passes a 429 and a success of a send-once submit through (nothing was created on a 429: the SDK may retry it)", async () => {
+    await markOnce()
+    for (const status of [429, 200, 422]) {
+      const res = await submitOnceFetch((async () => respond(status)) as never)(submitUrl(ONCE), { method: "POST" })
+      expect(res.status).toBe(status)
+    }
+  })
+
+  it("leaves every other call untouched: another endpoint's submit, and the send-once endpoint's status and result reads", async () => {
+    await markOnce()
+    const wrapped = submitOnceFetch((async () => respond(502)) as never)
+    expect((await wrapped(submitUrl(OTHER), { method: "POST" })).status).toBe(502)
+    expect((await wrapped(`${submitUrl(ONCE)}/requests/req-1/status`, { method: "GET" })).status).toBe(502)
+    expect((await wrapped(`${submitUrl(ONCE)}/requests/req-1`, { method: "GET" })).status).toBe(502)
+    const failure = new TypeError("fetch failed")
+    await expect(submitOnceFetch((async () => { throw failure }) as never)(submitUrl(OTHER), { method: "POST" })).rejects.toBe(failure)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -137,6 +199,59 @@ describe("runFalRequest", () => {
     await expect(
       runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0 }),
     ).rejects.toThrow("fal request failed (req-err): model exploded")
+  })
+
+  // Decided 2026-11-17: resuming a request and retrying a failed status read
+  // are opt-in (Gemini Omni Flash 1.2 Extend). A caller that passes neither
+  // (lip-sync, SAM3, video depth) keeps the path it always had.
+  it("with no resume or retry option: always submits, and the first failed status read throws", async () => {
+    mockSubmit.mockResolvedValue({ request_id: "req-plain" })
+    mockStatus.mockRejectedValue(new Error("socket hang up"))
+
+    await expect(
+      runFalRequest({ endpoint: "ep", input: { a: 1 }, label: "[fal:x]", pollIntervalMs: 0 }),
+    ).rejects.toThrow("socket hang up")
+    expect(mockSubmit).toHaveBeenCalledTimes(1)
+    expect(mockSubmit).toHaveBeenCalledWith("ep", { input: { a: 1 } })
+    expect(mockFire).toHaveBeenCalledTimes(1)
+    expect(mockStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it("resumeRequestId polls and fetches that request: nothing is submitted, no task is recorded again", async () => {
+    mockStatus.mockResolvedValue({ status: "COMPLETED" })
+    mockResult.mockResolvedValue({ data: { video: { url: "https://fal.media/o.mp4" } } })
+    const onSubmitted = vi.fn(async () => {})
+
+    const out = await runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0, resumeRequestId: "req-old", onSubmitted })
+    expect(out.requestId).toBe("req-old")
+    expect(mockSubmit).not.toHaveBeenCalled()
+    expect(mockFire).not.toHaveBeenCalled()
+    expect(onSubmitted).not.toHaveBeenCalled()
+    expect(mockStatus).toHaveBeenCalledWith("ep", { requestId: "req-old" })
+  })
+
+  it("statusErrorRetries tolerates that many failed status reads in a row, and no more", async () => {
+    mockSubmit.mockResolvedValue({ request_id: "req-blip" })
+    mockStatus
+      .mockRejectedValueOnce(new Error("blip 1"))
+      .mockRejectedValueOnce(new Error("blip 2"))
+      .mockResolvedValueOnce({ status: "IN_PROGRESS" })
+      .mockRejectedValueOnce(new Error("blip 3"))
+      .mockRejectedValueOnce(new Error("blip 4"))
+      .mockRejectedValueOnce(new Error("blip 5"))
+    await expect(
+      runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0, statusErrorRetries: 2 }),
+    ).rejects.toThrow("blip 5")
+    expect(mockSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it("maxPolls bounds the wait of one call; absent, the cap is the client's own", async () => {
+    mockSubmit.mockResolvedValue({ request_id: "req-slow" })
+    mockStatus.mockResolvedValue({ status: "IN_PROGRESS" })
+    await expect(
+      runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0, maxPolls: 4 }),
+    ).rejects.toThrow("fal request failed (req-slow): timed out after 4 polls")
+    expect(mockStatus).toHaveBeenCalledTimes(4)
   })
 
   it("propagates a result() failure wrapped with the request id", async () => {

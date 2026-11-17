@@ -95,6 +95,7 @@ function VIDEO_MODEL_LABELS(): Record<string, string> {
     "seedance-2-fast": "Seedance 2 Fast",
     "seedance-2-mini": "Seedance 2 Mini",
     "seedance-2-5": "Seedance 2.5",
+    "seedance-2-5-flash": "Seedance 2.5 Flash",
     veo3: getModel("veo3")?.label ?? "veo3",
     "veo3.1": getModel("veo3.1")?.label ?? "veo3.1",
     veo3_lite: getModel("veo3_lite")?.label ?? "veo3_lite",

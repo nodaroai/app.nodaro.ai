@@ -1697,8 +1697,69 @@ const GENERATE_TEXT_TOOL_BYTES = 3_740
 // budget); the list keeps the 28 B of headroom it had.
 const GENERATE_TEXT_HANDOFF_BYTES = 153
 
+// RAISED 2026-11-16 by Seedance 2.5 Flash (`seedance-2-5-flash`), and nothing else: the id joins the
+// catalog-derived model lists generate_video and animate_image already carry ("Recommended: …"), and
+// modify_video's model and resolution notes name it beside `seedance-2-5`. No tool was added, so the
+// fixture does NOT move. With the change this suite measures `generate_video` at 9_972 B, 18 B
+// over the earlier 9_954 B per-tool budget (the model list; its other notes were left as they were).
+const SEEDANCE_2_5_FLASH_PER_TOOL_BYTES = 18
+// RAISED 2026-11-16 (decided that day): generate_video's and animate_image's reference notes name
+// Seedance 2.5 Flash's 10 / 5 / 5 caps and that a call over them is refused rather than cut. With
+// it this suite measures `generate_video` at 10_048 B, 76 B over the per-tool budget above.
+const SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES = 76
+// The whole list grows by those notes in generate_video and animate_image, and by lip_sync's model
+// list, which now prices each Seedance model as its 8-second clip at 720p instead of "duration-tiered"
+// (decided 2026-11-16). With them this suite measures 543_783 B in all, 325 B over the 543_458 B it
+// measured before them.
+const SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES = 325
+// The whole list grows by the same model-list entries in generate_video, animate_image and
+// modify_video, plus modify_video's two notes. With the change this suite measures 543_458 B in
+// all; the earlier budget was 543_329 B with 28 B of headroom (543_301 B), so the change adds 157 B.
+const SEEDANCE_2_5_FLASH_TOTAL_BYTES = 157
+
+// RAISED 2026-11-16 by Seedance 2.5 Flash Extend (`seedance-2-5-flash-extend`), and nothing else:
+// extend_video's model enum and its catalog-derived notes (the URL models, their lengths and
+// resolutions, the reference-image and sound providers) name the new provider. No tool was added, so
+// the fixture does NOT move. With the change this suite measures 544_044 B in all, 261 B over the
+// 543_783 B it measured before it; the list keeps the 28 B of headroom it had, and extend_video is
+// nowhere near the per-tool budget.
+const SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES = 261
+
+// RAISED 2026-11-16 by one LLM id added to the registry (gemini-4-hydrogen): every tool whose
+// `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists it (20 B per list, five lists:
+// generate_text, image_to_text, analyze_prompt, generate_prompt, enhance_prompt), and nothing
+// else moved. No tool was added, so the membership fixture does NOT move (the recorded tool list,
+// tool-list-wire.json, does). Measured by this suite on top of Seedance 2.5 Flash Extend: 544_144 B in all, 100 B over the 544_044 B it measured before it.
+const GEMINI_4_HYDROGEN_ID_BYTES = 100
+
+// RAISED 2026-11-17 by character references on Gemini Omni Flash 1.2, and nothing else:
+// generate_video's `character_references` note lists the models that take them, read from
+// VIDEO_REF_LIMITS_BY_PROVIDER, and now names `gemini-omni-flash-1-2` (" / gemini-omni-flash-1-2",
+// 24 B). No tool was added, so the membership fixture does NOT move (the recorded tool list,
+// tool-list-wire.json, does). generate_video measures 10_072 B, 24 B over the 10_048 B per-tool
+// budget it sat exactly at. Measured by this suite on top of Gemini 4 Hydrogen: 544_168 B in all,
+// 24 B over the 544_144 B it measured before it; the list keeps its 28 B of headroom.
+const OMNI_FLASH_1_2_CHARACTERS_BYTES = 24
+// RAISED 2026-11-17 by Gemini Omni Flash 1.2 Extend (`gemini-omni-flash-1-2-extend`), and nothing
+// else: extend_video's model enum, its catalog-derived notes (the URL models, their lengths and
+// resolutions — 4k joins the resolution enum) and one sentence of its description (the two shapes it
+// takes, its price for 8 s at 720p, and that it does not continue dialogue) name the new provider. No
+// tool was added, so the membership fixture does NOT move. Measured by this suite before character
+// references on Gemini Omni Flash 1.2 landed: 544_628 B in all, 484 B over the 544_144 B it measured
+// before it. With both, this suite measures 544_652 B in all; the list keeps its 28 B of headroom,
+// and extend_video is nowhere near the per-tool budget.
+const GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES = 484
+
+// RAISED 2026-11-17 by generate_text's description naming no vendor, and nothing else: "Video and
+// audio need a Gemini model" now reads "… need a model that reads video or audio" (19 B more), since
+// Gemini 4 Argon is a Gemini model that reads neither. No tool was added, so the membership fixture
+// does NOT move (the recorded tool list, tool-list-wire.json, does). Measured by this suite on top of
+// Omni Flash 1.2's character references: 544_187 B in all, 19 B over the 544_168 B it measured
+// before it; the list keeps its 28 B of headroom.
+const GENERATE_TEXT_MEDIA_WORDING_BYTES = 19
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -1910,7 +1971,14 @@ export const TOOL_WIRE_BUDGET = {
     KLING_4_VIDEO_SUBJECT_BYTES +
     DUBBING_TOOLS_BYTES +
     GENERATE_TEXT_TOOL_BYTES +
-    GENERATE_TEXT_HANDOFF_BYTES,
+    GENERATE_TEXT_HANDOFF_BYTES +
+    SEEDANCE_2_5_FLASH_TOTAL_BYTES +
+    SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_TOTAL_BYTES +
+    SEEDANCE_2_5_FLASH_EXTEND_TOTAL_BYTES +
+    GEMINI_4_HYDROGEN_ID_BYTES +
+    OMNI_FLASH_1_2_CHARACTERS_BYTES +
+    GEMINI_OMNI_FLASH_1_2_EXTEND_TOTAL_BYTES +
+    GENERATE_TEXT_MEDIA_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

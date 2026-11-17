@@ -22,6 +22,11 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask, KieError } from "../..
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
 import { falLipSync } from "../../providers/fal/lip-sync.js"
+import { falGeminiOmniExtend, GEMINI_OMNI_EXTEND_KEY_COVERAGE, GEMINI_OMNI_EXTEND_SENT_REQUEST_KEY, geminiOmniExtendSentRequestOf, type GeminiOmniExtendSentRequest } from "../../providers/fal/gemini-omni-extend.js"
+import { falGeminiOmniExtendCostUsd } from "../../providers/fal/pricing.js"
+import { requireProviderKey } from "../../providers/provider-keys.js"
+import { extendSourceAspectProblem, displayVideoSize } from "../../lib/extend-source-shape.js"
+import { geminiOmniExtendResolution, isGeminiOmniExtendProvider } from "@nodaro/render-rules"
 import { prepareLipSyncAudio } from "../../providers/kie/lip-sync-audio.js"
 import { lipSyncAudioPricingOf, lipSyncModelLabel } from "../../lib/lip-sync-inputs.js"
 import { providersCanFetchOwnMedia } from "../../lib/own-media-reachability.js"
@@ -53,12 +58,12 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
+import { SEEDANCE_LIP_SYNC_SECONDS, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { extendTailPicture, extensionPictureSeconds, pictureSecondsOf, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
+import { extendTailPicture, extensionPictureSeconds, pictureSecondsOf, SQUARE_PIXEL_PICTURE_FILTER, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
 import { cutNativeExtension, nativeExtensionCutStartSec, pictureStartOffsetSec } from "../../providers/video/native-extension-cut.js"
 import { runPixverseExtend } from "../../providers/kie/pixverse-extend.js"
 import { runGrokExtend, type GrokExtendSeconds } from "../../providers/kie/grok-extend.js"
@@ -76,7 +81,7 @@ import {
   tailRecipeSeconds,
   TAIL_RECIPES,
 } from "../../lib/extend-recipe.js"
-import { seedanceExtendBaseCredits, seedanceExtendHeldSourceSec } from "../../lib/seedance-extend-credits.js"
+import { isExtendChargedBySecondsSent, seedanceExtendHeldSourceSec, sentChargedExtendBaseCredits } from "../../lib/seedance-extend-credits.js"
 import { creditIdBaseCredits } from "../../lib/credit-id-base.js"
 import { pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
@@ -84,7 +89,7 @@ import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
-import { seedance25CostUsd } from "../../providers/kie/seedance-cost.js"
+import { seedance25CostUsd, seedance25FlashCostUsd } from "../../providers/kie/seedance-cost.js"
 import { kling4CostUsd } from "../../providers/kie/kling4-cost.js"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
@@ -97,7 +102,7 @@ import {
   stripAudio,
 } from "../../providers/video/ffmpeg-utils.js"
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
-import { isSeedanceExtendPricedBySecondsSent, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import type { DeclaredSeedanceTaskType, TopazVideoResolution } from "@nodaro/shared/models"
 import { isKling4RunnerProvider, isNodaroVideoUpscaleTier, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { runHouseModelTask } from "../../lib/house-models.js"
@@ -163,7 +168,7 @@ import { handleCinematicAvatar } from "./heygen-cinematic.js"
 import { handleBeebleSwitchX } from "./beeble-switchx.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { uploadSwapWithSourceAudio } from "./face-swap-audio.js"
-import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
+import { DeterministicJobError, isDeterministicJobError } from "../../lib/deterministic-job-error.js"
 import {
   providerKindForVideoModel,
   providerKindForLipSyncModel,
@@ -298,8 +303,9 @@ async function dispatchLtxIfRequested(
 /**
  * A render's result with the cost KIE billed for it, from the seconds its
  * charge was measured from (`measureSeedance2Settle`):
- *  - Seedance 2.5: those seconds — or, for a run with no reference video and a
- *    fixed duration, that duration;
+ *  - Seedance 2.5 and Seedance 2.5 Flash (each at its own rates): those
+ *    seconds — or, for a run with no reference video and a fixed duration,
+ *    that duration;
  *  - Kling 4.0 / Kling 4.0 Flash with a reference video: output + the longer
  *    of output and the reference clips, the seconds the charge bills (the
  *    runner cannot see the clips' lengths and reports only the 2 × output
@@ -331,12 +337,33 @@ function withMeasuredRenderCost<R extends { cost: number | null }>(
     if (!hasVideoRef || !seconds) return result
     return { ...result, cost: kling4CostUsd({ provider: run.provider, resolution: run.resolution, hasVideoRef, outputSec: seconds.outputSec, inputSec: seconds.inputSec }) }
   }
-  if (run.provider !== "seedance-2-5") return result
+  if (run.provider !== "seedance-2-5" && run.provider !== "seedance-2-5-flash") return result
   const fixedSec = hasVideoRef ? undefined : positiveSeconds(run.duration)
   const outputSec = run.settle.seconds?.outputSec ?? fixedSec
   if (outputSec === undefined) return result
   const inputSec = run.settle.seconds?.inputSec ?? 0
+  // Each model at its own KIE rates: Flash never reads 2.5's (and has no draft).
+  if (run.provider === "seedance-2-5-flash") {
+    return { ...result, cost: seedance25FlashCostUsd({ resolution: run.resolution, hasVideoRef, outputSec, inputSec }) }
+  }
   return { ...result, cost: seedance25CostUsd({ resolution: run.resolution, draft: run.draft === true, hasVideoRef, outputSec, inputSec }) }
+}
+
+/**
+ * The provider cost of a Seedance Lip Sync run (an 8-second clip, no reference
+ * video, at the resolution sent): Seedance 2.5 and 2.5 Flash at their own KIE
+ * rates. Any other model, a run whose adapter reported no cost (relayed), or a
+ * resolution not known keeps the adapter's figure.
+ */
+function seedanceLipSyncProviderCost(cost: number | null, provider: string, resolution: string | undefined): number | null {
+  if (typeof cost !== "number" || resolution === undefined) return cost
+  if (provider === "seedance-2-5-flash") {
+    return seedance25FlashCostUsd({ resolution, hasVideoRef: false, outputSec: SEEDANCE_LIP_SYNC_SECONDS, inputSec: 0 })
+  }
+  if (provider === "seedance-2-5") {
+    return seedance25CostUsd({ resolution, draft: false, hasVideoRef: false, outputSec: SEEDANCE_LIP_SYNC_SECONDS, inputSec: 0 })
+  }
+  return cost
 }
 
 /** VEO direct-4K generates the base at 1080p, then chains get-4k-video (see
@@ -1047,6 +1074,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     if (!imageUrl) {
       throw new Error(`${resolvedProvider} lip-sync requires an image (face/portrait)`)
     }
+    const seedanceLipSyncSentResolution = isSeedanceLipSyncProvider(resolvedProvider)
+      ? seedanceLipSyncResolution(resolvedProvider, resolution)
+      : undefined
     const result = await imageToVideo(
       imageUrl,
       resolvedProvider,
@@ -1055,7 +1085,11 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       undefined, // endFrameUrl — not used in lip-sync mode
       {
         referenceAudioUrls: [audioUrl],
-        resolution: resolution ?? "720p",
+        // The Seedance 2 family sends the resolution it was priced at
+        // (`seedanceLipSyncResolution`, decided 2026-11-16: a 1080p asked of
+        // Seedance 2 Fast renders 720p, as it is billed). MiniMax Hailuo 3
+        // keeps its own rule.
+        resolution: seedanceLipSyncSentResolution ?? resolution ?? "720p",
         // generateAudio: false — we already have the audio track; let
         // seedance use OUR audio as the soundtrack rather than synthesise
         // a new one. (KIE merges reference_audio_urls into output by default.)
@@ -1064,7 +1098,10 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       { onTaskCreated: lipSyncOnTaskCreated },
     )
     resultUrl = result.url
-    resultCost = result.cost
+    // Seedance 2.5 and 2.5 Flash: what KIE bills an 8-second run with no
+    // reference video, at the resolution sent (the adapter reports a nominal
+    // figure). The Seedance 2.0 models have no cost helper yet and keep it.
+    resultCost = seedanceLipSyncProviderCost(result.cost, resolvedProvider, seedanceLipSyncSentResolution)
     resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
     resultMeta = result
@@ -1555,10 +1592,15 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       /** Route-assembled user refs (anchor-budgeted) — seats @image_1…N. */
       referenceImageUrls?: string[]
     }
-    // Seedance 2.5: the source length its hold was priced on, when the route
-    // or the workflow run measured it (`seedanceExtendHeldSourceSec`).
-    const heldSourceSec = isSeedanceExtendPricedBySecondsSent(provider) ? seedanceExtendHeldSourceSec(job.data as Record<string, unknown>) : undefined
+    // Seedance 2.5 / 2.5 Flash, Gemini Omni Flash 1.2: the source length its
+    // hold was priced on, when the route or the workflow run measured it
+    // (`seedanceExtendHeldSourceSec`).
+    const heldSourceSec = isExtendChargedBySecondsSent(provider) ? seedanceExtendHeldSourceSec(job.data as Record<string, unknown>) : undefined
     console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider})`)
+    // A recipe generated on fal (Gemini Omni Flash 1.2) needs fal's key: an
+    // install without one is refused here, before the source is fetched, with
+    // the missing-key sentence every fal lane uses (no relay route covers it).
+    if (recipe.transport === "fal") requireProviderKey(config.FAL_KEY, "FAL_KEY", undefined, GEMINI_OMNI_EXTEND_KEY_COVERAGE)
 
     // The job's provider picks the model the continuation is generated on;
     // the credit id is the provider's own row (`tailExtendCreditId`), so
@@ -1576,7 +1618,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // reference video's ratio — live-verified: 720×1280 ref → 496×864 out),
     // so this resolves without a probe round-trip; providers without a
     // native token would ffprobe + snap to the closest catalog ratio.
-    const aspectRatio = await resolveSourceMatchedAspect(genModel, sourceUrl)
+    // fal's extend takes no aspect ratio: it keeps the clip's own 16:9 or 9:16.
+    const aspectRatio = recipe.transport === "fal" ? undefined : await resolveSourceMatchedAspect(genModel, sourceUrl)
 
     await setJobProgress(job, ctx.jobId, 5)
 
@@ -1627,6 +1670,15 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const measuredSec = srcProbe.videoDurationSeconds ?? srcProbe.durationSeconds
       const pictureSec = heldSourceSec === undefined ? measuredSec : Math.min(measuredSec, heldSourceSec)
       if (pictureSec < recipe.minSourceSec) throw new Error(extendSourceTooShortMessage(provider, pictureSec))
+      // A shape the engine does not continue (Gemini Omni Flash 1.2: 16:9 or
+      // 9:16 only) is refused again here — the route's and the workflow run's
+      // probes are best effort — final and refunded in full: the same source
+      // is refused on every attempt.
+      // The picture's DISPLAY size (its sample aspect ratio applied): an
+      // anamorphic clip that plays as 16:9 is taken as 16:9.
+      const displaySize = displayVideoSize(srcProbe)
+      const shapeProblem = extendSourceAspectProblem(provider, displaySize.width, displaySize.height)
+      if (shapeProblem) throw new DeterministicJobError(shapeProblem)
       // The seconds of the source cut and sent: the recipe's tail, or all of a
       // shorter picture (a Seedance 2.5 run is charged for them, settled below).
       const sentSec = tailCutSec(provider, pictureSec)
@@ -1638,8 +1690,16 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // a chained MOV reference (Seedance's own SDR clip). The cut is admitted
       // at the memory a picture of the source's size needs (above 1080p, more
       // than the default; 4K when its size is not read).
+      // A model that takes reference videos only at some sizes and frame rates
+      // (Seedance 2.5 Flash) gets the tail fitted to them by the provider's
+      // reference-video re-encode, as every reference video it is sent.
       const tailPicture = extendTailPicture(await probeMatched(srcLocal))
-      const tailPath = await extractTailToFile(srcLocal, sentSec, { measureFrom: "picture", ...tailPicture })
+      // Gemini Omni Flash 1.2 reads the stored size as the shape: an
+      // anamorphic source (taken by the shape it plays at) is sent with
+      // square pixels at that shape. Every other engine's cut is as it was.
+      const squarePixels = isGeminiOmniExtendProvider(provider) && srcProbe.sampleAspectRatio !== undefined ? SQUARE_PIXEL_PICTURE_FILTER : undefined
+      const tailFilter = [tailPicture.pictureFilter, squarePixels].filter((f): f is string => !!f).join(",")
+      const tailPath = await extractTailToFile(srcLocal, sentSec, { measureFrom: "picture", ...tailPicture, ...(tailFilter ? { pictureFilter: tailFilter } : {}) })
       // Generation inputs only, never the deliverable: the tail, the frame and
       // a chained cut go to the job's scratch folder (`lib/job-scratch.ts`),
       // emptied when the job ends, and count against no one's quota.
@@ -1655,7 +1715,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         await cleanupWorkDir(dirname(frame.imagePath))
       }
       let chainTailUrl: string | undefined
-      const chainedMovUrl = genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
+      // MOV chaining is the recipe's (`movChain`: Seedance 2.5 only; Flash renders MP4 only).
+      const chainedMovUrl = recipe.movChain === true ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
       if (chainedMovUrl) {
         try {
           const cutPath = await cutChainedMovTail(chainedMovUrl, sentSec, prepDir, { coverSec: sentSec })
@@ -1670,21 +1731,94 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       const referenceVideoUrl = chainTailUrl ?? tailUrl
       // `mp4` is KIE's default and is sent as no field at all, so the mp4
       // payload stays byte-identical to today.
-      const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
+      const outputFormat = recipe.movChain === true ? seedance25OutputFormat() : "mp4"
       // The resolution the run was priced at (`tailExtendResolution`, the
       // credit id's own reading): one the model offers, else 720p — a job
       // naming any other can never render above the row it reserved.
-      const genResolution = tailExtendResolution(provider, resolution)
+      // Gemini Omni Flash 1.2 (decided 2026-11-17): never above the SOURCE's
+      // tier, since the delivered clip keeps the source's size
+      // (`geminiOmniExtendResolution`); it settles at the tier that ran.
+      const genResolution = isGeminiOmniExtendProvider(provider)
+        ? geminiOmniExtendResolution(resolution, displaySize)
+        : tailExtendResolution(provider, resolution)
+      // The seconds of the tail actually sent, as measured on the cut (Gemini
+      // Omni Flash 1.2's cut point and its recorded provider cost).
+      let sentPictureSec: number | undefined
+      // What the run that made the clip was sent: this attempt's values, or,
+      // for a request a retry picks up, the ones kept with its id.
+      let ranResolution = genResolution
+      let ranAddedSec = extSeconds
+      let ranSourcePictureSec = pictureSec
 
       const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
-      let gen
+      let gen: { url: string; cost?: number | null; relayJobId?: string; relayCredits?: number | null }
       try {
         // NO onTaskCreated on purpose: the KIE task's result is the raw
         // extension clip, NOT the deliverable. Persisting it would let the
         // reconcile cron finalize this extend-video job with the unstitched
         // extension (silent wrong output). If the worker dies mid-wait,
         // BullMQ's stalled-job recovery re-runs the whole handler instead.
-        if (lastFrameUrl !== undefined) {
+        if (recipe.transport === "fal") {
+          // Gemini Omni Flash 1.2 on fal (no reconcile hook, as above): the
+          // tail as the clip to continue, the prompt as written, the seconds
+          // and the resolution the run is priced at. fal returns the tail with
+          // the new seconds after it; the cut below keeps the new seconds.
+          // A retry of this job polls the request it already submitted (its
+          // id kept on the job right after submit), never starting a second
+          // billed generation. Only a request fal answered as failed
+          // (`requestEnded`) is forgotten, so its retry submits a new one; a
+          // poll that got no answer or ran out keeps it, and is polled again.
+          const prior = geminiOmniExtendSentRequestOf(job.data)
+          if (prior) {
+            // Cut, settle and record by the run that made the clip, not by
+            // this attempt's second reading of the source.
+            sentPictureSec = prior.sentPictureSec
+            ranResolution = prior.resolution
+            ranAddedSec = prior.addedSec
+            ranSourcePictureSec = prior.sourcePictureSec
+          } else {
+            sentPictureSec = pictureSecondsOf(await probeMatchedOrThrow(tailPath))
+            if (!sentPictureSec) throw new Error(`Extend: the sent tail of job ${ctx.jobId} has no picture`)
+          }
+          const sentNow: Omit<GeminiOmniExtendSentRequest, "falRequestId"> = { sentPictureSec, resolution: genResolution, addedSec: extSeconds, sourcePictureSec: pictureSec }
+          try {
+            const fal = await falGeminiOmniExtend(
+              { prompt: kiePrompt, videoUrl: tailUrl, durationSec: extSeconds, resolution: genResolution },
+              {
+                ...(prior ? { resumeRequestId: prior.falRequestId } : {}),
+                // Kept with what was sent, tried up to three times. Best
+                // effort after that: a write that keeps failing must not
+                // abandon a request fal is already running (the poll goes on;
+                // only a retry of this attempt would then submit again).
+                onSubmitted: async (falRequestId) => {
+                  for (let attempt = 1; ; attempt++) {
+                    try {
+                      await job.updateData({ ...(job.data as Record<string, unknown>), [GEMINI_OMNI_EXTEND_SENT_REQUEST_KEY]: { falRequestId, ...sentNow } })
+                      return
+                    } catch (err) {
+                      if (attempt >= 3) {
+                        console.warn(`[worker] Job ${ctx.jobId}: fal request ${falRequestId} not kept on the job for a retry:`, err)
+                        return
+                      }
+                    }
+                  }
+                },
+              },
+            )
+            gen = { url: fal.videoUrl, cost: null }
+          } catch (err) {
+            if (!isDeterministicJobError(err) && (err as { requestEnded?: unknown } | null)?.requestEnded === true && geminiOmniExtendSentRequestOf(job.data)) {
+              // A failed write here must never replace fal's own error.
+              try {
+                const { [GEMINI_OMNI_EXTEND_SENT_REQUEST_KEY]: _forgotten, ...rest } = job.data as Record<string, unknown>
+                await job.updateData(rest)
+              } catch (forgetErr) {
+                console.warn(`[worker] Job ${ctx.jobId}: the failed fal request was not cleared from the job:`, forgetErr)
+              }
+            }
+            throw err
+          }
+        } else if (lastFrameUrl !== undefined) {
           gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
             resolution: genResolution,
             // Seedance's own levers: the sound switch and the user's references
@@ -1767,8 +1901,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       let stitchedR2Url: string
       let stitchBoundary: ExtendStitchResult["boundary"]
       try {
-        const extensionPath = join(stitchDir, isMovUrl(gen.url) ? "extension.mov" : "extension.mp4")
-        await downloadFile(gen.url, extensionPath)
+        const generatedPath = join(stitchDir, isMovUrl(gen.url) ? "extension.mov" : "extension.mp4")
+        await downloadFile(gen.url, generatedPath)
         // An extension with less than half the seconds the run is billed for
         // (`extensionTooShort`), no picture included, fails the run before
         // anything is encoded: final on this attempt and refunded in full, so
@@ -1777,7 +1911,32 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // (deterministic-job-error.ts). Only a file the probe READ is judged
         // so: a probe that failed throws a plain error, which is retried
         // (`extensionPictureSeconds`).
-        const extensionSec = await extensionPictureSeconds(extensionPath)
+        // A model that returns the clip it was sent with the new seconds
+        // after it (`returnsSentClip`, Gemini Omni Flash 1.2): its new seconds
+        // are its picture less the sent tail's, cut from where the tail's
+        // picture ends on its timeline (`nativeExtensionCutStartSec`, as
+        // PixVerse V6's are cut at the source's), the sound kept.
+        let extensionPath = generatedPath
+        let extensionSec = await extensionPictureSeconds(generatedPath)
+        if (recipe.returnsSentClip === true) {
+          // Gemini Omni Flash 1.2 read it before the request was sent (or
+          // kept it with the request a retry picked up).
+          sentPictureSec ??= pictureSecondsOf(await probeMatchedOrThrow(tailPath))
+          if (!sentPictureSec) throw new Error(`Extend: the sent tail of job ${ctx.jobId} has no picture`)
+          const generatedProbe = await probeMatched(generatedPath)
+          const cutStartSec = nativeExtensionCutStartSec(generatedProbe, sentPictureSec)
+          const newSec = extensionSec === undefined ? undefined : extensionSec - sentPictureSec
+          const secs = (n: number | undefined): string => (n === undefined ? "none" : `${n.toFixed(3)}s`)
+          console.log(
+            `[worker] extend-video ${ctx.jobId} ${provider} cut: sent ${secs(sentPictureSec)}, returned ${secs(extensionSec)} ` +
+              `(sound: ${generatedProbe.audioCodec ? "yes" : "no"}), new ${secs(newSec)}, cut from ${secs(cutStartSec)}, billed ${ranAddedSec}s`,
+          )
+          if (extensionTooShort(newSec, ranAddedSec)) {
+            throw new DeterministicJobError(extensionTooShortMessage(newSec, ranAddedSec))
+          }
+          extensionPath = await cutNativeExtension(generatedPath, cutStartSec, stitchDir, { sound: true })
+          extensionSec = newSec
+        }
         if (extensionTooShort(extensionSec, extSeconds)) {
           throw new DeterministicJobError(extensionTooShortMessage(extensionSec, extSeconds))
         }
@@ -1809,20 +1968,32 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // be read here (the price table unreachable) commits the hold as made,
       // rather than failing a run whose deliverable is already stored.
       let meteredBaseCredits: number | undefined
-      if (isSeedanceExtendPricedBySecondsSent(provider)) {
+      if (isExtendChargedBySecondsSent(provider)) {
         try {
-          meteredBaseCredits = await seedanceExtendBaseCredits({ duration: extSeconds, resolution: genResolution, sourcePictureSec: pictureSec })
+          meteredBaseCredits = await sentChargedExtendBaseCredits({ provider, duration: ranAddedSec, resolution: ranResolution, sourcePictureSec: ranSourcePictureSec })
         } catch (err) {
-          console.warn(`[worker] Job ${ctx.jobId}: Seedance 2.5 extend price not read, committing the hold as made:`, err)
+          console.warn(`[worker] Job ${ctx.jobId}: ${provider} price not read, committing the hold as made:`, err)
         }
       }
+      // What KIE bills a Seedance 2.5 Flash extension, recorded as the job's
+      // provider cost: Flash's reference-video rate over the seconds sent and
+      // the seconds added. A result with no cost of its own (a relayed run)
+      // keeps it. Seedance 2.5 Extend still records the adapter's figure.
+      // Gemini Omni Flash 1.2's fal bill, by the rates measured on its
+      // endpoint (the queue client does not surface fal's billable units):
+      // the seconds added at its resolution, the clip sent, its thinking.
+      const providerCost = genModel === "seedance-2-5-flash" && typeof gen.cost === "number"
+        ? seedance25FlashCostUsd({ resolution: genResolution, hasVideoRef: true, inputSec: sentSec, outputSec: extSeconds })
+        : recipe.transport === "fal"
+          ? falGeminiOmniExtendCostUsd({ resolution: ranResolution, sentSec: sentPictureSec ?? sentSec, addedSec: ranAddedSec })
+          : gen.cost ?? null
       const { ok: seedanceOk } = await finalizeJobWithMedia({
         jobId: ctx.jobId,
         jobType: "extend-video",
         ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
         result: {
           url: stitchedR2Url,
-          cost: gen.cost ?? null,
+          cost: providerCost,
           providerUsed: provider,
           // Same rebuilt-literal carry as lip-sync (:868) and video-upscale
           // (:1060), same reason: `gen` IS the RouteResult from the capability
@@ -1837,6 +2008,9 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         mediaUrl: stitchedR2Url,
         extraOutputData: {
           thumbnailUrl: stitchedThumbUrl,
+          // Gemini Omni Flash 1.2: the tier the new seconds were generated and
+          // charged at (never above the source's, decided 2026-11-17).
+          ...(isGeminiOmniExtendProvider(provider) ? { resolution: ranResolution } : {}),
           // Raw (unstitched) extension clip — provenance/debug, AND the mov
           // the next extension in this chain cuts its reference from.
           rawExtensionUrl,

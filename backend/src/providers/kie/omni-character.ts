@@ -39,6 +39,12 @@ import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
 import { requireKieKey, createSanitizedError, KIE_API_BASE, type KieError } from "./client.js"
 import type { VideoCharacterReference, VideoCharacterVoice } from "@nodaro/shared/video"
+import { VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
+
+/** The id-cache scope a model declares (`characterIdScope`); undefined = the shared, unscoped cache. */
+export function omniCharacterIdScope(modelKey: string | null | undefined): string | undefined {
+  return modelKey ? VIDEO_REF_LIMITS_BY_PROVIDER[modelKey]?.characterIdScope : undefined
+}
 
 /** KIE documents no validity period for a character id; 24h is a guess that
  *  trades a few redundant creates for never serving a long-dead id. */
@@ -149,12 +155,16 @@ async function cacheSet(key: string, id: string): Promise<void> {
  *  URLs, not the bytes behind them: a mutable URL whose image changes within the
  *  TTL serves the previously minted face until the entry expires — send a fresh
  *  URL (or change the description/name) to force a new character. */
-export function omniCharacterCacheKey(ref: VideoCharacterReference): string {
+export function omniCharacterCacheKey(ref: VideoCharacterReference, scope?: string): string {
   const parts: unknown[] = [ref.imageUrl, ref.bodyImageUrl ?? "", ref.description, ref.name ?? ""]
   // A voice only ever ADDS a dimension: an unvoiced reference keeps the key it
   // always had, and a voiced and an unvoiced character can never share an id —
   // the minted character carries its voice traits (`audio_ids`) inside KIE.
   if (ref.voice) parts.push([ref.voice.preset, ref.voice.description ?? "", ref.voice.exampleLine ?? ""])
+  // A model's own id scope (`characterIdScope`, Gemini Omni Flash 1.2) only
+  // ever ADDS a dimension too: an unscoped model keeps the key it always had,
+  // and a scoped model never reads or overwrites another model's entry.
+  if (scope) parts.push({ scope })
   const digest = createHash("sha256").update(JSON.stringify(parts)).digest("hex")
   return `${CACHE_KEY_PREFIX}${digest}`
 }
@@ -377,7 +387,8 @@ export async function resolveOmniCharacterIds(
   meta: EgressMeta,
   opts: { force?: boolean } = {},
 ): Promise<ResolvedOmniCharacters> {
-  const keys = refs.map(omniCharacterCacheKey)
+  const scope = omniCharacterIdScope(meta.modelKey)
+  const keys = refs.map((ref) => omniCharacterCacheKey(ref, scope))
   const audioSettled = new Map<string, { id: string; fromCache: boolean }>()
   const settled = new Map<string, { id: string; fromCache: boolean }>()
   const audioKeyOf = (ref: VideoCharacterReference): string | null =>
@@ -427,7 +438,12 @@ export async function resolveOmniCharacterIds(
 }
 
 /** Drop the cache entries for these references (after KIE rejected their ids). */
-export async function forgetOmniCharacters(refs: readonly VideoCharacterReference[]): Promise<void> {
+export async function forgetOmniCharacters(
+  refs: readonly VideoCharacterReference[],
+  /** OUR video model key: the entries forgotten are that model's scope's (`characterIdScope`). */
+  modelKey?: string,
+): Promise<void> {
+  const scope = omniCharacterIdScope(modelKey)
   const del = async (key: string): Promise<void> => {
     try {
       await (injectedStore ?? redisStore).del(key)
@@ -435,7 +451,7 @@ export async function forgetOmniCharacters(refs: readonly VideoCharacterReferenc
     await memoryStore.del(key)
   }
   for (const ref of refs) {
-    await del(omniCharacterCacheKey(ref))
+    await del(omniCharacterCacheKey(ref, scope))
     // The voice persona goes too: a character recreated against a dead audio id
     // would be rejected for it, and the video request would re-send it.
     if (ref.voice) await del(omniAudioCacheKey(ref.voice, omniAudioPersonaName(ref)))

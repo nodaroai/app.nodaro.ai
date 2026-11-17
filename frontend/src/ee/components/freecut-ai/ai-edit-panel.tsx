@@ -66,6 +66,8 @@ export interface AiEditPanelProps {
   readonly project?: number
   /** Classes for the panel's own box (a framed panel fills its frame). */
   readonly className?: string
+  /** Shown on top while there is no video to edit: which videos the panel works on. */
+  readonly noVideoNote?: string
 }
 
 const clock = (ms: number) => {
@@ -118,7 +120,7 @@ function useTimelineFacts(link: () => EditorLink | null, key: string): { readonl
   return facts
 }
 
-export default function AiEditPanel({ editorWindow, editorOrigin, videos, openedVideoUrl, matchByName = false, capabilities = [], onClose, onLayout, project = 0, className }: AiEditPanelProps) {
+export default function AiEditPanel({ editorWindow, editorOrigin, videos, openedVideoUrl, matchByName = false, capabilities = [], onClose, onLayout, project = 0, className, noVideoNote }: AiEditPanelProps) {
   const t = useT()
   const linkRef = useRef<EditorLink | null>(null)
   const [view, setView] = useState<"edited" | "original">("edited")
@@ -269,6 +271,10 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
               <h2 className="text-[19px] font-semibold leading-snug tracking-tight">{t("freecutAi.ask.title")}</h2>
               <p className="text-[12px] leading-relaxed text-white/55">{t("freecutAi.ask.sub")}</p>
             </div>
+          ) : null}
+
+          {videos.length === 0 && noVideoNote ? (
+            <p className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] leading-relaxed text-white/75" role="status">{noVideoNote}</p>
           ) : null}
 
           {videos.length > 1 ? (

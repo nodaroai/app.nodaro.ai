@@ -362,6 +362,21 @@ describe("getModelIdentifier", () => {
     const extend = (data: Record<string, unknown>) => makeNode({ type: "extend-video", data: { label: "Extend", ...data } as any })
     expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe(tailExtendCreditId("seedance-2-0-extend", 12, "1080p"))
     expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend" }))).toBe(tailExtendCreditId("seedance-2-0-extend", undefined, undefined))
+    // Gemini Omni Flash 1.2 Extend (decided 2026-11-17): the whole-run quote id — the whole 10 s window when the source is not known…
+    expect(getModelIdentifier(extend({ provider: "gemini-omni-flash-1-2-extend", duration: 5, resolution: "4k" }))).toBe("gemini-omni-flash-1-2-extend:4k:sent-10s:added-5s")
+    expect(getModelIdentifier(extend({ provider: "gemini-omni-flash-1-2-extend", resolution: "480p" }))).toBe("gemini-omni-flash-1-2-extend:720p:sent-10s:added-8s")
+    // …and the source's own seconds when the canvas knows them (an upload's length).
+    const gx = { ...extend({ provider: "gemini-omni-flash-1-2-extend", duration: 3, resolution: "720p" }), id: "gx" } as WorkflowNode
+    const up = { id: "up", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://m.test/u.mp4", duration: 4.37, videoDurationSec: 4.37 } } as unknown as WorkflowNode
+    const wire = [{ id: "up-gx", source: "up", target: "gx", targetHandle: "video" } as WorkflowEdge]
+    expect(getModelIdentifier(gx, wire, [up, gx])).toBe("gemini-omni-flash-1-2-extend:720p:sent-4.37s:added-3s")
+    // A tier above the source's is priced at the source's (a 1280×720 upload asked for 4K: 720p).
+    const gx4k = { ...extend({ provider: "gemini-omni-flash-1-2-extend", duration: 5, resolution: "4k" }), id: "gx" } as WorkflowNode
+    const up720 = { id: "up", type: "upload-video", position: { x: 0, y: 0 }, data: { url: "https://m.test/u.mp4", duration: 12, videoDurationSec: 12, metadata: { width: 1280, height: 720 } } } as unknown as WorkflowNode
+    expect(getModelIdentifier(gx4k, wire, [up720, gx4k])).toBe("gemini-omni-flash-1-2-extend:720p:sent-10s:added-5s")
+    // A made generation's recorded length is rounded up to the whole second: never below what the hold counts.
+    const made = { id: "up", type: "generate-video", position: { x: 0, y: 0 }, data: { provider: "seedance-2-5", generatedResults: [{ url: "https://cdn.example.com/g.mp4", duration: 5.04 }], activeResultIndex: 0 } } as unknown as WorkflowNode
+    expect(getModelIdentifier(gx, wire, [made, gx])).toBe("gemini-omni-flash-1-2-extend:720p:sent-6s:added-3s")
     expect(getModelIdentifier(extend({ provider: "seedance-2-0-extend", duration: 12, resolution: "1080p" }))).toBe("seedance-2-0-extend:12s:1080p")
     // Seedance 2.5 is charged per second sent and added: its resolution's two-second row
     // (the estimate multiplies by the run's units).

@@ -1,4 +1,4 @@
-// @test-units-by-name runs only the Extend Video providers it names (Seedance 2.5, Seedance 2.0, Kling 4)
+// @test-units-by-name runs only the Extend Video providers it names (Seedance 2.5, Seedance 2.5 Flash, Seedance 2.0, Kling 4)
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
@@ -160,6 +160,7 @@ vi.mock("@/lib/discard-job-copies.js", () => ({ discardFailedRunCopies: mocks.mo
 
 import { videoAIHandlers } from "../video-ai.js"
 import { TAIL_RECIPES, extendSourceTooShortMessage, extensionTooShortMessage, tailRecipeSeconds } from "../../../lib/extend-recipe.js"
+import { seedance25FlashCostUsd } from "@/providers/kie/seedance-cost.js"
 import { extendTailPicture } from "@/providers/video/extend-stitch.js"
 import { defaultLaunchPeakMiB } from "@/providers/video/ffmpeg-admission-instance.js"
 import type { MatchedProbe } from "@/providers/video/matched-encode.js"
@@ -355,6 +356,12 @@ describe("the job's provider picks the model", () => {
       expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", seconds, { measureFrom: "picture" })
     },
   )
+
+  it("an anamorphic source's tail is cut as it always was (square pixels are Gemini Omni Flash 1.2's alone)", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1440, height: 1080, sampleAspectRatio: 4 / 3, durationSeconds: 25.2, videoDurationSeconds: 25 })
+    await run({ provider: "seedance-2-5-extend" })
+    expect(mocks.mockExtractTailToFile).toHaveBeenCalledWith("/tmp/test-workdir/source.mp4", 10, { measureFrom: "picture" })
+  })
 
   it("seedance-2-5-extend cuts the last 10 s of a longer source", async () => {
     mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 25.2, videoDurationSeconds: 25 })
@@ -1029,5 +1036,93 @@ describe("kling-4-extend — the tail recipe on Kling 4", () => {
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
     expect(finalize.mediaUrl).toBe(STITCHED_R2)
     expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "kling-4-extend" })
+  })
+})
+
+// Decided 2026-11-16: Seedance 2.5 Flash Extend runs Seedance 2.5's recipe on
+// Seedance 2.5 Flash — MP4 only, its tail fitted into Flash's reference-video
+// pixel window, settled on its own rows, its provider cost at Flash's own rate.
+describe("seedance-2-5-flash-extend — Seedance 2.5's recipe on Seedance 2.5 Flash", () => {
+  const flash = (data: Record<string, unknown> = {}) => run({ provider: "seedance-2-5-flash-extend", ...data })
+
+  it("generates on seedance-2-5-flash: the last 10 s as @video_1, declared as an extension, no start image", async () => {
+    await flash()
+    const gen = generation()
+    expect(gen.model).toBe("seedance-2-5-flash")
+    expect(gen.seconds).toBe(8)
+    expect(gen.prompt).toBe(TAIL_RECIPES["seedance-2-5-flash-extend"].prompt("she opens the door", 8))
+    expect(gen.options).toEqual(OPTIONS_25)
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result).toMatchObject({ url: STITCHED_R2, providerUsed: "seedance-2-5-flash-extend" })
+  })
+
+  it("MP4 only: never asks for mov, even with the container lever, and never looks up a chained mov", async () => {
+    vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
+    mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+    await flash()
+    expect(generation().options).not.toHaveProperty("outputFormat")
+    expect(generation().options.referenceVideoUrls).toEqual([TAIL_URL])
+    expect(mocks.mockFindChainedMovReference).not.toHaveBeenCalled()
+    expect(mocks.mockCutChainedMovTail).not.toHaveBeenCalled()
+  })
+
+  it("renders 480p and 720p as sent; 1080p (which Flash does not render), or any other, at 720p", async () => {
+    for (const [sent, rendered] of [["480p", "480p"], ["720p", "720p"], ["1080p", "720p"], [undefined, "720p"]] as const) {
+      mocks.mockTextToVideo.mockClear()
+      await flash({ resolution: sent })
+      expect(generation().options, String(sent)).toMatchObject({ resolution: rendered })
+    }
+  })
+
+  it.each([
+    // [picture, seconds added, resolution, base]
+    [6, 8, "720p", 896], // (6 + 8) ÷ 2 × 128
+    [25, 8, "720p", 1152], // the default run: (10 + 8) ÷ 2 × 128
+    [25, 8, "480p", 522], // (10 + 8) ÷ 2 × 58
+    [12, 30, "720p", 2560], // (10 + 30) ÷ 2 × 128
+    [4.37, 5, "480p", 272], // ceil((4.37 + 5) ÷ 2 × 58) = ceil(271.73)
+    [12, 8, "1080p", 1152], // 1080p runs, and is settled, at 720p
+  ] as const)("settles a %s s source + %s s at %s on its own row: base %s", async (picture, duration, resolution, base) => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1280, height: 720, durationSeconds: picture, videoDurationSeconds: picture })
+    await flash({ duration, resolution })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].meteredBaseCredits).toBe(base)
+  })
+
+  it("records Flash's own reference-video cost over the seconds sent and added; a relayed run keeps its own (none)", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 6, videoDurationSeconds: 6 })
+    await flash({ duration: 8, resolution: "720p" })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result.cost).toBeCloseTo(
+      seedance25FlashCostUsd({ resolution: "720p", hasVideoRef: true, inputSec: 6, outputSec: 8 }),
+      10,
+    )
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    mocks.mockTextToVideo.mockResolvedValue({ url: KIE_MP4, cost: null, providerUsed: "nodaro" })
+    await flash({ duration: 8, resolution: "480p" })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result.cost).toBeNull()
+  })
+
+  it("Seedance 2.5 Extend still records the adapter's own cost", async () => {
+    await run({ provider: "seedance-2-5-extend" })
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].result.cost).toBe(0.2)
+  })
+
+  // The tail is cut as every extend's is; the provider's reference-video
+  // re-encode fits it to Flash's size and frame rate (reference-video-fit.ts).
+  it("cuts a 1080p source's tail as every extend does: the fit is the provider's", async () => {
+    await flash()
+    expect(mocks.mockExtractTailToFile.mock.calls[0]![2]).toEqual({ measureFrom: "picture" })
+  })
+
+  it("refuses a source under Flash's 2 s before any provider call; Seedance 2.5 continues it", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValue({ width: 1280, height: 720, durationSeconds: 1.9, videoDurationSeconds: 1.9 })
+    await expect(flash()).rejects.toThrow(extendSourceTooShortMessage("seedance-2-5-flash-extend", 1.9))
+    expect(generations()).toBe(0)
+    await run({ provider: "seedance-2-5-extend" })
+    expect(generations()).toBe(1)
+  })
+
+  it("the same 1080p source's tail is not scaled for Seedance 2.5 Extend", async () => {
+    await run({ provider: "seedance-2-5-extend" })
+    expect(mocks.mockExtractTailToFile.mock.calls[0]![2]).toEqual({ measureFrom: "picture" })
   })
 })

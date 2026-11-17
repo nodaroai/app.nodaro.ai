@@ -5,7 +5,7 @@ import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
-import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
+import { probeAndCheckRefVideoDurations, probeRefVideoDurations, refVideoCapFor } from "../../lib/ref-video-probe.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { seedance2RefVideoChargedQuote } from "../billing/seedance2-ref-video-quote.js"
 
@@ -14,7 +14,7 @@ const MAX_CLIPS = SEEDANCE_2_5_REF_LIMITS.videos
 
 /** The quote body (exported: the Seedance 2.5 HD estimate reads a planned draft through these same fields). */
 export const seedanceRefEstimateBody = z.object({
-  /** A Seedance 2 model (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5). */
+  /** A Seedance 2 model (seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5, seedance-2-5-flash). */
   provider: z.string().min(1).max(64),
   /** The run's resolution; omitted = the model's default, as the run sends it. */
   resolution: z.string().min(1).max(16).optional(),
@@ -105,7 +105,13 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
     const { provider, resolution, duration, draft, referenceTaskType, referenceVideoUrls } = parsed.data
-    const unknownClips = parsed.data.unknownReferenceVideos ?? 0
+    // Counted as the run sends them: the model's own reference-video cap (5 on
+    // Seedance 2.5 Flash, though the body takes up to 10). The known clips fill
+    // it first, as the run's resolver keeps them in order.
+    const unknownClips = Math.min(
+      parsed.data.unknownReferenceVideos ?? 0,
+      Math.max(0, refVideoCapFor(provider) - referenceVideoUrls.length),
+    )
     if (!billsReferenceVideoSeconds(provider)) {
       return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0, Kling 4.0 Flash, Gemini Omni Flash 1.2).` } })
     }
@@ -118,7 +124,7 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       // The run's own gate: the same probe, the same refusal.
       const check = await probeAndCheckRefVideoDurations({ provider, referenceVideoUrls })
       if (!check.ok) {
-        return reply.status(400).send({ error: { code: "video_too_long", message: check.message } })
+        return reply.status(400).send({ error: { code: check.code ?? "video_too_long", message: check.message } })
       }
       // A provider with no declared bound is not probed by the gate; the
       // reservation probes it itself — so does the estimate.

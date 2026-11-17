@@ -74,11 +74,15 @@ export async function downgradeToEffectiveFloor(
 }
 
 /**
- * The subscription statuses that hold a live plan — `PAID_TIER_STATUSES` in
- * subscription-grant.ts (kept equal by provision-credits.test.ts; that module
- * is not imported here, it pulls in the whole billing surface).
+ * The stored subscription statuses that hold a live plan: the account's
+ * subscription, whose plan is not ended. `PAID_TIER_STATUSES` in
+ * subscription-grant.ts plus `unpaid` (payment retries ended without payment):
+ * the account keeps its tier then, as under `past_due` — a row could not
+ * store `unpaid` before migration 656 and stayed `past_due` — but an update
+ * saying `unpaid` writes no paid tier. Kept so by provision-credits.test.ts;
+ * that module is not imported here, it pulls in the whole billing surface.
  */
-export const LIVE_SUBSCRIPTION_STATUSES: readonly string[] = ["active", "trialing", "past_due"]
+export const LIVE_SUBSCRIPTION_STATUSES: readonly string[] = ["active", "trialing", "past_due", "unpaid"]
 
 export type EndPlanOutcome =
   /** The plan ended now: tier free, the plan's credits ended; `removed` is exactly what the write took. */

@@ -426,3 +426,25 @@ describe("getHandleConnectionLimit — keyframes models' in-between frames", () 
     expect(wiredEndFrames([e("startFrame")], "other")).toEqual({ hasStartFrame: false, hasEndFrame: false })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Seedance 2.5 Flash — the connector popovers show its own 10 / 5 / 5
+// ---------------------------------------------------------------------------
+describe("getHandleConnectionLimit (Seedance 2.5 Flash)", () => {
+  const gv = (provider: string): WorkflowNode =>
+    ({ id: "n", type: "generate-video", data: { provider } }) as unknown as WorkflowNode
+  const v2v = (provider: string): WorkflowNode =>
+    ({ id: "n", type: "video-to-video", data: { provider } }) as unknown as WorkflowNode
+
+  it("caps image, video and audio references at 10 / 5 / 5 on Generate Video", () => {
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["seedance-2-5-flash"]).toMatchObject({ images: 10, videos: 5, audio: 5 })
+    expect(getHandleConnectionLimit(gv("seedance-2-5-flash"), "imageReferences")?.limit).toBe(10)
+    expect(getHandleConnectionLimit(gv("seedance-2-5-flash"), "videoReferences")?.limit).toBe(5)
+    expect(getHandleConnectionLimit(gv("seedance-2-5-flash"), "audioReferences")?.limit).toBe(5)
+  })
+
+  it("caps the Video to Video edit lane's image and audio rails at 10 / 5", () => {
+    expect(getHandleConnectionLimit(v2v("seedance-2-5-flash"), "imageReferences")?.limit).toBe(10)
+    expect(getHandleConnectionLimit(v2v("seedance-2-5-flash"), "audioReferences")?.limit).toBe(5)
+  })
+})

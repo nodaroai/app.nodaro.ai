@@ -262,8 +262,10 @@ function catalogWindow(provider: TailExtendProvider): { readonly min: number; re
  */
 export const TAIL_RECIPE_WINDOWS: Readonly<Record<TailExtendProvider, { readonly min: number; readonly max: number }>> = {
   "seedance-2-5-extend": catalogWindow("seedance-2-5-extend"),
+  "seedance-2-5-flash-extend": catalogWindow("seedance-2-5-flash-extend"),
   "seedance-2-0-extend": catalogWindow("seedance-2-0-extend"),
   "kling-4-extend": catalogWindow("kling-4-extend"),
+  "gemini-omni-flash-1-2-extend": catalogWindow("gemini-omni-flash-1-2-extend"),
 }
 
 /** Whether an Extend Video provider runs a tail recipe. Own keys only, so `"toString"` answers false. */

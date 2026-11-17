@@ -65,3 +65,37 @@ export function falCostUsd(
       return Math.ceil((m.frames ?? 0) / 16) * price.rate
   }
 }
+
+/**
+ * Gemini Omni Flash 1.2 Extend (`google/gemini-omni-flash/v1.2/extend`, our
+ * `gemini-omni-flash-1-2-extend`): what fal bills a run, in USD, from the rates
+ * measured on 2026-11-17 (fal's `x-fal-billable-units`, one unit $0.0273, which
+ * the queue client does not surface): each new second at its resolution's
+ * rate, plus the clip sent as input at about $0.0087 a second, plus the
+ * model's thinking — measured at about $0.006 at 360p and $0.0098 at 720p (a
+ * 4.06 s clip + 3 s billed 4.514 units at 360p and 10.651 at 720p). 1080p and
+ * 4K were not measured: they take the 720p allowance, the larger one seen, so
+ * the recorded cost is not understated there. Display and anomaly only: the
+ * credit charge is the run's rows, never this.
+ */
+export const FAL_GEMINI_OMNI_EXTEND_USD_PER_ADDED_SEC: Readonly<Record<string, number>> = {
+  "360p": 0.0273,
+  "720p": 0.0819,
+  "1080p": 0.1229,
+  "4k": 0.2457,
+}
+const FAL_GEMINI_OMNI_EXTEND_USD_PER_SENT_SEC = 0.0087
+/** The thinking allowance by resolution: measured at 360p and 720p; 1080p and 4K take 720p's (not measured). */
+const FAL_GEMINI_OMNI_EXTEND_USD_THINKING: Readonly<Record<string, number>> = {
+  "360p": 0.006,
+  "720p": 0.0098,
+  "1080p": 0.0098,
+  "4k": 0.0098,
+}
+
+/** fal's bill for one Gemini Omni Flash 1.2 Extend run, in USD (null for a resolution it does not render). */
+export function falGeminiOmniExtendCostUsd(m: { resolution: string; sentSec: number; addedSec: number }): number | null {
+  const perAdded = FAL_GEMINI_OMNI_EXTEND_USD_PER_ADDED_SEC[m.resolution]
+  if (perAdded === undefined) return null
+  return perAdded * m.addedSec + FAL_GEMINI_OMNI_EXTEND_USD_PER_SENT_SEC * m.sentSec + FAL_GEMINI_OMNI_EXTEND_USD_THINKING[m.resolution]!
+}

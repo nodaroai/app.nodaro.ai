@@ -26,11 +26,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { STRIPE_PRODUCTS, TIER_CREDITS, TIER_STORAGE_LIMITS } from "../stripe-config.js"
 import type { MemoryDb, Row } from "../../../test/memory-tables.js"
 
-/** The statuses the subscriptions CHECK accepts once the marker's migration is in. */
+/** The statuses the subscriptions CHECK accepts (migrations 650 and 656). */
 const STORABLE_STATUSES = new Set([
   "active",
   "trialing",
   "past_due",
+  "unpaid",
   "paused",
   "canceled",
   "incomplete",
@@ -47,6 +48,18 @@ const { state } = vi.hoisted(() => {
     missingColumns: new Set<string>(),
     /** The claim's conditional update fails (a database error) while set. */
     failClaim: false,
+    /**
+     * Database errors to answer instead of running a call: the first rule whose
+     * `when` matches the table, the builder method and its first argument.
+     * `once` rules are dropped once used.
+     */
+    refusals: [] as Array<{
+      when: (table: string, prop: string, arg: unknown) => boolean
+      error: { code: string; message: string }
+      once?: boolean
+      /** The write commits, then the error is reported (a connection dropped after the commit). */
+      landed?: boolean
+    }>,
     /**
      * Another event, run to its end just before the next subscriptions write
      * that `when` matches lands: what a concurrent delivery does between a
@@ -71,6 +84,7 @@ vi.mock("@/lib/supabase.js", async () => {
     const inner = memorySupabase(state.db).from(table) as Record<string, (...args: unknown[]) => unknown>
     let refused: ReturnType<typeof missing> | null = null
     let record: Record<string, unknown> | null = null
+    let landedError: { data: null; error: { code: string; message: string } } | null = null
     const touches = (value: unknown) =>
       [...state.missingColumns].find((c) => (typeof value === "string" ? value.includes(c) : value != null && typeof value === "object" && c in value))
     const proxy: Record<string, unknown> = new Proxy(inner, {
@@ -78,6 +92,11 @@ vi.mock("@/lib/supabase.js", async () => {
         if (prop === "then") {
           return (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
             if (refused) return Promise.resolve(refused).then(resolve, reject)
+            if (landedError) {
+              if (record) state.writes.push(record)
+              const failure = landedError
+              return (target.then as (a: unknown, b: unknown) => Promise<unknown>)(() => failure, reject).then(resolve, reject)
+            }
             const other = state.interleave
             if (record && other && table === "subscriptions" && other.when(record)) {
               state.interleave = null
@@ -105,6 +124,14 @@ vi.mock("@/lib/supabase.js", async () => {
           if (column && table === "subscriptions") refused = missing(prop === "insert" ? "PGRST204" : "42703", column)
           if (table === "subscriptions" && prop === "update" && state.failClaim && (args[0] as Row | undefined)?.plan_granted === true) {
             refused = { data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } }
+          }
+          const rule = state.refusals.find((r) => r.when(table, prop, args[0]))
+          if (rule?.landed) {
+            landedError = { data: null, error: rule.error }
+            if (rule.once) state.refusals.splice(state.refusals.indexOf(rule), 1)
+          } else if (rule) {
+            refused = { data: null, error: rule.error }
+            if (rule.once) state.refusals.splice(state.refusals.indexOf(rule), 1)
           }
           if (prop === "insert" || prop === "update") record = { table, [prop]: args[0] }
           const out = fn.apply(target, args)
@@ -243,6 +270,7 @@ beforeEach(() => {
   state.writes.length = 0
   state.missingColumns.clear()
   state.failClaim = false
+  state.refusals.length = 0
   state.interleave = null
   state.logTransaction.mockClear()
   state.invalidate.mockClear()
@@ -691,5 +719,208 @@ describe("a database without the marker yet (staging runs ahead of the migration
     await handleSubscriptionCanceled(canceled)
 
     expect(profile()).toMatchObject({ tier: "free" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A grant whose write fails is retried, never lost.
+// ---------------------------------------------------------------------------
+
+const TIMEOUT = { code: "57014", message: "canceling statement due to statement timeout" }
+/** The grant's profile write: the plan's credits with its storage. */
+const isGrantWrite = (table: string, prop: string, arg: unknown) =>
+  table === "profiles" && prop === "update" && (arg as Row | undefined)?.storage_limit_bytes !== undefined && (arg as Row | undefined)?.subscription_credits !== undefined
+const isRelease = (table: string, prop: string, arg: unknown) =>
+  table === "subscriptions" && prop === "update" && (arg as Row | undefined)?.plan_granted === false
+
+describe("a plan grant whose write fails", () => {
+  it("paid at creation: the claim is released, Stripe is asked again, and the redelivered created event grants once", async () => {
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+
+    await expect(handleSubscriptionCreated(created("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: false })
+    expect(profile()).toEqual(FREE_PROFILE)
+    expect(state.logTransaction).not.toHaveBeenCalled()
+    expect(state.notifyPaidConversion).not.toHaveBeenCalled()
+    expect(state.writes.filter((w) => w.rpc)).toEqual([])
+
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionCreated(created("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(profile()).toMatchObject(GRANTED_PRO)
+    expect(state.writes.filter((w) => w.rpc === "add_topup_credits")).toHaveLength(1)
+  })
+
+  it("paid at creation: a later paid update grants it too, once, if the created redelivery never comes", async () => {
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+    await expect(handleSubscriptionCreated(created("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+
+    await handleSubscriptionUpdated(updated("active"))
+    await handleSubscriptionCreated(created("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(profile()).toMatchObject(GRANTED_PRO)
+  })
+
+  it("claimed by a paid update: released, Stripe is asked again, and the redelivered update grants once", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+
+    await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+
+    // Nothing after the failed grant ran: the status, the row and the account are as they were.
+    expect(subscription()).toMatchObject({ status: "incomplete", plan_granted: false })
+    expect(profile()).toEqual(FREE_PROFILE)
+    expect(state.logTransaction).not.toHaveBeenCalled()
+
+    await handleSubscriptionUpdated(updated("active"))
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(profile()).toMatchObject(GRANTED_PRO)
+  })
+
+  it("recorded and granted by an update that outran created: released, and the redelivered update grants once", async () => {
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+
+    await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    expect(subscription()).toMatchObject({ plan_granted: false })
+    expect(profile()).toEqual(FREE_PROFILE)
+
+    await handleSubscriptionUpdated(updated("active"))
+    await handleSubscriptionCreated(created("incomplete"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(profile()).toMatchObject(GRANTED_PRO)
+  })
+
+  it("a write that commits but reports an error is not granted twice: no release, no second allocation, no carryover of the first", async () => {
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true, landed: true })
+
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionUpdated(updated("active"))
+
+    expect(planGrants()).toHaveLength(1)
+    expect(subscription()).toMatchObject({ status: "active", plan_granted: true })
+    expect(profile()).toMatchObject(GRANTED_PRO)
+    // The pre-subscribe balance moves to top-up once; the plan's own allocation never does.
+    expect(state.writes.filter((w) => w.rpc === "add_topup_credits")).toHaveLength(1)
+  })
+
+  it("a release that fails too is logged loudly and Stripe is still asked again", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    state.refusals.push({ when: isGrantWrite, error: TIMEOUT, once: true })
+    state.refusals.push({ when: isRelease, error: TIMEOUT, once: true })
+
+    await expect(handleSubscriptionUpdated(updated("active"))).rejects.toMatchObject({ name: "StripeEventRetryError" })
+
+    expect(errorSpy.mock.calls.flat().join("\n")).toMatch(/PLAN NOT GRANTED AND ITS CLAIM NOT RELEASED: sub=sub_pay_1/)
+    expect(profile()).toEqual(FREE_PROFILE)
+    expect(planGrants()).toHaveLength(0)
+  })
+
+  it("a release never un-grants a plan granted before: it is conditional on the marker it gives back", async () => {
+    await handleSubscriptionCreated(created("active"))
+    state.writes.length = 0
+
+    // A redelivered created event for a granted row: nothing to claim, nothing written.
+    await handleSubscriptionCreated(created("active"))
+
+    expect(state.writes).toEqual([])
+    expect(subscription()).toMatchObject({ plan_granted: true })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The cancellation's retry without the marker decides from the marker.
+// ---------------------------------------------------------------------------
+
+describe("a cancellation whose write is retried without returning the marker", () => {
+  /** The first cancel write is answered "no such column" though the marker exists. */
+  const refuseFirstCancel = () =>
+    state.refusals.push({
+      when: (table, prop, arg) => table === "subscriptions" && prop === "update" && (arg as Row | undefined)?.status === "canceled",
+      error: { code: "42703", message: 'column "something_else" does not exist' },
+      once: true,
+    })
+
+  it("a subscription never paid for leaves the account as it was, a tier it holds from elsewhere included", async () => {
+    // An account on a paid tier this subscription never gave (set by an admin).
+    const adminSet = { ...FREE_PROFILE, tier: "pro", subscription_tier: "pro", subscription_credits: 900, storage_limit_bytes: TIER_STORAGE_LIMITS.pro }
+    state.db = migratedDb(adminSet)
+    await handleSubscriptionCreated(created("incomplete"))
+    refuseFirstCancel()
+
+    await handleSubscriptionCanceled(canceled)
+
+    expect(subscription()).toMatchObject({ status: "canceled", plan_granted: false })
+    expect(profile()).toEqual(adminSet)
+    expect(state.logTransaction).not.toHaveBeenCalled()
+  })
+
+  it("a granted subscription is downgraded, as before", async () => {
+    await handleSubscriptionCreated(created("active"))
+    refuseFirstCancel()
+
+    await handleSubscriptionCanceled(canceled)
+
+    expect(profile()).toMatchObject({ tier: "free", subscription_tier: "free", storage_limit_bytes: TIER_STORAGE_LIMITS.free })
+    expect(state.logTransaction).toHaveBeenCalledWith(expect.objectContaining({ source: "expiry" }))
+  })
+
+  it("a marker read that fails asks Stripe again and touches no account; the redelivery decides from the marker", async () => {
+    await handleSubscriptionCreated(created("incomplete"))
+    refuseFirstCancel()
+    state.refusals.push({
+      when: (table, prop, arg) => table === "subscriptions" && prop === "select" && arg === "plan_granted",
+      error: TIMEOUT,
+      once: true,
+    })
+
+    await expect(handleSubscriptionCanceled(canceled)).rejects.toMatchObject({ name: "StripeEventRetryError" })
+    expect(profile()).toEqual(FREE_PROFILE)
+
+    await handleSubscriptionCanceled(canceled)
+
+    expect(subscription()).toMatchObject({ status: "canceled", plan_granted: false })
+    expect(profile()).toEqual(FREE_PROFILE)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// `unpaid` is stored, and the account keeps its plan as under past_due.
+// ---------------------------------------------------------------------------
+
+describe("unpaid (payment retries ended without payment)", () => {
+  it("is stored on the row; the account keeps its tier and no paid tier is written", async () => {
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionUpdated(updated("past_due"))
+    state.writes.length = 0
+
+    await handleSubscriptionUpdated(updated("unpaid"))
+
+    expect(subscription()).toMatchObject({ status: "unpaid" })
+    expect(profileWrites().filter((w) => (w.update as Row).tier !== undefined)).toEqual([])
+    expect(profile()).toMatchObject({ tier: "pro", subscription_tier: "pro", storage_limit_bytes: TIER_STORAGE_LIMITS.pro })
+  })
+
+  it("still counts as the account's live subscription when an older one is cancelled", async () => {
+    await handleSubscriptionCreated(created("active"))
+    await handleSubscriptionUpdated(updated("unpaid"))
+    // An older subscription of the same account, granted long ago, deleted late.
+    ;(state.db.tables.subscriptions as Row[]).push({
+      user_id: USER, stripe_subscription_id: "sub_old", stripe_price_id: PRO, tier: "pro", status: "active", plan_granted: true,
+      current_period_start: PERIOD.currentPeriodStart, current_period_end: PERIOD.currentPeriodEnd,
+    })
+
+    await handleSubscriptionCanceled({ ...canceled, subscriptionId: "sub_old" })
+
+    expect(profile()).toMatchObject({ tier: "pro", subscription_tier: "pro" })
+    expect(state.logTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ source: "expiry" }))
   })
 })

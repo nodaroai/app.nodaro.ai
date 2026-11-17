@@ -155,6 +155,35 @@ describe("Seedance 2.5 Extend — the provider guide's recipe, the whole body", 
   })
 })
 
+// Decided 2026-11-16: Seedance 2.5 Flash Extend sends Seedance 2.5's recipe to Seedance 2.5 Flash.
+describe("Seedance 2.5 Flash Extend — Seedance 2.5's recipe on Flash, the whole body", () => {
+  // What the worker passes: textToVideo(prompt, "seedance-2-5-flash", 8, "adaptive", options).
+  const OPTIONS = {
+    resolution: "480p",
+    generateAudio: true,
+    referenceVideoUrls: [TAIL_URL],
+    aspectRatio: "adaptive",
+    referenceTaskType: "extend" as const,
+  }
+
+  it("the tail as @video_1, declared as an extension at adaptive; no seed, no output_format, no start image", async () => {
+    vi.stubEnv("KIE_SEEDANCE_25_OUTPUT_FORMAT", "mov")
+    await provider.textToVideo("Extend @video_1 forward by 8 seconds: she opens the door", "seedance-2-5-flash", 8, "adaptive", OPTIONS)
+    const { model, input } = sent()
+    expect(model).toBe("bytedance/seedance-2-5-flash")
+    expect(input).toMatchObject({
+      prompt: "Extend @video_1 forward by 8 seconds: she opens the door",
+      duration: 8,
+      aspect_ratio: "adaptive",
+      generate_audio: true,
+      resolution: "480p",
+      reference_video_urls: [TAIL_URL],
+      omni_reference_task_type: "extend",
+    })
+    for (const key of ["seed", "output_format", "first_frame_url", "reference_image_urls"]) expect(input, key).not.toHaveProperty(key)
+  })
+})
+
 describe("Seedance 2.0 Extend — unchanged, the whole body", () => {
   // What the worker passes: imageToVideo(lastFrame, prompt, "seedance-2", 8, undefined, options).
   const OPTIONS = {

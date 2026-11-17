@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByFamily, validateModelInput } from "@nodaro/shared/model-catalog"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { parseRateQuoteCreditId, quoteBaseCredits } from "../../unit-quote-rates.js"
+import { wholeRequestQuoteOf } from "../../../ee/billing/whole-request-quotes.js"
 
 /**
  * A catalog row's static figure: its `STATIC_CREDIT_COSTS` entry, or — for a
@@ -15,6 +16,12 @@ import { parseRateQuoteCreditId, quoteBaseCredits } from "../../unit-quote-rates
 function staticFigureOf(identifier: string, modelId: string): number | undefined {
   const row = (STATIC_CREDIT_COSTS as Record<string, number | undefined>)[identifier]
   if (row !== undefined) return row
+  // A whole-request quote of the model's own rows (a Gemini Omni Flash 1.2
+  // Extend run, decided 2026-11-17): priced from them by the registry the price lookups read.
+  const whole = wholeRequestQuoteOf(identifier)
+  if (whole && !parseRateQuoteCreditId(identifier)) {
+    return whole.rows.every((id) => id.startsWith(`${modelId}:`)) ? whole.base((id) => (STATIC_CREDIT_COSTS as Record<string, number | undefined>)[id]) : undefined
+  }
   const quote = parseRateQuoteCreditId(identifier)
   if (!quote || !quote.rateId.startsWith(`${modelId}:`)) return undefined
   const rate = (STATIC_CREDIT_COSTS as Record<string, number | undefined>)[quote.rateId]

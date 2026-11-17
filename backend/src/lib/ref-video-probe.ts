@@ -2,11 +2,13 @@ import {
   SEEDANCE_2_REF_LIMITS,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   VIDEO_REF_VIDEO_DURATION_LIMITS,
+  VIDEO_REF_VIDEO_PICTURE_LIMITS,
   checkCharacterClipDurations,
   checkRefVideoDurations,
+  refVideoAspectProblem,
 } from "@nodaro/shared/models"
 import { characterVideoUrls, pricedReferenceVideoUrls } from "@nodaro/shared/video"
-import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
+import { probeMediaDuration, probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { isOwnMediaUrl } from "./fetch-own-media.js"
 
 /**
@@ -255,8 +257,9 @@ export type RefVideoDurationCheck =
   | { ok: true; durationsSec?: number[] }
   /** Out of bounds — `message` is a finished, user-facing sentence. `code`
    *  is set only when it is not `video_too_long`: a character's clip the probe
-   *  could not read (`character_video_unreadable`). */
-  | { ok: false; durationsSec: number[]; message: string; code?: "character_video_unreadable" }
+   *  could not read (`character_video_unreadable`), or a clip whose shape the
+   *  model does not take (`video_aspect_unsupported`). */
+  | { ok: false; durationsSec: number[]; message: string; code?: "character_video_unreadable" | "video_aspect_unsupported" }
 
 /**
  * Probe the connected reference videos and check them against the provider's
@@ -309,5 +312,26 @@ export async function probeAndCheckRefVideoDurations(args: {
     }
   }
   const check = checkRefVideoDurations(provider, durationsSec)
-  return check.ok ? { ok: true, durationsSec } : { ok: false, durationsSec, message: check.message }
+  if (!check.ok) return { ok: false, durationsSec, message: check.message }
+  const shape = await refVideoShapeProblem(provider, urls)
+  return shape === undefined ? { ok: true, durationsSec } : { ok: false, durationsSec, message: shape, code: "video_aspect_unsupported" }
+}
+
+/**
+ * Why `provider` cannot take one of these reference videos for its SHAPE
+ * (`refVideoAspectProblem`, @nodaro/shared: Seedance 2.5 Flash takes 1:2.5 to
+ * 2.5:1), as a finished sentence, or undefined. Only a provider with a picture
+ * rule (`VIDEO_REF_VIDEO_PICTURE_LIMITS`) is probed, each clip it would be sent
+ * at once (at most its cap). A clip whose size cannot be read is not refused:
+ * a failed probe must not refuse a run (the provider measures it).
+ */
+export async function refVideoShapeProblem(provider: string, referenceVideoUrls: readonly unknown[]): Promise<string | undefined> {
+  if (!VIDEO_REF_VIDEO_PICTURE_LIMITS[provider]) return undefined
+  const sizes = await Promise.allSettled(refVideoProbeCandidates(provider, referenceVideoUrls).map((url) => probeVideoSource(url)))
+  for (const size of sizes) {
+    if (size.status !== "fulfilled") continue
+    const problem = refVideoAspectProblem(provider, size.value.width, size.value.height)
+    if (problem) return problem
+  }
+  return undefined
 }

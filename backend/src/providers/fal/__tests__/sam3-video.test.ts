@@ -49,6 +49,7 @@ describe("SAM 3 video (fal)", () => {
     }))
     // No reconcile registration: its RLE is rendered locally, which the generic fal finalize cannot do.
     expect(runFalRequest.mock.calls[0]![0]).not.toHaveProperty("reconcileOpts")
+    for (const key of ["resumeRequestId", "onSubmitted", "statusErrorRetries"]) expect(runFalRequest.mock.calls[0]![0]).not.toHaveProperty(key)
     expect(out.requestId).toBe("req-1")
     expect(out.cost).toBeCloseTo(Math.ceil(90 / 16) * rate, 10)
   })

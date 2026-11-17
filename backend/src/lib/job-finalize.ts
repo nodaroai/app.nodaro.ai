@@ -1,5 +1,4 @@
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
-import { isGrokExtendSourceModel } from "@nodaro/shared/models"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { requestedImageFormat, storeFormattedImages } from "./image-output-store.js"
@@ -19,6 +18,7 @@ import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
 import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
 import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
 import { recordedLengthBoundSec, recordedVideoLengthSec } from "./generated-video-recorded-length.js"
+import { grokSourceOutputFields, type JobTaskRow } from "./grok-source-record.js"
 // @registry-enumerates NOT_GENERIC_RECOVERABLE carries every node unit with the "finalize:own-writer" capability
 import { UNIT_NODE_DESCRIPTORS } from "./unit-descriptors.js"
 import { composeSet, unitsWith } from "./unit-compose.js"
@@ -47,7 +47,7 @@ export { EXTRA_IMAGE_UPLOAD_CONCURRENCY, type DroppedExtraImages, type ExtraImag
  */
 export type FinalizeOutcome = { ok: true } | { ok: false; reason?: "lost_race" | "blocked" | "held" }
 
-interface JobRow {
+interface JobRow extends JobTaskRow {
   id: string
   user_id: string | null
   should_watermark: boolean | null
@@ -491,7 +491,7 @@ export async function finalizeJobWithMedia(
   // 1. Load job row (the shape we need for upload / asset / reopen).
   const { data: jobRow } = await supabase
     .from("jobs")
-    .select("id, user_id, should_watermark, is_public, job_type, workflow_execution_id, status, input_data")
+    .select("id, user_id, should_watermark, is_public, job_type, workflow_execution_id, status, input_data, provider_task_id, provider_kind, relay_job_id")
     .eq("id", jobId)
     .single()
   const job = jobRow as JobRow | null
@@ -647,19 +647,11 @@ export async function finalizeJobWithMedia(
   //    recorded — as the Grok Extend source check reads it) that made a
   //    provider task records, beside that task, the resolution its request
   //    RECORDED (`input_data.resolution`, exactly as stored): the fact a Grok
-  //    Extend's charge reads off this job (lib/grok-extend-source.ts). The
-  //    lanes that land the take copy both onto its result row, so the quote
-  //    reads the same fact. Every other job completes as before.
-  const recordedResolution = job.input_data?.resolution
-  const recordedModel = job.input_data?.provider ?? job.input_data?.resolvedModel
-  if (
-    videoR2Url !== undefined &&
-    isGrokExtendSourceModel(typeof recordedModel === "string" ? recordedModel.trim() : recordedModel) &&
-    typeof outputData.kieTaskId === "string" && outputData.kieTaskId !== "" &&
-    typeof recordedResolution === "string" && recordedResolution !== ""
-  ) {
-    outputData = { ...outputData, recordedResolution }
-  }
+  //    Extend's charge reads off this job (lib/grok-extend-source.ts). A
+  //    recovery's output carries no task, so the row's KIE task is added as
+  //    the worker would add it. One definition for every lane
+  //    (lib/grok-source-record.ts). Every other job completes as before.
+  outputData = { ...outputData, ...grokSourceOutputFields({ video: videoR2Url !== undefined, inputData: job.input_data, output: outputData, row: job }) }
 
   // 4. CAS-guarded markJobCompleted (live statuses only). Null provider /
   //    cost fields are OMITTED, not written: the reconcile path passes

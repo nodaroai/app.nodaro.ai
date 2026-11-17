@@ -421,6 +421,7 @@ describe("the KIE equivalence is the registry", () => {
         "gemini-3.7-flash": "gemini-3-8-flash-openai",
         "gemini-3.8-flash": "gemini-3-8-flash-openai",
         "gemini-4-carbon": "gemini-4-carbon-openai",
+        "gemini-4-hydrogen": "gemini-4-hydrogen-openai",
       }
     `)
   })

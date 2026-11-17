@@ -6,6 +6,8 @@ import { grokExtendCreditId, pixverseExtendCreditId, tailExtendCreditId, tailExt
 import { EXTEND_VIDEO_PROVIDERS, RETIRED_VIDEO_PROVIDERS, canonicalVideoProvider, isTailExtendProvider } from "@nodaro/shared/models"
 import { isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { quoteBaseCredits } from "@/lib/credit-base-cost.js"
+import { priceMarginKey } from "@/lib/speech-credits.js"
+import { geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider } from "@nodaro/render-rules"
 import { tailRecipeSeconds } from "@/lib/extend-recipe.js"
 import { resolveNodeInputs } from "@/services/workflow-engine/input-resolver.js"
 import { stampGrokExtendSource } from "@/lib/grok-extend-stamp.js"
@@ -65,8 +67,20 @@ describe("route, payload builder and estimate name one id for every tail-recipe 
       for (const resolution of RESOLUTIONS) {
         const label = `${provider} ${String(duration)} ${String(resolution)}`
         const ids = producers({ provider, duration, resolution })
+        // Gemini Omni Flash 1.2 Extend (decided 2026-11-17): held at its
+        // resolution's per-second-added row; the estimate names the whole-run
+        // quote id, marked up at that same row (`priceMarginKey`) and priced
+        // from its two rows (gemini-omni-extend-parity.test.ts holds the figures equal).
+        if (isGeminiOmniExtendProvider(runsAs)) {
+          const want = geminiOmniExtendAddedCreditId(resolution)
+          expect({ route: ids.route, run: ids.run }, label).toEqual({ route: want, run: want })
+          expect(ids.estimate, label).toBe(tailExtendCreditId(runsAs, duration, resolution))
+          expect(priceMarginKey(ids.estimate), label).toBe(want)
+          expect(STATIC_CREDIT_COSTS[want], label).toBeGreaterThan(0)
+          continue
+        }
         const want = isSeedanceExtendPricedBySecondsSent(runsAs)
-          ? seedanceExtendRateCreditId(resolution)
+          ? seedanceExtendRateCreditId(resolution, runsAs)
           : tailExtendCreditId(runsAs, duration, resolution)
         expect(ids, label).toEqual({ route: want, run: want, estimate: want })
         expect(STATIC_CREDIT_COSTS[want], label).toBeGreaterThan(0)
@@ -91,6 +105,22 @@ describe("route, payload builder and estimate name one id for every tail-recipe 
     })
   })
 
+  it("Seedance 2.5 Flash Extend is priced on its own rows, never on a Seedance 2.5 one; 1080p at 720p", () => {
+    expect(TAIL_PROVIDERS).toContain("seedance-2-5-flash-extend")
+    expect(producers({ provider: "seedance-2-5-flash-extend", duration: 12, resolution: "480p" })).toEqual({
+      route: "seedance-2-5-flash-extend:480p:per-2s",
+      run: "seedance-2-5-flash-extend:480p:per-2s",
+      estimate: "seedance-2-5-flash-extend:480p:per-2s",
+    })
+    expect(producers({ provider: "seedance-2-5-flash-extend", resolution: "1080p" })).toEqual({
+      route: "seedance-2-5-flash-extend:720p:per-2s",
+      run: "seedance-2-5-flash-extend:720p:per-2s",
+      estimate: "seedance-2-5-flash-extend:720p:per-2s",
+    })
+    const queued = buildPayload(node({ prompt: "keep going", provider: "seedance-2-5-flash-extend", resolution: "1080p" }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }).payload
+    expect(queued).toMatchObject({ provider: "seedance-2-5-flash-extend", resolution: "720p", duration: 8 })
+  })
+
   it("Seedance 2.0 is priced per second added, on its own rows", () => {
     expect(producers({ provider: "seedance-2-0-extend", duration: 6, resolution: "480p" }).run).toBe("seedance-2-0-extend:6s:480p")
     expect(producers({ provider: "seedance-2-0-extend" }).run).toBe("seedance-2-0-extend:8s:720p")
@@ -103,6 +133,26 @@ describe("route, payload builder and estimate name one id for every tail-recipe 
       estimate: "kling-4-extend:5s:720p",
     })
     expect(producers({ provider: "kling-4-extend", duration: 22, resolution: "1080p" }).run).toBe("kling-4-extend:22s:1080p")
+  })
+
+  // Decided 2026-11-17: its run is held on its two rows (computed by the route
+  // and node-executor alike) and marked up at its per-length row, the one id
+  // every producer names; the job carries the length and resolution it is
+  // priced at, and an empty prompt (fal requires one) is refused before any hold.
+  it("Gemini Omni Flash 1.2 Extend is held at its resolution's per-second-added row and quoted under its whole-run id; 480p runs at 720p", () => {
+    expect(TAIL_PROVIDERS).toContain("gemini-omni-flash-1-2-extend")
+    expect(producers({ provider: "gemini-omni-flash-1-2-extend", duration: 5, resolution: "4k" })).toEqual({
+      route: "gemini-omni-flash-1-2-extend:4k:per-second",
+      run: "gemini-omni-flash-1-2-extend:4k:per-second",
+      estimate: "gemini-omni-flash-1-2-extend:4k:sent-10s:added-5s",
+    })
+    const queued = buildPayload(node({ prompt: "keep going", provider: "gemini-omni-flash-1-2-extend", resolution: "480p", duration: 12 }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }).payload
+    expect(queued).toMatchObject({ provider: "gemini-omni-flash-1-2-extend", resolution: "720p", duration: 10, prompt: "keep going" })
+  })
+
+  it("a workflow run of Gemini Omni Flash 1.2 Extend with no prompt is refused in the route's words", () => {
+    expect(() => buildPayload(node({ prompt: "", provider: "gemini-omni-flash-1-2-extend" }), "job-1", { videoUrl: "https://cdn.example.com/source.mp4" }))
+      .toThrow("prompt (what happens next) is required for gemini-omni-flash-1-2-extend")
   })
 })
 
@@ -167,7 +217,8 @@ describe("every Extend Video provider is priced on a row, by all three producers
   it.each(CASES)("%j", (data) => {
     const ids = producers(data)
     expect(ids.run, "the workflow run reserves what the route reserves").toBe(ids.route)
-    expect(ids.estimate, "the estimate quotes what the route reserves").toBe(ids.route)
+    // A whole-run quote id (Gemini Omni Flash 1.2 Extend) is marked up at the route's id.
+    expect(priceMarginKey(ids.estimate), "the estimate quotes what the route reserves").toBe(ids.route)
     expect(STATIC_CREDIT_COSTS[ids.route], ids.route).toBeGreaterThan(0)
   })
 })
@@ -448,7 +499,7 @@ describe("workflow run — an MCP-built extension whose task an old server run o
 
 /** The base credits a Seedance 2.5 extend is charged on a source of `sourceSec` (undefined: not known), as every lane reads it. */
 const charge25 = (duration: unknown, resolution: unknown, sourceSec: number | undefined): number => {
-  const price = seedanceExtendPrice({ duration, resolution, sourcePictureSec: sourceSec })
+  const price = seedanceExtendPrice({ provider: "seedance-2-5-extend", duration, resolution, sourcePictureSec: sourceSec })
   return quoteBaseCredits(STATIC_CREDIT_COSTS[price.rateId]!, price.units)
 }
 

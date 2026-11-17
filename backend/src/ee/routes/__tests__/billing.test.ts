@@ -202,6 +202,15 @@ function mockTables(spec: Record<string, { single?: unknown; list?: unknown[] }>
   return { updates: (table: string) => recorded.filter((r) => r.table === table).map((r) => r.payload) }
 }
 
+/** The status lists the route filtered the subscriptions table by. */
+function subscriptionStatusFilters(): unknown[] {
+  return vi
+    .mocked(supabase.from)
+    .mock.calls.map((c, i) => ({ table: c[0], chain: vi.mocked(supabase.from).mock.results[i]?.value as { in: { mock: { calls: unknown[][] } } } }))
+    .filter((r) => r.table === "subscriptions")
+    .flatMap((r) => r.chain.in.mock.calls.filter((args) => args[0] === "status").map((args) => args[1]))
+}
+
 const activeBasic = { stripe_subscription_id: "sub_existing", stripe_price_id: "pri_basic", status: "active" }
 
 function liveSub(overrides: Record<string, unknown> = {}) {
@@ -545,6 +554,20 @@ describe("POST /v1/billing/change-plan", () => {
     expect(supabase.rpc).not.toHaveBeenCalledWith("grant_plan_change_credits", expect.anything())
   })
 
+  it("reads the newest of the active, past_due and unpaid subscriptions, and refuses an unpaid one before Stripe is touched", async () => {
+    mockTables({ subscriptions: { single: { ...activeBasic, status: "unpaid" } } })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/change-plan",
+      payload: { userId: "user-123", newPriceId: "pri_pro" },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(subscriptionStatusFilters()).toEqual([["active", "past_due", "unpaid"]])
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled()
+  })
+
   it("refuses a subscription that is not active (past_due), before Stripe is touched", async () => {
     mockTables({ subscriptions: { single: { ...activeBasic, status: "past_due" } } })
 
@@ -645,6 +668,19 @@ describe("POST /v1/billing/create-checkout-session — one subscription per acco
       })
       expect(res.statusCode, status).toBe(409)
     }
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
+  })
+
+  it("reads past_due and unpaid as the account's subscription (unpaid: payment retries ended without payment)", async () => {
+    mockTables({ subscriptions: { list: [{ id: "sub-row", status: "unpaid" }] }, stripe_customers: { single: { stripe_customer_id: "cus_123" } } })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/billing/create-checkout-session",
+      payload: { userId: "user-123", priceId: "pri_pro" },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(subscriptionStatusFilters()).toEqual([["active", "past_due", "unpaid"]])
     expect(stripe.checkout.sessions.create).not.toHaveBeenCalled()
   })
 

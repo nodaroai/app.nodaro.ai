@@ -8,14 +8,20 @@
  *   generation's KIE taskId
  * - runway-extend: Runway extend (POST /api/v1/runway/extend) — likewise
  * - ltx-2.3-pro: LTX 2.3 Pro extend, from a video URL
- * - seedance-2-5-extend / seedance-2-0-extend / kling-4-extend: Seedance 2.5 /
- *   Seedance 2.0 / Kling 4, from a video URL — the tail recipe
- *   (lib/extend-recipe.ts): the source's last seconds as the `@video_1`
- *   reference, then a stitch. Seedance 2.5 is charged per second sent and
- *   added (@nodaro/render-rules `seedance-extend-pricing.ts`), on the source
+ * - seedance-2-5-extend / seedance-2-5-flash-extend / seedance-2-0-extend /
+ *   kling-4-extend: Seedance 2.5 / Seedance 2.5 Flash / Seedance 2.0 / Kling 4,
+ *   from a video URL — the tail recipe (lib/extend-recipe.ts): the source's
+ *   last seconds as the `@video_1` reference, then a stitch. Seedance 2.5 and
+ *   2.5 Flash are charged per second sent and added, each on its own rows (@nodaro/render-rules `seedance-extend-pricing.ts`), on the source
  *   the preHandler measures. The earlier id `seedance-2-extend` is retired:
  *   the app-wide hook (middleware/retired-video-provider.ts) runs it as
  *   `seedance-2-5-extend`.
+ * - gemini-omni-flash-1-2-extend: Gemini Omni Flash 1.2 on fal, from a
+ *   video URL — the tail recipe too (its last 10 s go to fal, which returns
+ *   them with the new seconds joined on; only the new seconds are joined onto
+ *   the source). Only a 16:9 or 9:16 source, refused otherwise before the
+ *   hold. Charged per second sent and added on its own rows, rounded up to 10
+ *   (`gemini-omni-extend-rate.ts`), on the source the preHandler measures.
  * - pixverse-v6-extend: PixVerse V6, from a video URL — a native extend
  *   (lib/extend-native.ts): the whole source in, the source with the new
  *   seconds joined on back, of which only the new seconds are stitched to it.
@@ -49,18 +55,23 @@ import {
   isCatalogExtendProvider,
   isGrokExtendProvider,
   isPixverseExtendProvider,
+  refVideoAspectProblem,
 } from "@nodaro/shared/models"
+import { displayVideoSize, extendSourceAspectProblem } from "../lib/extend-source-shape.js"
+import { falEnabled } from "../providers/fal/enabled.js"
+import { MissingProviderKeyError } from "../providers/provider-keys.js"
+import { GEMINI_OMNI_EXTEND_KEY_COVERAGE } from "../providers/fal/gemini-omni-extend.js"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, catalogExtendCreditId, grokExtendCreditId, grokExtendSeconds, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
-import { isSeedanceExtendPricedBySecondsSent, seedanceExtendRateCreditId } from "@nodaro/render-rules"
+import { geminiOmniExtendAddedCreditId, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { EXTEND_REFERENCE_IMAGE_PROVIDERS, extendSourceTooShortMessage, isTailRecipeProvider, tailRecipeSeconds, TAIL_RECIPES } from "../lib/extend-recipe.js"
 import { EXTEND_DURATION_MAX_SEC, EXTEND_DURATION_SECONDS, describeSeconds } from "../lib/extend-durations.js"
 import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../lib/extend-native.js"
 import { GROK_EXTEND_SOURCE_CODE, GROK_EXTEND_SOURCE_MESSAGE, resolveGrokExtendSource, type GrokExtendSource } from "../lib/grok-extend-source.js"
 import { ltxExtendBaseCredits } from "../lib/ltx-extend-credits.js"
-import { SEEDANCE_EXTEND_SOURCE_SEC_KEY, seedanceExtendBaseCredits } from "../lib/seedance-extend-credits.js"
+import { isExtendChargedBySecondsSent, SEEDANCE_EXTEND_SOURCE_SEC_KEY, sentChargedExtendBaseCredits } from "../lib/seedance-extend-credits.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
 import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -84,13 +95,14 @@ export const extendVideoBody = z.object({
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
   extendMode: z.enum(["start", "end"]).optional(), // LTX 2.3 Pro only
   // Seconds to add, one of the provider's own (`EXTEND_DURATION_SECONDS`):
-  // Seedance 2.5 4–30, Seedance 2.0 4–15, Kling 4 3–30, PixVerse V6 1–15,
+  // Seedance 2.5 and 2.5 Flash 4–30, Seedance 2.0 4–15, Kling 4 3–30, PixVerse V6 1–15,
   // LTX / VEO / Runway 1–20.
   duration: z.number().int().min(1).max(EXTEND_DURATION_MAX_SEC).optional(),
   // Catalog extend providers only, one their catalog entry offers (Seedance:
-  // 480p / 720p / 1080p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p /
-  // 720p / 1080p), checked per provider by `extendRequestProblem`.
-  resolution: z.enum(["360p", "480p", "540p", "720p", "1080p"]).optional(),
+  // 480p / 720p / 1080p, 2.5 Flash 480p / 720p; Kling 4: 720p / 1080p; PixVerse V6: 360p / 540p /
+  // 720p / 1080p; Gemini Omni Flash 1.2: 360p / 720p / 1080p / 4k), checked
+  // per provider by `extendRequestProblem`.
+  resolution: z.enum(["360p", "480p", "540p", "720p", "1080p", "4k"]).optional(),
   generateAudio: z.boolean().optional(), // Seedance and PixVerse V6 only (default true); Kling 4's sound is always on
   // Reference images for the extension (Seedance only — the other extend
   // transports have no reference path, and a ref they'd silently drop is
@@ -180,7 +192,13 @@ export function resolveExtendVideoIdentifier(body: Record<string, unknown> | und
   // Seedance 2.5 is charged per second sent and added: its resolution's
   // two-second row, which the guard multiplies by the run's units
   // (`seedanceExtendBaseCredits`, on the source the preHandler measured).
-  if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendRateCreditId(body?.resolution)
+  if (isSeedanceExtendPricedBySecondsSent(provider)) return seedanceExtendRateCreditId(body?.resolution, provider)
+  // Gemini Omni Flash 1.2 Extend is charged per second sent and added on two
+  // rows (@nodaro/render-rules `gemini-omni-extend-pricing.ts`): the guard
+  // computes the run's base from them (`extendVideoComputeCredits`) and marks
+  // it up once at its resolution's per-second-added row, named here — the id
+  // a workflow run holds at and its whole-run quote id is marked up at.
+  if (isGeminiOmniExtendProvider(provider)) return geminiOmniExtendAddedCreditId(body?.resolution)
   // Every other catalog extend provider (Seedance 2.0, Kling 4, PixVerse V6)
   // on its own rows (per second added × resolution; PixVerse's `:audio` with
   // its sound on) — the one builder every surface prices such an extend with.
@@ -219,15 +237,18 @@ const grokSourceResolutionOf = (req: FastifyRequest): string | undefined => grok
 const measuredSourcePictureSec = new WeakMap<FastifyRequest, number>()
 
 /**
- * BASE credits of a Seedance 2.5 extend request (the guard marks them up once
- * at the rate row): the run's seconds sent and added at its resolution's
- * rate. Undefined for every other provider (its row prices it). Exported for tests.
+ * BASE credits of an extend request charged by the seconds it sends (the
+ * guard marks them up once at the id `resolveExtendVideoIdentifier` names):
+ * Seedance 2.5 / 2.5 Flash — the run's seconds sent and added at its
+ * resolution's rate; Gemini Omni Flash 1.2 — the seconds sent and added on
+ * its two rows, rounded up to 10. Undefined for every other provider (its row
+ * prices it). Exported for tests.
  */
 export async function extendVideoComputeCredits(body: unknown, req: FastifyRequest): Promise<number | undefined> {
   const b = body as Record<string, unknown> | undefined
   const provider = canonicalVideoProvider(typeof b?.provider === "string" ? b.provider : "veo-extend")
-  if (!isSeedanceExtendPricedBySecondsSent(provider)) return undefined
-  return seedanceExtendBaseCredits({ duration: b?.duration, resolution: b?.resolution, sourcePictureSec: measuredSourcePictureSec.get(req) })
+  if (!isExtendChargedBySecondsSent(provider)) return undefined
+  return sentChargedExtendBaseCredits({ provider, duration: b?.duration, resolution: b?.resolution, sourcePictureSec: measuredSourcePictureSec.get(req) })
 }
 
 type ExtendVideoBody = z.infer<typeof extendVideoBody>
@@ -246,7 +267,9 @@ function extendRequestProblem(data: ExtendVideoBody): string | null {
     // recipe wraps it in its prompt ("extend @video_1 as follows: …"); an
     // empty continuation has nothing to say.
     if (!videoUrl) return `videoUrl is required for ${provider}`
-    if (!prompt) return `prompt (what happens next) is required for ${provider}`
+    // Gemini Omni Flash 1.2 sends the prompt as written and fal refuses a
+    // blank one: read trimmed, as a workflow run reads it (decided 2026-11-17).
+    if (!(isGeminiOmniExtendProvider(provider) ? prompt?.trim() : prompt)) return `prompt (what happens next) is required for ${provider}`
   } else if (isPixverseExtendProvider(provider)) {
     // URL-based too; the prompt is sent as written, and PixVerse refuses one
     // under 3 characters — after the reservation, so it is refused here.
@@ -275,6 +298,13 @@ function extendRequestProblem(data: ExtendVideoBody): string | null {
   const resolutions = isCatalogExtendProvider(provider) ? MODEL_CATALOG[provider]?.resolutions ?? [] : []
   if (data.resolution !== undefined && resolutions.length > 0 && !resolutions.includes(data.resolution)) {
     return `resolution must be ${describeChoices(resolutions)} for ${provider}`
+  }
+  // 4k joined the field for Gemini Omni Flash 1.2 Extend (decided 2026-11-17):
+  // a provider with no catalog resolutions (VEO, Runway, LTX 2.3 Pro, Grok)
+  // ignores the field, and is refused 4k as it was before, rather than taking
+  // a value no request could send it until now.
+  if (data.resolution === "4k" && resolutions.length === 0) {
+    return `resolution 4k is not offered by ${provider}`
   }
   // Reference images ride ONLY the Seedance transport (i2v with a native
   // reference_image_urls array). The other extend providers have no reference
@@ -311,7 +341,9 @@ function retiredLengthInWindow(data: ExtendVideoBody, retiredId: string | undefi
  * {@link checkExtendSource}'s answer. `pictureSec`: the length of the source's
  * picture, when it was measured (what a Seedance 2.5 run's price counts).
  */
-export type ExtendSourceCheck = { ok: true; pictureSec?: number } | { ok: false; code: "video_too_short"; message: string }
+export type ExtendSourceCheck =
+  | { ok: true; pictureSec?: number; size?: { width: number; height: number } }
+  | { ok: false; code: "video_too_short" | "video_aspect_unsupported"; message: string }
 
 /**
  * Whether a tail-recipe provider can continue `videoUrl`. The run sends the
@@ -319,7 +351,9 @@ export type ExtendSourceCheck = { ok: true; pictureSec?: number } | { ok: false;
  * picture shorter than the tail), and the model refuses a reference shorter
  * than its floor (`minSourceSec`, the floor the worker holds too: Seedance
  * 1.8 s, a little under its 2 s tail, so a nominal 2 s clip that probes a
- * frame short still runs; Kling 4 2 s, under its 3 s tail). A shorter picture
+ * frame short still runs; Seedance 2.5 Flash its documented 2 s; Kling 4 2 s,
+ * under its 3 s tail). A source whose shape the model does not take as a
+ * reference video (`refVideoAspectProblem`) is refused the same way. A shorter picture
  * is refused here — before anything is reserved — instead of failing in the
  * worker after the reservation. The picture's length is the video stream's
  * own (`videoDurationSeconds`: the sound can run past the last frame), the
@@ -339,15 +373,31 @@ export async function checkExtendSource(
 ): Promise<ExtendSourceCheck> {
   if (!isTailRecipeProvider(provider) || !safeUrlSchema.safeParse(videoUrl).success) return { ok: true }
   let pictureSec: number
+  let size: { width: number; height: number }
+  let display: { width: number; height: number }
   try {
     const probe = await probeVideoSource(videoUrl)
     pictureSec = probe.videoDurationSeconds ?? probe.durationSeconds
+    size = { width: probe.width, height: probe.height }
+    // The DISPLAY size (its sample aspect applied): what Gemini Omni Flash
+    // 1.2's shape and tier cap are judged on.
+    display = displayVideoSize(probe)
   } catch (err) {
     onProbeError?.(err)
     return { ok: true }
   }
-  if (pictureSec >= TAIL_RECIPES[provider].minSourceSec) return { ok: true, pictureSec }
-  return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }
+  if (pictureSec < TAIL_RECIPES[provider].minSourceSec) {
+    return { ok: false, code: "video_too_short", message: extendSourceTooShortMessage(provider, pictureSec) }
+  }
+  // The source's end goes to the model as a reference video, so a shape its
+  // model does not take (Seedance 2.5 Flash: 1:2.5 to 2.5:1) is refused here too.
+  const shape = refVideoAspectProblem(TAIL_RECIPES[provider].genModel, size.width, size.height)
+    // An engine that continues only some shapes (Gemini Omni Flash 1.2: 16:9
+    // or 9:16) refuses any other here, before anything is held.
+    ?? extendSourceAspectProblem(provider, display.width, display.height)
+  if (shape) return { ok: false, code: "video_aspect_unsupported", message: shape }
+  // The size rides only where it is read: Gemini Omni Flash 1.2's tier cap.
+  return isGeminiOmniExtendProvider(provider) ? { ok: true, pictureSec, size: display } : { ok: true, pictureSec }
 }
 
 export async function extendVideoRoutes(app: FastifyInstance) {
@@ -399,12 +449,26 @@ export async function extendVideoRoutes(app: FastifyInstance) {
         }
       }
       const resolution = isGrokExtendProvider(provider) ? grokSourceResolutionOf(req) : data.resolution
+      // Gemini Omni Flash 1.2 runs on fal: an install with no fal key is
+      // refused here, before anything is probed or held (the worker refuses it
+      // again as the backstop).
+      if (isGeminiOmniExtendProvider(provider) && !falEnabled()) {
+        return reply.status(503).send({ error: { code: "provider_unavailable", message: new MissingProviderKeyError("FAL_KEY", undefined, GEMINI_OMNI_EXTEND_KEY_COVERAGE).message } })
+      }
       if (isTailRecipeProvider(provider) && videoUrl && req.userId) {
         const source = await checkExtendSource(provider, videoUrl, (err) => {
           req.log.warn({ err, provider }, "extend-video: source ffprobe failed; the worker measures it again")
         })
         if (!source.ok) return reply.status(400).send({ error: { code: source.code, message: source.message } })
         if (source.pictureSec !== undefined) measuredSourcePictureSec.set(req, source.pictureSec)
+        // Gemini Omni Flash 1.2: a tier above the source's runs, and is
+        // charged, at the source's (the delivered clip keeps its size). The
+        // capped tier replaces the body's, so the guard, the reservation, the
+        // job and the queue all read the tier that runs.
+        if (isGeminiOmniExtendProvider(provider) && source.size) {
+          const tier = geminiOmniExtendResolution(data.resolution, source.size)
+          if (tier !== geminiOmniExtendResolution(data.resolution)) req.body = { ...(req.body as Record<string, unknown>), resolution: tier }
+        }
       }
       // The free-credit video limits judge the provider the request RUNS, as
       // an extension (no extension on free credits). Left to themselves they
@@ -562,7 +626,7 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             // Seedance 2.5: the source length the hold was priced on, so the
             // worker sends (and settles on) no more of the source than was
             // held, even if the link answers it a longer file.
-            ...(isSeedanceExtendPricedBySecondsSent(canonicalVideoProvider(provider)) && measuredSourcePictureSec.has(req)
+            ...(isExtendChargedBySecondsSent(canonicalVideoProvider(provider)) && measuredSourcePictureSec.has(req)
               ? { [SEEDANCE_EXTEND_SOURCE_SEC_KEY]: measuredSourcePictureSec.get(req) }
               : {}),
             usageLogId,

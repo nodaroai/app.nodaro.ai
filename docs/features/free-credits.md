@@ -99,11 +99,18 @@ includes are on the [pricing page](https://app.nodaro.ai/pricing).
 Until an account buys anything, its video runs within these limits:
 
 - **Not available:** every Kling model (generation, motion transfer, lip-sync)
-  except Kling 4.0 Flash, and Seedance 2.5 (including its HD finalize step),
+  except Kling 4.0 Flash, and Seedance 2.5 (including its HD finalize step)
+  except Seedance 2.5 Flash,
   video upscaling (VEO 1080p / 4K, Topaz), and extending a video.
 - **Kling 4.0 Flash** (`kling-4-flash`) is the one Kling model open to free
   credits, within the limits below: 3 or 4 second clips at 720p, its only
   resolution.
+- **Seedance 2.5 Flash** (`seedance-2-5-flash`) is open to free credits within
+  the limits below: a 4 second clip at 480p, its lowest resolution. Seedance
+  2.5 itself, its HD finalize step and its extend stay unavailable, and so does
+  Seedance 2.5 Flash's extend (`seedance-2-5-flash-extend`): extending a video
+  is not available on any model (Gemini Omni Flash 1.2's extend,
+  `gemini-omni-flash-1-2-extend`, included).
 - **Every other video model:** clips of **up to 4 seconds**, at the model's
   **lowest resolution** (for example 480p on Seedance 2 Fast, 720p on VEO 3.1
   Lite). A model whose shortest clip is longer than 4 seconds is not

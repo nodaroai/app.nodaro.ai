@@ -147,9 +147,10 @@ export default function PricingPage() {
     }
   }
 
-  // Derive current tier from active subscription
+  // Derive current tier from the account's live subscription (a payment being
+  // retried, or whose retries ended unpaid, is still the account's plan)
   const isActiveSub = subscription &&
-    (subscription.status === "active" || subscription.status === "past_due")
+    (subscription.status === "active" || subscription.status === "past_due" || subscription.status === "unpaid")
   const currentTierId = isActiveSub ? subscriptionTierId(subscription.stripe_price_id, plans) : null
 
   // Auto-open Stripe checkout when redirected from login with ?plan= param

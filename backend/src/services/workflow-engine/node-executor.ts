@@ -143,7 +143,7 @@ import { pricedRefVideoInput, probeAndCheckRefVideoDurations, probeRefVideoDurat
 import { payloadReplicas, readReplica, ReplicaRecordingError, withoutReplicaLinks } from "../../lib/voice-replica.js"
 import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
-import { probeAndCheckRefAudio } from "../../lib/ref-audio-probe.js"
+import { probeAndCheckRefAudio, sentReferenceAudioUrls } from "../../lib/ref-audio-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import type {
@@ -2468,7 +2468,13 @@ async function executeWorkerNode(
   // runs refuse a clip the provider would reject before anything is reserved.
   const refAudioCheck = await probeAndCheckRefAudio({
     provider: payload.provider as string | undefined,
-    referenceAudioUrls: payload.referenceAudioUrls,
+    // A Seedance Lip Sync run sends its voice line as reference audio 1.
+    referenceAudioUrls: sentReferenceAudioUrls({
+      provider: payload.provider,
+      referenceAudioUrls: payload.referenceAudioUrls,
+      audioUrl: payload.audioUrl,
+      lipSync: node.type === "lip-sync",
+    }),
   })
   if (!refAudioCheck.ok) {
     await supabase.from("jobs").delete().eq("id", jobId)
@@ -2703,10 +2709,20 @@ async function executeWorkerNode(
   // source's picture is measured (best effort, as the route measures it) and
   // its length stamped before anything is held. Unmeasured: the whole
   // 10-second window is held and the worker settles on the source it measures.
+  // A source whose shape the model does not take (Seedance 2.5 Flash: 1:2.5
+  // to 2.5:1) is refused here, as the route refuses it: no row, no hold.
   const seedanceExtendStamp = await stampSeedanceExtendSource(jobName, payload, (err) => {
     console.warn(`[node-executor] extend-video ${jobId}: source ffprobe failed; holding the whole window, the worker measures it again:`, err)
   })
-  if (Object.keys(seedanceExtendStamp).length > 0) payload = { ...payload, ...seedanceExtendStamp }
+  if (!seedanceExtendStamp.ok) {
+    await dropRefusedStampedJob(jobId)
+    const err = new Error(seedanceExtendStamp.message) as Error & { errorCode?: string }
+    err.errorCode = seedanceExtendStamp.code
+    throw err
+  }
+  if (Object.keys(seedanceExtendStamp.patch).length > 0) payload = { ...payload, ...seedanceExtendStamp.patch }
+  // Gemini Omni Flash 1.2: the capped tier's row is the id the job is held at.
+  if (seedanceExtendStamp.modelIdentifier) modelIdentifier = seedanceExtendStamp.modelIdentifier
 
   const pitchTempoRefusal = await stampPitchTempoDuration(jobName, payload)
   if (pitchTempoRefusal) {

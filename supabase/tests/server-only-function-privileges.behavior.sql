@@ -236,6 +236,7 @@ INSERT INTO server_only (sig) VALUES
   ('remove_creature_asset(uuid,uuid,text,text)'),
   ('remove_location_asset(uuid,uuid,text,text)'),
   ('remove_object_asset(uuid,uuid,text,text)'),
+  ('renew_subscription_credits_safety_net(uuid,uuid,timestamptz,integer)'),
   ('replace_import_source_policies(jsonb,uuid,text)'),
   ('reserve_credits(uuid,integer,uuid,text,numeric,numeric,boolean,integer,boolean,uuid,uuid,boolean)'),
   ('reserve_job_credits(uuid,integer,uuid,text,numeric,numeric,boolean,integer,boolean,uuid,uuid,boolean,boolean)'),

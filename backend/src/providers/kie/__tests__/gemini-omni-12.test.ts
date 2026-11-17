@@ -153,13 +153,65 @@ describe("buildGeminiOmni12Request", () => {
     expect(buildGeminiOmni12Request({ ...base, seed: 12345 }).input).not.toHaveProperty("seed")
   })
 
+  describe("character_ids (decided 2026-11-17)", () => {
+    it("text mode with 1 and 2 characters: character_ids beside the integer duration", () => {
+      expect(buildGeminiOmni12Request({ ...base, characterIds: ["c1"] }).input).toEqual({
+        prompt: base.prompt, resolution: "720p", aspect_ratio: "16:9", duration: 8, character_ids: ["c1"],
+      })
+      const { mode, input } = buildGeminiOmni12Request({ ...base, characterIds: ["c1", "c2"] })
+      expect(mode).toBe("reference")
+      expect(input.character_ids).toEqual(["c1", "c2"])
+    })
+
+    it("characters do not take image slots: 6 references and 2 characters all go", () => {
+      const urls = Array.from({ length: 6 }, (_, i) => `r${i}`)
+      const { input, droppedRefImages } = buildGeminiOmni12Request({ ...base, referenceImageUrls: urls, characterIds: ["c1", "c2"] })
+      expect(input.image_urls).toEqual(urls)
+      expect(input.character_ids).toEqual(["c1", "c2"])
+      expect(droppedRefImages).toBe(0)
+    })
+
+    it("video edit with 1 and 2 characters: video_list, no duration, 5 images still fit", () => {
+      const urls = Array.from({ length: 5 }, (_, i) => `r${i}`)
+      for (const ids of [["c1"], ["c1", "c2"]]) {
+        const { mode, input, droppedRefImages } = buildGeminiOmni12Request({ ...base, sourceVideoUrl: "v", referenceImageUrls: urls, characterIds: ids })
+        expect(mode).toBe("video-edit")
+        expect(input.video_list).toEqual(["v"])
+        expect(input).not.toHaveProperty("duration")
+        expect(input.image_urls).toEqual(urls)
+        expect(input.character_ids).toEqual(ids)
+        expect(droppedRefImages).toBe(0)
+      }
+    })
+
+    it("the same id twice goes once", () => {
+      expect(buildGeminiOmni12Request({ ...base, characterIds: ["c1", "c1"] }).input.character_ids).toEqual(["c1"])
+    })
+
+    it("no characters, no key — the body is what it was", () => {
+      expect(buildGeminiOmni12Request({ ...base, characterIds: [] }).input).toEqual(buildGeminiOmni12Request(base).input)
+    })
+
+    it("never with a frame: a start frame, an end frame, or both are refused", () => {
+      for (const frames of [{ startFrameUrl: "s" }, { endFrameUrl: "e" }, { startFrameUrl: "s", endFrameUrl: "e" }, { startFrameUrl: "s", referenceImageUrls: ["r"] }]) {
+        expect(() => buildGeminiOmni12Request({ ...base, ...frames, characterIds: ["c1"] })).toThrow()
+      }
+    })
+
+    it("a third character is refused", () => {
+      expect(() => buildGeminiOmni12Request({ ...base, characterIds: ["c1", "c2", "c3"] })).toThrow()
+    })
+  })
+
   it("never sends a field the schema does not have", () => {
-    const allowed = new Set(["prompt", "duration", "aspect_ratio", "resolution", "seeds", "image_urls", "first_frame_url", "last_frame_url", "video_list"])
+    const allowed = new Set(["prompt", "duration", "aspect_ratio", "resolution", "seeds", "image_urls", "first_frame_url", "last_frame_url", "video_list", "character_ids"])
     const cases = [
       base,
       { ...base, seed: 12345, startFrameUrl: "s", endFrameUrl: "e" },
       { ...base, seed: 12345, referenceImageUrls: ["r"], startFrameUrl: "s" },
       { ...base, seed: 12345, sourceVideoUrl: "v", referenceImageUrls: ["r"] },
+      { ...base, seed: 12345, referenceImageUrls: ["r"], characterIds: ["c1", "c2"] },
+      { ...base, seed: 12345, sourceVideoUrl: "v", characterIds: ["c1"] },
     ]
     for (const args of cases) {
       for (const key of Object.keys(buildGeminiOmni12Request(args).input)) expect(allowed.has(key), key).toBe(true)

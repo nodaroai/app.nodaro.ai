@@ -30,6 +30,7 @@ import {
   createOmniCharacter,
   resolveOmniCharacterIds,
   omniCharacterCacheKey,
+  omniCharacterIdScope,
   isInvalidOmniCharacterError,
   isInvalidOmniAudioError,
   createOmniAudio,
@@ -244,6 +245,46 @@ describe("resolveOmniCharacterIds — cache", () => {
     const err = await resolveOmniCharacterIds([ref()], meta).catch((e) => e)
     expect(err.internalDetails).toContain("500")
     expect(err.internalDetails).toContain("nope")
+  })
+})
+
+describe("character id cache scope (Gemini Omni Flash 1.2, decided 2026-11-17)", () => {
+  const omni12 = { modelKey: "gemini-omni-flash-1-2" }
+  const omni11 = { modelKey: "gemini-omni-flash" }
+
+  it("the unscoped key (Gemini Omni Flash 1.1 and Pro) is byte-identical to the one before scopes existed", () => {
+    expect(omniCharacterIdScope("gemini-omni-flash")).toBeUndefined()
+    expect(omniCharacterIdScope("gemini-omni-video")).toBeUndefined()
+    // Frozen literal: sha256 of the JSON parts [imageUrl, "", description, ""].
+    expect(omniCharacterCacheKey(ref())).toBe("kie:omni-character:2ebcfe82b941c359ba0ebdc11ffb9bd9cb89f5a917e9a7a94c1e3637488a436d")
+    expect(omniCharacterCacheKey(ref(), omniCharacterIdScope("gemini-omni-flash"))).toBe(omniCharacterCacheKey(ref()))
+  })
+
+  it("1.2 keys in its own scope, read from the model's limits row", () => {
+    expect(omniCharacterIdScope("gemini-omni-flash-1-2")).toBe("gemini-omni-flash-1-2")
+    expect(omniCharacterCacheKey(ref(), "gemini-omni-flash-1-2")).not.toBe(omniCharacterCacheKey(ref()))
+  })
+
+  it("an id minted for 1.1 is never served to 1.2, nor the other way round", async () => {
+    fetchMock.mockResolvedValueOnce(created("id-11")).mockResolvedValueOnce(created("id-12"))
+    const a = await resolveOmniCharacterIds([ref()], omni11)
+    const b = await resolveOmniCharacterIds([ref()], omni12)
+    expect(a).toEqual({ ids: ["id-11"], fromCache: [false], audioIds: [] })
+    expect(b).toEqual({ ids: ["id-12"], fromCache: [false], audioIds: [] })
+    expect((await resolveOmniCharacterIds([ref()], omni11)).ids).toEqual(["id-11"])
+    expect((await resolveOmniCharacterIds([ref()], omni12)).ids).toEqual(["id-12"])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("a 1.2 recreate (forget + resolve) never touches the 1.1 entry", async () => {
+    fetchMock.mockResolvedValueOnce(created("id-11")).mockResolvedValueOnce(created("id-12")).mockResolvedValueOnce(created("id-12b"))
+    await resolveOmniCharacterIds([ref()], omni11)
+    await resolveOmniCharacterIds([ref()], omni12)
+    await forgetOmniCharacters([ref()], omni12.modelKey)
+    expect((await resolveOmniCharacterIds([ref()], omni12)).ids).toEqual(["id-12b"])
+    const still11 = await resolveOmniCharacterIds([ref()], omni11)
+    expect(still11).toEqual({ ids: ["id-11"], fromCache: [true], audioIds: [] })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
 
