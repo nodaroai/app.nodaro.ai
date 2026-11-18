@@ -9,6 +9,7 @@ import type { Edl } from "@nodaro/shared/edl"
 import {
   affinityCpuCount,
   cgroupCpuQuota,
+  FFMPEG_THREAD_CEILING_CPUS,
   ffmpegAutoThreadsFor,
   ffmpegCpuBudget,
   ffmpegEffectiveThreads,
@@ -165,7 +166,8 @@ describe("ffmpegThreads — the box's own counts", () => {
   })
 
   it("no quota: ffmpeg decides, exactly as before", () => {
-    expect(ffmpegThreads(box("max 100000", "0-47"))).toBeUndefined()
+    // No quota on a 48-CPU box: past the ceiling, the counts of a 16-CPU box (not 48 / 48 / 72).
+    expect(ffmpegThreads(box("max 100000", "0-47"))).toEqual({ decode: 16, filter: 16, encode: 24 })
   })
 })
 
@@ -183,8 +185,10 @@ describe("ffmpegAutoThreadsFor / ffmpegEffectiveThreads — the counts ffmpeg pi
     expect(ffmpegAutoThreadsFor(200).encode).toBe(128)
   })
 
-  it("a quota'd box: the counts that are placed (production: 32 of 48 CPUs)", () => {
-    expect(ffmpegEffectiveThreads(box("3200000 100000", "0-47"))).toEqual({ decode: 32, filter: 32, encode: 32 })
+  it("a quota'd box: the counts that are placed (production: 32 of 48 CPUs, past the ceiling: a 16-CPU box's)", () => {
+    expect(ffmpegEffectiveThreads(box("3200000 100000", "0-47"))).toEqual({ decode: 16, filter: 16, encode: 24 })
+    // Under a quota at or below the ceiling, every count is the quota, as before.
+    expect(ffmpegEffectiveThreads(box("800000 100000", "0-47"))).toEqual({ decode: 8, filter: 8, encode: 8 })
   })
 
   it("no quota below the cores: what ffmpeg picks for the CPUs the process may run on", () => {
@@ -267,5 +271,31 @@ describe("sliceFingerprint — threads are part of what renders", () => {
     const three = sliceFingerprint(cmd, EDL, V, { decode: 2, filter: 2, encode: 3 })
     expect(new Set([none, two, three]).size).toBe(3)
     expect(sliceFingerprint(cmd, EDL, V, { decode: 2, filter: 2, encode: 2 })).toBe(two)
+  })
+})
+
+describe("FFMPEG_THREAD_CEILING_CPUS — the most CPUs a render is sized for", () => {
+  const box = (cpuMax: string, cpusAllowed: string) => (path: string): string | undefined =>
+    ({
+      "/proc/self/status": `Name:\tnode\nCpus_allowed_list:\t${cpusAllowed}\n`,
+      "/proc/self/cgroup": "0::/\n",
+      "/sys/fs/cgroup/cpu.max": `${cpuMax}\n`,
+    })[path]
+
+  it("is 16", () => {
+    expect(FFMPEG_THREAD_CEILING_CPUS).toBe(16)
+  })
+
+  it("a box past it, with no quota or a quota above it, renders as a 16-CPU box", () => {
+    expect(ffmpegThreads(box("max 100000", "0-31"))).toEqual({ decode: 16, filter: 16, encode: 24 })
+    expect(ffmpegThreads(box("3200000 100000", "0-47"))).toEqual({ decode: 16, filter: 16, encode: 24 })
+    expect(ffmpegEffectiveThreads(box("max 100000", "0-47"))).toEqual({ decode: 16, filter: 16, encode: 24 })
+  })
+
+  it("a box at or below it, or a quota below it, is unchanged", () => {
+    expect(ffmpegThreads(box("max 100000", "0-15"))).toBeUndefined()
+    expect(ffmpegThreads(box("max 100000", "0-7"))).toBeUndefined()
+    expect(ffmpegThreads(box("200000 100000", "0-47"))).toEqual({ decode: 2, filter: 2, encode: 2 })
+    expect(ffmpegThreads(box("1600000 100000", "0-47"))).toEqual({ decode: 16, filter: 16, encode: 16 })
   })
 })

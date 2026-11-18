@@ -165,7 +165,8 @@ export function affinityCpuCount(read: ReadText = readText): number | undefined 
 }
 
 /** The render's thread counts on THIS box, or undefined (let ffmpeg decide —
- *  it already sees the right number of CPUs). Read once per render.
+ *  it already sees the right number of CPUs, and no more than
+ *  {@link FFMPEG_THREAD_CEILING_CPUS}). Read once per render.
  *
  *  Both the scheduler cap and "the cores ffmpeg sees" are the affinity mask
  *  (decided 2026-10-05). Not `availableParallelism()`: on the Node we deploy
@@ -175,8 +176,27 @@ export function affinityCpuCount(read: ReadText = readText): number | undefined 
 export function ffmpegThreads(read: ReadText = readText): FfmpegThreads | undefined {
   const allowed = affinityCpuCount(read) ?? cpus().length
   const budget = ffmpegCpuBudget(cgroupCpuQuota(read), allowed, allowed)
+  // Past the ceiling, every render runs as on a box of FFMPEG_THREAD_CEILING_CPUS CPUs.
+  if ((budget ?? allowed) > FFMPEG_THREAD_CEILING_CPUS) return ffmpegAutoThreadsFor(FFMPEG_THREAD_CEILING_CPUS)
   return budget === undefined ? undefined : ffmpegThreadsFor(budget)
 }
+
+/**
+ * The most CPUs one ffmpeg render is sized for (decided 2026-11-18). On a box
+ * with many CPUs and no quota below them (or a quota above this), ffmpeg's own
+ * counts follow every CPU it sees — 32 decoder and filter threads, 48 x264
+ * frame threads, plus a scaler's threads per filter thread — and many renders
+ * at once (a Clip Pack's clips, every job of a busy worker) ran the box out of
+ * threads: thread creation failed with "Resource temporarily unavailable"
+ * (EAGAIN) and the renders failed. Past this many CPUs a render is told the
+ * counts a box of exactly this many would pick itself (`ffmpegAutoThreadsFor`:
+ * decoder and graph 16, x264 24) — the box the render goldens and the memory
+ * model were captured on, so nothing measured there moves. Chosen from the
+ * 2026-10-11 thread table in `ffmpeg-memory-model.ts` (16 threads held where 32
+ * ran into the pids cap first); not re-measured on a larger box. A box at or
+ * below it, or under a quota below it, is unchanged.
+ */
+export const FFMPEG_THREAD_CEILING_CPUS = 16
 
 /**
  * The counts ffmpeg picks by itself on a box with `cpus` CPUs and no quota

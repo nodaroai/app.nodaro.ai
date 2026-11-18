@@ -1,5 +1,6 @@
 import { execFile, spawn, type ExecFileException } from "node:child_process"
 import { execFileFfmpeg, spawnFfmpeg } from "./ffmpeg-process.js"
+import { retryOnShortage, spawnShowsShortage, stderrShowsShortage } from "./ffmpeg-shortage-retry.js"
 import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
@@ -506,6 +507,12 @@ function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut
   }
 }
 
+/** The box's passing shortage, from a failed launch's full stderr or its spawn error (never a stopped launch). */
+function shortageMark(error: ExecFileException, stderr: string | undefined): { resourceShortage?: true } {
+  if (error.killed === true || error.name === "AbortError") return {}
+  return stderrShowsShortage(stderr) || spawnShowsShortage(error) ? { resourceShortage: true } : {}
+}
+
 /**
  * Run ffmpeg to completion under its kill budget. With `stallWatch`, the launch
  * is also stopped once it shows no progress — frozen stats AND an idle CPU —
@@ -519,8 +526,8 @@ export async function runFfmpeg(
   launch?: FfmpegLaunchOptions,
   stallWatch?: FfmpegStallWatch,
 ): Promise<string> {
-  const limitMs = ffmpegLimitMs(timeoutMs)
-  return holdSlot(() => new Promise<string>((resolve, reject) => {
+  // A launch that failed for the box's passing shortage runs again, its slot released while it waits.
+  return retryOnShortage((limitMs) => holdSlot(() => new Promise<string>((resolve, reject) => {
     // Declared first: the callback may run before execFile returns.
     let stopEscalation = () => {}
     let stopWatch = () => {}
@@ -536,7 +543,7 @@ export async function runFfmpeg(
       if (stalledAfterMs !== undefined) {
         reject(ffmpegStallError(stalledAfterMs, stallWatch?.stallMs))
       } else if (error) {
-        reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error)))
+        reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error), shortageMark(error, stderr)))
       } else {
         resolve(stdout)
       }
@@ -552,7 +559,8 @@ export async function runFfmpeg(
         child.kill("SIGKILL")
       })
     }
-  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB, ...(launch?.signal ? { signal: launch.signal } : {}) })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB, ...(launch?.signal ? { signal: launch.signal } : {}) }),
+  { limitMs: ffmpegLimitMs(timeoutMs), label: "ffmpeg", ...(launch?.signal ? { signal: launch.signal } : {}) })
 }
 
 /**
@@ -566,8 +574,7 @@ export async function runFfmpegCapture(
   timeoutMs?: number,
   launch?: FfmpegLaunchOptions,
 ): Promise<{ stdout: string; stderr: string }> {
-  const limitMs = ffmpegLimitMs(timeoutMs)
-  return holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+  return retryOnShortage((limitMs) => holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       // Declared first: the callback may run before execFile returns.
       let stopEscalation = () => {}
       const child = execFileFfmpeg(args, {
@@ -588,6 +595,7 @@ export async function runFfmpegCapture(
               stdout,
               stderr,
               ...execFailureFlags(error),
+              ...shortageMark(error, stderr),
             }),
           )
         } else {
@@ -595,7 +603,7 @@ export async function runFfmpegCapture(
         }
       })
       stopEscalation = escalateKill(child, limitMs)
-  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB }), { limitMs: ffmpegLimitMs(timeoutMs), label: "ffmpeg" })
 }
 
 /**
@@ -618,8 +626,7 @@ export async function runFfmpegWithProgress(
   timeoutMs?: number,
   launch?: FfmpegLaunchOptions,
 ): Promise<void> {
-  const limitMs = ffmpegLimitMs(timeoutMs)
-  return holdSlot(() => new Promise<void>((resolve, reject) => {
+  return retryOnShortage((limitMs) => holdSlot(() => new Promise<void>((resolve, reject) => {
       const proc = spawnFfmpeg(["-progress", "pipe:1", "-nostats", ...args], {
         stdio: ["ignore", "pipe", "pipe"],
       })
@@ -650,7 +657,7 @@ export async function runFfmpegWithProgress(
 
       proc.on("error", (err) => {
         clearTimeout(watchdog)
-        reject(new Error(`ffmpeg failed to spawn: ${err.message}`))
+        reject(Object.assign(new Error(`ffmpeg failed to spawn: ${err.message}`), spawnShowsShortage(err as NodeJS.ErrnoException) ? { resourceShortage: true as const } : {}))
       })
       proc.on("close", (code) => {
         clearTimeout(watchdog)
@@ -659,10 +666,10 @@ export async function runFfmpegWithProgress(
         } else if (code === 0) {
           resolve()
         } else {
-          reject(new Error(ffmpegFailureMessage(stderrTail, `exit code ${code}`)))
+          reject(Object.assign(new Error(ffmpegFailureMessage(stderrTail, `exit code ${code}`)), stderrShowsShortage(stderrTail) ? { resourceShortage: true as const } : {}))
         }
       })
-  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB }), { limitMs: ffmpegLimitMs(timeoutMs), label: "ffmpeg" })
 }
 
 /**
