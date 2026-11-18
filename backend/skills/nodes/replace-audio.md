@@ -1,7 +1,7 @@
 ---
 node_type: replace-audio
-generated_at: 2026-11-18T19:43:22.665Z
-generated_from: d0de23eefc
+generated_at: 2026-11-18T21:36:26.777Z
+generated_from: 01ee8c1eb5
 ---
 
 # Replace Audio
@@ -9,7 +9,7 @@ generated_from: d0de23eefc
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `replace-audio`
 **Category:** processing
-**Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
+**Credit cost:** `165` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `in`, `music`
 **Outputs (source handles):** `video-out`
 

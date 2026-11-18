@@ -2849,6 +2849,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // without them prices the same. Keep the two pairs equal.
   "cast-swap:per-second": 2,
   "cast-swap-full-quality:per-second": 4,
+  // Replace Audio (the cloud plugin): BASE credits per run, by its mode and
+  // whether its music is made from a prompt. Seeded by migration 675 and
+  // repeated here at the same values (the plugin's floors are these too), so
+  // its rows are not ghosts and a host without them prices the same.
+  "replace-audio": 150,
+  "replace-audio:prompt": 180,
+  "replace-audio:replace-all": 50,
+  "replace-audio:replace-all:prompt": 80,
   "generate-video-pro": 100,       // multi-segment stitch fee-base (flat, on top of per-second segment cost — see ee/billing/generate-video-pro-credits.ts)
   "edit-video-pro": 100,           // replace-span bridge fee-base (flat, on top of per-second ref-rate segment cost — see ee/billing/edit-video-pro-credits.ts)
   "dubbing": 80,
