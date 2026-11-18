@@ -57,6 +57,8 @@ const ANSWERS_WITH_JOB_ID: ReadonlyMap<string, string> = new Map([
   ["generate-3d-scene", SCENE3D_GENERATE_JOB_TYPE],
   ["edit-3d-scene", SCENE3D_EDIT_JOB_TYPE],
   ["pro-3d-render", PRO3D_RENDER_JOB_TYPE],
+  // The Nodaro Cloud plugin's route queues its own job under the node's type.
+  ["replace-audio", "replace-audio"],
 ])
 
 /** Nodes whose route does no provider or LLM work in the request, and why. */

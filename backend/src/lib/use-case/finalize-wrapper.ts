@@ -106,10 +106,11 @@ export async function finalizeUseCaseWrapper(executionId: string, expectedWrappe
     return "already_final"
   }
 
-  const output: UseCaseWrapperOutput = exec.inlineGraph
-    ? usecaseWrapperOutput(exec.inlineGraph, exec.nodeStates, exec.id)
-    : { quality: "final", _executionId: exec.id }
   const input = (wrapper.input_data ?? {}) as Record<string, unknown>
+  // What the job kept from its request and reports back (the speakers' names): never read by the graph.
+  const output: UseCaseWrapperOutput = exec.inlineGraph
+    ? usecaseWrapperOutput(exec.inlineGraph, exec.nodeStates, exec.id, { speakerNames: input.speakerNames })
+    : { quality: "final", _executionId: exec.id }
   const fee = typeof input._feeCredits === "number" ? input._feeCredits : 0
   // A wrapper whose start stamp never landed is stamped now, as it settles:
   // what names a continuation's generations and what a cancel stops read it.

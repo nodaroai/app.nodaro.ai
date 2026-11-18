@@ -12109,6 +12109,18 @@
           "minimum": 0,
           "maximum": 100
         },
+        "speakerNames": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
         "componentDepth": {
           "type": "integer",
           "minimum": 0,

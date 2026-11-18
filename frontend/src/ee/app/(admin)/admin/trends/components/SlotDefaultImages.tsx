@@ -1,11 +1,9 @@
 // An optional slot's original look (`defaultImages`): pictures of that role as
-// it is in the clip, on every clip preparation. An optional person needs one to
-// publish (the server's `optional_person_default_missing`), unless the trend
-// hides its original; a place, product or pet may have one. A Full depth run
-// sends it for the slot when the person leaves it empty (without one the slot
-// is sent with no pictures and stays as in the original; Full depth never
-// borrows an example's pictures). Other preparations' runs do not read it, so
-// the editor says what a run does with it on Full depth only.
+// it is in the clip, on every clip preparation, never needed to publish. A run
+// sends it for the slot when the person leaves it empty, whatever the slot's
+// kind, unless the trend hides its original (its runs fill the slot from the
+// example, or on Full depth leave it as in the clip). Without one, a person takes the example's pictures (never on Full
+// depth) and any other role stays as in the clip. The editor says which.
 //
 // Three ways in, each stored in the trend's own storage:
 //   - Upload: a local file or a pasted address, copied in (`/media` kind
@@ -30,7 +28,6 @@ import { startAdminTrendImageUpscale } from "@/lib/api"
 import { useTrendMedia, useTrendUpscaleJob } from "@/ee/hooks/queries/use-admin-queries"
 import type { TrendSlotKind } from "@/lib/api"
 import { MAX_IMAGES_PER_SLOT } from "../model"
-import { hasOriginalLook, originalLookNeededToPublish } from "../original-look"
 import { FrameCropDialog, type CropOriginal } from "./FrameCropDialog"
 import { MediaPicker } from "./MediaPicker"
 import { uploadLocalFile } from "./uploads"
@@ -47,9 +44,9 @@ interface Props {
   readonly kind: TrendSlotKind
   /** A required slot cannot have any: only removing is offered (the save is refused until they are gone). */
   readonly required: boolean
-  /** The trend's clip preparation is Full depth: its runs send these for an empty slot. */
+  /** The trend's clip preparation is Full depth: its runs never fill an empty slot from an example. */
   readonly fullDepth: boolean
-  /** The trend hides its original: no slot needs an original look to publish. */
+  /** The trend hides its original: its runs fill an empty slot from the example, never from these. */
   readonly hideOriginal: boolean
   /** The saved original, for "Take from the original"; null while there is none. */
   readonly original: CropOriginal | null
@@ -62,11 +59,16 @@ interface Props {
 /** What the role is called in "a picture of this …". */
 const ROLE_NOUNS: Readonly<Record<TrendSlotKind, string>> = { person: "person", location: "place", product: "product", pet: "pet" }
 
-/** What the original look is, and what a run does with it (said on Full depth only: no other run reads it yet). */
-export function originalLookText(kind: TrendSlotKind, fullDepth: boolean, needed: boolean): string {
+/** What the original look is, and what a run that leaves the role empty does with it, or without it. */
+export function originalLookText(kind: TrendSlotKind, fullDepth: boolean, hideOriginal: boolean): string {
   const what = kind === "person" ? "A picture of this person as they are in the clip." : `A picture of this ${ROLE_NOUNS[kind]} as it is in the clip.`
-  const run = !fullDepth ? "" : kind === "person" ? " A run that leaves this role empty uses it." : " A run that leaves this role empty uses it; with none, the role stays as in the clip."
-  return `${what}${run}${needed ? " Needed to publish." : ""}`
+  // A trend that hides its original never sends it (often frames of that original); Full depth never uses an example either.
+  if (hideOriginal) {
+    const left = fullDepth ? "stays as in the clip" : "takes the example's pictures"
+    return `${what} This trend hides its original, so a run never uses it: a role left empty ${left}.`
+  }
+  const without = kind === "person" && !fullDepth ? "the example's picture is used" : "the role stays as in the clip"
+  return `${what} A run that leaves this role empty uses it; with none, ${without}.`
 }
 
 export function SlotDefaultImages({ trendId, n, images, kind, required, fullDepth, hideOriginal, original, originalWaitFor, onChange }: Props) {
@@ -74,7 +76,6 @@ export function SlotDefaultImages({ trendId, n, images, kind, required, fullDept
   const [uploading, setUploading] = useState(false)
   const [cropping, setCropping] = useState(false)
   const full = images.length >= MAX_IMAGES_PER_SLOT
-  const needed = originalLookNeededToPublish({ kind, required }, hideOriginal)
 
   const add = (url: string) => onChange((imgs) => (imgs.includes(url) ? imgs : [...imgs, url].slice(0, MAX_IMAGES_PER_SLOT)))
   const store = async (from: string) => {
@@ -100,17 +101,12 @@ export function SlotDefaultImages({ trendId, n, images, kind, required, fullDept
   return (
     <div role="group" aria-label={`Slot ${n} default image`} className="flex flex-col gap-2 rounded-md border border-dashed p-2 text-sm">
       <span className="font-medium">
-        Original look <span className="font-normal text-muted-foreground">{needed ? "(needed to publish)" : "(optional)"}</span>
+        Original look <span className="font-normal text-muted-foreground">(optional)</span>
       </span>
       {required ? (
         <span className="text-xs text-destructive">A required slot cannot have a default image: remove these, or make the slot optional.</span>
       ) : (
-        <span className="text-xs text-muted-foreground">{originalLookText(kind, fullDepth, needed)}</span>
-      )}
-      {needed && !hasOriginalLook({ defaultImages: images }) && (
-        <span className="text-xs text-amber-600 dark:text-amber-400" data-original-look-missing>
-          Not added yet: this trend cannot be published until it has one.
-        </span>
+        <span className="text-xs text-muted-foreground">{originalLookText(kind, fullDepth, hideOriginal)}</span>
       )}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-3">

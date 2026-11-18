@@ -26,6 +26,7 @@ const STORED: Readonly<Record<string, unknown>> = {
   steps: { steps: {} },
   style: { style: { "nodaro-prism": "precise", "nodaro-pulse": "flex" } },
   "pulse-audio": { pulseAudio: "generated" },
+  "pulse-reference-audio": { pulseReferenceAudio: { "720p": { mode: "voice", semitones: 2.5 }, "1080p": { mode: "none" } } },
   "prism-reference-audio": { prismReferenceAudio: { "480p": "full", "720p": "voice", "1080p": "none" } },
   "style-only": { styleOnly: {} },
   "precise-art-style": { preciseArtStyle: { "nodaro-prism": { opener: "edit" } } },

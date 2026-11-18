@@ -32,6 +32,13 @@
  * marked people some example leaves empty (`faceMaskVariantSets`). A trend
  * whose examples fill every marked person needs no variant; its slot marks
  * are allowed but do nothing at run time (`faceMaskVariantsApply`).
+ *
+ * A person with an original look (`defaultImages`) is filled by it whenever a
+ * run leaves it empty on a trend that shows its original (compose.ts), so
+ * such a run never leaves that person empty. The sets above still count them:
+ * a superset of what runs can need, so every run finds its variant (a run's
+ * empty set is a subset of what the sets were made from), while some
+ * variants are made that no run uses.
  */
 import { createHash } from "node:crypto"
 import { CAST_SWAP_FACE_MASK_MARK_LIMITS } from "@nodaro/render-rules"

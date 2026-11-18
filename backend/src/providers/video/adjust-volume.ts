@@ -1,14 +1,56 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir, getVideoDuration } from "./ffmpeg-utils.js"
 import { mp3EncodeArgs, writesMp3ByDefault } from "./mp3-encode.js"
 
-interface AdjustVolumeOptions {
-  readonly audioUrl?: string
-  readonly videoUrl?: string
+/** The levers of an adjust: volume in percent, loudness normalization, and the fades in seconds. */
+export interface AdjustVolumeLevers {
   readonly volume?: number
   readonly normalize?: boolean
   readonly fadeIn?: number
   readonly fadeOut?: number
+}
+
+interface AdjustVolumeOptions extends AdjustVolumeLevers {
+  readonly audioUrl?: string
+  readonly videoUrl?: string
+}
+
+/**
+ * The audio filters of an adjust, in order: the volume, the loudness
+ * normalization, the fade-in from the start and the fade-out that ENDS at the
+ * input's end. `durationSec` (the input's length) places the fade-out: it
+ * starts at `durationSec - fadeOut` (at 0 when the fade is longer than the
+ * input). Without a start ffmpeg runs a fade-out from 0 — the sound faded away
+ * over the clip's FIRST seconds and silent after — so it is required whenever
+ * `fadeOut` is above 0.
+ */
+export function adjustVolumeFilters(levers: AdjustVolumeLevers, durationSec?: number): string[] {
+  const { volume = 100, normalize = false, fadeIn = 0, fadeOut = 0 } = levers
+  const filters: string[] = [`volume=${volume / 100}`]
+  if (normalize) filters.push("loudnorm")
+  if (fadeIn > 0) filters.push(`afade=t=in:d=${fadeIn}`)
+  if (fadeOut > 0) {
+    if (durationSec === undefined || !Number.isFinite(durationSec) || durationSec <= 0) {
+      throw new Error("Could not read the audio's length to place its fade-out")
+    }
+    const start = Math.max(0, durationSec - fadeOut)
+    filters.push(`afade=t=out:st=${start.toFixed(3)}:d=${fadeOut}`)
+  }
+  return filters
+}
+
+/**
+ * The length a fade-out ends at: the input's audio stream's own (a video's
+ * sound can end before its picture), else the container's.
+ */
+async function audioLengthSec(inputPath: string): Promise<number> {
+  try {
+    const sec = parseFloat((await runFfprobe(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=duration", "-of", "csv=p=0", inputPath])).trim())
+    if (Number.isFinite(sec) && sec > 0) return sec
+  } catch {
+    // No stream duration to read: the container's below.
+  }
+  return getVideoDuration(inputPath)
 }
 
 function getExtension(url: string, fallback: string): string {
@@ -46,17 +88,9 @@ export async function adjustVolume(options: AdjustVolumeOptions): Promise<{ outp
     console.log(`[adjustVolume] Downloading ${isVideo ? "video" : "audio"}`)
     await downloadFile(inputUrl, inputPath)
 
-    const audioFilters: string[] = []
-    audioFilters.push(`volume=${volume / 100}`)
-    if (normalize) {
-      audioFilters.push("loudnorm")
-    }
-    if (fadeIn > 0) {
-      audioFilters.push(`afade=t=in:d=${fadeIn}`)
-    }
-    if (fadeOut > 0) {
-      audioFilters.push(`afade=t=out:d=${fadeOut}`)
-    }
+    // The input's length is read only when a fade-out has to end at it.
+    const durationSec = fadeOut > 0 ? await audioLengthSec(inputPath) : undefined
+    const audioFilters = adjustVolumeFilters({ volume, normalize, fadeIn, fadeOut }, durationSec)
 
     // A video keeps its picture unchanged; only the audio is modified.
     await runFfmpeg(adjustVolumeArgs(inputPath, outputPath, isVideo, audioFilters))

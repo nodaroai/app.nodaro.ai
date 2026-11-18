@@ -34,6 +34,15 @@ With more than one recording wired into `media`, the recordings are taken in the
 
 The node shows one chip per clip, with its thumbnail and its title (the hook shows when you hover it). A clip whose captions could not be added is marked **No captions**.
 
+### The run's result over the API
+
+A run started over the API (`POST /v1/clip-pack`, the SDK's `edit.clipPack`) lists its clips on the finished job's `output_data.clips`, in the plan's order. Each clip has its `url`, `quality`, `clipKey`, and, when there are any, its `title`, `hook`, `thumbnailUrl` and `captionsFailed`. It also says where in the recording it comes from:
+
+- `sourceStartMs` and `sourceEndMs`: where the clip starts and ends in the recording, in milliseconds. The start is the beginning of the earliest stretch of the recording the clip keeps, and the end is the end of the latest one. They are the two numbers of its `clipKey` (`"<sourceStartMs>-<sourceEndMs>"`). A clip that starts 6 minutes 12 seconds into the episode has `sourceStartMs: 372000`.
+- `sourceSpans`: `[{ inMs, outMs }]`, the stretches of the recording the clip is cut from, sorted by time. Stretches that touch are merged into one. It is there only when the clip is cut from two or more stretches; a clip cut from one stretch is `sourceStartMs` to `sourceEndMs`.
+
+Times are on the recording's clock. For a run on one recording, that is the recording itself. With [several cameras](#several-cameras), it is the clock every recording is lined up to: the run's sound. All three fields are optional, and a run that finished before they were added has none of them. The SDK types the clip as `ClipPackClip` and the result as `ClipPackOutputData`.
+
 ## Configuration
 
 | Setting | Options | Default | Notes |
@@ -90,7 +99,7 @@ With **Review before render** on, a run stops at a preview of each clip: each re
 
 ## If a run fails
 
-- **A clip that could not be rendered** (or, on [several cameras](#several-cameras), whose camera switch failed). The run completes with the clips that rendered and keeps its fee; the node says how many could not be rendered ("1 clip could not be rendered."), and the API counts them on `failedClips`. A clip that failed is not charged. The run completed, so it has no **Continue**. Two ways to get the missing clip:
+- **A clip that could not be rendered** (or, on [several cameras](#several-cameras), whose camera switch failed). The run completes with the clips that rendered and keeps its fee; the node says how many could not be rendered ("1 clip could not be rendered."), and the API counts them on `failedClips` and names them on `failedClipList`: each clip that could not be rendered, in the plan's order, with its `clipKey`, `title`, `hook` and its place in the recording (`sourceStartMs`, `sourceEndMs`, and `sourceSpans` when it is cut from several stretches). A clip that failed is not charged. The run completed, so it has no **Continue**. Two ways to get the missing clip:
   - **The same clip, no fee:** render it yourself from the node's **Clip set (EDLs)** output — wire it into an [Apply EDL](./apply-edl.md) (or a [Speaker View](./speaker-view.md) for the framed look) with the wire's selection set to that clip (each clip's EDL names the recording), then an [Add Captions](./add-captions.md) if you want captions. Each step is charged at its own rate, with no per-run fee.
   - **A new run:** run the node again. This is a whole new run: every step is charged again, including the per-run fee, and the new plan may pick different moments.
 - **Captions that could not be added to a clip.** The clip is delivered uncaptioned and marked **No captions** ("Captions could not be added to these clips."); the API marks it `captionsFailed` and counts such clips on `failedCaptions`. Captions that failed are not charged.

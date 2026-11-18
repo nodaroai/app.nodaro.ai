@@ -91,7 +91,22 @@ const EXEMPT_BODY = "the body of a route that is exempt (a stored graph, a listi
  * why the name walk is what reads them. A value a reader reads instead is
  * declared on its route (`ROUTE_READINGS`).
  */
+/** The podcast pack's per-tool settings: sent on to each tool's own route, which judges them as its own body. */
+const PACK_TOOL_SETTINGS = "a podcast pack tool's settings: sent on, inside the tool's own body, to that tool's own judged route"
+
 const SUBTREES: Readonly<Record<string, string>> = {
+  "lib/use-case/pack-body.ts tools.tighten-episode": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts tools.episode-chapters": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts tools.episode-trailer": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts tools.clip-pack": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts tools.speaker-layout": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts cameras": NOT_CONTENT,
+  // The same settings as the tools object's own entries (built over the pack's tool list).
+  "lib/use-case/pack-body.ts tighten-episode": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts episode-chapters": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts episode-trailer": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts clip-pack": PACK_TOOL_SETTINGS,
+  "lib/use-case/pack-body.ts speaker-layout": PACK_TOOL_SETTINGS,
   // Taken by routes that are exempt (EXEMPT_ROUTES), or by none from outside.
   "lib/nodaro-motion-style-only.ts enginePrompt": EXEMPT_BODY,
   "lib/nodaro-motion-engine-keys.ts nodaro-prism.enginePrompt": EXEMPT_BODY,
@@ -397,6 +412,8 @@ const NODE_DATA_INPUTS = [
   "motion-graphics lottieUrl",
   "object defaultAssetUrl",
   "reference-board referenceImageUrls",
+  "replace-audio musicUrl",
+  "replace-audio videoUrl",
   "shot-cuts videoUrl",
   "site-capture url",
   "split-into-layers imageUrl",

@@ -220,6 +220,7 @@ import {
   completeFfmpegVideoJob,
   completeFfmpegAudioJob,
   createAssetFromJob,
+  libraryMediaOf,
   setJobProgress,
   startProgressRamp,
   _resetJobProgressMap,
@@ -909,6 +910,26 @@ describe("commitJobCredits", () => {
   //    reserved tier. Before this branch existed, the 12 fell through to the
   //    reserved-tier `else` and the per-speaker scaling was silently dropped. ──
 
+  // A covered step (lib/covered-step.ts): its podcast pack paid for it. Neither measured branch
+  // charges it or files an anomaly; it commits its 0 hold and the job reads 0 credits.
+  it("a covered step's count-based actual commits 0, records 0, files no anomaly", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({ data: { credits_used: 0, user_id: "u", action: "speaker-view", provider: "reserved", metadata: { covered: { by: "pack-1", credits: 40 } } }, error: null })
+    await commitJobCredits("u1", "job1", null, 12, true)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 0)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: 0 })
+    expect(mocks.mockCheckAndLogAnomaly).not.toHaveBeenCalled()
+  })
+
+  it("a covered step's provider-metered actual commits 0, records 0, files no anomaly", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({ data: { credits_used: 0, user_id: "u", action: "transcribe", provider: "reserved", metadata: { covered: { by: "pack-1", credits: 9 } } }, error: null })
+    await commitJobCredits("u1", "job1", 0.4, 0, true)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 0)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: 0 })
+    expect(mocks.mockCheckAndLogAnomaly).not.toHaveBeenCalled()
+  })
+
   it("commits the count-based actual POST-markup (25%) when metered with no provider cost", async () => {
     mocks.mockMarkupPercent.value = 25
     await commitJobCredits("u1", "job1", null, 12, true)
@@ -1251,6 +1272,29 @@ describe("createAssetFromJob", () => {
   it("swallows errors", async () => {
     mocks.mockSingle.mockRejectedValueOnce(new Error("DB down"))
     await expect(createAssetFromJob("job-1", "user-1")).resolves.toBeUndefined()
+  })
+
+  // A result that rides with by-products of its own (Replace Audio's mix beside
+  // its video) files only the kinds `output_data.libraryMedia` names.
+  it("files only the media kinds a job's libraryMedia names", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: {
+        status: "completed",
+        output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4", audioUrl: "https://r2.example.com/audios/job-1-mix.mp3", libraryMedia: ["video"] },
+      },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+    expect(mocks.mockInsert).toHaveBeenCalledTimes(1)
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ type: "video" }))
+  })
+
+  it("reads libraryMedia as every kind when it names none the Library files", () => {
+    expect(libraryMediaOf({})).toBeUndefined()
+    expect(libraryMediaOf({ libraryMedia: ["json", 3] })).toBeUndefined()
+    expect([...(libraryMediaOf({ libraryMedia: ["video", "audio", "nope"] }) ?? [])]).toEqual(["video", "audio"])
   })
 
   // A speech job asked for a WAV over the API stores one and says so

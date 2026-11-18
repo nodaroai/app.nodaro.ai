@@ -11,7 +11,7 @@
  * `TrendSlot.roleName` and `previewRoleName`, `references` (their `line` and
  * `previewLine` too), `trendPrompt`, `prePrompt`, `previewTrendPrompt`,
  * `previewPrePrompt`, `faceMasking`, `faceMask`, `faceMaskJob`, `upscaleJobs`,
- * `sourceCrop`, `klingLength`, `pulseAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `promptWording`, `steps`, `noPersonSourceClip` and `previewClip` never leave the server — public responses
+ * `sourceCrop`, `klingLength`, `pulseAudio`, `pulseReferenceAudio`, `prismReferenceAudio`, `promptParts`, `promptStyle`, `promptWording`, `steps`, `noPersonSourceClip` and `previewClip` never leave the server — public responses
  * are built from the other fields. The source's display copy
  * (`source.display`, a browser-safe re-encode in its own file) is public: the
  * trend's page shows it as the original, unless the trend hides its original
@@ -23,6 +23,7 @@ import type { LocaleId } from "@nodaro/shared/i18n"
 import type { CastSwapEngine, CastSwapKlingLength } from "@nodaro/shared/models"
 import type { FaceMasking, FaceMaskingWithMarks } from "../../../lib/cast-swap-face-masking.js"
 import type { CastSwapPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
+import type { CastSwapPulseReferenceAudio } from "../../../lib/cast-swap-pulse-reference-audio.js"
 import type { CastSwapPrismReferenceAudio, CastSwapPrismReferenceAudioId } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { CastSwapPromptPartId, CastSwapPromptStyle, CastSwapPromptWording, TrendCropAspect, TrendUpscaleResolution } from "@nodaro/render-rules"
 import type { CastSwapSteps } from "../../../lib/cast-swap-steps.js"
@@ -59,11 +60,11 @@ interface TrendSlotBase {
   hintImageUrl?: string
   /**
    * An OPTIONAL slot's original look (1–3 pictures, in trend storage): the
-   * role as it is in the clip. A Full depth run sends it for the slot when the
-   * person leaves it empty (compose.ts); no other run reads it. Shown on the
-   * trend's public page (`defaultImages` of a slot, routes/trends.ts), and an
-   * optional person needs one to publish (publish-check.ts). Never on a
-   * required slot (the schema refuses it).
+   * role as it is in the clip. A run sends it for the slot when the person
+   * leaves it empty, whatever the slot's kind, except on a trend that hides
+   * its original (compose.ts has the whole rule). Shown on the trend's public
+   * page (`defaultImages` of a slot, routes/trends.ts). Never on a required
+   * slot (the schema refuses it).
    */
   defaultImages?: string[]
   /** HIDDEN. Who this is in the source clip, e.g. "the woman on the left" (1–200). */
@@ -484,6 +485,18 @@ export interface TrendVersionData {
    * part of the face mask's settings, so changing it needs no new mask.
    */
   pulseAudio?: CastSwapPulseAudio
+  /**
+   * HIDDEN. What audio the clip a Kling 4 run sends to the video model
+   * carries ("audio in"), per output resolution (`{ "720p"?, "1080p"? }` of
+   * `{ mode, semitones }`, lib/cast-swap-pulse-reference-audio.ts). A missing
+   * key or resolution follows `pulseAudio` (the full mix at +4 with the
+   * original audio, unpitched with `"generated"`); a save stores only the
+   * resolutions off that default, and the field only on a Kling 4 draft that
+   * has one (never `{}`: an older platform's strict schema refuses the key).
+   * Read only on a Kling 4 trend; not part of the face mask's settings, so
+   * changing it needs no new mask.
+   */
+  pulseReferenceAudio?: CastSwapPulseReferenceAudio
   /**
    * HIDDEN. What audio the reference video a Prism run sends to the video
    * model carries, per output resolution (`{ "480p"?, "720p"?, "1080p"? }`):

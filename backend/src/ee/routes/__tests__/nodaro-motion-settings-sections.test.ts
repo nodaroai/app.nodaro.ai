@@ -52,6 +52,7 @@ const SAMPLES: Readonly<Record<string, unknown>> = {
   style: { style: { "nodaro-prism": "precise", "nodaro-pulse": "user" } },
   "prompt-wording": { promptWording: { "nodaro-prism": "new", "nodaro-pulse": "current" } },
   "pulse-audio": { pulseAudio: "generated" },
+  "pulse-reference-audio": { pulseReferenceAudio: { "720p": { mode: "voice", semitones: 4 }, "1080p": { mode: "none" } } },
   "prism-reference-audio": { prismReferenceAudio: { "720p": "voice" } },
   "style-only": { styleOnly: {} },
   "precise-art-style": { preciseArtStyle: { "nodaro-prism": { opener: "edit" } } },

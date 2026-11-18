@@ -701,6 +701,26 @@ nodaro edit speaker-layout --media <url> [--media <url> ...] [--master-audio <ur
                                                          # the framed video's URL is printed when the run completes. --review stops at a preview and
                                                          # prints the edit continue-use-case command that renders the final (no --edit: the layout
                                                          # has no cut to change). Priced as its steps plus a per-run fee (listed after this block).
+nodaro edit podcast-pack --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] --tool <tool>[=<json|file.json>] [--tool ...] [--speaker-names <file.json>] [--idempotency-key <key>] [--estimate] [--json]
+                                                         # Podcast pack: several podcast tools on one recording (up to 3 hours), for one price
+                                                         # by its length — every started 15 seconds of the recording, every chosen tool included
+                                                         # (the rate is listed after this block). --tool picks a tool: tighten-episode,
+                                                         # episode-chapters, episode-trailer, clip-pack, speaker-layout (repeat it, or
+                                                         # comma-separate tools that take their defaults); --tool clip-pack='{"count":5}' or
+                                                         # --tool clip-pack=clip.json gives a tool its own settings, the JSON its own route takes
+                                                         # (a recording field there is refused: the recording flags are the pack's). Several
+                                                         # cameras: the recordings flags of edit tighten-episode (they need Speaker Map; Chapters
+                                                         # takes one recording). --speaker-names reaches the tools that take it. Every chosen
+                                                         # tool's own refusals come first, before anything is charged. Prints the pack's job, then
+                                                         # each tool's ("clip-pack  <jobId>" per line; follow it with nodaro jobs get) and any tool
+                                                         # that did not start. A tool that fails continues free: edit continue-use-case <its jobId>
+                                                         # --mode from-failed (its Render final is free too). --estimate prints the price, the units
+                                                         # and the recording's length; --json prints { tools, durationSec, units, credits }.
+nodaro edit podcast-pack-start <packJobId> <tool> [--json]
+                                                         # Start, free, a tool the pack paid for that did not start (one listed in its
+                                                         # notStarted), on the recording and settings the pack kept. Once per tool: a tool
+                                                         # that already has a run in its pack is refused (continue that run instead). A pack
+                                                         # held for review stops everything under it: this is refused, as is continuing a tool.
 nodaro edit continue-use-case <jobId> --mode from-failed|render-final [--edit <file.json>] [--type tighten-episode|episode-chapters|episode-trailer|clip-pack|speaker-layout] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job. from-failed: keep the steps
                                                          # that finished, run the rest (the fee is held again; the failed run's was refunded).
@@ -746,7 +766,7 @@ nodaro workspace join <code> [--json]
 nodaro workspace usage [id] [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--tz <iana>] [--group-by member|model|day|none] [--user <id>] [--limit <n>] [--cursor <token>] [--csv] [--json]
 ```
 
-The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`, 11 credits<!-- credits: use-case-fee:clip-pack --> for `edit clip-pack`, and 11 credits<!-- credits: use-case-fee:speaker-layout --> for `edit speaker-layout`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again.
+The podcast use-case commands are priced as their steps at their own rates plus a per-run fee: 11 credits<!-- credits: use-case-fee:tighten-episode --> for `edit tighten-episode`, 11 credits<!-- credits: use-case-fee:episode-chapters --> for `edit episode-chapters`, 11 credits<!-- credits: use-case-fee:episode-trailer --> for `edit episode-trailer`, 11 credits<!-- credits: use-case-fee:clip-pack --> for `edit clip-pack`, and 11 credits<!-- credits: use-case-fee:speaker-layout --> for `edit speaker-layout`. A failed run's fee is refunded, and `edit continue-use-case --mode from-failed` holds it again. `edit podcast-pack` is priced by the recording alone: 22 credits<!-- credits: podcast-pack:per-15s --> per started 15 seconds, every chosen tool included, with no per-run fee and nothing charged for a tool's steps (an 8:32 recording is 35 units, 770 credits<!-- credits: podcast-pack:per-15s:35u -->); its tools continue free with `edit continue-use-case --mode from-failed`, and a tool that did not start starts free, once, with `edit podcast-pack-start`.
 
 ### Working in a workspace
 

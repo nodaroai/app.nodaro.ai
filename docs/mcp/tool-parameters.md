@@ -795,8 +795,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the chosen example's, or with none stays as in the original, except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
-| `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none. At least 1. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |
@@ -2180,6 +2180,30 @@ Needs `workflows:execute`.
 | `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `make_podcast_pack`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) |  | The recording (video or audio URL). Or `media_urls`. |
+| `media_urls` | string (URL)[] |  | Instead of media_url: 1–6 recordings of one conversation (cameras; one may be sound only), in order; without master_audio_url, 2+ cameras keep one place for the sound, so up to 5. With 2 or more the run lines them up, works out who is on which camera and cuts to whoever is talking. From 1 to 6 items. |
+| `master_audio_url` | string (URL) |  | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. Up to 6 recordings in all, this one included. |
+| `cameras` | object |  | With several recordings or a Master audio: the Cameras settings. |
+| `cameras.wide_camera` | integer |  | Which recording (1-based) is the wide shot: shown when a speaker has no camera of their own. From 1 to 6. |
+| `cameras.already_synced` | boolean |  | The recordings already share one clock: skip lining them up. |
+| `cameras.speaker_cameras` | object (map of integer) |  | Who is on which camera: speaker number (1 = the first voice heard) → recording number, 0 = the wide shot. Overrides the automatic map. |
+| `speaker_names` | object (map of string) |  | Speaker label → display name. |
+| `tools` | object | yes | The tools to run, at least one. |
+| `tools.tighten-episode` | object (map of any) |  | tighten_episode's arguments |
+| `tools.episode-chapters` | object (map of any) |  | make_chapters's arguments |
+| `tools.episode-trailer` | object (map of any) |  | make_trailer's arguments |
+| `tools.clip-pack` | object (map of any) |  | make_clip_pack's arguments |
+| `tools.speaker-layout` | object (map of any) |  | speaker_layout's arguments |
+| `estimate_only` | boolean |  | Quote only: nothing is created or charged. |
+| `pack_job_id` | string |  | A pack's job: starts its one tool in `tools` that did not start, free, once. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `make_trailer`
 
 Needs `workflows:execute`.
@@ -2664,6 +2688,23 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `plan` | object (map of any) | yes | A resolved ShotSequencePlan from resolve_shot_sequence. |
 
+## `replace_audio`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  |  |
+| `video_asset_id` | string |  |  |
+| `music_url` | string (URL) |  | The new music: an audio, or a video whose sound is used. |
+| `music_asset_id` | string |  | The new music as the id of one of your audios or videos (a job or an upload). |
+| `music_prompt` | string |  | Make the music from this description instead of a file. At most 1000 characters. |
+| `mode` | string |  | keep-speech (default): keep the speech, replace the music. replace-all: replace all the sound. One of `keep-speech`, `replace-all`. |
+| `music_volume` | number |  | The music's volume, percent (0–200, default 80). From 0 to 200. |
+| `speech_volume` | number |  | The speech's volume, percent (0–200, default 100). From 0 to 200. |
+| `duck_amount` | number |  | How far the music dips under the speech (0–100, default 70). From 0 to 100. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `request_audio_upload`
 
 Needs `assets:write`.
@@ -2769,8 +2810,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the chosen example's, or with none stays as in the original, except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
-| `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none. At least 1. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
 | `resolution` | string |  | One of get_trend's resolutions; default its first. One of `480p`, `720p`, `1080p`. |

@@ -160,6 +160,7 @@ const PLUGIN_GUARDED_ROUTE_NODES: Readonly<Record<string, string>> = {
   "/v1/recast/recommend": "generate-video-pro",
   "/v1/recast/:id/retake/revise": "generate-video-pro",
   "/v1/recast/:id/plan": "generate-video-pro",
+  "/v1/replace-audio": "replace-audio",
   "/v1/social-search": "social-search",
   "/v1/speaker-frames": "speaker-frames",
   "/v1/speaker-view": "speaker-view",

@@ -630,6 +630,17 @@ export function resolveNodeInputs(
       continue
     }
 
+    // Replace Audio's two media inputs, by the edge's target handle: the music
+    // takes an audio or a video (its sound), so the source's type cannot say
+    // which input it fills. Mirrors the frontend node-input-resolver.
+    if (targetNode.type === "replace-audio" && (edge.targetHandle === "in" || edge.targetHandle === "music")) {
+      if (typeof output === "string" && output !== "") {
+        const held = inputs.replaceAudio ?? { music: [] }
+        inputs.replaceAudio = edge.targetHandle === "in" ? { ...held, video: output } : { ...held, music: [...held.music, output] }
+      }
+      continue
+    }
+
     // Parameter nodes (framing, camera-motion, person, mood, etc.) are
     // additive enhancements — payload-builder's `collectCinematographyHints`
     // appends their hint to the prompt. Short-circuit the edge here so we

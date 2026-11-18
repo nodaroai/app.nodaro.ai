@@ -84,6 +84,15 @@ describe("finalizeUseCaseWrapper", () => {
     expect(m.commit).toHaveBeenCalledWith("job-w")
     expect(m.refund).not.toHaveBeenCalled()
   })
+  it("the speakers' names the job kept name its speakers on the output (decided 2026-11-17)", async () => {
+    const transcript = { words: [{ text: "Hi", startMs: 0, endMs: 500, speaker: "speaker_0" }, { text: " there", startMs: 900, endMs: 1_400, speaker: "speaker_1" }] }
+    m.exec = exec({ nodeStates: { ...done, "uc-transcribe": { status: "completed", output: { json: transcript } } } })
+    m.wrapper = { ...m.wrapper!, input_data: { ...(m.wrapper!.input_data as Record<string, unknown>), speakerNames: { speaker_1: "Avi" } } }
+    expect(await finalizeUseCaseWrapper("exec-1")).toBe("completed")
+    expect(m.completed.mock.calls[0]![1].output_data).toMatchObject({
+      speakers: [{ label: "speaker_0", talkMs: 500 }, { label: "speaker_1", name: "Avi", talkMs: 500 }],
+    })
+  })
   it("a wrapper whose start stamp never landed is stamped as it settles (completed or failed); a stamped one is left as is", async () => {
     m.wrapper = { ...m.wrapper!, input_data: { type: "tighten-episode", _feeCredits: 10 } }
     await finalizeUseCaseWrapper("exec-1")

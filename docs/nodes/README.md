@@ -436,6 +436,7 @@ FFmpeg-based video manipulation.
 | [Transcode Video](./processing-video/transcode-video.md) | Convert video codec and resolution | Change codec (H.264/H.265), quality, or resolution |
 | [Manual Edit](./processing-video/manual-edit.md) | Open video in web editor | Make manual adjustments in browser-based editor |
 | [Remove Audio](./processing-video/remove-audio.md) | Strip the audio track, output a silent video | Mute a clip losslessly before adding new sound |
+| [Replace Audio](./processing-video/replace-audio.md) | Keep a video's speech and replace its music, or replace all its sound, as one run — the new music a file or a track made from a prompt (Nodaro Cloud; 165 CR<!-- credits: replace-audio --> per run) | Put new music under a talking-head clip without losing the voice; swap a soundtrack for a licensed or generated one |
 | [Video Analysis](./processing-video/video-analysis.md) | Scene-by-scene breakdown for AI re-creation | Reverse-engineer a video (or YouTube URL) into castable ≤8s scenes with prompt-ready descriptions, layered audio (concurrent speech/music/sfx), and reusable entity slots |
 | [AI Audit](./processing-video/video-audit.md) | Re-watch a video against its analysis and disclose every fix | Sanity-check a Video Analysis result before spending downstream generation credits; wire a finished analysis to re-verify it directly, or leave it unwired to auto-run one first |
 

@@ -113,6 +113,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "reference-sheet": { sheet: "image", panels: "reference" },
   "remove-background": { image: "image" },
   "render-video": { video: "video" },
+  "replace-audio": { "video-out": "video" },
   "resize-video": { "video-out": "video" },
   "save-to-storage": { out: "approve" },
   "schedule-trigger": { payload: "control" },

@@ -1919,6 +1919,17 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "layout", type: "select", options: [...VIDEO_OVERLAY_LAYOUT_IDS] },
   ] } },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
+  // Replace Audio (Nodaro Cloud only): the run is served by the cloud plugin at
+  // POST /v1/replace-audio, which prices it per run by mode and music source.
+  { type: "replace-audio", label: "Replace Audio", category: "processing", description: "Keep a video's speech and replace its music, as one run: the speech is separated from the rest, the new music (a file, or a track made from a prompt) dips under it, and the mix replaces the video's sound. Or replace all the sound. Nodaro Cloud only.", outputType: "video", inputSchema: { fields: [
+    { key: "videoUrl", type: "video-url", required: true },
+    { key: "musicUrl", type: "audio-url" },
+    { key: "musicPrompt", type: "text" },
+    { key: "mode", type: "select", options: ["keep-speech", "replace-all"] },
+    { key: "musicVolume", type: "number" },
+    { key: "speechVolume", type: "number" },
+    { key: "duckAmount", type: "number" },
+  ] } },
   { type: "still-to-video", label: "Still to Video", category: "processing", description: "Turn one still image + one audio track into an MP4 with an optional motion effect (zoom / pan / Ken Burns). Local FFmpeg — no provider, no GPU, zero credits. The output duration is the audio's duration (no duration field).", outputType: "video", creditCost: 0, inputSchema: { fields: [
     { key: "imageUrl", type: "image-url", required: true },
     { key: "audioUrl", type: "audio-url", required: true },

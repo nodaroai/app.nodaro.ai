@@ -39,6 +39,7 @@ const snapshot: Snapshot = JSON.parse(readFileSync(join(__dirname, "..", "node-d
 const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "suno-speech": "new node (decided 2026-11-17): its page is written in docs/nodes/suno-music/suno-speech.md and reaches the docs site with the release",
+  "replace-audio": "new node (Nodaro Cloud): its page is written under docs/nodes/ and reaches the docs site with the release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

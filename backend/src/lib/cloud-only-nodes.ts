@@ -80,6 +80,8 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   "ugc-clip",
   "ugc-cards",
   "ugc-finish-clips",
+  // Replace Audio: served by a private plugin; no relay fronts it.
+  "replace-audio",
 ])
 
 /**

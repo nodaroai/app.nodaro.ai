@@ -20,6 +20,7 @@ import { Sparkles, X } from "lucide-react"
 import type { AiPanelVideo } from "@nodaro/shared/media"
 import { formatNumber, useT, type MessageKey } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { ConfettiBurst } from "@/components/ui/confetti-burst"
 import { creditUnitLabel, creditUnits } from "@/lib/credit-units"
 import { createEditorLink, type CompareMode, type EditorLink } from "@/ee/lib/freecut-ai/editor-link"
 import { ABILITIES, ABILITY_NAME, ABILITY_OF, cardPhraseKeys, requestSteps } from "@/ee/lib/freecut-ai/abilities"
@@ -43,6 +44,7 @@ import { ActionFooter, RequestField } from "./panel/request-box"
 import { ResultBar } from "./panel/result-bar"
 import { Results } from "./panel/results"
 import { RunControls } from "./panel/run-controls"
+import { RunMarshal } from "./panel/run-marshal"
 import { Narration, RunList } from "./panel/run-list"
 import { RunLog } from "./panel/run-log"
 import { StatusBlock } from "./panel/status-block"
@@ -212,6 +214,13 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
   const cost = costOf(will, { heard: !!heard, read: !cardsOnly && session.request.trim().length > 0, prices })
   const planSteps = session.plan?.steps ?? []
   const phase = session.phase
+  // A run that just finished is celebrated once, over the whole editor.
+  const lastKind = useRef(phase.kind)
+  const [celebrated, setCelebrated] = useState(0)
+  useEffect(() => {
+    if (lastKind.current === "running" && phase.kind === "done") setCelebrated((n) => n + 1)
+    lastKind.current = phase.kind
+  }, [phase.kind])
   const status = statusOf({
     phase,
     stage: session.stage,
@@ -252,8 +261,10 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
 
   return (
     <div className={cn("flex h-full", view === "original" ? "w-full" : "w-[360px] shrink-0", className)}>
+      <ConfettiBurst fire={celebrated} />
       {view === "original" && session.video ? <OriginalView url={session.video.url} onBack={backToEdit} /> : null}
-      <aside className="flex h-full w-[360px] shrink-0 flex-col border-s border-white/10 bg-[#0b0b11] text-white" aria-label={t("freecutAi.title")}>
+      <aside className="relative flex h-full w-[360px] shrink-0 flex-col border-s border-white/10 bg-[#0b0b11] text-white" aria-label={t("freecutAi.title")}>
+        {phase.kind === "running" && <RunMarshal />}
         <div className="flex items-center justify-between px-4 pb-1 pt-3">
           <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
             <Sparkles className="h-4 w-4 text-[#ff0073]" />

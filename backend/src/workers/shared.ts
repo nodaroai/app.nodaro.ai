@@ -7,6 +7,7 @@ import { variantJobId } from "@nodaro/shared/workflow"
 import { renderResultStamp, isRenderNodeType } from "@nodaro/shared/nodes"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
+import { coveredMarkOf } from "../lib/covered-step.js"
 import { getAppSettings } from "../lib/app-settings.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, getR2ObjectSize } from "../lib/storage.js"
@@ -540,6 +541,23 @@ export async function requestJobStop(jobId: string): Promise<void> {
  * logs any anomaly, and passes actual credits to the RPC (which refunds surplus).
  * Wrapped in try-catch to avoid failing the job if credit commit fails.
  */
+/**
+ * A covered step's settle (lib/covered-step.ts): its 0 hold is committed and
+ * the job reads 0 credits. A measured actual is never charged and never filed
+ * as an anomaly — the step's pack paid for it.
+ */
+async function settleCoveredStep(
+  credits: { commitCredits(usageLogId: string, actualCredits?: number): Promise<unknown> },
+  usageLogId: string,
+  jobId: string,
+): Promise<void> {
+  await Promise.all([
+    credits.commitCredits(usageLogId, 0),
+    supabase.from("jobs").update({ credits_actual: 0 }).eq("id", jobId),
+  ])
+  console.log(`[worker] Credits committed for covered job ${jobId} (its pack paid)`)
+}
+
 export async function commitJobCredits(
   usageLogId: string | null | undefined,
   jobId: string,
@@ -594,9 +612,11 @@ export async function commitJobCredits(
       // sequential await costs nothing).
       const { data: usageLog } = await supabase
         .from("usage_logs")
-        .select("credits_used, user_id, action, provider")
+        .select("credits_used, user_id, action, provider, metadata")
         .eq("id", usageLogId)
         .single()
+      // A covered step (lib/covered-step.ts): its pack paid — it settles at its 0 hold, and nothing is an anomaly.
+      if (coveredMarkOf(usageLog?.metadata)) return await settleCoveredStep(CreditsService, usageLogId, jobId)
       const providerCredits = await computeActualCredits(providerCostUsd, usageLog?.action ?? undefined)
       // Retained non-provider add-ons (e.g. loop-trim) are charged on top of
       // the provider-derived credits. This also makes the anomaly check
@@ -642,9 +662,10 @@ export async function commitJobCredits(
       // different bases and a measured settlement's refund silently shrinks.
       const { data: usageLog } = await supabase
         .from("usage_logs")
-        .select("credits_used, user_id, action, provider")
+        .select("credits_used, user_id, action, provider, metadata")
         .eq("id", usageLogId)
         .single()
+      if (coveredMarkOf(usageLog?.metadata)) return await settleCoveredStep(CreditsService, usageLogId, jobId)
       const baseActual = Math.max(0, extraNonProviderCredits)
       const settings = await getAppSettings()
       const { applyServiceMarkup } = await import("../ee/billing/service-margin.js")
@@ -1814,8 +1835,11 @@ export async function createAssetFromJob(
     // job-finalize.ts extraImageSets) holds several image rows, so its result is
     // found by its url; every other job keeps the one-row-per-type check.
     const libraryImages = libraryImagesOf(output)
+    // A job whose result rides with by-products of its own says which of its media are Library items.
+    const filed = libraryMediaOf(output)
 
     for (const { key, type, mime } of mediaFields) {
+      if (filed && !filed.has(type)) continue
       const url = output[key]
       if (typeof url !== "string" || !url) continue
 
@@ -1925,6 +1949,20 @@ export async function createAssetFromJob(
   } catch (err) {
     console.error(`[worker] Failed to create asset records for job ${jobId}:`, err)
   }
+}
+
+/**
+ * `output_data.libraryMedia`: the media kinds of a job's output that are Library
+ * items, when the job says so — a result that rides with by-products of its own
+ * (Replace Audio: the video is the result; the mix, the music and the speech
+ * beside it are the job's files, not Library items). Undefined when the job
+ * says nothing the Library files: every media field is filed, as before.
+ */
+export function libraryMediaOf(output: Record<string, unknown>): ReadonlySet<"image" | "video" | "audio"> | undefined {
+  const raw = output.libraryMedia
+  if (!Array.isArray(raw)) return undefined
+  const kinds = raw.filter((k): k is "image" | "video" | "audio" => k === "image" || k === "video" || k === "audio")
+  return kinds.length > 0 ? new Set(kinds) : undefined
 }
 
 /** The image types an extra Library image is stored as, by extension. */

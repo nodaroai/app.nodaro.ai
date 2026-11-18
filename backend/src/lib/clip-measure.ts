@@ -42,10 +42,15 @@ export interface MeasuredClip {
 
 export type ClipMeasureErrorCode = "invalid-url" | "unreadable" | "no-picture" | "unmeasured" | "too-large"
 
-/** A measurement that cannot be made, with a sentence a person can act on. */
+/**
+ * A measurement that cannot be made, with a sentence a person can act on. An
+ * `unreadable` one carries what failed as its `cause` (decided 2026-11-17), so
+ * a caller can tell a download or a read that failed for now from a file that
+ * cannot be read.
+ */
 export class ClipMeasureError extends Error {
-  constructor(readonly code: ClipMeasureErrorCode, message: string) {
-    super(message)
+  constructor(readonly code: ClipMeasureErrorCode, message: string, options?: { readonly cause?: unknown }) {
+    super(message, options)
     this.name = "ClipMeasureError"
   }
 }
@@ -124,14 +129,14 @@ async function measureUncached(url: string, deps: ClipMeasureDeps, opts: Measure
       const big = tooLarge(err, opts.maxBytes)
       if (big) throw big
       console.warn(`[clip-measure] download failed: ${err instanceof Error ? err.message : String(err)}`)
-      throw new ClipMeasureError("unreadable", "Could not read this video. Check that the link works and the file is a video, then run again.")
+      throw new ClipMeasureError("unreadable", "Could not read this video. Check that the link works and the file is a video, then run again.", { cause: err })
     }
     let ends: Awaited<ReturnType<ClipMeasureDeps["streamEnds"]>>
     try {
       ends = await deps.streamEnds(path)
     } catch (err) {
       console.warn(`[clip-measure] demux failed: ${err instanceof Error ? err.message : String(err)}`)
-      throw new ClipMeasureError("unreadable", "Could not read this video. Check that the file is a video that plays, then run again.")
+      throw new ClipMeasureError("unreadable", "Could not read this video. Check that the file is a video that plays, then run again.", { cause: err })
     }
     if (ends.video.state === "absent") throw new ClipMeasureError("no-picture", "This file has no picture, so Speaker View has nothing to frame.")
     if (ends.video.state !== "measured" || !(ends.video.endSec > 0)) {

@@ -172,6 +172,11 @@ describe("cancelOwnedJob", () => {
     expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "in_flight" })
     expect(mocks.refundCredits).not.toHaveBeenCalled()
   })
+  it("a podcast pack is never cancelled: it holds the price of the tools it started", async () => {
+    tables(jobsTable(live({ status: "processing", provider: "podcast-pack", input_data: { type: "podcast-pack", tools: ["clip-pack"] } })))
+    expect(await cancelOwnedJob(JOB, USER)).toEqual({ kind: "in_flight" })
+    expect(mocks.refundCredits).not.toHaveBeenCalled()
+  })
   it("cancels a running background scrape despite its saved provider run (it was cancellable in its route)", async () => {
     for (const type of ["web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape"]) {
       vi.clearAllMocks()

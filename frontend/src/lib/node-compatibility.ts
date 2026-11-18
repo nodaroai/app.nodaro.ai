@@ -15,6 +15,7 @@ import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES, GENERATE_SCRIPT_FIELD_HANDLES 
 import { ACCEPTS_SPEAKER_TRACKS, ANALYSIS_PRODUCER_TYPES } from "./data-handles"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 import { UGC_TARGET_HANDLES, ugcInputReading, ugcOutputReadBy, ugcTargetHandle } from "./ugc-handles"
+import { REPLACE_AUDIO_TARGET_HANDLES } from "./replace-audio-handles"
 import { isValidWorkflowConnection } from "./connection-validation"
 import { UNIT_NODE_DEFINITIONS } from "./unit-definitions"
 import { composeSet, unitJsonWorkers } from "./unit-compose"
@@ -385,6 +386,17 @@ export function getCompatibleNodes(
   // The UGC video nodes: what a drop accepts, by pip (ugcCompatibleNodes).
   const ugcOffer = ugcCompatibleNodes(handleId, direction, nodeOptions, consumerNodeType)
   if (ugcOffer) return ugcOffer
+
+  // Replace Audio's inputs: exactly what each pip takes (a video on `in`; an
+  // audio, or a video whose sound is used, on `music`), read from the rows the
+  // pips and the drop validator share (replace-audio-handles.ts).
+  if (consumerNodeType === "replace-audio" && direction === "target") {
+    const entry = REPLACE_AUDIO_TARGET_HANDLES.find((e) => e.handleId === handleId)
+    if (entry) {
+      const direct = nodeOptions.filter((option) => option.type !== consumerNodeType && entry.accepts(option.type))
+      return { direct, compatible: [], directTypes: new Set<SceneNodeType>(direct.map((o) => o.type)) }
+    }
+  }
 
   // Data-category sources (list, loop, web-scrape, extract-field,
   // filter-list, deduplicate, merge-lists, sort-list): walk

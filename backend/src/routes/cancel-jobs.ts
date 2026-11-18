@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { PODCAST_PACK_JOB_TYPE } from "../lib/use-case/pack-job-type.js"
 import { oneScanAtATime, tryRemoveFromQueue } from "../lib/queue.js"
 import { withdrawFromLane } from "../lib/concurrency-lanes/withdraw.js"
 import { cancelOwnedJob, cancelRunningChildJobs, refundReservedHolds } from "../lib/cancel-job.js"
@@ -121,8 +122,10 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       // leave the run dispatching and billing).
       const delegated = (j: { status: unknown; provider?: unknown }) =>
         isParkedJobStatus(j.status as string) || j.provider === "use-case"
-      const delegatedIds = jobs.filter(delegated).map((j) => j.id as string)
-      const jobIds = jobs.filter((j) => !delegated(j)).map((j) => j.id as string)
+      // A podcast pack's job is never cancelled: it holds the price of the tools it started (its tools are cancelled above or below).
+      const cancellable = jobs.filter((j) => j.provider !== PODCAST_PACK_JOB_TYPE)
+      const delegatedIds = cancellable.filter(delegated).map((j) => j.id as string)
+      const jobIds = cancellable.filter((j) => !delegated(j)).map((j) => j.id as string)
 
       let heldCancelled = 0
       for (const heldId of delegatedIds) {

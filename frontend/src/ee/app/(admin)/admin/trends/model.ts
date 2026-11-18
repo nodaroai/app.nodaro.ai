@@ -48,7 +48,6 @@ import {
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import { faceMeshLinesSaved } from "./face-mesh-layers"
 import { normaliseShotList } from "./shot-list"
-import { describeOriginalLookMissing } from "./original-look"
 import type {
   AdminTrendData,
   AdminTrendEngine,
@@ -68,9 +67,11 @@ import type {
   CastSwapPromptWordingId,
   CastSwapPulseAudioId,
   CastSwapPrismReferenceAudioByResolution,
+  CastSwapPulseReferenceAudioByResolution,
   CastSwapSteps,
 } from "@/lib/api"
 import { prismReferenceAudioByResolutionOf, prismReferenceAudioNotDefault } from "./prism-reference-audio"
+import { pulseReferenceAudioNotDefault, pulseReferenceAudioOf } from "./pulse-reference-audio"
 
 export const MAX_TREND_IMAGES = 30
 export const MAX_IMAGES_PER_SLOT = 3
@@ -198,6 +199,14 @@ export interface TrendForm {
    * draft naming none).
    */
   prismReferenceAudio: CastSwapPrismReferenceAudioByResolution | undefined
+  /**
+   * Per output resolution, a mode and a pitch shift (as stored, or as the
+   * select set it): undefined, or a resolution left out, = the default of the
+   * form's Pulse audio (the full mix at +4 with the original audio, at 0 with
+   * Kling's audio). Saved, its resolutions off that default only, only while
+   * the engine is Pulse (Kling 4).
+   */
+  pulseReferenceAudio: CastSwapPulseReferenceAudioByResolution | undefined
   /** As stored: undefined = the clip preparation's default (prompt-style.ts). */
   promptStyle: CastSwapPromptStyleId | undefined
   /** As stored: undefined = "current" (prompt-wording.ts). Read only when the prompt style is Flexible. */
@@ -236,6 +245,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     klingLength: draft.klingLength,
     pulseAudio: draft.pulseAudio,
     prismReferenceAudio: prismReferenceAudioByResolutionOf(draft.prismReferenceAudio),
+    pulseReferenceAudio: draft.pulseReferenceAudio ? pulseReferenceAudioOf(draft.pulseReferenceAudio) : undefined,
     promptStyle: draft.promptStyle,
     promptWording: draft.promptWording,
     previewClip: draft.previewClip ? { ...draft.previewClip } : undefined,
@@ -398,6 +408,7 @@ export function withChipShown(s: FormSlot, chip: TrendChipKey, show: boolean): F
  */
 export function fromForm(form: TrendForm): TrendDraftBody {
   const prismAudio = prismReferenceAudioNotDefault(form.prismReferenceAudio)
+  const pulseRefAudio = pulseReferenceAudioNotDefault(form.pulseReferenceAudio, form.pulseAudio)
   return {
     name: cleanText(form.name),
     ...(hasAnyText(form.description) ? { description: cleanText(form.description) } : {}),
@@ -418,6 +429,9 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     // Read only on Kling 4: kept out of a Seedance draft.
     ...(form.engine === "kling-4" && form.klingLength ? { klingLength: form.klingLength } : {}),
     ...(form.engine === "kling-4" && form.pulseAudio ? { pulseAudio: form.pulseAudio } : {}),
+    // Read only on Kling 4: kept out of a Prism draft. Only the resolutions off the default of the Pulse audio
+    // saved beside it, and none at all when every one is.
+    ...(form.engine === "kling-4" && pulseRefAudio ? { pulseReferenceAudio: pulseRefAudio } : {}),
     // Read only on Prism (a draft naming no engine is one): kept out of a Kling 4 draft. Only the
     // resolutions off the default (the full mix at +4), and none at all when every one is.
     ...(engineOfForm(form) === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),
@@ -678,6 +692,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   promptParts: "engine prompt changes",
   trendPrePrompt: "pre prompts",
   prismReferenceAudioPitch: "the Prism reference audio pitch shift",
+  pulseReferenceAudio: "the Pulse reference audio",
   "kling-4": "Nodaro Pulse (Kling 4)",
   fullQuality: "Full Quality",
   trendRun: "trend runs",
@@ -716,8 +731,6 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return `The 4 s preview's input clip is out of date: ${describePreviewClipOutOfDate(r.why)}. Save the draft, or publish again, to make it again (1. Source clip → Preview input).`
     case "example_slots_incomplete":
       return `Example ${r.example ?? "?"} has no pictures for: ${(r.slots ?? []).join(", ")}.`
-    case "optional_person_default_missing":
-      return describeOriginalLookMissing(r.slots)
     case "invalid_data":
       return `The draft is not valid: ${r.message ?? "unknown problem"}.`
     case "face_mask_missing":

@@ -16,7 +16,7 @@ const ROUTER = readFileSync(join(SRC, "router.tsx"), "utf8")
 describe("Admin → Motion price check registration", () => {
   it("has its entry in the admin nav right after Video Remake, only where credits exist", () => {
     const motion = `...(hasCredits() ? [{ href: "/admin/video-remake", label: "Video Remake", icon: Clapperboard }] : []),`
-    const entry = `...(hasCredits() ? [{ href: "/admin/motion-price-check", label: "Motion price check", icon: Receipt }] : []),`
+    const entry = `...(hasCredits() ? [{ href: "/admin/motion-price-check", label: "Video Remake price check", icon: Receipt }] : []),`
     expect(LAYOUT).toContain(entry)
     expect(LAYOUT.slice(LAYOUT.indexOf(motion) + motion.length).trimStart().startsWith(entry)).toBe(true)
   })

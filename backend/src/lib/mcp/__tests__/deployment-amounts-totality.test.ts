@@ -91,6 +91,7 @@ const AMOUNT_FILES: Readonly<Record<string, { count: number } & ({ funnel: true 
   "tools/diagnose.ts": { count: 10, funnel: true }, // diagnose_run's creditsActual
   "tools/pipelines.ts": { count: 6, funnel: true }, // get_pipeline_status' counters
   "tools/verbs-use-case-estimate.ts": { count: 24, funnel: true }, // estimate_use_case
+  "tools/verbs-use-case-pack.ts": { count: 5, funnel: true }, // make_podcast_pack's quote (estimate_only)
   "served-documents.ts": { count: 1, funnel: true }, // every served document's figures (the match is its credits-word pattern)
   // ── not stated raw, for the reason given ──
   "tools/_job-view.ts": {

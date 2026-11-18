@@ -25,7 +25,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 import type { EditPlanMode } from "@nodaro/shared/edl"
-import type { CastSwapPromptPartId } from "@nodaro/render-rules"
+import type { CastSwapPromptPartId, ReplaceAudioBody } from "@nodaro/render-rules"
 import type {
   VideoDepthProvider,
   VideoDepthModelSize,
@@ -4236,6 +4236,37 @@ export async function mergeVideoAudioApi(
     workflowId: true,
     label: "apiErr.startMergeVideoAudio",
   })
+}
+
+/**
+ * Replace Audio (Nodaro Cloud): starts the run a private plugin serves at
+ * `POST /v1/replace-audio` and answers its job (`202 { jobId }`). The body is
+ * the shared one (`replaceAudioNodeBody`, @nodaro/render-rules) plus the run's
+ * workflow fields. Not `apiJson`, which keeps no HTTP status: a deployment
+ * without the plugin answers Fastify's own 404 (no `error.code`), said here as
+ * "runs on Nodaro Cloud" rather than a bare failure. Every other refusal is
+ * the route's own (`error.message`, through `throwApiError`, which also keeps
+ * its code — an over-long or over-large video reads as a warning).
+ */
+export async function replaceAudio(body: ReplaceAudioBody): Promise<{ jobId: string }> {
+  const payload = JSON.stringify(withWorkflowId({ ...body }))
+  const res = await fetch(`${API_BASE_URL}/v1/replace-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: payload,
+  })
+  if (!res.ok) {
+    const err: unknown = await res.json().catch(() => null)
+    const errJson = err && typeof err === "object" && !Array.isArray(err) ? (err as Record<string, unknown>) : null
+    const errObj = errJson?.error && typeof errJson.error === "object" ? (errJson.error as Record<string, unknown>) : undefined
+    if (res.status === 404 && typeof errObj?.code !== "string") throw new Error(tx("apiErr.replaceAudioNotServed"))
+    throwApiError(errJson, "apiErr.startReplaceAudio")
+  }
+  try {
+    return (await res.json()) as { jobId: string }
+  } catch {
+    throw new Error(tx("apiErr.unexpectedResponse", { context: tx("apiErr.startReplaceAudio") }))
+  }
 }
 
 export async function trimAudioApi(videoUrl: string, audioFormat?: string, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {
@@ -12188,6 +12219,14 @@ export interface AdminTrendData {
    */
   prismReferenceAudio?: CastSwapPrismReferenceAudioByResolution | CastSwapPrismReferenceAudioId
   /**
+   * Kling 4 only: what audio the clip sent to the video model carries, per
+   * output resolution (hidden): a mode and a pitch shift. Absent, or a
+   * resolution left out, = the default of the trend's Pulse audio (the full
+   * mix at +4 with the original audio, at 0 with Kling's audio). Stored only
+   * off that default (trends/pulse-reference-audio.ts).
+   */
+  pulseReferenceAudio?: CastSwapPulseReferenceAudioByResolution
+  /**
    * The engine prompt's overrides (hidden; written only by the prompt parts
    * route, kept by a draft save): per part, its text and the hash of the
    * default it replaced.
@@ -12297,6 +12336,30 @@ export type CastSwapPrismReferenceAudioStored = CastSwapPrismReferenceAudioId | 
 
 /** The Prism reference audio per output resolution (admin only); a resolution left out is the default, the full mix at +4. */
 export type CastSwapPrismReferenceAudioByResolution = Partial<Record<TrendResolution, CastSwapPrismReferenceAudioStored>>
+
+/** The output resolutions a Nodaro Pulse (Kling 4) run renders. */
+export type CastSwapPulseResolution = "720p" | "1080p"
+
+/**
+ * One resolution's Pulse reference audio (admin only): what the clip sent to
+ * the video model carries, as Prism's modes and pitch shift (-24 to 24 in
+ * steps of 0.5; never on `"none"`). Always this object, never an id.
+ */
+export interface CastSwapPulseReferenceAudioValue {
+  mode: CastSwapPrismReferenceAudioMode
+  semitones?: number
+}
+
+/**
+ * The Pulse reference audio per output resolution (admin only). A resolution
+ * left out is the default of the Pulse audio in effect: the full mix at +4
+ * with the original audio, at 0 with Kling's audio. Saving a resolution
+ * changed off that default waits until every environment's platform claims it
+ * (`supports.platform.pulseReferenceAudio`; else 422 `platform_unsupported`)
+ * and its engine declares `castSwap.pulseReferenceAudio` (else 409
+ * `engine_unsupported`).
+ */
+export type CastSwapPulseReferenceAudioByResolution = Partial<Record<CastSwapPulseResolution, CastSwapPulseReferenceAudioValue>>
 
 /**
  * The engine a trend version stores, by its INTERNAL id (admin only): Seedance
@@ -12426,7 +12489,7 @@ export interface AdminTrendRunSlot {
   kind: TrendSlotKind
   images: string[]
   fromExample: boolean
-  /** Only on a Full depth run whose slot was left empty and filled with the slot's default pictures. */
+  /** Only when the slot was left empty and its original look (`defaultImages`) filled it. */
   fromDefault?: true
   body?: TrendChoice
   outfit?: TrendChoice
@@ -12524,6 +12587,8 @@ export interface TrendEngineEnvironment {
       prismReferenceAudioModes?: Array<CastSwapPrismReferenceAudioId | "full-one-tone" | "voice-one-tone">
       /** The engine takes the Prism reference audio as a mode and a pitch shift per resolution; absent = only the ids above. */
       prismReferenceAudioPitch?: boolean
+      /** The engine takes the Pulse reference audio, a mode and a pitch shift per resolution (`pulseReferenceAudio`); absent = it cannot. */
+      pulseReferenceAudio?: boolean
       /** The engine takes the preparation steps (`steps`); absent = it cannot. */
       steps?: boolean
       /** With `steps`, the engine takes "Body from the clip" (`steps.clipBody`); absent = it cannot. */
@@ -12571,6 +12636,8 @@ export interface TrendEngineEnvironment {
       faceMeshMinFaceHeightPct?: boolean
       /** Prism's reference audio as a mode and a pitch shift (`prismReferenceAudio`'s `{ mode, semitones }` no id says). */
       prismReferenceAudioPitch?: boolean
+      /** Pulse's reference audio (`pulseReferenceAudio`): it keeps the key and sends it to its engine. */
+      pulseReferenceAudio?: boolean
       /** The Motion setting's face mesh layers (`faceMasking.faceMeshLayers`). */
       faceMeshLayers?: boolean
       /** The Precise art-style route's photographic path (`photographicStyles`): it keeps the key and answers it to its engine. */
@@ -13882,6 +13949,35 @@ export async function saveNodaroMotionPrismReferenceAudio(
     await apiRequest<{ data: NodaroMotionPrismReferenceAudioView }>(ADMIN_NODARO_MOTION_PRISM_REFERENCE_AUDIO, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { prismReferenceAudio },
+    })
+  ).data
+}
+
+// ---- Admin: Video Remake's Pulse reference audio for direct runs (/v1/admin/video-remake/pulse-reference-audio, admin-nodaro-motion-pulse-reference-audio.ts) ----
+
+export interface NodaroMotionPulseReferenceAudioView {
+  /** Only the resolutions off the default of the Pulse audio in effect. null = never saved: every direct Pulse run follows its Pulse audio. */
+  pulseReferenceAudio: CastSwapPulseReferenceAudioByResolution | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine takes the setting (`castSwap.pulseReferenceAudio`); without it every run follows its Pulse audio. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PULSE_REFERENCE_AUDIO = "/v1/admin/video-remake/pulse-reference-audio"
+
+export async function fetchNodaroMotionPulseReferenceAudio(): Promise<NodaroMotionPulseReferenceAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPulseReferenceAudioView }>(ADMIN_NODARO_MOTION_PULSE_REFERENCE_AUDIO, "apiErr.loadNodaroMotion")
+  ).data
+}
+
+export async function saveNodaroMotionPulseReferenceAudio(
+  pulseReferenceAudio: CastSwapPulseReferenceAudioByResolution,
+): Promise<NodaroMotionPulseReferenceAudioView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPulseReferenceAudioView }>(ADMIN_NODARO_MOTION_PULSE_REFERENCE_AUDIO, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { pulseReferenceAudio },
     })
   ).data
 }

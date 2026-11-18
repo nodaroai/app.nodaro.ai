@@ -690,10 +690,12 @@ describe("a trend's Model section", () => {
       klingLength={undefined}
       pulseAudio={undefined}
       prismReferenceAudio={undefined}
+      pulseReferenceAudio={undefined}
       onChange={() => {}}
       onKlingLengthChange={() => {}}
       onPulseAudioChange={() => {}}
       onPrismReferenceAudioChange={() => {}}
+      onPulseReferenceAudioChange={() => {}}
       envs={envs}
     />
   )

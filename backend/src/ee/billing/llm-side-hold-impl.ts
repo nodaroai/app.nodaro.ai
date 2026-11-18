@@ -8,6 +8,7 @@
 
 import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
+import { coveredMarkOf } from "../../lib/covered-step.js"
 import { insertAppReport } from "../../lib/app-reports.js"
 import { isBillingContext, isDeploymentBillingContext, type BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
@@ -66,6 +67,12 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
   const replayChargeId = llmChargeId(args.feature, args.calls[0].modelId)
   const keyed = await keyedHold(args.jobId, args.userId, args.key, replayChargeId)
   if (keyed) return keyed
+
+  // A covered job (lib/covered-step.ts) holds nothing: its pack paid for it. A side hold would charge
+  // it again, so it is refused before anything is reserved — loudly, never a silent second charge.
+  const cover = await jobCover(args.jobId, args.userId)
+  if (cover === "unreadable") return refusal("reservation_failed", "Failed to read the job's hold")
+  if (cover) return refusal("conflict", "A pack paid for this job: it cannot hold more credits")
 
   // The deployment's model availability, asked of each planned call's MODEL
   // (the charge id is the feature's row, which carries no switch for one LLM
@@ -160,6 +167,17 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
     console.error(`[llm-side-hold] job ${args.jobId}: the side-hold reservation failed (a hold it may have made is released by the side-hold sweep): ${detail}`)
     return refusal("reservation_failed", "Failed to reserve credits")
   }
+}
+
+/** Whether the job's own hold is a covered one (its pack paid), "unreadable" on a failed read. */
+async function jobCover(jobId: string, userId: string): Promise<boolean | "unreadable"> {
+  const { data: job, error } = await supabase.from("jobs").select("usage_log_id").eq("id", jobId).eq("user_id", userId).maybeSingle()
+  if (error) return "unreadable"
+  const usageLogId = (job as { usage_log_id?: unknown } | null)?.usage_log_id
+  if (typeof usageLogId !== "string") return false
+  const { data: log, error: logError } = await supabase.from("usage_logs").select("metadata").eq("id", usageLogId).maybeSingle()
+  if (logError) return "unreadable"
+  return coveredMarkOf((log as { metadata?: unknown } | null)?.metadata) !== null
 }
 
 /**

@@ -55,7 +55,7 @@ import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/typ
 import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
-import { bypassTeleports, drawnSourceId } from "@nodaro/render-rules"
+import { bypassTeleports, drawnSourceId, REPLACE_AUDIO_NODE_TYPE, replaceAudioNodeCreditId } from "@nodaro/render-rules"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -485,6 +485,10 @@ export function getModelIdentifier(
   // model's tier; ideas add the per-five-ideas bucket).
   if (node.type === "content-recipe") return contentRecipeCreditId(data.llmModel, data.reasoningEffort as string | undefined)
   if (node.type === "content-ideas") return contentIdeasCreditId(data.count, data.llmModel, data.reasoningEffort as string | undefined)
+
+  // Replace Audio (Nodaro Cloud): the row its mode and music source quote —
+  // the shared builder the plugin's route prices the run on.
+  if (node.type === REPLACE_AUDIO_NODE_TYPE) return replaceAudioNodeCreditId(data)
 
   // A metered LLM node: its per-model estimate once the server has priced its
   // key as one (`llmNodePriceIds`), else today's id below — the tier id, for

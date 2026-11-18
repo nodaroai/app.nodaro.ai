@@ -4617,6 +4617,20 @@ export interface PluginSupports {
    *   Additive-optional: absent ⇒ `false` — today's ids above, so the wire is
    *   byte-identical (lib/cast-swap-prism-reference-audio.ts
    *   `prismReferenceAudioWire`).
+   * - `pulseReferenceAudio`: a Pulse run (`engine: "kling-4"`) takes
+   *   `pulseReferenceAudio`, `{ "720p"?, "1080p"? }` of `{ mode, semitones? }`
+   *   — what audio the clip sent to the video model carries ("audio in"), with
+   *   the modes and pitch range of `prismReferenceAudioPitch` above (every mode
+   *   implied). A missing resolution follows the run's `pulseAudio`: the full
+   *   mix at +4 with the original audio out, unpitched with `"generated"`, as
+   *   every run sent before. `"none"` sends a silent clip with no sound to
+   *   keep; what the final video carries still follows `pulseAudio`. The host
+   *   sends only the resolutions off that default, and no key when none is: a
+   *   trend's choice (`TrendVersionData.pulseReferenceAudio`) and, for every
+   *   direct run, the admin's `nodaro_motion_pulse_reference_audio` setting
+   *   (any caller-sent value is dropped). Additive-optional: absent ⇒ `false`
+   *   — the key is never sent, so the wire is byte-identical
+   *   (lib/cast-swap-pulse-reference-audio.ts).
    * - `faceMesh`: a `faceMasking` setting (a run's, a stored clip's make, and
    *   the Video Remake settings read through `tk.settings`) takes
    *   `faceMesh: true` — thin face lines (a mesh, the lip outline, the eye
@@ -4909,6 +4923,7 @@ export interface PluginSupports {
     readonly prismReferenceAudioPerResolution?: boolean
     readonly prismReferenceAudioModes?: readonly ("full" | "voice" | "none" | "one-tone" | "octave" | "full-one-tone" | "voice-one-tone")[]
     readonly prismReferenceAudioPitch?: boolean
+    readonly pulseReferenceAudio?: boolean
     readonly artStyle?: boolean
     readonly faceMesh?: boolean
     readonly roleOutlines?: boolean

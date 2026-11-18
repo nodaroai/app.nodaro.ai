@@ -1,7 +1,8 @@
 /**
  * The database double behind a run's figures (`runCreditsFor`,
  * lib/job-credit-status.ts): the reads it makes — the steps (`jobs` by
- * `parent_job_id`, owner-scoped, one read per tree level), their usage logs,
+ * `parent_job_id`, owner-scoped, one read per tree level; a use-case run's by
+ * `workflow_execution_id`), their usage logs,
  * and the committed side holds — answered from the rows a test sets, with
  * every read recorded. Shared by job-run-credits.test.ts and
  * motion-price-run-cases.test.ts, so the two cannot answer differently.
@@ -19,7 +20,7 @@
  * module, so they share `db`.
  */
 
-export type DbJob = { id: string; parent_job_id: string | null; usage_log_id: string | null; credits: number | null; user_id?: string }
+export type DbJob = { id: string; parent_job_id: string | null; usage_log_id: string | null; credits: number | null; user_id?: string; workflow_execution_id?: string | null }
 export type DbLog = { id: string; status: string; credits_used: number | null; credits_charged: number | null }
 export type DbSide = { job_id: string; usage_logs: { status: string; credits_used: number | null; credits_charged: number | null } }
 export type DbRead = { table: string; column: string; ids: unknown[]; eqs: Array<[string, unknown]>; ins: Array<[string, unknown[]]> }
@@ -76,12 +77,19 @@ export function supabaseDouble() {
           return db.ignoreOwner || ((!eq || eq[1] === owner) && (!inList || inList[1].includes(owner)))
         }
         const rows = (): unknown[] => {
-          if (table === "jobs") return db.jobs.filter((j) => read.ids.includes((j as Record<string, unknown>)[read.column]) && ownerOk(j))
+          if (table === "jobs") {
+            const hit = db.jobs.filter((j) => read.ids.includes((j as Record<string, unknown>)[read.column]) && ownerOk(j))
+            return window ? [...hit].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(window[0], window[1] + 1) : hit
+          }
           if (table === "usage_logs") return db.logs.filter((l) => read.ids.includes(l.id))
           return db.side.filter((s) => read.ids.includes(s.job_id) && s.usage_logs.status === "committed")
         }
+        let window: [number, number] | null = null
         const q = {
           select: () => q,
+          // The steps of a use-case run are read page by page, by id.
+          order: () => q,
+          range: (from: number, to: number) => ((window = [from, to]), q),
           in: (column: string, ids: unknown[]) => (read.ins.push([column, ids]), column === "user_id" ? q : ((read.column = column), (read.ids = ids), q)),
           eq: (column: string, value: unknown) => (read.eqs.push([column, value]), q),
           then: (res: (v: unknown) => unknown) =>

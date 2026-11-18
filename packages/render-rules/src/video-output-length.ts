@@ -615,6 +615,10 @@ export const VIDEO_LENGTH_RULES: Readonly<Record<string, OutputLengthRule>> = co
   "ai-avatar": { via: "rule", run: aiAvatarLength },
   "speed-ramp": { via: "rule", run: speedRampLength },
   "merge-video-audio": { via: "rule", carries: true, run: mergeVideoAudioLength },
+  // Replace Audio (a Nodaro Cloud plugin's run): the video wired into its `in`
+  // (its `music` may carry a video too), with its sound replaced. The file is
+  // the plugin's own, so it is no carrier: the measured walk adds its slack.
+  "replace-audio": { via: "rule", run: (_n, inputs) => videoIn(inputs, "in") },
   "assemble-narrated-video": { via: "rule", carries: true, run: assembleNarratedLength },
   "slideshow": { via: "rule", run: slideshowLength },
   "split-media": { via: "rule", carries: true, run: splitMediaLength },

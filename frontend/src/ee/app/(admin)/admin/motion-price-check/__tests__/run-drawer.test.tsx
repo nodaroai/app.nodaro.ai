@@ -385,7 +385,7 @@ describe("Admin → Motion price check: a run's drill-down", () => {
     await waitFor(() => expect(opener).not.toBeInTheDocument())
     await user.keyboard("{Escape}")
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
-    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Motion price check" })).toHaveFocus())
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Video Remake price check" })).toHaveFocus())
     expect(document.body).not.toHaveFocus()
   })
 

@@ -1,22 +1,30 @@
 /**
- * A slot's default pictures for Full depth (`TrendSlot.defaultImages`).
+ * A slot's original look (`TrendSlot.defaultImages`) and what a run sends for
+ * an empty optional slot (compose.ts).
  *
  * What must hold:
  *  - the schema takes them on an optional slot of any kind (a location too),
  *    1–3 http(s) addresses, and refuses them on a required slot, clearly;
- *  - a Full depth run fills an empty optional slot with them: the person's own
- *    pictures first, then the default, then none (kept as in the clip); an
- *    example NEVER fills a slot there, and the run records example 0 and
- *    `fromDefault: true` on a defaulted slot (`fromExample: false`);
- *  - every other clip preparation runs exactly as before, examples included,
- *    and its display slots carry no `fromDefault` key at all;
- *  - a run read back (`displaySlots`) keeps `fromDefault` only when true.
+ *  - the person's own pictures always come first;
+ *  - a Full depth run fills an empty optional slot with its original look,
+ *    else none (kept as in the clip); an example NEVER fills a slot there, and
+ *    the run records example 0;
+ *  - a trend that hides its original fills it from the chosen example,
+ *    whatever its kind, and never sends an original look;
+ *  - every other trend fills it with its original look, whatever its kind
+ *    (with or without examples); else a person from the chosen example, and a
+ *    place, product or pet with none;
+ *  - a slot an original look filled says `fromDefault: true` (`fromExample:
+ *    false`); no other display slot has the key, and a run read back
+ *    (`displaySlots`) keeps it only when true.
  */
 import { describe, expect, it } from "vitest"
 import { VIDEO_MASK_RECIPE } from "@nodaro/shared/media"
 import { composeTrendRun, TrendRunError } from "../compose.js"
 import { faceMaskSettingsKey } from "../face-mask.js"
 import { displaySlots } from "../run-helpers.js"
+import { emptyFillOf, type TrendEmptyFill } from "../empty-fill.js"
+import { detailSlotOf } from "../../../routes/trends.js"
 import { trendVersionDataSchema } from "../schemas.js"
 import type { TrendRunRequest, TrendSlot, TrendVersionData } from "../types.js"
 import { TREND_PICTURE_MAX_BYTES } from "@nodaro/render-rules"
@@ -149,45 +157,126 @@ describe("a Full depth run", () => {
   })
 })
 
-describe("every other clip preparation", () => {
-  // A depth mode or faces, with or without a stored clip, exactly as before default pictures existed.
-  const others: Array<[string, TrendVersionData]> = [
-    ["masking off", data()],
-    ["faces", data({ faceMasking: FACES })],
-    ["keep people", withStoredClip(data({ faceMasking: KEEP }))],
-  ]
-  const withoutDefaults = (d: TrendVersionData): TrendVersionData => ({
-    ...d,
-    slots: d.slots.map((s) => {
-      const { defaultImages: _d, ...rest } = s
-      return rest as TrendSlot
-    }),
+describe("an empty optional slot, by slot kind × original look × trend × example", () => {
+  type TrendType = "ordinary" | "no example" | "hides its original" | "full depth"
+  const KINDS: TrendSlot["kind"][] = ["person", "location", "product", "pet"]
+  const TYPES: TrendType[] = ["ordinary", "no example", "hides its original", "full depth"]
+  const LOOK = [img("x-look-a"), img("x-look-b")]
+  const EX = [img("ex1-x")]
+  const cases = KINDS.flatMap((kind) =>
+    [true, false].flatMap((look) =>
+      TYPES.flatMap((type) => [true, false].map((exampleHas) => ({ kind, look, type, exampleHas }))),
+    ),
+  )
+  const name = ({ kind, look, type, exampleHas }: (typeof cases)[number]) =>
+    `${kind}, ${look ? "with" : "without"} an original look, ${type}, the example ${exampleHas ? "has" : "has no"} pictures for it`
+
+  /** A required lead and one optional slot `x` of `kind`; Example 1 has pictures for `x` when `exampleHas`. */
+  function trendOf({ kind, look, type, exampleHas }: (typeof cases)[number]): TrendVersionData {
+    const x = { key: "x", kind, label: { en: "X" }, required: false, roleName: "the other one", ...(look ? { defaultImages: LOOK } : {}) } as TrendSlot
+    const example = { ...EXAMPLES[0]!, slots: { lead: [img("ex1-lead")], ...(exampleHas ? { x: EX } : {}) } }
+    const d = data({ slots: [SLOTS[0]!, x], examples: type === "no example" ? [] : [example] })
+    if (type === "hides its original") return { ...d, hideOriginal: true }
+    if (type === "full depth") return withStoredClip({ ...d, faceMasking: FULL })
+    return d
+  }
+
+  /** What the rule says `x` gets: [images, fromExample, fromDefault], its source, and the example the run records. */
+  function expected(c: (typeof cases)[number]): { x: [string[], boolean, true | undefined]; fill: TrendEmptyFill; example: number } {
+    const r = expectedRun(c)
+    // The source by rule: "example" even where that example has no pictures for the slot (the run then sends none).
+    const fill: TrendEmptyFill = r.x[2] ? "default" : c.type === "hides its original" || (c.type === "ordinary" && c.kind === "person" && !c.look) ? "example" : "original"
+    return { ...r, fill }
+  }
+
+  function expectedRun({ kind, look, type, exampleHas }: (typeof cases)[number]): { x: [string[], boolean, true | undefined]; example: number } {
+    const fromLook: [string[], boolean, true | undefined] = [LOOK, false, true]
+    const fromExample: [string[], boolean, true | undefined] = exampleHas ? [EX, true, undefined] : [[], false, undefined]
+    const none: [string[], boolean, true | undefined] = [[], false, undefined]
+    switch (type) {
+      case "full depth":
+        return { x: look ? fromLook : none, example: 0 }
+      case "hides its original":
+        return { x: fromExample, example: 1 }
+      case "no example":
+        return { x: look ? fromLook : none, example: 0 }
+      case "ordinary":
+        return { x: look ? fromLook : kind === "person" ? fromExample : none, example: 1 }
+    }
+  }
+
+  it.each(cases.map((c) => [name(c), c] as const))("%s", (_name, c) => {
+    const r = run(trendOf(c))
+    const want = expected(c)
+    const x = r.display.slots.find((s) => s.key === "x")!
+    expect([x.images, x.fromExample, x.fromDefault]).toEqual(want.x)
+    // The key itself is there only when an original look filled the slot.
+    expect(Object.hasOwn(x, "fromDefault")).toBe(want.x[2] === true)
+    expect(r.display.example).toBe(want.example)
+    // The rule's answer, and the trend's page states the same for the slot.
+    const d = trendOf(c)
+    const xSlot = d.slots.find((s) => s.key === "x")!
+    expect(emptyFillOf(d, xSlot)).toBe(want.fill)
+    expect(detailSlotOf(d, xSlot, "en").emptyFill).toBe(want.fill)
+    // The engine is sent what the run records.
+    expect(rolesOf(r)).toEqual([[img("me")], want.x[0]])
+    // The lead always runs with the person's own pictures.
+    expect(rows(r.display)[0]).toEqual(["lead", [img("me")], false, undefined])
   })
 
-  it.each(others)("%s fills an empty optional slot from the example, ignoring the defaults", (_name, d) => {
-    const r = run(d)
-    expect(rows(r.display)).toEqual([
-      ["lead", [img("me")], false, undefined],
-      ["guest", [img("ex1-guest")], true, undefined],
-      ["dog", [img("ex1-dog")], true, undefined],
-      ["place", [img("ex1-place")], true, undefined],
-    ])
-    expect(r.display.example).toBe(1)
-    // No `fromDefault` key anywhere.
-    expect(r.display.slots.every((s) => !Object.hasOwn(s, "fromDefault"))).toBe(true)
-    // The body is byte for byte the one a trend without default pictures composes.
-    expect(JSON.stringify(r.body)).toBe(JSON.stringify(run(withoutDefaults(d)).body))
+  it("puts the person's own pictures first, on every trend", () => {
+    for (const type of TYPES) {
+      const r = run(trendOf({ kind: "location", look: true, type, exampleHas: true }), { slots: { ...me, x: { images: [img("my-x")] } } })
+      expect(rows(r.display)[1]).toEqual(["x", [img("my-x")], false, undefined])
+    }
   })
 
-  it.each(others)("%s with no examples sends an empty optional slot with no pictures, ignoring the defaults", (_name, d) => {
-    const r = run({ ...d, examples: [] })
+  it("a Full depth trend that also hides its original sends neither its original look nor an example, as its page says", () => {
+    for (const kind of KINDS) {
+      for (const look of [true, false]) {
+        const d = { ...trendOf({ kind, look, type: "full depth", exampleHas: true }), hideOriginal: true }
+        const r = run(d)
+        // Its original look would show frames of the original it hides: none is sent, and the page shows none.
+        expect(rows(r.display)[1]).toEqual(["x", [], false, undefined])
+        expect(r.display.example).toBe(0)
+        const shown = detailSlotOf(d, d.slots[1]!, "en")
+        expect(shown.emptyFill).toBe("original")
+        expect(shown).not.toHaveProperty("defaultImages")
+      }
+    }
+  })
+
+  it("a required slot has no empty fill, on the rule and on the page", () => {
+    for (const type of TYPES) {
+      const d = trendOf({ kind: "person", look: false, type, exampleHas: true })
+      expect(emptyFillOf(d, d.slots[0]!)).toBeUndefined()
+      expect(detailSlotOf(d, d.slots[0]!, "en")).not.toHaveProperty("emptyFill")
+    }
+  })
+
+  it("on a trend that hides its original, the body is the one the trend composes without original looks", () => {
+    const withLooks = data({ hideOriginal: true })
+    const withoutLooks = data({
+      hideOriginal: true,
+      slots: SLOTS.map((s) => {
+        const { defaultImages: _d, ...rest } = s
+        return rest as TrendSlot
+      }),
+    })
+    expect(JSON.stringify(run(withLooks).body)).toBe(JSON.stringify(run(withoutLooks).body))
+  })
+
+  it("an example asked for by number is still recorded on an ordinary trend whose looks filled every empty slot", () => {
+    const d = data({ examples: [EXAMPLES[0]!, { ...EXAMPLES[0]!, videoUrl: img("ex2") }] })
+    const r = run(d, { example: 2 })
+    expect(r.display.example).toBe(2)
     expect(rows(r.display)).toEqual([
       ["lead", [img("me")], false, undefined],
-      ["guest", [], false, undefined],
+      ["guest", [img("guest-default")], false, true],
+      // No original look: a pet stays as in the clip.
       ["dog", [], false, undefined],
-      ["place", [], false, undefined],
+      ["place", [img("place-a"), img("place-b")], false, true],
     ])
-    expect(r.display.example).toBe(0)
   })
 })
 

@@ -138,6 +138,7 @@ export const NODE_DATA_FIELDS: Readonly<Record<string, NodeDataFieldSpec>> = {
   "remove-background": { declared: true, fields: ["activeResultIndex", "currentJobId", "currentJobProgress", "errorMessage", "executionStatus", "fieldMappings", "generatedImageUrl", "generatedResults", "label"] },
   "render-quality": { declared: true, fields: ["hintMode", "label", "postText", "preText", "renderQuality"] },
   "render-video": { declared: true, fields: ["activeResultIndex", "aspectRatio", "assetOrder", "backgroundColor", "currentJobId", "currentJobProgress", "durationSeconds", "errorMessage", "executionStatus", "fieldMappings", "fps", "generatedResults", "generatedVideoUrl", "label"] },
+  "replace-audio": { declared: true, fields: ["activeResultIndex", "currentJobId", "currentJobProgress", "duckAmount", "errorMessage", "executionStatus", "fieldMappings", "generatedResults", "generatedVideoUrl", "label", "mode", "musicPrompt", "musicSource", "musicUrl", "musicVolume", "speechVolume", "videoUrl"] },
   "resize-video": { declared: true, fields: ["activeResultIndex", "currentJobProgress", "errorMessage", "executionStatus", "fieldMappings", "generatedResults", "generatedVideoUrl", "label", "method", "padColor", "targetAspect"] },
   "router": { declared: true, fields: ["activeRoutes", "conditionGroups", "executionStatus", "label", "mode", "routeOutputs", "routes"] },
   "rss-feed": { declared: true, fields: ["extractFields", "feedUrl", "itemIndex", "label"] },

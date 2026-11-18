@@ -641,6 +641,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   }
   if (
     type === "merge-video-audio" ||
+    // Replace Audio's `video-out`: the active take's video.
+    type === "replace-audio" ||
     type === "still-to-video" ||
     type === "slideshow" ||
     type === "add-captions" ||

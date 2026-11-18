@@ -1,9 +1,9 @@
 // `--estimate` on `nodaro edit`'s use-case node commands (tighten-episode,
-// episode-chapters, episode-trailer, clip-pack, speaker-layout): the same flags
-// as the run, sent to the type's `/estimate` route instead, so the quote is for
-// exactly the run the same command line would start. Its own module so
-// edit-use-case.ts keeps to the run commands.
-import type { UseCaseEstimate } from "@nodaro/sdk/edit"
+// episode-chapters, episode-trailer, clip-pack, speaker-layout) and on
+// podcast-pack: the same flags as the run, sent to the `/estimate` route
+// instead, so the quote is for exactly the run the same command line would
+// start. Its own module so edit-use-case.ts keeps to the run commands.
+import type { PodcastPackEstimate, UseCaseEstimate } from "@nodaro/sdk/edit"
 import { dim, emit, success } from "../output.js"
 import type { GlobalOpts } from "./edit-shared.js"
 
@@ -12,7 +12,7 @@ export const ESTIMATE_HELP =
   "quote the run only: what these flags would be charged, with nothing created or charged (--watch and --idempotency-key are not used)"
 
 /** "1 h 05 min", "12 min 30 s", "40 s": a recording's length as the quote read it. */
-function lengthOf(sec: number): string {
+export function lengthOf(sec: number): string {
   const total = Math.round(sec)
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
@@ -39,5 +39,24 @@ export function reportUseCaseEstimate(label: string, quote: UseCaseEstimate, opt
     success(`${label} is estimated at ${approx}${quote.totalCredits} credits (its steps ${approx}${quote.stepsCredits} + the per-run fee ${quote.feeCredits})`)
   }
   dim(quote.durationSec === null ? "the recording's length could not be read" : `the recording is ${lengthOf(quote.durationSec)}`)
+  dim("nothing was created or charged")
+}
+
+/**
+ * Print a podcast pack's quote: the route's figures as they are under --json,
+ * else the price for the whole pack, its units and the recording's length. 0
+ * (an edition without credits) and null (no price on this server) are said,
+ * not quoted.
+ */
+export function reportPodcastPackEstimate(quote: PodcastPackEstimate, opts: GlobalOpts): void {
+  if (opts.json) {
+    emit(quote, opts)
+    return
+  }
+  const units = quote.units === 1 ? "1 unit" : `${quote.units} units`
+  if (quote.credits === 0) success("Podcast pack: not billed in credits on this edition")
+  else if (quote.credits === null) success("Podcast pack: this server has no price for it")
+  else success(`Podcast pack is ${quote.credits} credits (${units} of 15 seconds, every tool included)`)
+  dim(`the recording is ${lengthOf(quote.durationSec)}; tools: ${quote.tools.join(", ")}`)
   dim("nothing was created or charged")
 }

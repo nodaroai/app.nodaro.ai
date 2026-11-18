@@ -17,7 +17,7 @@
  * where `quality` is the node's own setting.
  */
 import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared/nodes"
-import { isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, runResultTaskFields, usecaseListsItsResult } from "@nodaro/render-rules"
+import { isUseCaseNodeType, RECORDED_OUTPUT_LENGTH_NODE_TYPES, REPLACE_AUDIO_NODE_TYPE, runResultTaskFields, usecaseListsItsResult } from "@nodaro/render-rules"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -31,9 +31,28 @@ export interface RunResultIdentity {
   readonly kieTaskId?: string
   /** Beside that task, the resolution its job recorded (`input_data.resolution`, as stored), when it recorded one. */
   readonly recordedResolution?: string
+  /** Replace Audio's tracks beside its video (`replaceAudioTakeTracks`): the speech it kept, the music it laid under it, and the mix of the two. */
+  readonly speechUrl?: string
+  readonly musicUrl?: string
+  readonly mixUrl?: string
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
+
+/**
+ * Replace Audio's tracks, from its run's output (`speechUrl` — absent when it
+ * replaced all the sound — `musicUrl` and the final mix, `audioUrl`), as its
+ * take's `speechUrl` / `musicUrl` / `mixUrl`: what the node plays under the
+ * video. On the RESULT only: the node's own `musicUrl` is its setting (the
+ * music it takes when none is wired).
+ */
+export function replaceAudioTakeTracks(output: unknown): Pick<RunResultIdentity, "speechUrl" | "musicUrl" | "mixUrl"> {
+  const o = (output && typeof output === "object" ? output : {}) as Record<string, unknown>
+  const speechUrl = str(o.speechUrl)
+  const musicUrl = str(o.musicUrl)
+  const mixUrl = str(o.audioUrl)
+  return { ...(speechUrl ? { speechUrl } : {}), ...(musicUrl ? { musicUrl } : {}), ...(mixUrl ? { mixUrl } : {}) }
+}
 
 /**
  * The length a job recorded (`durationSec`, in seconds) as a result row's
@@ -66,6 +85,8 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
     // node whose own task it is: a reader of the node's task (a Grok Extend's
     // quote) finds the very take it names, and the fact its charge reads.
     ...runResultTaskFields(nodeType, o),
+    // Replace Audio: the speech, music and mix it made, beside its video.
+    ...(nodeType === REPLACE_AUDIO_NODE_TYPE ? replaceAudioTakeTracks(o) : {}),
   }
 }
 

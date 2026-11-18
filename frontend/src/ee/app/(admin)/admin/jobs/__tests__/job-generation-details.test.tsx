@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (orig) => ({
 }))
 import type { ReactElement } from "react"
 import { fetchJobCastSwapSteps } from "@/lib/api"
-import { CastSwapStepsBody, JobGenerationDetails, JobSkippedSteps, JobStepOutputs, PRECISE_STYLE_ROUTED_LINE, PRECISE_STYLE_SENT_GRAY_LINE } from "../job-generation-details"
+import { CastSwapStepsBody, JobGenerationDetails, JobRunSteps, JobSkippedSteps, runStepTime, JobStepOutputs, PRECISE_STYLE_ROUTED_LINE, PRECISE_STYLE_SENT_GRAY_LINE } from "../job-generation-details"
 afterEach(cleanup)
 beforeEach(() => vi.mocked(fetchJobCastSwapSteps).mockReset())
 it("shows recorded model and generation parameters above the JSON", () => {
@@ -162,4 +162,16 @@ it("says when the Precise art-style route kept the run Precise and sent its clip
   withQuery(<JobStepOutputs job={{ id: "job-not-gray", job_type: null, input_data: { type: "cast-swap" } }} />)
   await screen.findByText("This run used today's steps.")
   expect(screen.queryByTestId("precise-style-sent-gray")).toBeNull()
+})
+it("lists the steps one job ran inside itself, in order, with their times", () => {
+  render(<JobRunSteps output={{ runSteps: [{ step: "download-video", ms: 820 }, { step: "separate-speech", ms: 41_250 }, { step: "merge" }, { nope: 1 }] }} />)
+  const list = screen.getByTestId("job-run-steps")
+  expect(within(list).getByText("Steps (3)")).toBeTruthy()
+  const items = within(list).getAllByRole("listitem").map((li) => li.textContent)
+  expect(items).toEqual(["download-video · 820 ms", "separate-speech · 41.3 s", "merge"])
+})
+it("shows no steps box for a job that logged none", () => {
+  const { container } = render(<JobRunSteps output={{ videoUrl: "https://x/v.mp4" }} />)
+  expect(container.firstChild).toBeNull()
+  expect(runStepTime(1500)).toBe("1.5 s")
 })

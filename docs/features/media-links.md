@@ -51,10 +51,15 @@ formats it takes:
 If the link's host cannot be looked up for the moment, reading the link
 runs out of time, or the server cannot read it just then, the run is
 refused with a `503` before anything is charged, and it can simply be
-run again. The code is `source_unreachable` for a lookup that failed,
+run again. The code is `source_unreachable` for a lookup that failed, or
+a host that answered with a server error (5xx) or dropped the connection,
 `probe_timeout` for a read that ran out of time, and `probe_unavailable`
-when the server could not run the read itself (nothing is wrong with the
-link). A host that does not exist is a `400`; see below.
+when the server could not run the read itself, or ran out of threads or
+memory while reading (nothing is wrong with the link). The podcast
+use-case runs (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker
+Layout) read the link once more before they answer one of these (not
+after a read that ran out of time: it already waited). A host
+that does not exist is a `400`; see below.
 
 ## When a link's host cannot be used
 

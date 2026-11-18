@@ -18,13 +18,14 @@ import { VIDEO_SOURCE_TYPES_FOR_RENDER, collectMediaAssets, detectPreviewItemTyp
  * (decided 2026-10-18) and stays a member through its contract.producer
  * "video". Trailer, remove-audio, gif-to-video and Speaker Layout are the real
  * units that join (tighten-episode is "dynamic", episode-chapters has no producer).
+ * Replace Audio (a legacy node, its run served by the Cloud plugin) joined the legacy rows after Merge Video + Audio.
  */
 const LEGACY_RENDER_VIDEO_SOURCES = [
   "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "generate-video-pro",
   "edit-video-pro", "upload-video", "youtube-video", "combine-videos", "assemble-narrated-video", "lip-sync",
   "speech-to-video", "ai-avatar", "cinematic-avatar", "motion-transfer", "video-upscale", "video-depth",
-  "extend-video", "video-retake", "face-swap", "suno-music-video", "merge-video-audio", "still-to-video",
-  "slideshow", "add-captions", "resize-video", "social-media-format", "trim-video", "render-video",
+  "extend-video", "video-retake", "face-swap", "suno-music-video", "merge-video-audio", "replace-audio",
+  "still-to-video", "slideshow", "add-captions", "resize-video", "social-media-format", "trim-video", "render-video",
   "speed-ramp", "loop-video", "fade-video", "video-overlay", "transcode-video", "manual-edit",
   "video-sfx", "ugc-clip", "video-mask", "mask-composite",
 ]

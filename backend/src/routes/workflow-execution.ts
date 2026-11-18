@@ -45,7 +45,7 @@ import { importViaOf } from "../lib/import-via.js"
 import { previewReviewRefusal, previewReviewStops } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CHILD_JOB_COLUMN, nonAdminJobInputData, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../lib/public-job-data.js"
-import { creditsChargedOf, runCreditsFor, runCreditsOf, type RunCredits } from "../lib/job-credit-status.js"
+import { creditsChargedOf, runCreditsFor, runCreditsOf, type JobChargeRow, type RunCredits } from "../lib/job-credit-status.js"
 
 /** No run figures loaded: the hold, as before. */
 const EMPTY_RUN_CREDITS = new Map() as unknown as RunCredits
@@ -367,6 +367,17 @@ const globalExecutionsQuery = z.object({
   status: z.string().optional(),
   viewAll: z.enum(["true", "false"]).optional(),
 })
+
+
+/**
+ * Job rows for a run's figures WITHOUT their input: a use-case run's input names
+ * its inner execution, whose jobs `runCreditsFor` would add to its row. The
+ * history lists such a run beside the workflow run that started it, whose total
+ * already holds the whole run, so its row keeps its own figure there.
+ */
+function withoutRunInputs(rows: readonly JobChargeRow[]): JobChargeRow[] {
+  return rows.map(({ input_data: _input, ...row }) => row)
+}
 
 export async function workflowExecutionRoutes(app: FastifyInstance) {
   // --- Run workflow ---
@@ -1777,7 +1788,10 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       : true
     const execRows = execData.map((row) => toExecutionSummary(row, { isAdmin, canRead }))
     // Each standalone job as a run (its steps' charges included), in one read per table.
-    const jobCredits = await runCreditsFor(jobsResult.data ?? [], req.userId)
+    // Without their input (decided 2026-11-17): a use-case run a workflow's own run started is
+    // listed here too, beside that run whose total already holds it, so its steps are not
+    // added to its row again — the row keeps the run's own figure, as it always did.
+    const jobCredits = await runCreditsFor(withoutRunInputs(jobsResult.data ?? []), req.userId)
     const jobRows = (jobsResult.data ?? []).map((row) => jobToExecutionSummary(row, isAdmin, jobCredits))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())
@@ -1932,7 +1946,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       _source: "exec" as const,
     }))
     // Each standalone job as a run (its steps' charges included), in one read per table.
-    const jobCredits = await runCreditsFor(jobsResult.data ?? [], [...new Set((jobsResult.data ?? []).map((row) => row.user_id as string))])
+    // As the workflow list above: the listed rows keep their own figure (withoutRunInputs).
+    const jobCredits = await runCreditsFor(withoutRunInputs(jobsResult.data ?? []), [...new Set((jobsResult.data ?? []).map((row) => row.user_id as string))])
     const jobRows = (jobsResult.data ?? []).map((row) => ({ ...jobToExecutionSummary(row, isAdminViewAll, jobCredits), workflowId: row.workflow_id, userId: row.user_id, _source: "job" as const }))
     const merged = [...execRows, ...jobRows]
       .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())

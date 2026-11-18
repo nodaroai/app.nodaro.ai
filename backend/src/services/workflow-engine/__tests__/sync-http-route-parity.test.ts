@@ -19,10 +19,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { IDEMPOTENT_SYNC_HTTP_NODES, SYNC_HTTP_NODES, SYNC_HTTP_ROUTES } from "../node-executor.js"
 import { PLUGIN_SERVED_SYNC_TYPES } from "../ugc-sync-nodes.js"
+import { REPLACE_AUDIO_SYNC_TYPES } from "../replace-audio-sync.js"
 import { CLOUD_ONLY_NODE_TYPES } from "../../../lib/cloud-only-nodes.js"
 import { unitRouteFiles } from "../../../lib/route-inventory.js"
 
-/** The sync-HTTP routes the Nodaro Cloud plugin serves (the UGC nodes), by node type. */
+/** The sync-HTTP routes the Nodaro Cloud plugin serves (the UGC nodes, Replace Audio), by node type. */
 const PLUGIN_SERVED_SYNC_ROUTES: Readonly<Record<string, string>> = {
   "ugc-creator": "/v1/ugc/creator",
   "ugc-script": "/v1/ugc/script",
@@ -30,6 +31,7 @@ const PLUGIN_SERVED_SYNC_ROUTES: Readonly<Record<string, string>> = {
   "ugc-clip": "/v1/ugc/clip",
   "ugc-cards": "/v1/ugc/cards",
   "ugc-finish-clips": "/v1/ugc/finish",
+  "replace-audio": "/v1/replace-audio",
 }
 const isPluginServed = (nodeType: string): boolean => Object.hasOwn(PLUGIN_SERVED_SYNC_ROUTES, nodeType)
 
@@ -91,10 +93,10 @@ describe("SYNC_HTTP_NODES ↔ SYNC_HTTP_ROUTES ↔ IDEMPOTENT_SYNC_HTTP_NODES", 
   it("every node the orchestrator sends an Idempotency-Key for is a sync-HTTP node", () => {
     const stray = [...IDEMPOTENT_SYNC_HTTP_NODES].filter((t) => !SYNC_HTTP_NODES.has(t))
     expect(stray).toEqual([])
-    // The routes that key on the header today, and the UGC nodes (every call
-    // carries the run's key); a new member must be deliberate.
+    // The routes that key on the header today, the UGC nodes (every call
+    // carries the run's key) and Replace Audio; a new member must be deliberate.
     expect([...IDEMPOTENT_SYNC_HTTP_NODES].sort()).toEqual([
-      "collection-write", "pro-3d-render", "ugc-cards", "ugc-clip", "ugc-clips", "ugc-creator", "ugc-finish-clips", "ugc-script",
+      "collection-write", "pro-3d-render", "replace-audio", "ugc-cards", "ugc-clip", "ugc-clips", "ugc-creator", "ugc-finish-clips", "ugc-script",
     ])
   })
 })
@@ -140,7 +142,7 @@ describe("SYNC_HTTP_ROUTES ↔ the routes the Nodaro Cloud plugin serves", () =>
   ]
 
   it("are exactly the executor's plugin-served nodes, each at its pinned path", () => {
-    expect([...PLUGIN_SERVED_SYNC_TYPES].sort()).toEqual(Object.keys(PLUGIN_SERVED_SYNC_ROUTES).sort())
+    expect([...PLUGIN_SERVED_SYNC_TYPES, ...REPLACE_AUDIO_SYNC_TYPES].sort()).toEqual(Object.keys(PLUGIN_SERVED_SYNC_ROUTES).sort())
     for (const [nodeType, path] of Object.entries(PLUGIN_SERVED_SYNC_ROUTES)) {
       expect(SYNC_HTTP_NODES.has(nodeType), nodeType).toBe(true)
       expect(SYNC_HTTP_ROUTES[nodeType], nodeType).toBe(path)

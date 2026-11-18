@@ -754,42 +754,14 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(mem.trends[0]!.status).toBe("draft")
   })
 
-  describe("an optional person's original look (optional_person_default_missing)", () => {
+  it("a trend with an optional person and no original look publishes", async () => {
     const GUEST = { key: "guest", label: { en: "Guest" }, kind: "person" as const, required: false, roleName: "the man on the right" }
-    const LOOK = `https://cdn.test/trends/${T1}/guest-look.png`
-    const withGuest = (over: Partial<TrendVersionData> = {}, guest: TrendVersionData["slots"][number] = GUEST) =>
-      draftData({ examples: [EXAMPLE], ...over, slots: [...draftData().slots, guest] })
-
-    it("a draft with an optional person and no original look saves, but does not publish; with one it publishes", async () => {
-      seed({}, draftData({ examples: [EXAMPLE] }))
-      let res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: withGuest(), revision: await revisionOf() })
-      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
-
-      res = await call("POST", `/v1/admin/trends/${T1}/publish`)
-      expect(res.statusCode).toBe(409)
-      expect(reasonsOf(res)).toEqual([{ code: "optional_person_default_missing", slots: ["guest"], message: expect.stringContaining('"Guest"') }])
-      expect(mem.trends[0]!.status).toBe("draft")
-
-      res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: withGuest({}, { ...GUEST, defaultImages: [LOOK] }), revision: await revisionOf() })
-      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
-      res = await call("POST", `/v1/admin/trends/${T1}/publish`)
-      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
-    })
-
-    it("a trend that hides its original publishes without one (it keeps Example 1)", async () => {
-      seed({}, withGuest({ hideOriginal: true }))
-      const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
-      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
-    })
-
-    it("a live trend whose draft lacks one keeps its published version: only the new publish is refused", async () => {
-      seed({ status: "published", publishedVersion: 1, draftVersion: 2, versions: { 1: { data: draftData({ examples: [EXAMPLE] }), published: true }, 2: { data: withGuest(), published: false } } })
-      const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
-      expect(res.statusCode).toBe(409)
-      expect(reasonsOf(res)).toEqual([expect.objectContaining({ code: "optional_person_default_missing", slots: ["guest"] })])
-      expect(mem.trends[0]!.status).toBe("published")
-      expect(mem.trends[0]!.publishedVersion).toBe(1)
-    })
+    seed({}, draftData({ examples: [EXAMPLE] }))
+    let res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: draftData({ examples: [EXAMPLE], slots: [...draftData().slots, GUEST] }), revision: await revisionOf() })
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+    expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    expect(mem.trends[0]!.status).toBe("published")
   })
 
   it("a draft that hides its original publishes with an example, and the admin still sees the real original", async () => {
@@ -1494,15 +1466,7 @@ describe("POST /:id/publish — engine check", () => {
   it("publishes a 5-person Kling 4 trend (each prepared picture counts as one), and blocks one that can send more than 10", async () => {
     const kling = { ...CAST_SWAP_ALL, resolutions: ["720p", "1080p"], engines: ["seedance-2-5", "kling-4"] }
     world.envs = [envRow("production", kling), envRow("staging", kling)]
-    // Each optional person with its original look (publishing needs one; a default never adds to a run's images).
-    const slots = Array.from({ length: 5 }, (_, i) => ({
-      key: `p${i}`,
-      label: { en: `P${i}` },
-      kind: "person" as const,
-      required: i === 0,
-      roleName: `person ${i}`,
-      ...(i === 0 ? {} : { defaultImages: [`https://cdn.test/trends/${T1}/p${i}-look.png`] }),
-    }))
+    const slots = Array.from({ length: 5 }, (_, i) => ({ key: `p${i}`, label: { en: `P${i}` }, kind: "person" as const, required: i === 0, roleName: `person ${i}` }))
     const example = { ...EXAMPLE, slots: Object.fromEntries(slots.map((s) => [s.key, [`https://cdn.test/trends/${T1}/ex1-${s.key}.png`]])) }
     const refs = (n: number) => [1, 2].map((r) => ({ images: Array.from({ length: n }, (_, i) => `https://cdn.test/r${r}-${i}.png`), line: "the sign" }))
     // 5 prepared + 2 × 2 references = 9.
@@ -4171,5 +4135,148 @@ describe("Prism's reference audio: a value no id says, held until every environm
     const rows = (await call("GET", "/v1/admin/trends/engine-environments")).json().data as Array<{ env: string; supports: Record<string, unknown> }>
     expect(rows.find((r) => r.env === "production")!.supports).toEqual({ castSwap: PITCH })
     expect(rows.find((r) => r.env === "staging")!.supports).toEqual({ castSwap: PITCH, platform: TAKES })
+  })
+})
+
+/**
+ * Pulse's reference audio ("audio in", decided 2026-11-18) is a field an older
+ * platform's strict trend schema refuses outright, and an older engine is never
+ * sent. Trends live in the database every environment shares. So a draft is
+ * saved with it only on Kling 4 and only the resolutions off the default of its
+ * own audio out; a save or a publish that CHANGES a resolution to such a value
+ * waits for every environment's platform claim (422 `platform_unsupported`), then
+ * its engine flag (409, or the publish need `pulseReferenceAudio`). What was not
+ * changed, or was taken back to the default, is never refused.
+ */
+describe("Pulse's reference audio: stored only off the default, held until every environment's platform and engine take it", () => {
+  const VOICE = { "720p": { mode: "voice" as const, semitones: 4 } }
+  const KLING = { ...CAST_SWAP_ALL, resolutions: ["720p", "1080p"], engines: ["seedance-2-5", "kling-4"], pulseAudio: true }
+  const IN = { ...KLING, pulseReferenceAudio: true }
+  const CLAIM = { pulseReferenceAudio: true }
+  const COVERED = () => [envRow("production", IN, CLAIM), envRow("staging", IN, CLAIM)]
+  const LACKING = () => [envRow("production", KLING), envRow("staging", KLING)]
+  const kling = (over: Partial<TrendVersionData> = {}) => draftData({ engine: "kling-4", examples: [EXAMPLE], ...over })
+  const save = async (pulseReferenceAudio: unknown, over: Partial<TrendVersionData> = {}) =>
+    call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...kling(over), ...(pulseReferenceAudio === undefined ? {} : { pulseReferenceAudio }) }, revision: await revisionOf() })
+  const publish = () => call("POST", `/v1/admin/trends/${T1}/publish`)
+  const stored = () => mem.trends[0]!.versions[mem.trends[0]!.draftVersion]!.data
+
+  describe("a draft save", () => {
+    it("stores only the resolutions off the default of the draft's audio out, and no key when none is", async () => {
+      seed({}, kling())
+      world.envs = COVERED()
+      expect((await save({ ...VOICE, "1080p": { mode: "full", semitones: 4 } })).statusCode).toBe(200)
+      expect(stored().pulseReferenceAudio).toEqual(VOICE)
+      expect((await save({ "720p": { mode: "full", semitones: 0 } }, { pulseAudio: "generated" })).statusCode).toBe(200)
+      expect("pulseReferenceAudio" in stored()).toBe(false)
+      expect((await save({ "720p": { mode: "full", semitones: 4 } })).statusCode).toBe(200)
+      expect("pulseReferenceAudio" in stored()).toBe(false)
+    })
+
+    it("drops it from a draft that is not on Kling 4", async () => {
+      seed()
+      world.envs = COVERED()
+      const res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: { ...draftData(), pulseReferenceAudio: VOICE }, revision: await revisionOf() })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect("pulseReferenceAudio" in stored()).toBe(false)
+    })
+
+    it("refuses ids and other resolutions", async () => {
+      seed({}, kling())
+      for (const bad of ["voice", { "720p": "voice" }, { "480p": { mode: "none" } }]) expect((await save(bad)).statusCode, JSON.stringify(bad)).toBe(400)
+    })
+
+    it("is held while one environment's platform does not claim it, naming it; nothing is saved", async () => {
+      seed({}, kling())
+      world.envs = [envRow("production", IN), envRow("staging", IN, CLAIM)]
+      const before = structuredClone(stored())
+      const res = await save(VOICE)
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toEqual({
+        code: "platform_unsupported",
+        envs: ["production"],
+        message:
+          "The platform in production does not take the Pulse reference audio yet, and trends are shared by every environment: keep the default for the audio out, or wait until production is updated.",
+      })
+      expect(stored()).toEqual(before)
+    })
+
+    it("is refused while one environment's engine lacks the flag, every platform claiming it", async () => {
+      seed({}, kling())
+      world.envs = [envRow("production", IN, CLAIM), envRow("staging", KLING, CLAIM)]
+      const res = await save(VOICE)
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"] })
+      expect("pulseReferenceAudio" in stored()).toBe(false)
+    })
+
+    it("holds a value newly stored even where it sounds as before (full at +4 with Kling's own audio)", async () => {
+      seed({}, kling())
+      world.envs = LACKING()
+      expect((await save({ "720p": { mode: "full", semitones: 4 } }, { pulseAudio: "generated" })).statusCode).toBe(422)
+    })
+
+    it("never refuses what was not changed, or what is taken back to the default", async () => {
+      seed({}, kling({ pulseReferenceAudio: VOICE }))
+      world.envs = LACKING()
+      const res = await save(VOICE, { name: { en: "Renamed" } })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(stored().pulseReferenceAudio).toEqual(VOICE)
+      expect((await save(undefined)).statusCode).toBe(200)
+      expect("pulseReferenceAudio" in stored()).toBe(false)
+    })
+
+    it("saves it once every environment's claim and flag cover it", async () => {
+      seed({}, kling())
+      world.envs = COVERED()
+      expect((await save(VOICE)).statusCode).toBe(200)
+      expect(stored().pulseReferenceAudio).toEqual(VOICE)
+    })
+  })
+
+  describe("a publish", () => {
+    it("of a value never published is held while one environment's platform does not claim it", async () => {
+      seed({}, kling({ pulseReferenceAudio: VOICE }))
+      world.envs = [envRow("production", IN, CLAIM), envRow("staging", IN)]
+      const res = await publish()
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging"] })
+      expect(mem.trends[0]!.status).toBe("draft")
+    })
+
+    it("is blocked while one environment's engine lacks the flag, every platform claiming it", async () => {
+      seed({}, kling({ pulseReferenceAudio: VOICE }))
+      world.envs = [envRow("production", IN, CLAIM), envRow("staging", KLING, CLAIM)]
+      const res = await publish()
+      expect(res.statusCode).toBe(409)
+      expect(reasonsOf(res)).toContainEqual({ code: "engine_unsupported", env: "staging", need: "pulseReferenceAudio" })
+    })
+
+    it("goes through once every environment's claim and flag cover it", async () => {
+      seed({}, kling({ pulseReferenceAudio: VOICE }))
+      world.envs = COVERED()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.status).toBe("published")
+    })
+
+    it("is never held for what the published version holds as it is (its engine need stays the publish checks')", async () => {
+      seed({
+        status: "published",
+        publishedVersion: 1,
+        draftVersion: 2,
+        versions: { 1: { data: kling({ pulseReferenceAudio: VOICE }), published: true }, 2: { data: kling({ pulseReferenceAudio: VOICE, name: { en: "Renamed" } }), published: false } },
+      })
+      world.envs = [envRow("production", IN), envRow("staging", IN)]
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.publishedVersion).toBe(2)
+    })
+
+    it("of a Kling 4 trend at the default needs nothing new", async () => {
+      seed({}, kling())
+      world.envs = LACKING()
+      expect((await publish()).statusCode).toBe(200)
+    })
   })
 })

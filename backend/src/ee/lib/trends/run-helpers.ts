@@ -50,6 +50,11 @@ import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
 import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
+import {
+  engineTakesPulseReferenceAudio,
+  parseNodaroMotionPulseReferenceAudio,
+  pulseReferenceAudioNotDefault,
+} from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { engineTakesPromptWording } from "../../../lib/nodaro-motion-prompt-wording.js"
 import { prismReferenceAudioByResolutionOf, prismReferenceAudioWire, prismRunResolution } from "../../../lib/cast-swap-prism-reference-audio.js"
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
@@ -210,7 +215,7 @@ export function displaySlots(v: unknown): TrendRunDisplaySlot[] {
       kind,
       images: Array.isArray(s.images) ? s.images.filter((i): i is string => typeof i === "string") : [],
       fromExample: s.fromExample === true,
-      // Only on a Full depth run whose default pictures filled the slot (compose.ts): absent otherwise.
+      // Only when the slot's original look filled it (compose.ts): absent otherwise.
       ...(s.fromDefault === true ? { fromDefault: true as const } : {}),
       ...chips,
     }]
@@ -655,6 +660,25 @@ export function withoutUnsupportedPulseAudio(composed: ComposedTrendRun): void {
 }
 
 /**
+ * The body without `pulseReferenceAudio` when the loaded engine does not
+ * declare it takes one (`castSwap.pulseReferenceAudio`): such an engine always
+ * sends the default for the run's audio out, so it gets exactly the body it got
+ * before the setting existed. On an engine that takes it, the resolutions are
+ * read again against the body's own `pulseAudio` (run after
+ * `withoutUnsupportedPulseAudio`, which may have dropped it): only those off
+ * that default are kept, and no key when none is. Mutates `composed.body`.
+ */
+export function withoutUnsupportedPulseReferenceAudio(composed: ComposedTrendRun): void {
+  const { body } = composed
+  if (body.pulseReferenceAudio === undefined) return
+  const kept = engineTakesPulseReferenceAudio()
+    ? pulseReferenceAudioNotDefault(parseNodaroMotionPulseReferenceAudio(body.pulseReferenceAudio), body.pulseAudio)
+    : undefined
+  if (kept === undefined) delete body.pulseReferenceAudio
+  else body.pulseReferenceAudio = kept
+}
+
+/**
  * The body's `prismReferenceAudio` (composed as a value per output resolution,
  * as stored) as the loaded engine takes it (`prismReferenceAudioWire`): the
  * object form (`{ mode, semitones }` per resolution) for an engine declaring
@@ -758,7 +782,7 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
 /**
  * Every field the loaded engine does not take, dropped (the stored mask, the
  * prompt parts, the prompt style and scene, the Flex wording, the face mesh, the depth colormap and model size, the stored scene
- * description, the preparation steps, the Pulse audio, the Prism reference
+ * description, the preparation steps, the Pulse audio and reference audio, the Prism reference
  * audio, the run's `sourceAsset`), and the
  * preview's prepared input clip put on the wire where the engine takes it
  * (`withPreparedPreview`): the estimate, the run and the admin test run alike.
@@ -775,6 +799,8 @@ export function withoutUnsupportedFields(composed: ComposedTrendRun): void {
   withoutUnsupportedSceneDescription(composed)
   withoutUnsupportedSteps(composed)
   withoutUnsupportedPulseAudio(composed)
+  // After the Pulse audio: it reads the audio out the body is left with.
+  withoutUnsupportedPulseReferenceAudio(composed)
   withoutUnsupportedPrismReferenceAudio(composed)
   withPreparedPreview(composed)
 }

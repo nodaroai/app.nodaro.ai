@@ -71,6 +71,8 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = composeUnitSet("VIDEO_P
   "video-sfx",
   "suno-music-video",
   "merge-video-audio",
+  // Replace Audio (Nodaro Cloud plugin): the video with its sound replaced → video.
+  "replace-audio",
   "add-captions",
   "resize-video",
   "social-media-format",

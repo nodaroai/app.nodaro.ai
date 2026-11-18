@@ -23,6 +23,10 @@
  *   captions and the music mix and merge that keep it (decided 2026-10-16).
  * - a run on several recordings or a Master audio: its cameras report
  *   (`cameras`, wrapper-output-cameras.ts), for an episode and a list alike.
+ * - its speakers (`speakers`, wrapper-output-speakers.ts, decided 2026-11-17):
+ *   each transcript label first heard first, the name the request gave it
+ *   (`input_data.speakerNames`, handed in as `request`) and how long they
+ *   talk — for an episode and a layout, whenever the transcript has labels.
  */
 import {
   runForwardedVideoLengthSec,
@@ -32,20 +36,45 @@ import {
   type RunOutputLengths,
   type StoredInlineGraph,
 } from "@nodaro/render-rules"
-import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput, type UseCaseWrapperRequest } from "./wrapper-output-parts.js"
 import { listOutput } from "./wrapper-output-lists.js"
 import { layoutOutput } from "./wrapper-output-layout.js"
 import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
+import { usecaseSpeakers } from "./wrapper-output-speakers.js"
 
 export { usecaseNoClipsRenderedMessage, usecaseNoResultMessage, usecaseWrapperKeepsPartial } from "./wrapper-output-lists.js"
 
-export type { UseCaseCameraSpeaker, UseCaseCamerasReport, UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+export type { UseCaseCameraSpeaker, UseCaseCamerasReport, UseCaseClipRow, UseCaseFormatRow, UseCaseWrapperOutput, UseCaseWrapperRequest } from "./wrapper-output-parts.js"
+
+/**
+ * The run's transcribe step: the one diarized `transcribe` node every use-case
+ * graph builds (`usecaseTranscribeNode`). A layout's output map names its
+ * render's transcript instead (the speakers as its edit renamed them), so the
+ * step is found by its type; the output map's transcript is the fallback.
+ */
+const transcribeNodeId = (graph: StoredInlineGraph): string =>
+  graph.nodes.find((n) => n.type === "transcribe")?.id ?? graph.outputMap.transcript.nodeId
+
+/**
+ * The run's speakers, read off its transcribe step (never a render's renamed
+ * transcript, so each label is the transcript's own), as the `speakers`
+ * field; nothing when the transcript names no speaker.
+ */
+export function usecaseSpeakersField(
+  graph: StoredInlineGraph,
+  nodeStates: Readonly<Record<string, unknown>>,
+  request: UseCaseWrapperRequest,
+): Pick<UseCaseWrapperOutput, "speakers"> {
+  const speakers = usecaseSpeakers(completedOutput(nodeStates, transcribeNodeId(graph))?.json, request.speakerNames)
+  return speakers.length > 0 ? { speakers } : {}
+}
 
 function episodeOutput(
   graph: StoredInlineGraph,
   map: EpisodeOutputMap,
   nodeStates: Readonly<Record<string, unknown>>,
   executionId: string,
+  request: UseCaseWrapperRequest,
 ): UseCaseWrapperOutput {
   const mediaNodeId = completedOutput(nodeStates, map.media.nodeId) ? map.media.nodeId : map.renderNodeId
   const media = completedOutput(nodeStates, mediaNodeId)
@@ -73,6 +102,7 @@ function episodeOutput(
     ...(isRecord(graph.settings) ? { useCaseSettings: graph.settings } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
     ...(cameras ? { cameras } : {}),
+    ...usecaseSpeakersField(graph, nodeStates, request),
     _executionId: executionId,
     ...failedStepOf(graph, nodeStates),
   }
@@ -82,6 +112,8 @@ export function usecaseWrapperOutput(
   graph: StoredInlineGraph,
   nodeStates: Readonly<Record<string, unknown>>,
   executionId: string,
+  /** What the wrapper job kept from its request (its `input_data`), reported back; never read by the graph. */
+  request: UseCaseWrapperRequest = {},
 ): UseCaseWrapperOutput {
   const map = graph.outputMap
   // `case undefined` + `case "episode"` is `usecaseResultKind(map) === "episode"`
@@ -91,9 +123,9 @@ export function usecaseWrapperOutput(
     // A P1 snapshot names no kind: an episode.
     case undefined:
     case "episode":
-      return episodeOutput(graph, map, nodeStates, executionId)
+      return episodeOutput(graph, map, nodeStates, executionId, request)
     case "layout":
-      return layoutOutput(graph, map, nodeStates, executionId)
+      return { ...layoutOutput(graph, map, nodeStates, executionId), ...usecaseSpeakersField(graph, nodeStates, request) }
     default:
       return listOutput(graph, nodeStates, executionId)
   }

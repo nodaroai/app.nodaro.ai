@@ -20,6 +20,14 @@
  * its parent's owner).
  *
  * Without credits there is nothing to sum and nothing is read.
+ *
+ * A use-case run (Tighten Episode, Clip Pack, …, decided 2026-11-17) runs its
+ * steps as the jobs of its own inner execution, never by `parent_job_id`: a
+ * root that names that execution (`innerExecutionId`, read off the run's own
+ * `input_data._executionId`) has every job of it as a step, and their children
+ * below them as usual. Only the run's OWN execution: a continuation is a new
+ * run with a new execution, and the steps it reused keep the execution (and so
+ * the run) that made and charged them, so a chain is never counted twice.
  */
 import { supabase } from "./supabase.js"
 import { hasCredits } from "./config.js"
@@ -54,6 +62,8 @@ const IN_BATCH = 200
 export interface RunStepRoot {
   id: string
   owner: string
+  /** A use-case run's own inner execution: every job of it is a step of this run (see the module note). */
+  innerExecutionId?: string
 }
 
 /**
@@ -94,8 +104,21 @@ export async function runStepsOf(jobs: readonly RunStepRoot[]): Promise<RunSteps
   const asked = new Set(roots)
 
   const read = new Map<string, RunStepRow>()
+  // A use-case run's inner jobs → the run: their step parent (they carry no `parent_job_id`).
+  const runOf = new Map<string, string>()
+  /** The job a step's charge rolls up to next: its parent job, else the use-case run it is a step of. */
+  const upOf = (id: string): string | null => read.get(id)?.parent_job_id ?? runOf.get(id) ?? null
   const expanded = new Set<string>()
   let level: RunStepRoot[] = roots.map((id) => ({ id, owner: ownerOf.get(id)! }))
+  for (const inner of await useCaseInnerJobs(jobs.filter((j) => asked.has(j.id) && j.owner === ownerOf.get(j.id)), incomplete)) {
+    if (read.has(inner.row.id)) continue
+    read.set(inner.row.id, inner.row)
+    runOf.set(inner.row.id, inner.run)
+    // An inner job asked for beside its run is a step of the run AND walked as itself (already in `level`).
+    if (asked.has(inner.row.id)) continue
+    ownerOf.set(inner.row.id, inner.owner)
+    level.push({ id: inner.row.id, owner: inner.owner })
+  }
   for (let depth = 1; depth <= MAX_CHILD_JOB_DEPTH && level.length > 0; depth++) {
     for (const { id } of level) expanded.add(id)
     const next: RunStepRoot[] = []
@@ -109,7 +132,7 @@ export async function runStepsOf(jobs: readonly RunStepRoot[]): Promise<RunSteps
           while (at && !seen.has(at)) {
             seen.add(at)
             if (asked.has(at)) incomplete.add(at)
-            at = read.get(at)?.parent_job_id ?? null
+            at = upOf(at)
           }
         }
       }
@@ -144,7 +167,7 @@ export async function runStepsOf(jobs: readonly RunStepRoot[]): Promise<RunSteps
   // Each step belongs to every asked-for job above it.
   for (const step of read.values()) {
     const seen = new Set<string>([step.id])
-    let parent = step.parent_job_id
+    let parent = upOf(step.id)
     while (parent && !seen.has(parent)) {
       seen.add(parent)
       if (asked.has(parent)) {
@@ -152,8 +175,71 @@ export async function runStepsOf(jobs: readonly RunStepRoot[]): Promise<RunSteps
         if (list) list.push(step)
         else out.set(parent, [step])
       }
-      parent = read.get(parent)?.parent_job_id ?? null
+      parent = upOf(parent)
     }
   }
   return { steps: out, incomplete }
+}
+
+/** Rows per read of a use-case run's steps: the gateway's own page (`max_rows`), so a full page means read on. */
+export const INNER_JOBS_PAGE = 1000
+
+/** A use-case run's inner job: its row, the run it is a step of, and whose it is. */
+interface UseCaseInnerJob {
+  readonly row: RunStepRow
+  readonly run: string
+  readonly owner: string
+}
+
+/**
+ * Every job of each use-case run's own inner execution (one read per owner and
+ * batch, owner-scoped). A read that fails is logged and leaves its runs
+ * `incomplete` (their figures unknown, never a lower number).
+ */
+async function useCaseInnerJobs(roots: readonly RunStepRoot[], incomplete: Set<string>): Promise<UseCaseInnerJob[]> {
+  const runOfExecution = new Map<string, RunStepRoot>()
+  for (const r of roots) if (r.innerExecutionId && !runOfExecution.has(r.innerExecutionId)) runOfExecution.set(r.innerExecutionId, r)
+  if (runOfExecution.size === 0) return []
+  const found: UseCaseInnerJob[] = []
+  const byOwner = new Map<string, string[]>()
+  for (const [execution, r] of runOfExecution) byOwner.set(r.owner, [...(byOwner.get(r.owner) ?? []), execution])
+  for (const [owner, executions] of byOwner) {
+    for (let i = 0; i < executions.length; i += IN_BATCH) {
+      const batch = executions.slice(i, i + IN_BATCH)
+      const failed = (why: string) => {
+        console.error(`[job-run-steps] could not read the steps of ${batch.length} use-case run(s): ${why}`)
+        for (const execution of batch) incomplete.add(runOfExecution.get(execution)!.id)
+      }
+      try {
+        // Page by page: the gateway returns at most a page of rows and never
+        // says it cut the rest, and a missed step would read as a lower charge.
+        for (let from = 0; ; from += INNER_JOBS_PAGE) {
+          // trash-read: a run's charge counts a step in the Trash until the purge.
+          const { data, error } = await supabase
+            .from("jobs")
+            .select("id, parent_job_id, usage_log_id, credits, user_id, workflow_execution_id")
+            .eq("user_id", owner)
+            .in("workflow_execution_id", batch)
+            .order("id", { ascending: true })
+            .range(from, from + INNER_JOBS_PAGE - 1)
+          if (error) {
+            failed(error.message)
+            break
+          }
+          const page = (data ?? []) as Array<RunStepRow & { workflow_execution_id?: string | null }>
+          for (const row of page) {
+            const run = row?.workflow_execution_id ? runOfExecution.get(row.workflow_execution_id) : undefined
+            // Defence in depth: the query is owner-scoped, and a step is its run's owner's.
+            if (!row?.id || !run || (row.user_id != null && row.user_id !== owner)) continue
+            const { workflow_execution_id: _execution, ...step } = row
+            found.push({ row: step, run: run.id, owner })
+          }
+          if (page.length < INNER_JOBS_PAGE) break
+        }
+      } catch (err) {
+        failed(err instanceof Error ? err.message : String(err))
+      }
+    }
+  }
+  return found
 }

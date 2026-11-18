@@ -14,6 +14,8 @@
  * - a run on several recordings or a Master audio: its cameras report;
  * - a failed run keeps what completed and names the failed step in the
  *   user's words. Pure.
+ * Its speakers (`speakers`) are added by usecaseWrapperOutput, read off the
+ * transcribe step as an episode's are, never off the render's renamed transcript.
  */
 import { runForwardedVideoLengthSec, type LayoutOutputMap, type RunOutputLengths, type StoredInlineGraph } from "@nodaro/render-rules"
 import { completedOutput, failedStepOf, isRecord, str, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"

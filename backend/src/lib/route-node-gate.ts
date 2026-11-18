@@ -12,6 +12,7 @@ import {
 import { isCapabilityHost } from "./surface-deny.js"
 import { runtimeSurfaceProfile } from "./surface-profile.js"
 import { castSwapSpelling } from "./video-remake-paths.js"
+import { packToolsNamed } from "./use-case/pack-price.js"
 
 /**
  * Which node a credit-guarded route RUNS — the name `creditGuard`
@@ -126,6 +127,8 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   "/v1/llm-suggest-description": "llm-chat",
   // A use-case node's fixed fee, for a client that plans and cuts its result itself (Edit with AI): the node named in the body.
   "/v1/use-case-fee": (body) => (typeof body.type === "string" ? [body.type] : []),
+  // A podcast pack runs the podcast tools it names (lib/use-case/pack-price.ts).
+  "/v1/podcast-pack": packToolsNamed,
   "/v1/prompt-helper/wizard": "llm-chat",
   // An entity's own steps: its sheet's images and motion, its caption, its
   // approval (with its optional caption), its LoRA training.
@@ -251,6 +254,7 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/recast/:id/plan",
   "/v1/cast-swap/face-mask",
   "/v1/studio/productions/:id/sequences/:sequenceId/takes/:takeId/units/:unitId/generate",
+  "/v1/replace-audio",
   "/v1/social-search",
   "/v1/speaker-frames",
   "/v1/speaker-view",

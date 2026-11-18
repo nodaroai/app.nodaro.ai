@@ -48,15 +48,7 @@ const box = (leftPct: number, from = 0, to = 359) => ({ fromFrame: from, toFrame
 const slotMark = (slot: string, leftPct: number): FaceMaskMark => ({ label: { slot }, ...box(leftPct) })
 const ERASED: FaceMaskMark = { label: "erased", ...box(0) }
 
-/** An optional person carries its original look, which publishing needs (these runs, not Full depth, never send it). */
-const person = (key: string, required: boolean): TrendSlot => ({
-  key,
-  kind: "person",
-  label: { en: key },
-  required,
-  roleName: `the ${key}`,
-  ...(required ? {} : { defaultImages: [`https://cdn.example.com/trends/t-1/${key}-look.png`] }),
-})
+const person = (key: string, required: boolean): TrendSlot => ({ key, kind: "person", label: { en: key }, required, roleName: `the ${key}` })
 
 /** A trend with no examples: a lead (required) and three optional people. */
 function data(marks: FaceMaskMark[], over: Partial<TrendVersionData> = {}): TrendVersionData {
@@ -367,6 +359,16 @@ describe("the run's pick (composeTrendRun)", () => {
     const withExample = { ...d, examples: [example] }
     const { body } = composeTrendRun(trend(withExample), fill())
     expect(body.storedFaceMask).toEqual({ url: "https://cdn.example.com/trends/t-1/mask.mp4", frames: 360 })
+  })
+
+  it("a marked person with an original look is never left empty: it fills them, and the run sends the base mask", () => {
+    const look = "https://cdn.example.com/trends/t-1/amy-look.png"
+    const withLook = { ...d, slots: d.slots.map((s) => (s.key === "amy" ? { ...s, defaultImages: [look] } : s)) }
+    const { body, display } = composeTrendRun(trend(withLook), fill("ben"))
+    expect(display.slots.find((s) => s.key === "amy")).toMatchObject({ images: [look], fromExample: false, fromDefault: true })
+    expect(body.storedFaceMask).toEqual({ url: "https://cdn.example.com/trends/t-1/mask.mp4", frames: 360 })
+    // Amy and ben both empty: only ben is left empty, so ben's own variant goes.
+    expect(composeTrendRun(trend(withLook), fill()).body.storedFaceMask).toMatchObject({ url: "https://cdn.example.com/trends/t-1/v1.mp4", required: true })
   })
 
   it("a trend whose chosen example has no pictures for a marked person sends that person's variant", () => {

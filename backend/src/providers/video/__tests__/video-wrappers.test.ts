@@ -894,9 +894,38 @@ describe("adjustVolume", () => {
     expect(ffargs()[ffargs().indexOf("-af") + 1]).toContain("afade=t=in:d=2")
   })
 
-  it("fadeOut > 0 adds afade=t=out:d=...", async () => {
+  // The fade-out ENDS at the end: it starts at the audio's length minus the
+  // fade (without `st` ffmpeg runs it from 0, fading the clip's first seconds).
+  it("fadeOut > 0 adds afade=t=out starting fadeOut before the audio's end", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("12.500000\n")
     await adjustVolume({ audioUrl: "https://r2/a.mp3", fadeOut: 3 })
-    expect(ffargs()[ffargs().indexOf("-af") + 1]).toContain("afade=t=out:d=3")
+    expect(ffargs()[ffargs().indexOf("-af") + 1]).toContain("afade=t=out:st=9.500:d=3")
+    expect(mocks.runFfprobe.mock.calls.at(-1)![0]).toEqual(expect.arrayContaining(["-select_streams", "a:0", "-show_entries", "stream=duration"]))
+  })
+
+  it("fadeOut reads the container's length when the audio stream states none", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("N/A\n")
+    mocks.getVideoDuration.mockResolvedValueOnce(8)
+    await adjustVolume({ videoUrl: "https://r2/v.mp4", fadeOut: 2 })
+    expect(ffargs()[ffargs().indexOf("-af") + 1]).toContain("afade=t=out:st=6.000:d=2")
+  })
+
+  it("a fade-out longer than the audio starts at 0", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("1.5\n")
+    await adjustVolume({ audioUrl: "https://r2/a.mp3", fadeOut: 4 })
+    expect(ffargs()[ffargs().indexOf("-af") + 1]).toContain("afade=t=out:st=0.000:d=4")
+  })
+
+  it("fails rather than fade from the start when the length cannot be read", async () => {
+    mocks.runFfprobe.mockRejectedValueOnce(new Error("ffprobe failed"))
+    mocks.getVideoDuration.mockResolvedValueOnce(Number.NaN)
+    await expect(adjustVolume({ audioUrl: "https://r2/a.mp3", fadeOut: 3 })).rejects.toThrow(/fade-out/)
+  })
+
+  it("reads no length when there is no fade-out", async () => {
+    mocks.runFfprobe.mockClear()
+    await adjustVolume({ audioUrl: "https://r2/a.mp3", fadeIn: 1 })
+    expect(mocks.runFfprobe).not.toHaveBeenCalled()
   })
 
   it("video mode: streams-copy video, applies audio filters", async () => {

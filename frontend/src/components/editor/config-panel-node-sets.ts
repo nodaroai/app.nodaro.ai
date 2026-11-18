@@ -21,6 +21,8 @@ export const GENERATE_BUTTON_TYPES = composeSet("GENERATE_BUTTON_TYPES", new Set
   "llm-chat", "web-scrape", "site-capture", "meta-ads-scrape", "instagram-scrape", "social-search", "video-analysis", "video-audit",
   "content-recipe", "content-ideas",
   "ugc-creator", "ugc-script", "ugc-clips", "ugc-clip", "ugc-cards", "ugc-finish-clips",
+  // Replace Audio: a Nodaro Cloud plugin's run, priced by its settings (replaceAudioNodeCreditId).
+  "replace-audio",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "pro-3d-render",
   "image-to-text", "qa-check", "transcribe", "describe-to-picker",

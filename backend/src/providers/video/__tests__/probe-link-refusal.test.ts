@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest"
 import { runFfprobe } from "../ffmpeg-utils.js"
-import { LINK_HOST_NOT_FOUND, LINK_NOT_PUBLIC, LINK_READ_TIMED_OUT, MEDIA_LINK_BAD_HOST, PROBE_UNAVAILABLE, probeLinkRefusal, probeRefusalStatus, ProbeSourceBlockedError } from "../probe-guard.js"
+import { LINK_HOST_NOT_FOUND, LINK_HOST_UNREACHABLE, LINK_NOT_PUBLIC, LINK_READ_TIMED_OUT, MEDIA_LINK_BAD_HOST, PROBE_UNAVAILABLE, probeLinkRefusal, probeRefusalStatus, ProbeSourceBlockedError } from "../probe-guard.js"
 
 const failureOf = (p: Promise<unknown>) => p.then(() => { throw new Error("expected a failure") }, (e: unknown) => e)
 
@@ -47,6 +47,48 @@ describe("a probe the server could not run", () => {
     // ffprobe ran: the file is the problem.
     expect(probeLinkRefusal(await failureOf(runFfprobe(["-v", "error", "/nonexistent/clip.mp4"])))).toBeUndefined()
     expect(probeLinkRefusal(Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT", syscall: "open" }))).toBeUndefined()
+  })
+})
+
+describe("a read that failed for now, though ffprobe ran (decided 2026-11-17)", () => {
+  const ffprobeSaid = (stderr: string) => Object.assign(new Error(`ffprobe failed: ${stderr}`), { killed: false, timedOut: false })
+  it("the server short of threads (the system's own words): the retryable probe_unavailable, never the file", () => {
+    expect(probeLinkRefusal(ffprobeSaid("[h264 @ 0x55] Error while opening decoder: Resource temporarily unavailable"))).toBe(PROBE_UNAVAILABLE)
+    // Kept as a refusal's cause, it reads the same.
+    expect(probeLinkRefusal(Object.assign(new Error("could not read"), { cause: ffprobeSaid("Resource temporarily unavailable") }))).toBe(PROBE_UNAVAILABLE)
+  })
+  it("words a link or a damaged file can carry are never read as the server's: a link naming EAGAIN, an allocation a damaged file failed", () => {
+    expect(probeLinkRefusal(ffprobeSaid("https://cdn.example.com/EAGAIN-ECONNRESET.mp4: Server returned 404 Not Found"))).toBeUndefined()
+    expect(probeLinkRefusal(ffprobeSaid("[mov,mp4 @ 0x55] Cannot allocate memory"))).toBeUndefined()
+  })
+  it("a refusal the guard gave for its own reason keeps it, whatever the read printed after it (a proxy's 502)", () => {
+    const refused = Object.assign(new ProbeSourceBlockedError("host", "probeVideoSource: blocked — DNS resolution failed for cdn.exmaple.com"), { cause: ffprobeSaid("Server returned 5XX Server Error reply") })
+    expect(probeLinkRefusal(refused)).toBe(LINK_HOST_NOT_FOUND)
+    const link = Object.assign(new ProbeSourceBlockedError("link", "probeVideoSource: blocked — a link two URL parsers read differently"), { cause: ffprobeSaid("Resource temporarily unavailable") })
+    expect(probeLinkRefusal(link)).toBeUndefined()
+  })
+  it("our own download out of time is the timeout; a dropped connection read off its code is the host's", () => {
+    expect(probeLinkRefusal(new Error("Download timeout: no response within 120 s"))).toBe(LINK_READ_TIMED_OUT)
+    expect(probeLinkRefusal(Object.assign(new Error("read failed"), { code: "ECONNRESET" }))).toBe(LINK_HOST_UNREACHABLE)
+  })
+  it("a host that failed for now (a 5xx, a dropped connection): the retryable source_unreachable", () => {
+    for (const said of [
+      "https://cdn.example.com/ep.mp4: Server returned 5XX Server Error reply",
+      "Connection reset by peer",
+      "Connection timed out",
+    ]) expect(probeLinkRefusal(ffprobeSaid(said)), said).toBe(LINK_HOST_UNREACHABLE)
+    expect(probeLinkRefusal(new Error("Failed to download: https://cdn.example.com/ep.mp4 (502)"))).toBe(LINK_HOST_UNREACHABLE)
+    expect(probeLinkRefusal(Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }))).toBe(LINK_HOST_UNREACHABLE)
+    expect(probeRefusalStatus(LINK_HOST_UNREACHABLE.code)).toBe(503)
+  })
+  it("what the file itself says keeps the route's 400: a bare number is never a status, a 4xx is the link's", () => {
+    for (const said of [
+      "Invalid data found when processing input",
+      "moov atom not found",
+      "Server returned 404 Not Found",
+      "Server returned 403 Forbidden (access denied)",
+      "[h264 @ 0x55] 544x960 frame=512 error 503",
+    ]) expect(probeLinkRefusal(ffprobeSaid(said)), said).toBeUndefined()
   })
 })
 

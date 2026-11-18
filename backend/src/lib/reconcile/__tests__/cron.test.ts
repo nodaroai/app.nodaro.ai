@@ -162,6 +162,10 @@ vi.mock("../hold-expiry.js", () => ({
 vi.mock("../cancelled-metered-holds.js", () => ({ sweepCancelledMeteredHolds: vi.fn(async () => {}) }))
 // Its own sweep is pinned in trend-variant-anchor-sweep.test.ts.
 vi.mock("../trend-variant-anchor-sweep.js", () => ({ sweepIdleTrendVariantAnchors: vi.fn(async () => {}) }))
+// The podcast pack sweep has its own tests (podcast-pack-sweep.test.ts); here only its place in the tick matters.
+vi.mock("../podcast-pack-sweep.js", () => ({
+  sweepPodcastPacks: vi.fn().mockResolvedValue({ scanned: 0, swept: 0, recovered: 0, notStale: 0, errors: 0 }),
+}))
 vi.mock("../use-case-wrapper-sweep.js", () => ({
   sweepUseCaseWrappers: vi.fn().mockResolvedValue({ scanned: 0, swept: 0, recovered: 0, notStale: 0, errors: 0 }),
 }))

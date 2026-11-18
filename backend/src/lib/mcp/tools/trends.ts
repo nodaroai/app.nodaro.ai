@@ -87,10 +87,10 @@ export const trendRunShape = {
   slots: z
     .record(z.string().regex(/^[a-z0-9_]{1,32}$/), slotInput)
     .describe(
-      "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes the chosen example's, or with none stays as in the original, except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look. " +
+      "By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). " +
         'Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot\'s chips.',
     ),
-  example: z.number().int().min(1).optional().describe("The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out (never in Full depth trends). Leave out if the trend has none."),
+  example: z.number().int().min(1).optional().describe("The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none."),
   details: z.string().max(1000).optional().describe("The user's own words; mention a slot as {slot:<key>}."),
   preview: z.boolean().optional().describe("true = a 4 s preview (when the trend's previewSec is 4)."),
   resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("One of get_trend's resolutions; default its first."),
@@ -100,7 +100,7 @@ export const trendRunShape = {
 
 type RunArgs = z.infer<z.ZodObject<typeof trendRunShape>> & { session_id?: string }
 
-/** The route's camelCase body; an empty images list is left out (the slot then takes the example's, or stays as in the original on a trend with none; a Full depth trend uses its default image for the role, else the original's look). */
+/** The route's camelCase body; an empty images list is left out (the slot is then filled as an empty optional slot is, compose.ts). */
 function runBody(args: RunArgs): Record<string, unknown> {
   const slots: Record<string, Record<string, unknown>> = {}
   for (const [key, { images, ...chips }] of Object.entries(args.slots)) {
@@ -193,6 +193,7 @@ function detailView(d: Rec): Rec {
       const hint = str(s.hint)
       const hintImage = str(s.hintImageUrl)
       const looks = strings(s.defaultImages).filter((u) => u.startsWith("https://"))
+      const fill = str(s.emptyFill)
       const given = isRec(s.defaults) ? s.defaults : {}
       const listed = strings(s.chips)
       const chips = CHIPS.filter((k) => listed.includes(k))
@@ -205,6 +206,7 @@ function detailView(d: Rec): Rec {
         ...(hint ? { hint } : {}),
         ...(hintImage ? { hintImageUrl: hintImage } : {}),
         ...(looks.length > 0 ? { defaultImages: looks } : {}),
+        ...(fill === "default" || fill === "example" || fill === "original" ? { emptyFill: fill } : {}),
         chips,
         ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
       }
@@ -343,7 +345,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       {
         title: "Get Trend",
         description:
-          "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, defaultImages (the role as in the original), chips the user may set, their defaults), " +
+          "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, defaultImages (the role as in the original), emptyFill (if left out: default, example or original), chips the user may set, their defaults), " +
           "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"nodaro-prism\" or \"nodaro-pulse\") with its engineName and resolutions (default first). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),

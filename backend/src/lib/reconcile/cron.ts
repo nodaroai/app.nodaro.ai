@@ -23,6 +23,7 @@ import { noteCounterNoticeWindows } from "./counter-notice-windows.js"
 import { markJobFailed } from "../job-failure.js"
 import { isUserQuietStopped } from "../access-blocks.js"
 import { sweepUseCaseWrappers } from "./use-case-wrapper-sweep.js"
+import { sweepPodcastPacks } from "./podcast-pack-sweep.js"
 import { sweepCancelledMeteredHolds } from "./cancelled-metered-holds.js"
 import { sweepSideLlmHolds } from "./side-llm-holds.js"
 import { laneColumnsAbsent, noteLaneColumnError, readBullEntry } from "../concurrency-lanes/columns.js"
@@ -280,6 +281,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   await sweepLaneQueue(result)
   await sweepStuckComponentWrappers(result)
   await sweepStuckUseCaseWrappers(result)
+  await sweepStuckPodcastPacks(result)
   await sweepStuckOrchestratorJobs(result)
   // A trend person mask's own job, idle for a day (it waits for the editor; trend-variant-anchor-sweep.ts).
   await sweepIdleTrendVariantAnchors(result)
@@ -725,6 +727,19 @@ export async function sweepStuckComponentWrappers(result: ReconcileResult): Prom
 /** Use-case wrappers (provider="use-case"): finalised from their inner run's
  *  end (lib/reconcile/use-case-wrapper-sweep.ts). Counts merge into the tick's;
  *  a sweep that throws must not abort the tick. */
+/** A podcast pack left `processing` (lib/reconcile/podcast-pack-sweep.ts): completed and charged when a tool started, else failed and refunded. */
+async function sweepStuckPodcastPacks(result: ReconcileResult): Promise<void> {
+  try {
+    const packs = await sweepPodcastPacks()
+    result.scanned += packs.scanned
+    result.swept += packs.swept
+    result.errors += packs.errors
+  } catch (err) {
+    console.error(`[reconcile/cron] podcast pack sweep failed:`, err)
+    result.errors++
+  }
+}
+
 async function sweepStuckUseCaseWrappers(result: ReconcileResult): Promise<void> {
   try {
     const useCase = await sweepUseCaseWrappers()

@@ -75,6 +75,7 @@ import {
 } from "@nodaro/shared/media"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { pricedAsId } from "../../lib/retired-price-id.js"
+import { COVERED_METADATA_KEY, coveredMarkOf, type CoveredMark } from "../../lib/covered-step.js"
 import { aiAvatarCreditIdOf, switchXQuoteCreditId } from "../../lib/probed-credit-ids.js"
 import { estimatedCaptionEngine } from "../../lib/add-captions-transcription.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
@@ -122,6 +123,7 @@ import { generateVideoProCapSec as generateVideoProCapSecOfEnv } from "../../lib
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
+import { replaceAudioNodeCreditId } from "@nodaro/render-rules"
 import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
@@ -492,6 +494,13 @@ export interface CreditCheckSurface {
   /** The run's video parameters, when it generates video: judged against the
    *  free-credit video limits (`free-video-limits.ts`) under free-tier semantics. */
   video?: FreeVideoRequest
+  /**
+   * A covered step (`lib/covered-step.ts`): a pack already paid for it, so it
+   * reserves and settles nothing. Only what refuses the MODEL is asked (an
+   * admin's disable, the tier and free-video limits) — never a balance, an
+   * allowance or a day's spend, which the pack's own charge was held to.
+   */
+  covered?: boolean
 }
 
 export interface CreditCheckResult {
@@ -2683,6 +2692,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // siblings (seeded at 1 by migration 430 — a ×10 re-denomination slip,
   // corrected by migration 439). Keyless; community works.
   "silence-detect": 10,
+  // Podcast pack (decided 2026-11-18): one rate per started 15 seconds of the
+  // original recording, every tool chosen in the pack included (its steps hold
+  // 0, lib/covered-step.ts). A pack of N units is quoted whole as
+  // `podcast-pack:per-15s:<N>u`. Migration 673.
+  "podcast-pack:per-15s": 20,
   // Audio Sync — measures 2–6 recordings' clock offsets (local ffmpeg decode +
   // in-process cross-correlation, no provider). Priced PER SOURCE ALIGNED to
   // the reference: `audio-sync:<n>src` = 10 × (n − 1) — 2 sources 10 … 6
@@ -2835,6 +2849,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // without them prices the same. Keep the two pairs equal.
   "cast-swap:per-second": 2,
   "cast-swap-full-quality:per-second": 4,
+  // Replace Audio (the cloud plugin): BASE credits per run, by its mode and
+  // whether its music is made from a prompt. Seeded by migration 675 and
+  // repeated here at the same values (the plugin's floors are these too), so
+  // its rows are not ghosts and a host without them prices the same.
+  "replace-audio": 150,
+  "replace-audio:prompt": 180,
+  "replace-audio:replace-all": 50,
+  "replace-audio:replace-all:prompt": 80,
   "generate-video-pro": 100,       // multi-segment stitch fee-base (flat, on top of per-second segment cost — see ee/billing/generate-video-pro-credits.ts)
   "edit-video-pro": 100,           // replace-span bridge fee-base (flat, on top of per-second ref-rate segment cost — see ee/billing/edit-video-pro-credits.ts)
   "dubbing": 80,
@@ -3376,6 +3398,11 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
 
   // Camera Switch: flat — one id whatever the request carries.
   "camera-switch": () => CAMERA_SWITCH_CREDIT_ID,
+
+  // Replace Audio (the Nodaro Cloud plugin): flat per mode and music source. The
+  // plugin registers the floors (staticCreditCosts) and prices the run it
+  // measures: a keep-speech run on a video with no sound is charged as replace-all.
+  "replace-audio": (data) => replaceAudioNodeCreditId(data),
 
   // Speaker Frames: one id whatever the request carries; the blocks are the
   // reserve's quantity (lib/speaker-frames-plan.ts), never the id.
@@ -4334,6 +4361,10 @@ export class CreditsService {
       }
     }
 
+    // A covered step costs this payer nothing: no balance, allowance or day's
+    // spend can refuse it (the pack that paid for it was held to them).
+    if (surface?.covered) return { allowed: true, required: 0, watermark }
+
     // Calculate total balance. In web-free mode the topup pool is excluded —
     // it never spends on a consumer surface.
     const { subscriptionCredits, topupCredits, totalBalance } = spendableBalance(profile, webFree)
@@ -4504,6 +4535,14 @@ export class CreditsService {
        * makes it idempotent per job (a replay returns the same hold).
        */
       sideHold?: { key?: string }
+      /**
+       * The pack that paid for this step (`lib/covered-step.ts`): it reserves
+       * 0 credits whatever its price, through the zero-cost branch, and its
+       * usage log records the pack and the price it would have had
+       * (`metadata.covered`), which every settle above the hold reads. Never
+       * with `oncePerJob` or `sideHold`.
+       */
+      covered?: string
     },
   ): Promise<ReserveResult> {
     // A blocked account reserves nothing, on any lane — FIRST, ahead of the
@@ -4610,8 +4649,10 @@ export class CreditsService {
     // workspace budget with no reserve-side authorization. The ENTITLEMENTS
     // stay personal-derived too (`personalWatermark`) — no override without
     // payment.
+    const covered = options?.covered
+    if (covered && (options?.oncePerJob || options?.sideHold)) throw new Error("A covered step holds nothing: it takes no job-once or side hold")
     if ((options?.oncePerJob || options?.sideHold) && pricing.creditCost <= 0) throw new Error("Job reservations require positive configured credits")
-    if (pricing.creditCost === 0) {
+    if (pricing.creditCost === 0 || covered) {
       const { data: usageLog } = await supabase
         .from("usage_logs")
         .insert({
@@ -4640,6 +4681,8 @@ export class CreditsService {
             // reservation that never happened. Zero credits were reserved
             // here; nothing can ever be reversed.
             ...(dep ? { payer: { kind: "deployment", account: dep.payerId, allowance_enforced: false } } : {}),
+            // A covered step: the pack that paid, and the step's own price (what the pack cost us).
+            ...(covered ? { [COVERED_METADATA_KEY]: { by: covered, credits: pricing.creditCost } satisfies CoveredMark } : {}),
           },
         })
         .select("id")
@@ -4927,6 +4970,19 @@ export class CreditsService {
     usageLogId: string,
     actualCredits?: number,
   ): Promise<CommitOutcome | undefined> {
+    // A covered step (lib/covered-step.ts) collects nothing over its 0 hold:
+    // its pack paid. The ONE place an overrun can be collected, so the ONE
+    // place the mark is read for it. A failed read leaves the row reserved
+    // and loud, as a failed RPC does — never a collect it may not make.
+    const { data: log, error: logError } = await supabase.from("usage_logs").select("metadata").eq("id", usageLogId).maybeSingle()
+    if (logError) {
+      console.error(`[credits] the metered settle could not read usage log ${usageLogId} — row left reserved for retry:`, logError.message)
+      return undefined
+    }
+    if (coveredMarkOf((log as { metadata?: unknown } | null)?.metadata)) {
+      await CreditsService.settleCommit(usageLogId, 0)
+      return { charged: 0, collectedOverHold: 0, shortfall: 0 }
+    }
     // billing-payer-ok: the RPC reads the payer from the usage_logs row (mig 551 → 351/382/434 branches) — this wrapper relays the log id; there is no TS fallback
     const { data, error } = await supabase.rpc("commit_credits_metered", {
       p_usage_log_id: usageLogId,

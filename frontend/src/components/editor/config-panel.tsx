@@ -218,6 +218,7 @@ import {
   CompositeConfig,
   RenderVideoConfig,
   MergeVideoAudioConfig,
+  ReplaceAudioConfig,
   CharacterConfig,
   FaceConfig,
   ObjectConfig,
@@ -519,6 +520,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />
     case "video-overlay": return <VideoOverlayConfig {...configProps} nodeId={selectedNodeId} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
+    case "replace-audio": return <ReplaceAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} nodeId={selectedNodeId} />
     case "resize-video": return <ResizeVideoConfig {...configProps} />
     case "social-media-format": return <SocialMediaFormatConfig {...configProps} />

@@ -42,3 +42,5 @@ export * from "../speaker-map-contract.js"
 export * from "../edit-plan-contract.js"
 // A person's review of an Edit Plan (`editedEdl`) and the one resolver that applies it.
 export * from "../edit-plan-review.js"
+// What a podcast use-case run reports on its job's output_data (clip spans, trailer moments, speakers).
+export * from "../use-case-output.js"

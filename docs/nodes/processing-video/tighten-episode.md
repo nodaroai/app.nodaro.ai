@@ -29,6 +29,18 @@ With more than one recording wired into `media`, the recordings are taken in the
 | Episode (`media`) | Video or audio | The tightened episode. **Episode audio** on an audio episode. It carries the episode's length, so a step priced by the length of what it is given (Trim, Loop, Combine Videos, Video SFX, Pitch & Tempo) is priced by it: see [Steps after the node](#steps-after-the-node). |
 | Edit (EDL) (`json`) | EDL | The edit plan the episode was cut from, with your review edits applied. Wire it into another render, for example a second [Apply EDL](./apply-edl.md) in another format. Wired into a text or prompt input, it lands there as its JSON text, in the editor as in a server run. It is JSON, not media: it does not connect to an input that takes only audio, video or images (wire the **Episode** there). |
 
+### The speakers, over the API
+
+A run started over the API (`POST /v1/tighten-episode`, the SDK's `edit.tightenEpisode`) lists the episode's speakers on the finished job's `output_data.speakers`, in the order they are first heard:
+
+- `label`: the speaker's label in the run's transcript, for example `speaker_0`. With [several cameras](#several-cameras), the speakers are listed in the same order as the cameras report (`output_data.cameras`).
+- `name`: the name the request gave this label. It is left out when the request gave none.
+- `talkMs`: how long the speaker talks across the whole recording, in milliseconds. This counts the recording as transcribed, not the tightened episode. Talk is counted from the transcript's words in runs: one speaker's words one after another, with no other speaker's word in between and no pause of 0.7 seconds or longer. A run lasts from its first word's start to its last word's end. When two people talk at once, both count, so the totals can add up to more than the recording.
+
+To name the speakers, send `speakerNames` with the request: the speaker label → the name to show (`{ "speaker_0": "Dana" }`, up to 80 characters a name, at most 32 speakers). The job keeps the names and returns them on `speakers[].name`, and a **Continue** or **Render final** of the run keeps them too. The run itself does not read them: the captions, the transcript and the edit are the same with or without names. A name is never guessed from what is said, so only the names you send are shown. A blank name is dropped, and a label nobody in the recording has is ignored. A request over those limits is refused (`400 validation_error`) before anything is charged.
+
+`speakers` is there when the transcript names speakers. It is optional, and a run that finished before it was added does not have it. The SDK types it as `UseCaseSpeaker[]` on `TightenEpisodeOutputData`, and the request field as `speakerNames`.
+
 ## Configuration
 
 | Setting | Options | Default | Notes |

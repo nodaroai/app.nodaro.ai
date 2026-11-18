@@ -10,10 +10,9 @@
  *   trend's pre prompt and face masking (top-level fields; the engine refuses
  *   either inside `display`);
  * - `display`: the public record of the run (English labels, the user's own
- *   pictures, the example's pictures for empty optional slots — none on a
- *   trend with no example, or for a slot the example has no pictures for,
- *   which then stays as in the original — the chips and the user's raw
- *   details), also carried in
+ *   pictures, what filled each empty optional slot (its original look or the
+ *   example's pictures, by the rule below; none leaves it as in the
+ *   original), the chips and the user's raw details), also carried in
  *   `body.trendRun.display`;
  * - `needs`: what the engine must support for this run.
  *
@@ -83,14 +82,25 @@
  * run (`sceneRoleNames`, applied by `withoutUnsupportedSceneDescription`,
  * run-helpers.ts, once the description is known to stay).
  *
- * An empty optional slot on a FULL DEPTH trend (`faceMasking.source`
- * `"full-depth"`) is never filled from an example (an example can look nothing
- * like the original): it takes the slot's `defaultImages` when it has them
- * (`fromDefault: true` on the display slot), else it is sent with no pictures,
- * so the engine keeps that role as in the clip. The run records `example: 0`
- * (none was used); an explicit `example` must still exist. Every other clip
- * preparation fills an empty optional slot from the example as before, and its
- * display slots carry no `fromDefault` key.
+ * An empty optional slot takes what `emptyFillOf` says (empty-fill.ts, the
+ * rule the trend's public page states as each slot's `emptyFill`; a slot sent
+ * with no pictures is kept by the engine as in the clip):
+ *  - on a FULL DEPTH trend (`faceMasking.source` `"full-depth"`) it is never
+ *    filled from an example (an example can look nothing like the original):
+ *    it takes the slot's original look (`defaultImages`) when it has one,
+ *    else no pictures; one that also hides its original sends no original
+ *    look either. The run records `example: 0` (none was used); an explicit
+ *    `example` must still exist;
+ *  - on a trend that hides its original (`hideOriginal`), whatever the slot's
+ *    kind, it takes the chosen example's pictures (none when that example has
+ *    none for it, or the trend has no example); its original look is never
+ *    sent, as its public page never shows it;
+ *  - on every other trend it takes its original look when it has one,
+ *    whatever its kind (with or without examples); else a person takes the
+ *    chosen example's pictures (none when that example has none for it, or the
+ *    trend has no example), and a place, product or pet none.
+ * A slot an original look filled says `fromDefault: true` (and `fromExample:
+ * false`) on the display slot; every other display slot has no such key.
  *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking, unless the trend
@@ -104,6 +114,11 @@
  * A Kling 4 trend that delivers Kling's own audio sends `pulseAudio: "generated"`
  * (the original audio, the default, sends no key); dropped for an engine that
  * does not declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
+ * A Kling 4 trend whose reference audio ("audio in") is off the default of its
+ * audio out at some output resolution sends `pulseReferenceAudio` as those
+ * resolutions' values (`{ "720p": { mode: "voice", semitones: 4 } }`; the
+ * default everywhere sends no key); dropped for an engine that does not declare
+ * it (`withoutUnsupportedPulseReferenceAudio`, run-helpers.ts).
  * A Prism trend whose reference audio is off the default (the full mix at +4)
  * at some output resolution sends `prismReferenceAudio` as those resolutions'
  * values, as stored (`{ "720p": "none" }`, `{ "720p": { mode: "full",
@@ -159,6 +174,7 @@ import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
 import { promptStyleOf, sendsSourceClipFirst, trendPromptWordingSent } from "./prompt-style.js"
+import { emptyFillOf, trendIsFullDepth } from "./empty-fill.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
@@ -169,6 +185,11 @@ import {
   type CastSwapPrismReferenceAudio,
   type CastSwapPrismReferenceAudioSent,
 } from "../../../lib/cast-swap-prism-reference-audio.js"
+import {
+  parseNodaroMotionPulseReferenceAudio,
+  pulseReferenceAudioNotDefault,
+  type CastSwapPulseReferenceAudio,
+} from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
 import type {
   CastSwapEngine,
@@ -223,14 +244,13 @@ export interface TrendRunDisplaySlot extends Chips {
   images: string[]
   /**
    * True when the slot was left empty and the example's pictures filled it.
-   * False with no pictures: left empty on a trend with no example, or the
-   * chosen example has no pictures for it, so it stays as in the original.
+   * False with no pictures: left empty and nothing filled it, so it stays as
+   * in the original.
    */
   fromExample: boolean
   /**
-   * Present (true) only when the slot was left empty on a Full depth trend
-   * and its default pictures filled it (`fromExample` is then false). Absent
-   * otherwise, so a run of any other trend records exactly what it did before.
+   * Present (true) only when the slot was left empty and its original look
+   * (`defaultImages`) filled it (`fromExample` is then false). Absent otherwise.
    */
   fromDefault?: true
 }
@@ -294,6 +314,13 @@ export interface TrendRunBody {
    * declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
    */
   pulseAudio?: "generated"
+  /**
+   * Only on Kling 4, and only the resolutions where the trend's reference
+   * audio is off the default of its audio out (absent = the default
+   * everywhere). Dropped for an engine that does not declare it
+   * (`withoutUnsupportedPulseReferenceAudio`, run-helpers.ts).
+   */
+  pulseReferenceAudio?: CastSwapPulseReferenceAudio
   /**
    * Only on Prism, and only when the trend's reference audio is off the
    * default (the full mix at +4) at some output resolution (absent = the
@@ -502,11 +529,9 @@ export function composeTrendRun(
   }
 
   // A trend may have no example (only its original). Leaving `example` out
-  // then means "no example": an empty optional slot is sent with no pictures,
-  // so the original's person stays (the engine keeps a role with none as in
-  // the clip), and the run records example 0. With examples, an empty
-  // optional slot takes the chosen example's pictures (Example 1 by default),
-  // or none (kept as in the clip) when that example has none for it.
+  // then means "no example" and the run records example 0. With examples,
+  // the chosen one (Example 1 by default) is recorded; what an empty optional
+  // slot takes from it is the rule in this file's header.
   const noExample = req.example === undefined && data.examples.length === 0
   const requested = noExample ? 0 : (req.example ?? 1)
   const exampleInRange = Number.isInteger(requested) && requested >= 1 && requested <= data.examples.length
@@ -515,9 +540,8 @@ export function composeTrendRun(
     throw new TrendRunError("example_out_of_range", `This trend has no example ${req.example}.`)
   }
   // Full depth never fills an empty slot from an example (an example can look nothing like the
-  // original): its default pictures, else none (kept as in the clip). So it records example 0.
-  const fullDepth = faceMaskingOn(data.faceMasking) && faceMaskingSourceOf(data.faceMasking) === "full-depth"
-  const example = fullDepth ? 0 : requested
+  // original): its original look, else none (kept as in the clip). So it records example 0.
+  const example = trendIsFullDepth(data) ? 0 : requested
 
   const slots: TrendRunDisplaySlot[] = []
   const roles: unknown[] = []
@@ -531,13 +555,15 @@ export function composeTrendRun(
       images = [...own]
     } else if (slot.required) {
       throw new TrendRunError("missing_slot", `"${pickText(slot.label, "en")}" needs a picture.`, slot.key)
-    } else if (fullDepth) {
-      images = [...(slot.defaultImages ?? [])]
-      fromDefault = images.length > 0
-    } else if (noExample) {
+    } else if (emptyFillOf(data, slot) === "default") {
+      // The rule (empty-fill.ts) is the one the trend's public page states for the slot.
+      images = [...slot.defaultImages!]
+      fromDefault = true
+    } else if (emptyFillOf(data, slot) === "original") {
+      // No pictures: the engine keeps that role as in the clip.
       images = []
     } else {
-      // Unreachable today (an out-of-range example is refused above, and no example is `noExample`):
+      // Unreachable today (`"example"` means the trend has examples, and an out-of-range one is refused above):
       // kept so the index below can never read past `examples`.
       if (!exampleInRange) throw new TrendRunError("example_out_of_range", `This trend has no example ${example}.`)
       const fill = data.examples[example - 1]!.slots
@@ -682,6 +708,7 @@ export function composeTrendRun(
   const parts = promptPartTexts(data.promptParts)
   const wording = trendPromptWordingSent(data)
   const prismAudio = prismReferenceAudioNotDefault(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
+  const pulseInAudio = pulseReferenceAudioNotDefault(parseNodaroMotionPulseReferenceAudio(data.pulseReferenceAudio), data.pulseAudio)
   // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
   const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
   const steps = normaliseSteps(data.steps)
@@ -714,6 +741,9 @@ export function composeTrendRun(
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
     ...(engine === "kling-4" && data.pulseAudio === "generated" ? { pulseAudio: "generated" as const } : {}),
+    // Kling 4's reference audio ("audio in"), per output resolution, where the trend's is off the default of its audio
+    // out (the default everywhere sends no key).
+    ...(engine === "kling-4" && pulseInAudio ? { pulseReferenceAudio: pulseInAudio } : {}),
     // Prism's reference audio, per output resolution, where the trend's is off the default (the full mix at +4;
     // the default everywhere sends no key). A plain id stored earlier reads as every resolution.
     ...(engine === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),

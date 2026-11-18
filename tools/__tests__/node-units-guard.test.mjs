@@ -88,7 +88,9 @@ test("G1: a node type is a unit or a legacy literal entry — never both; the le
  * raised.
  */
 export const BURN_DOWN_PINS = {
-  "tools/units/legacy-nodes.json": 221,
+  // 222, not 221: Replace Audio (replace-audio) is served by a private Cloud plugin's
+  // route, and no unit kind describes a node whose route the app does not own yet.
+  "tools/units/legacy-nodes.json": 222,
   "tools/test-select/registry-users-tests.json": 240,
   "tools/test-select/registry-users-product.json": 207,
 }

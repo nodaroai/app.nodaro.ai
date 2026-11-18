@@ -5,9 +5,11 @@
  * `make_clip_pack` → POST /v1/clip-pack, `continue_use_case` → POST
  * /v1/<the run's type>/continue, the type read from the run's own job row;
  * `estimate_use_case` → POST /v1/<type>/estimate, verbs-use-case-estimate.ts,
- * with each run verb's own input). CORE and ungated like `apply_edl`: the route
- * answers an install that cannot run it (unconnected, keyless) with its own
- * honest 503 before any charge. Its own module (the video verbs file is past
+ * with each run verb's own input; `make_podcast_pack` → POST /v1/podcast-pack,
+ * several of them on one recording for one price, verbs-use-case-pack.ts).
+ * CORE and ungated like `apply_edl`: the route answers an install that
+ * cannot run it (unconnected, keyless) with its own honest 503 before any
+ * charge. Its own module (the video verbs file is past
  * 3,000 lines); `registerVideoVerbs` calls it after its `workflows:execute`
  * gate, and the gate is checked here too.
  *
@@ -48,6 +50,7 @@ import {
   type UseCaseNodeType,
 } from "@nodaro/render-rules"
 import { hasCredits } from "../../config.js"
+import { isRetryableProbeRefusal } from "../../../providers/video/probe-guard.js"
 import { nodeOfferedTo } from "../tool-offer.js"
 import { mcpInject } from "../internal-request.js"
 import type { McpSession } from "../session.js"
@@ -62,6 +65,7 @@ import { RECORDINGS_SENTENCE, recordingsInputShape, recordingsPayload } from "./
 import { registerSpeakerLayout, SPEAKER_LAYOUT_INPUT } from "./verbs-use-case-speaker-layout.js"
 import { useCaseVerbInput, type UseCaseVerbInput } from "./verbs-use-case-input.js"
 import { registerEstimateUseCase } from "./verbs-use-case-estimate.js"
+import { registerPodcastPack } from "./verbs-use-case-pack.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 const tuple = (list: readonly string[]) => list as unknown as [string, ...string[]]
@@ -149,8 +153,11 @@ function refusalText(statusCode: number, body: string): string | null {
     return null
   }
   if (!code || !message) return null
-  // The use-case routes' 503s are their own words (no connection, no key, not
-  // available on this server yet) — never a raw upstream body.
+  // An input that could not be read FOR NOW (decided 2026-11-17): its message
+  // already says to run it again, as every measuring route's does.
+  if (statusCode === 503 && isRetryableProbeRefusal({ code })) return `Nodaro: ${message} [${code}]`
+  // The use-case routes' other 503s are their own words (no connection, no key,
+  // not available on this server yet) — never a raw upstream body.
   if (statusCode === 503) return `Nodaro cannot run this here (503 ${code}): ${message}`
   // The route's message states its figures in raw credits: a deployment in its
   // own terms is told the refusal without them (lib/mcp/amounts.ts).
@@ -242,6 +249,8 @@ export function registerUseCaseVerbs({ server, session, fastify }: RegisterOpts)
 
   // One quote for every offered node: its run verb's arguments, posted to its /estimate route.
   registerEstimateUseCase({ server, session, fastify }, named, INPUT_BY_BUILDER, refusalText)
+  // Several of them on one recording, one price: each tool's arguments are its run verb's own.
+  registerPodcastPack({ server, session, fastify }, named, INPUT_BY_BUILDER, refusalText)
 }
 
 /** tighten_episode's arguments and the body they make (shared with estimate_use_case). */

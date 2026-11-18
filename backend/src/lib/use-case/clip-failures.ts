@@ -44,8 +44,36 @@ export function clipStepRows(state: unknown, one: (out: Readonly<Record<string, 
   return { failed, rows: value ? [value] : [], stamps: [out] }
 }
 
-/** The rows a step started that came back with nothing (a row never started is `cancelled`). */
-const failedRows = (step: ClipStepRows): number => step.rows.filter((v, i) => !v && step.stamps[i]?.cancelled !== true).length
+/** Whether row `i` of a step failed: it started and came back with nothing (a row never started is `cancelled`). */
+const rowFailed = (step: ClipStepRows, i: number): boolean => !step.rows[i] && step.stamps[i]?.cancelled !== true
+
+/** The rows a step started that came back with nothing. */
+const failedRows = (step: ClipStepRows): number => step.rows.filter((_, i) => rowFailed(step, i)).length
+
+/**
+ * WHICH planned clips failed (decided 2026-11-17), by their clip keys, in plan
+ * order, each once — the same clips `clipPackFailedClips` counts. `plannedKeys`
+ * is the plan's clips' keys in plan order (undefined for a clip that has
+ * none). A step that failed outright failed them all. Camera Switch runs once
+ * per planned clip, so its row i is planned clip i; the render's rows are
+ * named by the clip key each was sent for (stamped on every row, a failed one
+ * too). A failed render row with no key names no clip (the count still has it).
+ */
+export function clipPackFailedClipKeys(input: {
+  readonly plannedKeys: ReadonlyArray<string | undefined>
+  readonly render: ClipStepRows
+  readonly switched?: ClipStepRows
+}): string[] {
+  const { plannedKeys, render, switched } = input
+  const failed = new Set<string>()
+  if (switched?.failed || render.failed) {
+    for (const k of plannedKeys) if (k) failed.add(k)
+  } else {
+    if (switched) switched.rows.forEach((_, i) => { const k = plannedKeys[i]; if (k && rowFailed(switched, i)) failed.add(k) })
+    render.rows.forEach((_, i) => { const k = str(render.stamps[i]?.clipKey); if (k && rowFailed(render, i)) failed.add(k) })
+  }
+  return [...new Set(plannedKeys.filter((k): k is string => !!k && failed.has(k)))]
+}
 
 /** How many of the plan's `planned` clips failed, and why when a step failed outright (see the module note). */
 export function clipPackFailedClips(input: {

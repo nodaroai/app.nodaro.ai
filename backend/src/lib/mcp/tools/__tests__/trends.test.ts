@@ -232,6 +232,14 @@ describe("get_trend", () => {
     expect(view.slots[1]!.defaultImages).toEqual(["https://cdn.example/partner-as-in-clip.png"])
   })
 
+  it("hands back an optional slot's emptyFill as the route says it, and drops an unknown value", async () => {
+    const withFill = { ...DETAIL, slots: [{ ...DETAIL.slots[0], emptyFill: "sometimes" }, { ...DETAIL.slots[1], emptyFill: "example" }] }
+    const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: withFill } } })
+    const view = (await callTool(serverWith(fastify), "get_trend", { slug: "dance-off" })).structuredContent as { slots: Array<Record<string, unknown>> }
+    expect(view.slots[0]).not.toHaveProperty("emptyFill")
+    expect(view.slots[1]!.emptyFill).toBe("example")
+  })
+
   it("hands back only the original's public fields", async () => {
     const leaky = { ...DETAIL, original: { ...DETAIL.original, sourceUrl: "https://cdn.example/source.mp4", jobId: "j-src" } }
     const { fastify } = stubFastify({ "GET /v1/trends/dance-off": { statusCode: 200, body: { data: leaky } } })
@@ -472,14 +480,18 @@ describe("trend verbs — what the descriptions promise", () => {
     return JSON.stringify(t)
   }
 
-  it("only an OPTIONAL slot left out takes the example's pictures", async () => {
+  it("says what an OPTIONAL slot left out takes: its original look, else a person the example's", async () => {
     for (const tool of ["estimate_trend", "run_trend"]) {
       const text = await schemaText(tool)
-      expect(text, tool).toContain("an optional slot left out takes the chosen example's")
-      // …except in Full depth, which never uses an example to fill a slot.
-      expect(text, tool).toContain("except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look")
+      expect(text, tool).toContain("an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original")
+      // Full depth never uses an example; a trend that hides its original always does.
+      expect(text, tool).toContain("Full depth trends never use an example; one that hides its original always does")
       expect(text, tool).not.toContain("one left out takes the example's")
     }
+  })
+
+  it("says get_trend names a slot's emptyFill", async () => {
+    expect(await schemaText("get_trend")).toContain("emptyFill (if left out: default, example or original)")
   })
 
   it("says session_id is accepted but not applied yet", async () => {

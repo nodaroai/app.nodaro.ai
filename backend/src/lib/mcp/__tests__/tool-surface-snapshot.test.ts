@@ -1584,6 +1584,11 @@ const OMNIHUMAN_2_0_LIP_SYNC_BYTES = 144
 // that many bytes.
 const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
 
+// replace_audio (Nodaro Cloud: a client of the cloud plugin's POST /v1/replace-audio): the
+// tool's own definition as tools/list serves it (cloud, all scopes) — the video, one music source
+// (a file or a prompt), the mode and three levers. No price figure in it.
+const REPLACE_AUDIO_TOOL_BYTES = 2_724
+
 // RAISED 2026-11-11 by Nodaro Image Upscale on edit_image (the model in its `model` enum and its
 // one line in the description, and `upscale_factor`'s 8 with which model takes which factors),
 // and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
@@ -1777,7 +1782,25 @@ const COMPETITOR_SEARCH_TERMS_BYTES = 291
 // `defaultImages` (an optional slot's pictures of that role as in the original). No tool was
 // added, so the fixture does NOT move. Measured by this suite on top of the competitor search
 // terms: 45 B over what it measured before; the list keeps its 28 B of headroom.
-const TRENDS_ORIGINAL_LOOK_BYTES = 45
+// LOWERED by the empty optional slot rule: estimate_trend's and run_trend's `slots` and `example`
+// descriptions say what an optional slot left out takes in fewer words, 21 B less in each (42 B in
+// all). Measured by this suite: 549_022 B in all; the budget comes down by the same 42 B, so the
+// list keeps the headroom it had before.
+// RAISED again by a slot's `emptyFill`: `get_trend` names it (what a run takes for an optional slot
+// left out: default, example or original), 55 B more. No tool was added, so the membership fixture
+// does NOT move. Measured by this suite: 549_077 B in all; the list keeps the same headroom.
+const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55
+// RAISED 2026-11-18 by one NEW tool, `make_podcast_pack` (verbs-use-case-pack.ts: the MCP face of
+// POST /v1/podcast-pack — several podcast tools on one recording for one price — and, with
+// `estimate_only`, of its quote), and nothing else. Registered beside the use-case verbs and gated
+// the same way, so BOTH the cloud/all AND the community/all fixtures move by exactly that name. Each
+// tool's arguments are an open record checked at call time against its run verb's own shape (the
+// five shapes nested would be past the per-tool budget); the recording fields are the shared ones.
+// Measured by this suite on the same tree with and without it: 552_188 total − 548_722 = 3_466 B,
+// far under the per-tool budget; the list keeps its 28 B of headroom. Its `pack_job_id` (start, free
+// and once, a tool its pack paid for that did not start) then added 552_508 − 552_188 = 320 B: 3_786 B,
+// the same 28 B of headroom.
+const PODCAST_PACK_TOOL_BYTES = 3_786
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -1978,6 +2001,7 @@ export const TOOL_WIRE_BUDGET = {
     OMNIHUMAN_2_0_LIP_SYNC_BYTES +
     PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
+    REPLACE_AUDIO_TOOL_BYTES +
     NODARO_IMAGE_UPSCALE_BYTES +
     LLM_REGISTRY_2026_11_IDS_BYTES +
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
@@ -2002,7 +2026,8 @@ export const TOOL_WIRE_BUDGET = {
     GENERATE_TEXT_MEDIA_WORDING_BYTES +
     SUNO_SPEECH_COVER_ID_STEM_WAV_BYTES +
     COMPETITOR_SEARCH_TERMS_BYTES +
-    TRENDS_ORIGINAL_LOOK_BYTES,
+    TRENDS_ORIGINAL_LOOK_BYTES +
+    PODCAST_PACK_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

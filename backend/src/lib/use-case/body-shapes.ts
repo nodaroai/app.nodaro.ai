@@ -13,8 +13,25 @@
  */
 import { z } from "zod"
 import { USE_CASE_MAX_RECORDINGS } from "@nodaro/render-rules"
-import { EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
+import { CAMERA_SWITCH_NAME_MAX, EDIT_PLAN_TIERS } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../url-validator.js"
+
+/** The most speakers a request may name (a recording's diarization never comes close). */
+export const USE_CASE_SPEAKER_NAMES_MAX = 32
+
+/**
+ * The speakers' names (decided 2026-11-17): transcript speaker label → the
+ * name to show for them. The job keeps them (`input_data.speakerNames`) and
+ * reports them back on `speakers[].name`; the run itself never reads them —
+ * nothing is renamed in the captions, the transcript or the edit. A name is
+ * trimmed and a blank one dropped (`cleanSpeakerNames`).
+ */
+export const usecaseSpeakerNamesShape = {
+  speakerNames: z
+    .record(z.string().min(1).max(200), z.string().max(CAMERA_SWITCH_NAME_MAX))
+    .refine((names) => Object.keys(names).length <= USE_CASE_SPEAKER_NAMES_MAX, { message: `at most ${USE_CASE_SPEAKER_NAMES_MAX} speakers` })
+    .optional(),
+} satisfies z.ZodRawShape
 
 /** Honoured on the internal lane only (the backend engine); ignored from any other caller. Then the usual job stamps. */
 export const usecaseLaneShape = {

@@ -105,6 +105,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Music2,
+  Music4,
   Smile,
   Sparkles,
   StickyNote,
@@ -1540,6 +1541,15 @@ const LEGACY_NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Volume2 className="h-4 w-4" />,
     category: "Processing",
     group: "video-sound",
+  },
+  {
+    // Nodaro Cloud: its run is served by a private plugin (CLOUD_ONLY_NODE_TYPES).
+    type: "replace-audio",
+    label: "Replace Audio",
+    icon: <Music4 className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-sound",
+    keywords: ["replace audio", "replace music", "swap music", "new music", "background music", "soundtrack", "keep speech", "duck", "ducking", "music bed", "change audio"],
   },
   {
     type: "trim-audio",

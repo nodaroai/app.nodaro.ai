@@ -151,6 +151,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Image Overlay": "שכבת תמונה",
   "Video Overlay": "שכבה על וידאו",
   "Merge Video & Audio": "מיזוג וידאו ואודיו",
+  "Replace Audio": "החלפת אודיו",
   "Add Captions": "הוספת כתוביות",
   "Resize Video": "שינוי גודל וידאו",
   "Social Media Format": "פורמט לרשתות חברתיות",

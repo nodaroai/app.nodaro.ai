@@ -116,7 +116,7 @@ async function jobFor(d: ClaimedDelivery): Promise<Record<string, unknown> | nul
   const usageLogId = (row.usage_log_id as string | null | undefined) ?? null
   // The job as a run: its steps (child jobs) and settled side holds included.
   const credits = await runCreditsFor([
-    { id: d.jobId, usage_log_id: usageLogId, credits: typeof row.credits === "number" ? row.credits : null },
+    { id: d.jobId, usage_log_id: usageLogId, credits: typeof row.credits === "number" ? row.credits : null, input_data: row.input_data },
   ], d.userId)
   return {
     ...(sanitizeJobForPublic(fillJobRenderQuality(row) as unknown as JobRecord, false) as unknown as Record<string, unknown>),

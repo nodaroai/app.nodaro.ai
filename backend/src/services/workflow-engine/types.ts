@@ -705,6 +705,12 @@ export interface ResolvedInputs {
    * UGC Cards' `notes` stays `clipNotes`.
    */
   ugc?: Record<string, unknown>
+  /**
+   * Replace Audio's inputs, by the edge's target handle: the video wired into
+   * `in` (`video`) and every source wired into `music` — an audio or a video
+   * whose sound is used — in wire order (`music`; one is a run, more is refused).
+   */
+  replaceAudio?: { readonly video?: string; readonly music: readonly string[] }
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 
@@ -1056,6 +1062,13 @@ export interface OrchestratorContext {
    *  resolves downstream (credits layer / RPC self-gate); free users and
    *  subscribers are unaffected, so the flag threads unconditionally. */
   webFreeMode?: boolean
+  /**
+   * The podcast pack that paid for this run (lib/covered-step.ts): every step
+   * reserves and settles 0 credits. Read at pickup from the use-case run's
+   * wrapper job (`input_data._coveredBy`), never from the queue payload, so a
+   * run picked up again is still covered. Absent for every other run.
+   */
+  coveredBy?: string
   /** Copied from the job at pickup — see WorkflowExecutionJob.cheapLanesOnly.
    *  Inline sub-workflows share this context; a component's inner run is a
    *  new job, so the component dispatch sends it across the HTTP hop. */

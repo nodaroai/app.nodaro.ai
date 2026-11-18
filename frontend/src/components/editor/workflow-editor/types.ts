@@ -800,6 +800,8 @@ export const EXECUTABLE_TYPES = composeSet("EXECUTABLE_TYPES", new Set([
   "image-overlay",
   "video-overlay",
   "merge-video-audio",
+  // Replace Audio — a cloud plugin node (job + poll, like merge-video-audio).
+  "replace-audio",
   "still-to-video",
   "slideshow",
   "trim-audio",

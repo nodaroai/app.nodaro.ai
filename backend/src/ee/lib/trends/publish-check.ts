@@ -16,11 +16,7 @@
  * so these block only when making it failed), at least one
  * required slot, pictures for every slot in every example (a trend may have
  * no example at all: it shows only its original; one that hides its original,
- * `hideOriginal`, needs at least one: `hide_original_needs_example`), an
- * original look (`defaultImages`: a picture of that person as the clip shows
- * them) on every optional person, whatever the clip preparation
- * (`optional_person_default_missing`, with their keys; a trend that hides its
- * original is exempt), valid data
+ * `hideOriginal`, needs at least one: `hide_original_needs_example`), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
  * the user's details (`promptBudget`), the 4 s preview's own too when the
  * trend offers one (`promptModesOf`), with each role name a preview can send
@@ -81,6 +77,11 @@
  * version (the published version of a trend that is published, on Prism)
  * already holds at that resolution is not changed by this publish, so it raises
  * no need (`livePrismReferenceAudio`); an id always does.
+ * A Kling 4 trend whose reference audio ("audio in") is off the default of its
+ * audio out at some resolution (`pulseReferenceAudioNotDefault`) needs an
+ * engine that declares it (`castSwap.pulseReferenceAudio`, need
+ * `PULSE_REFERENCE_AUDIO_NEED`): one from before it is never sent the key and
+ * sends the default.
  * A trend that sets its preparation steps (`steps`, anything but `{}`:
  * `stepsSet`) likewise needs an engine that declares them (`castSwap.steps`,
  * need `STEPS_NEED`): an older engine's body schema strips the key silently,
@@ -141,6 +142,11 @@ import {
   type PrismReferenceAudioRequirement,
 } from "../../../lib/cast-swap-prism-reference-audio.js"
 import {
+  engineTakesPulseReferenceAudioIn,
+  parseNodaroMotionPulseReferenceAudio,
+  pulseReferenceAudioNotDefault,
+} from "../../../lib/cast-swap-pulse-reference-audio.js"
+import {
   depthColormapSent,
   depthModelSizeSent,
   engineDrawsDepthColormap,
@@ -199,7 +205,6 @@ export interface PublishBlocker {
     | "preview_clip_out_of_date"
     | "no_required_slot"
     | "example_slots_incomplete"
-    | "optional_person_default_missing"
     | "invalid_data"
     | "prompt_budget"
     | "engine_unknown"
@@ -219,7 +224,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "pulseReferenceAudio", "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -227,13 +232,12 @@ export interface PublishBlocker {
   example?: number
   /**
    * The required slot keys an example has no pictures for, for `example_slots_incomplete`; the
-   * people a person variant leaves empty, for `face_mask_variant_*`; the optional people with no
-   * original look, for `optional_person_default_missing`.
+   * people a person variant leaves empty, for `face_mask_variant_*`.
    */
   slots?: string[]
   /**
-   * What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images`, `hide_original_needs_example`,
-   * `optional_person_default_missing` and the face mask codes.
+   * What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images`, `hide_original_needs_example`
+   * and the face mask codes.
    */
   message?: string
   /**
@@ -326,6 +330,9 @@ function prismReferenceAudioRequirementOfNeed(need: string): PrismReferenceAudio
   return PRISM_REFERENCE_AUDIO_REQUIREMENTS.find((r) => r !== "pitch" && r === mode) ?? null
 }
 
+/** The need of a Kling 4 trend whose reference audio is off the default of its audio out (`pulseReferenceAudio`, `castSwap.pulseReferenceAudio`). */
+export const PULSE_REFERENCE_AUDIO_NEED = "pulseReferenceAudio"
+
 /** The need of a trend that sets its preparation steps (`steps`, `castSwap.steps`). */
 export const STEPS_NEED = "steps"
 
@@ -381,6 +388,8 @@ function needsOf(data: TrendVersionData, livePrismReferenceAudio?: unknown): str
     ...depthModelSizeNeeds(data),
     // Prism's reference audio beyond what every engine takes: an engine from before it is sent the full audio.
     ...prismReferenceAudioModeNeeds(data, livePrismReferenceAudio),
+    // Pulse's reference audio off the default of its audio out: an engine from before it is never sent the key.
+    ...(pulseReferenceAudioSet(data) ? [PULSE_REFERENCE_AUDIO_NEED] : []),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
     // ("Body from the clip" Off, or On with no prompt, is safe everywhere: not a need.)
     ...(stepsSet(stepsThatNeedTheEngine(data.steps)) ? [STEPS_NEED] : []),
@@ -428,6 +437,12 @@ function prismReferenceAudioModeNeeds(data: TrendVersionData, livePrismReference
     .map(prismReferenceAudioNeedOf)
 }
 
+/** Whether a Kling 4 draft's reference audio is off the default of its audio out at some resolution (what its runs send). */
+export function pulseReferenceAudioSet(data: Pick<TrendVersionData, "engine" | "pulseAudio" | "pulseReferenceAudio">): boolean {
+  if (engineOf(data) !== "kling-4") return false
+  return pulseReferenceAudioNotDefault(parseNodaroMotionPulseReferenceAudio(data.pulseReferenceAudio), data.pulseAudio) !== undefined
+}
+
 function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
   const cs = env.supports.castSwap
   if (!cs) return ["castSwap"]
@@ -454,6 +469,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)
     if (need === STYLE_REFS_NEED) return !engineTakesStyleRefs(cs)
     if (need === PROMPT_WORDING_NEED) return !engineTakesPromptWording(cs, "new")
+    if (need === PULSE_REFERENCE_AUDIO_NEED) return !engineTakesPulseReferenceAudioIn(cs)
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)
@@ -501,15 +517,6 @@ export function publishBlockers(
       .map((s) => s.key)
     if (missing.length > 0) out.push({ code: "example_slots_incomplete", example: i + 1, slots: missing })
   })
-  const bare = optionalPeopleWithoutOriginalLook(data)
-  if (bare.length > 0) {
-    const names = bare.map((s) => `"${s.label.en || s.key}"`).join(", ")
-    out.push({
-      code: "optional_person_default_missing",
-      slots: bare.map((s) => s.key),
-      message: `Every optional person needs an original look (a picture of them as they are in the clip): add one for ${names}, or make the slot required.`,
-    })
-  }
   const parsed = trendVersionDataSchema.safeParse(data)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
@@ -604,15 +611,6 @@ export function publishBlockers(
     for (const need of missingNeeds(row, needs)) out.push({ code: "engine_unsupported", env, need })
   }
   return out
-}
-
-/**
- * The optional people with no original look (`defaultImages`), in slot order:
- * none on a trend that hides its original (it keeps filling from Example 1).
- */
-export function optionalPeopleWithoutOriginalLook(data: Pick<TrendVersionData, "slots" | "hideOriginal">): TrendVersionData["slots"] {
-  if (data.hideOriginal === true) return []
-  return data.slots.filter((s) => s.kind === "person" && !s.required && (s.defaultImages?.length ?? 0) === 0)
 }
 
 /**

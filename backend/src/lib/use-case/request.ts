@@ -24,8 +24,10 @@ import {
   type UseCaseSettings,
   type UseCaseSources,
 } from "@nodaro/render-rules"
-import { probeMediaDuration, probeMediaStreams } from "../../providers/video/ffmpeg-utils.js"
+import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
+import { isRetryableProbeRefusal, probeLinkRefusal } from "../../providers/video/probe-guard.js"
 import { ClipMeasureError, type MeasuredClip } from "../clip-measure.js"
+import { readUseCaseStreams, type StreamsRead, type TransientProbeRefusal } from "./probe-streams.js"
 import type { UseCaseBody } from "./bodies.js"
 import { usecaseSourcesOf } from "./sources.js"
 import { camerasShape } from "./body-shapes.js"
@@ -68,10 +70,13 @@ export type PreparedUseCase =
  * dispatch reads (`measureClip(url)`, the same cache key, so one download per
  * recording per hour), behind the start limit. Null is "not measured": no
  * shape refusal here — the estimate quotes, the run's Speaker View refuses.
- * A `ClipMeasureError` is the recording's refusal (`media_unreadable`).
+ * A `ClipMeasureError` is the recording's refusal (`media_unreadable`), or a
+ * retryable 503 when what failed was not the file's own (its `cause`).
  */
 export interface PrepareUseCaseOptions {
   readonly measureWholeClip: (url: string) => Promise<MeasuredClip | null>
+  /** The pause before an input's second read (probe-streams.ts); the default outside tests. */
+  readonly probeRetryDelayMs?: number
 }
 
 /**
@@ -94,6 +99,13 @@ export function usecaseWholeClipUrl(
 
 const refuse = (code: string, message: string): PreparedUseCase => ({ ok: false, status: 400, code, message })
 
+/** A read that failed for a reason that is not the input's own (decided 2026-11-17): 503, run it again. */
+const unavailable = (refusal: TransientProbeRefusal): PreparedUseCase => ({ ok: false, status: 503, code: refusal.code, message: refusal.message })
+
+/** The streams an input carries, or null when it could not be read; a read that failed for now is its 503 refusal. */
+const streamsOrRefusal = (read: StreamsRead): { readonly hasVideo: boolean; readonly hasAudio: boolean } | null | PreparedUseCase =>
+  read.kind === "transient" ? unavailable(read.refusal) : read.kind === "read" ? read.streams : null
+
 /** An intro card no longer than this (a still image's frame) is not a video. */
 export const INTRO_CARD_MIN_SEC = 0.1
 
@@ -115,14 +127,15 @@ export function usecaseReviewerPresent(
 /** A recording's place in a refusal: its 1-based position when the run has several, else none (one recording is refused exactly as it always was). */
 const recordingName = (position: number | null): string => (position === null ? "The recording" : `Recording ${position}`)
 
-/** What one recording carries, or its refusal. */
-async function probeRecordingStreams(url: string, position: number | null): Promise<{ hasVideo: boolean } | PreparedUseCase> {
-  let streams: { hasVideo: boolean; hasAudio: boolean }
-  try {
-    streams = await probeMediaStreams(url)
-  } catch {
-    return refuse("media_unreadable", `${recordingName(position)} could not be read. Check that the link opens and is a video or audio file.`)
-  }
+/**
+ * What one recording carries, or its refusal: `media_unreadable` only when
+ * the recording itself could not be read (after a second try where the first
+ * failure was not the file's own), a retryable 503 when the read failed for now.
+ */
+async function probeRecordingStreams(url: string, position: number | null, retryDelayMs: number | undefined): Promise<{ hasVideo: boolean } | PreparedUseCase> {
+  const streams = streamsOrRefusal(await readUseCaseStreams(url, recordingName(position), retryDelayMs))
+  if (streams !== null && isRefusal(streams)) return streams
+  if (streams === null) return refuse("media_unreadable", `${recordingName(position)} could not be read. Check that the link opens and is a video or audio file.`)
   if (!streams.hasAudio) return refuse("media_has_no_audio", `${recordingName(position)} has no sound to transcribe.`)
   return { hasVideo: streams.hasVideo }
 }
@@ -164,7 +177,7 @@ export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody, o
   }
   const kinds: UseCaseMediaKind[] = []
   for (const [i, url] of body.mediaUrls.entries()) {
-    const probed = await probeRecordingStreams(url, several ? i + 1 : null)
+    const probed = await probeRecordingStreams(url, several ? i + 1 : null, opts.probeRetryDelayMs)
     if (isRefusal(probed)) return probed
     kinds.push(probed.hasVideo ? "video" : "audio")
   }
@@ -181,7 +194,8 @@ export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody, o
   }
   let masterAudio: UseCaseMediaSource | undefined
   if (masterAudioUrl) {
-    const master = await probeMediaStreams(masterAudioUrl).catch(() => null)
+    const master = streamsOrRefusal(await readUseCaseStreams(masterAudioUrl, "The master audio", opts.probeRetryDelayMs))
+    if (master !== null && isRefusal(master)) return master
     if (!master?.hasAudio) return refuse("master_audio_unreadable", "The master audio could not be read as audio.")
     // Its length is the plan's clock: Edit Plan is quoted and held on it.
     const durationSec = await lengthOf(masterAudioUrl)
@@ -189,15 +203,26 @@ export async function prepareUseCase(type: UseCaseNodeType, body: UseCaseBody, o
     masterAudio = { url: masterAudioUrl, kind: "audio", ...(durationSec !== undefined ? { durationSec } : {}) }
   }
   if (body.musicUrl) {
-    const music = await probeMediaStreams(body.musicUrl).catch(() => null)
+    const music = streamsOrRefusal(await readUseCaseStreams(body.musicUrl, "The music", opts.probeRetryDelayMs))
+    if (music !== null && isRefusal(music)) return music
     if (!music?.hasAudio) return refuse("music_has_no_audio", "The music file could not be read as audio.")
   }
   let introCardSec: number | undefined
   if (body.introCardUrl) {
     // A video that plays (decided 2026-10-14: no still image). A still probes
     // as a video stream, so its length tells it apart: none, or a frame's.
-    const card = await probeMediaStreams(body.introCardUrl).catch(() => null)
-    const cardSec = card?.hasVideo ? await probeMediaDuration(body.introCardUrl).catch(() => undefined) : undefined
+    const card = streamsOrRefusal(await readUseCaseStreams(body.introCardUrl, "The intro card", opts.probeRetryDelayMs))
+    if (card !== null && isRefusal(card)) return card
+    let cardSec: number | undefined
+    if (card?.hasVideo) {
+      try {
+        cardSec = await probeMediaDuration(body.introCardUrl)
+      } catch (err) {
+        // Its length read failing for now is a retryable 503 (decided 2026-11-17), never "not a video".
+        const forNow = probeLinkRefusal(err)
+        if (forNow && isRetryableProbeRefusal(forNow)) return unavailable({ code: forNow.code, message: `The intro card: ${forNow.message}` })
+      }
+    }
     if (!card?.hasVideo || !(typeof cardSec === "number" && Number.isFinite(cardSec) && cardSec > INTRO_CARD_MIN_SEC)) {
       return refuse("intro_card_unreadable", "The intro card could not be read as a video.")
     }
@@ -250,7 +275,12 @@ async function wholeClipRefusal(
   try {
     clip = await measure(url)
   } catch (err) {
-    if (err instanceof ClipMeasureError) return refuse("media_unreadable", err.message)
+    if (err instanceof ClipMeasureError) {
+      // A download or a read that failed for now (its cause, decided 2026-11-17): a retryable 503, never "the file".
+      const forNow = probeLinkRefusal(err.cause)
+      if (forNow && isRetryableProbeRefusal(forNow)) return unavailable({ code: forNow.code, message: `The recording: ${forNow.message}` })
+      return refuse("media_unreadable", err.message)
+    }
     throw err
   }
   // Not measured (an estimate on an address not yet measured): the run refuses it.

@@ -126,7 +126,7 @@ export default function AdminMotionPriceCheck() {
       <header className="space-y-1">
         {/* Focusable by script only: where a run's drawer gives the focus back when there is no list to return to. */}
         <h1 data-page-heading tabIndex={-1} className={`text-xl font-bold ${HEADING_FOCUS}`}>
-          Motion price check
+          Video Remake price check
         </h1>
         <p className="text-sm text-muted-foreground">
           Each Video Remake run: what it held, what it took, what that is worth, and what we paid for its steps.
