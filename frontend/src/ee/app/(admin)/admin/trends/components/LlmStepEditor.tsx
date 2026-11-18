@@ -6,7 +6,9 @@
 // - Model: the admin LLM models list (enabled ones only). While the step is
 //   shown a picture (the clip, the role pictures or the references), only the
 //   models that take images are offered; while it is shown the clip, a model
-//   that reads video on the LLM nodes only (Gemini 4 Hydrogen) is not. A saved model that is no longer
+//   that reads video on the LLM nodes only (Gemini 4 Hydrogen) is not — but for
+//   the shot list (`allowLlmNodeOnlyMedia`, decided 2026-11-18), whose one call
+//   goes through the LLM Chat route those models read video on. A saved model that is no longer
 //   offered stays shown as it is, marked, so the screen never says otherwise
 //   than what is saved; the check names it.
 // - Instructions: empty = the engine's default, shown as the placeholder and
@@ -17,13 +19,14 @@
 //
 // The defaults' texts are the engine's, read at run time: none is written here.
 
-import { useId } from "react"
+import { useId, type ReactNode } from "react"
 import { getLlmModalityCaps, readsMediaOnLlmNodesOnly } from "@nodaro/shared/llm-models"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import type { CastSwapStepsProblem, LlmInput, LlmStepSetting } from "@/lib/api"
 import type { AdminLlmModel } from "@/ee/hooks/queries/use-admin-queries"
+import { SHOT_LIST_LLM_NODE_MEDIA_MODELS } from "../shot-list"
 
 /** The longest text a step may be set to write, and the shortest. */
 export const LLM_MAX_CHARS = { min: 200, max: 20_000 } as const
@@ -56,12 +59,16 @@ export function seesPictures(inputs: readonly LlmInput[]): boolean {
  * The models offered for a step: enabled ones, only those that take images
  * while it sees a picture, and — while it is shown the clip — none whose video
  * reading is for the LLM nodes only (`readsMediaOnLlmNodesOnly`: Gemini 4
- * Hydrogen), which the save refuses for a clip step (`model_cannot_read_clip`).
+ * Hydrogen), which the save refuses for a clip step (`model_cannot_read_clip`),
+ * unless `allowLlmNodeOnlyMedia` and the model is one the shot list may use by
+ * name (`SHOT_LIST_LLM_NODE_MEDIA_MODELS`; the server's `modelReadsShotListClip`,
+ * decided 2026-11-18).
  */
-export function offeredModels(models: readonly AdminLlmModel[], inputs: readonly LlmInput[]): AdminLlmModel[] {
+export function offeredModels(models: readonly AdminLlmModel[], inputs: readonly LlmInput[], allowLlmNodeOnlyMedia = false): AdminLlmModel[] {
   const pictures = seesPictures(inputs)
   const clip = inputs.includes("clip")
-  return models.filter((m) => m.isEnabled && (!pictures || getLlmModalityCaps(m.id).image) && !(clip && readsMediaOnLlmNodesOnly(m.id)))
+  const shotListMay = (id: string) => allowLlmNodeOnlyMedia && SHOT_LIST_LLM_NODE_MEDIA_MODELS.includes(id)
+  return models.filter((m) => m.isEnabled && (!pictures || getLlmModalityCaps(m.id).image) && !(clip && readsMediaOnLlmNodesOnly(m.id) && !shotListMay(m.id)))
 }
 
 interface Props {
@@ -79,12 +86,21 @@ interface Props {
   /** The check's problems for this step, their paths relative to it ("model", "inputs", …). */
   readonly problems?: readonly CastSwapStepsProblem[]
   readonly disabled?: boolean
+  /** Offer a model that reads video on the LLM nodes only while the step is shown the clip (the shot list's step). */
+  readonly allowLlmNodeOnlyMedia?: boolean
+  /**
+   * With `allowLlmNodeOnlyMedia`: the environments whose platform cannot take such a model yet (the server holds the
+   * save, 422). While any: each such model is listed disabled, with a short note (one already saved stays chosen).
+   */
+  readonly llmNodeOnlyMediaHeldIn?: readonly string[]
+  /** A control shown beside the model picker (the shot list's "Speech in the script"); left out: the model alone. */
+  readonly besideModel?: ReactNode
 }
 
 /** The problems whose relative path starts with `field`. */
 const at = (problems: readonly CastSwapStepsProblem[], field: string) => problems.filter((p) => p.path === field || p.path.startsWith(`${field}.`))
 
-export function LlmStepEditor({ value, onChange, defaults, models, showInputs, lengthNote, problems = [], disabled }: Props) {
+export function LlmStepEditor({ value, onChange, defaults, models, showInputs, lengthNote, problems = [], disabled, allowLlmNodeOnlyMedia = false, llmNodeOnlyMediaHeldIn = [], besideModel }: Props) {
   const id = useId()
   const current: LlmStepSetting = value ?? seedLlm(defaults)
   const inputs = showInputs ? current.inputs : LABELLER_INPUTS
@@ -95,7 +111,10 @@ export function LlmStepEditor({ value, onChange, defaults, models, showInputs, l
     if (next.instructions === undefined || next.instructions.trim() === "") delete next.instructions
     onChange(next)
   }
-  const offered = offeredModels(models ?? [], inputs)
+  const offered = offeredModels(models ?? [], inputs, allowLlmNodeOnlyMedia)
+  // A model only the shot list may use, while an environment's platform cannot take it: listed, disabled.
+  const held = (id: string) => llmNodeOnlyMediaHeldIn.length > 0 && inputs.includes("clip") && readsMediaOnLlmNodesOnly(id) && id !== current.model
+  const heldShown = offered.some((m) => held(m.id))
   // A saved model is marked as not offered only once the list is in (never while it loads).
   const unlisted = !offered.some((m) => m.id === current.model)
   const marked = unlisted && models !== undefined
@@ -103,8 +122,7 @@ export function LlmStepEditor({ value, onChange, defaults, models, showInputs, l
   const known = new Set(["model", "instructions", "inputs", "maxChars"])
   const rest = problems.filter((p) => !known.has(p.path.split(".")[0] ?? ""))
 
-  return (
-    <div className="flex min-w-0 flex-col gap-3 text-sm">
+  const modelPicker = (
       <div className="flex flex-col gap-1 sm:w-1/2 sm:pr-1.5">
         <label htmlFor={`${id}-model`} className="font-medium">
           Model
@@ -118,15 +136,32 @@ export function LlmStepEditor({ value, onChange, defaults, models, showInputs, l
         >
           {unlisted && <option value={current.model}>{marked ? `${current.model} (not offered)` : current.model}</option>}
           {offered.map((m) => (
-            <option key={m.id} value={m.id}>
+            <option key={m.id} value={m.id} disabled={held(m.id)}>
               {m.displayName}
             </option>
           ))}
         </select>
         {models === undefined && <span className="text-xs text-muted-foreground">Loading the models…</span>}
+        {heldShown && (
+          <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+            {offered.filter((m) => held(m.id)).map((m) => m.displayName).join(", ")}: not available yet in {llmNodeOnlyMediaHeldIn.join(", ")}.
+          </span>
+        )}
         {seesPictures(inputs) && <span className="text-xs text-muted-foreground">Only models that take pictures are offered: this step is shown pictures.</span>}
         <Problems list={at(problems, "model")} />
       </div>
+  )
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3 text-sm">
+      {besideModel ? (
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
+          {modelPicker}
+          <div className="flex min-w-0 flex-col gap-1 sm:w-1/2 sm:pl-1.5">{besideModel}</div>
+        </div>
+      ) : (
+        modelPicker
+      )}
 
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center justify-between gap-2">

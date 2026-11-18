@@ -5,9 +5,11 @@ vi.mock("@nodaro/shared/llm-models", async (importOriginal) => {
   const real = await importOriginal<typeof import("@nodaro/shared/llm-models")>()
   return {
     ...real,
-    LLM_MODEL_IDS: [...real.LLM_MODEL_IDS, "text-only-test-model"],
+    LLM_MODEL_IDS: [...real.LLM_MODEL_IDS, "text-only-test-model", "node-only-test-model"],
     getLlmModalityCaps: (id: string | undefined) =>
-      id === "text-only-test-model" ? { image: false, video: false, audio: false } : real.getLlmModalityCaps(id),
+      id === "text-only-test-model" ? { image: false, video: false, audio: false } : id === "node-only-test-model" ? { image: true, video: true, audio: true } : real.getLlmModalityCaps(id),
+    // A model a later change might add to LLM_NODE_ONLY_MEDIA_MODELS: never the shot list's until it is named.
+    readsMediaOnLlmNodesOnly: (id: string | undefined) => id === "node-only-test-model" || real.readsMediaOnLlmNodesOnly(id),
   }
 })
 
@@ -16,6 +18,7 @@ import {
   castSwapStepsSchema,
   engineTakesClipBodySheet,
   engineTakesShotList,
+  engineTakesShotListSpeech,
   engineTakesSteps,
   engineTakesStyleRefs,
   loadedEngineTakesClipBodySheet,
@@ -24,6 +27,10 @@ import {
   normaliseSteps,
   sceneStepKeyOf,
   shotListNeedsEngine,
+  shotListSpeechKey,
+  shotListSpeechSet,
+  shotListOnlyClipModelSet,
+  SHOT_LIST_LLM_NODE_MEDIA_MODELS,
   SHEET_LAYOUTS,
   SKIP_REASONS,
   SKIPPABLE_STEPS,
@@ -36,6 +43,7 @@ import {
   STYLE_REFS_PROMPT_MAX,
   withStepsFor,
   type CastSwapSteps,
+  type LlmStepSetting,
   type SheetRules,
 } from "../cast-swap-steps.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
@@ -407,5 +415,123 @@ describe("styleRefs (Style the role pictures)", () => {
     const sent = JSON.stringify(withStepsFor({ a: 1, steps: before }, ALL))
     expect(sent).toBe(JSON.stringify({ a: 1, steps: before }))
     expect(sent).toBe(JSON.stringify(withStepsFor({ a: 1, steps: before }, { steps: true, clipBodySheet: true, shotList: true })))
+  })
+})
+
+// The shot list's speech (decided 2026-11-18): each style's `speech` "off" | "who" | "words"; "off" is never stored and
+// never sent; an engine without `castSwap.shotListSpeech` is sent the shot list without the key.
+describe("shotList speech", () => {
+  const SPEECH = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: [], trendRun: true, steps: true, shotList: true, shotListSpeech: true } as const
+
+  it("each style takes off, who and words in both schemas; anything else is refused", () => {
+    for (const speech of ["off", "who", "words"]) {
+      const steps = { shotList: { precise: { mode: "on", speech }, flex: { mode: "on", speech } } }
+      expect(codesOf(castSwapStepsSchema, steps)).toEqual([])
+      expect(codesOf(castSwapStepsSaveSchema, steps)).toEqual([])
+    }
+    expect(codesOf(castSwapStepsSchema, { shotList: { flex: { mode: "on", speech: "lips" } } })).toEqual(["invalid_value"])
+  })
+
+  it('"off" is never stored: a style keeps everything else; who and words are kept as set', () => {
+    expect(normaliseSteps({ shotList: { flex: { mode: "on", speech: "off" } } })).toEqual({ shotList: { flex: { mode: "on" } } })
+    expect(normaliseSteps({ shotList: { precise: { mode: "on", llm: llm(), speech: "off" } } } as CastSwapSteps)).toEqual({ shotList: { precise: { mode: "on", llm: llm() } } })
+    expect(normaliseSteps({ shotList: { flex: { mode: "on", speech: "words" } } })).toEqual({ shotList: { flex: { mode: "on", speech: "words" } } })
+  })
+
+  it("asks for speech only with who or words, and then needs an engine that runs the shot list", () => {
+    expect(shotListSpeechSet({ flex: { mode: "on", speech: "who" } })).toBe(true)
+    expect(shotListSpeechSet({ precise: { mode: "on", speech: "words" } })).toBe(true)
+    expect(shotListSpeechSet({ flex: { mode: "on", speech: "off" } })).toBe(false)
+    expect(shotListSpeechSet(undefined)).toBe(false)
+    expect(shotListNeedsEngine({ flex: { mode: "on", speech: "who" } })).toBe(true)
+    expect(shotListNeedsEngine({ flex: { mode: "on", speech: "off" } })).toBe(false)
+    expect(stepsThatNeedTheEngine({ shotList: { flex: { mode: "on", speech: "off" } } })).toBeUndefined()
+  })
+
+  it("an engine takes it only with steps, the shot list and shotListSpeech", () => {
+    expect(engineTakesShotListSpeech(SPEECH)).toBe(true)
+    expect(engineTakesShotListSpeech({ ...SPEECH, shotListSpeech: undefined })).toBe(false)
+    expect(engineTakesShotListSpeech({ ...SPEECH, shotList: undefined })).toBe(false)
+    expect(engineTakesShotListSpeech(undefined)).toBe(false)
+  })
+
+  it("sent to an engine without shotListSpeech without the key, the rest of the shot list kept; to one with it as set", () => {
+    const steps = { shotList: { precise: { mode: "on", llm: llm(), speech: "who" }, flex: { mode: "on", speech: "words" } } } as CastSwapSteps
+    expect(stepsForEngine(steps, { ...SPEECH, shotListSpeech: undefined })).toEqual({ shotList: { precise: { mode: "on", llm: llm() }, flex: { mode: "on" } } })
+    expect(stepsForEngine(steps, SPEECH)).toEqual(steps)
+    expect(withStepsFor({ steps }, { ...SPEECH, shotListSpeech: undefined }).steps).toEqual({ shotList: { precise: { mode: "on", llm: llm() }, flex: { mode: "on" } } })
+    // An "off" is never sent, whatever the engine.
+    expect(stepsForEngine({ shotList: { flex: { mode: "on", speech: "off" } } }, SPEECH)).toEqual({ shotList: { flex: { mode: "on" } } })
+  })
+})
+
+// The other mouths (decided 2026-11-18): `speechMouth` "spoken" (the default, never stored) | "all" | "none", stored and
+// sent only beside speech, under speech's own capability.
+describe("shotList speech mouths", () => {
+  const SPEECH = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: [], trendRun: true, steps: true, shotList: true, shotListSpeech: true } as const
+
+  it("takes spoken, all and none in both schemas; anything else is refused", () => {
+    for (const speechMouth of ["spoken", "all", "none"]) {
+      expect(codesOf(castSwapStepsSaveSchema, { shotList: { flex: { mode: "on", speech: "who", speechMouth } } })).toEqual([])
+    }
+    expect(codesOf(castSwapStepsSchema, { shotList: { flex: { mode: "on", speech: "who", speechMouth: "closed" } } })).toEqual(["invalid_value"])
+  })
+
+  it("a style turned off has no speech: never stored, never asked for (decided 2026-11-18)", () => {
+    expect(normaliseSteps({ shotList: { precise: { mode: "off", speech: "who", speechMouth: "all" } } })).toEqual({ shotList: { precise: { mode: "off" } } })
+    expect(shotListSpeechSet({ precise: { mode: "off", speech: "who" } })).toBe(false)
+    expect(shotListNeedsEngine({ precise: { mode: "off", speech: "words" } })).toBe(false)
+    expect(shotListSpeechKey({ precise: { mode: "off", speech: "words" } })).toBe("")
+  })
+
+  it("stored only with speech on and off its default", () => {
+    expect(normaliseSteps({ shotList: { flex: { mode: "on", speech: "who", speechMouth: "none" } } })).toEqual({ shotList: { flex: { mode: "on", speech: "who", speechMouth: "none" } } })
+    expect(normaliseSteps({ shotList: { flex: { mode: "on", speech: "who", speechMouth: "spoken" } } })).toEqual({ shotList: { flex: { mode: "on", speech: "who" } } })
+    expect(normaliseSteps({ shotList: { flex: { mode: "on", speech: "off", speechMouth: "all" } } })).toEqual({ shotList: { flex: { mode: "on" } } })
+    expect(normaliseSteps({ shotList: { flex: { mode: "on", speechMouth: "all" } } })).toEqual({ shotList: { flex: { mode: "on" } } })
+    expect(shotListSpeechSet({ flex: { mode: "on", speechMouth: "all" } })).toBe(false)
+  })
+
+  it("sent with speech to an engine that takes it; taken out with speech for one that does not", () => {
+    const steps = { shotList: { flex: { mode: "on", speech: "words", speechMouth: "all" } } } as CastSwapSteps
+    expect(stepsForEngine(steps, SPEECH)).toEqual(steps)
+    expect(stepsForEngine(steps, { ...SPEECH, shotListSpeech: undefined })).toEqual({ shotList: { flex: { mode: "on" } } })
+  })
+
+  it("the speech key compares what each style means", () => {
+    expect(shotListSpeechKey(undefined)).toBe("")
+    expect(shotListSpeechKey({ flex: { mode: "on", speech: "off", speechMouth: "none" } })).toBe("")
+    expect(shotListSpeechKey({ flex: { mode: "on", speech: "who", speechMouth: "spoken" } })).toBe(shotListSpeechKey({ flex: { mode: "on", speech: "who" } }))
+    expect(shotListSpeechKey({ flex: { mode: "on", speech: "who", speechMouth: "none" } })).not.toBe(shotListSpeechKey({ flex: { mode: "on", speech: "who" } }))
+    expect(shotListSpeechKey({ precise: { mode: "on", speech: "who" } })).not.toBe(shotListSpeechKey({ flex: { mode: "on", speech: "who" } }))
+  })
+})
+
+// The shot list's model (decided 2026-11-18): Gemini 3.8 Flash, Gemini 4 Carbon and Gemini 4 Hydrogen. Hydrogen reads
+// video on the LLM nodes only, and the shot list is one call through the LLM Chat route: allowed there, and only there.
+describe("the shot list's model", () => {
+  it("takes Gemini 3.8 Flash, Gemini 4 Carbon and Gemini 4 Hydrogen shown the clip, on either style", () => {
+    for (const model of ["gemini-3.8-flash", "gemini-4-carbon", "gemini-4-hydrogen"]) {
+      for (const style of ["precise", "flex"]) {
+        expect(codesOf(castSwapStepsSaveSchema, { shotList: { [style]: { mode: "on", llm: llm({ model, inputs: ["clip", "rolePhotos"] }) } } }), `${style} ${model}`).toEqual([])
+      }
+    }
+  })
+
+  it("only the models named for the shot list: another LLM-node-only model is refused there (decided 2026-11-18)", () => {
+    expect(SHOT_LIST_LLM_NODE_MEDIA_MODELS).toEqual(["gemini-4-hydrogen"])
+    expect(codesOf(castSwapStepsSaveSchema, { shotList: { flex: { mode: "on", llm: llm({ model: "node-only-test-model", inputs: ["clip"] }) } } })).toEqual(["model_cannot_read_clip"])
+    expect(shotListOnlyClipModelSet({ flex: { mode: "on", llm: llm({ model: "gemini-4-hydrogen", inputs: ["clip"] }) as LlmStepSetting } })).toBe(true)
+    expect(shotListOnlyClipModelSet({ flex: { mode: "on", llm: llm({ model: "gemini-4-hydrogen", inputs: ["rolePhotos"] }) as LlmStepSetting } })).toBe(false)
+    expect(shotListOnlyClipModelSet({ flex: { mode: "on", llm: llm({ model: "gemini-4-carbon", inputs: ["clip"] }) as LlmStepSetting } })).toBe(false)
+  })
+
+  it("Hydrogen stays refused for every other clip step", () => {
+    expect(codesOf(castSwapStepsSaveSchema, { sceneDescription: { mode: "llm", llm: llm({ model: "gemini-4-hydrogen" }) } })).toEqual(["model_cannot_read_clip"])
+    expect(codesOf(castSwapStepsSaveSchema, { enginePrompt: { mode: "llm", llm: llm({ model: "gemini-4-hydrogen" }) } })).toEqual(["model_cannot_read_clip"])
+  })
+
+  it("a model that cannot read the clip is still refused for the shot list", () => {
+    expect(codesOf(castSwapStepsSaveSchema, { shotList: { flex: { mode: "on", llm: llm({ model: "claude-sonnet-5" }) } } })).toEqual(["model_cannot_read_clip"])
   })
 })

@@ -18,7 +18,11 @@
 //    engine also declares `castSwap.clipBodySheet`.
 // 5. Shot list (ShotListStep.tsx): per style — Precise off / on, Flex always
 //    on — and each one's LLM; anything but the defaults only once every
-//    environment's engine also declares `castSwap.shotList`.
+//    environment's engine also declares `castSwap.shotList`. Each style's
+//    "Speech in the script" (and, with it on, "Other mouths") beside its model
+//    picker, offered once every environment's engine and platform take it.
+//    `llmNodeOnlyMedia` (Admin → Video Remake alone) offers the shot list a
+//    model that reads video on the LLM nodes only (Gemini 4 Hydrogen).
 // 6. Style the role pictures (StyleRefsStep.tsx): for runs with an art style,
 //    each role's picture redrawn in that style first. Off until turned on
 //    (always saved as picked), its Send and image instruction; On only once
@@ -57,6 +61,7 @@ import { useAdminLlmModels, type AdminLlmModel } from "@/ee/hooks/queries/use-ad
 import {
   environmentsThatCannotTakeClipBody,
   environmentsThatCannotTakeShotList,
+  environmentsThatCannotTakeShotListSpeech,
   environmentsThatCannotTakeSteps,
   environmentsThatCannotTakeStyleRefs,
   environmentsThatTakeClipBody,
@@ -64,7 +69,7 @@ import {
 import { fullDepthSceneDescribes } from "@nodaro/render-rules"
 import { ClipBodyStep, clipBodyDefaultMode, clipBodyNeedsEngine } from "./ClipBodyStep"
 import { normaliseShotList, shotListNeedsEngine } from "../shot-list"
-import { ShotListStep } from "./ShotListStep"
+import { ShotListStep, type ShotListSpeechOffer } from "./ShotListStep"
 import { StyleRefsStep, styleRefsNeedsEngine } from "./StyleRefsStep"
 import { LABELLER_INPUTS, LlmStepEditor, Problems } from "./LlmStepEditor"
 import { SheetRulesTable } from "./SheetRulesTable"
@@ -125,11 +130,13 @@ interface Props {
   readonly source?: AdminTrendFaceMaskingSource
   /** Full depth's scene source; the scene description applies to one written in words ("description", "description-and-original"). */
   readonly scene?: AdminTrendFullDepthScene
+  /** Offer the shot list a model that reads video on the LLM nodes only (Admin → Video Remake alone; a trend's steps refuse it). */
+  readonly llmNodeOnlyMedia?: boolean
 }
 
 const NOT_CRITICAL = "Not critical — skipped if it fails"
 
-export function StepsEditor({ value, onChange, envs, engine, source, scene }: Props) {
+export function StepsEditor({ value, onChange, envs, engine, source, scene, llmNodeOnlyMedia = false }: Props) {
   const missing = environmentsThatCannotTakeSteps(envs)
   const offered = missing !== undefined && missing.length === 0
   const defaultsQuery = useQuery({
@@ -198,6 +205,8 @@ export function StepsEditor({ value, onChange, envs, engine, source, scene }: Pr
         clipBodyHas={environmentsThatTakeClipBody(envs)}
         shotListMissing={environmentsThatCannotTakeShotList(envs)}
         styleRefsMissing={environmentsThatCannotTakeStyleRefs(envs)}
+        speech={{ missing: environmentsThatCannotTakeShotListSpeech(envs) }}
+        llmNodeOnlyMedia={llmNodeOnlyMedia}
       />
     </div>
   )
@@ -222,6 +231,8 @@ function Sections({
   clipBodyHas,
   shotListMissing,
   styleRefsMissing,
+  speech,
+  llmNodeOnlyMedia,
 }: {
   readonly value: CastSwapSteps | undefined
   readonly onChange: (next: CastSwapSteps | undefined) => void
@@ -237,6 +248,10 @@ function Sections({
   readonly shotListMissing: readonly string[] | undefined
   /** The environments whose engine cannot take Style the role pictures (unknown while loading). */
   readonly styleRefsMissing: readonly string[] | undefined
+  /** The shot list's "Speech in the script": which environments cannot take it yet. */
+  readonly speech: ShotListSpeechOffer
+  /** The shot list may be offered a model that reads video on the LLM nodes only (Admin → Video Remake). */
+  readonly llmNodeOnlyMedia: boolean
 }) {
   const id = useId()
   const disabled = !defaults
@@ -371,6 +386,8 @@ function Sections({
           offered={!disabled && shotListMissing !== undefined && shotListMissing.length === 0 && !!defaults?.defaults.shotList}
           notYetIn={shotListMissing}
           problems={shotListProblems}
+          speech={speech}
+          allowLlmNodeOnlyMedia={llmNodeOnlyMedia}
           onChange={(shotList) => set({ shotList })}
         />
       </Section>

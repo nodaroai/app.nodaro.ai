@@ -79,6 +79,12 @@
  * never held, and every other draft write only carries the draft's own value
  * forward (nodaro-motion-prism-reference-audio-modes.ts).
  *
+ * Likewise the shot list's speech and its mouths (`steps.shotList.<style>.speech`
+ * / `.speechMouth`, decided 2026-11-18): a draft save that changes them to ones
+ * that ask for speech is 422 then 409 (`shotListSpeechTrendRefusal`), and a
+ * publish that changes them from the live version is 422 while any platform
+ * does not take them (its engine by the publish checks, `SHOT_LIST_SPEECH_NEED`).
+ *
  * Likewise Pulse's reference audio ("audio in", decided 2026-11-18), which an
  * older platform's strict schema refuses outright: a draft is saved with it
  * only on Kling 4 and only the resolutions off the default of its own audio
@@ -103,6 +109,8 @@ import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, withFreshPlatform }
 import { faceMeshMinFaceHeightCarried, platformHoldOfFaceMeshMinFaceHeight } from "../lib/nodaro-motion-face-mesh.js"
 import { prismReferenceAudioPlatformHold, prismReferenceAudioRefusalOf } from "../lib/nodaro-motion-prism-reference-audio-modes.js"
 import { pulseReferenceAudioPlatformHold, pulseReferenceAudioRefusalOf } from "../lib/nodaro-motion-pulse-reference-audio-holds.js"
+import { platformHoldOfShotListSpeech, shotListSpeechTrendRefusal } from "../lib/nodaro-motion-steps-gate.js"
+import { shotListSpeechKey, shotListSpeechSet } from "../../lib/cast-swap-steps.js"
 import { parseNodaroMotionPulseReferenceAudio, pulseReferenceAudioChangesToOffDefault } from "../../lib/cast-swap-pulse-reference-audio.js"
 import {
   prismReferenceAudioByResolutionOf,
@@ -682,9 +690,13 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         parseNodaroMotionPulseReferenceAudio(loaded.draft.pulseReferenceAudio),
         loaded.draft.pulseAudio,
       )
+      // Whether this save changes the shot list's speech (or its mouths) to one that asks for speech (decided
+      // 2026-11-18): the draft's own left as it is, or turned Off, is never held.
+      const speechChanged =
+        shotListSpeechSet(valid.data.steps?.shotList) && shotListSpeechKey(valid.data.steps?.shotList) !== shotListSpeechKey(loaded.draft.steps?.shotList)
       // Read only when the draft needs them for a hold (once, for all); a failed read is a 500, never a save.
       const environments =
-        audioRequirements.length > 0 || pulseInChanged || faceMeshMinFaceHeightCarried(valid.data.faceMasking) ? await listEngineEnvironments() : undefined
+        audioRequirements.length > 0 || pulseInChanged || speechChanged || faceMeshMinFaceHeightCarried(valid.data.faceMasking) ? await listEngineEnvironments() : undefined
       // Full depth's smallest face with mesh lines, held while any environment's platform does not take it: trends are
       // in the database every environment shares, and an older platform keys the stored clip without it (its runs
       // refused).
@@ -698,6 +710,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // never sent it.
       const pulseInRefusal = pulseInChanged && environments ? pulseReferenceAudioRefusalOf("trend", environments) : null
       if (pulseInRefusal) return reply.status(pulseInRefusal.status).send({ error: pulseInRefusal.error })
+      // The shot list's speech likewise: an older platform's strict schema refuses the keys (and with them the draft),
+      // and an older engine is sent the shot list without them.
+      const speechRefusal = speechChanged && environments ? shotListSpeechTrendRefusal(valid.data.steps, loaded.draft.steps, environments) : null
+      if (speechRefusal) return reply.status(speechRefusal.status).send({ error: speechRefusal.error })
       // The preview's input clip, cut (again) when the source, the window or the face mask moved. A cut that
       // fails never loses the save: the draft is saved as it is (its clip missing or stale, which blocks
       // publish — the blocker carries the reason — but not the admin's other edits), and the answer says why.
@@ -995,6 +1011,18 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         )
         const pulseInHeld = changed ? pulseReferenceAudioPlatformHold("publish", await listEngineEnvironments()) : null
         if (pulseInHeld) return reply.status(422).send({ error: pulseInHeld })
+      }
+      // The shot list's speech likewise, where this publish changes it from the live version (the published version of
+      // a trend that is published); its engine is the publish checks' (`SHOT_LIST_SPEECH_NEED`).
+      if (shotListSpeechSet(loaded.draft.steps?.shotList)) {
+        let live: TrendVersionData | null = null
+        if (trend.status === "published" && trend.publishedVersion !== null) {
+          live = trend.publishedVersion === trend.draftVersion ? loaded.draft : await getVersion(trend.id, trend.publishedVersion)
+        }
+        if (shotListSpeechKey(loaded.draft.steps?.shotList) !== shotListSpeechKey(live?.steps?.shotList)) {
+          const speechHeld = platformHoldOfShotListSpeech([loaded.draft.steps], await listEngineEnvironments(), Date.now(), "publish")
+          if (speechHeld) return reply.status(422).send({ error: speechHeld })
+        }
       }
       // The preview's input clip, made (again) first so a stale or missing one never blocks on its own:
       // saved as its own write (guarded on the revision read; on a published draft that is a new

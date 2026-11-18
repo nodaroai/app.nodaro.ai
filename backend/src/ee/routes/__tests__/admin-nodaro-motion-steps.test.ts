@@ -561,3 +561,120 @@ describe("POST /v1/admin/video-remake/steps/check", () => {
     expect(engine.calls).toEqual([])
   })
 })
+
+// The shot list's speech (decided 2026-11-18): `shotList.<style>.speech` "off" | "who" | "words". "off" is never stored
+// (absent is the same); "who" / "words" are held first while any environment's PLATFORM does not claim it (422: an older
+// platform refuses the key, and with it the engine's whole entry, when it reads the shared row), then while any
+// environment's ENGINE does not declare `castSwap.shotListSpeech` (409).
+describe("the shot list's speech", () => {
+  const SPEECH_ENGINE = { steps: true, shotList: true, shotListSpeech: true }
+  const claimed = (env: string, castSwap: Record<string, unknown>, platform: Record<string, unknown> | null) => ({
+    ...envRow(env, { castSwap }),
+    ...(platform ? { platformClaim: { supports: platform, at: new Date().toISOString() } } : {}),
+  })
+  const everywhere = () => [claimed("production", SPEECH_ENGINE, { shotListSpeech: true }), claimed("staging", SPEECH_ENGINE, { shotListSpeech: true })]
+  const words = { shotList: { flex: { mode: "on", speech: "words" } } }
+
+  it("saves who / words once every environment's platform and engine take it, stored as set", async () => {
+    h.envs = everywhere()
+    for (const speech of ["who", "words"]) {
+      h.upserts = []
+      const entry = { shotList: { precise: { mode: "on", speech }, flex: { mode: "on", speech } } }
+      const res = await put({ "nodaro-prism": entry })
+      expect(res.statusCode, speech).toBe(200)
+      expect(h.upserts[0]).toMatchObject({ value: { "nodaro-prism": entry } })
+    }
+  })
+
+  it('"off" is never stored: the setting saved exactly as without it, whatever the environments', async () => {
+    h.envs = []
+    const res = await put({ "nodaro-prism": { shotList: { precise: { mode: "off", speech: "off" }, flex: { mode: "on", speech: "off" } } } })
+    expect(res.statusCode).toBe(200)
+    expect(h.upserts[0]).toMatchObject({ value: { "nodaro-prism": { shotList: { precise: { mode: "off" }, flex: { mode: "on" } } } } })
+    expect(JSON.stringify(h.upserts[0])).not.toContain("speech")
+  })
+
+  it("422 platform_unsupported while an environment's platform does not claim it (held before the engine), and saves nothing", async () => {
+    for (const [envs, lacking] of [
+      [[claimed("production", SPEECH_ENGINE, { shotListSpeech: true }), claimed("staging", SPEECH_ENGINE, null)], ["staging"]],
+      [[claimed("production", SPEECH_ENGINE, {}), claimed("staging", SPEECH_ENGINE, { faceMeshLayers: true })], ["staging", "production"]],
+      // Its engine lacking too: the platform hold is said first.
+      [[claimed("production", { steps: true, shotList: true }, null), claimed("staging", SPEECH_ENGINE, { shotListSpeech: true })], ["production"]],
+    ] as const) {
+      h.envs = [...envs]
+      const res = await put({ "nodaro-pulse": words })
+      expect(res.statusCode, JSON.stringify(envs)).toBe(422)
+      expect(res.json().error).toEqual({ code: "platform_unsupported", envs: lacking, message: expect.stringMatching(/does not take Speech in the script/) })
+    }
+    expect(h.upserts).toEqual([])
+  })
+
+  it("409 engine_unsupported while an environment's engine does not declare castSwap.shotListSpeech, and saves nothing", async () => {
+    h.envs = [claimed("production", { steps: true, shotList: true }, { shotListSpeech: true }), claimed("staging", SPEECH_ENGINE, { shotListSpeech: true })]
+    const res = await put({ "nodaro-pulse": words })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toEqual({ code: "engine_unsupported", envs: ["production"], message: expect.stringMatching(/cannot write who speaks/) })
+    expect(h.upserts).toEqual([])
+  })
+
+  it("the other mouths: stored only with speech on and off its default, held as speech is", async () => {
+    h.envs = everywhere()
+    const none = { shotList: { flex: { mode: "on", speech: "who", speechMouth: "none" } } }
+    expect((await put({ "nodaro-prism": none })).statusCode).toBe(200)
+    expect(h.upserts.at(-1)).toMatchObject({ value: { "nodaro-prism": none } })
+    expect((await put({ "nodaro-prism": { shotList: { flex: { mode: "on", speech: "who", speechMouth: "spoken" } } } })).statusCode).toBe(200)
+    expect(h.upserts.at(-1)).toMatchObject({ value: { "nodaro-prism": { shotList: { flex: { mode: "on", speech: "who" } } } } })
+    expect(JSON.stringify(h.upserts.at(-1))).not.toContain("speechMouth")
+    // With speech Off it is never stored, and needs nothing.
+    h.envs = []
+    expect((await put({ "nodaro-prism": { shotList: { flex: { mode: "on", speech: "off", speechMouth: "none" } } } })).statusCode).toBe(200)
+    expect(JSON.stringify(h.upserts.at(-1))).not.toContain("speech")
+    // With speech on, held as speech is.
+    expect((await put({ "nodaro-prism": none })).statusCode).toBe(422)
+  })
+
+  it("Gemini 4 Hydrogen on the shot list is held 422 while a platform lacks the claim, on presence; saved once every one has it", async () => {
+    const hydrogen = { shotList: { flex: { mode: "on", llm: { model: "gemini-4-hydrogen", inputs: ["clip", "rolePhotos"], maxChars: 4000 } } } }
+    h.envs = [claimed("production", SPEECH_ENGINE, { shotListSpeech: true }), claimed("staging", SPEECH_ENGINE, null)]
+    const res = await put({ "nodaro-prism": hydrogen })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toEqual({
+      code: "platform_unsupported",
+      envs: ["staging"],
+      message: "The platform in staging does not take Gemini 4 Hydrogen for the shot list yet, and this setting is shared by every environment: choose another model, or wait until staging is updated.",
+    })
+    expect(h.upserts).toEqual([])
+    // Another model, or Hydrogen not shown the clip, is not held.
+    const carbon = { shotList: { flex: { mode: "on", llm: { model: "gemini-4-carbon", inputs: ["clip", "rolePhotos"], maxChars: 4000 } } } }
+    expect((await put({ "nodaro-prism": carbon })).statusCode).toBe(200)
+    h.envs = everywhere()
+    expect((await put({ "nodaro-prism": hydrogen })).statusCode).toBe(200)
+    expect(h.upserts.at(-1)).toMatchObject({ value: { "nodaro-prism": hydrogen } })
+  })
+
+  it("speech on a style turned off is never stored, nor held", async () => {
+    h.envs = [claimed("production", { steps: true, shotList: true }, null), claimed("staging", { steps: true, shotList: true }, null)]
+    const res = await put({ "nodaro-prism": { shotList: { precise: { mode: "off", speech: "who", speechMouth: "none" } } } })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.stringify(h.upserts.at(-1))).not.toContain("speech")
+  })
+
+  it("refuses a value it does not know, with its path", async () => {
+    h.envs = everywhere()
+    const res = await put({ "nodaro-prism": { shotList: { flex: { mode: "on", speech: "lips" } } } })
+    expect(res.statusCode).toBe(400)
+    expect((res.json().error.issues as Array<{ path: string }>).map((i) => i.path)).toEqual(["steps.nodaro-prism.shotList.flex.speech"])
+  })
+
+  it("the check never forwards speech to an engine without castSwap.shotListSpeech: the rest of the shot list is", async () => {
+    engine.reply = { problems: [] }
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } })
+    const steps = { shotList: { precise: { mode: "on", speech: "who", speechMouth: "none" }, flex: { mode: "on", speech: "words" } } }
+    await check({ engine: "nodaro-prism", steps })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps: { shotList: { precise: { mode: "on" }, flex: { mode: "on" } } } }])
+    engine.calls = []
+    setPluginSupports({ castSwap: { ...CS, ...SPEECH_ENGINE } })
+    await check({ engine: "nodaro-prism", steps })
+    expect(engine.calls).toEqual([{ engine: "motion-prism", steps }])
+  })
+})

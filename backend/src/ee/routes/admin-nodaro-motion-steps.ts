@@ -29,7 +29,17 @@
  * (`shotListNeedsEngine`: Precise on, or an LLM of its own) while any
  * environment's engine does not declare `castSwap.shotList`; and "Style the
  * role pictures" On (`styleRefsNeedsEngine`; Off, its default, needs nothing)
- * while any environment's engine does not declare `castSwap.styleRefs`. Each save writes an
+ * while any environment's engine does not declare `castSwap.styleRefs`. The
+ * shot list's speech (decided 2026-11-18: any style's `speech` "who" or
+ * "words"; "off" is never stored) is held first, 422 `platform_unsupported`,
+ * while any environment's platform does not claim `shotListSpeech` (an older
+ * platform refuses the key and drops the engine's whole entry when it reads
+ * the shared row), then 409 while any environment's engine does not declare
+ * `castSwap.shotListSpeech`. A shot list shown the clip by Gemini 4 Hydrogen
+ * (decided 2026-11-18, `shotListOnlyClipModelSet`) is held the same way, 422
+ * while any environment's platform lacks that claim (an older platform's save
+ * schema refuses the model, and with it every save of the shared row). Both
+ * holds are on presence: while the setting saved holds the value. Each save writes an
  * `admin_actions` row (`update_nodaro_motion_steps`, before and after). A
  * save that turns an engine's Precise shot list on re-checks that engine's
  * saved Precise prompt overrides on a large run (as the masking save does for
@@ -46,7 +56,8 @@
  * the same. The check never forwards `clipBody` to an engine that does not
  * declare `castSwap.clipBodySheet`, nor `shotList` to one that does not
  * declare `castSwap.shotList`, nor `styleRefs` to one that does not declare
- * `castSwap.styleRefs` (the platform still checks all three). Any other
+ * `castSwap.styleRefs`, nor a shot list style's `speech` to one that does not
+ * declare `castSwap.shotListSpeech` (the platform still checks them all). Any other
  * refusal, or an answer outside the contract, is 502
  * `engine_error` with a fixed sentence (never the engine's words).
  */
@@ -66,10 +77,12 @@ import {
   castSwapStepsSaveSchema,
   clipBodyNeedsEngine,
   shotListNeedsEngine,
+  shotListSpeechSet,
   styleRefsNeedsEngine,
   stepsThatNeedTheEngine,
   loadedEngineTakesClipBodySheet,
   loadedEngineTakesShotList,
+  loadedEngineTakesShotListSpeech,
   loadedEngineTakesSteps,
   loadedEngineTakesStyleRefs,
   stepsProblems,
@@ -81,12 +94,16 @@ import { listEngineEnvironments } from "../lib/engine-environments.js"
 import {
   cannotTakeClipBodyMessage,
   cannotTakeShotListMessage,
+  cannotTakeShotListSpeechMessage,
   cannotTakeStepsMessage,
   cannotTakeStyleRefsMessage,
   environmentsThatCannotTakeClipBody,
   environmentsThatCannotTakeShotList,
+  environmentsThatCannotTakeShotListSpeech,
   environmentsThatCannotTakeSteps,
   environmentsThatCannotTakeStyleRefs,
+  platformHoldOfShotListModels,
+  platformHoldOfShotListSpeech,
 } from "../lib/nodaro-motion-steps-gate.js"
 import { engineRequest, isRec, parseJson } from "../lib/trends/run-helpers.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -193,19 +210,33 @@ function mergedProblems(platform: CastSwapStepsProblem[], fromEngine: CastSwapSt
 /**
  * The setting as this environment's engine may be shown it: no `clipBody` unless it declares
  * `castSwap.clipBodySheet`, no `shotList` unless it declares `castSwap.shotList`, no `styleRefs`
- * unless it declares `castSwap.styleRefs`.
+ * unless it declares `castSwap.styleRefs`, and no shot list style's `speech` unless it declares
+ * `castSwap.shotListSpeech` (the rest of that style kept).
  */
 function forLoadedEngine(steps: unknown): unknown {
   if (!isRec(steps)) return steps
   const dropClipBody = Object.hasOwn(steps, "clipBody") && !loadedEngineTakesClipBodySheet()
   const dropShotList = Object.hasOwn(steps, "shotList") && !loadedEngineTakesShotList()
   const dropStyleRefs = Object.hasOwn(steps, "styleRefs") && !loadedEngineTakesStyleRefs()
-  if (!dropClipBody && !dropShotList && !dropStyleRefs) return steps
+  const dropSpeech = !dropShotList && isRec(steps.shotList) && !loadedEngineTakesShotListSpeech()
+  if (!dropClipBody && !dropShotList && !dropStyleRefs && !dropSpeech) return steps
   const rest: Record<string, unknown> = { ...steps }
   if (dropClipBody) delete rest.clipBody
   if (dropShotList) delete rest.shotList
   if (dropStyleRefs) delete rest.styleRefs
+  if (dropSpeech) rest.shotList = withoutSpeechKeys(steps.shotList as Record<string, unknown>)
   return rest
+}
+
+/** A shot list as sent unchecked: each style object without its `speech` and `speechMouth` keys (anything else as it is). */
+function withoutSpeechKeys(shotList: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(shotList).map(([style, step]) => {
+      if (!isRec(step) || (!Object.hasOwn(step, "speech") && !Object.hasOwn(step, "speechMouth"))) return [style, step]
+      const { speech: _speech, speechMouth: _mouth, ...kept } = step
+      return [style, kept]
+    }),
+  )
 }
 
 /**
@@ -224,6 +255,10 @@ export const NODARO_MOTION_STEPS_SECTION = defineNodaroMotionSettingsSection({
     const needing = Object.values(steps).map((entry) => stepsThatNeedTheEngine(entry))
     if (needing.some((entry) => entry !== undefined)) {
       const environments = await listEngineEnvironments()
+      // The shot list's speech is held first while any environment's PLATFORM does not take it (decided 2026-11-18):
+      // an older platform refuses the key, and with it the engine's whole entry, when it reads this shared row.
+      const held = platformHoldOfShotListSpeech(Object.values(steps), environments) ?? platformHoldOfShotListModels(Object.values(steps), environments)
+      if (held) return { status: 422, error: held }
       const envs = environmentsThatCannotTakeSteps(environments)
       if (envs.length > 0) {
         return { status: 409, error: { code: "engine_unsupported", message: cannotTakeStepsMessage(envs), envs } }
@@ -240,6 +275,13 @@ export const NODARO_MOTION_STEPS_SECTION = defineNodaroMotionSettingsSection({
         const lacking = environmentsThatCannotTakeShotList(environments)
         if (lacking.length > 0) {
           return { status: 409, error: { code: "engine_unsupported", message: cannotTakeShotListMessage(lacking), envs: lacking } }
+        }
+      }
+      // The shot list's speech likewise, once any engine's entry asks for it ("off" is never stored).
+      if (needing.some((entry) => shotListSpeechSet(entry?.shotList))) {
+        const lacking = environmentsThatCannotTakeShotListSpeech(environments)
+        if (lacking.length > 0) {
+          return { status: 409, error: { code: "engine_unsupported", message: cannotTakeShotListSpeechMessage(lacking), envs: lacking } }
         }
       }
       // "Style the role pictures" On likewise (Off is its default everywhere).

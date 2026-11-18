@@ -6,7 +6,9 @@
 //
 // The setting is shared by every environment, so the editor is greyed out,
 // naming the environments, until every one's engine takes the steps (the
-// server refuses the save otherwise, 409 `engine_unsupported`).
+// server refuses the save otherwise, 409 `engine_unsupported`). Here alone
+// the shot list may be written by a model that reads video on the LLM nodes
+// only (Gemini 4 Hydrogen, decided 2026-11-18).
 
 import type { CastSwapSteps, NodaroMotionEngine, NodaroMotionMotionEntry, NodaroMotionSteps, TrendEngineEnvironment } from "@/lib/api"
 import { StepsEditor, normaliseSteps } from "../../trends/components/StepsEditor"
@@ -36,5 +38,5 @@ export function StepsColumn({ engine, value, onChange, envs, motion }: Props) {
   const m = motion?.masking
   // Flex is Full depth, its scene always written in words (the engine's reading); any other masking runs the default.
   const scene = isFlexMasking(m) ? (shotListSceneOf(sceneOf(m)) ?? sceneOf(m)) : "description"
-  return <StepsEditor value={value} onChange={onChange} envs={envs} engine={engine} source="full-depth" scene={scene} />
+  return <StepsEditor value={value} onChange={onChange} envs={envs} engine={engine} source="full-depth" scene={scene} llmNodeOnlyMedia />
 }

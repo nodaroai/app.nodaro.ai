@@ -687,6 +687,7 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   steps: "the preparation steps",
   clipBodySheet: "the Body from the clip step",
   shotList: "the shot list step",
+  shotListSpeech: "Speech in the script",
   styleRefs: "the Style the role pictures step",
   "promptWording:new": "the new Flex prompt wording",
   promptParts: "engine prompt changes",
