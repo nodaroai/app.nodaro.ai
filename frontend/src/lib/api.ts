@@ -12489,7 +12489,7 @@ export interface AdminTrendRunSlot {
   kind: TrendSlotKind
   images: string[]
   fromExample: boolean
-  /** Only when the slot was left empty and its original look (`defaultImages`) filled it. */
+  /** Only when the slot was left empty and its original look filled it (`defaultImages`; on a trend that hides its original, stored Example 1's pictures). */
   fromDefault?: true
   body?: TrendChoice
   outfit?: TrendChoice

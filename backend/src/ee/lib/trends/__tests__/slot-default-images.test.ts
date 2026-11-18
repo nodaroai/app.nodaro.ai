@@ -9,8 +9,11 @@
  *  - a Full depth run fills an empty optional slot with its original look,
  *    else none (kept as in the clip); an example NEVER fills a slot there, and
  *    the run records example 0;
- *  - a trend that hides its original fills it from the chosen example,
- *    whatever its kind, and never sends an original look;
+ *  - a trend that hides its original fills it, whatever its kind, with the
+ *    pictures of the example shown as the original (stored Example 1), as
+ *    its original look, whatever example the run names, and never sends the
+ *    slot's own; Full depth that also hides its original sends none;
+ *  - an original look is its https pictures, the same set the page shows;
  *  - every other trend fills it with its original look, whatever its kind
  *    (with or without examples); else a person from the chosen example, and a
  *    place, product or pet with none;
@@ -185,7 +188,7 @@ describe("an empty optional slot, by slot kind × original look × trend × exam
   function expected(c: (typeof cases)[number]): { x: [string[], boolean, true | undefined]; fill: TrendEmptyFill; example: number } {
     const r = expectedRun(c)
     // The source by rule: "example" even where that example has no pictures for the slot (the run then sends none).
-    const fill: TrendEmptyFill = r.x[2] ? "default" : c.type === "hides its original" || (c.type === "ordinary" && c.kind === "person" && !c.look) ? "example" : "original"
+    const fill: TrendEmptyFill = r.x[2] ? "default" : c.type === "ordinary" && c.kind === "person" && !c.look ? "example" : "original"
     return { ...r, fill }
   }
 
@@ -197,7 +200,8 @@ describe("an empty optional slot, by slot kind × original look × trend × exam
       case "full depth":
         return { x: look ? fromLook : none, example: 0 }
       case "hides its original":
-        return { x: fromExample, example: 1 }
+        // The shown original's (stored Example 1's) pictures, as its original look; never the slot's own.
+        return { x: exampleHas ? [EX, false, true] : none, example: 1 }
       case "no example":
         return { x: look ? fromLook : none, example: 0 }
       case "ordinary":
@@ -217,7 +221,11 @@ describe("an empty optional slot, by slot kind × original look × trend × exam
     const d = trendOf(c)
     const xSlot = d.slots.find((s) => s.key === "x")!
     expect(emptyFillOf(d, xSlot)).toBe(want.fill)
-    expect(detailSlotOf(d, xSlot, "en").emptyFill).toBe(want.fill)
+    const shown = detailSlotOf(d, xSlot, "en")
+    expect(shown.emptyFill).toBe(want.fill)
+    // The page's `defaultImages` are exactly what the run sends as the original look, and nothing otherwise.
+    if (want.x[2]) expect(shown.defaultImages).toEqual(want.x[0])
+    else expect(shown).not.toHaveProperty("defaultImages")
     // The engine is sent what the run records.
     expect(rolesOf(r)).toEqual([[img("me")], want.x[0]])
     // The lead always runs with the person's own pictures.
@@ -252,6 +260,63 @@ describe("an empty optional slot, by slot kind × original look × trend × exam
       expect(emptyFillOf(d, d.slots[0]!)).toBeUndefined()
       expect(detailSlotOf(d, d.slots[0]!, "en")).not.toHaveProperty("emptyFill")
     }
+  })
+
+  describe("a trend that hides its original fills from the example shown as the original (stored Example 1)", () => {
+    const EX2 = [img("ex2-x")]
+    const hidden = (ex1: Record<string, string[]>) =>
+      ({
+        ...trendOf({ kind: "location", look: true, type: "hides its original", exampleHas: false }),
+        examples: [
+          { ...EXAMPLES[0]!, slots: { lead: [img("ex1-lead")], ...ex1 } },
+          { ...EXAMPLES[0]!, videoUrl: img("ex2"), slots: { lead: [img("ex2-lead")], x: EX2 } },
+        ],
+      } as TrendVersionData)
+
+    it("whatever example the run names: stored 2 asked for, stored 1's pictures sent", () => {
+      const d = hidden({ x: EX })
+      const r = run(d, { example: 2 })
+      expect(rows(r.display)[1]).toEqual(["x", EX, false, true])
+      // The recorded number is the one asked for, as before.
+      expect(r.display.example).toBe(2)
+      const shown = detailSlotOf(d, d.slots[1]!, "en")
+      expect(shown).toMatchObject({ emptyFill: "default", defaultImages: EX })
+    })
+
+    it("when stored Example 1 has no pictures for the slot: none, kept as in the clip, even if the named example has some", () => {
+      const d = hidden({})
+      const r = run(d, { example: 2 })
+      expect(rows(r.display)[1]).toEqual(["x", [], false, undefined])
+      const shown = detailSlotOf(d, d.slots[1]!, "en")
+      expect(shown.emptyFill).toBe("original")
+      expect(shown).not.toHaveProperty("defaultImages")
+    })
+
+    it("with no stored example at all: none", () => {
+      const d = { ...hidden({}), examples: [] }
+      expect(rows(run(d).display)[1]).toEqual(["x", [], false, undefined])
+      expect(emptyFillOf(d, d.slots[1]!)).toBe("original")
+    })
+  })
+
+  it("an original look counts its https pictures only, on the run and on the page alike", () => {
+    const http = "http://cdn.example/trends/t1/plain.png"
+    for (const [kind, fill, images, fromExample] of [
+      // A person whose only looks are http: as if it had none, so the example's pictures.
+      ["person", "example", [img("ex1-x")], true],
+      ["location", "original", [], false],
+    ] as const) {
+      const base = trendOf({ kind, look: false, type: "ordinary", exampleHas: true })
+      const d = { ...base, slots: [base.slots[0]!, { ...base.slots[1]!, defaultImages: [http] }] }
+      expect(emptyFillOf(d, d.slots[1]!)).toBe(fill)
+      expect(rows(run(d).display)[1]).toEqual(["x", images, fromExample, undefined])
+      expect(detailSlotOf(d, d.slots[1]!, "en")).not.toHaveProperty("defaultImages")
+    }
+    // Mixed: only the https ones are sent, and shown.
+    const base = trendOf({ kind: "location", look: false, type: "ordinary", exampleHas: true })
+    const d = { ...base, slots: [base.slots[0]!, { ...base.slots[1]!, defaultImages: [http, img("x-look-a")] }] }
+    expect(rows(run(d).display)[1]).toEqual(["x", [img("x-look-a")], false, true])
+    expect(detailSlotOf(d, d.slots[1]!, "en").defaultImages).toEqual([img("x-look-a")])
   })
 
   it("on a trend that hides its original, the body is the one the trend composes without original looks", () => {

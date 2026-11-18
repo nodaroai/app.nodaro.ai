@@ -2614,7 +2614,7 @@ interface TrendOriginal extends TrendVideo {
 interface TrendDetailSlot {
   key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
   hintImageUrl?: string                  // a picture of who or what the slot is in the original (never sent by a run)
-  defaultImages?: string[]               // an optional slot's original look: 1–3 https pictures of the role as in the original; absent on a required slot and on a trend that hides its original
+  defaultImages?: string[]               // an optional slot's original look: 1–3 https pictures of the role as in the original, sent by a run that leaves it empty; on a trend that hides its original, the shown original's (its first example's) pictures for it; absent on a required slot
   emptyFill?: "default" | "example" | "original" // an optional slot's: what a run takes when you leave it empty (its original look, the chosen example's pictures for it, or none: as in the original); absent on a required slot
   chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
   defaults?: TrendChips                  // the starting value of those chips
@@ -2697,7 +2697,9 @@ the original when that example has none for it (no pictures,
 product or pet stays as in the original. A Full depth trend never uses an
 example (its original look, else the original's look; such a run records
 `example: 0`), and a trend that hides its original fills every optional slot
-left out from the chosen example, whatever its kind. On a trend with no
+left out, whatever its kind, with the pictures of the example shown as its
+original for that slot (served as its `defaultImages`, `fromDefault: true` on
+the run), whatever `example` names, or none. On a trend with no
 example, leave `example` out: a slot with no original look then stays as in
 the original (no pictures, `fromExample: false`) and the run records
 `example: 0`.

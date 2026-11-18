@@ -1789,7 +1789,10 @@ const COMPETITOR_SEARCH_TERMS_BYTES = 291
 // RAISED again by a slot's `emptyFill`: `get_trend` names it (what a run takes for an optional slot
 // left out: default, example or original), 55 B more. No tool was added, so the membership fixture
 // does NOT move. Measured by this suite: 549_077 B in all; the list keeps the same headroom.
-const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55
+// LOWERED by the hidden-original fill: the `slots` wording of estimate_trend and run_trend no longer
+// says a trend that hides its original fills from the example, 36 B less in each (72 B in all).
+// Measured by this suite: 552_774 B in all before, 552_702 B after; the list keeps its headroom.
+const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55 - 72
 // RAISED 2026-11-18 by one NEW tool, `make_podcast_pack` (verbs-use-case-pack.ts: the MCP face of
 // POST /v1/podcast-pack — several podcast tools on one recording for one price — and, with
 // `estimate_only`, of its quote), and nothing else. Registered beside the use-case verbs and gated

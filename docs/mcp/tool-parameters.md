@@ -795,7 +795,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's (not on Full depth or hidden-original trends); otherwise it stays as in the original. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
 | `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
@@ -2810,7 +2810,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's (not on Full depth or hidden-original trends); otherwise it stays as in the original. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
 | `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |

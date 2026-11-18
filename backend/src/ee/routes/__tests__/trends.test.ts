@@ -807,7 +807,7 @@ describe("GET /v1/trends/:slug — the original", () => {
     expect(d.slots[1]).not.toHaveProperty("hintImageUrl")
   })
 
-  it("passes an optional slot's original look through (https only), never a required slot's, nor any on a trend that hides its original", async () => {
+  it("passes an optional slot's original look through (https only), never a required slot's; on a trend that hides its original, the shown original's pictures instead of its own", async () => {
     const [lead, place] = versionData().slots
     const look = "https://cdn.example/trends/t1/place-as-in-clip.png"
     const slots = [
@@ -822,8 +822,10 @@ describe("GET /v1/trends/:slug — the original", () => {
 
     mem.trends[0]!.versions[2] = versionData({ slots, hideOriginal: true })
     const hidden = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
-    for (const s of hidden.json().data.slots) expect(s).not.toHaveProperty("defaultImages")
+    // The slot's own look never leaves; its original look is the shown original's (stored Example 1's) picture for it.
     expect(hidden.body).not.toContain(look)
+    expect(hidden.json().data.slots[0]).not.toHaveProperty("defaultImages")
+    expect(hidden.json().data.slots[1]).toMatchObject({ defaultImages: ["https://cdn.example/ex1-place.png"], emptyFill: "default" })
   })
 
   it("says on each optional slot what a run takes when it is left empty (emptyFill), and nothing on a required one", async () => {
@@ -2283,7 +2285,8 @@ describe("a run's example on a trend that hides its original: numbered as the pa
       engine.calls = []
       const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: { ...RUN_BODY, example } })
       expect(res.statusCode).toBe(202)
-      expect(sent()).toEqual({ example: example + 1, place: [`https://cdn.example/ex${example + 1}-place.png`] })
+      // The number is translated; the empty place still takes the shown original's (stored Example 1's) picture.
+      expect(sent()).toEqual({ example: example + 1, place: ["https://cdn.example/ex1-place.png"] })
     }
     engine.calls = []
     expect((await app.inject({ method: "POST", url: "/v1/trends/neon-dance/runs", headers: as(), payload: RUN_BODY })).statusCode).toBe(202)
@@ -2294,7 +2297,7 @@ describe("a run's example on a trend that hides its original: numbered as the pa
     hide(true)
     const res = await app.inject({ method: "POST", url: "/v1/trends/neon-dance/estimate", headers: as(), payload: { ...RUN_BODY, example: 2 } })
     expect(res.statusCode).toBe(200)
-    expect(sent()).toEqual({ example: 3, place: ["https://cdn.example/ex3-place.png"] })
+    expect(sent()).toEqual({ example: 3, place: ["https://cdn.example/ex1-place.png"] })
   })
 
   it("is checked against the page's list: the stored count − 1 at most, the refusal naming the number asked for", async () => {

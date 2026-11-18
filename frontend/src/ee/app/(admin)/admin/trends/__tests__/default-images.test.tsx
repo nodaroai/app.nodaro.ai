@@ -9,7 +9,7 @@
  *   publish. Each says what a run that leaves the role empty does: uses it;
  *   without one a person takes the example's picture (not on Full depth) and
  *   any other role stays as in the clip; on a trend that hides its original a
- *   run never uses it (the example fills the role).
+ *   run never uses it (the example shown as the original fills the role).
  * - Upload: a picture is copied into trend storage (`/media` kind `default`)
  *   and saved on the slot's `defaultImages`; ✕ removes it.
  * - Take from the original: the dialog plays the saved original; Save sends
@@ -118,7 +118,7 @@ describe("where the section shows", { timeout: 20_000 }, () => {
     const group = await screen.findByRole("group", { name: "Slot 2 default image" })
     expect(within(group).getByText("(optional)")).toBeInTheDocument()
     expect(
-      within(group).getByText("A picture of this person as they are in the clip. This trend hides its original, so a run never uses it: a role left empty takes the example's pictures."),
+      within(group).getByText("A picture of this person as they are in the clip. This trend hides its original, so a run never uses it: a role left empty takes the pictures of the example shown as the original."),
     ).toBeInTheDocument()
   })
 

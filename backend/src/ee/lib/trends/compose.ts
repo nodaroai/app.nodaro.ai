@@ -87,20 +87,24 @@
  * with no pictures is kept by the engine as in the clip):
  *  - on a FULL DEPTH trend (`faceMasking.source` `"full-depth"`) it is never
  *    filled from an example (an example can look nothing like the original):
- *    it takes the slot's original look (`defaultImages`) when it has one,
- *    else no pictures; one that also hides its original sends no original
- *    look either. The run records `example: 0` (none was used); an explicit
- *    `example` must still exist;
+ *    it takes the slot's original look (`defaultImages`, https) when it has
+ *    one, else no pictures; one that also hides its original sends no
+ *    pictures at all. The run records `example: 0` (none was used); an
+ *    explicit `example` must still exist;
  *  - on a trend that hides its original (`hideOriginal`), whatever the slot's
- *    kind, it takes the chosen example's pictures (none when that example has
- *    none for it, or the trend has no example); its original look is never
- *    sent, as its public page never shows it;
- *  - on every other trend it takes its original look when it has one,
- *    whatever its kind (with or without examples); else a person takes the
- *    chosen example's pictures (none when that example has none for it, or the
- *    trend has no example), and a place, product or pet none.
- * A slot an original look filled says `fromDefault: true` (and `fromExample:
- * false`) on the display slot; every other display slot has no such key.
+ *    kind, it takes the pictures of the clip its page shows as the original
+ *    (stored Example 1) for that slot, whatever example the run names (none
+ *    when that example has none for it, or the trend has no example); the
+ *    slot's own `defaultImages` are never sent;
+ *  - on every other trend it takes its original look (`defaultImages`, https)
+ *    when it has one, whatever its kind (with or without examples); else a
+ *    person takes the chosen example's pictures (none when that example has
+ *    none for it, or the trend has no example), and a place, product or pet
+ *    none.
+ * The original look is `emptyFillLookOf`'s (empty-fill.ts), the very pictures
+ * the page shows as the slot's `defaultImages`. A slot it filled says
+ * `fromDefault: true` (and `fromExample: false`) on the display slot; every
+ * other display slot has no such key.
  *
  * Masking off (absent, or `mode: "off"`) sends no `faceMasking` key at all, so
  * the body is exactly what it was before trends had masking, unless the trend
@@ -174,7 +178,7 @@ import { currentPreviewClip } from "./preview-clip.js"
 import { withPromptsFor } from "./prompt-parts.js"
 import { promptPartTexts } from "./prompt-parts-store.js"
 import { promptStyleOf, sendsSourceClipFirst, trendPromptWordingSent } from "./prompt-style.js"
-import { emptyFillOf, trendIsFullDepth } from "./empty-fill.js"
+import { emptyFillLookOf, emptyFillOf, trendIsFullDepth } from "./empty-fill.js"
 import { storedSceneDescriptionFor, type SceneDescriptionWindow } from "./scene-description.js"
 import type { CastSwapPromptStyle } from "@nodaro/render-rules"
 import type { PromptPartTexts } from "../../../lib/cast-swap-prompt-parts-contract.js"
@@ -250,7 +254,9 @@ export interface TrendRunDisplaySlot extends Chips {
   fromExample: boolean
   /**
    * Present (true) only when the slot was left empty and its original look
-   * (`defaultImages`) filled it (`fromExample` is then false). Absent otherwise.
+   * filled it (`fromExample` is then false): its `defaultImages`, or on a
+   * trend that hides its original the shown original's (stored Example 1's)
+   * pictures for it. Absent otherwise.
    */
   fromDefault?: true
 }
@@ -556,8 +562,9 @@ export function composeTrendRun(
     } else if (slot.required) {
       throw new TrendRunError("missing_slot", `"${pickText(slot.label, "en")}" needs a picture.`, slot.key)
     } else if (emptyFillOf(data, slot) === "default") {
-      // The rule (empty-fill.ts) is the one the trend's public page states for the slot.
-      images = [...slot.defaultImages!]
+      // The rule (empty-fill.ts) is the one the trend's public page states for the slot, and these
+      // are the very pictures it shows as the slot's `defaultImages`.
+      images = emptyFillLookOf(data, slot)
       fromDefault = true
     } else if (emptyFillOf(data, slot) === "original") {
       // No pictures: the engine keeps that role as in the clip.

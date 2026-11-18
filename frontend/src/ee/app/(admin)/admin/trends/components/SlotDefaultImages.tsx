@@ -1,8 +1,9 @@
 // An optional slot's original look (`defaultImages`): pictures of that role as
 // it is in the clip, on every clip preparation, never needed to publish. A run
 // sends it for the slot when the person leaves it empty, whatever the slot's
-// kind, unless the trend hides its original (its runs fill the slot from the
-// example, or on Full depth leave it as in the clip). Without one, a person takes the example's pictures (never on Full
+// kind, unless the trend hides its original (its runs fill the slot with the
+// pictures of the example shown as the original, or on Full depth leave it as
+// in the clip). Without one, a person takes the example's pictures (never on Full
 // depth) and any other role stays as in the clip. The editor says which.
 //
 // Three ways in, each stored in the trend's own storage:
@@ -64,7 +65,7 @@ export function originalLookText(kind: TrendSlotKind, fullDepth: boolean, hideOr
   const what = kind === "person" ? "A picture of this person as they are in the clip." : `A picture of this ${ROLE_NOUNS[kind]} as it is in the clip.`
   // A trend that hides its original never sends it (often frames of that original); Full depth never uses an example either.
   if (hideOriginal) {
-    const left = fullDepth ? "stays as in the clip" : "takes the example's pictures"
+    const left = fullDepth ? "stays as in the clip" : "takes the pictures of the example shown as the original"
     return `${what} This trend hides its original, so a run never uses it: a role left empty ${left}.`
   }
   const without = kind === "person" && !fullDepth ? "the example's picture is used" : "the role stays as in the clip"
