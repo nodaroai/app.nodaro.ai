@@ -13020,6 +13020,8 @@ export const ptBR: ChromeDict = {
   "competitors.searchTermsCap": "{n} de {max} no seu plano",
   "competitors.searchTermsOverCap": "Seu plano busca só os primeiros {n}; os demais ficam guardados para um plano superior.",
   "competitors.searchTermsNameOnly": "Seu plano busca só o nome; estes termos ficam guardados para um plano superior.",
+  "competitors.searchTermsNoCap": "Sem limite de termos. Cada termo é buscado em cada plataforma, e cada varredura faz no máximo {max} buscas.",
+  "competitors.scanTooBig": "Esta varredura faria {n} buscas; cada varredura faz no máximo {max}. Remova alguns termos de busca ou plataformas.",
   "nav.topics": "Tópicos",
   "topics.title": "Tópicos",
   "topics.description": "Acompanhe uma hashtag ou frase nas plataformas, sem uma marca por trás. Cada varredura busca o termo nas plataformas que você escolher e guarda os posts que o citam.",

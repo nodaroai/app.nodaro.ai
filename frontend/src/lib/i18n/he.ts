@@ -13230,6 +13230,8 @@ export const he: ChromeDict = {
   "competitors.searchTermsCap": "{n} מתוך {max} בתוכנית שלכם",
   "competitors.searchTermsOverCap": "בתוכנית שלכם מחופשים רק {n} הראשונים; השאר נשמרים לתוכנית גבוהה יותר.",
   "competitors.searchTermsNameOnly": "בתוכנית שלכם מחופש רק השם; המונחים האלה נשמרים לתוכנית גבוהה יותר.",
+  "competitors.searchTermsNoCap": "אין הגבלה על מספר המונחים. כל מונח מחופש בכל פלטפורמה, וכל סריקה מריצה עד {max} חיפושים.",
+  "competitors.scanTooBig": "הסריקה הזו תריץ {n} חיפושים, וכל סריקה מריצה עד {max}. הסירו חלק ממונחי החיפוש או מהפלטפורמות.",
   "nav.topics": "נושאים",
   "topics.title": "נושאים",
   "topics.description": "עקבו אחרי האשטג או ביטוי ברשתות השונות, בלי מותג סביבו. כל סריקה מחפשת אותו ברשתות שתבחרו ושומרת את הפוסטים שמזכירים אותו.",

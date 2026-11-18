@@ -45,8 +45,14 @@ export interface CompetitorSearch {
   readonly term?: string
 }
 
-/** The most search terms any brand can have (the platform's own ceiling; a plan allows fewer). */
-export const COMPETITOR_SEARCH_TERMS_MAX = 15
+/**
+ * The most search terms any brand can have (the platform's own ceiling; a plan
+ * allows fewer). A platform admin has no cap on terms, only on one scan's
+ * size (`COMPETITOR_SCAN_SEARCH_LIMIT`): one platform fits up to this many.
+ */
+export const COMPETITOR_SEARCH_TERMS_MAX = 100
+/** A brand whose scan would run more searches than this (each account, and each about-platform once per term) cannot be saved or scanned. */
+export const COMPETITOR_SCAN_SEARCH_LIMIT = 100
 /** The longest a search term can be. */
 export const COMPETITOR_SEARCH_TERM_MAX_LENGTH = 100
 /** A brand scan is charged this id per Social Search page it runs, summed (a topic scan has its own, `TOPIC_SCAN_PAGE_CREDIT_ID`). */

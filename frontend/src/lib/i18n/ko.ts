@@ -13020,6 +13020,8 @@ export const ko: ChromeDict = {
   "competitors.searchTermsCap": "요금제 한도 {max}개 중 {n}개",
   "competitors.searchTermsOverCap": "현재 요금제에서는 처음 {n}개만 검색합니다. 나머지는 상위 요금제를 위해 보관됩니다.",
   "competitors.searchTermsNameOnly": "현재 요금제에서는 이름만 검색합니다. 이 검색어는 상위 요금제를 위해 보관됩니다.",
+  "competitors.searchTermsNoCap": "검색어 개수 제한이 없습니다. 각 검색어는 플랫폼마다 검색되며, 스캔 1회에 검색은 최대 {max}개입니다.",
+  "competitors.scanTooBig": "이 스캔은 검색 {n}개를 실행하게 되지만, 스캔 1회에 검색은 최대 {max}개까지입니다. 검색어나 플랫폼을 일부 빼 주세요.",
   "nav.topics": "토픽",
   "topics.title": "토픽",
   "topics.description": "브랜드와 상관없이 해시태그나 문구를 여러 플랫폼에서 추적합니다. 스캔할 때마다 고른 플랫폼에서 검색하고 그 문구를 언급한 게시물을 남깁니다.",

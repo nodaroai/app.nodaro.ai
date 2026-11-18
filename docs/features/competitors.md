@@ -40,6 +40,9 @@ Then choose:
   word; give a fuller term to keep them out. Each term is searched on each
   platform you picked, so it adds a search per platform. Standard plans can
   set 3 terms, Pro 5 and Business 10; Free and Basic search the name only.
+  One scan runs at most 100 searches (one per account, plus one per
+  platform for each term), so a brand that would need more cannot be saved
+  until some terms or platforms go.
 - **Schedule:** weekly (the default), daily, or no schedule (scan only when
   you press **Scan now**).
 - **This is my brand:** track yourself. Cards about your own brand speak to

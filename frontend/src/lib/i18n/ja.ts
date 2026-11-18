@@ -13020,6 +13020,8 @@ export const ja: ChromeDict = {
   "competitors.searchTermsCap": "プランの上限 {max} 件中 {n} 件",
   "competitors.searchTermsOverCap": "お使いのプランでは最初の {n} 件だけを検索します。残りは上位プラン用に保存されます。",
   "competitors.searchTermsNameOnly": "お使いのプランでは名前だけを検索します。これらの語句は上位プラン用に保存されます。",
+  "competitors.searchTermsNoCap": "語句の数に上限はありません。各語句はプラットフォームごとに検索され、1 回のスキャンの検索は最大 {max} 件です。",
+  "competitors.scanTooBig": "このスキャンでは {n} 件の検索が必要ですが、1 回のスキャンの検索は最大 {max} 件です。検索語句かプラットフォームを減らしてください。",
   "nav.topics": "トピック",
   "topics.title": "トピック",
   "topics.description": "ブランドに関係なく、ハッシュタグやフレーズを複数のプラットフォームで追跡します。各スキャンは選んだプラットフォームで検索し、それに触れた投稿を残します。",

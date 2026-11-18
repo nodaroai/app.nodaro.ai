@@ -103,7 +103,7 @@ Needs `assets:write` · Nodaro Cloud only.
 | `accounts.linkedin` | string |  | At most 300 characters. |
 | `accounts.meta_ads` | string |  | At most 300 characters. |
 | `about_platforms` | string[] |  | Where to search posts naming it. |
-| `search_terms` | string[] |  | Phrases or #hashtags searched instead of the name (a full name, a handle), one search per platform each; a post must name one. The plan caps how many. At most 15 items. |
+| `search_terms` | string[] |  | Phrases or #hashtags searched instead of the name (a full name, a handle), one search per platform each; a post must name one. The plan caps how many. At most 100 items. |
 | `is_own` | boolean |  | The user's own brand. |
 | `schedule` | string |  | Default weekly. One of `off`, `weekly`, `daily`. |
 

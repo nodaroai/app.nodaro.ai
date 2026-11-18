@@ -13329,6 +13329,8 @@ export const en = {
   "competitors.searchTermsCap": "{n} of {max} on your plan",
   "competitors.searchTermsOverCap": "Your plan searches the first {n}; the rest are kept for a higher plan.",
   "competitors.searchTermsNameOnly": "Your plan searches the name only; these terms are kept for a higher plan.",
+  "competitors.searchTermsNoCap": "No limit on terms. Each term is searched on each platform, and a scan runs at most {max} searches.",
+  "competitors.scanTooBig": "This scan would run {n} searches; a scan can run at most {max}. Remove some search terms or platforms.",
   "nav.topics": "Topics",
   "topics.title": "Topics",
   "topics.description": "Follow a hashtag or phrase across platforms, with no brand around it. Each scan searches it on the platforms you pick and keeps the posts that name it.",
