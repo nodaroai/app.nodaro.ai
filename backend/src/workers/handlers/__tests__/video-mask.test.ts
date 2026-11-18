@@ -690,6 +690,25 @@ describe("video-mask handler — steadyRegions", () => {
     expect(completed().output_data).not.toHaveProperty("steady")
   })
 
+  it("with tracks, reports each subject's frames and where to look at it; without, nothing", async () => {
+    prepare(20)
+    const other = { top: 300, left: 500, size: 40, until: 10 }
+    answerWith(clip(20, [face, other]))
+    await run({ tracks: true })
+    expect(completed().output_data).toMatchObject({
+      tracks: [
+        { id: 0, fromFrame: 0, toFrame: 19, frames: 20, viewFrame: 0 },
+        { id: 1, fromFrame: 0, toFrame: 9, frames: 10, viewFrame: 0 },
+      ],
+      tracksOmitted: 0,
+      cutFrames: [],
+    })
+    mocks.markJobCompleted.mockClear()
+    await run({})
+    expect(completed().output_data).not.toHaveProperty("tracks")
+    expect(completed().output_data).not.toHaveProperty("cutFrames")
+  })
+
   it("with the field on, skips the hold and reports steady counts", async () => {
     prepare(30)
     // Blinks for 3 frames (a gap it fills), and a speck shows for one frame (a pop it removes).

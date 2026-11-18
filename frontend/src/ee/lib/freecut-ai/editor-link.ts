@@ -17,6 +17,15 @@ import {
   NODARO_UNDO_EDIT,
 } from "@nodaro/shared/media"
 
+/** One line of what the agents did, for an editor that keeps an activity log (capability `studio-layout`). */
+export interface ActivityLine {
+  readonly agent: string
+  readonly color: string
+  readonly text: string
+}
+
+const NODARO_ACTIVITY = "NODARO_ACTIVITY"
+
 /**
  * A move a cursor makes, drawn by the editor over its own interface (capability
  * `presence-targets`): the edit itself always comes as an op.
@@ -54,6 +63,12 @@ export interface PresenceCursor {
   readonly target?: string
   readonly gesture?: PresenceGesture
   readonly note?: string
+  /**
+   * What the agent is doing, shown on its character (`presence` editors draw one;
+   * an older editor ignores it): at work (absent), waiting its turn, done, or
+   * stopped until the person answers.
+   */
+  readonly mood?: "working" | "waiting" | "done" | "needs-you"
 }
 
 export interface PresenceHighlight {
@@ -100,6 +115,8 @@ export interface EditorLink {
   /** Opens a timeline tab ("main" for the main one). */
   openSequence(sequenceId: string): void
   presence(cursors: readonly PresenceCursor[], highlights?: readonly PresenceHighlight[]): void
+  /** Adds lines to the editor's activity log; an editor without one ignores them. */
+  activity?(lines: readonly ActivityLine[]): void
   dispose(): void
 }
 
@@ -159,6 +176,7 @@ export function createEditorLink(frame: () => Window | null | undefined, origin:
     compare: (mode, split) => post(NODARO_PLAYBACK, { action: "compare", mode, ...(split === undefined ? {} : { split }) }),
     openSequence: (sequenceId) => post(NODARO_PLAYBACK, { action: "open-sequence", sequenceId }),
     presence: (cursors, highlights = []) => post(NODARO_PRESENCE, { cursors, highlights }),
+    activity: (lines) => post(NODARO_ACTIVITY, { lines }),
     dispose: () => {
       window.removeEventListener("message", onMessage)
       for (const entry of waiting.values()) {

@@ -12,7 +12,7 @@ export function RunLog({ lines }: { readonly lines: readonly FeedLine[] }) {
   const t = useT()
   if (lines.length === 0) return null
   return (
-    <details className="rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2 text-[11px]">
+    <details className="rounded-lg border border-[#262633] bg-[#121219] px-3 py-2 text-[11px]">
       <summary className="cursor-pointer select-none text-white/70">{t("freecutAi.details", { n: lines.length })}</summary>
       <ol className="mt-2 flex max-h-56 flex-col gap-1 overflow-y-auto" aria-live="polite">
         {lines.map((line) => (

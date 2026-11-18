@@ -89,6 +89,11 @@ export async function recoverEntityJob(args: {
   claimant?: FinalizeClaimant
   /** A recovered GPT Image 2.6 Auto run: what KIE really billed, to settle on. */
   autoQualityKieCredits?: number
+  /** What the provider billed for the saved task (`jobs.provider_cost`), when
+   *  the record the recovery read carries it (`kieRecoveredCostUsd`); null or
+   *  absent leaves the column unwritten. Recorded only: the commit below is
+   *  not metered, so it never moves the charge. */
+  providerCost?: number | null
 }): Promise<void> {
   const { jobId, jobType, url } = args
   if (!isEntityMediaJobType(jobType)) {
@@ -125,11 +130,16 @@ export async function recoverEntityJob(args: {
       shouldWatermark,
       usageLogId: await loadUsageLogId(jobId),
       spec: entityAttachSpecFrom(row.input_data),
-      // Post-reconcile the provider's actual cost is unknown: leave the cost
-      // fields unset so the completion write OMITS them (writing NULL there
-      // clobbered the metadata a prior attempt had recorded) and credits
-      // commit at the reservation (a GPT Image 2.6 Auto run settles on KIE's bill).
-      result: { url, ...(args.autoQualityKieCredits !== undefined && { autoQualityKieCredits: args.autoQualityKieCredits }) },
+      // The provider's bill is recorded when the caller read one off the saved
+      // task; otherwise the cost fields stay unset so the completion write OMITS
+      // them (writing NULL there clobbered the metadata a prior attempt had
+      // recorded). Credits commit at the reservation either way (a GPT Image
+      // 2.6 Auto run settles on KIE's bill).
+      result: {
+        url,
+        ...(args.providerCost != null && { cost: args.providerCost }),
+        ...(args.autoQualityKieCredits !== undefined && { autoQualityKieCredits: args.autoQualityKieCredits }),
+      },
     })
     if (r2Url) {
       console.log(`[entity-recovery] recovered ${jobType} job ${jobId}: ${r2Url}`)

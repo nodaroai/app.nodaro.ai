@@ -116,6 +116,7 @@ vi.mock("../../../providers/kie/runway-client.js", () => ({ pollRunwayTask: vi.f
 vi.mock("../../../providers/kie/suno-client.js", () => ({ pollSunoTask: vi.fn() }))
 
 import { reconcileKieJob, type KieJobRow } from "../kie.js"
+import { KIE_CREDIT_USD } from "../../../providers/kie/models.js"
 
 const CHARACTER_ID = "11111111-1111-4111-8111-111111111111"
 const OBJECT_ID = "22222222-2222-4222-8222-222222222222"
@@ -182,6 +183,26 @@ describe("reconcile recovers a FINISHED entity generation instead of refunding i
     expect(mocks.bumpMock).not.toHaveBeenCalled()
     expect(mocks.refundMock).not.toHaveBeenCalled()
     expect(mocks.markJobFailedMock).not.toHaveBeenCalled()
+  })
+
+  it("records what KIE billed for the saved task as provider_cost; the commit stays the unmetered reserved-tier commit", async () => {
+    mocks.jobRow.data = jobRowWith({ type: "generate-character", attachToCharacterId: CHARACTER_ID, provider: "nano-banana" })
+    mocks.pollKieTaskMock.mockResolvedValue({
+      resultJson: { resultUrls: ["https://kie/result.png"] },
+      rawRecordInfo: { code: 200, data: { creditsConsumed: 8 } },
+      providerMs: 4200,
+    })
+
+    await reconcileKieJob(row())
+
+    expect(mocks.markJobCompletedMock).toHaveBeenCalledWith("j-1", {
+      output_data: { imageUrl: "https://r2/images/j-1.png" },
+      provider_cost: 8 * KIE_CREDIT_USD,
+    })
+    // Only the recorded figure is new: no `metered` flag and no metered base,
+    // so commitJobCredits takes its reserved-tier branch exactly as before.
+    expect(mocks.commitCreditsMock).toHaveBeenCalledTimes(1)
+    expect(mocks.commitCreditsMock).toHaveBeenCalledWith("ul-1", "j-1", 8 * KIE_CREDIT_USD)
   })
 
   it("a recovered GPT Image 2.6 Auto entity run settles on what KIE billed", async () => {

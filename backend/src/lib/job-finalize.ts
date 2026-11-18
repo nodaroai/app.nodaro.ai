@@ -655,8 +655,8 @@ export async function finalizeJobWithMedia(
 
   // 4. CAS-guarded markJobCompleted (live statuses only). Null provider /
   //    cost fields are OMITTED, not written: the reconcile path passes
-  //    cost:null + providerUsed:null ("actual cost unknown post-reconcile"),
-  //    and writing those NULLs clobbered whatever the worker/route had
+  //    providerUsed:null, and cost:null when the saved task's record carries
+  //    no bill (`kieRecoveredCostUsd`), and writing those NULLs clobbered whatever the worker/route had
   //    already recorded — every cron-completed job lost its provider
   //    metadata (admin data-quality residual from the 2026-06-10 audit).
   // The settlement inputs, built ONCE: parked on a HELD row for approve to

@@ -26,6 +26,13 @@
  * With `keep` or `eraseAlways` the result reports `keptRegions` (the regions
  * an erase box held that a keep box saved), so a caller can tell a worker
  * that honoured them from one that predates them.
+ *
+ * `eraseTracks` (decided 2026-11-18): points on single frames, each naming a
+ * whole subject — the track (`video-mask-tracks.ts`, the rule Video Mask
+ * reports its `tracks` by) whose region the point lies in is dropped on every
+ * frame it is on, before any box is applied. `cutFrames`: the shot starts the
+ * mask was made with, so the tracks are the ones Video Mask reported. With
+ * them the result reports `erasedTracks` and `unmatchedSeeds`.
  */
 
 import { join } from "node:path"
@@ -41,6 +48,8 @@ import {
   type MaskGeometry,
   type MaskRegionBox,
 } from "./video-mask.js"
+import { steadyGapLimitFrames } from "./video-mask-steady.js"
+import { maskRegionBoxKey, trackMaskRegions, tracksOfSeeds, type MaskTrackSeed } from "./video-mask-tracks.js"
 
 /** One box of a mask erase: a frame range (0-based, inclusive) and the box's edges, % of the frame. */
 export interface MaskEraseBoxInput {
@@ -98,6 +107,45 @@ export function regionErased(
 export interface MaskEraseLists {
   readonly keep?: readonly MaskEraseBoxInput[]
   readonly eraseAlways?: readonly MaskEraseBoxInput[]
+  /** Points naming whole subjects to drop (`tracksOfSeeds`), applied before the boxes. */
+  readonly eraseTracks?: readonly MaskTrackSeed[]
+  /** The frames a new shot starts on in the mask (Video Mask's `cutFrames`): no track crosses one. */
+  readonly cutFrames?: readonly number[]
+}
+
+/**
+ * Drop the tracks `seeds` name from a whole mask's RLE, IN PLACE (a frame that
+ * loses a region is replaced): every region of a named track, on every frame.
+ * `erasedTracks`: the tracks named; `unmatchedSeeds`: the seeds on no region.
+ */
+export async function eraseMaskTracks(
+  rle: string[],
+  geometry: Pick<MaskGeometry, "width" | "height" | "frameRate">,
+  seeds: readonly MaskTrackSeed[],
+  cutFrames: readonly number[] = [],
+): Promise<{ readonly droppedRegions: number; readonly erasedTracks: number; readonly unmatchedSeeds: number }> {
+  const { width, height } = geometry
+  const tracking = await trackMaskRegions(rle, width, height, cutFrames, steadyGapLimitFrames(geometry.frameRate))
+  const { ids, unmatched } = tracksOfSeeds(rle, width, height, tracking, seeds)
+  let droppedRegions = 0
+  if (ids.size > 0) {
+    let sliceStart = performance.now()
+    for (let f = 0; f < rle.length; f++) {
+      const assigned = tracking.regionTrack[f]!
+      if (assigned.size === 0) continue
+      const r = dropMaskRegionsWhere(rle[f]!, width, height, (box) => {
+        const id = assigned.get(maskRegionBoxKey(box))
+        return id !== undefined && ids.has(id)
+      })
+      if (r.dropped > 0) rle[f] = r.rle
+      droppedRegions += r.dropped
+      if (performance.now() - sliceStart >= SLICE_MS) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        sliceStart = performance.now()
+      }
+    }
+  }
+  return { droppedRegions, erasedTracks: ids.size, unmatchedSeeds: unmatched }
 }
 
 /**
@@ -249,6 +297,9 @@ export interface MaskEraseResult {
   readonly kept: boolean
   /** The regions an erase box held that a keep box saved. */
   readonly keptRegions: number
+  /** With `eraseTracks`: the tracks its seeds named, and the seeds that lay on no region. */
+  readonly erasedTracks?: number
+  readonly unmatchedSeeds?: number
 }
 
 /**
@@ -283,6 +334,8 @@ export async function eraseMaskVideo(
   if (stated !== undefined && stated !== rle.length) {
     throw new DeterministicJobError(`The mask video decoded to ${rle.length} frames, but holds ${stated}.`)
   }
+  const seeds = lists.eraseTracks ?? []
+  const byTrack = seeds.length > 0 ? await eraseMaskTracks(rle, geometry, seeds, lists.cutFrames ?? []) : undefined
   const erased = await eraseMaskRegions(rle, geometry, boxes, lists)
   const outputPath = join(workDir, "mask-erased.mp4")
   const { coveredFraction } = await renderMaskVideo(erased.rle, geometry, outputPath, { allowEmpty: true })
@@ -296,8 +349,9 @@ export async function eraseMaskVideo(
     height: geometry.height,
     frames: rle.length,
     coveredFraction,
-    droppedRegions: erased.droppedRegions,
+    droppedRegions: erased.droppedRegions + (byTrack?.droppedRegions ?? 0),
     keptRegions: erased.keptRegions,
     kept: coveredFraction > 0,
+    ...(byTrack ? { erasedTracks: byTrack.erasedTracks, unmatchedSeeds: byTrack.unmatchedSeeds } : {}),
   }
 }

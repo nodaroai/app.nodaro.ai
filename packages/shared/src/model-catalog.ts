@@ -3972,6 +3972,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-3.0-motion:5s", credits: 150 },
       { identifier: "kling-3.0-motion:10s", credits: 300 },
       { identifier: "kling-3.0-motion:1080p:10s", credits: 500 },
+      { identifier: "kling-3.0-motion:720p:per-4s", credits: 228, note: "720p: per 4 seconds of the driving video; charged per whole second" },
     ],
   },
   // Wan Animate (decided 2026-11-12): catalog entries so a deployment's model

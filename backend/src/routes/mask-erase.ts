@@ -44,18 +44,36 @@ const MAX_BOXES = CAST_SWAP_FACE_MASK_MARK_LIMITS.maxMarks
  * `eraseAlways` (optional): boxes whose centred regions are dropped whatever
  * keep says (a trend's "Everyone" marks in a person variant). At most 50
  * boxes in all — a trend's marks, every list together.
+ * `eraseTracks` (optional): points on single frames, each naming a whole
+ * subject (the track whose region the point lies in, as Video Mask reports
+ * its `tracks`), dropped on every frame it is on; `cutFrames`, the shot
+ * starts that mask was made with. With `eraseTracks`, `erase` may be empty.
  */
+const MAX_TRACK_SEEDS = 64
+const MAX_CUT_FRAMES = 2000
+const trackSeedSchema = z.strictObject({
+  frame: z.number().int().min(0),
+  xPct: z.number().min(0).max(100),
+  yPct: z.number().min(0).max(100),
+})
+
 export const maskEraseBody = z
   .object({
     maskUrl: safeUrlSchema,
-    erase: z.array(maskEraseBoxSchema).min(1).max(MAX_BOXES),
+    erase: z.array(maskEraseBoxSchema).max(MAX_BOXES),
     keep: z.array(maskEraseBoxSchema).max(MAX_BOXES).optional(),
     eraseAlways: z.array(maskEraseBoxSchema).max(MAX_BOXES).optional(),
+    eraseTracks: z.array(trackSeedSchema).max(MAX_TRACK_SEEDS).optional(),
+    cutFrames: z.array(z.number().int().min(1)).max(MAX_CUT_FRAMES).optional(),
     forcePrivate: z.literal(true).optional(),
   })
   .refine((b) => b.erase.length + (b.keep?.length ?? 0) + (b.eraseAlways?.length ?? 0) <= MAX_BOXES, {
     path: ["keep"],
     message: `At most ${MAX_BOXES} boxes in all (erase, keep and eraseAlways together).`,
+  })
+  .refine((b) => b.erase.length > 0 || (b.eraseTracks?.length ?? 0) > 0, {
+    path: ["erase"],
+    message: "Mask Erase needs at least one box or one track.",
   })
 
 const INTERNAL_ONLY = { error: { code: "forbidden", message: "Mask Erase is an internal step of the platform's own jobs." } }
@@ -110,11 +128,14 @@ export async function maskEraseRoutes(app: FastifyInstance) {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     // An empty list is no list: the job's input and queue payload stay exactly as before the lists existed.
-    const { forcePrivate: _private, keep, eraseAlways, ...rest } = parsed.data
+    const { forcePrivate: _private, keep, eraseAlways, eraseTracks, cutFrames, ...rest } = parsed.data
+    const tracks = eraseTracks && eraseTracks.length > 0
     const body = {
       ...rest,
       ...(keep && keep.length > 0 ? { keep } : {}),
       ...(eraseAlways && eraseAlways.length > 0 ? { eraseAlways } : {}),
+      ...(tracks ? { eraseTracks } : {}),
+      ...(tracks && cutFrames && cutFrames.length > 0 ? { cutFrames } : {}),
     }
     const { data: job, error } = await insertJob(req, {
       force_private: extractForcePrivate(req.body) || undefined,

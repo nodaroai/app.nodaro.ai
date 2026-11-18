@@ -5,12 +5,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, gvpRenderResolution, gvpSegmentAudio, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
-import { dubbingQuotedMinutesOf, lipSyncPricingUnits, maskCompositePricingUnits, videoOverlayPricingUnits, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
+import { dubbingQuotedMinutesOf, lipSyncPricingUnits, maskCompositePricingUnits, motionTransferPricingUnits, motionTransferQuote, videoOverlayPricingUnits, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
+import { buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
 import type { SelectorFields } from "@nodaro/shared/workflow"
 import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
 import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -82,6 +82,11 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "omnihuman-2-0:per-second": 35,
+  // Motion Transfer on Kling 3.0 at 720p: the RATE of four seconds of driving
+  // video; every estimate multiplies it by the billed seconds ÷ 4
+  // (PRICING_UNIT_ESTIMATORS). Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "kling-3.0-motion:720p:per-4s": 228,
   "video-depth": 300,
   "extend-video": 400,
   "face-swap": 160,
@@ -603,11 +608,17 @@ export function estimateNodeCredits(
     return estimateEditVideoProCredits(node.data as EditVideoProNodeData)
   }
   if (nodeType === "motion-transfer" && node.data) {
-    const provider = (node.data.provider as string) ?? "kling"
-    const resolution = (node.data.resolution as string) ?? "720p"
-    const videoDuration = node.data.videoDuration as number | undefined
-    const modelId = buildMotionCreditModelIdentifier(provider, resolution, videoDuration)
-    return MOTION_CREDIT_COSTS[modelId] ?? NODE_CREDIT_COSTS["motion-transfer"] ?? 0
+    // The driving video's length as the graph gives it, else the most its
+    // orientation runs — never the node's own `videoDuration` (decided 2026-11-18).
+    const quote = motionTransferQuote(
+      { ...storedNode, id: storedNode.id ?? "" } as WorkflowNode,
+      (nodes ?? []) as WorkflowNode[],
+      (edges ?? []) as WorkflowEdge[],
+      reruns,
+    )
+    // A per-second rate (Kling 3.0 at 720p) is the price of ONE unit (four
+    // seconds): every estimate multiplies it by the units (PRICING_UNIT_ESTIMATORS).
+    return MOTION_CREDIT_COSTS[quote.creditId] ?? NODE_CREDIT_COSTS[quote.creditId] ?? NODE_CREDIT_COSTS["motion-transfer"] ?? 0
   }
   if (nodeType === "web-scrape" && node.data) {
     const rawActor = node.data.actor
@@ -1020,6 +1031,12 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   // 15 s, shown as an estimate (the server measures the audio before it holds
   // anything). Every other lip-sync model: 1.
   "lip-sync": lipSyncPricingUnits,
+  // Motion Transfer at a per-second rate (Kling 3.0 at 720p): a quarter of its
+  // four-second row per billed second of the driving video the graph gives,
+  // else of the most its orientation runs (10 s / 30 s), shown as an estimate
+  // (the server measures the video before it holds anything). Every other
+  // model and size: 1 (its tier row is the whole price).
+  "motion-transfer": motionTransferPricingUnits,
 };
 
 /**

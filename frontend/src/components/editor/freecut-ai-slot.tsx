@@ -46,7 +46,7 @@ export function FreeCutAiSlot({ videoUrl, ...props }: FreeCutAiSlotProps) {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full w-[360px] shrink-0 items-center justify-center border-s border-[#2D2D2D] bg-[#161616]">
+        <div className="flex h-full w-[360px] shrink-0 items-center justify-center border-s border-[#262633] bg-[#0e0e15]">
           <Loader2 className="h-5 w-5 animate-spin text-white/50" />
         </div>
       }

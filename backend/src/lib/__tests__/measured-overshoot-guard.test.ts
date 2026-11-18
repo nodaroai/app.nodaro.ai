@@ -90,6 +90,7 @@ import {
   videoSfxQuoteCreditId,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits, videoDepthCreditId, videoMaskCreditId } from "@nodaro/shared/media"
+import { checkMotionTransferLength, motionTransferEstimateSeconds } from "@nodaro/shared/credits"
 import { lipSyncAudioPricingOf, lipSyncHeldSecondsOf } from "../lip-sync-inputs.js"
 import { nemotronChargeId } from "../nemotron-transcribe-settle.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityClipReading, videoUtilityUnits, withMeasuredInputLengths } from "../video-utility-credits.js"
@@ -390,6 +391,8 @@ const SWEPT: ReadonlyArray<{ readonly name: string; readonly step: MeasuringStep
   { name: "Dubbing", step: "dubbing", reading: "container", maxSec: 1800, quote: (s) => dubbingQuotedMinutes({}, s), charge: (s) => dubbingHeldMinutes(s) },
   { name: "Lip Sync, a length tier (Kling Avatar)", step: "lip-sync", reading: "container", maxSec: 300, quote: (s) => pickLipSyncBucket(s), charge: (s) => lipSyncHeldSecondsOf(KLING_AVATAR, decoded(s))! },
   { name: "Lip Sync, OmniHuman 2.0's seconds", step: "lip-sync", reading: "container", maxSec: OMNI.maxSeconds, quote: (s) => lipSyncEstimateSeconds(OMNI, s), charge: (s) => lipSyncHeldSeconds(OMNI, s) },
+  // Motion Transfer's driving video (Kling following the video's orientation: its 30 s limit), its billed seconds.
+  { name: "Motion Transfer, its billed seconds", step: "motion-transfer", reading: "container", maxSec: 30, quote: (s) => motionTransferEstimateSeconds("kling-3.0", "video", s), charge: (s) => { const r = checkMotionTransferLength("kling-3.0", "video", s); return r.ok ? r.billedSeconds : 0 } },
   { name: "Mask Composite", step: "mask-composite", reading: "container", maxSec: 300, quote: (s) => maskCompositeUnits(s), charge: (s) => maskCompositeUnits(s) },
   { name: "Video Overlay", step: "video-overlay", reading: "video-stream", maxSec: 60, quote: (s) => videoOverlayVideoUnits(s), charge: (s) => videoOverlayVideoUnits(s) },
   { name: "Topaz Video Upscale, the stream", step: "video-upscale:topaz", reading: "video-stream", maxSec: 60, quote: (s) => topazVideoHoldUnits({ ...TOPAZ_1080P_30, durationSec: s }), charge: (s) => topazVideoHoldUnits({ ...TOPAZ_1080P_30, durationSec: s }) },

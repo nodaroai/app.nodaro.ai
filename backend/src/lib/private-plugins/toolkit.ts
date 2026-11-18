@@ -1749,6 +1749,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // POST /v1/video-face-mesh also takes `layers` (any set of the wireframe, eyes, lips, contours, irises and bold
   // lines) in place of `parts`, and answers them as `output_data.layers`.
   videoFaceMeshLayers: true,
+  // POST /v1/video-mask takes `tracks` (one track per subject, in its output) and POST /v1/mask-erase takes
+  // `eraseTracks` (whole subjects dropped by a point on one frame): providers/video/video-mask-tracks.ts.
+  videoMaskTracks: true,
   // tk.media.pitchTempo takes -24..24 semitones, half steps included, in one pass (providers/video/pitch-tempo.ts
   // `PITCH_SHIFT_MAX_SEMITONES`).
   pitchTempoTwoOctaves: true,

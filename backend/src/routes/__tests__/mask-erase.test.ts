@@ -186,6 +186,37 @@ describe("POST /v1/mask-erase — a child step", () => {
     expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], usageLogId: "u-1" })
   })
 
+  it("takes eraseTracks with the mask's cutFrames, with or without a box", async () => {
+    const SEED = { frame: 12, xPct: 40, yPct: 25.5 }
+    expect((await asChild({ ...BODY, erase: [], eraseTracks: [SEED], cutFrames: [30] })).statusCode).toBe(202)
+    expect(inserted).toMatchObject({ input_data: { type: "mask-erase", erase: [], eraseTracks: [SEED], cutFrames: [30] } })
+    expect(videoQueue.add).toHaveBeenLastCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [], eraseTracks: [SEED], cutFrames: [30], usageLogId: "u-1" })
+    expect((await asChild({ ...BODY, eraseTracks: [SEED] })).statusCode).toBe(202)
+    expect(videoQueue.add).toHaveBeenLastCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], eraseTracks: [SEED], usageLogId: "u-1" })
+  })
+
+  it("an empty eraseTracks list is no list, and cutFrames alone is dropped", async () => {
+    await asChild({ ...BODY, eraseTracks: [], cutFrames: [30] })
+    expect(videoQueue.add).toHaveBeenCalledWith("mask-erase", { jobId: "job-me-1", maskUrl: BODY.maskUrl, erase: [BOX], usageLogId: "u-1" })
+  })
+
+  it("refuses a bad track seed, too many of them, or no box and no track (400, nothing queued)", async () => {
+    const SEED = { frame: 0, xPct: 50, yPct: 50 }
+    for (const body of [
+      { ...BODY, erase: [], eraseTracks: [] },
+      { ...BODY, eraseTracks: [{ ...SEED, frame: -1 }] },
+      { ...BODY, eraseTracks: [{ ...SEED, xPct: 101 }] },
+      { ...BODY, eraseTracks: [{ ...SEED, id: 3 }] },
+      { ...BODY, eraseTracks: Array.from({ length: 65 }, () => SEED) },
+      { ...BODY, eraseTracks: [SEED], cutFrames: [0] },
+    ]) {
+      const res = await asChild(body)
+      expect(res.statusCode, JSON.stringify(body).slice(0, 120)).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    }
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("refuses more than 50 boxes erase and keep together, or a bad keep box (400, nothing queued)", async () => {
     for (const body of [
       { ...BODY, erase: Array.from({ length: 30 }, () => BOX), keep: Array.from({ length: 21 }, () => BOX) },

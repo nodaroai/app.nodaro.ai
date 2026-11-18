@@ -197,7 +197,9 @@ describe("a mapped video node re-runs the call it was made from", () => {
     const body = { imageUrl: IMAGE, videoUrl: VIDEO, prompt: "dance", provider: "kling-3.0", resolution: "1080p", characterOrientation: "image", backgroundSource: "input_image", videoDuration: 8 }
     expect(wires("/v1/motion-transfer", body)).toEqual([[IMAGE, "image", "image"], [VIDEO, "video", "video"]])
     const payload = run("/v1/motion-transfer", body, { imageUrl: IMAGE, videoUrl: VIDEO })
-    expect(payload).toMatchObject({ imageUrl: IMAGE, videoUrl: VIDEO, provider: "kling-3.0", resolution: "1080p", characterOrientation: "image", backgroundSource: "input_image", videoDuration: 8 })
+    expect(payload).toMatchObject({ imageUrl: IMAGE, videoUrl: VIDEO, provider: "kling-3.0", resolution: "1080p", characterOrientation: "image", backgroundSource: "input_image" })
+    // A declared length is never carried (decided 2026-11-18): the run measures the driving video before it holds anything.
+    expect(payload.videoDuration).toBeUndefined()
     expect(String(payload.prompt)).toContain("dance")
   })
 

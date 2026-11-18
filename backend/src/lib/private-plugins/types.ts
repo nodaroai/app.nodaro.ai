@@ -3947,6 +3947,18 @@ export interface PluginCapabilities {
    */
   readonly videoFaceMeshLayers?: boolean
   /**
+   * `POST /v1/video-mask` takes `tracks: true` and answers the mask's subjects
+   * as `output_data.tracks` (each one's `id`, `fromFrame`, `toFrame`, `frames`
+   * and the `viewFrame` / `viewBox` to look at it on), with `tracksOmitted`
+   * and the `cutFrames` they were followed between; and `POST /v1/mask-erase`
+   * takes `eraseTracks` (points on single frames, each naming the subject
+   * whose region it lies in, dropped on every frame it is on) with those
+   * `cutFrames`, `erase` then allowed empty, and answers `erasedTracks` and
+   * `unmatchedSeeds`. False (or absent): an older host, which drops the first
+   * key and refuses the second.
+   */
+  readonly videoMaskTracks?: boolean
+  /**
    * `tk.media.pitchTempo` takes `semitones` from -24 to 24 (two octaves either
    * way, half steps included) in ONE rubberband pass, at the same speed, and
    * clamps beyond that. False (or absent): an older host, which clamps the

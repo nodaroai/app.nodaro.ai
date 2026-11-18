@@ -48,6 +48,7 @@ import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 import { measureSeedance2Settle } from "../seedance2-ref-video-settle.js"
 import { gptImage26AutoSettledBase } from "../gpt-image-2-6-settle.js"
 import { kieTaskCreditsConsumed } from "../../providers/kie/image-cost.js"
+import { kieRecoveredCostUsd } from "../../providers/kie/billed-cost.js"
 import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../seedance-draft-finalize.js"
 import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-audio.js"
@@ -227,7 +228,7 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
       const r = await pollVeoTask(id, "VEO")
       const urls = r.resultUrls
       if (!urls?.[0]) throw new Error("VEO success but no resultUrls")
-      return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs }
+      return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs, kieCredits: kieTaskCreditsConsumed(r.rawRecordInfo) }
     }
     case "kie-veo-1080p": {
       // Quasi-sync GET /api/v1/veo/get-1080p-video with the PARENT kieTaskId
@@ -252,7 +253,7 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
       const r = await pollLumaTask(id, pollAttempts)
       const urls = r.resultJson.resultUrls ?? []
       if (!urls[0]) throw new Error("Luma success but no resultUrls")
-      return { url: urls[0]!, extraUrls: urls.slice(1) }
+      return { url: urls[0]!, extraUrls: urls.slice(1), kieCredits: kieTaskCreditsConsumed(r.rawRecordInfo) }
     }
     case "kie-runway": {
       const videoUrl = await pollRunwayTask(id, "Runway")
@@ -613,6 +614,8 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
   // lane runs it with the attach spec read off `jobs.input_data`. Before this,
   // a finished provider result was discarded here and refunded ~90 min later.
   if (isEntityMediaJobType(row.job_type)) {
+    // What KIE billed for the saved task, recorded as the worker records it.
+    const providerCost = kieRecoveredCostUsd(result.kieCredits)
     try {
       await recoverEntityJob({
         jobId: row.id,
@@ -620,6 +623,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
         url: result.url,
         claimant: opts?.claimant ?? "cron",
         autoQualityKieCredits: autoQualityCreditsOf(row, result.kieCredits),
+        ...(providerCost !== null && { providerCost }),
       })
     } catch (err) {
       await bumpAttemptsOrExhaust(row.id, err)
@@ -733,7 +737,11 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       result: {
         url: composite?.url ?? result.url,
         ...(composite ? {} : { extraUrls: result.extraUrls }),
-        cost: null,  // committed at reservation; actual cost is unknown post-reconcile
+        // What KIE billed for the saved task (its record's credits), or null when
+        // the record carries none: the column is then left as it is. Recorded
+        // only: no `meteredCost`, so the reservation (or the metered base above)
+        // is committed whatever this is.
+        cost: kieRecoveredCostUsd(result.kieCredits),
         providerUsed: null,
         providerMs: result.providerMs,
       },

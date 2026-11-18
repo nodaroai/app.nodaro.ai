@@ -121,7 +121,7 @@ import {
   sunoCreditType,
   resolveImageGenCreditIdentifier,
   buildVideoCreditModelIdentifier,
-  buildMotionCreditModelIdentifier,
+  motionTransferEstimatePrice,
   motionTransferResolution,
   lipSyncAudioRateOf,
   isSeedanceLipSyncProvider,
@@ -5950,8 +5950,11 @@ function buildPayloadOf(
       const mtProvider = (data.provider as string) ?? "kling"
       // The size the model runs at, sent and charged alike, as on the route.
       const mtResolution = motionTransferResolution(mtProvider, (data.resolution as string) ?? "720p").resolution
-      const mtVideoDuration = data.videoDuration as number | undefined
-      const mtModelId = buildMotionCreditModelIdentifier(mtProvider, mtResolution, mtVideoDuration)
+      // The price is never read from the node's `videoDuration` (decided
+      // 2026-11-18): the run measures the driving video before it reserves
+      // (`stampMotionTransferInput`, node-executor) and reserves that row. Until
+      // then the id is the most the run can be held for at its orientation.
+      const mtModelId = motionTransferEstimatePrice(mtProvider, mtResolution, data.characterOrientation, undefined).creditId
       return {
         jobName: "motion-transfer",
         queueName: "video-generation",
@@ -5966,7 +5969,6 @@ function buildPayloadOf(
           backgroundSource: data.backgroundSource,
           characterOrientation: data.characterOrientation,
           resolution: mtResolution,
-          videoDuration: mtVideoDuration,
           usageLogId,
         },
       }

@@ -1,13 +1,13 @@
 {
   "cloud/every-scope": {
     "tools": 263,
-    "bytes": 560193,
-    "sha256": "5ec2e329d7307cfe256dc09f7249f1dec90aad73d9f92d7968643838461cbb4b"
+    "bytes": 560104,
+    "sha256": "1aa4da4d8dadd7dbcb30701cfbe1fbb34be6662369aa793f6447aae8cdd47404"
   },
   "cloud/all": {
     "tools": 254,
-    "bytes": 550671,
-    "sha256": "1332a445b6e147c201e45fade5c19ccd9b81412fa609609579aedbe09b1be7d9"
+    "bytes": 550582,
+    "sha256": "a308453d6a1031417543d993c3fd245a5e06da847d4f7b2bbdba05dc21ffd314"
   },
   "cloud/jobs": {
     "tools": 28,
@@ -21,13 +21,13 @@
   },
   "community/every-scope": {
     "tools": 198,
-    "bytes": 447266,
-    "sha256": "1fd276bb9e6577ae45d7befaf34935b13a761ffb9d7e383ee2376e365a7c5ac0"
+    "bytes": 447153,
+    "sha256": "1ae4221701c82e469512db148d6a9cd73a3a6ae1c91b6ecffe0650115ece4526"
   },
   "community/all": {
     "tools": 196,
-    "bytes": 444961,
-    "sha256": "29e18434ed8fd8d40123a117e5b2e2b0cfe246f6397cbf398fe34ebdaeef5aab"
+    "bytes": 444848,
+    "sha256": "1717bc75a6cd3323bd7662985e91244c0702c441a2fc986db04d153de55d6ac3"
   },
   "community/none": {
     "tools": 10,

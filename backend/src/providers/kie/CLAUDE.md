@@ -69,6 +69,15 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 - `__tests__/kie-billed-cost-guard.test.ts` lists, per method, the branches in `video.ts` /
   `audio.ts` that still record the catalog figure directly, with why; a new one fails it. The
   list only shrinks.
+- A job finished by a RECOVERY path (the reconcile cron, the worker's re-pick after a restart,
+  a unit's `recover.ts`) records `kieRecoveredCostUsd(credits)`: the saved task's record credits
+  at the same rate, read off the poll it already made, else nothing (the column is left as it
+  is: a recovery knows the task, not the request the worker ran it with, so it names no catalog
+  figure). Covered: the generic finalize and the entity tail in `lib/reconcile/kie.ts` for every
+  record-carrying kind (`kie-standard`, `kie-seedance-draft`, `kie-lip-sync`, `kie-luma`,
+  `kie-veo`); kinds whose poll returns only a URL record nothing.
+  `lib/reconcile/__tests__/kie-recovery-cost-guard.test.ts` holds every recovered kind, every
+  completion call in `lib/reconcile/kie.ts` and every `recover.ts` to it, with short lists.
 
 ---
 

@@ -171,7 +171,7 @@ export const VIDEO_UTILITY_READING: Readonly<Record<VideoUtilityStepType, Measur
 }
 
 /** The steps whose quote reads the measured walk with a slack from {@link MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC}. */
-export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" | "pitch-tempo" | "dubbing" | "video-upscale" | "lip-sync"
+export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" | "pitch-tempo" | "dubbing" | "video-upscale" | "lip-sync" | "motion-transfer"
 
 /**
  * The slack a quote of each of these steps adds to each clip a node makes in
@@ -180,7 +180,7 @@ export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" |
  * server's estimate and the app listing read:
  * - the CONTAINER (ffprobe's format duration, an audio tail included), the
  *   quote and the charge forgiving the same 0.05 s past a whole second: Video
- *   Mask and Video Depth — Mask Composite's slack, the whole 0.15 s a made
+ *   Mask, Video Depth and Motion Transfer's driving video — Mask Composite's slack, the whole 0.15 s a made
  *   clip's container can run past its planned length;
  * - the CONTAINER, the quote reading the length exactly and the hold and the
  *   charge forgiving 0.05 s: Video SFX (its 8 / 15 / 30 / 60 / 120 / 300 s
@@ -203,6 +203,7 @@ export const MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC: Readonly<Record<MeasuredInpu
   "dubbing": EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
   "video-upscale": VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC,
   "lip-sync": EXACT_QUOTE_PLANNED_CLIP_SLACK_SEC,
+  "motion-transfer": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
 }
 
 /**
@@ -221,6 +222,7 @@ export const MEASURED_INPUT_READING: Readonly<Record<MeasuredInputStepType, Meas
   "dubbing": "container",
   "video-upscale": "video-stream",
   "lip-sync": "container",
+  "motion-transfer": "container",
 }
 
 /** The recording node types: the uploads an app exposes and the Video URL (YouTube or any link) node. */

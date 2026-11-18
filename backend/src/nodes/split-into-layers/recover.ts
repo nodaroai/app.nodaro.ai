@@ -12,7 +12,8 @@ import { creditIdBaseCredits } from "../../lib/credit-id-base.js"
 import { finalizeJobWithMedia, type FinalizeClaimant, type FinalizeOutcome } from "../../lib/job-finalize.js"
 import { isPostProcessingError } from "../../lib/post-processing-error.js"
 import { layerDecompositionResultOf, type DecomposedLayer, type LayerDecompositionResult } from "../../providers/kie/layer-decomposition.js"
-import { KIE_CREDIT_USD, LAYER_DECOMPOSITION_MODEL_KEY } from "../../providers/kie/models.js"
+import { kieRecoveredCostUsd } from "../../providers/kie/billed-cost.js"
+import { LAYER_DECOMPOSITION_MODEL_KEY } from "../../providers/kie/models.js"
 import type { UnitRecover } from "../kit.js"
 import { descriptor } from "./descriptor.generated.js"
 
@@ -120,7 +121,7 @@ export async function deliverLayerSplit(d: LayerSplitDelivery): Promise<Finalize
     result: {
       url: d.result.baseUrl,
       // Recorded only (jobs.provider_cost): the settlement reads the row of the images stored.
-      cost: d.result.kieCredits !== undefined ? d.result.kieCredits * KIE_CREDIT_USD : null,
+      cost: kieRecoveredCostUsd(d.result.kieCredits),
       providerUsed: LAYER_DECOMPOSITION_MODEL_KEY,
       kieTaskId: d.result.taskId,
       ...(d.result.providerMs !== undefined ? { providerMs: d.result.providerMs } : {}),

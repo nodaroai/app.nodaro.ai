@@ -3,7 +3,7 @@
 import { useEffect, useRef, type KeyboardEvent } from "react"
 import { Link } from "react-router-dom"
 import { X } from "lucide-react"
-import { COMPETITOR_SEARCH_TERM_MAX_LENGTH, normalizeSearchTerms } from "@nodaro/shared/social"
+import { COMPETITOR_SCAN_SEARCH_LIMIT, COMPETITOR_SEARCH_TERM_MAX_LENGTH, normalizeSearchTerms } from "@nodaro/shared/social"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useT } from "@/lib/i18n"
@@ -62,9 +62,10 @@ function TermChips({ terms, cap, onRemove }: { readonly terms: readonly string[]
   )
 }
 
-/** How many terms the plan allows, or that only the first ones are searched. */
-function TermsCapNote({ count, cap }: { readonly count: number; readonly cap: number }) {
+/** How many terms the plan allows, or that only the first ones are searched; with no cap, what does limit them (one scan's size). */
+function TermsCapNote({ count, cap, unlimited }: { readonly count: number; readonly cap: number; readonly unlimited: boolean }) {
   const t = useT()
+  if (unlimited) return <p className="text-[12px] text-muted-foreground">{t("competitors.searchTermsNoCap", { max: COMPETITOR_SCAN_SEARCH_LIMIT })}</p>
   if (cap === 0) return count > 0 ? <p className="text-[12px] text-muted-foreground">{t("competitors.searchTermsNameOnly")}</p> : null
   const text = count > cap ? t("competitors.searchTermsOverCap", { n: cap }) : t("competitors.searchTermsCap", { n: count, max: cap })
   return <p className="text-[12px] text-muted-foreground">{text}</p>
@@ -73,17 +74,21 @@ function TermsCapNote({ count, cap }: { readonly count: number; readonly cap: nu
 /**
  * Phrases or #hashtags searched instead of the brand's name, as chips. `cap`
  * is the plan's (0 below Standard: the name only, with a word on where terms
- * come from). The typed text is the dialog's, so the price and Save count it.
+ * come from); `unlimited` when the plan has none (a platform admin: held only
+ * to one scan's size). The typed text is the dialog's, so the price and Save
+ * count it.
  */
 export function SearchTermsField({
   terms,
   cap,
+  unlimited = false,
   draft,
   onDraft,
   onChange,
 }: {
   readonly terms: readonly string[]
   readonly cap: number
+  readonly unlimited?: boolean
   readonly draft: string
   readonly onDraft: (draft: string) => void
   readonly onChange: (terms: readonly string[]) => void
@@ -134,7 +139,7 @@ export function SearchTermsField({
           </Button>
         </div>
       )}
-      <TermsCapNote count={terms.length} cap={cap} />
+      <TermsCapNote count={terms.length} cap={cap} unlimited={unlimited} />
     </fieldset>
   )
 }

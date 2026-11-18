@@ -46,6 +46,11 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
+// Motion Transfer measures its driving video before anything is held (decided 2026-11-18): a readable 10-second clip.
+vi.mock("@/lib/motion-transfer-input.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/motion-transfer-input.js")>()),
+  measureMotionTransferInput: vi.fn(async () => ({ ok: true, measuredSec: 10, billedSeconds: 10, creditId: "motion-transfer:10s" })),
+}))
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),

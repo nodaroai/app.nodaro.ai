@@ -101,6 +101,8 @@ export const MEASURING_STEP_ALLOWANCES: Readonly<Record<MeasuringStepId, Measuri
   // Video Mask and Video Depth: `pricedClipSeconds` on the quote and the charge alike.
   "video-mask": measuredInput("video-mask", CLIP_PRICE_GRACE_SEC, CLIP_PRICE_GRACE_SEC),
   "video-depth": measuredInput("video-depth", CLIP_PRICE_GRACE_SEC, CLIP_PRICE_GRACE_SEC),
+  // Motion Transfer's driving video: its billed seconds (`motionTransferBilledSeconds`) on the quote and the charge alike.
+  "motion-transfer": measuredInput("motion-transfer", CLIP_PRICE_GRACE_SEC, CLIP_PRICE_GRACE_SEC),
   // Topaz: frames of the video stream on the quote and the hold, none forgiven; a stream with no length, the container's frames less its allowance.
   "video-upscale:topaz": { ...measuredInput("video-upscale", 0, 0), fallback: { reading: "container", chargeGraceSec: TOPAZ_VIDEO_CONTAINER_GRACE_SEC } },
   // Nodaro Video Upscale: the stream's seconds rounded up; a stream with no length, the container's less its allowance.

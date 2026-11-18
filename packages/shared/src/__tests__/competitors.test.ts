@@ -4,6 +4,7 @@ import {
   COMPETITOR_SCAN_CREDIT_COSTS,
   COMPETITOR_SCAN_MAX_SEARCHES,
   COMPETITOR_SCAN_PAGE_CREDIT_ID,
+  COMPETITOR_SCAN_SEARCH_LIMIT,
   COMPETITOR_SEARCH_TERMS_MAX,
   SCAN_PAGE_CREDIT_COSTS,
   SOCIAL_SEARCH_CREDITS_PER_PAGE,
@@ -69,7 +70,11 @@ describe("search terms", () => {
     expect(competitorScanSearches({ ...c, termCap: 3 })).toBe(2 * 3)
     expect(competitorScanSearches({ ...c, termCap: 0 })).toBe(2)
     expect(competitorScanSearches({ ...c, termCap: null })).toBe(2 * 4)
-    expect(competitorScanSearches({ aboutPlatforms: ["x"], searchTerms: Array.from({ length: 40 }, (_, i) => `t${i}`) })).toBe(COMPETITOR_SEARCH_TERMS_MAX)
+    // No cap (a platform admin): every term up to the column's ceiling, so one platform fits a hundred.
+    const terms = (n: number) => Array.from({ length: n }, (_, i) => `t${i}`)
+    expect(competitorScanSearches({ aboutPlatforms: ["x"], searchTerms: terms(40) })).toBe(40)
+    expect(competitorScanSearches({ aboutPlatforms: ["x"], searchTerms: terms(120) })).toBe(COMPETITOR_SEARCH_TERMS_MAX)
+    expect(COMPETITOR_SEARCH_TERMS_MAX).toBe(COMPETITOR_SCAN_SEARCH_LIMIT)
   })
 })
 

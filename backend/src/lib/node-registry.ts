@@ -28,6 +28,7 @@ import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
 import {
   isSpeechLengthPriceId,
   buildMotionCreditModelIdentifier,
+  MOTION_TRANSFER_RATE_IDS,
   SPEECH_FLOOR_UNITS,
   speechPriceUnits,
   speechRowUnits,
@@ -135,6 +136,8 @@ function motionTransferIds(): string[] {
       }
     }
   }
+  // A model and size charged per second of its driving video (Kling 3.0 at 720p): its rate row.
+  for (const id of MOTION_TRANSFER_RATE_IDS) out.add(id)
   return [...out]
 }
 

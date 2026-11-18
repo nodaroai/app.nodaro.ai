@@ -1,6 +1,6 @@
 "use client"
 
-import { COMPETITOR_ABOUT_PLATFORMS, type CreateCompetitorInput, type TrackedCompetitor } from "@nodaro/shared/social"
+import { COMPETITOR_ABOUT_PLATFORMS, COMPETITOR_SCAN_SEARCH_LIMIT, type CreateCompetitorInput, type TrackedCompetitor } from "@nodaro/shared/social"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { useT } from "@/lib/i18n"
@@ -55,6 +55,7 @@ export function CompetitorFormDialog({
             <SearchTermsField
               terms={form.searchTerms}
               cap={f.cap}
+              unlimited={f.unlimited}
               draft={f.termDraft}
               onDraft={f.setTermDraft}
               onChange={(searchTerms) => setForm((cur) => ({ ...cur, searchTerms }))}
@@ -68,10 +69,15 @@ export function CompetitorFormDialog({
             </label>
           </div>
         </div>
+        {f.tooBig && (
+          <p role="alert" className="text-[12px] text-destructive">
+            {t("competitors.scanTooBig", { n: f.searches, max: COMPETITOR_SCAN_SEARCH_LIMIT })}
+          </p>
+        )}
         <ScanFormFooter
           priceText={f.pages === 1 ? t("competitors.priceLineOne") : t("competitors.priceLine", { n: f.pages })}
           credits={f.credits}
-          saveDisabled={busy === true || !form.brand.trim()}
+          saveDisabled={busy === true || !form.brand.trim() || f.tooBig}
           onCancel={() => onOpenChange(false)}
           onSave={() => onSubmit(f.input())}
         />

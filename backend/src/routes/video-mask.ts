@@ -62,6 +62,9 @@ export const videoMaskBody = z.object({
   // Follow the mask's regions across frames: short gaps filled, pops removed and a subject lost for longer looked
   // for again (at most 3 extra model requests), in place of holdLastMask. Left out, the job carries no such field.
   steadyRegions: z.boolean().optional(),
+  // Report the mask's subjects: `tracks` (each one's frames and its largest box) and the `cutFrames` they were
+  // followed between, in the job's output. Left out, the job carries no such field.
+  tracks: z.boolean().optional(),
 })
 
 /**

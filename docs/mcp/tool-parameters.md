@@ -103,7 +103,7 @@ Needs `assets:write` · Nodaro Cloud only.
 | `accounts.linkedin` | string |  | At most 300 characters. |
 | `accounts.meta_ads` | string |  | At most 300 characters. |
 | `about_platforms` | string[] |  | Where to search posts naming it. |
-| `search_terms` | string[] |  | Phrases or #hashtags searched instead of the name (a full name, a handle), one search per platform each; a post must name one. The plan caps how many. At most 15 items. |
+| `search_terms` | string[] |  | Phrases or #hashtags searched instead of the name (a full name, a handle), one search per platform each; a post must name one. The plan caps how many. At most 100 items. |
 | `is_own` | boolean |  | The user's own brand. |
 | `schedule` | string |  | Default weekly. One of `off`, `weekly`, `daily`. |
 
@@ -2359,11 +2359,11 @@ Needs `workflows:execute`.
 | `video_url` | string (URL) |  |  |
 | `video_asset_id` | string |  |  |
 | `prompt` | string |  | At most 8000 characters. |
-| `character_orientation` | string |  | Which source's framing wins. Default `image`. One of `image`, `video`. |
-| `resolution` | string |  | Output resolution. Default 720p. One of `480p`, `580p`, `720p`, `1080p`. |
+| `character_orientation` | string |  | One of `image`, `video`. |
+| `resolution` | string |  | One of `480p`, `580p`, `720p`, `1080p`. |
 | `provider` | string |  | Motion transfer provider. Default kling. |
 | `background_source` | string |  | Which source provides the background. Provider-dependent. One of `input_video`, `input_image`. |
-| `video_duration` | number |  | Output duration in seconds. Provider-dependent. From 1 to 60. |
+| `video_duration` | number |  | Ignored: the driver video is measured. From 1 to 60. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 

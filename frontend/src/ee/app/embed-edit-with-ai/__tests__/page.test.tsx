@@ -151,11 +151,11 @@ describe("/embed/edit-with-ai", () => {
   it("shows the panel before its host has a video for it, with a note on which videos it works on", () => {
     render(<EditWithAiFramePage />)
     deliver(init({ videos: [], openedVideoUrl: undefined }))
-    // Everything the panel can do is on show; a file imported from the computer has no address the run could listen to, and the note says so.
+    // Everything the panel can do is on show, with a note on which videos it works on (one from the computer once it has uploaded).
     expect(screen.getByTestId("panel")).toBeTruthy()
     expect(panelProps.last?.videos).toEqual([])
-    expect(String(panelProps.last?.noVideoNote)).toMatch(/works on videos from your Nodaro library or from this production/)
-    expect(String(panelProps.last?.noVideoNote)).toMatch(/imported from your computer cannot be edited with AI yet/)
+    expect(String(panelProps.last?.noVideoNote)).toMatch(/works on the videos you import into the editor/)
+    expect(String(panelProps.last?.noVideoNote)).toMatch(/from your computer is uploaded to your library as you import it/)
   })
 
   it("says where to open it when nobody frames it, or nobody answers", () => {

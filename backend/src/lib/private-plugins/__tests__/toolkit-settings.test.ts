@@ -732,6 +732,7 @@ describe("tk.settings: the face mesh's layers", () => {
 
   it("the capability is declared", () => {
     expect(buildToolkit().capabilities?.videoFaceMeshLayers).toBe(true)
+    expect(buildToolkit().capabilities?.videoMaskTracks).toBe(true)
   })
 })
 

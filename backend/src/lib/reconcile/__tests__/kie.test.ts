@@ -233,6 +233,7 @@ vi.mock("../unit-recovery.js", () => ({
 
 import { DrainAbortError } from "../../worker-drain.js"
 import { reconcileKieJob, type KieJobRow } from "../kie.js"
+import { KIE_CREDIT_USD } from "../../../providers/kie/models.js"
 
 describe("reconcileKieJob", () => {
   beforeEach(() => {
@@ -1515,5 +1516,129 @@ describe("an own-writer unit with a recovery", () => {
     await reconcileKieJob(row({ job_type: "character", input_data: null }))
     expect(unitRecovery.recover).not.toHaveBeenCalled()
     expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ reconcile_last_error: expect.stringMatching(/not generically recoverable: character/) }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A job finished by a recovery path (the cron, or the worker's re-pick after a
+// restart — both reach reconcileKieJob) records what KIE billed for its saved
+// task, as a job finished normally does: the record's credits at the rate
+// `kieRecoveredCostUsd` applies. A record with no figure leaves the column
+// unwritten (cost null → omitted by finalize). Recorded only: the settlement
+// inputs finalize reads (`meteredCost`, `collectOverHold`, `meteredBaseCredits`)
+// are exactly what they were.
+// ---------------------------------------------------------------------------
+describe("a recovered job records what KIE billed for its saved task", () => {
+  const record = (credits: number) => ({ code: 200, data: { creditsConsumed: credits } })
+  const lastFinalizeInput = (): Record<string, unknown> =>
+    mocks.finalizeMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+  const lastResult = (): Record<string, unknown> => lastFinalizeInput().result as Record<string, unknown>
+  const expectSettlementUnchanged = () => {
+    const input = lastFinalizeInput()
+    const result = lastResult()
+    expect(result).not.toHaveProperty("meteredCost")
+    expect(result).not.toHaveProperty("collectOverHold")
+    expect(input).not.toHaveProperty("meteredBaseCredits")
+    expect(input).not.toHaveProperty("extraNonProviderCredits")
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.finalizeMock.mockResolvedValue({ ok: true })
+    mocks.jobsSingleMock.mockResolvedValue({ data: { reconcile_attempts: 0 }, error: null })
+  })
+
+  for (const [jobType, provider] of [["video-to-video", "happyhorse-edit"], ["video-to-video", "wan-videoedit"], ["motion-transfer", "kling"]] as const) {
+    it(`${jobType} (${provider}) on kie-standard: provider_cost = the record's credits × KIE_CREDIT_USD`, async () => {
+      mocks.pollKieTaskMock.mockResolvedValueOnce({
+        resultJson: { resultUrls: ["https://kie.example/out.mp4"] },
+        providerMs: 50000,
+        rawRecordInfo: record(84),
+        taskId: "t-v",
+      })
+      await reconcileKieJob({
+        id: "j-v", provider_kind: "kie-standard", provider_task_id: "t-v", reconcile_attempts: 0,
+        job_type: jobType, input_data: { provider },
+      })
+      expect(lastResult().cost).toBeCloseTo(84 * KIE_CREDIT_USD, 10)
+      expect(lastResult().providerUsed).toBeNull()
+      expectSettlementUnchanged()
+    })
+  }
+
+  it("the worker's re-pick after a deploy restart (claimant 'worker') records the same figure", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.mp4"] },
+      rawRecordInfo: record(30),
+      taskId: "t-w",
+    })
+    await reconcileKieJob(
+      { id: "j-w", provider_kind: "kie-standard", provider_task_id: "t-w", reconcile_attempts: 0, job_type: "motion-transfer" },
+      { claimant: "worker", pollAttempts: 120 },
+    )
+    expect(lastFinalizeInput().claimant).toBe("worker")
+    expect(lastResult().cost).toBeCloseTo(30 * KIE_CREDIT_USD, 10)
+    expectSettlementUnchanged()
+  })
+
+  it("a record with no credits figure records nothing (cost null, the column left as it is)", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/out.mp4"] },
+      rawRecordInfo: { code: 200, data: { state: "success" } },
+      taskId: "t-n",
+    })
+    await reconcileKieJob({ id: "j-n", provider_kind: "kie-standard", provider_task_id: "t-n", reconcile_attempts: 0, job_type: "video-to-video" })
+    expect(lastResult().cost).toBeNull()
+    expectSettlementUnchanged()
+  })
+
+  it("kie-luma (Luma Modify) reads the same record figure off its poll", async () => {
+    mocks.pollLumaTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/luma.mp4"] }, rawRecordInfo: record(120) })
+    await reconcileKieJob({ id: "j-l", provider_kind: "kie-luma", provider_task_id: "t-l", reconcile_attempts: 0, job_type: "video-to-video" })
+    expect(lastResult().cost).toBeCloseTo(120 * KIE_CREDIT_USD, 10)
+    expectSettlementUnchanged()
+  })
+
+  it("kie-veo reads the record figure when its record carries one, and records nothing when it does not", async () => {
+    mocks.pollVeoTaskMock.mockResolvedValueOnce({ resultUrls: ["https://veo.example/a.mp4"], rawRecordInfo: record(60) })
+    await reconcileKieJob({ id: "j-veo1", provider_kind: "kie-veo", provider_task_id: "t-veo1", reconcile_attempts: 0, job_type: "image-to-video" })
+    expect(lastResult().cost).toBeCloseTo(60 * KIE_CREDIT_USD, 10)
+
+    mocks.pollVeoTaskMock.mockResolvedValueOnce({ resultUrls: ["https://veo.example/b.mp4"], rawRecordInfo: { code: 200, data: { successFlag: 1 } } })
+    await reconcileKieJob({ id: "j-veo2", provider_kind: "kie-veo", provider_task_id: "t-veo2", reconcile_attempts: 0, job_type: "image-to-video" })
+    expect(lastResult().cost).toBeNull()
+  })
+
+  it("a kind whose poll returns only the result URL (kie-aleph) records nothing", async () => {
+    mocks.pollAlephTaskMock.mockResolvedValueOnce("https://kie.example/aleph.mp4")
+    await reconcileKieJob({ id: "j-a", provider_kind: "kie-aleph", provider_task_id: "t-a", reconcile_attempts: 0, job_type: "video-to-video" })
+    expect(lastResult().cost).toBeNull()
+  })
+
+  it("a Seedance run settled on its delivered clip keeps its metered base: the recorded figure rides beside it", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/sd.mp4"] },
+      rawRecordInfo: record(400),
+      taskId: "t-sd2",
+    })
+    settle.measure.mockResolvedValueOnce(7193)
+    await reconcileKieJob({
+      id: "j-sd2", provider_kind: "kie-standard", provider_task_id: "t-sd2", reconcile_attempts: 0, job_type: "image-to-video",
+      input_data: { provider: "seedance-2-5", resolution: "1080p", duration: 12, referenceVideoUrls: ["https://r2.example.com/videos/ref.mp4"], refVideoDurationsSec: [30] },
+    })
+    expect(lastFinalizeInput().meteredBaseCredits).toBe(7193)
+    expect(lastResult().cost).toBeCloseTo(400 * KIE_CREDIT_USD, 10)
+    expect(lastResult()).not.toHaveProperty("meteredCost")
+  })
+
+  it("an entity job recovered from its saved task hands the same figure to the entity tail; none when the record has none", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://cdn.example/c.png"] }, rawRecordInfo: record(8), taskId: "t-e" })
+    await reconcileKieJob({ id: "j-e", provider_kind: "kie-standard", provider_task_id: "t-e", reconcile_attempts: 0, job_type: "generate-character" })
+    const args = mocks.recoverEntityMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(args.providerCost).toBeCloseTo(8 * KIE_CREDIT_USD, 10)
+
+    mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://cdn.example/d.png"] }, taskId: "t-e2" })
+    await reconcileKieJob({ id: "j-e2", provider_kind: "kie-standard", provider_task_id: "t-e2", reconcile_attempts: 0, job_type: "generate-character" })
+    expect(mocks.recoverEntityMock.mock.calls.at(-1)?.[0]).not.toHaveProperty("providerCost")
   })
 })

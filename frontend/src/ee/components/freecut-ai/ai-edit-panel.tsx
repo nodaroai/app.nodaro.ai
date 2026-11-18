@@ -27,6 +27,8 @@ import { EDIT_STEPS, readTimelineView, timelineSeconds, type EditStep } from "@/
 import { costOf, lockedSteps, statusOf } from "@/ee/lib/freecut-ai/panel-model"
 import { cardOnlyPlan, layoutInWords } from "@/ee/lib/freecut-ai/request-reading"
 import { brollCount } from "@/ee/lib/freecut-ai/run/broll"
+import { restingCrew } from "@/ee/lib/freecut-ai/run/show"
+import type { AgentId } from "@/ee/lib/freecut-ai/abilities"
 import { titleCount } from "@/ee/lib/freecut-ai/run/titles"
 import { AbilityRows } from "./panel/ability-cards"
 import { LayoutShots } from "./panel/layout-shots"
@@ -164,6 +166,19 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
     }
   }, [editorWindow, editorOrigin])
 
+  // The crew is there from the start, asleep at its lanes, in an editor that keeps it on screen.
+  const restsCrew = capabilities.includes("studio-layout") && capabilities.includes("presence-targets")
+  const running = session.phase.kind === "running"
+  useEffect(() => {
+    if (!restsCrew || running) return
+    const names = Object.fromEntries(Object.entries(AGENT_NAME).map(([a, key]) => [a, t(key)])) as Record<AgentId, string>
+    try {
+      linkRef.current?.presence(restingCrew(names))
+    } catch {
+      // The editor is not open yet; the next change sends it again.
+    }
+  }, [restsCrew, running, t, editorWindow, editorOrigin, project])
+
   const showCompare = (mode: CompareMode) => {
     if (editorCompares) {
       session.setCompareMode(mode)
@@ -238,7 +253,7 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
   return (
     <div className={cn("flex h-full", view === "original" ? "w-full" : "w-[360px] shrink-0", className)}>
       {view === "original" && session.video ? <OriginalView url={session.video.url} onBack={backToEdit} /> : null}
-      <aside className="flex h-full w-[360px] shrink-0 flex-col border-s border-white/10 bg-[#0f0f12] text-white" aria-label={t("freecutAi.title")}>
+      <aside className="flex h-full w-[360px] shrink-0 flex-col border-s border-white/10 bg-[#0b0b11] text-white" aria-label={t("freecutAi.title")}>
         <div className="flex items-center justify-between px-4 pb-1 pt-3">
           <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
             <Sparkles className="h-4 w-4 text-[#ff0073]" />

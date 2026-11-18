@@ -22,7 +22,9 @@ import {
   catalogExtendCreditId,
   grokExtendCreditId,
   grokExtendWiredSourceResolution,
-  buildMotionCreditModelIdentifier,
+  motionTransferEstimatePrice,
+  motionTransferRateOf,
+  motionTransferEstimateSeconds,
   AI_AVATAR_DURATION_BUCKETS,
   type AiAvatarEngine,
   type AiAvatarResolution,
@@ -2114,6 +2116,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "nodaro-video-upscale:2k:per-4s": 30,
   "nodaro-video-upscale:4k:per-4s": 60,
   // ── Motion Transfer (per-second pricing, duration-tiered) ──
+  // Kling 3.0 720p, per second of the driving video the server measures (decided
+  // 2026-11-18): the price of four seconds; a run is charged this × billed
+  // seconds ÷ 4, rounded up once (`motionTransferPrice`). Seeded by migration
+  // 668. The tier rows below stay for history and for the code a migration
+  // reaches before it.
+  "kling-3.0-motion:720p:per-4s": 228,
   // Kling 3.0 720p: /sec
   "kling-3.0-motion": 300,        // 10s default
   "kling-3.0-motion:5s": 150,
@@ -6396,6 +6404,8 @@ function estimateNodeCredits(
     editPlan: node.type === "edit-plan" ? { sourceSec: editPlanSourceSecOf(node, nodes, edges), perMinute: prices.editPlanPerMinute === true } : undefined,
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, measuredFor("video-sfx")) : undefined,
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
+    // Motion Transfer: its `video` wire (the driving video) by the measured walk, with its slack.
+    motionTransferSec: node.type === "motion-transfer" ? motionTransferVideoSecOf(node, edges, measuredFor("motion-transfer")) : undefined,
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
     // AI Avatar in audio mode: the audio its run plays (`aiAvatarAudioSourceId`, the server's engine) by the measured walk, with its slack.
     aiAvatarAudioSec: node.type === "ai-avatar" ? aiAvatarAudioSecOf(priced, nodes, edges, wires.measuredSec) : undefined,
@@ -6662,6 +6672,21 @@ function videoSfxClipSecOf(
   if (node.id === undefined || !edges) return undefined
   const inputs = edges.filter((e) => e.target === node.id)
   return videoSfxClipSec(inputs, inputs.map((e) => wireSec(e.source)))
+}
+
+/**
+ * The length of the driving video a Motion Transfer's `video` wire brings, as
+ * `wireSec` reads it (the measured walk); undefined when the graph does not
+ * know it (the estimate then quotes the most the run can be charged).
+ */
+function motionTransferVideoSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "video")
+  return wire === undefined ? undefined : wireSec(wire.source)
 }
 
 /**
@@ -7323,6 +7348,20 @@ export function graphPricingUnits(
       return lipSyncRateQuoteSeconds(rate, sec, source !== undefined, node.data)
     }
   }
+  // Motion Transfer at a per-second rate (Kling 3.0 at 720p): its four-second
+  // row × the billed seconds ÷ 4, at the length its `video` wire gives as the
+  // measured walk reads it (with its slack), else the most its orientation runs
+  // (`motionTransferEstimateSeconds`, the editor's rule too). The run measures
+  // the real video before it holds anything.
+  if (node.type === "motion-transfer") {
+    const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
+    const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling"
+    const rate = motionTransferRateOf(provider, data.resolution)
+    if (rate) {
+      const sec = motionTransferVideoSecOf(node, edges, (sourceId) => measuredSec(sourceId, "motion-transfer"))
+      return motionTransferEstimateSeconds(provider, data.characterOrientation, sec) / rate.rateSeconds
+    }
+  }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives as the measured walk reads it, with
   // Topaz's one frame of slack on a clip a node makes (the run bills the clip
@@ -7785,6 +7824,8 @@ export function getNodeModelIdentifier(
     renderCreditId?: string
     /** Video Depth: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoDepthSec?: number
+    /** Motion Transfer: its driving video's length a run estimate knows (undefined = not known: the most its orientation runs). */
+    motionTransferSec?: number
     /** Pitch & Tempo: the input's length a run estimate knows (undefined = the one-minute id). */
     pitchTempoSec?: number
     /** Transcribe on Nemotron 3.5 Transcribe: the file's length a run estimate knows (undefined = the 60-minute id). */
@@ -8142,6 +8183,16 @@ export function getNodeModelIdentifier(
     if (referenceAudioId) return referenceAudioId
   }
 
+  // Motion Transfer (decided 2026-11-18): the row of its driving video's length
+  // as the graph gives it (`motionTransferSec`, the length the run measures),
+  // else the most its orientation runs (10 s keeping the image's orientation,
+  // 30 s following the video's) — never the node's own `videoDuration`. A
+  // per-second rate (Kling 3.0 at 720p) is its row, multiplied by the units
+  // (graphPricingUnits). Above the `!provider` bail: a node naming no model runs Kling 2.6.
+  if (nodeType === "motion-transfer") {
+    return motionTransferEstimatePrice(typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling", data.resolution, data.characterOrientation, graph.motionTransferSec).creditId
+  }
+
   // A node naming no model whose default is priced per input image: the node-type
   // row would quote below what the run reserves. An Extend Video node naming no
   // provider runs on the node's default (`EXTEND_VIDEO_DEFAULT_PROVIDER`, the
@@ -8196,14 +8247,6 @@ export function getNodeModelIdentifier(
   // a resolution the node names.
   if (isGrokExtendProvider(catalogExtend)) return grokExtendCreditId(data.duration, graph.grokExtendSourceResolution)
 
-  // Motion transfer: duration-tiered pricing
-  if (nodeType === "motion-transfer") {
-    return buildMotionCreditModelIdentifier(
-      provider,
-      (data.resolution as string) ?? "720p",
-      data.videoDuration as number | undefined,
-    )
-  }
 
   // Video to Video, Seedance EDIT lane: Seedance has no v2v endpoint, so this
   // lane dispatches a text-to-video job in edit shape and reserves on the

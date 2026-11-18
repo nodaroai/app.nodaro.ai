@@ -41,6 +41,8 @@ vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
   return { safeUrlSchema: z.string().url() }
 })
+// The driving video is measured before anything is held (decided 2026-11-18): a 10-second clip.
+vi.mock("@/lib/video-utility-probe.js", () => ({ probeClipLengthSec: vi.fn(async () => 10) }))
 vi.mock("@/ee/lib/credit-guard-impl.js", () => ({
   creditGuardImpl: () => h.creditCheck,
   reserveCreditsForJobImpl: h.reserve,

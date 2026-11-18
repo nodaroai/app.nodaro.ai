@@ -32,7 +32,7 @@ export function StatusBlock({ model, subText }: { readonly model: StatusModel; r
   const Icon = ICONS[model.icon]
   const sub = subText ?? (model.sub ? t(model.sub, model.subVars) : "")
   return (
-    <div className="border-b border-[#2D2D2D] px-4 py-3" data-status={model.kind}>
+    <div className="border-b border-[#262633] px-4 py-3" data-status={model.kind}>
       <div className="flex items-center gap-2">
         <Icon className={cn("h-4 w-4 shrink-0", TONE[model.kind], model.icon === "spin" && "animate-spin", model.icon === "dot" && "h-2.5 w-2.5 fill-current")} aria-hidden />
         <p className={cn("text-sm font-semibold", TONE[model.kind])} aria-live="polite">

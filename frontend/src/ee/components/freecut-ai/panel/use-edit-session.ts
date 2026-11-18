@@ -25,7 +25,7 @@ import { ABILITY_NAME, ABILITY_PHRASE, cardPhraseKeys, LAYOUT_WIDE_PHRASE, reque
 import { formatOps, type PhoneFraming } from "@/ee/lib/freecut-ai/crop-path"
 import type { CardPhrase } from "@/ee/lib/freecut-ai/request-reading"
 import { lockedSteps, outcomesAfterStop, withoutSteps, type Phase, type RunStage, type StepOutcomes } from "@/ee/lib/freecut-ai/panel-model"
-import { RunDeclined, RunFailed, RunStopped, runAiEdit, undoAiEdit, type HeardVideo, type MadeResult, type RunEvent } from "@/ee/lib/freecut-ai/run-ai-edit"
+import { AGENT_COLORS, RunDeclined, RunFailed, RunStopped, runAiEdit, undoAiEdit, type HeardVideo, type MadeResult, type RunEvent } from "@/ee/lib/freecut-ai/run-ai-edit"
 import { captionOps } from "@/ee/lib/freecut-ai/run/captions"
 import { JobFailed, JobTimedOut, keyOf } from "@/ee/lib/freecut-ai/run/jobs"
 import { applyPictureChange, type PictureChoice, addPictureAtPlayhead, type PictureSourceChoice } from "@/ee/lib/freecut-ai/run/change-picture"
@@ -280,6 +280,11 @@ export function useEditSession({ link, videos, openedVideoUrl, matchByName = fal
         lineId.current += 1
         const line: FeedLine = { id: lineId.current, agent: event.agent, key: event.key, vars: event.vars, at: (Date.now() - startedAt) / 1000 }
         setFeed((prev) => [...prev.slice(-120), line])
+        try {
+          editor.activity?.([{ agent: t(AGENT_NAME[event.agent]), color: AGENT_COLORS[event.agent], text: t(event.key, event.vars) }])
+        } catch {
+          // The editor closed: its log is only shown there.
+        }
       }
     }
     try {

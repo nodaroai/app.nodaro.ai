@@ -27,7 +27,7 @@
 import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
-import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, seedanceLipSyncCreditId } from "@nodaro/shared/credits"
+import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, motionTransferRateOf, seedanceLipSyncCreditId } from "@nodaro/shared/credits"
 import { LLM_FEATURE_DEFAULTS, getLlmModel, llmDefaultsFeature, llmPriceKey, type LlmFeature } from "@nodaro/shared/llm-models"
 import type { MeteredLlmFeature } from "../../../ee/billing/llm-typical-usage.js"
 import { amountAbbreviation, amountWord, statedAmount, unitFields } from "../amounts.js"
@@ -110,6 +110,21 @@ export function lipSyncPriceSuffix(id: string): string {
     STATIC_CREDIT_COSTS[`${id}:8s:480p`] !== undefined || STATIC_CREDIT_COSTS[`${id}:4s:480p`] !== undefined
   if (typeof STATIC_CREDIT_COSTS[id] === "number" && !tiered) return ` (${stated(creditsOf(id), id)} ${amountAbbreviation()})`
   return " (duration-tiered)"
+}
+
+/**
+ * Motion Transfer's price sentence for a tool description: Kling 3.0 at 720p
+ * is charged per second of the driving video the server measures — the whole
+ * run's charged price for 10 seconds. Every other model and size is priced by
+ * the measured length's tier (Wan Animate by size). Off-cloud, the
+ * `list_models` pointer.
+ */
+export function motionTransferPriceHint(): string {
+  if (!hasCredits()) return OFF_CLOUD
+  const rate = motionTransferRateOf("kling-3.0", "720p")
+  if (!rate) throw new Error("Kling 3.0 at 720p has no per-second rate")
+  const units = 10 / rate.rateSeconds
+  return `Kling 3.0 720p is per second (${stated(rateCreditsOf(rate.rateId, units), `${rate.rateId}@${units}`)} ${amountAbbreviation()} for 10 s).`
 }
 
 /** The model a metered LLM feature runs on when the caller names none (borrowed defaults included). */

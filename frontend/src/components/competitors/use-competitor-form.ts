@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { COMPETITOR_SCAN_PAGE_CREDIT_ID, COMPETITOR_SEARCH_TERMS_MAX, competitorScanPages, type CreateCompetitorInput, type TrackedCompetitor } from "@nodaro/shared/social"
+import {
+  COMPETITOR_SCAN_PAGE_CREDIT_ID,
+  COMPETITOR_SCAN_SEARCH_LIMIT,
+  COMPETITOR_SEARCH_TERMS_MAX,
+  competitorScanPages,
+  competitorScanSearches,
+  type CreateCompetitorInput,
+  type TrackedCompetitor,
+} from "@nodaro/shared/social"
 import { useCompetitorLimits } from "@/hooks/queries/use-competitors-queries"
 import { discoverCompetitor } from "@/lib/api"
 import { useT } from "@/lib/i18n"
@@ -37,7 +45,11 @@ export function useCompetitorForm(open: boolean, editing: TrackedCompetitor | nu
   // The terms Save sends: the chips, and the one still being typed, within the cap.
   const terms = limits ? addTerms(form.searchTerms, termDraft, cap) : []
   // A scan's pages: one per account, one per about-platform per term the plan lets it search.
-  const pages = competitorScanPages({ accounts: form.accounts, aboutPlatforms: form.aboutPlatforms, searchTerms: terms, termCap })
+  const scan = { accounts: form.accounts, aboutPlatforms: form.aboutPlatforms, searchTerms: terms, termCap }
+  const pages = competitorScanPages(scan)
+  // More searches than one scan may run: the server refuses to save it, so Save waits until terms or platforms go.
+  const searches = competitorScanSearches(scan)
+  const tooBig = searches > COMPETITOR_SCAN_SEARCH_LIMIT
   const credits = useScanPagesPrice(COMPETITOR_SCAN_PAGE_CREDIT_ID, pages)
   const input = (): CreateCompetitorInput => inputFrom({ ...form, searchTerms: terms }, limits !== null)
 
@@ -56,5 +68,5 @@ export function useCompetitorForm(open: boolean, editing: TrackedCompetitor | nu
     }
   }
 
-  return { form, setForm, termDraft, setTermDraft, finding, findAccounts, limits, cap, pages, credits, input }
+  return { form, setForm, termDraft, setTermDraft, finding, findAccounts, limits, cap, unlimited: termCap === null, pages, searches, tooBig, credits, input }
 }
