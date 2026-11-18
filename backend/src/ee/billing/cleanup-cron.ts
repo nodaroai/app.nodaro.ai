@@ -21,6 +21,8 @@ import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
 import { runFounderNotifyTick } from "../notifications/founder-notify.js"
 import { maybeSendMonthlyStatements } from "../notifications/monthly-statement.js"
 import { getNotifyConfig } from "../notifications/notify-config.js"
+import { runCostShortfallSweep } from "./cost-shortfall-store.js"
+import { COST_SHORTFALL_SWEEP } from "./cost-shortfall.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -94,6 +96,17 @@ export function startCleanupCron(): void {
       await maybeSendMonthlyStatements(new Date(), (await getNotifyConfig()).digestHour)
     } catch (err) {
       console.error("[cron] monthly statement tick failed:", err)
+    }
+  })
+
+  // Jobs charged less than their provider cost -- every 5 minutes. Reads settled
+  // jobs back, records each loss, alerts, and switches off a model that keeps
+  // losing (cost-shortfall-sweep.ts). Idempotent in the database, so replicas and
+  // staging sharing production's database can all run it; never throws.
+  cron.schedule(`*/${COST_SHORTFALL_SWEEP.everyMinutes} * * * *`, async () => {
+    const result = await runCostShortfallSweep()
+    if (result && (result.recorded > 0 || result.paused.length > 0)) {
+      console.log(`[cron] cost-shortfall sweep: scanned=${result.scanned} recorded=${result.recorded} alerted=${result.alerted} paused=${result.paused.join(",") || "none"}`)
     }
   })
 

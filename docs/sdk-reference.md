@@ -450,7 +450,7 @@ topping up or a wider scope changes nothing:
 | `code` | Refusal |
 |--------|---------|
 | `model_not_available` | this deployment does not offer the model (outside its edition or surface, or hidden by its operator) |
-| `model_disabled` | an admin switched the model off on the models page |
+| `model_disabled` | an admin switched the model off on the models page, or the platform switched it off automatically while its price is fixed |
 
 It is a `ForbiddenError`, so an existing `instanceof ForbiddenError` catch still
 catches it; check `instanceof ModelUnavailableError` first to tell the two

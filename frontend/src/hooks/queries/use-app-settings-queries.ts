@@ -42,6 +42,8 @@ export interface AppSettings {
   readonly notify_welcome_offer_enabled?: boolean
   readonly notify_credits_digest_enabled?: boolean
   readonly notify_slack_webhook_url?: string
+  /** Whether a model losing money on every run is switched off automatically (Cloud-only). Absent row reads as true. */
+  readonly cost_shortfall_auto_pause_enabled?: boolean
   /** Admin -> user email: sends allowed per admin per UTC day (Cloud-only). */
   readonly admin_messages_daily_limit?: number
 }

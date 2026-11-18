@@ -191,7 +191,11 @@ export async function adminSettingsRoutes(app: FastifyInstance) {
       key === "copilot_enabled" ||
       // Content rights: whether a link import without a confirmation is refused
       // (lib/content-rights.ts). Read tolerantly as "off" when not a boolean.
-      key === "content_rights_required"
+      key === "content_rights_required" ||
+      // Whether a model losing money on every run is switched off
+      // automatically (ee/billing/cost-shortfall-sweep.ts). Read as "on" unless a
+      // boolean is stored, so a non-boolean would silently leave it on.
+      key === "cost_shortfall_auto_pause_enabled"
     ) {
       if (typeof value !== "boolean") {
         return reply.status(400).send({

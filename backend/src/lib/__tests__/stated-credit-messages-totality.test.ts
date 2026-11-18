@@ -54,6 +54,7 @@ const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string;
   "ee/billing/cleanup-cron.ts": { count: 1, why: LOG },
   "ee/billing/cleanup-service.ts": { count: 1, why: LOG },
   "ee/billing/commit-at-charged-price.ts": { count: 1, why: LOG },
+  "ee/billing/cost-shortfall-sweep.ts": { count: 2, why: LOG },
   "ee/billing/kie-low-balance-alert.ts": { count: 1, why: "the operator's alert about the platform's own provider account" },
   "ee/billing/llm-billing-impl.ts": { count: 8, why: "log lines, and the admin anomaly title: never a run's failure" },
   "ee/billing/llm-cancel-settle.ts": { count: 2, why: LOG },
