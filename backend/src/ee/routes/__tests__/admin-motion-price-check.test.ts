@@ -181,7 +181,7 @@ describe("POST /runs", () => {
 describe("answers 503 motion_price_check_unavailable while the functions are not in the database", () => {
   const UNAVAILABLE = {
     code: "motion_price_check_unavailable",
-    message: "Motion price check needs the database update that ships with the next production release.",
+    message: "Video Remake price check needs the database update that ships with the next production release.",
   }
 
   it.each(["PGRST202", "42883"])("%s on each route", async (code) => {
@@ -215,13 +215,13 @@ describe("answers 503 motion_price_check_unavailable while the functions are not
     expect((await post(`/runs/${RUN}`, {})).statusCode).toBe(503)
   })
 
-  it("a generic database error is a 500 that says only Failed to read the Motion price check", async () => {
+  it("a generic database error is a 500 that says only Failed to read the Video Remake price check", async () => {
     const raw = { code: "57014", message: "canceling statement due to statement timeout on public.jobs" }
     state.rpc.mockResolvedValue({ data: null, error: raw })
     for (const [url, body] of [["/runs", { from: FROM, to: TO }], [`/runs/${RUN}`, {}], ["/kie-real", { token: TOKEN, from: FROM, to: TO }]] as const) {
       const res = await post(url, body)
       expect(res.statusCode, url).toBe(500)
-      expect((res.json() as { error: unknown }).error).toEqual({ code: "internal_error", message: "Failed to read the Motion price check" })
+      expect((res.json() as { error: unknown }).error).toEqual({ code: "internal_error", message: "Failed to read the Video Remake price check" })
       expect(res.body).not.toContain("statement timeout")
     }
   })

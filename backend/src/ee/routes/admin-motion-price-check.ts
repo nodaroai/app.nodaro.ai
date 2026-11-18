@@ -41,10 +41,10 @@ const MAX_RANGE_MS = 31 * 86_400_000
 /** The list function's offset is an INT. */
 const MAX_OFFSET = 2_147_483_647
 
-const FAILED = "Failed to read the Motion price check"
+const FAILED = "Failed to read the Video Remake price check"
 const UNAVAILABLE = {
   code: "motion_price_check_unavailable",
-  message: "Motion price check needs the database update that ships with the next production release.",
+  message: "Video Remake price check needs the database update that ships with the next production release.",
 } as const
 
 const instant = z.string().datetime({ offset: true })

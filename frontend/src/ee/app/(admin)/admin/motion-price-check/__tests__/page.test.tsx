@@ -186,7 +186,7 @@ const KIE: KieRealResult = {
   fetchedAt: new Date(2026, 10, 3, 12, 0).toISOString(),
 }
 const TOKEN = "kie-session-token"
-const UNAVAILABLE = "Motion price check needs the database update that ships with the next production release."
+const UNAVAILABLE = "Video Remake price check needs the database update that ships with the next production release."
 const NOT_FETCHED = "Not fetched — paid shows recorded costs"
 
 function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
@@ -234,7 +234,7 @@ describe("Admin → Motion price check", () => {
       limit: 50,
     })
     expect(kieUsd).toBeUndefined()
-    expect(screen.getByRole("heading", { level: 1, name: "Motion price check" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 1, name: "Video Remake price check" })).toBeInTheDocument()
     expect(
       screen.getByText("Each Video Remake run: what it held, what it took, what that is worth, and what we paid for its steps."),
     ).toBeInTheDocument()
@@ -692,7 +692,7 @@ describe("Admin → Motion price check", () => {
   it("leaves room under its last control for the fixed accessibility button, at every width", async () => {
     renderPage()
     await runsTable()
-    const page = screen.getByRole("heading", { level: 1, name: "Motion price check" }).closest("header")!.parentElement!
+    const page = screen.getByRole("heading", { level: 1, name: "Video Remake price check" }).closest("header")!.parentElement!
     // The button is 44 px, 16 px from the corner: 80 px keeps Next clear of it at the end of the page.
     expect(tokens(page)).toContain("pb-20")
     // A padding shorthand would take that room back from 640 px up.

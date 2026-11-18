@@ -107,7 +107,7 @@ const ADMIN_NAV = [
   ...(hasCredits() ? [{ href: "/admin/trends", label: "Trends", icon: TrendingUp }] : []),
   ...(hasCredits() ? [{ href: "/admin/trend-radar", label: "Trend Radar", icon: Radar }] : []),
   ...(hasCredits() ? [{ href: "/admin/video-remake", label: "Video Remake", icon: Clapperboard }] : []),
-  ...(hasCredits() ? [{ href: "/admin/motion-price-check", label: "Motion price check", icon: Receipt }] : []),
+  ...(hasCredits() ? [{ href: "/admin/motion-price-check", label: "Video Remake price check", icon: Receipt }] : []),
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },
