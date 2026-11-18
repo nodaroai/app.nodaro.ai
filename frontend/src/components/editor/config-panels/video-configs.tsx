@@ -1474,6 +1474,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   const isWanFlash = provider === "wan-flash"
   const isAleph = provider === "runway-aleph"
   const isVideoEdit = provider === "wan-videoedit"
+  const isHappyHorseEdit = provider === "happyhorse-edit"
   // Seedance has no v2v endpoint — it EDITS a reference video — so this lane is
   // dispatched as a text-to-video job in edit shape. None of the Wan/Aleph
   // levers apply (length and ratio come from the source clip), so its own
@@ -1508,6 +1509,8 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     if (!isVideoEdit && data.v2vResolution !== undefined) {
       // Leaving Seedance: 480p is not a Wan resolution → snap to the first valid
       // option. Entering Seedance: 720p/1080p are both valid, so nothing moves.
+      // HappyHorse Edit shares the Wan list (720p / 1080p, shown below): a
+      // stale 480p snaps to 720p, the size it runs at when none is named.
       const valid = isSeedanceEdit
         ? seedanceResolutions.map((o) => o.value)
         : V2V_RESOLUTION_OPTIONS.map((o) => o.value as string)
@@ -1739,6 +1742,21 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             </Select>
           </MappableField>
         </>
+      )}
+
+      {/* HappyHorse Edit: the size it is priced at and runs at — 720p unless
+          1080p is chosen (the server sends and charges that same size). */}
+      {isHappyHorseEdit && (
+        <MappableField field="v2vResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select value={data.v2vResolution === "1080p" ? "1080p" : "720p"} onValueChange={(v) => onUpdate({ v2vResolution: v as "720p" | "1080p" })}>
+            <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {V2V_RESOLUTION_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{localizeOption(o.label)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </MappableField>
       )}
 
       {/* Wan Flash: Audio & Multi-shots */}

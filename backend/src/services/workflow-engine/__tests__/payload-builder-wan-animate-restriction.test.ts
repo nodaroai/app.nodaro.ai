@@ -71,8 +71,10 @@ describe("a workflow's Wan Animate node under models.allow", () => {
       const allowed = build(node({ provider, resolution: "580p" }))
       expect(allowed).toEqual(unrestricted)
       expect(allowed.jobName).toBe("motion-transfer")
-      expect(allowed.modelIdentifier).toBe(`${provider}:580p`)
-      expect(allowed.payload).toMatchObject({ provider, resolution: "580p", imageUrl: IMAGE, videoUrl: VIDEO })
+      // Priced per second of the driving video (the run reads it before reserving); Move runs at 720p only.
+      const runsAt = provider === "wan-animate-move" ? "720p" : "580p"
+      expect(allowed.modelIdentifier).toBe(`${provider}:${runsAt}:per-4s`)
+      expect(allowed.payload).toMatchObject({ provider, resolution: runsAt, imageUrl: IMAGE, videoUrl: VIDEO })
     })
 
     it(`${provider}: a deployment that restricts nothing builds it`, () => {
@@ -82,7 +84,7 @@ describe("a workflow's Wan Animate node under models.allow", () => {
 
     it(`${provider}: a size it does not have is built, and priced, as 720p`, () => {
       const built = build(node({ provider, resolution: "1080p" }))
-      expect(built.modelIdentifier).toBe(`${provider}:720p`)
+      expect(built.modelIdentifier).toBe(`${provider}:720p:per-4s`)
       expect(built.payload).toMatchObject({ provider, resolution: "720p" })
     })
   }

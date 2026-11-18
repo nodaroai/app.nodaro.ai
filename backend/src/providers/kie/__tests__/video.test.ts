@@ -800,6 +800,30 @@ describe("videoToVideo — happyhorse-edit wire shape", () => {
   })
 })
 
+describe("videoToVideo — wan-flash always states its audio setting", () => {
+  const lastInput = () => (mocks.mockRunKieTask.mock.calls.at(-1) as [string, Record<string, unknown>])[1]
+
+  it("sends audio:false when the caller gives none", async () => {
+    await provider.videoToVideo("https://x/v.mp4", "p", "wan-flash", {})
+    expect(lastInput().audio).toBe(false)
+  })
+
+  it("sends audio:false when the caller gives false", async () => {
+    await provider.videoToVideo("https://x/v.mp4", "p", "wan-flash", { audio: false })
+    expect(lastInput().audio).toBe(false)
+  })
+
+  it("sends audio:true when asked", async () => {
+    await provider.videoToVideo("https://x/v.mp4", "p", "wan-flash", { audio: true })
+    expect(lastInput().audio).toBe(true)
+  })
+
+  it("leaves Wan 2.6 as it was: no audio field", async () => {
+    await provider.videoToVideo("https://x/v.mp4", "p", "wan", { audio: true })
+    expect(lastInput()).not.toHaveProperty("audio")
+  })
+})
+
 describe("egress dimensions — kling-motion sites synthesize resolution from `mode`", () => {
   it("kling-3.0 motion control surfaces resolution (from mode) + videoInput", async () => {
     await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", {
@@ -825,6 +849,20 @@ describe("egress dimensions — kling-motion sites synthesize resolution from `m
       resolution: "1080p",
     })
     expect(dimsOfLastKieCall()).not.toHaveProperty("mode")
+  })
+})
+
+describe("Wan Animate sizes sent to the provider", () => {
+  it.each([undefined, "480p", "580p", "720p", "1080p"] as const)("Move named %s is sent at 720p, the only size it runs at", async (resolution) => {
+    mocks.mockRunKieTask.mockClear()
+    await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", { provider: "wan-animate-move", ...(resolution ? { resolution } : {}) })
+    expect((mocks.mockRunKieTask.mock.calls.at(-1)![1] as Record<string, unknown>).resolution).toBe("720p")
+  })
+
+  it.each([["480p", "480p"], ["580p", "580p"], ["720p", "720p"], [undefined, "480p"]] as const)("Replace named %s is sent at %s", async (resolution, sent) => {
+    mocks.mockRunKieTask.mockClear()
+    await provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", { provider: "wan-animate-replace", ...(resolution ? { resolution } : {}) })
+    expect((mocks.mockRunKieTask.mock.calls.at(-1)![1] as Record<string, unknown>).resolution).toBe(sent)
   })
 })
 

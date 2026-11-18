@@ -177,7 +177,7 @@ here for each one anyway.
 | `REPLICATE_API_TOKEN` | `""` | Replicate — Flux 2 family, LoRA training |
 | `ANTHROPIC_API_KEY` | `""` | Direct Anthropic lane for Claude LLM nodes |
 | `GEMINI_API_KEY` | `""` | Direct Google lane for Gemini models — see "Gemini routing" |
-| `ELEVENLABS_API_KEY` | `""` | Speech, voices, dubbing |
+| `ELEVENLABS_API_KEY` | `""` | Speech, voices, dubbing, Audio Isolation (Voice Extractor) |
 | `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io` | Where ElevenLabs traffic goes — see 12a |
 | `FAL_KEY` | `""` | fal.ai-hosted models |
 | `HEYGEN_API_KEY` | `""` | AI Avatar / Cinematic Avatar (or run them on the nodaro.ai connection) |

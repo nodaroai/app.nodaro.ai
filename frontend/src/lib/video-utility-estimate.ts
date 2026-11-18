@@ -21,10 +21,18 @@ import {
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   videoOverlayVideoUnits,
+  motionTransferChargedPrice,
   motionTransferEstimatePrice,
-  motionTransferEstimateSeconds,
-  motionTransferRateOf,
+  type MotionTransferPrice,
+  isClipPricedV2vProvider,
+  videoToVideoEstimatePrice,
+  videoToVideoSentResolution,
+  type V2vClipPrice,
+  AUDIO_ISOLATION_RATE_ID,
+  audioIsolationEstimateUnits,
 } from "@nodaro/shared/credits"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
+import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { maskCompositeUnits } from "@nodaro/shared/media"
 import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
 import { NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
@@ -721,13 +729,15 @@ export function motionTransferQuotedSec(
 }
 
 /**
- * The price a Motion Transfer is QUOTED at (`motionTransferEstimatePrice`, the
- * rule the server's run estimate reads): the row of its driving video's
- * length as the graph gives it, else the most its orientation runs (10 s
- * keeping the image's orientation, 30 s following the video's), with
- * `lengthKnown: false` so the caller shows it as an estimate.
+ * The per-second price a Motion Transfer is QUOTED at before its floor
+ * (`motionTransferEstimatePrice`, the rule the server's run estimate reads):
+ * its rate row and the units of its driving video's length as the graph gives
+ * it, else of the most its orientation runs (10 s keeping the image's
+ * orientation, 30 s following the video's), the floor row it is compared with
+ * (Wan Animate), and `lengthKnown: false` when the length stood in for an
+ * unknown one, so the caller shows it as an estimate.
  */
-export function motionTransferQuote(
+export function motionTransferRateQuote(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
@@ -738,16 +748,149 @@ export function motionTransferQuote(
   return motionTransferEstimatePrice(provider, data.resolution, data.characterOrientation, motionTransferQuotedSec(node, nodes, edges, rerunIds))
 }
 
-/** The units a Motion Transfer is quoted at: billed seconds ÷ the row's seconds on a per-second rate (Kling 3.0 at 720p); 1 otherwise. */
+/** A Motion Transfer row's seeded base credits (its catalog pricing row, `STATIC_CREDIT_COSTS`' mirror), for a cold price cache. */
+let catalogRows: ReadonlyMap<string, number> | undefined
+function catalogRowCredits(id: string): number | undefined {
+  catalogRows ??= new Map(Object.values(MODEL_CATALOG).flatMap((entry) => (entry.pricing ?? []).map((row) => [row.identifier, row.credits] as const)))
+  return catalogRows.get(id)
+}
+
+/**
+ * The price a Motion Transfer is QUOTED at: its rate quote
+ * ({@link motionTransferRateQuote}) with the run's floor rule applied
+ * (`motionTransferChargedPrice`, the rule the route and the workflow run
+ * read) — a Wan Animate run whose flat row for its size is at least its
+ * per-second price is quoted at that row, once (no units). The two figures are
+ * the server's charged prices when both are cached (`priceOf`: the whole-run
+ * quote `<rate>:<N>u`, else the one-unit price × the whole units, and the
+ * floor row), else the seeded base rows (a cold cache).
+ */
+export function motionTransferQuote(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+  /** The server's charged prices as cached (the editor passes its price cache); none: the seeded rows decide. */
+  priceOf: (creditId: string) => number | undefined = () => undefined,
+): MotionTransferPrice & { readonly lengthKnown: boolean } {
+  const quote = motionTransferRateQuote(node, nodes, edges, rerunIds)
+  const { lengthKnown } = quote
+  if (quote.floorId === undefined) return { creditId: quote.creditId, ...(quote.units !== undefined ? { units: quote.units } : {}), lengthKnown }
+  const units = quote.units ?? 1
+  const cachedPerSecond = unitQuoteCredits(quote.creditId, units, priceOf)
+  const cachedFloor = priceOf(quote.floorId)
+  const rateRow = catalogRowCredits(quote.creditId)
+  const figures = cachedPerSecond !== undefined && cachedFloor !== undefined
+    ? { perSecond: cachedPerSecond, floor: cachedFloor }
+    : { perSecond: rateRow === undefined ? undefined : Math.ceil(rateRow * units), floor: catalogRowCredits(quote.floorId) }
+  return { ...motionTransferChargedPrice(quote, figures), lengthKnown }
+}
+
+/** The units a Motion Transfer is quoted at: billed seconds ÷ the row's seconds while it is quoted at its rate; 1 at a Wan Animate floor row (the same call as its id, so the two flip together). */
 export function motionTransferPricingUnits(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
+  priceOf: (creditId: string) => number | undefined = () => undefined,
 ): number {
+  return motionTransferQuote(node, nodes, edges, rerunIds, priceOf).units ?? 1
+}
+
+/** Every price a Motion Transfer's quote reads, for a surface to fetch: its rate row, the whole-run quote of it, and its floor row. */
+export function motionTransferPriceIds(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): string[] {
+  const quote = motionTransferRateQuote(node, nodes, edges, rerunIds)
+  const whole = unitQuoteIdFor(quote.creditId, quote.units ?? 1)
+  return [quote.creditId, ...(whole ? [whole] : []), ...(quote.floorId ? [quote.floorId] : [])]
+}
+
+/**
+ * The length, in seconds, of the clip a Video to Video on a clip-priced model
+ * (HappyHorse Edit, Wan 2.7 VideoEdit) is QUOTED on, or `undefined` when the
+ * graph does not know it: its `video` wire as the wire-length walk reads it, with
+ * that model's slack and reading — the server's reading.
+ */
+export function videoToVideoQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string>,
+  provider: unknown,
+): number | undefined {
+  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "video")
+  return wire ? measuredInputReader("video-to-video", nodes, edges, rerunIds, undefined, provider)(wire.source) : undefined
+}
+
+/**
+ * The price a Video to Video on a clip-priced model is QUOTED at
+ * (`videoToVideoEstimatePrice`, the rule the server's run estimate reads): the
+ * row and units of its clip's length as the graph gives it, else the model's
+ * longest clip with `lengthKnown: false` so the caller shows it as an
+ * estimate; at the size it sends (HappyHorse Edit: 720p unless 1080p is
+ * named). `rowOf` gives Wan 2.7 VideoEdit's flat row and rate. Undefined for
+ * every other model.
+ */
+export function videoToVideoQuote(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rowOf: (id: string) => number | undefined,
+  rerunIds: ReadonlySet<string> = new Set(),
+): (V2vClipPrice & { readonly lengthKnown: boolean }) | undefined {
   const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
-  const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling"
-  const rate = motionTransferRateOf(provider, data.resolution)
-  if (!rate) return 1
-  return motionTransferEstimateSeconds(provider, data.characterOrientation, motionTransferQuotedSec(node, nodes, edges, rerunIds)) / rate.rateSeconds
+  const provider = data.provider
+  if (!isClipPricedV2vProvider(provider)) return undefined
+  return videoToVideoEstimatePrice(
+    provider,
+    videoToVideoSentResolution(provider, data.v2vResolution),
+    data.videoEditDuration,
+    videoToVideoQuotedSec(node, nodes, edges, rerunIds, provider),
+    rowOf,
+  )
+}
+
+/**
+ * The length, in seconds, of the audio an Audio Isolation is QUOTED on, or
+ * `undefined` when the graph does not know it: its `audio` wire as the
+ * shared wire-length walk reads it ({@link measuredInputReader}) — the server's reading.
+ */
+export function audioIsolationQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const wire = edges.find((e) => e.target === node.id && (e.targetHandle === "audio" || e.targetHandle == null))
+  return wire ? measuredInputReader("audio-isolation", nodes, edges, rerunIds)(wire.source) : undefined
+}
+
+/**
+ * The price an Audio Isolation is QUOTED at (decided 2026-11-18): its
+ * per-10-second row × the started ten seconds of the audio the graph gives,
+ * else the 30-minute cap's 180 units, with `lengthKnown: false` so the caller
+ * shows it as an estimate. The run reads the audio before it holds anything.
+ */
+export function audioIsolationQuote(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): { readonly creditId: string; readonly units: number; readonly lengthKnown: boolean } {
+  const sec = audioIsolationQuotedSec(node, nodes, edges, rerunIds)
+  return { creditId: AUDIO_ISOLATION_RATE_ID, units: audioIsolationEstimateUnits(sec), lengthKnown: sec !== undefined && sec > 0 }
+}
+
+/** The units an Audio Isolation is quoted at ({@link audioIsolationQuote}). */
+export function audioIsolationPricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  return audioIsolationQuote(node, nodes, edges, rerunIds).units
 }

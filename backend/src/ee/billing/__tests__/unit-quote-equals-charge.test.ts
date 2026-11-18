@@ -79,8 +79,10 @@ import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { topazVideoHoldBaseCredits } from "../../../lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "../../../lib/nodaro-video-upscale-plan.js"
 import { isNodaroVideoUpscaleCreditId, isSeedanceExtendRateCreditId, NODARO_VIDEO_UPSCALE_RATE_SECONDS } from "@nodaro/render-rules"
-import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
+import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, UNIT_QUOTE_RATES, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
 import { motionTransferRateBaseCredits } from "../../../lib/motion-transfer-input.js"
+import { videoToVideoClipBaseCredits } from "../../../lib/video-to-video-clip-input.js"
+import { audioIsolationStampedBaseCredits } from "../../../lib/audio-isolation-input.js"
 import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
 import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
 
@@ -157,8 +159,16 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       return lipSyncRateBaseCredits(lipSyncAudioRateOf("omnihuman-2-0")!, units)
     case "motion-transfer":
       // routes/motion-transfer.ts computeCredits and the workflow run's computeMotionTransferRateCreditOverride
-      // (lib/motion-transfer-input.ts): the four-second row × the billed seconds of the measured video ÷ 4.
-      return (await motionTransferRateBaseCredits("kling-3.0", "720p", units * 4))!
+      // (lib/motion-transfer-input.ts): the model and size's four-second row × the billed seconds of the video ÷ 4.
+      return (await motionTransferRateBaseCredits(rateId, units))!
+    case "video-to-video":
+      // routes/video-to-video.ts computeCredits and the workflow run's computeVideoToVideoClipCreditOverride
+      // (lib/video-to-video-clip-input.ts): the clip rate's four-second row × the units of the clip it read.
+      return (await videoToVideoClipBaseCredits(rateId, units))!
+    case "audio-isolation":
+      // routes/audio-isolation.ts computeCredits and the workflow run's computeAudioIsolationCreditOverride
+      // (lib/audio-isolation-input.ts): the ten-second row × the started ten seconds of the audio.
+      return audioIsolationStampedBaseCredits("audio-isolation", { audioIsolationUnits: units }) as Promise<number>
     default:
       throw new Error(`no route rule for ${nodeType} — add one with its case`)
   }
@@ -299,8 +309,10 @@ describe("what a whole-run quote id accepts", () => {
       expect(chargedCredits(table, rateId), rateId).toBeDefined()
       settings.current = { cost_markup_percent: 15, service_margin_percent: { [rateId]: 37 } }
       invalidateModelPricingCache()
-      const base = STATIC_CREDIT_COSTS[rateId]! * 7
-      expect(chargedCredits(await getChargedPriceTable(), `${rateId}:7u`), rateId).toBe(applyServiceMarkup(base, settings.current as never, rateId))
+      // 7 units, or the most a run of the rate can have when that is fewer (Wan 2.7 VideoEdit's 10 s: 2.5).
+      const units = Math.min(7, UNIT_QUOTE_RATES.get(rateId)!.maxUnits)
+      const base = Math.ceil(STATIC_CREDIT_COSTS[rateId]! * units)
+      expect(chargedCredits(await getChargedPriceTable(), `${rateId}:${units}u`), rateId).toBe(applyServiceMarkup(base, settings.current as never, rateId))
     }
   })
 

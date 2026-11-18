@@ -17,7 +17,6 @@ import {
   DIALOGUE_PROVIDERS,
   TTS_OUTPUT_FORMATS,
   TEXT_TO_AUDIO_PROVIDERS,
-  MOTION_TRANSFER_PROVIDERS,
   hasContiguousSegmentDurations,
   isMinimaxH3Provider,
   getDialogueCapabilities,
@@ -26,9 +25,14 @@ import {
 import { VIDEO_ANALYSIS_TIER_ORDER, llmTierCreditIds } from "@nodaro/shared/llm-models"
 import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
 import {
+  AUDIO_ISOLATION_MAX_UNITS,
+  AUDIO_ISOLATION_RATE_ID,
   isSpeechLengthPriceId,
-  buildMotionCreditModelIdentifier,
+  MOTION_TRANSFER_FLOOR_IDS,
+  MOTION_TRANSFER_MAX_SEC,
+  MOTION_TRANSFER_MIN_SEC,
   MOTION_TRANSFER_RATE_IDS,
+  MOTION_TRANSFER_SECOND_RATES,
   SPEECH_FLOOR_UNITS,
   speechPriceUnits,
   speechRowUnits,
@@ -116,29 +120,32 @@ function idsMatching(pattern: RegExp): string[] {
 }
 
 /**
- * Motion Transfer's ids are built, not named: `buildMotionCreditModelIdentifier`
- * folds provider + resolution + duration into one of four base families
- * (`motion-transfer`, `kling-3.0-motion`, `wan-animate-move`,
- * `wan-animate-replace`), each with its own suffix scheme. Enumerating the
- * builder over the route's own input space is the only derivation that stays
- * right when a tier moves: the resolutions and the 60s duration ceiling mirror
- * `motionTransferBody` in `routes/motion-transfer.ts`.
+ * Motion Transfer's rows (decided 2026-11-18): every model and size is charged
+ * per second of its driving video at its four-second rate row, and Wan Animate
+ * never below its flat row for the size (`MOTION_TRANSFER_SECOND_RATES`). The
+ * rate rows and the floor rows are what a run reserves on.
  */
-const MOTION_TRANSFER_RESOLUTIONS = ["480p", "580p", "720p", "1080p"] as const
-const MOTION_TRANSFER_MAX_DURATION_SEC = 60
 function motionTransferIds(): string[] {
-  const out = new Set<string>()
-  for (const provider of MOTION_TRANSFER_PROVIDERS) {
-    for (const resolution of MOTION_TRANSFER_RESOLUTIONS) {
-      out.add(buildMotionCreditModelIdentifier(provider, resolution, undefined))
-      for (let sec = 1; sec <= MOTION_TRANSFER_MAX_DURATION_SEC; sec++) {
-        out.add(buildMotionCreditModelIdentifier(provider, resolution, sec))
-      }
-    }
+  return [...new Set([...MOTION_TRANSFER_RATE_IDS, ...MOTION_TRANSFER_FLOOR_IDS])]
+}
+
+/**
+ * Motion Transfer's band: the cheapest run (the shortest video, 3 s, on the
+ * cheapest model and size, never below its floor) to the priciest (the
+ * longest, 30 s). A rate row alone prices four seconds, no run.
+ */
+function motionTransferBand(credits: (id: string, units?: number) => number | undefined): readonly [number, number] | undefined {
+  let low = Infinity
+  let high = 0
+  for (const rate of Object.values(MOTION_TRANSFER_SECOND_RATES)) {
+    const floor = rate.floorId === undefined ? 0 : (credits(rate.floorId) ?? 0)
+    const shortest = credits(rate.rateId, MOTION_TRANSFER_MIN_SEC / rate.rateSeconds)
+    const longest = credits(rate.rateId, MOTION_TRANSFER_MAX_SEC / rate.rateSeconds)
+    if (shortest === undefined || longest === undefined) return undefined
+    low = Math.min(low, Math.max(shortest, floor))
+    high = Math.max(high, Math.max(longest, floor))
   }
-  // A model and size charged per second of its driving video (Kling 3.0 at 720p): its rate row.
-  for (const id of MOTION_TRANSFER_RATE_IDS) out.add(id)
-  return [...out]
+  return Number.isFinite(low) ? [low, high] : undefined
 }
 
 /** Retake bills `ltx-2.3-pro-retake:per-second × retakeDuration`. 2s is the
@@ -211,7 +218,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "video-retake": { ids: [RETAKE_PER_SECOND_ID], span: RETAKE_BAND_SECONDS },
   "speech-to-video": { ids: familyIds("speech-to-video") },
-  "motion-transfer": { ids: motionTransferIds() },
+  "motion-transfer": { ids: motionTransferIds(), band: motionTransferBand },
   "ai-avatar": {
     ids: idsMatching(/^heygen-avatar-[^:]+:/),
     note: "One reserve-hold row per engine × resolution × duration bucket; the shape (not a fixed engine list) so a new HeyGen avatar engine joins the band on its own.",
@@ -242,7 +249,12 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "audio-separation": { ids: familyIds("audio-separation") },
   // One fixed row each (`fixed-row-credit-ids.ts`): never the node-type alias
   // row, which nothing charges.
-  "audio-isolation": { ids: [FIXED_ROW_CREDIT_IDS["audio-isolation"]] },
+  // Per started ten seconds of the audio (decided 2026-11-18): 1 to the 30-minute cap's 180 units.
+  "audio-isolation": {
+    ids: [AUDIO_ISOLATION_RATE_ID],
+    span: [1, AUDIO_ISOLATION_MAX_UNITS],
+    note: "Per started 10 seconds of the audio, up to 30 minutes: a run reserves the `elevenlabs-isolation:per-10s` row × its units.",
+  },
   "forced-alignment": { ids: [FIXED_ROW_CREDIT_IDS["forced-alignment"]] },
   "audio-fx": { ids: familyIds("audio-fx") },
   "pitch-tempo": {
@@ -1324,7 +1336,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
-  { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements.", outputType: "audio", creditCost: creditBandFor("audio-isolation") },
+  { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements. Audio (or a video's sound) up to 30 minutes, priced per started 10 seconds.", outputType: "audio", creditCost: creditBandFor("audio-isolation") },
   {
     type: "audio-separation",
     label: "Audio Separation",

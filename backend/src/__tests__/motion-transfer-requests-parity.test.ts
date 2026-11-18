@@ -12,12 +12,14 @@
  * the credit id the run is checked and charged under, and the job.
  *
  * What may differ is pinned field by field below: a Wan Animate request at
- * 1080p (a size neither model has) is sent and charged as 720p, and the route's
- * answer says so. And since the driving video is measured before anything is
- * held (decided 2026-11-18; an 8-second clip here): the route's job and queue
- * payload record the measured length and the seconds billed, and Kling 3.0 at
- * any size charged as 720p is checked and charged under its per-second row.
- * Everything else, what KIE receives included, is byte for byte.
+ * 1080p (a size neither model has), and a Wan Animate Move request at 480p or
+ * 580p (Move runs at 720p only), is sent and charged as 720p, and the route's
+ * answer says so. And since the driving video's length is read before anything
+ * is held (decided 2026-11-18; an 8-second clip here): the route's job and
+ * queue payload record that length and the seconds billed, and every case is
+ * checked and charged under its per-second row (Wan Animate under its flat row
+ * for the size, its floor, which an 8-second clip never passes). Everything
+ * else, what KIE receives included, is byte for byte.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
@@ -90,6 +92,21 @@ vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   downloadFile: vi.fn(async () => undefined),
   getVideoDuration: vi.fn(async () => 8),
 }))
+// The price rows the route's floor rule compares, as seeded; the database is not read here.
+const ROWS = vi.hoisted((): Record<string, number> => ({
+  "wan-animate-replace:480p:per-4s": 60,
+  "wan-animate-replace:580p:per-4s": 95,
+  "wan-animate-replace:720p:per-4s": 125,
+  "wan-animate-move:720p:per-4s": 125,
+  "wan-animate-replace": 255,
+  "wan-animate-replace:580p": 330,
+  "wan-animate-replace:720p": 410,
+  "wan-animate-move:720p": 410,
+}))
+vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/credit-base-cost.js")>()),
+  baseCreditCostFor: async (id: string) => ROWS[id]!,
+}))
 // The route's measure of the motion video, before anything is held: the same 8-second clip.
 vi.mock("@/lib/video-utility-probe.js", () => ({ probeClipLengthSec: vi.fn(async () => 8) }))
 vi.mock("@/lib/job-finalize.js", () => ({ finalizeJobWithMedia: vi.fn().mockResolvedValue({ ok: true }) }))
@@ -111,6 +128,7 @@ import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/typ
 import { videoAIHandlers } from "../workers/handlers/video-ai.js"
 import { useProviderSafetySettings } from "../lib/provider-safety.js"
 import { MOTION_TRANSFER_REQUESTS_BEFORE_CATALOG_ENTRIES } from "./fixtures/motion-transfer-requests.js"
+import { motionTransferRateOf } from "@nodaro/shared/credits"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://cdn.example.com/character.png"
@@ -201,40 +219,52 @@ async function record(): Promise<Recorded> {
   return { route, workflow }
 }
 
-/** The cases whose request changed (decided 2026-11-12): Wan Animate at a size it does not have. */
-const isWanAt1080 = (name: string) => [...WAN].some((p) => name === caseName(p, "1080p"))
+/**
+ * The cases whose request changed: Wan Animate at a size it does not have
+ * (1080p, decided 2026-11-12), and Wan Animate Move at 480p or 580p (it runs
+ * at 720p only, decided 2026-11-18).
+ */
+const sizeMoved = (name: string) =>
+  [...WAN].some((p) => name === caseName(p, "1080p")) || name === caseName("wan-animate-move", "480p") || name === caseName("wan-animate-move", "580p")
 
-/** Kling 3.0 at a size charged as 720p (decided 2026-11-18): checked and charged under its per-second row. */
-const KLING_3_RATE_ID = "kling-3.0-motion:720p:per-4s"
-const isKling3ChargedAs720 = (name: string) => name.startsWith("kling-3.0 @") && name !== caseName("kling-3.0", "1080p")
+/**
+ * The row each case is checked and charged under now (decided 2026-11-18):
+ * every model and size per second of its 8-second clip — the route at the row
+ * the floor rule picks (Wan Animate's flat row for the size it runs at, which
+ * an 8-second clip never passes), the workflow build at the rate row until the
+ * run reads the video (`stampMotionTransferInput`, which this build does not run).
+ */
+function chargedNow(lane: "route" | "workflow", provider: string, size: string | undefined): string {
+  const rate = motionTransferRateOf(provider, size)
+  return lane === "route" && rate.floorId !== undefined ? rate.floorId : rate.rateId
+}
 
-/** The measured clip: 8 seconds, billed 8. */
+/** The clip: 8 seconds, billed 8. */
 const RECORDED = { videoDuration: 8, motionTransferBilledSeconds: 8 }
 
 /**
  * A run with the 2026-11-18 change taken back out, to compare with the
- * fixture: the measured length the route's job and queue payload record, and
- * Kling 3.0's per-second row (back to the 10-second tier the fixture's
- * undeclared length was charged under).
+ * fixture: the length the route's job and queue payload record, and the row
+ * every case is now checked and charged under (back to the row the fixture
+ * recorded).
  */
-function asBeforeMeasuring(lane: "route" | "workflow", name: string, run: Json): Json {
+function asBeforeLength(lane: "route" | "workflow", c: (typeof CASES)[number], run: Json): Json {
   const out = JSON.parse(JSON.stringify(run)) as Json
+  const was = before[lane][c.name]!
   if (lane === "route") {
     for (const key of ["queued", "inputData"] as const) {
       const v = out[key] as Json
-      expect({ videoDuration: v.videoDuration, motionTransferBilledSeconds: v.motionTransferBilledSeconds }, `${name}: ${key}`).toEqual(RECORDED)
+      expect({ videoDuration: v.videoDuration, motionTransferBilledSeconds: v.motionTransferBilledSeconds }, `${c.name}: ${key}`).toEqual(RECORDED)
       delete v.videoDuration
       delete v.motionTransferBilledSeconds
     }
-  }
-  if (isKling3ChargedAs720(name)) {
-    if (lane === "route") {
-      expect([out.check, out.debit], name).toEqual([KLING_3_RATE_ID, KLING_3_RATE_ID])
-      out.check = out.debit = "kling-3.0-motion:10s"
-    } else {
-      expect(out.modelIdentifier, name).toBe(KLING_3_RATE_ID)
-      out.modelIdentifier = "kling-3.0-motion:10s"
-    }
+    const row = chargedNow(lane, c.provider, c.size)
+    expect([out.check, out.debit], c.name).toEqual([row, row])
+    out.check = was.check
+    out.debit = was.debit
+  } else {
+    expect(out.modelIdentifier, c.name).toBe(chargedNow(lane, c.provider, c.size))
+    out.modelIdentifier = was.modelIdentifier
   }
   return out
 }
@@ -254,57 +284,51 @@ describe("Motion Transfer's requests are what they were before the Wan Animate c
     expect(Object.keys(now.route)).toHaveLength(CASES.length)
   })
 
-  it("every case but Wan Animate at 1080p is byte for byte what it was, on both lanes, but for the measured length", () => {
+  it("every case whose size did not move is byte for byte what it was, on both lanes, but for the length and the row it is charged under", () => {
     for (const lane of ["route", "workflow"] as const) {
-      for (const [name, run] of Object.entries(now[lane])) {
-        if (isWanAt1080(name)) continue
-        expect(asBeforeMeasuring(lane, name, run), `${lane}: ${name}`).toEqual(before[lane][name])
+      for (const c of CASES) {
+        if (sizeMoved(c.name)) continue
+        expect(asBeforeLength(lane, c, now[lane][c.name]!), `${lane}: ${c.name}`).toEqual(before[lane][c.name])
       }
     }
   })
 
-  it("Kling's sizes, 1080p among them, are sent exactly as before; only Kling 3.0 charged as 720p moved to its per-second row", () => {
+  it("Kling's sizes, 1080p among them, are sent exactly as before, and charged per second", () => {
     for (const lane of ["route", "workflow"] as const) {
-      for (const provider of ["kling", "kling-3.0"]) {
-        for (const size of SIZES) {
-          const name = caseName(provider, size)
-          expect(now[lane][name]!.kie, `${lane}: ${name}`).toEqual(before[lane][name]!.kie)
-          expect(asBeforeMeasuring(lane, name, now[lane][name]!), `${lane}: ${name}`).toEqual(before[lane][name])
-        }
+      for (const c of CASES.filter((x) => !WAN.has(x.provider))) {
+        expect(now[lane][c.name]!.kie, `${lane}: ${c.name}`).toEqual(before[lane][c.name]!.kie)
+        const row = lane === "route" ? now.route[c.name]!.check : now.workflow[c.name]!.modelIdentifier
+        expect(row, `${lane}: ${c.name}`).toMatch(/:per-4s$/)
       }
     }
   })
 
-  it("Wan Animate at 480p, 580p and 720p sends the size it names and charges that size's row, as before", () => {
-    for (const provider of WAN) {
-      for (const [size, row] of [["480p", provider], ["580p", `${provider}:580p`], ["720p", `${provider}:720p`]] as const) {
-        const name = caseName(provider, size)
-        expect((now.route[name]!.kie as { input: Json }).input.resolution, name).toBe(size)
-        expect([now.route[name]!.check, now.route[name]!.debit], name).toEqual([row, row])
-        expect((now.workflow[name]!.kie as { input: Json }).input.resolution, name).toBe(size)
-        expect(now.workflow[name]!.modelIdentifier, name).toBe(row)
-      }
+  it("Wan Animate Replace at 480p, 580p and 720p sends the size it names, held at that size's flat row (its floor) for an 8-second clip", () => {
+    for (const [size, row] of [["480p", "wan-animate-replace"], ["580p", "wan-animate-replace:580p"], ["720p", "wan-animate-replace:720p"]] as const) {
+      const name = caseName("wan-animate-replace", size)
+      expect((now.route[name]!.kie as { input: Json }).input.resolution, name).toBe(size)
+      expect([now.route[name]!.check, now.route[name]!.debit], name).toEqual([row, row])
+      expect((now.workflow[name]!.kie as { input: Json }).input.resolution, name).toBe(size)
+      expect(now.workflow[name]!.modelIdentifier, name).toBe(`wan-animate-replace:${size}:per-4s`)
     }
   })
 
-  it("Wan Animate at 1080p now sends 720p and is checked and charged under the 720p row", () => {
-    for (const provider of WAN) {
-      const name = caseName(provider, "1080p")
+  it("a size a model does not run at (Wan Animate's 1080p, Move's 480p and 580p) is sent as 720p and held at the 720p floor", () => {
+    for (const c of CASES.filter((x) => sizeMoved(x.name))) {
+      const name = c.name
       const was = { route: before.route[name]!, workflow: before.workflow[name]! }
       const run = { route: now.route[name]!, workflow: now.workflow[name]! }
-      // Before: 1080p went to the provider as it was, and was charged the 480p row.
-      expect((was.route.kie as { input: Json }).input.resolution).toBe("1080p")
-      expect([was.route.check, was.route.debit]).toEqual([provider, provider])
-      expect(was.workflow.modelIdentifier).toBe(provider)
-      // Now: 720p, on the 720p row, on both lanes.
+      // Before: the size went to the provider as it was named.
+      expect((was.route.kie as { input: Json }).input.resolution).toBe(c.size)
+      // Now: 720p, on the 720p rows, on both lanes.
       expect((run.route.kie as { input: Json }).input.resolution, name).toBe("720p")
-      expect([run.route.check, run.route.debit], name).toEqual([`${provider}:720p`, `${provider}:720p`])
+      expect([run.route.check, run.route.debit], name).toEqual([`${c.provider}:720p`, `${c.provider}:720p`])
       expect((run.route.queued as Json).resolution, name).toBe("720p")
       expect((run.route.inputData as Json).resolution, name).toBe("720p")
       expect((run.workflow.kie as { input: Json }).input.resolution, name).toBe("720p")
-      expect(run.workflow.modelIdentifier, name).toBe(`${provider}:720p`)
+      expect(run.workflow.modelIdentifier, name).toBe(`${c.provider}:720p:per-4s`)
       expect((run.workflow.payload as Json).resolution, name).toBe("720p")
-      // Nothing else in what is sent, queued or recorded moved (the measured length aside).
+      // Nothing else in what is sent, queued or recorded moved (the length aside).
       const withoutSize = (v: unknown) => ({ ...(v as Json), resolution: undefined, videoDuration: undefined, motionTransferBilledSeconds: undefined })
       expect(withoutSize((run.route.kie as { input: Json }).input)).toEqual(withoutSize((was.route.kie as { input: Json }).input))
       expect(withoutSize(run.route.queued)).toEqual(withoutSize(was.route.queued))
@@ -315,13 +339,12 @@ describe("Motion Transfer's requests are what they were before the Wan Animate c
   })
 
   it("the route's answer says the size moved, and nothing else in it changed", () => {
-    for (const provider of WAN) {
-      const name = caseName(provider, "1080p")
-      const response = now.route[name]!.response as { adjustments?: Array<{ field: string; from: unknown; to: unknown }> }
-      expect((response.adjustments ?? []).map(({ field, from, to }) => ({ field, from, to })), name).toEqual([
-        { field: "resolution", from: "1080p", to: "720p" },
+    for (const c of CASES.filter((x) => sizeMoved(x.name))) {
+      const response = now.route[c.name]!.response as { adjustments?: Array<{ field: string; from: unknown; to: unknown }> }
+      expect((response.adjustments ?? []).map(({ field, from, to }) => ({ field, from, to })), c.name).toEqual([
+        { field: "resolution", from: c.size, to: "720p" },
       ])
-      expect({ ...response, adjustments: undefined }, name).toEqual({ ...(before.route[name]!.response as Json), adjustments: undefined })
+      expect({ ...response, adjustments: undefined }, c.name).toEqual({ ...(before.route[c.name]!.response as Json), adjustments: undefined })
     }
   })
 })

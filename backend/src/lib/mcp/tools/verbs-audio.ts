@@ -4,7 +4,7 @@ import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { resolveSpeechSourceUrl } from "./_speech-source.js"
-import { creditHint } from "./_credit-hint.js"
+import { audioIsolationPriceHint, creditHint } from "./_credit-hint.js"
 import { DUCK_DEFAULT_AMOUNT, DUCK_DEFAULTS } from "../../mix-audio-duck.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import {
@@ -2309,9 +2309,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Isolate Audio",
       description:
-        "Remove background noise and isolate the primary audio (speech, vocals, " +
-        "or instrument) from a mixed audio or video file. Returns a job_id with " +
-        "a clean audio output.",
+        "Remove background noise, isolating the primary audio (speech, vocals or " +
+        "instrument) of an audio or video file; returns a job_id. Up to 30 min " +
+        "(longer: refused, uncharged); " +
+        `${audioIsolationPriceHint()}.`,
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),

@@ -9,7 +9,7 @@ import { tailRecipeSeconds } from "../../lib/extend-recipe.js"
 import { SUNO_WAV_DEMUCS_MESSAGE, SUNO_WAV_NO_STEM_IDS_MESSAGE, SUNO_WAV_STEM_CODE } from "../../lib/suno-id-source.js"
 import { pixverseExtendPromptProblem, pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
-import { AUDIO_ISOLATION_CREDIT_ID, FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
+import { FORCED_ALIGNMENT_CREDIT_ID, REMOVE_BACKGROUND_CREDIT_ID } from "../../lib/fixed-row-credit-ids.js"
 import {
   pro3DRenderShotStills,
   type Scene3DReference,
@@ -122,7 +122,11 @@ import {
   resolveImageGenCreditIdentifier,
   buildVideoCreditModelIdentifier,
   motionTransferEstimatePrice,
+  AUDIO_ISOLATION_RATE_ID,
   motionTransferResolution,
+  isClipPricedV2vProvider,
+  videoToVideoClipRateOf,
+  videoToVideoSentResolution,
   lipSyncAudioRateOf,
   isSeedanceLipSyncProvider,
   referenceAudioLipSyncCreditId,
@@ -5543,17 +5547,26 @@ function buildPayloadOf(
           ? resolvedInputs.referenceImageUrls[0]
           : undefined) as string | undefined
       const v2vReferenceImageUrl = v2vUpstreamRef ?? v2vMention.additionalUrls[0]
+      // HappyHorse Edit and Wan 2.7 VideoEdit are priced by the length of their
+      // clip (decided 2026-11-18): the run reads the clip before it reserves
+      // (`stampVideoToVideoClipInput`, node-executor) and reserves the row that
+      // length chose. Until then the id is the model's rate row.
+      // HappyHorse Edit sends the size it is priced at: 720p unless 1080p is named.
+      const v2vResolution = videoToVideoSentResolution(v2vProvider, data.v2vResolution)
+      const v2vModelId = isClipPricedV2vProvider(v2vProvider)
+        ? videoToVideoClipRateOf(v2vProvider, v2vResolution)!.rateId
+        : v2vProvider
       return {
         jobName: "video-to-video",
         queueName: "video-generation",
-        modelIdentifier: v2vProvider,
+        modelIdentifier: v2vModelId,
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           prompt: v2vPrompt,
           provider: v2vProvider,
           duration: data.v2vDuration as string | undefined,
-          resolution: data.v2vResolution as string | undefined,
+          resolution: v2vResolution,
           audio: data.audio as boolean | undefined,
           multiShots: data.multiShots as boolean | undefined,
           aspectRatio: data.aspectRatio as string | undefined,
@@ -6513,7 +6526,10 @@ function buildPayloadOf(
     }
 
     case "audio-isolation":
-      return simpleResult("audio-isolation", AUDIO_ISOLATION_CREDIT_ID, {
+      // Reserved on the per-10-second row; the run reads the audio's length
+      // before it reserves (`stampAudioIsolationInput`, node-executor) and the
+      // units it is charged ride the payload from there.
+      return simpleResult("audio-isolation", AUDIO_ISOLATION_RATE_ID, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         usageLogId,

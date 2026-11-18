@@ -2476,6 +2476,8 @@ export const KIE_TTS_MODELS: Record<string, KieModelConfig> = {
 // =============================================================================
 // AUDIO ISOLATION MODELS
 // =============================================================================
+// No lane calls this since 2026-11-18: Audio Isolation runs on ElevenLabs' own
+// API (providers/elevenlabs/audio-isolation.ts). Kept for the credit audit.
 export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
   "elevenlabs-isolation": {
     model: "elevenlabs/audio-isolation",

@@ -22,6 +22,9 @@ import { isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { isSeedanceVideoEditProvider } from "@nodaro/shared/models"
 import { seedanceVideoEditCreditId } from "@nodaro/shared/credits"
 import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
+import { useExactUnitQuote } from "@/hooks/use-unit-quote-credits"
+import { videoToVideoQuote } from "@/lib/video-utility-estimate"
+import { videoToVideoClipRowOf } from "@/components/editor/workflow-editor/types"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -75,10 +78,30 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   // LONGEST clip (Auto duration) — the exact identifier payload-builder.ts
   // builds, a draft at 480p — so the pill quotes what the run will actually
   // hold. Every route provider keeps its flat per-provider key.
+  // HappyHorse Edit and Wan 2.7 VideoEdit are priced by their clip's length
+  // (decided 2026-11-18): the row and units of the length the graph gives
+  // (the wire-length walk), else of the model's longest clip, shown as an
+  // estimate (≈) — the server reads the clip before it holds anything. A rate
+  // is quoted as the whole run (`<rate>:<units>u`), as the server prices it.
+  const clipCreditId = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? videoToVideoQuote(node, s.nodes, s.edges, videoToVideoClipRowOf)?.creditId : undefined
+  })
+  const clipUnits = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? videoToVideoQuote(node, s.nodes, s.edges, videoToVideoClipRowOf)?.units : undefined
+  })
+  const clipLengthKnown = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? videoToVideoQuote(node, s.nodes, s.edges, videoToVideoClipRowOf)?.lengthKnown : undefined
+  })
   const creditIdentifier = isSeedanceVideoEditProvider(v2vProvider)
     ? seedanceVideoEditCreditId(v2vProvider, nodeData.v2vResolution, nodeData.draft === true)
-    : v2vProvider
-  const rowCredits = useModelCredits(creditIdentifier, v2vProvider === "luma-modify" ? 32 : 25)
+    : clipCreditId ?? v2vProvider
+  const flatCredits = useModelCredits(clipUnits === undefined ? creditIdentifier : undefined, v2vProvider === "luma-modify" ? 32 : 25)
+  const rateCredits = useExactUnitQuote(clipUnits !== undefined ? clipCreditId : undefined, clipUnits ?? 1)
+  const rowCredits = clipUnits !== undefined ? (rateCredits ?? 0) : flatCredits
+  const creditsEstimate = clipLengthKnown === false
   // The Seedance lane is billed input + output seconds: the server prices it
   // from the probed source clip — exactly what the run reserves.
   const price = useNodeVideoPrice(id, rowCredits)
@@ -144,6 +167,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
       icon={<Clapperboard className="h-4 w-4" />}
       category="ai"
       credits={price.credits}
+      creditsEstimate={creditsEstimate}
       creditsRange={price.creditsRange}
       creditsRangeBasis="length"
       selected={selected}
@@ -192,7 +216,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={price.runCredits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={price.runCredits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
       }
       handles={[
         { id: "video",           type: "target", position: Position.Left,  customStyle: { top: HANDLE_TOP.video,           left: '-29px' }, external: true },

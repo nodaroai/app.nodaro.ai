@@ -27,7 +27,7 @@
 import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
-import { LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, motionTransferRateOf, seedanceLipSyncCreditId } from "@nodaro/shared/credits"
+import { AUDIO_ISOLATION_RATE_ID, LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, motionTransferRateOf, seedanceLipSyncCreditId, videoToVideoClipRateOf, WAN_VIDEOEDIT_FLOOR_CREDIT_ID } from "@nodaro/shared/credits"
 import { LLM_FEATURE_DEFAULTS, getLlmModel, llmDefaultsFeature, llmPriceKey, type LlmFeature } from "@nodaro/shared/llm-models"
 import type { MeteredLlmFeature } from "../../../ee/billing/llm-typical-usage.js"
 import { amountAbbreviation, amountWord, statedAmount, unitFields } from "../amounts.js"
@@ -113,18 +113,47 @@ export function lipSyncPriceSuffix(id: string): string {
 }
 
 /**
- * Motion Transfer's price sentence for a tool description: Kling 3.0 at 720p
- * is charged per second of the driving video the server measures — the whole
- * run's charged price for 10 seconds. Every other model and size is priced by
- * the measured length's tier (Wan Animate by size). Off-cloud, the
+ * Motion Transfer's price sentence for a tool description: every model and
+ * size is charged per second of the driving video the server reads — the
+ * whole run's charged price for 10 seconds at 720p on the two Kling models —
+ * and Wan Animate never below its flat price for the size. Off-cloud, the
  * `list_models` pointer.
  */
 export function motionTransferPriceHint(): string {
   if (!hasCredits()) return OFF_CLOUD
-  const rate = motionTransferRateOf("kling-3.0", "720p")
-  if (!rate) throw new Error("Kling 3.0 at 720p has no per-second rate")
-  const units = 10 / rate.rateSeconds
-  return `Kling 3.0 720p is per second (${stated(rateCreditsOf(rate.rateId, units), `${rate.rateId}@${units}`)} ${amountAbbreviation()} for 10 s).`
+  const tenSeconds = (provider: string): string => {
+    const rate = motionTransferRateOf(provider, "720p")
+    const units = 10 / rate.rateSeconds
+    return stated(rateCreditsOf(rate.rateId, units), `${rate.rateId}@${units}`)
+  }
+  return `Per second (10 s at 720p: ${tenSeconds("kling")} ${amountAbbreviation()} kling, ${tenSeconds("kling-3.0")} kling-3.0); Wan Animate min its flat price.`
+}
+
+/**
+ * Video to Video's price sentence for the models priced by their clip's
+ * length: HappyHorse Edit at 720p and Wan 2.7 VideoEdit, each the whole run's
+ * charged price for a 10-second clip, and Wan 2.7 VideoEdit's least charge
+ * (its flat row). Off-cloud, the `list_models` pointer.
+ */
+export function videoToVideoClipPriceHint(): string {
+  if (!hasCredits()) return OFF_CLOUD
+  const hh = videoToVideoClipRateOf("happyhorse-edit", "720p")
+  const wan = videoToVideoClipRateOf("wan-videoedit", "1080p")
+  if (!hh || !wan) throw new Error("Video to Video has no clip rate")
+  const cr = amountAbbreviation()
+  const hhUnits = 10 / hh.rateSeconds
+  const wanUnits = 10 / wan.rateSeconds
+  return `per 10 s: happyhorse-edit 720p ${stated(rateCreditsOf(hh.rateId, hhUnits), `${hh.rateId}@${hhUnits}`)} ${cr}, ` +
+    `wan-videoedit ${stated(rateCreditsOf(wan.rateId, wanUnits), `${wan.rateId}@${wanUnits}`)}, min ${stated(creditsOf(WAN_VIDEOEDIT_FLOOR_CREDIT_ID), WAN_VIDEOEDIT_FLOOR_CREDIT_ID)}`
+}
+
+/**
+ * Audio Isolation's price for a tool description: the charged price of one
+ * started 10 seconds of the audio. Off-cloud, the `list_models` pointer.
+ */
+export function audioIsolationPriceHint(): string {
+  if (!hasCredits()) return OFF_CLOUD
+  return `${stated(rateCreditsOf(AUDIO_ISOLATION_RATE_ID, 1), `${AUDIO_ISOLATION_RATE_ID}@1`)} ${amountAbbreviation()} per started 10 s`
 }
 
 /** The model a metered LLM feature runs on when the caller names none (borrowed defaults included). */

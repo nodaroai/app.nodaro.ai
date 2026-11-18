@@ -2357,9 +2357,9 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `video_url` | string (URL) |  |  |
 | `video_asset_id` | string |  |  |
-| `model` | string |  | v2v model. Default `wan`. Options: wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. An unknown model is refused. `seedance-2-5` (and `seedance-2-5-flash`) edits the clip by instruction and keeps its length and ratio (clip 4-30s; billed on input + output seconds, settled to the delivered length). |
+| `model` | string |  | v2v model. Default `wan`. Options: wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
 | `duration` | string |  | Wan / Wan Flash only — 5s or 10s output. One of `5`, `10`. |
-| `resolution` | string |  | Wan / Wan Flash (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p). One of `480p`, `720p`, `1080p`. |
+| `resolution` | string |  | Wan / Wan Flash / happyhorse-edit (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p). One of `480p`, `720p`, `1080p`. |
 | `aspect_ratio` | string |  | Runway Aleph only. One of `16:9`, `9:16`, `4:3`, `3:4`, `1:1`, `21:9`. |
 | `audio` | boolean |  | Wan Flash only — preserve/regenerate audio. |
 | `multi_shots` | boolean |  | Wan Flash only — allow multi-shot scene changes. |
@@ -2385,9 +2385,9 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `character_orientation` | string |  | One of `image`, `video`. |
 | `resolution` | string |  | One of `480p`, `580p`, `720p`, `1080p`. |
-| `provider` | string |  | Motion transfer provider. Default kling. |
-| `background_source` | string |  | Which source provides the background. Provider-dependent. One of `input_video`, `input_image`. |
-| `video_duration` | number |  | Ignored: the driver video is measured. From 1 to 60. |
+| `provider` | string |  | Default kling. |
+| `background_source` | string |  | Background source; provider-dependent. One of `input_video`, `input_image`. |
+| `video_duration` | number |  | Ignored. From 1 to 60. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
 

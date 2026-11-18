@@ -9,6 +9,7 @@ import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shar
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
+  AUDIO_ISOLATION_RATE_ID,
   seedanceVideoEditCreditId,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
@@ -51,7 +52,7 @@ import { addCaptionsEngineHere } from "@/lib/caption-engine"
 import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
-import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
+import { videoAuditAnalysisWired, videoToVideoClipRowOf } from "@/components/editor/workflow-editor/types"
 import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
@@ -62,7 +63,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, motionTransferQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -868,8 +869,22 @@ export function getModelIdentifier(
   // multiplies by the units (PRICING_UNIT_ESTIMATORS → motionTransferPricingUnits).
   // Above the `!provider` bail: a node naming no model runs Kling 2.6.
   if (nodeType === "motion-transfer") {
-    return motionTransferQuote(node, nodes ?? [], edges ?? [], reruns).creditId
+    return motionTransferQuote(node, nodes ?? [], edges ?? [], reruns, getCachedModelCredits).creditId
   }
+
+  // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit (decided 2026-11-18):
+  // the row of its clip's length as the graph gives it, else the model's
+  // longest clip — a rate row every estimate multiplies by the units
+  // (PRICING_UNIT_ESTIMATORS), or Wan 2.7 VideoEdit's flat row while it is the larger.
+  if (nodeType === "video-to-video") {
+    const clip = videoToVideoQuote(node, nodes ?? [], edges ?? [], videoToVideoClipRowOf, reruns)
+    if (clip) return clip.creditId
+  }
+
+  // Audio Isolation (decided 2026-11-18): its per-10-second row, which every
+  // estimate multiplies by the started ten seconds of its audio
+  // (PRICING_UNIT_ESTIMATORS → audioIsolationPricingUnits).
+  if (nodeType === "audio-isolation") return AUDIO_ISOLATION_RATE_ID
 
   // A node naming no model whose default is priced per input image: as the server estimate.
   // An Extend Video node naming no provider runs on the node's default

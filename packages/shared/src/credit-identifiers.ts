@@ -1206,10 +1206,11 @@ export function pricedVideoSelection(opts: {
  * Compute composite model identifier for motion control with duration-tiered pricing.
  * Examples: "kling-3.0-motion:10s", "kling-3.0-motion:1080p:15s", "motion-transfer:5s"
  *
- * This is the TIER row only. A run is priced through `motionTransferPrice`
- * (motion-transfer-pricing.ts): from the length the server MEASURES, and at a
- * per-second rate for a model and size that has one (Kling 3.0 at 720p) —
- * never from this builder with a declared length.
+ * This is the old TIER row only, kept for older code and saved quotes: no
+ * run is priced from it. A run is priced through `motionTransferPrice`
+ * (motion-transfer-pricing.ts), per second of the driving video as the server
+ * reads it, for every model and size (Wan Animate's flat rows below are its
+ * floor).
  *
  * Wan Animate providers use resolution-tiered pricing (not per-second):
  * "wan-animate-move" (480p default), "wan-animate-move:580p", "wan-animate-move:720p"

@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { creditHint, creditLadderHint, lipSyncPriceSuffix, motionTransferPriceHint } from "./_credit-hint.js"
+import { creditHint, creditLadderHint, lipSyncPriceSuffix, motionTransferPriceHint, videoToVideoClipPriceHint } from "./_credit-hint.js"
 import { unitFields } from "../amounts.js"
 import { MAX_LIP_SYNC_AUDIO_SEC } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
@@ -1663,20 +1663,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Modify Video",
       description:
         "PRIMARY tool for video-to-video / restyle / clip-edit workflows. Use " +
-        "this directly — do NOT search the apps marketplace for video editing.\n\n" +
-        "Provide ONE of:\n" +
-        "  (a) `video_url` — public HTTPS URL\n" +
-        "  (b) `video_asset_id` — a Nodaro job id whose output is a video\n\n" +
-        "Plus a `prompt` describing the change.\n\n" +
-        "**Picking a model**:\n" +
-        "  • **`wan`** (default, Wan 2.6) — KIE restyle / transformation. " +
-        "5s or 10s; 720p or 1080p. Best general-purpose choice.\n" +
-        "  • **`wan-flash`** — faster Wan variant. Supports `audio: true` " +
-        "to keep / regenerate audio, and `multiShots: true` for multi-shot " +
-        "scene changes.\n" +
+        "it directly; do NOT search the apps marketplace.\n\n" +
+        "Provide `video_url` (public HTTPS) or `video_asset_id` (a Nodaro job " +
+        "id whose output is a video), plus a `prompt` describing the change.\n\n" +
+        "**Models**:\n" +
+        "  • **`wan`** (default, Wan 2.6) — restyle / transformation, 5s or 10s, " +
+        "720p or 1080p.\n" +
+        "  • **`wan-flash`** — faster Wan; `audio: true` keeps / regenerates " +
+        "audio, `multiShots: true` for multi-shot scene changes.\n" +
         "  • **`runway-aleph`** — stylised edits guided by an optional " +
-        "`reference_image_url`. More aspect-ratio options (16:9, 9:16, 4:3, " +
-        "3:4, 1:1, 21:9).",
+        "`reference_image_url`; more aspect ratios.",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
         video_url: z.string().url().optional(),
@@ -1686,11 +1682,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
-            "An unknown model is refused. `seedance-2-5` (and `seedance-2-5-flash`) edits the clip by instruction and keeps its " +
-            "length and ratio (clip 4-30s; billed on input + output seconds, settled to the delivered length).",
+            "An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping " +
+            "length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). " +
+            "`happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged " +
+            `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Wan / Wan Flash (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p)."),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Wan / Wan Flash / happyhorse-edit (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p)."),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
@@ -2689,12 +2687,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Motion Transfer",
       description:
-        "Drive a character image (image_url / image_asset_id) with the motion of a " +
-        "driver video (video_url / video_asset_id); `prompt` optional. Default " +
-        "provider `kling`; resolution 480p-1080p (default 720p); " +
-        "`character_orientation` `image` (default) or `video` picks whose pose " +
-        "frames it. The server measures the driver video and prices from it: 3 s " +
-        "to 10 s (30 s with `video`, or on Wan Animate), else refused uncharged. " +
+        "Drive a character image (image_url/image_asset_id) with a driver video's " +
+        "motion (video_url/video_asset_id); `prompt` optional. Default " +
+        "provider `kling`; resolution 480p-1080p (default 720p; `wan-animate-move` 720p only); " +
+        "`character_orientation` `image` (default) or `video`. Priced by the driver " +
+        "video's length: 3-10 s (30 s with `video` or Wan Animate), else refused uncharged. " +
         motionTransferPriceHint(),
       inputSchema: {
         image_url: z.string().url().optional(),
@@ -2707,17 +2704,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         provider: z
           .string()
           .optional()
-          .describe("Motion transfer provider. Default kling."),
+          .describe("Default kling."),
         background_source: z
           .enum(["input_video", "input_image"])
           .optional()
-          .describe("Which source provides the background. Provider-dependent."),
+          .describe("Background source; provider-dependent."),
         video_duration: z
           .number()
           .min(1)
           .max(60)
           .optional()
-          .describe("Ignored: the driver video is measured."),
+          .describe("Ignored."),
       },
       outputSchema: {
         jobId: z.string(),

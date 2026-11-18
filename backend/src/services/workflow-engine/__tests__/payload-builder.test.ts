@@ -426,6 +426,17 @@ describe("buildPayload", () => {
       expect(result.payload.prompt).toBe("make it anime")
     })
 
+    it("HappyHorse Edit sends the size it is priced at: 720p unless 1080p is named, and reserves its rate row", () => {
+      const inputs: ResolvedInputs = { videoUrl: "https://v.mp4", prompt: "edit this" }
+      for (const [v2vResolution, sent] of [[undefined, "720p"], ["480p", "720p"], ["720p", "720p"], ["1080p", "1080p"]] as const) {
+        const result = buildPayload(node("n1", "video-to-video", { provider: "happyhorse-edit", v2vResolution }), jobId, inputs)
+        expect(result.payload.resolution).toBe(sent)
+        expect(result.modelIdentifier).toBe(`happyhorse-edit:${sent}:per-4s`)
+      }
+      // Every other model's resolution is left as the node has it.
+      expect(buildPayload(node("n1", "video-to-video", { provider: "wan", v2vResolution: "1080p" }), jobId, inputs).payload.resolution).toBe("1080p")
+    })
+
     it("forwards wan-videoedit params", () => {
       const n = node("n1", "video-to-video", {
         provider: "wan-videoedit",
@@ -1373,7 +1384,7 @@ describe("buildPayload", () => {
       const inputs: ResolvedInputs = { audioUrl: "https://a.mp3" }
       const result = buildPayload(n, jobId, inputs)
       expect(result.jobName).toBe("audio-isolation")
-      expect(result.modelIdentifier).toBe("elevenlabs-isolation")
+      expect(result.modelIdentifier).toBe("elevenlabs-isolation:per-10s")
     })
 
     it("voice-changer", () => {

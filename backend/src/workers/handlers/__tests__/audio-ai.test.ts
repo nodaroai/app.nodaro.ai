@@ -9,9 +9,8 @@ const gate = vi.hoisted(() => ({
 const mocks = vi.hoisted(() => {
   const mockGenerateMusic = vi.fn()
   const mockTextToAudio = vi.fn()
-  const mockKieAudioProviderInstance = {
-    isolateAudio: vi.fn(),
-  }
+  const mockKieAudioProviderInstance = {}
+  const mockRunAudioIsolation = vi.fn()
   const mockGenerateSoundEffect = vi.fn().mockResolvedValue(Buffer.from("fake-sfx"))
   const mockKieAudioProvider = vi.fn().mockImplementation(function () { return mockKieAudioProviderInstance })
   const mockTranscribe = vi.fn()
@@ -75,6 +74,7 @@ const mocks = vi.hoisted(() => {
     mockTextToAudio,
     mockKieAudioProvider,
     mockKieAudioProviderInstance,
+    mockRunAudioIsolation,
     mockGenerateSoundEffect,
     mockTranscribe,
     mockExtractYouTubeAudio,
@@ -129,6 +129,7 @@ vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTe
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, directElevenLabsTTSWithTimestamps: mocks.mockDirectElevenLabsTTSWithTimestamps, stripAudioTags: mocks.mockStripAudioTags }))
 vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.mockDirectElevenLabsDialogue }))
 vi.mock("@/providers/elevenlabs/sound-effects.js", () => ({ generateSoundEffect: mocks.mockGenerateSoundEffect }))
+vi.mock("@/lib/audio-isolation-run.js", () => ({ runAudioIsolation: mocks.mockRunAudioIsolation }))
 vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", async (importOriginal) => ({
@@ -208,6 +209,7 @@ vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch })
 import { TTS_PROVIDERS } from "@nodaro/shared/models"
 import { GEMINI_TTS_WIRE_MODELS } from "../../../providers/kie/gemini-tts-models.js"
 import { ttsSupportsTimestamps } from "@nodaro/shared/model-catalog"
+import { elevenlabsIsolationCostUsd } from "../../../lib/pricing/elevenlabs-isolation-cost.js"
 import { audioAIHandlers } from "../audio-ai.js"
 // The REAL config object (not a module mock — the handler's siblings read other
 // fields off it). TTS branches on ELEVENLABS_API_KEY, and `config.ts` does
@@ -244,7 +246,10 @@ beforeEach(() => {
   mocks.mockGenerateMusic.mockResolvedValue("https://replicate.example.com/music.mp3")
   mocks.mockTextToAudio.mockResolvedValue("https://replicate.example.com/audio.mp3")
   mocks.mockGenerateSoundEffect.mockResolvedValue(Buffer.from("fake-sfx"))
-  mocks.mockKieAudioProviderInstance.isolateAudio.mockResolvedValue({ url: "https://kie.example.com/isolated.mp3", cost: 0.01 })
+  mocks.mockRunAudioIsolation.mockImplementation(async (input: { withProgress?: <T>(call: () => Promise<T>) => Promise<T> }) => {
+    const call = async () => ({ isolated: { buffer: Buffer.from("isolated"), contentType: "audio/wav", extension: "wav" }, sentSec: 30, converted: false })
+    return input.withProgress ? input.withProgress(call) : call()
+  })
   mocks.mockDirectElevenLabsDialogue.mockResolvedValue({ audio: Buffer.from("fake-dialogue") })
   mocks.mockTranscribe.mockResolvedValue({ text: "Hello world", language: "en", segments: [] })
   mocks.mockExtractYouTubeAudio.mockResolvedValue("https://example.com/yt-audio.mp3")
@@ -1146,24 +1151,29 @@ describe("extract-youtube-audio handler", () => {
 describe("audio-isolation handler", () => {
   const handler = audioAIHandlers["audio-isolation"]
 
-  it("happy path: isolates audio, uploads, saves, commits", async () => {
-    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
+  it("happy path: isolates on ElevenLabs' own API, stores the file in the type it came back in, records the length sent at the list rate", async () => {
+    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3", audioIsolationUnits: 3 })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockKieAudioProviderInstance.isolateAudio).toHaveBeenCalledWith(
-      "https://example.com/song.mp3",
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
-    )
-    expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://kie.example.com/isolated.mp3", "job-1", "audio", "user-1")
-    // progress flows through setJobProgress (mocked) — no direct assertion
-    // progress flows through setJobProgress (mocked) — no direct assertion
-    // markJobCompleted assertion removed — now inside finalizeJobWithMedia (mocked)
-    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    expect(mocks.mockRunAudioIsolation).toHaveBeenCalledWith(expect.objectContaining({ audioUrl: "https://example.com/song.mp3", heldUnits: 3 }))
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(Buffer.from("isolated"), "audios/job-1.wav", "audio/wav", "user-1")
+    const finalized = mocks.mockFinalizeJobWithMedia.mock.calls.at(-1)![0] as { jobType: string; result: Record<string, unknown> }
+    expect(finalized.jobType).toBe("audio-isolation")
+    // The 30 s sent at the list rate (lib/pricing); not metered, so the commit is the hold.
+    expect(finalized.result).toEqual({ url: "https://r2.example.com/audio/job-1.mp3", cost: elevenlabsIsolationCostUsd(30), providerUsed: "elevenlabs-direct" })
+    expect(elevenlabsIsolationCostUsd(30)).toBeGreaterThan(0)
+    expect("meteredCost" in finalized.result).toBe(false)
+  })
+
+  it("a job queued without units (before this change) runs with no held-units check", async () => {
+    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockRunAudioIsolation.mock.calls.at(-1)![0]).not.toHaveProperty("heldUnits")
   })
 
   it("returns early when finalize signals not-ok (cancelled)", async () => {
     mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
-    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
+    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3", audioIsolationUnits: 1 })
     await handler(job as never, makeCtx())
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
@@ -1583,11 +1593,11 @@ describe("revenue-leak: post-provider upload failure → PostProcessingError (re
     expect(isPostProcessingError(err)).toBe(true)
   })
 
-  it("audio-isolation (uploadToR2)", async () => {
-    mocks.mockUploadToR2.mockRejectedValueOnce(rawUploadError())
-    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
+  it("audio-isolation (uploadBufferToR2)", async () => {
+    mocks.mockUploadBufferToR2.mockRejectedValueOnce(rawUploadError())
+    const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3", audioIsolationUnits: 3 })
     const err = await captureThrow(() => audioAIHandlers["audio-isolation"](job as never, makeCtx()))
-    expect(mocks.mockKieAudioProviderInstance.isolateAudio).toHaveBeenCalled()
+    expect(mocks.mockRunAudioIsolation).toHaveBeenCalled()
     expect(isPostProcessingError(err)).toBe(true)
   })
 

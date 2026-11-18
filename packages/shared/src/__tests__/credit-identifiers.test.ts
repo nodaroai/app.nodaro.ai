@@ -752,14 +752,13 @@ describe("buildMotionCreditModelIdentifier", () => {
 
   // --- Wan Animate Move ---
   describe("wan-animate-move", () => {
-    it("480p returns base identifier (default resolution)", () => {
-      expect(buildMotionCreditModelIdentifier("wan-animate-move", "480p")).toBe("wan-animate-move")
-    })
-
-    it("580p returns composite identifier", () => {
-      expect(buildMotionCreditModelIdentifier("wan-animate-move", "580p")).toBe(
-        "wan-animate-move:580p",
-      )
+    it("runs at 720p only: 480p and 580p are sent and named as 720p, and say so", () => {
+      for (const size of ["480p", "580p"]) {
+        expect(buildMotionCreditModelIdentifier("wan-animate-move", size)).toBe("wan-animate-move:720p")
+        const sized = motionTransferResolution("wan-animate-move", size)
+        expect(sized.resolution).toBe("720p")
+        expect(sized.adjustments.map(({ field, from, to }) => ({ field, from, to }))).toEqual([{ field: "resolution", from: size, to: "720p" }])
+      }
     })
 
     it("720p returns composite identifier", () => {
@@ -769,8 +768,8 @@ describe("buildMotionCreditModelIdentifier", () => {
     })
 
     it("ignores videoDuration (resolution-based pricing only)", () => {
-      expect(buildMotionCreditModelIdentifier("wan-animate-move", "580p", 30)).toBe(
-        "wan-animate-move:580p",
+      expect(buildMotionCreditModelIdentifier("wan-animate-move", "720p", 30)).toBe(
+        "wan-animate-move:720p",
       )
     })
   })

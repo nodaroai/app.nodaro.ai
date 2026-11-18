@@ -23,7 +23,7 @@ import type {
 } from "../provider.interface.js"
 import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, supportsAutoVideoDuration, listedSeedanceTaskType, seedanceTaskTypeFitsMedia, type DeclaredSeedanceTaskType, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isViduQ4Provider, normalizeViduQ4Resolution, isKling4RunnerProvider, isGrokVideo15Provider, videoStartFrameOnlyResolution, videoStartFrameOnlyMessage, isVeoProvider, videoProviderReferenceSyntax, applyVideoNegativePrompt, applyVideoAudioToggle, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION, isVideoAutoAspectToken, videoAutoAspectRunsAt } from "@nodaro/shared/model-catalog"
-import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
+import { getLipSyncMaxAudioSeconds, motionTransferResolution } from "@nodaro/shared/credits"
 import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider } from "@nodaro/shared/models"
@@ -3390,9 +3390,9 @@ export class KieVideoProvider
     }
     // Wan Flash specific params
     if (provider === "wan-flash") {
-      if (options?.audio !== undefined) {
-        input.audio = options.audio
-      }
+      // Always stated: a request that leaves the audio setting out is refused
+      // at task creation, so "no audio" is sent as `audio: false`.
+      input.audio = options?.audio === true
       if (options?.multiShots !== undefined) {
         input.multi_shots = options.multiShots
       }
@@ -3557,7 +3557,11 @@ export class KieVideoProvider
     // Wan 2.2 Animate (Move/Replace) — standard createTask
     // Input: image_url (string) + video_url (string) + resolution + optional prompt
     if (provider === "wan-animate-move" || provider === "wan-animate-replace") {
-      const wanResolution = options?.resolution ?? "480p"
+      // The size the shared rule runs it at (`motionTransferResolution`, the rule the
+      // route, the workflow run and every price read): Move runs at 720p only, so a
+      // 480p / 580p job (an older queued one included) is sent at 720p; Replace keeps
+      // the size it names. A job naming none is sent at 480p, as before.
+      const wanResolution = motionTransferResolution(provider, options?.resolution ?? "480p").resolution
       const input: Record<string, unknown> = {
         image_url: effectiveImageUrl,
         video_url: videoUrl,

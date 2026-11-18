@@ -17,11 +17,10 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_CREDIT_USD, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS } from "./models.js"
+import { KIE_CREDIT_USD, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_STT_MODELS } from "./models.js"
 import { getTtsCapabilities, ttsDirectionFor, ttsNamedVoiceFor } from "@nodaro/shared/model-catalog"
 import { sentSpeechText } from "@nodaro/prompts/prompt-fields"
 import { isGeminiTtsModel } from "./gemini-tts-models.js"
-import { kieBilledCostUsd } from "./billed-cost.js"
 import { geminiSpeechInput, runGeminiSpeech } from "./gemini-tts.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -246,48 +245,6 @@ export class KieAudioProvider
     )
 
     return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
-  }
-
-  async isolateAudio(audioUrl: string, reconcileOpts?: ReconcileOpts): Promise<ProviderResult> {
-    const modelConfig = KIE_AUDIO_ISOLATION_MODELS["elevenlabs-isolation"]
-    if (!modelConfig) {
-      throw createSanitizedError(
-        "elevenlabs-isolation model not configured",
-        "Audio isolation"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Isolating audio with ${modelConfig.model}`
-    )
-
-    const { resultJson, costTime, rawRecordInfo } = await runKieTask(
-      modelConfig.model,
-      { audio_url: audioUrl },
-      MAX_POLL_ATTEMPTS_VIDEO,
-      undefined,
-      { ...reconcileOpts, modelKey: "elevenlabs-isolation" },
-    )
-
-    const resultUrl =
-      resultJson.resultUrls?.[0] ?? resultJson.audioUrl
-    if (!resultUrl) {
-      throw createSanitizedError(
-        "audio isolation task succeeded but no URL found",
-        "Audio isolation"
-      )
-    }
-
-    // What KIE billed for the task: its record's `creditsConsumed`, else the
-    // catalog cost. Never `costTime`: that is generation time in SECONDS (see
-    // client.ts), not credits. Recorded only: no `meteredCost` here, so the
-    // reserved tier is committed whatever this figure is.
-    const actualCost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
-    console.log(
-      `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${actualCost.toFixed(4)}, gen time: ${costTime ?? "N/A"}s)`
-    )
-
-    return { url: resultUrl, cost: actualCost }
   }
 
   async speechToText(

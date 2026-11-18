@@ -43,6 +43,22 @@ vi.mock("@/lib/url-validator.js", async () => {
 })
 // The driving video is measured before anything is held (decided 2026-11-18): a 10-second clip.
 vi.mock("@/lib/video-utility-probe.js", () => ({ probeClipLengthSec: vi.fn(async () => 10) }))
+// The price rows the route's floor rule compares, as seeded; the database is not read here.
+const ROWS = vi.hoisted((): Record<string, number> => ({
+  "kling-3.0-motion:1080p:per-4s": 302,
+  "wan-animate-replace:480p:per-4s": 60,
+  "wan-animate-replace:580p:per-4s": 95,
+  "wan-animate-replace:720p:per-4s": 125,
+  "wan-animate-move:720p:per-4s": 125,
+  "wan-animate-replace": 255,
+  "wan-animate-replace:580p": 330,
+  "wan-animate-replace:720p": 410,
+  "wan-animate-move:720p": 410,
+}))
+vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/credit-base-cost.js")>()),
+  baseCreditCostFor: async (id: string) => ROWS[id]!,
+}))
 vi.mock("@/ee/lib/credit-guard-impl.js", () => ({
   creditGuardImpl: () => h.creditCheck,
   reserveCreditsForJobImpl: h.reserve,
@@ -119,18 +135,24 @@ describe("/v1/motion-transfer on Wan Animate under models.allow", () => {
       expectNothingStarted()
     })
 
-    it(`${provider}: an allow list that names it runs it as before`, async () => {
+    // A 10-second clip is held at the flat row of the size it runs at (Wan Animate's floor);
+    // Move runs at 720p only, so its 480p and 580p run, and are held, as 720p.
+    const runsAt = (size: string) => (provider === "wan-animate-move" ? "720p" : size)
+    const floorAt = (size: string) => (runsAt(size) === "480p" ? provider : `${provider}:${runsAt(size)}`)
+
+    it(`${provider}: an allow list that names it runs it`, async () => {
       setProfile({ models: { allow: [...KLING_MODELS, provider] } })
       const res = await run({ provider, resolution: "580p" })
       expect(res.statusCode).toBe(200)
-      expect(res.json()).toEqual({ jobId: "job-1" })
-      expectRan(provider, `${provider}:580p`, "580p")
+      if (provider === "wan-animate-move") expect(res.json()).toMatchObject({ jobId: "job-1", adjustments: [{ field: "resolution", from: "580p", to: "720p" }] })
+      else expect(res.json()).toEqual({ jobId: "job-1" })
+      expectRan(provider, floorAt("580p"), runsAt("580p"))
     })
 
-    it(`${provider}: a deployment that restricts nothing runs it as before`, async () => {
+    it(`${provider}: a deployment that restricts nothing runs it`, async () => {
       const res = await run({ provider, resolution: "480p" })
       expect(res.statusCode).toBe(200)
-      expectRan(provider, provider, "480p")
+      expectRan(provider, floorAt("480p"), runsAt("480p"))
     })
 
     it(`${provider}: an explicit deny refuses it too`, async () => {
@@ -154,7 +176,7 @@ describe("/v1/motion-transfer on Wan Animate under models.allow", () => {
     const res = await run({ provider: "kling-3.0", resolution: "1080p" })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ jobId: "job-1" })
-    expectRan("kling-3.0", "kling-3.0-motion:1080p:10s", "1080p")
+    expectRan("kling-3.0", "kling-3.0-motion:1080p:per-4s", "1080p")
   })
 
   it("an Admin → Availability models override saved before Wan Animate was listed withholds it", async () => {

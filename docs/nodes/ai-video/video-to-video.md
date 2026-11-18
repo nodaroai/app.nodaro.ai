@@ -138,12 +138,70 @@ avoided into the instruction itself.
 | **Seedance 2.5 Flash Edit** (`seedance-2-5-flash`) | dynamic — see below | The same edit, faster and lower-cost: 480p / 720p, 10 image / 5 audio references (WAV or MP3), no draft; native audio |
 | **Wan 2.6** (`wan`) | 193 cr<!-- credits: wan --> | General-purpose V2V, reliable results |
 | **Wan 2.6 Flash** (`wan-flash`) | 110 cr<!-- credits: wan-flash --> | Fast V2V with optional audio & multi-shot |
-| **Wan 2.7 VideoEdit** (`wan-videoedit`) | 352 cr<!-- credits: wan-videoedit --> | Guided editing with reference image, audio control, prompt extend |
+| **Wan 2.7 VideoEdit** (`wan-videoedit`) | by the clip's length, at least 352 cr<!-- credits: wan-videoedit --> — see below | Guided editing with reference image, audio control, prompt extend; clip 2–10 s |
 | **Luma Modify** (`luma-modify`) | 352 cr<!-- credits: luma-modify --> | Strong at style transfer and artistic modifications |
 | **Runway Aleph** (`runway-aleph`) | 385 cr<!-- credits: runway-aleph --> | High-quality transformations, flexible aspect ratio |
-| **HappyHorse Edit** (`happyhorse-edit`) | 385 cr<!-- credits: happyhorse-edit --> | Up to 60s input, 720p (default) or 1080p output |
+| **HappyHorse Edit** (`happyhorse-edit`) | by the clip's length — see below | Clip 3–60 s, 720p (default) or 1080p output |
 
 On Seedance 2.5 Flash the clip you edit, and every reference video, is fitted to what the model takes before it is sent: its size is scaled, shape kept, to a 480p- or 720p-class picture (a picture at exactly 2.5:1 or 1:2.5 may lose up to 2 pixels of its long side to stay inside them) (a 1080p or 4K clip down, a small one up), and its frame rate is set to stay between 24 and 60 frames a second — a constant rate outside that range moved to 24 or 60, and a clip with a variable rate (as phones record) made constant at its nominal rate, held in that range — over the same seconds, so its length and price do not change. A clip wider than 2.5:1 or taller than 1:2.5 is refused before any credits are held (`video_aspect_unsupported`): crop it to a less extreme shape.
+
+### HappyHorse Edit and Wan 2.7 VideoEdit — credits
+
+These two models are priced by the length of the clip you edit. When the run
+starts, the server reads the clip's length from the file **before any credits
+are held**, on every path (the editor, a workflow or app run, the API, the SDK,
+MCP and `POST /v1/quote`). A length a request names is never used. The price
+shown before a run is the price the run holds and charges: nothing is settled
+afterwards.
+
+**HappyHorse Edit** is charged for every started half-second of the clip, at
+the size it renders:
+
+| Size | Per clip second | 3 s clip | 10 s clip | 60 s clip |
+|------|-----------------|----------|-----------|-----------|
+| 720p (default) | 154<!-- credits-rate: happyhorse-edit:720p:per-4s@0.25 --> | 462 credits<!-- credits: happyhorse-edit:720p:per-4s@0.75 --> | 1540 credits<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> | 9240 credits<!-- credits: happyhorse-edit:720p:per-4s@15 --> |
+| 1080p | 264<!-- credits-rate: happyhorse-edit:1080p:per-4s@0.25 --> | 792 credits<!-- credits: happyhorse-edit:1080p:per-4s@0.75 --> | 2640 credits<!-- credits: happyhorse-edit:1080p:per-4s@2.5 --> | 15840 credits<!-- credits: happyhorse-edit:1080p:per-4s@15 --> |
+
+Each size's price row is the price of four clip seconds; a run is that row ×
+the started half-seconds ÷ 8, rounded up once. The size is 720p unless the
+request (or the node's **Resolution**) says 1080p, and the size priced is the
+size sent.
+
+Worked examples: a 3.00-second clip at 720p is 6 half-seconds, 462 credits<!-- credits: happyhorse-edit:720p:per-4s@0.75 -->; a 10.04-second clip at 720p is 21 half-seconds, 1617 credits<!-- credits: happyhorse-edit:720p:per-4s@2.625 -->; a 3.00-second clip at 1080p is 792 credits<!-- credits: happyhorse-edit:1080p:per-4s@0.75 -->.
+
+**Wan 2.7 VideoEdit** is charged per second of the clip it delivers — the
+clip's length, or the **Duration** you ask for (5 or 10 s) when that is shorter
+— rounded up to a whole second after forgiving 0.05 s, but never less than
+its flat price: a run is charged the larger of the two.
+
+- Flat price (the least a run costs): 352 credits<!-- credits: wan-videoedit -->.
+- Per second delivered (at 720p and 1080p alike): 66<!-- credits-rate: wan-videoedit:1080p:per-4s@0.25 -->.
+
+| Seconds delivered | Wan 2.7 VideoEdit |
+|-------------------|-------------------|
+| 2–5 s | 352 credits<!-- credits: wan-videoedit --> |
+| 6 s | 396 credits<!-- credits: wan-videoedit:1080p:per-4s@1.5 --> |
+| 10 s | 660 credits<!-- credits: wan-videoedit:1080p:per-4s@2.5 --> |
+
+Worked examples: a 3-second clip costs 352 credits<!-- credits: wan-videoedit -->; a 6-second clip costs 396 credits<!-- credits: wan-videoedit:1080p:per-4s@1.5 -->; a 10-second clip costs 660 credits<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->; a 10-second clip with Duration 5 is charged 5 seconds, 352 credits<!-- credits: wan-videoedit -->.
+
+**Limits and refusals.** A clip outside the model's limits is refused with a
+`400` before anything is held, and the message names the limit:
+
+- HappyHorse Edit: shorter than 3 seconds (`video_too_short`) or longer than 60
+  seconds (`video_too_long` — trim the video first).
+- Wan 2.7 VideoEdit: shorter than 2 seconds (`video_too_short`) or longer than
+  10 seconds (`video_too_long`; a clip up to 0.05 s past 10 s is accepted and
+  charged as 10 s).
+- A clip that cannot be read is refused (`video_unreadable`), never priced on a
+  guess; a link whose host cannot be reached right now is a retryable `503`.
+
+**The price you see before you run** reads the clip's length from the
+workflow — an upload at its recorded length, a clip another node makes in this
+run at the length it will produce plus a small allowance. When the length is
+not known, the price shown is the most the run can cost (a 60-second clip on
+HappyHorse Edit, a 10-second one on Wan 2.7 VideoEdit), marked as an estimate
+(≈).
 
 ### Seedance 2.5 Edit — credits
 

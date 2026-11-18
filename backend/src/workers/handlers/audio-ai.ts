@@ -33,6 +33,8 @@ import { defaultAllowedVoiceId, voiceLockActive } from "../../lib/voice-policy.j
 import { assertNamedVoiceModelAllowed, assertUnnamedVoicesAllowed, assertVoicesAllowed } from "../../lib/voice-lock.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
+import { elevenlabsIsolationCostUsd } from "../../lib/pricing/elevenlabs-isolation-cost.js"
+import { runAudioIsolation } from "../../lib/audio-isolation-run.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
@@ -694,27 +696,27 @@ const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutube
 }
 
 const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job, ctx) {
-  const { audioUrl } = job.data as { jobId: string; audioUrl: string }
+  const { audioUrl, audioIsolationUnits } = job.data as { jobId: string; audioUrl: string; audioIsolationUnits?: number }
   console.log(`[worker] audio-isolation ${ctx.jobId}`)
-  const kieAudio = new KieAudioProvider()
-  const audioIsoOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    () => kieAudio.isolateAudio(audioUrl, { onTaskCreated: audioIsoOnTaskCreated }),
-  )
-  await setJobProgress(job, ctx.jobId, 50)
-  // POST-PROVIDER: KIE already delivered the isolated audio (we were billed) —
-  // an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId))
+  // ElevenLabs' own API (decided 2026-11-18): download, read the length again,
+  // send the audio only (a video's sound taken out first), store what comes back.
+  const { isolated, sentSec } = await runAudioIsolation({
+    audioUrl,
+    ...(typeof audioIsolationUnits === "number" ? { heldUnits: audioIsolationUnits } : {}),
+    withProgress: (call) => withProgressRamp(job, ctx.jobId, { start: 10, cap: 85 }, call),
+  })
+  await setJobProgress(job, ctx.jobId, 90)
+  // POST-PROVIDER: ElevenLabs already delivered the isolated audio (we were
+  // billed) — an R2 upload failure here is post-delivery, so skip the refund.
+  const r2Url = await runPostProcessing(() => uploadBufferToR2(isolated.buffer, mediaObjectKey(ctx.jobId, "audio", isolated.extension), isolated.contentType, ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "audio-isolation",
-    result,
+    // ElevenLabs reports no bill: the cost recorded is the length sent at its list rate.
+    // Not metered: the commit is the hold.
+    result: { url: r2Url, cost: elevenlabsIsolationCostUsd(sentSec), providerUsed: "elevenlabs-direct" },
     mediaUrl: r2Url,
-    extraOutputData: buildProviderMeta(result),
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)

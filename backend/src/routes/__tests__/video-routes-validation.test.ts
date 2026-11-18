@@ -41,6 +41,11 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 1, watermark: false }),
 }))
 
+// Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit reads its clip before anything is held (decided 2026-11-18): a readable 5-second clip.
+vi.mock("@/lib/video-to-video-clip-input.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/video-to-video-clip-input.js")>()),
+  measureVideoToVideoClip: vi.fn(async () => ({ ok: true, clipSec: 5, billedSeconds: 5, creditId: "wan-videoedit" })),
+}))
 // Motion Transfer measures its driving video before anything is held (decided 2026-11-18): a readable 10-second clip.
 vi.mock("@/lib/motion-transfer-input.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/motion-transfer-input.js")>()),

@@ -295,7 +295,6 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
 describe("a single-row node advertises the row its run reserves", () => {
   const inputs = {
     "forced-alignment": { audioUrl: "https://media.test/a.mp3", prompt: "hello there" },
-    "audio-isolation": { audioUrl: "https://media.test/a.mp3" },
     "remove-background": { imageUrl: "https://media.test/a.png" },
   } as const
 
@@ -316,6 +315,23 @@ describe("a single-row node advertises the row its run reserves", () => {
   })
 })
 
+
+/**
+ * Audio Isolation left the single-row nodes (decided 2026-11-18): it is priced
+ * per started ten seconds of its audio, so the workflow run reserves its
+ * per-10-second row and the band runs from one unit to the 30-minute cap's 180.
+ */
+describe("Audio Isolation advertises its per-10-second band", () => {
+  it("reserves the per-10-second row, and its band is 1 to 180 units of it", () => {
+    const node: SimpleNode = { id: "n", type: "audio-isolation", data: { label: "audio-isolation" } }
+    const built = buildPayload(node, "job-1", { audioUrl: "https://media.test/a.mp3" } as never)
+    expect(built.modelIdentifier).toBe("elevenlabs-isolation:per-10s")
+    expect(Object.values(FIXED_ROW_CREDIT_IDS)).not.toContain("elevenlabs-isolation")
+    const unit = STATIC_CREDIT_COSTS["elevenlabs-isolation:per-10s"]!
+    expect(unit).toBe(10)
+    expect(NODE_REGISTRY.find((d) => d.type === "audio-isolation")!.creditCost).toBe(`${unit}-${unit * 180}`)
+  })
+})
 
 /**
  * Add Captions on Nemotron 3.5 Transcribe is one charge, the Remotion render

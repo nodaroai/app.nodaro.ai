@@ -157,7 +157,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
 | LTX 2.3 Pro | Lightricks | Standard | 264<!-- credits: ltx-2.3-pro --> | i2v, t2v | Lightricks LTX 2.3 Pro — text/image/audio→video up to 4K, 6/8/10s, end-frame interpolation. |
 | Kling 3 Omni | Kuaishou | Standard | 275<!-- credits: kling-3-omni --> | i2v | Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio. |
-| Wan Animate Move | Alibaba | Standard | 281<!-- credits: wan-animate-move --> | motion-transfer | Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video. |
 | Wan Animate Replace | Alibaba | Standard | 281<!-- credits: wan-animate-replace --> | motion-transfer | Wan 2.2 Animate: replaces the person in a driving video with the subject of a still image, keeping the motion. |
 | Gemini Omni Flash | Google | Standard | 297<!-- credits: gemini-omni-flash --> | i2v, t2v | Google Gemini Omni Flash — faster/cheaper Omni tier: multimodal video with native audio, text/image-to-video + video-edit. |
 | Kling 2.6 | Kuaishou | Standard | 308<!-- credits: kling --> | i2v, t2v | Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio. |
@@ -170,16 +169,17 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Gemini Omni | Google | Standard | 347<!-- credits: gemini-omni-video --> | i2v, t2v | Google multimodal video with native audio; text/image-to-video + video-edit. |
 | Luma Modify | Luma | Standard | 352<!-- credits: luma-modify --> | v2v | Luma Modify — changes or restyles an existing video from a prompt. |
 | Runway Extend | Runway | Standard | 352<!-- credits: runway-extend --> | extend | Extend a Runway video by another clip. |
-| Wan 2.7 VideoEdit | Alibaba | Standard | 352<!-- credits: wan-videoedit --> | v2v | Guided video editing with optional reference image, audio control, and prompt expansion. |
+| Wan 2.7 VideoEdit | Alibaba | Standard | 352<!-- credits: wan-videoedit --> | v2v | Guided video editing of a 2-10s clip with optional reference image, audio control, and prompt expansion; priced per second of the clip it delivers, never below the listed price. |
 | Wan 3.0 Prime | Alibaba | Standard | 352<!-- credits: wan-3-prime --> | i2v, t2v | Wan 3.0 Prime — Alibaba's high-speed Wan 3.0 tier: same multimodal surface and 2-30s range, faster turnaround at a higher per-second rate. |
-| HappyHorse Edit | HappyHorse | Standard | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output. |
+| HappyHorse Edit | HappyHorse | Standard | 385<!-- credits: happyhorse-edit --> | v2v | HappyHorse video-edit — video-to-video transformation of a 3-60s clip, 720p/1080p output; priced per started half-second of the clip, above the listed flat price. |
 | Runway Aleph V2V | Runway | Standard | 385<!-- credits: runway-aleph --> | v2v | Runway Aleph — video-to-video conversion. |
 | Kling 4.0 | Kuaishou | Standard | 396<!-- credits: kling-4 --> | i2v, t2v | Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text. |
 | Kling 4.0 Keyframes | Kuaishou | Standard | 396<!-- credits: kling-4-keyframes --> | i2v, t2v | Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio. |
 | Seedance 2 | Bytedance | Standard | 418<!-- credits: seedance-2 --> | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Standard | 418<!-- credits: veo-4k --> | video-upscale | Upscale VEO output to 4K. |
-| Gemini Omni Flash 1.2 Extend | Google | Premium | 429<!-- credits: gemini-omni-flash-1-2-extend:720p:sent-10s:added-8s --> | extend | Extend ANY 16:9 or 9:16 video with Gemini Omni Flash 1.2: a 3–10s continuation with sound, from 360p to 4K, of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more. |
+| Gemini Omni Flash 1.2 Extend | Google | Standard | 429<!-- credits: gemini-omni-flash-1-2-extend:720p:sent-10s:added-8s --> | extend | Extend ANY 16:9 or 9:16 video with Gemini Omni Flash 1.2: a 3–10s continuation with sound, from 360p to 4K, of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more. |
 | Kling 2.1 Master | Kuaishou | Premium | 440<!-- credits: kling-master --> | i2v | Master tier I2V — strong cinematic quality. |
+| Wan Animate Move | Alibaba | Premium | 451<!-- credits: wan-animate-move:720p --> | motion-transfer | Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video. |
 | InfiniTalk | InfiniTalk | Premium | 462<!-- credits: infinitalk --> | lip-sync | Audio-driven talking-head from a still image. 480p / 720p. |
 | Kling 4 Extend | Kuaishou | Premium | 468<!-- credits: kling-4-extend:5s:720p --> | extend | Extend ANY video with Kling 4: 3–30s continuation (audio included), stitched into one seamless clip. |
 | ⭐ Kling 3.0 | Kuaishou | Premium | 550<!-- credits: kling-3.0 --> | i2v, t2v | Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P. |
@@ -220,6 +220,7 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | Gemini 3.8 Flash-Lite TTS | Google | Everyday | 5<!-- credits: gemini-3-8-flash-lite-tts --> | tts, dialogue | Google's lightest Gemini speech model and the cheapest speech on the platform — 70 named voices grouped by use, its own tone tags (laugh, sigh, short pause and more) and a free-text style direction. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers. |
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 6<!-- credits: elevenlabs-sfx:5s --> | sfx | Generate short sound effects from a text prompt. |
 | Gemini 3.8 Flash TTS | Google | Everyday | 7<!-- credits: gemini-3-8-flash-tts --> | tts, dialogue | Google's Gemini 3.8 speech model — the same 70 voices, tone tags and free-text style direction as Flash-Lite, from the larger model of the generation. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers. |
+| ElevenLabs Voice Isolation | ElevenLabs | Everyday | 11<!-- credits: elevenlabs-isolation:per-10s --> | isolation | Strip background noise / music from a vocal track. Audio up to 30 minutes; priced per started 10 seconds of the audio. |
 | Gemini 3.1 Flash TTS | Google | Everyday | 15<!-- credits: gemini-3-1-flash-tts --> | tts, dialogue | Google's Gemini 3.1 speech model — 30 named voices, [audio tags] written freely, and a speaking style, pace, accent and audio profile for the speaker. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers. |
 | ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 17<!-- credits: elevenlabs-turbo --> | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs v4 Turbo | ElevenLabs | Everyday | 17<!-- credits: elevenlabs-v4-turbo --> | tts | Faster, cheaper ElevenLabs v4 at lower fidelity — [audio tags], stability and similarity control, at Turbo's credit price. Prefer v4 when quality matters. Direct API. |
@@ -245,7 +246,6 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | Incredibly Fast Whisper | OpenAI | Premium | 44<!-- credits: incredibly-fast-whisper --> | stt | Fast Whisper speech-to-text. Returns WORD-level timestamps when asked, so its transcript can feed captions. |
 | Whisper | OpenAI | Premium | 44<!-- credits: whisper --> | stt | Whisper speech-to-text — PHRASE-level segments only, NO word timestamps. Fine for a transcript or a static subtitle; not for word-timed (kinetic) captions. |
 | ElevenLabs Voice Design | ElevenLabs | Premium | 55<!-- credits: elevenlabs-voice-design --> | voice-design | Design a synthetic voice from a description (no reference clip needed). |
-| ElevenLabs Voice Isolation | ElevenLabs | Premium | 82<!-- credits: elevenlabs-isolation --> | isolation | Strip background noise / music from a vocal track. |
 | ElevenLabs Dubbing v2 | ElevenLabs | Premium | 1210<!-- credits: elevenlabs-dubbing-v2 --> | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
 <!-- AUTO-GEN:END model-table-audio -->
 

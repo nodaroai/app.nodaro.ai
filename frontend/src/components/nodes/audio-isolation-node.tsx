@@ -13,10 +13,12 @@ import { isValidAudioIsolationConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useExactUnitQuote } from "@/hooks/use-unit-quote-credits"
+import { audioIsolationQuote } from "@/lib/video-utility-estimate"
+import { AUDIO_ISOLATION_RATE_ID } from "@nodaro/shared/credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
-import type { AudioIsolationData } from "@/types/nodes"
+import type { AudioIsolationData, WorkflowNode } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidAudioIsolationConnection("audio", t)
 
@@ -33,7 +35,19 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("elevenlabs-isolation", 1)
+  // Priced per started ten seconds of the audio the graph gives (the shared
+  // wire-length walk), else the 30-minute cap, shown as an estimate (≈): the server reads
+  // the audio before it holds anything (decided 2026-11-18).
+  const quoteUnits = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? audioIsolationQuote(node, s.nodes, s.edges).units : undefined
+  })
+  const lengthKnown = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? audioIsolationQuote(node, s.nodes, s.edges).lengthKnown : false
+  })
+  const credits = useExactUnitQuote(AUDIO_ISOLATION_RATE_ID, quoteUnits ?? 1)
+  const creditsEstimate = !lengthKnown
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
@@ -52,11 +66,12 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
       icon={<AudioWaveform className="h-4 w-4" />}
       category="ai"
       credits={credits}
+      creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-        <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+        <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
