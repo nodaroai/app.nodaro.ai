@@ -17,7 +17,29 @@
 import { kieTaskCreditsConsumed } from "./image-cost.js"
 import { KIE_CREDIT_USD } from "./models.js"
 
+/** KIE credits in USD: the one conversion every recorded KIE bill goes through. */
+export function kieCreditsUsd(credits: number): number {
+  return credits * KIE_CREDIT_USD
+}
+
 export function kieBilledCostUsd(record: Record<string, unknown> | undefined, listedUsd: number): number {
   const credits = kieTaskCreditsConsumed(record)
-  return credits !== undefined ? credits * KIE_CREDIT_USD : listedUsd
+  return credits !== undefined ? kieCreditsUsd(credits) : listedUsd
+}
+
+/**
+ * What a job finished by a RECOVERY path (the reconcile cron, the worker's
+ * re-pick after a restart, a unit's `recover.ts`) records as its
+ * `provider_cost`: the credits its saved task's record carries
+ * (`kieTaskCreditsConsumed`, read off the poll the recovery already made), at
+ * the same rate as `kieBilledCostUsd`. No record figure: null, and the column
+ * is left unwritten — a recovery knows the task, not the request the worker
+ * ran it with, so it has no catalog figure it could name for certain.
+ *
+ * Recorded only, as above: a recovery commits its reservation (or its own
+ * metered base) whatever this is. `lib/reconcile/__tests__/kie-recovery-cost-guard.test.ts`
+ * holds every KIE recovery path to it.
+ */
+export function kieRecoveredCostUsd(credits: number | undefined): number | null {
+  return credits !== undefined ? kieCreditsUsd(credits) : null
 }

@@ -185,9 +185,10 @@ export interface EntityFinalizeInput {
   usageLogId: string | null | undefined
   spec: EntityAttachSpec
   /** The provider's delivered media plus its cost metadata. On the recovery
-   *  path the cost fields are unknown and left unset — they are OMITTED from
-   *  the completion write rather than written as NULL, which is what used to
-   *  clobber the provider metadata a prior attempt had already recorded. */
+   *  path `cost` is the provider's bill when the saved task's record carries
+   *  one, and every other cost field is left unset — unset fields are OMITTED
+   *  from the completion write rather than written as NULL, which is what used
+   *  to clobber the provider metadata a prior attempt had already recorded. */
   result: {
     url: string
     providerUsed?: string | null
@@ -232,7 +233,7 @@ export async function finalizeEntityJob(input: EntityFinalizeInput): Promise<str
   const ok = await markJobCompleted(jobId, {
     output_data: outputData,
     // Null/undefined cost metadata is OMITTED, never written: the recovery
-    // path does not know the provider's actual cost, and writing NULL there
+    // path may not know the provider's cost, and writing NULL there
     // erased whatever the crashed attempt had already recorded (the same
     // data-quality residual `finalizeJobWithMedia` documents at its own CAS).
     ...(result.providerUsed != null && { provider: result.providerUsed }),
