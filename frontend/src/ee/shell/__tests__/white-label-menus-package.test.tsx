@@ -111,7 +111,8 @@ function mount(worldMenus: SiteHeaderProps["worldMenus"]) {
 const bar = () => document.querySelector("[data-ns-desktop-only]") as HTMLElement
 
 async function openVideoMenu() {
-  fireEvent.click(await within(bar()).findByRole("button", { name: "Video menu" }))
+  // A world's tab is one link; Down on it opens its menu (the package has no menu button since 0.28.0).
+  fireEvent.keyDown(await within(bar()).findByRole("link", { name: /^Video/ }), { key: "ArrowDown" })
   const menu = await screen.findByRole("dialog", { name: "Video menu" })
   // Its categories are drawn once the platform's models are in.
   await within(menu).findAllByText("Acme Motion")
