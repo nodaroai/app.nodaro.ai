@@ -217,7 +217,12 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
       steps: plan.steps.filter((step) => PAID.has(step) && !quoted.includes(step)),
     }
     if ((plan.cannot.length > 0 || extra.listen || extra.steps.length > 0) && opts.confirmPartial) {
-      if (!(await untilStopped(opts.confirmPartial(plan, extra), signal))) throw new RunDeclined(plan)
+      ctx.show.ask("lead", true)
+      try {
+        if (!(await untilStopped(opts.confirmPartial(plan, extra), signal))) throw new RunDeclined(plan)
+      } finally {
+        ctx.show.ask("lead", false)
+      }
       ctx.timeline = (await readStage()).timeline
     }
     if (signal.aborted) throw new RunStopped()
@@ -566,9 +571,9 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
       link.compare("split", 0.5)
       onEvent({ type: "compare", mode: "split" })
       await ctx.preview(landAt, 5000)
-    } else {
-      link.playback("seek", landAt)
     }
+    // The finished edit is always handed over from its start, the timeline scrolled back to it.
+    link.playback("seek", 0)
     const result: RunSummary = { fromSeconds, toSeconds: timelineSeconds(ctx.timeline), ...summary }
     onEvent({ type: "done", summary: result })
     return result

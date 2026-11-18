@@ -46,6 +46,17 @@ const STATION: Record<AgentId, string> = {
   director: "lane.video",
 }
 
+/** The crew that rests at its stations while no edit runs (the director only joins a run). */
+const RESTING: readonly AgentId[] = ["lead", "cutter", "captions", "sound", "broll", "picture", "color", "framer"]
+
+/**
+ * The whole crew asleep at its stations: what a studio-layout editor shows
+ * before the first edit and after each one, so the agents are always there.
+ */
+export function restingCrew(names: Record<AgentId, string>): PresenceCursor[] {
+  return RESTING.map((a) => ({ id: `${a}#station`, name: names[a], color: AGENT_COLORS[a], target: STATION[a], mood: "waiting" as const }))
+}
+
 export class Show {
   private readonly cursors = new Map<AgentId, PresenceCursor>()
   private readonly highlights = new Map<string, PresenceHighlight>()
@@ -53,6 +64,8 @@ export class Show {
   private crew: readonly AgentId[] = []
   /** The agents that had steps in this run and have none left: back at their station, done. */
   private finished: readonly AgentId[] = []
+  /** The agent waiting for the person to answer, if one is. */
+  private asking: AgentId | null = null
 
   constructor(
     private readonly link: EditorLink,
@@ -61,6 +74,8 @@ export class Show {
     private readonly names: Record<AgentId, string>,
     private readonly pace: () => number,
     private readonly signal: AbortSignal,
+    /** The editor keeps the crew on screen between runs (`studio-layout`): it goes back to rest instead of leaving. */
+    private readonly rests = false,
   ) {}
 
   /** Waits a beat of the show at the panel's pace; nothing at all once skipped. */
@@ -86,6 +101,14 @@ export class Show {
     const left = this.crew.filter((a) => !next.includes(a) && !this.finished.includes(a))
     this.finished = [...this.finished.filter((a) => !next.includes(a)), ...left]
     this.crew = next
+    this.push()
+  }
+
+  /** An agent waits for the person to answer (or stops waiting): it shows it needs them. */
+  ask(agent: AgentId, waiting: boolean) {
+    const next = waiting ? agent : this.asking === agent ? null : this.asking
+    if (next === this.asking) return
+    this.asking = next
     this.push()
   }
 
@@ -126,7 +149,7 @@ export class Show {
   private announce() {
     const order = Object.keys(AGENT_COLORS) as AgentId[]
     const moodOf = (a: AgentId): CrewMood | null =>
-      this.cursors.has(a) ? "working" : this.crew.includes(a) ? "waiting" : this.finished.includes(a) ? "done" : null
+      this.asking === a ? "needs-you" : this.cursors.has(a) ? "working" : this.crew.includes(a) ? "waiting" : this.finished.includes(a) ? "done" : null
     announceCrew(
       order.flatMap((a) => {
         const mood = moodOf(a)
@@ -145,7 +168,8 @@ export class Show {
           : []
       const waiting = atStation(this.crew, "waiting")
       const done = atStation(this.finished, "done")
-      this.link.presence([...this.cursors.values(), ...waiting, ...done].slice(0, MAX_CURSORS), [...this.highlights.values()].slice(-64))
+      const cursors = [...this.cursors.values()].map((c) => (c.id === this.asking ? { ...c, mood: "needs-you" as const } : c))
+      this.link.presence([...cursors, ...waiting, ...done].slice(0, MAX_CURSORS), [...this.highlights.values()].slice(-64))
     } catch {
       // The editor has closed; the run notices on its next request.
     }
@@ -153,11 +177,19 @@ export class Show {
 
   /** Clears every cursor and highlight. */
   end() {
+    this.asking = null
     this.crew = []
     this.finished = []
     this.cursors.clear()
     this.highlights.clear()
     this.push()
+    if (this.rests && this.targets) {
+      try {
+        this.link.presence(restingCrew(this.names), [])
+      } catch {
+        // The editor has closed.
+      }
+    }
   }
 
   // ── gestures, each a move and a beat ──────────────────────────────────────

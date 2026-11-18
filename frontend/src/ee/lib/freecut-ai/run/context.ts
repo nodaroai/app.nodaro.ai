@@ -58,7 +58,7 @@ export class RunContext {
     this.userId = opts.userId
     this.caps = new Set(opts.capabilities)
     this.jobs = new RunJobs(opts.signal)
-    this.show = new Show(opts.link, this.caps.has("presence-targets"), opts.names, opts.pace, opts.signal)
+    this.show = new Show(opts.link, this.caps.has("presence-targets"), opts.names, opts.pace, opts.signal, this.caps.has("studio-layout"))
     this.timeline = first.timeline
     this.mediaId = first.mediaId
     this.mediaSeconds = first.mediaSeconds

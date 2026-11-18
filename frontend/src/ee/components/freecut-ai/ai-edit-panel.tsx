@@ -27,6 +27,8 @@ import { EDIT_STEPS, readTimelineView, timelineSeconds, type EditStep } from "@/
 import { costOf, lockedSteps, statusOf } from "@/ee/lib/freecut-ai/panel-model"
 import { cardOnlyPlan, layoutInWords } from "@/ee/lib/freecut-ai/request-reading"
 import { brollCount } from "@/ee/lib/freecut-ai/run/broll"
+import { restingCrew } from "@/ee/lib/freecut-ai/run/show"
+import type { AgentId } from "@/ee/lib/freecut-ai/abilities"
 import { titleCount } from "@/ee/lib/freecut-ai/run/titles"
 import { AbilityRows } from "./panel/ability-cards"
 import { LayoutShots } from "./panel/layout-shots"
@@ -163,6 +165,19 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
       linkRef.current = null
     }
   }, [editorWindow, editorOrigin])
+
+  // The crew is there from the start, asleep at its lanes, in an editor that keeps it on screen.
+  const restsCrew = capabilities.includes("studio-layout") && capabilities.includes("presence-targets")
+  const running = session.phase.kind === "running"
+  useEffect(() => {
+    if (!restsCrew || running) return
+    const names = Object.fromEntries(Object.entries(AGENT_NAME).map(([a, key]) => [a, t(key)])) as Record<AgentId, string>
+    try {
+      linkRef.current?.presence(restingCrew(names))
+    } catch {
+      // The editor is not open yet; the next change sends it again.
+    }
+  }, [restsCrew, running, t, editorWindow, editorOrigin, project])
 
   const showCompare = (mode: CompareMode) => {
     if (editorCompares) {

@@ -7,8 +7,8 @@ import { useEffect, useState } from "react"
 
 export const EDIT_CREW_EVENT = "nodaro:edit-crew"
 
-/** At work now, waiting its turn, or finished for this run. */
-export type CrewMood = "working" | "waiting" | "done"
+/** At work now, waiting its turn, finished for this run, or waiting for the person to answer. */
+export type CrewMood = "working" | "waiting" | "done" | "needs-you"
 
 export interface CrewMember {
   readonly id: string

@@ -10,6 +10,7 @@ import { useInertBehind } from "@/lib/use-inert-behind"
 import { isFromWindow } from "@/lib/popup-message"
 import { FreeCutAiSlot, aiEditAvailable } from "./freecut-ai-slot"
 import { EditCrewStrip } from "./edit-crew-strip"
+import { FREECUT_STUDIO_ACTION, FREECUT_STUDIO_SLOT, NODARO_STUDIO, STUDIO_LAYOUT, STUDIO_SIDE_WIDTH, readStudioAction, readStudioSlot, type StudioSlot } from "./freecut-studio"
 
 /**
  * Read at RUNTIME, not inlined at build time (#767). The published community
@@ -77,6 +78,9 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
   // Bumped by New project: the panel forgets what it did in the project the editor dropped.
   const [aiProject, setAiProject] = useState(0)
   const editorWindow = useCallback(() => iframeRef.current?.contentWindow, [])
+  // An editor with the studio layout draws the one top bar and keeps a slot for Edit with AI.
+  const studio = capabilities.includes(STUDIO_LAYOUT)
+  const [studioSlot, setStudioSlot] = useState<StudioSlot | null>(null)
   const editorDisabled = freecutUrl() === ""
 
   const sendVideoToFreeCut = useCallback(
@@ -180,6 +184,24 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         }
       }
 
+      if (event.data?.type === FREECUT_STUDIO_SLOT) {
+        setStudioSlot(readStudioSlot(event.data.payload))
+        return
+      }
+
+      if (event.data?.type === FREECUT_STUDIO_ACTION) {
+        const action = readStudioAction(event.data.payload)
+        if (action === "toggle-side") {
+          setAiMounted(true)
+          setAiOpen((open) => !open)
+        } else if (action === "close") {
+          setShowCloseConfirm(true)
+        } else if (action === "new-project") {
+          setShowNewProjectConfirm(true)
+        }
+        return
+      }
+
       if (event.data?.type === FREECUT_EXPORT_COMPLETE) {
         const buffer: ArrayBuffer = event.data.payload?.videoBuffer
         if (!buffer) return
@@ -234,6 +256,20 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
     return () => window.removeEventListener("message", handleMessage)
   }, [handleMessage])
 
+  // Tell a studio editor whether Edit with AI is open, and what its button says.
+  const aiOffered = aiEditAvailable(capabilities)
+  const aiLabel = t("freecutAi.open")
+  useEffect(() => {
+    if (!studio) return
+    iframeRef.current?.contentWindow?.postMessage(
+      {
+        type: NODARO_STUDIO,
+        payload: { sideOpen: aiOffered && aiOpen && !aiWide, sideWidth: STUDIO_SIDE_WIDTH, sideLabel: aiOffered ? aiLabel : "" },
+      },
+      freecutOrigin(),
+    )
+  }, [studio, aiOffered, aiOpen, aiWide, aiLabel])
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -271,7 +307,8 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
   return createPortal(
     <div ref={dialogRootRef} role="dialog" aria-modal="true" aria-label={t("mediaed.nodarcutFrameTitle")} className="fixed inset-0 z-[9999] bg-black flex flex-col">
-      {/* Header */}
+      {/* Header (a studio editor draws the top bar itself) */}
+      <div className={studio ? "hidden" : undefined}>
       <div className="flex items-center justify-between px-4 py-2 bg-[#0b0b11] border-b border-[#262633] shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-white">{t("mediaed.nodarcutEditorTitle")}</span>
@@ -308,6 +345,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
           <X className="w-5 h-5" />
         </button>
       </div>
+      </div>
 
       {/* Iframe, with Edit with AI beside it when open (over it while it shows the original) */}
       <div className="relative flex-1 min-h-0 flex">
@@ -337,7 +375,22 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         )}
       </div>
       {aiMounted && aiEditAvailable(capabilities) && (
-        <div className={!aiOpen ? "hidden" : aiWide ? "absolute inset-0 z-10 flex" : "flex"}>
+        <div
+          className={
+            !aiOpen || (studio && !aiWide && !studioSlot?.open)
+              ? "hidden"
+              : aiWide
+                ? "absolute inset-0 z-10 flex"
+                : studio
+                  ? "absolute z-10 flex overflow-hidden rounded-[7px] ring-1 ring-[#ff0073]/40 shadow-[0_0_24px_rgba(255,0,115,0.13)]"
+                  : "flex"
+          }
+          style={
+            studio && !aiWide && studioSlot
+              ? { left: studioSlot.x, top: studioSlot.y, width: studioSlot.width, height: studioSlot.height }
+              : undefined
+          }
+        >
           <FreeCutAiSlot
             editorWindow={editorWindow}
             editorOrigin={freecutOrigin()}

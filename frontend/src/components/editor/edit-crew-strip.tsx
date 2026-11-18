@@ -1,7 +1,8 @@
 /**
  * The Edit with AI crew in the editor's top bar: a small face per agent in its
  * colour, lit while it works, asleep while it waits its turn, in sunglasses
- * once it is done, and how many are at it now. Nothing shows between runs.
+ * once it is done, ringed with a "!" while it waits for the person to answer,
+ * and how many are at it now. Nothing shows between runs.
  */
 import { useEditCrew, type CrewMember } from "@/lib/edit-crew"
 import { useT } from "@/lib/i18n"
@@ -15,9 +16,14 @@ function Face({ member }: { readonly member: CrewMember }) {
       style={{
         background: color,
         opacity: mood === "waiting" ? 0.45 : 1,
-        boxShadow: mood === "working" ? `0 0 10px ${color}` : undefined,
+        boxShadow: mood === "working" ? `0 0 10px ${color}` : mood === "needs-you" ? "0 0 0 2px #fbbf24, 0 0 12px #fbbf24" : undefined,
       }}
     >
+      {mood === "needs-you" && (
+        <span aria-hidden="true" className="absolute -top-1.5 -end-1 font-mono text-[11px] font-bold text-amber-300">
+          !
+        </span>
+      )}
       <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
         {mood === "waiting" ? (
           <g stroke="#0b0b12" strokeWidth="2" fill="none" strokeLinecap="round">
