@@ -13,7 +13,7 @@ The Adjust Volume node modifies the volume level of an audio track and optionall
 | Volume | Slider | 100% | Output volume: 0-200% |
 | Normalize | Boolean | false | Auto-level to standard volume |
 | Fade In | Number | 0 | Fade-in duration: 0-10 seconds |
-| Fade Out | Number | 0 | Fade-out duration: 0-10 seconds |
+| Fade Out | Number | 0 | Fade-out duration: 0-10 seconds. The fade ends where the audio ends (a fade longer than the audio fades the whole of it) |
 
 ## Inputs & Outputs
 
@@ -37,4 +37,5 @@ The Adjust Volume node modifies the volume level of an audio track and optionall
 
 - Normalize overrides the volume setting — if enabled, volume slider is ignored
 - Fades are applied after volume adjustment
+- The fade-out runs over the last seconds of the audio (for a video, of its sound): a 3-second fade-out on a 20-second clip starts at 17 seconds
 - For per-track mixing of multiple sources, use Mix Audio instead
