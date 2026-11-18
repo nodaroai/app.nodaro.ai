@@ -206,7 +206,7 @@ HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per 
 
 | | 15s | 30s | 1min | 2min | 5min |
 |---|----:|----:|-----:|-----:|-----:|
-| `latentsync` hold | 75<!-- credits: latentsync:15s --> | 149<!-- credits: latentsync:30s --> | 297<!-- credits: latentsync:60s --> | 594<!-- credits: latentsync:120s --> | 1,485<!-- credits: latentsync:300s --> |
+| `latentsync` hold | 110<!-- credits: latentsync:15s --> | 176<!-- credits: latentsync:30s --> | 308<!-- credits: latentsync:60s --> | 572<!-- credits: latentsync:120s --> | 1,364<!-- credits: latentsync:300s --> |
 
 - A run that used **less** than its hold is charged less, and the rest of the hold is released when it ends. At the default settings this is the usual case.
 - A run that used **more** than its hold (more inference steps, a large video) is charged what it used: the difference is taken from your balance when the run ends.

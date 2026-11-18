@@ -4169,11 +4169,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses.",
     useCases: ["lip-sync", "dubbing", "video-to-video"],
     pricing: [
-      { identifier: "latentsync:15s", credits: 68, note: "hold — the run is charged what it used" },
-      { identifier: "latentsync:30s", credits: 135, note: "hold" },
-      { identifier: "latentsync:60s", credits: 270, note: "hold" },
-      { identifier: "latentsync:120s", credits: 540, note: "hold" },
-      { identifier: "latentsync:300s", credits: 1350, note: "hold, 5-min ceiling" },
+      { identifier: "latentsync:15s", credits: 100, note: "hold — the run is charged what it used" },
+      { identifier: "latentsync:30s", credits: 160, note: "hold" },
+      { identifier: "latentsync:60s", credits: 280, note: "hold" },
+      { identifier: "latentsync:120s", credits: 520, note: "hold" },
+      { identifier: "latentsync:300s", credits: 1240, note: "hold, 5-min ceiling" },
     ],
   },
   "heygen-lipsync-precision": {

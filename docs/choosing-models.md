@@ -126,12 +126,12 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Topaz Video Upscale | Topaz | Everyday | 44<!-- credits: topaz-video:per-unit --> | video-upscale | High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel. |
 | Grok Imagine Video 1.5 | xAI | Everyday | 55<!-- credits: grok-imagine-video-1.5 --> | i2v | Grok Imagine Video 1.5 — 1–15s at 480p, 720p or 1080p, per-second pricing. An exact first and last frame (the same image as both makes a seamless loop) and up to 4 in-between frames. Requires an input image. |
 | Bytedance Lite I2V | Bytedance | Everyday | 63<!-- credits: bytedance-lite --> | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
-| LatentSync | LatentSync | Everyday | 75<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | Grok Imagine Extend | xAI | Everyday | 77<!-- credits: grok-extend:6s:720p --> | extend | Extend a Grok Imagine video you made here (from text or an image) by 6 or 10 seconds, at the video's own resolution (480p or 720p). |
 | Hailuo 02 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-standard --> | i2v, t2v | Hailuo 02 Standard — economical option with end-frame support. |
 | Hailuo 2.3 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-2.3 --> | i2v | Cheaper Hailuo 2.3 tier — good baseline quality. |
 | VEO 3.1 Lite | Google | Everyday | 83<!-- credits: veo3_lite --> | i2v, t2v | VEO 3.1 Lite — most cost-effective VEO tier for high-volume generation. 4/6/8s with audio, supports first+last frame. |
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 99<!-- credits: bytedance-pro-fast --> | i2v | Faster Bytedance Pro variant. |
+| LatentSync | LatentSync | Everyday | 110<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 110<!-- credits: wan-turbo --> | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Wan Flash V2V | Alibaba | Everyday | 110<!-- credits: wan-flash --> | v2v | Faster Wan V2V variant. |
 | PixVerse V6 Extend | PixVerse | Everyday | 132<!-- credits: pixverse-v6-extend:5s:720p:audio --> | extend | Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip. |
