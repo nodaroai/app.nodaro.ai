@@ -10,6 +10,8 @@
  *                                         the Motion style's masking and prompt style per engine (admin-nodaro-motion-motion.ts)
  *   GET/PUT /v1/admin/video-remake/pulse-audio
  *                                         the direct Pulse runs' audio (admin-nodaro-motion-pulse-audio.ts)
+ *   GET/PUT /v1/admin/video-remake/pulse-reference-audio
+ *                                         the direct Pulse runs' reference audio, "audio in" (admin-nodaro-motion-pulse-reference-audio.ts)
  *   GET/PUT /v1/admin/video-remake/prism-reference-audio
  *                                         the direct Prism runs' reference audio (admin-nodaro-motion-prism-reference-audio.ts)
  *   GET/PUT /v1/admin/video-remake/steps, GET …/steps/defaults, POST …/steps/check
@@ -99,6 +101,7 @@ import { defineNodaroMotionSettingsSection, sendRefusal, type AnyNodaroMotionSet
 import { NODARO_MOTION_PROMPT_PARTS_SECTION, registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
 import { NODARO_MOTION_MOTION_SECTION, registerNodaroMotionMotionRoutes } from "./admin-nodaro-motion-motion.js"
 import { NODARO_MOTION_PULSE_AUDIO_SECTION, registerNodaroMotionPulseAudioRoutes } from "./admin-nodaro-motion-pulse-audio.js"
+import { NODARO_MOTION_PULSE_REFERENCE_AUDIO_SECTION, registerNodaroMotionPulseReferenceAudioRoutes } from "./admin-nodaro-motion-pulse-reference-audio.js"
 import { NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION, registerNodaroMotionPrismReferenceAudioRoutes } from "./admin-nodaro-motion-prism-reference-audio.js"
 import { NODARO_MOTION_STEPS_SECTION, registerNodaroMotionStepsRoutes } from "./admin-nodaro-motion-steps.js"
 import { NODARO_MOTION_STYLE_SECTION, registerNodaroMotionStyleRoutes } from "./admin-nodaro-motion-style.js"
@@ -192,6 +195,7 @@ export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSe
   NODARO_MOTION_STEPS_SECTION,
   NODARO_MOTION_STYLE_SECTION,
   NODARO_MOTION_PULSE_AUDIO_SECTION,
+  NODARO_MOTION_PULSE_REFERENCE_AUDIO_SECTION,
   NODARO_MOTION_PRISM_REFERENCE_AUDIO_SECTION,
   NODARO_MOTION_STYLE_ONLY_SECTION,
   NODARO_MOTION_PRECISE_ART_STYLE_SECTION,
@@ -234,6 +238,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPromptPartRoutes(app)
   registerNodaroMotionMotionRoutes(app)
   registerNodaroMotionPulseAudioRoutes(app)
+  registerNodaroMotionPulseReferenceAudioRoutes(app)
   registerNodaroMotionPrismReferenceAudioRoutes(app)
   registerNodaroMotionStepsRoutes(app)
   registerNodaroMotionStyleRoutes(app)

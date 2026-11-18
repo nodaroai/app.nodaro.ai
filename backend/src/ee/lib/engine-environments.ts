@@ -53,6 +53,15 @@ export interface PlatformSupports {
    */
   readonly prismReferenceAudioPitch?: boolean
   /**
+   * Pulse's reference audio ("audio in", `pulseReferenceAudio`,
+   * lib/cast-swap-pulse-reference-audio.ts): its schemas take the trend field
+   * and the `nodaro_motion_pulse_reference_audio` row, and its runs send them.
+   * A build from before reads the row (and a version holding the field) as
+   * never saved (every run the default), and its strict trend schema refuses
+   * that draft.
+   */
+  readonly pulseReferenceAudio?: boolean
+  /**
    * The Motion setting's face mesh layers (`faceMasking.faceMeshLayers`,
    * lib/cast-swap-face-mesh-layers.ts): its Motion schema takes the key, and
    * it is sent to an engine that declares it. A build from before refuses the
@@ -94,6 +103,7 @@ export interface PlatformSupports {
 export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   faceMeshMinFaceHeightPct: true,
   prismReferenceAudioPitch: true,
+  pulseReferenceAudio: true,
   faceMeshLayers: true,
   preciseStyleRoutePhotographic: true,
   preciseStyleRoutePerStyle: true,

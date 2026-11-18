@@ -24,6 +24,7 @@ const PROMPT_URL = "/v1/admin/video-remake/prompt-parts"
 const MOTION_URL = "/v1/admin/video-remake/motion"
 const PULSE_AUDIO_URL = "/v1/admin/video-remake/pulse-audio"
 const PRISM_AUDIO_URL = "/v1/admin/video-remake/prism-reference-audio"
+const PULSE_REF_URL = "/v1/admin/video-remake/pulse-reference-audio"
 const ANSWER = {
   set: "precise",
   parts: [{ id: "face", default: "Keep the faces.", defaultHash: "0123456789abcdef", placeholders: [], required: [], applies: true }],
@@ -82,6 +83,7 @@ beforeEach(() => {
   routes[`GET ${MOTION_URL}`] = () => ({ body: { data: { motion: null, updatedAt: null, engines: ENGINES, promptStyles: ["precise", "flexible"] } } })
   routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${PRISM_AUDIO_URL}`] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes[`GET ${PULSE_REF_URL}`] = () => ({ body: { data: { pulseReferenceAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${ENVS_URL}`] = () => ({ body: { data: ENVIRONMENTS } })
   // The preparation steps (steps.test.tsx): never saved; these environments' engines take none.
   routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
@@ -353,6 +355,8 @@ describe("Admin → Video Remake → Pulse audio", () => {
     await waitFor(() => expect(sentTo(`PUT ${PULSE_AUDIO_URL}`)).toEqual([{ pulseAudio: "generated" }]))
     expect(sentTo(`PUT ${URL}`)).toEqual([])
     expect(sentTo(`PUT ${MOTION_URL}`)).toEqual([])
+    // The Pulse reference audio follows it: nothing of it is saved.
+    expect(sentTo(`PUT ${PULSE_REF_URL}`)).toEqual([])
   })
 
   it("starts from what is stored, and says when this environment's engine does not take it yet", async () => {
@@ -361,6 +365,141 @@ describe("Admin → Video Remake → Pulse audio", () => {
     const pulse = await section(/Pulse/)
     expect(await within(pulse).findByRole("combobox", { name: "Pulse audio" })).toHaveTextContent("Kling's audio")
     expect(within(pulse).getByText(/does not take it yet/)).toBeInTheDocument()
+  })
+})
+
+describe("Admin → Video Remake → Pulse reference audio", () => {
+  const audioGroup = async () => within(await section(/Pulse/)).findByRole("group", { name: "Pulse reference audio" })
+  const pitchAt = (group: HTMLElement, r: string) => within(within(group).getByRole("group", { name: r })).getByRole("spinbutton", { name: "Pitch shift (semitones)" })
+  /** An environment whose engine declares `castSwap.pulseReferenceAudio` (or not), and whose platform claims it (or not). */
+  const takes = (env: string, engine = true, claim = engine): TrendEngineEnvironment => ({
+    ...ENVIRONMENTS[0]!,
+    env,
+    supports: {
+      castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, ...(engine ? { pulseReferenceAudio: true } : {}) },
+      ...(claim ? { platform: { pulseReferenceAudio: true } } : {}),
+    },
+  })
+  const echo = () => {
+    routes[`PUT ${PULSE_REF_URL}`] = (init) => ({
+      body: { data: { pulseReferenceAudio: JSON.parse(String(init?.body)).pulseReferenceAudio, updatedAt: "2026-11-18T12:00:00.000Z", supported: true } },
+    })
+  }
+  const putOrder = () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([url]) => url)
+
+  it("shows a mode and a pitch shift per Pulse resolution, in the Pulse section only, following the Pulse audio until it is set", async () => {
+    const user = userEvent.setup()
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup()
+    expect(within(group).getAllByRole("combobox").map((c) => c.closest("[role=group][aria-label$=p]")?.getAttribute("aria-label"))).toEqual(["720p", "1080p"])
+    for (const r of ["720p", "1080p"]) {
+      expect(within(group).getByRole("combobox", { name: r })).toHaveTextContent("Full mix")
+      expect(pitchAt(group, r)).toHaveValue("4")
+    }
+    expect(within(await section(/Prism/)).queryByRole("group", { name: "Pulse reference audio" })).not.toBeInTheDocument()
+    // Kling's audio: a resolution left as it is follows it, and that alone is no change here.
+    await user.click(within(await section(/Pulse/)).getByRole("combobox", { name: "Pulse audio" }))
+    await user.click(screen.getByRole("option", { name: "Kling's audio" }))
+    expect(pitchAt(group, "720p")).toHaveValue("0")
+    expect(pitchAt(group, "1080p")).toHaveValue("0")
+  })
+
+  it("saves only the resolutions off the default, after the Pulse audio it follows, and nothing else", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [takes("production"), takes("staging")] } })
+    routes[`PUT ${PULSE_AUDIO_URL}`] = (init) => ({
+      body: { data: { pulseAudio: JSON.parse(String(init?.body)).pulseAudio, updatedAt: "2026-11-18T12:00:00.000Z", supported: true } },
+    })
+    echo()
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup()
+    await waitFor(() => expect(within(group).queryAllByRole("status")).toEqual([]))
+    await user.click(within(await section(/Pulse/)).getByRole("combobox", { name: "Pulse audio" }))
+    await user.click(screen.getByRole("option", { name: "Kling's audio" }))
+    await user.click(within(group).getByRole("combobox", { name: "1080p" }))
+    await user.click(await screen.findByRole("option", { name: "Voice only" }))
+    expect(pitchAt(group, "1080p")).toHaveValue("0")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(sentTo(`PUT ${PULSE_REF_URL}`)).toEqual([{ pulseReferenceAudio: { "1080p": { mode: "voice", semitones: 0 } } }]))
+    expect(putOrder()).toEqual([PULSE_AUDIO_URL, PULSE_REF_URL])
+    expect(sentTo(`PUT ${PRISM_AUDIO_URL}`)).toEqual([])
+  })
+
+  it("holds Save while a changed value is not on every environment yet, saying what is missing", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [takes("production", true, false), takes("staging", false)] } })
+    routes[`GET ${PULSE_REF_URL}`] = () => ({
+      body: { data: { pulseReferenceAudio: { "720p": { mode: "full", semitones: 9 } }, updatedAt: "2026-11-18T10:00:00.000Z", supported: true } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup()
+    expect(await within(group).findByText(/^The Cast Swap engine of staging cannot take the Pulse reference audio yet/)).toBeInTheDocument()
+    expect(within(group).getByText(/^The platform in staging, production does not take the Pulse reference audio yet/)).toBeInTheDocument()
+    // Stored off the default: it stays open, to be set back; the other resolution waits.
+    expect(pitchAt(group, "720p")).toBeEnabled()
+    expect(pitchAt(group, "1080p")).toBeDisabled()
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "7{Enter}")
+    expect(
+      screen.getByText(
+        "Pulse reference audio, 720p: Full mix at +7 semitones cannot be saved yet: the Cast Swap engine of staging cannot take it, and the platform in staging, production does not take it.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    // Back to the default: left out, nothing held.
+    await user.clear(pitchAt(group, "720p"))
+    await user.type(pitchAt(group, "720p"), "4{Enter}")
+    expect(screen.queryByText(/^Pulse reference audio, 720p/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled()
+  })
+
+  it("says the server's refusal of a save", async () => {
+    const { toast } = await import("sonner")
+    const user = userEvent.setup()
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [takes("production"), takes("staging")] } })
+    routes[`PUT ${PULSE_REF_URL}`] = () => ({
+      status: 409,
+      body: { error: { code: "engine_unsupported", message: "The Cast Swap engine of staging cannot take the Pulse reference audio yet.", envs: ["staging"] } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup()
+    await waitFor(() => expect(within(group).queryAllByRole("status")).toEqual([]))
+    await user.click(within(group).getByRole("combobox", { name: "720p" }))
+    await user.click(await screen.findByRole("option", { name: "No audio" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("The Cast Swap engine of staging cannot take the Pulse reference audio yet."))
+  })
+
+  it("an out flip alone never holds a stored value it leaves as it is: both sides read against the Pulse audio saved first", async () => {
+    // Stored while the Pulse audio was the original; now Kling's audio is live, so the full mix at 0 is its default.
+    routes[`GET ${PULSE_AUDIO_URL}`] = () => ({ body: { data: { pulseAudio: "generated", updatedAt: "2026-11-18T10:00:00.000Z", supported: true } } })
+    routes[`GET ${PULSE_REF_URL}`] = () => ({
+      body: { data: { pulseReferenceAudio: { "720p": { mode: "full", semitones: 0 } }, updatedAt: "2026-11-18T10:00:00.000Z", supported: true } },
+    })
+    routes[`GET ${ENVS_URL}`] = () => ({ body: { data: [takes("production", false), takes("staging", false)] } })
+    const user = userEvent.setup()
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup()
+    await within(group).findByText(/^The Cast Swap engine of staging, production cannot take/)
+    await user.click(within(await section(/Pulse/)).getByRole("combobox", { name: "Pulse audio" }))
+    await user.click(screen.getByRole("option", { name: "Original audio (default)" }))
+    expect(within(group).getByRole("combobox", { name: "720p" })).toHaveTextContent("Full mix")
+    expect(pitchAt(group, "720p")).toHaveValue("0")
+    expect(screen.queryByText(/^Pulse reference audio, 720p/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled()
+  })
+
+  it("starts from what is stored, with no change to save, and says when this environment's engine does not take it yet", async () => {
+    routes[`GET ${PULSE_REF_URL}`] = () => ({
+      body: { data: { pulseReferenceAudio: { "1080p": { mode: "none" } }, updatedAt: "2026-11-18T10:00:00.000Z", supported: false } },
+    })
+    renderWith(<AdminNodaroMotionPage />)
+    const group = await audioGroup()
+    expect(within(group).getByRole("combobox", { name: "720p" })).toHaveTextContent("Full mix")
+    expect(within(group).getByRole("combobox", { name: "1080p" })).toHaveTextContent("No audio")
+    expect(pitchAt(group, "1080p")).toBeDisabled()
+    expect(within(group).getByText(/does not take it yet: its runs follow the Pulse audio/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
   })
 })
 

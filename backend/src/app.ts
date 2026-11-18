@@ -412,6 +412,7 @@ import { registerNodaroMotionEngineHook } from "./middleware/nodaro-motion-engin
 import { videoRemakeRewriteUrl } from "./lib/video-remake-paths.js"
 import { registerNodaroMotionPulseAudioHook } from "./middleware/nodaro-motion-pulse-audio.js"
 import { registerNodaroMotionPrismReferenceAudioHook } from "./middleware/nodaro-motion-prism-reference-audio.js"
+import { registerNodaroMotionPulseReferenceAudioHook } from "./middleware/nodaro-motion-pulse-reference-audio.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
@@ -668,6 +669,8 @@ export async function buildApp() {
   // A direct Video Remake run's Pulse audio is the admin's setting, never the caller's
   // (a trend run keeps the one its trend composed).
   registerNodaroMotionPulseAudioHook(app)
+  // Then its Pulse reference audio, which reads the run's audio out as that hook left it (so it must come after it).
+  registerNodaroMotionPulseReferenceAudioHook(app)
   // Likewise its Prism reference audio (a trend run keeps the one its trend composed).
   registerNodaroMotionPrismReferenceAudioHook(app)
 

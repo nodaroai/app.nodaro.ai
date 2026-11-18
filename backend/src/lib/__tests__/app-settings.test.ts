@@ -171,6 +171,31 @@ describe("getAppSettings", () => {
     expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBeNull()
   })
 
+  it("reads the direct runs' Pulse reference audio from its own row, anything else (or no row, or a failed read) as never saved", async () => {
+    for (const value of [{ "720p": { mode: "voice", semitones: 4 }, "1080p": { mode: "none" } }, {}]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_pulse_reference_audio", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_pulse_reference_audio).toEqual(value)
+    }
+
+    for (const value of ["voice", null, { "720p": "voice" }, { "480p": { mode: "full" } }]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_pulse_reference_audio", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_pulse_reference_audio, JSON.stringify(value)).toBeNull()
+    }
+
+    // The Pulse audio's own row is never read as this one.
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_pulse_audio", value: "generated" }], error: null })
+    const settings = await getAppSettings()
+    expect(settings.nodaro_motion_pulse_reference_audio).toBeNull()
+    expect(settings.nodaro_motion_pulse_audio).toBe("generated")
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: null, error: { message: "fail" } })
+    expect((await getAppSettings()).nodaro_motion_pulse_reference_audio).toBeNull()
+  })
+
 
   it("reads the no-person setting per engine: an earlier key as the current one, a bad entry dropped, no row or a failed read as never saved", async () => {
     mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_no_person", value: { "motion-pro": { sourceClip: false }, "nodaro-pulse": { sourceClip: true } } }], error: null })

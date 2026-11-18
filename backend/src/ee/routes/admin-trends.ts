@@ -78,6 +78,16 @@
  * publish checks). What was not changed is never refused, a value an id says is
  * never held, and every other draft write only carries the draft's own value
  * forward (nodaro-motion-prism-reference-audio-modes.ts).
+ *
+ * Likewise Pulse's reference audio ("audio in", decided 2026-11-18), which an
+ * older platform's strict schema refuses outright: a draft is saved with it
+ * only on Kling 4 and only the resolutions off the default of its own audio
+ * out (`withPulseReferenceAudioKept`); a save that changes a resolution to such
+ * a value is 422 `platform_unsupported` while any environment's platform does
+ * not claim it, then 409 `engine_unsupported` while any environment's engine
+ * lacks it; a publish that changes one from the live version (the published
+ * version of a trend that is published, on Kling 4) is held the same way (its
+ * engine by the publish checks) (nodaro-motion-pulse-reference-audio-holds.ts).
  */
 import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -92,6 +102,8 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, withFreshPlatform } from "../lib/engine-environments.js"
 import { faceMeshMinFaceHeightCarried, platformHoldOfFaceMeshMinFaceHeight } from "../lib/nodaro-motion-face-mesh.js"
 import { prismReferenceAudioPlatformHold, prismReferenceAudioRefusalOf } from "../lib/nodaro-motion-prism-reference-audio-modes.js"
+import { pulseReferenceAudioPlatformHold, pulseReferenceAudioRefusalOf } from "../lib/nodaro-motion-pulse-reference-audio-holds.js"
+import { parseNodaroMotionPulseReferenceAudio, pulseReferenceAudioChangesToOffDefault } from "../../lib/cast-swap-pulse-reference-audio.js"
 import {
   prismReferenceAudioByResolutionOf,
   prismReferenceAudioChangedFrom,
@@ -111,12 +123,12 @@ import {
   unpublish,
   updateTrendMeta,
 } from "../lib/trends/store.js"
-import { engineOf, trendRunRequestSchema, trendVersionDataSchema, withSavedSteps } from "../lib/trends/schemas.js"
+import { engineOf, trendRunRequestSchema, trendVersionDataSchema, withPulseReferenceAudioKept, withSavedSteps } from "../lib/trends/schemas.js"
 import type { CastSwapStepsProblem } from "../../lib/cast-swap-steps.js"
 import { pickText } from "../lib/trends/localize.js"
 import { TrendRunError, composeTrendRun, type ComposedTrendRun } from "../lib/trends/compose.js"
 import { TREND_SOURCE_SECONDS, TrendMediaError, copyToTrendStorage, isTransientMediaFailure } from "../lib/trends/media.js"
-import { publishBlockers } from "../lib/trends/publish-check.js"
+import { publishBlockers, pulseReferenceAudioSet } from "../lib/trends/publish-check.js"
 import { warmTrendVersionVideos } from "../lib/trends/warm-videos.js"
 import { startWebCopies } from "../lib/trends/web-copy.js"
 import { trendPromptPartProblems } from "../lib/trends/prompt-parts-check.js"
@@ -653,15 +665,26 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // A new source clip clears the face mask's marks (they were drawn on the old one), and says so.
       const { data: marked, cleared, abandoned } = withMarksForSource(merged, loaded.draft)
       // Validated BEFORE the preview clip is cut: a draft that cannot save pays for no ffmpeg run.
-      const valid = trendVersionDataSchema.safeParse(marked)
-      if (!valid.success) return badRequest(reply, valid.error)
+      const parsedDraft = trendVersionDataSchema.safeParse(marked)
+      if (!parsedDraft.success) return badRequest(reply, parsedDraft.error)
+      // Pulse's reference audio as it is stored: only on Kling 4, only off the default of the draft's audio out.
+      const valid = { data: withPulseReferenceAudioKept(parsedDraft.data) }
       // What this save changes of Prism's reference audio that older code cannot read (none: a value an id says, or
       // the draft's own left as it is).
       const audioRequirements = prismReferenceAudioUnreadableRequirementsOf(
         prismReferenceAudioChangedFrom(prismReferenceAudioByResolutionOf(valid.data.prismReferenceAudio), prismReferenceAudioByResolutionOf(loaded.draft.prismReferenceAudio)),
       )
-      // Read only when the draft needs them for a hold (once, for both); a failed read is a 500, never a save.
-      const environments = audioRequirements.length > 0 || faceMeshMinFaceHeightCarried(valid.data.faceMasking) ? await listEngineEnvironments() : undefined
+      // Whether this save changes a resolution of Pulse's reference audio to a value off the default (each side read
+      // against its own audio out; the draft's own left as it is, or taken back to the default, is never held).
+      const pulseInChanged = pulseReferenceAudioChangesToOffDefault(
+        parseNodaroMotionPulseReferenceAudio(valid.data.pulseReferenceAudio),
+        valid.data.pulseAudio,
+        parseNodaroMotionPulseReferenceAudio(loaded.draft.pulseReferenceAudio),
+        loaded.draft.pulseAudio,
+      )
+      // Read only when the draft needs them for a hold (once, for all); a failed read is a 500, never a save.
+      const environments =
+        audioRequirements.length > 0 || pulseInChanged || faceMeshMinFaceHeightCarried(valid.data.faceMasking) ? await listEngineEnvironments() : undefined
       // Full depth's smallest face with mesh lines, held while any environment's platform does not take it: trends are
       // in the database every environment shares, and an older platform keys the stored clip without it (its runs
       // refused).
@@ -671,6 +694,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // (the full audio at every resolution), and its schema refuses this draft on every save.
       const audioRefusal = environments ? prismReferenceAudioRefusalOf(audioRequirements, "trend", environments) : null
       if (audioRefusal) return reply.status(audioRefusal.status).send({ error: audioRefusal.error })
+      // Pulse's reference audio likewise: an older platform's strict schema refuses the key, and an older engine is
+      // never sent it.
+      const pulseInRefusal = pulseInChanged && environments ? pulseReferenceAudioRefusalOf("trend", environments) : null
+      if (pulseInRefusal) return reply.status(pulseInRefusal.status).send({ error: pulseInRefusal.error })
       // The preview's input clip, cut (again) when the source, the window or the face mask moved. A cut that
       // fails never loses the save: the draft is saved as it is (its clip missing or stale, which blocks
       // publish — the blocker carries the reason — but not the admin's other edits), and the answer says why.
@@ -950,6 +977,24 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         const changed = prismReferenceAudioUnreadableRequirementsOf(prismReferenceAudioChangedFrom(draftAudio, prismReferenceAudioByResolutionOf(liveAudio)))
         const audioHeld = changed.length > 0 ? prismReferenceAudioPlatformHold(changed, "publish", await listEngineEnvironments()) : null
         if (audioHeld) return reply.status(422).send({ error: audioHeld })
+      }
+      // Pulse's reference audio likewise, where this publish changes a resolution from the live version (the published
+      // version of a trend that is published, on Kling 4: a Prism version never sent it) to a value off the default.
+      // Read only for a Kling 4 draft that holds one; its engine is the publish checks' (`PULSE_REFERENCE_AUDIO_NEED`).
+      if (pulseReferenceAudioSet(loaded.draft)) {
+        let live: TrendVersionData | null = null
+        if (trend.status === "published" && trend.publishedVersion !== null) {
+          const version = trend.publishedVersion === trend.draftVersion ? loaded.draft : await getVersion(trend.id, trend.publishedVersion)
+          if (version && engineOf(version) === "kling-4") live = version
+        }
+        const changed = pulseReferenceAudioChangesToOffDefault(
+          parseNodaroMotionPulseReferenceAudio(loaded.draft.pulseReferenceAudio),
+          loaded.draft.pulseAudio,
+          parseNodaroMotionPulseReferenceAudio(live?.pulseReferenceAudio),
+          live?.pulseAudio,
+        )
+        const pulseInHeld = changed ? pulseReferenceAudioPlatformHold("publish", await listEngineEnvironments()) : null
+        if (pulseInHeld) return reply.status(422).send({ error: pulseInHeld })
       }
       // The preview's input clip, made (again) first so a stale or missing one never blocks on its own:
       // saved as its own write (guarded on the revision read; on a published draft that is a new

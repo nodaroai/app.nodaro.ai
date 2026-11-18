@@ -13,6 +13,7 @@
 import type {
   CastSwapPrismReferenceAudioByResolution,
   CastSwapPulseAudioId,
+  CastSwapPulseReferenceAudioByResolution,
   NodaroMotionMasking,
   NodaroMotionMotion,
   NodaroMotionNoPerson,
@@ -26,6 +27,7 @@ import type {
 } from "@/lib/api"
 import { DEFAULT_PULSE_AUDIO } from "../trends/components/PulseAudioSelect"
 import { prismReferenceAudioSaved, prismReferenceAudioTriple } from "../trends/prism-reference-audio"
+import { pulseReferenceAudioOf } from "../trends/pulse-reference-audio"
 import { motionToSaved, toSaved } from "./model"
 import { stepsToSaved } from "./components/StepsColumn"
 import { styleToSaved } from "./components/StyleChoiceSelect"
@@ -43,6 +45,7 @@ export const MOTION_SETTINGS_KEYS = [
   "steps",
   "style",
   "pulse-audio",
+  "pulse-reference-audio",
   "prism-reference-audio",
   "style-only",
   "precise-art-style",
@@ -93,6 +96,24 @@ export const PULSE_AUDIO_SPEC = spec<CastSwapPulseAudioId, CastSwapPulseAudioId,
   bodyOf: (draft) => ({ pulseAudio: draft }),
   storedOfBody: (body) => body.pulseAudio,
   saveArgOf: (body) => body.pulseAudio,
+})
+
+/**
+ * The Pulse reference audio: as stored, only the resolutions off the default of the Pulse audio in effect. A section
+ * cannot see the Pulse audio, so the draft and the body keep what is set as it is (each value as `{ mode, semitones }`);
+ * the page leaves out what equals the default of the Pulse audio beside it where it compares and saves
+ * (`pulseReferenceAudioSaved`, page.tsx).
+ */
+export const PULSE_REFERENCE_AUDIO_SPEC = spec<
+  CastSwapPulseReferenceAudioByResolution,
+  CastSwapPulseReferenceAudioByResolution,
+  { pulseReferenceAudio: CastSwapPulseReferenceAudioByResolution }
+>({
+  // Never saved (or a resolution left out) follows the Pulse audio.
+  draftOf: (stored) => pulseReferenceAudioOf(stored),
+  bodyOf: (draft) => ({ pulseReferenceAudio: pulseReferenceAudioOf(draft) }),
+  storedOfBody: (body) => body.pulseReferenceAudio,
+  saveArgOf: (body) => body.pulseReferenceAudio,
 })
 
 export const PRISM_REFERENCE_AUDIO_SPEC = spec<
@@ -179,6 +200,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   steps: STEPS_SPEC,
   style: STYLE_SPEC,
   "pulse-audio": PULSE_AUDIO_SPEC,
+  "pulse-reference-audio": PULSE_REFERENCE_AUDIO_SPEC,
   "prism-reference-audio": PRISM_REFERENCE_AUDIO_SPEC,
   "style-only": STYLE_ONLY_SPEC,
   "precise-art-style": PRECISE_ART_STYLE_SPEC,

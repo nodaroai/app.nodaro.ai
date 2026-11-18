@@ -28,6 +28,11 @@ import {
 } from "@nodaro/render-rules"
 import { faceMaskingWithMarksSchema, roleOutlinesOn } from "../../../lib/cast-swap-face-masking.js"
 import { castSwapPulseAudioSchema } from "../../../lib/cast-swap-pulse-audio.js"
+import {
+  castSwapPulseReferenceAudioSchema,
+  parseNodaroMotionPulseReferenceAudio,
+  pulseReferenceAudioNotDefault,
+} from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { castSwapPrismReferenceAudioSchema } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
 import { castSwapStepsSaveSchema, castSwapStepsSchema, normaliseSteps, stepsProblems, type CastSwapStepsProblem } from "../../../lib/cast-swap-steps.js"
@@ -295,6 +300,21 @@ export function engineOf(data: Pick<TrendVersionData, "engine">): CastSwapEngine
   return data.engine ?? CAST_SWAP_ENGINE_WHEN_OMITTED
 }
 
+/**
+ * A draft with its Pulse reference audio as it is stored (decided 2026-11-18):
+ * only on Kling 4, and only the resolutions off the default of the draft's own
+ * audio out (`pulseAudio`); no key at all when none is (never `{}`: an older
+ * platform's strict schema refuses the key, so a draft that does not need it
+ * never carries it). The draft itself when nothing changes; else a new object.
+ */
+export function withPulseReferenceAudioKept<T extends Pick<TrendVersionData, "engine" | "pulseAudio" | "pulseReferenceAudio">>(data: T): T {
+  if (data.pulseReferenceAudio === undefined) return data
+  const kept =
+    engineOf(data) === "kling-4" ? pulseReferenceAudioNotDefault(parseNodaroMotionPulseReferenceAudio(data.pulseReferenceAudio), data.pulseAudio) : undefined
+  const { pulseReferenceAudio: _dropped, ...rest } = data
+  return (kept ? { ...rest, pulseReferenceAudio: kept } : rest) as T
+}
+
 /** The most images a run of this version can send: 3 per slot plus every fixed reference image. */
 export function maxImagesOf(data: Pick<TrendVersionData, "slots" | "references">): number {
   return MAX_IMAGES_PER_SLOT * data.slots.length + data.references.reduce((n, r) => n + r.images.length, 0)
@@ -384,6 +404,10 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     // Absent = "original" (the original audio back on the result). Read only on a Kling 4 trend.
     pulseAudio: castSwapPulseAudioSchema.optional(),
+    // A mode and a pitch shift per Pulse output resolution (strict `{ mode, semitones? }`); absent (or a resolution
+    // left out) = the default of `pulseAudio`. A draft save stores only the resolutions off it, and only on Kling 4
+    // (admin-trends.ts `withPulseReferenceAudioKept`). Read only on a Kling 4 trend.
+    pulseReferenceAudio: castSwapPulseReferenceAudioSchema.optional(),
     // A mode and a pitch shift per output resolution, stored as today's id where one says it; absent (or a
     // resolution left out) = the default (the full mix at +4). A plain id, saved before the per-resolution
     // setting, parses to that id at every resolution. Read only on a Prism trend.

@@ -63,6 +63,7 @@ import {
   type TrendForm,
 } from "../model"
 import { prismReferenceAudioHeldIssues } from "../prism-reference-audio"
+import { pulseReferenceAudioHeldIssues } from "../pulse-reference-audio"
 import { fullDepthSceneDescribes, roleOutlineColour, slotMarkAllowed } from "@nodaro/render-rules"
 import { SourceClipEditor } from "../components/SourceClipEditor"
 import { HideOriginalToggle } from "../components/HideOriginalToggle"
@@ -180,6 +181,11 @@ export default function AdminTrendEditorPage() {
     // Prism's reference audio, a value no id says, at a resolution this draft changed: the server holds the save until
     // every environment takes it (the value is sent only while the model is Prism).
     ...(engineOfForm(form) === "seedance-2-5" ? prismReferenceAudioHeldIssues(form.prismReferenceAudio, server.draft.prismReferenceAudio, envs.data, { idsToo: false, envsUnreadable }) : []),
+    // Pulse's reference audio likewise, a value off the default of the form's Pulse audio at a resolution this draft
+    // changed (sent only while the model is Pulse).
+    ...(form.engine === "kling-4"
+      ? pulseReferenceAudioHeldIssues(form.pulseReferenceAudio, form.pulseAudio, server.draft.pulseReferenceAudio, server.draft.pulseAudio, envs.data, { envsUnreadable })
+      : []),
   ]
   const images = imagesSentAtMost(form)
   const maxImages = maxImagesFor(form)
@@ -537,10 +543,12 @@ export default function AdminTrendEditorPage() {
               klingLength={form.klingLength}
               pulseAudio={form.pulseAudio}
               prismReferenceAudio={form.prismReferenceAudio}
+              pulseReferenceAudio={form.pulseReferenceAudio}
               onChange={(engine) => set({ engine })}
               onKlingLengthChange={(klingLength) => set({ klingLength })}
               onPulseAudioChange={(pulseAudio) => set({ pulseAudio })}
               onPrismReferenceAudioChange={(prismReferenceAudio) => set({ prismReferenceAudio })}
+              onPulseReferenceAudioChange={(pulseReferenceAudio) => set({ pulseReferenceAudio })}
               envs={envs.data}
               envsUnreadable={envsUnreadable}
             />

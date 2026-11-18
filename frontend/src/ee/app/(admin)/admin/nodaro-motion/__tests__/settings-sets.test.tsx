@@ -62,6 +62,7 @@ beforeEach(() => {
   routes[`GET ${BASE}/motion`] = () => ({ body: { data: { motion: null, ...engines, promptStyles: ["precise", "flexible"] } } })
   routes[`GET ${BASE}/pulse-audio`] = () => ({ body: { data: { pulseAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${BASE}/prism-reference-audio`] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
+  routes[`GET ${BASE}/pulse-reference-audio`] = () => ({ body: { data: { pulseReferenceAudio: null, updatedAt: null, supported: true } } })
   routes[`GET ${BASE}/steps`] = () => ({ body: { data: { steps: null, ...engines } } })
   routes[`GET ${BASE}/style-only`] = () => ({ body: { data: { styleOnly: null, ...engines, supported: true } } })
   routes[`GET ${BASE}/precise-art-style`] = () => ({ body: { data: { preciseArtStyle: null, ...engines, supported: true } } })
@@ -88,6 +89,29 @@ const advancedSwitch = () => screen.findByRole("switch", { name: ADVANCED_SWITCH
 const everyPut = () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([url]) => url)
 
 describe("Admin → Video Remake → Stored settings", () => {
+  it("saves a set's Pulse reference audio after its Pulse audio, each read against its own Pulse audio", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/pulse-reference-audio`] = (init) => ({
+      body: { data: { ...JSON.parse(String(init?.body)), updatedAt: "2026-11-18T10:00:00.000Z", supported: true } },
+    })
+    sets = [set({ settings: { "pulse-audio": { pulseAudio: "generated" }, "pulse-reference-audio": { pulseReferenceAudio: { "1080p": { mode: "voice", semitones: 0 } } } } })]
+    renderWith(<AdminNodaroMotionPage />)
+    const p = await panel()
+    await user.click(await within(p).findByRole("button", { name: "Load as draft" }))
+    const banner = await screen.findByRole("region", { name: "Draft" })
+    expect(banner).toHaveTextContent("2 sections differ from live: Label of pulse-audio, Label of pulse-reference-audio.")
+    await user.click(within(banner).getByRole("button", { name: "Save all" }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/pulse-reference-audio`)).toEqual([{ pulseReferenceAudio: { "1080p": { mode: "voice", semitones: 0 } } }]))
+    expect(everyPut()).toEqual([`${BASE}/pulse-audio`, `${BASE}/pulse-reference-audio`])
+  })
+
+  it("a set whose Pulse reference audio is the default of its own Pulse audio matches live with nothing set", async () => {
+    sets = [set({ settings: { "pulse-audio": { pulseAudio: "original" }, "pulse-reference-audio": { pulseReferenceAudio: { "720p": { mode: "full", semitones: 4 } } } } })]
+    renderWith(<AdminNodaroMotionPage />)
+    const p = await panel()
+    await waitFor(() => expect(within(p).getByText("Live: Launch look")).toBeInTheDocument())
+  })
+
   it("names the set the live settings match, and marks it live once", async () => {
     sets = [set({ settings: { advanced: { show: false } } })]
     renderWith(<AdminNodaroMotionPage />)

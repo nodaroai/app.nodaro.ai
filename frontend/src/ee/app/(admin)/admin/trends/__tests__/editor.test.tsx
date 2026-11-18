@@ -248,6 +248,58 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("group", { name: "Prism reference audio" })).not.toBeInTheDocument()
   })
 
+  describe("Pulse reference audio", () => {
+    const takes = (name: string, engine: boolean, claim = engine): TrendEngineEnvironment => ({
+      ...ENVIRONMENTS[0]!,
+      env: name,
+      supports: {
+        castSwap: { ...ENVIRONMENTS[0]!.supports.castSwap, ...(engine ? { pulseReferenceAudio: true } : {}) },
+        ...(claim ? { platform: { pulseReferenceAudio: true } } : {}),
+      },
+    })
+
+    it("shows only for Pulse, following its Pulse audio, and saves only the resolutions off that default", async () => {
+      const user = userEvent.setup()
+      routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [takes("production", true), takes("staging", true)] } })
+      routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+      renderEditor()
+      await screen.findByRole("combobox", { name: "Model" })
+      expect(screen.queryByRole("group", { name: "Pulse reference audio" })).not.toBeInTheDocument()
+      await user.click(screen.getByRole("combobox", { name: "Model" }))
+      await user.click(screen.getByRole("option", { name: "Nodaro Pulse (Kling 4)" }))
+      const group = screen.getByRole("group", { name: "Pulse reference audio" })
+      const pitch = (r: string) => within(within(group).getByRole("group", { name: r })).getByRole("spinbutton")
+      expect(pitch("720p")).toHaveValue("4")
+      await user.click(screen.getByRole("combobox", { name: "Pulse audio" }))
+      await user.click(screen.getByRole("option", { name: "Kling's audio" }))
+      expect(pitch("720p")).toHaveValue("0")
+      await waitFor(() => expect(pitch("1080p")).toBeEnabled())
+      await user.clear(pitch("1080p"))
+      await user.type(pitch("1080p"), "4{Enter}")
+      await user.click(screen.getByRole("button", { name: /save draft/i }))
+      await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+      const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: Record<string, unknown> }>
+      expect(body.data).toMatchObject({ engine: "kling-4", pulseAudio: "generated", pulseReferenceAudio: { "1080p": { mode: "full", semitones: 4 } } })
+    })
+
+    it("holds a draft save that changes it while not every environment takes it, naming what is missing", async () => {
+      const user = userEvent.setup()
+      routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: [takes("production", true), takes("staging", false)] } })
+      routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { engine: "kling-4", pulseReferenceAudio: { "720p": { mode: "voice", semitones: 4 } } }) } })
+      renderEditor()
+      const group = await screen.findByRole("group", { name: "Pulse reference audio" })
+      expect(within(group).getByText(/^The Cast Swap engine of staging cannot take the Pulse reference audio yet, and trends are shared/)).toBeInTheDocument()
+      const pitch = within(within(group).getByRole("group", { name: "720p" })).getByRole("spinbutton")
+      await user.clear(pitch)
+      await user.type(pitch, "6{Enter}")
+      expect(
+        screen.getByText(
+          "Pulse reference audio, 720p: Voice only at +6 semitones cannot be saved yet: the Cast Swap engine of staging cannot take it, and the platform in staging does not take it.",
+        ),
+      ).toBeInTheDocument()
+    })
+  })
+
   describe("Prism reference audio: a value no id says waits for every environment", () => {
     const IDS = ["full", "voice", "none", "one-tone", "octave"]
     const PITCH_MODES = [...IDS, "full-one-tone", "voice-one-tone"]

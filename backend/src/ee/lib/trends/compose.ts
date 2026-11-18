@@ -114,6 +114,11 @@
  * A Kling 4 trend that delivers Kling's own audio sends `pulseAudio: "generated"`
  * (the original audio, the default, sends no key); dropped for an engine that
  * does not declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
+ * A Kling 4 trend whose reference audio ("audio in") is off the default of its
+ * audio out at some output resolution sends `pulseReferenceAudio` as those
+ * resolutions' values (`{ "720p": { mode: "voice", semitones: 4 } }`; the
+ * default everywhere sends no key); dropped for an engine that does not declare
+ * it (`withoutUnsupportedPulseReferenceAudio`, run-helpers.ts).
  * A Prism trend whose reference audio is off the default (the full mix at +4)
  * at some output resolution sends `prismReferenceAudio` as those resolutions'
  * values, as stored (`{ "720p": "none" }`, `{ "720p": { mode: "full",
@@ -180,6 +185,11 @@ import {
   type CastSwapPrismReferenceAudio,
   type CastSwapPrismReferenceAudioSent,
 } from "../../../lib/cast-swap-prism-reference-audio.js"
+import {
+  parseNodaroMotionPulseReferenceAudio,
+  pulseReferenceAudioNotDefault,
+  type CastSwapPulseReferenceAudio,
+} from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { originalCdnImageUrls } from "../../../lib/cdn-original-url.js"
 import type {
   CastSwapEngine,
@@ -304,6 +314,13 @@ export interface TrendRunBody {
    * declare it (`withoutUnsupportedPulseAudio`, run-helpers.ts).
    */
   pulseAudio?: "generated"
+  /**
+   * Only on Kling 4, and only the resolutions where the trend's reference
+   * audio is off the default of its audio out (absent = the default
+   * everywhere). Dropped for an engine that does not declare it
+   * (`withoutUnsupportedPulseReferenceAudio`, run-helpers.ts).
+   */
+  pulseReferenceAudio?: CastSwapPulseReferenceAudio
   /**
    * Only on Prism, and only when the trend's reference audio is off the
    * default (the full mix at +4) at some output resolution (absent = the
@@ -691,6 +708,7 @@ export function composeTrendRun(
   const parts = promptPartTexts(data.promptParts)
   const wording = trendPromptWordingSent(data)
   const prismAudio = prismReferenceAudioNotDefault(prismReferenceAudioByResolutionOf(data.prismReferenceAudio))
+  const pulseInAudio = pulseReferenceAudioNotDefault(parseNodaroMotionPulseReferenceAudio(data.pulseReferenceAudio), data.pulseAudio)
   // The stored description belongs to the stored clip: sent only beside it (a full-depth run always is).
   const scene = storedFaceMask ? storedSceneDescriptionFor(data, runMasking, req.preview === true) : undefined
   const steps = normaliseSteps(data.steps)
@@ -723,6 +741,9 @@ export function composeTrendRun(
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
     ...(engine === "kling-4" && data.pulseAudio === "generated" ? { pulseAudio: "generated" as const } : {}),
+    // Kling 4's reference audio ("audio in"), per output resolution, where the trend's is off the default of its audio
+    // out (the default everywhere sends no key).
+    ...(engine === "kling-4" && pulseInAudio ? { pulseReferenceAudio: pulseInAudio } : {}),
     // Prism's reference audio, per output resolution, where the trend's is off the default (the full mix at +4;
     // the default everywhere sends no key). A plain id stored earlier reads as every resolution.
     ...(engine === "seedance-2-5" && prismAudio ? { prismReferenceAudio: prismAudio } : {}),

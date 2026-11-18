@@ -12,6 +12,11 @@
 // Prism has its reference audio instead: what the reference video sent to the
 // video model carries, per output resolution (the full audio, the default; the
 // voice only; or none). Shown, and saved, only while the model is Prism.
+//
+// Pulse has its reference audio too, beside its Pulse audio: what the clip sent
+// to the video model carries, per output resolution, a resolution left as it
+// is following the Pulse audio chosen here. Shown, and saved, only while the
+// model is Pulse.
 
 import { useId } from "react"
 import {
@@ -21,10 +26,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { AdminTrendEngine, AdminTrendKlingLength, CastSwapPrismReferenceAudioByResolution, CastSwapPulseAudioId, TrendEngineEnvironment } from "@/lib/api"
+import type {
+  AdminTrendEngine,
+  AdminTrendKlingLength,
+  CastSwapPrismReferenceAudioByResolution,
+  CastSwapPulseAudioId,
+  CastSwapPulseReferenceAudioByResolution,
+  TrendEngineEnvironment,
+} from "@/lib/api"
 import { engineOfForm } from "../model"
 import { PulseAudioSelect } from "./PulseAudioSelect"
 import { PrismReferenceAudioSelect } from "./PrismReferenceAudioSelect"
+import { PulseReferenceAudioSelect } from "./PulseReferenceAudioSelect"
 
 const ENGINES: ReadonlyArray<{ value: AdminTrendEngine; label: string; hint: string }> = [
   {
@@ -55,11 +68,14 @@ interface Props {
   readonly pulseAudio: CastSwapPulseAudioId | undefined
   /** Per output resolution; undefined (or a resolution left out) = the full audio. */
   readonly prismReferenceAudio: CastSwapPrismReferenceAudioByResolution | undefined
+  /** Per output resolution, only those off the default of `pulseAudio`; undefined = none (each follows the Pulse audio). */
+  readonly pulseReferenceAudio: CastSwapPulseReferenceAudioByResolution | undefined
   readonly onChange: (next: AdminTrendEngine) => void
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
   readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
   readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioByResolution) => void
-  /** Each environment's engine and platform, as reported: the Prism reference audio only some take is offered once every one does. */
+  readonly onPulseReferenceAudioChange: (next: CastSwapPulseReferenceAudioByResolution) => void
+  /** Each environment's engine and platform, as reported: the reference audio only some take is offered once every one does. */
   readonly envs?: readonly TrendEngineEnvironment[]
   /** The environments could not be read: said in words, naming none. */
   readonly envsUnreadable?: boolean
@@ -70,10 +86,12 @@ export function EngineEditor({
   klingLength,
   pulseAudio,
   prismReferenceAudio,
+  pulseReferenceAudio,
   onChange,
   onKlingLengthChange,
   onPulseAudioChange,
   onPrismReferenceAudioChange,
+  onPulseReferenceAudioChange,
   envs,
   envsUnreadable,
 }: Props) {
@@ -124,6 +142,18 @@ export function EngineEditor({
           </div>
         )}
         {engine === "kling-4" && <PulseAudioSelect value={pulseAudio} onChange={onPulseAudioChange} />}
+        {engine === "kling-4" && (
+          <div className="sm:col-span-2">
+            <PulseReferenceAudioSelect
+              value={pulseReferenceAudio}
+              out={pulseAudio}
+              onChange={onPulseReferenceAudioChange}
+              envs={envs}
+              envsUnreadable={envsUnreadable}
+              sharedBy="trend"
+            />
+          </div>
+        )}
         {engine === "seedance-2-5" && (
           <div className="sm:col-span-2">
             <PrismReferenceAudioSelect

@@ -77,6 +77,11 @@
  * version (the published version of a trend that is published, on Prism)
  * already holds at that resolution is not changed by this publish, so it raises
  * no need (`livePrismReferenceAudio`); an id always does.
+ * A Kling 4 trend whose reference audio ("audio in") is off the default of its
+ * audio out at some resolution (`pulseReferenceAudioNotDefault`) needs an
+ * engine that declares it (`castSwap.pulseReferenceAudio`, need
+ * `PULSE_REFERENCE_AUDIO_NEED`): one from before it is never sent the key and
+ * sends the default.
  * A trend that sets its preparation steps (`steps`, anything but `{}`:
  * `stepsSet`) likewise needs an engine that declares them (`castSwap.steps`,
  * need `STEPS_NEED`): an older engine's body schema strips the key silently,
@@ -136,6 +141,11 @@ import {
   prismReferenceAudioUnreadableRequirementsOf,
   type PrismReferenceAudioRequirement,
 } from "../../../lib/cast-swap-prism-reference-audio.js"
+import {
+  engineTakesPulseReferenceAudioIn,
+  parseNodaroMotionPulseReferenceAudio,
+  pulseReferenceAudioNotDefault,
+} from "../../../lib/cast-swap-pulse-reference-audio.js"
 import {
   depthColormapSent,
   depthModelSizeSent,
@@ -214,7 +224,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "pulseReferenceAudio", "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -320,6 +330,9 @@ function prismReferenceAudioRequirementOfNeed(need: string): PrismReferenceAudio
   return PRISM_REFERENCE_AUDIO_REQUIREMENTS.find((r) => r !== "pitch" && r === mode) ?? null
 }
 
+/** The need of a Kling 4 trend whose reference audio is off the default of its audio out (`pulseReferenceAudio`, `castSwap.pulseReferenceAudio`). */
+export const PULSE_REFERENCE_AUDIO_NEED = "pulseReferenceAudio"
+
 /** The need of a trend that sets its preparation steps (`steps`, `castSwap.steps`). */
 export const STEPS_NEED = "steps"
 
@@ -375,6 +388,8 @@ function needsOf(data: TrendVersionData, livePrismReferenceAudio?: unknown): str
     ...depthModelSizeNeeds(data),
     // Prism's reference audio beyond what every engine takes: an engine from before it is sent the full audio.
     ...prismReferenceAudioModeNeeds(data, livePrismReferenceAudio),
+    // Pulse's reference audio off the default of its audio out: an engine from before it is never sent the key.
+    ...(pulseReferenceAudioSet(data) ? [PULSE_REFERENCE_AUDIO_NEED] : []),
     // The preparation steps: an engine from before them strips the key (and a run there is sent without it).
     // ("Body from the clip" Off, or On with no prompt, is safe everywhere: not a need.)
     ...(stepsSet(stepsThatNeedTheEngine(data.steps)) ? [STEPS_NEED] : []),
@@ -422,6 +437,12 @@ function prismReferenceAudioModeNeeds(data: TrendVersionData, livePrismReference
     .map(prismReferenceAudioNeedOf)
 }
 
+/** Whether a Kling 4 draft's reference audio is off the default of its audio out at some resolution (what its runs send). */
+export function pulseReferenceAudioSet(data: Pick<TrendVersionData, "engine" | "pulseAudio" | "pulseReferenceAudio">): boolean {
+  if (engineOf(data) !== "kling-4") return false
+  return pulseReferenceAudioNotDefault(parseNodaroMotionPulseReferenceAudio(data.pulseReferenceAudio), data.pulseAudio) !== undefined
+}
+
 function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
   const cs = env.supports.castSwap
   if (!cs) return ["castSwap"]
@@ -448,6 +469,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)
     if (need === STYLE_REFS_NEED) return !engineTakesStyleRefs(cs)
     if (need === PROMPT_WORDING_NEED) return !engineTakesPromptWording(cs, "new")
+    if (need === PULSE_REFERENCE_AUDIO_NEED) return !engineTakesPulseReferenceAudioIn(cs)
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
     if ((RESOLUTIONS as readonly string[]).includes(need)) return !(cs.resolutions ?? []).includes(need as TrendResolution)

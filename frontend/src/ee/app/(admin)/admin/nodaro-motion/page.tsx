@@ -12,7 +12,11 @@
 //   (left out: Flexible), PUT /v1/admin/video-remake/motion (MotionColumn.tsx).
 // Pulse also has its audio, for every direct Pulse run of either style: the
 // original audio back on the result (the default) or Kling's own track
-// (PUT /v1/admin/video-remake/pulse-audio).
+// (PUT /v1/admin/video-remake/pulse-audio). Beside it, its reference audio
+// ("audio in"): what the clip sent to the video model carries, per output
+// resolution, a resolution left as it is following the Pulse audio
+// (PUT /v1/admin/video-remake/pulse-reference-audio, saved after the Pulse
+// audio, whose default it follows).
 // Prism has its reference audio, for every direct Prism run of either style:
 // what the reference video sent to the video model carries, per output
 // resolution (the full audio, the default; the voice only; or none), the
@@ -82,6 +86,10 @@ import { useNodaroMotionPreciseArtStyle, useSaveNodaroMotionPreciseArtStyle } fr
 import { useNodaroMotionNoPerson, useSaveNodaroMotionNoPerson } from "@/ee/hooks/queries/use-nodaro-motion-no-person"
 import { useNodaroMotionPreciseStyleRoute, useSaveNodaroMotionPreciseStyleRoute } from "@/ee/hooks/queries/use-nodaro-motion-precise-style-route"
 import {
+  useNodaroMotionPulseReferenceAudio,
+  useSaveNodaroMotionPulseReferenceAudio,
+} from "@/ee/hooks/queries/use-nodaro-motion-pulse-reference-audio"
+import {
   useNodaroMotionPrismReferenceAudio,
   useSaveNodaroMotionPrismReferenceAudio,
 } from "@/ee/hooks/queries/use-nodaro-motion-prism-reference-audio"
@@ -91,6 +99,8 @@ import { useNodaroMotionPromptParts, useSaveNodaroMotionPromptParts } from "@/ee
 import { useNodaroMotionPromptWording, useSaveNodaroMotionPromptWording } from "@/ee/hooks/queries/use-nodaro-motion-prompt-wording"
 import { PrismReferenceAudioSelect } from "../trends/components/PrismReferenceAudioSelect"
 import { prismReferenceAudioHeldIssues, prismReferenceAudioSaved } from "../trends/prism-reference-audio"
+import { PulseReferenceAudioSelect } from "../trends/components/PulseReferenceAudioSelect"
+import { pulseReferenceAudioHeldIssues, pulseReferenceAudioSaved } from "../trends/pulse-reference-audio"
 import { maskingIssues } from "../trends/model"
 import { layersOfSetting } from "../trends/face-mesh-layers"
 import {
@@ -130,9 +140,11 @@ import {
   PROMPT_PARTS_SPEC,
   PROMPT_WORDING_SPEC,
   PULSE_AUDIO_SPEC,
+  PULSE_REFERENCE_AUDIO_SPEC,
   STEPS_SPEC,
   STYLE_ONLY_SPEC,
   STYLE_SPEC,
+  type MotionSettingsBinding,
   type MotionSettingsBindings,
 } from "./settings-sections"
 
@@ -147,6 +159,9 @@ const PULSE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet:
 
 /** Said under the Prism reference audio select when this environment's engine does not take it yet. */
 const PRISM_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs send the full audio."
+
+/** Said under the Pulse reference audio when this environment's engine does not take it yet. */
+const PULSE_REFERENCE_AUDIO_UNSUPPORTED = "This environment's engine does not take it yet: its runs follow the Pulse audio."
 
 /** Said after a save: runs read the engine settings within a minute. */
 export const SAVED_TOAST = "Saved. Runs pick it up within a minute."
@@ -189,6 +204,8 @@ export default function AdminNodaroMotionPage() {
   const saveMotion = useSaveNodaroMotionMotion()
   const pulseQuery = useNodaroMotionPulseAudio()
   const savePulse = useSaveNodaroMotionPulseAudio()
+  const pulseRefQuery = useNodaroMotionPulseReferenceAudio()
+  const savePulseRef = useSaveNodaroMotionPulseReferenceAudio()
   const prismAudioQuery = useNodaroMotionPrismReferenceAudio()
   const savePrismAudio = useSaveNodaroMotionPrismReferenceAudio()
   const stepsQuery = useNodaroMotionSteps()
@@ -224,6 +241,7 @@ export default function AdminNodaroMotionPage() {
   const masking = useSectionDraft(MASKING_SPEC, data, (v) => v.masking, save.mutateAsync, held)
   const motion = useSectionDraft(MOTION_SPEC, motionQuery.data, (v) => v.motion, saveMotion.mutateAsync, held)
   const pulse = useSectionDraft(PULSE_AUDIO_SPEC, pulseQuery.data, (v) => v.pulseAudio, savePulse.mutateAsync, held)
+  const pulseRef = useSectionDraft(PULSE_REFERENCE_AUDIO_SPEC, pulseRefQuery.data, (v) => v.pulseReferenceAudio, savePulseRef.mutateAsync, held)
   const prismAudio = useSectionDraft(PRISM_REFERENCE_AUDIO_SPEC, prismAudioQuery.data, (v) => v.prismReferenceAudio, savePrismAudio.mutateAsync, held)
   const steps = useSectionDraft(STEPS_SPEC, stepsQuery.data, (v) => v.steps, saveSteps.mutateAsync, held)
   const style = useSectionDraft(STYLE_SPEC, styleQuery.data, (v) => v.style, saveStyle.mutateAsync, held)
@@ -234,6 +252,23 @@ export default function AdminNodaroMotionPage() {
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
   const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
   const wording = useSectionDraft(PROMPT_WORDING_SPEC, wordingQuery.data, (v) => v.promptWording, saveWording.mutateAsync, held)
+  const [pulseDraft, setPulseDraft] = [pulse.draft, pulse.setDraft]
+  const [pulseRefDraft, setPulseRefDraft] = [pulseRef.draft, pulseRef.setDraft]
+  // The Pulse audio live (never saved: the original audio), undefined until it loads.
+  const livePulseAudio = pulseQuery.data ? (pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO) : undefined
+  // The Pulse reference audio follows the Pulse audio: each side is compared, and saved, without what equals the default
+  // of its own Pulse audio (the draft's beside the draft, the live one beside live, and beside a stored set, which is
+  // compared with live). So a set that leaves it as it is matches whatever the Pulse audio, as Save would send it.
+  const pulseRefBinding: MotionSettingsBinding = {
+    ...pulseRef.binding,
+    ready: pulseRef.binding.ready && livePulseAudio !== undefined,
+    live:
+      pulseRefQuery.data && livePulseAudio !== undefined
+        ? { pulseReferenceAudio: pulseReferenceAudioSaved(pulseRefQuery.data.pulseReferenceAudio, livePulseAudio) }
+        : undefined,
+    draft: { pulseReferenceAudio: pulseReferenceAudioSaved(pulseRefDraft, pulseDraft) },
+    canon: (body) => ({ pulseReferenceAudio: pulseReferenceAudioSaved((body as { pulseReferenceAudio?: unknown } | null)?.pulseReferenceAudio, livePulseAudio) }),
+  }
   // Every section, for the stored sets: the record type fails to compile without each one (settings-sections.ts).
   const bindings: MotionSettingsBindings = {
     "prompt-wording": wording.binding,
@@ -242,6 +277,7 @@ export default function AdminNodaroMotionPage() {
     steps: steps.binding,
     style: style.binding,
     "pulse-audio": pulse.binding,
+    "pulse-reference-audio": pulseRefBinding,
     "prism-reference-audio": prismAudio.binding,
     "style-only": styleOnly.binding,
     "precise-art-style": preciseArtStyle.binding,
@@ -252,7 +288,6 @@ export default function AdminNodaroMotionPage() {
   }
   const [draft, setDraft] = [masking.draft, masking.setDraft]
   const [motionDraft, setMotionDraft] = [motion.draft, motion.setDraft]
-  const [pulseDraft, setPulseDraft] = [pulse.draft, pulse.setDraft]
   const [prismAudioDraft, setPrismAudioDraft] = [prismAudio.draft, prismAudio.setDraft]
   const [stepsDraft, setStepsDraft] = [steps.draft, steps.setDraft]
   const [styleDraft, setStyleDraft] = [style.draft, style.setDraft]
@@ -273,6 +308,13 @@ export default function AdminNodaroMotionPage() {
   const pulseChanged = !!pulseQuery.data && pulseDraft !== (pulseQuery.data.pulseAudio ?? DEFAULT_PULSE_AUDIO)
   // Never saved (or a resolution left out) reads as the full mix at +4: choosing it then is no change. Compared as
   // saved, so No audio's kept pitch shift, or a value written as its id, is no change either.
+  // A resolution left out follows the Pulse audio: compared without what equals the default of each side's own Pulse
+  // audio, so changing the Pulse audio alone is no change here, and is saved first (what this one follows).
+  const pulseRefChanged =
+    !!pulseRefQuery.data &&
+    livePulseAudio !== undefined &&
+    JSON.stringify(pulseReferenceAudioSaved(pulseRefDraft, pulseDraft)) !==
+      JSON.stringify(pulseReferenceAudioSaved(pulseRefQuery.data.pulseReferenceAudio, livePulseAudio))
   const prismAudioChanged =
     !!prismAudioQuery.data &&
     JSON.stringify(prismReferenceAudioSaved(prismAudioDraft)) !== JSON.stringify(prismReferenceAudioSaved(prismAudioQuery.data.prismReferenceAudio))
@@ -284,6 +326,11 @@ export default function AdminNodaroMotionPage() {
     // A setting every environment shares, held only at a resolution it changed (the server would refuse it): a stored
     // value an environment lost never holds the other resolutions or the page's other saves.
     ...(prismAudioQuery.data ? prismReferenceAudioHeldIssues(prismAudioDraft, prismAudioQuery.data.prismReferenceAudio, envs.data, { envsUnreadable }) : []),
+    // Likewise the Pulse reference audio, at a resolution it changed to a value off the default of the Pulse audio.
+    // Both sides are read against the Pulse audio this Save leaves stored (it is saved first), as the server's check does.
+    ...(pulseRefQuery.data && livePulseAudio !== undefined
+      ? pulseReferenceAudioHeldIssues(pulseRefDraft, pulseDraft, pulseRefQuery.data.pulseReferenceAudio, pulseDraft, envs.data, { envsUnreadable })
+      : []),
   ]
   // Never saved reads as no steps: a draft with none set is then no change.
   const nextSteps = stepsToSaved(stepsDraft)
@@ -315,6 +362,7 @@ export default function AdminNodaroMotionPage() {
     !changed &&
     !motionChanged &&
     !pulseChanged &&
+    !pulseRefChanged &&
     !prismAudioChanged &&
     !stepsChanged &&
     !styleChanged &&
@@ -326,6 +374,7 @@ export default function AdminNodaroMotionPage() {
     save.isPending ||
     saveMotion.isPending ||
     savePulse.isPending ||
+    savePulseRef.isPending ||
     savePrismAudio.isPending ||
     saveSteps.isPending ||
     saveStyle.isPending ||
@@ -343,6 +392,8 @@ export default function AdminNodaroMotionPage() {
       if (changed) await save.mutateAsync(next)
       if (motionChanged) await saveMotion.mutateAsync(nextMotion)
       if (pulseChanged) await savePulse.mutateAsync(pulseDraft)
+      // After the Pulse audio: the server leaves out what equals the default of the Pulse audio in effect.
+      if (pulseRefChanged) await savePulseRef.mutateAsync(pulseReferenceAudioSaved(pulseRefDraft, pulseDraft))
       if (prismAudioChanged) await savePrismAudio.mutateAsync(prismReferenceAudioSaved(prismAudioDraft))
       if (stepsChanged) await saveSteps.mutateAsync(nextSteps)
       if (styleChanged) await saveStyle.mutateAsync(nextStyle)
@@ -375,6 +426,7 @@ export default function AdminNodaroMotionPage() {
             (!changed &&
               !motionChanged &&
               !pulseChanged &&
+              !pulseRefChanged &&
               !prismAudioChanged &&
               !stepsChanged &&
               !styleChanged &&
@@ -601,6 +653,24 @@ export default function AdminNodaroMotionPage() {
                       />
                     ) : pulseQuery.error ? (
                       <p className="text-xs text-destructive">{pulseQuery.error.message}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Loading…</p>
+                    )}
+                  </div>
+                )}
+                {engine.id === "nodaro-pulse" && (
+                  <div role="group" aria-label={`${engine.name} reference audio`} className="mt-4 max-w-md">
+                    {pulseRefQuery.data && pulseQuery.data ? (
+                      <PulseReferenceAudioSelect
+                        value={pulseRefDraft}
+                        out={pulseDraft}
+                        onChange={setPulseRefDraft}
+                        note={pulseRefQuery.data.supported ? undefined : PULSE_REFERENCE_AUDIO_UNSUPPORTED}
+                        envs={envs.data}
+                        envsUnreadable={envsUnreadable}
+                      />
+                    ) : pulseRefQuery.error ? (
+                      <p className="text-xs text-destructive">{pulseRefQuery.error.message}</p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Loading…</p>
                     )}
