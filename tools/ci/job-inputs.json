@@ -260,6 +260,7 @@
         "backend/src/ee/billing/provision-credits.ts",
         "backend/src/ee/billing/public-email-providers.ts",
         "backend/src/ee/billing/purchase-on-record.ts",
+        "backend/src/ee/billing/second-subscription.ts",
         "backend/src/ee/billing/seedance-ref-video-estimate.ts",
         "backend/src/ee/billing/seedance2-ref-video-credits.ts",
         "backend/src/ee/billing/seedance2-ref-video-quote.ts",

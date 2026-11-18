@@ -26,6 +26,7 @@ import { createStripeCustomer, createCheckoutSession, createPortalSession } from
 import { ON_SALE_PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
 import { creditsForLoadUsd, LOAD_CURRENCY, MIN_LOAD_USD, MAX_LOAD_USD } from "../billing/load-rate.js"
 import { readBillingPlans } from "../billing/plans.js"
+import { liveSubscriptionFirst } from "../billing/live-subscription-first.js"
 import { BILLING_UI_MODES, embeddedSessionAnswer, embeddedSessionParams, stripePublishableKey } from "../billing/embedded-checkout.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
@@ -269,11 +270,10 @@ export async function billingRoutes(app: FastifyInstance) {
           })
         : "free"
 
+    const columns = "id, stripe_subscription_id, tier, status, stripe_price_id, current_period_start, current_period_end, cancel_at_period_end, cancel_at, canceled_at"
     const { data, error } = await supabase
       .from("subscriptions")
-      .select(
-        "id, stripe_subscription_id, tier, status, stripe_price_id, current_period_start, current_period_end, cancel_at_period_end, cancel_at, canceled_at"
-      )
+      .select(columns)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -283,7 +283,8 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(200).send({ data: null, effectiveTier })
     }
 
-    return reply.send({ data, effectiveTier })
+    // The live plan first: a newer row that ended does not hide it.
+    return reply.send({ data: await liveSubscriptionFirst(userId, columns, data), effectiveTier })
   })
 
   // Get transaction history for a user. JWT-only like every other billing

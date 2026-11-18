@@ -4895,7 +4895,7 @@ to sell a plan, send the user to the Nodaro app's pricing page.
 answers a signed-in session, a personal API token without a workflow limit, or
 an app's OAuth token; a workflow-limited key gets `403 forbidden` and a billing
 integration key `403 billing_key_scope`. It answers `{ data, effectiveTier }`.
-`data` is the account's latest subscription — `tier`, `status` (`active`,
+`data` is the account's live subscription (one whose `status` is `active`, `trialing`, `past_due` or `unpaid`), or its latest one when none is live — `tier`, `status` (`active`,
 `trialing`, `past_due`, `unpaid` (payment retries ended without payment), `paused`, `canceled`, `incomplete`, `incomplete_expired` or `expired`),
 `current_period_start`, `current_period_end`, `cancel_at_period_end`,
 `cancel_at`, `canceled_at` and its Stripe ids — or `null` when it never

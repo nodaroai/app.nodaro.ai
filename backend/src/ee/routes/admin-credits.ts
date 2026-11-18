@@ -12,6 +12,7 @@ import { invalidateAdminCache } from "../../lib/admin-check.js"
 import { ENDED_SUBSCRIPTION_CREDITS, TIER_CREDITS } from "../billing/stripe-config.js"
 import { tierColumns, resolveTierFrom } from "../billing/tier-columns.js"
 import { readLiveOrClaimedSubscriptions } from "../billing/downgrade-floor.js"
+import { liveSubscriptionFirst } from "../billing/live-subscription-first.js"
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { deploymentPayerActive, deploymentPayerId } from "../../lib/deployment-payer.js"
 import { allowanceFor, allowancesFor } from "../billing/deployment-allowance-service.js"
@@ -315,23 +316,25 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     return data
   })
 
-  // GET /v1/admin/users/:id/subscription - Latest subscription row, incl.
+  // GET /v1/admin/users/:id/subscription - The live subscription row (else the latest), incl.
   // scheduled-cancellation state (cancel_at / cancel_at_period_end are synced
   // from Stripe by the subscription.updated webhook; status stays "active"
   // until the period actually ends).
   app.get("/v1/admin/users/:id/subscription", { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
 
+    const columns = "id, stripe_subscription_id, tier, status, current_period_start, current_period_end, cancel_at_period_end, cancel_at, canceled_at, created_at"
     const { data, error } = await supabase
       .from("subscriptions")
-      .select("id, stripe_subscription_id, tier, status, current_period_start, current_period_end, cancel_at_period_end, cancel_at, canceled_at, created_at")
+      .select(columns)
       .eq("user_id", id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
 
     if (error) return reply.code(500).send({ error: error.message })
-    return { data }
+    // The live plan first: a newer row that ended does not hide it.
+    return { data: data ? await liveSubscriptionFirst(id, columns, data) : data }
   })
 
   // PUT /v1/admin/users/:id/tier - Admin change user tier
