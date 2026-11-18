@@ -48,7 +48,15 @@ const box = (leftPct: number, from = 0, to = 359) => ({ fromFrame: from, toFrame
 const slotMark = (slot: string, leftPct: number): FaceMaskMark => ({ label: { slot }, ...box(leftPct) })
 const ERASED: FaceMaskMark = { label: "erased", ...box(0) }
 
-const person = (key: string, required: boolean): TrendSlot => ({ key, kind: "person", label: { en: key }, required, roleName: `the ${key}` })
+/** An optional person carries its original look, which publishing needs (these runs, not Full depth, never send it). */
+const person = (key: string, required: boolean): TrendSlot => ({
+  key,
+  kind: "person",
+  label: { en: key },
+  required,
+  roleName: `the ${key}`,
+  ...(required ? {} : { defaultImages: [`https://cdn.example.com/trends/t-1/${key}-look.png`] }),
+})
 
 /** A trend with no examples: a lead (required) and three optional people. */
 function data(marks: FaceMaskMark[], over: Partial<TrendVersionData> = {}): TrendVersionData {

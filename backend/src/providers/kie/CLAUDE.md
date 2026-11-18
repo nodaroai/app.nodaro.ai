@@ -749,6 +749,15 @@ builds an allow-listed body:
 - **`auto`:** KIE reads it as 16:9 when no reference image is sent, so beside real
   frames the runner sends the ratio nearest the start frame
   (`geminiOmni12FrameAspect`, the rule the frame fit already uses).
+- **Mentions:** the model addresses its images in plain words, so the builder
+  respells every platform image mention in the prompt (`@image_N`, `@imageN`,
+  `@image(N)`) as `image N`, in every mode (`respellImageMentions`,
+  `image-mentions.ts`).
+- **KIE's own timeout is resubmitted once.** A task KIE fails with
+  `[524] generate task timeout.` (seen 2026-11-18: three reference runs failed
+  ~46 s in within 7 minutes, and the same bodies ran minutes later) charged
+  nothing, so `runGeminiOmni12` sends the same body once more
+  (`isGeminiOmni12ProviderTimeout`); a second timeout fails the run.
 - `seeds`, not `seed`, 10000-99999: an out-of-range value is omitted. No
   `audio_ids`, so pinned voices are refused (`character_voice_unsupported`).
 - **Characters (`character_ids`, decided 2026-11-17):** taken the way 1.1 takes

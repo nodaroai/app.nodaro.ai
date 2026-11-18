@@ -134,7 +134,7 @@ const slotBase = {
   required: z.boolean(),
   hint: localizedText(500).optional(),
   hintImageUrl: httpUrl.optional(),
-  // An optional slot's default pictures (read by Full depth runs only, compose.ts). Refused on a required slot below.
+  // An optional slot's original look (sent by Full depth runs only, compose.ts; public on the trend's page). Refused on a required slot below.
   defaultImages: z.array(httpUrl).min(1).max(MAX_IMAGES_PER_SLOT).optional(),
   roleName: z.string().min(1).max(200),
   // The 4 s preview's own wording (prompt-parts.ts): same limit, and empty is

@@ -190,6 +190,14 @@ export interface TrendDetailSlot {
    */
   hintImageUrl?: string
   /**
+   * An optional slot's original look: 1–3 pictures (https) of this role as it
+   * is in the original, when the trend has them; you may show them on the
+   * empty slot. Absent on a required slot, and on a trend that hides its
+   * original. Which pictures a run sends for an empty optional slot is said
+   * on {@link TrendDetailSlot.required}.
+   */
+  defaultImages?: string[]
+  /**
    * The chips you may set on this slot, in its kind's order; `[]` = none (show
    * no chips row). A chip of the kind that is not listed is fixed by the
    * trend: sending it is refused with `400 chip_not_offered`.

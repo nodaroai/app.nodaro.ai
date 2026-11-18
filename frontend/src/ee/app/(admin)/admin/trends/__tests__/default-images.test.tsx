@@ -1,9 +1,15 @@
 /**
- * Admin → Trends → one trend → 2. Slots → a slot's default image (Full depth).
+ * Admin → Trends → one trend → 2. Slots → a slot's original look (its default
+ * images).
  *
- * - The section is shown on each OPTIONAL slot of a Full depth trend only (not
- *   on a required slot, not on any other clip preparation); a required slot
- *   still holding some shows them, to remove, and the save is refused.
+ * - The section is shown on each OPTIONAL slot of every clip preparation (not
+ *   on a required slot); a required slot still holding some shows them, to
+ *   remove, and the save is refused.
+ * - An optional person's is needed to publish (unless the trend hides its
+ *   original), marked while it has none; a place's, product's or pet's is
+ *   optional. What a run does with it is said on Full depth only (no other
+ *   preparation's run reads it). A missing one never holds Save
+ *   (`formIssues`), and the publish refusal names the people.
  * - Upload: a picture is copied into trend storage (`/media` kind `default`)
  *   and saved on the slot's `defaultImages`; ✕ removes it.
  * - Take from the original: the dialog plays the saved original; Save sends
@@ -33,7 +39,7 @@ import type { AdminTrendData, AdminTrendSlot } from "@/lib/api"
 import { detail, ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, run, sentTo, slot, TREND_ID } from "./harness"
 import AdminTrendEditorPage from "../detail/page"
 import { boxBetween, boxInPixels } from "../components/FrameCropDialog"
-import { formIssues, toForm } from "../model"
+import { describeBlocker, formIssues, toForm } from "../model"
 import { trendPictureUpscaleFits, TREND_PICTURE_UPSCALE_MAX_PIXELS } from "@nodaro/render-rules"
 
 const BASE = `/v1/admin/trends/${TREND_ID}`
@@ -71,11 +77,54 @@ describe("where the section shows", { timeout: 20_000 }, () => {
     ["masking off", undefined],
     ["faces hidden", { mode: "auto" as const, threshold: 0.4 }],
     ["keep people", { mode: "always" as const, source: "keep-people" as const }],
-  ])("not on %s", async (_name, faceMasking) => {
+  ])("also on %s, its pictures shown, and with no word of what a run does with it", async (_name, faceMasking) => {
     serve({ ...(faceMasking ? { faceMasking } : {}), slots: [slot(), { ...GUEST, defaultImages: [DEFAULT] }] })
     renderEditor()
-    await screen.findByRole("group", { name: "Slot 2 hint picture" })
-    expect(screen.queryByRole("group", { name: "Slot 2 default image" })).not.toBeInTheDocument()
+    const group = await screen.findByRole("group", { name: "Slot 2 default image" })
+    expect(within(group).getByRole("img", { name: "Slot 2 default image 1" })).toHaveAttribute("src", DEFAULT)
+    expect(within(group).getByText("Original look")).toBeInTheDocument()
+    expect(within(group).getByText(/A picture of this person as they are in the clip\. Needed to publish\./)).toBeInTheDocument()
+    expect(within(group).queryByText(/A run that leaves this role empty uses it/)).not.toBeInTheDocument()
+    expect(screen.queryByRole("group", { name: "Slot 1 default image" })).not.toBeInTheDocument()
+  })
+
+  it("on Full depth says a run that leaves the role empty uses it", async () => {
+    serve({ faceMasking: FULL, slots: [slot(), GUEST] })
+    renderEditor()
+    const group = await screen.findByRole("group", { name: "Slot 2 default image" })
+    expect(within(group).getByText(/A picture of this person as they are in the clip\. A run that leaves this role empty uses it\. Needed to publish\./)).toBeInTheDocument()
+  })
+
+  it("marks an optional person with none as needed to publish, but never holds Save", async () => {
+    const user = userEvent.setup()
+    serve({ slots: [slot(), GUEST] })
+    renderEditor()
+    const group = await screen.findByRole("group", { name: "Slot 2 default image" })
+    expect(within(group).getByText("(needed to publish)")).toBeInTheDocument()
+    expect(within(group).getByText(/cannot be published until it has one/)).toBeInTheDocument()
+    await user.type((await screen.findAllByLabelText(/^in the clip/i))[0]!, "!")
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(saved()).toHaveLength(1))
+    expect(saved()[0]!.data.slots[1]).not.toHaveProperty("defaultImages")
+  })
+
+  it("a trend that hides its original needs none: the person's is optional", async () => {
+    serve({ hideOriginal: true, slots: [slot(), GUEST] })
+    renderEditor()
+    const group = await screen.findByRole("group", { name: "Slot 2 default image" })
+    expect(within(group).getByText("(optional)")).toBeInTheDocument()
+    expect(within(group).queryByText(/Needed to publish/)).not.toBeInTheDocument()
+    expect(within(group).queryByText(/cannot be published until it has one/)).not.toBeInTheDocument()
+  })
+
+  it("an optional place's is optional, and says the role stays as in the clip without one on Full depth", async () => {
+    const PLACE = slot({ key: "place", kind: "location", label: { en: "Place" }, required: false, roleName: "the bar" })
+    serve({ faceMasking: FULL, slots: [slot(), PLACE] })
+    renderEditor()
+    const group = await screen.findByRole("group", { name: "Slot 2 default image" })
+    expect(within(group).getByText("(optional)")).toBeInTheDocument()
+    expect(within(group).getByText("A picture of this place as it is in the clip. A run that leaves this role empty uses it; with none, the role stays as in the clip.")).toBeInTheDocument()
+    expect(within(group).queryByText(/cannot be published until it has one/)).not.toBeInTheDocument()
   })
 
   it("keeps the default pictures through a save on another mode, and loads them as no change", async () => {
@@ -253,6 +302,16 @@ describe("the pure rules", () => {
   it("boxBetween takes either drag direction and clamps to the picture", () => {
     expect(boxBetween({ x: 0.8, y: 0.6 }, { x: 0.2, y: 0.1 })).toEqual({ x: 0.2, y: 0.1, w: 0.6000000000000001, h: 0.5 })
     expect(boxBetween({ x: -0.5, y: 0.5 }, { x: 0.5, y: 1.5 })).toEqual({ x: 0, y: 0.5, w: 0.5, h: 0.5 })
+  })
+
+  it("formIssues never names an optional person with no original look (publishing does, not saving)", () => {
+    expect(formIssues(toForm(detail({}, { slots: [slot(), GUEST] }).draft)).some((i) => /original look|default image/i.test(i))).toBe(false)
+  })
+
+  it("the publish refusal names the people who need one", () => {
+    expect(describeBlocker({ code: "optional_person_default_missing", slots: ["guest", "kid"] })).toBe(
+      "Every optional person needs an original look (a picture of them as they are in the clip): add one for guest, kid, or make the slot required (2. Slots).",
+    )
   })
 
   it("formIssues names a required slot with default pictures", () => {

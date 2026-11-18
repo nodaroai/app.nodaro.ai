@@ -192,6 +192,7 @@ function detailView(d: Rec): Rec {
     slots: (Array.isArray(d.slots) ? d.slots.filter(isRec) : []).map((s) => {
       const hint = str(s.hint)
       const hintImage = str(s.hintImageUrl)
+      const looks = strings(s.defaultImages).filter((u) => u.startsWith("https://"))
       const given = isRec(s.defaults) ? s.defaults : {}
       const listed = strings(s.chips)
       const chips = CHIPS.filter((k) => listed.includes(k))
@@ -203,6 +204,7 @@ function detailView(d: Rec): Rec {
         required: s.required === true,
         ...(hint ? { hint } : {}),
         ...(hintImage ? { hintImageUrl: hintImage } : {}),
+        ...(looks.length > 0 ? { defaultImages: looks } : {}),
         chips,
         ...(Object.keys(defaults).length > 0 ? { defaults } : {}),
       }
@@ -341,7 +343,7 @@ export function registerTrendTools({ server, session, fastify }: RegisterTrendTo
       {
         title: "Get Trend",
         description:
-          "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, chips the user may set, their defaults), " +
+          "One trend: its original (the clip it recasts, or its first example if the trend hides it; previewStartSec), its slots (key, label, kind, required, hint, hintImageUrl, defaultImages (the role as in the original), chips the user may set, their defaults), " +
           "its examples (the result video and the pictures each slot used; may be none), previewSec, engine (\"nodaro-prism\" or \"nodaro-pulse\") with its engineName and resolutions (default first). Fill estimate_trend / run_trend `slots` by these keys and chips.",
         inputSchema: {
           slug: z.string().regex(SLUG_RE).refine(notReserved, RESERVED).describe("The trend's slug (from list_trends)."),

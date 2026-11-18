@@ -2614,6 +2614,7 @@ interface TrendOriginal extends TrendVideo {
 interface TrendDetailSlot {
   key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
   hintImageUrl?: string                  // a picture of who or what the slot is in the original (never sent by a run)
+  defaultImages?: string[]               // an optional slot's original look: 1–3 https pictures of the role as in the original; absent on a required slot and on a trend that hides its original
   chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
   defaults?: TrendChips                  // the starting value of those chips
 }
@@ -3542,7 +3543,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > you typed it, instead of leaving it in the trailing auto-attach block. There
 > is no slug field to set: name the reference and it becomes mentionable, and
 > the index is correlation only — never a seat you compute. `~lock` / `~nolock`
-> apply as on character mentions. `@nodaro/shared` exports the grammar itself
+> apply as on character mentions. On the video routes a named mention of an
+> image, location, creature or object reference is read as that entry's
+> `{ref:<id>}`: its `@image_N` seat, or its name when it takes no seat. `@nodaro/shared` exports the grammar itself
 > (`imageMentionSlug`, `parseImageMentionToken`, `findImageMentionTokens`,
 > `knownImageSlugsFromRefs`) so a client can render the same preview the server
 > will assemble, and `toConnectedReference({ kind: "image", … })` builds the

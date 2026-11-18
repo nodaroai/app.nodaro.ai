@@ -77,7 +77,7 @@ const detail: TrendDetail = {
   original,
   slots: [
     { key: "lead", label: "Lead", kind: "person", required: true, hint: "A clear face", hintImageUrl: "https://cdn.example.com/hint.png", chips: ["outfit", "hair"], defaults: { outfit: "original" } },
-    { key: "place", label: "Place", kind: "location", required: false, chips: [] },
+    { key: "place", label: "Place", kind: "location", required: false, defaultImages: ["https://cdn.example.com/place-as-in-clip.png"], chips: [] },
   ],
   examples: [
     { videoUrl: "https://cdn.example.com/ex1.mp4", width: 720, height: 1280, slots: { lead: ["https://cdn.example.com/a.png"] } },
@@ -196,6 +196,9 @@ describe("trends resource", () => {
     const got = await make(fetchMock).trends.get("dance-off")
     expect(got.original).toEqual(original)
     expect(got.slots[0]!.hintImageUrl).toBe("https://cdn.example.com/hint.png")
+    // An optional slot's original look, as the route sends it; none on a required slot.
+    expect(got.slots[1]!.defaultImages).toEqual(["https://cdn.example.com/place-as-in-clip.png"])
+    expect(got.slots[0]).not.toHaveProperty("defaultImages")
 
     const { previewStartSec: _p, posterUrl: _q, ...bare } = original
     const noExample: TrendDetail = {

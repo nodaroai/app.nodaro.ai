@@ -2,7 +2,7 @@
 /**
  * A picture cropped out of one frame of a trend's ORIGINAL clip (the saved
  * draft's `source.videoUrl`, never its display copy): what the trend builder's
- * "Take from the original" stores as a slot's default picture (Full depth).
+ * "Take from the original" stores as a slot's default picture (its original look).
  *
  * The admin picks a time and a box on the clip as shown (its display copy:
  * rotation applied, which is how ffmpeg decodes the original too). The box is

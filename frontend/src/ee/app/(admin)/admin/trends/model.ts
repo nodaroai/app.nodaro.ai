@@ -48,6 +48,7 @@ import {
 import { FULL_DEPTH_SCENES } from "./prompt-style"
 import { faceMeshLinesSaved } from "./face-mesh-layers"
 import { normaliseShotList } from "./shot-list"
+import { describeOriginalLookMissing } from "./original-look"
 import type {
   AdminTrendData,
   AdminTrendEngine,
@@ -611,7 +612,6 @@ export function personMarkIssues(form: Pick<TrendForm, "slots" | "faceMasking">)
   return out
 }
 
-/** What the server would refuse in a face masking setting, as sentences. */
 /** A face masking setting's out-of-range values, as sentences (Save is held on any). Also Admin → Video Remake's. */
 export function maskingIssues(m: AdminTrendFaceMasking): string[] {
   const out: string[] = []
@@ -716,6 +716,8 @@ export function describeBlocker(r: TrendPublishBlocker): string {
       return `The 4 s preview's input clip is out of date: ${describePreviewClipOutOfDate(r.why)}. Save the draft, or publish again, to make it again (1. Source clip → Preview input).`
     case "example_slots_incomplete":
       return `Example ${r.example ?? "?"} has no pictures for: ${(r.slots ?? []).join(", ")}.`
+    case "optional_person_default_missing":
+      return describeOriginalLookMissing(r.slots)
     case "invalid_data":
       return `The draft is not valid: ${r.message ?? "unknown problem"}.`
     case "face_mask_missing":

@@ -754,6 +754,44 @@ describe("create → build → publish → edit (copy-on-write, Review Focus 3)"
     expect(mem.trends[0]!.status).toBe("draft")
   })
 
+  describe("an optional person's original look (optional_person_default_missing)", () => {
+    const GUEST = { key: "guest", label: { en: "Guest" }, kind: "person" as const, required: false, roleName: "the man on the right" }
+    const LOOK = `https://cdn.test/trends/${T1}/guest-look.png`
+    const withGuest = (over: Partial<TrendVersionData> = {}, guest: TrendVersionData["slots"][number] = GUEST) =>
+      draftData({ examples: [EXAMPLE], ...over, slots: [...draftData().slots, guest] })
+
+    it("a draft with an optional person and no original look saves, but does not publish; with one it publishes", async () => {
+      seed({}, draftData({ examples: [EXAMPLE] }))
+      let res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: withGuest(), revision: await revisionOf() })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+
+      res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+      expect(res.statusCode).toBe(409)
+      expect(reasonsOf(res)).toEqual([{ code: "optional_person_default_missing", slots: ["guest"], message: expect.stringContaining('"Guest"') }])
+      expect(mem.trends[0]!.status).toBe("draft")
+
+      res = await call("PUT", `/v1/admin/trends/${T1}/draft`, { data: withGuest({}, { ...GUEST, defaultImages: [LOOK] }), revision: await revisionOf() })
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    })
+
+    it("a trend that hides its original publishes without one (it keeps Example 1)", async () => {
+      seed({}, withGuest({ hideOriginal: true }))
+      const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    })
+
+    it("a live trend whose draft lacks one keeps its published version: only the new publish is refused", async () => {
+      seed({ status: "published", publishedVersion: 1, draftVersion: 2, versions: { 1: { data: draftData({ examples: [EXAMPLE] }), published: true }, 2: { data: withGuest(), published: false } } })
+      const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
+      expect(res.statusCode).toBe(409)
+      expect(reasonsOf(res)).toEqual([expect.objectContaining({ code: "optional_person_default_missing", slots: ["guest"] })])
+      expect(mem.trends[0]!.status).toBe("published")
+      expect(mem.trends[0]!.publishedVersion).toBe(1)
+    })
+  })
+
   it("a draft that hides its original publishes with an example, and the admin still sees the real original", async () => {
     seed({}, draftData({ hideOriginal: true, examples: [EXAMPLE] }))
     const res = await call("POST", `/v1/admin/trends/${T1}/publish`)
@@ -1456,7 +1494,15 @@ describe("POST /:id/publish — engine check", () => {
   it("publishes a 5-person Kling 4 trend (each prepared picture counts as one), and blocks one that can send more than 10", async () => {
     const kling = { ...CAST_SWAP_ALL, resolutions: ["720p", "1080p"], engines: ["seedance-2-5", "kling-4"] }
     world.envs = [envRow("production", kling), envRow("staging", kling)]
-    const slots = Array.from({ length: 5 }, (_, i) => ({ key: `p${i}`, label: { en: `P${i}` }, kind: "person" as const, required: i === 0, roleName: `person ${i}` }))
+    // Each optional person with its original look (publishing needs one; a default never adds to a run's images).
+    const slots = Array.from({ length: 5 }, (_, i) => ({
+      key: `p${i}`,
+      label: { en: `P${i}` },
+      kind: "person" as const,
+      required: i === 0,
+      roleName: `person ${i}`,
+      ...(i === 0 ? {} : { defaultImages: [`https://cdn.test/trends/${T1}/p${i}-look.png`] }),
+    }))
     const example = { ...EXAMPLE, slots: Object.fromEntries(slots.map((s) => [s.key, [`https://cdn.test/trends/${T1}/ex1-${s.key}.png`]])) }
     const refs = (n: number) => [1, 2].map((r) => ({ images: Array.from({ length: n }, (_, i) => `https://cdn.test/r${r}-${i}.png`), line: "the sign" }))
     // 5 prepared + 2 × 2 references = 9.
