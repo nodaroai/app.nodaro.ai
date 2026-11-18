@@ -10,6 +10,7 @@ vi.mock("@/ee/hooks/queries/use-admin-job-page", () => ({
 // The Cast Swap steps box reads its own route; nothing here is a Cast Swap run.
 vi.mock("../../jobs/job-generation-details", () => ({
   JobGenerationDetails: () => null,
+  JobRunSteps: () => null,
   JobSkippedSteps: () => null,
   JobStepOutputs: () => null,
 }))

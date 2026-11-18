@@ -143,6 +143,26 @@ describe("media resource", () => {
     expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({ imageUrl: "https://x/poster.png" })
   })
 
+  it("replaceAudio() POSTs /v1/replace-audio with the body verbatim and returns { jobId }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-replace" }))
+    const c = make(fetchMock)
+    const body = { videoUrl: "https://x/talk.mp4", musicPrompt: "warm lo-fi piano", mode: "keep-speech" as const, musicVolume: 70, duckAmount: 60 }
+    const out = await c.media.replaceAudio(body)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/replace-audio")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string; headers: Record<string, string> }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(body)
+    expect(init.headers["Idempotency-Key"]).toBeUndefined()
+    expect(out.jobId).toBe("j-replace")
+  })
+
+  it("replaceAudio() sends an idempotency key as the Idempotency-Key header", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-replace2" }))
+    const c = make(fetchMock)
+    await c.media.replaceAudio({ videoUrl: "https://x/talk.mp4", musicUrl: "https://x/song.mp3" }, { idempotencyKey: "retry-0001" })
+    expect((fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers["Idempotency-Key"]).toBe("retry-0001")
+  })
+
   it("imageOverlay() POSTs /v1/image-overlay with the base + percent-placed layers and returns { jobId }", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j5" }))
     const c = make(fetchMock)

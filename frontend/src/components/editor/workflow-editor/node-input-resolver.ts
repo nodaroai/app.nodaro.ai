@@ -71,6 +71,7 @@ import { appendVideoAsMixTrack } from "./mix-audio-video-track";
 import { routeUseCaseInput, usecaseHandsOnEpisode, usecaseHoldsVideo, type UseCaseResolvedInputs } from "./use-case-io";
 import { routeUnitInput, type UnitResolvedInputs } from "./unit-inputs";
 import { videoOverlayWireKindOf, withVideoOverlayWireKind } from "@/lib/video-overlay-wire-kind";
+import { REPLACE_AUDIO_MUSIC_HANDLE, REPLACE_AUDIO_VIDEO_HANDLE } from "@/lib/replace-audio-handles";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -725,6 +726,11 @@ export interface FrontendResolvedInputs extends UseCaseResolvedInputs, UnitResol
     sourceNodeId: string;
     sourceType?: "audio" | "video";
   }[];
+  /** Replace Audio: every music source wired into its `music` handle (an audio,
+   *  or a video whose sound is used), in edge order. Its body takes exactly one
+   *  (`replaceAudioNodeBody`, @nodaro/render-rules), so a second one is refused
+   *  rather than dropped. */
+  musicUrls?: string[];
   referenceImageUrls?: string[];
   /** The part of `referenceImageUrls` that arrived through an Image References
    *  handle (`imageReferences` / `references`), in edge order — without the
@@ -1923,6 +1929,16 @@ export function resolveNodeInputs(
       } else if (handle === "video" || !inputs.videoUrl) {
         inputs.videoUrl = output;
       }
+      continue;
+    }
+
+    // Replace Audio's two media inputs route by HANDLE, never by source type:
+    // every wire into `music` adds a music source (an audio, or a video whose
+    // sound is used), and `in` is the video whose sound is replaced. Mirrors
+    // backend input-resolver.ts (an edge on neither handle routes as any other).
+    if (node.type === "replace-audio" && (srcEdge.targetHandle === REPLACE_AUDIO_VIDEO_HANDLE || srcEdge.targetHandle === REPLACE_AUDIO_MUSIC_HANDLE)) {
+      if (srcEdge.targetHandle === REPLACE_AUDIO_MUSIC_HANDLE) inputs.musicUrls = [...(inputs.musicUrls ?? []), output];
+      else inputs.videoUrl = output;
       continue;
     }
 

@@ -412,6 +412,8 @@ const NODE_DATA_INPUTS = [
   "motion-graphics lottieUrl",
   "object defaultAssetUrl",
   "reference-board referenceImageUrls",
+  "replace-audio musicUrl",
+  "replace-audio videoUrl",
   "shot-cuts videoUrl",
   "site-capture url",
   "split-into-layers imageUrl",

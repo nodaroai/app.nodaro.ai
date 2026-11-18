@@ -30,6 +30,7 @@ import { registerUgcTools } from "./tools/ugc.js"
 import { registerResearchTools } from "./tools/research.js"
 import { registerSavedPostTools } from "./tools/saved-posts.js"
 import { registerCompetitorTools } from "./tools/competitors.js"
+import { registerReplaceAudioTools } from "./tools/verbs-replace-audio.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
@@ -310,6 +311,8 @@ export function registerMcpTools(server: McpServer, session: McpSession, opts: M
     // Competitor tracking (list / cards / add / scan): the `/v1/competitors*`
     // routes are the cloud plugin's.
     registerCompetitorTools({ server, session, fastify: opts.fastify })
+    // Replace Audio (replace_audio): the `/v1/replace-audio` route is the cloud plugin's.
+    registerReplaceAudioTools({ server, session, fastify: opts.fastify })
   }
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })

@@ -15,6 +15,10 @@
     "gpt-image-2-i2i:4K": 56,
     "gpt-image-2:2K": 35,
     "gpt-image-2:4K": 56,
+    "replace-audio": 165,
+    "replace-audio:prompt": 198,
+    "replace-audio:replace-all": 55,
+    "replace-audio:replace-all:prompt": 88,
     "ugc-finish": 33
   }
 }

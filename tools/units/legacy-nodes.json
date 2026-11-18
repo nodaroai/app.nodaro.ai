@@ -124,6 +124,7 @@
     "remove-background",
     "render-quality",
     "render-video",
+    "replace-audio",
     "resize-video",
     "router",
     "rss-feed",

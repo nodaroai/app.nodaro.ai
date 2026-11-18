@@ -220,6 +220,7 @@ import {
   completeFfmpegVideoJob,
   completeFfmpegAudioJob,
   createAssetFromJob,
+  libraryMediaOf,
   setJobProgress,
   startProgressRamp,
   _resetJobProgressMap,
@@ -1271,6 +1272,29 @@ describe("createAssetFromJob", () => {
   it("swallows errors", async () => {
     mocks.mockSingle.mockRejectedValueOnce(new Error("DB down"))
     await expect(createAssetFromJob("job-1", "user-1")).resolves.toBeUndefined()
+  })
+
+  // A result that rides with by-products of its own (Replace Audio's mix beside
+  // its video) files only the kinds `output_data.libraryMedia` names.
+  it("files only the media kinds a job's libraryMedia names", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: {
+        status: "completed",
+        output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4", audioUrl: "https://r2.example.com/audios/job-1-mix.mp3", libraryMedia: ["video"] },
+      },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    await createAssetFromJob("job-1", "user-1")
+    expect(mocks.mockInsert).toHaveBeenCalledTimes(1)
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ type: "video" }))
+  })
+
+  it("reads libraryMedia as every kind when it names none the Library files", () => {
+    expect(libraryMediaOf({})).toBeUndefined()
+    expect(libraryMediaOf({ libraryMedia: ["json", 3] })).toBeUndefined()
+    expect([...(libraryMediaOf({ libraryMedia: ["video", "audio", "nope"] }) ?? [])]).toEqual(["video", "audio"])
   })
 
   // A speech job asked for a WAV over the API stores one and says so

@@ -138,6 +138,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = composeRecord("NODE_TYPE
   "image-overlay": "Image Overlay",
   "video-overlay": "Video Overlay",
   "merge-video-audio": "Merge Video & Audio",
+  "replace-audio": "Replace Audio",
   "add-captions": "Add Captions",
   "resize-video": "Resize Video",
   "social-media-format": "Social Media Format",

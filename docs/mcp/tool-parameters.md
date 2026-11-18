@@ -2688,6 +2688,23 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `plan` | object (map of any) | yes | A resolved ShotSequencePlan from resolve_shot_sequence. |
 
+## `replace_audio`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  |  |
+| `video_asset_id` | string |  |  |
+| `music_url` | string (URL) |  | The new music: an audio, or a video whose sound is used. |
+| `music_asset_id` | string |  | The new music as the id of one of your audios or videos (a job or an upload). |
+| `music_prompt` | string |  | Make the music from this description instead of a file. At most 1000 characters. |
+| `mode` | string |  | keep-speech (default): keep the speech, replace the music. replace-all: replace all the sound. One of `keep-speech`, `replace-all`. |
+| `music_volume` | number |  | The music's volume, percent (0–200, default 80). From 0 to 200. |
+| `speech_volume` | number |  | The speech's volume, percent (0–200, default 100). From 0 to 200. |
+| `duck_amount` | number |  | How far the music dips under the speech (0–100, default 70). From 0 to 100. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `request_audio_upload`
 
 Needs `assets:write`.

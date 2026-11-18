@@ -131,6 +131,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "remove-background": { inputs: ["image"], outputs: ["image"] },
   "render-quality": { inputs: ["in"], outputs: ["out"] },
   "render-video": { inputs: ["composition"], outputs: ["video"] },
+  "replace-audio": { inputs: ["in", "music"], outputs: ["video-out"] },
   "resize-video": { inputs: ["in"], outputs: ["video-out"] },
   "router": { inputs: ["in"], outputs: ["route_a", "route_b"] },
   "rss-feed": { inputs: ["in"], outputs: ["content"] },

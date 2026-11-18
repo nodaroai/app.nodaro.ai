@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-11-17T08:57:26.135Z
-generated_from: cb7abbeec4
+generated_at: 2026-11-18T19:43:09.061Z
+generated_from: d0de23eefc
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -203,6 +203,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `remove-background` — Remove Background
 - `render-quality` — Render Quality
 - `render-video` — Render Video
+- `replace-audio` — Replace Audio
 - `resize-video` — Resize Video
 - `router` — Router
 - `rss-feed` — RSS Feed

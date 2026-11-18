@@ -122,6 +122,37 @@ export function JobSkippedSteps({ output }: { output: Record<string, unknown> | 
   </div>
 }
 
+/** A step's time as the admin reads it: milliseconds under a second, else seconds to one decimal. */
+export function runStepTime(ms: number): string {
+  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`
+}
+
+/**
+ * The steps ONE job ran inside itself (`output_data.runSteps`: `[{ step, ms }]`,
+ * in the order they ran) — a job that runs a fixed chain as one job (Replace
+ * Audio) keeps its steps visible here. Nothing when the job logged none.
+ */
+export function JobRunSteps({ output }: { output: Record<string, unknown> | null }) {
+  const raw = output?.runSteps
+  const steps = Array.isArray(raw)
+    ? raw.flatMap((s) => {
+      const r = s && typeof s === "object" ? (s as Record<string, unknown>) : {}
+      if (typeof r.step !== "string" || !r.step.trim()) return []
+      return [{ step: r.step, ms: typeof r.ms === "number" && Number.isFinite(r.ms) && r.ms >= 0 ? r.ms : undefined }]
+    })
+    : []
+  if (steps.length === 0) return null
+  return <div className="rounded-lg border p-3 text-sm" data-testid="job-run-steps">
+    <p className="font-medium">Steps ({steps.length})</p>
+    <ol className="mt-1 list-decimal pl-5">
+      {steps.map((s, i) => <li key={`${s.step}-${i}`} className="break-words">
+        <span className="font-mono text-xs">{s.step}</span>
+        {s.ms !== undefined && <span className="text-muted-foreground"> · {runStepTime(s.ms)}</span>}
+      </li>)}
+    </ol>
+  </div>
+}
+
 /** Whether a job is a Cast Swap run (a Full Quality version included): its queue name, else its input's type. */
 export function isCastSwapJob(job: { job_type?: string | null; input_data?: Record<string, unknown> | null }): boolean {
   if (job.job_type === "cast-swap" || job.job_type === "cast-swap-full-quality") return true

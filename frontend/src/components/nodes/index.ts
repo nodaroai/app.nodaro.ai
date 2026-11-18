@@ -130,6 +130,7 @@ import { ImageOverlayNode } from "./image-overlay-node";
 import { VideoOverlayNode } from "./video-overlay-node";
 import { AssembleNarratedVideoNode } from "./assemble-narrated-video-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
+import { ReplaceAudioNode } from "./replace-audio-node";
 import { AddCaptionsNode } from "./add-captions-node";
 import { ResizeVideoNode } from "./resize-video-node";
 import { SocialMediaFormatNode } from "./social-media-format-node";
@@ -368,6 +369,7 @@ const LEGACY_NODE_TYPES: Record<Exclude<SceneNodeType, UnitNodeType>, React.Comp
   "video-overlay": VideoOverlayNode,
   "assemble-narrated-video": AssembleNarratedVideoNode,
   "merge-video-audio": MergeVideoAudioNode,
+  "replace-audio": ReplaceAudioNode,
   "add-captions": AddCaptionsNode,
   "resize-video": ResizeVideoNode,
   "social-media-format": SocialMediaFormatNode,

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { JobAssetView } from "@/components/admin/job-asset-view"
 import { JobSourceBadge } from "@/components/admin/job-source-badge"
 import type { AdminJob } from "@/ee/hooks/queries/use-admin-queries"
-import { JobGenerationDetails, JobSkippedSteps, JobStepOutputs } from "./job-generation-details"
+import { JobGenerationDetails, JobRunSteps, JobSkippedSteps, JobStepOutputs } from "./job-generation-details"
 import { creditDetailLines } from "./admin-job-credits"
 
 /**
@@ -166,6 +166,7 @@ export function JobInfoSections({
   return (
     <>
       {full && <JobSkippedSteps output={full.output_data} />}
+      {full && <JobRunSteps output={full.output_data} />}
       <JobStepOutputs job={job} />
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm border rounded-lg p-4">

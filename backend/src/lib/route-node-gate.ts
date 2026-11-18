@@ -254,6 +254,7 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/recast/:id/plan",
   "/v1/cast-swap/face-mask",
   "/v1/studio/productions/:id/sequences/:sequenceId/takes/:takeId/units/:unitId/generate",
+  "/v1/replace-audio",
   "/v1/social-search",
   "/v1/speaker-frames",
   "/v1/speaker-view",

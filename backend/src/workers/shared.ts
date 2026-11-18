@@ -1835,8 +1835,11 @@ export async function createAssetFromJob(
     // job-finalize.ts extraImageSets) holds several image rows, so its result is
     // found by its url; every other job keeps the one-row-per-type check.
     const libraryImages = libraryImagesOf(output)
+    // A job whose result rides with by-products of its own says which of its media are Library items.
+    const filed = libraryMediaOf(output)
 
     for (const { key, type, mime } of mediaFields) {
+      if (filed && !filed.has(type)) continue
       const url = output[key]
       if (typeof url !== "string" || !url) continue
 
@@ -1946,6 +1949,20 @@ export async function createAssetFromJob(
   } catch (err) {
     console.error(`[worker] Failed to create asset records for job ${jobId}:`, err)
   }
+}
+
+/**
+ * `output_data.libraryMedia`: the media kinds of a job's output that are Library
+ * items, when the job says so — a result that rides with by-products of its own
+ * (Replace Audio: the video is the result; the mix, the music and the speech
+ * beside it are the job's files, not Library items). Undefined when the job
+ * says nothing the Library files: every media field is filed, as before.
+ */
+export function libraryMediaOf(output: Record<string, unknown>): ReadonlySet<"image" | "video" | "audio"> | undefined {
+  const raw = output.libraryMedia
+  if (!Array.isArray(raw)) return undefined
+  const kinds = raw.filter((k): k is "image" | "video" | "audio" => k === "image" || k === "video" || k === "audio")
+  return kinds.length > 0 ? new Set(kinds) : undefined
 }
 
 /** The image types an extra Library image is stored as, by extension. */

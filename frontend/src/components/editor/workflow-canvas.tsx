@@ -428,6 +428,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
   // Processing nodes - steel grey
   if (nodeType === 'combine-videos' ||
       nodeType === 'merge-video-audio' ||
+      nodeType === 'replace-audio' ||
       nodeType === 'add-captions' ||
       nodeType === 'resize-video' ||
       nodeType === 'trim-audio' ||

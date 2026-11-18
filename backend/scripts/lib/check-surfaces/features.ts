@@ -121,6 +121,7 @@ export const PLUGIN_ROUTE_PREFIXES: readonly string[] = [
   "/v1/topics",
   "/v1/topic-scan",
   "/v1/social-search",
+  "/v1/replace-audio",
   "/v1/voice-changer-pro",
   "/v1/moderate-image",
   "/v1/workflows/:p/collaborators",

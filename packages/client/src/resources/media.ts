@@ -437,6 +437,31 @@ export class MediaResource {
   }
 
   /**
+   * Replace a video's music and keep its speech, as one job
+   * (`POST /v1/replace-audio`, Nodaro Cloud only): the speech is separated
+   * from the rest of the sound, the new music dips under it while someone
+   * talks, and the mix replaces the video's sound, as long as the video.
+   * `mode: "replace-all"` replaces all the sound with the new music instead.
+   * The music is a file (`musicUrl`: an audio, or a video whose sound is used)
+   * or `musicPrompt` (an instrumental track as long as the video is made from
+   * it) — exactly one. Priced per run by mode and music source; a keep-speech
+   * run on a video with no sound is charged as replace-all. Poll
+   * `jobs.get(jobId)`; the completed job's output is a {@link ReplaceAudioOutput}.
+   *
+   * With `options.idempotencyKey` (sent as the `Idempotency-Key` header, at
+   * least 8 characters) a retry of the same request answers the job it
+   * already started instead of starting and charging a second one.
+   */
+  replaceAudio(input: ReplaceAudioInput, options: MediaRunOptions = {}): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/replace-audio", {
+      body: input,
+      ...(options.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+    })
+  }
+
+  /**
    * Turn one still image + one audio track into an MP4
    * (`POST /v1/still-to-video`) — locally rendered (FFmpeg), no AI model,
    * zero credits. The output duration IS the audio's duration; there is no
@@ -770,6 +795,55 @@ export interface MediaRunOptions extends RunNodeOptions {
   readonly signal?: AbortSignal
   /** This request's timeout in ms, in place of the client's `timeoutMs`. */
   readonly timeoutMs?: number
+}
+
+/** Body of {@link MediaResource.replaceAudio} (`POST /v1/replace-audio`). Exactly one of `musicUrl` and `musicPrompt`. */
+export interface ReplaceAudioInput {
+  /** The video whose sound is replaced (videos up to 10 minutes, files up to 500 MB). */
+  videoUrl: string
+  /** The new music: an audio, or a video whose sound is used. */
+  musicUrl?: string
+  /** Make the music from this description instead (up to 1,000 characters; a video up to 6 minutes). */
+  musicPrompt?: string
+  /** `keep-speech` (default): keep the speech, replace the music. `replace-all`: replace all the sound. */
+  mode?: "keep-speech" | "replace-all"
+  /** The music's volume in percent, 0–200 (default 80). */
+  musicVolume?: number
+  /** The speech's volume in percent, 0–200 (default 100). */
+  speechVolume?: number
+  /** How far the music dips under the speech, 0–100 (default 70; 0 = not at all). */
+  duckAmount?: number
+  /** A generation session to file the job under. */
+  sessionId?: string
+  /** A slug naming where the request comes from. */
+  origin?: string
+}
+
+/** One step a Replace Audio job ran, and how long it took (ms). */
+export interface ReplaceAudioRunStep {
+  step: string
+  ms: number
+}
+
+/** The completed job's output of {@link MediaResource.replaceAudio}. */
+export interface ReplaceAudioOutput {
+  /** The video with its new sound. */
+  videoUrl: string
+  thumbnailUrl?: string
+  width: number
+  height: number
+  /** Seconds. */
+  duration: number
+  /** The final mix (the video's new sound). */
+  audioUrl: string
+  /** The separated speech, normalized; absent when no speech was kept. */
+  speechUrl?: string
+  /** The new music, normalized. */
+  musicUrl: string
+  /** Whether the speech was kept (false for replace-all, and for a video with no sound). */
+  speechKept: boolean
+  /** The steps the job ran, in order. */
+  runSteps: ReplaceAudioRunStep[]
 }
 
 /** A media job started: its id, and `deduped: true` when an `Idempotency-Key` retry found the job already started. */

@@ -226,6 +226,13 @@ export interface GeneratedResult {
   // to expect the take handed back (`ugcReusedClips`, @nodaro/render-rules);
   // the server checks it against the caller's own jobs before pricing it free.
   readonly ugcClipNonce?: number
+  // A Replace Audio take: the tracks its run made beside the video — the
+  // speech it kept (absent when it replaced all the sound), the music it laid
+  // under it, and the final mix (lib/run-result-identity.ts). The node plays
+  // them under its video; its own `musicUrl` is its setting, never these.
+  readonly speechUrl?: string
+  readonly musicUrl?: string
+  readonly mixUrl?: string
 }
 
 /**
@@ -4432,6 +4439,42 @@ export type MergeVideoAudioData = {
   activeResultIndex?: number
 }
 
+/**
+ * Replace Audio (Nodaro Cloud): a video's sound replaced by new music — the
+ * speech kept and ducked under it (`keep-speech`), or all of it replaced
+ * (`replace-all`). The run is served by a private plugin at
+ * `POST /v1/replace-audio`; the node only collects its inputs and levers
+ * (`@nodaro/render-rules` replace-audio.ts names them and builds the body).
+ */
+export type ReplaceAudioNodeData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  /** The video, when none is wired into `in`. */
+  videoUrl?: string
+  /** The new music, when none is wired into `music` (music source `input`). */
+  musicUrl?: string
+  /** Where the music comes from: the music wired in (or `musicUrl`), or a track made from `musicPrompt`. */
+  musicSource: "input" | "prompt"
+  /** What the track made from a prompt sounds like (music source `prompt`), up to 1000 characters. */
+  musicPrompt: string
+  /** `keep-speech`: the speech stays and the music is ducked under it. `replace-all`: the music replaces all the sound. */
+  mode: "keep-speech" | "replace-all"
+  /** The music's level, 0–200 percent. */
+  musicVolume: number
+  /** The speech's level, 0–200 percent (keep-speech). */
+  speechVolume: number
+  /** How far the music dips while someone speaks, 0–100 percent (keep-speech). */
+  duckAmount: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+}
+
 export type AddCaptionsData = {
   currentJobProgress?: number
   /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
@@ -7724,6 +7767,7 @@ export type SceneNodeData =
   | ImageOverlayData
   | AssembleNarratedVideoData
   | MergeVideoAudioData
+  | ReplaceAudioNodeData
   | StillToVideoData
   | SlideshowData
   | AddCaptionsData
@@ -7962,6 +8006,7 @@ export type SceneNodeType =
   | "image-overlay"
   | "assemble-narrated-video"
   | "merge-video-audio"
+  | "replace-audio"
   | "still-to-video"
   | "slideshow"
   | "add-captions"
@@ -9812,6 +9857,15 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video-out"],
     defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, keepOriginalAudio: true, originalAudioVolume: 30, originalAudioRole: "background", trackSettings: {}, fieldMappings: {} },
+  },
+  {
+    // Nodaro Cloud: the run is served by a private plugin (POST /v1/replace-audio).
+    type: "replace-audio",
+    label: "Replace Audio",
+    category: "processing",
+    inputs: ["in", "music"],
+    outputs: ["video-out"],
+    defaultData: { label: "Replace Audio", musicSource: "input", musicPrompt: "", mode: "keep-speech", musicVolume: 80, speechVolume: 100, duckAmount: 70, fieldMappings: {}, executionStatus: "idle", generatedResults: [], activeResultIndex: 0 } as ReplaceAudioNodeData,
   },
   {
     type: "still-to-video",

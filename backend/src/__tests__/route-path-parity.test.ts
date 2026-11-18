@@ -184,6 +184,11 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   // deliberately absent from core. Off Cloud the pickers hide the node and the
   // workflow routes refuse a graph holding it, so nothing calls it there.
   "/v1/social-search",
+  // Replace Audio is a Cloud-only node (CLOUD_ONLY_NODE_TYPES, no relay): its
+  // route is registered at runtime by the cloud-plugins `registerRoutes()` and
+  // deliberately absent from core (the whole run is the plugin's). Off Cloud the
+  // pickers hide the node and the workflow routes refuse a graph holding it.
+  "/v1/replace-audio",
   // Competitor tracking: every route is the cloud-plugins `competitors`
   // plugin's (registered at runtime, deliberately absent from core). Off Cloud
   // the page is not offered and nothing calls them.

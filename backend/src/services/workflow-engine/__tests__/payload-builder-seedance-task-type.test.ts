@@ -208,7 +208,7 @@ const SWEEP_INPUTS = {
 /** Not built by the payload builder at all: sources, and nodes run inline or as use cases. */
 const NOT_BUILT_HERE = [
   "upload-video", "youtube-video", "manual-edit", "list", "sub-workflow", "reduce",
-  "ugc-clip", "ugc-finish-clips", "episode-trailer", "speaker-layout", "tighten-episode", "clip-pack",
+  "ugc-clip", "ugc-finish-clips", "episode-trailer", "speaker-layout", "tighten-episode", "clip-pack", "replace-audio",
 ]
 /** Built here, but refused without settings or wiring this minimal input does not give. */
 const NEEDS_MORE_INPUT = [

@@ -25,7 +25,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
 import type { EditPlanMode } from "@nodaro/shared/edl"
-import type { CastSwapPromptPartId } from "@nodaro/render-rules"
+import type { CastSwapPromptPartId, ReplaceAudioBody } from "@nodaro/render-rules"
 import type {
   VideoDepthProvider,
   VideoDepthModelSize,
@@ -4236,6 +4236,37 @@ export async function mergeVideoAudioApi(
     workflowId: true,
     label: "apiErr.startMergeVideoAudio",
   })
+}
+
+/**
+ * Replace Audio (Nodaro Cloud): starts the run a private plugin serves at
+ * `POST /v1/replace-audio` and answers its job (`202 { jobId }`). The body is
+ * the shared one (`replaceAudioNodeBody`, @nodaro/render-rules) plus the run's
+ * workflow fields. Not `apiJson`, which keeps no HTTP status: a deployment
+ * without the plugin answers Fastify's own 404 (no `error.code`), said here as
+ * "runs on Nodaro Cloud" rather than a bare failure. Every other refusal is
+ * the route's own (`error.message`, through `throwApiError`, which also keeps
+ * its code — an over-long or over-large video reads as a warning).
+ */
+export async function replaceAudio(body: ReplaceAudioBody): Promise<{ jobId: string }> {
+  const payload = JSON.stringify(withWorkflowId({ ...body }))
+  const res = await fetch(`${API_BASE_URL}/v1/replace-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: payload,
+  })
+  if (!res.ok) {
+    const err: unknown = await res.json().catch(() => null)
+    const errJson = err && typeof err === "object" && !Array.isArray(err) ? (err as Record<string, unknown>) : null
+    const errObj = errJson?.error && typeof errJson.error === "object" ? (errJson.error as Record<string, unknown>) : undefined
+    if (res.status === 404 && typeof errObj?.code !== "string") throw new Error(tx("apiErr.replaceAudioNotServed"))
+    throwApiError(errJson, "apiErr.startReplaceAudio")
+  }
+  try {
+    return (await res.json()) as { jobId: string }
+  } catch {
+    throw new Error(tx("apiErr.unexpectedResponse", { context: tx("apiErr.startReplaceAudio") }))
+  }
 }
 
 export async function trimAudioApi(videoUrl: string, audioFormat?: string, userId?: string, startTime?: number, endTime?: number): Promise<{ jobId: string }> {

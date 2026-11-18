@@ -147,6 +147,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Image Overlay": "이미지 오버레이",
   "Video Overlay": "동영상 오버레이",
   "Merge Video & Audio": "동영상 및 오디오 병합",
+  "Replace Audio": "오디오 교체",
   "Add Captions": "자막 추가",
   "Resize Video": "동영상 크기 조정",
   "Social Media Format": "SNS 포맷",

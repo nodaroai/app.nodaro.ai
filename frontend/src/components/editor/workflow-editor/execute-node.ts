@@ -102,6 +102,7 @@ import {
 import { browserRenderLoneRow, browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
 import { executeUgcCards, executeUgcClip, executeUgcClips, executeUgcCreator, executeUgcFinishClips, executeUgcScript } from "./ugc-execute";
+import { executeReplaceAudio } from "./replace-audio-execute";
 import { executeSiteCapture } from "./site-capture-execute";
 import { executeSpeakerFrames } from "./speaker-frames-executor";
 import { executeUseCase, type UseCaseContinueParams } from "./use-case-executor";
@@ -237,6 +238,7 @@ import {
   editPlan,
   cameraSwitch,
   executeReduce,
+  replaceAudio,
 } from "@/lib/api";
 import { applyWebScrapeFailure, applyWebScrapeResult, webScrapeRunStartPatch } from "@/components/nodes/web-scrape-run-state";
 import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
@@ -8424,6 +8426,18 @@ function executeNodeCore(
       "Merge Video & Audio",
       ctx,
     );
+  }
+
+  // Replace Audio (Nodaro Cloud): the plugin's run, from the shared request
+  // body (replace-audio-execute.ts); a node the body refuses fails before any call.
+  if (node.type === "replace-audio") {
+    setUserPromptTemplate(undefined);
+    return executeReplaceAudio(node, { videoUrl: inputs.videoUrl, musicUrls: inputs.musicUrls }, ctx, {
+      updateNodeData: (id, patch) => useWorkflowStore.getState().updateNodeData(id, patch),
+      poll: pollJobWithNodeUpdate,
+      start: replaceAudio,
+      toastError: (message) => guardedToast.error(message),
+    });
   }
 
   if (node.type === "trim-audio") {

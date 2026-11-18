@@ -1086,3 +1086,5 @@ export { RUN_OUTPUT_TASK_FIELD, handedOnTaskOf, ownTaskInputOf, recordedRunOutpu
 export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf, switchXMaxResolutionOf, switchXQuoteCreditId } from "./probed-credit-ids.js"
 // AI Avatar in audio mode: the audio its run plays, quoted at the bucket its run holds (unknown: the 120-second default, a minimum).
 export { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId } from "./ai-avatar-audio"
+// Replace Audio as a client of its Cloud route: the node's settings, the request body both engines send, the credit id it quotes.
+export { REPLACE_AUDIO_CREDIT_IDS, REPLACE_AUDIO_LEVERS, REPLACE_AUDIO_MODES, REPLACE_AUDIO_MUSIC_PROMPT_MAX, REPLACE_AUDIO_MUSIC_SOURCES, REPLACE_AUDIO_NODE_TYPE, replaceAudioCreditId, replaceAudioLever, replaceAudioMode, replaceAudioMusicSource, replaceAudioNodeBody, replaceAudioNodeCreditId, replaceAudioProblemText, type ReplaceAudioBody, type ReplaceAudioLever, type ReplaceAudioMode, type ReplaceAudioMusicSource, type ReplaceAudioNodeProblem } from "./replace-audio"

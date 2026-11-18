@@ -1584,6 +1584,11 @@ const OMNIHUMAN_2_0_LIP_SYNC_BYTES = 144
 // that many bytes.
 const SPLIT_INTO_LAYERS_TOOL_BYTES = 2_911
 
+// replace_audio (Nodaro Cloud: a client of the cloud plugin's POST /v1/replace-audio): the
+// tool's own definition as tools/list serves it (cloud, all scopes) — the video, one music source
+// (a file or a prompt), the mode and three levers. No price figure in it.
+const REPLACE_AUDIO_TOOL_BYTES = 2_724
+
 // RAISED 2026-11-11 by Nodaro Image Upscale on edit_image (the model in its `model` enum and its
 // one line in the description, and `upscale_factor`'s 8 with which model takes which factors),
 // and nothing else. No tool was added, so the fixture does NOT move. Measured by this suite:
@@ -1996,6 +2001,7 @@ export const TOOL_WIRE_BUDGET = {
     OMNIHUMAN_2_0_LIP_SYNC_BYTES +
     PIXVERSE_V6_MAX_MODELS_BYTES +
     SPLIT_INTO_LAYERS_TOOL_BYTES +
+    REPLACE_AUDIO_TOOL_BYTES +
     NODARO_IMAGE_UPSCALE_BYTES +
     LLM_REGISTRY_2026_11_IDS_BYTES +
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +

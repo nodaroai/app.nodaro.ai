@@ -70,6 +70,7 @@ import { noteStepCharges } from "./run-step-charges.js"
 import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import type { LlmPlannedCall, MeteredLlmFeature } from "../../lib/llm-billing.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
+import { REPLACE_AUDIO_SYNC_TYPES, buildReplaceAudioSyncBody, replaceAudioFailure } from "./replace-audio-sync.js"
 import {
   PLUGIN_SERVED_SYNC_TYPES, UGC_JOB_TYPES, buildUgcSyncBody, runUgcCards, runUgcClips, runUgcCreator, runUgcFinish, ugcJobIsThisRuns, ugcPersonPicks, ugcRunSeed,
   type UgcDeps,
@@ -219,6 +220,8 @@ export const SYNC_HTTP_NODES = new Set([
   "competitor-read",
   // The UGC nodes: the Nodaro Cloud plugin serves every one of their routes.
   ...PLUGIN_SERVED_SYNC_TYPES,
+  // Replace Audio: POST /v1/replace-audio (the Nodaro Cloud plugin) answers with a job; the run polls it.
+  ...REPLACE_AUDIO_SYNC_TYPES,
 ])
 
 /**
@@ -249,6 +252,8 @@ export const IDEMPOTENT_SYNC_HTTP_NODES: ReadonlySet<string> = new Set([
   "collection-write",
   // The UGC nodes: every call carries the run's key for the node.
   ...PLUGIN_SERVED_SYNC_TYPES,
+  // Replace Audio: a re-pick of the node is handed the job the first call started, never a second run.
+  ...REPLACE_AUDIO_SYNC_TYPES,
 ])
 
 // Maps node type to internal route path. Derived from the shared node-route
@@ -997,6 +1002,7 @@ async function executeSyncHttpNode(
     // Any other route's failure reads as a short sentence — its raw reply is
     // kept in the error's internalDetails and the server log, never shown.
     if (PLUGIN_SERVED_SYNC_TYPES.has(node.type)) throw new Error(ugcFailure(response.status, errorBody))
+    if (REPLACE_AUDIO_SYNC_TYPES.has(node.type)) throw new Error(replaceAudioFailure(response.status, errorBody))
     throw syncHttpCallError(`Sync HTTP call to ${route}`, response.status, errorBody, {
       nodeId: node.id, nodeType: node.type, executionId: ctx.executionId,
     })
@@ -1588,6 +1594,11 @@ export function buildSyncHttpBody(
     case "ugc-clips":
     case "ugc-clip":
       return buildUgcSyncBody(node, resolvedInputs, ctx)
+
+    // Replace Audio: the shared client body (@nodaro/render-rules), with the
+    // run's user; a missing or doubled input throws its sentence before any call.
+    case "replace-audio":
+      return buildReplaceAudioSyncBody(node, resolvedInputs, ctx)
 
     // UGC Creator and UGC Cards never reach here: their runners make every
     // call (ugc-sync-nodes.ts), so there is no single body to build.

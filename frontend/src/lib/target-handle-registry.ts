@@ -15,6 +15,7 @@ import { composeRecordAfter } from "./unit-compose"
 import { ACCEPTS_BRAND_TEXT, ACCEPTS_CONTENT_MATERIAL, ACCEPTS_POST_LINK, ACCEPTS_RECIPE } from "./content-handles"
 import { ACCEPTS_VIDEO_OR_POST_LINK } from "./video-analysis-handles"
 import { UGC_TARGET_HANDLES } from "./ugc-handles"
+import { REPLACE_AUDIO_TARGET_HANDLES } from "./replace-audio-handles"
 import { isTargetHandleWithheld } from "./target-handle-availability"
 import {
   isValidListNodeConnection,
@@ -436,7 +437,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_MEDIA }],
   "audio-fx":           [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
-  "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
+  // Replace Audio: the video on `in`, the new music (an audio, or a video's
+  // sound) on `music` — the same rows its own pips render (replace-audio-handles.ts).
+  "replace-audio":      REPLACE_AUDIO_TARGET_HANDLES,
+  "adjust-volume":     [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
   "pitch-tempo":        [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
   "silence-detect":     [{ handleId: "in", label: "Audio or Video", accepts: ACCEPTS_MEDIA }],
   // Audio Sync: 2–6 recordings (audio or video) on one ordered `sources` handle

@@ -147,6 +147,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Image Overlay": "Sobreposição em imagem",
   "Video Overlay": "Sobreposição em vídeo",
   "Merge Video & Audio": "Mesclar vídeo e áudio",
+  "Replace Audio": "Substituir áudio",
   "Add Captions": "Adicionar legendas",
   "Resize Video": "Redimensionar vídeo",
   "Social Media Format": "Formato para redes",

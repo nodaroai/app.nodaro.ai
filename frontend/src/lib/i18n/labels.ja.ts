@@ -147,6 +147,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Image Overlay": "画像オーバーレイ",
   "Video Overlay": "動画オーバーレイ",
   "Merge Video & Audio": "動画とオーディオを結合",
+  "Replace Audio": "音声を差し替え",
   "Add Captions": "字幕を追加",
   "Resize Video": "動画をリサイズ",
   "Social Media Format": "SNS フォーマット",

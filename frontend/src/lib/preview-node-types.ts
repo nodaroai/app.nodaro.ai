@@ -68,6 +68,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER: ReadonlySet<string> = composeSet("VI
   "face-swap",
   "suno-music-video",
   "merge-video-audio",
+  "replace-audio",
   "still-to-video",
   "slideshow",
   "add-captions",

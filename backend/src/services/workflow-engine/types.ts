@@ -705,6 +705,12 @@ export interface ResolvedInputs {
    * UGC Cards' `notes` stays `clipNotes`.
    */
   ugc?: Record<string, unknown>
+  /**
+   * Replace Audio's inputs, by the edge's target handle: the video wired into
+   * `in` (`video`) and every source wired into `music` — an audio or a video
+   * whose sound is used — in wire order (`music`; one is a run, more is refused).
+   */
+  replaceAudio?: { readonly video?: string; readonly music: readonly string[] }
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 

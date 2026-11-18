@@ -7241,6 +7241,52 @@ const { jobId } = await client.media.splitIntoLayers({ imageUrl: "https://exampl
 
 Full reference: [Split into Layers](./nodes/ai-image/split-into-layers.md).
 
+#### `replaceAudio(input, options?)`
+
+Nodaro Cloud only. Keep a video's speech and replace its music — or replace all its sound — as one job (`POST /v1/replace-audio`): the speech is separated from the rest of the sound, the new music dips under it while someone talks, and the mix replaces the video's sound, as long as the video.
+
+```ts
+replaceAudio(
+  input: {
+    videoUrl: string
+    musicUrl?: string      // an audio, or a video whose sound is used — or:
+    musicPrompt?: string   // an instrumental track as long as the video is made from it (≤ 1,000 characters)
+    mode?: "keep-speech" | "replace-all"   // default "keep-speech"
+    musicVolume?: number   // 0–200, default 80
+    speechVolume?: number  // 0–200, default 100
+    duckAmount?: number    // 0–100, default 70 (0 = the music does not dip)
+    sessionId?: string
+    origin?: string
+  },
+  options?: { idempotencyKey?: string; signal?: AbortSignal; timeoutMs?: number },
+): Promise<{ jobId: string }>
+```
+
+Exactly one of `musicUrl` and `musicPrompt`. Videos up to 10 minutes (6 with `musicPrompt`), files up to 500 MB; a file past a limit is a `413`, one that cannot be read (or a video with no picture, a music with no sound) a `422`, before anything is charged. One price per run: 165 credits<!-- credits: replace-audio --> to keep the speech (198 credits<!-- credits: replace-audio:prompt --> with `musicPrompt`), 55 credits<!-- credits: replace-audio:replace-all --> to replace all the sound (88 credits<!-- credits: replace-audio:replace-all:prompt --> with `musicPrompt`); a keep-speech run on a video with no sound is charged as replace-all. A failed run is refunded whole. With `options.idempotencyKey` a retry answers the job it already started.
+
+The completed job's output (`ReplaceAudioOutput`):
+
+```ts
+{
+  videoUrl: string        // the video with its new sound
+  thumbnailUrl?: string
+  width: number
+  height: number
+  duration: number        // seconds
+  audioUrl: string        // the final mix
+  speechUrl?: string      // the separated speech (keep-speech only)
+  musicUrl: string        // the new music, normalized
+  speechKept: boolean
+  runSteps: Array<{ step: string; ms: number }>
+}
+```
+
+```ts
+const { jobId } = await client.media.replaceAudio({ videoUrl: "https://example.com/talk.mp4", musicPrompt: "warm lo-fi piano" })
+```
+
+Full reference: [Replace Audio](./nodes/processing-video/replace-audio.md).
+
 #### `stillToVideo(input)`
 
 ```ts

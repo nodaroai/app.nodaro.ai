@@ -11,6 +11,7 @@ import { EDIT_VIDEO_PRO_INPUT_HANDLES } from "../edit-video-pro-handles"
 import { GENERATE_IMAGE_INPUT_HANDLES } from "../generate-image-handles"
 import { VIDEO_RETAKE_HANDLE_IDS } from "../video-retake-handles"
 import { UGC_TARGET_HANDLES } from "../ugc-handles"
+import { REPLACE_AUDIO_TARGET_HANDLES } from "../replace-audio-handles"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
 
 /**
@@ -54,6 +55,8 @@ const AUTHORITATIVE = new Map<string, readonly string[]>([
   // The UGC video nodes draw their input pips from these rows (ugc-handles.ts),
   // UGC Creator's `pickers` pip (several pickers on one pip) included.
   ...Object.entries(UGC_TARGET_HANDLES).map(([type, rows]) => [type, rows.map((r) => r.handleId)] as const),
+  // Replace Audio draws its two input pips from these rows (replace-audio-handles.ts).
+  ["replace-audio", REPLACE_AUDIO_TARGET_HANDLES.map((r) => r.handleId)],
   // validator/component overrides — see header.
   ["ai-avatar", ["image", "script", "audio"]],
   ["cinematic-avatar", ["prompt", "ref-video", "ref-audio", "ref-image"]],

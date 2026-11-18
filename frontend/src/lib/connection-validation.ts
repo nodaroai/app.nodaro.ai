@@ -5,6 +5,7 @@ import { isValidEditVideoProConnection } from "./edit-video-pro-handles"
 import { isValidVideoRetakeConnection, type VideoRetakeHandleId } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection, ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
+import { isValidReplaceAudioConnection } from "./replace-audio-handles"
 import {
   isValidTextToSpeechConnection,
   isValidTextToAudioConnection,
@@ -670,6 +671,13 @@ function connectionTypesAccepted(
     if (connection.targetHandle === "video") return ACCEPTS_VIDEO(sourceType)
     if (connection.targetHandle === "audio") return ACCEPTS_AUDIO(sourceType)
     return false
+  }
+
+  // Replace Audio — a video on `in`, the new music (an audio, or a video's
+  // sound) on `music`: the same rows as its pips and the source-direction
+  // popover (replace-audio-handles.ts).
+  if (targetType === "replace-audio" && connection.targetHandle) {
+    return isValidReplaceAudioConnection(connection.targetHandle, imageSourceType)
   }
 
   // ─── Data root-category nodes ─────────────────────────────────────────
