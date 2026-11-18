@@ -41,6 +41,7 @@ import type { ConnectedReference, DescribedReference } from "@nodaro/shared/type
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts/assembly"
 import { appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines } from "@nodaro/prompts/prompt-builder"
+import { namedMentionsToRefIdTokens } from "../lib/named-reference-mentions.js"
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
 import { userDirectionNotSupported } from "../lib/user-direction.js"
@@ -316,7 +317,6 @@ export function assembleVideoConnectedReferences(args: {
   uncappedForCount?: true
 }): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
   const {
-    prompt,
     provider,
     connectedReferences,
     describedReferences,
@@ -327,6 +327,11 @@ export function assembleVideoConnectedReferences(args: {
     referenceVideoCaptions,
     referenceAudioCaptions,
   } = args
+  // A named mention of an image, location, creature or object (`@town:2`) is
+  // addressed by its reference's id from here on, the one form the resolver
+  // binds for those kinds; read off the FULL list, so a capped-out one still
+  // degrades to its name.
+  const prompt = namedMentionsToRefIdTokens(args.prompt, connectedReferences)
   const providerCap = provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) : 0
   const imageCap = args.uncappedForCount && providerCap > 0
     ? Number.MAX_SAFE_INTEGER

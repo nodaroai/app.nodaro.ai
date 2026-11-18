@@ -19,3 +19,12 @@ const IMAGE_MENTION = /@(image(?:_\d+|\(\d+\)|\d+))(?![\p{L}\p{N}_])/giu
 export function neutralizeImageMentions(prompt: string, carried: (word: string) => boolean = () => false): string {
   return prompt.replace(IMAGE_MENTION, (whole, word: string) => (carried(word) ? whole : word))
 }
+
+/**
+ * Write every image mention the way the model addresses its images: the
+ * platform's `@image_N` means nothing to a model that reads plain `image N`.
+ * `spell` is that model's ordinal (`imageBindingFor(syntax).ordinal`).
+ */
+export function respellImageMentions(prompt: string, spell: (n: number) => string): string {
+  return prompt.replace(IMAGE_MENTION, (_whole, word: string) => spell(Number(/\d+/.exec(word)?.[0])))
+}

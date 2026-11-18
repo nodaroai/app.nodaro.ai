@@ -4,7 +4,7 @@ const media = vi.hoisted(() => ({ fetchOwnMedia: vi.fn(), meta: { width: 720, he
 vi.mock("../../../lib/fetch-own-media.js", () => ({ fetchOwnMedia: media.fetchOwnMedia }))
 vi.mock("sharp", () => ({ default: () => ({ metadata: async () => media.meta }) }))
 
-import { buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames } from "../gemini-omni-12.js"
+import { buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, isGeminiOmni12ProviderTimeout } from "../gemini-omni-12.js"
 
 const base = { prompt: "a cat plays piano", durationSec: 8, resolution: "720p", aspectRatio: "16:9" }
 
@@ -216,5 +216,26 @@ describe("buildGeminiOmni12Request", () => {
     for (const args of cases) {
       for (const key of Object.keys(buildGeminiOmni12Request(args).input)) expect(allowed.has(key), key).toBe(true)
     }
+  })
+})
+
+describe("buildGeminiOmni12Request — image mentions", () => {
+  it("writes a platform mention the way the model addresses its images", () => {
+    const { input } = buildGeminiOmni12Request({ ...base, prompt: "the person from @image_1 beside @image2 and @image(3)\nTown (@image_2).", referenceImageUrls: ["a", "b", "c"] })
+    expect(input.prompt).toBe("the person from image 1 beside image 2 and image 3\nTown (image 2).")
+  })
+
+  it("respells in the real-frame mode too, and leaves other text alone", () => {
+    const { input, mode } = buildGeminiOmni12Request({ ...base, prompt: "open on @image_1, mail me@images.example", startFrameUrl: "s" })
+    expect(mode).toBe("first-frame")
+    expect(input.prompt).toBe("open on image 1, mail me@images.example")
+  })
+})
+
+describe("isGeminiOmni12ProviderTimeout", () => {
+  it("is true only for the provider's own 524", () => {
+    expect(isGeminiOmni12ProviderTimeout(Object.assign(new Error("x"), { internalDetails: "task failed: [524] generate task timeout." }))).toBe(true)
+    expect(isGeminiOmni12ProviderTimeout(Object.assign(new Error("x"), { internalDetails: "task failed: [400] Generation failed." }))).toBe(false)
+    expect(isGeminiOmni12ProviderTimeout(new Error("task failed: [524]"))).toBe(false)
   })
 })

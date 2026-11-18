@@ -3309,6 +3309,14 @@ orchestrator already use):
   the entry's `defaultName`, else nothing — it never reaches the model raw.
   `{ref:}` follows the reference through `referenceOrder`; `{image:N}` keeps its
   literal `N`. The canvas editor keeps writing `{image:N}`.
+- **A named mention is read as its entry's `{ref:<id>}`.** For an image,
+  location, creature or object entry that has an `id`, `@<name-slug>:<index>`
+  (the slug of its `defaultName`: `"Old Town"` → `@old-town:1`) and
+  `@<name-slug>:<index>:<role>` mean `{ref:<id>}` and `{ref:<id>:<role>}`, so
+  the mention becomes the entry's seat, or its name when it takes none, and
+  never reaches the model as typed. The index is not read. A name a character
+  entry also answers to stays the character's, and of two entries with one
+  name the first is meant.
 - **`referenceOrder`** (an optional string array of stable ref ids) reorders the
   reference list and renumbers the `@image_N` bindings to match.
 - **`identityLock` (per-reference, opt-in — default off).** Each

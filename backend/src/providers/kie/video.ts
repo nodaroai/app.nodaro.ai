@@ -27,7 +27,7 @@ import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider } from "@nodaro/shared/models"
-import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
+import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, isGeminiOmni12ProviderTimeout, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
   runKieTask,
@@ -1589,6 +1589,10 @@ async function runGeminiOmni12(
       await forgetOmniCharacters(characterRefs.filter((_, i) => characters!.fromCache[i]), modelKey)
       characters = await resolveOmniCharacterIds(characterRefs, characterMeta)
       run = await submit(buildRequest(characters.ids).input)
+    } else if (isGeminiOmni12ProviderTimeout(err)) {
+      // KIE gave up on its own side (nothing charged): the same request, once more.
+      console.warn(`[KIE.ai] ${logLabel}: the provider timed out on its side; resubmitting once`)
+      run = await submit(input)
     } else {
       throw err
     }
