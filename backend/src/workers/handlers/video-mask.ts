@@ -68,6 +68,7 @@ import {
   type MaskZone,
 } from "../../providers/video/video-mask.js"
 import { mergeRecoveredFace, pickLostFaces, steadyGapLimitFrames, steadyMaskPass, type SteadyPlan } from "../../providers/video/video-mask-steady.js"
+import { reportedMaskTracks, trackMaskRegions, type MaskTrackSeed } from "../../providers/video/video-mask-tracks.js"
 import { maskComposite } from "../../providers/video/mask-composite.js"
 import { eraseMaskVideo, type MaskEraseBoxInput } from "../../providers/video/mask-erase.js"
 import { maskOutlineHandlers } from "./mask-outline.js"
@@ -335,7 +336,7 @@ async function runSteadyPass(rle: readonly string[], s: SteadyPassJob) {
 }
 
 const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
-  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct, zone: rawZone, perShot: rawPerShot, redetectEverySec: rawRedetect, steadyRegions } = job.data as {
+  const { videoUrl, prompt, threshold, provider, holdLastMask, minSubjectHeightPct, maxSubjectHeightPct, zone: rawZone, perShot: rawPerShot, redetectEverySec: rawRedetect, steadyRegions, tracks: wantsTracks } = job.data as {
     jobId: string
     videoUrl: string
     prompt: string
@@ -348,6 +349,7 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
     perShot?: boolean
     redetectEverySec?: number
     steadyRegions?: boolean
+    tracks?: boolean
   }
   // Absent (a job queued before perShot existed) = one pass over the whole clip.
   const perShot = rawPerShot === true
@@ -462,6 +464,11 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
     // model's own mask when no filter ran; a filter ran in place on it, and says for itself what the model matched.
     const emptiedBySteady = steady !== undefined && (filtered?.matched ?? covers(afterFilters)) && !covers(rle)
 
+    // tracks: the mask's regions grouped into one track per subject, as Mask Erase's `eraseTracks` follows them.
+    const tracked = wantsTracks === true
+      ? reportedMaskTracks((await trackMaskRegions(rle, prepared.geometry.width, prepared.geometry.height, cutFrames, steadyGapLimitFrames(prepared.geometry.frameRate))).tracks)
+      : undefined
+
     const maskPath = join(workDir, "mask.mp4")
     const { coveredFraction } = noneLeft || emptiedBySteady
       ? await renderMaskVideo(rle, prepared.geometry, maskPath, { allowEmpty: true })
@@ -490,6 +497,9 @@ const handleVideoMask: HandlerFn = async function handleVideoMask(job, ctx) {
         ...(steady ? { steady: steady.counts } : {}),
         // Size and zone together (a region dropped by both counts once).
         ...(filtered ? { droppedRegions: filtered.droppedRegions } : {}),
+        // Asked for with `tracks`: each subject's frames and its largest box, and the shot starts they were
+        // followed between (what Mask Erase is sent back with `eraseTracks`).
+        ...(tracked ? { tracks: tracked.tracks, tracksOmitted: tracked.omitted, cutFrames } : {}),
         // What made this mask: a mask stored and reused later is out of date once it changes.
         recipe: VIDEO_MASK_RECIPE,
       },
@@ -536,19 +546,22 @@ const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, c
 }
 
 const handleMaskErase: HandlerFn = async function handleMaskErase(job, ctx) {
-  const data = job.data as { jobId: string; maskUrl?: string; erase?: MaskEraseBoxInput[]; keep?: MaskEraseBoxInput[]; eraseAlways?: MaskEraseBoxInput[] }
-  if (!data.maskUrl || !Array.isArray(data.erase) || data.erase.length === 0) {
-    throw new DeterministicJobError("Mask Erase needs a mask video and at least one box.")
+  const data = job.data as { jobId: string; maskUrl?: string; erase?: MaskEraseBoxInput[]; keep?: MaskEraseBoxInput[]; eraseAlways?: MaskEraseBoxInput[]; eraseTracks?: MaskTrackSeed[]; cutFrames?: number[] }
+  // Points naming whole subjects (a track each), dropped on every frame they are on; with them no box is needed.
+  const eraseTracks = Array.isArray(data.eraseTracks) ? data.eraseTracks : []
+  const cutFrames = Array.isArray(data.cutFrames) ? data.cutFrames : []
+  if (!data.maskUrl || !Array.isArray(data.erase) || (data.erase.length === 0 && eraseTracks.length === 0)) {
+    throw new DeterministicJobError("Mask Erase needs a mask video and at least one box or track.")
   }
   // Regions centred in a keep box are never dropped by an erase box (none = every erase box applies);
   // those in an eraseAlways box always are.
   const keep = Array.isArray(data.keep) ? data.keep : []
   const eraseAlways = Array.isArray(data.eraseAlways) ? data.eraseAlways : []
   const lists = keep.length > 0 || eraseAlways.length > 0
-  console.log(`[worker] mask-erase ${ctx.jobId}: ${data.erase.length} box(es)${keep.length > 0 ? `, ${keep.length} kept` : ""}${eraseAlways.length > 0 ? `, ${eraseAlways.length} always` : ""}`)
+  console.log(`[worker] mask-erase ${ctx.jobId}: ${data.erase.length} box(es)${keep.length > 0 ? `, ${keep.length} kept` : ""}${eraseAlways.length > 0 ? `, ${eraseAlways.length} always` : ""}${eraseTracks.length > 0 ? `, ${eraseTracks.length} track seed(s)` : ""}`)
   const workDir = await createWorkDir("mask-erase")
   try {
-    const result = await eraseMaskVideo(data.maskUrl, data.erase, workDir, { keep, eraseAlways })
+    const result = await eraseMaskVideo(data.maskUrl, data.erase, workDir, { keep, eraseAlways, ...(eraseTracks.length > 0 ? { eraseTracks, cutFrames } : {}) })
     await setJobProgress(job, ctx.jobId, 80)
     // Uploaded as it is: a watermark would corrupt the mask.
     await completeFfmpegVideoJob(result.outputPath, ctx, {
@@ -561,6 +574,8 @@ const handleMaskErase: HandlerFn = async function handleMaskErase(job, ctx) {
       kept: result.kept,
       // Said whenever keep or eraseAlways was sent: a worker that predates them never says it.
       ...(lists ? { keptRegions: result.keptRegions } : {}),
+      // Said whenever track seeds were sent: a worker that predates them never says it.
+      ...(result.erasedTracks !== undefined ? { erasedTracks: result.erasedTracks, unmatchedSeeds: result.unmatchedSeeds ?? 0 } : {}),
     })
     console.log(`[worker] mask-erase ${ctx.jobId}: dropped ${result.droppedRegions} region(s) over ${result.frames} frames${result.kept ? "" : " — none left"}`)
   } finally {
