@@ -32,6 +32,8 @@ import { supabase } from "../lib/supabase.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { KEYED_JOB_COLUMNS, keyedJobOf } from "../lib/dedup-fingerprint.js"
 import { creditGuard, reserveCreditsForJob, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { usecaseContinueCover, type UseCaseCover } from "../lib/use-case/pack-cover.js"
+import { WRAPPER_COVERED_BY_KEY } from "../lib/covered-step.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { ensureInlineGraphColumns } from "../lib/execution-inline-graph.js"
@@ -92,7 +94,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
   const FEE_ID = usecaseFeeCreditId(type)
   app.post(
     usecaseContinuePath(type),
-    { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID)] },
+    // A run a podcast pack paid for continues free (lib/use-case/pack-cover.ts): its guard checks 0.
+    { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID, { computeCredits: async (_body, req) => ((await usecaseContinueCover(req, type)).kind === "covered" ? 0 : undefined) })] },
     async (req, reply) => {
       const parsed = usecaseContinueBody.safeParse(req.body)
       if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
@@ -141,10 +144,21 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
       const billingContext = req.billingContext
 
       const webFreeMode = req.webFreeMode === true || (await resolveWebSurfaceFlag(req))
+      // A run its podcast pack paid for continues free, from where it failed or to its Render final:
+      // no fee and no balance check, and its steps hold 0 (the new wrapper names the pack too).
+      let cover: UseCaseCover
+      try {
+        cover = await usecaseContinueCover(req, type)
+      } catch (err) {
+        return sendInternalError(reply, req, err, "Failed to continue the run")
+      }
+      // Its pack held for review (suspected abuse): everything under it stops — refused, never charged in its place.
+      if (cover.kind === "refused") return reply.status(409).send({ error: { code: "pack_under_review", message: cover.message } })
+      const covered = cover.kind === "covered"
       // From-failed: the balance must cover what the run still executes plus
       // the fee it holds, priced on the graph it executes (the earlier run's
       // pin applied) — the run route's whole-run check, for the rest of a run.
-      if (body.mode === "from-failed") {
+      if (body.mode === "from-failed" && !covered) {
         try {
           const cover = await fromFailedCover({
             userId,
@@ -165,7 +179,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
       // Render final: the balance must cover the run, priced on the graph it
       // executes (the earlier run's pin with this run's overrides over it) by
       // the one funnel every Render final quote and run reads.
-      if (body.mode === "render-final") {
+      if (body.mode === "render-final" && !covered) {
         try {
           // The run's plan on its plan node (this quote only), under the reviewer's
           // edit: the final is quoted on the edited cut, as its steps then hold.
@@ -203,7 +217,7 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
       }
 
       // The fee held is the run's own fee, as its first wrapper recorded it.
-      const feeCredits = hasCredits() ? plan.feeCredits : 0
+      const feeCredits = hasCredits() && !covered ? plan.feeCredits : 0
       if (feeCredits > 0) {
         req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false, ...req.creditReservation, creditOverride: feeCredits }
       }
@@ -227,6 +241,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         ...(plan.finalEdit ? { _finalEdit: plan.finalEdit } : {}),
         ...(plan.chainOf ? { _chainOf: plan.chainOf } : {}),
         _feeCredits: feeCredits,
+        // The pack that paid for the run it continues: this run's steps hold 0 too.
+        ...(cover.kind === "covered" ? { [WRAPPER_COVERED_BY_KEY]: cover.packId } : {}),
       }
       // Never `workflow_execution_id`: the wrapper reaches its run only through
       // `input_data._executionId` (and the run's own pointer back).

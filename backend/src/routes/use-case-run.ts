@@ -31,6 +31,9 @@ import { supabase } from "../lib/supabase.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { KEYED_JOB_COLUMNS, keyedJobOf } from "../lib/dedup-fingerprint.js"
 import { creditGuard, reserveCreditsForJob, resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
+import { usecaseRunCover } from "../lib/use-case/pack-cover.js"
+import { podcastPackUnits } from "../lib/use-case/pack-price.js"
+import { WRAPPER_COVERED_BY_KEY } from "../lib/covered-step.js"
 import { isNodeDeniedForUser } from "../lib/availability-viewer.js"
 import { deniedNodeRejectionMessage } from "../lib/surface-deny.js"
 import { ensureInlineGraphColumns } from "../lib/execution-inline-graph.js"
@@ -190,12 +193,28 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
     }
   })
 
-  app.post(d.route, { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID)] }, async (req, reply) => {
+  // A tool a podcast pack paid for (lib/use-case/pack-cover.ts) owes no fee: its guard checks 0.
+  const coveredFee = async (_body: unknown, req: FastifyRequest) => ((await usecaseRunCover(req, type)).kind === "covered" ? 0 : undefined)
+  app.post(d.route, { preHandler: [adoptForwardedPayer, usecaseKeyedRetry(type), creditGuard(() => FEE_ID, { computeCredits: coveredFee })] }, async (req, reply) => {
     const p = await prepared(type, req, reply, { run: true })
     if (!p) return
     const { userId, body, prep } = p
     const internal = isInternal(req)
     const billingContext = req.billingContext
+    // The pack that paid for this run, when the pack route started it: no fee, no balance check, and
+    // every step holds 0 (the run reads the cover from its wrapper). A pack that does not cover it refuses.
+    const cover = await usecaseRunCover(req, type)
+    if (cover.kind === "refused") return reply.status(409).send({ error: { code: "pack_not_covering", message: cover.message } })
+    // A covered run never runs on much more than its pack paid for: its own clock, measured here, within
+    // the pack's units. One unit of slack: the pack and the run measure the recording apart, and a length a
+    // frame either side of a 15-second boundary must never refuse a tool already paid for — the guard is for
+    // a recording far longer than the one priced (a long Master audio), not a frame of drift.
+    if (cover.kind === "covered" && cover.units !== undefined) {
+      const clock = usecaseClockSec(prep.sources)
+      if (typeof clock !== "number" || !(clock > 0) || podcastPackUnits(clock) > cover.units + 1) {
+        return reply.status(409).send({ error: { code: "pack_not_covering", message: "This recording is longer than its pack paid for." } })
+      }
+    }
 
     // The run's spend surface: the balance check, the fee hold and every step
     // of the hidden run reserve under it (false off-credits).
@@ -203,7 +222,9 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
     // The balance must cover the whole run, not just the fee. The quote and
     // the hold are one function: the fee held is the fee quoted.
     let feeCredits = 0
-    if (hasCredits()) {
+    if (hasCredits() && cover.kind === "covered") {
+      req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: false, ...req.creditReservation, creditOverride: 0 }
+    } else if (hasCredits()) {
       const { estimateUseCaseCredits } = await import("../ee/billing/use-case-estimate.js")
       const { CreditsService, DEPLOYMENT_OUT_OF_CREDITS } = await import("../ee/billing/credits.js")
       let estimate: Awaited<ReturnType<typeof estimateUseCaseCredits>>
@@ -242,6 +263,8 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
       // The speakers' names: kept on the job and reported back on its output (`speakers[].name`), never read by the run.
       ...usecaseKeptSpeakerNames(body.speakerNames),
       _feeCredits: feeCredits,
+      // The pack that paid for this run: its steps hold 0, and its continuations are free.
+      ...(cover.kind === "covered" ? { [WRAPPER_COVERED_BY_KEY]: cover.packId } : {}),
     }
     // Never `workflow_execution_id`: the wrapper reaches its run only through
     // `input_data._executionId` (and the run's own pointer back), so job

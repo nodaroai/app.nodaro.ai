@@ -102,9 +102,12 @@ describe("a length-recording job type completes only through the recording funne
     // The direct completion writes in the reconcile lanes, none of which can
     // complete a video generation row: an execution's own status, a LoRA
     // training (a model, its own job), and a transcription (Replicate's whisper
-    // lanes; KIE's Nemotron 3.5 Transcribe, since 2026-11-12).
+    // lanes; KIE's Nemotron 3.5 Transcribe, since 2026-11-12), and a podcast
+    // pack left in progress (its job is its tools' price: no media of its own).
     const direct = reconcileFiles.filter((f) => DIRECT_COMPLETION.test(code(`lib/reconcile/${f}`)))
-    expect(direct.sort()).toEqual(["kie.ts", "replicate.ts", "workflow-executions-cron.ts"])
+    expect(direct.sort()).toEqual(["kie.ts", "podcast-pack-sweep.ts", "replicate.ts", "workflow-executions-cron.ts"])
+    // The pack sweep completes a podcast-pack row only: no video generation row.
+    expect(code("lib/reconcile/podcast-pack-sweep.ts")).toMatch(/\.eq\("provider", PODCAST_PACK_JOB_TYPE\)/)
     // KIE's one direct write is its transcription recovery, reached only for a
     // `transcribe` row (a text result: there is no media to finalize).
     const kie = code("lib/reconcile/kie.ts")

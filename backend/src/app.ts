@@ -92,6 +92,7 @@ import { combineVideosRoutes } from "./routes/combine-videos.js"
 import { applyEdlRoutes } from "./routes/apply-edl.js"
 import { usecaseRunRoutes } from "./routes/use-case-run.js"
 import { usecaseContinueRoutes } from "./routes/use-case-continue.js"
+import { podcastPackRoutes } from "./routes/podcast-pack.js"
 import { imageCollageRoutes } from "./routes/image-collage.js"
 import { imageOverlayRoutes } from "./routes/image-overlay.js"
 import { fontRoutes } from "./routes/fonts.js"
@@ -708,6 +709,7 @@ export async function buildApp() {
   await app.register(applyEdlRoutes)
   await app.register(usecaseRunRoutes)
   await app.register(usecaseContinueRoutes)
+  await app.register(podcastPackRoutes)
   await app.register(imageCollageRoutes)
   await app.register(imageOverlayRoutes)
   await app.register(fontRoutes)

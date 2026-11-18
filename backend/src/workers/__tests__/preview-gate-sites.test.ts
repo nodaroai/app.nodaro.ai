@@ -142,6 +142,9 @@ describe("every enqueue producer answers reviewerPresent", () => {
       ],
       // speaker_layout (its own module, decided 2026-10-17) forwards the caller's own ask, as the verbs above.
       "lib/mcp/tools/verbs-use-case-speaker-layout.ts": [/\.\.\.\(args\.review_before_render === true \? \{ reviewerPresent: true \} : \{\}\),/],
+      // The podcast pack starts its tools with its own caller as their reviewer: a caller from outside
+      // the server is one (as on each tool's own route); inside a run, only as that run says.
+      "lib/use-case/pack-start.ts": [/reviewerPresent: packReviewerPresent\(req, body\),/],
     }
     // A file that calls a use-case route names one: a route literal, or the
     // type's route through the registry. A schema field (`reviewerPresent: z…`)

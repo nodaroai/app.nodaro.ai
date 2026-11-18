@@ -4,6 +4,7 @@ import { dirname } from "node:path"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { config } from "../../lib/config.js"
 import { transcribeLaneKey, transcribeTaskKind } from "../../lib/transcribe-lane-key.js"
+import { packOfStep, sharedTranscript, transcriptShareKey } from "../../lib/pack-transcript-share.js"
 import { settleNemotronTranscribe } from "../../lib/nemotron-transcribe-settle.js"
 import { isNodaroConnected } from "../../lib/nodaro-connect.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
@@ -521,6 +522,14 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
+/** One transcription's output and, when the provider was asked, what it billed. */
+interface Transcribed {
+  readonly outputData: Record<string, unknown>
+  readonly actualCost?: number
+  readonly billedDurationSec?: number
+  readonly billedKieCredits?: number
+}
+
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps, targetLanguage, duration_seconds: durationSec, bucketKey } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean; targetLanguage?: string; duration_seconds?: number; bucketKey?: string }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
@@ -536,75 +545,92 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   // uses, so a host that merely contains a platform's name is a plain file.
   // The YouTube extractor keeps its own lane; every other platform's page goes
   // through the worker's audio download (the engine Suno's cover uses). Both
-  // pass the import gate under the job's confirmation and way in.
-  let audioUrl = rawAudioUrl
-  if (isSocialUrl(audioUrl)) {
-    console.log(`[worker] transcribe ${ctx.jobId}: extracting audio from social video URL`)
-    const rights = importRightsOf(job, ctx)
-    audioUrl = isAllowedSocialVideoUrl(audioUrl, YOUTUBE_HOSTS)
-      ? await extractYouTubeAudio(audioUrl, rights)
-      : await downloadAudioToR2(audioUrl, rights, { scratchJobId: ctx.jobId })
-    await setJobProgress(job, ctx.jobId, 20)
-  }
-
-  // The same three-way ladder as handleTextToSpeech, for the same reason:
-  // transcription calls a vendor client straight from the worker and never
-  // reaches the capability router, so a keyless-but-connected install could
-  // not be rescued by any capability declaration (#761 — the sibling of the
-  // 2026-08-14 TTS incident). Key resolution is per-PROVIDER: elevenlabs-stt
-  // needs ELEVENLABS_API_KEY, Nemotron KIE_API_KEY, the two whisper lanes
-  // REPLICATE_API_TOKEN.
-  //   1. local key for the chosen provider -> local transcribe(), byte-identical
-  //   2. no key, connected -> replay the payload on the cloud (which holds
-  //      keys for BOTH lanes) and take its output verbatim — same code runs
-  //      there, so the shape is the local shape
-  //   3. no key, not connected -> the local path's own shared missing-key error
-  const localKey = transcribeLaneKey(provider)
-  const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
-  let outputData: Record<string, unknown>
-  let actualCost: number | undefined
-  /** Nemotron: the audio's length KIE decoded and billed, and its billed credits — what the run is charged for. */
-  let billedDurationSec: number | undefined
-  let billedKieCredits: number | undefined
-  if (await shouldRunOnCloud(localKey)) {
-    const cloud = await runJobOnCloud("transcribe", { ...(job.data as Record<string, unknown>), audioUrl }, async (p) => {
-      await setJobProgress(job, ctx.jobId, Math.min(90, Math.max(25, Math.round(p))))
-    })
-    // Validate rather than trust — an empty payload from a version-skewed
-    // cloud must fail loudly, not complete with no text (suno-lyrics rule).
-    if (typeof cloud.text !== "string") {
-      throw new Error("nodaro.ai returned no transcription")
+  // pass the import gate under the job's confirmation and way in. The
+  // transcription itself (`produce`): that audio, then the provider.
+  const produce = async (): Promise<Transcribed> => {
+    let audioUrl = rawAudioUrl
+    if (isSocialUrl(audioUrl)) {
+      console.log(`[worker] transcribe ${ctx.jobId}: extracting audio from social video URL`)
+      const rights = importRightsOf(job, ctx)
+      audioUrl = isAllowedSocialVideoUrl(audioUrl, YOUTUBE_HOSTS)
+        ? await extractYouTubeAudio(audioUrl, rights)
+        : await downloadAudioToR2(audioUrl, rights, { scratchJobId: ctx.jobId })
+      await setJobProgress(job, ctx.jobId, 20)
     }
-    outputData = cloud
-  } else {
-    const result = await withProgressRamp(
-      job,
-      ctx.jobId,
-      { start: 25, cap: 90 },
-      () =>
-        transcribe(audioUrl, provider, language, {
-          diarize,
-          tagAudioEvents,
-          wordTimestamps,
-          targetLanguage,
-          durationSec,
-          // Persist the provider's task id (the Replicate prediction on the
-          // whisper paths, the KIE task on Nemotron) so a BullMQ stall-retry
-          // recovers via that provider's reconcile handler instead of
-          // re-billing the transcribe call.
-          onTaskCreated: makeOnTaskCreated(ctx.jobId, transcribeTaskKind(provider)),
-        }),
-    )
-    actualCost = result.cost
-    billedDurationSec = result.billedDurationSec
-    billedKieCredits = result.billedKieCredits
-    outputData = { text: result.text, language: result.language, segments: result.segments }
-    if (result.words) outputData.words = result.words
-    if (result.json) outputData.json = result.json
-    // Nemotron: KIE flags an output that hit its length limit for the audio
-    // (it usually repeats itself). Kept on the result, never dropped silently.
-    if (result.truncated) outputData.truncated = true
+
+    // The same three-way ladder as handleTextToSpeech, for the same reason:
+    // transcription calls a vendor client straight from the worker and never
+    // reaches the capability router, so a keyless-but-connected install could
+    // not be rescued by any capability declaration (#761 — the sibling of the
+    // 2026-08-14 TTS incident). Key resolution is per-PROVIDER: elevenlabs-stt
+    // needs ELEVENLABS_API_KEY, Nemotron KIE_API_KEY, the two whisper lanes
+    // REPLICATE_API_TOKEN.
+    //   1. local key for the chosen provider -> local transcribe(), byte-identical
+    //   2. no key, connected -> replay the payload on the cloud (which holds
+    //      keys for BOTH lanes) and take its output verbatim — same code runs
+    //      there, so the shape is the local shape
+    //   3. no key, not connected -> the local path's own shared missing-key error
+    const localKey = transcribeLaneKey(provider)
+    const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
+    let outputData: Record<string, unknown>
+    let actualCost: number | undefined
+    /** Nemotron: the audio's length KIE decoded and billed, and its billed credits — what the run is charged for. */
+    let billedDurationSec: number | undefined
+    let billedKieCredits: number | undefined
+    if (await shouldRunOnCloud(localKey)) {
+      const cloud = await runJobOnCloud("transcribe", { ...(job.data as Record<string, unknown>), audioUrl }, async (p) => {
+        await setJobProgress(job, ctx.jobId, Math.min(90, Math.max(25, Math.round(p))))
+      })
+      // Validate rather than trust — an empty payload from a version-skewed
+      // cloud must fail loudly, not complete with no text (suno-lyrics rule).
+      if (typeof cloud.text !== "string") {
+        throw new Error("nodaro.ai returned no transcription")
+      }
+      outputData = cloud
+    } else {
+      const result = await withProgressRamp(
+        job,
+        ctx.jobId,
+        { start: 25, cap: 90 },
+        () =>
+          transcribe(audioUrl, provider, language, {
+            diarize,
+            tagAudioEvents,
+            wordTimestamps,
+            targetLanguage,
+            durationSec,
+            // Persist the provider's task id (the Replicate prediction on the
+            // whisper paths, the KIE task on Nemotron) so a BullMQ stall-retry
+            // recovers via that provider's reconcile handler instead of
+            // re-billing the transcribe call.
+            onTaskCreated: makeOnTaskCreated(ctx.jobId, transcribeTaskKind(provider)),
+          }),
+      )
+      actualCost = result.cost
+      billedDurationSec = result.billedDurationSec
+      billedKieCredits = result.billedKieCredits
+      outputData = { text: result.text, language: result.language, segments: result.segments }
+      if (result.words) outputData.words = result.words
+      if (result.json) outputData.json = result.json
+      // Nemotron: KIE flags an output that hit its length limit for the audio
+      // (it usually repeats itself). Kept on the result, never dropped silently.
+      if (result.truncated) outputData.truncated = true
+    }
+    return { outputData, actualCost, billedDurationSec, billedKieCredits }
   }
+  // A step of a podcast pack (lib/covered-step.ts): the pack's tools share one transcription
+  // of the same audio and settings (lib/pack-transcript-share.ts); any other step transcribes itself.
+  const packId = await packOfStep(ctx.usageLogId)
+  let transcribed: Transcribed
+  if (packId) {
+    const key = transcriptShareKey(packId, { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps, targetLanguage })
+    const shared = await sharedTranscript(key, produce, (t) => t.outputData)
+    if (shared.reused) console.log(`[worker] transcribe ${ctx.jobId}: the pack's transcription, already made by another of its tools`)
+    transcribed = shared.reused ? { outputData: shared.output } : shared.produced
+  } else {
+    transcribed = await produce()
+  }
+  const { outputData, actualCost, billedDurationSec, billedKieCredits } = transcribed
   // The `json` output handle is a `Transcript`. Both local paths set it; the
   // cloud relay returns whatever the connected install produced — defensively
   // rebuild it from the shared shape so a version-skewed cloud can't leave the

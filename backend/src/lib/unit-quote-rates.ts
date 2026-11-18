@@ -64,6 +64,7 @@ import { SCAN_PAGE_CREDIT_COSTS } from "@nodaro/shared/social"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { DUBBING_MAX_MINUTES, DUBBING_MODEL_IDENTIFIERS } from "./dubbing-model.js"
 import { VIDEO_UTILITY_JOB_NAMES } from "./video-utility-credits.js"
+import { PODCAST_PACK_RATE_ID } from "./use-case/pack-price.js"
 
 /** The largest unit count a quote id may name: far above any run (a 180-minute render, a 300-second clip in 5-second steps). */
 export const UNIT_QUOTE_MAX_UNITS = 100_000
@@ -140,6 +141,8 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
     rate.rateId,
     { minUnits: MOTION_TRANSFER_MIN_SEC / rate.rateSeconds, maxUnits: MOTION_TRANSFER_MAX_SEC / rate.rateSeconds, wholeUnits: false },
   ] as const),
+  // The podcast pack: every started 15 seconds of the recording, at least one — whole units only.
+  [PODCAST_PACK_RATE_ID, { maxUnits: UNIT_QUOTE_MAX_UNITS, minUnits: 1, wholeUnits: true }] as const,
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.
   ...Object.values(LIP_SYNC_AUDIO_RATES).map(
     (rate) => [rate.rateId, { maxUnits: rate.maxSeconds, minUnits: rate.minSeconds, wholeUnits: true }] as const,

@@ -42,6 +42,9 @@ import type {
   UseCaseRequestOptions,
 } from "./edit-use-case-results.js"
 export type { TightenEpisodeEstimate, TightenEpisodeJobResult, UseCaseContinueInput, UseCaseEstimate, UseCaseJobResult, UseCaseRequestOptions }
+import { podcastPackBody, type PodcastPackEstimate, type PodcastPackInput, type PodcastPackJobResult, type PodcastPackTool, type PodcastPackToolStarted } from "./edit-podcast-pack.js"
+export { PODCAST_PACK_TOOLS } from "./edit-podcast-pack.js"
+export type { PodcastPackDeduped, PodcastPackEstimate, PodcastPackInput, PodcastPackJobResult, PodcastPackNotStarted, PodcastPackOutputData, PodcastPackRecordingField, PodcastPackStarted, PodcastPackTool, PodcastPackToolRun, PodcastPackToolSettings, PodcastPackToolStarted, PodcastPackTools } from "./edit-podcast-pack.js"
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -379,16 +382,20 @@ function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record
  *   captioned by default) in one call; the same connection applies.
  * - {@link speakerLayout} frames a whole recording by speaker (the same
  *   length, nothing cut) in one call; the same connection applies.
+ * - {@link podcastPack} runs several of those tools on one recording, for one
+ *   price by its length; each tool runs as its own run, with its own job.
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
  *
  * Every request method except the estimates ({@link estimateTightenEpisode},
  * {@link estimateEpisodeChapters}, {@link estimateEpisodeTrailer},
- * {@link estimateClipPack}, {@link estimateSpeakerLayout}: a quote, `{ data }`)
+ * {@link estimateClipPack}, {@link estimateSpeakerLayout},
+ * {@link estimatePodcastPack}: a quote, `{ data }`)
  * and {@link editPlanCapabilities} (a read: {@link EditPlanCapabilities}) returns
- * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}); poll the
- * `jobId` with `client.jobs.getStatus(jobId)`.
+ * {@link EditJobResult} (the use-case runs a {@link UseCaseJobResult}, the
+ * pack a {@link PodcastPackJobResult}); poll the `jobId` with
+ * `client.jobs.getStatus(jobId)`.
  */
 export class EditResource {
   constructor(private client: NodaroClientCore) {}
@@ -604,6 +611,40 @@ export class EditResource {
    */
   estimateSpeakerLayout(input: SpeakerLayoutInput): Promise<{ data: UseCaseEstimate }> {
     return withUseCaseBody(() => speakerLayoutBody(input), (body) => this.client.request("POST", "/v1/speaker-layout/estimate", { body }))
+  }
+
+  /**
+   * Podcast pack (`POST /v1/podcast-pack`): run several of the podcast tools
+   * on one recording for one price, every started 15 seconds of the
+   * recording with every chosen tool included. Every tool's own refusals come
+   * first (a refusal's `details.tool` names the tool), before anything is
+   * charged. Answers the pack's job and each tool's (`tools`: the same job
+   * its own method answers), plus the tools that did not start. A tool that
+   * fails is continued free with {@link continueUseCase} (`"from-failed"`).
+   * Quote it first with {@link estimatePodcastPack}.
+   */
+  podcastPack(input: PodcastPackInput, options?: UseCaseRequestOptions): Promise<PodcastPackJobResult> {
+    return withUseCaseBody(() => podcastPackBody(input), (body) => this.client.request("POST", "/v1/podcast-pack", { body, ...idempotencyHeaders(options) }))
+  }
+
+  /**
+   * What a podcast pack is charged (`POST /v1/podcast-pack/estimate`): the
+   * same refusals, then the recording's length, its units and the price.
+   * Nothing is created or charged.
+   */
+  estimatePodcastPack(input: PodcastPackInput): Promise<{ data: PodcastPackEstimate }> {
+    return withUseCaseBody(() => podcastPackBody(input), (body) => this.client.request("POST", "/v1/podcast-pack/estimate", { body }))
+  }
+
+  /**
+   * Start, free, a tool a podcast pack paid for that did not start (`POST
+   * /v1/podcast-pack/:id/start`, the pack's `notStarted`): on the recording and
+   * the settings the pack kept. Once per tool — a tool that already has a run
+   * in its pack is refused (a failed run is continued with `continueUseCase`,
+   * free too); a pack held for review is refused (`pack_under_review`).
+   */
+  startPodcastPackTool(packJobId: string, tool: PodcastPackTool): Promise<PodcastPackToolStarted> {
+    return this.client.request("POST", `/v1/podcast-pack/${encodeURIComponent(packJobId)}/start`, { body: { tool } })
   }
 
   /**

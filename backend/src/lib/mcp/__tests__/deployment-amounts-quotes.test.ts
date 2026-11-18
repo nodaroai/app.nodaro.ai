@@ -132,6 +132,7 @@ const RECAST = {
 const FAILED_JOB_CREDITS = 3833
 const PIPELINE = { spent_credits: 4271, reserved_credits: 2851, upfront_credit_estimate: 7013 }
 const USE_CASE = { totalCredits: 8963, stepsCredits: 7737, feeCredits: 1226, durationSec: 3600 }
+const PODCAST_PACK = { tools: ["tighten-episode", "episode-chapters"], durationSec: 3600, units: 240, credits: 6427 }
 
 /** Each reply and the raw figures it states (each must be there with nothing configured, converted with a unit). */
 const FIGURES: Record<string, readonly number[]> = {
@@ -153,6 +154,7 @@ const FIGURES: Record<string, readonly number[]> = {
   diagnose_run: [FAILED_JOB_CREDITS],
   get_pipeline_status: Object.values(PIPELINE),
   estimate_use_case: [USE_CASE.totalCredits, USE_CASE.stepsCredits, USE_CASE.feeCredits],
+  make_podcast_pack_quote: [PODCAST_PACK.credits],
 }
 /** The refusals for want of balance, and the raw figures a route wrote into them. */
 const REFUSALS: Record<string, readonly number[]> = {
@@ -217,6 +219,7 @@ async function stubRoutes(): Promise<FastifyInstance> {
     worstCaseQuoteItems: [{ label: "worstCase", tool: "generate_video", args: {}, count: 1 }],
   }))
   f.post(usecaseEstimatePath("tighten-episode"), async () => ({ data: USE_CASE }))
+  f.post("/v1/podcast-pack/estimate", async () => ({ data: PODCAST_PACK }))
   await f.ready()
   return f
 }
@@ -269,6 +272,7 @@ async function replies(): Promise<{ text: Record<string, string>; raw: Record<st
   h.tables = {}
   await call("start_pipeline_402", "start_pipeline", { story_prompt: "a cat in space" })
   await call("estimate_use_case", "estimate_use_case", { node_type: "tighten-episode", input: { media_url: "https://cdn.example/ep.mp4" } })
+  await call("make_podcast_pack_quote", "make_podcast_pack", { media_url: "https://cdn.example/ep.mp4", tools: { "tighten-episode": {}, "episode-chapters": {} }, estimate_only: true })
   h.tables = {}
   const text = Object.fromEntries(Object.entries(raw).map(([k, r]) => [k, serialized(r)]))
   return { text, raw }

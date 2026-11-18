@@ -2180,6 +2180,30 @@ Needs `workflows:execute`.
 | `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `make_podcast_pack`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `media_url` | string (URL) |  | The recording (video or audio URL). Or `media_urls`. |
+| `media_urls` | string (URL)[] |  | Instead of media_url: 1–6 recordings of one conversation (cameras; one may be sound only), in order; without master_audio_url, 2+ cameras keep one place for the sound, so up to 5. With 2 or more the run lines them up, works out who is on which camera and cuts to whoever is talking. From 1 to 6 items. |
+| `master_audio_url` | string (URL) |  | The mixer or recorder track: the episode's sound and the clock the recordings are lined up to. Up to 6 recordings in all, this one included. |
+| `cameras` | object |  | With several recordings or a Master audio: the Cameras settings. |
+| `cameras.wide_camera` | integer |  | Which recording (1-based) is the wide shot: shown when a speaker has no camera of their own. From 1 to 6. |
+| `cameras.already_synced` | boolean |  | The recordings already share one clock: skip lining them up. |
+| `cameras.speaker_cameras` | object (map of integer) |  | Who is on which camera: speaker number (1 = the first voice heard) → recording number, 0 = the wide shot. Overrides the automatic map. |
+| `speaker_names` | object (map of string) |  | Speaker label → display name. |
+| `tools` | object | yes | The tools to run, at least one. |
+| `tools.tighten-episode` | object (map of any) |  | tighten_episode's arguments |
+| `tools.episode-chapters` | object (map of any) |  | make_chapters's arguments |
+| `tools.episode-trailer` | object (map of any) |  | make_trailer's arguments |
+| `tools.clip-pack` | object (map of any) |  | make_clip_pack's arguments |
+| `tools.speaker-layout` | object (map of any) |  | speaker_layout's arguments |
+| `estimate_only` | boolean |  | Quote only: nothing is created or charged. |
+| `pack_job_id` | string |  | A pack's job: starts its one tool in `tools` that did not start, free, once. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `make_trailer`
 
 Needs `workflows:execute`.

@@ -9712,10 +9712,10 @@ first, [`withWorkspace`](#clientwithworkspaceworkspaceid) is the second.
 
 ### `client.edit`
 
-Editorial primitives for podcast / long-form video editing. Twelve
+Editorial primitives for podcast / long-form video editing. Thirteen
 request methods return `{ jobId }` (`EditJobResult`) — poll with
-[`client.jobs.getStatus(jobId)`](#getstatusid) — plus five quotes
-(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`), one read
+[`client.jobs.getStatus(jobId)`](#getstatusid) — plus six quotes
+(`estimateTightenEpisode`, `estimateEpisodeChapters`, `estimateEpisodeTrailer`, `estimateClipPack`, `estimateSpeakerLayout`, `estimatePodcastPack`), one read
 (`editPlanCapabilities`) and one pure local helper.
 
 | Method | Endpoint | Notes |
@@ -9737,6 +9737,9 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `estimateClipPack(input)` | `POST /v1/clip-pack/estimate` | What a Clip Pack run is estimated at. Nothing is created or charged. |
 | `speakerLayout(input, options?)` | `POST /v1/speaker-layout` | Speaker Layout: one video recording in (or up to six of one conversation, at most five of them cameras, with an optional Master audio — several need Speaker Map), the whole recording framed by speaker out — the same length, nothing cut — in one call. Core; a self-hosted install needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise). |
 | `estimateSpeakerLayout(input)` | `POST /v1/speaker-layout/estimate` | What a Speaker Layout run is estimated at. Nothing is created or charged. |
+| `podcastPack(input, options?)` | `POST /v1/podcast-pack` | Podcast pack: several of the tools above (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout) on one recording, for one price by the recording's length, every chosen tool included. Each tool runs as its own run, with its own job; a tool that fails is continued free (`continueUseCase`). |
+| `estimatePodcastPack(input)` | `POST /v1/podcast-pack/estimate` | What a podcast pack is charged. Nothing is created or charged. |
+| `startPodcastPackTool(packJobId, tool)` | `POST /v1/podcast-pack/:id/start` | Start, free, a tool a podcast pack paid for that did not start (its `notStarted`), once per tool. |
 | `continueUseCase(input, options?)` | `POST /v1/<type>/continue` (`/v1/tighten-episode/continue`, `/v1/episode-chapters/continue`, `/v1/episode-trailer/continue`, `/v1/clip-pack/continue`, `/v1/speaker-layout/continue`) | Continue a Tighten Episode, Chapters, Trailer, Clip Pack or Speaker Layout run as a new job: from where it failed, or (Tighten Episode, Trailer, Clip Pack, Speaker Layout) its Render final after a review. The route is the run's own type. |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
@@ -10209,6 +10212,85 @@ recording whose length cannot be read at the 180-minute ceiling); a Render
 final (`continueUseCase`) is quoted on the render alone, with no fee. The
 estimate never downloads the recording: it refuses a shape (`media_shape`)
 only when the recording's size is already known; otherwise the run refuses it.
+
+#### `podcastPack(input, options?)` / `estimatePodcastPack(input)`
+
+```ts
+podcastPack(input: PodcastPackInput, options?: { idempotencyKey?: string }): Promise<PodcastPackJobResult>
+estimatePodcastPack(input: PodcastPackInput): Promise<{ data: PodcastPackEstimate }>
+```
+
+Run several of the podcast tools on one recording for one price: 22 credits<!-- credits: podcast-pack:per-15s -->
+per started 15 seconds of the recording, every chosen tool included, with no
+per-run fee and nothing charged for a tool's steps. An 8:32 recording is 35
+units: 770 credits<!-- credits: podcast-pack:per-15s:35u -->, whichever tools you choose. Each tool then runs
+as its own run, followed by its own job (the same job its own method
+answers); the tools share one transcription of the recording. Every tool
+keeps its own rules, the nodaro.ai connection a self-hosted install needs
+included.
+
+**`PodcastPackInput`** (with `UseCaseRecordingsInput`, its recordings, as on `tightenEpisode`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mediaUrl` | `string` | `mediaUrl` or `mediaUrls` | The recording, sent once for every tool — a video or audio URL, up to 3 hours. Sent as `mediaUrls: [mediaUrl]`. |
+| `mediaUrls`, `masterAudioUrl`, `cameras` | | no | Several recordings of one conversation (up to six), as on `tightenEpisode`. **Needs Speaker Map.** Passed to the tools that take them; Chapters takes one recording, so a pack of several with `"episode-chapters"` is refused. |
+| `tools` | `PodcastPackTools` | yes | The tools to run, keyed by type: `"tighten-episode"`, `"episode-chapters"`, `"episode-trailer"`, `"clip-pack"`, `"speaker-layout"` (listed in `PODCAST_PACK_TOOLS`, in the order the pack starts them). Each value is that tool's settings, exactly what its own method takes without the recording fields (`PodcastPackToolSettings`: for Clip Pack, `Omit<ClipPackInput, PodcastPackRecordingField>`); `{}` takes the tool's defaults. At least one: an empty object is refused `400 validation_error`. |
+| `speakerNames` | `Record<string, string>` | no | Speaker label → the name to show, as on `tightenEpisode`; passed only to the tools that take it (Tighten Episode, Speaker Layout). |
+| `workflowId`, `nodeId` | `string` | no | A workflow (its id) and a node on it, to tie the pack's job and its tools' runs to. |
+
+`podcastPack` answers `PodcastPackJobResult` — `{ jobId, tools: [{ tool, jobId, executionId }], notStarted?, durationSec, units }`.
+`jobId` is the pack's own job: it completes once its tools have started, and
+its `output_data` holds the same `{ tools, notStarted?, durationSec, units }`
+(`PodcastPackOutputData`). Follow each tool's `jobId` as you would its own
+run. `notStarted` lists the tools that did not start, each with its `error`
+(`{ code, message, tool }`); the pack keeps its charge for the ones that did.
+A tool that fails is continued free with `continueUseCase`
+(`mode: "from-failed"`, its own `jobId`) until it succeeds, and a review-on tool's
+Render final is free too; a later pack, or a tool run on its own, is charged
+anew. `options.idempotencyKey` works as on `tightenEpisode`: a retry with the
+same key answers `{ jobId, deduped: true }` (`PodcastPackDeduped`), the pack
+already started; its tools are on that job's `output_data`.
+
+Both methods refuse before anything is created or charged:
+`400 validation_error` for the body, then each chosen tool's own refusals with
+that tool's status and code (the error's `details.tool` names the tool), then
+`422 media_unreadable` when the recording's length cannot be read. `podcastPack`
+also refuses `402 insufficient_credits` when the balance is short, and `409`
+with the first tool's error when no tool could start (that pack is refunded).
+Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
+`TypeError` before any request.
+
+`estimatePodcastPack` answers `{ data: { tools, durationSec, units, credits } }`
+(`PodcastPackEstimate`): the tools it would run, the recording's length, its
+units and the pack's price (`0` on an edition without credits, `null` when the
+server has no price for it).
+
+`startPodcastPackTool(packJobId, tool)` starts, free, a tool the pack paid for
+that did not start (one listed in the pack's `notStarted`), on the recording
+and settings the pack kept, and answers `PodcastPackToolStarted` (`{ jobId,
+executionId, tool }`, the tool's run to follow). Once per tool: a tool that
+already has a run in its pack is refused with `409` (a failed run is continued
+with `continueUseCase`, free too). A pack held for review stops everything
+under it: its tools are stopped, and starting or continuing one is refused
+with `409` `pack_under_review`. The pack's own job cannot be cancelled; each
+tool's job can.
+
+```ts
+const input = {
+  mediaUrl: "https://cdn.example.com/episode-42.mp4",
+  tools: { "tighten-episode": {}, "clip-pack": { count: 5 } },
+}
+const { data: quote } = await client.edit.estimatePodcastPack(input)
+console.log(`${quote.units} units: ${quote.credits} credits`)
+
+const pack = await client.edit.podcastPack(input, { idempotencyKey: "episode-42-pack" })
+if (!pack.deduped) {
+  for (const run of pack.tools) console.log(run.tool, run.jobId) // follow each with client.jobs.getStatus(run.jobId)
+}
+// A tool whose job failed re-runs free from where it stopped:
+// await client.edit.continueUseCase({ jobId: run.jobId, mode: "from-failed", nodeType: run.tool })
+```
 
 #### `continueUseCase(input, options?)`
 

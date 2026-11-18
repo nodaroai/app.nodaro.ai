@@ -3035,6 +3035,8 @@ async function executeWorkerNode(
         billingContext: ctx.billingContext,
         // The free-credit video limits judge what this node will generate.
         video: freeVideoRequestForJob(jobName, reserveModelIdentifier, payload as Record<string, unknown>),
+        // A step a pack paid for (lib/covered-step.ts): only what refuses the model is asked.
+        ...(ctx.coveredBy ? { covered: true } : {}),
       })
       if (!preflight.allowed) {
         // B15: a metered hold the balance cannot cover says how much the node
@@ -3058,6 +3060,8 @@ async function executeWorkerNode(
           isAppRun: ctx.isAppRun,
           creditOverride,
           webFreeMode: ctx.webFreeMode ?? false,
+          // …and it holds 0 credits, its usage log naming the pack and its own price.
+          ...(ctx.coveredBy ? { covered: ctx.coveredBy } : {}),
         },
       ).catch((err: unknown) => {
         // B15: the balance moved between the preflight and the reserve — the

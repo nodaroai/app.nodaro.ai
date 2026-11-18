@@ -89,6 +89,7 @@ import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { continuationRootOf, pinRunRoot } from "../lib/continuation-run-root.js"
 import { loadInlineGraph } from "../lib/execution-inline-graph.js"
+import { wrapperCoverOf } from "../lib/covered-step.js"
 import { finalizeUseCaseWrapper } from "../lib/use-case/finalize-wrapper.js"
 import { markExecutionCancelled } from "./orchestrator-cancel.js"
 import { mirrorUseCaseProgress } from "../lib/use-case/progress.js"
@@ -695,6 +696,27 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       ctx.workflowOwnerId = userId
       ctx.triesEvery = usecaseTriesEvery(inline)
       inlineGraphHash = inline.hash
+      // A tool of a podcast pack: its steps are paid for (lib/covered-step.ts). An unreadable
+      // cover fails the run rather than charging the steps a pack already paid for.
+      if (job.data.wrapperJobId) {
+        try {
+          const cover = await wrapperCoverOf(job.data.wrapperJobId, userId)
+          if (cover.kind === "void") {
+            // Its pack did not go ahead, or is held for review: the run neither runs free nor is charged in its place.
+            await failExecution(
+              executionId,
+              cover.reason === "held"
+                ? "The pack this run belongs to is under review, so this run was stopped."
+                : "The pack this run belongs to did not go ahead, so this run was stopped.",
+            )
+            return
+          }
+          if (cover.kind === "covered") ctx.coveredBy = cover.packId
+        } catch (err) {
+          await failExecution(executionId, (err as Error).message)
+          return
+        }
+      }
     }
 
     if (appVersionId) {

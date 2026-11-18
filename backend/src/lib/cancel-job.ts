@@ -22,6 +22,7 @@ import { supabase } from "./supabase.js"
 import { tryRemoveFromQueue } from "./queue.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
 import { BACKGROUND_SCRAPE_JOB_TYPES } from "./background-scrape/job-types.js"
+import { PODCAST_PACK_JOB_TYPE } from "./use-case/pack-job-type.js"
 
 export type CancelOwnedJobResult =
   | { kind: "not_found" }
@@ -434,6 +435,9 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   if (!(CANCELLABLE_STATUSES as readonly string[]).includes(job.status)) {
     return { kind: "invalid_status", status: job.status as string }
   }
+  // A podcast pack's job holds the price of tools it may already have started (lib/use-case/pack-cover.ts):
+  // cancelling it would refund a pack whose tools run on. Its tools are cancelled on their own jobs.
+  if (job.provider === PODCAST_PACK_JOB_TYPE) return { kind: "in_flight" }
   const input = (job.input_data ?? null) as Record<string, unknown> | null
   const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
 

@@ -1,6 +1,7 @@
 import { USE_CASE_NODE_TYPES, usecaseContinuePath, usecaseDescriptor } from "@nodaro/render-rules"
 import type { WorldId } from "@nodaro/shared/runtime-config"
 import { FILM_PIPELINE_FEATURE } from "../availability-override.js"
+import { PODCAST_PACK_TOOLS } from "../use-case/pack-price.js"
 
 /**
  * What every MCP tool needs from what a deployment offers (decided
@@ -300,6 +301,8 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   speaker_layout: runs("/v1/speaker-layout"),
   continue_use_case: { routes: USE_CASE_CONTINUE_ROUTES, fromRegistry: true },
   estimate_use_case: { routes: USE_CASE_RUN_ROUTES, fromRegistry: true },
+  // A pack runs the tools its body names (lib/route-node-gate.ts): offered while any of them is.
+  make_podcast_pack: runs(...PODCAST_PACK_TOOLS.map((t) => ({ route: "/v1/podcast-pack", body: { tools: { [t]: {} } } }))),
 
   // ── Audio ───────────────────────────────────────────────────────────────
   generate_music: runs("/v1/generate-music", "/v1/suno/generate"),

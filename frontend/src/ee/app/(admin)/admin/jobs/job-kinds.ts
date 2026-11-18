@@ -122,6 +122,7 @@ export const OTHER_JOB_TYPES: ReadonlySet<string> = composeSet("OTHER_JOB_TYPES"
   "edit-plan", // an edit decision list (JSON)
   "camera-switch", // a switched edit decision list (JSON)
   "use-case-fee", // a use-case node's per-run fee alone (Edit with AI built the result in the editor)
+  "podcast-pack", // a podcast pack's price: its tools run as their own jobs; makes no media
   "speaker-frames", // a face-track file (JSON)
   "character-lora-training", // trains a character model; makes no media
 ]), UNIT_NODE_DEFINITIONS.filter((u) => u.execution.kind === "worker" && nodeKindOf(u.type) === null).map((u) => u.type))

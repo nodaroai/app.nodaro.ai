@@ -909,6 +909,26 @@ describe("commitJobCredits", () => {
   //    reserved tier. Before this branch existed, the 12 fell through to the
   //    reserved-tier `else` and the per-speaker scaling was silently dropped. ──
 
+  // A covered step (lib/covered-step.ts): its podcast pack paid for it. Neither measured branch
+  // charges it or files an anomaly; it commits its 0 hold and the job reads 0 credits.
+  it("a covered step's count-based actual commits 0, records 0, files no anomaly", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({ data: { credits_used: 0, user_id: "u", action: "speaker-view", provider: "reserved", metadata: { covered: { by: "pack-1", credits: 40 } } }, error: null })
+    await commitJobCredits("u1", "job1", null, 12, true)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 0)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: 0 })
+    expect(mocks.mockCheckAndLogAnomaly).not.toHaveBeenCalled()
+  })
+
+  it("a covered step's provider-metered actual commits 0, records 0, files no anomaly", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({ data: { credits_used: 0, user_id: "u", action: "transcribe", provider: "reserved", metadata: { covered: { by: "pack-1", credits: 9 } } }, error: null })
+    await commitJobCredits("u1", "job1", 0.4, 0, true)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 0)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: 0 })
+    expect(mocks.mockCheckAndLogAnomaly).not.toHaveBeenCalled()
+  })
+
   it("commits the count-based actual POST-markup (25%) when metered with no provider cost", async () => {
     mocks.mockMarkupPercent.value = 25
     await commitJobCredits("u1", "job1", null, 12, true)

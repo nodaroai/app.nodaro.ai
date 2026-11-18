@@ -44,6 +44,11 @@ export const m = {
   measure: vi.fn(),
   limited: false,
   limitCalls: 0,
+  // The pack job a covered run names (lib/use-case/pack-cover.ts), as an owner-scoped read finds it.
+  packRow: null as Record<string, unknown> | null,
+  packReads: [] as Array<[string, unknown]>,
+  /** The runs a pack already has for the tool (lib/use-case/pack-cover.ts packToolHasRun). */
+  packRuns: [] as Array<{ id: string }>,
 }
 vi.mock("@/lib/dedup-fingerprint.js", async (orig) => ({
   ...(await orig<typeof import("@/lib/dedup-fingerprint.js")>()),
@@ -113,6 +118,17 @@ vi.mock("@/services/use-case-execution.js", async (orig) => ({
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: () => ({
+      select: () => {
+        const chain = {
+          eq: (col: string, val: unknown) => {
+            m.packReads.push([col, val])
+            return chain
+          },
+          maybeSingle: async () => ({ data: m.packRow, error: null }),
+          limit: async () => ({ data: m.packRuns, error: null }),
+        }
+        return chain
+      },
       update: (row: unknown) => ({
         eq: () => ({
           // The stamp is filtered by the wrapper's owner as well as its id.
@@ -157,7 +173,7 @@ beforeEach(() => {
   Object.assign(m, {
     credits: true, denied: false, deniedTypes: [], absent: false, authKind: "jwt", prepared: ok(), preflight: null, cover: { ok: true },
     coverArgs: [], estimateCalls: 0, estimatedTypes: [], estimateThrows: null, reserveSeen: [], existingByKey: null, keyLookups: [], payer: undefined, stampThrows: false, guard: "pass", guardCalls: 0,
-    limited: false, limitCalls: 0,
+    limited: false, limitCalls: 0, packRow: null, packReads: [], packRuns: [],
   })
   m.peek.mockReset().mockResolvedValue(null)
   m.measure.mockReset().mockResolvedValue({ durationMs: 3_600_000, width: 1920, height: 1080 })

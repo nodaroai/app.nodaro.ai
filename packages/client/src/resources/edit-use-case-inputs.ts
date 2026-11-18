@@ -260,10 +260,11 @@ export interface SpeakerLayoutInput extends UseCaseRecordingsInput {
 /**
  * The body's recordings (`mediaUrls`, then `masterAudioUrl` and `cameras` when
  * given), and the rest of the input as it came: the one mapper every use-case
- * body goes through. Throws before any request when the input names both
- * `mediaUrl` and `mediaUrls`, or neither.
+ * body goes through (the podcast pack's too, edit-podcast-pack.ts). Throws
+ * before any request when the input names both `mediaUrl` and `mediaUrls`, or
+ * neither.
  */
-function withRecordings<T extends UseCaseRecordingsInput>(input: T): Record<string, unknown> {
+export function withRecordings<T extends UseCaseRecordingsInput>(input: T): Record<string, unknown> {
   const { mediaUrl, mediaUrls, masterAudioUrl, cameras, ...rest } = input
   if (mediaUrl !== undefined && mediaUrls !== undefined) throw new TypeError("pass mediaUrl or mediaUrls, not both")
   const recordings = mediaUrls ?? (mediaUrl !== undefined ? [mediaUrl] : undefined)

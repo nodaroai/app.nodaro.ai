@@ -1056,6 +1056,13 @@ export interface OrchestratorContext {
    *  resolves downstream (credits layer / RPC self-gate); free users and
    *  subscribers are unaffected, so the flag threads unconditionally. */
   webFreeMode?: boolean
+  /**
+   * The podcast pack that paid for this run (lib/covered-step.ts): every step
+   * reserves and settles 0 credits. Read at pickup from the use-case run's
+   * wrapper job (`input_data._coveredBy`), never from the queue payload, so a
+   * run picked up again is still covered. Absent for every other run.
+   */
+  coveredBy?: string
   /** Copied from the job at pickup — see WorkflowExecutionJob.cheapLanesOnly.
    *  Inline sub-workflows share this context; a component's inner run is a
    *  new job, so the component dispatch sends it across the HTTP hop. */

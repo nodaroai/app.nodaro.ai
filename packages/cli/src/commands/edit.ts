@@ -19,6 +19,7 @@ import { dim, emit, success, warn } from "../output.js"
 import { reportQueuedJob, collectVariadic } from "../util.js"
 import { readJsonFile, refuseUnknownPlanTier, type GlobalOpts, type WatchOpts } from "./edit-shared.js"
 import { registerUseCaseCommands } from "./edit-use-case.js"
+import { registerPodcastPackCommand, registerPodcastPackStartCommand } from "./edit-podcast-pack.js"
 
 /** Who answered `edit capabilities`, in words (a newer server's value is printed as it is). */
 const CAPABILITIES_SOURCE: Readonly<Record<string, string>> = {
@@ -269,6 +270,8 @@ export function editCommand(): Command {
     )
 
   registerUseCaseCommands(cmd)
+  registerPodcastPackCommand(cmd)
+  registerPodcastPackStartCommand(cmd)
 
   // ── plan (edit-plan) ──────────────────────────────────────────────────────
   cmd
