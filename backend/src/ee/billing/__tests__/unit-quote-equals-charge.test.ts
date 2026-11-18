@@ -80,6 +80,7 @@ import { topazVideoHoldBaseCredits } from "../../../lib/topaz-video-plan.js"
 import { nodaroVideoUpscaleBaseCredits } from "../../../lib/nodaro-video-upscale-plan.js"
 import { isNodaroVideoUpscaleCreditId, isSeedanceExtendRateCreditId, NODARO_VIDEO_UPSCALE_RATE_SECONDS } from "@nodaro/render-rules"
 import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, parseRateQuoteCreditId } from "../../../lib/unit-quote-rates.js"
+import { motionTransferRateBaseCredits } from "../../../lib/motion-transfer-input.js"
 import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
 import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
 
@@ -154,6 +155,10 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       // routes/lip-sync.ts computeCredits and the workflow run's computeLipSyncRateCreditOverride:
       // the model's per-second row × the billed seconds of the measured audio.
       return lipSyncRateBaseCredits(lipSyncAudioRateOf("omnihuman-2-0")!, units)
+    case "motion-transfer":
+      // routes/motion-transfer.ts computeCredits and the workflow run's computeMotionTransferRateCreditOverride
+      // (lib/motion-transfer-input.ts): the four-second row × the billed seconds of the measured video ÷ 4.
+      return (await motionTransferRateBaseCredits("kling-3.0", "720p", units * 4))!
     default:
       throw new Error(`no route rule for ${nodeType} — add one with its case`)
   }

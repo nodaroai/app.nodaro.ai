@@ -19,7 +19,8 @@
  * per-second lip-sync rate (`LIP_SYNC_AUDIO_RATES`: whole seconds, from the
  * model's minimum to its maximum — OmniHuman 2.0's 4 to 300), the Nodaro
  * Video Upscale tiers' four-second rows (a quarter-unit per billed second),
- * and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
+ * Motion Transfer's per-second rows (a quarter-unit per billed second of the
+ * driving video), and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
  * added). A
  * speech request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
@@ -32,6 +33,9 @@
  */
 import {
   LIP_SYNC_AUDIO_RATES,
+  MOTION_TRANSFER_MAX_SEC,
+  MOTION_TRANSFER_MIN_SEC,
+  MOTION_TRANSFER_SECOND_RATES,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
   VIDEO_OVERLAY_PRICING,
@@ -129,6 +133,13 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
   // A brand's or a topic's scan: whole Social Search pages.
   ...Object.keys(SCAN_PAGE_CREDIT_COSTS).map((id) => [id, SCAN_PAGES] as const),
+  // Motion Transfer at a per-second rate (Kling 3.0 at 720p): each row prices
+  // four seconds, so a run is a quarter-unit per billed second of its driving
+  // video, from the shortest video a run takes to the longest.
+  ...Object.values(MOTION_TRANSFER_SECOND_RATES).map((rate) => [
+    rate.rateId,
+    { minUnits: MOTION_TRANSFER_MIN_SEC / rate.rateSeconds, maxUnits: MOTION_TRANSFER_MAX_SEC / rate.rateSeconds, wholeUnits: false },
+  ] as const),
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.
   ...Object.values(LIP_SYNC_AUDIO_RATES).map(
     (rate) => [rate.rateId, { maxUnits: rate.maxSeconds, minUnits: rate.minSeconds, wholeUnits: true }] as const,

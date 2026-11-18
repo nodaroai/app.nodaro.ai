@@ -997,10 +997,36 @@ describe("CreditsService", () => {
       ])).toBe(270) // base (wan-t2v)
     })
 
-    it("resolves motion-transfer kling-3.0 1080p 5s", () => {
+    // Decided 2026-11-18: the node's own `videoDuration` is never read for the
+    // price. With no driving video the graph knows, the estimate quotes the
+    // most the run can be charged for its orientation (10 s keeping the image's,
+    // 30 s following the video's).
+    it("resolves motion-transfer kling-3.0 1080p with no known video at its orientation's limit, ignoring a declared 5s", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p", videoDuration: 5 } },
-      ])).toBe(250) // base (kling-3.0-motion:1080p:5s)
+      ])).toBe(500) // base (kling-3.0-motion:1080p:10s)
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p", characterOrientation: "video", videoDuration: 5 } },
+      ])).toBe(1500) // base (kling-3.0-motion:1080p:30s)
+    })
+
+    it("resolves motion-transfer from the wired driving video's length, never the node's", () => {
+      const upload = (sec: number) => ({ id: "v", type: "upload-video", data: { url: "https://m.test/dance.mp4", videoDurationSec: sec, duration: sec } })
+      const wire = [{ source: "v", target: "x", targetHandle: "video" }]
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { id: "x", type: "motion-transfer", data: { provider: "kling", resolution: "720p", characterOrientation: "video", videoDuration: 4 } },
+        upload(12),
+      ], wire)).toBe(230) // base (motion-transfer:15s)
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { id: "x", type: "motion-transfer", data: { provider: "kling-3.0", resolution: "720p", characterOrientation: "image", videoDuration: 3 } },
+        upload(9.4),
+      ], wire)).toBe(570) // ceil(228 × 10 / 4)
+    })
+
+    it("resolves motion-transfer kling-3.0 720p per second: no known video quotes the orientation's limit", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "720p", videoDuration: 1 } },
+      ])).toBe(570) // ceil(228 × 10 / 4)
     })
 
     it("resolves motion-transfer wan-animate-move 720p", () => {

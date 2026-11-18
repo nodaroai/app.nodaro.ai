@@ -36,7 +36,7 @@ import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
 import { seedanceHdQuoteIdFor } from "@/lib/seedance-hd-quote"
-import { lipSyncQuoteIsEstimate, nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
+import { lipSyncQuoteIsEstimate, motionTransferQuote, nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { tx } from "@/lib/i18n"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
@@ -171,6 +171,9 @@ function isMeteredEstimate(
   // A Lip Sync charged per second of its audio, quoted before its audio's length is known
   // (15 s): an estimate — the run measures the audio and holds what it costs.
   if (node.type === "lip-sync") return lipSyncQuoteIsEstimate(node, allNodes, edges, rerunIds)
+  // A Motion Transfer whose driving video's length the graph does not know is quoted at the most
+  // its orientation runs (10 s / 30 s): an estimate — the run measures the video before it holds anything.
+  if (node.type === "motion-transfer") return !motionTransferQuote(node, allNodes, edges, rerunIds).lengthKnown
   if (!llmNodePriceIds(node)) return false
   const id = getModelIdentifier(node, edges, allNodes, rerunIds)
   return isModelEstimate(id) && cachedCost(id) !== undefined

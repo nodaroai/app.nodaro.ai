@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { creditHint, creditLadderHint, lipSyncPriceSuffix } from "./_credit-hint.js"
+import { creditHint, creditLadderHint, lipSyncPriceSuffix, motionTransferPriceHint } from "./_credit-hint.js"
 import { unitFields } from "../amounts.js"
 import { MAX_LIP_SYNC_AUDIO_SEC } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
@@ -2689,28 +2689,21 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Motion Transfer",
       description:
-        "Transfer the motion from a driver video onto a character image. " +
-        "Provide BOTH a character (image_url / image_asset_id) AND a driver " +
-        "video (video_url / video_asset_id). Optionally describe the desired " +
-        "result via `prompt`.\n\n" +
-        "**Provider**: default `kling` (KIE). Resolution lever 480p / 580p / " +
-        "720p / 1080p (default 720p). `character_orientation` controls " +
-        "whether the image's pose or the video's pose drives framing " +
-        "(default `image`).",
+        "Drive a character image (image_url / image_asset_id) with the motion of a " +
+        "driver video (video_url / video_asset_id); `prompt` optional. Default " +
+        "provider `kling`; resolution 480p-1080p (default 720p); " +
+        "`character_orientation` `image` (default) or `video` picks whose pose " +
+        "frames it. The server measures the driver video and prices from it: 3 s " +
+        "to 10 s (30 s with `video`, or on Wan Animate), else refused uncharged. " +
+        motionTransferPriceHint(),
       inputSchema: {
         image_url: z.string().url().optional(),
         image_asset_id: z.string().optional(),
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
         prompt: z.string().max(8000).optional(),
-        character_orientation: z
-          .enum(["image", "video"])
-          .optional()
-          .describe("Which source's framing wins. Default `image`."),
-        resolution: z
-          .enum(["480p", "580p", "720p", "1080p"])
-          .optional()
-          .describe("Output resolution. Default 720p."),
+        character_orientation: z.enum(["image", "video"]).optional(),
+        resolution: z.enum(["480p", "580p", "720p", "1080p"]).optional(),
         provider: z
           .string()
           .optional()
@@ -2724,7 +2717,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .min(1)
           .max(60)
           .optional()
-          .describe("Output duration in seconds. Provider-dependent."),
+          .describe("Ignored: the driver video is measured."),
       },
       outputSchema: {
         jobId: z.string(),
@@ -2809,7 +2802,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         resolution,
         characterOrientation: args.character_orientation ?? "image",
         ...(args.background_source ? { backgroundSource: args.background_source } : {}),
-        ...(args.video_duration !== undefined ? { videoDuration: args.video_duration } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

@@ -116,6 +116,7 @@ import { stampVideoUtilityLength, videoUtilityMeasuredBaseCredits, videoUtilityR
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { aiAvatarReserveId, stampAiAvatarAudioLength } from "../../lib/ai-avatar-audio-length.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
+import { motionTransferReserveId, motionTransferStampedBaseCredits, stampMotionTransferInput } from "../../lib/motion-transfer-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
 import { stampAddCaptionsNemotronInput, addCaptionsNemotronReserveId } from "../../lib/add-captions-nemotron.js"
@@ -1766,6 +1767,24 @@ export async function computeLipSyncRateCreditOverride(
 }
 
 /**
+ * Motion Transfer on a model and size charged per second of its driving video
+ * (Kling 3.0 at 720p) is priced at its four-second row × the billed seconds
+ * `stampMotionTransferInput` measured ÷ 4, rounded up once, marked up once at
+ * the row — what the route's guard holds for the same video. Undefined for
+ * every other job and for a run priced by a tier row (its stamped row prices it).
+ */
+export async function computeMotionTransferRateCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  reserveId: string,
+): Promise<number | undefined> {
+  const base = await motionTransferStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), reserveId)
+}
+
+/**
  * LTX 2.3 Pro Retake is priced per second of the replaced window. The workflow
  * run reserves what the route's guard charges for the same request — the
  * per-second row times the window the payload sends (lib/ltx-retake-credits.ts)
@@ -2567,6 +2586,19 @@ async function executeWorkerNode(
     err.errorCode = lipSyncRefusal.code
     throw err
   }
+  // Motion Transfer: the route's own rule — measure the driving video, refuse
+  // one the model cannot take (under 3 s, past its limit, unreadable) and stamp
+  // the measured length, the billed seconds and the row it reserves — before
+  // input_data is written and before anything is reserved. Every edition: the
+  // length a node carried is never what the run is priced on. A refusal leaves
+  // no jobs row.
+  const motionRefusal = await stampMotionTransferInput(jobName, payload)
+  if (motionRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(motionRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = motionRefusal.code
+    throw err
+  }
   // Video Mask: the same — measure the clip by the route's rule and stamp the
   // price row before input_data is written; a clip the route refuses (unreadable,
   // over the cap) leaves no jobs row.
@@ -2951,6 +2983,8 @@ async function executeWorkerNode(
         // Nodaro Image Upscale: the tier stamped from its output's size, else the hold.
         nodaroImageUpscaleReserveId(jobName, payload) ??
         videoDepthReserveId(jobName, payload) ??
+        // Motion Transfer: the row of the driving video `stampMotionTransferInput` measured above.
+        motionTransferReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
         nemotronTranscribeReserveId(jobName, payload) ??
         addCaptionsNemotronReserveId(jobName, payload) ??
@@ -2980,6 +3014,7 @@ async function executeWorkerNode(
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeSeedanceExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLipSyncRateCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeMotionTransferRateCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??

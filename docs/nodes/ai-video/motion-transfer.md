@@ -25,10 +25,29 @@ The Motion Transfer node takes motion from a reference video and applies it to a
 
 **Outputs:**
 - Generated video with transferred motion
+## Motion video length
+
+The server measures the motion video before anything is charged, and every price below is read from that measured length. A length you send (the API's `videoDuration`, MCP's `video_duration`, or a length stored on the node) is accepted for older clients and ignored.
+
+The motion video must be between 3 seconds and the model's limit:
+
+| Model | Character orientation `image` (the default) | Character orientation `video` |
+|-------|---------------------------------------------|-------------------------------|
+| Kling 2.6, Kling 3.0 | up to 10 s | up to 30 s |
+| Wan Animate Move / Replace | up to 30 s | up to 30 s |
+
+A video up to 0.05 seconds past the limit is accepted and priced at the limit. Anything else is refused before any credits are held, and no job is created:
+
+- shorter than 3 seconds: `video_too_short` (400), "Motion Transfer needs a motion video of at least 3 seconds";
+- longer than the limit: `video_too_long` (400), naming the limit and asking you to trim the video first;
+- a video that cannot be read: `video_unreadable` (400), "The motion video could not be read".
+
+The measured length is billed in whole seconds, rounded up, with the first 0.05 seconds past a whole second forgiven: 6.2 s is billed as 7 s, 10.04 s as 10 s.
+
 ## Supported Providers
 
-- **Kling 2.6** — Standard motion transfer, 720p/1080p, 5-30s
-- **Kling 3.0** — Premium quality, background source control
+- **Kling 2.6** — Standard motion transfer, 720p/1080p, 3-30s
+- **Kling 3.0** — Premium quality, background source control, 3-30s
 - **Wan Animate Move** (`wan-animate-move`) — Lightweight option, 480p / 580p / 720p
 - **Wan Animate Replace** (`wan-animate-replace`) — Lightweight option, replaces character in motion video, 480p / 580p / 720p
 
@@ -49,23 +68,36 @@ Worked examples:
 - Wan Animate Move at 580p: 363 credits<!-- credits: wan-animate-move:580p -->.
 - Wan Animate Replace at 1080p: runs at 720p, 451 credits<!-- credits: wan-animate-replace:720p -->.
 
-**Kling 2.6 and Kling 3.0** are priced by the length of the motion video, rounded down to whole seconds, in tiers (up to 5 s, up to 10 s, up to 15 s, and longer at the 30 s price; 10 s when the length is not known), and by size (1080p, or 720p for any other size):
+**Kling 3.0 at 720p** (and any size Kling runs as 720p: 480p, 580p, or none) is charged per second of the measured motion video. Its price row is the price of four seconds; a run is that row × the billed seconds ÷ 4, rounded up once. The hold is the charge: nothing is settled after the run.
 
-| Length | Kling 2.6, 720p | Kling 2.6, 1080p | Kling 3.0, 720p | Kling 3.0, 1080p |
-|--------|-----------------|------------------|-----------------|------------------|
-| up to 5 s | 88 credits<!-- credits: motion-transfer:5s --> | 132 credits<!-- credits: motion-transfer:1080p:5s --> | 165 credits<!-- credits: kling-3.0-motion:5s --> | 275 credits<!-- credits: kling-3.0-motion:1080p:5s --> |
-| up to 10 s | 165 credits<!-- credits: motion-transfer:10s --> | 253 credits<!-- credits: motion-transfer:1080p:10s --> | 330 credits<!-- credits: kling-3.0-motion:10s --> | 550 credits<!-- credits: kling-3.0-motion:1080p:10s --> |
-| up to 15 s | 253 credits<!-- credits: motion-transfer:15s --> | 374 credits<!-- credits: motion-transfer:1080p:15s --> | 495 credits<!-- credits: kling-3.0-motion:15s --> | 825 credits<!-- credits: kling-3.0-motion:1080p:15s --> |
-| longer | 495 credits<!-- credits: motion-transfer:30s --> | 748 credits<!-- credits: motion-transfer:1080p:30s --> | 990 credits<!-- credits: kling-3.0-motion:30s --> | 1650 credits<!-- credits: kling-3.0-motion:1080p:30s --> |
+| Billed seconds | Kling 3.0, 720p |
+|----------------|-----------------|
+| per second | 62.7<!-- credits-rate: kling-3.0-motion:720p:per-4s@0.25 --> |
+| 3 s | 189 credits<!-- credits: kling-3.0-motion:720p:per-4s@0.75 --> |
+| 10 s | 627 credits<!-- credits: kling-3.0-motion:720p:per-4s@2.5 --> |
+| 30 s | 1881 credits<!-- credits: kling-3.0-motion:720p:per-4s@7.5 --> |
 
-Worked example: Kling 3.0 at 1080p with a 10-second motion video costs 550 credits<!-- credits: kling-3.0-motion:1080p:10s -->.
+Worked examples: a 10-second motion video costs 627 credits<!-- credits: kling-3.0-motion:720p:per-4s@2.5 -->; a 3-second one costs 189 credits<!-- credits: kling-3.0-motion:720p:per-4s@0.75 -->.
+
+**Kling 2.6 (both sizes) and Kling 3.0 at 1080p** are priced by the measured length, in tiers (up to 5 s, up to 10 s, up to 15 s, and longer at the 30 s price), and by size (1080p, or 720p for any other size):
+
+| Length | Kling 2.6, 720p | Kling 2.6, 1080p | Kling 3.0, 1080p |
+|--------|-----------------|------------------|------------------|
+| up to 5 s | 88 credits<!-- credits: motion-transfer:5s --> | 132 credits<!-- credits: motion-transfer:1080p:5s --> | 275 credits<!-- credits: kling-3.0-motion:1080p:5s --> |
+| up to 10 s | 165 credits<!-- credits: motion-transfer:10s --> | 253 credits<!-- credits: motion-transfer:1080p:10s --> | 550 credits<!-- credits: kling-3.0-motion:1080p:10s --> |
+| up to 15 s | 253 credits<!-- credits: motion-transfer:15s --> | 374 credits<!-- credits: motion-transfer:1080p:15s --> | 825 credits<!-- credits: kling-3.0-motion:1080p:15s --> |
+| longer | 495 credits<!-- credits: motion-transfer:30s --> | 748 credits<!-- credits: motion-transfer:1080p:30s --> | 1650 credits<!-- credits: kling-3.0-motion:1080p:30s --> |
+
+The tier is the billed seconds' (so a 10.5-second video, billed as 11 s, is in the "up to 15 s" tier). Worked example: Kling 3.0 at 1080p with a 10-second motion video costs 550 credits<!-- credits: kling-3.0-motion:1080p:10s -->.
+
+**The price you see before you run** reads the motion video's length from the workflow — an upload at its recorded length, a video another node makes in this run at the length it will produce plus a small allowance. When the length is not known, the price shown is the most the run can cost for its character orientation (a 10-second video with `image`, 30 seconds with `video`), marked as an estimate (≈). The run itself measures the real video.
 
 ## Best Practices
 
 - Use a clear, full-body character image for best results
 - Reference video should have clean, distinct movements
 - Wan Animate is excellent for quick iterations before upgrading to Kling
-- Duration is auto-detected from the connected video when possible
+- The motion video's length is measured by the server when the run starts; trim it to the model's limit first
 
 ## Common Use Cases
 

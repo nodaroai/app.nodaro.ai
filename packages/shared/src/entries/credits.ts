@@ -121,6 +121,22 @@ export {
 } from "../lip-sync-pricing.js"
 export type { LipSyncDurationBucket, LipSyncAudioRate } from "../lip-sync-pricing.js"
 export {
+  MOTION_TRANSFER_MIN_SEC,
+  MOTION_TRANSFER_IMAGE_ORIENTATION_MAX_SEC,
+  MOTION_TRANSFER_MAX_SEC,
+  MOTION_TRANSFER_SECOND_RATES,
+  MOTION_TRANSFER_RATE_IDS,
+  motionTransferOrientation,
+  motionTransferMaxSec,
+  motionTransferRateOf,
+  motionTransferBilledSeconds,
+  motionTransferPrice,
+  checkMotionTransferLength,
+  motionTransferEstimateSeconds,
+  motionTransferEstimatePrice,
+} from "../motion-transfer-pricing.js"
+export type { MotionTransferSecondRate, MotionTransferPrice, MotionTransferLengthCheck } from "../motion-transfer-pricing.js"
+export {
   SEEDANCE_LIP_SYNC_SECONDS,
   isSeedanceLipSyncProvider,
   seedanceLipSyncResolution,

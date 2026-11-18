@@ -10,7 +10,6 @@ import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
-  buildMotionCreditModelIdentifier,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
   buildVideoAuditCreditId,
@@ -63,7 +62,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, motionTransferQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -858,6 +857,16 @@ export function getModelIdentifier(
     return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(data.targetResolution))
   }
 
+  // Motion Transfer (decided 2026-11-18): the row of its driving video's length
+  // as the graph gives it (`motionTransferQuote`, the measured walk — never
+  // the node's own `videoDuration`), else the most its orientation runs. A
+  // per-second rate (Kling 3.0 at 720p) is its row, which every estimate
+  // multiplies by the units (PRICING_UNIT_ESTIMATORS → motionTransferPricingUnits).
+  // Above the `!provider` bail: a node naming no model runs Kling 2.6.
+  if (nodeType === "motion-transfer") {
+    return motionTransferQuote(node, nodes ?? [], edges ?? [], reruns).creditId
+  }
+
   // A node naming no model whose default is priced per input image: as the server estimate.
   // An Extend Video node naming no provider runs on the node's default
   // (`EXTEND_VIDEO_DEFAULT_PROVIDER`) and is quoted as that run, never the
@@ -951,15 +960,6 @@ export function getModelIdentifier(
     // (`minimax-h3:8s`): the row the run holds (decided 2026-11-16).
     const referenceAudioId = referenceAudioLipSyncCreditId(provider, data.resolution)
     if (referenceAudioId) return referenceAudioId
-  }
-
-  // Motion transfer: duration-tiered pricing
-  if (nodeType === "motion-transfer") {
-    return buildMotionCreditModelIdentifier(
-      (data.provider as string) ?? "kling",
-      (data.resolution as string) ?? "720p",
-      data.videoDuration as number | undefined,
-    )
   }
 
   return buildCreditModelIdentifier(

@@ -29,7 +29,8 @@
    "omnihuman-2-0:per-second": 35,
    "nodaro-video-upscale:2k:per-4s": 30,
    "seedance-2-5-extend:720p:per-2s": 190,
-   "seedance-2-5-flash-extend:720p:per-2s": 128
+   "seedance-2-5-flash-extend:720p:per-2s": 128,
+   "kling-3.0-motion:720p:per-4s": 228
   }
  },
  "cases": [
@@ -1271,6 +1272,47 @@
     "servedUnit": 41,
     "credits": 443,
     "perUnitQuote": 451
+   }
+  },
+  {
+   "name": "Motion Transfer (Kling 3.0, 720p): a 9.4 s driving video upload \u2014 10 billed seconds, a quarter-unit each",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "motion-transfer",
+     "data": {
+      "provider": "kling-3.0",
+      "resolution": "720p",
+      "characterOrientation": "image",
+      "videoDuration": 3
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/dance.mp4",
+      "videoDurationSec": 9.4,
+      "duration": 9.4
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "kling-3.0-motion:720p:per-4s",
+    "units": 2.5,
+    "quoteId": "kling-3.0-motion:720p:per-4s:2.5u",
+    "servedUnit": 263,
+    "credits": 656,
+    "perUnitQuote": 789
    }
   }
  ]

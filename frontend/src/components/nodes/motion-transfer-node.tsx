@@ -17,11 +17,12 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
-import { buildMotionCreditModelIdentifier } from "@nodaro/shared/credits"
+import { useExactUnitQuote } from "@/hooks/use-unit-quote-credits"
+import { motionTransferQuote } from "@/lib/video-utility-estimate"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
-import type { MotionTransferData } from "@/types/nodes"
+import type { MotionTransferData, WorkflowNode } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT   = (t: string) => isValidMotionTransferConnection("prompt",   t, isPickerType)
@@ -64,10 +65,28 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const provider = nodeData.provider || "kling"
-  const resolution = nodeData.resolution || "720p"
-  const modelId = buildMotionCreditModelIdentifier(provider, resolution, nodeData.videoDuration)
-  const credits = useModelCredits(modelId, 38)
+  // Priced from the driving video's length as the graph gives it (the
+  // measured walk), else the most the orientation runs — never the node's own
+  // `videoDuration` (decided 2026-11-18): the server measures the video before
+  // it holds anything. Kling 3.0 at 720p is per second: its four-second row ×
+  // the billed seconds ÷ 4, the server's whole-run quote. A length the graph
+  // does not know is shown as an estimate (≈).
+  const quoteCreditId = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? motionTransferQuote(node, s.nodes, s.edges).creditId : undefined
+  })
+  const quoteUnits = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? motionTransferQuote(node, s.nodes, s.edges).units : undefined
+  })
+  const lengthKnown = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? motionTransferQuote(node, s.nodes, s.edges).lengthKnown : false
+  })
+  const tierCredits = useModelCredits(quoteUnits === undefined ? quoteCreditId : undefined, 38)
+  const rateCredits = useExactUnitQuote(quoteUnits !== undefined ? quoteCreditId : undefined, quoteUnits ?? 1)
+  const credits = quoteUnits !== undefined ? rateCredits : tierCredits
+  const creditsEstimate = !lengthKnown
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
 
@@ -132,6 +151,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       icon={<Waypoints className="h-4 w-4" />}
       category="ai"
       credits={credits}
+      creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={status === "running"}
       {...videoNodeSizing(mediaAspectRatio)}
@@ -175,7 +195,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
       }
       handles={handles}
     >

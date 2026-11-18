@@ -21,6 +21,9 @@ import {
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   videoOverlayVideoUnits,
+  motionTransferEstimatePrice,
+  motionTransferEstimateSeconds,
+  motionTransferRateOf,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits } from "@nodaro/shared/media"
 import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
@@ -697,4 +700,54 @@ export function lipSyncQuoteIsEstimate(
   if (isLipSyncChargedAtRunCost(provider)) return true
   const rate = lipSyncAudioRateOf(provider)
   return rate !== undefined && rateModelQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
+}
+
+/**
+ * The length, in seconds, of the driving video a Motion Transfer is QUOTED on,
+ * or `undefined` when the graph does not know it: its `video` wire as the
+ * measured walk reads it ({@link measuredInputReader}: an upload at its
+ * recorded length, a node that runs at the length it will produce plus the
+ * container slack) — the server's reading. Never the node's own
+ * `videoDuration`: the run measures the video before it holds anything.
+ */
+export function motionTransferQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "video")
+  return wire ? measuredInputReader("motion-transfer", nodes, edges, rerunIds)(wire.source) : undefined
+}
+
+/**
+ * The price a Motion Transfer is QUOTED at (`motionTransferEstimatePrice`, the
+ * rule the server's run estimate reads): the row of its driving video's
+ * length as the graph gives it, else the most its orientation runs (10 s
+ * keeping the image's orientation, 30 s following the video's), with
+ * `lengthKnown: false` so the caller shows it as an estimate.
+ */
+export function motionTransferQuote(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): ReturnType<typeof motionTransferEstimatePrice> {
+  const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling"
+  return motionTransferEstimatePrice(provider, data.resolution, data.characterOrientation, motionTransferQuotedSec(node, nodes, edges, rerunIds))
+}
+
+/** The units a Motion Transfer is quoted at: billed seconds ÷ the row's seconds on a per-second rate (Kling 3.0 at 720p); 1 otherwise. */
+export function motionTransferPricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling"
+  const rate = motionTransferRateOf(provider, data.resolution)
+  if (!rate) return 1
+  return motionTransferEstimateSeconds(provider, data.characterOrientation, motionTransferQuotedSec(node, nodes, edges, rerunIds)) / rate.rateSeconds
 }
