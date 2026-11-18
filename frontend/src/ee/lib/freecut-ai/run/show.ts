@@ -48,6 +48,8 @@ export class Show {
   private readonly highlights = new Map<string, PresenceHighlight>()
   /** The agents with a step still to do: each waits at its station until its own cursor is at work. */
   private crew: readonly AgentId[] = []
+  /** The agents that had steps in this run and have none left: back at their station, done. */
+  private finished: readonly AgentId[] = []
 
   constructor(
     private readonly link: EditorLink,
@@ -77,6 +79,9 @@ export class Show {
   setCrew(agents: readonly AgentId[]) {
     const next = [...new Set(agents)]
     if (next.length === this.crew.length && next.every((a) => this.crew.includes(a))) return
+    // An agent that leaves the crew has done its part: it goes back to its station, done.
+    const left = this.crew.filter((a) => !next.includes(a) && !this.finished.includes(a))
+    this.finished = [...this.finished.filter((a) => !next.includes(a)), ...left]
     this.crew = next
     this.push()
   }
@@ -117,8 +122,13 @@ export class Show {
   push() {
     try {
       // An agent still to work, with no cursor of its own right now, stands at its station.
-      const waiting = this.targets && !this.skipping ? this.crew.filter((a) => !this.cursors.has(a)).map((a) => ({ id: `${a}#station`, name: this.names[a], color: AGENT_COLORS[a], target: STATION[a] })) : []
-      this.link.presence([...this.cursors.values(), ...waiting].slice(0, MAX_CURSORS), [...this.highlights.values()].slice(-64))
+      const atStation = (agents: readonly AgentId[], mood: "waiting" | "done"): PresenceCursor[] =>
+        this.targets && !this.skipping
+          ? agents.filter((a) => !this.cursors.has(a)).map((a) => ({ id: `${a}#station`, name: this.names[a], color: AGENT_COLORS[a], target: STATION[a], mood }))
+          : []
+      const waiting = atStation(this.crew, "waiting")
+      const done = atStation(this.finished, "done")
+      this.link.presence([...this.cursors.values(), ...waiting, ...done].slice(0, MAX_CURSORS), [...this.highlights.values()].slice(-64))
     } catch {
       // The editor has closed; the run notices on its next request.
     }
@@ -127,6 +137,7 @@ export class Show {
   /** Clears every cursor and highlight. */
   end() {
     this.crew = []
+    this.finished = []
     this.cursors.clear()
     this.highlights.clear()
     this.push()

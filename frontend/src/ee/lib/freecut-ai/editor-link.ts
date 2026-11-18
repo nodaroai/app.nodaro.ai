@@ -54,6 +54,12 @@ export interface PresenceCursor {
   readonly target?: string
   readonly gesture?: PresenceGesture
   readonly note?: string
+  /**
+   * What the agent is doing, shown on its character (`presence` editors draw one;
+   * an older editor ignores it): at work (absent), waiting its turn, done, or
+   * stopped until the person answers.
+   */
+  readonly mood?: "working" | "waiting" | "done" | "needs-you"
 }
 
 export interface PresenceHighlight {
