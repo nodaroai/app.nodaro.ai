@@ -8623,7 +8623,7 @@ export const ja: ChromeDict = {
   "freecutAi.frame.unavailable": "ここでは「AI で編集」を利用できません。",
   "freecutAi.frame.waitingEditor": "エディターが開くのを待っています…",
   "freecutAi.frame.editorTooOld": "このエディターはまだ「AI で編集」からの編集を受け付けていません。",
-  "freecutAi.frame.noVideos": "「AI で編集」は、Nodaro ライブラリーまたはこの制作物の動画で使えます。エディターに読み込んでください。コンピューターから読み込んだ動画は、まだ「AI で編集」で編集できません。",
+  "freecutAi.frame.noVideos": "「AI で編集」は、エディターに読み込んだ動画で使えます。コンピューターから読み込んだ動画は、読み込みと同時にライブラリーへアップロードされ、アップロードが終わると「AI で編集」で使えるようになります。",
   "freecutAi.status.ready": "準備完了",
   "freecutAi.status.readySub": "やりたいことを選ぶか、自分の言葉で書いてください。",
   "freecutAi.status.reading": "リクエストを読んでいます",

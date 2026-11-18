@@ -8896,7 +8896,7 @@ export const en = {
   "freecutAi.frame.unavailable": "Edit with AI is not available here.",
   "freecutAi.frame.waitingEditor": "Waiting for the editor to open…",
   "freecutAi.frame.editorTooOld": "This editor does not take edits from Edit with AI yet.",
-  "freecutAi.frame.noVideos": "Edit with AI works on videos from your Nodaro library or from this production: import one into the editor. A video imported from your computer cannot be edited with AI yet.",
+  "freecutAi.frame.noVideos": "Edit with AI works on the videos you import into the editor. A video from your computer is uploaded to your library as you import it, and is ready for Edit with AI once the upload finishes.",
   "freecutAi.status.ready": "Ready",
   "freecutAi.status.readySub": "Tap what to do, or write it in your own words.",
   "freecutAi.status.reading": "Reading your request",
