@@ -57,6 +57,19 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
   into `SunoCoverByIdRefusedError`, so a refused resend never also starts the
   file lane (and that lane's own resend).
 
+### What a task cost is recorded from the task's own record
+- `jobs.provider_cost` on a KIE video or audio lane is `kieBilledCostUsd(rawRecordInfo, modelConfig.cost)`
+  (`billed-cost.ts`): the record's `creditsConsumed` (in `data`) × `KIE_CREDIT_USD`, else the
+  catalog figure. The record is the final poll's answer (`runKieTask` / `pollLumaTask` return it
+  as `rawRecordInfo`), never a request of its own. Recorded only: without `meteredCost` the
+  reservation is committed whatever the figure is.
+- Covered: Video to Video (Wan 2.6, Wan Flash, Wan VideoEdit, HappyHorse Edit, Luma Modify) and
+  Motion Transfer (Kling 2.6, Kling 3.0, Wan Animate Move/Replace), Audio Isolation. The image
+  lane reads the same field through `costFromTaskRecord`.
+- `__tests__/kie-billed-cost-guard.test.ts` lists, per method, the branches in `video.ts` /
+  `audio.ts` that still record the catalog figure directly, with why; a new one fails it. The
+  list only shrinks.
+
 ---
 
 ## Model Key → KIE API Doc Map

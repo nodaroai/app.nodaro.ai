@@ -12,7 +12,8 @@ vi.mock("../client.js", () => ({
   MAX_POLL_ATTEMPTS_VIDEO: 90,
 }))
 
-vi.mock("../models.js", () => ({
+vi.mock("../models.js", async (importOriginal) => ({
+  KIE_CREDIT_USD: (await importOriginal<typeof import("../models.js")>()).KIE_CREDIT_USD,
   KIE_MUSIC_MODELS: {
     "suno": { model: "suno/v4", cost: 0.10 },
   },
@@ -133,5 +134,29 @@ describe("KieAudioProvider.isolateAudio", () => {
   it("throws when no result URL", async () => {
     mocks.mockRunKieTask.mockResolvedValueOnce({ resultJson: {} })
     await expect(provider.isolateAudio("https://example.com/song.mp3")).rejects.toThrow()
+  })
+
+  it("records what KIE billed for the task: the record's creditsConsumed at the KIE credit rate", async () => {
+    const { KIE_CREDIT_USD } = await import("../models.js")
+    mocks.mockRunKieTask.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example.com/audio.mp3"] },
+      // The record's figure sits in `data`; `costTime` is seconds and is never read as a bill.
+      rawRecordInfo: { code: 200, message: "success", data: { creditsConsumed: 7, costTime: 42 } },
+      costTime: 42,
+    })
+    const result = await provider.isolateAudio("https://example.com/song.mp3")
+    expect(result.cost).toBeCloseTo(7 * KIE_CREDIT_USD, 10)
+    expect(result).not.toHaveProperty("meteredCost")
+    expect(result).not.toHaveProperty("collectOverHold")
+  })
+
+  it("records the catalog figure when the task record carries no credits", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example.com/audio.mp3"] },
+      rawRecordInfo: { code: 200, message: "success", data: { costTime: 42 } },
+      costTime: 42,
+    })
+    const result = await provider.isolateAudio("https://example.com/song.mp3")
+    expect(result.cost).toBe(0.01)
   })
 })

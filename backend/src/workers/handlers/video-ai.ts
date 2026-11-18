@@ -2458,10 +2458,9 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   console.log(`[worker] face-swap ${ctx.jobId}`)
 
   const faceSwapOnTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
-  const outputUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, async () => {
-    const { videoUrl: out } = await replicateFaceSwap(faceImageUrl, videoUrl, { onTaskCreated: faceSwapOnTaskCreated })
-    return out
-  })
+  const { videoUrl: outputUrl, cost } = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
+    replicateFaceSwap(faceImageUrl, videoUrl, { onTaskCreated: faceSwapOnTaskCreated }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   // The swap comes back without sound: put the source clip's audio back on it.
@@ -2473,7 +2472,9 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-to-video",
-    result: { url: outputUrl, cost: null, providerUsed: "roop" },
+    // `cost` is what Replicate billed for the prediction, recorded as
+    // provider_cost. No `meteredCost`: the run commits its reservation.
+    result: { url: outputUrl, cost, providerUsed: "roop" },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })

@@ -43,6 +43,10 @@ const RATE_TABLE_MODELS: Readonly<Record<string, { charge: Charge; why: string }
   "incredibly-fast-whisper": { charge: "fixed-row", why: "Transcribe: one row whatever the recording's length" },
   whisper: { charge: "fixed-row", why: "Transcribe: one row whatever the recording's length" },
   demucs: { charge: "fixed-row", why: "Separate Audio: one row per mode whatever the audio's length" },
+  // Not a new fixed-price model: Face Swap was already "fixed-row" below (its
+  // call site, face-swap.ts). Its model joined the rate table only so its run
+  // records what Replicate billed (jobs.provider_cost); the charge is unchanged.
+  "roop-face-swap": { charge: "fixed-row", why: "Face Swap: one row whatever the target video's length" },
 }
 
 /** How each file that runs a Replicate prediction is charged for the time the prediction takes. */
@@ -104,6 +108,7 @@ describe("a model billed by run time is charged by something that grows with it"
       "incredibly-fast-whisper",
       "providers/replicate/audio-separation.ts",
       "providers/replicate/face-swap.ts",
+      "roop-face-swap",
       "whisper",
     ])
   })

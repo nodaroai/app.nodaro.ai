@@ -143,6 +143,8 @@ vi.mock("../../../workers/shared.js", () => ({
 
 import { reconcileReplicateJob, type ReplicateJobRow } from "../replicate.js"
 import { MASK_NO_REGION_MESSAGE } from "../../../providers/replicate/failure-messages.js"
+import { REPLICATE_MODEL_USD_PER_SEC, extractCost } from "../../../providers/replicate/client.js"
+import { FACE_SWAP_COST_MODEL_KEY } from "../../../providers/replicate/face-swap.js"
 
 // G-7 harness accessors (did not exist before this task).
 const lastJobsUpdate = (): Record<string, unknown> => mocks.jobsUpdates.at(-1) ?? {}
@@ -253,6 +255,17 @@ describe("reconcileReplicateJob", () => {
     vi.mocked(probeVideoStreamDurationSource).mockResolvedValue(29.133333)
     await reconcileReplicateJob({id:"j-r",provider_kind:"replicate-prediction",provider_task_id:"p-1",reconcile_attempts:0,job_type:"lip-sync",input_data:{provider:"lipsync-2-pro",audioDurationSec:29.281338}})
     expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({result:expect.objectContaining({cost:29.133333 * 0.08325})}))
+  })
+
+  it("a recovered Face Swap records what Replicate billed (its GPU seconds at the model's rate), with nothing metered", async () => {
+    setPrediction({ id: "p-fs", status: "succeeded", output: "https://replicate.example/swap.mp4", metrics: { predict_time: 40 } })
+    await reconcileReplicateJob({ id: "j-fs", provider_kind: "replicate-prediction", provider_task_id: "p-fs", reconcile_attempts: 0, job_type: "face-swap" })
+    const input = mocks.finalizeMock.mock.calls.at(-1)![0] as Record<string, unknown> & { result: Record<string, unknown> }
+    expect(input.result.cost).toBeCloseTo(40 * REPLICATE_MODEL_USD_PER_SEC[FACE_SWAP_COST_MODEL_KEY]!, 10)
+    expect(input.result).not.toHaveProperty("displayCost")
+    expect(input.result).not.toHaveProperty("meteredCost")
+    expect(input.result).not.toHaveProperty("collectOverHold")
+    expect(input).not.toHaveProperty("meteredBaseCredits")
   })
 
   it("succeeded with output array → uses first URL + extras", async () => {
@@ -836,6 +849,31 @@ describe("reconcileReplicateJob", () => {
       // copy-paste bug passing some other id) must not silently pass.
       expect(mocks.loadUsageLogIdMock).toHaveBeenCalledWith("job-tr-1")
       expect(mocks.commitMock).toHaveBeenCalledWith("usage-log-tr-1", "job-tr-1")
+    })
+
+    it.each(["whisper", "incredibly-fast-whisper"])(
+      "%s: records what Replicate billed for the prediction; the commit is unchanged",
+      async (engine) => {
+        setPrediction({
+          id: "pred-tr-cost",
+          status: "succeeded",
+          output: engine === "whisper"
+            ? { transcription: "recovered text", detected_language: "english", segments: [] }
+            : { text: "recovered text", chunks: [{ timestamp: [0, 1], text: "recovered text" }] },
+          metrics: { predict_time: 4 },
+        })
+        await reconcileReplicateJob(row({ id: "job-tr-cost", provider_task_id: "pred-tr-cost", input_data: { provider: engine } }))
+        const fields = mocks.markCompletedMock.mock.calls.at(-1)![1] as Record<string, unknown>
+        expect(fields.provider_cost).toBeCloseTo(extractCost({ predict_time: 4 }, engine)!, 10)
+        // The same two arguments as before: no cost, no metered flag — the reservation is committed.
+        expect(mocks.commitMock.mock.calls.at(-1)).toEqual(["usage-log-tr-1", "job-tr-cost"])
+      },
+    )
+
+    it("records no provider_cost when the prediction reports no GPU time", async () => {
+      setPrediction({ id: "pred-tr-nm", status: "succeeded", output: { transcription: "t", detected_language: "english", segments: [] } })
+      await reconcileReplicateJob(row({ id: "job-tr-nm", provider_task_id: "pred-tr-nm", input_data: { provider: "whisper" } }))
+      expect(mocks.markCompletedMock.mock.calls.at(-1)![1]).not.toHaveProperty("provider_cost")
     })
 
     it("fails a genuinely empty transcribe prediction honestly", async () => {

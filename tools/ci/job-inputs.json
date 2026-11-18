@@ -897,6 +897,7 @@
         "backend/src/providers/image/overlay-contract.ts",
         "backend/src/providers/kie/aspect-ratio-sentence.ts",
         "backend/src/providers/kie/audio.ts",
+        "backend/src/providers/kie/billed-cost.ts",
         "backend/src/providers/kie/client.ts",
         "backend/src/providers/kie/egress-dimensions.ts",
         "backend/src/providers/kie/gemini-omni-12.ts",

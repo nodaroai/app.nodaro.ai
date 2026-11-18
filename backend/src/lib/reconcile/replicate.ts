@@ -1,4 +1,6 @@
 import { replicateOutputCost } from "../../providers/replicate/output-cost.js"
+import { extractCost } from "../../providers/replicate/client.js"
+import { FACE_SWAP_COST_MODEL_KEY } from "../../providers/replicate/face-swap.js"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazBilledUnits } from "../../providers/replicate/topaz-units.js"
 import { unitRateBaseCredits } from "../credit-base-cost.js"
@@ -350,7 +352,17 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
       await refundReservedCreditsForJob(row.id)
       return
     }
-    const ok = await markJobCompleted(row.id, { output_data: shaped as unknown as Record<string, unknown> })
+    // What Replicate billed for the prediction (its GPU seconds at the
+    // engine's rate), recorded as the worker records it. The commit below
+    // takes no cost: the reservation is committed.
+    const billedCost = extractCost(
+      pred.metrics as Record<string, unknown> | undefined,
+      provider === "incredibly-fast-whisper" ? "incredibly-fast-whisper" : "whisper",
+    )
+    const ok = await markJobCompleted(row.id, {
+      output_data: shaped as unknown as Record<string, unknown>,
+      ...(billedCost !== null ? { provider_cost: billedCost } : {}),
+    })
     if (!ok) return
     await commitJobCredits(await loadUsageLogId(row.id), row.id)
     return
@@ -443,6 +455,11 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
 
     const outputCost = row.job_type === "lip-sync"
       ? await replicateOutputCost(String(row.input_data?.provider ?? ""), urls[0]!) : null
+    // A recovered Face Swap records what Replicate billed for the prediction
+    // (its GPU seconds at the model's rate), as its worker does. Recorded only:
+    // no `meteredCost`, so the reservation is committed.
+    const billedCost = row.job_type === "face-swap"
+      ? extractCost(pred.metrics as Record<string, unknown> | undefined, FACE_SWAP_COST_MODEL_KEY) : null
     // A Topaz video upscale is charged the units the prediction reports (the
     // worker's own settlement), never the whole hold it reserved.
     const topazUnits = row.job_type === "video-upscale"
@@ -464,7 +481,7 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
       result: {
         url: composite?.url ?? urls[0]!,
         extraUrls: composite ? [] : urls.slice(1),
-        cost: outputCost,
+        cost: outputCost ?? billedCost,
         ...(outputCost !== null ? { displayCost: outputCost } : {}),
         providerUsed: "replicate",
         providerMs,

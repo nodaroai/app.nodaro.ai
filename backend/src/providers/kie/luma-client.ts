@@ -31,10 +31,18 @@ import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
 
+/** A finished Luma Modify task: its result, and the whole record-info answer it
+ *  came in (`{ code, msg, data }`), so a caller can read what the task was
+ *  billed when the record says (`kieBilledCostUsd`). */
+export interface LumaTaskResult {
+  resultJson: KieResultJson
+  rawRecordInfo?: Record<string, unknown>
+}
+
 export async function runLumaModifyTask(
   input: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
-): Promise<{ resultJson: KieResultJson }> {
+): Promise<LumaTaskResult> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -128,7 +136,7 @@ export async function runLumaModifyTask(
 export async function pollLumaTask(
   taskId: string,
   maxAttempts: number = MAX_POLL_ATTEMPTS_VIDEO,
-): Promise<{ resultJson: KieResultJson }> {
+): Promise<LumaTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
     throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
@@ -209,6 +217,7 @@ export async function pollLumaTask(
 
       return {
         resultJson: { resultUrls },
+        rawRecordInfo: detailData as Record<string, unknown>,
       }
     }
 
@@ -219,6 +228,7 @@ export async function pollLumaTask(
         console.warn(`[KIE.ai Luma] Callback failed but resultUrls present, treating as success`)
         return {
           resultJson: { resultUrls },
+          rawRecordInfo: detailData as Record<string, unknown>,
         }
       }
       // No results — treat as failure

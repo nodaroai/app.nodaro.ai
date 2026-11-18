@@ -120,6 +120,10 @@ export const REPLICATE_MODEL_USD_PER_SEC: Record<string, number> = {
   // the separate-audio node and the Voice Changer Pro analyze commit the
   // reserved tier and only RECORD this figure (jobs.provider_cost).
   demucs: REPLICATE_GPU_USD_PER_SEC.a100_80gb,
+  // arabyai-replicate/roop_face_swap runs on A100 (80GB) (its Replicate page).
+  // Recorded only: Face Swap commits the reserved tier and only RECORDS this
+  // figure (jobs.provider_cost).
+  "roop-face-swap": REPLICATE_GPU_USD_PER_SEC.a100_80gb,
 }
 
 /**

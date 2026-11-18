@@ -21,6 +21,7 @@ import { KIE_CREDIT_USD, KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_AUDIO_ISOLATION_M
 import { getTtsCapabilities, ttsDirectionFor, ttsNamedVoiceFor } from "@nodaro/shared/model-catalog"
 import { sentSpeechText } from "@nodaro/prompts/prompt-fields"
 import { isGeminiTtsModel } from "./gemini-tts-models.js"
+import { kieBilledCostUsd } from "./billed-cost.js"
 import { geminiSpeechInput, runGeminiSpeech } from "./gemini-tts.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -260,7 +261,7 @@ export class KieAudioProvider
       `[KIE.ai] Isolating audio with ${modelConfig.model}`
     )
 
-    const { resultJson, costTime } = await runKieTask(
+    const { resultJson, costTime, rawRecordInfo } = await runKieTask(
       modelConfig.model,
       { audio_url: audioUrl },
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -277,11 +278,11 @@ export class KieAudioProvider
       )
     }
 
-    // `costTime` is provider generation time in SECONDS (see client.ts), NOT KIE
-    // credits — the previous `costTime * KIE_CREDIT_USD` ~5x-inflated provider_cost
-    // (corrupting the credit-audit baseline). Use the catalog cost; user billing is
-    // unaffected (meteredCost is undefined here, so the reserved tier is committed).
-    const actualCost = modelConfig.cost
+    // What KIE billed for the task: its record's `creditsConsumed`, else the
+    // catalog cost. Never `costTime`: that is generation time in SECONDS (see
+    // client.ts), not credits. Recorded only: no `meteredCost` here, so the
+    // reserved tier is committed whatever this figure is.
+    const actualCost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
     console.log(
       `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${actualCost.toFixed(4)}, gen time: ${costTime ?? "N/A"}s)`
     )

@@ -1014,9 +1014,25 @@ describe("transcribe handler — Nemotron 3.5 Transcribe", () => {
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
 
-  it("records no provider_cost for the other engines (unchanged)", async () => {
-    mocks.mockTranscribe.mockResolvedValueOnce({ text: "Hi", language: "en", segments: [], cost: 0.01 })
-    const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: "whisper" })
+  it.each(["whisper", "incredibly-fast-whisper"])(
+    "%s (Replicate): records what Replicate billed, and its commit is unchanged (the reservation, not metered)",
+    async (engine) => {
+      mocks.mockTranscribe.mockResolvedValueOnce({ text: "Hi", language: "en", segments: [], cost: 0.01 })
+      const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: engine })
+      await handler(job as never, makeCtx())
+      const fields = mocks.mockMarkJobCompleted.mock.calls.at(-1)![1] as Record<string, unknown>
+      expect(fields.provider_cost).toBe(0.01)
+      // The same three arguments as before: usage log, job, the cost — no `metered`,
+      // so commitJobCredits commits the reserved tier.
+      expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+      expect(mocks.mockCommitJobCredits.mock.calls[0]).toEqual([expect.anything(), "job-1", 0.01])
+      expect(settle.commitJobCreditsAtActualPrice).not.toHaveBeenCalled()
+    },
+  )
+
+  it("records no provider_cost for an engine that reports none (Scribe)", async () => {
+    mocks.mockTranscribe.mockResolvedValueOnce({ text: "Hi", language: "en", segments: [] })
+    const job = makeJob("transcribe", { audioUrl: "https://example.com/a.mp3", provider: "elevenlabs-stt" })
     await handler(job as never, makeCtx())
     const fields = mocks.mockMarkJobCompleted.mock.calls.at(-1)![1] as Record<string, unknown>
     expect(fields).not.toHaveProperty("provider_cost")

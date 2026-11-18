@@ -620,10 +620,13 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: outputData,
-    // What KIE billed for a Nemotron run (its own `creditsConsumed`, else its
-    // rate × the length it decoded), recorded only: the charge is the settle
-    // below, on KIE's length.
-    ...(provider === "nemotron-3-5-transcribe" && actualCost !== undefined ? { provider_cost: actualCost } : {}),
+    // What the provider billed for the run, recorded only: on Nemotron KIE's
+    // own `creditsConsumed` (else its rate × the length it decoded), the
+    // charge being the settle below, on KIE's length; on the two Replicate
+    // whisper engines the prediction's GPU seconds at the engine's rate, the
+    // commit below committing the reservation (not metered). Scribe and a
+    // cloud-relayed run report none, and write none.
+    ...(actualCost !== undefined ? { provider_cost: actualCost } : {}),
   })
   if (!ok) return
   if (provider === "nemotron-3-5-transcribe") {

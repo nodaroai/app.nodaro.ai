@@ -11,6 +11,14 @@ import { extractUrl, runReplicatePrediction } from "./client.js"
 
 const ROOP_VERSION = "11b6bf0f4e14d808f655e87e5448233cceff10a45f659d71539cafb7163b2e84"
 
+/**
+ * The model's key in `REPLICATE_MODEL_USD_PER_SEC`: the prediction's GPU
+ * seconds at its hardware's rate are what Replicate billed, recorded as the
+ * job's `provider_cost`. Recorded only: the run commits its reservation.
+ * The worker and the Replicate reconcile lane both price with it.
+ */
+export const FACE_SWAP_COST_MODEL_KEY = "roop-face-swap"
+
 export async function replicateFaceSwap(
   faceImageUrl: string,
   targetVideoUrl: string,
@@ -27,6 +35,7 @@ export async function replicateFaceSwap(
     },
     label: "[replicate:faceSwap]",
     reconcileOpts,
+    costModelKey: FACE_SWAP_COST_MODEL_KEY,
   })
 
   const videoUrl = extractUrl(
