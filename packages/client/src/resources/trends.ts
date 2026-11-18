@@ -176,10 +176,14 @@ export interface TrendDetailSlot {
   label: string
   kind: TrendSlotKind
   /**
-   * A required slot needs pictures; an optional one left empty takes the
-   * chosen example's, or, on a trend with no example (or when that example has
-   * none for it), stays as in the original;
-   * except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
+   * A required slot needs pictures. What an optional one left empty takes is
+   * stated per slot as {@link TrendDetailSlot.emptyFill}. In short, it takes its
+   * original look ({@link TrendDetailSlot.defaultImages}) when it has one,
+   * whatever its kind; without one, a person takes the chosen example's (none
+   * on a trend with no example, or when that example has none for it), and a
+   * place, product or pet none: a slot with no pictures stays as in the
+   * original. A Full depth trend never uses an example; a trend that hides its
+   * original fills every empty optional slot from the example.
    */
   required: boolean
   hint?: string
@@ -197,6 +201,16 @@ export interface TrendDetailSlot {
    * on {@link TrendDetailSlot.required}.
    */
   defaultImages?: string[]
+  /**
+   * An optional slot's: what a run takes for it when you leave it empty, as
+   * the trend's own rule decides (absent on a required slot):
+   * - `"default"`: its original look ({@link TrendDetailSlot.defaultImages});
+   * - `"example"`: the chosen example's pictures for this slot
+   *   (`examples[n].slots[key]`); when that example has none for it, the run
+   *   sends none and the role stays as in the original;
+   * - `"original"`: no pictures; the role stays as in the original.
+   */
+  emptyFill?: "default" | "example" | "original"
   /**
    * The chips you may set on this slot, in its kind's order; `[]` = none (show
    * no chips row). A chip of the kind that is not listed is fixed by the
@@ -274,15 +288,15 @@ export interface TrendRunSlot extends TrendChips {
 /** The body of `estimate()` and `run()`. */
 export interface TrendRunRequest {
   /**
-   * Slot key → what you put in it. Every required slot needs pictures; an
-   * optional slot left out takes the chosen example's, or, on a trend with no
-   * example (or when that example has none for it), stays as in the original; except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look.
+   * Slot key → what you put in it. Every required slot needs pictures; what an
+   * optional slot left out takes is said on {@link TrendDetailSlot.required}.
    * 1–3 pictures per slot.
    */
   slots: Record<string, TrendRunSlot>
   /**
    * 1-based example whose pictures fill the optional slots you leave empty
-   * (never in a Full depth trend, which records `example: 0`), numbering the
+   * that {@link TrendDetailSlot.required} says it fills (never in a Full depth
+   * trend, which records `example: 0`), numbering the
    * examples as {@link TrendDetail.examples} lists them. Default 1. Leave it out on a trend with no examples: sending one there
    * answers 400 `example_out_of_range` (and `0` is a `validation_error`). On a
    * trend that hides its original ({@link TrendDetail.original} is its first
@@ -378,13 +392,14 @@ export interface TrendRunDisplaySlot extends TrendChips {
   images: string[]
   /**
    * `true` when the slot was left empty and the example's pictures filled it.
-   * `false` with no `images`: left empty on a trend with no example, or the
-   * chosen example has no pictures for it, so it stayed as in the original.
+   * `false` with no `images`: left empty and nothing filled it, so it stayed
+   * as in the original.
    */
   fromExample: boolean
   /**
-   * `true` when the slot was left empty and the trend's own default pictures
-   * filled it (`fromExample` is then `false`). Absent otherwise.
+   * `true` when the slot was left empty and its original look
+   * ({@link TrendDetailSlot.defaultImages}) filled it (`fromExample` is then
+   * `false`). Absent otherwise.
    */
   fromDefault?: true
 }

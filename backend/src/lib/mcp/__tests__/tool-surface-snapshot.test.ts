@@ -1777,7 +1777,14 @@ const COMPETITOR_SEARCH_TERMS_BYTES = 291
 // `defaultImages` (an optional slot's pictures of that role as in the original). No tool was
 // added, so the fixture does NOT move. Measured by this suite on top of the competitor search
 // terms: 45 B over what it measured before; the list keeps its 28 B of headroom.
-const TRENDS_ORIGINAL_LOOK_BYTES = 45
+// LOWERED by the empty optional slot rule: estimate_trend's and run_trend's `slots` and `example`
+// descriptions say what an optional slot left out takes in fewer words, 21 B less in each (42 B in
+// all). Measured by this suite: 549_022 B in all; the budget comes down by the same 42 B, so the
+// list keeps the headroom it had before.
+// RAISED again by a slot's `emptyFill`: `get_trend` names it (what a run takes for an optional slot
+// left out: default, example or original), 55 B more. No tool was added, so the membership fixture
+// does NOT move. Measured by this suite: 549_077 B in all; the list keeps the same headroom.
+const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55
 // RAISED 2026-11-18 by one NEW tool, `make_podcast_pack` (verbs-use-case-pack.ts: the MCP face of
 // POST /v1/podcast-pack — several podcast tools on one recording for one price — and, with
 // `estimate_only`, of its quote), and nothing else. Registered beside the use-case verbs and gated

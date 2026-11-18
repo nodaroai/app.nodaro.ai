@@ -12426,7 +12426,7 @@ export interface AdminTrendRunSlot {
   kind: TrendSlotKind
   images: string[]
   fromExample: boolean
-  /** Only on a Full depth run whose slot was left empty and filled with the slot's default pictures. */
+  /** Only when the slot was left empty and its original look (`defaultImages`) filled it. */
   fromDefault?: true
   body?: TrendChoice
   outfit?: TrendChoice

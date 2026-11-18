@@ -2615,6 +2615,7 @@ interface TrendDetailSlot {
   key: string; label: string; kind: TrendSlotKind; required: boolean; hint?: string
   hintImageUrl?: string                  // a picture of who or what the slot is in the original (never sent by a run)
   defaultImages?: string[]               // an optional slot's original look: 1–3 https pictures of the role as in the original; absent on a required slot and on a trend that hides its original
+  emptyFill?: "default" | "example" | "original" // an optional slot's: what a run takes when you leave it empty (its original look, the chosen example's pictures for it, or none: as in the original); absent on a required slot
   chips: TrendChipKey[]                  // the chips you may set, in the kind's order; [] = none (no chips row)
   defaults?: TrendChips                  // the starting value of those chips
 }
@@ -2686,14 +2687,18 @@ kind of job) is a `NotFoundError`. `tags()` lists the tags in use on published
 trends, most used first, with their labels in the resolved locale (`locale`,
 else your profile's language, else English).
 
-A required slot left empty is refused with `400 missing_slot`; an optional one
-left out takes the chosen example's pictures (`fromExample: true` on the run),
-or stays as in the original when that example has none for it (no pictures,
+A required slot left empty is refused with `400 missing_slot`; what an optional
+one left out takes is stated on the slot as `emptyFill`. The rule: it uses its original look (the slot's `defaultImages`) when it has one,
+whatever its kind (`fromDefault: true` on the run). Without one, a person takes
+the chosen example's pictures (`fromExample: true` on the run), or stays as in
+the original when that example has none for it (no pictures,
 `fromExample: false`; an example's `slots` then has no key for that slot)
-(`example_out_of_range` when the trend has no such example), except in Full depth trends, where it uses the trend's default image for that role if one is set, otherwise the original's look
-(`fromDefault: true` on the run when the default was used; such a run records
-`example: 0`). On a trend with
-no example, leave `example` out: an optional slot left out then stays as in
+(`example_out_of_range` when the trend has no such example), and a place,
+product or pet stays as in the original. A Full depth trend never uses an
+example (its original look, else the original's look; such a run records
+`example: 0`), and a trend that hides its original fills every optional slot
+left out from the chosen example, whatever its kind. On a trend with no
+example, leave `example` out: a slot with no original look then stays as in
 the original (no pictures, `fromExample: false`) and the run records
 `example: 0`.
 `estimate()` and `run()` answer `400` before charging for `missing_slot`,

@@ -16,11 +16,7 @@
  * so these block only when making it failed), at least one
  * required slot, pictures for every slot in every example (a trend may have
  * no example at all: it shows only its original; one that hides its original,
- * `hideOriginal`, needs at least one: `hide_original_needs_example`), an
- * original look (`defaultImages`: a picture of that person as the clip shows
- * them) on every optional person, whatever the clip preparation
- * (`optional_person_default_missing`, with their keys; a trend that hides its
- * original is exempt), valid data
+ * `hideOriginal`, needs at least one: `hide_original_needs_example`), valid data
  * (`trendVersionDataSchema`), and pre and trend prompts that leave room for
  * the user's details (`promptBudget`), the 4 s preview's own too when the
  * trend offers one (`promptModesOf`), with each role name a preview can send
@@ -199,7 +195,6 @@ export interface PublishBlocker {
     | "preview_clip_out_of_date"
     | "no_required_slot"
     | "example_slots_incomplete"
-    | "optional_person_default_missing"
     | "invalid_data"
     | "prompt_budget"
     | "engine_unknown"
@@ -227,13 +222,12 @@ export interface PublishBlocker {
   example?: number
   /**
    * The required slot keys an example has no pictures for, for `example_slots_incomplete`; the
-   * people a person variant leaves empty, for `face_mask_variant_*`; the optional people with no
-   * original look, for `optional_person_default_missing`.
+   * people a person variant leaves empty, for `face_mask_variant_*`.
    */
   slots?: string[]
   /**
-   * What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images`, `hide_original_needs_example`,
-   * `optional_person_default_missing` and the face mask codes.
+   * What is wrong, for `invalid_data`, `prompt_budget`, `too_many_images`, `hide_original_needs_example`
+   * and the face mask codes.
    */
   message?: string
   /**
@@ -501,15 +495,6 @@ export function publishBlockers(
       .map((s) => s.key)
     if (missing.length > 0) out.push({ code: "example_slots_incomplete", example: i + 1, slots: missing })
   })
-  const bare = optionalPeopleWithoutOriginalLook(data)
-  if (bare.length > 0) {
-    const names = bare.map((s) => `"${s.label.en || s.key}"`).join(", ")
-    out.push({
-      code: "optional_person_default_missing",
-      slots: bare.map((s) => s.key),
-      message: `Every optional person needs an original look (a picture of them as they are in the clip): add one for ${names}, or make the slot required.`,
-    })
-  }
   const parsed = trendVersionDataSchema.safeParse(data)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
@@ -604,15 +589,6 @@ export function publishBlockers(
     for (const need of missingNeeds(row, needs)) out.push({ code: "engine_unsupported", env, need })
   }
   return out
-}
-
-/**
- * The optional people with no original look (`defaultImages`), in slot order:
- * none on a trend that hides its original (it keeps filling from Example 1).
- */
-export function optionalPeopleWithoutOriginalLook(data: Pick<TrendVersionData, "slots" | "hideOriginal">): TrendVersionData["slots"] {
-  if (data.hideOriginal === true) return []
-  return data.slots.filter((s) => s.kind === "person" && !s.required && (s.defaultImages?.length ?? 0) === 0)
 }
 
 /**

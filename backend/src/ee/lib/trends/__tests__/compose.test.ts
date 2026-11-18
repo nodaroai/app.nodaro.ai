@@ -85,15 +85,15 @@ describe("composeTrendRun — slots", () => {
     expect(codeOf(() => composeTrendRun(trend(), req({ slots: { lead: { body: "new" } } })))).toEqual({ code: "missing_slot", slot: "lead" })
   })
 
-  it("fills an empty optional slot with the chosen example's pictures", () => {
+  it("fills an empty optional person with the chosen example's pictures; a place with no original look stays as in the clip", () => {
     const { body, display } = composeTrendRun(trend(), req({ example: 2 }))
     expect(display.example).toBe(2)
     expect(display.slots.map((s) => [s.key, s.images, s.fromExample])).toEqual([
       ["lead", [img("me")], false],
       ["friend", [img("ex2-friend")], true],
-      ["place", [img("ex2-place")], true],
+      ["place", [], false],
     ])
-    expect((body.roles as Array<{ images: string[] }>).map((r) => r.images)).toEqual([[img("me")], [img("ex2-friend")], [img("ex2-place")]])
+    expect((body.roles as Array<{ images: string[] }>).map((r) => r.images)).toEqual([[img("me")], [img("ex2-friend")], []])
   })
 
   it("uses Example 1 by default", () => {
@@ -156,12 +156,12 @@ describe("composeTrendRun — slots", () => {
     expect(display.slots.map((s) => [s.key, s.images, s.fromExample])).toEqual([
       ["lead", [img("me")], false],
       ["friend", [], false],
-      ["place", [img("ex1-place")], true],
+      ["place", [], false],
     ])
     expect((body.roles as Array<{ name: string; images: string[] }>).map((r) => [r.name, r.images])).toEqual([
       ["the woman on the left", [img("me")]],
       ["the man on the right", []],
-      ["the dance floor", [img("ex1-place")]],
+      ["the dance floor", []],
     ])
     // The person's own pictures still win over the example's gap.
     const own = composeTrendRun(trend(data), req({ slots: { lead: { images: [img("me")] }, friend: { images: [img("pal")] } } }))
@@ -205,14 +205,17 @@ describe("composeTrendRun — roles", () => {
     expect(body.roles).toEqual([
       { kind: "person", name: "the woman on the left", images: [img("me")], body: "original", outfit: "new", hair: "original" },
       { kind: "person", name: "the man on the right", images: [img("ex1-friend")], body: "new", outfit: "new", hair: "new" },
-      { kind: "location", name: "the dance floor", images: [img("ex1-place")] },
+      { kind: "location", name: "the dance floor", images: [] },
     ])
   })
 
   it("sends every picture as its original file, never a CDN display rendition", () => {
     const shown = (path: string) => `https://cdn.nodaro.ai/cdn-cgi/image/width=1600,quality=80,format=auto/${path}`
     const file = (path: string) => `https://cdn.nodaro.ai/${path}`
+    const base = version()
     const data = version({
+      // The place's original look, as a display rendition too.
+      slots: base.slots.map((s) => (s.key === "place" ? { ...s, defaultImages: [shown("trends/place-look.png")] } : s)),
       references: [{ images: [shown("trends/cloud.png")], line: "the clouds in the opening dive" }],
       examples: [
         { videoUrl: img("ex1v"), width: 720, height: 1280, durationSec: 12, sourceJobId: "j1", slots: { lead: [img("ex1-lead")], friend: [shown("trends/friend.png")], place: [img("ex1-place")] } },
@@ -222,7 +225,7 @@ describe("composeTrendRun — roles", () => {
     expect(body.roles.map((r) => (r as { images: string[] }).images)).toEqual([
       [file("community/listing-1/portrait.png"), img("me")],
       [file("trends/friend.png")],
-      [img("ex1-place")],
+      [file("trends/place-look.png")],
     ])
     expect(body.references).toEqual([{ images: [file("trends/cloud.png")], line: "the clouds in the opening dive" }])
     expect(display.slots[0]!.images).toEqual([file("community/listing-1/portrait.png"), img("me")])

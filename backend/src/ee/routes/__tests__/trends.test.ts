@@ -673,7 +673,7 @@ describe("GET /v1/trends/:slug", () => {
     })
     expect(d.slots).toEqual([
       { key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: ["body", "outfit", "hair"], defaults: { hair: "original" } },
-      { key: "place", label: "Place", kind: "location", required: false, chips: [] },
+      { key: "place", label: "Place", kind: "location", required: false, emptyFill: "original", chips: [] },
     ])
     expect(d.examples).toEqual([
       {
@@ -824,6 +824,20 @@ describe("GET /v1/trends/:slug — the original", () => {
     const hidden = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
     for (const s of hidden.json().data.slots) expect(s).not.toHaveProperty("defaultImages")
     expect(hidden.body).not.toContain(look)
+  })
+
+  it("says on each optional slot what a run takes when it is left empty (emptyFill), and nothing on a required one", async () => {
+    const [lead, place] = versionData().slots
+    let d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    expect(d.slots[0].required).toBe(true)
+    expect(d.slots[0]).not.toHaveProperty("emptyFill")
+    // A place with no original look stays as in the clip.
+    expect(d.slots[1]).toMatchObject({ required: false, emptyFill: "original" })
+
+    mem.trends[0]!.versions[2] = versionData({ slots: [lead!, { ...place!, defaultImages: ["https://cdn.example/trends/t1/place-look.png"] } as TrendSlot] })
+    d = (await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })).json().data
+    expect(d.slots[1].emptyFill).toBe("default")
+    expect(d.slots[0]).not.toHaveProperty("emptyFill")
   })
 
   it("an optional slot with no original look has no defaultImages key", async () => {

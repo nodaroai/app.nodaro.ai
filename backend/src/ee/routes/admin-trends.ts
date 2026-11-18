@@ -223,7 +223,7 @@ const patchBody = z.strictObject({
 })
 /**
  * `source`: the clip (and its display copy); `reference` / `hint` / `default`: a picture (a fixed
- * reference, a slot's hint picture, a slot's default picture for Full depth).
+ * reference, a slot's hint picture, a slot's default picture, its original look).
  */
 const mediaBody = z.strictObject({ url: z.url({ protocol: /^https?$/ }), kind: z.enum(["source", "reference", "hint", "default"]) })
 const exampleBody = z.strictObject({ jobId: z.string().regex(UUID_RE, "Not a job id.") })

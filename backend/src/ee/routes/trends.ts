@@ -76,6 +76,7 @@ import {
 } from "../lib/trends/store.js"
 import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
 import { pickText } from "../lib/trends/localize.js"
+import { emptyFillOf, type TrendEmptyFill } from "../lib/trends/empty-fill.js"
 import { PUBLIC_READ_LIMIT, guestKeep, guestLocale, keptHit, sendPublicRead } from "../lib/trends/public-read.js"
 import { watchTrendCatalogForEdge } from "../lib/trends/catalog-stamp.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../lib/nodaro-motion-quote.js"
@@ -210,6 +211,12 @@ export interface TrendDetail extends TrendCard {
     hintImageUrl?: string
     /** An optional slot's original look (1–3 https pictures of the role as in the clip); none while the trend hides its original. */
     defaultImages?: string[]
+    /**
+     * An optional slot's: what a run takes when it is left empty (empty-fill.ts): `"default"` its
+     * original look, `"example"` the chosen example's pictures for it (none when that example has
+     * none), `"original"` no pictures (kept as in the clip). Absent on a required slot.
+     */
+    emptyFill?: TrendEmptyFill
     chips: ChipKey[]
     defaults?: Chips
   }>
@@ -381,6 +388,28 @@ function originalOf(data: TrendVersionData): TrendOriginal | undefined {
   }
 }
 
+/** One slot as the trend's page shows it. */
+export function detailSlotOf(data: TrendVersionData, s: TrendVersionData["slots"][number], locale: string): TrendDetail["slots"][number] {
+  const hint = pickText(s.hint, locale)
+  const defaults = slotDefaults(s)
+  // A trend that hides its original never shows it, so neither its role pictures (often frames of it).
+  const looks = s.required || data.hideOriginal === true ? [] : (s.defaultImages ?? []).filter((u) => u.startsWith("https://"))
+  // What a run takes for it when left empty: the rule the run itself follows (empty-fill.ts).
+  const emptyFill = emptyFillOf(data, s)
+  return {
+    key: s.key,
+    label: pickText(s.label, locale) ?? s.key,
+    kind: s.kind,
+    required: s.required,
+    ...(hint ? { hint } : {}),
+    ...(s.hintImageUrl ? { hintImageUrl: s.hintImageUrl } : {}),
+    ...(looks.length > 0 ? { defaultImages: looks } : {}),
+    ...(emptyFill ? { emptyFill } : {}),
+    chips: shownChips(s),
+    ...(defaults ? { defaults } : {}),
+  }
+}
+
 function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale: string, isFavorite: boolean): TrendDetail | null {
   const shown = toCard(row, data, locale, isFavorite)
   if (!shown) return null
@@ -396,23 +425,7 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     engine: nodaroMotionEngineOf(engineOf(data)),
     engineName: nodaroMotionEngineName(engineOf(data)),
     resolutions: [...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engineOf(data)]],
-    slots: data.slots.map((s) => {
-      const hint = pickText(s.hint, locale)
-      const defaults = slotDefaults(s)
-      // A trend that hides its original never shows it, so neither its role pictures (often frames of it).
-      const looks = s.required || data.hideOriginal === true ? [] : (s.defaultImages ?? []).filter((u) => u.startsWith("https://"))
-      return {
-        key: s.key,
-        label: pickText(s.label, locale) ?? s.key,
-        kind: s.kind,
-        required: s.required,
-        ...(hint ? { hint } : {}),
-        ...(s.hintImageUrl ? { hintImageUrl: s.hintImageUrl } : {}),
-        ...(looks.length > 0 ? { defaultImages: looks } : {}),
-        chips: shownChips(s),
-        ...(defaults ? { defaults } : {}),
-      }
-    }),
+    slots: data.slots.map((s) => detailSlotOf(data, s, locale)),
     examples: listedExamples(data).map((ex) => {
       const slots: Record<string, string[]> = {}
       for (const [k, v] of Object.entries(ex.slots)) if (keys.has(k)) slots[k] = [...v]

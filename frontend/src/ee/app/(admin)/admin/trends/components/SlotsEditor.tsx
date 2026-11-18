@@ -8,9 +8,9 @@
 // original), copied into the trend's storage as it is added; shown with the
 // slot, never sent with a run.
 // Every optional slot may also carry its original look (SlotDefaultImages):
-// pictures of that role as it is in the clip, which an optional person needs
-// to publish (unless the trend hides its original). A Full depth run sends
-// them when the person leaves the slot empty.
+// pictures of that role as it is in the clip, which a run sends when the
+// person leaves the slot empty (unless the trend hides its original). Never
+// needed to publish.
 
 import { useState } from "react"
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react"
@@ -77,9 +77,9 @@ interface Props {
   readonly slots: FormSlot[]
   /** The trend offers a 4 s preview: each slot shows its preview role name (kept, not shown, otherwise). */
   readonly hasPreview: boolean
-  /** The trend's clip preparation is Full depth: its runs send an empty optional slot's original look. */
+  /** The trend's clip preparation is Full depth: its runs never fill an empty optional slot from an example. */
   readonly fullDepth?: boolean
-  /** The trend hides its original: no optional person needs an original look to publish. */
+  /** The trend hides its original: its runs fill an empty optional slot from the example, never its original look. */
   readonly hideOriginal?: boolean
   /** The saved original, for "Take from the original"; null while there is none. */
   readonly original?: CropOriginal | null
