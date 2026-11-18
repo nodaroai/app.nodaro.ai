@@ -278,10 +278,10 @@ describe("POST /v1/lip-sync — the rate limit is for the models that measure th
   })
 
   it("every model that measures its audio is counted, the default (Kling Avatar) included; a model priced by no length never is", () => {
-    for (const provider of ["omnihuman-2-0", "kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync", undefined]) {
+    for (const provider of ["omnihuman-2-0", "kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "latentsync", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync", undefined]) {
       expect(lipSyncRateLimitSkips({ body: { provider } }), String(provider)).toBe(false)
     }
-    for (const provider of ["infinitalk", "seedance-2", "latentsync", "minimax-h3"]) {
+    for (const provider of ["infinitalk", "seedance-2", "minimax-h3"]) {
       expect(lipSyncRateLimitSkips({ body: { provider } }), provider).toBe(true)
     }
     expect(lipSyncRateLimitSkips({ body: undefined })).toBe(false)

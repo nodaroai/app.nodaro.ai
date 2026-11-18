@@ -78,6 +78,16 @@ describe("the seconds a Lip Sync is quoted at", () => {
       expect(lipSyncQuoteIsEstimate(x, [x], []), provider).toBe(false)
     }
   })
+
+  it("a model charged what its run used (LatentSync): the figure is its hold, always an estimate (≈)", () => {
+    const x = node("x", "lip-sync", { provider: "latentsync" })
+    // Known length or not: the run is settled at what it used, above or below the hold.
+    expect(lipSyncQuoteIsEstimate(x, [x], [])).toBe(true)
+    expect(lipSyncQuoteIsEstimate(x, [x, upload(26.9)], [audioWire("a")])).toBe(true)
+    expect(lipSyncPricingUnits(x, [x, upload(26.9)], [audioWire("a")])).toBe(1)
+    expect(getModelIdentifier(x, [audioWire("a")], [x, upload(26.9)])).toBe("latentsync:30s")
+    expect(estimateRunCreditLines([x], [x, upload(26.9)], [audioWire("a")], () => undefined)[0]).toMatchObject({ estimate: true })
+  })
 })
 
 /**
@@ -151,7 +161,7 @@ describe("the bucket a Lip Sync priced by its audio's length is quoted at", () =
   })
 
   it("a model whose price reads no length is never quoted on a length bucket", () => {
-    for (const provider of ["infinitalk", "latentsync"]) {
+    for (const provider of ["infinitalk"]) {
       expect(getModelIdentifier(node("x", "lip-sync", { provider, audioDurationSec: 42 })), provider).not.toMatch(/:\d+s$/)
     }
   })

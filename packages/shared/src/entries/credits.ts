@@ -107,6 +107,8 @@ export {
   pickLipSyncBucket,
   getLipSyncMaxAudioSeconds,
   isPerSecondLipSyncProvider,
+  LIP_SYNC_CHARGED_AT_RUN_COST,
+  isLipSyncChargedAtRunCost,
   buildLipSyncCreditId,
   LIP_SYNC_AUDIO_RATES,
   OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID,

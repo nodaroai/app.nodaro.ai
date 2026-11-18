@@ -664,6 +664,7 @@ export async function finalizeJobWithMedia(
   // `heldCommitArgs` approve uses — so the two settlements cannot drift.
   const commitReplay: HeldCommitReplay = {
     metered: result.meteredCost,
+    ...(result.collectOverHold === true ? { collectOverHold: true } : {}),
     extraNonProviderCredits: input.extraNonProviderCredits,
     meteredCost: result.cost,
     loopTrimAddonRefundCredits: input.loopTrimAddonRefundCredits,

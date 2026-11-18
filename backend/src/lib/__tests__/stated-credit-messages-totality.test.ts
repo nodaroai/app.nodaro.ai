@@ -75,7 +75,7 @@ const NOT_A_SAVED_FAILURE: Readonly<Record<string, { count: number; why: string;
   "ee/scripts/topaz-overcharge-refund.ts": { count: 5, why: "a one-off operator script's output and its admin notes" },
   "scripts/cleanup-stuck-pipelines.ts": { count: 1, why: "an operator script's output" },
   "lib/reconcile/cancelled-metered-holds.ts": { count: 1, why: LOG },
-  "workers/shared.ts": { count: 1, why: LOG },
+  "workers/shared.ts": { count: 2, why: LOG },
   "lib/character-lora.ts": { count: 1, why: "a count of reference photos, not credits", balance: "not a balance: the photos the user has" },
   "lib/llm-files.ts": { count: 1, why: "a count of pages, not credits", balance: "not a balance: the pages the files have" },
   "lib/mcp/tools/collections.ts": { count: 1, why: "the names of the user's collections, not credits", balance: "not a balance: the user's collection names" },

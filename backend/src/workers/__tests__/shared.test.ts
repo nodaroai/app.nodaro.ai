@@ -843,6 +843,67 @@ describe("commitJobCredits", () => {
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", base)
   })
 
+  // ── A hold that may be collected above (LatentSync, decided 2026-11-18): the
+  //    reservation is a hold sized for a usual run, and the provider's cost for
+  //    THIS run is the charge, whichever side of the hold it lands. ──
+  describe("collectOverHold (the hold is not the price)", () => {
+    const usageLog = (creditsUsed: number) => ({ data: { credits_used: creditsUsed, user_id: "user-1", action: "latentsync:30s", provider: null }, error: null })
+    // $0.159 at the mocked converter: ceil(0.159 / 0.02) = 8, × 1.25 = 10.
+    const ACTUAL = 10
+
+    it("an actual ABOVE the hold goes through the metered settle, and credits_actual is the charge it confirmed", async () => {
+      mocks.mockSingle.mockResolvedValueOnce(usageLog(4))
+      mocks.mockCommitCredits.mockResolvedValueOnce({ charged: ACTUAL, collectedOverHold: 6, shortfall: 0 })
+      await commitJobCredits("u1", "j1", 0.159, 0, true, false, true)
+      expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+      expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", ACTUAL, { collectOverHold: true })
+      expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: ACTUAL })
+    })
+
+    it("what could not be collected is not recorded as charged", async () => {
+      mocks.mockSingle.mockResolvedValueOnce(usageLog(4))
+      mocks.mockCommitCredits.mockResolvedValueOnce({ charged: 7, collectedOverHold: 3, shortfall: 3 })
+      await commitJobCredits("u1", "j1", 0.159, 0, true, false, true)
+      expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: 7 })
+      expect(mocks.mockUpdate).not.toHaveBeenCalledWith({ credits_actual: ACTUAL })
+    })
+
+    it("an actual BELOW the hold releases the rest, and neither side files an anomaly", async () => {
+      for (const hold of [4, 200]) {
+        mocks.mockCheckAndLogAnomaly.mockClear()
+        mocks.mockCommitCredits.mockClear()
+        mocks.mockSingle.mockResolvedValueOnce(usageLog(hold))
+        mocks.mockCommitCredits.mockResolvedValueOnce({ charged: ACTUAL, collectedOverHold: 0, shortfall: 0 })
+        await commitJobCredits("u1", "j1", 0.159, 0, true, false, true)
+        expect(mocks.mockCommitCredits, `hold ${hold}`).toHaveBeenCalledWith("u1", ACTUAL, { collectOverHold: true })
+        expect(mocks.mockCheckAndLogAnomaly, `hold ${hold}`).not.toHaveBeenCalled()
+      }
+    })
+
+    it("a settle that gives no receipt records no charge and never falls back to a plain commit", async () => {
+      mocks.mockSingle.mockResolvedValueOnce(usageLog(4))
+      mocks.mockMaybeSingle.mockResolvedValueOnce({ data: { status: "reserved" }, error: null })
+      mocks.mockCommitCredits.mockResolvedValueOnce(undefined)
+      const alert = vi.spyOn(console, "error").mockImplementation(() => {})
+      await commitJobCredits("u1", "j1", 0.159, 0, true, false, true)
+      expect(mocks.mockCommitCredits).toHaveBeenCalledTimes(1)
+      expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ credits_actual: expect.anything() }))
+      expect(alert.mock.calls.some((c) => String(c[0]).includes("[ALERT]"))).toBe(true)
+      alert.mockRestore()
+    })
+
+    it("without a provider cost there is nothing to meter: the hold is committed as it is", async () => {
+      await commitJobCredits("u1", "j1", null, 0, true, false, true)
+      expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1")
+    })
+
+    it("is off by default: a metered commit without it is the plain true-up it was", async () => {
+      mocks.mockSingle.mockResolvedValueOnce(usageLog(4))
+      await commitJobCredits("u1", "j1", 0.159, 0, true)
+      expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", ACTUAL)
+    })
+  })
+
   // ── Count-based metered actual (voice-changer-pro): metered=true, extra>0, no
   //    provider USD cost. Commits the POST-MARKUP count-based actual, NOT the
   //    reserved tier. Before this branch existed, the 12 fell through to the

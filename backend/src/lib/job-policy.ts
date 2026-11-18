@@ -440,11 +440,26 @@ export interface HeldCommitReplay {
    *  branch with no USD cost), marked up once, and never above the
    *  reservation. `extraNonProviderCredits` still rides on top of it. */
   readonly meteredBaseCredits?: number
+  /** `ProviderResult.collectOverHold`: the reservation was a HOLD sized for a
+   *  usual run, not the price. With `metered`, the true-up from the provider's
+   *  cost may land ABOVE it, and the overrun is collected from the payer (the
+   *  metered settle) instead of being dropped. */
+  readonly collectOverHold?: boolean
 }
 
 export const HELD_COMMIT_REPLAY_KEYS = [
   "metered", "extraNonProviderCredits", "meteredCost", "loopTrimAddonRefundCredits", "meteredBaseCredits",
+  "collectOverHold",
 ] as const
+
+/** `commitJobCredits`'s positional tail: the last two are present only for a hold that may be collected above (`collectOverHold`). */
+export type HeldCommitArgs = [
+  providerCostUsd: number | null | undefined,
+  extraNonProviderCredits: number | undefined,
+  metered: boolean | undefined,
+  ceilingReservation?: boolean | undefined,
+  collectOverHold?: boolean | undefined,
+]
 
 /**
  * The `commitJobCredits(usageLogId, jobId, ...)` tail for a settlement — the
@@ -462,11 +477,15 @@ export const HELD_COMMIT_REPLAY_KEYS = [
 export function heldCommitArgs(
   commit: HeldCommitReplay,
   providerCostFallback: number | null | undefined,
-): [providerCostUsd: number | null | undefined, extraNonProviderCredits: number | undefined, metered: boolean | undefined] {
+): HeldCommitArgs {
   if (commit.meteredBaseCredits != null) {
     return [null, commit.meteredBaseCredits + (commit.extraNonProviderCredits ?? 0), true]
   }
-  return [commit.meteredCost ?? providerCostFallback, commit.extraNonProviderCredits, commit.metered]
+  const cost = commit.meteredCost ?? providerCostFallback
+  // The last two are named only when set, so every other settlement's arguments are what they were.
+  return commit.collectOverHold === true
+    ? [cost, commit.extraNonProviderCredits, commit.metered, undefined, true]
+    : [cost, commit.extraNonProviderCredits, commit.metered]
 }
 
 /** Split a stored `held_completion_fields` into the real `jobs` columns approve

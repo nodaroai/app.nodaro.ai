@@ -128,6 +128,9 @@ export const LIP_SYNC_MAX_AUDIO_SECONDS: Record<string, number> = {
   "sync-lipsync-v3": 300,
   // Volcengine (KIE) — video-to-video dubbing, per-second, 5-min ceiling.
   "volcengine-lipsync": 300,
+  // LatentSync — its output is as long as its audio, and its run time grows
+  // with that length. 5-min ceiling: longer audio is priced at it and cut to it.
+  "latentsync": 300,
   // The per-second-rate models: their own maximum (longer audio is refused; up to the 0.05 s its hold forgives past it, held at the maximum and cut to it).
   ...Object.fromEntries(Object.entries(LIP_SYNC_AUDIO_RATES).map(([provider, rate]) => [provider, rate.maxSeconds])),
 }
@@ -165,10 +168,32 @@ const PER_SECOND_LIP_SYNC_PROVIDERS = new Set([
   "sync-lipsync-v3",
   // Volcengine (KIE) — video-to-video dubbing, billed per output second.
   "volcengine-lipsync",
+  // LatentSync — held by the bucket of its audio's length and charged what the
+  // run used (LIP_SYNC_CHARGED_AT_RUN_COST below).
+  "latentsync",
 ])
 
 export function isPerSecondLipSyncProvider(provider: string): boolean {
   return PER_SECOND_LIP_SYNC_PROVIDERS.has(provider)
+}
+
+/**
+ * Bucketed lip-sync models whose bucket row is a HOLD, not the charge (decided
+ * 2026-11-18): the run is charged what it used once it ends. Less than the
+ * hold releases the rest; more is collected from the payer's balance. The
+ * work such a model does grows with its audio's length AND with settings the
+ * bucket cannot see (LatentSync's inference steps, the size of its video), so
+ * one fixed row per bucket would be wrong for most runs. Every other bucketed
+ * model is charged its bucket row as it is.
+ *
+ * A member MUST be a bucketed model (`isPerSecondLipSyncProvider`): the hold is
+ * its bucket row. `lip-sync-pricing.test.ts` holds that.
+ */
+export const LIP_SYNC_CHARGED_AT_RUN_COST: ReadonlySet<string> = new Set(["latentsync"])
+
+/** Is this lip-sync model charged what its run used, with its bucket row as the hold? */
+export function isLipSyncChargedAtRunCost(provider: unknown): boolean {
+  return typeof provider === "string" && LIP_SYNC_CHARGED_AT_RUN_COST.has(provider)
 }
 
 /**

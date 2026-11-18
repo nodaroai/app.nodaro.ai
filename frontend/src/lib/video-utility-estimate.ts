@@ -17,6 +17,7 @@ import {
   PITCH_TEMPO_PRICING,
   NEMOTRON_TRANSCRIBE_PRICING,
   LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS,
+  isLipSyncChargedAtRunCost,
   lipSyncAudioRateOf,
   lipSyncEstimateSeconds,
   videoOverlayVideoUnits,
@@ -681,13 +682,19 @@ export function lipSyncPricingUnits(
   return lipSyncEstimateSeconds(rate, rateModelQuotedAudioSec(node, nodes, edges, rerunIds), LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS)
 }
 
-/** Is this Lip Sync quoted on a length it does not know yet (a per-second-rate model with no audio length)? Its figure is then an estimate. */
+/**
+ * Is this Lip Sync's figure an estimate? A per-second-rate model quoted on a
+ * length it does not know yet, and a model charged what its run used
+ * (`isLipSyncChargedAtRunCost`: LatentSync), whose figure is its hold.
+ */
 export function lipSyncQuoteIsEstimate(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
 ): boolean {
-  const rate = lipSyncAudioRateOf((withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider)
+  const provider = (withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider
+  if (isLipSyncChargedAtRunCost(provider)) return true
+  const rate = lipSyncAudioRateOf(provider)
   return rate !== undefined && rateModelQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
 }

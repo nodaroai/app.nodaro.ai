@@ -29,7 +29,8 @@ describe("_credit-hint — derived credit figures", () => {
 
   it("prices a per-second lip-sync model at its charged 15 s bucket, a flat one at its charged price", () => {
     expect(lipSyncPriceSuffix("volcengine-lipsync")).toBe(` (${statedPrices().credits("volcengine-lipsync:15s")} cr/15s)`)
-    expect(lipSyncPriceSuffix("latentsync")).toBe(` (${statedPrices().credits("latentsync")} cr)`)
+    expect(lipSyncPriceSuffix("latentsync")).toBe(` (${statedPrices().credits("latentsync:15s")} cr/15s)`)
+    expect(lipSyncPriceSuffix("wav2lip")).toBe(` (${statedPrices().credits("wav2lip")} cr)`)
   })
 
   it("renders a ladder of charged figures, one per id", () => {

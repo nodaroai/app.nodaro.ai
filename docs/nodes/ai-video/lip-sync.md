@@ -200,6 +200,20 @@ HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per 
 | `lipsync-2-pro` | 693<!-- credits: lipsync-2-pro:15s --> | 1,375<!-- credits: lipsync-2-pro:30s --> | 2,750<!-- credits: lipsync-2-pro:60s --> | 5,500<!-- credits: lipsync-2-pro:120s --> | 13,739<!-- credits: lipsync-2-pro:300s --> |
 | `sync-lipsync-v3` | 1,100<!-- credits: sync-lipsync-v3:15s --> | 2,200<!-- credits: sync-lipsync-v3:30s --> | 4,400<!-- credits: sync-lipsync-v3:60s --> | 8,800<!-- credits: sync-lipsync-v3:120s --> | 22,000<!-- credits: sync-lipsync-v3:300s --> |
 
+#### LatentSync: held by tier, charged what the run used
+
+`latentsync` re-animates the lips of an existing video. The work a run takes grows with the length of its audio, and also with its **Inference steps** setting and the size of the video, so it has no fixed price per tier. A run **holds** the tier of its measured audio length, and when it ends it is charged for the work it actually used:
+
+| | 15s | 30s | 1min | 2min | 5min |
+|---|----:|----:|-----:|-----:|-----:|
+| `latentsync` hold | 75<!-- credits: latentsync:15s --> | 149<!-- credits: latentsync:30s --> | 297<!-- credits: latentsync:60s --> | 594<!-- credits: latentsync:120s --> | 1,485<!-- credits: latentsync:300s --> |
+
+- A run that used **less** than its hold is charged less, and the rest of the hold is released when it ends. At the default settings this is the usual case.
+- A run that used **more** than its hold (more inference steps, a large video) is charged what it used: the difference is taken from your balance when the run ends.
+- A failed run is refunded in full.
+
+The output is as long as the audio: a longer video is cut to it and a shorter one is played forward and back to fill it. Audio past 5 minutes is cut to 5 minutes and held at the 5-minute tier. The price shown before a run (the node's credit chip, the Run button, the workflow estimate, MCP) is the hold, marked `≈` in the editor and read as the other tiered models' prices are (below).
+
 The node's credit chip and the Run button show an estimate: the tier of the audio's length once the editor knows it, and before then the model's top tier (5 minutes; 60 seconds for `omnihuman-1-5`), the most a run can be charged. The editor knows the length of the audio node the run plays: an uploaded audio at the length recorded for it, or audio a node made earlier. An AAC audio is read as OmniHuman 2.0's is (above): one AAC frame past its record, less the 0.05 seconds a tier's edge forgives, so a 15-second M4A recorded at 16 kHz (a frame of 0.064 seconds) is quoted at the 30s tier its run holds, 660 credits<!-- credits: kling-avatar:30s --> on `kling-avatar`; at 44.1 or 48 kHz it stays in the 15s tier. The sound of an MP4 video, whose rate is not recorded, is read at AAC's longest frame, so one at exactly a tier's length is quoted at the next tier. A length the Lip Sync node itself carries is never used. An app or a component whose user supplies the audio lists the top tier too.
 
 The run itself is priced on the length Nodaro measures, which is not always the estimate's. A voice made again during the run (a Text to Speech or Text to Dialogue node that runs before the Lip Sync) is estimated at the length of its last take. If the new take comes out longer, the run is held and charged on its measured length, which can be a higher tier than the estimate.
@@ -208,7 +222,7 @@ The run itself is priced on the length Nodaro measures, which is not always the 
 
 ### How the audio's length is measured
 
-Every model priced by the length of its audio — `kling-avatar`, `kling-avatar-pro`, `omnihuman-1-5`, `heygen-lipsync-precision`, `lipsync-2-pro`, `sync-lipsync-v3`, `volcengine-lipsync` and `omnihuman-2-0` — is priced on the length Nodaro measures from the audio itself, on every path: the editor's Run, a workflow or app run, the API, the SDK and MCP. A length a request or a node carries (`audioDurationSec`, MCP's `audio_duration_sec`) is ignored. The run is held for the tier of the measured length (for `omnihuman-2-0`, its whole seconds), and the hold is the charge: nothing is refunded or added afterwards.
+Every model priced by the length of its audio — `kling-avatar`, `kling-avatar-pro`, `omnihuman-1-5`, `latentsync`, `heygen-lipsync-precision`, `lipsync-2-pro`, `sync-lipsync-v3`, `volcengine-lipsync` and `omnihuman-2-0` — is priced on the length Nodaro measures from the audio itself, on every path: the editor's Run, a workflow or app run, the API, the SDK and MCP. A length a request or a node carries (`audioDurationSec`, MCP's `audio_duration_sec`) is ignored. The run is held for the tier of the measured length (for `omnihuman-2-0`, its whole seconds), and the hold is the charge: nothing is refunded or added afterwards. The one exception is `latentsync`, whose hold is settled at what the run used (above).
 
 | Audio plays | `kling-avatar` is charged |
 |-------------|---------------------------|

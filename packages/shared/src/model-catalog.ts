@@ -4154,9 +4154,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   },
   // LatentSync, HeyGen Lipsync Precision and Lipsync 2 Pro run on Replicate
   // (providers/replicate/lip-sync.ts). Listed so a deployment's model
-  // restriction can name them (decided 2026-11-12); what they are sent and
-  // charged did not change. They take no size: the result keeps the size of the
-  // video they are given.
+  // restriction can name them (decided 2026-11-12). They take no size: the
+  // result keeps the size of the video they are given. LatentSync holds the
+  // bucket of its audio's length and is charged what the run used
+  // (`isLipSyncChargedAtRunCost`, decided 2026-11-18).
   "latentsync": {
     id: "latentsync",
     kind: "video",
@@ -4165,9 +4166,15 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "bytedance",
     label: "LatentSync",
     series: "LatentSync",
-    description: "Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input.",
+    description: "Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses.",
     useCases: ["lip-sync", "dubbing", "video-to-video"],
-    pricing: [{ identifier: "latentsync", credits: 7 }],
+    pricing: [
+      { identifier: "latentsync:15s", credits: 68, note: "hold — the run is charged what it used" },
+      { identifier: "latentsync:30s", credits: 135, note: "hold" },
+      { identifier: "latentsync:60s", credits: 270, note: "hold" },
+      { identifier: "latentsync:120s", credits: 540, note: "hold" },
+      { identifier: "latentsync:300s", credits: 1350, note: "hold, 5-min ceiling" },
+    ],
   },
   "heygen-lipsync-precision": {
     id: "heygen-lipsync-precision",

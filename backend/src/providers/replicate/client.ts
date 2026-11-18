@@ -109,7 +109,7 @@ const T4_RATE = REPLICATE_GPU_USD_PER_SEC.t4
  * priced Replicate models (flux-2, ltx, runway, pika) commit the reserved tier,
  * so their extractCost is display-only and the T4 fallback is harmless.
  */
-const REPLICATE_MODEL_USD_PER_SEC: Record<string, number> = {
+export const REPLICATE_MODEL_USD_PER_SEC: Record<string, number> = {
   latentsync: REPLICATE_GPU_USD_PER_SEC.l40s,
   wav2lip: REPLICATE_GPU_USD_PER_SEC.l40s,
   sadtalker: REPLICATE_GPU_USD_PER_SEC.a100_80gb,

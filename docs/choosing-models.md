@@ -119,7 +119,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 <!-- AUTO-GEN:START model-table-video -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
-| LatentSync | LatentSync | Everyday | 8<!-- credits: latentsync --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input. |
 | Nodaro Video Upscale | Nodaro Upscale | — | 17<!-- credits: nodaro-video-upscale:1080p:per-4s --> | video-upscale | Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
@@ -127,6 +126,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Topaz Video Upscale | Topaz | Everyday | 44<!-- credits: topaz-video:per-unit --> | video-upscale | High-quality video upscale and enhancement to 720p, 1080p or 4K at 15–60 fps (frames are interpolated). Metered: the price is per Topaz unit, and a run uses a few units per output gigapixel. |
 | Grok Imagine Video 1.5 | xAI | Everyday | 55<!-- credits: grok-imagine-video-1.5 --> | i2v | Grok Imagine Video 1.5 — 1–15s at 480p, 720p or 1080p, per-second pricing. An exact first and last frame (the same image as both makes a seamless loop) and up to 4 in-between frames. Requires an input image. |
 | Bytedance Lite I2V | Bytedance | Everyday | 63<!-- credits: bytedance-lite --> | i2v, t2v | Cheapest Bytedance video tier with end-frame support. |
+| LatentSync | LatentSync | Everyday | 75<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | Grok Imagine Extend | xAI | Everyday | 77<!-- credits: grok-extend:6s:720p --> | extend | Extend a Grok Imagine video you made here (from text or an image) by 6 or 10 seconds, at the video's own resolution (480p or 720p). |
 | Hailuo 02 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-standard --> | i2v, t2v | Hailuo 02 Standard — economical option with end-frame support. |
 | Hailuo 2.3 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-2.3 --> | i2v | Cheaper Hailuo 2.3 tier — good baseline quality. |
