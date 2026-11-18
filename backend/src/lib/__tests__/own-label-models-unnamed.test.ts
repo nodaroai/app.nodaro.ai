@@ -173,5 +173,6 @@ describe("house models name no upstream", () => {
       }
     }
     expect(hits).toEqual([])
-  })
+    // Reads every tracked text file: about 2 s alone, past the default 5 s when the whole suite shares the disk.
+  }, 60_000)
 })
