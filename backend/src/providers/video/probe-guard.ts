@@ -570,6 +570,42 @@ export function probeNotRun(err: unknown): boolean {
 }
 
 /**
+ * A reader that started but could not get what it needed from the SERVER
+ * (decided 2026-11-17): a thread or a process it could not create. ffmpeg /
+ * ffprobe then print the system's own words ("Resource temporarily
+ * unavailable" is EAGAIN) and exit as for any other failure, so only the words
+ * tell it apart. Only phrases with spaces, which a link cannot carry as they
+ * are (a link that names "EAGAIN" is not the server's shortage); and never
+ * "Cannot allocate memory", which a damaged file can make ffmpeg print too.
+ */
+const SERVER_SHORT_RE = /Resource temporarily unavailable/
+
+/**
+ * A link's host that failed the read FOR NOW (decided 2026-11-17): a 5xx
+ * (libavformat's "Server returned 5XX", a download's "Failed to download:
+ * <url> (5xx)"), or a connection dropped or timed out on the way. A 5xx is
+ * matched only where a status is reported, never as a bare number (an ffmpeg
+ * message is full of them: "544x960"); and only as phrases a link cannot
+ * carry as they are.
+ */
+const HOST_FOR_NOW_RE = /Server returned 5XX|Failed to download: \S+ \(5\d\d\)|Connection reset by peer|Connection timed out|socket hang up/
+
+/** The same, as a Node error's own code (a download's, never its words). */
+const HOST_FOR_NOW_CODES: ReadonlySet<string> = new Set(["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "EPIPE"])
+
+/** The words of `err` and the errors it was caused by. */
+const failureWords = (err: unknown): string =>
+  causeChain(err).map((e) => { const m = (e as { message?: unknown }).message; return typeof m === "string" ? m : "" }).join("\n")
+
+/** Our own downloader running out of time ("Download timeout: …", never a link's words: its message starts so). */
+const downloadTimedOut = (err: unknown): boolean =>
+  causeChain(err).some((e) => { const m = (e as { message?: unknown }).message; return typeof m === "string" && m.startsWith("Download timeout") })
+
+/** A Node error code in the chain that says the host failed for now. */
+const hostCodeForNow = (err: unknown): boolean =>
+  causeChain(err).some((e) => { const c = (e as { code?: unknown }).code; return typeof c === "string" && HOST_FOR_NOW_CODES.has(c) })
+
+/**
  * The ONE meaning a probe failure has on every route that measures a link
  * before its charge, when the failure is not about the file's own content:
  * - a link that is not an ordinary media file → 400 {@link NOT_A_MEDIA_FILE};
@@ -577,7 +613,10 @@ export function probeNotRun(err: unknown): boolean {
  *   later one) → 503 {@link LINK_HOST_UNREACHABLE}, `source_unreachable`;
  * - a read that ran out of time → 503 {@link LINK_READ_TIMED_OUT}, `probe_timeout`;
  * - a read the server could not run (its reader failed to start, or it was
- *   stopped) → 503 {@link PROBE_UNAVAILABLE}, `probe_unavailable`;
+ *   stopped, or it started but the server was short of threads or memory)
+ *   → 503 {@link PROBE_UNAVAILABLE}, `probe_unavailable`;
+ * - a host that failed the read for now (a 5xx, a dropped or timed-out
+ *   connection) → 503 {@link LINK_HOST_UNREACHABLE}, `source_unreachable`;
  * - a host that does not exist (reason `host`) → 400 {@link LINK_HOST_NOT_FOUND},
  *   and a private or reserved address, at the first hop or any later one
  *   (reason `address`) → 400 {@link LINK_NOT_PUBLIC}: both `media_link_bad_host`.
@@ -592,11 +631,17 @@ export function probeLinkRefusal(err: unknown): { readonly code: ProbeLinkRefusa
   if (notMedia) return notMedia
   const reason = (err as { reason?: unknown } | null)?.reason
   if (reason === "dns") return LINK_HOST_UNREACHABLE
-  // Out of time anywhere in the chain (a stop whose cause is a timeout is a timeout).
-  if (causeChain(err).some((c) => (c as { timedOut?: unknown }).timedOut === true || (c as { name?: unknown }).name === "TimeoutError")) return LINK_READ_TIMED_OUT
+  // Out of time anywhere in the chain (a stop whose cause is a timeout is a timeout), or our own download's.
+  if (causeChain(err).some((c) => (c as { timedOut?: unknown }).timedOut === true || (c as { name?: unknown }).name === "TimeoutError") || downloadTimedOut(err)) return LINK_READ_TIMED_OUT
   if (probeNotRun(err)) return PROBE_UNAVAILABLE
   if (reason === "host") return LINK_HOST_NOT_FOUND
   if (reason === "address") return LINK_NOT_PUBLIC
+  // A refusal the guard gave for its own reason is that reason's answer: what
+  // the read printed after it (a proxy's 502 for a host it refused) is not the host failing.
+  if (reason !== undefined) return undefined
+  const words = failureWords(err)
+  if (SERVER_SHORT_RE.test(words)) return PROBE_UNAVAILABLE
+  if (HOST_FOR_NOW_RE.test(words) || hostCodeForNow(err)) return LINK_HOST_UNREACHABLE
   return undefined
 }
 

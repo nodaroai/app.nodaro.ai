@@ -59,6 +59,7 @@ import { resolveUseCaseContinuation, type UseCaseContinuation } from "../lib/use
 import { fromFailedCover } from "../lib/use-case/continue-credits.js"
 import { usecaseShortfallBody } from "../lib/use-case/credits-refusal.js"
 import { usecaseInnerDenial } from "../lib/use-case/inner-availability.js"
+import { usecaseKeptSpeakerNames } from "../lib/use-case/wrapper-output-speakers.js"
 import { continuationInputOverrides } from "../services/workflow-engine/run-continuation.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 import { UnqueuedRunError } from "../lib/enqueue-execution.js"
@@ -219,6 +220,8 @@ function registerContinue(app: FastifyInstance, type: UseCaseNodeType): void {
         ...(plan.input.masterAudioUrl !== undefined ? { masterAudioUrl: plan.input.masterAudioUrl } : {}),
         ...(plan.input.mediaKind !== undefined ? { mediaKind: plan.input.mediaKind } : {}),
         ...(plan.input.durationSec !== undefined ? { durationSec: plan.input.durationSec } : {}),
+        // The speakers' names the run kept, reported back on this job's output too.
+        ...usecaseKeptSpeakerNames(plan.input.speakerNames),
         ...(plan.finalChain ? { _finalChain: true } : {}),
         ...(plan.finalOf ? { _finalOf: plan.finalOf } : {}),
         ...(plan.finalEdit ? { _finalEdit: plan.finalEdit } : {}),

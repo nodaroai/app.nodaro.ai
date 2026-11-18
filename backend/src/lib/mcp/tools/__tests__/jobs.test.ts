@@ -107,6 +107,22 @@ describe("list_jobs tool", () => {
     expect(result.content[0]?.text).toContain("\"j1\"")
   })
 
+  it("leaves out a use-case run's steps (listed only through the run, whose charge holds theirs), and never returns the run embed", async () => {
+    mockListJobs([
+      // One media type for all three (the default kinds filter is not what is checked): only the run link differs.
+      { id: "run", status: "completed", job_type: "generate-image", created_at: "2026-11-17T19:19:22Z", credits: 11, workflow_execution_id: null },
+      { id: "step", status: "completed", job_type: "generate-image", created_at: "2026-11-17T19:20:26Z", credits: 22, workflow_execution_id: "exec-1", workflow_executions: { trigger_type: "use_case" } },
+      { id: "node", status: "completed", job_type: "generate-image", created_at: "2026-11-17T19:21:00Z", credits: 2, workflow_execution_id: "exec-2", workflow_executions: [{ trigger_type: "manual" }] },
+    ])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const text = (await callTool(server, "list_jobs", { limit: 10 })).content[0]?.text ?? ""
+    expect(text).toContain("\"run\"")
+    expect(text).toContain("\"node\"")
+    expect(text).not.toContain("\"step\"")
+    expect(text).not.toContain("workflow_executions")
+  })
+
   it("leaves out child jobs (a step a worker-side handler ran for its parent)", async () => {
     const { is } = mockListJobs([])
     const server = buildServer()

@@ -37,7 +37,10 @@
  * Continue captions the rendered clips. `json` is the plan as
  * the run held it: a Render final's plan is seeded with the review applied, so it holds
  * the kept clips. A review-on run stops at the render: its per-clip previews
- * are the clips until Render final.
+ * are the clips until Render final. Each clip names its place in the
+ * recording (decided 2026-11-17: `sourceStartMs`, `sourceEndMs`, and
+ * `sourceSpans` when it is cut from several stretches), read off the plan
+ * clip its key names (wrapper-output-spans.ts).
  */
 import {
   MULTICAM_NODE_IDS,
@@ -50,9 +53,10 @@ import {
   type StoredInlineGraph,
 } from "@nodaro/render-rules"
 import { edlSpanKey } from "@nodaro/shared/nodes"
-import { completedOutput, failedStepOf, isRecord, str, type UseCaseClipRow, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
+import { completedOutput, failedStepOf, isRecord, str, type ClipPackFailedClip, type UseCaseClipRow, type UseCaseWrapperOutput } from "./wrapper-output-parts.js"
 import { usecaseCamerasReport } from "./wrapper-output-cameras.js"
-import { clipPackFailedClips, clipStepRows } from "./clip-failures.js"
+import { clipPackFailedClipKeys, clipPackFailedClips, clipStepRows } from "./clip-failures.js"
+import { clipSourceSpans, type ClipSourcePlace } from "./wrapper-output-spans.js"
 
 export function listOutput(
   graph: StoredInlineGraph,
@@ -157,17 +161,20 @@ function clipsOutput(
   })
 
   const planned = Array.isArray(planOut?.json) ? (planOut!.json as unknown[]) : []
-  // Each planned clip's title and hook, by its clip key (the key is the clip's span: an edited hook keeps it).
-  const meta = new Map(planned.flatMap((c) => {
-    const clip = typeof c === "string" ? parseJson(c) : c
+  // The planned clips as EDLs (a row can be its JSON text), in plan order.
+  const plannedClips = planned.map((c) => (typeof c === "string" ? parseJson(c) : c))
+  // Each planned clip's title and hook and its place in the recording, by its
+  // clip key (the key is the clip's span: an edited hook keeps it).
+  const meta = new Map(plannedClips.flatMap((clip) => {
     const key = edlSpanKey(clip)
     const m = (isRecord(clip) ? clip.meta : undefined) as { title?: unknown; hook?: unknown } | undefined
-    return key ? [[key, m ?? {}] as const] : []
+    return key ? [[key, { ...(m ?? {}), place: clipSourceSpans(clip) }] as const] : []
   }))
   const clips = pairs.map(({ url, row, captioned, j, captionsFailed }): UseCaseClipRow => {
     const s = stamps[row] ?? {}
     const clipKey = str(s.clipKey)
     const m = clipKey ? meta.get(clipKey) : undefined
+    const place: ClipSourcePlace = m?.place ?? {}
     // The still of the file the clip delivers: its captioned file's, else its render's.
     const thumbnailUrl = (captioned ? str(lastStamps[j]?.thumbnailUrl) : undefined) ?? str(s.thumbnailUrl)
     return {
@@ -180,17 +187,25 @@ function clipsOutput(
       ...(str(m?.hook) ? { hook: str(m?.hook) } : {}),
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
       ...(captionsFailed ? { captionsFailed: true as const } : {}),
+      ...place,
     }
   })
 
   // The clips that could not be delivered, each counted once: its render row
   // failed or, on several cameras, its Camera Switch row did (clip-failures.ts).
   const hasSwitch = graph.nodes.some((n) => n.id === MULTICAM_NODE_IDS.switch)
-  const { failedClips, reason: renderError } = clipPackFailedClips({
-    planned: planned.length,
+  const steps = {
     render: clipStepRows(nodeStates[map.renderNodeId], (o) => str(o.videoUrl) ?? str(o.audioUrl)),
     ...(hasSwitch ? { switched: clipStepRows(nodeStates[MULTICAM_NODE_IDS.switch], (o) => (isRecord(o.json) && o.json.edl !== undefined ? "edl" : undefined)) } : {}),
-  })
+  }
+  const { failedClips, reason: renderError } = clipPackFailedClips({ planned: planned.length, ...steps })
+  // The same clips by name (decided 2026-11-17): each with its title, hook and place in the recording.
+  const failedClipList = failedClips > 0
+    ? clipPackFailedClipKeys({ plannedKeys: plannedClips.map((c) => edlSpanKey(c)), ...steps }).map((clipKey): ClipPackFailedClip => {
+        const m = meta.get(clipKey)
+        return { clipKey, ...(str(m?.title) ? { title: str(m?.title) } : {}), ...(str(m?.hook) ? { hook: str(m?.hook) } : {}), ...(m?.place ?? {}) }
+      })
+    : []
   const failedCaptions = clips.filter((c) => c.captionsFailed).length
   const first = clips[0]?.url
   const audio = !!render && !str(render.videoUrl) && !!str(render.audioUrl) && !after
@@ -198,6 +213,7 @@ function clipsOutput(
     ...(first ? { [audio ? "audioUrl" : "videoUrl"]: first } : {}),
     clips,
     ...(failedClips > 0 ? { failedClips } : {}),
+    ...(failedClipList.length > 0 ? { failedClipList } : {}),
     ...(failedCaptions > 0 ? { failedCaptions } : {}),
     ...(captionsNotRun ? { captionsNotRun: true as const } : {}),
     ...(renderError ? { renderError } : {}),

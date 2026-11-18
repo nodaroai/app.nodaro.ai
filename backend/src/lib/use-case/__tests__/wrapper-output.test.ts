@@ -277,8 +277,8 @@ describe("a Clip Pack run's result", () => {
       "uc-captions": done(captionsOf([ok(0, "https://r2/c0.mp4"), ok(1, "https://r2/c2.mp4")])),
     }, "exec-4")
     expect(out.clips).toEqual([
-      { url: "https://r2/c0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0", title: "The pivot", hook: "We almost quit." },
-      { url: "https://r2/c2.mp4", quality: "final", clipKey: keyOf(2), planBasis: "pb2", renderBasis: "rb2" },
+      { url: "https://r2/c0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0", title: "The pivot", hook: "We almost quit.", sourceStartMs: 0, sourceEndMs: 30_000 },
+      { url: "https://r2/c2.mp4", quality: "final", clipKey: keyOf(2), planBasis: "pb2", renderBasis: "rb2", sourceStartMs: 120_000, sourceEndMs: 150_000 },
     ])
     expect(out.failedClips).toBe(1)
     expect(out.videoUrl).toBe("https://r2/c0.mp4")
@@ -392,7 +392,7 @@ describe("a Clip Pack run's result", () => {
       "uc-render": done({ videoUrl: "https://r2/r0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0" }),
       "uc-captions": done({ videoUrl: "https://r2/c0.mp4" }),
     }, "exec-8")
-    expect(out.clips).toEqual([{ url: "https://r2/c0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0", title: "The pivot", hook: "We almost quit." }])
+    expect(out.clips).toEqual([{ url: "https://r2/c0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0", title: "The pivot", hook: "We almost quit.", sourceStartMs: 0, sourceEndMs: 30_000 }])
   })
 
   it("a plan with no clips: no result, in the kind's own words", () => {
@@ -458,8 +458,8 @@ describe("a Clip Pack run's result", () => {
       "uc-captions": { status: "failed", error: "captions failed" },
     }, "exec-5")
     expect(out.clips).toEqual([
-      { url: "https://r2/r0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0", title: "The pivot", hook: "We almost quit.", captionsFailed: true },
-      { url: "https://r2/r1.mp4", quality: "final", clipKey: keyOf(1), planBasis: "pb1", renderBasis: "rb1", title: "The fix", captionsFailed: true },
+      { url: "https://r2/r0.mp4", quality: "final", clipKey: keyOf(0), planBasis: "pb0", renderBasis: "rb0", title: "The pivot", hook: "We almost quit.", captionsFailed: true, sourceStartMs: 0, sourceEndMs: 30_000 },
+      { url: "https://r2/r1.mp4", quality: "final", clipKey: keyOf(1), planBasis: "pb1", renderBasis: "rb1", title: "The fix", captionsFailed: true, sourceStartMs: 60_000, sourceEndMs: 90_000 },
     ])
     expect(out).toMatchObject({ videoUrl: "https://r2/r0.mp4", failedCaptions: 2 })
     expect(out).not.toHaveProperty("failedClips")

@@ -9925,6 +9925,7 @@ music bed under it. Only the recording is required (`mediaUrl`, or
 | `instructions` | `string` | no | Editing instructions for the planner (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
+| `speakerNames` | `Record<string, string>` | no | Speaker label (as the run's transcript names them, e.g. `"speaker_0"`) → the name to show, up to 80 characters; at most 32 speakers. The job keeps them and returns them on `output_data.speakers[].name`; the run never reads them (nothing is renamed in the captions, transcript or edit), and a continuation keeps them. A blank name is dropped; a label nobody in the recording has is ignored. Over the limits: `400 validation_error`. |
 
 Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
 `TypeError` before any request. **Several recordings or a Master audio need Speaker Map**:
@@ -9944,6 +9945,24 @@ several recordings or a Master audio adds `cameras`: `{ speakers: [{ speaker,
 ordinal, camera, marginDb }], syncNotes, mapNotes }` — who was put on which
 recording (`camera` `null` = the wide shot).
 
+When the transcript names speakers, `output_data.speakers` lists them, first
+heard first: `[{ label, name?, talkMs }]` — the transcript's label, the name
+`speakerNames` gave it, and how long they talk across the recording in ms
+(runs of one speaker's words with no other speaker's word between them and
+no pause of 0.7 s or longer; two people talking at once both count). With
+several cameras the labels come in the `cameras.speakers` order. Read it as a
+`TightenEpisodeOutputData` (exported with `UseCaseSpeaker`); a run that
+finished before the field was added has none:
+
+```ts
+const job = (await client.jobs.getStatus(jobId)).data
+const out = job.output_data as TightenEpisodeOutputData
+const total = (out.speakers ?? []).reduce((sum, s) => sum + s.talkMs, 0)
+for (const s of out.speakers ?? []) {
+  console.log(s.name ?? s.label, total > 0 ? Math.round((100 * s.talkMs) / total) : 0, "%")
+}
+```
+
 `estimateTightenEpisode` answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec, estimate? } }`:
 the run's steps at their own rates plus its fee of 11 credits<!-- credits: use-case-fee:tighten-episode --> per run.
 The estimate leans high — the render is priced at the recording's full length
@@ -9961,7 +9980,12 @@ Both refuse before anything is created or charged: `400` (`validation_error`,
 nodaro_connection_required` (a self-hosted install not connected to nodaro.ai),
 `503 provider_key_missing` (a self-hosted install with no key for the
 transcription a step needs, and no nodaro.ai connection that covers it; the
-message names the key) or `503 use_case_unavailable`. `tightenEpisode` also throws
+message names the key), `503 use_case_unavailable`, or — when a recording,
+the Master audio or the music could not be read FOR NOW (the server short of
+threads or memory, the link's host answering 5xx; read once more first) —
+`503 probe_unavailable`, `source_unreachable` or `probe_timeout`: nothing is
+wrong with the file, run it again. `media_unreadable` is only the file's own
+failure. `tightenEpisode` also throws
 `InsufficientCreditsError` when the balance does not cover the estimate.
 
 #### `episodeChapters(input, options?)` / `estimateEpisodeChapters(input)`
@@ -10105,14 +10129,22 @@ whoever is talking), with the same need for Speaker Map. See the
 
 `clipPack` answers `UseCaseJobResult` — `{ jobId, executionId?, deduped? }`.
 Poll `jobId`: the finished job's `output_data.clips` is
-`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed? }]`, one
+`[{ url, title?, hook?, clipKey, thumbnailUrl?, captionsFailed?, sourceStartMs?, sourceEndMs?, sourceSpans? }]`
+(`ClipPackClip`, on `ClipPackOutputData`), one
 entry per clip in the plan's order (`thumbnailUrl` on each video clip), and
-`output_data.videoUrl` the first clip (`audioUrl` for audio clips);
+`output_data.videoUrl` the first clip (`audioUrl` for audio clips). Each clip
+says where it comes from in the recording, in ms: `sourceStartMs` and
+`sourceEndMs` are its first kept stretch's start and its last one's end (the
+two numbers of its `clipKey`), and `sourceSpans`, `[{ inMs, outMs }]` sorted by
+time with touching stretches merged, lists the stretches when there are two
+or more. A run that finished before these fields were added has none of them;
 `output_data.json` is the plan's clip set and `quality` is `"proxy"` for a
 review-on run's previews, `"final"` otherwise; a run on several recordings
 or a Master audio adds `output_data.cameras`. Every clip is tried: a clip that could not be
 rendered (or, on several cameras, whose camera switch failed) is skipped and
-not charged, and counted in `output_data.failedClips`; the run completes with the others and keeps its
+not charged, and counted in `output_data.failedClips` and named in
+`output_data.failedClipList` (`ClipPackFailedClip[]`: each one's `clipKey`,
+`title`, `hook` and place in the recording, in the plan's order); the run completes with the others and keeps its
 fee. A clip whose captions could not be added comes uncaptioned, marked
 `captionsFailed: true` and counted in `output_data.failedCaptions`; those
 captions are not charged. A run with no clip rendered fails, and its fee is
@@ -10153,6 +10185,7 @@ the node's default. See the
 | `emphasisStyle` | `ClipPackEmphasis` | no | Default `"scale"`; `"none"`, or `"scale"`, `"border"` and `"dim"` joined with `"+"`, each once — any other is refused `400 validation_error`. |
 | `framingSource` | `"auto" \| "static" \| "tracking"` | no | How the speakers are followed ([Following faces](./nodes/processing-video/speaker-layout.md#following-faces)): `"auto"` (absent) follows faces with Speaker Frames while it is available to the caller, else the even split; `"static"` splits the frame evenly by speaker; `"tracking"` follows faces (charged per started block of 1,000 sampled frames; refused `403 node_not_available` where Speaker Frames is not available to the caller). Faces aren't named after a speaker yet, so a camera shared by several speakers keeps the even split. |
 | `reviewBeforeRender` | `boolean` | no | Stop at a quick preview; render it at full quality afterwards with `continueUseCase({ mode: "render-final" })` — with no `editedEdl`: the layout has no cut to change. |
+| `speakerNames` | `Record<string, string>` | no | Speaker label → the name to show, as on `tightenEpisode`: kept by the job, returned on `output_data.speakers[].name`, never read by the run. |
 
 `options.idempotencyKey` works as on `tightenEpisode`. Passing both
 `mediaUrl` and `mediaUrls`, or neither, rejects with a `TypeError` before any
@@ -10163,7 +10196,9 @@ Poll `jobId`: the finished job's `output_data.videoUrl` is the framed video,
 `durationSec` its length, `json` the edit Speaker View drew, `transcript` the
 transcript and `quality` `"proxy"` for a review-on run's preview, `"final"`
 otherwise; a run on several recordings or a Master audio adds `cameras`, who
-was put on which camera. A run on one recording reads the recording's size
+was put on which camera. `output_data.speakers` (`SpeakerLayoutOutputData`) lists
+each speaker first heard first, `[{ label, name?, talkMs }]`, counted as on
+`tightenEpisode`: each speaker's share of the conversation. A run on one recording reads the recording's size
 before it starts, and may be refused `429 rate_limit_exceeded` (try again in a
 moment) when you start too many of those in a minute.
 

@@ -42,6 +42,24 @@ const jobsRateGate: ToolGate = { required: ["assets:write"] }
 
 type PublicCreditFields = ReturnType<typeof publicCreditFieldsOf>
 
+/** The run a listed job belongs to, read only to keep a use-case run's steps out of the listing. */
+const USE_CASE_RUN_EMBED = "workflow_executions!workflow_execution_id(trigger_type)"
+
+/** A job of a use-case run's own inner run (its execution's trigger is `use_case`): listed only through the run. */
+function isUseCaseRunStep(row: Readonly<Record<string, unknown>>): boolean {
+  if (row.workflow_execution_id == null) return false
+  // A to-one embed arrives as an object; a one-element array is read the same (as GET /v1/jobs reads it).
+  const embed = row.workflow_executions
+  const execution = (Array.isArray(embed) ? embed[0] : embed) as { trigger_type?: unknown } | null | undefined
+  return execution?.trigger_type === "use_case"
+}
+
+/** The row without the run embed, which is never returned. */
+function withoutRunEmbed(row: Record<string, unknown>): Record<string, unknown> {
+  const { workflow_executions: _execution, ...rest } = row
+  return rest
+}
+
 /**
  * Replace each row's `usage_log_id` with `credits_charged` — the run's settled
  * charge, its steps (child jobs) and settled side holds included — plus
@@ -49,7 +67,7 @@ type PublicCreditFields = ReturnType<typeof publicCreditFieldsOf>
  * run loader (a read per table for all rows). `credits` stays the job's own
  * hold. The raw usage-log id never reaches the agent.
  */
-async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unknown; credits?: unknown }>(
+async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unknown; credits?: unknown; input_data?: unknown }>(
   rows: readonly T[],
   ownerId: string,
 ): Promise<Array<Omit<T, "usage_log_id"> & PublicCreditFields>> {
@@ -58,7 +76,8 @@ async function withCreditsCharged<T extends { usage_log_id?: unknown; id?: unkno
   const credits = await runCreditsFor(
     rows.flatMap((r) => {
       const id = jobId(r)
-      return id ? [{ id, usage_log_id: logId(r), credits: typeof r.credits === "number" ? r.credits : null }] : []
+      // A use-case run's steps are its inner execution's jobs (read off its input).
+      return id ? [{ id, usage_log_id: logId(r), credits: typeof r.credits === "number" ? r.credits : null, input_data: r.input_data }] : []
     }),
     ownerId,
   )
@@ -225,7 +244,7 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       let filtered =
         scope === "mine"
           // trash-read: applyJobListFilters below leaves the Trash out.
-          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id, workflow_execution_id${jobListFilterSelect(filters)}`).eq("user_id", session.userId)
+          ? supabase.from("jobs").select(`${baseSelect}, usage_log_id, workflow_execution_id, ${USE_CASE_RUN_EMBED}${jobListFilterSelect(filters)}`).eq("user_id", session.userId)
           : supabase
               .from("jobs")
               .select(`${baseSelect}, user_id`)
@@ -257,7 +276,10 @@ export function registerJobs({ server, session, fastify }: RegisterJobsOpts): vo
       // or re-read rows it already passed.
       const lastRead = page[page.length - 1]
       const nextCursor = page.length === limit && lastRead?.created_at ? (lastRead.created_at as string) : null
-      let rows = page.map(withoutFilterEmbeds)
+      // A use-case run's steps are listed only through the run (decided
+      // 2026-11-17), as GET /v1/jobs lists them: its credits_charged holds
+      // theirs, so listed beside it they would be summed twice.
+      let rows = page.filter((row) => !isUseCaseRunStep(row)).map((row) => withoutFilterEmbeds(withoutRunEmbed(row)))
       // Map of media kind → set of job_type strings that produce that
       // media. Filtering happens in JS rather than in the SQL query so a
       // multi-kind selection (e.g. ["image", "video"]) is just a set

@@ -58,6 +58,8 @@ export type UseCaseBody = {
   masterAudioUrl?: string
   /** The Cameras settings (a body that spreads usecaseMulticamRecordingShape); its type's resolver reads them. */
   cameras?: unknown
+  /** Speaker label → name (a body that spreads usecaseSpeakerNamesShape): kept on the job and reported back, never read by the run. */
+  speakerNames?: Record<string, string>
   reviewBeforeRender?: boolean
   componentDepth?: number
   executingComponentIds?: string[]

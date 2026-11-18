@@ -6,21 +6,16 @@
  */
 import type { StoredInlineGraph } from "@nodaro/render-rules"
 import type { UseCaseCamerasReport } from "@nodaro/render-rules"
+import type { ClipPackClip, ClipPackFailedClip, UseCaseSpeaker } from "@nodaro/shared/edl"
 
-/** One clip of a clip set, in plan order. */
-export interface UseCaseClipRow {
-  readonly url: string
-  readonly quality: "proxy" | "final"
-  readonly clipKey?: string
-  readonly planBasis?: string
-  readonly renderBasis?: string
-  readonly title?: string
-  readonly hook?: string
-  /** The still of the file it delivers (none for an audio clip). */
-  readonly thumbnailUrl?: string
-  /** Its captions could not be added: the clip is its render, uncaptioned. */
-  readonly captionsFailed?: true
-}
+export type { ClipPackFailedClip }
+
+/**
+ * One clip of a clip set, in plan order: the wire shape `@nodaro/shared`
+ * publishes (and the SDK re-exports), so what the server writes and what an
+ * app reads cannot drift apart.
+ */
+export type UseCaseClipRow = ClipPackClip
 
 /** One delivered format, in format order. */
 export interface UseCaseFormatRow {
@@ -50,6 +45,8 @@ export interface UseCaseWrapperOutput {
   readonly clips?: readonly UseCaseClipRow[]
   /** How many planned clips could not be rendered. */
   readonly failedClips?: number
+  /** Which planned clips could not be rendered, in plan order (decided 2026-11-17). */
+  readonly failedClipList?: readonly ClipPackFailedClip[]
   /** How many delivered clips came without captions (their captions could not be added). */
   readonly failedCaptions?: number
   /** Clips rendered, but the run stopped before captioning them: nothing is kept; Continue captions them. */
@@ -64,6 +61,14 @@ export interface UseCaseWrapperOutput {
   readonly text?: string
   /** A run on several recordings or a Master audio: who was put on which camera, and the sync and map notes. */
   readonly cameras?: UseCaseCamerasReport
+  /** An episode's or a layout's speakers, first heard first: their label, the name the request gave, their talk. */
+  readonly speakers?: readonly UseCaseSpeaker[]
+}
+
+/** What the wrapper job kept from its request that the output reports back (never read by the run's graph). */
+export interface UseCaseWrapperRequest {
+  /** Speaker label → display name, as the request sent it (`input_data.speakerNames`). */
+  readonly speakerNames?: unknown
 }
 
 type State = { readonly status?: unknown; readonly output?: Readonly<Record<string, unknown>> }

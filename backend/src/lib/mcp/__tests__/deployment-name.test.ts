@@ -434,7 +434,7 @@ const NAME_FILES: Readonly<Record<string, { count: number; how: string; funnel?:
   "tools/verbs-shot-sequence.ts": { count: 2, how: LIST },
   "tools/verbs-split-into-layers.ts": { count: 1, how: LIST },
   "tools/verbs-split-media.ts": { count: 2, how: LIST },
-  "tools/verbs-use-case.ts": { count: 3, how: REFUSALS },
+  "tools/verbs-use-case.ts": { count: 4, how: REFUSALS },
   "tools/verbs-video-mask.ts": { count: 4, how: LIST },
   "tools/verbs-video-overlay.ts": { count: 1, how: LIST },
   "tools/verbs-video.ts": { count: 23, how: LIST },

@@ -52,6 +52,21 @@ export type {
   UseCaseNodeType,
   UseCaseRecordingsInput,
   UseCaseRequestOptions,
+  UseCaseSpeakerNamesInput,
 } from "../resources/edit.js"
+
+// What a finished use-case run reports on its job's `output_data` (read it with
+// `client.jobs.getStatus(jobId)`): the clips' places in the recording and the
+// speakers. The same `@nodaro/shared` types the server writes them with.
+export type {
+  ClipPackClip,
+  ClipPackFailedClip,
+  ClipPackOutputData,
+  SpeakerLayoutOutputData,
+  TightenEpisodeOutputData,
+  UseCaseOutputData,
+  UseCaseSourceSpan,
+  UseCaseSpeaker,
+} from "@nodaro/shared/edl"
 
 export type { SpeakerMapInput, SpeakerMapSource } from "../resources/speaker-map-inputs.js"

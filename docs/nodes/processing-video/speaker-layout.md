@@ -28,6 +28,12 @@ With more than one recording wired into `media`, the recordings are taken in the
 | Video (`media`) | Video | The framed video. It carries its length, so a step priced by the length of what it is given (Trim, Loop, Combine Videos, Video SFX) is priced by the framed video's length. |
 | Edit (EDL) (`json`) | EDL | The edit Speaker View drew: the whole recording, with each speaker's boxes. Wire it into another render, for example a second [Speaker View](./speaker-view.md) in another shape. It is JSON, not media: it does not connect to an input that takes only audio, video or images (wire the **Video** there). |
 
+### The speakers, over the API
+
+A run started over the API (`POST /v1/speaker-layout`, the SDK's `edit.speakerLayout`) lists the recording's speakers on the finished job's `output_data.speakers`, in the order they are first heard: each speaker's `label` in the run's transcript (for example `speaker_0`), the `name` the request gave it, and `talkMs`, how long they talk across the recording, in milliseconds. Talk is counted as on [Tighten Episode](./tighten-episode.md#the-speakers-over-the-api): one speaker's words one after another, with no other speaker's word in between and no pause of 0.7 seconds or longer. With [several cameras](#several-cameras), this gives each speaker's share of the conversation.
+
+To name the speakers, send `speakerNames` with the request (`{ "speaker_0": "Dana" }`), with the same limits and rules as on [Tighten Episode](./tighten-episode.md#the-speakers-over-the-api). The job keeps the names and returns them, and the run does not read them: the video and its edit are the same with or without names. Only the names you send are shown; a name is never guessed. `speakers` is there when the transcript names speakers. It is optional, and a run that finished before it was added does not have it. The SDK types it as `UseCaseSpeaker[]` on `SpeakerLayoutOutputData`.
+
 ## Configuration
 
 | Setting | Options | Default | Notes |

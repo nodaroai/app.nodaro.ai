@@ -18,7 +18,7 @@ import { SPEAKER_VIEW_LAYOUT_SETTINGS, USE_CASE_FRAMING_SOURCES } from "@nodaro/
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../../lib/url-validator.js"
-import { usecaseLaneShape, usecaseMulticamRecordingShape, usecasePlanShape } from "../../lib/use-case/body-shapes.js"
+import { usecaseLaneShape, usecaseMulticamRecordingShape, usecasePlanShape, usecaseSpeakerNamesShape } from "../../lib/use-case/body-shapes.js"
 import type { UnitUseCase } from "../kit.js"
 
 export const body = z.object({
@@ -50,6 +50,8 @@ export const body = z.object({
   reviewBeforeRender: z.boolean().optional(),
   ...usecasePlanShape,
   musicDuckAmount: z.number().min(0).max(100).optional(),
+  // The speakers' names: kept by the job and reported on `speakers[].name`, never read by the run.
+  ...usecaseSpeakerNamesShape,
   ...usecaseLaneShape,
 })
 
@@ -71,6 +73,7 @@ export const useCase: UnitUseCase = {
       { key: "instructions", type: "string" },
       { key: "styleGuide", type: "string" },
       { key: "musicDuckAmount", type: "number" },
+      { key: "speakerNames", type: "object" },
     ],
   },
 }

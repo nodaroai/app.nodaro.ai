@@ -299,7 +299,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     const usageLogId = job.usage_log_id ?? null
     // The job as a run: its own charge, its steps' (child jobs) and its side holds.
-    const runCredits = await runCreditsFor([{ id: job.id, usage_log_id: usageLogId, credits: job.credits }], job.user_id)
+    const runCredits = await runCreditsFor([{ id: job.id, usage_log_id: usageLogId, credits: job.credits, input_data: job.input_data }], job.user_id)
     // The owner's favorite and rating of it — the owner's, also when an admin
     // reads it. Pollers read this route: a failed read leaves the two fields
     // out (unknown) and the job still answers.
@@ -581,6 +581,8 @@ export async function jobRoutes(app: FastifyInstance) {
         id: job.id as string,
         usage_log_id: (job as { usage_log_id?: string | null }).usage_log_id ?? null,
         credits: (job as { credits?: number | null }).credits ?? null,
+        // A use-case run's steps are its inner execution's jobs (read off its input).
+        input_data: (job as { input_data?: unknown }).input_data,
       })),
       filterUserId,
     )

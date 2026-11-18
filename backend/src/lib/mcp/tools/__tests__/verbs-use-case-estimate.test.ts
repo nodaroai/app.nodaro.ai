@@ -176,4 +176,12 @@ describe("estimate_use_case: refusals", () => {
     expect(res403.isError).toBe(true)
     expect(textOf(res403)).toContain("node_not_available")
   })
+
+  it("a recording that could not be read for now: the route's own words and code, to run it again (decided 2026-11-17)", async () => {
+    const forNow = await setup({ status: 503, body: { error: { code: "probe_unavailable", message: "Could not read the link just now — run it again." } } })
+    const res = await callTool(forNow.server, "estimate_use_case", { node_type: "tighten-episode", input: { media_url: "https://r2/ep.mp4" } })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("Nodaro: Could not read the link just now — run it again. [probe_unavailable]")
+    expect(textOf(res)).not.toContain("cannot run this here")
+  })
 })

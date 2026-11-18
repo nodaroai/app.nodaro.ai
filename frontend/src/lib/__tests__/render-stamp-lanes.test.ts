@@ -49,6 +49,7 @@ const NOT_A_LANE: Readonly<Record<string, string>> = {
   "frontend/src/components/edl-review/clip-pack/clip-inspector.tsx": "passes the playing card's clip to the grid",
   "frontend/src/lib/use-case-run-rows.ts": "names a Clip Pack node's chips by their clip (each clip once); it reads the landed rows and stamps nothing",
   "backend/src/lib/mcp/tools/verbs-use-case.ts": "make_clip_pack's description names the clip rows' clipKey for the agent; the verb starts a run and sends no render",
+  "backend/src/lib/use-case/clip-failures.ts": "names a Clip Pack's failed clips by the clipKey their failed render rows carry; it reads the rows and stamps nothing",
 }
 
 const SCANNED = ["backend/src", "frontend/src", "packages/shared/src", "packages/client/src"]

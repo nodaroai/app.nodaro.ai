@@ -821,6 +821,8 @@
         "backend/src/lib/use-case/wrapper-output-layout.ts",
         "backend/src/lib/use-case/wrapper-output-lists.ts",
         "backend/src/lib/use-case/wrapper-output-parts.ts",
+        "backend/src/lib/use-case/wrapper-output-spans.ts",
+        "backend/src/lib/use-case/wrapper-output-speakers.ts",
         "backend/src/lib/use-case/wrapper-output.ts",
         "backend/src/lib/user-direction-result.ts",
         "backend/src/lib/user-direction.ts",

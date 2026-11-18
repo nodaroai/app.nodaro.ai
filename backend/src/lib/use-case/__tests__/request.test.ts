@@ -9,7 +9,8 @@ const probe = vi.hoisted(() => ({
 vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({ probeMediaStreams: probe.streams, probeMediaDuration: probe.duration }))
 // The caller's measurement of a whole-clip render's one recording (the route passes peekClip or measureClip).
 const clip = vi.hoisted(() => ({ measure: vi.fn() }))
-const MEASURE = { measureWholeClip: (url: string) => clip.measure(url) }
+// No pause before a second read: the tests do not wait on it (probe-streams.ts).
+const MEASURE = { measureWholeClip: (url: string) => clip.measure(url), probeRetryDelayMs: 0 }
 import { INTRO_CARD_MIN_SEC, prepareUseCase, usecaseReviewerPresent, usecaseWholeClipUrl } from "../request.js"
 import { ClipMeasureError, clipCacheKey, measureClip, peekClip, type ClipMeasureDeps } from "../../clip-measure.js"
 import { USE_CASE_BODIES, type UseCaseBody } from "../bodies.js"
@@ -399,6 +400,14 @@ describe("prepareUseCase for Speaker Layout (decided 2026-10-17)", () => {
     clip.measure.mockRejectedValue(new ClipMeasureError("unreadable", "That video could not be read."))
     expect(await prepareUseCase("speaker-layout", sl(), MEASURE)).toMatchObject({ ok: false, status: 400, code: "media_unreadable", message: "That video could not be read." })
   })
+  it("a measurement whose download or read failed for now → the retryable 503, never media_unreadable (decided 2026-11-17)", async () => {
+    const forNow = new ClipMeasureError("unreadable", "That video could not be read.", { cause: new Error("Failed to download: https://r2/ep.mp4 (503)") })
+    clip.measure.mockRejectedValue(forNow)
+    expect(await prepareUseCase("speaker-layout", sl(), MEASURE)).toMatchObject({ ok: false, status: 503, code: "source_unreachable" })
+    const shortOfThreads = new ClipMeasureError("unreadable", "That video could not be read.", { cause: new Error("ffprobe failed: Resource temporarily unavailable") })
+    clip.measure.mockRejectedValue(shortOfThreads)
+    expect(await prepareUseCase("speaker-layout", sl(), MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_unavailable" })
+  })
   it("any other measuring error is not a refusal: it is thrown", async () => {
     clip.measure.mockRejectedValue(new Error("redis down"))
     await expect(prepareUseCase("speaker-layout", sl(), MEASURE)).rejects.toThrow("redis down")
@@ -486,5 +495,82 @@ describe("a whole-clip render's measurement (decided 2026-10-20: the estimate ne
     expect(url).toBe("https://r2/ep.mp4")
     await measureClip(url!, d)
     expect(d.download).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * A read that failed for a reason that is not the file's own (decided
+ * 2026-11-17): tried once more, and when it still fails, a retryable 503
+ * (`probe_unavailable`, `probe_timeout`, `source_unreachable`), never
+ * "the recording could not be read". The file's own failure stays the 400.
+ */
+describe("prepareUseCase: an input that could not be read for now", () => {
+  const ffprobeSaid = (stderr: string, flags: Record<string, unknown> = {}) => Object.assign(new Error(`ffprobe failed: ${stderr}`), { killed: false, timedOut: false, ...flags })
+  const OK = { hasVideo: true, hasAudio: true }
+
+  it("a read the server was short of threads for: tried again, and the second read is the answer", async () => {
+    probe.streams.mockRejectedValueOnce(ffprobeSaid("Error while opening decoder: Resource temporarily unavailable")).mockResolvedValueOnce(OK)
+    expect((await prepareUseCase("tighten-episode", body(), MEASURE)).ok).toBe(true)
+    expect(probe.streams).toHaveBeenCalledTimes(2)
+  })
+  it("still short on the second read: 503 probe_unavailable, run it again", async () => {
+    probe.streams.mockRejectedValue(ffprobeSaid("Resource temporarily unavailable"))
+    expect(await prepareUseCase("tighten-episode", body(), MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_unavailable", message: expect.stringMatching(/run it again/) })
+    expect(probe.streams).toHaveBeenCalledTimes(2)
+    expect(probe.duration).not.toHaveBeenCalled()
+  })
+  it("the host answered 5xx twice: 503 source_unreachable", async () => {
+    probe.streams.mockRejectedValue(ffprobeSaid("https://r2/ep.mp4: Server returned 5XX Server Error reply"))
+    expect(await prepareUseCase("tighten-episode", body(), MEASURE)).toMatchObject({ ok: false, status: 503, code: "source_unreachable" })
+  })
+  it("a read that ran out of time: 503 probe_timeout at once, not read again (it already waited)", async () => {
+    probe.streams.mockRejectedValue(ffprobeSaid("", { killed: true, timedOut: true }))
+    expect(await prepareUseCase("tighten-episode", body(), MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_timeout" })
+    expect(probe.streams).toHaveBeenCalledTimes(1)
+  })
+  it("a failure nothing names is read once more before the recording is called unreadable (400)", async () => {
+    probe.streams.mockRejectedValue(ffprobeSaid("Invalid data found when processing input"))
+    expect(await prepareUseCase("tighten-episode", body(), MEASURE)).toMatchObject({ ok: false, status: 400, code: "media_unreadable" })
+    expect(probe.streams).toHaveBeenCalledTimes(2)
+  })
+  it("a link that is not a media file is not read again: the 400 at once", async () => {
+    probe.streams.mockRejectedValue(Object.assign(new Error("probeVideoSource: blocked — not a single file"), { reason: "container", demuxer: "hls" }))
+    expect(await prepareUseCase("tighten-episode", body(), MEASURE)).toMatchObject({ ok: false, status: 400, code: "media_unreadable" })
+    expect(probe.streams).toHaveBeenCalledTimes(1)
+  })
+  it("a link the host answered with a 4xx is not read again: the 400 at once", async () => {
+    probe.streams.mockRejectedValue(ffprobeSaid("https://r2/ep.mp4: Server returned 404 Not Found"))
+    expect(await prepareUseCase("tighten-episode", body(), MEASURE)).toMatchObject({ ok: false, status: 400, code: "media_unreadable" })
+    expect(probe.streams).toHaveBeenCalledTimes(1)
+  })
+  it("the 503 names the input it is about", async () => {
+    probe.streams.mockImplementation(async (u: string) => {
+      if (u === "https://r2/c2.mp4") throw ffprobeSaid("Resource temporarily unavailable")
+      return OK
+    })
+    const two = body({ mediaUrls: ["https://r2/c1.mp4", "https://r2/c2.mp4"] })
+    expect(await prepareUseCase("tighten-episode", two, MEASURE)).toMatchObject({ status: 503, message: expect.stringMatching(/^Recording 2: /) })
+  })
+  it("an intro card whose length read failed for now: the retryable 503, never \"not a video\"", async () => {
+    probe.duration.mockImplementation(async (u: string) => {
+      if (u === "https://r2/card.mp4") throw ffprobeSaid("Resource temporarily unavailable")
+      return 3600
+    })
+    const trailer = episodeTrailerBody.parse({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.mp4" }) as UseCaseBody
+    expect(await prepareUseCase("episode-trailer", trailer, MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_unavailable", message: expect.stringMatching(/^The intro card: /) })
+  })
+  it("the Master audio, the music and the intro card read the same way: for now is a 503", async () => {
+    const failsFor = (url: string) => probe.streams.mockImplementation(async (u: string) => {
+      if (u === url) throw ffprobeSaid("Resource temporarily unavailable")
+      return OK
+    })
+    failsFor("https://r2/m.wav")
+    const two = body({ mediaUrls: ["https://r2/c1.mp4", "https://r2/c2.mp4"], masterAudioUrl: "https://r2/m.wav" })
+    expect(await prepareUseCase("tighten-episode", two, MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_unavailable" })
+    failsFor("https://r2/bed.mp3")
+    expect(await prepareUseCase("tighten-episode", body({ musicUrl: "https://r2/bed.mp3" }), MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_unavailable" })
+    failsFor("https://r2/card.mp4")
+    const trailer = episodeTrailerBody.parse({ mediaUrls: ["https://r2/ep.mp4"], introCardUrl: "https://r2/card.mp4" }) as UseCaseBody
+    expect(await prepareUseCase("episode-trailer", trailer, MEASURE)).toMatchObject({ ok: false, status: 503, code: "probe_unavailable" })
   })
 })

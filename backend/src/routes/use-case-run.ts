@@ -56,6 +56,7 @@ import { prepareUseCase, usecaseReviewerPresent, usecaseWholeClipUrl, type Prepa
 import { measureClip, peekClip } from "../lib/clip-measure.js"
 import { clipMeasureStartLimiter } from "../lib/clip-measure-limit.js"
 import { usecaseClockSec, usecaseSourcesOf, usecaseWrapperRecordings } from "../lib/use-case/sources.js"
+import { usecaseKeptSpeakerNames } from "../lib/use-case/wrapper-output-speakers.js"
 import { usecaseFramesAvailable, usecaseInnerDenial, usecaseMulticamDenial } from "../lib/use-case/inner-availability.js"
 import { executeInlineGraph, InlineGraphUnavailableError } from "../services/use-case-execution.js"
 import { UnqueuedRunError } from "../lib/enqueue-execution.js"
@@ -238,6 +239,8 @@ function registerUseCase(app: FastifyInstance, type: UseCaseNodeType): void {
       // Several recordings or a Master audio: every recording, the master and the run's kind (a continuation's resume match reads them).
       ...usecaseWrapperRecordings(prep.sources),
       durationSec: usecaseClockSec(prep.sources) ?? null,
+      // The speakers' names: kept on the job and reported back on its output (`speakers[].name`), never read by the run.
+      ...usecaseKeptSpeakerNames(body.speakerNames),
       _feeCredits: feeCredits,
     }
     // Never `workflow_execution_id`: the wrapper reaches its run only through

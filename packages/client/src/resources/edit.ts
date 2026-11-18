@@ -32,7 +32,16 @@ import {
 } from "./edit-use-case-inputs.js"
 
 export { CLIP_PACK_MAX_TARGET_SEC, CLIP_PACK_MIN_TARGET_SEC, TRAILER_FORMATS } from "./edit-use-case-inputs.js"
-export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, SpeakerLayoutInput, TightenEpisodeInput, TrailerFormat, UseCaseRecordingsInput } from "./edit-use-case-inputs.js"
+export type { ClipPackEmphasis, ClipPackInput, EpisodeChaptersInput, EpisodeTrailerInput, SpeakerLayoutInput, TightenEpisodeInput, TrailerFormat, UseCaseRecordingsInput, UseCaseSpeakerNamesInput } from "./edit-use-case-inputs.js"
+import type {
+  TightenEpisodeEstimate,
+  TightenEpisodeJobResult,
+  UseCaseContinueInput,
+  UseCaseEstimate,
+  UseCaseJobResult,
+  UseCaseRequestOptions,
+} from "./edit-use-case-results.js"
+export type { TightenEpisodeEstimate, TightenEpisodeJobResult, UseCaseContinueInput, UseCaseEstimate, UseCaseJobResult, UseCaseRequestOptions }
 
 // Re-export the canonical EDL / transcript vocabulary from `@nodaro/shared`
 // (single source of truth — the shapes live at `packages/shared/src/edl.ts`).
@@ -340,72 +349,6 @@ export { USE_CASE_NODE_TYPES, type UseCaseNodeType }
 /** The route that continues a run of `type`. */
 const continuePathOf = (type: UseCaseNodeType): `/v1/${UseCaseNodeType}/continue` => `/v1/${type}/continue`
 
-/** What a use-case run (`tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack`, `speakerLayout`) and `continueUseCase` answer: the run's job to poll. */
-export interface UseCaseJobResult extends EditJobResult {
-  /** The run's execution (absent on a deduplicated retry). */
-  executionId?: string
-  /** `true` when an `Idempotency-Key` retry found the run already started: `jobId` is that run. */
-  deduped?: boolean
-}
-
-/** What `tightenEpisode` answers (a {@link UseCaseJobResult}). */
-export type TightenEpisodeJobResult = UseCaseJobResult
-
-/**
- * What a use-case run is estimated at (`data`). Every credit amount is 0
- * on an edition without credits; `durationSec` is `null` when the recording's
- * length could not be read.
- */
-export interface UseCaseEstimate {
-  /** The whole run: its steps plus the fee. */
-  totalCredits: number
-  /** The steps at their own rates. */
-  stepsCredits: number
-  /** The per-run fee. */
-  feeCredits: number
-  /** A step is a metered LLM call's ESTIMATE (charged its actual usage), so the
-   *  total is one: show it `≈N`. Absent for a fixed figure. */
-  estimate?: true
-  /** The recording's length, in seconds. */
-  durationSec: number | null
-}
-
-/** What a Tighten Episode run is estimated at (a {@link UseCaseEstimate}). */
-export type TightenEpisodeEstimate = UseCaseEstimate
-
-/** Input for {@link EditResource.continueUseCase}. */
-export interface UseCaseContinueInput {
-  /** The run to continue: the job `tightenEpisode`, `episodeChapters`, `episodeTrailer`, `clipPack` or `speakerLayout` (or an earlier continuation) answered. */
-  jobId: string
-  /**
-   * `"from-failed"` re-runs what did not finish of a failed run;
-   * `"render-final"` renders the full-quality result after a review-on preview
-   * (a Chapters run has no preview: it is refused `render_final_not_preview`;
-   * a Clip Pack edit that drops every clip is refused `use_case_nothing_kept`).
-   */
-  mode: "from-failed" | "render-final"
-  /** Render final only: the reviewer's edit of the plan (an EDL). A Speaker Layout run has no plan: an edit is refused `400 use_case_no_plan`. */
-  editedEdl?: unknown
-  /**
-   * The run's node type: its continuation goes to `POST /v1/<nodeType>/continue`.
-   * Optional: when absent the job is read first (`GET /v1/jobs/:id`, which
-   * needs the `jobs:read` scope on an app token) for the type the run records.
-   * Required when that read cannot answer: a key without `jobs:read`, or a job
-   * that records no use-case type (the call rejects with `use_case_type_unknown`).
-   */
-  nodeType?: UseCaseNodeType
-}
-
-/** Per-call options for the use-case requests (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout, and their continuations). */
-export interface UseCaseRequestOptions {
-  /**
-   * Sent as the `Idempotency-Key` header. Reuse the same value when retrying
-   * the same request and the server answers the run it already started
-   * (`deduped: true`) instead of starting a second one.
-   */
-  idempotencyKey?: string
-}
-
 function idempotencyHeaders(options?: UseCaseRequestOptions): { headers?: Record<string, string> } {
   return options?.idempotencyKey ? { headers: { "Idempotency-Key": options.idempotencyKey } } : {}
 }
@@ -532,7 +475,10 @@ export class EditResource {
    * Tighten Episode (`POST /v1/tighten-episode`): tighten a podcast recording
    * in one call — transcribe, cut the silences and filler, render, with
    * optional captions, music and framing. Answers the run's job to poll; its
-   * `output_data` holds the episode. The run is priced as its steps at their own
+   * `output_data` holds the episode, and `output_data.speakers` each speaker's
+   * label, the name `speakerNames` gave it and how long they talk across the
+   * recording (`{ label, name?, talkMs }[]`, `TightenEpisodeOutputData`).
+   * The run is priced as its steps at their own
    * rates plus the listed per-run fee. Quote it first with
    * {@link estimateTightenEpisode}.
    */
@@ -606,10 +552,12 @@ export class EditResource {
    * with the speakers stacked by default; `framing: null` keeps the
    * recording's shape) and captioned. An audio recording makes audio clips.
    * The finished job's `output_data.clips` is `{ url, title?, hook?, clipKey,
-   * thumbnailUrl?, captionsFailed? }[]` in plan order, the first also
+   * thumbnailUrl?, captionsFailed?, sourceStartMs?, sourceEndMs?,
+   * sourceSpans? }[]` in plan order (`ClipPackClip`: where each clip is
+   * in the recording, on its clock), the first also
    * `output_data.videoUrl` (`audioUrl` for audio clips). Every clip is tried:
-   * one that cannot be rendered is skipped, not charged and counted on
-   * `failedClips` (the pack keeps the others and its fee); a clip whose
+   * one that cannot be rendered is skipped, not charged, counted on
+   * `failedClips` and named on `failedClipList` (the pack keeps the others and its fee); a clip whose
    * captions failed comes uncaptioned (`captionsFailed`, counted on
    * `failedCaptions`). When no clip renders the run fails and its fee is
    * refunded. With `reviewBeforeRender` the run stops at previews; Render
@@ -637,7 +585,9 @@ export class EditResource {
    * speaker framed in turn; several recordings of one conversation: lined up,
    * each speaker shown on their own camera. The finished job's
    * `output_data.videoUrl` is the framed video, `output_data.json` the edit
-   * Speaker View drew. With `reviewBeforeRender` the run stops at a preview;
+   * Speaker View drew, and `output_data.speakers` each speaker's label, the
+   * name `speakerNames` gave it and how long they talk (`{ label, name?,
+   * talkMs }[]`, `SpeakerLayoutOutputData`). With `reviewBeforeRender` the run stops at a preview;
    * {@link continueUseCase} (`mode: "render-final"`, no `editedEdl`) renders
    * it at full quality. Priced as its steps at their own rates plus the listed
    * per-run fee; quote it first with {@link estimateSpeakerLayout}.

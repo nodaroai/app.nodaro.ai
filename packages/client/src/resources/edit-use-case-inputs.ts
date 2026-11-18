@@ -89,6 +89,24 @@ export interface TightenEpisodeInput extends UseCaseRecordingsInput {
   styleGuide?: string
   /** How far the music dips under the voice, 0–100 (default 75). */
   musicDuckAmount?: number
+  /** See {@link UseCaseSpeakerNamesInput.speakerNames}. */
+  speakerNames?: UseCaseSpeakerNamesInput["speakerNames"]
+}
+
+/**
+ * The speakers' names a Tighten Episode or Speaker Layout run reports back.
+ */
+export interface UseCaseSpeakerNamesInput {
+  /**
+   * Speaker label (as the run's transcript names them, e.g. `"speaker_0"`) →
+   * the name to show (up to 80 characters; at most 32 speakers). The job keeps
+   * them and the finished job's `output_data.speakers[].name` carries them
+   * (`TightenEpisodeOutputData`, `SpeakerLayoutOutputData`); the
+   * run itself never reads them, so nothing is renamed in the captions, the
+   * transcript or the edit. A name is trimmed and a blank one dropped; a
+   * label nobody in the recording has is ignored. A continuation keeps them.
+   */
+  speakerNames?: Record<string, string>
 }
 
 /**
@@ -235,6 +253,8 @@ export interface SpeakerLayoutInput extends UseCaseRecordingsInput {
    * (`mode: "render-final"`, no `editedEdl`: the layout has no cut to change).
    */
   reviewBeforeRender?: boolean
+  /** See {@link UseCaseSpeakerNamesInput.speakerNames}. */
+  speakerNames?: UseCaseSpeakerNamesInput["speakerNames"]
 }
 
 /**

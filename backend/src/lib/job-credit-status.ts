@@ -10,8 +10,9 @@
  * agree.
  *
  * A job is a RUN: what it charged includes its steps — the child jobs a
- * worker-side handler ran for it (`parent_job_id`, lib/job-run-steps.ts), each
- * billed on its own usage log — and its metered side holds (migration 554).
+ * worker-side handler ran for it (`parent_job_id`, lib/job-run-steps.ts), or
+ * the jobs of a use-case run's own inner execution, each billed on its own
+ * usage log — and its metered side holds (migration 554).
  * `runCreditsFor` is the one loader of a run's figures and `creditsChargedOf`
  * the one reader of its charge: the REST job routes, the MCP job tools,
  * webhooks, trend runs, the execution history and the admin Jobs list all read
@@ -21,6 +22,7 @@ import { supabase } from "./supabase.js"
 import { settledCharge } from "./usage-amount.js"
 import { sideHoldChargesFor } from "./job-step-charge.js"
 import { runStepsOf } from "./job-run-steps.js"
+import { isUseCaseNodeType } from "@nodaro/shared/nodes"
 
 export type CreditStatus = "reserved" | "committed" | "refunded"
 
@@ -96,6 +98,20 @@ export function ownCreditFigure(
 
 // ── a run's figures ─────────────────────────────────────────────────────────
 
+/**
+ * The inner execution of a use-case run, read off its own `input_data`: a run
+ * of a use-case type (`type`) carries its execution as `_executionId` (the
+ * run route stamps it, the finaliser back-fills it). Its steps carry their
+ * own types and no such stamp, so they are never read as runs. Undefined for
+ * any other job.
+ */
+export function useCaseRunExecutionOf(inputData: unknown): string | undefined {
+  if (!inputData || typeof inputData !== "object" || Array.isArray(inputData)) return undefined
+  const { type, _executionId } = inputData as { type?: unknown; _executionId?: unknown }
+  return isUseCaseNodeType(type) && typeof _executionId === "string" && _executionId.length > 0 ? _executionId : undefined
+}
+
+
 /** What `runCreditsFor` reads off a job row the caller already has. */
 export interface JobChargeRow {
   id: string
@@ -104,6 +120,12 @@ export interface JobChargeRow {
   credits?: number | null
   /** The job's owner — read when `runCreditsFor` is given several owners (an admin list). */
   user_id?: string | null
+  /**
+   * The job's `input_data`, when the caller has it: a use-case run's names its
+   * inner execution, whose jobs are its steps (`useCaseRunExecutionOf`). A row
+   * without it is read as before (its `parent_job_id` children only).
+   */
+  input_data?: unknown
 }
 
 /** One job's figures, alone and as a run with its steps. */
@@ -199,7 +221,8 @@ export async function runCreditsFor(
     typeof owners === "string" ? owners : j.user_id && allowed!.has(j.user_id) ? j.user_id : null
   const roots = jobs.flatMap((j) => {
     const owner = ownerOf(j)
-    return owner ? [{ id: j.id, owner }] : []
+    const innerExecutionId = useCaseRunExecutionOf(j.input_data)
+    return owner ? [{ id: j.id, owner, ...(innerExecutionId ? { innerExecutionId } : {}) }] : []
   })
   const read = async () => {
     const { steps, incomplete } = await timed("steps", () => runStepsOf(roots))

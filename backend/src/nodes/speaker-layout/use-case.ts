@@ -14,7 +14,7 @@
 import { z } from "zod"
 import { CLIP_PACK_EMPHASIS_REFUSAL, SPEAKER_VIEW_LAYOUT_SETTINGS, USE_CASE_FRAMING_SOURCES, isClipPackEmphasis } from "@nodaro/render-rules"
 import { EDL_TARGET_ASPECTS, SPEAKER_SWITCH_IDS } from "@nodaro/shared/edl"
-import { usecaseLaneShape, usecaseMulticamRecordingShape } from "../../lib/use-case/body-shapes.js"
+import { usecaseLaneShape, usecaseMulticamRecordingShape, usecaseSpeakerNamesShape } from "../../lib/use-case/body-shapes.js"
 import type { UnitUseCase } from "../kit.js"
 
 export const body = z.object({
@@ -26,6 +26,8 @@ export const body = z.object({
   emphasisStyle: z.string().max(40).refine(isClipPackEmphasis, CLIP_PACK_EMPHASIS_REFUSAL).optional(),
   framingSource: z.enum(USE_CASE_FRAMING_SOURCES as unknown as [string, ...string[]]).optional(),
   reviewBeforeRender: z.boolean().optional(),
+  // The speakers' names: kept by the job and reported on `speakers[].name`, never read by the run.
+  ...usecaseSpeakerNamesShape,
   ...usecaseLaneShape,
 })
 
@@ -42,6 +44,7 @@ export const useCase: UnitUseCase = {
       { key: "emphasisStyle", type: "string" },
       { key: "framingSource", type: "select", options: USE_CASE_FRAMING_SOURCES as unknown as string[] },
       { key: "reviewBeforeRender", type: "boolean" },
+      { key: "speakerNames", type: "object" },
     ],
   },
 }
