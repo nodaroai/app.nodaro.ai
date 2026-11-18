@@ -1,5 +1,25 @@
 # @nodaro/cli
 
+## 1.52.0
+
+### Minor Changes
+
+- a3cfe3e: Competitor search terms and topic tracking (`@nodaro/shared/social`). A tracked brand can carry `searchTerms`: phrases or #hashtags that the searches for posts about it use instead of its name, and that a post must name to count as about it. A plan caps how many (`CompetitorListResult.limits`). `normalizeSearchTerms` cleans a list the way the server keeps it. `competitorScanSearches` counts one about-search per platform per term, and `competitorScanPages` the pages a scan runs. Scans are now charged per Social Search page at `COMPETITOR_SCAN_PAGE_CREDIT_ID`, summed, so a scan of more than twelve searches is priced in full; `competitorScanCreditId` is deprecated. New `topics` contract: `TrackedTopic`, `TopicListResult`, `CreateTopicInput`, `TopicDetail`, `TopicHistory`, `TopicCardsResult`, `TOPIC_PLATFORMS`, `TOPIC_POST_COUNTS` (20/40/60), `topicScanPages` and `TOPIC_SCAN_PAGE_CREDIT_ID`, for following a hashtag or phrase with no brand around it.
+- 7430094: `nodaro video-remake full-quality estimate|run <jobId>` finishes a Video Remake draft at Full Quality, and the help names its engines Nodaro Prism and Nodaro Pulse. `nodaro cast-swap` still runs the same commands and is no longer listed in the help.
+
+### Patch Changes
+
+- Updated dependencies [a3cfe3e]
+- Updated dependencies [d8be278]
+- Updated dependencies [42d0e86]
+- Updated dependencies [eab674d]
+- Updated dependencies [1a93a78]
+- Updated dependencies [5471b09]
+- Updated dependencies [7430094]
+- Updated dependencies [7430094]
+  - @nodaro/shared@3.70.0
+  - @nodaro/sdk@2.76.0
+
 ## 1.51.0
 
 ### Minor Changes
