@@ -11,7 +11,7 @@
  */
 
 import { config } from "../../lib/config.js"
-import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, sleep, pollDelay } from "./client.js"
+import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, retryOnProviderTaskTimeout, sleep, pollDelay } from "./client.js"
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
@@ -345,6 +345,8 @@ interface SunoRecordInfoResponse {
     }
     failReason?: string
     errorMessage?: string
+    /** The provider's code for a failed task, beside `errorMessage`. */
+    errorCode?: number | string | null
   }
 }
 
@@ -671,17 +673,19 @@ export async function sunoGenerate(
   if (DEBUG) console.log(`[Suno] Generating song with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate",
-    body,
-    opName: "generate",
-    label: "Music generation",
-    reconcileOpts,
-    jsonOpName: "",
-    debugLabel: "",
-  })
+  return retryOnProviderTaskTimeout("Suno generate", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate",
+      body,
+      opName: "generate",
+      label: "Music generation",
+      reconcileOpts,
+      jsonOpName: "",
+      debugLabel: "",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 /**
@@ -719,16 +723,18 @@ export async function sunoCover(
   if (DEBUG) console.log(`[Suno] Creating cover with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/upload-cover",
-    body,
-    opName: "cover",
-    label: "Music generation",
-    reconcileOpts,
-    debugLabel: "Cover",
-  })
+  return retryOnProviderTaskTimeout("Suno cover", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/upload-cover",
+      body,
+      opName: "cover",
+      label: "Music generation",
+      reconcileOpts,
+      debugLabel: "Cover",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 /**
@@ -780,16 +786,18 @@ export async function sunoExtend(
   if (DEBUG) console.log(`[Suno] Extending track ${params.audioId} with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/extend",
-    body,
-    opName: "extend",
-    label: "Music generation",
-    reconcileOpts,
-    debugLabel: "Extend",
-  })
+  return retryOnProviderTaskTimeout("Suno extend", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/extend",
+      body,
+      opName: "extend",
+      label: "Music generation",
+      reconcileOpts,
+      debugLabel: "Extend",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 /**
@@ -807,16 +815,18 @@ export async function sunoLyrics(
   if (DEBUG) console.log(`[Suno] Generating lyrics`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/lyrics",
-    body,
-    opName: "lyrics",
-    label: "Lyrics generation",
-    reconcileOpts,
-    debugLabel: "Lyrics",
-  })
+  return retryOnProviderTaskTimeout("Suno lyrics", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/lyrics",
+      body,
+      opName: "lyrics",
+      label: "Lyrics generation",
+      reconcileOpts,
+      debugLabel: "Lyrics",
+    })
 
-  return pollSunoLyricsTask(taskId)
+    return pollSunoLyricsTask(taskId)
+  })
 }
 
 /**
@@ -896,7 +906,8 @@ export async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
           "Unknown error"
         throw createUpstreamFailureError(
           `Suno task failed: ${reason}`,
-          "Music generation"
+          "Music generation",
+          { taskCode: detailData.data?.errorCode },
         )
       }
 
@@ -978,16 +989,18 @@ export async function sunoSeparate(
   if (DEBUG) console.log(`[Suno] Separating audio (type: ${params.type})`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/vocal-removal/generate",
-    body,
-    opName: "separate",
-    label: "Stem separation",
-    reconcileOpts,
-    debugLabel: "Separate",
-  })
+  return retryOnProviderTaskTimeout("Suno separate", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/vocal-removal/generate",
+      body,
+      opName: "separate",
+      label: "Stem separation",
+      reconcileOpts,
+      debugLabel: "Separate",
+    })
 
-  return pollSunoSeparateTask(taskId)
+    return pollSunoSeparateTask(taskId)
+  })
 }
 
 /**
@@ -1096,16 +1109,18 @@ export async function sunoMusicVideo(
   if (DEBUG) console.log(`[Suno] Generating music video for task ${params.taskId}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/mp4/generate",
-    body,
-    opName: "music video",
-    label: "Music video generation",
-    reconcileOpts,
-    debugLabel: "Music video",
-  })
+  return retryOnProviderTaskTimeout("Suno music video", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/mp4/generate",
+      body,
+      opName: "music video",
+      label: "Music video generation",
+      reconcileOpts,
+      debugLabel: "Music video",
+    })
 
-  return pollSunoMusicVideoTask(taskId)
+    return pollSunoMusicVideoTask(taskId)
+  })
 }
 
 /**
@@ -1236,16 +1251,18 @@ export async function sunoMashup(
   if (DEBUG) console.log(`[Suno] Creating mashup with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/mashup",
-    body,
-    opName: "mashup",
-    label: "Music mashup",
-    reconcileOpts,
-    debugLabel: "Mashup",
-  })
+  return retryOnProviderTaskTimeout("Suno mashup", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/mashup",
+      body,
+      opName: "mashup",
+      label: "Music mashup",
+      reconcileOpts,
+      debugLabel: "Mashup",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 // =============================================================================
@@ -1282,16 +1299,18 @@ export async function sunoReplaceSection(
   if (DEBUG) console.log(`[Suno] Replacing section for task ${params.taskId}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/replace-section",
-    body,
-    opName: "replace section",
-    label: "Replace section",
-    reconcileOpts,
-    debugLabel: "Replace section",
-  })
+  return retryOnProviderTaskTimeout("Suno replace section", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/replace-section",
+      body,
+      opName: "replace section",
+      label: "Replace section",
+      reconcileOpts,
+      debugLabel: "Replace section",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 // =============================================================================
@@ -1410,16 +1429,18 @@ export async function sunoAddInstrumental(
   if (DEBUG) console.log(`[Suno] Adding instrumental to task ${params.taskId}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/add-instrumental",
-    body,
-    opName: "add instrumental",
-    label: "Add instrumental",
-    reconcileOpts,
-    debugLabel: "Add instrumental",
-  })
+  return retryOnProviderTaskTimeout("Suno add instrumental", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/add-instrumental",
+      body,
+      opName: "add instrumental",
+      label: "Add instrumental",
+      reconcileOpts,
+      debugLabel: "Add instrumental",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 // =============================================================================
@@ -1446,16 +1467,18 @@ export async function sunoAddVocals(
   if (DEBUG) console.log(`[Suno] Adding vocals to task ${params.taskId}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/add-vocals",
-    body,
-    opName: "add vocals",
-    label: "Add vocals",
-    reconcileOpts,
-    debugLabel: "Add vocals",
-  })
+  return retryOnProviderTaskTimeout("Suno add vocals", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/add-vocals",
+      body,
+      opName: "add vocals",
+      label: "Add vocals",
+      reconcileOpts,
+      debugLabel: "Add vocals",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 // =============================================================================
@@ -1480,16 +1503,18 @@ export async function sunoConvertWav(
   if (DEBUG) console.log(`[Suno] Converting to WAV for task ${params.taskId}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/wav/generate",
-    body,
-    opName: "WAV convert",
-    label: "WAV conversion",
-    reconcileOpts,
-    debugLabel: "WAV convert",
-  })
+  return retryOnProviderTaskTimeout("Suno WAV convert", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/wav/generate",
+      body,
+      opName: "WAV convert",
+      label: "WAV conversion",
+      reconcileOpts,
+      debugLabel: "WAV convert",
+    })
 
-  return pollSunoWavTask(taskId)
+    return pollSunoWavTask(taskId)
+  })
 }
 
 /**
@@ -1624,16 +1649,18 @@ export async function sunoUploadExtend(
   if (DEBUG) console.log(`[Suno] Upload extend with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
 
-  const taskId = await createSunoTask({
-    path: "/api/v1/generate/upload-extend",
-    body,
-    opName: "upload extend",
-    label: "Upload extend",
-    reconcileOpts,
-    debugLabel: "Upload extend",
-  })
+  return retryOnProviderTaskTimeout("Suno upload extend", async () => {
+    const taskId = await createSunoTask({
+      path: "/api/v1/generate/upload-extend",
+      body,
+      opName: "upload extend",
+      label: "Upload extend",
+      reconcileOpts,
+      debugLabel: "Upload extend",
+    })
 
-  return pollSunoTask(taskId)
+    return pollSunoTask(taskId)
+  })
 }
 
 // =============================================================================

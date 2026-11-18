@@ -14,6 +14,7 @@ import {
   createSanitizedError,
   createUpstreamFailureError,
   MAX_POLL_ATTEMPTS,
+  retryOnProviderTaskTimeout,
   type KieResultJson,
   type KieTaskResponse,
   type VeoRecordInfoResponse,
@@ -47,74 +48,76 @@ export async function runFluxKontextTask(
     console.log(`[KIE.ai Kontext] Request body:`, JSON.stringify(requestBody, null, 2))
   }
 
-  // Step 1: Create task
-  const createResponse = await providerFetch(
-    {
-      provider: "kie",
-      operation: "kontext.generate",
-      modelKey: reconcileOpts?.modelKey ?? null,
-      body: requestBody,
-      dimensions: reconcileOpts?.dimensions ?? {},
-    },
-    `${KIE_API_BASE}/api/v1/flux/kontext/generate`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  return retryOnProviderTaskTimeout("Flux Kontext", async () => {
+    // Step 1: Create task
+    const createResponse = await providerFetch(
+      {
+        provider: "kie",
+        operation: "kontext.generate",
+        modelKey: reconcileOpts?.modelKey ?? null,
+        body: requestBody,
+        dimensions: reconcileOpts?.dimensions ?? {},
       },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(30_000),
+      `${KIE_API_BASE}/api/v1/flux/kontext/generate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(30_000),
+      }
+    )
+
+    const responseText = await createResponse.text()
+    if (DEBUG) {
+      console.log(`[KIE.ai Kontext] Response status: ${createResponse.status}`)
+      console.log(`[KIE.ai Kontext] Response body: ${responseText.substring(0, 500)}`)
     }
-  )
 
-  const responseText = await createResponse.text()
-  if (DEBUG) {
-    console.log(`[KIE.ai Kontext] Response status: ${createResponse.status}`)
-    console.log(`[KIE.ai Kontext] Response body: ${responseText.substring(0, 500)}`)
-  }
+    if (!createResponse.ok) {
+      throw createSanitizedError(
+        `Kontext generate failed: ${createResponse.status} - ${responseText}`,
+        "Image generation"
+      )
+    }
 
-  if (!createResponse.ok) {
-    throw createSanitizedError(
-      `Kontext generate failed: ${createResponse.status} - ${responseText}`,
-      "Image generation"
-    )
-  }
+    let createData: KieTaskResponse
+    try {
+      createData = JSON.parse(responseText) as KieTaskResponse
+    } catch {
+      throw createSanitizedError(
+        `Kontext response is not valid JSON: ${responseText}`,
+        "Image generation"
+      )
+    }
 
-  let createData: KieTaskResponse
-  try {
-    createData = JSON.parse(responseText) as KieTaskResponse
-  } catch {
-    throw createSanitizedError(
-      `Kontext response is not valid JSON: ${responseText}`,
-      "Image generation"
-    )
-  }
+    if (
+      createData.code !== 0 &&
+      createData.code !== 200 &&
+      createData.code !== undefined
+    ) {
+      throw createSanitizedError(
+        `Kontext generate error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`,
+        "Image generation"
+      )
+    }
 
-  if (
-    createData.code !== 0 &&
-    createData.code !== 200 &&
-    createData.code !== undefined
-  ) {
-    throw createSanitizedError(
-      `Kontext generate error (code ${createData.code}): ${createData.message ?? JSON.stringify(createData)}`,
-      "Image generation"
-    )
-  }
+    if (!createData.data?.taskId) {
+      throw createSanitizedError(
+        `Kontext generate response missing taskId: ${JSON.stringify(createData)}`,
+        "Image generation"
+      )
+    }
 
-  if (!createData.data?.taskId) {
-    throw createSanitizedError(
-      `Kontext generate response missing taskId: ${JSON.stringify(createData)}`,
-      "Image generation"
-    )
-  }
+    const taskId = createData.data.taskId
+    console.log(`[KIE.ai Kontext] Task created: ${taskId}`)
 
-  const taskId = createData.data.taskId
-  console.log(`[KIE.ai Kontext] Task created: ${taskId}`)
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Kontext]")
 
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Kontext]")
-
-  return pollKontextTask(taskId, MAX_POLL_ATTEMPTS)
+    return pollKontextTask(taskId, MAX_POLL_ATTEMPTS)
+  })
 }
 
 /**
@@ -201,7 +204,8 @@ export async function pollKontextTask(
         `Error code: ${detailData.data.errorCode ?? "unknown"}`
       throw createUpstreamFailureError(
         `Kontext task failed: ${errorMsg}`,
-        "Image generation"
+        "Image generation",
+        { taskCode: detailData.data.errorCode },
       )
     }
 

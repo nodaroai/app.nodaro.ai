@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-vi.mock("../client.js", () => ({
-  MAX_POLL_ATTEMPTS_VIDEO: 120,
-  createKieTask: vi.fn(),
-  pollKieTask: vi.fn(),
-  createSanitizedError: (msg: string) => new Error(msg),
-}))
+vi.mock("../client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../client.js")>()
+  return {
+    MAX_POLL_ATTEMPTS_VIDEO: 120,
+    createKieTask: vi.fn(),
+    pollKieTask: vi.fn(),
+    createSanitizedError: (msg: string) => new Error(msg),
+    // The real resubmit rule and the real terminal-failure builder that marks a provider timeout.
+    retryOnProviderTaskTimeout: actual.retryOnProviderTaskTimeout,
+    createUpstreamFailureError: actual.createUpstreamFailureError,
+  }
+})
 
-import { createKieTask, pollKieTask } from "../client.js"
+import { createKieTask, createUpstreamFailureError, pollKieTask } from "../client.js"
 import { runPixverseExtend, PIXVERSE_EXTEND_FIELDS } from "../pixverse-extend.js"
 
 const create = vi.mocked(createKieTask)
@@ -143,5 +149,19 @@ describe("runPixverseExtend — the task", () => {
     await expect(runPixverseExtend({ ...BASE, seed: 1 })).resolves.toMatchObject({ url: "https://tempfile.example/v.mp4" })
     poll.mockResolvedValueOnce({ resultJson: {}, taskId: "task-pv-1" })
     await expect(runPixverseExtend({ ...BASE, seed: 1 })).rejects.toThrow(/no URL/)
+  })
+
+  it("creates the same task once more when the provider timed the first out on its side (task code 524), and returns the second", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const onTaskCreated = vi.fn(async () => undefined)
+    create.mockResolvedValueOnce({ taskId: "task-pv-1" }).mockResolvedValueOnce({ taskId: "task-pv-2" })
+    poll
+      .mockRejectedValueOnce(createUpstreamFailureError("task failed: [524] generate task timeout.", "Generation", { upstreamStatus: "524" }))
+      .mockResolvedValueOnce({ resultJson: { resultUrls: ["https://tempfile.example/second.mp4"] }, taskId: "task-pv-2" })
+    await expect(runPixverseExtend(BASE, { onTaskCreated })).resolves.toMatchObject({ url: "https://tempfile.example/second.mp4", kieTaskId: "task-pv-2" })
+    expect(create).toHaveBeenCalledTimes(2)
+    // The same body, the random seed included: the input is built once.
+    expect(create.mock.calls[1]![1]).toEqual(create.mock.calls[0]![1])
+    expect(onTaskCreated.mock.calls).toEqual([["task-pv-1"], ["task-pv-2"]])
   })
 })

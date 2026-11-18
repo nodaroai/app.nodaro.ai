@@ -26,6 +26,37 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 - Standard models: 60 attempts (~5 min). Video: 90 attempts (~10 min)
 - 10s timeout per poll request; 30s timeout for task creation
 
+### A task KIE times out is sent once more
+- A task KIE ends as failed with code `524` (`[524] generate task timeout.`)
+  was given up on KIE's side and is not charged; the same request sent again
+  has run (seen 2026-11-18: three Gemini Omni Flash 1.2 reference runs failed
+  ~46 s in within 7 minutes, and the same bodies ran minutes later).
+- `createUpstreamFailureError` marks it on the TASK's code
+  (`providerTaskTimeout`, from `upstreamStatus` or `taskCode`), never on words,
+  never for a content block, and never for an HTTP 524 on a create or poll
+  call, where the task may still be running.
+- `retryOnProviderTaskTimeout` / `withProviderTimeoutRetry` (client.ts) wrap the
+  WHOLE create → save the task id → poll sequence, so the second task's id is
+  the one saved and the cancellation check runs again. One resend; a second
+  timeout fails the run. `runKieTask` has it built in.
+- A new function that creates a task and polls it goes through one of the two:
+  `__tests__/provider-timeout-retry-totality.test.ts` fails a poll call that
+  does not. Never put the retry inside a `poll*` function: the recovery lane
+  (`lib/reconcile/kie.ts`) and the plugin toolkit poll a SAVED task id and have
+  no request to send again, so a task they pick up still fails on a timeout.
+- Only the market API's `failCode` has been seen carrying `524`. The other
+  families (VEO, Luma, Kontext, Runway, Aleph, Suno) pass their own code the
+  same way, unobserved.
+- Not covered: Suno's older `status: FAILED` branches (music video, WAV,
+  separate, lyrics: no code on the error); a failure `separateFailure` retypes
+  into its own error; Luma's `successFlag: 4` (callback failed: the code may
+  describe our callback, not the task); and the long lip-sync poll window,
+  where a timeout at the very end of the first attempt leaves the second less
+  than a full window inside the job's ceiling.
+- `sunoCoverById` counts its attempts: only the first turns a refused create
+  into `SunoCoverByIdRefusedError`, so a refused resend never also starts the
+  file lane (and that lane's own resend).
+
 ---
 
 ## Model Key → KIE API Doc Map
@@ -753,11 +784,6 @@ builds an allow-listed body:
   respells every platform image mention in the prompt (`@image_N`, `@imageN`,
   `@image(N)`) as `image N`, in every mode (`respellImageMentions`,
   `image-mentions.ts`).
-- **KIE's own timeout is resubmitted once.** A task KIE fails with
-  `[524] generate task timeout.` (seen 2026-11-18: three reference runs failed
-  ~46 s in within 7 minutes, and the same bodies ran minutes later) charged
-  nothing, so `runGeminiOmni12` sends the same body once more
-  (`isGeminiOmni12ProviderTimeout`); a second timeout fails the run.
 - `seeds`, not `seed`, 10000-99999: an out-of-range value is omitted. No
   `audio_ids`, so pinned voices are refused (`character_voice_unsupported`).
 - **Characters (`character_ids`, decided 2026-11-17):** taken the way 1.1 takes

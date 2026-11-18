@@ -22,6 +22,7 @@ import {
   createSanitizedError,
   createUpstreamFailureError,
   MAX_POLL_ATTEMPTS_VIDEO,
+  retryOnProviderTaskTimeout,
   type KieResultJson,
 } from "./client.js"
 import { providerFetch } from "../egress.js"
@@ -48,74 +49,76 @@ export async function runLumaModifyTask(
     console.log(`[KIE.ai Luma] Request body:`, JSON.stringify(input, null, 2))
   }
 
-  // Step 1: Create task — body is top-level (prompt, videoUrl)
-  const createResponse = await providerFetch(
-    {
-      provider: "kie",
-      operation: "luma.modify",
-      modelKey: reconcileOpts?.modelKey ?? null,
-      body: input,
-      dimensions: reconcileOpts?.dimensions ?? {},
-    },
-    `${KIE_API_BASE}/api/v1/modify/generate`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  return retryOnProviderTaskTimeout("Luma Modify", async () => {
+    // Step 1: Create task — body is top-level (prompt, videoUrl)
+    const createResponse = await providerFetch(
+      {
+        provider: "kie",
+        operation: "luma.modify",
+        modelKey: reconcileOpts?.modelKey ?? null,
+        body: input,
+        dimensions: reconcileOpts?.dimensions ?? {},
       },
-      body: JSON.stringify(input),
-      signal: AbortSignal.timeout(30_000),
+      `${KIE_API_BASE}/api/v1/modify/generate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(input),
+        signal: AbortSignal.timeout(30_000),
+      }
+    )
+
+    const responseText = await createResponse.text()
+    if (DEBUG) {
+      console.log(`[KIE.ai Luma] Response status: ${createResponse.status}`)
+      console.log(`[KIE.ai Luma] Response body: ${responseText.substring(0, 500)}`)
     }
-  )
 
-  const responseText = await createResponse.text()
-  if (DEBUG) {
-    console.log(`[KIE.ai Luma] Response status: ${createResponse.status}`)
-    console.log(`[KIE.ai Luma] Response body: ${responseText.substring(0, 500)}`)
-  }
+    if (!createResponse.ok) {
+      throw createSanitizedError(
+        `Luma Modify generate failed: ${createResponse.status} - ${responseText}`,
+        "Video generation"
+      )
+    }
 
-  if (!createResponse.ok) {
-    throw createSanitizedError(
-      `Luma Modify generate failed: ${createResponse.status} - ${responseText}`,
-      "Video generation"
-    )
-  }
+    let createData: { code?: number; message?: string; msg?: string; data?: { taskId?: string } }
+    try {
+      createData = JSON.parse(responseText)
+    } catch {
+      throw createSanitizedError(
+        `Luma Modify response is not valid JSON: ${responseText}`,
+        "Video generation"
+      )
+    }
 
-  let createData: { code?: number; message?: string; msg?: string; data?: { taskId?: string } }
-  try {
-    createData = JSON.parse(responseText)
-  } catch {
-    throw createSanitizedError(
-      `Luma Modify response is not valid JSON: ${responseText}`,
-      "Video generation"
-    )
-  }
+    if (
+      createData.code !== 0 &&
+      createData.code !== 200 &&
+      createData.code !== undefined
+    ) {
+      throw createSanitizedError(
+        `Luma Modify generate error (code ${createData.code}): ${createData.message ?? createData.msg ?? JSON.stringify(createData)}`,
+        "Video generation"
+      )
+    }
 
-  if (
-    createData.code !== 0 &&
-    createData.code !== 200 &&
-    createData.code !== undefined
-  ) {
-    throw createSanitizedError(
-      `Luma Modify generate error (code ${createData.code}): ${createData.message ?? createData.msg ?? JSON.stringify(createData)}`,
-      "Video generation"
-    )
-  }
+    if (!createData.data?.taskId) {
+      throw createSanitizedError(
+        `Luma Modify generate response missing taskId: ${JSON.stringify(createData)}`,
+        "Video generation"
+      )
+    }
 
-  if (!createData.data?.taskId) {
-    throw createSanitizedError(
-      `Luma Modify generate response missing taskId: ${JSON.stringify(createData)}`,
-      "Video generation"
-    )
-  }
+    const taskId = createData.data.taskId
+    console.log(`[KIE.ai Luma] Task created: ${taskId}`)
 
-  const taskId = createData.data.taskId
-  console.log(`[KIE.ai Luma] Task created: ${taskId}`)
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Luma]")
 
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Luma]")
-
-  return pollLumaTask(taskId, MAX_POLL_ATTEMPTS_VIDEO)
+    return pollLumaTask(taskId, MAX_POLL_ATTEMPTS_VIDEO)
+  })
 }
 
 /**
@@ -232,7 +235,8 @@ export async function pollLumaTask(
         `Error code: ${detailData.data?.errorCode ?? "unknown"}`
       throw createUpstreamFailureError(
         `Luma Modify task failed: ${errorMsg}`,
-        "Video generation"
+        "Video generation",
+        { taskCode: detailData.data?.errorCode },
       )
     }
 

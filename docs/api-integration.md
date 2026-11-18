@@ -1803,6 +1803,15 @@ The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
 plus, for five classes of failure, a structured `error_hint`.
 
+One failure is retried before the job fails, on the models whose provider
+reports it: when the provider says it timed a generation out on its own side,
+before producing anything, the platform sends the same request once more by
+itself. The job fails only when the second attempt fails too. The second
+attempt costs no extra credits; the job takes longer to finish, and
+`error_message` reads as it always did when both attempts fail. Not every
+model's provider reports this, and a job the platform had to pick up again
+after a restart is not sent a second time, so a timeout can still fail a job.
+
 A provider content-policy block:
 
 ```json

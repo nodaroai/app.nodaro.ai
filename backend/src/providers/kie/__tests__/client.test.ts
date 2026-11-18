@@ -33,6 +33,20 @@ describe("createUpstreamFailureError + isUpstreamKieFailure", () => {
     expect(createSanitizedError("task timed out after 60 attempts", "Generation").isUpstreamFailure).toBe(false)
   })
 
+  it("marks the provider's own task timeout by the task's code, never by words or a content block", async () => {
+    const { isProviderTaskTimeout } = await import("../client.js")
+    expect(isProviderTaskTimeout(createUpstreamFailureError("task failed: [524] generate task timeout.", "Generation", { upstreamStatus: "524" }))).toBe(true)
+    expect(isProviderTaskTimeout(createUpstreamFailureError("VEO failed: generate task timeout.", "Video generation", { taskCode: 524 }))).toBe(true)
+    // The same words with no code, or another code: not a timeout.
+    expect(isProviderTaskTimeout(createUpstreamFailureError("task failed: [524] generate task timeout.", "Generation"))).toBe(false)
+    expect(isProviderTaskTimeout(createUpstreamFailureError("task failed: [500] generate task timeout.", "Generation", { upstreamStatus: "500" }))).toBe(false)
+    // A content block is never sent again, whatever its code.
+    expect(isProviderTaskTimeout(createUpstreamFailureError("task failed: [524] content policy violation", "Generation", { upstreamStatus: "524" }))).toBe(false)
+    // Not a terminal task failure at all.
+    expect(isProviderTaskTimeout(createSanitizedError("createTask failed: 524 - gateway timeout", "Generation", false, false, { upstreamStatus: 524 }))).toBe(false)
+    expect(isProviderTaskTimeout(new Error("task failed: [524]"))).toBe(false)
+  })
+
   it("isUpstreamKieFailure is true only for a flagged KieError", () => {
     expect(isUpstreamKieFailure(createUpstreamFailureError("x", "Generation"))).toBe(true)
     expect(isUpstreamKieFailure(createSanitizedError("x", "Generation"))).toBe(false)
@@ -408,6 +422,70 @@ describe("split tasks", () => {
     const { runKieTask } = await import("../client.js")
     const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x", aspect_ratio: "3:2" })).catch((e: unknown) => e)
     expect((err as KieError).message).toBe("This model doesn't take 3:2. Pick another aspect ratio and run again.")
+  })
+
+  /** Counts tasks created; task N ends in `ends[N]`: a fail code, or "ok". */
+  function tasksEnd(...ends: string[]) {
+    let created = 0
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/createTask")) {
+        created++
+        return new Response(JSON.stringify({ code: 0, data: { taskId: `t-${created}` } }), { status: 200 })
+      }
+      const id = /taskId=([\w-]+)/.exec(url)![1]!
+      const end = ends[Number(id.slice(2)) - 1]
+      const data = end === "ok"
+        ? { taskId: id, state: "success", resultJson: JSON.stringify({ resultUrls: [`https://x/${id}.mp4`] }) }
+        : { taskId: id, state: "fail", failCode: end, failMsg: end === "524" ? "generate task timeout." : "Generation failed." }
+      return new Response(JSON.stringify({ code: 200, data }), { status: 200 })
+    })
+    return () => created
+  }
+
+  it("runKieTask: a task the provider timed out (524) is created once more, and the second task's id is the one saved", async () => {
+    const created = tasksEnd("524", "ok")
+    const onTaskCreated = vi.fn()
+    const { runKieTask } = await import("../client.js")
+    const run = await withTimers(() => runKieTask("nano-banana", { prompt: "x" }, 3, undefined, { onTaskCreated }))
+    expect(created()).toBe(2)
+    expect(run.taskId).toBe("t-2")
+    expect(run.resultJson.resultUrls).toEqual(["https://x/t-2.mp4"])
+    expect(onTaskCreated.mock.calls.map((c) => c[0])).toEqual(["t-1", "t-2"])
+  })
+
+  it("runKieTask: a second timeout fails the run, with no third task", async () => {
+    const created = tasksEnd("524", "524", "ok")
+    const { runKieTask, isProviderTaskTimeout } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x" }, 3)).catch((e: unknown) => e)
+    expect(isProviderTaskTimeout(err)).toBe(true)
+    expect(created()).toBe(2)
+  })
+
+  it("runKieTask: any other failed task is not sent again", async () => {
+    const created = tasksEnd("400", "ok")
+    const { runKieTask, isProviderTaskTimeout } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x" }, 3)).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect(isProviderTaskTimeout(err)).toBe(false)
+    expect(created()).toBe(1)
+  })
+
+  it("runKieTask: an HTTP 524 on the create call is not a task timeout: the task may be running", async () => {
+    let calls = 0
+    fetchMock.mockImplementation(async () => { calls++; return new Response("gateway timeout", { status: 524 }) })
+    const { runKieTask, isProviderTaskTimeout } = await import("../client.js")
+    const err = await withTimers(() => runKieTask("nano-banana", { prompt: "x" }, 3)).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KieError)
+    expect(isProviderTaskTimeout(err)).toBe(false)
+    expect(calls).toBe(1)
+  })
+
+  it("pollKieTask alone (a resumed task) reports the timeout and sends nothing: it has no request", async () => {
+    const created = tasksEnd("524")
+    const { pollKieTask, isProviderTaskTimeout } = await import("../client.js")
+    const err = await withTimers(() => pollKieTask("t-1", 3)).catch((e: unknown) => e)
+    expect(isProviderTaskTimeout(err)).toBe(true)
+    expect(created()).toBe(0)
   })
 
   it("pollKieTask alone (a resumed task) has no request, so it says the chosen aspect ratio", async () => {

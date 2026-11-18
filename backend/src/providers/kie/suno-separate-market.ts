@@ -31,7 +31,7 @@ import {
 } from "@nodaro/shared/models"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { createKieTask, createSanitizedError, pollKieTask } from "./client.js"
+import { createKieTask, createSanitizedError, pollKieTask, retryOnProviderTaskTimeout } from "./client.js"
 import type { SunoSeparateResult } from "./suno-client.js"
 import { separateFailure } from "./suno-separate-refusals.js"
 import { sunoStemFieldFor } from "./suno-stem-fields.js"
@@ -85,13 +85,15 @@ export async function sunoSeparateMarket(
     ...(type === "split_stem_advanced" ? { stem_name: params.stemName ?? DEFAULT_SUNO_STEM_NAME } : {}),
   }
 
-  const { taskId } = await createKieTask(SEPARATE_VOCALS_MODEL, input, {
-    modelKey: sunoSeparateCreditId(type),
-    dimensions: reconcileOpts?.dimensions,
+  return retryOnProviderTaskTimeout("Suno separate", async () => {
+    const { taskId } = await createKieTask(SEPARATE_VOCALS_MODEL, input, {
+      modelKey: sunoSeparateCreditId(type),
+      dimensions: reconcileOpts?.dimensions,
+    })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+    const { resultJson } = await pollKieTask(taskId, undefined, undefined, { onFail: separateFailure })
+    return parseSeparateVocalsResult(resultJson, type, taskId)
   })
-  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
-  const { resultJson } = await pollKieTask(taskId, undefined, undefined, { onFail: separateFailure })
-  return parseSeparateVocalsResult(resultJson, type, taskId)
 }
 
 // =============================================================================

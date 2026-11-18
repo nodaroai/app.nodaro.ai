@@ -4,7 +4,7 @@ const media = vi.hoisted(() => ({ fetchOwnMedia: vi.fn(), meta: { width: 720, he
 vi.mock("../../../lib/fetch-own-media.js", () => ({ fetchOwnMedia: media.fetchOwnMedia }))
 vi.mock("sharp", () => ({ default: () => ({ metadata: async () => media.meta }) }))
 
-import { buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, isGeminiOmni12ProviderTimeout } from "../gemini-omni-12.js"
+import { buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames } from "../gemini-omni-12.js"
 
 const base = { prompt: "a cat plays piano", durationSec: 8, resolution: "720p", aspectRatio: "16:9" }
 
@@ -229,13 +229,5 @@ describe("buildGeminiOmni12Request — image mentions", () => {
     const { input, mode } = buildGeminiOmni12Request({ ...base, prompt: "open on @image_1, mail me@images.example", startFrameUrl: "s" })
     expect(mode).toBe("first-frame")
     expect(input.prompt).toBe("open on image 1, mail me@images.example")
-  })
-})
-
-describe("isGeminiOmni12ProviderTimeout", () => {
-  it("is true only for the provider's own 524", () => {
-    expect(isGeminiOmni12ProviderTimeout(Object.assign(new Error("x"), { internalDetails: "task failed: [524] generate task timeout." }))).toBe(true)
-    expect(isGeminiOmni12ProviderTimeout(Object.assign(new Error("x"), { internalDetails: "task failed: [400] Generation failed." }))).toBe(false)
-    expect(isGeminiOmni12ProviderTimeout(new Error("task failed: [524]"))).toBe(false)
   })
 })

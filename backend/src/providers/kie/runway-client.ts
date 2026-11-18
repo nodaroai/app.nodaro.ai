@@ -19,6 +19,7 @@ import {
   createSanitizedError,
   createUpstreamFailureError,
   MAX_POLL_ATTEMPTS_VIDEO,
+  retryOnProviderTaskTimeout,
   type KieResultJson,
 } from "./client.js"
 import { providerFetch } from "../egress.js"
@@ -118,12 +119,14 @@ export async function runRunwayTask(
   input: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
-  const { taskId, apiKey } = await postKieEndpoint("/api/v1/runway/generate", input, "Runway generate", "runway.generate", reconcileOpts)
+  return retryOnProviderTaskTimeout("Runway", async () => {
+    const { taskId, apiKey } = await postKieEndpoint("/api/v1/runway/generate", input, "Runway generate", "runway.generate", reconcileOpts)
 
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Runway]")
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Runway]")
 
-  const videoUrl = await pollRunwayRecordDetail(taskId, "Runway", apiKey)
-  return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
+    const videoUrl = await pollRunwayRecordDetail(taskId, "Runway", apiKey)
+    return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
+  })
 }
 
 /**
@@ -238,18 +241,20 @@ export async function runRunwayExtendTask(
   quality: "720p" | "1080p" = "720p",
   reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
-  const { taskId: extendTaskId, apiKey } = await postKieEndpoint(
-    "/api/v1/runway/extend",
-    { taskId, prompt, quality },
-    "Runway extend",
-    "runway.extend",
-    reconcileOpts,
-  )
+  return retryOnProviderTaskTimeout("Runway Extend", async () => {
+    const { taskId: extendTaskId, apiKey } = await postKieEndpoint(
+      "/api/v1/runway/extend",
+      { taskId, prompt, quality },
+      "Runway extend",
+      "runway.extend",
+      reconcileOpts,
+    )
 
-  await fireOnTaskCreated(reconcileOpts, extendTaskId, "[KIE.ai Runway Extend]")
+    await fireOnTaskCreated(reconcileOpts, extendTaskId, "[KIE.ai Runway Extend]")
 
-  const videoUrl = await pollRunwayRecordDetail(extendTaskId, "Runway Extend", apiKey)
-  return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
+    const videoUrl = await pollRunwayRecordDetail(extendTaskId, "Runway Extend", apiKey)
+    return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
+  })
 }
 
 /**
@@ -264,12 +269,14 @@ export async function runAlephTask(
   input: Record<string, unknown>,
   reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
-  const { taskId, apiKey } = await postKieEndpoint("/api/v1/aleph/generate", input, "Aleph generate", "runway.aleph.generate", reconcileOpts)
+  return retryOnProviderTaskTimeout("Aleph", async () => {
+    const { taskId, apiKey } = await postKieEndpoint("/api/v1/aleph/generate", input, "Aleph generate", "runway.aleph.generate", reconcileOpts)
 
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Aleph]")
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Aleph]")
 
-  const videoUrl = await pollAlephRecordInfo(taskId, apiKey)
-  return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
+    const videoUrl = await pollAlephRecordInfo(taskId, apiKey)
+    return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
+  })
 }
 
 /**
@@ -366,12 +373,12 @@ async function pollAlephRecordInfo(
     // VEO (client.ts) and Kontext failure handling.
     if (successFlag === 2 || successFlag === 3) {
       const errorMsg = detailData.data?.errorMessage ?? "task failed"
-      throw createUpstreamFailureError(`Aleph failed: ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`Aleph failed: ${errorMsg}`, "Video generation", { taskCode: detailData.data?.errorCode })
     }
 
     if (detailData.data?.errorCode && detailData.data.errorCode !== 0) {
       const errorMsg = detailData.data?.errorMessage ?? "Unknown error"
-      throw createUpstreamFailureError(`Aleph failed: [${detailData.data.errorCode}] ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`Aleph failed: [${detailData.data.errorCode}] ${errorMsg}`, "Video generation", { taskCode: detailData.data.errorCode })
     }
 
     // successFlag === 0 means still processing — continue polling

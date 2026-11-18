@@ -24,7 +24,7 @@
  */
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { createKieTask, createSanitizedError, pollKieTask } from "./client.js"
+import { createKieTask, createSanitizedError, pollKieTask, retryOnProviderTaskTimeout } from "./client.js"
 import { kieTaskCreditsConsumed } from "./image-cost.js"
 import { LAYER_DECOMPOSITION_MODEL_KEY, LAYER_DECOMPOSITION_WIRE_MODEL } from "./models.js"
 
@@ -88,13 +88,15 @@ export function layerDecompositionInput(req: LayerDecompositionRequest): Record<
 
 /** Decompose one image and poll the task to its end. Every failure is the client's sanitized error (refunded by the worker's failure path). */
 export async function runLayerDecomposition(req: LayerDecompositionRequest, reconcileOpts?: ReconcileOpts): Promise<LayerDecompositionResult> {
-  const { taskId } = await createKieTask(LAYER_DECOMPOSITION_WIRE_MODEL, layerDecompositionInput(req), {
-    modelKey: LAYER_DECOMPOSITION_MODEL_KEY,
-    dimensions: { resolution: req.size, images: req.maxImages, ...reconcileOpts?.dimensions },
+  return retryOnProviderTaskTimeout("Layer decomposition", async () => {
+    const { taskId } = await createKieTask(LAYER_DECOMPOSITION_WIRE_MODEL, layerDecompositionInput(req), {
+      modelKey: LAYER_DECOMPOSITION_MODEL_KEY,
+      dimensions: { resolution: req.size, images: req.maxImages, ...reconcileOpts?.dimensions },
+    })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai layer decomposition]")
+    const { resultJson, providerMs, rawRecordInfo } = await pollKieTask(taskId)
+    return layerDecompositionResultOf({ taskId, resultJson, kieCredits: kieTaskCreditsConsumed(rawRecordInfo), providerMs })
   })
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai layer decomposition]")
-  const { resultJson, providerMs, rawRecordInfo } = await pollKieTask(taskId)
-  return layerDecompositionResultOf({ taskId, resultJson, kieCredits: kieTaskCreditsConsumed(rawRecordInfo), providerMs })
 }
 
 /** A finished task as its poll read it: its parsed `resultJson`, and what it cost and took. */

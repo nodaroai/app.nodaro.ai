@@ -111,6 +111,12 @@ export class KieError extends Error {
    *  `error_hint` (`subject: "audio"`); this flag never changes the user-facing
    *  message. */
   public audioRefused = false
+  /** True when the provider ended the TASK with its own timeout code (see
+   *  `createUpstreamFailureError`): its side gave up, nothing was produced, and
+   *  the same request sent again can run. Never set for an HTTP-level timeout on
+   *  a create or poll call, where the task may still be running. Read by
+   *  `isProviderTaskTimeout`; this flag never changes the user-facing message. */
+  public providerTaskTimeout = false
 
   constructor(
     sanitizedMessage: string,
@@ -510,6 +516,10 @@ export function createUpstreamFailureError(
     inputVideoRefused?: boolean
     /** The aspect ratio the request chose, for the sentence when the model refused it. */
     requestedAspectRatio?: string | null
+    /** The code the provider put on the failed TASK, when the caller does not
+     *  pass it as `upstreamStatus` (which also words the message). Read only to
+     *  recognise the provider's own task timeout — see `isProviderTaskTimeout`. */
+    taskCode?: UpstreamStatus
   },
 ): KieError {
   const inputVideoRefused = options?.inputVideoRefused === true
@@ -550,11 +560,61 @@ export function createUpstreamFailureError(
     err.audioRefused = cls !== null && GENERATED_AUDIO_RE.test(providerWords)
     return err
   }
-  return createSanitizedError(internalMessage, context, true, contentPolicy, {
+  const err = createSanitizedError(internalMessage, context, true, contentPolicy, {
     upstreamStatus: options?.upstreamStatus,
     inputVideoRefused,
     requestedAspectRatio: options?.requestedAspectRatio,
   })
+  // Only here: a failure with a content class or a caller's own sentence
+  // returned above, and is never a timeout to send again.
+  err.providerTaskTimeout = isProviderTimeoutCode(options?.taskCode ?? options?.upstreamStatus)
+  return err
+}
+
+/** The code a provider puts on a task it gave up waiting for. */
+const PROVIDER_TASK_TIMEOUT_CODE = 524
+
+function isProviderTimeoutCode(code: UpstreamStatus): boolean {
+  const n = typeof code === "number" ? code : Number.parseInt(String(code ?? ""), 10)
+  return n === PROVIDER_TASK_TIMEOUT_CODE
+}
+
+/**
+ * True when the provider ended a task with its own timeout: it reported the
+ * task as failed with code 524. Its side gave up, a failed task is not charged,
+ * and the same request sent again has run. Decided on the task's code at the
+ * place the failure is built (`createUpstreamFailureError`), never on a
+ * message, and never for an HTTP 524 on a create or poll call.
+ */
+export function isProviderTaskTimeout(err: unknown): boolean {
+  return (err as { providerTaskTimeout?: unknown } | null)?.providerTaskTimeout === true
+}
+
+/**
+ * Runs one whole provider task (create, save its id, poll) and, when the
+ * provider timed the task out on its own side, runs it once more. `run` must
+ * create the task itself: the second run is a new task with a new id, saved
+ * the same way the first was, and passes the same cancellation check. Every
+ * place that creates a task and waits for it goes through here
+ * (`provider-timeout-retry-totality.test.ts`); a task picked up again from its
+ * saved id has no request to send and does not.
+ */
+export async function retryOnProviderTaskTimeout<T>(label: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (err) {
+    if (!isProviderTaskTimeout(err)) throw err
+    console.warn(`[KIE.ai] ${label}: the provider timed the task out on its side; sending it once more`)
+    return run()
+  }
+}
+
+/** A function that creates a task and waits for it, behind `retryOnProviderTaskTimeout`. */
+export function withProviderTimeoutRetry<A extends unknown[], R>(
+  label: string,
+  runOnce: (...args: A) => Promise<R>,
+): (...args: A) => Promise<R> {
+  return (...args) => retryOnProviderTaskTimeout(label, () => runOnce(...args))
 }
 
 /** True for a KieError marking a terminal upstream provider failure (vs a
@@ -1162,12 +1222,14 @@ export async function runKieTask(
   rawRecordInfo?: Record<string, unknown>
   taskId?: string
 }> {
-  const { taskId } = await createKieTask(model, input, {
-    modelKey: opts?.modelKey ?? null,
-    dimensions: opts?.dimensions,
+  return retryOnProviderTaskTimeout(opts?.modelKey ?? model, async () => {
+    const { taskId } = await createKieTask(model, input, {
+      modelKey: opts?.modelKey ?? null,
+      dimensions: opts?.dimensions,
+    })
+    await fireOnTaskCreated(opts, taskId, "[KIE.ai]")
+    return pollKieTask(taskId, maxAttempts, onProgress, { requestedAspectRatio: requestedAspectRatioOf(input) })
   })
-  await fireOnTaskCreated(opts, taskId, "[KIE.ai]")
-  return pollKieTask(taskId, maxAttempts, onProgress, { requestedAspectRatio: requestedAspectRatioOf(input) })
 }
 
 /**
@@ -1179,7 +1241,8 @@ export async function runKieTask(
  *   2 = failed
  *   3 = generation failed
  */
-export async function runVeoTask(
+export const runVeoTask = withProviderTimeoutRetry("VEO", runVeoTaskOnce)
+async function runVeoTaskOnce(
   model: string,
   prompt: string,
   imageUrls?: string[],
@@ -1464,7 +1527,7 @@ async function pollVeoRecordInfo(
 
     if (successFlag === 2 || successFlag === 3) {
       const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
-      throw createUpstreamFailureError(`${label} failed: ${errorMsg}`, "Video generation", { requestedAspectRatio })
+      throw createUpstreamFailureError(`${label} failed: ${errorMsg}`, "Video generation", { requestedAspectRatio, taskCode: detailData.data.errorCode })
     }
   }
 
@@ -1476,7 +1539,8 @@ async function pollVeoRecordInfo(
  * API: POST /api/v1/veo/extend
  * Polls: GET /api/v1/veo/record-info (same as runVeoTask)
  */
-export async function runVeoExtendTask(
+export const runVeoExtendTask = withProviderTimeoutRetry("VEO Extend", runVeoExtendTaskOnce)
+async function runVeoExtendTaskOnce(
   taskId: string,
   prompt: string,
   model?: "fast" | "quality",
@@ -1643,7 +1707,8 @@ export async function runVeo1080pTask(
  * API: POST /api/v1/veo/get-4k-video
  * Async: polls record-info for completion (~5-10 min).
  */
-export async function runVeo4kTask(
+export const runVeo4kTask = withProviderTimeoutRetry("VEO 4K", runVeo4kTaskOnce)
+async function runVeo4kTaskOnce(
   taskId: string,
   index: number = 0,
   reconcileOpts?: ReconcileOpts,
