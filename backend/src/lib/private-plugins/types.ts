@@ -4787,6 +4787,13 @@ export interface PluginSupports {
    *   absent ⇒ the platform answers the settings without the key and refuses
    *   to save a shared Video Remake setting with one while any environment
    *   lacks it (lib/cast-swap-face-mesh-layers.ts `engineDrawsFaceMeshLayers`).
+   * - `shotListSpeech` (Cast Swap engine ≥ 0.490.0, decided 2026-11-18): with
+   *   `shotList`, each shot list style may name `speech` ("off", the same as
+   *   absent; "who": each shot line ends with who speaks and when; "words":
+   *   who, when and the exact words heard). Additive-optional: absent ⇒ the
+   *   platform sends the shot list without the key and refuses to save a
+   *   shared Video Remake steps setting that asks for speech while any
+   *   environment lacks it (lib/cast-swap-steps.ts `engineTakesShotListSpeech`).
    * - `maskFillNone`: a faces hidden masking setting (the Video Remake
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
@@ -4948,6 +4955,7 @@ export interface PluginSupports {
     readonly preciseStyleRoutePhotographic?: boolean
     readonly preciseStyleRoutePerStyle?: boolean
     readonly preciseStyleRoute?: boolean
+    readonly shotListSpeech?: boolean
   }
 }
 

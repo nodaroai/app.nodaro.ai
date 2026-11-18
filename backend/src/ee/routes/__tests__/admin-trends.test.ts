@@ -4280,3 +4280,106 @@ describe("Pulse's reference audio: stored only off the default, held until every
     })
   })
 })
+
+/**
+ * The shot list's speech and its mouths on a trend (`steps.shotList.<style>.speech` / `.speechMouth`, decided
+ * 2026-11-18): stored as the Video Remake setting stores them ("off" and the default mouths left out); a draft save that
+ * changes them to ones asking for speech waits for every environment's platform claim (422), then its engine flag (409);
+ * a publish that changes them from the live version waits for the claim (422), its engine by the publish need
+ * `shotListSpeech`. What was not changed, or was turned Off, is never refused.
+ */
+describe("a trend's shot list speech: stored only when on, held until every environment's platform and engine take it", () => {
+  const SHOT = { ...CAST_SWAP_ALL, steps: true, shotList: true }
+  const SPEECH = { ...SHOT, shotListSpeech: true }
+  const CLAIM = { shotListSpeech: true }
+  const COVERED = () => [envRow("production", SPEECH, CLAIM), envRow("staging", SPEECH, CLAIM)]
+  const WORDS = { shotList: { flex: { mode: "on" as const, speech: "words" as const, speechMouth: "none" as const } } }
+  const withSteps = (steps: unknown, over: Partial<TrendVersionData> = {}) => draftData({ examples: [EXAMPLE], ...(steps === undefined ? {} : { steps: steps as TrendVersionData["steps"] }), ...over })
+  const save = async (steps: unknown, over: Partial<TrendVersionData> = {}) =>
+    call("PUT", `/v1/admin/trends/${T1}/draft`, { data: withSteps(steps, over), revision: await revisionOf() })
+  const publish = () => call("POST", `/v1/admin/trends/${T1}/publish`)
+  const stored = () => mem.trends[0]!.versions[mem.trends[0]!.draftVersion]!.data
+
+  describe("a draft save", () => {
+    it("stores who / words with a mouths value off its default; Off and the default mouths are left out", async () => {
+      seed({}, withSteps(undefined))
+      world.envs = COVERED()
+      expect((await save(WORDS)).statusCode).toBe(200)
+      expect(stored().steps).toEqual(WORDS)
+      expect((await save({ shotList: { flex: { mode: "on", speech: "who", speechMouth: "spoken" } } })).statusCode).toBe(200)
+      expect(stored().steps).toEqual({ shotList: { flex: { mode: "on", speech: "who" } } })
+      expect((await save({ shotList: { flex: { mode: "on", speech: "off", speechMouth: "all" } } })).statusCode).toBe(200)
+      expect(JSON.stringify(stored().steps ?? {})).not.toContain("speech")
+    })
+
+    it("is held while one environment's platform does not claim it, naming it; nothing is saved", async () => {
+      seed({}, withSteps(undefined))
+      world.envs = [envRow("production", SPEECH), envRow("staging", SPEECH, CLAIM)]
+      const before = structuredClone(stored())
+      const res = await save(WORDS)
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toEqual({
+        code: "platform_unsupported",
+        envs: ["production"],
+        message: "The platform in production does not take Speech in the script yet, and trends are shared by every environment: set it to Off, or wait until production is updated.",
+      })
+      expect(stored()).toEqual(before)
+    })
+
+    it("is refused while one environment's engine lacks the flag, every platform claiming it", async () => {
+      seed({}, withSteps(undefined))
+      world.envs = [envRow("production", SPEECH, CLAIM), envRow("staging", SHOT, CLAIM)]
+      const res = await save(WORDS)
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"], message: expect.stringMatching(/trends are shared by every environment/) })
+    })
+
+    it("a mouths change alone is a change; what was not changed, or was turned Off, is never refused", async () => {
+      seed({}, withSteps(WORDS))
+      world.envs = [envRow("production", SHOT), envRow("staging", SHOT)]
+      expect((await save(WORDS, { name: { en: "Renamed" } })).statusCode).toBe(200)
+      expect(stored().steps).toEqual(WORDS)
+      expect((await save({ shotList: { flex: { mode: "on", speech: "words", speechMouth: "all" } } })).statusCode).toBe(422)
+      expect((await save({ shotList: { flex: { mode: "on", speech: "off" } } })).statusCode).toBe(200)
+    })
+  })
+
+  describe("a publish", () => {
+    it("of speech never published is held while one environment's platform does not claim it", async () => {
+      seed({}, withSteps(WORDS))
+      world.envs = [envRow("production", SPEECH, CLAIM), envRow("staging", SPEECH)]
+      const res = await publish()
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging"], message: expect.stringMatching(/would be made without it/) })
+      expect(mem.trends[0]!.status).toBe("draft")
+    })
+
+    it("is blocked while one environment's engine lacks the flag (the publish need), every platform claiming it", async () => {
+      seed({}, withSteps(WORDS))
+      world.envs = [envRow("production", SPEECH, CLAIM), envRow("staging", SHOT, CLAIM)]
+      const res = await publish()
+      expect(res.statusCode).toBe(409)
+      expect(reasonsOf(res)).toContainEqual({ code: "engine_unsupported", env: "staging", need: "shotListSpeech" })
+    })
+
+    it("goes through once every environment's claim and flag cover it", async () => {
+      seed({}, withSteps(WORDS))
+      world.envs = COVERED()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.status).toBe("published")
+    })
+
+    it("is never held for what the published version holds as it is (its engine need stays the publish checks')", async () => {
+      seed({
+        status: "published",
+        publishedVersion: 1,
+        draftVersion: 2,
+        versions: { 1: { data: withSteps(WORDS), published: true }, 2: { data: withSteps(WORDS, { name: { en: "Renamed" } }), published: false } },
+      })
+      world.envs = [envRow("production", SPEECH), envRow("staging", SPEECH)]
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+    })
+  })
+})

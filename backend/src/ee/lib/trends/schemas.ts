@@ -35,7 +35,15 @@ import {
 } from "../../../lib/cast-swap-pulse-reference-audio.js"
 import { castSwapPrismReferenceAudioSchema } from "../../../lib/cast-swap-prism-reference-audio.js"
 import { PROMPT_PART_TEXT_MAX } from "../../../lib/cast-swap-prompt-parts-contract.js"
-import { castSwapStepsSaveSchema, castSwapStepsSchema, normaliseSteps, stepsProblems, type CastSwapStepsProblem } from "../../../lib/cast-swap-steps.js"
+import {
+  SHOT_LIST_STYLES,
+  castSwapStepsSaveSchema,
+  castSwapStepsSchema,
+  modelReadsClip,
+  normaliseSteps,
+  stepsProblems,
+  type CastSwapStepsProblem,
+} from "../../../lib/cast-swap-steps.js"
 import type {
   Choice,
   LocalizedText,
@@ -574,12 +582,34 @@ export function hiddenChip(
  * the key is left out). `problems`: each refusal with its path under `steps`
  * and its code. A body without the key (or with it undefined) is returned
  * without it. Never mutates `edited`.
+ *
+ * The shot list's speech and its mouths (`shotList.<style>.speech`,
+ * `.speechMouth`, decided 2026-11-18) are stored as the Video Remake setting
+ * stores them: only with speech on, "off" and the default mouths left out; the
+ * draft route holds a save that changes them while an environment cannot take
+ * them (admin-trends.ts). A trend's shot list shown the clip keeps the
+ * clip steps' models (`modelReadsClip`): a model that reads video on the LLM
+ * nodes only (Gemini 4 Hydrogen), which the Video Remake shot list may use
+ * (`modelReadsShotListClip`), is refused here, `model_cannot_read_clip`.
  */
 export function withSavedSteps(edited: Record<string, unknown>): { data: Record<string, unknown> } | { problems: CastSwapStepsProblem[] } {
   const { steps, ...rest } = edited
   if (steps === undefined) return { data: rest }
   const parsed = castSwapStepsSaveSchema.safeParse(steps)
   if (!parsed.success) return { problems: stepsProblems(parsed.error, "steps") }
+  const clipModels = SHOT_LIST_STYLES.filter((style) => {
+    const llm = parsed.data.shotList?.[style]?.llm
+    return llm !== undefined && llm.inputs.includes("clip") && !modelReadsClip(llm.model)
+  })
+  if (clipModels.length > 0) {
+    return {
+      problems: clipModels.map((style) => ({
+        path: `steps.shotList.${style}.llm.model`,
+        code: "model_cannot_read_clip",
+        message: "This model cannot read the clip: choose one that takes video, or leave the clip out.",
+      })),
+    }
+  }
   const normalised = normaliseSteps(parsed.data)
   return { data: normalised ? { ...rest, steps: normalised } : rest }
 }

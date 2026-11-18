@@ -284,6 +284,30 @@ export function environmentsThatCannotTakeShotList(envs: readonly TrendEngineEnv
 }
 
 /**
+ * The environments (of `SHARED_SETTING_ENVIRONMENTS`) that cannot take the
+ * shot list's speech (`steps.shotList.<style>.speech`, decided 2026-11-18): by
+ * their engine (none recorded, or one without `castSwap.steps`,
+ * `castSwap.shotList` and `castSwap.shotListSpeech`) and by their platform
+ * (the app itself, whose strict schema refuses the key otherwise:
+ * `platform.shotListSpeech`). Unknown while the environments are (undefined).
+ * Speech is offered only when both are empty (the server holds the save
+ * otherwise: 422 `platform_unsupported`, 409 `engine_unsupported`).
+ */
+export function environmentsThatCannotTakeShotListSpeech(
+  envs: readonly TrendEngineEnvironment[] | undefined,
+): { engine: string[]; platform: string[] } | undefined {
+  if (!envs) return undefined
+  const of = (name: string) => envs.find((e) => e.env === name)?.supports
+  return {
+    engine: SHARED_SETTING_ENVIRONMENTS.filter((name) => {
+      const cs = of(name)?.castSwap
+      return cs?.steps !== true || cs.shotList !== true || cs.shotListSpeech !== true
+    }),
+    platform: SHARED_SETTING_ENVIRONMENTS.filter((name) => of(name)?.platform?.shotListSpeech !== true),
+  }
+}
+
+/**
  * The environments (of `SHARED_SETTING_ENVIRONMENTS`, in that order) whose
  * engine cannot take "Style the role pictures" (`steps.styleRefs`) — none
  * recorded, or one that does not declare `castSwap.steps` and

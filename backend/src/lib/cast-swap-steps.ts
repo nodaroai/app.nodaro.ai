@@ -22,7 +22,20 @@
  *   = Precise off, Flex on with the engine's defaults; Flex is always on
  *   (`flex.mode` "off" is refused, `shot_list_flex_always_on`). Sent only to
  *   an engine that declares `castSwap.shotList` (`stepsForEngine`); the
- *   defaults need no engine (`shotListNeedsEngine`).
+ *   defaults need no engine (`shotListNeedsEngine`). Each style's `speech`
+ *   (decided 2026-11-18): what each shot line says of the speech heard —
+ *   "off" (absent: the same) nothing, "who" who speaks and when, "words" who
+ *   speaks, when and the words. Stored only when it is not "off"
+ *   (`normaliseSteps`), so a setting that never uses it stays readable by a
+ *   platform or an engine from before it; sent only to an engine that also
+ *   declares `castSwap.shotListSpeech` (`stepsForEngine` takes the key out for
+ *   any other, the rest of the shot list kept). With speech on, a style's
+ *   `speechMouth` says what the rule says of the other mouths: "spoken" (the
+ *   default, never stored: closed for spoken lines, singers left alone),
+ *   "all" (closed when not speaking) or "none" (nothing). It is stored and
+ *   sent only beside speech, so the speech gates cover it (decided
+ *   2026-11-18: no capability of its own). Trends take both (decided
+ *   2026-11-18), held as the Video Remake setting is (admin-trends.ts).
  * - `styleRefs` ("Style the role pictures"): for a run that chose an art
  *   style (`direction.style`: this switch is a Flex run's; a Precise run with
  *   an art style has its own, `nodaro-motion-precise-art-style.ts`), each role's reference picture is
@@ -52,7 +65,7 @@
  */
 import { createHash } from "node:crypto"
 import { z } from "zod"
-import { getLlmModalityCaps, LLM_MODEL_IDS, readsVideoOutsideLlmNodes } from "@nodaro/shared/llm-models"
+import { getLlmModalityCaps, LLM_MODEL_IDS, readsMediaOnLlmNodesOnly, readsVideoOutsideLlmNodes } from "@nodaro/shared/llm-models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 // ---- 0.1 Vocabulary --------------------------------------------------------
@@ -207,10 +220,21 @@ export interface ClipBodySetting {
   prompt?: string
 }
 
-/** The shot list's step for one style: on or off, and its LLM (absent: the engine's default). */
+/** What a shot list says of the speech heard (decided 2026-11-18): nothing, who speaks and when, or that and the words. */
+export const SHOT_LIST_SPEECH = ["off", "who", "words"] as const
+export type ShotListSpeech = (typeof SHOT_LIST_SPEECH)[number]
+
+/** What the speech rule says of the mouths of those not speaking (decided 2026-11-18); "spoken" is the default. */
+export const SHOT_LIST_SPEECH_MOUTH = ["spoken", "all", "none"] as const
+export type ShotListSpeechMouth = (typeof SHOT_LIST_SPEECH_MOUTH)[number]
+
+/** The shot list's step for one style: on or off, its LLM (absent: the engine's default) and its speech (absent: "off"). */
 export interface ShotListStyleSetting {
   mode: "on" | "off"
   llm?: LlmStepSetting
+  speech?: ShotListSpeech
+  /** Read only while `speech` is "who" or "words"; absent: "spoken". */
+  speechMouth?: ShotListSpeechMouth
 }
 
 /** The styles a shot list is set per (a direct run's `style`; "flex" is the person's name for "motion"). */
@@ -276,6 +300,8 @@ const clipBodySchema = z.strictObject({
 const shotListStyleSchema = z.strictObject({
   mode: z.enum(["on", "off"]),
   llm: llmStepSchema.optional(),
+  speech: z.enum(SHOT_LIST_SPEECH).optional(),
+  speechMouth: z.enum(SHOT_LIST_SPEECH_MOUTH).optional(),
 })
 
 const shotListSchema = z.strictObject({
@@ -352,6 +378,44 @@ export function modelReadsClip(model: string): boolean {
   return readsVideoOutsideLlmNodes(model) || (CLIP_AS_IMAGE_MODELS as readonly string[]).includes(model)
 }
 
+/**
+ * The models that read video on the LLM nodes only (`LLM_NODE_ONLY_MEDIA_MODELS`) that the Video Remake shot list may
+ * be written by, by name (decided 2026-11-18): the Video Remake shot list is the one other place Gemini 4 Hydrogen is
+ * offered. A model later added to `LLM_NODE_ONLY_MEDIA_MODELS` enters the shot list only once it is named here. The
+ * admin page keeps the same list (`SHOT_LIST_LLM_NODE_MEDIA_MODELS` in frontend .../trends/shot-list.ts, held equal by
+ * a test there).
+ */
+export const SHOT_LIST_LLM_NODE_MEDIA_MODELS = ["gemini-4-hydrogen"] as const
+
+/** Whether `model` is one the shot list alone may be shown the clip by (`SHOT_LIST_LLM_NODE_MEDIA_MODELS`). */
+export function shotListOnlyClipModel(model: string): boolean {
+  return (SHOT_LIST_LLM_NODE_MEDIA_MODELS as readonly string[]).includes(model) && readsMediaOnLlmNodesOnly(model)
+}
+
+/**
+ * Whether `model` may read the clip in the SHOT LIST step (`shotList.<style>.llm`): any model `modelReadsClip`
+ * allows, and also one named in `SHOT_LIST_LLM_NODE_MEDIA_MODELS` (Gemini 4 Hydrogen). The shot list is one call
+ * through the LLM Chat route (`/v1/llm-chat/generate`), the very route those models read video on, sent the clip as a
+ * video reference; decided 2026-11-18, so the shot list may be written by Gemini 3.8 Flash, Gemini 4 Carbon or Gemini
+ * 4 Hydrogen on Admin → Video Remake (a trend's shot list keeps `modelReadsClip`: `withSavedSteps`,
+ * trends/schemas.ts). Every other clip step keeps `modelReadsClip`.
+ */
+export function modelReadsShotListClip(model: string): boolean {
+  return modelReadsClip(model) || shotListOnlyClipModel(model)
+}
+
+/**
+ * Whether a shot list (either style) is shown the clip by a model only the shot list may use (`shotListOnlyClipModel`):
+ * a platform from before that choice refuses it (`model_cannot_read_clip`) on every save of the shared row, so the
+ * save holds it until every platform takes it (decided 2026-11-18, `PlatformSupports.shotListSpeech`).
+ */
+export function shotListOnlyClipModelSet(s: ShotListSetting | undefined): boolean {
+  return SHOT_LIST_STYLES.some((style) => {
+    const llm = s?.[style]?.llm
+    return llm !== undefined && llm.inputs.includes("clip") && shotListOnlyClipModel(llm.model)
+  })
+}
+
 /** The save-time rules: a known model that can see what it is shown; an image prompt naming only the engine's placeholders. */
 function saveRules(s: z.output<typeof stepsShape>, ctx: Ctx): void {
   const unknown = unknownClipBodyPlaceholders(s.clipBody?.prompt ?? "")
@@ -367,7 +431,8 @@ function saveRules(s: z.output<typeof stepsShape>, ctx: Ctx): void {
     if (llm.inputs.some((i) => PICTURE_INPUTS.includes(i)) && !getLlmModalityCaps(llm.model).image) {
       issue(ctx, [...path, "model"], "model_cannot_see_images", "This model cannot see pictures: choose one that can, or show it text only.")
     }
-    if (llm.inputs.includes("clip") && !modelReadsClip(llm.model)) {
+    const readsClip = path[0] === "shotList" ? modelReadsShotListClip(llm.model) : modelReadsClip(llm.model)
+    if (llm.inputs.includes("clip") && !readsClip) {
       issue(ctx, [...path, "model"], "model_cannot_read_clip", "This model cannot read the clip: choose one that takes video, or leave the clip out.")
     }
   }
@@ -431,12 +496,56 @@ function shotListSet(s: ShotListSetting | undefined): s is ShotListSetting {
   return !!s && (s.precise !== undefined || s.flex !== undefined)
 }
 
-/** The shot list without its absent styles. */
+/**
+ * The shot list without its absent styles, without a style's `speech` "off" (stored only when it asks for some), and
+ * without its `speechMouth` unless speech is on and the value is not the default ("spoken").
+ */
 function normaliseShotList(s: ShotListSetting): ShotListSetting {
   return {
-    ...(s.precise !== undefined ? { precise: s.precise } : {}),
-    ...(s.flex !== undefined ? { flex: s.flex } : {}),
+    ...(s.precise !== undefined ? { precise: withoutOffSpeech(s.precise) } : {}),
+    ...(s.flex !== undefined ? { flex: withoutOffSpeech(s.flex) } : {}),
   }
+}
+
+/** A style's step with `speech` "off" (or on a style turned off) left out, and its mouths value unless it means something. */
+function withoutOffSpeech(s: ShotListStyleSetting): ShotListStyleSetting {
+  // A style turned off has no speech (decided 2026-11-18): never stored, never held, never read by the engine.
+  const speechOn = s.mode === "on" && (s.speech === "who" || s.speech === "words")
+  const dropSpeech = s.speech !== undefined && !speechOn
+  const dropMouth = s.speechMouth !== undefined && (!speechOn || s.speechMouth === "spoken")
+  if (!dropSpeech && !dropMouth) return s
+  const { speech, speechMouth, ...rest } = s
+  return { ...rest, ...(dropSpeech || speech === undefined ? {} : { speech }), ...(dropMouth || speechMouth === undefined ? {} : { speechMouth }) }
+}
+
+/** Whether the shot list asks either style for speech ("who" or "words"): what an engine and a platform must take. */
+export function shotListSpeechSet(s: ShotListSetting | undefined): boolean {
+  return SHOT_LIST_STYLES.some((style) => {
+    const step = s?.[style]
+    return step?.mode === "on" && (step.speech === "who" || step.speech === "words")
+  })
+}
+
+/**
+ * The shot list's speech as stored, one string to compare (each style's `speech` and `speechMouth` once
+ * normalised); "" when it asks for none. Two settings that mean the same speech give the same string.
+ */
+export function shotListSpeechKey(s: ShotListSetting | undefined): string {
+  if (!shotListSpeechSet(s)) return ""
+  const n = normaliseShotList(s!)
+  return JSON.stringify(SHOT_LIST_STYLES.map((style) => [n[style]?.speech ?? null, n[style]?.speechMouth ?? null]))
+}
+
+/** The shot list with every style's `speech` left out: what an engine without `castSwap.shotListSpeech` is sent. */
+function withoutSpeech(s: ShotListSetting): ShotListSetting {
+  const out: ShotListSetting = {}
+  for (const style of SHOT_LIST_STYLES) {
+    const step = s[style]
+    if (!step) continue
+    const { speech: _speech, speechMouth: _mouth, ...rest } = step
+    out[style] = rest
+  }
+  return out
 }
 
 // ---- Capability gating -----------------------------------------------------
@@ -447,6 +556,7 @@ export interface StepsCapabilities {
   readonly clipBodySheet?: boolean
   readonly shotList?: boolean
   readonly styleRefs?: boolean
+  readonly shotListSpeech?: boolean
 }
 
 /**
@@ -493,6 +603,21 @@ export function loadedEngineTakesShotList(): boolean {
 }
 
 /**
+ * Whether a (loaded or recorded) Cast Swap engine takes a shot list style's
+ * `speech`: it takes the shot list AND declares `castSwap.shotListSpeech`.
+ * An engine without it is sent the shot list without the key (its strict
+ * schema would refuse the key, and with it the whole shot list).
+ */
+export function engineTakesShotListSpeech(cs: { readonly steps?: boolean; readonly shotList?: boolean; readonly shotListSpeech?: boolean } | undefined): boolean {
+  return engineTakesShotList(cs) && cs?.shotListSpeech === true
+}
+
+/** Whether this process's Cast Swap engine takes a shot list style's `speech`. */
+export function loadedEngineTakesShotListSpeech(): boolean {
+  return engineTakesShotListSpeech(getPluginSupports().castSwap)
+}
+
+/**
  * Whether a (loaded or recorded) Cast Swap engine takes `steps.styleRefs`
  * ("Style the role pictures"): it takes steps AND declares
  * `castSwap.styleRefs`. An engine without it is never sent the field.
@@ -525,7 +650,7 @@ export function styleRefsNeedsEngine(s: StyleRefsSetting | undefined): boolean {
  */
 export function shotListNeedsEngine(s: ShotListSetting | undefined): boolean {
   if (!s) return false
-  return s.precise?.mode === "on" || s.precise?.llm !== undefined || s.flex?.llm !== undefined || (s.flex !== undefined && s.flex.mode !== "on")
+  return s.precise?.mode === "on" || s.precise?.llm !== undefined || s.flex?.llm !== undefined || (s.flex !== undefined && s.flex.mode !== "on") || shotListSpeechSet(s)
 }
 
 /**
@@ -557,7 +682,8 @@ export function stepsThatNeedTheEngine(s: CastSwapSteps | undefined | null): Cas
  * copy without its absent keys, without `clipBody` unless the engine
  * declares `castSwap.clipBodySheet`, without `shotList` unless it
  * declares `castSwap.shotList`, and without `styleRefs` unless it declares
- * `castSwap.styleRefs`.
+ * `castSwap.styleRefs`; and a shot list sent without its styles' `speech`
+ * unless the engine declares `castSwap.shotListSpeech`.
  */
 export function stepsForEngine(
   s: CastSwapSteps | undefined | null,
@@ -568,6 +694,7 @@ export function stepsForEngine(
   if (normalised && !engineTakesClipBodySheet(cs)) delete normalised.clipBody
   if (normalised && !engineTakesShotList(cs)) delete normalised.shotList
   if (normalised && !engineTakesStyleRefs(cs)) delete normalised.styleRefs
+  if (normalised?.shotList && !engineTakesShotListSpeech(cs)) normalised.shotList = withoutSpeech(normalised.shotList)
   return normaliseSteps(normalised)
 }
 

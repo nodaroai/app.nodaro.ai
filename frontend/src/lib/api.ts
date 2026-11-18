@@ -12625,6 +12625,8 @@ export interface TrendEngineEnvironment {
       preciseStyleRoutePhotographic?: boolean
       /** The engine reads the route's per-style map (`styleRoutes`); absent = it is answered no map: it routes every style as Flex, except that one with `preciseStyleRoutePhotographic` keeps photographic styles Precise on `photographicStyles: "precise"`, stored or answered in the map's place when every Filmed style is "precise" in it. */
       preciseStyleRoutePerStyle?: boolean
+      /** With the shot list, the engine writes who speaks into it (`steps.shotList.<style>.speech`); absent = it cannot. */
+      shotListSpeech?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12646,6 +12648,8 @@ export interface TrendEngineEnvironment {
       preciseStyleRoutePerStyle?: boolean
       /** The Precise art-style route's Filmed fallback: to an engine that cannot read the per-style map it answers `photographicStyles: "precise"` when every Filmed style is "precise" in the map. */
       preciseStyleRouteFilmedFallback?: boolean
+      /** The shot list's speech (`steps.shotList.<style>.speech`): its steps schemas take the key. */
+      shotListSpeech?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -12763,10 +12767,17 @@ export interface ClipBodySetting {
   mode: "on" | "off"
   prompt?: string
 }
-/** The shot list's step for one style: on or off, and its LLM (left out: the engine's default). */
+/** What a shot list says of the speech heard: nothing, who speaks and when, or that and the words (decided 2026-11-18). */
+export type ShotListSpeech = "off" | "who" | "words"
+/** What the speech rule says of the other mouths: "spoken" (the default, never stored), "all" or "none" (decided 2026-11-18). */
+export type ShotListSpeechMouth = "spoken" | "all" | "none"
+/** The shot list's step for one style: on or off, its LLM (left out: the engine's default), its speech (left out: "off"). */
 export interface ShotListStyleSetting {
   mode: "on" | "off"
   llm?: LlmStepSetting
+  speech?: ShotListSpeech
+  /** Read only while `speech` is "who" or "words"; left out: "spoken". */
+  speechMouth?: ShotListSpeechMouth
 }
 /** The styles a shot list is set per ("flex" is the person's name for the "motion" style). */
 export type ShotListStyle = "precise" | "flex"

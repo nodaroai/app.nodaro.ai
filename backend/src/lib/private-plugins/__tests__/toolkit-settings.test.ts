@@ -392,6 +392,16 @@ describe("tk.settings.nodaroMotionSteps", () => {
     })
   })
 
+  it("answers a shot list style's speech only to an engine that declares castSwap.shotListSpeech (the rest of the shot list kept)", async () => {
+    const speech = { shotList: { precise: { mode: "on", speech: "who" }, flex: { mode: "on", speech: "words" } } }
+    h.steps = { "nodaro-prism": speech }
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true, shotListSpeech: true } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({ "nodaro-prism": speech, "motion-prism": speech, "motion-pro": speech })
+    setPluginSupports({ castSwap: { ...CS, steps: true, shotList: true } } as never)
+    const without = { shotList: { precise: { mode: "on" }, flex: { mode: "on" } } }
+    expect(await buildToolkit().settings!.nodaroMotionSteps!()).toEqual({ "nodaro-prism": without, "motion-prism": without, "motion-pro": without })
+  })
+
   it("answers styleRefs only to an engine that declares castSwap.styleRefs", async () => {
     h.steps = { "nodaro-prism": { enginePrompt: { mode: "template" }, styleRefs: { mode: "on", send: "styled" } } }
     setPluginSupports({ castSwap: { ...CS, steps: true, styleRefs: true } } as never)

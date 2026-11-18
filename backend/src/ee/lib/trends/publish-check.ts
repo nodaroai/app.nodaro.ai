@@ -95,6 +95,10 @@
  * defaults (`steps.shotList`, `shotListNeedsEngine`: Precise on, or an LLM of
  * its own) needs an engine that declares `castSwap.shotList` (need
  * `SHOT_LIST_NEED`): an engine without it is sent no `shotList`. A trend
+ * whose shot list asks for speech (`steps.shotList.<style>.speech` "who" or
+ * "words", with its `speechMouth`; decided 2026-11-18) needs an engine that
+ * declares `castSwap.shotListSpeech` too (need `SHOT_LIST_SPEECH_NEED`): an
+ * engine without it is sent the shot list without them. A trend
  * that turns "Style the role pictures" On (`steps.styleRefs`,
  * `styleRefsNeedsEngine`) needs an engine that declares `castSwap.styleRefs`
  * (need `STYLE_REFS_NEED`); Off, its default, needs nothing. A Flexible
@@ -170,9 +174,11 @@ import {
   clipBodyNeedsEngine,
   engineTakesClipBodySheet,
   engineTakesShotList,
+  engineTakesShotListSpeech,
   engineTakesSteps,
   engineTakesStyleRefs,
   shotListNeedsEngine,
+  shotListSpeechSet,
   styleRefsNeedsEngine,
   stepsSet,
   stepsThatNeedTheEngine,
@@ -224,7 +230,7 @@ export interface PublishBlocker {
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "pulseReferenceAudio", "steps", "clipBodySheet", "shotList", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "pulseReferenceAudio", "steps", "clipBodySheet", "shotList", "shotListSpeech", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -342,6 +348,9 @@ export const CLIP_BODY_NEED = "clipBodySheet"
 /** The need of a trend that sets the shot list away from its defaults (`steps.shotList`, `castSwap.shotList`). */
 export const SHOT_LIST_NEED = "shotList"
 
+/** The need of a trend whose shot list asks for speech (`steps.shotList.<style>.speech`, `castSwap.shotListSpeech`). */
+export const SHOT_LIST_SPEECH_NEED = "shotListSpeech"
+
 /** The need of a trend that turns "Style the role pictures" On (`steps.styleRefs`, `castSwap.styleRefs`). */
 export const STYLE_REFS_NEED = "styleRefs"
 
@@ -397,6 +406,8 @@ function needsOf(data: TrendVersionData, livePrismReferenceAudio?: unknown): str
     ...(clipBodyNeedsEngine(data.steps?.clipBody) ? [CLIP_BODY_NEED] : []),
     // The shot list away from its defaults: an engine without it is sent none.
     ...(shotListNeedsEngine(data.steps?.shotList) ? [SHOT_LIST_NEED] : []),
+    // The shot list's speech (and its mouths): an engine without it is sent the shot list without them.
+    ...(shotListSpeechSet(data.steps?.shotList) ? [SHOT_LIST_SPEECH_NEED] : []),
     // "Style the role pictures" On: an engine without it is sent none (and would not style the pictures).
     ...(styleRefsNeedsEngine(data.steps?.styleRefs) ? [STYLE_REFS_NEED] : []),
     // The new Flex wording: an engine without it is sent none (and words the prompt as today).
@@ -467,6 +478,7 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === STEPS_NEED) return !engineTakesSteps(cs)
     if (need === CLIP_BODY_NEED) return !engineTakesClipBodySheet(cs)
     if (need === SHOT_LIST_NEED) return !engineTakesShotList(cs)
+    if (need === SHOT_LIST_SPEECH_NEED) return !engineTakesShotListSpeech(cs)
     if (need === STYLE_REFS_NEED) return !engineTakesStyleRefs(cs)
     if (need === PROMPT_WORDING_NEED) return !engineTakesPromptWording(cs, "new")
     if (need === PULSE_REFERENCE_AUDIO_NEED) return !engineTakesPulseReferenceAudioIn(cs)

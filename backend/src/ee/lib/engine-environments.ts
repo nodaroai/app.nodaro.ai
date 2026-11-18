@@ -97,6 +97,14 @@ export interface PlatformSupports {
    * ignores, and no photographic path: every style is made the Flex way there.
    */
   readonly preciseStyleRouteFilmedFallback?: boolean
+  /**
+   * The shot list's speech (`steps.shotList.<style>.speech`, decided
+   * 2026-11-18, lib/cast-swap-steps.ts): its steps schemas take the key, and
+   * it is sent to an engine that declares `castSwap.shotListSpeech` (taken out
+   * for any other). A build from before refuses the key, and with it the
+   * engine's whole steps entry, when it reads the row.
+   */
+  readonly shotListSpeech?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
@@ -108,6 +116,7 @@ export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   preciseStyleRoutePhotographic: true,
   preciseStyleRoutePerStyle: true,
   preciseStyleRouteFilmedFallback: true,
+  shotListSpeech: true,
 })
 
 /**
