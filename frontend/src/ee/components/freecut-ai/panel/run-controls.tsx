@@ -10,7 +10,7 @@ import type { Speed } from "./use-edit-session"
 export function RunControls({ speed, onSpeed, onSkip, onStop }: { readonly speed: Speed; readonly onSpeed: (s: Speed) => void; readonly onSkip: () => void; readonly onStop: () => void }) {
   const t = useT()
   return (
-    <div className="flex items-center gap-2 border-t border-[#2D2D2D] px-4 py-3">
+    <div className="flex items-center gap-2 border-t border-[#262633] px-4 py-3">
       <button type="button" onClick={onStop} className="flex items-center gap-1.5 rounded-md border border-white/15 px-3 py-1.5 text-xs hover:bg-white/10">
         <Square className="h-3 w-3" aria-hidden />
         {t("freecutAi.stop")}

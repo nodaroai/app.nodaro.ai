@@ -52,7 +52,7 @@ const same = (a: string | null, b: string | null) => (a ?? "").toLowerCase() ===
  */
 function ColorField({ id, label, options, value, none = false, busy, onPick }: { readonly id: string; readonly label: string; readonly options: readonly string[]; readonly value: string | null; readonly none?: boolean; readonly busy: boolean; readonly onPick: (value: string | null) => void }) {
   const t = useT()
-  const swatch = (on: boolean) => cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-[#141417] disabled:opacity-40", on ? "border-white" : "border-[#2D2D2D]")
+  const swatch = (on: boolean) => cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-[#0e0e15] disabled:opacity-40", on ? "border-white" : "border-[#262633]")
   const offered = options.some((option) => same(option, value))
   return (
     <>
@@ -96,7 +96,7 @@ function Choice<T extends string>({ label, options, names, value, busy, onPick }
             aria-checked={value === option}
             disabled={busy}
             onClick={() => onPick(option)}
-            className={cn("min-h-11 flex-1 rounded-lg border bg-[#141417] px-1 text-[11px] transition-colors disabled:opacity-40", value === option ? "border-[#ff4f9a] text-white" : "border-[#2D2D2D] text-white/75 hover:bg-white/10")}
+            className={cn("min-h-11 flex-1 rounded-lg border bg-[#0e0e15] px-1 text-[11px] transition-colors disabled:opacity-40", value === option ? "border-[#ff4f9a] text-white" : "border-[#262633] text-white/75 hover:bg-white/10")}
           >
             {t(names[option])}
           </button>
@@ -117,7 +117,7 @@ function ChangeTitle({ row, record, others, busy, onApply }: { readonly row: Tit
   const [color, setColor] = useState(keyColorOf(record))
   const [ink, setInk] = useState(textColorOf(record))
   const [behind, setBehind] = useState(backgroundOf(record))
-  const field = "rounded-lg border border-[#2D2D2D] bg-[#141417] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50"
+  const field = "rounded-lg border border-[#262633] bg-[#0e0e15] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50"
   const said = text.trim()
   const next: TitleRecord = { ...record, text: said, key: key.trim(), ...(record.kind === "number" ? { sub: sub.trim() } : {}), place, entry, color, textColor: ink, background: behind }
   return (
@@ -183,7 +183,7 @@ export function Titles({ link, refreshKey, records, look, busy, onChange }: Titl
         {shown.map((row) => {
           const record = recordOf(row, look)
           return (
-            <li key={row.key} className={cn("rounded-lg border bg-[#1E1E1E]", open === row.key ? "border-[#ff4f9a]" : "border-[#2D2D2D]")}>
+            <li key={row.key} className={cn("rounded-lg border bg-[#121219]", open === row.key ? "border-[#ff4f9a]" : "border-[#262633]")}>
               <div className="flex items-stretch">
                 <button type="button" onClick={() => link()?.playback("seek", row.from)} className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-s-lg px-3 py-1.5 text-start transition-colors hover:bg-white/10">
                   <span aria-hidden className="flex h-7 w-[18px] shrink-0 items-center justify-center rounded-[3px] bg-white/10 text-[11px] font-bold" style={{ color: keyColorOf(record) }}>

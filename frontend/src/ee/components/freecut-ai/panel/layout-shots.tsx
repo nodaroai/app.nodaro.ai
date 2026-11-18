@@ -80,7 +80,7 @@ function ChangeShot({ row, people, alike, busy, onApply }: { readonly row: Layou
   const names = people === 2 ? [t("freecutAi.shots.left"), t("freecutAi.shots.right")] : people === 3 ? [t("freecutAi.shots.left"), t("freecutAi.shots.middle"), t("freecutAi.shots.right")] : Array.from({ length: people }, (_, i) => formatNumber(i + 1))
   const choice: ShotChoice = { as, first }
   const pressed = "border-[#ff4f9a] text-white"
-  const idle = "border-[#2D2D2D] text-white/75 hover:bg-white/10"
+  const idle = "border-[#262633] text-white/75 hover:bg-white/10"
   return (
     <div className="flex flex-col gap-2.5 border-t border-white/10 px-3 pb-3 pt-2.5">
       <p className="text-[11px] text-white/60">{t("freecutAi.shots.showAs")}</p>
@@ -92,7 +92,7 @@ function ChangeShot({ row, people, alike, busy, onApply }: { readonly row: Layou
             aria-pressed={as === kind}
             disabled={busy || people < NEEDS[kind]}
             onClick={() => setAs(kind)}
-            className={cn("flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-lg border bg-[#141417] px-2 py-2 text-[11px] transition-colors disabled:opacity-40", as === kind ? pressed : idle)}
+            className={cn("flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-lg border bg-[#0e0e15] px-2 py-2 text-[11px] transition-colors disabled:opacity-40", as === kind ? pressed : idle)}
           >
             <Glyph kind={kind} large />
             {t(NAME[kind])}
@@ -104,7 +104,7 @@ function ChangeShot({ row, people, alike, busy, onApply }: { readonly row: Layou
           <p className="text-[11px] text-white/60">{t("freecutAi.shots.first")}</p>
           <div className="flex flex-wrap gap-1.5">
             {names.map((name, i) => (
-              <button key={name} type="button" aria-pressed={first === i} disabled={busy} onClick={() => setFirst(i)} className={cn("min-h-11 min-w-11 flex-1 rounded-lg border bg-[#141417] px-2 text-[11px] transition-colors", first === i ? pressed : idle)}>
+              <button key={name} type="button" aria-pressed={first === i} disabled={busy} onClick={() => setFirst(i)} className={cn("min-h-11 min-w-11 flex-1 rounded-lg border bg-[#0e0e15] px-2 text-[11px] transition-colors", first === i ? pressed : idle)}>
                 {name}
               </button>
             ))}
@@ -146,7 +146,7 @@ export function LayoutShots({ link, refreshKey, faces, busy, onChange }: LayoutS
   return (
     <section aria-label={t("freecutAi.shots.title")} className="flex flex-col gap-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-white/60">{t("freecutAi.shots.title")}</p>
-      <div className="flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2.5">
+      <div className="flex flex-col gap-2 rounded-lg border border-[#262633] bg-[#121219] px-3 py-2.5">
         <div aria-hidden className="flex h-2 gap-0.5 overflow-hidden rounded-full">
           {KINDS.filter((kind) => shares[kind] > 0).map((kind) => (
             <span key={kind} style={{ background: COLOR[kind], width: `${(shares[kind] / total) * 100}%` }} />
@@ -164,7 +164,7 @@ export function LayoutShots({ link, refreshKey, faces, busy, onChange }: LayoutS
       </div>
       <ul className="flex flex-col gap-1">
         {shown.map((row) => (
-          <li key={row.from} className={cn("rounded-lg border bg-[#1E1E1E]", open === row.from ? "border-[#ff4f9a]" : "border-[#2D2D2D]")}>
+          <li key={row.from} className={cn("rounded-lg border bg-[#121219]", open === row.from ? "border-[#ff4f9a]" : "border-[#262633]")}>
             <div className="flex items-stretch">
               <button type="button" onClick={() => link()?.playback("seek", row.from)} className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-s-lg px-3 py-1.5 text-start transition-colors hover:bg-white/10">
                 <Glyph kind={row.kind} />

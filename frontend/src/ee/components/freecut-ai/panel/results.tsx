@@ -27,7 +27,7 @@ export function Results({ made, onOpen }: { readonly made: readonly MadeResult[]
     <section aria-label={t("freecutAi.results")} className="flex flex-col gap-1.5">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-white/60">{t("freecutAi.results")}</p>
       {made.map((result) => (
-        <div key={result.id} className="flex flex-col gap-1 rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2">
+        <div key={result.id} className="flex flex-col gap-1 rounded-lg border border-[#262633] bg-[#121219] px-3 py-2">
           <div className="flex items-center gap-2">
             <span className="me-auto text-xs font-medium text-white">{t(result.key, result.vars)}</span>
             {result.seconds !== undefined ? <span className="font-mono text-[11px] text-white/60">{t("freecutAi.seconds", { s: formatNumber(result.seconds, { maximumFractionDigits: 1 }) })}</span> : null}

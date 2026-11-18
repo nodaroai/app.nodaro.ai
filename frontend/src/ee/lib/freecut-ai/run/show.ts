@@ -13,6 +13,7 @@ import type { EditorLink, PresenceCursor, PresenceGesture, PresenceHighlight, Pr
 import type { AgentId } from "../abilities"
 import { AGENT_COLORS } from "./types"
 import { pause } from "./jobs"
+import { announceCrew, type CrewMood } from "@/lib/edit-crew"
 
 /** Where a cursor stands: a moment on a track, a point on the video, an item, or a named place in the editor. */
 export type Place =
@@ -28,19 +29,21 @@ export const SKIP_PACE = 64
 const MAX_CURSORS = 24
 
 /**
- * Where an agent with work still to do waits its turn: at its own tool, in
- * sight, never wandering. A cursor only ever moves to do the thing it shows.
+ * Where an agent with work still to do waits its turn, and comes back to when
+ * it is done: its home on the timeline, the lane of the kind of clip it makes
+ * (an editor without that lane yet seats it on the first track of the same
+ * side). A cursor only ever moves to do the thing it shows.
  */
 const STATION: Record<AgentId, string> = {
-  lead: "timeline.ruler",
-  cutter: "tool.razor",
-  captions: "rail.text",
-  sound: "panel.media",
-  broll: "rail.media",
-  picture: "preview",
-  color: "workspace.color",
-  framer: "panel.properties",
-  director: "transport.play",
+  lead: "lane.video",
+  cutter: "lane.video",
+  captions: "lane.subtitle",
+  sound: "lane.audio",
+  broll: "lane.image",
+  picture: "lane.image",
+  color: "lane.adjustment",
+  framer: "lane.video",
+  director: "lane.video",
 }
 
 export class Show {
@@ -119,7 +122,21 @@ export class Show {
     if (changed) this.push()
   }
 
+  /** Tells the page who is on the crew now, for the editor's top bar. */
+  private announce() {
+    const order = Object.keys(AGENT_COLORS) as AgentId[]
+    const moodOf = (a: AgentId): CrewMood | null =>
+      this.cursors.has(a) ? "working" : this.crew.includes(a) ? "waiting" : this.finished.includes(a) ? "done" : null
+    announceCrew(
+      order.flatMap((a) => {
+        const mood = moodOf(a)
+        return mood ? [{ id: a, name: this.names[a], color: AGENT_COLORS[a], mood }] : []
+      }),
+    )
+  }
+
   push() {
+    this.announce()
     try {
       // An agent still to work, with no cursor of its own right now, stands at its station.
       const atStation = (agents: readonly AgentId[], mood: "waiting" | "done"): PresenceCursor[] =>

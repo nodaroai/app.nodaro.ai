@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n"
 import { useInertBehind } from "@/lib/use-inert-behind"
 import { isFromWindow } from "@/lib/popup-message"
 import { FreeCutAiSlot, aiEditAvailable } from "./freecut-ai-slot"
+import { EditCrewStrip } from "./edit-crew-strip"
 
 /**
  * Read at RUNTIME, not inlined at build time (#767). The published community
@@ -271,7 +272,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
   return createPortal(
     <div ref={dialogRootRef} role="dialog" aria-modal="true" aria-label={t("mediaed.nodarcutFrameTitle")} className="fixed inset-0 z-[9999] bg-black flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#1E1E1E] border-b border-[#2D2D2D] shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#0b0b11] border-b border-[#262633] shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-white">{t("mediaed.nodarcutEditorTitle")}</span>
           <button
@@ -297,6 +298,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             </button>
           )}
         </div>
+        <EditCrewStrip />
         <button
           type="button"
           aria-label={t("mediaed.closeEditor")}

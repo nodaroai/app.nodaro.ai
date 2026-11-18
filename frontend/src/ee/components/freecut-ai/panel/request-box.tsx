@@ -85,7 +85,7 @@ export function ActionFooter({ cost, estimate, ready, makeOnly, disabled, onStar
   const price = cost.total !== undefined && cost.total > 0 ? t(estimate ? "freecutAi.priceAbout" : "freecutAi.price", { n: formatNumber(creditUnits(cost.total)), u: unit }) : null
   const parts = cost.parts.filter((p) => p.credits !== undefined && p.credits > 0).map((p) => t(p.key, { ...p.vars, n: formatNumber(creditUnits(p.credits!)), u: unit }))
   return (
-    <div className="flex flex-col gap-2 border-t border-white/10 bg-[#141417] px-4 py-3">
+    <div className="flex flex-col gap-2 border-t border-white/10 bg-[#0e0e15] px-4 py-3">
       {open && parts.length > 0 ? (
         <ul className="flex flex-col gap-0.5 text-[11px] text-white/60">
           {parts.map((p) => (

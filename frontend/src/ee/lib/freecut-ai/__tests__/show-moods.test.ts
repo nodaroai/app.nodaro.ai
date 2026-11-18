@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { AgentId } from "../abilities"
 import type { EditorLink, PresenceCursor } from "../editor-link"
 import { Show } from "../run/show"
+import { EDIT_CREW_EVENT, type CrewMember } from "@/lib/edit-crew"
 
 const NAMES: Record<AgentId, string> = {
   lead: "Lead",
@@ -54,5 +55,24 @@ describe("the show's moods", () => {
     show.setCrew(["cutter"])
     show.setCrew([])
     expect(last()).toEqual([])
+  })
+
+  it("tells the page who is on the crew, for the top bar, and nobody once the run ends", () => {
+    const seen: (readonly CrewMember[])[] = []
+    const listen = (e: Event) => seen.push((e as CustomEvent<readonly CrewMember[]>).detail)
+    window.addEventListener(EDIT_CREW_EVENT, listen)
+    try {
+      const { show } = makeShow()
+      show.setCrew(["cutter", "captions"])
+      show.at("cutter", { frame: 10, trackId: "t1" })
+      expect(seen.at(-1)?.map((m) => [m.id, m.mood])).toEqual([["cutter", "working"], ["captions", "waiting"]])
+      show.setCrew(["captions"])
+      show.clear("cutter")
+      expect(seen.at(-1)?.map((m) => [m.id, m.mood])).toEqual([["cutter", "done"], ["captions", "waiting"]])
+      show.end()
+      expect(seen.at(-1)).toEqual([])
+    } finally {
+      window.removeEventListener(EDIT_CREW_EVENT, listen)
+    }
   })
 })

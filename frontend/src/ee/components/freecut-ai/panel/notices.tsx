@@ -88,7 +88,7 @@ export function Declined({ plan, reason }: { readonly plan: EditPlan; readonly r
   const t = useT()
   if (reason === "done") {
     return (
-      <div className="rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2.5" role="status">
+      <div className="rounded-lg border border-[#262633] bg-[#121219] px-3 py-2.5" role="status">
         <p className="text-xs text-white/80">{t("freecutAi.declinedDone")}</p>
         <p className="mt-1 text-[11px] text-white/60">{t("freecutAi.nothingEdited")}</p>
       </div>

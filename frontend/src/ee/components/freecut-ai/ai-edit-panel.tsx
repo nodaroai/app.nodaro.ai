@@ -238,7 +238,7 @@ export default function AiEditPanel({ editorWindow, editorOrigin, videos, opened
   return (
     <div className={cn("flex h-full", view === "original" ? "w-full" : "w-[360px] shrink-0", className)}>
       {view === "original" && session.video ? <OriginalView url={session.video.url} onBack={backToEdit} /> : null}
-      <aside className="flex h-full w-[360px] shrink-0 flex-col border-s border-white/10 bg-[#0f0f12] text-white" aria-label={t("freecutAi.title")}>
+      <aside className="flex h-full w-[360px] shrink-0 flex-col border-s border-white/10 bg-[#0b0b11] text-white" aria-label={t("freecutAi.title")}>
         <div className="flex items-center justify-between px-4 pb-1 pt-3">
           <span className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
             <Sparkles className="h-4 w-4 text-[#ff0073]" />

@@ -95,7 +95,7 @@ function PlaceGlyph({ place, tall }: { readonly place: PicturePlace; readonly ta
 /** How long a picture stays: half a second shorter or longer at a tap. */
 function PictureLength({ seconds, busy, onSeconds }: { readonly seconds: number; readonly busy: boolean; readonly onSeconds: (seconds: number) => void }) {
   const t = useT()
-  const step = "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#2D2D2D] bg-[#141417] text-white/85 transition-colors hover:bg-white/10 disabled:opacity-40"
+  const step = "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#262633] bg-[#0e0e15] text-white/85 transition-colors hover:bg-white/10 disabled:opacity-40"
   const shown = Math.round(seconds * 2) / 2
   return (
     <>
@@ -136,9 +136,9 @@ function AddPicture({ busy, price, onAdd }: { readonly busy: boolean; readonly p
     )
   }
   return (
-    <div className="flex flex-col gap-2.5 rounded-lg border border-[#ff4f9a] bg-[#1E1E1E] p-3">
+    <div className="flex flex-col gap-2.5 rounded-lg border border-[#ff4f9a] bg-[#121219] p-3">
       <label htmlFor="ai-picture-add-words" className="text-[11px] text-white/60">{t("freecutAi.pictures.addHint")}</label>
-      <textarea id="ai-picture-add-words" value={words} disabled={busy} rows={3} maxLength={600} dir="auto" onChange={(e) => setWords(e.target.value)} className="resize-none rounded-lg border border-[#2D2D2D] bg-[#141417] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50" />
+      <textarea id="ai-picture-add-words" value={words} disabled={busy} rows={3} maxLength={600} dir="auto" onChange={(e) => setWords(e.target.value)} className="resize-none rounded-lg border border-[#262633] bg-[#0e0e15] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50" />
       <input
         ref={file}
         id="ai-picture-add-file"
@@ -192,7 +192,7 @@ function ChangePicture({ row, busy, price, place, tall, fps, onApply }: { readon
                 onClick={() => {
                   if (to !== place) onApply({ kind: "place", place: to })
                 }}
-                className={cn("flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-lg border bg-[#141417] px-1.5 py-2 text-center text-[11px] transition-colors disabled:opacity-40", place === to ? "border-[#ff4f9a] text-white" : "border-[#2D2D2D] text-white/75 hover:bg-white/10")}
+                className={cn("flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-lg border bg-[#0e0e15] px-1.5 py-2 text-center text-[11px] transition-colors disabled:opacity-40", place === to ? "border-[#ff4f9a] text-white" : "border-[#262633] text-white/75 hover:bg-white/10")}
               >
                 <PlaceGlyph place={to} tall={tall} />
                 {t(PLACE_NAME[to])}
@@ -205,7 +205,7 @@ function ChangePicture({ row, busy, price, place, tall, fps, onApply }: { readon
       {record?.said ? (
         <>
           <p className="text-[11px] text-white/60">{t("freecutAi.pictures.said")}</p>
-          <p className="rounded-lg border border-[#2D2D2D] bg-[#141417] px-2.5 py-2 text-xs text-white/75" dir="auto">{record.said}</p>
+          <p className="rounded-lg border border-[#262633] bg-[#0e0e15] px-2.5 py-2 text-xs text-white/75" dir="auto">{record.said}</p>
         </>
       ) : null}
       <label htmlFor={`ai-picture-shows-${row.key}`} className="text-[11px] text-white/60">{t("freecutAi.pictures.shows")}</label>
@@ -216,7 +216,7 @@ function ChangePicture({ row, busy, price, place, tall, fps, onApply }: { readon
         rows={3}
         dir="auto"
         onChange={(e) => setPrompt(e.target.value)}
-        className="resize-none rounded-lg border border-[#2D2D2D] bg-[#141417] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50"
+        className="resize-none rounded-lg border border-[#262633] bg-[#0e0e15] px-2.5 py-2 text-xs text-white outline-none focus:border-[#ff4f9a] disabled:opacity-50"
       />
       <input
         ref={file}
@@ -280,7 +280,7 @@ export function Pictures({ link, refreshKey, records, busy, price, onChange, onA
   return (
     <section aria-label={t("freecutAi.pictures.title")} className="flex flex-col gap-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-white/60">{t("freecutAi.pictures.title")}</p>
-      {rows.length > 0 ? <div className="flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] px-3 py-2.5">
+      {rows.length > 0 ? <div className="flex flex-col gap-2 rounded-lg border border-[#262633] bg-[#121219] px-3 py-2.5">
         <div aria-hidden className="flex h-2 gap-0.5 overflow-hidden rounded-full">
           {SOURCES.filter((source) => counts[source] > 0).map((source) => (
             <span key={source} style={{ background: COLOR[source], width: `${(counts[source] / rows.length) * 100}%` }} />
@@ -298,7 +298,7 @@ export function Pictures({ link, refreshKey, records, busy, price, onChange, onA
       </div> : null}
       <ul className="flex flex-col gap-1">
         {shown.map((row) => (
-          <li key={row.key} className={cn("rounded-lg border bg-[#1E1E1E]", open === row.key ? "border-[#ff4f9a]" : row.source === "none" ? "border-dashed border-[#8a8a94]" : "border-[#2D2D2D]")}>
+          <li key={row.key} className={cn("rounded-lg border bg-[#121219]", open === row.key ? "border-[#ff4f9a]" : row.source === "none" ? "border-dashed border-[#8a8a94]" : "border-[#262633]")}>
             <div className="flex items-stretch">
               <button type="button" onClick={() => link()?.playback("seek", row.from)} className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-s-lg px-3 py-1.5 text-start transition-colors hover:bg-white/10">
                 <Glyph source={row.source} />
