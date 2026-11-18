@@ -43,6 +43,7 @@ import {
   startOfIsraelDayUtc,
   notifyPaidConversion,
   notifyCancellation,
+  notifySecondSubscription,
   isStandbySender,
   runFounderNotifyTick,
   TICK_LATCH_MAX_MS,
@@ -266,5 +267,37 @@ describe("notifyCancellation — fires only when the user was actually paid", ()
     expect(sendSlack).toHaveBeenCalledOnce()
     const msg = vi.mocked(sendSlack).mock.calls[0][1] as { text: string }
     expect(msg.text).toContain("Scheduled to cancel")
+  })
+})
+
+describe("notifySecondSubscription — a billing incident, not a milestone", () => {
+  it("notifySecondSubscription posts with milestones off and never throws", async () => {
+    vi.mocked(getNotifyConfig).mockResolvedValue({ ...CONFIG_ON, milestonesEnabled: false })
+    await expect(notifySecondSubscription("u1", "sub_first", "sub_second", "cancel-and-refund")).resolves.toBe(true)
+    expect(sendSlack).toHaveBeenCalledOnce()
+    const msg = vi.mocked(sendSlack).mock.calls[0][1] as { text: string }
+    expect(msg.text).toBe(":rotating_light: Second subscription — user@example.com: kept sub_first, sub_second cancel-and-refund")
+
+    // A note says what is left for a person; a standby instance, a failing config read and no webhook stay silent.
+    vi.mocked(sendSlack).mockClear()
+    await notifySecondSubscription("u1", "sub_first", "sub_second", "cancel-and-refund", "refund by hand")
+    expect((vi.mocked(sendSlack).mock.calls[0][1] as { text: string }).text).toMatch(/cancel-and-refund \(refund by hand\)$/)
+    // One that is only reported says so, with why.
+    vi.mocked(sendSlack).mockClear()
+    await notifySecondSubscription("u1", "sub_first", "sub_second", "alert", "nothing cancelled or refunded, settle it by hand")
+    expect((vi.mocked(sendSlack).mock.calls[0][1] as { text: string }).text).toBe(
+      ":rotating_light: Second subscription — user@example.com: kept sub_first, sub_second alert (nothing cancelled or refunded, settle it by hand)",
+    )
+    vi.mocked(sendSlack).mockClear()
+    setPublicUrl("https://next.nodaro.ai")
+    await notifySecondSubscription("u1", "sub_first", "sub_second", "cancel-and-refund")
+    expect(sendSlack).not.toHaveBeenCalled()
+    setPublicUrl("")
+    vi.mocked(getNotifyConfig).mockRejectedValue(new Error("config down"))
+    // Not posted is answered as such, so the caller can send it again.
+    await expect(notifySecondSubscription("u1", "sub_first", "sub_second", "alert")).resolves.toBe(false)
+    vi.mocked(getNotifyConfig).mockResolvedValue({ ...CONFIG_ON, slackWebhookUrl: "" })
+    await expect(notifySecondSubscription("u1", "sub_first", "sub_second", "alert")).resolves.toBe(false)
+    expect(sendSlack).not.toHaveBeenCalled()
   })
 })

@@ -120,16 +120,6 @@ export async function geminiOmni12FrameAspect(modelKey: string, frameUrl: string
   }
 }
 
-/**
- * KIE's own timeout on a task (`[524] generate task timeout.`): its side gave
- * up, nothing was charged, and the same request sent again has run. Read off
- * `internalDetails`, where the provider's code and words are kept.
- */
-export function isGeminiOmni12ProviderTimeout(err: unknown): boolean {
-  const details = (err as { internalDetails?: unknown } | null)?.internalDetails
-  return typeof details === "string" && /\[524\]/.test(details)
-}
-
 export function buildGeminiOmni12Request(rawArgs: GeminiOmni12RequestArgs): GeminiOmni12Request {
   // The model addresses its images in plain words (`image 1`), so a mention
   // written in the platform's spelling (`@image_1`) is respelled, in every mode.

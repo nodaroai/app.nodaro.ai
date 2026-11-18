@@ -23,7 +23,7 @@
  */
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ProgressCallback, ReconcileOpts } from "../provider.interface.js"
-import { MAX_POLL_ATTEMPTS_VIDEO, createKieTask, createSanitizedError, pollKieTask } from "./client.js"
+import { MAX_POLL_ATTEMPTS_VIDEO, createKieTask, createSanitizedError, pollKieTask, retryOnProviderTaskTimeout } from "./client.js"
 import { GROK_EXTEND_MODEL_KEY, GROK_EXTEND_WIRE_MODEL } from "./models.js"
 
 /** The seconds Grok can add (`extend_times`). */
@@ -101,10 +101,12 @@ export async function runGrokExtend(
   // does not read, so the seconds added are named here. The resolution is the
   // source's (the caller's `dimensions`): the body carries none.
   const dimensions = { ...reconcileOpts?.dimensions, duration: args.extendSec, durationLabel: `${args.extendSec}s` }
-  const { taskId } = await createKieTask(GROK_EXTEND_WIRE_MODEL, input, { modelKey: GROK_EXTEND_MODEL_KEY, dimensions })
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Grok extend]")
-  const { resultJson, providerMs } = await pollKieTask(taskId, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
-  const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
-  if (!url) throw createSanitizedError("Grok extend task succeeded but no URL found", "Video extension")
-  return { url, kieTaskId: taskId, ...(providerMs !== undefined ? { providerMs } : {}) }
+  return retryOnProviderTaskTimeout("Grok extend", async () => {
+    const { taskId } = await createKieTask(GROK_EXTEND_WIRE_MODEL, input, { modelKey: GROK_EXTEND_MODEL_KEY, dimensions })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Grok extend]")
+    const { resultJson, providerMs } = await pollKieTask(taskId, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
+    const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!url) throw createSanitizedError("Grok extend task succeeded but no URL found", "Video extension")
+    return { url, kieTaskId: taskId, ...(providerMs !== undefined ? { providerMs } : {}) }
+  })
 }

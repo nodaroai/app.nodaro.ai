@@ -4,6 +4,8 @@ import {
   getLipSyncMaxAudioSeconds,
   isPerSecondLipSyncProvider,
   buildLipSyncCreditId,
+  LIP_SYNC_CHARGED_AT_RUN_COST,
+  isLipSyncChargedAtRunCost,
 } from "../lip-sync-pricing.js"
 
 describe("pickLipSyncBucket", () => {
@@ -81,7 +83,26 @@ describe("isPerSecondLipSyncProvider", () => {
 
   it("returns false for everything else", () => {
     expect(isPerSecondLipSyncProvider("infinitalk")).toBe(false)
-    expect(isPerSecondLipSyncProvider("latentsync")).toBe(false)
+    expect(isPerSecondLipSyncProvider("seedance-2")).toBe(false)
+  })
+
+  it("flags LatentSync: its work grows with its audio's length", () => {
+    expect(isPerSecondLipSyncProvider("latentsync")).toBe(true)
+    expect(getLipSyncMaxAudioSeconds("latentsync")).toBe(300)
+  })
+})
+
+describe("models charged what the run used (the bucket row is their hold)", () => {
+  it("is LatentSync, and no other", () => {
+    expect([...LIP_SYNC_CHARGED_AT_RUN_COST]).toEqual(["latentsync"])
+    expect(isLipSyncChargedAtRunCost("latentsync")).toBe(true)
+    for (const p of ["kling-avatar", "lipsync-2-pro", "omnihuman-2-0", "infinitalk", undefined, 7]) {
+      expect(isLipSyncChargedAtRunCost(p), String(p)).toBe(false)
+    }
+  })
+
+  it("every member is a bucketed model: the hold is its bucket row", () => {
+    for (const p of LIP_SYNC_CHARGED_AT_RUN_COST) expect(isPerSecondLipSyncProvider(p), p).toBe(true)
   })
 })
 
@@ -123,7 +144,13 @@ describe("buildLipSyncCreditId", () => {
 
   it("returns the bare provider for non-per-second models", () => {
     expect(buildLipSyncCreditId("infinitalk", 10)).toBe("infinitalk")
-    expect(buildLipSyncCreditId("latentsync", undefined)).toBe("latentsync")
+  })
+
+  it("emits composite IDs for LatentSync (its hold)", () => {
+    expect(buildLipSyncCreditId("latentsync", 12)).toBe("latentsync:15s")
+    expect(buildLipSyncCreditId("latentsync", 26.9)).toBe("latentsync:30s")
+    expect(buildLipSyncCreditId("latentsync", 999)).toBe("latentsync:300s")
+    expect(buildLipSyncCreditId("latentsync", undefined)).toBe("latentsync:300s")
   })
 })
 

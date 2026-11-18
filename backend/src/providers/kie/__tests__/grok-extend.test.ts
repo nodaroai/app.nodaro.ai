@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-vi.mock("../client.js", () => ({
-  MAX_POLL_ATTEMPTS_VIDEO: 120,
-  createKieTask: vi.fn(),
-  pollKieTask: vi.fn(),
-  createSanitizedError: (msg: string) => new Error(msg),
-}))
+vi.mock("../client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../client.js")>()
+  return {
+    MAX_POLL_ATTEMPTS_VIDEO: 120,
+    createKieTask: vi.fn(),
+    pollKieTask: vi.fn(),
+    createSanitizedError: (msg: string) => new Error(msg),
+    // The real resubmit rule and the real terminal-failure builder that marks a provider timeout.
+    retryOnProviderTaskTimeout: actual.retryOnProviderTaskTimeout,
+    createUpstreamFailureError: actual.createUpstreamFailureError,
+  }
+})
 
-import { createKieTask, pollKieTask } from "../client.js"
+import { createKieTask, createUpstreamFailureError, pollKieTask } from "../client.js"
 import { runGrokExtend, GROK_EXTEND_FIELDS } from "../grok-extend.js"
 
 const create = vi.mocked(createKieTask)
@@ -120,5 +126,25 @@ describe("runGrokExtend — the task", () => {
     await expect(runGrokExtend(BASE)).resolves.toMatchObject({ url: "https://tempfile.example/v.mp4" })
     poll.mockResolvedValueOnce({ resultJson: {}, taskId: "task-grok-ext-1" })
     await expect(runGrokExtend(BASE)).rejects.toThrow(/no URL/)
+  })
+
+  it("creates the task once more when the provider timed the first out on its side (task code 524), and returns the second", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const onTaskCreated = vi.fn(async () => undefined)
+    create.mockResolvedValueOnce({ taskId: "task-grok-ext-1" }).mockResolvedValueOnce({ taskId: "task-grok-ext-2" })
+    poll
+      .mockRejectedValueOnce(createUpstreamFailureError("task failed: [524] generate task timeout.", "Generation", { upstreamStatus: "524" }))
+      .mockResolvedValueOnce({ resultJson: { resultUrls: ["https://tempfile.example/second.mp4"] }, taskId: "task-grok-ext-2" })
+    await expect(runGrokExtend(BASE, { onTaskCreated })).resolves.toMatchObject({ url: "https://tempfile.example/second.mp4", kieTaskId: "task-grok-ext-2" })
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(create.mock.calls[1]![1]).toEqual(create.mock.calls[0]![1])
+    expect(onTaskCreated.mock.calls).toEqual([["task-grok-ext-1"], ["task-grok-ext-2"]])
+    expect(poll.mock.calls.map((c) => c[0])).toEqual(["task-grok-ext-1", "task-grok-ext-2"])
+  })
+
+  it("does not create the task again for any other failure code", async () => {
+    poll.mockRejectedValueOnce(createUpstreamFailureError("task failed: [500] internal error", "Generation", { upstreamStatus: "500" }))
+    await expect(runGrokExtend(BASE)).rejects.toThrow()
+    expect(create).toHaveBeenCalledTimes(1)
   })
 })

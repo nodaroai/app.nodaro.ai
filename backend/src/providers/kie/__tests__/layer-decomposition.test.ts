@@ -1,12 +1,19 @@
 import { describe, it, expect, vi } from "vitest"
 
-vi.mock("../client.js", () => ({
-  createKieTask: vi.fn(),
-  pollKieTask: vi.fn(),
-  createSanitizedError: (msg: string) => new Error(msg),
-}))
+vi.mock("../client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../client.js")>()
+  return {
+    createKieTask: vi.fn(),
+    pollKieTask: vi.fn(),
+    createSanitizedError: (msg: string) => new Error(msg),
+    // The real resubmit rule and the real terminal-failure builder that marks a provider timeout.
+    retryOnProviderTaskTimeout: actual.retryOnProviderTaskTimeout,
+    createUpstreamFailureError: actual.createUpstreamFailureError,
+  }
+})
 
-import { layerDecompositionInput, parseLayerDecompositionResult } from "../layer-decomposition.js"
+import { createKieTask, createUpstreamFailureError, pollKieTask } from "../client.js"
+import { layerDecompositionInput, parseLayerDecompositionResult, runLayerDecomposition } from "../layer-decomposition.js"
 
 /** The documented result (the docs' callback example), with the base first and three layers. */
 const DOC_RESULT = {
@@ -65,5 +72,23 @@ describe("layer decomposition — the result", () => {
     const r = parseLayerDecompositionResult(junk, "t1")
     expect(r.baseWidth).toBeUndefined()
     expect(r.layers).toEqual([{ url: "https://tf/l.png", zIndex: 1 }])
+  })
+})
+
+describe("layer decomposition — a provider timeout", () => {
+  it("creates the task once more when the provider timed the first out on its side (task code 524), and returns the second", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const create = vi.mocked(createKieTask)
+    const poll = vi.mocked(pollKieTask)
+    const onTaskCreated = vi.fn(async () => undefined)
+    create.mockResolvedValueOnce({ taskId: "t1" }).mockResolvedValueOnce({ taskId: "t2" })
+    poll
+      .mockRejectedValueOnce(createUpstreamFailureError("task failed: [524] generate task timeout.", "Generation", { upstreamStatus: "524" }))
+      .mockResolvedValueOnce({ resultJson: DOC_RESULT, taskId: "t2" })
+    const r = await runLayerDecomposition({ imageUrl: "https://in.png", maxImages: 4, size: "1K" }, { onTaskCreated })
+    expect(r).toMatchObject({ baseUrl: "https://tf/base.png" })
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(onTaskCreated.mock.calls).toEqual([["t1"], ["t2"]])
+    expect(poll.mock.calls.map((c) => c[0])).toEqual(["t1", "t2"])
   })
 })

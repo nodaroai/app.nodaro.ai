@@ -43,7 +43,8 @@ const STEP_CHARGE_READERS: Record<string, string> = {
 
 /** Sources that select `credits_actual` but are not a reader of a step's charge — each with why. */
 const NOT_STEP_CHARGE_READERS: Record<string, string> = {
-  "ee/billing/llm-billing-impl.ts": "the metered settle and sweep: read and write the job's OWN charge (a side hold has its own sink)",
+  "ee/billing/cost-shortfall-store.ts": "selects credit_anomalies.credits_actual (the charge the cost-shortfall sweep recorded itself), never jobs.credits_actual; the charge it compares with the job's OWN provider cost is the job's own settled usage log plus its settled side holds (sideHoldChargesFor) — each step (child job) has its own provider cost and is judged on its own",
+  "ee/billing/llm-billing-impl.ts":"the metered settle and sweep: read and write the job's OWN charge (a side hold has its own sink)",
   "ee/copilot/turn-runner.ts": "a Copilot turn's own job, which makes no side calls",
   "ee/pipelines/services/_poll.ts": "returns the row; its consumer (_run-worker-job.ts, checked below) adds the side holds",
   "ee/routes/admin-credit-audit.ts": "admin per-task pricing audit of each job's OWN charge against its OWN provider cost; side holds are audited per (feature, model) by the LLM mode (admin-credit-audit-llm.ts)",

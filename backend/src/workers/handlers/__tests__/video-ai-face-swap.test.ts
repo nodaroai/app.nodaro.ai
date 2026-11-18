@@ -61,6 +61,16 @@ describe("face-swap handler", () => {
     expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example/videos/job-1.mp4" }))
   })
 
+  it("hands finalize what Replicate billed as the recorded cost, and nothing that changes the commit", async () => {
+    await handler(job({ faceImageUrl: FACE, videoUrl: VIDEO }) as never, ctx as never)
+
+    const input = mocks.finalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown> & { result: Record<string, unknown> }
+    // Exactly these keys: no `meteredCost` / `collectOverHold` on the result and
+    // no `meteredBaseCredits` on the input, so finalize commits the reserved tier.
+    expect(input.result).toEqual({ url: "https://replicate.example/out.mp4", cost: 0.05, providerUsed: "roop" })
+    expect(input).not.toHaveProperty("meteredBaseCredits")
+  })
+
   it.each([
     ["no face", { videoUrl: VIDEO }, /face image/],
     ["an empty face", { faceImageUrl: "   ", videoUrl: VIDEO }, /face image/],

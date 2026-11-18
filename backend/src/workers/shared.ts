@@ -553,9 +553,9 @@ export async function commitJobCredits(
    */
   extraNonProviderCredits = 0,
   /**
-   * Pricing convention (decision A): ONLY genuinely metered providers (Replicate
-   * GPU-time: face-swap, legacy lip-sync, whisper transcribe) recompute the
-   * charge from `providerCostUsd` and true-up. Every fixed/composite-priced
+   * Pricing convention (decision A): ONLY a caller that states it is metered
+   * (`ProviderResult.meteredCost`: the HeyGen avatars, LatentSync) recomputes
+   * the charge from `providerCostUsd` and trues up. Every fixed/composite-priced
    * provider commits the RESERVED tier (markup already applied once at reserve
    * over the base price) — `reserved == committed`, no spurious refund, and
    * no under-charge from a flat/GPU-time `result.cost`. Default false.
@@ -568,6 +568,16 @@ export async function commitJobCredits(
    * an "overcharge" anomaly — skip that branch; undercharge/zero-cost still log.
    */
   ceilingReservation = false,
+  /**
+   * The reservation was a HOLD sized for a usual run, not the price (a model
+   * whose work grows with settings its hold cannot see — LatentSync). The
+   * metered actual is charged whichever side of the hold it lands: below it the
+   * rest is released, above it the overrun is collected from the payer's
+   * balance (the metered settle, `commit_credits_metered`, which records what
+   * it could not collect as an `uncollected_overrun` anomaly itself). Neither
+   * side is an anomaly. Only read with `metered` and a provider cost.
+   */
+  collectOverHold = false,
 ): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
@@ -592,6 +602,11 @@ export async function commitJobCredits(
       // the provider-derived credits. This also makes the anomaly check
       // accurate (reserved included the add-on, so actual should too).
       const actualCredits = providerCredits + Math.max(0, extraNonProviderCredits)
+
+      if (collectOverHold) {
+        await settleMeteredOverHold(usageLogId, jobId, actualCredits, usageLog?.credits_used)
+        return
+      }
 
       // checkAndLogAnomaly has internal try/catch so it never rejects
       const tasks: PromiseLike<unknown>[] = [
@@ -696,6 +711,39 @@ export async function commitJobCredits(
     console.error(`[worker] Failed to commit credits for job ${jobId}:`, error)
     // Don't fail the job if credit commit fails
   }
+}
+
+/**
+ * Settle a run at its metered actual, UP or DOWN from its hold (the
+ * `collectOverHold` branch of {@link commitJobCredits}). `jobs.credits_actual`
+ * is the charge the settle CONFIRMED, never the figure asked for: what could
+ * not be collected was not charged. A settle that gives no receipt leaves the
+ * log `reserved` and loud, exactly as `settleAtChargedPrice` does — a plain
+ * commit of an actual above the hold would record a charge nobody paid.
+ */
+async function settleMeteredOverHold(
+  usageLogId: string,
+  jobId: string,
+  actualCredits: number,
+  reserved: number | null | undefined,
+): Promise<void> {
+  const { CreditsService } = await import("../ee/services/credits.js")
+  const outcome = await CreditsService.commitCredits(usageLogId, actualCredits, { collectOverHold: true })
+  if (!outcome) {
+    const { data: log } = await supabase.from("usage_logs").select("status").eq("id", usageLogId).maybeSingle()
+    if (log?.status === "reserved") {
+      console.error(
+        `[ALERT] [credits] metered settle of job ${jobId} (log ${usageLogId}, ${actualCredits} credits) gave no receipt — ` +
+          `the log is left reserved for an RPC retry (no fallback settlement)`,
+      )
+    }
+    return
+  }
+  await supabase.from("jobs").update({ credits_actual: outcome.charged }).eq("id", jobId)
+  console.log(
+    `[worker] Credits settled for job ${jobId} (actual: ${actualCredits}, charged: ${outcome.charged}, hold: ${reserved ?? "??"}, ` +
+      `collected over the hold: ${outcome.collectedOverHold}, uncollected: ${outcome.shortfall})`,
+  )
 }
 
 /**

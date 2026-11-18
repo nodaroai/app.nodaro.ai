@@ -2485,7 +2485,23 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "generate-music": 180,
   "text-to-audio": 30,
   "lip-sync": 130,
+  // LatentSync (Replicate). The bucket of the audio's length is the run's
+  // HOLD; the charge is what the run used (`isLipSyncChargedAtRunCost`: the
+  // worker commits the provider's cost, releasing the rest or collecting an
+  // overrun). Rows: 40 credits plus 4 per second of the bucket — a run has a
+  // part that does not grow with its length (measured on real runs: clips of
+  // 8 to 13 s settled at 56 to 63 base credits).
+  // The bare row is the single price from before the buckets, and no run
+  // holds it any more. It is NOT raised to the 300 s ceiling in this change:
+  // a migration reaches the database before the code that reads the bucket
+  // rows is live, and until then a run is still charged the bare row as it is.
+  // Raise it (row + migration) in a later release.
   "latentsync": 7,
+  "latentsync:15s": 100,
+  "latentsync:30s": 160,
+  "latentsync:60s": 280,
+  "latentsync:120s": 520,
+  "latentsync:300s": 1240,                // 5-min ceiling
   "wav2lip": 10,
   "video-retalking": 200,
   "sadtalker": 50,

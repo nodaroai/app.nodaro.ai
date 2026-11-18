@@ -284,7 +284,7 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
   })
 
   it("a model whose price reads no length is never probed", async () => {
-    for (const provider of ["infinitalk", "seedance-2", "seedance-2-5", "minimax-h3", "latentsync", undefined]) {
+    for (const provider of ["infinitalk", "seedance-2", "seedance-2-5", "minimax-h3", undefined]) {
       expect(await check({ provider }), String(provider)).toBeUndefined()
     }
     expect(state.imageCalls + state.downloads.length).toBe(0)
@@ -297,7 +297,7 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
  * the request or the node carried.
  */
 describe("checkLipSyncInputs — the bucketed models", () => {
-  const BUCKETED = ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync"]
+  const BUCKETED = ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "latentsync", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync"]
 
   it("is every model priced by a length bucket, and no other", () => {
     expect(LIP_SYNC_PROVIDERS.filter((p) => lipSyncAudioPricingOf(p)?.kind === "bucket")).toEqual(BUCKETED)

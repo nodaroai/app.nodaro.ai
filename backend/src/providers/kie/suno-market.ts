@@ -24,7 +24,7 @@
 import { sunoSpeechProviderInput, type SunoSpeechRun } from "@nodaro/render-rules"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
-import { KieError, createKieTask, createSanitizedError, createUpstreamFailureError, pollKieTask } from "./client.js"
+import { KieError, createKieTask, createSanitizedError, createUpstreamFailureError, pollKieTask, retryOnProviderTaskTimeout } from "./client.js"
 import { KIE_CREDIT_USD } from "./models.js"
 import { sunoCoverByIdInput, type SunoCoverByIdParams } from "./suno-cover-by-id.js"
 import {
@@ -124,7 +124,8 @@ export async function pollSunoMarketTracks(taskId: string, label: string): Promi
       if (state === "fail") {
         const failMsg = str(data?.failMsg) ?? "Unknown error"
         const failCode = str(data?.failCode) ?? "no_code"
-        throw createUpstreamFailureError(`Suno ${label} task failed: [${failCode}] ${failMsg}`, label)
+        const taskCode = typeof data?.failCode === "number" || typeof data?.failCode === "string" ? data.failCode : undefined
+        throw createUpstreamFailureError(`Suno ${label} task failed: [${failCode}] ${failMsg}`, label, { taskCode })
       }
       if (state !== "success") return undefined
       const tracks = sunoMarketTracksOf(data)
@@ -142,12 +143,14 @@ export async function pollSunoMarketTracks(taskId: string, label: string): Promi
 
 /** Create a Suno Speech task for a run and poll it to its takes (two per run). */
 export async function sunoSpeech(run: SunoSpeechRun, reconcileOpts?: ReconcileOpts): Promise<SunoTaskResult> {
-  const { taskId } = await createKieTask(SUNO_SPEECH_MODEL, sunoSpeechProviderInput(run), {
-    modelKey: reconcileOpts?.modelKey ?? null,
-    dimensions: reconcileOpts?.dimensions,
+  return retryOnProviderTaskTimeout("Suno speech", async () => {
+    const { taskId } = await createKieTask(SUNO_SPEECH_MODEL, sunoSpeechProviderInput(run), {
+      modelKey: reconcileOpts?.modelKey ?? null,
+      dimensions: reconcileOpts?.dimensions,
+    })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+    return pollSunoMarketTracks(taskId, "Speech generation")
   })
-  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
-  return pollSunoMarketTracks(taskId, "Speech generation")
 }
 
 // =============================================================================
@@ -194,24 +197,31 @@ export function isDefiniteCreateRefusal(err: unknown): err is KieError {
  * Throws `SunoCoverByIdRefusedError` only when KIE definitely refused the
  * create (`isDefiniteCreateRefusal`), before any task exists. A create that
  * may have made a task (a 5xx, an unreadable answer, a lost connection) and a
- * task that fails later are thrown as they are: the job fails and is refunded,
- * and never asks KIE for a second task.
+ * task that fails later are thrown as they are: the job fails and is refunded.
+ * The one second task is the resubmit after the provider timed the first out
+ * on its side (`retryOnProviderTaskTimeout`); a refused create on THAT attempt
+ * is thrown as the plain refusal, never `SunoCoverByIdRefusedError`, so the
+ * caller does not then also cover the file (and resubmit that) on top of it.
  */
 export async function sunoCoverById(p: SunoCoverByIdParams, reconcileOpts?: ReconcileOpts): Promise<SunoTaskResult> {
   const input = sunoCoverByIdInput(p)
   if (!input) throw new SunoCoverByIdInexpressibleError()
-  let taskId: string
-  try {
-    ;({ taskId } = await createKieTask(SUNO_COVER_MARKET_MODEL, input, {
-      modelKey: reconcileOpts?.modelKey ?? null,
-      dimensions: reconcileOpts?.dimensions,
-    }))
-  } catch (err) {
-    if (isDefiniteCreateRefusal(err)) throw new SunoCoverByIdRefusedError(err)
-    throw err
-  }
-  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
-  return pollSunoMarketTracks(taskId, "Music generation")
+  let attempt = 0
+  return retryOnProviderTaskTimeout("Suno cover by id", async () => {
+    attempt++
+    let taskId: string
+    try {
+      ;({ taskId } = await createKieTask(SUNO_COVER_MARKET_MODEL, input, {
+        modelKey: reconcileOpts?.modelKey ?? null,
+        dimensions: reconcileOpts?.dimensions,
+      }))
+    } catch (err) {
+      if (attempt === 1 && isDefiniteCreateRefusal(err)) throw new SunoCoverByIdRefusedError(err)
+      throw err
+    }
+    await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+    return pollSunoMarketTracks(taskId, "Music generation")
+  })
 }
 
 // =============================================================================
@@ -226,13 +236,15 @@ export async function sunoConvertWavStem(
   p: { readonly taskId: string; readonly audioId: string },
   reconcileOpts?: ReconcileOpts,
 ): Promise<SunoConvertWavResult> {
-  const { taskId } = await createKieTask(SUNO_WAV_MARKET_MODEL, { task_id: p.taskId, audio_id: p.audioId }, {
-    modelKey: reconcileOpts?.modelKey ?? null,
-    dimensions: reconcileOpts?.dimensions,
+  return retryOnProviderTaskTimeout("Suno stem WAV convert", async () => {
+    const { taskId } = await createKieTask(SUNO_WAV_MARKET_MODEL, { task_id: p.taskId, audio_id: p.audioId }, {
+      modelKey: reconcileOpts?.modelKey ?? null,
+      dimensions: reconcileOpts?.dimensions,
+    })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+    const { resultJson } = await pollKieTask(taskId, SUNO_MAX_POLL_ATTEMPTS)
+    const audioUrl = resultJson.resultUrls?.[0] ?? resultJson.audioUrl
+    if (!audioUrl) throw createSanitizedError("Suno WAV conversion returned no file", "WAV conversion")
+    return { taskId, audioUrl }
   })
-  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
-  const { resultJson } = await pollKieTask(taskId, SUNO_MAX_POLL_ATTEMPTS)
-  const audioUrl = resultJson.resultUrls?.[0] ?? resultJson.audioUrl
-  if (!audioUrl) throw createSanitizedError("Suno WAV conversion returned no file", "WAV conversion")
-  return { taskId, audioUrl }
 }

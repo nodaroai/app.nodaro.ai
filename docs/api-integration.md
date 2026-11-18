@@ -1761,7 +1761,7 @@ All errors share the same shape:
 | 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
 | 403 | `insufficient_scope` | `missingScope` (+ `message`) | (OAuth tokens only) The token is missing a scope the route requires. Re-run the OAuth consent with the broader scope. See [OAuth Flow §4](./oauth-flow.md#4-scope-vocabulary). |
-| 403 | `model_disabled` | — | (Cloud edition only) The platform's admin has switched this model off. Nothing was reserved or charged. Not a balance problem — buying credits does not lift it; pick another model, or try again once the admin switches it back on. |
+| 403 | `model_disabled` | — | (Cloud edition only) The platform's admin has switched this model off — or the platform switched it off automatically because its runs were costing more than they were charged, until its price is fixed. Nothing was reserved or charged. Not a balance problem — buying credits does not lift it; pick another model, or try again once the admin switches it back on. |
 | 403 | `model_not_available` | — | A model this deployment does not offer: outside its `models.allow`, in its `models.deny`, left off in Admin → Availability, or switched off by its admin. A request is judged on the model it runs on — the one it names, or, on a deployment that restricts models, the default its route would run when it names none (the image default for its aspect ratio, a feature's default LLM, a route's one fixed model). Refused before anything is created or charged; name a model `GET /v1/models` lists. |
 | 403 | `sso_required` | — | (Deployments that restrict sign-in to their identity provider) A session JWT for an account that was not provisioned through that provider. Sign in through the provider; API tokens and OAuth app tokens are not affected. |
 | 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `GET /v1/api-tokens`). |
@@ -1802,6 +1802,15 @@ backoff. Treat 4xx as terminal — don't retry without fixing the request.
 The table above covers request-level errors — a call that never produced a
 job. A **job** that later fails carries its own detail in `error_message`
 plus, for five classes of failure, a structured `error_hint`.
+
+One failure is retried before the job fails, on the models whose provider
+reports it: when the provider says it timed a generation out on its own side,
+before producing anything, the platform sends the same request once more by
+itself. The job fails only when the second attempt fails too. The second
+attempt costs no extra credits; the job takes longer to finish, and
+`error_message` reads as it always did when both attempts fail. Not every
+model's provider reports this, and a job the platform had to pick up again
+after a restart is not sent a second time, so a timeout can still fail a job.
 
 A provider content-policy block:
 
@@ -4886,7 +4895,7 @@ to sell a plan, send the user to the Nodaro app's pricing page.
 answers a signed-in session, a personal API token without a workflow limit, or
 an app's OAuth token; a workflow-limited key gets `403 forbidden` and a billing
 integration key `403 billing_key_scope`. It answers `{ data, effectiveTier }`.
-`data` is the account's latest subscription — `tier`, `status` (`active`,
+`data` is the account's live subscription (one whose `status` is `active`, `trialing`, `past_due` or `unpaid`), or its latest one when none is live — `tier`, `status` (`active`,
 `trialing`, `past_due`, `unpaid` (payment retries ended without payment), `paused`, `canceled`, `incomplete`, `incomplete_expired` or `expired`),
 `current_period_start`, `current_period_end`, `cancel_at_period_end`,
 `cancel_at`, `canceled_at` and its Stripe ids — or `null` when it never

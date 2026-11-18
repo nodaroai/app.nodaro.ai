@@ -235,6 +235,30 @@ describe("sunoSeparateMarket", () => {
     expect(r.backingVocalsUrl).toMatch(/Backing_Vocals\.mp3$/)
   })
 
+  it("a task the provider timed out on its side (failCode 524) is created once more, and the second task's stems returned", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const onTaskCreated = vi.fn(async () => undefined)
+    let creates = 0
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/jobs/createTask")) {
+        creates++
+        return new Response(JSON.stringify({ code: 200, data: { taskId: `t-${creates}` } }), { status: 200 })
+      }
+      if (url.includes("taskId=t-1")) {
+        return new Response(JSON.stringify({ code: 200, data: { taskId: "t-1", state: "fail", failCode: "524", failMsg: "generate task timeout." } }), { status: 200 })
+      }
+      if (url.includes("/jobs/recordInfo")) return new Response(JSON.stringify(fixture("split_stem")), { status: 200 })
+      throw new Error(`unexpected url ${url}`)
+    })
+    const r = await withTimers(() =>
+      sunoSeparateMarket({ source: { audioUrl: "https://x/a.mp3" }, type: "split_stem" }, { onTaskCreated }),
+    )
+    expect(creates).toBe(2)
+    expect(onTaskCreated.mock.calls).toEqual([["t-1"], ["t-2"]])
+    expect(r.taskId).toBe("t-2")
+  })
+
   it("413 → SunoCatalogRefusalError (not a content-policy error)", async () => {
     mockCreateThenRecord(fixture("catalog-refusal"))
     const err = await withTimers(() =>

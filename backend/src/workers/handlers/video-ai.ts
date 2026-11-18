@@ -58,7 +58,7 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { SEEDANCE_LIP_SYNC_SECONDS, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
+import { SEEDANCE_LIP_SYNC_SECONDS, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -1203,6 +1203,13 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     result: {
       url: resultUrl,
       cost: resultCost,
+      // A model charged what its run used (LatentSync, decided 2026-11-18): the
+      // bucket it held is a hold, and the provider's cost for THIS run is the
+      // charge — the rest released, an overrun collected. Only with a cost in
+      // hand: a run that reports none settles at its hold.
+      ...(isLipSyncChargedAtRunCost(resolvedProvider) && typeof resultCost === "number" && resultCost > 0
+        ? { meteredCost: true, collectOverHold: true }
+        : {}),
       displayCost: resultDisplayCost,
       providerUsed: resultProviderUsed,
       // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
@@ -2451,10 +2458,9 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   console.log(`[worker] face-swap ${ctx.jobId}`)
 
   const faceSwapOnTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
-  const outputUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, async () => {
-    const { videoUrl: out } = await replicateFaceSwap(faceImageUrl, videoUrl, { onTaskCreated: faceSwapOnTaskCreated })
-    return out
-  })
+  const { videoUrl: outputUrl, cost } = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
+    replicateFaceSwap(faceImageUrl, videoUrl, { onTaskCreated: faceSwapOnTaskCreated }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   // The swap comes back without sound: put the source clip's audio back on it.
@@ -2466,7 +2472,9 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-to-video",
-    result: { url: outputUrl, cost: null, providerUsed: "roop" },
+    // `cost` is what Replicate billed for the prediction, recorded as
+    // provider_cost. No `meteredCost`: the run commits its reservation.
+    result: { url: outputUrl, cost, providerUsed: "roop" },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })

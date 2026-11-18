@@ -59,7 +59,7 @@ export default function AdminCreditAnomaliesPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
@@ -91,6 +91,18 @@ export default function AdminCreditAnomaliesPage() {
           <CardContent>
             <p className="text-2xl font-bold text-red-400">
               {summary ? `${summary.totalUndercharge} CR` : "--"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Cost Shortfall
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-400" title="Credits short of the provider's cost, across jobs charged below it">
+              {summary ? `${summary.totalCostShortfall ?? 0} CR` : "--"}
             </p>
           </CardContent>
         </Card>
@@ -133,6 +145,7 @@ export default function AdminCreditAnomaliesPage() {
               <SelectItem value="reconcile_exhausted">Reconcile Exhausted</SelectItem>
               <SelectItem value="uncollected_overrun">Uncollected Overrun</SelectItem>
               <SelectItem value="metered_settle_unconfirmed">Settle Unconfirmed</SelectItem>
+              <SelectItem value="cost_shortfall">Cost Shortfall</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -193,10 +206,16 @@ export default function AdminCreditAnomaliesPage() {
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {a.provider ?? "--"}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-xs">
+                  <td
+                    className="px-3 py-2 text-right tabular-nums text-xs"
+                    title={a.anomaly_type === "cost_shortfall" ? "The provider's cost in credits, no markup" : undefined}
+                  >
                     {a.credits_estimated}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-xs">
+                  <td
+                    className="px-3 py-2 text-right tabular-nums text-xs"
+                    title={a.anomaly_type === "cost_shortfall" ? "Credits charged" : undefined}
+                  >
                     {a.credits_actual}
                   </td>
                   <td className={`px-3 py-2 text-right tabular-nums text-xs font-medium ${
@@ -298,6 +317,7 @@ const ANOMALY_TYPE_STYLES: Record<string, { label: string; cls: string }> = {
   reconcile_exhausted: { label: "Reconcile Exhausted", cls: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
   uncollected_overrun: { label: "Uncollected Overrun", cls: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
   metered_settle_unconfirmed: { label: "Settle Unconfirmed", cls: "bg-rose-500/10 text-rose-400 border-rose-500/20" },
+  cost_shortfall: { label: "Cost Shortfall", cls: "bg-red-500/10 text-red-300 border-red-500/30" },
 }
 
 const STATUS_STYLES: Record<string, { label: string; cls: string }> = {

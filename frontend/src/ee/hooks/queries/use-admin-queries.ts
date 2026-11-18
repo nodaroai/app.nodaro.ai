@@ -964,6 +964,8 @@ export function useAdminSettings() {
         copilot_enabled: (settings.copilot_enabled as boolean) ?? true,
         // Content rights: whether a link import without a confirmation is refused. Off until every client sends one.
         content_rights_required: (settings.content_rights_required as boolean | undefined) ?? false,
+        // Cost-shortfall auto-pause (ee/billing/cost-shortfall-sweep.ts). An absent row means on.
+        cost_shortfall_auto_pause_enabled: (settings.cost_shortfall_auto_pause_enabled as boolean | undefined) ?? true,
         copilot_default_tier: (settings.copilot_default_tier as string) ?? "",
         copilot_tier_caps: (settings.copilot_tier_caps && typeof settings.copilot_tier_caps === "object"
           ? settings.copilot_tier_caps
@@ -1269,6 +1271,8 @@ export interface CreditAnomaly {
     | "reconcile_exhausted"
     | "uncollected_overrun"
     | "metered_settle_unconfirmed"
+    /** A job charged less than its provider cost: estimated = the provider cost in credits, actual = credits charged. */
+    | "cost_shortfall"
   readonly status: "pending" | "acknowledged" | "dismissed"
   readonly admin_notes: string | null
   readonly resolved_at: string | null
@@ -1278,6 +1282,8 @@ export interface AnomalySummary {
   readonly pending: number
   readonly totalOvercharge: number
   readonly totalUndercharge: number
+  /** Credits short of cost across the jobs charged less than their provider cost. Absent on an older server. */
+  readonly totalCostShortfall?: number
   readonly total: number
 }
 

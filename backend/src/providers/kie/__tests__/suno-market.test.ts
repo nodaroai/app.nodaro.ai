@@ -113,6 +113,34 @@ describe("sunoSpeech", () => {
     expect(result.tracks.map((t) => [t.id, t.duration])).toStrictEqual([["clip-1", 12.3], ["clip-2", 11.8]])
   })
 
+  it("a task the provider timed out on its side (failCode 524) is created once more, and the second task's takes returned", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const onTaskCreated = vi.fn(async () => undefined)
+    let creates = 0
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/jobs/createTask")) {
+        creates++
+        return new Response(JSON.stringify({ code: 200, data: { taskId: `t-${creates}` } }), { status: 200 })
+      }
+      if (url.includes("taskId=t-1")) {
+        return new Response(JSON.stringify({ code: 200, data: { taskId: "t-1", state: "fail", failCode: 524, failMsg: "generate task timeout." } }), { status: 200 })
+      }
+      if (url.includes("/jobs/recordInfo")) return new Response(JSON.stringify(TWO_TAKES), { status: 200 })
+      throw new Error(`unexpected url ${url}`)
+    })
+    const result = await withTimers(() => sunoSpeech(sunoSpeechRun({ mode: "brief", prompt: "A short morning news intro" }), { onTaskCreated }))
+    expect(creates).toBe(2)
+    expect(onTaskCreated.mock.calls).toEqual([["t-1"], ["t-2"]])
+    expect(result.taskId).toBe("t-2")
+    expect(result.tracks).toHaveLength(2)
+  })
+
+  it("a task failed with any other code is not created again", async () => {
+    mockCreateThenRecord({ code: 200, data: { taskId: "t-market", state: "fail", failCode: "500", failMsg: "boom" } })
+    await expect(withTimers(() => sunoSpeech(sunoSpeechRun({ mode: "brief", prompt: "A short morning news intro" })))).rejects.toThrow()
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/jobs/createTask"))).toHaveLength(1)
+  })
+
   it("Script sends only the script and the options set", async () => {
     mockCreateThenRecord(TWO_TAKES)
     await withTimers(() => sunoSpeech(sunoSpeechRun({ mode: "script", script: "Hello there.", tone: "warm", vocalGender: "male", prompt: "dropped" })))
@@ -207,6 +235,27 @@ describe("cover by id", () => {
     const failed = await withTimers(() => sunoCoverById({ ...base, prompt: "jazz" })).catch((e: unknown) => e)
     expect(failed).not.toBeInstanceOf(SunoCoverByIdRefusedError)
     expect(failed).toBeInstanceOf(Error)
+  })
+
+  it("a task the provider timed out on its side (failCode 524) is created once more; a refused create on that resubmit is the plain refusal, so the file is not covered on top of it", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    let creates = 0
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/jobs/createTask")) {
+        creates++
+        return creates === 1
+          ? new Response(JSON.stringify({ code: 200, data: { taskId: "t-1" } }), { status: 200 })
+          : new Response(JSON.stringify({ code: 422, msg: "audio not found" }), { status: 422 })
+      }
+      if (url.includes("/jobs/recordInfo")) {
+        return new Response(JSON.stringify({ code: 200, data: { taskId: "t-1", state: "fail", failCode: 524, failMsg: "generate task timeout." } }), { status: 200 })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+    const err = await withTimers(() => sunoCoverById({ ...base, prompt: "jazz" })).catch((e: unknown) => e)
+    expect(creates).toBe(2)
+    expect(err).toBeInstanceOf(Error)
+    expect(err).not.toBeInstanceOf(SunoCoverByIdRefusedError)
   })
 
   it("fields a by-id body cannot say are never sent", async () => {

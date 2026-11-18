@@ -8,6 +8,7 @@ import { pollWelcomeOffer, welcomeLabelsFor, countSubscribed } from "./welcome-o
 import { pullLoopsUnsubscribes } from "./loops-unsubscribe-pull.js"
 import { maybeSendCreditsDigest } from "./credits-digest.js"
 import { sectionBlocks } from "./slack-blocks.js"
+import type { SecondSubscriptionAction } from "../billing/second-subscription.js"
 
 export { israelParts, startOfIsraelDayUtc }
 
@@ -126,6 +127,36 @@ export async function notifyCancellation(
     await post({ text })
   } catch {
     /* never break billing */
+  }
+}
+
+/**
+ * A second subscription for one account, granted nothing by the Stripe
+ * webhook (second-subscription.ts). `action` says what was done with it:
+ * `cancel-and-refund`, or `alert` when nothing was done at Stripe and it is a
+ * person's to settle. An incident, not a milestone: it posts whenever a
+ * webhook is set, whatever the milestone switch says. Names the account and
+ * the two subscriptions only, never a payment detail. `note` says what was
+ * left for a person to do, when anything was. Never throws; answers whether
+ * the message was posted.
+ */
+export async function notifySecondSubscription(
+  userId: string,
+  keptId: string,
+  secondId: string,
+  action: SecondSubscriptionAction,
+  note?: string,
+): Promise<boolean> {
+  try {
+    if (isStandbySender()) return false
+    const cfg = await getNotifyConfig()
+    if (!cfg.slackWebhookUrl) return false
+    const email = (await userEmail(userId)) ?? userId
+    const text = `:rotating_light: Second subscription — ${email}: kept ${keptId}, ${secondId} ${action}${note ? ` (${note})` : ""}`
+    return await post({ text })
+  } catch {
+    /* never break billing */
+    return false
   }
 }
 

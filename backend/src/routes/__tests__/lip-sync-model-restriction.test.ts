@@ -80,7 +80,7 @@ const BODY = { videoUrl: "https://cdn.example.com/face.mp4", audioUrl: "https://
 const LISTED = ["latentsync", "heygen-lipsync-precision", "lipsync-2-pro"] as const
 /** The credit id each runs under with a 42-second line (the per-second ones bucket it to 60 s). */
 const CREDIT_ID: Readonly<Record<(typeof LISTED)[number], string>> = {
-  latentsync: "latentsync",
+  latentsync: "latentsync:60s",
   "heygen-lipsync-precision": "heygen-lipsync-precision:60s",
   "lipsync-2-pro": "lipsync-2-pro:60s",
 }

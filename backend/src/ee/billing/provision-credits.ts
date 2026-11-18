@@ -44,6 +44,7 @@ import {
   type StoredSubscription,
   writeGrantedStatus,
 } from "./subscription-grant.js"
+import { refusedSubscriptionInvoice, settleRefusedAgain, settleSecondSubscription } from "./second-subscription.js"
 
 /**
  * The free-grant exit by purchase: a withheld signup grant leaves 'withheld'
@@ -158,8 +159,9 @@ export async function handleSubscriptionCreated(
     const claim = regrant ? await claimAndGrantSubscription(userId, tier, data, "subscription.created") : null
     // Granted (then given this event's status, the row being recorded
     // `incomplete` until its grant lands), or refused for another live
-    // subscription (logged by the claim).
+    // subscription (logged by the claim, settled by second-subscription.ts).
     if (claim?.outcome === "claimed") await writeGrantedStatus(data.subscriptionId, data.status, "subscription.created")
+    if (claim?.outcome === "other_live") await settleSecondSubscription(userId, data.subscriptionId, claim.otherSubscriptionId, "subscription.created")
     if (claim && claim.outcome !== "not_claimable") return
     // Granted, but its status write failed (or was never reached): the row is
     // still `incomplete`. This redelivery writes the status; the grant itself
@@ -168,6 +170,7 @@ export async function handleSubscriptionCreated(
       await writeGrantedStatus(data.subscriptionId, data.status, "subscription.created")
       return
     }
+    if (await settleRefusedAgain(userId, data.subscriptionId, "subscription.created", existing, data.status)) return
     console.log("[stripe] subscription.created: already exists, skipping", data.subscriptionId)
     return
   }
@@ -179,7 +182,10 @@ export async function handleSubscriptionCreated(
     if (recorded !== "marker-missing") return
   }
 
-  await recordAndGrantSubscription(userId, tier, data, "subscription.created")
+  const recorded = await recordAndGrantSubscription(userId, tier, data, "subscription.created")
+  if (recorded?.outcome === "other_live") {
+    await settleSecondSubscription(userId, data.subscriptionId, recorded.otherSubscriptionId, "subscription.created")
+  }
 }
 
 /**
@@ -275,12 +281,20 @@ export async function handleSubscriptionUpdated(
   // record it unpaid. Record and grant it here; created then finds the row.
   // `claimTried`: this event already asked for the grant (its own insert was
   // claimed), so the claim below does not ask again.
+  // `refusedNow`: this event's claim was refused for another live subscription
+  // and second-subscription.ts has dealt with it, so it is not settled again
+  // below when its row reads as ended.
   let grantedNow = false
   let claimTried = false
+  let refusedNow = false
   if (!existing && GRANTING_STATUSES.has(data.status)) {
     const recorded = await recordAndGrantSubscription(userId, getTierFromPriceId(data.priceId), data, "subscription.updated", true)
     grantedNow = recorded?.outcome === "claimed"
     claimTried = recorded !== null
+    if (recorded?.outcome === "other_live") {
+      await settleSecondSubscription(userId, data.subscriptionId, recorded.otherSubscriptionId, "subscription.updated")
+      refusedNow = true
+    }
     // When created recorded it first (the insert above lost), the claim below grants it.
     existing = await readSubscriptionRow<StoredSubscription>(data.subscriptionId, SUBSCRIPTION_UPDATE_COLUMNS)
   }
@@ -294,6 +308,7 @@ export async function handleSubscriptionUpdated(
   // event saying it is live is a late one (Stripe's order is not the order
   // things happened). It grants nothing, renews nothing and moves no status.
   let lateForEnded = isEndedStatus(existing.status) && !isEndedStatus(data.status)
+  if (lateForEnded && !refusedNow) await settleRefusedAgain(userId, data.subscriptionId, "subscription.updated", existing, data.status)
 
   // Paid at last: the first event to see the subscription active or trialing
   // claims its grant and gives it — the same grant a subscription paid at
@@ -302,10 +317,14 @@ export async function handleSubscriptionUpdated(
   // A claim refused because another subscription of the account is granted and
   // live (`other_live`, logged by the claim) grants nothing, and this
   // subscription's live status is not written below: the row stays as
-  // recorded.
+  // recorded, unless second-subscription.ts cancels it at Stripe and records
+  // it ended.
   if (!claimTried && !grantedNow && !lateForEnded && !planGranted(existing) && GRANTING_STATUSES.has(data.status)) {
     const claim = await claimAndGrantSubscription(userId, getTierFromPriceId(data.priceId), data, "subscription.updated")
     grantedNow = claim.outcome === "claimed"
+    if (claim.outcome === "other_live") {
+      await settleSecondSubscription(userId, data.subscriptionId, claim.otherSubscriptionId, "subscription.updated")
+    }
     // Lost the claim to a concurrent event (a created that claimed it between
     // this event's read and its claim), or the subscription ended meanwhile:
     // read the row again and go on from what it is now, as for a plan granted
@@ -723,6 +742,13 @@ export async function handleInvoicePaid(
     })
     return
   }
+
+  // A second subscription granted nothing gets nothing from its invoices
+  // either: no credits for a plan change made on it (that grant is keyed by
+  // the account and the invoice, and does not read whether the subscription's
+  // plan was ever granted), and no receipt of plan credits. A granted
+  // subscription answers false at once.
+  if (await refusedSubscriptionInvoice(sub.user_id, data.subscriptionId, data.invoiceId)) return
 
   // A plan change paid for: grant the gap it bought. The RPC writes this
   // invoice's transactions row itself — that row is its idempotency claim, so

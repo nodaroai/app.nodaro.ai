@@ -414,29 +414,3 @@ describe("gemini-omni-flash-1-2 — characterReferences → character_ids (decid
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
 })
-
-describe("gemini-omni-flash-1-2 — the provider's own timeout is resubmitted once", () => {
-  const M = "gemini-omni-flash-1-2"
-  const timeout = () => Object.assign(new Error("sanitized"), { internalDetails: "task failed: [524] generate task timeout." })
-
-  it("sends the same body again and delivers the second run", async () => {
-    mocks.mockRunKieTask.mockRejectedValueOnce(timeout())
-    const result = await provider.textToVideo("chess at the park, @image_1", M, 4, "16:9", { referenceImageUrls: ["https://x/r.png"] })
-    expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(2)
-    expect(sentInput(1)).toEqual(sentInput(0))
-    expect(sentInput().prompt).toBe("chess at the park, image 1")
-    expect(result.url).toBe("https://x/out.mp4")
-  })
-
-  it("a second timeout fails the run", async () => {
-    mocks.mockRunKieTask.mockRejectedValueOnce(timeout()).mockRejectedValueOnce(timeout())
-    await expect(provider.textToVideo("a prompt", M, 4, "16:9", {})).rejects.toThrow()
-    expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(2)
-  })
-
-  it("any other failure is not resubmitted", async () => {
-    mocks.mockRunKieTask.mockRejectedValueOnce(Object.assign(new Error("sanitized"), { internalDetails: "task failed: [400] Generation failed." }))
-    await expect(provider.textToVideo("a prompt", M, 4, "16:9", {})).rejects.toThrow()
-    expect(mocks.mockRunKieTask).toHaveBeenCalledOnce()
-  })
-})

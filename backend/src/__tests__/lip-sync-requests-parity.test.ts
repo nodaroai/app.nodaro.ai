@@ -156,9 +156,10 @@ import { reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { buildPayload } from "../services/workflow-engine/payload-builder.js"
 import type { ResolvedInputs, SimpleNode } from "../services/workflow-engine/types.js"
 import { videoAIHandlers } from "../workers/handlers/video-ai.js"
+import { finalizeJobWithMedia } from "../lib/job-finalize.js"
 import { LIP_SYNC_REQUESTS_BEFORE_CATALOG_ENTRIES } from "./fixtures/lip-sync-requests.js"
 import { retiredLipSyncProviderMessage } from "@nodaro/shared/models"
-import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
+import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://cdn.example.com/face.png"
@@ -180,10 +181,16 @@ const RETIRED = new Set<string>(["wav2lip", "video-retalking", "sadtalker"])
 const isRetiredCase = (name: string) => [...RETIRED].some((p) => name === p || name.startsWith(`${p} `))
 /** The options priced by the audio's length, in buckets. */
 const PER_SECOND = ["kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync"]
+/**
+ * Bucketed since the fixture was recorded, so it has no named-length cases
+ * there: LatentSync (decided 2026-11-18 — held by the bucket of its measured
+ * audio, its two recorded cases run as a bucketed model's now).
+ */
+const BUCKETED_SINCE = ["latentsync"]
 /** A case on a bucketed option ("(no provider)" runs Kling AI Avatar): priced on the measured length since 2026-11-13. */
 const measuredProviderOf = (c: { name: string; provider: string | undefined }) => {
   const provider = c.provider ?? "kling-avatar"
-  return PER_SECOND.includes(provider) ? provider : undefined
+  return PER_SECOND.includes(provider) || BUCKETED_SINCE.includes(provider) ? provider : undefined
 }
 /** The options priced by size. */
 const BY_SIZE = ["infinitalk", "seedance-2", "seedance-2-fast", "seedance-2-mini", "seedance-2-5", "minimax-h3"]
@@ -398,7 +405,7 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
     }
     expect(held).toBe(2 * (CASES.length - 6))
     // Every bucketed option's cases: plain, every lever, three named lengths — and "(no provider)".
-    expect(measured).toBe(2 * (PER_SECOND.length * 5 + 1))
+    expect(measured).toBe(2 * (PER_SECOND.length * 5 + 1 + BUCKETED_SINCE.length * 2))
   })
 
   it("a bucketed model is charged its measured length's bucket whatever length the request names, and every lane is sent our copy of the audio", () => {
@@ -438,14 +445,14 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
     expect(retiredLipSyncProviderMessage("wav2lip")).toBe("Wav2Lip is no longer available for Lip Sync. Pick another Lip Sync model.")
   })
 
-  it("the three newly listed models are sent, checked and charged as before (and the fixture saw them run)", () => {
+  it("the three newly listed models are sent as before, and checked and charged as before but for a bucketed model's measured length (and the fixture saw them run)", () => {
     for (const provider of ["latentsync", "heygen-lipsync-precision", "lipsync-2-pro"]) {
       for (const name of [provider, `${provider} + every lever`]) {
         const route = before.route[name]!
         expect(route.status, name).toBe(200)
         expect((route.sent as Json).via, name).toBe("replicate")
         expect(route.runModel, name).toBe(provider)
-        // HeyGen and Lipsync 2 Pro are priced by a length bucket: their measured length since 2026-11-13.
+        // HeyGen and Lipsync 2 Pro are priced by a length bucket: their measured length since 2026-11-13. LatentSync since 2026-11-18.
         const measured = measuredProviderOf({ name, provider })
         expect(now.route[name], name).toEqual(measured ? measuredNow("route", route, measured) : route)
         expect(now.workflow[name], name).toEqual(measured ? measuredNow("workflow", before.workflow[name]!, measured) : before.workflow[name])
@@ -454,5 +461,37 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
     expect([before.route["latentsync"]!.check, before.route["latentsync"]!.debit]).toEqual(["latentsync", "latentsync"])
     expect(before.route["heygen-lipsync-precision"]!.check).toBe("heygen-lipsync-precision:300s")
     expect(before.route["lipsync-2-pro @ 42s"]!.check).toBe("lipsync-2-pro:60s")
+  })
+})
+
+/**
+ * A model charged what its run used (LatentSync, decided 2026-11-18): the
+ * worker hands the finalize the provider's cost AS THE CHARGE, to be settled
+ * above or below the hold. Every other model's settlement is what it was: the
+ * hold, committed as it is.
+ */
+describe("the settlement the worker asks for", () => {
+  const settlementOf = async (provider: string): Promise<Json> => {
+    vi.mocked(finalizeJobWithMedia).mockClear()
+    await sentBy({ provider, imageUrl: IMAGE, videoUrl: VIDEO, audioUrl: AUDIO, prompt: "make them talk" })
+    const { result } = vi.mocked(finalizeJobWithMedia).mock.calls.at(-1)![0]
+    return { cost: result.cost, meteredCost: result.meteredCost, collectOverHold: result.collectOverHold }
+  }
+
+  it("LatentSync: charged the provider's cost for this run, collected above the hold when it costs more", async () => {
+    expect(await settlementOf("latentsync")).toEqual({ cost: 0.01, meteredCost: true, collectOverHold: true })
+  })
+
+  it("every other running model: no metered settlement — the hold is the charge", async () => {
+    const others = PROVIDERS.filter((p) => !RETIRED.has(p) && p !== "latentsync")
+    expect(others.length).toBeGreaterThan(10)
+    for (const provider of others) {
+      const settled = await settlementOf(provider)
+      expect([settled.meteredCost, settled.collectOverHold], provider).toEqual([undefined, undefined])
+    }
+  })
+
+  it("is asked for exactly the models declared as charged at their run's cost", () => {
+    expect(PROVIDERS.filter((p) => isLipSyncChargedAtRunCost(p))).toEqual(["latentsync"])
   })
 })

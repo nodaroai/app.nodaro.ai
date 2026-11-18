@@ -1,5 +1,23 @@
 # @nodaro/shared
 
+## 3.70.0
+
+### Minor Changes
+
+- a3cfe3e: Competitor search terms and topic tracking (`@nodaro/shared/social`). A tracked brand can carry `searchTerms`: phrases or #hashtags that the searches for posts about it use instead of its name, and that a post must name to count as about it. A plan caps how many (`CompetitorListResult.limits`). `normalizeSearchTerms` cleans a list the way the server keeps it. `competitorScanSearches` counts one about-search per platform per term, and `competitorScanPages` the pages a scan runs. Scans are now charged per Social Search page at `COMPETITOR_SCAN_PAGE_CREDIT_ID`, summed, so a scan of more than twelve searches is priced in full; `competitorScanCreditId` is deprecated. New `topics` contract: `TrackedTopic`, `TopicListResult`, `CreateTopicInput`, `TopicDetail`, `TopicHistory`, `TopicCardsResult`, `TOPIC_PLATFORMS`, `TOPIC_POST_COUNTS` (20/40/60), `topicScanPages` and `TOPIC_SCAN_PAGE_CREDIT_ID`, for following a hashtag or phrase with no brand around it.
+- d8be278: `gemini-4-hydrogen` now reads PDF files: its `LLM_MODALITY_CAPS` row gains `file: true`, so `llmAcceptsFiles("gemini-4-hydrogen")` is true and `LLM_FILE_MODELS` lists it beside `gpt-6.1-terra`. LLM Chat and `generate_text` take `referenceFileUrls` / `file_urls` on it, within the same limits (PDF only, up to 5 files, 6 MB and 100 pages in all).
+
+  New in `@nodaro/shared/llm-models`:
+
+  - `LlmModelDef.fileWire` (`LlmFileWire`): how a document is sent to a model on each lane that can serve it. Declared by exactly the models that read files.
+  - `llmFileWire(modelId)`: that declaration, or `undefined` for a model that reads no files.
+
+  The `file` cap is read by the LLM nodes only: it enrols the model in no other product. GPT-6.1 Terra's caps and behaviour are unchanged.
+
+- eab674d: LatentSync (Lip Sync) is priced by the length of its audio and charged what the run used (`@nodaro/shared/credits`). It joins the models held by a length bucket (`isPerSecondLipSyncProvider`, `buildLipSyncCreditId` now returns `latentsync:<bucket>s`, `getLipSyncMaxAudioSeconds` is 300 for it), and the new `LIP_SYNC_CHARGED_AT_RUN_COST` / `isLipSyncChargedAtRunCost` name the models whose bucket row is a hold: the run is settled at what it used, below or above that hold. Its catalog entry lists the hold rows in place of the single price.
+- 1a93a78: Suno Speech and Suno stem ids (`@nodaro/shared/models`). The new `suno-speech` node is an audio producer (its row in the unit contracts). Suno Separate's output now names the Suno ids of its stems: `SUNO_SEPARATE_ID_FIELDS` lists `sunoTaskId` (the separation's task) and `sunoStemIds` (each stem's or take's own id, by its result field), and `sunoSeparateHandleField` / `sunoSeparateHandleIds` give the result field and the `{ taskId, audioId }` pair behind a handle — what Suno Convert to WAV takes a stem by. A run that Demucs or the connected cloud delivered carries no stem ids.
+- 7430094: Video Remake (formerly Nodaro Motion): its engines are Nodaro Prism and Nodaro Pulse, with the public ids `"nodaro-prism"` and `"nodaro-pulse"`. `NODARO_MOTION_ENGINES`, `NODARO_MOTION_ENGINE_NAMES`, `nodaroMotionEngineOf` and `nodaroMotionEngineFrom` answer them. Every earlier id is still read wherever an engine is read (`castSwapEngineFrom`, `CAST_SWAP_ENGINE_IDS_ACCEPTED`) and answered as the current one; `NODARO_MOTION_EARLIER_ENGINES_OF` lists each engine's earlier ids, newest first.
+
 ## 3.69.0
 
 ### Minor Changes

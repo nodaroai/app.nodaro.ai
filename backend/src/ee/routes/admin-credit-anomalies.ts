@@ -50,22 +50,26 @@ export async function adminCreditAnomalyRoutes(app: FastifyInstance): Promise<vo
   // Summary stats — uses parallel count queries to avoid fetching all rows
   app.get("/v1/admin/credit-anomalies/summary", { preHandler: requireAdmin }, async (_req, reply) => {
     const table = "credit_anomalies" as "assets"
-    const [totalRes, pendingRes, overchargeRes, underchargeRes] = await Promise.all([
+    const [totalRes, pendingRes, overchargeRes, underchargeRes, costShortfallRes] = await Promise.all([
       supabase.from(table).select("id", { count: "exact", head: true }) as any,
       (supabase.from(table).select("id", { count: "exact", head: true }) as any).eq("status", "pending"),
       supabase.from(table).select("diff").eq("anomaly_type", "overcharge") as any,
       supabase.from(table).select("diff").eq("anomaly_type", "undercharge") as any,
+      // Jobs charged less than their provider cost (ee/billing/cost-shortfall-sweep.ts): diff = provider cost in credits − charged.
+      supabase.from(table).select("diff").eq("anomaly_type", "cost_shortfall") as any,
     ])
 
     if (totalRes.error) return reply.status(500).send({ error: { message: totalRes.error.message } })
 
     const totalOvercharge = (overchargeRes.data ?? []).reduce((sum: number, r: { diff: number }) => sum + Math.abs(r.diff), 0)
     const totalUndercharge = (underchargeRes.data ?? []).reduce((sum: number, r: { diff: number }) => sum + r.diff, 0)
+    const totalCostShortfall = (costShortfallRes.data ?? []).reduce((sum: number, r: { diff: number }) => sum + Math.max(0, r.diff), 0)
 
     return reply.send({
       pending: pendingRes.count ?? 0,
       totalOvercharge,
       totalUndercharge,
+      totalCostShortfall,
       total: totalRes.count ?? 0,
     })
   })

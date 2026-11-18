@@ -361,6 +361,40 @@ describe("sunoGenerate — pollSunoTask behaviour (via sunoGenerate)", () => {
       .rejects.toThrow(/Music generation/)
   })
 
+  it("a task the provider timed out on its side (errorCode 524) is created once more, and its result returned", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const onTaskCreated = vi.fn(async () => undefined)
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t-1" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t-1", status: "GENERATE_AUDIO_FAILED", errorCode: 524, errorMessage: "generate task timeout." },
+      }))
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t-2" } }))
+      .mockResolvedValueOnce(recordInfoSuccess("t-2"))
+
+    const result = await withTimers(() => sunoGenerate({ prompt: "p" }, { onTaskCreated }))
+
+    expect(result.taskId).toBe("t-2")
+    const creates = fetchMock.mock.calls.filter(([url]) => String(url) === `${KIE_API_BASE}/api/v1/generate`)
+    expect(creates).toHaveLength(2)
+    expect((creates[1]![1] as { body: string }).body).toBe((creates[0]![1] as { body: string }).body)
+    expect(onTaskCreated.mock.calls).toEqual([["t-1"], ["t-2"]])
+  })
+
+  it("a task failed with any other errorCode is not created again", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
+      .mockResolvedValueOnce(jsonResponse({
+        code: 200,
+        data: { taskId: "t", status: "FAILED", errorCode: 500, errorMessage: "internal" },
+      }))
+
+    await expect(withTimers(() => sunoGenerate({ prompt: "p" })))
+      .rejects.toThrow(/Music generation/)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it("status containing 'FAILED' or 'ERROR' substring also throws", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))

@@ -273,6 +273,19 @@ describe("PUT /v1/admin/settings/copilot_enabled — the runtime kill switch", (
   })
 })
 
+describe("PUT /v1/admin/settings/cost_shortfall_auto_pause_enabled", () => {
+  // Read as "on" unless a boolean is stored: a non-boolean would leave the
+  // automatic pause on while the admin believed it off.
+  it("rejects a non-boolean", async () => {
+    const res = await app.inject({
+      method: "PUT", url: "/v1/admin/settings/cost_shortfall_auto_pause_enabled",
+      payload: { value: "off", userId: "admin-1" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("cost_shortfall_auto_pause_enabled")
+  })
+})
+
 describe("PUT /v1/admin/settings — concurrency lane keys have their own routes", () => {
   // The switch is a map keyed by runtime environment: a write here would
   // replace the whole map (one environment erasing the other's key) and skip

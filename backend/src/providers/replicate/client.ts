@@ -109,7 +109,7 @@ const T4_RATE = REPLICATE_GPU_USD_PER_SEC.t4
  * priced Replicate models (flux-2, ltx, runway, pika) commit the reserved tier,
  * so their extractCost is display-only and the T4 fallback is harmless.
  */
-const REPLICATE_MODEL_USD_PER_SEC: Record<string, number> = {
+export const REPLICATE_MODEL_USD_PER_SEC: Record<string, number> = {
   latentsync: REPLICATE_GPU_USD_PER_SEC.l40s,
   wav2lip: REPLICATE_GPU_USD_PER_SEC.l40s,
   sadtalker: REPLICATE_GPU_USD_PER_SEC.a100_80gb,
@@ -120,6 +120,10 @@ const REPLICATE_MODEL_USD_PER_SEC: Record<string, number> = {
   // the separate-audio node and the Voice Changer Pro analyze commit the
   // reserved tier and only RECORD this figure (jobs.provider_cost).
   demucs: REPLICATE_GPU_USD_PER_SEC.a100_80gb,
+  // arabyai-replicate/roop_face_swap runs on A100 (80GB) (its Replicate page).
+  // Recorded only: Face Swap commits the reserved tier and only RECORDS this
+  // figure (jobs.provider_cost).
+  "roop-face-swap": REPLICATE_GPU_USD_PER_SEC.a100_80gb,
 }
 
 /**

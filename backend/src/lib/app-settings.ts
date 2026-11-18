@@ -197,6 +197,12 @@ export interface AppSettings {
   rights_repeat_infringer_policy: RepeatInfringerPolicy
   /** What an admin changed about provider content filters (lib/provider-safety.ts); empty = none. */
   provider_safety_overrides: Record<string, Record<string, boolean | number | string>>
+  /**
+   * Whether a model whose jobs keep being charged less than its provider cost is switched off
+   * automatically (ee/billing/cost-shortfall-sweep.ts). Default true; off, the
+   * cost-shortfall jobs are still recorded and alerted, nothing is switched off.
+   */
+  cost_shortfall_auto_pause_enabled: boolean
 }
 
 // The settings are kept in memory so a job does not read every row each time.
@@ -255,7 +261,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_precise_art_style: null, nodaro_motion_no_person: null, nodaro_motion_precise_style_route: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY, provider_safety_overrides: {} }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_precise_art_style: null, nodaro_motion_no_person: null, nodaro_motion_precise_style_route: null, nodaro_motion_advanced: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY, provider_safety_overrides: {}, cost_shortfall_auto_pause_enabled: true }
     readFailures.add(fallback)
     return fallback
   }
@@ -293,6 +299,7 @@ async function refreshSettings(): Promise<AppSettings> {
     content_rights_required: false,
     rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY,
     provider_safety_overrides: {},
+    cost_shortfall_auto_pause_enabled: true,
   }
 
   for (const row of data ?? []) {
@@ -374,6 +381,10 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === GALLERY_BANNED_USERS_KEY) {
       settings.gallery_banned_users = parseGalleryBannedUsers(row.value)
+      continue
+    }
+    if (row.key === "cost_shortfall_auto_pause_enabled" && typeof row.value === "boolean") {
+      settings.cost_shortfall_auto_pause_enabled = row.value
       continue
     }
     if (row.key === "copilot_enabled" && typeof row.value === "boolean") {

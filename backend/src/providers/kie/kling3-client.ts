@@ -15,6 +15,7 @@ import {
   createSanitizedError,
   createUpstreamFailureError,
   pollDelay,
+  retryOnProviderTaskTimeout,
 } from "./client.js"
 import { providerFetch } from "../egress.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
@@ -198,74 +199,76 @@ export async function kling3Generate(
     console.log(`[Kling3] Input:`, JSON.stringify(requestBody, null, 2))
   }
 
-  const createResponse = await providerFetch(
-    {
-      provider: "kie",
-      operation: "kling3.generate",
-      modelKey: reconcileOpts?.modelKey ?? null,
-      body: requestBody,
-      dimensions: reconcileOpts?.dimensions ?? {},
-    },
-    `${KIE_API_BASE}/api/v1/jobs/createTask`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  return retryOnProviderTaskTimeout("Kling 3.0", async () => {
+    const createResponse = await providerFetch(
+      {
+        provider: "kie",
+        operation: "kling3.generate",
+        modelKey: reconcileOpts?.modelKey ?? null,
+        body: requestBody,
+        dimensions: reconcileOpts?.dimensions ?? {},
       },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(30_000),
+      `${KIE_API_BASE}/api/v1/jobs/createTask`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(30_000),
+      }
+    )
+
+    const responseText = await createResponse.text()
+    if (DEBUG) {
+      console.log(`[Kling3] Response status: ${createResponse.status}`)
+      console.log(`[Kling3] Response body: ${responseText.substring(0, 500)}`)
     }
-  )
 
-  const responseText = await createResponse.text()
-  if (DEBUG) {
-    console.log(`[Kling3] Response status: ${createResponse.status}`)
-    console.log(`[Kling3] Response body: ${responseText.substring(0, 500)}`)
-  }
+    if (!createResponse.ok) {
+      throw createSanitizedError(
+        `createTask failed: ${createResponse.status} - ${responseText}`,
+        "Kling 3.0"
+      )
+    }
 
-  if (!createResponse.ok) {
-    throw createSanitizedError(
-      `createTask failed: ${createResponse.status} - ${responseText}`,
-      "Kling 3.0"
-    )
-  }
+    let createData: { code?: number; msg?: string; data?: { taskId?: string } }
+    try {
+      createData = JSON.parse(responseText)
+    } catch {
+      throw createSanitizedError(
+        `response is not valid JSON: ${responseText}`,
+        "Kling 3.0"
+      )
+    }
 
-  let createData: { code?: number; msg?: string; data?: { taskId?: string } }
-  try {
-    createData = JSON.parse(responseText)
-  } catch {
-    throw createSanitizedError(
-      `response is not valid JSON: ${responseText}`,
-      "Kling 3.0"
-    )
-  }
+    if (createData.code !== 200 && createData.code !== 0) {
+      throw createSanitizedError(
+        `createTask error (code ${createData.code}): ${createData.msg ?? JSON.stringify(createData)}`,
+        "Kling 3.0",
+        false,
+        false,
+        { upstreamStatus: createData.code },
+      )
+    }
 
-  if (createData.code !== 200 && createData.code !== 0) {
-    throw createSanitizedError(
-      `createTask error (code ${createData.code}): ${createData.msg ?? JSON.stringify(createData)}`,
-      "Kling 3.0",
-      false,
-      false,
-      { upstreamStatus: createData.code },
-    )
-  }
+    const taskId = createData.data?.taskId
+    if (!taskId) {
+      throw createSanitizedError(
+        `createTask response missing taskId: ${JSON.stringify(createData)}`,
+        "Kling 3.0"
+      )
+    }
 
-  const taskId = createData.data?.taskId
-  if (!taskId) {
-    throw createSanitizedError(
-      `createTask response missing taskId: ${JSON.stringify(createData)}`,
-      "Kling 3.0"
-    )
-  }
+    if (DEBUG) console.log(`[Kling3] Task created: ${taskId}`)
 
-  if (DEBUG) console.log(`[Kling3] Task created: ${taskId}`)
+    await fireOnTaskCreated(reconcileOpts, taskId, "[Kling3]")
 
-  await fireOnTaskCreated(reconcileOpts, taskId, "[Kling3]")
+    const videoUrl = await pollKling3Task(taskId, apiKey, params.onProgress)
 
-  const videoUrl = await pollKling3Task(taskId, apiKey, params.onProgress)
-
-  return { taskId, videoUrl }
+    return { taskId, videoUrl }
+  })
 }
 
 /**
@@ -393,9 +396,11 @@ export async function pollKling3Task(
         (data.errorMessage as string) ??
         "Unknown error"
       console.warn(`[Kling3] taskId=${taskId} failed: ${failMsg}`)
+      const failCode = data.failCode ?? data.fail_code
       throw createUpstreamFailureError(
         `Kling 3.0 generation failed: ${failMsg}`,
-        "Kling 3.0"
+        "Kling 3.0",
+        { taskCode: typeof failCode === "number" || typeof failCode === "string" ? failCode : undefined },
       )
     }
   }

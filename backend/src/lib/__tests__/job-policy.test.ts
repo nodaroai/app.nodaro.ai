@@ -304,6 +304,7 @@ describe("splitHeldCompletionFields", () => {
   it("HELD_COMMIT_REPLAY_KEYS names every settlement input approve replays", () => {
     expect([...HELD_COMMIT_REPLAY_KEYS]).toEqual([
       "metered", "extraNonProviderCredits", "meteredCost", "loopTrimAddonRefundCredits", "meteredBaseCredits",
+      "collectOverHold",
     ])
   })
 
@@ -320,6 +321,9 @@ describe("heldCommitArgs", () => {
   it("legacy shape: provider cost (or the caller's fallback), the add-on and the metered flag, verbatim", () => {
     expect(heldCommitArgs({ metered: true, extraNonProviderCredits: 3, meteredCost: 0.4 }, 0.9)).toEqual([0.4, 3, true])
     expect(heldCommitArgs({}, 0.9)).toEqual([0.9, undefined, undefined])
+    // A hold that may be collected above: the dispatcher's fifth argument, with no ceiling claimed.
+    expect(heldCommitArgs({ metered: true, meteredCost: 0.4, collectOverHold: true }, 0.9)).toEqual([0.4, undefined, true, undefined, true])
+    expect(heldCommitArgs({ metered: true, collectOverHold: false }, 0.9)).toEqual([0.9, undefined, true])
     // A recorded null cost is a real value ("unknown"), not an absence — the
     // fallback fills it, exactly as `??` did at both call sites before.
     expect(heldCommitArgs({ meteredCost: null }, 0.9)).toEqual([0.9, undefined, undefined])

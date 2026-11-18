@@ -10,8 +10,8 @@ export interface ProviderResult {
    *  provider returns a single result. */
   extraUrls?: readonly string[]
   cost: number | null // null if cost unknown
-  /** True only for GENUINELY metered providers (Replicate GPU-time: face-swap,
-   *  legacy lip-sync, whisper transcribe). When true, commit recomputes the
+  /** True only where the caller states the run is metered (the HeyGen
+   *  avatars, LatentSync). When true, commit recomputes the
    *  charge from `cost` and trues-up. When false/undefined (the default for all
    *  fixed/composite-priced providers), commit charges the RESERVED tier —
    *  markup is applied once at reserve over the base price. See the pricing-

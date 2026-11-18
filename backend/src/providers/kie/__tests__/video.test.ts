@@ -41,6 +41,9 @@ vi.mock("../kling3-client.js", () => ({
   kling3Generate: mocks.mockKling3Generate,
 }))
 
+const lumaMocks = vi.hoisted(() => ({ runLumaModifyTask: vi.fn() }))
+vi.mock("../luma-client.js", () => ({ runLumaModifyTask: lumaMocks.runLumaModifyTask }))
+
 vi.mock("../models.js", async () => {
   const actual = await vi.importActual<typeof import("../models.js")>("../models.js")
   return actual
@@ -100,6 +103,7 @@ vi.mock("sharp", () => {
 // ---------------------------------------------------------------------------
 
 import { KieVideoProvider } from "../video.js"
+import { KIE_CREDIT_USD, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_TO_VIDEO_MODELS } from "../models.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -821,5 +825,55 @@ describe("egress dimensions — kling-motion sites synthesize resolution from `m
       resolution: "1080p",
     })
     expect(dimsOfLastKieCall()).not.toHaveProperty("mode")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// What each Video to Video / Motion Transfer run records as its provider cost:
+// the task record's own `creditsConsumed` at the KIE credit rate, else the
+// catalog figure. Recorded only — none of these results is metered, so the
+// worker commits the reservation whatever the figure is.
+// ---------------------------------------------------------------------------
+
+describe("Video to Video and Motion Transfer record what KIE billed for the task", () => {
+  const record = (data: Record<string, unknown>) => ({ code: 200, message: "success", data })
+
+  type Lane = { name: string; listed: () => number; run: () => Promise<Record<string, unknown>>; luma?: true }
+  const lanes: Lane[] = [
+    { name: "wan (v2v)", listed: () => KIE_VIDEO_TO_VIDEO_MODELS.wan!.cost, run: () => provider.videoToVideo("https://x/v.mp4", "p", "wan", {}) as never },
+    { name: "wan-flash (v2v)", listed: () => KIE_VIDEO_TO_VIDEO_MODELS["wan-flash"]!.cost, run: () => provider.videoToVideo("https://x/v.mp4", "p", "wan-flash", {}) as never },
+    { name: "wan-videoedit", listed: () => KIE_VIDEO_TO_VIDEO_MODELS["wan-videoedit"]!.cost, run: () => provider.videoToVideo("https://x/v.mp4", "p", "wan-videoedit", {}) as never },
+    { name: "happyhorse-edit", listed: () => KIE_VIDEO_TO_VIDEO_MODELS["happyhorse-edit"]!.cost, run: () => provider.videoToVideo("https://x/v.mp4", "p", "happyhorse-edit", {}) as never },
+    { name: "luma-modify", listed: () => KIE_VIDEO_TO_VIDEO_MODELS["luma-modify"]!.cost, run: () => provider.videoToVideo("https://x/v.mp4", "p", "luma-modify", {}) as never, luma: true },
+    { name: "kling (2.6 motion)", listed: () => KIE_MOTION_TRANSFER_MODELS.kling!.cost, run: () => provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", { provider: "kling" }) as never },
+    { name: "kling-3.0 (motion)", listed: () => KIE_MOTION_TRANSFER_MODELS["kling-3.0"]!.cost, run: () => provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", { provider: "kling-3.0" }) as never },
+    { name: "wan-animate-move", listed: () => KIE_MOTION_TRANSFER_MODELS["wan-animate-move"]!.cost, run: () => provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", { provider: "wan-animate-move" }) as never },
+    { name: "wan-animate-replace", listed: () => KIE_MOTION_TRANSFER_MODELS["wan-animate-replace"]!.cost, run: () => provider.motionTransfer("https://img.png", "https://x/v.mp4", "dance", { provider: "wan-animate-replace" }) as never },
+  ]
+
+  function finishWith(lane: Lane, rawRecordInfo: Record<string, unknown> | undefined) {
+    const done = { resultJson: { resultUrls: ["https://cdn.kie.ai/out.mp4"] }, ...(rawRecordInfo ? { rawRecordInfo } : {}) }
+    if (lane.luma) lumaMocks.runLumaModifyTask.mockResolvedValueOnce(done)
+    else mocks.mockRunKieTask.mockResolvedValueOnce(done)
+  }
+
+  it.each(lanes)("$name: the record's creditsConsumed × the KIE credit rate", async (lane) => {
+    finishWith(lane, record({ creditsConsumed: 123.5, costTime: 40 }))
+    const result = await lane.run()
+    expect(result.cost).toBeCloseTo(123.5 * KIE_CREDIT_USD, 10)
+    // Recorded only: nothing here makes the commit metered.
+    expect(result).not.toHaveProperty("meteredCost")
+    expect(result).not.toHaveProperty("collectOverHold")
+    expect(result).not.toHaveProperty("meteredBaseCredits")
+  })
+
+  it.each(lanes)("$name: the catalog figure when the record carries no credits", async (lane) => {
+    finishWith(lane, record({ costTime: 40 }))
+    expect((await lane.run()).cost).toBe(lane.listed())
+  })
+
+  it.each(lanes)("$name: the catalog figure when there is no record at all", async (lane) => {
+    finishWith(lane, undefined)
+    expect((await lane.run()).cost).toBe(lane.listed())
   })
 })

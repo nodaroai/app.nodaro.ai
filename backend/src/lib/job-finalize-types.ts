@@ -24,6 +24,10 @@ export interface ProviderFinalizeResult {
   /** See ProviderResult.meteredCost — true only for genuine GPU-time providers
    *  (commit trues-up from cost); fixed/composite providers commit reserved. */
   meteredCost?: boolean
+  /** With `meteredCost`: the reservation was a hold sized for a usual run, so a
+   *  cost above it is collected from the payer instead of being dropped
+   *  (`HeldCommitReplay.collectOverHold`). */
+  collectOverHold?: boolean
   displayCost?: number | null
   providerUsed?: string | null
   kieTaskId?: string

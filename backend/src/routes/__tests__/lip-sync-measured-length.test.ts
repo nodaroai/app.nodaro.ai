@@ -141,7 +141,7 @@ describe("POST /v1/lip-sync — every model priced by its audio's length holds t
 
   it("covers the per-second-rate model and every bucketed one", () => {
     expect(LENGTH_PRICED).toEqual([
-      "kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "omnihuman-2-0",
+      "kling-avatar", "kling-avatar-pro", "omnihuman-1-5", "omnihuman-2-0", "latentsync",
       "heygen-lipsync-precision", "lipsync-2-pro", "sync-lipsync-v3", "volcengine-lipsync",
     ])
   })
@@ -225,7 +225,7 @@ describe("POST /v1/lip-sync — every model priced by its audio's length holds t
   })
 
   it("a model whose price reads no length is never measured: its job is what it was", async () => {
-    for (const provider of ["infinitalk", "seedance-2", "minimax-h3", "latentsync"]) {
+    for (const provider of ["infinitalk", "seedance-2", "minimax-h3"]) {
       state.guardCalls = []
       vi.mocked(videoQueue.add).mockClear()
       const res = await app.inject({ method: "POST", url: "/v1/lip-sync", payload: body(provider, { audioDurationSec: 12 }) })

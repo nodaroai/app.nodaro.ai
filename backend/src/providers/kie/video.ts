@@ -27,7 +27,7 @@ import { getLipSyncMaxAudioSeconds } from "@nodaro/shared/credits"
 import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
 import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider } from "@nodaro/shared/models"
-import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, isGeminiOmni12ProviderTimeout, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
+import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
   runKieTask,
@@ -58,6 +58,7 @@ import {
   kieModelAcceptsResolution,
   type KieModelConfig,
 } from "./models.js"
+import { kieBilledCostUsd } from "./billed-cost.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
@@ -1589,10 +1590,6 @@ async function runGeminiOmni12(
       await forgetOmniCharacters(characterRefs.filter((_, i) => characters!.fromCache[i]), modelKey)
       characters = await resolveOmniCharacterIds(characterRefs, characterMeta)
       run = await submit(buildRequest(characters.ids).input)
-    } else if (isGeminiOmni12ProviderTimeout(err)) {
-      // KIE gave up on its own side (nothing charged): the same request, once more.
-      console.warn(`[KIE.ai] ${logLabel}: the provider timed out on its side; resubmitting once`)
-      run = await submit(input)
     } else {
       throw err
     }
@@ -3285,7 +3282,7 @@ export class KieVideoProvider
 
     // Luma Modify uses a special API endpoint
     if (provider === "luma-modify") {
-      const { resultJson } = await runLumaModifyTask({
+      const { resultJson, rawRecordInfo } = await runLumaModifyTask({
         prompt: finalPrompt,
         videoUrl,
       }, { ...reconcileOpts, modelKey: provider })
@@ -3296,10 +3293,11 @@ export class KieVideoProvider
           "Video generation"
         )
       }
+      const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
       console.log(
-        `[KIE.ai] Luma Modify completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+        `[KIE.ai] Luma Modify completed: ${outputUrl} (cost: $${cost.toFixed(4)})`
       )
-      return { url: outputUrl, cost: modelConfig.cost }
+      return { url: outputUrl, cost }
     }
 
     // HappyHorse Video Edit takes ONE video as a string `video_url` ("URL of the
@@ -3320,7 +3318,7 @@ export class KieVideoProvider
         input.resolution = options.resolution
       }
       console.log(`[KIE.ai] HappyHorse Edit input:`, JSON.stringify(input, null, 2))
-      const { resultJson, providerMs } = await runKieTask(
+      const { resultJson, providerMs, rawRecordInfo } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
@@ -3331,8 +3329,9 @@ export class KieVideoProvider
       if (!outputUrl) {
         throw createSanitizedError("HappyHorse Edit task succeeded but no URL found", "Video generation")
       }
-      console.log(`[KIE.ai] HappyHorse Edit completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
-      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+      const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
+      console.log(`[KIE.ai] HappyHorse Edit completed: ${outputUrl} (cost: $${cost.toFixed(4)})`)
+      return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
     // Wan 2.7 VideoEdit — single video_url string, optional reference_image
@@ -3354,7 +3353,7 @@ export class KieVideoProvider
       if (options?.referenceImageUrl) input.reference_image = options.referenceImageUrl
 
       console.log(`[KIE.ai] Wan VideoEdit input:`, JSON.stringify(input, null, 2))
-      const { resultJson, providerMs } = await runKieTask(
+      const { resultJson, providerMs, rawRecordInfo } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
@@ -3368,10 +3367,11 @@ export class KieVideoProvider
           "Video generation"
         )
       }
+      const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
       console.log(
-        `[KIE.ai] Wan VideoEdit completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+        `[KIE.ai] Wan VideoEdit completed: ${outputUrl} (cost: $${cost.toFixed(4)})`
       )
-      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+      return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
     // Standard createTask endpoint for Wan V2V providers (Wan 2.6, Wan Flash)
@@ -3403,7 +3403,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, providerMs } = await runKieTask(
+    const { resultJson, providerMs, rawRecordInfo } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -3420,11 +3420,12 @@ export class KieVideoProvider
       )
     }
 
+    const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
     console.log(
-      `[KIE.ai] V2V completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] V2V completed: ${outputUrl} (cost: $${cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async motionTransfer(
@@ -3528,7 +3529,7 @@ export class KieVideoProvider
       // `{ resolution: mode }` at the call site (mirrors runKling3), so the tier
       // reaches the egress decorator; the body's `video_urls` still surfaces
       // videoInput generically.
-      const { resultJson, providerMs } = await runKieTask(
+      const { resultJson, providerMs, rawRecordInfo } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
@@ -3545,11 +3546,12 @@ export class KieVideoProvider
         )
       }
 
+      const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
       console.log(
-        `[KIE.ai] Kling 3.0 Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+        `[KIE.ai] Kling 3.0 Motion transfer completed: ${outputUrl} (cost: $${cost.toFixed(4)})`
       )
 
-      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+      return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
     // Wan 2.2 Animate (Move/Replace) — standard createTask
@@ -3576,7 +3578,7 @@ export class KieVideoProvider
         JSON.stringify(input, null, 2)
       )
 
-      const { resultJson, providerMs } = await runKieTask(
+      const { resultJson, providerMs, rawRecordInfo } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
@@ -3593,11 +3595,12 @@ export class KieVideoProvider
         )
       }
 
+      const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
       console.log(
-        `[KIE.ai] Wan Animate completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+        `[KIE.ai] Wan Animate completed: ${outputUrl} (cost: $${cost.toFixed(4)})`
       )
 
-      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+      return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
     // Kling 2.6 Motion Control — original behavior
@@ -3629,7 +3632,7 @@ export class KieVideoProvider
     // lever), NOT the generic `mode` the helper ignores. Synthesize
     // `{ resolution }` at the call site (mirrors runKling3) so the tier reaches
     // the decorator; `video_urls` still surfaces videoInput generically.
-    const { resultJson, providerMs } = await runKieTask(
+    const { resultJson, providerMs, rawRecordInfo } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -3646,11 +3649,12 @@ export class KieVideoProvider
       )
     }
 
+    const cost = kieBilledCostUsd(rawRecordInfo, modelConfig.cost)
     console.log(
-      `[KIE.ai] Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Motion transfer completed: ${outputUrl} (cost: $${cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async lipSync(

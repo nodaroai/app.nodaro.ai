@@ -3,6 +3,7 @@ import { Loader2, Settings, Server, Percent, Check, AlertCircle, Film, Plus, Tra
 import { useAdminSettings } from "@/ee/hooks/queries/use-admin-queries"
 import { ImportShareCard } from "./import-share-card"
 import { ImportSourcesCard } from "./import-sources-card"
+import { CostShortfallAutoPauseCard } from "./cost-shortfall-auto-pause-card"
 import { useUpdateSettingMutation, type AppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { isFeatureEnabled, isCloud } from "@/lib/edition"
 import { Button } from "@/components/ui/button"
@@ -449,6 +450,8 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         )}
+
+        <CostShortfallAutoPauseCard />
 
         {/* Workflow Copilot — runtime pause. Its own card because it is not a
             display preference; it is the switch that stops an assistant that

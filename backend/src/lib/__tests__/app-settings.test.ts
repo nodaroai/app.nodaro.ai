@@ -91,6 +91,19 @@ describe("getAppSettings", () => {
     expect(settings.model_maker_logos).toEqual([])
   })
 
+  it("reads cost_shortfall_auto_pause_enabled: on with no row, off only for a stored false", async () => {
+    mockSelect.mockResolvedValueOnce({ data: [], error: null })
+    expect((await getAppSettings()).cost_shortfall_auto_pause_enabled).toBe(true)
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "cost_shortfall_auto_pause_enabled", value: false }], error: null })
+    expect((await getAppSettings()).cost_shortfall_auto_pause_enabled).toBe(false)
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "cost_shortfall_auto_pause_enabled", value: "off" }], error: null })
+    expect((await getAppSettings()).cost_shortfall_auto_pause_enabled).toBe(true)
+  })
+
   it("reads model_maker_logos — the known maker ids, once each — and defaults to none", async () => {
     mockSelect.mockResolvedValueOnce({
       data: [{ key: "model_maker_logos", value: ["google", "acme", "google", "openai", 7] }],

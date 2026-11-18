@@ -119,7 +119,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 <!-- AUTO-GEN:START model-table-video -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
-| LatentSync | LatentSync | Everyday | 8<!-- credits: latentsync --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input. |
 | Nodaro Video Upscale | Nodaro Upscale | — | 17<!-- credits: nodaro-video-upscale:1080p:per-4s --> | video-upscale | Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p. Offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. |
 | VEO 1080p Upscale | Google | Everyday | 22<!-- credits: veo-1080p --> | video-upscale | Upscale VEO output to 1080p. |
 | Runway (via KIE) | Runway | Everyday | 33<!-- credits: runway-kie --> | i2v, t2v | Runway Gen-3 routed through KIE. 5/10s at 720p/1080p. |
@@ -132,6 +131,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Hailuo 2.3 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-2.3 --> | i2v | Cheaper Hailuo 2.3 tier — good baseline quality. |
 | VEO 3.1 Lite | Google | Everyday | 83<!-- credits: veo3_lite --> | i2v, t2v | VEO 3.1 Lite — most cost-effective VEO tier for high-volume generation. 4/6/8s with audio, supports first+last frame. |
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 99<!-- credits: bytedance-pro-fast --> | i2v | Faster Bytedance Pro variant. |
+| LatentSync | LatentSync | Everyday | 110<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 110<!-- credits: wan-turbo --> | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Wan Flash V2V | Alibaba | Everyday | 110<!-- credits: wan-flash --> | v2v | Faster Wan V2V variant. |
 | PixVerse V6 Extend | PixVerse | Everyday | 132<!-- credits: pixverse-v6-extend:5s:720p:audio --> | extend | Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip. |

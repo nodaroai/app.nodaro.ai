@@ -1,5 +1,22 @@
 # @nodaro/sdk
 
+## 2.76.0
+
+### Minor Changes
+
+- 42d0e86: `uploads.uploadLarge(file, { filename, onProgress, signal, concurrency })` uploads a file of any size, choosing the lane by size. A file of `UPLOAD_MAX_BYTES` (500 MB, `POST /v1/upload`'s limit, now exported) or less goes through `uploads.upload` exactly as today. Only a bigger video or audio file goes straight to the platform's storage in parts (`POST /v1/uploads/large/start`, one `PUT` per part, `POST /v1/uploads/large/complete`). That large lane is limited by length instead of size: a file longer than 30 minutes rejects with the new `MediaTooLongError` (HTTP 422 `media_too_long`). Parts go three at a time by default, a failed part is tried twice more, and a failure or cancel aborts the upload. A file over 500 MB on a server without the lane (409 `large_upload_unavailable`, or 404 on an older server) throws the new `LargeUploadUnavailableError`.
+- 5471b09: `TrendDetailSlot.defaultImages`: an optional slot's original look, 1–3 https pictures of that role as it is in the trend's original, when the trend has them (absent on a required slot and on a trend that hides its original). `client.trends.get()` returns it, so an app can show it on an empty slot.
+- 7430094: `client.videoRemake` (also `@nodaro/sdk/video-remake`) is Video Remake, formerly Nodaro Motion, calling `/v1/video-remake`: `run`, `estimate`, `styleChoice`, `fullQualityEstimate` and `fullQuality`, with its types named `VideoRemake*`. Its engines are `VideoRemakeEngine`: `"nodaro-prism"` (Nodaro Prism) and `"nodaro-pulse"` (Nodaro Pulse); `estimate()` answers the engine by its current id whichever id the server named, and a request still takes every earlier id (`VideoRemakeEngineLegacyId`, deprecated). `client.castSwap`, `CastSwapResource` and every `CastSwap*` type stay as deprecated aliases of the same resource and types.
+
+### Patch Changes
+
+- Updated dependencies [a3cfe3e]
+- Updated dependencies [d8be278]
+- Updated dependencies [eab674d]
+- Updated dependencies [1a93a78]
+- Updated dependencies [7430094]
+  - @nodaro/shared@3.70.0
+
 ## 2.75.0
 
 ### Minor Changes

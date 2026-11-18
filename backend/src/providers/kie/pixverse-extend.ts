@@ -26,7 +26,7 @@
  */
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ProgressCallback, ReconcileOpts } from "../provider.interface.js"
-import { MAX_POLL_ATTEMPTS_VIDEO, createKieTask, createSanitizedError, pollKieTask } from "./client.js"
+import { MAX_POLL_ATTEMPTS_VIDEO, createKieTask, createSanitizedError, pollKieTask, retryOnProviderTaskTimeout } from "./client.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { PIXVERSE_V6_EXTEND_MODEL_KEY, PIXVERSE_V6_EXTEND_WIRE_MODEL } from "./models.js"
 import { pixverseV6MaxSeed } from "./pixverse-v6-max.js"
@@ -91,10 +91,12 @@ export async function runPixverseExtend(
   // The wire names quality `quality`, a key the shared reader leaves alone, so
   // the resolution dimension is named here.
   const dimensions = { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input), resolution: args.quality }
-  const { taskId } = await createKieTask(PIXVERSE_V6_EXTEND_WIRE_MODEL, input, { modelKey: PIXVERSE_V6_EXTEND_MODEL_KEY, dimensions })
-  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai PixVerse extend]")
-  const { resultJson, providerMs } = await pollKieTask(taskId, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
-  const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
-  if (!url) throw createSanitizedError("PixVerse extend task succeeded but no URL found", "Video extension")
-  return { url, kieTaskId: taskId, ...(providerMs !== undefined ? { providerMs } : {}) }
+  return retryOnProviderTaskTimeout("PixVerse extend", async () => {
+    const { taskId } = await createKieTask(PIXVERSE_V6_EXTEND_WIRE_MODEL, input, { modelKey: PIXVERSE_V6_EXTEND_MODEL_KEY, dimensions })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai PixVerse extend]")
+    const { resultJson, providerMs } = await pollKieTask(taskId, MAX_POLL_ATTEMPTS_VIDEO, onProgress)
+    const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!url) throw createSanitizedError("PixVerse extend task succeeded but no URL found", "Video extension")
+    return { url, kieTaskId: taskId, ...(providerMs !== undefined ? { providerMs } : {}) }
+  })
 }
