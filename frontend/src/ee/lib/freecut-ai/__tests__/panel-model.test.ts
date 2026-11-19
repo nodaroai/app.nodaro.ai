@@ -69,7 +69,7 @@ describe("the status line", () => {
 })
 
 describe("what a request is charged", () => {
-  const prices = { read: 1, listen: 22, choose: 2, steps: { music: 33, broll: 30, mistakes: 6, phone: 12, layout: 12, clips: 40, chapters: 15, trailer: 25, picture: 120, cameras: 18 } }
+  const prices = { read: 1, listen: 22, choose: 2, pack: 88, steps: { music: 33, broll: 30, mistakes: 6, phone: 12, layout: 12, clips: 40, picture: 120, cameras: 18 } }
 
   it("editing on the timeline is free: cutting pauses and laying captions pay only the listening", () => {
     expect(costOf(["pauses", "captions"], { heard: false, read: false, prices })).toEqual({ total: 22, parts: [{ key: "freecutAi.cost.listen", credits: 22 }] })
@@ -95,8 +95,15 @@ describe("what a request is charged", () => {
 
   it("every paid step has its own line", () => {
     const cost = costOf([...PAID_STEPS], { heard: true, read: false, prices })
-    expect(cost.parts.map((p) => p.key)).toEqual(["freecutAi.cost.choose", ...PAID_STEPS.map((s) => `freecutAi.cost.${s}`)])
-    expect(cost.total).toBe(2 + 33 + 30 + 6 + 12 + 12 + 40 + 15 + 25 + 120 + 18)
+    expect(cost.parts.map((p) => p.key)).toEqual(["freecutAi.cost.choose", "freecutAi.cost.pack", ...PAID_STEPS.map((s) => `freecutAi.cost.${s}`)])
+    expect(cost.total).toBe(2 + 88 + 33 + 30 + 6 + 12 + 12 + 40 + 120 + 18)
+  })
+
+  it("the podcast pack is paid once for clips, a trailer and chapters together", () => {
+    const cost = costOf(["clips", "trailer", "chapters"], { heard: true, read: false, prices })
+    expect(cost.parts.map((p) => p.key)).toEqual(["freecutAi.cost.pack", "freecutAi.cost.clips"])
+    expect(cost.total).toBe(88 + 40)
+    expect(costOf(["chapters"], { heard: true, read: false, prices }).total).toBe(88)
   })
 
   it("has no figure while a price it needs is unknown", () => {

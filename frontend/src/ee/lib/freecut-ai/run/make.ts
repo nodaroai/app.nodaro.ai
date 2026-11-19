@@ -1,41 +1,21 @@
 /**
  * Made from the video: short vertical clips and a trailer, each in its own tab
- * of the editor, and a chapter list marked on the ruler. The platform's edit
- * plan picks the moments from what was said (planned as soon as the video is
- * heard); the clips and the trailer are then cut in the editor from the video
- * itself, never rendered on a server. Inside each clip the pauses are cut, the
- * crop follows the face and captions are laid, the way the main edit was.
- * What is made is kept when the edit is undone.
- *
- * Each is priced like the canvas's own node: its planning plus the node's
- * fixed fee per run, charged once the result is made.
+ * of the editor, and a chapter list marked on the ruler. The platform's podcast
+ * tools pick the moments, all started as one podcast pack (run/pack.ts: one
+ * price for the video's length, every tool included); the clips and the
+ * trailer are then cut in the editor from the video itself. Inside each clip
+ * the pauses are cut, the crop follows the face and captions are laid, the way
+ * the main edit was. What is made is kept when the edit is undone.
  */
-import { chargeUseCaseFee, editPlan } from "@/lib/api"
-import { unwrapEditPlanOutput } from "@nodaro/shared/edl"
-import { USE_CASE_NODE_TYPES, usecaseDescriptor, type UseCaseNodeType, type UseCaseResultKind } from "@nodaro/render-rules"
-import { isEditPlanModeSupported } from "@/lib/edit-plan-modes"
 import { coverTransform, pathAt, type PhoneFraming } from "../crop-path"
 import { captionCues, isFillerWord, keptRanges, pauseRanges, readTimelineView, timelineFrameOf, wordsIn, type EditStep, type SecondsRange } from "../edit-plan"
 import { CAPTION_HIGHLIGHT, highlightWords } from "./captions"
 import type { RunContext } from "./context"
-import type { CreativeChoices } from "./creative"
 import { JobFailed, pause } from "./jobs"
 import { RunFailed, type HeardVideo, type MadeResult } from "./types"
 
-const PLAN_TIMEOUT_MS = 8 * 60_000
-const TRAILER_SECONDS = 30
 /** The chapter marks' color on the ruler (the Assistant's own). */
 const CHAPTER_COLOR = "#f08c3a"
-
-/** What each made thing is, in the use-case nodes' own terms: the node that makes the same result. */
-const MADE_RESULT = { clips: "clips", trailer: "formats", chapters: "chapters" } as const satisfies Record<"clips" | "trailer" | "chapters", UseCaseResultKind>
-
-/** The use-case node a made thing is priced like (its fixed fee per run): the node whose result it is. */
-export function makeFeeType(made: keyof typeof MADE_RESULT): UseCaseNodeType {
-  const type = USE_CASE_NODE_TYPES.find((t) => usecaseDescriptor(t).resultKind === MADE_RESULT[made])
-  if (!type) throw new Error(`no use-case node makes ${MADE_RESULT[made]}`)
-  return type
-}
 
 interface EdlLike {
   readonly segments?: ReadonlyArray<{ readonly inMs: number; readonly outMs: number }>
@@ -44,39 +24,6 @@ interface EdlLike {
 
 const rangesOf = (edl: EdlLike | null | undefined): SecondsRange[] =>
   (edl?.segments ?? []).filter((s) => s.outMs > s.inMs).map((s) => ({ start: s.inMs / 1000, end: s.outMs / 1000 }))
-
-/** A plan of the platform's edit planner, started now; its answer is read when its turn comes. */
-export function startPlan(ctx: RunContext, heard: HeardVideo, videoUrl: string, mode: "clips" | "trailer" | "chapters", extra: { count?: number; targetDurationSec?: number } = {}): Promise<unknown> {
-  return ctx.jobs
-    .run(
-      () =>
-        editPlan({
-          mode,
-          planTier: "economy",
-          transcript: heard.transcript,
-          sources: [{ id: "video", url: videoUrl, kind: "video" }],
-          ...extra,
-          userId: ctx.userId,
-        }),
-      PLAN_TIMEOUT_MS,
-    )
-    .then((output) => unwrapEditPlanOutput(output))
-}
-
-/** Whether this server's planner can plan a trailer; otherwise the creative pass picks its moments. */
-export const plansTrailer = () => isEditPlanModeSupported("trailer")
-
-/** The fee, charged once the result is made; a failure is said on the card, never swallowed. */
-async function chargeFee(ctx: RunContext, step: EditStep, type: string): Promise<string | undefined> {
-  try {
-    await chargeUseCaseFee({ type })
-    return undefined
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    ctx.feed("lead", "freecutAi.feeFailed", { reason })
-    return reason
-  }
-}
 
 /** The moments, marked on the edit while they are picked. */
 async function markMoments(ctx: RunContext, ranges: readonly SecondsRange[]) {
@@ -157,7 +104,6 @@ async function makeSequence(ctx: RunContext, step: EditStep, name: string, range
 
 export interface MadeOutcome {
   readonly made: readonly MadeResult[]
-  readonly feeFailed?: string
 }
 
 export async function buildClips(ctx: RunContext, planned: Promise<unknown>, heard: HeardVideo, count: number, framing: PhoneFraming | null, name: (n: number) => string): Promise<MadeOutcome> {
@@ -178,25 +124,23 @@ export async function buildClips(ctx: RunContext, planned: Promise<unknown>, hea
     ctx.emit({ type: "made", result })
     ctx.step("clips", "working", "freecutAi.makingClips", { done: made.length, total: count }, 0.3 + (0.7 * made.length) / count)
   }
-  const feeFailed = made.length > 0 ? await chargeFee(ctx, "clips", makeFeeType("clips")) : undefined
   ctx.working("lead", false)
-  return { made, feeFailed }
+  return { made }
 }
 
-export async function buildTrailer(ctx: RunContext, planned: Promise<unknown> | null, creative: CreativeChoices | null, heard: HeardVideo, name: string): Promise<MadeOutcome> {
+export async function buildTrailer(ctx: RunContext, planned: Promise<unknown>, heard: HeardVideo, name: string): Promise<MadeOutcome> {
   ctx.working("lead", true)
   ctx.step("trailer", "working", "freecutAi.picking", undefined, 0.1)
-  const ranges = planned ? rangesOf((await planned) as EdlLike | null) : (creative?.trailer ?? [])
+  const ranges = rangesOf((await planned) as EdlLike | null)
   if (ranges.length === 0) throw new JobFailed("no trailer")
   await markMoments(ctx, ranges)
   const sequence = await makeSequence(ctx, "trailer", name, ranges, null, heard)
   clearMoments(ctx)
   ctx.working("lead", false)
   if (!sequence) return { made: [] }
-  const feeFailed = await chargeFee(ctx, "trailer", makeFeeType("trailer"))
   const result: MadeResult = { id: `trailer-${sequence.sequenceId}`, kind: "trailer", key: "freecutAi.made.trailer", sequenceId: sequence.sequenceId, seconds: sequence.seconds }
   ctx.emit({ type: "made", result })
-  return { made: [result], feeFailed }
+  return { made: [result] }
 }
 
 export async function buildChapters(ctx: RunContext, planned: Promise<unknown>): Promise<MadeOutcome> {
@@ -225,7 +169,6 @@ export async function buildChapters(ctx: RunContext, planned: Promise<unknown>):
   ])
   ctx.working("lead", false)
   if (!applied.ok) return { made: [] }
-  const feeFailed = await chargeFee(ctx, "chapters", makeFeeType("chapters"))
   const result: MadeResult = {
     id: `chapters-${Date.now().toString(36)}`,
     kind: "chapters",
@@ -234,7 +177,5 @@ export async function buildChapters(ctx: RunContext, planned: Promise<unknown>):
     chapters: marks.map((m) => ({ seconds: m.frame / ctx.fps, title: m.title })),
   }
   ctx.emit({ type: "made", result })
-  return { made: [result], feeFailed }
+  return { made: [result] }
 }
-
-export { TRAILER_SECONDS }

@@ -4,7 +4,7 @@
  * server's price list, never written down here: the planning calls on their
  * model and effort, the transcription engine, the music, the image model the
  * b-roll is made with, the video editing model, face tracking, camera
- * switching, the edit plans, and the canvas nodes' fixed fees for what is made.
+ * switching, the edit plan, and the podcast pack that plans what is made.
  */
 import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
 import { sunoCreditType } from "@nodaro/shared/credits"
@@ -13,14 +13,14 @@ import { SPEAKER_FRAMES_CREDIT_ID } from "@nodaro/render-rules"
 import { useLlmPrice } from "@/hooks/use-llm-price"
 import { useModelCreditCost } from "@/hooks/use-model-credit-cost"
 import { useUnitQuote } from "@/hooks/use-unit-quote-credits"
-import { editPlanPerMinuteReported, isEditPlanModeSupported, useEditPlanModes } from "@/lib/edit-plan-modes"
+import { editPlanPerMinuteReported, useEditPlanModes } from "@/lib/edit-plan-modes"
 import type { EditPrices } from "@/ee/lib/freecut-ai/panel-model"
 import { PLANNER_EFFORT, PLANNER_MODEL } from "@/ee/lib/freecut-ai/planner-prompt"
 import { LISTEN_PROVIDER } from "@/ee/lib/freecut-ai/run/listen"
 import { CREATIVE_EFFORT, CREATIVE_MODEL } from "@/ee/lib/freecut-ai/run/creative"
 import { BROLL_IMAGE_MODEL, brollShots } from "@/ee/lib/freecut-ai/run/broll"
 import { PICTURE_MAX_SECONDS, PICTURE_MODEL } from "@/ee/lib/freecut-ai/run/picture"
-import { makeFeeType } from "@/ee/lib/freecut-ai/run/make"
+import { PACK_RATE_ID, packUnits } from "@/ee/lib/freecut-ai/run/pack"
 
 const MUSIC_CREDIT_ID = sunoCreditType(DEFAULT_SUNO_MODEL, "suno-generate")
 const CAMERA_SWITCH_ID = "camera-switch"
@@ -46,14 +46,9 @@ export function useEditPrices(seconds: number | undefined): EditPrices & { reado
   const trim = useUnitQuote(TRIM_ID, Math.ceil(PICTURE_MAX_SECONDS / TRIM_UNIT_SECONDS))
   const cameras = num(useModelCreditCost(CAMERA_SWITCH_ID).data)
   const length = seconds && seconds > 0 ? seconds : undefined
-  const planId = (mode: "tighten" | "clips" | "trailer" | "chapters") => (length ? editPlanReserveCreditId(mode, "economy", length, perMinute) : "")
-  const mistakes = num(useModelCreditCost(planId("tighten")).data)
-  const clipsPlan = num(useModelCreditCost(planId("clips")).data)
-  const trailerPlan = num(useModelCreditCost(planId("trailer")).data)
-  const chaptersPlan = num(useModelCreditCost(planId("chapters")).data)
-  const clipsFee = num(useModelCreditCost(`use-case-fee:${makeFeeType("clips")}`).data)
-  const trailerFee = num(useModelCreditCost(`use-case-fee:${makeFeeType("trailer")}`).data)
-  const chaptersFee = num(useModelCreditCost(`use-case-fee:${makeFeeType("chapters")}`).data)
+  const mistakes = num(useModelCreditCost(length ? editPlanReserveCreditId("tighten", "economy", length, perMinute) : "").data)
+  // Clips, the trailer and the chapters: one podcast pack for the video's length, whichever are asked.
+  const pack = useUnitQuote(length ? PACK_RATE_ID : undefined, length ? packUnits(length) : 1)
   const blocks = length ? Math.max(1, Math.ceil((length * SAMPLES_PER_SECOND) / FRAMES_PER_BLOCK)) : 1
   // The whole run's price, as the server charges it: the blocks at the per-block rate, rounded up once.
   const tracking = useUnitQuote(length ? SPEAKER_FRAMES_CREDIT_ID : undefined, blocks)
@@ -62,6 +57,7 @@ export function useEditPrices(seconds: number | undefined): EditPrices & { reado
     readEstimate: read.estimate || choose.estimate,
     listen,
     choose: choose.credits,
+    pack: length ? pack : undefined,
     brollPicture: image,
     steps: {
       mistakes: length ? mistakes : undefined,
@@ -71,11 +67,8 @@ export function useEditPrices(seconds: number | undefined): EditPrices & { reado
       phone: tracking,
       layout: tracking,
       cameras,
-      // Vertical clips are framed on the face: tracking is part of their price.
-      clips: length ? sum(clipsPlan, clipsFee, tracking) : undefined,
-      // A server that cannot plan a trailer picks its moments in the creative pass.
-      trailer: length ? (isEditPlanModeSupported("trailer") ? sum(trailerPlan, trailerFee) : sum(choose.credits, trailerFee)) : undefined,
-      chapters: length ? sum(chaptersPlan, chaptersFee) : undefined,
+      // Vertical clips are framed on the face in the editor: their face tracking, beside the pack.
+      clips: length ? tracking : undefined,
     },
   }
 }

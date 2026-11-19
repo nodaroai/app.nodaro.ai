@@ -7506,12 +7506,24 @@ export async function llmStructuredApi<T = unknown>(params: {
   return apiJson("/v1/llm/structured", { body, workflowId: true, label: "apiErr.structuredLlm", signal: params.signal })
 }
 
+/** One tool a podcast pack started: its own run, followed by its own job. */
+export interface PodcastPackToolRun {
+  readonly tool: string
+  readonly jobId: string
+  readonly executionId: string | null
+}
+
 /**
- * A use-case node's fixed fee per run (`POST /v1/use-case-fee`), for a result
- * this client planned and built itself (Edit with AI's clips, trailer, chapters).
+ * A podcast pack (`POST /v1/podcast-pack`): several podcast tools on one
+ * recording, for one price by its length, each tool with its own settings
+ * (`{}` for its defaults). Answers the pack's job and each tool's run.
  */
-export async function chargeUseCaseFee(params: { type: string }): Promise<{ jobId: string }> {
-  return apiJson("/v1/use-case-fee", { body: { type: params.type }, workflowId: true, label: "apiErr.useCaseFee" })
+export async function podcastPack(params: { mediaUrls: string[]; tools: Record<string, Record<string, unknown>> }): Promise<{
+  jobId: string
+  tools?: PodcastPackToolRun[]
+  notStarted?: Array<{ tool: string; error: { code: string; message: string } }>
+}> {
+  return apiJson("/v1/podcast-pack", { body: { mediaUrls: params.mediaUrls, tools: params.tools }, workflowId: true, label: "apiErr.podcastPack" })
 }
 
 export async function generateAIWriterStream(params: {
