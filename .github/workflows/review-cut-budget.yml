@@ -37,7 +37,9 @@ env:
 jobs:
   cut-budget:
     name: Review cut budget (Chromium)
-    runs-on: ubuntu-latest
+    # A named image, not ubuntu-latest: Playwright installs system packages per
+    # OS release and refuses one it does not know yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
