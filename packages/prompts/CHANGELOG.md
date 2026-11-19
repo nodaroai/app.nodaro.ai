@@ -1,5 +1,21 @@
 # @nodaro/prompts
 
+## 1.59.1
+
+### Patch Changes
+
+- e42ff95: Wan 2.6 video-to-video (`wan`, `wan-flash`) is described as what it does: it makes a new clip featuring the subject of the input video, in the scene the prompt describes, and does not edit or restyle the clip. The two catalog descriptions, the prompt wizard's capability line for `wan` and the Wan prompt doctrine say so; `wan`'s `useCases` lists `reference` in place of `restyle`. Wording only: no model, default or parameter changes.
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [e1e0748]
+- Updated dependencies [21718eb]
+- Updated dependencies [f9f120e]
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [9574d1f]
+- Updated dependencies [6b43b7b]
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [e42ff95]
+  - @nodaro/shared@3.71.0
+
 ## 1.59.0
 
 ### Minor Changes
