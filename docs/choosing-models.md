@@ -16,7 +16,7 @@ Every table on this page is **generated from Nodaro's model catalog** — it nev
 - A **Premium image still costs far less than a Premium video** — don't compare tiers across modalities. Use the credit number for that.
 - **⭐ marks the best-in-tier pick** for that family — a safe default when you're unsure.
 
-**Mode codes** in the tables: `t2i` text→image · `i2i` image→image · `edit` targeted edit · `upscale` / `remove-bg` · `t2v` text→video · `i2v` image→video · `v2v` video→video · `extend` · `motion-transfer` · `lip-sync` · `video-upscale` · `tts` text→speech · `music` · `sfx` · `stt` speech→text · `voice-design` / `voice-changer` · `isolation` · `dubbing` · `forced-alignment`.
+**Mode codes** in the tables: `t2i` text→image · `i2i` image→image · `edit` targeted edit · `upscale` / `remove-bg` · `t2v` text→video · `i2v` image→video · `v2v` video edit (changes the clip you give it) · `extend` · `motion-transfer` · `lip-sync` · `video-upscale` · `tts` text→speech · `music` · `sfx` · `stt` speech→text · `voice-design` / `voice-changer` · `isolation` · `dubbing` · `forced-alignment`.
 
 ## Quick picks by task
 
@@ -133,7 +133,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 99<!-- credits: bytedance-pro-fast --> | i2v | Faster Bytedance Pro variant. |
 | LatentSync | LatentSync | Everyday | 110<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 110<!-- credits: wan-turbo --> | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
-| Wan Flash V2V | Alibaba | Everyday | 110<!-- credits: wan-flash --> | v2v | Faster Wan 2.6 video-to-video: a new clip featuring the subject of the input video, in the scene the prompt describes (not an edit or restyle of the clip); optional audio and multi-shot. |
+| Wan 2.6 Flash | Alibaba | Everyday | 110<!-- credits: wan-flash --> |  | Faster Wan 2.6 video-to-video: a new clip featuring the subject of the input video, in the scene the prompt describes (not an edit or restyle of the clip); optional audio and multi-shot. |
 | PixVerse V6 Extend | PixVerse | Everyday | 132<!-- credits: pixverse-v6-extend:5s:720p:audio --> | extend | Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 138<!-- credits: kling-turbo --> | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 158<!-- credits: minimax --> | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
@@ -143,7 +143,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | ⭐ VEO 3.1 Fast | Google | Everyday | 165<!-- credits: veo3.1 --> | i2v, t2v | VEO 3.1 Fast — cheaper VEO 3.1 tier, 4/6/8s with audio. Good balance for most uses. Flat per-generation pricing across durations. |
 | Depth Anything (per frame) | Depth Anything | Everyday | 176<!-- credits: depth-anything-frames --> | video-depth | Depth Anything v1 run on each frame. Grayscale or inferno colormap; may flicker between frames. Up to 80 s. |
 | Bytedance Pro I2V | Bytedance | Everyday | 193<!-- credits: bytedance-pro --> | i2v, t2v | Pro Bytedance video tier — better quality. |
-| Wan 2.6 | Alibaba | Everyday | 193<!-- credits: wan --> | v2v, t2v | Wan 2.6 — text-to-video and video-to-video under a single id. Its video-to-video makes a new clip featuring the subject of the input video, in the scene the prompt describes; it does not edit or restyle the clip. |
+| Wan 2.6 | Alibaba | Everyday | 193<!-- credits: wan --> | t2v | Wan 2.6 — text-to-video and video-to-video under a single id. Its video-to-video makes a new clip featuring the subject of the input video, in the scene the prompt describes; it does not edit or restyle the clip. |
 | Wan 2.6 I2V | Alibaba | Everyday | 193<!-- credits: wan-i2v --> | i2v | Wan 2.6 image-to-video — 5/10/15s at 720p/1080p. |
 | Gemini Omni Flash 1.2 | Google | Everyday | 198<!-- credits: gemini-omni-flash-1-2 --> | i2v, t2v | Google Gemini Omni Flash 1.2 — 3–15s video with native sound, from 360p to 4K: from text, up to 6 reference images, exact first and last frames, or a video edit. Priced per second. |
 | LTX 2.3 Fast | Lightricks | Everyday | 198<!-- credits: ltx-2.3-fast --> | i2v, t2v | Lightricks LTX 2.3 Fast — text/image→video up to 20s at 1080p (6/8/10s at 2K and 4K). No audio input, no extend. |
