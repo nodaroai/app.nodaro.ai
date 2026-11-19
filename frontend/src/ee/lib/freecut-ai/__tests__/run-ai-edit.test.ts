@@ -77,7 +77,8 @@ vi.mock("@/lib/api", () => ({
   }),
   getWorkflowExecution: vi.fn(async (id: string) => {
     const plans: Record<string, unknown> = {
-      "exec-clip-pack": { version: 1, clips: [{ segments: [{ inMs: 1000, outMs: 4000 }] }, { segments: [{ inMs: 3500, outMs: 4000 }] }] },
+      // The clips plan step answers a bare list, as a real run does.
+      "exec-clip-pack": [{ segments: [{ inMs: 1000, outMs: 4000 }] }, { segments: [{ inMs: 3500, outMs: 4000 }] }],
       "exec-episode-trailer": { version: 1, clock: "master", sources: [], segments: [{ inMs: 1000, outMs: 2000 }] },
       "exec-episode-chapters": { version: 1, chapters: [{ startMs: 1000, title: "Hello" }, { startMs: 3500, title: "Again" }] },
     }
