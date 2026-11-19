@@ -5,10 +5,10 @@
  * measured inside the credit guard (`beforePricing`), before anything is held:
  * under 3 s, past the model's limit (10 s keeping the image's orientation, 30 s
  * following the video's, 30 s on Wan Animate — each with 0.05 s of grace), or
- * unreadable is refused with nothing held and no job row. Kling 3.0 at 720p is
- * charged its four-second row × the billed seconds ÷ 4; every other model and
- * size keeps its rows, read from the measured length. The probe, the guard and
- * the queue are stood in for.
+ * unreadable is refused with nothing held and no job row. Every model and size
+ * is charged its four-second row × the billed seconds ÷ 4; Wan Animate never
+ * below its flat row for the size, that row then held once. The probe, the
+ * guard, the rows and the queue are stood in for.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -27,10 +27,28 @@ vi.mock("@/lib/video-utility-probe.js", () => ({
     return state.video
   }),
 }))
+/** The rows as seeded (migrations 668 and 670, and the flat Wan Animate rows that are its floor). */
+const ROWS = vi.hoisted((): Record<string, number> => ({
+  "motion-transfer:720p:per-4s": 126,
+  "motion-transfer:1080p:per-4s": 203,
+  "kling-3.0-motion:720p:per-4s": 228,
+  "kling-3.0-motion:1080p:per-4s": 302,
+  "wan-animate-replace:480p:per-4s": 60,
+  "wan-animate-replace:580p:per-4s": 95,
+  "wan-animate-replace:720p:per-4s": 125,
+  "wan-animate-move:720p:per-4s": 125,
+  "wan-animate-move": 255,
+  "wan-animate-move:580p": 330,
+  "wan-animate-move:720p": 410,
+  "wan-animate-replace": 255,
+  "wan-animate-replace:580p": 330,
+  "wan-animate-replace:720p": 410,
+}))
 vi.mock("@/lib/credit-base-cost.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/credit-base-cost.js")>()),
-  // The row's base × the units, rounded up once (the real composition, with the seeded row).
-  unitRateBaseCredits: async (rateId: string, units: number) => (rateId === "kling-3.0-motion:720p:per-4s" ? Math.ceil(228 * units) : 0),
+  baseCreditCostFor: async (id: string) => ROWS[id] ?? 0,
+  // The row's base × the units, rounded up once (the real composition, with the seeded rows).
+  unitRateBaseCredits: async (rateId: string, units: number) => Math.ceil((ROWS[rateId] ?? 0) * units),
 }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: vi.fn(async () => ({ data: { id: "job-1" }, error: null })) }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn().mockResolvedValue({ id: "queue-job-1" }) }, redis: {} }))
@@ -133,16 +151,62 @@ describe("POST /v1/motion-transfer — priced on the driving video the server me
     expect(state.guardCalls.map((c) => c.base)).toEqual([Math.ceil(228 * 7 / 4), 570])
   })
 
-  it("every other model and size keeps its rows, from the measured length (no per-second base)", async () => {
+  it("every model and size is held per second of the video, never a length tier", async () => {
     state.video = 12
     await run({ resolution: "1080p", characterOrientation: "video", videoDuration: 3 })
     await run({ provider: "kling", resolution: "720p", characterOrientation: "video", videoDuration: 3 })
-    await run({ provider: "wan-animate-move", resolution: "580p" })
+    await run({ provider: "kling", resolution: "1080p", characterOrientation: "video" })
+    await run({ provider: "wan-animate-replace", resolution: "580p" })
     expect(state.guardCalls).toEqual([
-      { identifier: "kling-3.0-motion:1080p:15s", base: undefined },
-      { identifier: "motion-transfer:15s", base: undefined },
-      { identifier: "wan-animate-move:580p", base: undefined },
+      { identifier: "kling-3.0-motion:1080p:per-4s", base: Math.ceil(302 * 3) },
+      { identifier: "motion-transfer:720p:per-4s", base: 378 },
+      { identifier: "motion-transfer:1080p:per-4s", base: 609 },
+      { identifier: "wan-animate-replace:580p", base: undefined },
     ])
+  })
+
+  it("Kling 2.6 at 720p, 10 s: ceil(126 × 10 / 4) = 315 base", async () => {
+    await run({ provider: "kling" })
+    expect(state.guardCalls).toEqual([{ identifier: "motion-transfer:720p:per-4s", base: 315 }])
+  })
+
+  it("Wan Animate Replace 720p: 3 s and 13 s are held at its flat row once; 14 s and 30 s per second", async () => {
+    for (const sec of [3, 13, 14, 30]) {
+      state.video = sec
+      const res = await run({ provider: "wan-animate-replace", resolution: "720p" })
+      expect(res.statusCode).toBe(200)
+    }
+    expect(state.guardCalls).toEqual([
+      { identifier: "wan-animate-replace:720p", base: undefined },
+      { identifier: "wan-animate-replace:720p", base: undefined },
+      { identifier: "wan-animate-replace:720p:per-4s", base: 438 },
+      { identifier: "wan-animate-replace:720p:per-4s", base: 938 },
+    ])
+    // The row the guard holds is the row the usage log names.
+    expect(vi.mocked(reserveCreditsForJob).mock.calls.map((c) => c[3])).toEqual([
+      "wan-animate-replace:720p", "wan-animate-replace:720p", "wan-animate-replace:720p:per-4s", "wan-animate-replace:720p:per-4s",
+    ])
+  })
+
+  it.each(["480p", "580p"])("Wan Animate Move at %s is sent and held as 720p: its 720p row up to 13 s, its 720p rate past it", async (size) => {
+    state.video = 13
+    await run({ provider: "wan-animate-move", resolution: size })
+    state.video = 14
+    await run({ provider: "wan-animate-move", resolution: size })
+    expect(state.guardCalls).toEqual([
+      { identifier: "wan-animate-move:720p", base: undefined },
+      { identifier: "wan-animate-move:720p:per-4s", base: 438 },
+    ])
+    const calls = vi.mocked(videoQueue.add).mock.calls
+    expect(calls).toHaveLength(2)
+    for (const call of calls) expect(call[1]).toMatchObject({ resolution: "720p" })
+  })
+
+  it("Wan Animate Replace keeps the size it names", async () => {
+    state.video = 20
+    await run({ provider: "wan-animate-replace", resolution: "480p" })
+    expect(state.guardCalls).toEqual([{ identifier: "wan-animate-replace:480p:per-4s", base: 300 }])
+    expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).toMatchObject({ resolution: "480p" })
   })
 
   it.each([

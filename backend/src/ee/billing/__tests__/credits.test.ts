@@ -1004,10 +1004,10 @@ describe("CreditsService", () => {
     it("resolves motion-transfer kling-3.0 1080p with no known video at its orientation's limit, ignoring a declared 5s", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p", videoDuration: 5 } },
-      ])).toBe(500) // base (kling-3.0-motion:1080p:10s)
+      ])).toBe(755) // ceil(302 × 10 / 4)
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "1080p", characterOrientation: "video", videoDuration: 5 } },
-      ])).toBe(1500) // base (kling-3.0-motion:1080p:30s)
+      ])).toBe(2265) // ceil(302 × 30 / 4)
     })
 
     it("resolves motion-transfer from the wired driving video's length, never the node's", () => {
@@ -1016,11 +1016,21 @@ describe("CreditsService", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { id: "x", type: "motion-transfer", data: { provider: "kling", resolution: "720p", characterOrientation: "video", videoDuration: 4 } },
         upload(12),
-      ], wire)).toBe(230) // base (motion-transfer:15s)
+      ], wire)).toBe(378) // ceil(126 × 12 / 4)
       expect(CreditsService.estimateWorkflowBaseCredits([
         { id: "x", type: "motion-transfer", data: { provider: "kling-3.0", resolution: "720p", characterOrientation: "image", videoDuration: 3 } },
         upload(9.4),
       ], wire)).toBe(570) // ceil(228 × 10 / 4)
+    })
+
+    // Decided 2026-11-18: Audio Isolation is quoted per started 10 seconds of
+    // the audio its wire gives; with no length known, the 30-minute cap.
+    it("resolves audio-isolation per started 10 seconds of the wired audio, else the 30-minute cap", () => {
+      const upload = (sec: number) => ({ id: "a", type: "upload-audio", data: { url: "https://m.test/voice.mp3", metadata: { durationSeconds: sec } } })
+      const wire = [{ source: "a", target: "x", targetHandle: "audio" }]
+      expect(CreditsService.estimateWorkflowBaseCredits([{ id: "x", type: "audio-isolation", data: {} }, upload(25)], wire)).toBe(30) // 3 × 10
+      expect(CreditsService.estimateWorkflowBaseCredits([{ id: "x", type: "audio-isolation", data: {} }, upload(8)], wire)).toBe(10)
+      expect(CreditsService.estimateWorkflowBaseCredits([{ id: "x", type: "audio-isolation", data: {} }])).toBe(1800) // 180 × 10
     })
 
     it("resolves motion-transfer kling-3.0 720p per second: no known video quotes the orientation's limit", () => {
@@ -1029,16 +1039,36 @@ describe("CreditsService", () => {
       ])).toBe(570) // ceil(228 × 10 / 4)
     })
 
-    it("resolves motion-transfer wan-animate-move 720p", () => {
+    it("resolves motion-transfer Wan Animate per second, never below its flat row for the size", () => {
+      const upload = (sec: number) => ({ id: "v", type: "upload-video", data: { url: "https://m.test/dance.mp4", videoDurationSec: sec, duration: sec } })
+      const wire = [{ source: "v", target: "x", targetHandle: "video" }]
+      const replace720 = (sec: number) => CreditsService.estimateWorkflowBaseCredits([
+        { id: "x", type: "motion-transfer", data: { provider: "wan-animate-replace", resolution: "720p" } },
+        upload(sec),
+      ], wire)
+      expect(replace720(3)).toBe(410) // its flat 720p row: the floor
+      expect(replace720(13)).toBe(410) // ceil(125 × 13 / 4) = 407, below the floor
+      expect(replace720(14)).toBe(438) // ceil(125 × 14 / 4)
+      expect(replace720(30)).toBe(938) // ceil(125 × 30 / 4)
+      // No known video: the most the run can be charged (30 s).
       expect(CreditsService.estimateWorkflowBaseCredits([
-        { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "720p" } },
-      ])).toBe(410)
+        { type: "motion-transfer", data: { provider: "wan-animate-replace", resolution: "480p" } },
+      ])).toBe(450) // ceil(60 × 30 / 4)
     })
 
-    it("resolves motion-transfer wan-animate-move default 480p", () => {
-      expect(CreditsService.estimateWorkflowBaseCredits([
-        { type: "motion-transfer", data: { provider: "wan-animate-move", resolution: "480p" } },
-      ])).toBe(255)
+    it("resolves motion-transfer Wan Animate Move named 480p as the 720p it runs at", () => {
+      const upload = (sec: number) => ({ id: "v", type: "upload-video", data: { url: "https://m.test/dance.mp4", videoDurationSec: sec, duration: sec } })
+      const wire = [{ source: "v", target: "x", targetHandle: "video" }]
+      for (const resolution of ["480p", "580p", "720p"]) {
+        expect(CreditsService.estimateWorkflowBaseCredits([
+          { id: "x", type: "motion-transfer", data: { provider: "wan-animate-move", resolution } },
+          upload(5),
+        ], wire), resolution).toBe(410)
+        expect(CreditsService.estimateWorkflowBaseCredits([
+          { id: "x", type: "motion-transfer", data: { provider: "wan-animate-move", resolution } },
+          upload(30),
+        ], wire), resolution).toBe(938)
+      }
     })
 
     it("estimates a retired seedance node as the seedance-2-mini it runs as", () => {

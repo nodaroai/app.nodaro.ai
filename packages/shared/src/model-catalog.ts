@@ -3225,10 +3225,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "alibaba",
     label: "Wan 2.7 VideoEdit",
     series: "Wan",
-    description: "Guided video editing with optional reference image, audio control, and prompt expansion.",
+    description: "Guided video editing of a 2-10s clip with optional reference image, audio control, and prompt expansion; priced per second of the clip it delivers, never below the listed price.",
     useCases: ["v2v", "restyle", "reference"],
     resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "wan-videoedit", credits: 320 }],
+    pricing: [
+      { identifier: "wan-videoedit", credits: 320, note: "the least a run costs" },
+      { identifier: "wan-videoedit:1080p:per-4s", credits: 240, note: "per 4 seconds of the clip it delivers (720p at this row too); charged per whole second, never below the flat row" },
+    ],
   },
   // ── Wan 2.7 ──
   "wan-2.7": {
@@ -3446,11 +3449,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "alibaba",
     label: "HappyHorse Edit",
     series: "HappyHorse",
-    description: "HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output.",
+    description: "HappyHorse video-edit — video-to-video transformation of a 3-60s clip, 720p/1080p output; priced per started half-second of the clip, above the listed flat price.",
     useCases: ["v2v", "restyle"],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse-edit", credits: 350, note: "720p default (5s-equivalent flat rate)" },
+      { identifier: "happyhorse-edit", credits: 350, note: "flat row of runs priced before per-clip-second pricing" },
+      { identifier: "happyhorse-edit:720p:per-4s", credits: 560, note: "720p (default): per 4 seconds of the clip; charged per started half-second" },
+      { identifier: "happyhorse-edit:1080p:per-4s", credits: 960, note: "1080p: per 4 seconds of the clip; charged per started half-second" },
     ],
   },
   // ── Vidu (ShengShu Technology) ──
@@ -3953,6 +3958,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "motion-transfer:15s", credits: 230 },
       { identifier: "motion-transfer:30s", credits: 450 },
       { identifier: "motion-transfer:1080p:10s", credits: 230 },
+      { identifier: "motion-transfer:720p:per-4s", credits: 126, note: "720p: per 4 seconds of the driving video; charged per whole second" },
+      { identifier: "motion-transfer:1080p:per-4s", credits: 203, note: "1080p: per 4 seconds of the driving video; charged per whole second" },
     ],
   },
   "kling-3.0-motion": {
@@ -3973,16 +3980,19 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-3.0-motion:10s", credits: 300 },
       { identifier: "kling-3.0-motion:1080p:10s", credits: 500 },
       { identifier: "kling-3.0-motion:720p:per-4s", credits: 228, note: "720p: per 4 seconds of the driving video; charged per whole second" },
+      { identifier: "kling-3.0-motion:1080p:per-4s", credits: 302, note: "1080p: per 4 seconds of the driving video; charged per whole second" },
     ],
   },
   // Wan Animate (decided 2026-11-12): catalog entries so a deployment's model
   // restriction can name them. Before, `models.allow` could not withhold them
   // while the Motion Transfer node and /v1/motion-transfer kept running them
-  // beside the Kling models. The sizes are the three each runs at and is priced
-  // on today (one flat row per size, any clip length); a size it does not have
-  // (the route's 1080p) runs, and is charged, as 720p — `defaultResolution`, the
-  // size `normalizeModelInput` moves it to (`motionTransferResolution`), and
-  // the size a request naming none has always run at.
+  // beside the Kling models. Replace runs at three sizes; Move at 720p only (the
+  // one size the provider takes for it). A size a model does not have (Move's
+  // 480p / 580p, the route's 1080p) runs, and is charged, as 720p —
+  // `defaultResolution`, the size `normalizeModelInput` moves it to
+  // (`motionTransferResolution`), and the size a request naming none has always
+  // run at. Each is charged per second of the driving video at its `:per-4s`
+  // row, never below its flat row for the size it runs at.
   "wan-animate-move": {
     id: "wan-animate-move",
     kind: "video",
@@ -3993,12 +4003,14 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "Wan",
     description: "Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video.",
     useCases: ["motion-transfer", "cheap"],
-    resolutions: ["480p", "580p", "720p"],
+    resolutions: ["720p"],
     defaultResolution: "720p",
     pricing: [
-      { identifier: "wan-animate-move", credits: 255, note: "480p" },
-      { identifier: "wan-animate-move:580p", credits: 330, note: "580p" },
-      { identifier: "wan-animate-move:720p", credits: 410, note: "720p" },
+      // 720p first: the size Move runs at, so its default variant's price.
+      { identifier: "wan-animate-move:720p", credits: 410, note: "720p, the only size it runs at" },
+      { identifier: "wan-animate-move", credits: 255, note: "480p (runs, and is charged, as 720p)" },
+      { identifier: "wan-animate-move:580p", credits: 330, note: "580p (runs, and is charged, as 720p)" },
+      { identifier: "wan-animate-move:720p:per-4s", credits: 125, note: "per 4 seconds of the driving video, never below the 720p row; charged per whole second" },
     ],
   },
   "wan-animate-replace": {
@@ -4017,6 +4029,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "wan-animate-replace", credits: 255, note: "480p" },
       { identifier: "wan-animate-replace:580p", credits: 330, note: "580p" },
       { identifier: "wan-animate-replace:720p", credits: 410, note: "720p" },
+      { identifier: "wan-animate-replace:480p:per-4s", credits: 60, note: "480p: per 4 seconds of the driving video, never below the 480p row; charged per whole second" },
+      { identifier: "wan-animate-replace:580p:per-4s", credits: 95, note: "580p: per 4 seconds of the driving video, never below the 580p row; charged per whole second" },
+      { identifier: "wan-animate-replace:720p:per-4s", credits: 125, note: "720p: per 4 seconds of the driving video, never below the 720p row; charged per whole second" },
     ],
   },
 
@@ -4935,9 +4950,9 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "elevenlabs",
     label: "ElevenLabs Voice Isolation",
     series: "ElevenLabs",
-    description: "Strip background noise / music from a vocal track.",
+    description: "Strip background noise / music from a vocal track. Audio up to 30 minutes; priced per started 10 seconds of the audio.",
     useCases: ["cleanup", "isolation"],
-    pricing: [{ identifier: "elevenlabs-isolation", credits: 74, note: "variable per second" }],
+    pricing: [{ identifier: "elevenlabs-isolation:per-10s", credits: 10, note: "per started 10 seconds of the audio, up to 30 minutes" }],
   },
   "elevenlabs-dubbing": {
     id: "elevenlabs-dubbing",

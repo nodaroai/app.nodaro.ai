@@ -20,7 +20,9 @@
  * model's minimum to its maximum — OmniHuman 2.0's 4 to 300), the Nodaro
  * Video Upscale tiers' four-second rows (a quarter-unit per billed second),
  * Motion Transfer's per-second rows (a quarter-unit per billed second of the
- * driving video), and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
+ * driving video), Video to Video's clip rows (HappyHorse Edit: an eighth of a
+ * unit per started half-second of the clip; Wan 2.7 VideoEdit: a quarter-unit
+ * per billed second), Audio Isolation's ten-second row (whole units, 1 to 180), and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
  * added). A
  * speech request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
@@ -32,10 +34,17 @@
  * the parity suites fail.
  */
 import {
+  AUDIO_ISOLATION_MAX_UNITS,
+  AUDIO_ISOLATION_RATE_ID,
   LIP_SYNC_AUDIO_RATES,
   MOTION_TRANSFER_MAX_SEC,
   MOTION_TRANSFER_MIN_SEC,
   MOTION_TRANSFER_SECOND_RATES,
+  HAPPYHORSE_EDIT_MAX_SEC,
+  HAPPYHORSE_EDIT_MIN_SEC,
+  V2V_CLIP_RATES,
+  WAN_VIDEOEDIT_MAX_SEC,
+  WAN_VIDEOEDIT_MIN_SEC,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
   VIDEO_OVERLAY_PRICING,
@@ -105,6 +114,22 @@ function seedanceExtendUnits(provider: SentPricedSeedanceExtendProvider): UnitQu
   }
 }
 
+/** Video to Video's clip rate rows with the unit counts a run of each can have. */
+function v2vClipRateRules(): ReadonlyArray<readonly [string, UnitQuoteRule]> {
+  const rules = new Map<string, UnitQuoteRule>()
+  for (const [key, rate] of Object.entries(V2V_CLIP_RATES)) {
+    if (rules.has(rate.rateId)) continue
+    if (key.startsWith("happyhorse-edit:")) {
+      rules.set(rate.rateId, { minUnits: HAPPYHORSE_EDIT_MIN_SEC / rate.rateSeconds, maxUnits: HAPPYHORSE_EDIT_MAX_SEC / rate.rateSeconds, wholeUnits: false })
+    } else {
+      // From the shortest clip, not the seeded break-even: which row a run takes follows the live rows,
+      // so a repriced row can move the rate to any length the model takes.
+      rules.set(rate.rateId, { minUnits: WAN_VIDEOEDIT_MIN_SEC / rate.rateSeconds, maxUnits: WAN_VIDEOEDIT_MAX_SEC / rate.rateSeconds, wholeUnits: false })
+    }
+  }
+  return [...rules]
+}
+
 /** Every rate a whole-run quote may name, with the unit counts it accepts. */
 export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   ...[
@@ -134,15 +159,24 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   [SPEAKER_FRAMES_CREDIT_ID, FRAME_BLOCKS] as const,
   // A brand's or a topic's scan: whole Social Search pages.
   ...Object.keys(SCAN_PAGE_CREDIT_COSTS).map((id) => [id, SCAN_PAGES] as const),
-  // Motion Transfer at a per-second rate (Kling 3.0 at 720p): each row prices
-  // four seconds, so a run is a quarter-unit per billed second of its driving
-  // video, from the shortest video a run takes to the longest.
+  // Motion Transfer, every model and size: each row prices four seconds, so a
+  // run is a quarter-unit per billed second of its driving video, from the
+  // shortest video a run takes to the longest. (A Wan Animate run its floor
+  // row prices is charged that row once: its own id, not a quote of this one.)
   ...Object.values(MOTION_TRANSFER_SECOND_RATES).map((rate) => [
     rate.rateId,
     { minUnits: MOTION_TRANSFER_MIN_SEC / rate.rateSeconds, maxUnits: MOTION_TRANSFER_MAX_SEC / rate.rateSeconds, wholeUnits: false },
   ] as const),
   // The podcast pack: every started 15 seconds of the recording, at least one — whole units only.
   [PODCAST_PACK_RATE_ID, { maxUnits: UNIT_QUOTE_MAX_UNITS, minUnits: 1, wholeUnits: true }] as const,
+  // Video to Video's clip rows (each prices four seconds). HappyHorse Edit: an
+  // eighth of a unit per started half-second, from the shortest clip it takes
+  // to the longest. Wan 2.7 VideoEdit: a quarter-unit per billed second, over
+  // the clips it takes (below its break-even a run is charged its flat row).
+  ...v2vClipRateRules(),
+  // Audio Isolation: whole started ten-second units of its audio, one to the
+  // 30-minute cap's 180.
+  [AUDIO_ISOLATION_RATE_ID, { minUnits: 1, maxUnits: AUDIO_ISOLATION_MAX_UNITS, wholeUnits: true }] as const,
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.
   ...Object.values(LIP_SYNC_AUDIO_RATES).map(
     (rate) => [rate.rateId, { maxUnits: rate.maxSeconds, minUnits: rate.minSeconds, wholeUnits: true }] as const,

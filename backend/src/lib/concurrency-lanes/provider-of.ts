@@ -83,7 +83,7 @@ const CORE_HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze({
   "voice-remix": "elevenlabs", // remixVoice
   "dubbing": "elevenlabs", // startDubbing
   "forced-alignment": "elevenlabs", // forcedAlignment / forcedAlignmentFromBuffer
-  "audio-isolation": "kie", // KieAudioProvider.isolateAudio (KIE's elevenlabs-isolation task)
+  "audio-isolation": "elevenlabs", // directAudioIsolation (ElevenLabs' own API)
   "audio-separation": "replicate", // ReplicateAudioSeparationProvider (Demucs)
   "generate-music": "replicate", // providers/audio/generate-music.ts: every engine is a replicate.run
   "video-retake": "replicate", // runLtxRetake (LTX on Replicate)

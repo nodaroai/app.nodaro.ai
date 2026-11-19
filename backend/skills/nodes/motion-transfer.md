@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-10-24T23:37:39.662Z
-generated_from: db68a9ee4
+generated_at: 2026-11-18T17:39:44.129Z
+generated_from: b26a20c51e
 ---
 
 # Motion Transfer
@@ -9,7 +9,7 @@ generated_from: db68a9ee4
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `motion-transfer`
 **Category:** ai
-**Credit cost:** `88-1650` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `105-2492` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `image`, `video`, `prompt`, `negative`, `assets`
 **Outputs (source handles):** `video`
 

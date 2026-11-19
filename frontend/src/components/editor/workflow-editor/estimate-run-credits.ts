@@ -25,7 +25,7 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { componentStoredEstimate, llmNodePriceIds, meteredModeProbeId, scrapeAnalysisPriceIds, scrapeAnalysisRunCredits } from "@/lib/llm-price-ids"
 import { isModelEstimate, isModelRefused, refusedModelMessage } from "@/hooks/use-model-credit-cost"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
-import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, type RunCreditLine, type RunCreditQuantity } from "./types"
+import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, videoToVideoClipRowOf, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
 import { isNodaroVideoUpscaleCreditId, nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared/workflow"
@@ -36,7 +36,7 @@ import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
 import { seedanceHdQuoteIdFor } from "@/lib/seedance-hd-quote"
-import { lipSyncQuoteIsEstimate, motionTransferQuote, nodaroVideoUpscaleRefusedSec } from "@/lib/video-utility-estimate"
+import { audioIsolationQuote, lipSyncQuoteIsEstimate, motionTransferPriceIds, motionTransferQuote, nodaroVideoUpscaleRefusedSec, videoToVideoQuote } from "@/lib/video-utility-estimate"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { tx } from "@/lib/i18n"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
@@ -174,6 +174,15 @@ function isMeteredEstimate(
   // A Motion Transfer whose driving video's length the graph does not know is quoted at the most
   // its orientation runs (10 s / 30 s): an estimate — the run measures the video before it holds anything.
   if (node.type === "motion-transfer") return !motionTransferQuote(node, allNodes, edges, rerunIds).lengthKnown
+  // A Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit whose clip's length the graph does not know is
+  // quoted at the model's longest clip: an estimate — the run reads the clip before it holds anything.
+  if (node.type === "video-to-video") {
+    const clip = videoToVideoQuote(node, allNodes, edges, videoToVideoClipRowOf, rerunIds)
+    if (clip) return !clip.lengthKnown
+  }
+  // An Audio Isolation whose audio's length the graph does not know is quoted at the 30-minute
+  // cap: an estimate — the run reads the audio before it holds anything.
+  if (node.type === "audio-isolation") return !audioIsolationQuote(node, allNodes, edges, rerunIds).lengthKnown
   if (!llmNodePriceIds(node)) return false
   const id = getModelIdentifier(node, edges, allNodes, rerunIds)
   return isModelEstimate(id) && cachedCost(id) !== undefined
@@ -231,7 +240,9 @@ export function runModelIds(
         // A Component holding a stored estimate flag: the mode probe, so the flag is read only while metered.
         const probe = componentStoredEstimate(v) ? [meteredModeProbeId()] : []
         // A Seedance 2.5 HD finalize of a draft this run makes: its row, or the server's quote of it.
-        return [id, ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds), seedanceHdQuoteIdFor(v, allNodes, edges, rerunIds)]
+        // A Motion Transfer: its rate row, the whole-run quote of it and its floor row — both figures its floor rule compares.
+        const motion = v.type === "motion-transfer" ? motionTransferPriceIds(v, allNodes, edges, rerunIds) : []
+        return [id, ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, ...motion, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds), seedanceHdQuoteIdFor(v, allNodes, edges, rerunIds)]
       })
     }),
     ...speechPriceIdsFor(runs, allNodes, edges),

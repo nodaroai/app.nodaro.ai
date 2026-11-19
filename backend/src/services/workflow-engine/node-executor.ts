@@ -118,6 +118,8 @@ import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-du
 import { aiAvatarReserveId, stampAiAvatarAudioLength } from "../../lib/ai-avatar-audio-length.js"
 import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth-input.js"
 import { motionTransferReserveId, motionTransferStampedBaseCredits, stampMotionTransferInput } from "../../lib/motion-transfer-input.js"
+import { stampVideoToVideoClipInput, videoToVideoReserveId, videoToVideoStampedBaseCredits } from "../../lib/video-to-video-clip-input.js"
+import { audioIsolationReserveId, audioIsolationStampedBaseCredits, stampAudioIsolationInput } from "../../lib/audio-isolation-input.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
 import { stampAddCaptionsNemotronInput, addCaptionsNemotronReserveId } from "../../lib/add-captions-nemotron.js"
@@ -1778,11 +1780,11 @@ export async function computeLipSyncRateCreditOverride(
 }
 
 /**
- * Motion Transfer on a model and size charged per second of its driving video
- * (Kling 3.0 at 720p) is priced at its four-second row × the billed seconds
- * `stampMotionTransferInput` measured ÷ 4, rounded up once, marked up once at
- * the row — what the route's guard holds for the same video. Undefined for
- * every other job and for a run priced by a tier row (its stamped row prices it).
+ * Motion Transfer is priced at the row `stampMotionTransferInput` chose: a
+ * per-second rate row × the units it stamped, rounded up once, marked up once
+ * at the row — what the route's guard holds for the same video. Undefined for
+ * every other job and for a run charged a floor row (Wan Animate; its stamped
+ * row prices it).
  */
 export async function computeMotionTransferRateCreditOverride(
   jobName: string,
@@ -1790,6 +1792,42 @@ export async function computeMotionTransferRateCreditOverride(
   reserveId: string,
 ): Promise<number | undefined> {
   const base = await motionTransferStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), reserveId)
+}
+
+/**
+ * Video to Video on HappyHorse Edit, and on Wan 2.7 VideoEdit past its flat
+ * row, is priced at its four-second row × the units `stampVideoToVideoClipInput`
+ * stamped from the clip's length, rounded up once, marked up once at the row —
+ * what the route's guard holds for the same clip. Undefined for every other job
+ * and model, and for a Wan 2.7 VideoEdit run charged its flat row (its stamped
+ * row prices it).
+ */
+export async function computeVideoToVideoClipCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  reserveId: string,
+): Promise<number | undefined> {
+  const base = await videoToVideoStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), reserveId)
+}
+
+/**
+ * Audio Isolation is priced per started ten seconds of its audio: the
+ * per-10-second row × the units `stampAudioIsolationInput` read, rounded up
+ * once, marked up once at the row — what the route's guard holds for the same
+ * audio. Undefined for every other job.
+ */
+export async function computeAudioIsolationCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  reserveId: string,
+): Promise<number | undefined> {
+  const base = await audioIsolationStampedBaseCredits(jobName, payload)
   if (base === undefined) return undefined
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
   return applyServiceMarkup(base, await getAppSettings(), reserveId)
@@ -2610,6 +2648,28 @@ async function executeWorkerNode(
     err.errorCode = motionRefusal.code
     throw err
   }
+  // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit: the route's own
+  // rule — read the clip's length, refuse one the model cannot take, and stamp
+  // the length, the billed seconds and the row it reserves — before input_data
+  // is written and before anything is reserved. A refusal leaves no jobs row.
+  const v2vRefusal = await stampVideoToVideoClipInput(jobName, payload)
+  if (v2vRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(v2vRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = v2vRefusal.code
+    throw err
+  }
+  // Audio Isolation: the route's own rule — read the audio's length, refuse
+  // audio past 30 minutes or that cannot be read, and stamp the length and the
+  // units it is held and charged — before input_data is written and before
+  // anything is reserved. Every edition. A refusal leaves no jobs row.
+  const isolationRefusal = await stampAudioIsolationInput(jobName, payload)
+  if (isolationRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(isolationRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = isolationRefusal.code
+    throw err
+  }
   // Video Mask: the same — measure the clip by the route's rule and stamp the
   // price row before input_data is written; a clip the route refuses (unreadable,
   // over the cap) leaves no jobs row.
@@ -2996,6 +3056,10 @@ async function executeWorkerNode(
         videoDepthReserveId(jobName, payload) ??
         // Motion Transfer: the row of the driving video `stampMotionTransferInput` measured above.
         motionTransferReserveId(jobName, payload) ??
+        // Video to Video on a clip-priced model: the row `stampVideoToVideoClipInput` chose above.
+        videoToVideoReserveId(jobName, payload) ??
+        // Audio Isolation: its per-10-second row, once `stampAudioIsolationInput` read the audio.
+        audioIsolationReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
         nemotronTranscribeReserveId(jobName, payload) ??
         addCaptionsNemotronReserveId(jobName, payload) ??
@@ -3026,6 +3090,8 @@ async function executeWorkerNode(
         (await computeSeedanceExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLipSyncRateCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeMotionTransferRateCreditOverride(jobName, payload, reserveModelIdentifier)) ??
+        (await computeVideoToVideoClipCreditOverride(jobName, payload, reserveModelIdentifier)) ??
+        (await computeAudioIsolationCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??

@@ -47,7 +47,7 @@ describe("a node unit's provider attribution", () => {
     expect(HANDLER_PROVIDERS[KIE_UNIT]).toBe("kie")
     expect(Object.isFrozen(HANDLER_PROVIDERS)).toBe(true)
     expect(HANDLER_PROVIDERS["voice-changer"]).toBe("elevenlabs")
-    expect(primaryProviderOfJob("audio-isolation", {})).toBe("kie")
+    expect(primaryProviderOfJob("audio-isolation", {})).toBe("elevenlabs")
   })
 
   it("every provider-lane job (registry table and node units) is attributed, or unattributed with a reason, exactly once — the unit included", () => {

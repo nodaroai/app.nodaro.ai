@@ -76,7 +76,7 @@ const RAW_SENTENCES: Readonly<Record<string, { count: number; why: string }>> = 
 const PROSE = "the only match is description prose that names credits without stating a figure"
 const AMOUNT_FILES: Readonly<Record<string, { count: number } & ({ funnel: true } | { funnel?: false; why: string })>> = {
   // ── stated through the funnel ──
-  "tools/_credit-hint.ts": { count: 15, funnel: true }, // every description price hint (statedPrices → stated())
+  "tools/_credit-hint.ts": { count: 16, funnel: true }, // every description price hint (statedPrices → stated())
   "tools/models.ts": { count: 21, funnel: true }, // check_balance, credit_transactions, list_models
   "tools/jobs.ts": { count: 13, funnel: true }, // get_job, wait_for_job, list_jobs (withCreditsCharged → statedJobRow)
   "tools/gallery.ts": { count: 1, funnel: true }, // get_asset (statedJobRow)

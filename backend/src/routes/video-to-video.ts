@@ -18,6 +18,11 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { isClipPricedV2vProvider, videoToVideoSentResolution } from "@nodaro/shared/credits"
+import { measureVideoToVideoClip, videoToVideoClipBaseCredits } from "../lib/video-to-video-clip-input.js"
+import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
+import { ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
+import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 
 const SEEDANCE_EDIT_ONLY_LISTS = ["referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls"] as const
 
@@ -132,24 +137,101 @@ async function rewriteSeedanceEdit(req: FastifyRequest, reply: FastifyReply): Pr
   return undefined
 }
 
+/** Body fields named like the clip's length or its price: dropped from every request, never read. */
+const CLIENT_CLIP_FIELDS: readonly string[] = ["videoDuration", "videoToVideoBilledSeconds", "videoToVideoUnits", "__videoToVideoClip"]
+/** The request measure the clip step keeps, server-side only, for the guard's pricing and the handler. */
+const CLIP = "videoToVideoClip"
+/** What the clip step read: the clip's length, the seconds held, and the row and units priced. */
+interface VideoToVideoClipStash {
+  readonly clipSec: number
+  readonly billedSeconds: number
+  readonly creditId: string
+  readonly units?: number
+}
+
+/** What the clip step recorded for this request (the server-side request's, never the body's). */
+function clipOf(req: FastifyRequest): VideoToVideoClipStash | undefined {
+  return requestMeasure<VideoToVideoClipStash>(req, CLIP)
+}
+
+/** The model a non-Seedance request runs on: the one it names, else the route's default. */
+function runProvider(req: FastifyRequest): string {
+  return ((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
+}
+
+/**
+ * The credit guard's `beforePricing` step for the models priced by their
+ * clip's length (HappyHorse Edit, Wan 2.7 VideoEdit): past the guard's model
+ * and node doors, the app-token scope gate and the Idempotency-Key dedup (so a
+ * model the deployment withholds never costs a download), validate the body
+ * with the handler's own schema, read the clip's length
+ * (`measureVideoToVideoClip`, the rule the workflow run shares), refuse what
+ * the model cannot take with nothing held, and keep the result on the
+ * server-side request. `POST /v1/quote` runs this same step. Every other model
+ * is never probed; a Seedance edit runs its own lane's steps.
+ */
+export async function videoToVideoClipStep(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (isSeedanceEdit(req)) return
+  dropClientMeasureFields(req.body, CLIENT_CLIP_FIELDS)
+  const provider = runProvider(req)
+  if (!isClipPricedV2vProvider(provider)) return
+  const parsed = videoToVideoBody.safeParse(req.body)
+  if (!parsed.success) {
+    return void reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+  }
+  const { videoUrl, resolution, videoEditDuration } = parsed.data
+  const read = await measureVideoToVideoClip({ provider, resolution, videoEditDuration }, videoUrl, (err) => {
+    req.log.warn({ err }, "video-to-video: ffprobe failed; refusing the run")
+  }, { deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS })
+  if (!read.ok) {
+    return void reply.status(probeRefusalStatus(read.code)).send({ error: { code: read.code, message: read.message } })
+  }
+  setRequestMeasure(req, CLIP, {
+    clipSec: read.clipSec,
+    billedSeconds: read.billedSeconds,
+    creditId: read.creditId,
+    ...(read.units !== undefined ? { units: read.units } : {}),
+  } satisfies VideoToVideoClipStash)
+}
+
+/** The row a clip-priced run reserves (the clip step's); the throw only covers a body that step already refused. */
+function clipCreditId(req: FastifyRequest): string {
+  const stash = clipOf(req)
+  if (!stash) throw new Error("video-to-video: the run reached its pricing without its clip's length")
+  return stash.creditId
+}
+
 const onlyForSeedanceEdit = (precheck: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>) =>
   async (req: FastifyRequest, reply: FastifyReply): Promise<unknown> => (isSeedanceEdit(req) ? precheck(req, reply) : undefined)
 
 /**
  * Everything /v1/video-to-video prices a request with — registered as the
- * route's preHandlers and run as-is by `POST /v1/quote` (one copy). Every
- * model of the route's own is a flat per-model price (the model id is the
- * credit id); a Seedance edit is priced by the reference lane's own pricing on
- * its rewritten body — the clip's length, settled to what was rendered.
+ * route's preHandlers and run as-is by `POST /v1/quote` (one copy):
+ * - HappyHorse Edit and Wan 2.7 VideoEdit are priced by the length of their
+ *   clip, read before anything is held (`videoToVideoClipStep`): the row and
+ *   units it chose (`videoToVideoClipPrice`, @nodaro/shared);
+ * - every other model of the route's own is a flat per-model price (the model
+ *   id is the credit id);
+ * - a Seedance edit is priced by the reference lane's own pricing on its
+ *   rewritten body — the clip's length, settled to what was rendered.
  */
 export const videoToVideoPricing: RoutePricing = {
   prechecks: [rewriteSeedanceEdit, ...textToVideoPricing.prechecks.map(onlyForSeedanceEdit)],
-  modelResolver: (req) => isSeedanceEdit(req)
-    ? textToVideoPricing.modelResolver(req)
-    : ((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER,
+  modelResolver: (req) => {
+    if (isSeedanceEdit(req)) return textToVideoPricing.modelResolver(req)
+    const provider = runProvider(req)
+    return isClipPricedV2vProvider(provider) ? clipCreditId(req) : provider
+  },
   opts: {
     runModel: jobRunModel("video-to-video"),
-    computeCredits: (body, req) => isSeedanceEdit(req) ? textToVideoPricing.opts?.computeCredits?.(body, req) : undefined,
+    computeCredits: async (body, req) => {
+      if (isSeedanceEdit(req)) return textToVideoPricing.opts?.computeCredits?.(body, req)
+      if (!isClipPricedV2vProvider(runProvider(req))) return undefined
+      const stash = clipOf(req)
+      if (!stash) throw new Error("video-to-video: the run reached its pricing without its clip's length")
+      return videoToVideoClipBaseCredits(stash.creditId, stash.units)
+    },
+    beforePricing: videoToVideoClipStep,
   },
 }
 
@@ -186,6 +268,19 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
     parsed.data.negativePrompt = finalNegativePrompt
 
     const mcpClient = extractMcpClient(req.body)
+    const runModel = provider ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
+    // A model priced by its clip: the length the server read from the clip
+    // (never one the request sent) is recorded on the job and the queue
+    // payload, and the run reserves the row that length chose. HappyHorse Edit
+    // sends the size it is priced at: 720p unless the request names 1080p.
+    const clip = isClipPricedV2vProvider(runModel) ? clipOf(req) : undefined
+    if (isClipPricedV2vProvider(runModel) && !clip) {
+      // Unreachable while the guard's clip step runs first; an invariant, not a user error.
+      return sendInternalError(reply, req, new Error("video-to-video: clip length missing"), "Failed to create job")
+    }
+    const sentResolution = runModel === "happyhorse-edit" ? videoToVideoSentResolution(runModel, resolution) : resolution
+    if (runModel === "happyhorse-edit") parsed.data.resolution = sentResolution as typeof parsed.data.resolution
+    const clipFields = clip ? { videoDuration: clip.clipSec, videoToVideoBilledSeconds: clip.billedSeconds } : {}
 
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
@@ -193,7 +288,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: withResolvedModel(buildJobInputData(parsed.data, "video-to-video"), "video-to-video"),
+        input_data: withResolvedModel({ ...buildJobInputData(parsed.data, "video-to-video"), ...clipFields }, "video-to-video"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -201,7 +296,8 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to create job")
     }
 
-    const modelIdentifier = provider ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
+    // The row the run reserves: the clip's for a clip-priced model, else the model's own.
+    const modelIdentifier = clip ? clip.creditId : runModel
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
@@ -210,9 +306,9 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       jobId: job.id,
       videoUrl,
       prompt: finalPrompt,
-      provider: modelIdentifier,
+      provider: runModel,
       duration,
-      resolution,
+      resolution: sentResolution,
       audio,
       multiShots,
       aspectRatio,
@@ -222,6 +318,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       videoEditDuration,
       audioSetting,
       promptExtend,
+      ...clipFields,
       usageLogId,
     }))
     if (reply.sent) return

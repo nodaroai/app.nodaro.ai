@@ -13,7 +13,9 @@ const KLING = ["kling", "kling-3.0"]
 
 describe("the sizes each Motion Transfer option offers", () => {
   it("are its model's catalog sizes", () => {
-    for (const p of WAN) expect(motionTransferSizes(p), p).toEqual(["480p", "580p", "720p"])
+    // Wan Animate Move runs at 720p only (the one size the provider takes for it).
+    expect(motionTransferSizes("wan-animate-move")).toEqual(["720p"])
+    expect(motionTransferSizes("wan-animate-replace")).toEqual(["480p", "580p", "720p"])
     for (const p of KLING) expect(motionTransferSizes(p), p).toEqual(["720p", "1080p"])
   })
 })
@@ -29,7 +31,7 @@ describe("the size the panel shows", () => {
   })
 
   it("is the size the node holds when its model has it", () => {
-    expect(motionTransferShownSize("wan-animate-move", "580p")).toBe("580p")
+    expect(motionTransferShownSize("wan-animate-replace", "580p")).toBe("580p")
     expect(motionTransferShownSize("kling-3.0", "1080p")).toBe("1080p")
   })
 
@@ -48,6 +50,14 @@ describe("the snap when the option changes", () => {
       expect(motionTransferSnap(p, "480p"), p).toBe("720p")
       expect(motionTransferSnap(p, "580p"), p).toBe("720p")
     }
+  })
+
+  it("moves a saved 480p or 580p to 720p on Wan Animate Move, the size it runs and is charged at", () => {
+    for (const size of ["480p", "580p"]) {
+      expect(motionTransferSnap("wan-animate-move", size), size).toBe("720p")
+      expect(motionTransferShownSize("wan-animate-move", size), size).toBe("720p")
+    }
+    expect(motionTransferSnap("wan-animate-replace", "580p")).toBeUndefined()
   })
 
   it("leaves an unset size and an offered size alone", () => {

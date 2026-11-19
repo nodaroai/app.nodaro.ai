@@ -47,7 +47,6 @@ const kieInfo: ProviderInfo = {
     "speech-to-video",
     "music-generation",
     "text-to-speech",
-    "audio-isolation",
     "transcription",
   ],
   supportedModels: {
@@ -72,7 +71,9 @@ const kieInfo: ProviderInfo = {
     // sound-effect wrapper failed every request); the capability key stays —
     // the Record is exhaustive over ProviderCapability.
     "sound-effect": [],
-    "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
+    // Audio Isolation left KIE for ElevenLabs' own API (2026-11-18); the
+    // config stays in models.ts for the credit audit only.
+    "audio-isolation": [],
     "audio-separation": [], // KIE has no Demucs; Replicate-only capability
     // Scribe only: `speechToText` runs Scribe, so an STT model with its own
     // runner (Nemotron 3.5 Transcribe) is never offered here.

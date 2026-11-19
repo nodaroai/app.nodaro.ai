@@ -36,7 +36,7 @@ describe("primaryProviderOfJob", () => {
 
   it("a handler that calls a provider client directly counts against that provider", () => {
     expect(primaryProviderOfJob("text-to-speech", { text: "hi", voice: "x" })).toBe("elevenlabs")
-    expect(primaryProviderOfJob("audio-isolation", { audioUrl: "https://x/a.mp3" })).toBe("kie")
+    expect(primaryProviderOfJob("audio-isolation", { audioUrl: "https://x/a.mp3" })).toBe("elevenlabs")
   })
 
   it("a speech job counts against the provider its model runs on: Gemini on KIE, any other on ElevenLabs", () => {

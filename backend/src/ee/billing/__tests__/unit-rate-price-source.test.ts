@@ -1,7 +1,7 @@
-// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing,lip-sync,motion-transfer,podcast-pack}.ts
+// @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing,lip-sync,motion-transfer,podcast-pack,video-to-video,audio-isolation}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
 // @test-watches backend/src/workers/handlers/video-ai.ts
-// @test-watches backend/src/lib/{video-utility-credits,video-utility-length,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,motion-transfer-input,nodaro-video-upscale-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/lib/{video-utility-credits,video-utility-length,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,motion-transfer-input,video-to-video-clip-input,audio-isolation-input,nodaro-video-upscale-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
 // @test-watches backend/src/ee/pipelines/services/pipeline-combine-videos.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
@@ -102,7 +102,9 @@ import { speakerFramesCreditOverride } from "../../../lib/speaker-frames-plan.js
 import { dubbingBaseCredits } from "../../../lib/dubbing-span.js"
 import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
 import { motionTransferRateBaseCredits } from "../../../lib/motion-transfer-input.js"
-import { LIP_SYNC_AUDIO_RATES, OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID } from "@nodaro/shared/credits"
+import { videoToVideoClipBaseCredits } from "../../../lib/video-to-video-clip-input.js"
+import { audioIsolationStampedBaseCredits } from "../../../lib/audio-isolation-input.js"
+import { LIP_SYNC_AUDIO_RATES, MOTION_TRANSFER_RATE_IDS, OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID } from "@nodaro/shared/credits"
 import { buildToolkit } from "../../../lib/private-plugins/toolkit.js"
 import { SCAN_PAGE_CREDIT_COSTS } from "@nodaro/shared/social"
 import { SRC, parseText, walk } from "../../../lib/__tests__/source-ast.js"
@@ -195,10 +197,29 @@ const CHARGES: Readonly<Record<string, Charge>> = {
     charge: async () => markedUp(OMNIHUMAN_2_0_PER_SECOND_CREDIT_ID, await lipSyncRateBaseCredits(LIP_SYNC_AUDIO_RATES["omnihuman-2-0"]!, 7)),
   },
   // routes/motion-transfer.ts (computeCredits) and the workflow run's computeMotionTransferRateCreditOverride:
-  // Kling 3.0 at 720p billed 10 s of its measured driving video — 2.5 units of its four-second row.
-  "kling-3.0-motion:720p:per-4s": {
+  // every model and size billed 10 s of its driving video — 2.5 units of its four-second row.
+  ...Object.fromEntries(MOTION_TRANSFER_RATE_IDS.map((id): [string, Charge] => [id, {
     units: 2.5,
-    charge: async () => markedUp("kling-3.0-motion:720p:per-4s", (await motionTransferRateBaseCredits("kling-3.0", "720p", 10))!),
+    charge: async () => markedUp(id, (await motionTransferRateBaseCredits(id, 2.5))!),
+  }])),
+  // routes/video-to-video.ts (computeCredits) and the workflow run's computeVideoToVideoClipCreditOverride:
+  // HappyHorse Edit billed 21 started half-seconds of a 10.04 s clip (2.625 units); Wan 2.7 VideoEdit
+  // billed 10 s of its clip (2.5 units, past its flat row).
+  ...Object.fromEntries(
+    (["happyhorse-edit:720p:per-4s", "happyhorse-edit:1080p:per-4s"] as const).map((id): [string, Charge] => [
+      id,
+      { units: 2.625, charge: async () => markedUp(id, (await videoToVideoClipBaseCredits(id, 2.625))!) },
+    ]),
+  ),
+  "wan-videoedit:1080p:per-4s": {
+    units: 2.5,
+    charge: async () => markedUp("wan-videoedit:1080p:per-4s", (await videoToVideoClipBaseCredits("wan-videoedit:1080p:per-4s", 2.5))!),
+  },
+  // routes/audio-isolation.ts (computeCredits) and the workflow run's computeAudioIsolationCreditOverride:
+  // 25 s of audio — 3 started ten seconds of its row.
+  "elevenlabs-isolation:per-10s": {
+    units: 3,
+    charge: async () => markedUp("elevenlabs-isolation:per-10s", (await audioIsolationStampedBaseCredits("audio-isolation", { audioIsolationUnits: 3 }))!),
   },
   // routes/video-upscale.ts (computeCredits) and the workflow run's computeNodaroVideoUpscaleCreditOverride:
   // a Nodaro Video Upscale plan billed 10 s — 2.5 units of its tier's four-second row.
@@ -383,6 +404,8 @@ describe("each charge site prices through the function this suite drives", () =>
     "routes/dubbing.ts": ["dubbingBaseCredits"],
     "routes/lip-sync.ts": ["lipSyncRateBaseCredits"],
     "routes/motion-transfer.ts": ["unitRateBaseCredits"],
+    "routes/video-to-video.ts": ["videoToVideoClipBaseCredits"],
+    "routes/audio-isolation.ts": ["unitRateBaseCredits"],
     "services/workflow-engine/node-executor.ts": [
       "videoUtilityChargeBaseCredits",
       "videoUtilityMeasuredBaseCredits",
@@ -394,6 +417,8 @@ describe("each charge site prices through the function this suite drives", () =>
       "speakerViewCreditOverride",
       "lipSyncRateBaseCredits",
       "motionTransferStampedBaseCredits",
+      "videoToVideoStampedBaseCredits",
+      "audioIsolationStampedBaseCredits",
       "seedanceExtendStampedBaseCredits",
     ],
     "workers/handlers/video-ai.ts": ["sentChargedExtendBaseCredits"],
@@ -410,7 +435,9 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/private-plugins/toolkit.ts": ["unitRatePrice"],
     "lib/dubbing-span.ts": ["baseCreditCostFor"],
     "lib/lip-sync-inputs.ts": ["unitRateBaseCredits"],
-    "lib/motion-transfer-input.ts": ["unitRateBaseCredits"],
+    "lib/motion-transfer-input.ts": ["unitRateBaseCredits", "baseCreditCostFor"],
+    "lib/video-to-video-clip-input.ts": ["unitRateBaseCredits"],
+    "lib/audio-isolation-input.ts": ["unitRateBaseCredits"],
     "lib/nodaro-video-upscale-plan.ts": ["unitRateBaseCredits"],
     // Seedance's sent-priced extends through the unit rate; Gemini Omni Flash 1.2 Extend's two rows through the shared lookup.
     "lib/seedance-extend-credits.ts": ["unitRateBaseCredits", "baseCreditCostFor", "seedanceExtendBaseCredits", "geminiOmniExtendRunBaseCredits"],

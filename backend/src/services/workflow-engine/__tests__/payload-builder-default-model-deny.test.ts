@@ -24,7 +24,7 @@ import { __resetModelSwitchForTests } from "../../../lib/model-switch.js"
 import { deniedModelRejectionMessage, modelRestrictionConfigured } from "../../../lib/surface-deny.js"
 import { resolvedModelOfJob } from "../../../lib/job-resolved-model.js"
 import { llmFeatureDefault } from "../../../lib/run-model.js"
-import { AUDIO_ISOLATION_CREDIT_ID } from "../../../lib/fixed-row-credit-ids.js"
+import { AUDIO_ISOLATION_MODEL_ID } from "../../../lib/run-model.js"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { applyDefaultVideoSelection, DEFAULT_TTS_PROVIDER } from "@nodaro/shared/models"
 
@@ -85,7 +85,7 @@ const CASES: readonly Case[] = [
   { name: "Character", node: () => node("character"), inputs: WIRED, runsOn: () => IMAGE_MODEL_ROLE_DEFAULTS.character },
   { name: "Text to Speech", node: () => node("text-to-speech", { voiceId: "Rachel", textSource: "direct", directText: "hi" }), runsOn: () => DEFAULT_TTS_PROVIDER },
   { name: "Text to Speech with an empty provider", node: () => node("text-to-speech", { voiceId: "Rachel", provider: "", textSource: "direct", directText: "hi" }), runsOn: () => DEFAULT_TTS_PROVIDER },
-  { name: "Audio Isolation (one fixed model)", node: () => node("audio-isolation"), inputs: WIRED, runsOn: () => AUDIO_ISOLATION_CREDIT_ID },
+  { name: "Audio Isolation (one fixed model)", node: () => node("audio-isolation"), inputs: WIRED, runsOn: () => AUDIO_ISOLATION_MODEL_ID },
   { name: "Suno Generate", node: () => node("suno-generate", { prompt: "a song about the sea" }), runsOn: () => resolvedModelOfJob("suno-generate", {})! },
   { name: "Generate Script", node: () => node("generate-script"), inputs: WIRED, runsOn: () => llmFeatureDefault("generate-script")! },
 ]

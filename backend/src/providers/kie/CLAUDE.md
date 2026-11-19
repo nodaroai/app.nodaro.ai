@@ -64,7 +64,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
   as `rawRecordInfo`), never a request of its own. Recorded only: without `meteredCost` the
   reservation is committed whatever the figure is.
 - Covered: Video to Video (Wan 2.6, Wan Flash, Wan VideoEdit, HappyHorse Edit, Luma Modify) and
-  Motion Transfer (Kling 2.6, Kling 3.0, Wan Animate Move/Replace), Audio Isolation. The image
+  Motion Transfer (Kling 2.6, Kling 3.0, Wan Animate Move/Replace). (Audio Isolation left KIE for
+  ElevenLabs' own API on 2026-11-18.) The image
   lane reads the same field through `costFromTaskRecord`.
 - `__tests__/kie-billed-cost-guard.test.ts` lists, per method, the branches in `video.ts` /
   `audio.ts` that still record the catalog figure directly, with why; a new one fails it. The

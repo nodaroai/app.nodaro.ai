@@ -19,11 +19,11 @@
  *   2026-11-18): the driving video is measured by the server before anything
  *   is held (`motionTransferMeasureStep`), and the job records that length.
  *
- * Pricing (`motionTransferPrice`, @nodaro/shared): Kling 3.0 at 720p is charged
- * per second of the measured video at its four-second row (the hold is the
- * charge); every other model and size by its tier (Kling) or its size row
- * (Wan Animate), read from the measured length. A video shorter than 3 s, past
- * the model's limit, or unreadable is refused with nothing held.
+ * Pricing (`motionTransferPrice`, @nodaro/shared): every model and size is
+ * charged per second of the driving video at its four-second row (the hold is
+ * the charge); Wan Animate never below its flat row for the size, the row then
+ * charged once (`motionTransferChargedRow`). A video shorter than 3 s, past the
+ * model's limit, or unreadable is refused with nothing held.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -126,9 +126,9 @@ function motionTransferCreditId(req: FastifyRequest): string {
 }
 
 /**
- * BASE credits for a run charged at a per-second rate (Kling 3.0 at 720p): its
- * four-second row × the billed seconds ÷ 4, rounded up once; undefined for a
- * run priced by a tier row, which the guard prices from that row.
+ * BASE credits for a run charged at a per-second rate row: its four-second
+ * row × the billed seconds ÷ 4, rounded up once; undefined for a run charged
+ * a floor row (Wan Animate), which the guard prices from that row.
  */
 export async function motionTransferComputeCredits(_body: unknown, req: FastifyRequest): Promise<number | undefined> {
   const stash = measureOf(req)

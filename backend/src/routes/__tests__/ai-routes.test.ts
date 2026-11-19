@@ -51,6 +51,10 @@ vi.mock("@/lib/motion-transfer-input.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/motion-transfer-input.js")>()),
   measureMotionTransferInput: vi.fn(async () => ({ ok: true, measuredSec: 10, billedSeconds: 10, creditId: "motion-transfer:10s" })),
 }))
+vi.mock("@/lib/audio-isolation-input.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/audio-isolation-input.js")>()),
+  readAudioIsolationInput: vi.fn(async () => ({ ok: true, audioSec: 8, units: 1 })),
+}))
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),

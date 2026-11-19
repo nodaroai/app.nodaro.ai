@@ -39,7 +39,8 @@ const BILLED_COST_SITES: Readonly<Record<string, Readonly<Record<string, number>
   // Video to Video: Luma Modify, HappyHorse Edit, Wan VideoEdit, and Wan 2.6 + Wan Flash (one shared branch).
   // Motion Transfer: Kling 3.0, Wan Animate Move/Replace (one shared branch), Kling 2.6.
   "video.ts": { videoToVideo: 4, motionTransfer: 3 },
-  "audio.ts": { isolateAudio: 1 },
+  // Audio Isolation left KIE for ElevenLabs' own API (2026-11-18): no KIE audio lane reads a task's bill now.
+  "audio.ts": {},
 }
 
 const OWNER = /^(?:export )?(?:async )?function (\w+)|^ {2}async (\w+)\(/

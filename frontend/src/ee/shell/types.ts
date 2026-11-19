@@ -48,7 +48,7 @@ export interface SiteHeaderLanguage {
 export interface SiteHeaderHandle {
   readonly closeOverlays: () => void
   /** Opens the header's plans and credits screen on a side; `false` where it does not apply (the caller's own fallback runs). */
-  readonly openBilling: (tab: "plans" | "credits") => boolean
+  readonly openBilling: (tab: "plans" | "credits", options?: { readonly needed?: number }) => boolean
   /** The hosted header's own: closes that screen when the header is made inert. The app never calls it. */
   readonly closeBillingForInert: () => void
 }

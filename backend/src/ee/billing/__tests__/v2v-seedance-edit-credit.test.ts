@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { SEEDANCE_VIDEO_EDIT_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared/models"
-import { seedanceVideoEditCreditId } from "@nodaro/shared/credits"
+import { isClipPricedV2vProvider, seedanceVideoEditCreditId } from "@nodaro/shared/credits"
 import { MODEL_CATALOG, VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../credits.js"
 import { seedance2RefVideoQuote } from "../seedance2-ref-video-quote.js"
@@ -56,10 +56,16 @@ describe("video-to-video — Seedance edit lane credit identifier", () => {
     }
   })
 
-  it("leaves every /v1/video-to-video ROUTE provider on its own flat key", () => {
+  it("leaves every /v1/video-to-video ROUTE provider on its own flat key, but the two priced by their clip", () => {
     for (const provider of VIDEO_TO_VIDEO_PROVIDERS) {
       const flat = STATIC_CREDIT_COSTS[provider]
       if (flat === undefined) continue // priced in model_pricing only
+      // HappyHorse Edit / Wan 2.7 VideoEdit (decided 2026-11-18): priced by the clip's length,
+      // an unknown clip at the model's longest (video-to-video-clip-quote / -pricing tests).
+      if (isClipPricedV2vProvider(provider)) {
+        expect(estimate({ provider, v2vResolution: "1080p" }), provider).toBeGreaterThanOrEqual(flat)
+        continue
+      }
       expect(estimate({ provider, v2vResolution: "1080p" }), provider).toBe(flat)
     }
   })

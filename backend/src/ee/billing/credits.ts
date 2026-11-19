@@ -25,6 +25,13 @@ import {
   motionTransferEstimatePrice,
   motionTransferRateOf,
   motionTransferEstimateSeconds,
+  motionTransferBaseCharge,
+  isClipPricedV2vProvider,
+  v2vSeededRowCredits,
+  videoToVideoEstimatePrice,
+  videoToVideoSentResolution,
+  AUDIO_ISOLATION_RATE_ID,
+  audioIsolationEstimateUnits,
   AI_AVATAR_DURATION_BUCKETS,
   type AiAvatarEngine,
   type AiAvatarResolution,
@@ -2029,8 +2036,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // ── Video-to-Video / Motion ──
   "wan": 175,                     // (V2V 5s 720p)
   "wan-flash": 100,               // est (Flash V2V, faster)
+  // Wan 2.7 VideoEdit (decided 2026-11-18, `videoToVideoClipPrice`): charged
+  // per second of the clip it delivers at the per-4s row (the price of FOUR
+  // seconds; 720p at the 1080p row for now), but never below the flat row —
+  // a run is charged the larger of the two. Seeded by migration 671.
   "wan-videoedit": 320,
-  "wan-t2v": 270,                 // (T2V 5s 1080p default)
+  "wan-videoedit:1080p:per-4s": 240,
+  "wan-t2v": 270,                // (T2V 5s 1080p default)
   "wan-turbo-t2v": 200,           // (T2V 5s 720p default)
   // Wan 2.7 T2I — 1K/2K/4K (estimated, adjust after audit-credits post-ship)
   "wan-2.7": 20,        // (1K default)
@@ -2101,13 +2113,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "happyhorse-ref2v:12s:1080p":   870, "happyhorse-ref2v:13s:1080p": 950, "happyhorse-ref2v:14s:1080p": 1020,
   "happyhorse-ref2v:15s:1080p":  1090,
   // HappyHorse Edit stays on the 1.0 endpoint (1.1 has no video-edit mode).
-  // KIE bills per second (published: 28 cr/s @720p, 48 cr/s @1080p) but the
-  // input clip's duration isn't known at reservation time (the v2v route has
-  // no duration probe), so this is a flat 5s-@720p-equivalent: ceil(28×5÷4).
-  // The render default is pinned to 720p in kie/models.ts to match. Longer
-  // inputs still under-bill — wiring duration-aware pricing needs an input
-  // probe (deferred; watch `audit-credits`).
+  // Charged per started half-second of the clip it edits (decided 2026-11-18,
+  // `videoToVideoClipPrice`, @nodaro/shared): the size's row below is the price
+  // of FOUR clip seconds, and a run is charged row × half-seconds ÷ 8, rounded
+  // up once. The size priced is the size sent: 720p unless the request names
+  // 1080p. Seeded by migration 671. The flat row stays for history and for the
+  // code a migration reaches before it.
   "happyhorse-edit": 350,
+  "happyhorse-edit:720p:per-4s": 560,
+  "happyhorse-edit:1080p:per-4s": 960,
   "luma-modify": 320,             // (not in KIE pricing data)
   "runway-aleph": 350,             // (V2V conversion)
   "topaz-video": 190,             // retired KIE flat row (pre-2026-10-25 usage logs)
@@ -2124,13 +2138,22 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "nodaro-video-upscale:1080p:per-4s": 15,
   "nodaro-video-upscale:2k:per-4s": 30,
   "nodaro-video-upscale:4k:per-4s": 60,
-  // ── Motion Transfer (per-second pricing, duration-tiered) ──
-  // Kling 3.0 720p, per second of the driving video the server measures (decided
-  // 2026-11-18): the price of four seconds; a run is charged this × billed
-  // seconds ÷ 4, rounded up once (`motionTransferPrice`). Seeded by migration
-  // 668. The tier rows below stay for history and for the code a migration
-  // reaches before it.
+  // ── Motion Transfer (per second of the driving video) ──
+  // Every model and size, per second of the driving video as the server reads
+  // it (decided 2026-11-18): each row is the price of four seconds; a run is
+  // charged this × billed seconds ÷ 4, rounded up once (`motionTransferPrice`).
+  // Wan Animate Move is charged at its 720p rate whatever size it names. Seeded
+  // by migrations 668 (Kling 3.0 720p) and 670 (the rest). The tier rows below
+  // stay for history and for the code a migration reaches before it; Wan
+  // Animate's flat rows are its floor (`motionTransferChargedPrice`).
   "kling-3.0-motion:720p:per-4s": 228,
+  "kling-3.0-motion:1080p:per-4s": 302,
+  "motion-transfer:720p:per-4s": 126,
+  "motion-transfer:1080p:per-4s": 203,
+  "wan-animate-replace:480p:per-4s": 60,
+  "wan-animate-replace:580p:per-4s": 95,
+  "wan-animate-replace:720p:per-4s": 125,
+  "wan-animate-move:720p:per-4s": 125,
   // Kling 3.0 720p: /sec
   "kling-3.0-motion": 300,        // 10s default
   "kling-3.0-motion:5s": 150,
@@ -2156,7 +2179,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "motion-transfer:1080p:10s": 230,
   "motion-transfer:1080p:15s": 340,
   "motion-transfer:1080p:30s": 680,
-  // Wan Animate (Move + Replace) — resolution-tiered pricing
+  // Wan Animate (Move + Replace) — the flat price by size, now each size's FLOOR
   "wan-animate-move": 255,         // (480p default, actual from audit)
   "wan-animate-move:580p": 330,    // (interpolated from audit)
   "wan-animate-move:720p": 410,    // (actual from audit)
@@ -2331,6 +2354,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // "lyria": 7,                    // Replicate Google Lyria 2
   // "bark": 7,                     // Replicate Suno Bark
   "elevenlabs-isolation": 74,     // /sec, variable; ~148s avg = (from audit)
+  // Audio Isolation, per started 10 seconds of its audio as the server reads it
+  // (decided 2026-11-18): a run is charged this × its units, at least one, up to
+  // 30 minutes (`audioIsolationUnits`). Seeded by migration 678. The two rows
+  // above and the `audio-isolation` alias stay for the code a migration reaches before it.
+  "elevenlabs-isolation:per-10s": 10,
   // Both Replicate transcription lanes are LIVE again — the canvas Transcribe
   // node has offered them since #768 and /v1/transcribe accepts all three
   // engines, so a commented-out row here is a 503 price_not_configured on a
@@ -6082,7 +6110,7 @@ function sumEstimatedNodes(
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges ?? [])
   const wires = runWireReadersOf(nodes, edges, rerunIds)
-  const unitsOf = (n: EstimateNode) => graphPricingUnits(n, nodes, edges, rerunIds, wires.measuredSec)
+  const unitsOf = (n: EstimateNode) => graphPricingUnits(n, nodes, edges, rerunIds, wires.measuredSec, undefined, (id) => prices.base(id))
   return nodes.reduce((sum, node) => {
     if (!include(node)) return sum
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
@@ -6453,6 +6481,9 @@ function estimateNodeCredits(
   // editor's Run total reads. A draft that exists, or none wired: as before.
   const finalize = seedanceDraftFinalizeEstimateCredits(node, nodes, edges, rerunIds, prices)
   if (finalize !== undefined) return finalize
+  // Motion Transfer on Wan Animate: never below its flat row for the size (the run's own floor rule).
+  const motionFloor = node.type === "motion-transfer" ? motionTransferFloorCredits(node, nodes, edges, prices, unitsOf(node, priced)) : undefined
+  if (motionFloor !== undefined) return motionFloor
   const modelId = getNodeModelIdentifier(priced, {
     renderCreditId: renderEstimateCreditId(priced, listingGateNodes(nodes), edges ? listingGateEdges(edges) : undefined, rerunIds),
     timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
@@ -6462,6 +6493,10 @@ function estimateNodeCredits(
     videoDepthSec: node.type === "video-depth" ? videoDepthClipSecOf(node, nodes, edges, measuredFor("video-depth"), prices) : undefined,
     // Motion Transfer: its `video` wire (the driving video) by the measured walk, with its slack.
     motionTransferSec: node.type === "motion-transfer" ? motionTransferVideoSecOf(node, edges, measuredFor("motion-transfer")) : undefined,
+    // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit: its `video` wire by the wire-length walk, with its slack;
+    // Wan 2.7 VideoEdit's flat row against its rate read from the price table's base rows.
+    videoToVideoSec: node.type === "video-to-video" ? videoToVideoClipSecOf(node, edges, measuredFor("video-to-video")) : undefined,
+    rowCredits: (id) => prices.base(id),
     pitchTempoSec: node.type === "pitch-tempo" ? pitchTempoInputSecOf(node, edges, measuredFor("pitch-tempo")) : undefined,
     // AI Avatar in audio mode: the audio its run plays (`aiAvatarAudioSourceId`, the server's engine) by the measured walk, with its slack.
     aiAvatarAudioSec: node.type === "ai-avatar" ? aiAvatarAudioSecOf(priced, nodes, edges, wires.measuredSec) : undefined,
@@ -6730,9 +6765,24 @@ function videoSfxClipSecOf(
   return videoSfxClipSec(inputs, inputs.map((e) => wireSec(e.source)))
 }
 
+
+/**
+ * The length of the clip a Video to Video's `video` wire brings, as `wireSec`
+ * reads it (the wire-length walk); undefined when the graph does not know it.
+ */
+function videoToVideoClipSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const wire = edges.find((e) => e.target === node.id && e.targetHandle === "video")
+  return wire === undefined ? undefined : wireSec(wire.source)
+}
+
 /**
  * The length of the driving video a Motion Transfer's `video` wire brings, as
- * `wireSec` reads it (the measured walk); undefined when the graph does not
+ * `wireSec` reads it (the walk the server estimate shares); undefined when the graph does not
  * know it (the estimate then quotes the most the run can be charged).
  */
 function motionTransferVideoSecOf(
@@ -6742,6 +6792,44 @@ function motionTransferVideoSecOf(
 ): number | undefined {
   if (node.id === undefined || !edges) return undefined
   const wire = edges.find((e) => e.target === node.id && e.targetHandle === "video")
+  return wire === undefined ? undefined : wireSec(wire.source)
+}
+
+/**
+ * A Motion Transfer on a model with a floor (Wan Animate), as its run is
+ * charged (`motionTransferBaseCharge`, @nodaro/shared, the rule the route and
+ * the workflow run read): the larger of its rate row × `units` (rounded up
+ * once) and its floor row, compared as base credits, marked up once at the row
+ * that won. Undefined for a model with no floor, or when a row is priced
+ * nowhere: priced as every other node then (its rate row × the units).
+ */
+function motionTransferFloorCredits(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+  units: number,
+): number | undefined {
+  const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
+  const rate = motionTransferRateOf(typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling", data.resolution)
+  if (rate.floorId === undefined) return undefined
+  const charged = motionTransferBaseCharge({ creditId: rate.rateId, units, floorId: rate.floorId }, (id) => prices.base(id))
+  if (charged.baseCredits === undefined || prices.base(rate.floorId) === undefined) return undefined
+  return prices.charge(charged.creditId, charged.baseCredits)
+}
+
+/**
+ * The length of the audio an Audio Isolation's `audio` wire brings, as
+ * `wireSec` reads it (the walk the server estimate shares); undefined when the graph does not
+ * know it (the estimate then quotes the 30-minute cap).
+ */
+function audioIsolationWireSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const wire = edges.find((e) => e.target === node.id && (e.targetHandle === "audio" || e.targetHandle == null))
   return wire === undefined ? undefined : wireSec(wire.source)
 }
 
@@ -7062,9 +7150,9 @@ function listingUtilityWireSecOf(
  * row of `MEASURING_STEP_ALLOWANCES`, slack and reading), or undefined for a
  * step the listing reads by its own rule.
  */
-function listingMeasuringStepOf(type: string): MeasuringStepId | undefined {
+function listingMeasuringStepOf(type: string, provider?: unknown): MeasuringStepId | undefined {
   if (MEASURED_VIDEO_UTILITY_JOBS.has(type)) return type as VideoUtilityStepType
-  return Object.hasOwn(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type) ? measuredInputStepId(type as MeasuredInputStepType) : undefined
+  return Object.hasOwn(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type) ? measuredInputStepId(type as MeasuredInputStepType, provider) : undefined
 }
 
 /**
@@ -7100,7 +7188,7 @@ function utilityListingParts(
   // One entry per clip that reaches it (a Bundle from a fanned-out source counts each clip), as the run estimate reads it.
   const incoming = fanInClipWires(node, nodes, edges, rerunIds)
   const episodeIds = episodeRecordingIds(nodes, edges, replacedMediaIds)
-  const step = listingMeasuringStepOf(node.type)
+  const step = listingMeasuringStepOf(node.type, node.data?.provider)
   // A video-utility job (Trim, Loop, Combine Videos): where the measured walk cannot size a clip, the listing's
   // own reading takes a Video to Video Seedance edit at the most it can make (`chargedVideoOutputLength`).
   const chargedByLength = videoUtilityEstimateBody(node, incoming) !== undefined
@@ -7311,7 +7399,7 @@ function sumListingParts(
     const runs = nodeFanOut({ id: node.id ?? "", type: node.type, data: node.data }, gateNodes, gateEdges, rerunIds)
     if (runs === 0) return sum
     // The listing's own measured walk (a generated voice by its script, as Pitch & Tempo and Dubbing read it).
-    const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds, utilityWireSec, replacedMediaIds)
+    const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds, utilityWireSec, replacedMediaIds, (id) => prices.base(id))
     // Several providers on one node: each runs, at its own price (the run's
     // expansion), as the run estimate and the editor's estimate sum them.
     const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps, utilityWireSec) ?? {
@@ -7354,6 +7442,8 @@ export function graphPricingUnits(
   measuredSec: MeasuredWireSecOf = measuredWireLengthOf(nodes, edges, rerunIds),
   /** Sources whose recording the app user replaces (a listing's): a Topaz upscale reads no size or rate from their sample. */
   replacedMediaIds: ReadonlySet<string> = new Set(),
+  /** Base rows of the caller's price table (Wan 2.7 VideoEdit's flat row against its rate); the seeded rows when absent. */
+  rowCreditsOf?: (id: string) => number | undefined,
 ): number {
   // Speaker Frames: the blocks of the edit wired in when it is known now; a
   // length not known before the run, 180 min on each camera the run will
@@ -7404,19 +7494,37 @@ export function graphPricingUnits(
       return lipSyncRateQuoteSeconds(rate, sec, source !== undefined, node.data)
     }
   }
-  // Motion Transfer at a per-second rate (Kling 3.0 at 720p): its four-second
+  // Motion Transfer (every model and size per second): its four-second rate
   // row × the billed seconds ÷ 4, at the length its `video` wire gives as the
-  // measured walk reads it (with its slack), else the most its orientation runs
-  // (`motionTransferEstimateSeconds`, the editor's rule too). The run measures
-  // the real video before it holds anything.
+  // walk reads it (with its slack), else the most its orientation runs
+  // (`motionTransferEstimateSeconds`, the editor's rule too). The run reads the
+  // real video before it holds anything. A Wan Animate floor is applied where
+  // the price table is at hand (`motionTransferFloorCredits`).
   if (node.type === "motion-transfer") {
     const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
     const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling"
     const rate = motionTransferRateOf(provider, data.resolution)
-    if (rate) {
-      const sec = motionTransferVideoSecOf(node, edges, (sourceId) => measuredSec(sourceId, "motion-transfer"))
-      return motionTransferEstimateSeconds(provider, data.characterOrientation, sec) / rate.rateSeconds
+    const sec = motionTransferVideoSecOf(node, edges, (sourceId) => measuredSec(sourceId, "motion-transfer"))
+    return motionTransferEstimateSeconds(provider, data.characterOrientation, sec) / rate.rateSeconds
+  }
+  // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit: its rate row × the
+  // billed seconds ÷ 4, at the length its `video` wire gives as the wire-length
+  // walk reads it, else the model's longest clip — the rule getNodeModelIdentifier
+  // read for the id (1 when Wan 2.7 VideoEdit is charged its flat row).
+  if (node.type === "video-to-video") {
+    const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
+    const provider = data.provider
+    if (isClipPricedV2vProvider(provider)) {
+      const sec = videoToVideoClipSecOf(node, edges, (sourceId) => measuredSec(sourceId, measuredInputStepId("video-to-video", provider)))
+      return videoToVideoEstimatePrice(provider, videoToVideoSentResolution(provider, data.v2vResolution), data.videoEditDuration, sec, rowCreditsOf ?? v2vSeededRowCredits).units ?? 1
     }
+  }
+  // Audio Isolation: one per-10-second unit per started ten seconds of the
+  // audio its `audio` wire gives as the shared wire-length walk reads it (with its
+  // slack), else the 30-minute cap's 180 (`audioIsolationEstimateUnits`, the
+  // editor's rule too). The run reads the real audio before it holds anything.
+  if (node.type === "audio-isolation") {
+    return audioIsolationEstimateUnits(audioIsolationWireSecOf(node, edges, (sourceId) => measuredSec(sourceId, "audio-isolation")))
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives as the measured walk reads it, with
@@ -7882,6 +7990,10 @@ export function getNodeModelIdentifier(
     videoDepthSec?: number
     /** Motion Transfer: its driving video's length a run estimate knows (undefined = not known: the most its orientation runs). */
     motionTransferSec?: number
+    /** Video to Video on a clip-priced model: its clip's length a run estimate knows (undefined = not known: the model's longest clip). */
+    videoToVideoSec?: number
+    /** A row's price in the caller's table (Wan 2.7 VideoEdit's flat row against its rate); the seeded rows when absent. */
+    rowCredits?: (id: string) => number | undefined
     /** Pitch & Tempo: the input's length a run estimate knows (undefined = the one-minute id). */
     pitchTempoSec?: number
     /** Transcribe on Nemotron 3.5 Transcribe: the file's length a run estimate knows (undefined = the 60-minute id). */
@@ -8239,12 +8351,17 @@ export function getNodeModelIdentifier(
     if (referenceAudioId) return referenceAudioId
   }
 
-  // Motion Transfer (decided 2026-11-18): the row of its driving video's length
-  // as the graph gives it (`motionTransferSec`, the length the run measures),
-  // else the most its orientation runs (10 s keeping the image's orientation,
-  // 30 s following the video's) — never the node's own `videoDuration`. A
-  // per-second rate (Kling 3.0 at 720p) is its row, multiplied by the units
-  // (graphPricingUnits). Above the `!provider` bail: a node naming no model runs Kling 2.6.
+  // Audio Isolation (decided 2026-11-18): its per-10-second row, which every
+  // estimate multiplies by the units (graphPricingUnits). Above the `!provider`
+  // bail: the node names no model.
+  if (nodeType === "audio-isolation") return AUDIO_ISOLATION_RATE_ID
+
+  // Motion Transfer (decided 2026-11-18): its per-second rate row, multiplied
+  // by the units of its driving video's length as the graph gives it, else of
+  // the most its orientation runs (graphPricingUnits) — never the node's own
+  // `videoDuration`. A Wan Animate floor is applied by the estimate, which has
+  // the price table (`motionTransferFloorCredits`). Above the `!provider`
+  // bail: a node naming no model runs Kling 2.6.
   if (nodeType === "motion-transfer") {
     return motionTransferEstimatePrice(typeof data.provider === "string" && data.provider !== "" ? data.provider : "kling", data.resolution, data.characterOrientation, graph.motionTransferSec).creditId
   }
@@ -8317,6 +8434,14 @@ export function getNodeModelIdentifier(
   // apps' advertised price).
   if (nodeType === "video-to-video" && isSeedanceVideoEditProvider(provider)) {
     return seedanceVideoEditCreditId(provider, data.v2vResolution as string | undefined, data.draft === true)
+  }
+
+  // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit (decided 2026-11-18):
+  // the row of its clip's length as the graph gives it (`videoToVideoSec`, the
+  // length the run reads), else the model's longest clip; a rate row is
+  // multiplied by its units (graphPricingUnits).
+  if (nodeType === "video-to-video" && isClipPricedV2vProvider(provider)) {
+    return videoToVideoEstimatePrice(provider, videoToVideoSentResolution(provider, data.v2vResolution), data.videoEditDuration, graph.videoToVideoSec, graph.rowCredits ?? v2vSeededRowCredits).creditId
   }
 
   // Video nodes with duration/audio-based variable pricing.

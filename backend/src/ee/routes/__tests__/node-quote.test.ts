@@ -36,6 +36,13 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async () => {
   return { ...actual, probeMediaDuration: probe.probeMediaDuration }
 })
 
+// The clip HappyHorse Edit / Wan 2.7 VideoEdit read before anything is held.
+const clipRead = vi.hoisted(() => ({ sec: 10, calls: 0 }))
+vi.mock("../../../lib/video-utility-probe.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/video-utility-probe.js")>()),
+  probeClipLengthSec: vi.fn(async () => { clipRead.calls++; return clipRead.sec }),
+}))
+
 const fakeProfile = {
   role: "user", tier: "standard", subscription_tier: "standard",
   subscription_credits: 100000, topup_credits: 0,
@@ -213,6 +220,42 @@ describe("POST /v1/quote equals what the run reserves on the same body", () => {
     })
     expect(quote).toMatchObject({ identifier: "luma-modify", reserve: reserved, adjustments: [], warnings: [] })
     expect(identifier).toBe("luma-modify")
+  })
+
+  // Every row reads DB_PRICE (19) here: the clip-priced models' quote is their
+  // hold, on the rows the run reads.
+  it("video-to-video on HappyHorse Edit: the clip's started half-seconds at the size sent", async () => {
+    clipRead.sec = 10.04
+    clipRead.calls = 0
+    const { quote, identifier, reserved } = await quoteThenRun("video-to-video", { videoUrl: CLIP, prompt: "make it noir", provider: "happyhorse-edit" })
+    expect(identifier).toBe("happyhorse-edit:720p:per-4s")
+    expect(quote.identifier).toBe(identifier)
+    expect(quote.reserve).toBe(reserved)
+    // 21 half-seconds: ceil(19 × 21 / 8) = 50 base.
+    expect(reserved).toBe(mk(50))
+    // The quote and the run each read the clip once.
+    expect(clipRead.calls).toBe(2)
+  })
+
+  it.each([
+    [4, "wan-videoedit", 19],
+    [5, "wan-videoedit:1080p:per-4s", Math.ceil((19 * 5) / 4)],
+  ])("video-to-video on Wan 2.7 VideoEdit, a %i s clip: the larger of the flat row and the rate (%s)", async (sec, id, base) => {
+    clipRead.sec = sec
+    const { quote, identifier, reserved } = await quoteThenRun("video-to-video", { videoUrl: CLIP, prompt: "make it noir", provider: "wan-videoedit" })
+    expect(identifier).toBe(id)
+    expect(quote.identifier).toBe(id)
+    expect(quote.reserve).toBe(reserved)
+    expect(reserved).toBe(mk(base))
+  })
+
+  it("video-to-video on HappyHorse Edit, a clip past 60 s: the quote refuses it as the run does", async () => {
+    clipRead.sec = 61
+    const app = await buildApp()
+    const q = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-to-video", params: { videoUrl: CLIP, prompt: "x", provider: "happyhorse-edit" } } })
+    expect(q.statusCode).toBe(400)
+    expect(q.json().error.code).toBe("video_too_long")
+    await app.close()
   })
 })
 

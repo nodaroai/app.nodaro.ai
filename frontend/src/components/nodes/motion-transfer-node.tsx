@@ -18,7 +18,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { useExactUnitQuote } from "@/hooks/use-unit-quote-credits"
-import { motionTransferQuote } from "@/lib/video-utility-estimate"
+import { motionTransferRateQuote } from "@/lib/video-utility-estimate"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -65,27 +65,32 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  // Priced from the driving video's length as the graph gives it (the
-  // measured walk), else the most the orientation runs — never the node's own
-  // `videoDuration` (decided 2026-11-18): the server measures the video before
-  // it holds anything. Kling 3.0 at 720p is per second: its four-second row ×
-  // the billed seconds ÷ 4, the server's whole-run quote. A length the graph
-  // does not know is shown as an estimate (≈).
-  const quoteCreditId = useWorkflowStore((s) => {
+  // Priced from the driving video's length as the graph gives it, else the
+  // most the orientation runs — never the node's own `videoDuration` (decided
+  // 2026-11-18): the server reads the video before it holds anything. Every
+  // model is per second: its four-second row × the billed seconds ÷ 4, the
+  // server's whole-run quote; Wan Animate never below its flat row for the
+  // size (the run's floor: the larger of the two charged figures). A length the
+  // graph does not know is shown as an estimate (≈).
+  const rateId = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
-    return node ? motionTransferQuote(node, s.nodes, s.edges).creditId : undefined
+    return node ? motionTransferRateQuote(node, s.nodes, s.edges).creditId : undefined
   })
-  const quoteUnits = useWorkflowStore((s) => {
+  const rateUnits = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
-    return node ? motionTransferQuote(node, s.nodes, s.edges).units : undefined
+    return node ? motionTransferRateQuote(node, s.nodes, s.edges).units ?? 1 : 1
+  })
+  const floorId = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? motionTransferRateQuote(node, s.nodes, s.edges).floorId : undefined
   })
   const lengthKnown = useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
-    return node ? motionTransferQuote(node, s.nodes, s.edges).lengthKnown : false
+    return node ? motionTransferRateQuote(node, s.nodes, s.edges).lengthKnown : false
   })
-  const tierCredits = useModelCredits(quoteUnits === undefined ? quoteCreditId : undefined, 38)
-  const rateCredits = useExactUnitQuote(quoteUnits !== undefined ? quoteCreditId : undefined, quoteUnits ?? 1)
-  const credits = quoteUnits !== undefined ? rateCredits : tierCredits
+  const rateCredits = useExactUnitQuote(rateId, rateUnits)
+  const floorCredits = useModelCredits(floorId, 0)
+  const credits = floorId !== undefined && rateCredits !== undefined ? Math.max(rateCredits, floorCredits) : rateCredits
   const creditsEstimate = !lengthKnown
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)

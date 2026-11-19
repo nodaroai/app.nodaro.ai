@@ -1,14 +1,16 @@
 import {
   checkMotionTransferLength,
+  motionTransferBaseCharge,
   motionTransferOrientation,
   motionTransferPrice,
   motionTransferRateOf,
   motionTransferResolution,
+  type MotionTransferPrice,
 } from "@nodaro/shared/credits"
 import { MOTION_TRANSFER_PROVIDERS } from "@nodaro/shared/models"
 import { DOWNLOAD_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
 import { probeLinkRefusal, type ProbeLinkRefusalCode } from "../providers/video/probe-guard.js"
-import { unitRateBaseCredits } from "./credit-base-cost.js"
+import { baseCreditCostFor, unitRateBaseCredits } from "./credit-base-cost.js"
 import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
 import { safeUrlSchema } from "./url-validator.js"
 import { probeClipLengthSec } from "./video-utility-probe.js"
@@ -16,8 +18,9 @@ import { probeClipLengthSec } from "./video-utility-probe.js"
 /**
  * Motion Transfer input gate: measures the DRIVING video before anything is
  * held, refuses one the model cannot take, and prices the run from the
- * measured length (`motionTransferPrice`, @nodaro/shared). A length the
- * caller declares (`videoDuration`) is never read for the price.
+ * length it reads (`motionTransferPrice`, @nodaro/shared), at the row the
+ * floor rule picks (`motionTransferChargedRow`). A length the caller declares
+ * (`videoDuration`) is never read for the price.
  *
  * CORE, deliberately not `ee/` — input validation runs in every edition. One
  * rule for both places a run starts: the route's measuring step (the credit
@@ -38,9 +41,9 @@ export type MotionTransferMeasure =
       readonly measuredSec: number
       /** The whole seconds the run is held and charged for. */
       readonly billedSeconds: number
-      /** The row the run reserves. */
+      /** The row the run reserves: its per-second rate, or (Wan Animate) the floor row when that is larger. */
       readonly creditId: string
-      /** Units of that row the run is charged (a per-second rate); undefined for a row charged once. */
+      /** Units of that row the run is charged (a per-second rate); undefined for a floor row, charged once. */
       readonly units?: number
     }
   | {
@@ -84,7 +87,7 @@ export async function measureMotionTransferInput(
   }
   const length = checkMotionTransferLength(run.provider, run.characterOrientation, seconds)
   if (!length.ok) return { ok: false, code: length.code, message: length.message }
-  const price = motionTransferPrice(run.provider, run.resolution, length.billedSeconds)
+  const price = await motionTransferChargedRow(motionTransferPrice(run.provider, run.resolution, length.billedSeconds))
   return {
     ok: true,
     measuredSec: seconds,
@@ -95,19 +98,40 @@ export async function measureMotionTransferInput(
 }
 
 /**
- * BASE credits (pre-markup) of a run charged at a per-second rate: the rate
- * row × the billed seconds ÷ the seconds the row prices, rounded up once
- * (`unitRateBaseCredits`, the composition a whole-run quote `<rate>:<N>u`
- * reads too); undefined for a run priced by a tier row.
+ * The row a run is charged at, by the floor rule (`motionTransferBaseCharge`,
+ * @nodaro/shared) on the rows as they are priced now — `model_pricing`, else
+ * `STATIC_CREDIT_COSTS`, the lookup its reservation reads: a Wan Animate run
+ * is charged its flat row for the size when that is at least its rate × the
+ * units, else the rate. A row priced nowhere leaves the rate, whose own lookup
+ * then refuses the run as the credit guard refuses any unpriced row; a price
+ * table that cannot be read throws. Kling has
+ * no floor and is never read here. Off-cloud every row is 0: the floor row.
  */
-export async function motionTransferRateBaseCredits(
-  provider: unknown,
-  resolution: unknown,
-  billedSeconds: number,
-): Promise<number | undefined> {
-  const rate = motionTransferRateOf(provider, resolution)
-  if (!rate) return undefined
-  return unitRateBaseCredits(rate.rateId, billedSeconds / rate.rateSeconds)
+export async function motionTransferChargedRow(price: MotionTransferPrice): Promise<MotionTransferPrice> {
+  if (price.floorId === undefined) return price
+  const rows = new Map<string, number>()
+  for (const id of [price.creditId, price.floorId]) {
+    try {
+      rows.set(id, await baseCreditCostFor(id))
+    } catch (err) {
+      // Priced nowhere: left out, so the rule keeps the rate (see above). Any
+      // other failure (the price table cannot be read) refuses the run rather
+      // than charge it below its floor.
+      if ((err as { name?: unknown } | null)?.name !== "PriceNotConfiguredError") throw err
+    }
+  }
+  const { baseCredits: _base, ...charged } = motionTransferBaseCharge(price, (id) => rows.get(id))
+  return charged
+}
+
+/**
+ * BASE credits (pre-markup) of a run charged at a per-second rate row: the
+ * rate row × the units, rounded up once (`unitRateBaseCredits`, the
+ * composition a whole-run quote `<rate>:<N>u` reads too); undefined for a run
+ * charged a floor row, which the reservation prices from that row.
+ */
+export async function motionTransferRateBaseCredits(creditId: string, units: number | undefined): Promise<number | undefined> {
+  return units === undefined ? undefined : unitRateBaseCredits(creditId, units)
 }
 
 /** The model a workflow payload runs: its `provider` when it is one, else the default (Kling 2.6). */
@@ -116,7 +140,7 @@ function resolvedProvider(provider: unknown): string {
 }
 
 /** Payload fields only the stamp may set: dropped from every motion-transfer payload first. */
-const STAMPED_FIELDS = ["motionTransferBilledSeconds", "bucketKey"] as const
+const STAMPED_FIELDS = ["motionTransferBilledSeconds", "motionTransferUnits", "bucketKey"] as const
 
 /**
  * The workflow run's twin of the route's measuring step: measures a
@@ -124,8 +148,9 @@ const STAMPED_FIELDS = ["motionTransferBilledSeconds", "bucketKey"] as const
  * route refuses, and stamps what the route records — `videoDuration` (the
  * length it measured, replacing any length the node carried: a browser's reading,
  * maybe of an older clip, or anything raw workflow JSON says),
- * `motionTransferBilledSeconds` (the seconds it is held and charged for) and
- * `bucketKey` (the row it reserves, see `motionTransferReserveId`). The
+ * `motionTransferBilledSeconds` (the seconds it is held and charged for),
+ * `bucketKey` (the row it reserves, see `motionTransferReserveId`) and, when
+ * that row is a per-second rate, `motionTransferUnits` (the units of it). The
  * provider and the orientation are written back as resolved, so the worker
  * runs what was priced. The caller must run it BEFORE writing input_data: the
  * worker reads the jobs row.
@@ -155,6 +180,7 @@ export async function stampMotionTransferInput(
   payload.videoDuration = measured.measuredSec
   payload.motionTransferBilledSeconds = measured.billedSeconds
   payload.bucketKey = measured.creditId
+  if (measured.units !== undefined) payload.motionTransferUnits = measured.units
   return undefined
 }
 
@@ -165,19 +191,29 @@ export function motionTransferReserveId(jobName: string, payload: Record<string,
 
 /**
  * BASE credits of a stamped motion-transfer payload charged at a per-second
- * rate (what the route's guard charges for the same video); undefined for any
- * other job and for a run priced by a tier row. A rate run that reached here
- * unmeasured is refused, never priced at a guess.
+ * rate row (what the route's guard charges for the same video): the row the
+ * stamp chose × the units it stamped; undefined for any other job and for a
+ * run charged a floor row (its stamped row prices it). A run that reached here
+ * without its stamp is refused, never priced at a guess.
  */
 export async function motionTransferStampedBaseCredits(
   jobName: string,
   payload: Record<string, unknown>,
 ): Promise<number | undefined> {
   if (jobName !== "motion-transfer") return undefined
-  if (!motionTransferRateOf(payload.provider, payload.resolution)) return undefined
   const billed = payload.motionTransferBilledSeconds
-  if (typeof billed !== "number" || !(billed > 0)) {
-    throw new Error("motion-transfer: a per-second-rate run reached its reservation without its measured video")
+  const creditId = payload.bucketKey
+  if (typeof billed !== "number" || !(billed > 0) || typeof creditId !== "string") {
+    throw new Error("motion-transfer: the run reached its reservation without its driving video's length")
   }
-  return motionTransferRateBaseCredits(payload.provider, payload.resolution, billed)
+  const units = payload.motionTransferUnits
+  if (units === undefined) {
+    // A floor row: charged once, at its row. Only a floor row can be stamped without units.
+    if (creditId === motionTransferRateOf(payload.provider, payload.resolution).rateId) {
+      throw new Error("motion-transfer: a per-second rate run reached its reservation without its units")
+    }
+    return undefined
+  }
+  if (typeof units !== "number" || !(units > 0)) throw new Error("motion-transfer: the stamped units are not a number of seconds")
+  return motionTransferRateBaseCredits(creditId, units)
 }

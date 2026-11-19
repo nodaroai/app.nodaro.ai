@@ -30,7 +30,12 @@
    "nodaro-video-upscale:2k:per-4s": 30,
    "seedance-2-5-extend:720p:per-2s": 190,
    "seedance-2-5-flash-extend:720p:per-2s": 128,
-   "kling-3.0-motion:720p:per-4s": 228
+   "kling-3.0-motion:720p:per-4s": 228,
+   "motion-transfer:720p:per-4s": 126,
+   "wan-animate-replace:720p:per-4s": 125,
+   "happyhorse-edit:720p:per-4s": 560,
+   "wan-videoedit:1080p:per-4s": 240,
+   "elevenlabs-isolation:per-10s": 10
   }
  },
  "cases": [
@@ -1313,6 +1318,199 @@
     "servedUnit": 263,
     "credits": 656,
     "perUnitQuote": 789
+   }
+  },
+  {
+   "name": "Motion Transfer (Kling 2.6, 720p): a 9.4 s driving video upload \u2014 10 billed seconds, a quarter-unit each",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "motion-transfer",
+     "data": {
+      "provider": "kling",
+      "resolution": "720p",
+      "characterOrientation": "image"
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/dance.mp4",
+      "videoDurationSec": 9.4,
+      "duration": 9.4
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "motion-transfer:720p:per-4s",
+    "units": 2.5,
+    "quoteId": "motion-transfer:720p:per-4s:2.5u",
+    "servedUnit": 145,
+    "credits": 363,
+    "perUnitQuote": 435
+   }
+  },
+  {
+   "name": "Motion Transfer (Wan Animate Replace, 720p): a 20 s driving video upload \u2014 past its floor, 20 billed seconds",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "motion-transfer",
+     "data": {
+      "provider": "wan-animate-replace",
+      "resolution": "720p"
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/dance.mp4",
+      "videoDurationSec": 20,
+      "duration": 20
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "wan-animate-replace:720p:per-4s",
+    "units": 5,
+    "quoteId": "wan-animate-replace:720p:per-4s:5u",
+    "servedUnit": 144,
+    "credits": 719,
+    "perUnitQuote": 720
+   }
+  },
+  {
+   "name": "Video to Video (HappyHorse Edit, 720p): a 10.04 s clip upload \u2014 21 started half-seconds, an eighth of a unit each",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-to-video",
+     "data": {
+      "provider": "happyhorse-edit"
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/clip.mp4",
+      "videoDurationSec": 10.04,
+      "duration": 10.04
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "happyhorse-edit:720p:per-4s",
+    "units": 2.625,
+    "quoteId": "happyhorse-edit:720p:per-4s:2.625u",
+    "servedUnit": 644,
+    "credits": 1691,
+    "perUnitQuote": 1932
+   }
+  },
+  {
+   "name": "Video to Video (Wan 2.7 VideoEdit): a 10 s clip upload \u2014 10 billed seconds, past its flat row, a quarter-unit each",
+   "nodes": [
+    {
+     "id": "x",
+     "type": "video-to-video",
+     "data": {
+      "provider": "wan-videoedit",
+      "videoEditDuration": "0"
+     }
+    },
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/clip.mp4",
+      "videoDurationSec": 10,
+      "duration": 10
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "wan-videoedit:1080p:per-4s",
+    "units": 2.5,
+    "quoteId": "wan-videoedit:1080p:per-4s:2.5u",
+    "servedUnit": 276,
+    "credits": 690,
+    "perUnitQuote": 828
+   }
+  },
+  {
+   "name": "Audio Isolation: a 25.3 s audio upload \u2014 3 started ten seconds",
+   "nodes": [
+    {
+     "id": "a",
+     "type": "upload-audio",
+     "data": {
+      "url": "https://m.test/interview.mp3",
+      "metadata": {
+       "durationSeconds": 25.3
+      }
+     }
+    },
+    {
+     "id": "x",
+     "type": "audio-isolation",
+     "data": {}
+    }
+   ],
+   "edges": [
+    {
+     "id": "a-x",
+     "source": "a",
+     "target": "x",
+     "targetHandle": "audio"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-isolation:per-10s",
+    "units": 3,
+    "quoteId": "elevenlabs-isolation:per-10s:3u",
+    "servedUnit": 12,
+    "credits": 35,
+    "perUnitQuote": 36
    }
   }
  ]

@@ -5,12 +5,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, gvpRenderResolution, gvpSegmentAudio, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
-import { dubbingQuotedMinutesOf, lipSyncPricingUnits, maskCompositePricingUnits, motionTransferPricingUnits, motionTransferQuote, videoOverlayPricingUnits, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
+import { audioIsolationPricingUnits, dubbingQuotedMinutesOf, lipSyncPricingUnits, maskCompositePricingUnits, motionTransferPricingUnits, motionTransferQuote, videoOverlayPricingUnits, videoToVideoQuote, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
+import { AUDIO_ISOLATION_RATE_ID, V2V_CLIP_RATE_IDS, WAN_VIDEOEDIT_FLOOR_CREDIT_ID, v2vSeededRowCredits, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
 import type { SelectorFields } from "@nodaro/shared/workflow"
 import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
 import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -82,11 +82,38 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "omnihuman-2-0:per-second": 35,
-  // Motion Transfer on Kling 3.0 at 720p: the RATE of four seconds of driving
+  // Motion Transfer, every model and size: the RATE of four seconds of driving
   // video; every estimate multiplies it by the billed seconds ÷ 4
-  // (PRICING_UNIT_ESTIMATORS). Pinned to STATIC_CREDIT_COSTS by
+  // (PRICING_UNIT_ESTIMATORS). Wan Animate's flat rows are its floor, quoted
+  // once when they are the larger. Pinned to STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "kling-3.0-motion:720p:per-4s": 228,
+  "kling-3.0-motion:1080p:per-4s": 302,
+  "motion-transfer:720p:per-4s": 126,
+  "motion-transfer:1080p:per-4s": 203,
+  "wan-animate-replace:480p:per-4s": 60,
+  "wan-animate-replace:580p:per-4s": 95,
+  "wan-animate-replace:720p:per-4s": 125,
+  "wan-animate-move:720p:per-4s": 125,
+  "wan-animate-replace": 255,
+  "wan-animate-replace:580p": 330,
+  "wan-animate-replace:720p": 410,
+  "wan-animate-move:720p": 410,
+  // Video to Video on HappyHorse Edit and Wan 2.7 VideoEdit: the RATE of four
+  // seconds of clip; every estimate multiplies it by the billed seconds ÷ 4
+  // (PRICING_UNIT_ESTIMATORS). Wan 2.7 VideoEdit is never charged below its
+  // flat row, listed here so a cold-cache estimate can tell which one a run
+  // pays (`videoToVideoClipPrice`). Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "happyhorse-edit:720p:per-4s": 560,
+  "happyhorse-edit:1080p:per-4s": 960,
+  "wan-videoedit:1080p:per-4s": 240,
+  "wan-videoedit": 320,
+  // Audio Isolation: the RATE of ten seconds of audio; every estimate
+  // multiplies it by the started ten seconds (PRICING_UNIT_ESTIMATORS). Pinned
+  // to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "elevenlabs-isolation:per-10s": 10,
   "video-depth": 300,
   "extend-video": 400,
   "face-swap": 160,
@@ -567,6 +594,18 @@ export function videoAuditAnalysisWired(
 }
 
 /**
+ * The rows the editor compares when Wan 2.7 VideoEdit is charged the larger of
+ * its flat row and its rate (`videoToVideoClipPrice`): the live charged prices
+ * when BOTH are cached, else both seeded rows (`v2vSeededRowCredits`) — never
+ * one of each, which would compare a marked-up price with a base one.
+ */
+export function videoToVideoClipRowOf(id: string): number | undefined {
+  const pair = [WAN_VIDEOEDIT_FLOOR_CREDIT_ID, ...V2V_CLIP_RATE_IDS.filter((r) => r.startsWith(`${WAN_VIDEOEDIT_FLOOR_CREDIT_ID}:`))]
+  if (pair.every((p) => getCachedCredits(p) !== undefined)) return getCachedCredits(id) ?? v2vSeededRowCredits(id)
+  return v2vSeededRowCredits(id)
+}
+
+/**
  * Estimate credit cost for a single node, reading node data for variable-cost nodes.
  *
  * `edges` is optional graph context — only edge-priced node types read it
@@ -615,10 +654,31 @@ export function estimateNodeCredits(
       (nodes ?? []) as WorkflowNode[],
       (edges ?? []) as WorkflowEdge[],
       reruns,
+      getCachedCredits,
     )
-    // A per-second rate (Kling 3.0 at 720p) is the price of ONE unit (four
-    // seconds): every estimate multiplies it by the units (PRICING_UNIT_ESTIMATORS).
+    // A per-second rate is the price of ONE unit (four seconds): every estimate
+    // multiplies it by the units (PRICING_UNIT_ESTIMATORS); a Wan Animate floor
+    // row is the whole price (units 1).
     return MOTION_CREDIT_COSTS[quote.creditId] ?? NODE_CREDIT_COSTS[quote.creditId] ?? NODE_CREDIT_COSTS["motion-transfer"] ?? 0
+  }
+  if (nodeType === "video-to-video" && node.data) {
+    // HappyHorse Edit / Wan 2.7 VideoEdit: the row of the clip's length as the
+    // graph gives it, else the model's longest clip (decided 2026-11-18). A
+    // rate row is the price of ONE unit (four seconds): every estimate
+    // multiplies it by the units (PRICING_UNIT_ESTIMATORS).
+    const quote = videoToVideoQuote(
+      { ...storedNode, id: storedNode.id ?? "" } as WorkflowNode,
+      (nodes ?? []) as WorkflowNode[],
+      (edges ?? []) as WorkflowEdge[],
+      videoToVideoClipRowOf,
+      reruns,
+    )
+    if (quote) return getCachedCredits(quote.creditId) ?? NODE_CREDIT_COSTS[quote.creditId] ?? NODE_CREDIT_COSTS["video-to-video"] ?? 0
+  }
+  // Audio Isolation (decided 2026-11-18): the price of ONE started ten seconds
+  // of its audio; every estimate multiplies it by the units (PRICING_UNIT_ESTIMATORS).
+  if (nodeType === "audio-isolation") {
+    return getCachedCredits(AUDIO_ISOLATION_RATE_ID) ?? NODE_CREDIT_COSTS[AUDIO_ISOLATION_RATE_ID] ?? 0
   }
   if (nodeType === "web-scrape" && node.data) {
     const rawActor = node.data.actor
@@ -1038,7 +1098,17 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   // else of the most its orientation runs (10 s / 30 s), shown as an estimate
   // (the server measures the video before it holds anything). Every other
   // model and size: 1 (its tier row is the whole price).
-  "motion-transfer": motionTransferPricingUnits,
+  // The editor's price cache decides a Wan Animate floor, as getModelIdentifier's id does.
+  "motion-transfer": (node, allNodes, edges, rerunIds) => motionTransferPricingUnits(node, allNodes, edges, rerunIds, getCachedCredits),
+  // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit: the rate's units
+  // for the clip the graph gives (billed seconds ÷ 4), else for the model's
+  // longest clip, shown as an estimate (the server reads the clip before it
+  // holds anything). 1 for Wan 2.7 VideoEdit at its flat row and every other model.
+  "video-to-video": (node, allNodes, edges, rerunIds) => videoToVideoQuote(node, allNodes, edges, videoToVideoClipRowOf, rerunIds)?.units ?? 1,
+  // Audio Isolation: one unit of its ten-second row per started ten seconds of
+  // the audio the graph gives, else the 30-minute cap's 180, shown as an
+  // estimate (the server reads the audio before it holds anything).
+  "audio-isolation": audioIsolationPricingUnits,
 };
 
 /**

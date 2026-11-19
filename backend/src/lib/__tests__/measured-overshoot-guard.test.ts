@@ -90,7 +90,7 @@ import {
   videoSfxQuoteCreditId,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits, videoDepthCreditId, videoMaskCreditId } from "@nodaro/shared/media"
-import { checkMotionTransferLength, motionTransferEstimateSeconds } from "@nodaro/shared/credits"
+import { audioIsolationEstimateUnits, checkAudioIsolationLength, checkMotionTransferLength, motionTransferEstimateSeconds, checkVideoToVideoClipLength, videoToVideoEstimateSeconds } from "@nodaro/shared/credits"
 import { lipSyncAudioPricingOf, lipSyncHeldSecondsOf } from "../lip-sync-inputs.js"
 import { nemotronChargeId } from "../nemotron-transcribe-settle.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityClipReading, videoUtilityUnits, withMeasuredInputLengths } from "../video-utility-credits.js"
@@ -322,6 +322,7 @@ describe("every measuring step's declared allowances cover a made file's oversho
     const steps = new Set(Object.keys(MEASURING_STEP_ALLOWANCES))
     for (const t of Object.keys(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC) as MeasuredInputStepType[]) {
       if (t === "video-upscale") expect([...steps].filter((s) => s.startsWith("video-upscale:")).sort()).toEqual(["video-upscale:nodaro", "video-upscale:topaz"])
+      else if (t === "video-to-video") expect([...steps].filter((s) => s.startsWith("video-to-video:")).sort()).toEqual(["video-to-video:happyhorse-edit", "video-to-video:wan-videoedit"])
       else expect(steps.has(t), t).toBe(true)
     }
     for (const t of MEASURED_VIDEO_UTILITY_JOBS) expect(steps.has(t), t).toBe(true)
@@ -338,7 +339,8 @@ describe("every measuring step's declared allowances cover a made file's oversho
 
   it("each step's slack and reading are the ones its quote passes the walk, and Trim / Loop / Combine Videos read as their runs measure", () => {
     for (const t of Object.keys(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC) as MeasuredInputStepType[]) {
-      for (const id of (t === "video-upscale" ? ["video-upscale:topaz", "video-upscale:nodaro"] : [t]) as MeasuringStepId[]) {
+      const ids = t === "video-upscale" ? ["video-upscale:topaz", "video-upscale:nodaro"] : t === "video-to-video" ? ["video-to-video:happyhorse-edit", "video-to-video:wan-videoedit"] : [t]
+      for (const id of ids as MeasuringStepId[]) {
         expect(MEASURING_STEP_ALLOWANCES[id].plannedClipSlackSec, id).toBe(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[t])
         expect(MEASURING_STEP_ALLOWANCES[id].reading, id).toBe(MEASURED_INPUT_READING[t])
       }
@@ -393,6 +395,11 @@ const SWEPT: ReadonlyArray<{ readonly name: string; readonly step: MeasuringStep
   { name: "Lip Sync, OmniHuman 2.0's seconds", step: "lip-sync", reading: "container", maxSec: OMNI.maxSeconds, quote: (s) => lipSyncEstimateSeconds(OMNI, s), charge: (s) => lipSyncHeldSeconds(OMNI, s) },
   // Motion Transfer's driving video (Kling following the video's orientation: its 30 s limit), its billed seconds.
   { name: "Motion Transfer, its billed seconds", step: "motion-transfer", reading: "container", maxSec: 30, quote: (s) => motionTransferEstimateSeconds("kling-3.0", "video", s), charge: (s) => { const r = checkMotionTransferLength("kling-3.0", "video", s); return r.ok ? r.billedSeconds : 0 } },
+  // Video to Video's clip, its billed seconds: HappyHorse Edit's started half-seconds (as a count), Wan 2.7 VideoEdit's whole seconds.
+  { name: "Video to Video, HappyHorse Edit's half-seconds", step: "video-to-video:happyhorse-edit", reading: "container", maxSec: 60, quote: (s) => 2 * videoToVideoEstimateSeconds("happyhorse-edit", undefined, s), charge: (s) => { const r = checkVideoToVideoClipLength("happyhorse-edit", s); return r.ok ? 2 * r.billedSeconds : 0 } },
+  { name: "Video to Video, Wan 2.7 VideoEdit's seconds", step: "video-to-video:wan-videoedit", reading: "container", maxSec: 10, quote: (s) => videoToVideoEstimateSeconds("wan-videoedit", "0", s), charge: (s) => { const r = checkVideoToVideoClipLength("wan-videoedit", s, "0"); return r.ok ? r.billedSeconds : 0 } },
+  // Audio Isolation's audio (its 30-minute cap), its started ten seconds.
+  { name: "Audio Isolation, its started ten seconds", step: "audio-isolation", reading: "container", maxSec: 1800, quote: (s) => audioIsolationEstimateUnits(s), charge: (s) => { const r = checkAudioIsolationLength(s); return r.ok ? r.units : 0 } },
   { name: "Mask Composite", step: "mask-composite", reading: "container", maxSec: 300, quote: (s) => maskCompositeUnits(s), charge: (s) => maskCompositeUnits(s) },
   { name: "Video Overlay", step: "video-overlay", reading: "video-stream", maxSec: 60, quote: (s) => videoOverlayVideoUnits(s), charge: (s) => videoOverlayVideoUnits(s) },
   { name: "Topaz Video Upscale, the stream", step: "video-upscale:topaz", reading: "video-stream", maxSec: 60, quote: (s) => topazVideoHoldUnits({ ...TOPAZ_1080P_30, durationSec: s }), charge: (s) => topazVideoHoldUnits({ ...TOPAZ_1080P_30, durationSec: s }) },
