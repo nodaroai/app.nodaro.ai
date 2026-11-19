@@ -35,6 +35,8 @@ const NOT_SETTINGS: Readonly<Record<string, string>> = {
   "POST /v1/admin/video-remake/prompt-parts/preview": "asks the engine for a sample prompt; writes nothing",
   "GET /v1/admin/video-remake/steps/defaults": "the engine's defaults for the steps editor",
   "POST /v1/admin/video-remake/steps/check": "asks the engine to check a steps draft; writes nothing",
+  "GET /v1/admin/video-remake/custom-style/defaults": "the engine's defaults for the custom style's two steps",
+  "POST /v1/admin/video-remake/custom-style/check": "asks the engine to check a custom style draft; writes nothing",
   "GET /v1/admin/video-remake/settings-sets": "the stored sets themselves",
   "POST /v1/admin/video-remake/settings-sets": "the stored sets themselves",
   "PUT /v1/admin/video-remake/settings-sets/:id": "the stored sets themselves",
@@ -59,6 +61,7 @@ const SAMPLES: Readonly<Record<string, unknown>> = {
   "no-person": { noPerson: {} },
   "precise-style-route": { preciseStyleRoute: { routing: "off", bypassEmails: [" Tester@Example.com ", "tester@example.com"] } },
   advanced: { show: true },
+  "custom-style": { customStyle: { enabled: false, medium: { instructions: "Read the words.", model: " some-model " }, describe: { instructions: "  " } } },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces.", avoid: "" } } } },
 }
 

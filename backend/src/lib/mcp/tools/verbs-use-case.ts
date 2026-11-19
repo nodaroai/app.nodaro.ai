@@ -34,6 +34,8 @@ import {
   SPEAKER_VIEW_EMPHASIS_ATOMS,
   SPEAKER_VIEW_LAYOUT_SETTINGS,
   TIGHTEN_EPISODE_DEFAULTS,
+  TIGHTEN_PAUSES,
+  TIGHTEN_TIGHTNESS_LEVELS,
   TRAILER_FORMATS,
   USE_CASE_NODE_TYPES,
   isClipPackEmphasis,
@@ -281,6 +283,10 @@ const TIGHTEN_INPUT = useCaseVerbInput({
       .max(100)
       .optional()
       .describe(`How far the music dips under speech, 0–100 (default ${D.musicDuckAmount}).`),
+    tightness: z
+      .enum(tuple(TIGHTEN_TIGHTNESS_LEVELS))
+      .optional()
+      .describe(`Shortens pauses: ${TIGHTEN_TIGHTNESS_LEVELS.map((l) => `${l}${l === D.tightness ? " (default)" : ""} over ${TIGHTEN_PAUSES[l].minPauseMs} ms to ${TIGHTEN_PAUSES[l].keptMs} ms`).join(", ")}.`),
     client_request_id: clientRequestIdSchema.optional(),
   },
   body: (args) => {
@@ -289,6 +295,7 @@ const TIGHTEN_INPUT = useCaseVerbInput({
     return {
       payload: {
         ...recordings.payload,
+        ...(args.tightness ? { tightness: args.tightness } : {}),
         ...(args.music_url ? { musicUrl: args.music_url } : {}),
         ...(args.output ? { output: args.output } : {}),
         ...(args.framing_aspect ? { framing: { aspect: args.framing_aspect, layout: args.framing_layout ?? "auto" } } : {}),

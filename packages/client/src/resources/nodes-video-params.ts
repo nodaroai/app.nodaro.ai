@@ -1,11 +1,16 @@
 import type { VideoToVideoNodeProvider } from "@nodaro/shared/models"
 import type { GenerationSessionParams } from "./nodes.js"
+import type { VideoRemakeEngine, VideoRemakeEstimate, VideoRemakeParams } from "./cast-swap.js"
 
 /**
  * Typed request body for `nodes.run("video-to-video", …)` / `runAndWait` /
- * `quote` — `POST /v1/video-to-video`: change or restyle an existing clip from
- * a prompt. Mirrors the route's body; fields a model does not use are ignored
- * by that model.
+ * `quote` — `POST /v1/video-to-video`: edit an existing clip by instruction.
+ * Video Remake (`client.videoRemake`, Nodaro Cloud) is the recommended way to
+ * edit, modify, restyle or transfer the motion of a clip: it keeps the clip's
+ * motion, camera and timing and changes what you ask. Its two engines are
+ * named choices here too ({@link VideoToVideoRemakeParams}), which answer its
+ * quote and start nothing. Mirrors the route's body; fields a model does not
+ * use are ignored by that model.
  */
 export interface VideoToVideoParams extends GenerationSessionParams {
   /** The clip to change. */
@@ -15,15 +20,19 @@ export interface VideoToVideoParams extends GenerationSessionParams {
   prompt?: string
   /** The person's own words, kept for the record when `prompt` was rewritten. */
   userPrompt?: string
-  /** Default `"wan"`. `seedance-2-5` edits the whole clip and is priced by the
-   *  clip's length (see `nodes.quote`). The platform tells Seedance the run is
+  /** Default `"seedance-2-5"`, which edits the whole clip by instruction (it
+   *  needs a `prompt` and a 4–30 s clip) and is priced by the clip's length
+   *  (see `nodes.quote`). `wan` / `wan-flash` do not edit the clip: they make a
+   *  new clip featuring its subject. The platform tells Seedance the run is
    *  an edit when every clip (`videoUrl` and `referenceVideoUrls`) is 4–30 s
    *  long (a draft included), so this lane takes no `referenceTaskType` of its own. */
   provider?: VideoToVideoNodeProvider
   /** Wan / Wan Flash. A Seedance edit ignores it: the result keeps the source
    *  clip's own length. */
   duration?: "5" | "10"
-  /** `480p` is Seedance only. */
+  /** `480p` is Seedance only. A request naming neither a `provider` nor a
+   *  `resolution` renders at 480p; one naming `seedance-2-5` and no resolution
+   *  renders at 720p. */
   resolution?: "480p" | "720p" | "1080p"
   /** Native audio: Wan Flash's audio track, Seedance's generated sound. */
   audio?: boolean
@@ -62,6 +71,72 @@ export interface VideoToVideoParams extends GenerationSessionParams {
    */
   referenceAudioUrls?: string[]
   [k: string]: unknown
+}
+
+/**
+ * `nodes.run("video-to-video", …)` / `nodes.quote` with a Video Remake engine
+ * as the `provider` (`"nodaro-prism"`, `"nodaro-pulse"`; Nodaro Cloud). The
+ * route starts NOTHING for these two: `run` resolves a
+ * {@link VideoToVideoRemakeQuote}, Video Remake's price for the clip and the
+ * instruction, with the request that runs it on `client.videoRemake.run`.
+ *
+ * Video Remake reads `videoUrl`, `prompt` (its instruction, the run's
+ * `postPrompt`), `resolution` and `draft`. Every other Video to Video lever
+ * (`duration`, `aspectRatio`, `seed`, `audio`, `multiShots`, …) does not apply
+ * and is dropped; a reference list (`referenceImageUrl`, `referenceImageUrls`,
+ * `referenceVideoUrls`, `referenceAudioUrls`) is refused with a 400: Video
+ * Remake takes pictures as roles and fixed references on its own route.
+ * Refusals: 404 `not_available` (a deployment without Video Remake), 403
+ * `node_not_available` / `model_not_available`, 503 `engine_unavailable`, and
+ * Video Remake's own (a clip outside 4–30 s, and the rest of its estimate's).
+ */
+export interface VideoToVideoRemakeParams {
+  /** The clip to change, 4–30 seconds. */
+  videoUrl: string
+  /** What to change, in your own words. Required. */
+  prompt: string
+  /** The Video Remake engine, by its public id. */
+  provider: VideoRemakeEngine
+  /** Nodaro Prism: 480p (its default), 720p or 1080p. Nodaro Pulse: 720p (its default) or 1080p. */
+  resolution?: "480p" | "720p" | "1080p"
+  /** Nodaro Prism only: a 480p draft that Full Quality can finish at 1080p. */
+  draft?: boolean
+  [k: string]: unknown
+}
+
+/** The `client.videoRemake.run` body that runs a {@link VideoToVideoRemakeQuote}: the clip, the instruction, no role. */
+export type VideoToVideoRemakeRun = Pick<VideoRemakeParams, "videoUrl" | "roles" | "postPrompt" | "resolution" | "draft"> & {
+  roles: []
+  postPrompt: string
+  engine: VideoRemakeEngine
+}
+
+/**
+ * What `POST /v1/video-to-video` answers for a Video Remake engine: a QUOTE,
+ * never a started job. There is no `jobId`; `quoteOnly` is always `true`.
+ * Nothing was held or charged. To run it:
+ * `client.videoRemake.run(result.videoRemake.run.body)`.
+ */
+export interface VideoToVideoRemakeQuote {
+  readonly quoteOnly: true
+  /** The same, in words. */
+  readonly message: string
+  readonly videoRemake: {
+    /** Video Remake's quote for this clip and instruction: `totalCredits` is the hold, `expectedCredits` the expected charge. */
+    readonly quote: Omit<VideoRemakeEstimate, "engine" | "maskingCredits"> & {
+      readonly engine: VideoRemakeEngine
+      /** The engine's name, as people read it ("Nodaro Prism", "Nodaro Pulse"). */
+      readonly engineName: string
+    }
+    /** The request that runs it. */
+    readonly run: { readonly method: "POST"; readonly path: "/v1/video-remake"; readonly body: VideoToVideoRemakeRun }
+  }
+  readonly jobId?: never
+}
+
+/** Whether a `nodes.run("video-to-video", …)` answer is a Video Remake quote (nothing started) rather than a job. */
+export function isVideoToVideoRemakeQuote(result: unknown): result is VideoToVideoRemakeQuote {
+  return !!result && typeof result === "object" && (result as { quoteOnly?: unknown }).quoteOnly === true && "videoRemake" in result
 }
 
 /** One way the platform shaped the price — shown so a client can explain it. */

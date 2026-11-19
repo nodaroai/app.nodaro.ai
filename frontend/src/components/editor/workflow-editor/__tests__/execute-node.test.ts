@@ -1649,13 +1649,13 @@ describe("video-to-video", () => {
       videoUrl: "http://vid.mp4",
     })
     mockRunVideoToVideoGeneration.mockResolvedValue(undefined)
-    await executeNode(makeNode("video-to-video", {}), makeCtx())
+    await executeNode(makeNode("video-to-video", { provider: "wan" }), makeCtx())
     expect(mockRunVideoToVideoGeneration).toHaveBeenCalledWith(
       "n1",
       "http://vid.mp4",
       expect.anything(),
       "",
-      undefined,
+      "wan",
       expect.objectContaining({
         aspectRatio: undefined,
         audio: undefined,
@@ -1693,6 +1693,7 @@ describe("video-to-video", () => {
       },
     }
     const v2vNode = makeNode("video-to-video", {
+      provider: "wan",
       prompt: "@shira:1:smile waving",
     })
     mockNodes = [shiraNode, v2vNode]
@@ -1736,6 +1737,7 @@ describe("video-to-video", () => {
       },
     }
     const v2vNode = makeNode("video-to-video", {
+      provider: "wan",
       prompt: "make her wave",
     })
     mockNodes = [shiraNode, v2vNode]
@@ -1767,12 +1769,64 @@ describe("video-to-video", () => {
     })
     mockRunVideoToVideoGeneration.mockResolvedValue(undefined)
     await executeNode(
-      makeNode("video-to-video", { negativePrompt: "stale data field" }),
+      makeNode("video-to-video", { provider: "wan", negativePrompt: "stale data field" }),
       makeCtx(),
     )
     const callArgs = mockRunVideoToVideoGeneration.mock.calls[0]
     const passedOptions = callArgs[5] as { negativePrompt?: string }
     expect(passedOptions.negativePrompt).toBe("wired text")
+  })
+
+  // A node that stores no model runs the default, Seedance 2.5 edit: the same
+  // text-to-video job in edit shape a node naming that model sends.
+  it("a node with no model runs the Seedance 2.5 edit, never the route's own executor", async () => {
+    const optionsFor = async (data: Record<string, unknown>) => {
+      mockRunTextToVideoGeneration.mockClear()
+      mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+      mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+      const v2vNode = makeNode("video-to-video", { prompt: "make it night", ...data })
+      mockNodes = [v2vNode]
+      mockEdges = []
+      await executeNode(v2vNode as any, makeCtx())
+      const [, prompt, , provider, options] = mockRunTextToVideoGeneration.mock.calls[0] as [string, string, unknown, string, Record<string, unknown>]
+      return { prompt, provider, options }
+    }
+    // What a node saved under the former default carries: a length and a multi-shot switch.
+    const bare = await optionsFor({ duration: 5, v2vDuration: "10", multiShots: true })
+    const named = await optionsFor({ provider: "seedance-2-5" })
+    expect(mockRunVideoToVideoGeneration).not.toHaveBeenCalled()
+    expect(bare.provider).toBe("seedance-2-5")
+    expect(bare.prompt).toBe("edit @video_1 as follows:\nmake it night")
+    expect(bare.prompt).toBe(named.prompt)
+    expect(bare.options).toEqual(named.options)
+    expect(bare.options).toMatchObject({ aspectRatio: "adaptive", duration: -1, referenceVideoUrls: ["http://vid.mp4"] })
+  })
+
+  it("a restyle look with no typed prompt runs: the preset's own text is the instruction", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockRunTextToVideoGeneration.mockClear()
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    const v2vNode = makeNode("video-to-video", { provider: "seedance-2-5", promptPrefix: "Restyle as a flowing watercolor animation. Keep the original motion and composition." })
+    mockNodes = [v2vNode]
+    mockEdges = []
+    await executeNode(v2vNode as any, makeCtx())
+    const [, prompt, , provider] = mockRunTextToVideoGeneration.mock.calls[0] as [string, string, unknown, string]
+    expect(provider).toBe("seedance-2-5")
+    expect(prompt).toBe("edit @video_1 as follows:\nRestyle as a flowing watercolor animation. Keep the original motion and composition.")
+  })
+
+  it("a node with no model and no prompt is refused: the edit needs an instruction", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    const v2vNode = makeNode("video-to-video", {})
+    mockNodes = [v2vNode]
+    mockEdges = []
+    mockRunTextToVideoGeneration.mockClear()
+    const promise = executeNode(v2vNode as any, makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No prompt")
+    expect(mockToastError).toHaveBeenCalled()
+    expect(mockRunTextToVideoGeneration).not.toHaveBeenCalled()
+    expect(mockRunVideoToVideoGeneration).not.toHaveBeenCalled()
   })
 
   // ── Seedance EDIT lane ──

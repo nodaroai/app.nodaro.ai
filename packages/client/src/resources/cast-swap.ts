@@ -321,8 +321,14 @@ export interface VideoRemakeParams {
    * the engine, where it is that run's change), and one with a pre or post prompt
    * runs as any other art-style run. The job records it in
    * `input_data.direction`.
+   *
+   * A custom style: `{ customStyle: "<text>" }` in place of `{ style }` gives
+   * the style in your own words (see {@link VideoRemakeCustomStyleDirection}),
+   * only where {@link VideoRemakeResource.styleChoice} answers `customStyle`
+   * true for the engine. It goes wherever a catalog art style goes and counts
+   * as the run's change wherever one does. Never both: send one of the two.
    */
-  direction?: { style: string }
+  direction?: VideoRemakeArtStyleDirection | VideoRemakeCustomStyleDirection
   /**
    * Nodaro Pulse only (Prism ignores it): which end of the clip is cut to
    * whole seconds (see {@link VideoRemakeMotionLength}). Default `"cut-end"`.
@@ -369,6 +375,105 @@ export interface VideoRemakeParams {
 }
 
 /** What a run would cost, in credits. */
+/** A run's art style from the catalog: a `style` picker id (see {@link VideoRemakeParams}'s `direction`). */
+export interface VideoRemakeArtStyleDirection {
+  style: string
+  customStyle?: never
+}
+
+/**
+ * A run's custom style: the visual style in your own words, in place of a
+ * catalog art style. Describe the look only: the medium (drawn, 3D-rendered
+ * or filmed), line, colour, lighting and texture; not who or what is in the
+ * video. At most 600 characters, never blank. The words are used as written;
+ * the run itself works out whether the style is drawn, rendered or filmed, at
+ * no extra charge (the estimate is the same as for a catalog art style). The
+ * job records the text as sent in `input_data.direction.customStyle`.
+ * {@link VideoRemakeResource.describeStyle} writes such a text from an image.
+ *
+ * Nodaro Prism only, on a direct run, and only where
+ * {@link VideoRemakeResource.styleChoice} answers `customStyle` true for the
+ * engine. Refusals: {@link VideoRemakeCustomStyleRefusalCode}.
+ */
+export interface VideoRemakeCustomStyleDirection {
+  customStyle: string
+  style?: never
+}
+
+/**
+ * The `code` of a refusal that concerns a custom style (`NodaroError.code`),
+ * all before anything is charged.
+ *
+ * On {@link VideoRemakeResource.run} and {@link VideoRemakeResource.estimate}:
+ * - `custom_style_with_art_style` (400): `direction` carries both `style` and
+ *   `customStyle`; send one;
+ * - `custom_style_empty` (400): the text is blank, or nothing is left of it
+ *   once its curly braces are taken out;
+ * - `custom_style_too_long` (400): more than 600 characters;
+ * - `custom_style_not_available` (403): a custom style is not offered here
+ *   (see {@link VideoRemakeStyleChoice.customStyle}); choose a catalog art
+ *   style instead;
+ * - `raw_reference_token` (400): the text holds `{image:…}`, `{video:…}` or
+ *   `{audio:…}`;
+ * - `art_style_needs_prism` / `art_style_needs_flex` (400): where a catalog
+ *   art style could not go either (Nodaro Pulse, a trend run).
+ *
+ * On {@link VideoRemakeResource.describeStyle}:
+ * - `unauthorized` (401): no authenticated user;
+ * - `validation_error` (400), `unsafe_url` (400): the body, or an address that
+ *   is not a public http(s) one;
+ * - `custom_style_not_available` (403): as above;
+ * - `image_unreadable` (400): the image could not be fetched, is larger than
+ *   10 MB, or is not a PNG, JPEG, WebP or GIF;
+ * - `describe_style_failed` (502): the image could not be described just now;
+ *   try again;
+ * - `style_not_described` (422): no style could be described from this image;
+ *   try another, or write the style yourself;
+ * - `rate_limit_exceeded` (429): too many calls in a minute for this account.
+ *
+ * Open-ended: a code not listed here may still arrive.
+ */
+export type VideoRemakeCustomStyleRefusalCode =
+  | "custom_style_with_art_style"
+  | "custom_style_empty"
+  | "custom_style_too_long"
+  | "custom_style_not_available"
+  | "raw_reference_token"
+  | "art_style_needs_prism"
+  | "art_style_needs_flex"
+  | "unauthorized"
+  | "validation_error"
+  | "unsafe_url"
+  | "image_unreadable"
+  | "describe_style_failed"
+  | "style_not_described"
+  | "rate_limit_exceeded"
+  | (string & {})
+
+/** What {@link VideoRemakeResource.describeStyle} takes. */
+export interface VideoRemakeDescribeStyleParams {
+  /** A public http(s) image (PNG, JPEG, WebP or GIF, at most 10 MB) whose visual style is put into words. */
+  imageUrl: string
+  /** A wish about the style, at most 600 characters ("like this, but darker"). */
+  note?: string
+}
+
+/** The medium a described style reads as: drawn or painted, computer-rendered or modelled, or filmed. */
+export type VideoRemakeStyleMedium = "2d" | "3d" | "photo"
+
+/** The tones a described style reads as. */
+export type VideoRemakeStyleTones = "colour" | "black-and-white" | "one-colour"
+
+/** What {@link VideoRemakeResource.describeStyle} answers. */
+export interface VideoRemakeDescribedStyle {
+  /** The image's visual style in words (never its content), at most 600 characters: ready to edit and send as `direction.customStyle`. */
+  text: string
+  /** How the description reads, a hint for an interface only: a run works out its style's medium itself, from the words it is sent. */
+  medium?: VideoRemakeStyleMedium
+  /** As `medium`. */
+  tones?: VideoRemakeStyleTones
+}
+
 export interface VideoRemakeEstimate {
   /**
    * The engine the run would use, by its public id (absent from an older
@@ -601,6 +706,17 @@ export interface VideoRemakeStyleChoice {
    * missing from it: `false`.
    */
   preciseArtStyleAlone?: Partial<Record<VideoRemakeEngine, boolean>>
+  /**
+   * Per engine, whether a direct run takes a custom style there: the style in
+   * your own words (`direction: { customStyle }`, see
+   * {@link VideoRemakeCustomStyleDirection}) in place of a catalog art style,
+   * and {@link VideoRemakeResource.describeStyle} with it. `true` only where
+   * the engine takes one and Nodaro offers it on this deployment. Nodaro
+   * Pulse is always `false` (it takes no art style). Absent from an older
+   * server, and an engine missing from it: `false` (offer the catalog's art
+   * styles alone; a custom style sent anyway is refused).
+   */
+  customStyle?: Partial<Record<VideoRemakeEngine, boolean>>
 }
 
 /**
@@ -614,6 +730,21 @@ export interface VideoRemakeAdvanced {
    * setting for the whole page, the same for every engine.
    */
   show: boolean
+}
+
+/**
+ * One art style of {@link VideoRemakeResource.artStyles}: a style Video
+ * Remake's art style picker offers, with its preview.
+ */
+export interface VideoRemakeArtStyle {
+  /** The style's id: what a run takes as `direction.style` (an id of the `style` picker catalog). */
+  id: string
+  /** The style's name in the language asked for; English where that language does not name it. */
+  label: string
+  /** A short clip of real footage wiping into the style (an absolute https address). */
+  clipUrl: string
+  /** A still frame cut from that clip (an absolute https address). */
+  stillUrl: string
 }
 
 export class VideoRemakeResource {
@@ -646,7 +777,9 @@ export class VideoRemakeResource {
    * art style alone is refused, and one with a pre or post prompt runs as any
    * other art-style run. Its `preciseArtStyle` says, per engine, whether a
    * Precise run takes an art style there too, and its `preciseArtStyleAlone`
-   * whether that art style alone is the run's change.
+   * whether that art style alone is the run's change. Its `customStyle` says,
+   * per engine, whether a run takes the style in your own words there
+   * (`direction: { customStyle }`, and {@link describeStyle}).
    * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<VideoRemakeStyleChoice> {
@@ -665,6 +798,44 @@ export class VideoRemakeResource {
    */
   advanced(): Promise<VideoRemakeAdvanced> {
     return this.client.request("GET", "/v1/video-remake/advanced")
+  }
+
+  /**
+   * Put an image's visual style into words
+   * (`POST /v1/video-remake/describe-style`): `text` describes how the image
+   * is made and how it looks (the medium, line, colour, lighting and
+   * texture), never who or what it shows, ready to show, edit and send as a
+   * run's `direction: { customStyle: text }`. With `note`, a wish about the
+   * style is folded in ("like this, but darker"). Free: it starts no job and
+   * charges nothing, and nothing of the image is kept. Needs a signed-in
+   * account, and is limited to 10 calls a minute per account. Only where
+   * {@link styleChoice} answers `customStyle` true (403
+   * `custom_style_not_available` elsewhere). Refusals:
+   * {@link VideoRemakeCustomStyleRefusalCode}.
+   */
+  describeStyle(params: VideoRemakeDescribeStyleParams): Promise<VideoRemakeDescribedStyle> {
+    const body = { imageUrl: params.imageUrl, ...(params.note !== undefined ? { note: params.note } : {}) }
+    return this.client.request("POST", "/v1/video-remake/describe-style", { body })
+  }
+
+  /**
+   * The art styles Video Remake's art style picker offers
+   * (`GET /v1/video-remake/art-styles`), in the picker's order: each with its
+   * `id` (a run's `direction.style`), its name in `locale` (a Nodaro language
+   * id such as `"he"`, `"ja"`, `"ko"` or `"pt-BR"`; English when left out,
+   * for a language Nodaro does not have, and for a style the language does
+   * not name) and its preview, a clip and a still cut from it. The list is
+   * empty where there is nothing to offer: a deployment that does not show
+   * Nodaro's previews, or one without Video Remake or its art styles. It
+   * lists what the picker shows; whether a run takes an art style on an
+   * engine is {@link styleChoice}'s to say.
+   * Public (no sign-in needed); the answer may be up to five minutes old.
+   */
+  async artStyles(params: { locale?: string } = {}): Promise<VideoRemakeArtStyle[]> {
+    const query: Record<string, string> = {}
+    if (params.locale) query.locale = params.locale
+    const res = await this.client.request<{ data: VideoRemakeArtStyle[] }>("GET", "/v1/video-remake/art-styles", { query })
+    return res.data
   }
 
   /** Quote a run before starting it (`POST /v1/video-remake/estimate`); spends nothing. */

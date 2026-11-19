@@ -395,6 +395,14 @@ describe("getHandleConnectionLimit (video-to-video)", () => {
     expect(getHandleConnectionLimit(v2v("seedance-2-5"), "video")).toBeNull()
     expect(getHandleConnectionLimit(v2v("seedance-2-5"), "prompt")).toBeNull()
   })
+
+  it("a node that stores no model takes the references of the default it runs, Seedance 2.5 edit", () => {
+    const bare = { id: "n", type: "video-to-video", data: {} } as unknown as WorkflowNode
+    for (const handle of ["imageReferences", "audioReferences"]) {
+      expect(getHandleConnectionLimit(bare, handle)).toEqual(getHandleConnectionLimit(v2v("seedance-2-5"), handle))
+    }
+    expect(getHandleConnectionLimit(bare, "imageReferences")?.limit).toBeGreaterThan(0)
+  })
 })
 
 describe("getHandleConnectionLimit — keyframes models' in-between frames", () => {

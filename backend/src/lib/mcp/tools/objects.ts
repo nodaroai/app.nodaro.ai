@@ -1,3 +1,4 @@
+import { refineFromVideoMcpRefusal } from "../../entity-motion-refine.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
@@ -275,7 +276,9 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
         "— progress and the finished clip appear in the tool card " +
         "(get_job is the programmatic fallback). Credit cost depends on " +
         "the provider.",
-      inputSchema: {
+      // A LOOSE object: `refine_from_video_url`, which the tool no longer lists, still
+      // reaches the handler, which refuses it. Only the listed keys are in the tool list.
+      inputSchema: z.looseObject({
         motion_prompt: z
           .string()
           .min(1)
@@ -333,18 +336,7 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
             "Output aspect ratio. Defaults to 1:1 (product-showcase framing) — " +
             "objects favor square framing vs. location's 16:9 cinematic default.",
           ),
-        refine_from_video_url: z
-          .string()
-          .url()
-          .optional()
-          .describe(
-            "Refinement path: when set, route to video-to-video using THIS " +
-            "clip as the source instead of running image-to-video from " +
-            "`source_image_url`. Use to iterate on an existing motion clip " +
-            "with a new prompt (e.g. 'same shot but faster rotation'). " +
-            "Routes through providers with video-to-video capability.",
-          ),
-      },
+      }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -353,6 +345,8 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
       _meta: uiMeta(WIDGET_URI.jobAuto),
     },
     async (args) => {
+      const refineRefusal = refineFromVideoMcpRefusal(args)
+      if (refineRefusal) return errorResult(400, refineRefusal)
       const payload: Record<string, unknown> = {
         motionPrompt: args.motion_prompt,
         sourceImageUrl: args.source_image_url,
@@ -374,9 +368,6 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
       }
       if (args.attach_name) payload.attachName = args.attach_name
       if (args.aspect_ratio) payload.aspectRatio = args.aspect_ratio
-      if (args.refine_from_video_url) {
-        payload.refineFromVideoUrl = args.refine_from_video_url
-      }
 
       const res = await mcpInject(fastify, session, {
         method: "POST",

@@ -37,6 +37,15 @@ function packTool(made: PackMade): UseCaseNodeType {
 /** The step of each tool's run that holds its plan. */
 const PLAN_NODE: Readonly<Record<PackMade, string>> = { clips: CLIP_PACK_NODE_IDS.plan, trailer: TRAILER_NODE_IDS.plan, chapters: CHAPTERS_NODE_IDS.plan }
 
+/**
+ * A plan as the editor reads it. A plan step can answer the clips as a bare
+ * list, which is already the form the clips are read in; any other plan is
+ * unwrapped as a job's output is.
+ */
+function planFrom(json: unknown): unknown {
+  return Array.isArray(json) ? json : unwrapEditPlanOutput(json)
+}
+
 const PLAN_TIMEOUT_MS = 15 * 60_000
 const POLL_MS = 2500
 const ENDED = new Set(["failed", "cancelled", "timed_out", "discarded"])
@@ -76,7 +85,7 @@ async function planOf(ctx: RunContext, run: ToolRun, made: PackMade): Promise<un
       try {
         const execution = await getWorkflowExecution(run.executionId)
         const state = execution.nodeStates?.[PLAN_NODE[made]] as NodeStateLike | undefined
-        if (state?.status === "completed" && state.output?.json !== undefined) return unwrapEditPlanOutput(state.output.json)
+        if (state?.status === "completed" && state.output?.json !== undefined) return planFrom(state.output.json)
         if (state?.status === "failed") throw new JobFailed(state.error ?? "failed")
         if (ENDED.has(execution.status)) throw new JobFailed(execution.status)
         if (execution.status === "completed") break
@@ -91,7 +100,7 @@ async function planOf(ctx: RunContext, run: ToolRun, made: PackMade): Promise<un
     }
   }
   const output = await waitForJob(run.jobId, ctx.signal, Math.max(60_000, end - Date.now()))
-  return unwrapEditPlanOutput(output.plan ?? output.json)
+  return planFrom(output.plan ?? output.json)
 }
 
 /**

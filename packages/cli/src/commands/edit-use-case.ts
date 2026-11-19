@@ -55,6 +55,8 @@ export function registerUseCaseCommands(cmd: Command): void {
   const framingLayouts: readonly string[] = ["auto", ...SPEAKER_LAYOUT_IDS]
   /** The body's framing sources, every one of `TightenEpisodeInput["framingSource"]` (a Record, so a new one fails typecheck here). */
   const FRAMING_SOURCES = Object.keys({ auto: true, static: true, tracking: true } satisfies Record<NonNullable<TightenEpisodeInput["framingSource"]>, true>)
+  /** Every one of `TightenEpisodeInput["tightness"]` (a Record, so a new one fails typecheck here). */
+  const TIGHTNESS_LEVELS = Object.keys({ light: true, standard: true, tight: true } satisfies Record<NonNullable<TightenEpisodeInput["tightness"]>, true>)
   withRecordingsOptions(
     cmd
       .command("tighten-episode")
@@ -69,6 +71,10 @@ export function registerUseCaseCommands(cmd: Command): void {
       `with --framing, how it follows the speakers: ${FRAMING_SOURCES.join(" | ")} (default static: the even split; tracking follows faces with Speaker Frames, charged per started block of 1,000 sampled frames; auto follows faces while Speaker Frames is available to you)`,
     )
     .option("--music-duck-amount <n>", "with --music, how far the music dips under the voice, 0–100 (default 75)")
+    .option(
+      "--tightness <level>",
+      `how tightly pauses are cut: ${TIGHTNESS_LEVELS.join(" | ")} (default standard: pauses over 350 ms kept at 220 ms; light: over 600 ms kept at 350 ms; tight: over 250 ms kept at 150 ms)`,
+    )
     .option("--no-captions", "no captions on a video episode")
     .option("--caption-style <style>", `the captions' look (default word-highlight): ${ALL_CAPTION_STYLES.join(" | ")}`)
     .option("--review", "stop at a preview to review (render the final with `nodaro edit continue-use-case <jobId> --mode render-final`)")
@@ -88,6 +94,7 @@ export function registerUseCaseCommands(cmd: Command): void {
           RecordingsOpts & {
             music?: string
             musicDuckAmount?: string
+            tightness?: string
             output?: string
             framing?: string
             layout?: string
@@ -128,6 +135,10 @@ export function registerUseCaseCommands(cmd: Command): void {
           warn(`--framing-source must be ${FRAMING_SOURCES.join(", ")} (got "${opts.framingSource}")`)
           process.exit(1)
         }
+        if (opts.tightness !== undefined && !TIGHTNESS_LEVELS.includes(opts.tightness)) {
+          warn(`--tightness must be ${TIGHTNESS_LEVELS.join(", ")} (got "${opts.tightness}")`)
+          process.exit(1)
+        }
         if (opts.musicDuckAmount !== undefined && opts.music === undefined) {
           warn("--music-duck-amount applies with --music only (it is how far the music dips under the voice)")
           process.exit(1)
@@ -155,6 +166,7 @@ export function registerUseCaseCommands(cmd: Command): void {
           ...recordings,
           ...(opts.music ? { musicUrl: opts.music } : {}),
           ...(opts.musicDuckAmount !== undefined ? { musicDuckAmount: duck } : {}),
+          ...(opts.tightness ? { tightness: opts.tightness as NonNullable<TightenEpisodeInput["tightness"]> } : {}),
           ...(opts.output ? { output: opts.output as "video" | "audio" } : {}),
           ...(opts.framing
             ? { framing: { aspect: opts.framing as Framing["aspect"], layout: (opts.layout ?? "auto") as Framing["layout"] } }

@@ -106,6 +106,8 @@ const PUBLIC_ROUTE_READS: Readonly<Record<string, Read>> = {
   "GET /v1/cast-swap/style-choice": none("one admin switch, the same for everyone"),
   "GET /v1/video-remake/advanced": none("one admin switch, the same for everyone"),
   "GET /v1/cast-swap/advanced": none("one admin switch, the same for everyone"),
+  "GET /v1/video-remake/art-styles": CATALOG,
+  "GET /v1/cast-swap/art-styles": CATALOG,
   "GET /v1/gallery/items": none("no route answers this path today; the gallery is GET /v1/gallery"),
   "* /v1/gallery/report": asks("the gallery's report form: every item answers as not in the gallery", "routes/gallery.ts"),
   "GET /v1/public/workflows/*": asks("a workflow shared with settings.studio.shared: every caller but the signed-in owner gets the unshared 404", "routes/workflows.ts"),

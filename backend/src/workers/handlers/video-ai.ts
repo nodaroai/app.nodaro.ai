@@ -2,7 +2,7 @@
 import { dirname } from "node:path"
 import {
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER,
-  VIDEO_RETAKE_MODEL, VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
+  VIDEO_RETAKE_MODEL, QUEUED_VIDEO_TO_VIDEO_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
 } from "./default-models.js"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
@@ -698,7 +698,8 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     audioSetting?: "auto" | "origin"
     promptExtend?: boolean
   }
-  const resolvedV2vProvider = provider ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
+  // A queued job with no provider is a Wan 2.6 job (default-models.ts).
+  const resolvedV2vProvider = provider ?? QUEUED_VIDEO_TO_VIDEO_PROVIDER
   console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${resolvedV2vProvider})`)
 
   const v2vOnTaskCreated = makeOnTaskCreated(

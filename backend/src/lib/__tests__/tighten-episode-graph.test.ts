@@ -9,6 +9,8 @@ import { describe, it, expect } from "vitest"
 import {
   TIGHTEN_EPISODE_DEFAULTS,
   TIGHTEN_NODE_IDS as ID,
+  TIGHTEN_PAUSES,
+  TIGHTEN_TIGHTNESS_LEVELS,
   ancestorsOf,
   buildTightenEpisodeGraph,
   descendantsOf,
@@ -43,12 +45,19 @@ const CORE = [
 ]
 
 describe("resolveTightenEpisodeSettings", () => {
-  it("defaults: video out, captions on (word-highlight), review off, standard tier, duck 75", () => {
+  it("defaults: video out, captions on (word-highlight), review off, standard tier, duck 75, standard tightness", () => {
     expect(resolveTightenEpisodeSettings(undefined, "video")).toEqual(TIGHTEN_EPISODE_DEFAULTS)
     expect(TIGHTEN_EPISODE_DEFAULTS).toEqual({
       output: "video", framing: null, captions: true, captionStyle: "word-highlight", reviewBeforeRender: false,
-      planTier: "standard", instructions: "", styleGuide: "", musicDuckAmount: 75,
+      planTier: "standard", instructions: "", styleGuide: "", musicDuckAmount: 75, tightness: "standard",
     })
+  })
+  it("tightness: each level as asked; absent or unknown reads standard (ruled 2026-11-18)", () => {
+    for (const tightness of TIGHTEN_TIGHTNESS_LEVELS) {
+      expect(resolveTightenEpisodeSettings({ tightness }, "video").tightness).toBe(tightness)
+    }
+    expect(resolveTightenEpisodeSettings({}, "video").tightness).toBe("standard")
+    expect(resolveTightenEpisodeSettings({ tightness: "loose" }, "video").tightness).toBe("standard")
   })
   it("an audio recording forces audio output and no captions", () => {
     expect(resolveTightenEpisodeSettings({ output: "video", captions: true }, "audio")).toMatchObject({ output: "audio", captions: false })
@@ -87,6 +96,29 @@ describe("resolveTightenEpisodeSettings", () => {
   })
 })
 
+describe("buildTightenEpisodeGraph — tightness is the Silence Detect it runs", () => {
+  it("each level reports its pauses padded by half of what it keeps, and lists every silence of 50 ms for the plan", () => {
+    for (const tightness of TIGHTEN_TIGHTNESS_LEVELS) {
+      const { minPauseMs, keptMs } = TIGHTEN_PAUSES[tightness]
+      expect(dataOf(buildTightenEpisodeGraph(s({ tightness }), { media: VIDEO }), ID.silence)).toEqual({
+        fieldMappings: {}, label: "Silence Detect", thresholdDb: -35, minSilenceMs: minPauseMs, padMs: keptMs / 2, allRangesMinMs: 50,
+      })
+    }
+  })
+  it("light keeps more of a pause than standard, standard more than tight, and each cuts only longer pauses", () => {
+    const { light, standard, tight } = TIGHTEN_PAUSES
+    expect(light.keptMs).toBeGreaterThan(standard.keptMs)
+    expect(standard.keptMs).toBeGreaterThan(tight.keptMs)
+    for (const p of [light, standard, tight]) expect(p.minPauseMs).toBeGreaterThan(p.keptMs)
+  })
+  it("tightness changes the graph's identity, and only the Silence Detect node", () => {
+    const a = buildTightenEpisodeGraph(s({ tightness: "light" }), { media: VIDEO })
+    const b = buildTightenEpisodeGraph(s({ tightness: "tight" }), { media: VIDEO })
+    expect(usecaseGraphHash(a)).not.toBe(usecaseGraphHash(b))
+    expect(a.nodes.filter((n) => n.id !== ID.silence)).toEqual(b.nodes.filter((n) => n.id !== ID.silence))
+  })
+})
+
 describe("buildTightenEpisodeGraph — goldens", () => {
   it("video, captions off, no music, review off: the template chain rendering final", () => {
     const g = buildTightenEpisodeGraph(s({ captions: false }), { media: VIDEO })
@@ -97,7 +129,7 @@ describe("buildTightenEpisodeGraph — goldens", () => {
     expect(wires(g)).toEqual(CORE)
     expect(dataOf(g, ID.source)).toMatchObject({ url: VIDEO.url, metadata: { durationSeconds: 3600 } })
     expect(dataOf(g, ID.transcribe)).toMatchObject({ provider: "elevenlabs-stt", language: "auto", diarize: true })
-    expect(dataOf(g, ID.silence)).toMatchObject({ thresholdDb: -35, minSilenceMs: 700, padMs: 120 })
+    expect(dataOf(g, ID.silence)).toMatchObject({ thresholdDb: -35, minSilenceMs: 350, padMs: 110, allRangesMinMs: 50 })
     expect(dataOf(g, ID.plan)).toMatchObject({ mode: "tighten", planTier: "standard", instructions: "", sourceOrder: [ID.source] })
     expect(dataOf(g, ID.plan)).not.toHaveProperty("executionStatus")
     expect(dataOf(g, ID.render)).toMatchObject({ output: "video", quality: "final", crossfadeMs: 0 })

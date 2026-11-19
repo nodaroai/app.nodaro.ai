@@ -61,6 +61,9 @@ export type ModelMode =
   // video
   | "i2v"
   | "t2v"
+  // v2v: the model EDITS the clip it is given. It is what an "edit" list
+  // reads, so a Video to Video provider that makes a new clip from the
+  // input's subject instead (Wan 2.6, Wan 2.6 Flash) does not carry it.
   | "v2v"
   | "extend"
   | "motion-transfer"
@@ -3188,9 +3191,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan": {
     id: "wan",
     kind: "video",
-    // "wan" id covers v2v AND t2v under different KIE endpoints; the
-    // pricing variants tag which mode each cost belongs to.
-    modes: ["v2v", "t2v"] as const,
+    // "wan" id covers text-to-video AND the Video to Video route under
+    // different KIE endpoints; the pricing variants tag which each cost
+    // belongs to. No "v2v" mode on purpose: that mode lists the models that
+    // EDIT a clip, and this one makes a new clip featuring the input video's
+    // subject. It stays a Video to Video provider (VIDEO_TO_VIDEO_PROVIDERS)
+    // and is picked there by its id.
+    modes: ["t2v"] as const,
     family: "Alibaba",
     maker: "alibaba",
     label: "Wan 2.6",
@@ -3208,10 +3215,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   "wan-flash": {
     id: "wan-flash",
     kind: "video",
-    modes: ["v2v"] as const,
+    // No mode on purpose: "v2v" lists the models that EDIT a clip, and this
+    // one makes a new clip featuring the input video's subject. It runs only
+    // on the Video to Video route (VIDEO_TO_VIDEO_PROVIDERS), picked by its id.
+    modes: [] as const,
     family: "Alibaba",
     maker: "alibaba",
-    label: "Wan Flash V2V",
+    label: "Wan 2.6 Flash",
     series: "Wan",
     description: "Faster Wan 2.6 video-to-video: a new clip featuring the subject of the input video, in the scene the prompt describes (not an edit or restyle of the clip); optional audio and multi-shot.",
     useCases: ["v2v", "fast"],

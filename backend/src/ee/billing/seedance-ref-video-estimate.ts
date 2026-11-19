@@ -4,6 +4,7 @@ import {
   audioSoundtrackClipSec,
   billsReferenceVideoSeconds,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   pricedOutputDurationSec,
   SEEDANCE_VIDEO_EDIT_TASK_TYPE,
 } from "@nodaro/shared/models"
@@ -125,7 +126,8 @@ function refVideoEstimateRequest(
     duration = sel.duration
     referenceTaskType = data.referenceTaskType
   } else {
-    provider = (data.provider as string | undefined) ?? ""
+    // A node that stores no model runs the default (Seedance 2.5 edit).
+    provider = videoToVideoProviderOf(data.provider)
     if (!isSeedanceVideoEditProvider(provider)) return undefined
     resolution = data.v2vResolution as string | undefined
     duration = VIDEO_DURATION_AUTO

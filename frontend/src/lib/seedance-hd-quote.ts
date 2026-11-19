@@ -24,6 +24,7 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { SeedancePlannedDraftRequest } from "@/lib/api"
 import { seedanceFinalizeDraftQuote } from "@nodaro/render-rules"
 import { VIDEO_DURATION_AUTO } from "@nodaro/shared/model-catalog"
+import { videoToVideoProviderOf } from "@nodaro/shared/models"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { seedanceRefQuoteRequest } from "@/lib/seedance-ref-quote"
 import { seedanceHdDraftKey, seedanceHdQuoteKey } from "@/lib/seedance-hd-quote-key"
@@ -66,10 +67,10 @@ function unwiredVideoToVideoDraft(
 ): SeedancePlannedDraftRequest | undefined {
   if (draft.type !== "video-to-video") return undefined
   const data = withWiredSettings(draft, nodes as WorkflowNode[], edges as WorkflowEdge[]).data as Record<string, unknown>
-  if (typeof data.provider !== "string") return undefined
+  const provider = videoToVideoProviderOf(data.provider)
   const url = typeof data.videoUrl === "string" && data.videoUrl !== "" ? data.videoUrl : undefined
   return {
-    provider: data.provider,
+    provider,
     ...(typeof data.v2vResolution === "string" ? { resolution: data.v2vResolution } : {}),
     duration: VIDEO_DURATION_AUTO,
     draft: true,

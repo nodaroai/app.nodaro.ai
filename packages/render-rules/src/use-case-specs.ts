@@ -99,10 +99,13 @@ export const USE_CASE_SPECS = {
     needsVideo: false,
     inputNodeIds: { media: TIGHTEN_NODE_IDS.source, music: TIGHTEN_NODE_IDS.music, masterAudio: USE_CASE_MASTER_NODE_ID },
     // `cameras` is resolved (and sent) only for two or more recordings or a Master audio; `framingSource` only when a framed episode follows faces.
-    settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras", "framingSource"],
+    settingKeys: ["output", "framing", "captions", "captionStyle", "reviewBeforeRender", "planTier", "instructions", "styleGuide", "musicDuckAmount", "cameras", "framingSource", "tightness"],
     resultKind: "episode",
     // A node with no framing source keeps the even split it always had.
     absentFramingSource: TIGHTEN_ABSENT_FRAMING_SOURCE,
+    // Absent tightness is standard, which shortens pauses the chain used to leave (ruled 2026-11-18):
+    // an attempt stored before it ran the old cut, so it is never resumed as if it had run standard.
+    newDefaultSettings: ["tightness"],
     // An audio recording makes an audio episode, with no captions (its framing is only hidden, never cleared).
     audioForced: Object.freeze({ output: "audio", captions: false }),
     resolveSettings: (raw, kind, shape) => resolveTightenEpisodeSettings(raw, kind, shape),

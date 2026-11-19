@@ -70,7 +70,7 @@ carries them:
   `inputOverrides: { "<nodeId>": { "promptPrefix": "…" } }`, SDK
   `client.apps.run(slug, inputs, { inputOverrides })`, MCP `run_app` `inputOverrides`, CLI
   `nodaro apps run <slug> --override <nodeId>.promptPrefix="…"`.
-- **Presets** capture and apply them like any other setting — and many factory presets (Reference Sheet boards, Cast grid, Edit by Name, Face Privacy, Portrait Transformations, Stylized Subject & Edits, SwitchX operations, Restyle Looks) ship their instruction this way, so your prompt stays yours (see [Presets](./nodes/presets.md#factory-presets-that-ship-pre--post-text)) (`GET /v1/node-presets`,
+- **Presets** capture and apply them like any other setting — and many factory presets (Reference Sheet boards, Cast grid, Edit by Name, Face Privacy, Portrait Transformations, Stylized Subject & Edits, SwitchX operations, Video to Video Looks) ship their instruction this way, so your prompt stays yours (see [Presets](./nodes/presets.md#factory-presets-that-ship-pre--post-text)) (`GET /v1/node-presets`,
   `client.presets`, `nodaro presets`, MCP `get_node_preset`). The MCP `generate_image` /
   `generate_video` / `generate_music` / `text_to_audio` verbs with a `presetId` wrap your
   `prompt` with the preset's pre/post text — as does `generate_speech`, which wraps its `text`.

@@ -91,6 +91,7 @@ import {
   dialogueProviderOf,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   isCatalogExtendProvider,
   isGrokExtendProvider,
   canonicalVideoProvider,
@@ -8371,7 +8372,9 @@ export function getNodeModelIdentifier(
   // provider runs on the node's default (`EXTEND_VIDEO_DEFAULT_PROVIDER`, the
   // payload builder's too) and is quoted as that run, never the node-type row.
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
-  const provider = (data.provider as string | undefined)
+  // A Video to Video node naming no model runs the default (Seedance 2.5 edit,
+  // `videoToVideoProviderOf`, the payload builder's too) and is quoted as that run.
+  const provider = (nodeType === "video-to-video" ? videoToVideoProviderOf(data.provider) : data.provider as string | undefined)
     ?? (nodeType === "extend-video" ? EXTEND_VIDEO_DEFAULT_PROVIDER : undefined)
     ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)
   if (!provider) return nodeType

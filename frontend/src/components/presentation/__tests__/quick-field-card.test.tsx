@@ -54,8 +54,8 @@ describe("QuickFieldCard", () => {
 
   it("holds an UNSET field to a restriction: a node that would run as a disallowed model gets the first allowed one", () => {
     const onPatch = vi.fn()
-    render(<QuickFieldCard control={control("video-to-video", "provider")} nodeData={{}} allowedValues={["seedance-2-5"]} onPatch={onPatch} />)
-    expect(onPatch).toHaveBeenCalledWith({ provider: "seedance-2-5" })
+    render(<QuickFieldCard control={control("video-to-video", "provider")} nodeData={{}} allowedValues={["wan-videoedit"]} onPatch={onPatch} />)
+    expect(onPatch).toHaveBeenCalledWith({ provider: "wan-videoedit" })
   })
 
   it("leaves an unset field alone when what it runs as is allowed", () => {
@@ -172,8 +172,8 @@ describe("a cleared lever reaches the run as a clear", () => {
   it("the card reads a null run value as unset", () => {
     const c = control("video-to-video", "provider")
     render(<QuickFieldCard control={c} nodeData={{ provider: null }} onPatch={vi.fn()} />)
-    // Unset reads as the model the node runs as (Wan).
-    expect(screen.getByRole("combobox", { name: c.ariaLabel })).toHaveTextContent(/wan/i)
+    // Unset reads as the model the node runs as (Seedance 2.5 Edit).
+    expect(screen.getByRole("combobox", { name: c.ariaLabel })).toHaveTextContent(/seedance 2\.5 edit/i)
   })
 })
 

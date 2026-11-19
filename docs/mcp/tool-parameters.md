@@ -1021,7 +1021,6 @@ Needs `workflows:execute`.
 | `attach_to_creature_id` | string |  | When set, append the result to this creature's motion_clips[] bucket. Ownership is re-verified BEFORE credit reservation, so a forged id is rejected with `not_found` and no credits are charged. |
 | `attach_name` | string |  | Display name for the motion-clip entry (defaults to motion description). From 1 to 200 characters. |
 | `aspect_ratio` | string |  | Output aspect ratio. Defaults to 1:1 (centered reference-clip framing) — creatures favor square framing vs. location's 16:9 cinematic default. One of `1:1`, `3:4`, `16:9`, `9:16`, `4:3`. |
-| `refine_from_video_url` | string (URL) |  | Refinement path: when set, route to video-to-video using THIS clip as the source instead of running image-to-video from `source_image_url`. Use to iterate on an existing motion clip with a new prompt (e.g. 'same shot but faster rotation'). Routes through providers with video-to-video capability. |
 
 ## `generate_dialogue`
 
@@ -1179,7 +1178,6 @@ Needs `workflows:execute`.
 | `canonical_description` | string |  | Canonical scene description (preferred prompt context; falls back to category + name). At most 4000 characters. |
 | `attach_to_location_id` | string |  | When set, append the result to this location's atmosphere_motions[] bucket. |
 | `attach_name` | string |  | Display name for the atmosphere-motion entry (defaults to motion description). From 1 to 200 characters. |
-| `refine_from_video_url` | string (URL) |  | Refinement path: when set, route to video-to-video using THIS clip as the source instead of running image-to-video from `source_image_url`. Use to iterate on an existing atmosphere clip with a new prompt (e.g. 'same shot but light rain instead of fog'). Routes through providers with video-to-video capability. |
 
 ## `generate_mask`
 
@@ -1244,7 +1242,6 @@ Needs `workflows:execute`.
 | `attach_to_object_id` | string |  | When set, append the result to this object's motion_clips[] bucket. Ownership is re-verified BEFORE credit reservation, so a forged id is rejected with `not_found` and no credits are charged. |
 | `attach_name` | string |  | Display name for the motion-clip entry (defaults to motion description). From 1 to 200 characters. |
 | `aspect_ratio` | string |  | Output aspect ratio. Defaults to 1:1 (product-showcase framing) — objects favor square framing vs. location's 16:9 cinematic default. One of `1:1`, `3:4`, `16:9`, `9:16`, `4:3`. |
-| `refine_from_video_url` | string (URL) |  | Refinement path: when set, route to video-to-video using THIS clip as the source instead of running image-to-video from `source_image_url`. Use to iterate on an existing motion clip with a new prompt (e.g. 'same shot but faster rotation'). Routes through providers with video-to-video capability. |
 
 ## `generate_prompt`
 
@@ -2357,9 +2354,9 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `video_url` | string (URL) |  |  |
 | `video_asset_id` | string |  |  |
-| `model` | string |  | v2v model. Default `wan`. Options: wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. `wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
+| `model` | string |  | No model: a Video Remake quote on `nodaro-prism` (nothing runs); name `seedance-2-5` for an edit that runs at once. Options: nodaro-prism, nodaro-pulse, wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
 | `duration` | string |  | Wan / Wan Flash only — 5s or 10s output. One of `5`, `10`. |
-| `resolution` | string |  | Wan / Wan Flash / happyhorse-edit (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p). One of `480p`, `720p`, `1080p`. |
+| `resolution` | string |  | seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p), nodaro-prism (480p default) / nodaro-pulse (720p default, or 1080p). One of `480p`, `720p`, `1080p`. |
 | `aspect_ratio` | string |  | Runway Aleph only. One of `16:9`, `9:16`, `4:3`, `3:4`, `1:1`, `21:9`. |
 | `audio` | boolean |  | Wan Flash only — generate the clip with audio. |
 | `multi_shots` | boolean |  | Wan Flash only — several shots with transitions instead of one continuous shot. |
@@ -3433,6 +3430,7 @@ Needs `workflows:execute`.
 | `instructions` | string |  | Editing instructions for the plan. At most 4000 characters. |
 | `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
 | `music_duck_amount` | number |  | How far the music dips under speech, 0–100 (default 75). From 0 to 100. |
+| `tightness` | string |  | Shortens pauses: light over 600 ms to 350 ms, standard (default) over 350 ms to 220 ms, tight over 250 ms to 150 ms. One of `light`, `standard`, `tight`. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `train_character`
@@ -3723,6 +3721,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `engine` | string |  | Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality. One of `nodaro-prism`, `nodaro-pulse`. |
 | `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. An admin may force "motion" for the engine, which overrides this. One of `precise`, `motion`. |
 | `art_style` | string |  | An art style on Nodaro Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |
+| `custom_style` | string |  | The style in your own words, instead of art_style (never both). Write it yourself: describe the visual style only — the medium (drawn, 3D-rendered or filmed), line, colour, lighting and texture — never who or what is in the video, and no names of people. At most 600 characters. Nodaro Prism only. At most 600 characters. |
+| `custom_style_image_url` | string (URL) |  | A public https image whose visual style the video should take. Nodaro reads the image's style (never its content) and restyles the clip in it. With custom_style too, your text is a note on the image's style (for example 'like this, but darker'). Not with art_style. At most 4096 characters. |
 | `motion_length` | string |  | nodaro-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
 | `resolution` | string |  | Default "480p" (nodaro-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |

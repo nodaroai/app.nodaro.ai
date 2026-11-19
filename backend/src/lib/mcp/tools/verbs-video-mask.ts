@@ -19,8 +19,8 @@ import type { RegisterOpts } from "./verbs-image.js"
 import { dispatchJob, JOB_OUTPUT_SCHEMA } from "./_verb-helpers.js"
 
 const VIDEO_WIDGET = {
-  "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-  ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+  "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+  ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
 }
 
 function refuse(text: string) {

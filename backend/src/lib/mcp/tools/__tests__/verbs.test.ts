@@ -1802,18 +1802,24 @@ describe("suno_cover verb", () => {
 })
 
 describe("modify_video verb", () => {
-  it("calls /v1/video-to-video with prompt + provider=wan", async () => {
+  it("a model of the route's own is sent to /v1/video-to-video as named", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/video-to-video", { jobId: "j-mv" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
     const result = await callTool(server, "modify_video", {
-      prompt: "make it cyberpunk",
+      prompt: "on a rooftop at night",
       video_url: "https://a/v.mp4",
+      model: "wan",
+      duration: "10",
     })
     expect(result.isError).toBeUndefined()
-    expect(received.body?.prompt).toBe("make it cyberpunk")
+    expect(received.body?.prompt).toBe("on a rooftop at night")
     expect(received.body?.provider).toBe("wan")
+    expect(received.body?.duration).toBe("10")
   })
+
+  // A call that names no model: `modify-video-remake-engines.test.ts` (a Video Remake quote where
+  // `video_remake` is offered, a Seedance 2.5 edit that runs at once where it is not).
 
   it("seedance-2-5 dispatches through the Seedance reference-video lane, in edit shape", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-edit" })

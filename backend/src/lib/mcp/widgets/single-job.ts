@@ -371,6 +371,23 @@ ${uiProtocolShim()}
       statusEl.textContent = 'Loading…';
     });
 
+    // The quote state: the price sentence the tool wrote, then what happens next. Terminal: no
+    // polling, no media, no actions.
+    function showQuote(q) {
+      progEl.hidden = true;
+      actionsEl.hidden = true;
+      while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+      var price = document.createElement('div');
+      price.id = 'quote-price';
+      price.textContent = typeof q.summary === 'string' && q.summary ? q.summary : 'Price quote';
+      var next = document.createElement('div');
+      next.id = 'quote-next';
+      next.textContent = ${widgetJs("Nothing has run yet. Accept the price in the chat to run it with Video Remake.")};
+      statusEl.appendChild(price);
+      statusEl.appendChild(next);
+      statusEl.style.display = '';
+    }
+
     // Tool result arrives once the server has created the job and returned
     // the jobId via structuredContent. We then start polling get_asset until
     // the job lands — stateless HTTP transport can't deliver async progress
@@ -384,6 +401,12 @@ ${uiProtocolShim()}
         return;
       }
       var sc = (e.detail && e.detail.structuredContent) || {};
+      // A price quote (modify_video with a Video Remake engine): nothing ran and there is no job
+      // to follow. Show the price and the next step instead of a result.
+      if (!sc.jobId && sc.videoRemake && sc.videoRemake.quote) {
+        showQuote(sc.videoRemake);
+        return;
+      }
       if (sc.jobId) state.jobId = sc.jobId;
       if (sc.model) state.model = sc.model;
       if (sc.aspectRatio) state.aspectRatio = sc.aspectRatio;

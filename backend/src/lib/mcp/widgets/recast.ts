@@ -11,7 +11,7 @@
  * are landscape multi-panel composites (unlike the portrait cast candidates),
  * so their options stack full-width instead of sharing a 3-up grid.
  *
- * Static template registered at `ui://nodaro/widget/v4/recast`. Per-call data
+ * Static template registered at `ui://nodaro/widget/v5/recast`. Per-call data
  * arrives via the host's `ui/notifications/tool-result` event from
  * `get_recast_status`; while the run is live the widget polls that same FREE
  * tool via `tools/call`. A gate pick calls `resolve_recast_gate` (the pick

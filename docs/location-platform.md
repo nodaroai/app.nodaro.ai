@@ -145,30 +145,6 @@ downstream i2v nodes or as B-roll loops.
   image-to-video generation on that provider. See `docs/nodes/ai-video/generate-video.md`
   for the per-provider table.
 
-#### Refinement (video-to-video)
-
-Pass `refineFromVideoUrl` (REST) / `refine_from_video_url` (MCP) to route
-the worker through video-to-video using THAT clip as the source instead of
-running image-to-video from the source frame. Use to iterate on an existing
-atmosphere clip with a new prompt without shifting composition:
-
-```bash
-# REST — refine an existing fog clip into rain
-curl -X POST $API/v1/generate-location-motion \
-  -H "Authorization: Bearer $NODARO_API_KEY" \
-  -d '{
-    "motionPrompt": "same shot but light rain instead of fog",
-    "sourceImageUrl": "https://r2/loc.png",
-    "refineFromVideoUrl": "https://r2/loc-fog.mp4",
-    "provider": "wan-i2v",
-    "name": "Old Library"
-  }'
-```
-
-Routes through providers with the `video-to-video` capability (currently
-Wan 2.6 via KIE). Same auto-attach behavior — the refined clip lands in
-`atmosphere_motions[]` when `attachToLocationId` is set.
-
 ## Reference photos (mood-board)
 
 The mood-board is a small array of caller-supplied reference images that
@@ -647,15 +623,6 @@ generate_location_motion({
   name: "Rainy Tokyo Alley",
   attach_to_location_id: "loc-uuid",
   attach_name: "neon dolly-in"
-})
-
-// Refinement — iterate an existing clip via video-to-video.
-generate_location_motion({
-  motion_prompt: "same shot but light rain instead of fog",
-  source_image_url: "https://r2/loc.png",
-  refine_from_video_url: "https://r2/loc-fog.mp4",
-  provider: "wan-i2v",
-  name: "Rainy Tokyo Alley"
 })
 ```
 

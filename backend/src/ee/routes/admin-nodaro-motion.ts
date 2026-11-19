@@ -28,6 +28,8 @@
  *                                         whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it (admin-nodaro-motion-precise-style-route.ts)
  *   GET/PUT /v1/admin/video-remake/advanced
  *                                         whether a Video Remake page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
+ *   GET/PUT /v1/admin/video-remake/custom-style, GET …/custom-style/defaults, POST …/custom-style/check
+ *                                         whether a run may take the style in the person's own words, and the instructions and model of its two LLM steps (admin-nodaro-motion-custom-style.ts)
  *   GET/POST /v1/admin/video-remake/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
  *                                         named copies of every setting above, kept to load as a draft (admin-nodaro-motion-settings-sets.ts)
  *
@@ -111,6 +113,7 @@ import { NODARO_MOTION_PRECISE_ART_STYLE_SECTION, registerNodaroMotionPreciseArt
 import { NODARO_MOTION_NO_PERSON_SECTION, registerNodaroMotionNoPersonRoutes } from "./admin-nodaro-motion-no-person.js"
 import { NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION, registerNodaroMotionPreciseStyleRouteRoutes } from "./admin-nodaro-motion-precise-style-route.js"
 import { NODARO_MOTION_ADVANCED_SECTION, registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
+import { NODARO_MOTION_CUSTOM_STYLE_SECTION, registerNodaroMotionCustomStyleRoutes } from "./admin-nodaro-motion-custom-style.js"
 import { registerNodaroMotionSettingsSetsRoutes } from "./admin-nodaro-motion-settings-sets.js"
 
 /**
@@ -202,6 +205,7 @@ export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSe
   NODARO_MOTION_NO_PERSON_SECTION,
   NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION,
   NODARO_MOTION_ADVANCED_SECTION,
+  NODARO_MOTION_CUSTOM_STYLE_SECTION,
   NODARO_MOTION_PROMPT_PARTS_SECTION,
 ]
 
@@ -248,6 +252,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionNoPersonRoutes(app)
   registerNodaroMotionPreciseStyleRouteRoutes(app)
   registerNodaroMotionAdvancedRoutes(app)
+  registerNodaroMotionCustomStyleRoutes(app)
   registerNodaroMotionSettingsSetsRoutes(app, NODARO_MOTION_SETTINGS_SECTIONS)
   app.get("/v1/admin/video-remake/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {

@@ -43,16 +43,48 @@ describe("MODEL_CATALOG covers every generatable video provider", () => {
 })
 
 /**
- * Every /v1/video-to-video model is listed too, as a "v2v" video entry —
- * `/v1/models` and MCP `list_models` read only the catalog, so a model outside
- * it is one no client can offer (luma-modify was, until 2026-10-19).
+ * Every /v1/video-to-video model is listed too, as a video entry: `/v1/models`
+ * and MCP `list_models` read only the catalog, so a model outside it is one no
+ * client can offer (luma-modify was, until 2026-10-19).
+ *
+ * The mode "v2v" means the model EDITS the clip it is given: it is what the
+ * surfaces that list "edit" models read. So every Video to Video provider
+ * carries it EXCEPT the reference-to-video ones named here, which take the
+ * clip's subject and make a NEW clip of the scene the prompt describes. Those
+ * stay Video to Video providers (the route takes them, the node's menu offers
+ * them) and are picked there by id; they are not listed as edit models.
+ *
+ * A new Video to Video provider must be an edit model with "v2v", or be added
+ * to this list with its reason: it cannot be neither unnoticed.
  */
+const REFERENCE_TO_VIDEO_PROVIDERS: Readonly<Record<string, string>> = {
+  "wan": "Wan 2.6 video-to-video makes a new clip featuring the input video's subject; it does not edit the clip",
+  "wan-flash": "the faster tier of the same Wan 2.6 reference-to-video model",
+}
+
 describe("MODEL_CATALOG covers every video-to-video provider", () => {
-  it.each([...VIDEO_TO_VIDEO_PROVIDERS])("%s has a v2v video entry", (p) => {
+  it.each([...VIDEO_TO_VIDEO_PROVIDERS])("%s has a video entry", (p) => {
     const entry = MODEL_CATALOG[p]
     expect(entry, `Add a MODEL_CATALOG entry for ${p}`).toBeDefined()
     expect(entry!.kind).toBe("video")
-    expect(entry!.modes).toContain("v2v")
+  })
+
+  it("every provider is an edit model (\"v2v\") except the named reference-to-video ones", () => {
+    const others = VIDEO_TO_VIDEO_PROVIDERS.filter((p) => !MODEL_CATALOG[p]!.modes.includes("v2v"))
+    expect([...others].sort()).toEqual(Object.keys(REFERENCE_TO_VIDEO_PROVIDERS).sort())
+    for (const id of ["happyhorse-edit", "luma-modify", "runway-aleph", "wan-videoedit"]) {
+      expect(MODEL_CATALOG[id]!.modes, id).toContain("v2v")
+    }
+  })
+
+  it("a reference-to-video model is a Video to Video provider and no edit model", () => {
+    for (const id of Object.keys(REFERENCE_TO_VIDEO_PROVIDERS)) {
+      expect(VIDEO_TO_VIDEO_PROVIDERS as readonly string[]).toContain(id)
+      expect(MODEL_CATALOG[id]!.modes).not.toContain("v2v")
+    }
+    // The shared id keeps its text-to-video listing; the fast tier has no other lane.
+    expect(MODEL_CATALOG["wan"]!.modes).toEqual(["t2v"])
+    expect(MODEL_CATALOG["wan-flash"]!.modes).toEqual([])
   })
 })
 

@@ -167,7 +167,8 @@ const AI_ROUTES: AIRouteConfig[] = [
     routeFn: videoToVideoRoutes,
     requiredField: "videoUrl",
     invalidPayload: { userId: VALID_UUID },
-    validPayload: { userId: VALID_UUID, videoUrl: EXAMPLE_VIDEO_URL },
+    // A model of the route's own lane: a request naming none is a Seedance 2.5 edit, the reference lane's job.
+    validPayload: { userId: VALID_UUID, videoUrl: EXAMPLE_VIDEO_URL, provider: "wan" },
     queueJobType: "video-to-video",
     resolvedModel: "wan",
   },

@@ -14,7 +14,7 @@
 //   when `output` is audio or the recording has no picture, which is why that pip is
 //   runtimeTyped — and the plan (an EDL) on `json`.
 import { z } from "zod"
-import { SPEAKER_VIEW_LAYOUT_SETTINGS, USE_CASE_FRAMING_SOURCES } from "@nodaro/render-rules"
+import { SPEAKER_VIEW_LAYOUT_SETTINGS, TIGHTEN_TIGHTNESS_LEVELS, USE_CASE_FRAMING_SOURCES } from "@nodaro/render-rules"
 import { ALL_CAPTION_STYLES } from "@nodaro/shared/captions"
 import { EDIT_PLAN_TIERS, EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import { safeUrlSchema } from "../../lib/url-validator.js"
@@ -50,6 +50,12 @@ export const body = z.object({
   reviewBeforeRender: z.boolean().optional(),
   ...usecasePlanShape,
   musicDuckAmount: z.number().min(0).max(100).optional(),
+  /**
+   * How tightly the pauses are cut (decided 2026-11-18): `light` shortens
+   * pauses over 600 ms to 350 ms, `standard` pauses over 350 ms to 220 ms,
+   * `tight` pauses over 250 ms to 150 ms. Absent = standard, for every caller.
+   */
+  tightness: z.enum(TIGHTEN_TIGHTNESS_LEVELS).optional(),
   // The speakers' names: kept by the job and reported on `speakers[].name`, never read by the run.
   ...usecaseSpeakerNamesShape,
   ...usecaseLaneShape,
@@ -73,6 +79,7 @@ export const useCase: UnitUseCase = {
       { key: "instructions", type: "string" },
       { key: "styleGuide", type: "string" },
       { key: "musicDuckAmount", type: "number" },
+      { key: "tightness", type: "select", options: [...TIGHTEN_TIGHTNESS_LEVELS] },
       { key: "speakerNames", type: "object" },
     ],
   },

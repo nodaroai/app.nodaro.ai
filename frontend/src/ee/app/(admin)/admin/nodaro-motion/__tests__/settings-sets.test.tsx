@@ -69,6 +69,8 @@ beforeEach(() => {
   routes[`GET ${BASE}/no-person`] = () => ({ body: { data: { noPerson: null, ...engines, supported: true } } })
   routes[`GET ${BASE}/precise-style-route`] = () => ({ body: { data: { preciseStyleRoute: null, updatedAt: null, supported: true } } })
   routes[`GET ${BASE}/advanced`] = () => ({ body: { data: { show: advancedShown, updatedAt: null } } })
+  // The custom style (custom-style.test.tsx): never saved, and an engine that takes none (nothing more is asked).
+  routes["GET /v1/admin/video-remake/custom-style"] = () => ({ body: { data: { customStyle: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
   routes[`PUT ${BASE}/advanced`] = (init) => {
     advancedShown = JSON.parse(String(init?.body)).show
     return { body: { data: { show: advancedShown, updatedAt: "2026-11-06T10:00:00.000Z" } } }

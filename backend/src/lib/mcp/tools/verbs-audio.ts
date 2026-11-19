@@ -219,9 +219,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-audio",
+        resourceUri: "ui://nodaro/widget/v5/job-audio",
         visibility: ["model", "app"],
       },
     },
@@ -569,9 +569,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-audio",
+        resourceUri: "ui://nodaro/widget/v5/job-audio",
         visibility: ["model", "app"],
       },
     },
@@ -808,8 +808,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -900,9 +900,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-audio",
+        resourceUri: "ui://nodaro/widget/v5/job-audio",
         visibility: ["model", "app"],
       },
     },
@@ -969,9 +969,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -1243,9 +1243,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -1358,8 +1358,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: { jobId: z.string(), prompt: z.string().optional(), model: z.string().optional() },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -1439,8 +1439,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: { jobId: z.string(), prompt: z.string().optional(), model: z.string().optional() },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -1548,9 +1548,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -1668,9 +1668,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -1759,9 +1759,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -1845,9 +1845,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -1921,9 +1921,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -2012,9 +2012,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -2119,9 +2119,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-audio",
+          resourceUri: "ui://nodaro/widget/v5/job-audio",
           visibility: ["model", "app"],
         },
       },
@@ -2223,8 +2223,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2320,8 +2320,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2365,8 +2365,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2413,8 +2413,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2471,8 +2471,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2695,8 +2695,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2740,8 +2740,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2809,8 +2809,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2856,8 +2856,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2916,8 +2916,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2942,8 +2942,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2970,8 +2970,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3009,8 +3009,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-audio", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
       },
     },
     async (args) => {

@@ -56,7 +56,9 @@
 // Above the engines, one switch for the whole page (AdvancedSwitch.tsx): whether
 // the Video Remake page shows its Advanced chip (Prepare references and the
 // pre-prompt), off until turned on (PUT /v1/admin/video-remake/advanced). A page
-// option only: no run reads it.
+// option only: no run reads it. Below it, the custom style (CustomStyleSection.tsx,
+// use-custom-style-section.tsx): whether a Prism run may take the style in the
+// person's own words, and its two LLM steps (PUT /v1/admin/video-remake/custom-style).
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -129,6 +131,7 @@ import { PreciseStyleRouteColumn, preciseStyleRouteDraftOf, preciseStyleRouteIss
 import { SettingsSetsManager } from "./components/SettingsSetsManager"
 import type { MotionDraftOrigin } from "./components/DraftBanner"
 import { useSectionDraft } from "./use-section-draft"
+import { useCustomStyleSection } from "./use-custom-style-section"
 import {
   ADVANCED_SPEC,
   MASKING_SPEC,
@@ -249,6 +252,7 @@ export default function AdminNodaroMotionPage() {
   const styleOnly = useSectionDraft(STYLE_ONLY_SPEC, styleOnlyQuery.data, (v) => v.styleOnly, saveStyleOnly.mutateAsync, held)
   const preciseArtStyle = useSectionDraft(PRECISE_ART_STYLE_SPEC, preciseArtStyleQuery.data, (v) => v.preciseArtStyle, savePreciseArtStyle.mutateAsync, held)
   const noPerson = useSectionDraft(NO_PERSON_SPEC, noPersonQuery.data, (v) => v.noPerson, saveNoPerson.mutateAsync, held)
+  const customStyle = useCustomStyleSection(held)
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
   const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
   const wording = useSectionDraft(PROMPT_WORDING_SPEC, wordingQuery.data, (v) => v.promptWording, saveWording.mutateAsync, held)
@@ -284,6 +288,7 @@ export default function AdminNodaroMotionPage() {
     "no-person": noPerson.binding,
     "precise-style-route": preciseStyleRoute.binding,
     advanced: advanced.binding,
+    "custom-style": customStyle.binding,
     "prompt-parts": promptParts.binding,
   }
   const [draft, setDraft] = [masking.draft, masking.setDraft]
@@ -369,7 +374,8 @@ export default function AdminNodaroMotionPage() {
     !styleOnlyChanged &&
     !preciseArtStyleChanged &&
     !noPersonChanged &&
-    !preciseStyleRouteChanged
+    !preciseStyleRouteChanged &&
+    !customStyle.changed
   const pending =
     save.isPending ||
     saveMotion.isPending ||
@@ -382,7 +388,8 @@ export default function AdminNodaroMotionPage() {
     savePreciseArtStyle.isPending ||
     saveNoPerson.isPending ||
     savePreciseStyleRoute.isPending ||
-    saveAdvanced.isPending
+    saveAdvanced.isPending ||
+    customStyle.pending
 
   if (!hasAdmin()) return null
 
@@ -406,6 +413,8 @@ export default function AdminNodaroMotionPage() {
       // Its refusal is also said beside them (savePreciseStyleRoute.error).
       if (preciseStyleRouteChanged) await savePreciseStyleRoute.mutateAsync(nextPreciseStyleRoute)
       if (advancedChanged) await saveAdvanced.mutateAsync(advancedDraft)
+      // Its refusal is also said at its fields (CustomStyleSection).
+      if (customStyle.changed) await customStyle.save()
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -434,7 +443,8 @@ export default function AdminNodaroMotionPage() {
               !preciseArtStyleChanged &&
               !noPersonChanged &&
               !preciseStyleRouteChanged &&
-              !advancedChanged) ||
+              !advancedChanged &&
+              !customStyle.changed) ||
             issues.length > 0 ||
             preciseStyleRouteHeld ||
             pending ||
@@ -457,6 +467,7 @@ export default function AdminNodaroMotionPage() {
           <p className="text-xs text-muted-foreground">Loading…</p>
         )}
       </div>
+      {customStyle.node}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

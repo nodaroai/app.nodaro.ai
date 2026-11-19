@@ -108,6 +108,32 @@ describe("list_models tool (always available)", () => {
     expect(text).not.toContain("\"nano-banana-2\"")
   })
 
+  it("mode v2v lists the models that edit a clip, never Wan 2.6's reference-to-video ones", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const listed = async (args: Record<string, unknown>) => {
+      const result = await callTool(server, "list_models", args)
+      expect(result.isError).toBeUndefined()
+      const body = JSON.parse(result.content[0]?.text ?? "") as {
+        sections: Array<{ families: Array<{ models: Array<{ id: string; modes: string[] }> }> }>
+      }
+      return body.sections.flatMap((s) => s.families.flatMap((f) => f.models))
+    }
+    const edits = (await listed({ mode: "v2v" })).map((m) => m.id)
+    expect(edits).toEqual(expect.arrayContaining(["happyhorse-edit", "luma-modify", "runway-aleph", "seedance-2-5", "seedance-2-5-flash", "wan-videoedit"]))
+    expect(edits).not.toContain("wan")
+    expect(edits).not.toContain("wan-flash")
+    // Both are still listed: Wan 2.6 as a text-to-video model, its fast tier with no mode.
+    const video = await listed({ kind: "video" })
+    expect(video.find((m) => m.id === "wan")?.modes).toEqual(["t2v"])
+    expect(video.find((m) => m.id === "wan-flash")?.modes).toEqual([])
+    expect((await listed({ mode: "t2v" })).map((m) => m.id)).toContain("wan")
+  })
+
   it("attaches promptTips for providers with a prompting doctrine", async () => {
     const server = buildServer()
     registerModels({

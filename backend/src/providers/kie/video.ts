@@ -26,7 +26,7 @@ import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapa
 import { getLipSyncMaxAudioSeconds, motionTransferResolution } from "@nodaro/shared/credits"
 import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
-import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider } from "@nodaro/shared/models"
+import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider, QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER } from "@nodaro/shared/models"
 import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
@@ -3223,7 +3223,9 @@ export class KieVideoProvider
     options?: ProviderOptions,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
-    const provider = model ?? "wan"
+    // No model = a job queued before the default moved off Wan 2.6: this lane
+    // has no Seedance entry (a Seedance edit runs as text-to-video).
+    const provider = model ?? QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER
     const modelConfig = KIE_VIDEO_TO_VIDEO_MODELS[provider]
     if (!modelConfig) {
       throw createSanitizedError(

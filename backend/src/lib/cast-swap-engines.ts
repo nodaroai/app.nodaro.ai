@@ -49,6 +49,18 @@ export function loadedEngineTakesArtStyle(): boolean {
 }
 
 /**
+ * Whether this process's Cast Swap engine takes a custom style
+ * (`direction.customStyle`, the style in the person's own words, and its
+ * `describe-style` route): it declares `castSwap.customStyle`. An older one's
+ * strict schema refuses the key, so a body naming one must be held back rather
+ * than sent. Whether the deployment offers it is the route's to say
+ * (`custom_style_not_available`).
+ */
+export function loadedEngineTakesCustomStyle(): boolean {
+  return getPluginSupports().castSwap?.customStyle === true
+}
+
+/**
  * The request key for a Nodaro Pulse run's length fit: `motionLength`
  * where the loaded engine takes Video Remake's names (`engineAliases`,
  * 0.394.0+), else the old `klingLength` (an older engine knows only that one

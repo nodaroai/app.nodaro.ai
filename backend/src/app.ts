@@ -197,6 +197,7 @@ import { consentRoutes } from "./ee/routes/consent.js"
 import { trendRoutes } from "./ee/routes/trends.js"
 import { castSwapStyleChoiceRoutes } from "./ee/routes/cast-swap-style-choice.js"
 import { castSwapAdvancedRoutes } from "./ee/routes/cast-swap-advanced.js"
+import { castSwapArtStylesRoutes } from "./ee/routes/cast-swap-art-styles.js"
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
@@ -850,6 +851,8 @@ export async function buildApp() {
   if (hasCredits()) await app.register(castSwapStyleChoiceRoutes)
   // Video Remake: whether a Video Remake page shows its Advanced options (public; the admin's setting, a page option only).
   if (hasCredits()) await app.register(castSwapAdvancedRoutes)
+  // Video Remake: the art styles its picker offers, each with its preview clip (public; a catalog read).
+  if (hasCredits()) await app.register(castSwapArtStylesRoutes)
   // Trends admin: build, test, promote admin runs to examples, publish (engine check per environment).
   if (hasAdmin() && hasCredits()) await app.register(adminTrendsRoutes)
   // Trend Radar: the daily run's candidate queue and settings (admin session only; the cron's tick).

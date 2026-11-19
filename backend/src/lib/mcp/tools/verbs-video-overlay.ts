@@ -100,8 +100,8 @@ export function registerOverlayImagesVerb({ server, session, fastify }: Register
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {

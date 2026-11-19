@@ -255,7 +255,7 @@ export const JOB_AUTO_CLASSIFY_JS = classifyJs(`"${OVERFLOW_NOTE}"`)
 
 /**
  * Builds the static job-auto widget HTML. Registered once per request by the
- * resource registrar under ui://nodaro/widget/v4/job-auto, with the session's
+ * resource registrar under ui://nodaro/widget/v5/job-auto, with the session's
  * pages host (`pagesBase`, lib/mcp-lane-addresses.ts) for the library link.
  */
 export function buildJobAutoWidget(pagesBase: string = mcpLaneAddresses().pagesBase): string {

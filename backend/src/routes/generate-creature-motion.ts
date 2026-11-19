@@ -11,6 +11,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { refineFromVideoRefused } from "../lib/entity-motion-refine.js"
 import {
   // Reuse the entity-agnostic video-motion helpers (the object names are the
   // canonical home for these — they produce a generic "Motion: …, // product-showcase quality" string + resolve aspect ratios; nothing in them
@@ -50,9 +51,9 @@ export const generateCreatureMotionBody = z.object({
   sourceImageUrl: safeUrlSchema,
   provider: z.enum(OBJECT_MOTION_PROVIDERS).optional().default("kling-turbo"),
   name: z.string().min(1).max(200),
-  // When set, worker routes to video-to-video using this clip as the source
-  // instead of running image-to-video from sourceImageUrl.
-  refineFromVideoUrl: safeUrlSchema.optional(),
+  // Not an option of this route: a body that sends it is refused, never run
+  // as image-to-video from `sourceImageUrl` instead.
+  refineFromVideoUrl: refineFromVideoRefused,
   // Optional descriptive context for `buildObjectMotionPrompt`. The canonical
   // description is preferred when present; the helper falls back to
   // `category` + `name` otherwise.
@@ -112,8 +113,7 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
           return provider
         }
         return buildVideoCreditModelIdentifier(
-          provider, duration, undefined, "image-to-video", undefined, undefined,
-          Boolean(b.refineFromVideoUrl),
+          provider, duration, undefined, "image-to-video",
         )
       }, { runModel: jobRunModel("generate-creature-motion") }),
     },
@@ -177,7 +177,6 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
           ? provider
           : buildVideoCreditModelIdentifier(
               provider, parsed.data.duration, undefined, "image-to-video",
-              undefined, undefined, Boolean(parsed.data.refineFromVideoUrl),
             )
 
       const builtPrompt = buildObjectMotionPrompt({
@@ -246,7 +245,6 @@ export async function generateCreatureMotionRoutes(app: FastifyInstance) {
         jobId: job.id,
         prompt,
         sourceImageUrl: parsed.data.sourceImageUrl,
-        refineFromVideoUrl: parsed.data.refineFromVideoUrl,
         provider,
         duration: parsed.data.duration,
         aspectRatio,

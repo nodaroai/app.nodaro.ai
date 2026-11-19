@@ -11,7 +11,7 @@ import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
  * node's config panel.
  */
 const RUNS_AS: Record<string, string> = {
-  "video-to-video": "wan",
+  "video-to-video": "seedance-2-5",
   "lip-sync": "kling-avatar",
   "extend-video": "veo-extend",
   "modify-image": IMAGE_MODEL_ROLE_DEFAULTS.edit,

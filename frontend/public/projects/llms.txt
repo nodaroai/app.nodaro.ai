@@ -542,24 +542,25 @@ Animate an image into video.
 
 **End frame support (2-image to video):** `minimax`, `veo3`, `veo3.1`, `kling-turbo`, `kling-3.0`, `hailuo-standard`, `bytedance-lite`
 
-#### video-to-video (25 credits)
-Transform existing video with AI.
+#### video-to-video (credits by the model and the clip's length)
+Edit an existing video by instruction.
 
 ```json
 {
   "type": "video-to-video",
   "data": {
     "label": "Video to Video",
-    "prompt": "The dancer performs on a neon-lit rooftop at night",
+    "provider": "seedance-2-5",
+    "prompt": "Turn the daytime street into a rainy night, keep everything else",
     "duration": 5,
     "fieldMappings": {}
   }
 }
 ```
 
-**Providers:** `wan`, `luma-modify`, `runway-aleph`
+**Providers:** `seedance-2-5` (the default), `seedance-2-5-flash`, `wan-videoedit`, `happyhorse-edit`, `luma-modify`, `runway-aleph`, `wan`, `wan-flash`
 
-`wan` (the default) makes a new clip featuring the subject of the input video, in the scene the prompt describes; it does not restyle or edit the clip.
+`seedance-2-5` (the default, also what a node with no `provider` runs) edits the clip by instruction and keeps its length and aspect ratio; it needs a prompt and a 4-30 s clip. `wan` and `wan-flash` neither edit nor restyle the clip: they make a new clip featuring the subject of the input video, in the scene the prompt describes. To edit a video and keep its motion, camera and timing (a new cast, prop, place or look in a 4-30 s clip; a prompt alone is a valid change), use Video Remake (Nodaro Cloud; elsewhere, where it is offered), which is not a workflow node: MCP `video_remake`; API `POST /v1/video-remake`. A restyle (changing a clip's art style while keeping its motion, camera and timing) is best done with Video Remake (Nodaro Cloud; elsewhere, where it is offered) with an art style (MCP `video_remake` with `art_style`; API `POST /v1/video-remake` with `direction: { "style": "<style id>" }`), not this node.
 
 | Input Handles | Output Handles |
 |---------------|----------------|
@@ -931,6 +932,8 @@ Upscale video resolution.
 
 #### motion-transfer (38 credits)
 Transfer motion from a video to a character image.
+
+This node animates ONE still character image. For motion transfer or motion control on a whole clip (keep the clip's motion, camera and timing; change the cast, a prop, the place, the look or the art style), use Video Remake (Nodaro Cloud; elsewhere, where it is offered), which is not a workflow node: MCP `video_remake`; API `POST /v1/video-remake`.
 
 ```json
 {

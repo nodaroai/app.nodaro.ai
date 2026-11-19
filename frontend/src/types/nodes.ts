@@ -6205,12 +6205,14 @@ export type SilenceDetectNodeData = {
   minSilenceMs?: number
   /** Padding kept around speech, ms — shrinks each reported range inward. Default 120. */
   padMs?: number
+  /** Also list every silence at least this long, unpadded, as `allRanges` (ms). Absent: no list. Tighten Episode's own Silence Detect sets it (50). */
+  allRangesMinMs?: number
   // execution state
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   currentJobId?: string
   currentJobProgress?: number
-  // execution result — single structured json output { version, ranges, durationMs }.
+  // execution result — single structured json output { version, ranges, allRanges?, durationMs }.
   // Mirrors WebScrapeNodeData.generatedJson so the DAG extractors read it uniformly.
   generatedJson?: unknown
   fieldMappings?: Record<string, unknown>

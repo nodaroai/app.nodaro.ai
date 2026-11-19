@@ -65,6 +65,8 @@ import {
 import { availableReasoningEfforts, defaultReasoningEffort, DESCRIBE_TO_PICKER_MODELS, LLM_FEATURE_DEFAULTS, LLM_MODELS, type LlmFeature, type LlmModelDef, orderedLlmModels, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
 import {
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
+  DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
   DEFAULT_TTS_PROVIDER,
   DEFAULT_DIALOGUE_PROVIDER,
   getDialogueCapabilities,
@@ -766,7 +768,7 @@ const faceSwapProviderControl = (): QuickConfigControl => ({
 const v2vResolutionControl = (): QuickConfigControl => ({
   field: "v2vResolution", ariaLabel: tx("field.resolution"), icon: Sparkles,
   options: (data) => {
-    const provider = typeof data.provider === "string" ? data.provider : "wan"
+    const provider = videoToVideoProviderOf(data.provider)
     if (provider === "runway-aleph") return []
     if (isSeedanceVideoEditProvider(provider)) return draftLockedResolutions(provider, data.draft, getVideoResolutionOptions(provider) ?? [])
     return toOptions(V2V_RESOLUTION_OPTIONS)
@@ -1256,7 +1258,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS, IMAGE_MODEL_ROLE_DEFAULTS.edit)],
   "upscale-image": [upscaleImageProviderControl()],
-  "video-to-video": [providerControl(VIDEO_V2V_MODELS, "wan"), v2vResolutionControl(), seedanceDraftControl("v2vResolution", "wan")],
+  "video-to-video": [providerControl(VIDEO_V2V_MODELS, DEFAULT_VIDEO_TO_VIDEO_PROVIDER), v2vResolutionControl(), seedanceDraftControl("v2vResolution", DEFAULT_VIDEO_TO_VIDEO_PROVIDER)],
   // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
   // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.
   "switchx": [

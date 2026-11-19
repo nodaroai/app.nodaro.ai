@@ -130,6 +130,10 @@ describe("a use-case node is its own review source", () => {
   })
 })
 
+// Frozen from the code before multicam; never re-recorded. Its five views were corrected by hand
+// when Tighten's Silence Detect came to run by tightness (ruled 2026-11-18): each view's Silence
+// Detect node reads minSilenceMs 350, padMs 110 and allRangesMinMs 50 (was 700 and 120), each
+// rewritten only where putting that node's old data back gives the record exactly.
 describe("one recording's review view is as it was before multicam (frozen from that code)", () => {
   const aud = { id: "aud", type: "upload-audio", position: at, data: { url: "https://r2/ep.m4a" } }
   const cam2 = { id: "cam2", type: "upload-video", position: at, data: { url: "https://r2/cam2.mp4" } }

@@ -77,6 +77,7 @@ const JUDGES_NODES_ITSELF: Readonly<Record<string, string>> = {
   "lib/clone-app-run.ts": "an app's, a component's or a share link's run: the runner's one-off voice clones judged before anything is written (no plugin step)",
   "routes/voice-clone-consent.ts": "the clone consent box's own route (POST /v1/voice-clone/consent), which no plugin engine's job calls",
   "workers/handlers/audio-ai.ts": "the speech worker's backstop for a one-off voice clone, asked as the job's user (a worker, no route)",
+  "ee/routes/cast-swap-art-styles.ts": "the public list of Video Remake's art styles (GET /v1/video-remake/art-styles): empty where the node is withheld from users; a read that runs no node, which no plugin engine's job calls",
 }
 
 const BACKEND_SRC = join(REPO_ROOT, "backend/src")

@@ -1,6 +1,6 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
 import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
-import type { VideoToVideoParams, NodeQuote } from "./nodes-video-params.js"
+import type { VideoToVideoParams, VideoToVideoRemakeParams, VideoToVideoRemakeQuote, NodeQuote } from "./nodes-video-params.js"
 import type { LlmChatParams } from "./nodes-llm-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
@@ -897,6 +897,19 @@ function isImageBatchRequest(type: string, params: Record<string, unknown>): boo
   return (typeof params.count === "number" && params.count > 1) || Array.isArray(params.models)
 }
 
+/** Whether a video-to-video request names a Video Remake engine, which the route quotes and never runs. */
+function isRemakeEngineRequest(type: string, params: Record<string, unknown>): boolean {
+  return type === "video-to-video" && (params.provider === "nodaro-prism" || params.provider === "nodaro-pulse")
+}
+
+function remakeEngineRefusal(provider: string): NodaroError {
+  return new NodaroError(
+    `video-to-video with provider ${provider} starts no job: it answers Video Remake's quote. Use nodes.run() to read the quote, then client.videoRemake.run() to run it.`,
+    "quote_only_provider",
+    0,
+  )
+}
+
 /** The job ids of a batch answer (several jobs from one call), or null for a single job. */
 function batchJobIds(result: RunNodeResult): string[] | null {
   const ids = (result as { jobIds?: unknown } | null)?.jobIds
@@ -980,6 +993,9 @@ export class NodesResource {
   run(type: "text-to-speech", params: TextToSpeechParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  /** A Video Remake engine as the `provider` (`"nodaro-prism"`, `"nodaro-pulse"`): answers its QUOTE and
+   *  the request that runs it on `client.videoRemake.run`. No job is started and nothing is held. */
+  run(type: "video-to-video", params: VideoToVideoRemakeParams, options?: RunNodeOptions): Promise<VideoToVideoRemakeQuote>
   run(type: "video-to-video", params: VideoToVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   /** Synchronous: answers `{ jobId, generatedText }`. */
   run(type: "llm-chat", params: LlmChatParams, options?: RunNodeOptions): Promise<RunNodeResult>
@@ -993,7 +1009,7 @@ export class NodesResource {
   /** Synchronous and free: answers the tiles, no job. */
   run(type: "split-image", params: SplitImageParams, options?: RunNodeOptions): Promise<SplitImageResult>
   run(type: string, params?: Record<string, unknown>, options?: RunNodeOptions): Promise<RunNodeResult>
-  run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult | GenerateImageBatchResult> {
+  run(type: string, params: Record<string, unknown> = {}, options: RunNodeOptions = {}): Promise<RunNodeResult | GenerateImageBatchResult | VideoToVideoRemakeQuote> {
     // The route comes from the table the platform's workflow engine uses
     // too; only render-video's plan route depends on the body.
     const route = type === "render-video" && typeof params.planType === "string" ? "/v1/render-video/plan" : nodeRunRoute(type)
@@ -1007,7 +1023,7 @@ export class NodesResource {
     // cannot run.
     const conventional = !Object.prototype.hasOwnProperty.call(NODE_RUN_ROUTES, type)
     return this.client
-      .request<RunNodeResult>("POST", route, {
+      .request<RunNodeResult | VideoToVideoRemakeQuote>("POST", route, {
         body,
         // Transport-level retry safety, opt-in per call. The platform reads the
         // standard header, so a caller that reuses a key on a retry gets the
@@ -1044,7 +1060,9 @@ export class NodesResource {
    */
   quote(type: "text-to-video", params: TextToVideoParams): Promise<NodeQuote>
   quote(type: "generate-video", params: GenerateVideoParams): Promise<NodeQuote>
-  quote(type: "video-to-video", params: VideoToVideoParams): Promise<NodeQuote>
+  /** With a Video Remake engine as the `provider`: Video Remake's own quote (`reserve` its hold,
+   *  `expected` its expected charge), with a `quote_only_provider` warning. */
+  quote(type: "video-to-video", params: VideoToVideoParams | VideoToVideoRemakeParams): Promise<NodeQuote>
   /** A Seedance 2.5 draft's 1080p finalize (`seedance-2-5-hd`) is priced from
    *  the draft itself, including the clips it was made with. */
   quote(type: "video-upscale", params: VideoUpscaleParams): Promise<NodeQuote>
@@ -1115,6 +1133,8 @@ export class NodesResource {
     // A batch would be waited on as its first job alone — refused before
     // anything is submitted or charged.
     if (isImageBatchRequest(type, params)) throw batchRefusal(`${type} with count above 1 or models makes several jobs`)
+    // A Video Remake engine is only quoted by this route: there is no job to wait for.
+    if (isRemakeEngineRequest(type, params)) throw remakeEngineRefusal(String(params.provider))
     const result = await this.run(type, params, { idempotencyKey: opts.idempotencyKey })
     const ids = batchJobIds(result)
     if (ids && ids.length > 1) throw batchRefusal(`${type} started ${ids.length} jobs (${ids.join(", ")}), which keep running`)

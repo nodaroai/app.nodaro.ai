@@ -188,6 +188,20 @@ describe("resolveAssetId — a UGC clip", () => {
   })
 })
 
+describe("resolveAssetId — a Video Remake run", () => {
+  it.each(["cast-swap", "cast-swap-full-quality"])("a %s job resolves as a video, so a run's job id feeds the video verbs", async (type) => {
+    mockJob({ id: "j4", user_id: "u1", job_type: type, output_data: { videoUrl: "https://r2/remade.mp4" } })
+    await expect(resolveAssetId({ assetId: "j4", userId: "u1", expectedKind: "video" })).resolves.toBe("https://r2/remade.mp4")
+  })
+
+  it("is never an image, and one without its video yet says so", async () => {
+    mockJob({ id: "j4", user_id: "u1", job_type: "cast-swap", output_data: { videoUrl: "https://r2/remade.mp4" } })
+    await expect(resolveAssetId({ assetId: "j4", userId: "u1", expectedKind: "image" })).rejects.toThrow(/expected image, got job of type cast-swap/)
+    mockJob({ id: "j4", user_id: "u1", job_type: "cast-swap", output_data: {} })
+    await expect(resolveAssetId({ assetId: "j4", userId: "u1", expectedKind: "video" })).rejects.toThrow(/has no videoUrl yet/)
+  })
+})
+
 describe("resolveAssetId — every node that produces a video", () => {
   it("a still-to-video job resolves as a video, so its id feeds the video verbs", async () => {
     mockJob({ id: "j1", user_id: "u1", job_type: "still-to-video", output_data: { videoUrl: "https://r2/still.mp4" } })

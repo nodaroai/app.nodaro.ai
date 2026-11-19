@@ -43,7 +43,7 @@ vi.mock("../../../config.js", async (importOriginal) => {
   return { ...orig, hasCredits: () => h.credits }
 })
 
-const { registerCastSwapTools } = await import("../cast-swap.js")
+const { registerCastSwapTools, CUSTOM_STYLE_MAX_CHARS, CUSTOM_STYLE_NOTE_MAX_CHARS_FALLBACK, CUSTOM_STYLE_QUOTE_PLACEHOLDER, _resetCustomStyleNoteLimitForTests } = await import("../cast-swap.js")
 const { buildMcpServer } = await import("../../server.js")
 const { resolveRequestSession } = await import("../../../generation-session-scope.js")
 const { sendInternalError } = await import("../../../http-errors.js")
@@ -262,6 +262,293 @@ describe("video_remake", () => {
         '/v1/video-remake/estimate {"style":"pop-art"}',
         '/v1/video-remake {"style":"pop-art"}',
       ])
+    })
+  })
+
+  it("refuses a custom style before any quote, describe or run where the loaded engine takes none (an engine from before it)", async () => {
+    const { fastify, calls } = stubFastify({
+      "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/video-remake/describe-style": { statusCode: 200, body: { text: "never read" } },
+      "/v1/video-remake": { statusCode: 202, body: { jobId: "00000000-0000-4000-8000-000000000005" } },
+    })
+    try {
+      // No declaration at all, an engine that takes art styles but predates custom ones, and one that says it takes none.
+      for (const castSwap of [undefined, { artStyle: true }, { artStyle: true, customStyle: false }]) {
+        _resetPluginSupportsForTests()
+        if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+        for (const custom of [{ custom_style: "Hand-drawn ink" }, { custom_style_image_url: "https://cdn.example/look.png" }]) {
+          for (const confirm of [undefined, true]) {
+            const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", ...custom, ...(confirm ? { confirm } : {}) })
+            expect(res.isError, JSON.stringify([castSwap, custom])).toBe(true)
+            expect(res.content).toEqual([{ type: "text", text: "Nodaro: custom styles are not available on this deployment yet. [custom_style_unavailable]" }])
+          }
+        }
+      }
+      // Its strict schema would refuse the key, and it has no route that reads an image: nothing is sent.
+      expect(calls).toEqual([])
+    } finally {
+      _resetPluginSupportsForTests()
+    }
+  })
+
+  describe("a custom style, on an engine that takes one (castSwap.customStyle)", () => {
+    const TEXT = "Hand-drawn ink on rough paper, heavy outlines, flat muted colours"
+    const IMAGE = "https://cdn.example/look.png"
+    const DESCRIBED = "Loose watercolour washes over pencil lines, soft edges, pale warm palette"
+    const JOB = "00000000-0000-4000-8000-000000000006"
+    const routes = (describe: { statusCode: number; body: unknown } = { statusCode: 200, body: { text: DESCRIBED, medium: "2d", tones: "colour" } }) =>
+      stubFastify({
+        "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/video-remake/describe-style": describe,
+        "/v1/video-remake": { statusCode: 202, body: { jobId: JOB } },
+      })
+    const urls = (calls: InjectCall[]) => calls.map((c) => c.url)
+    /** The engine's own custom-style route, the platform's read of its limits. */
+    const NOTE_LIMIT_URL = "/v1/video-remake/custom-style"
+
+    beforeEach(() => {
+      setPluginSupports({ castSwap: { artStyle: true, customStyle: true } as never })
+      _resetCustomStyleNoteLimitForTests()
+    })
+    afterEach(() => _resetPluginSupportsForTests())
+
+    it("lists both arguments, with what each is for", async () => {
+      const { fastify } = routes()
+      const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
+      const props = (tool.inputSchema as { properties: Record<string, { description?: string; maxLength?: number }> }).properties
+      expect(props.custom_style!.description).toBe(
+        "The style in your own words, instead of art_style (never both). Write it yourself: describe the visual style only — the medium (drawn, 3D-rendered or filmed), line, colour, lighting and texture — never who or what is in the video, and no names of people. At most 600 characters. Nodaro Prism only.",
+      )
+      expect(props.custom_style!.maxLength).toBe(600)
+      expect(props.custom_style_image_url!.description).toBe(
+        "A public https image whose visual style the video should take. Nodaro reads the image's style (never its content) and restyles the clip in it. With custom_style too, your text is a note on the image's style (for example 'like this, but darker'). Not with art_style.",
+      )
+    })
+
+    it("text alone: the quote and the run carry it as direction.customStyle, as written, and no image is read", async () => {
+      const { fastify, calls } = routes()
+      const server = serverWith(fastify)
+      const quote = await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style: TEXT })
+      const run = await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style: TEXT, confirm: true })
+      expect(urls(calls)).toEqual(["/v1/video-remake/estimate", "/v1/video-remake"])
+      for (const c of calls) expect(c.payload).toEqual({ ...BODY, style: "motion", direction: { customStyle: TEXT } })
+      // Nothing about an image in a quote that has none.
+      expect(quote.content[0]!.text).not.toMatch(/image's style/)
+      expect(run.structuredContent).toEqual({ jobId: JOB, confirmed: true })
+    })
+
+    it("an image, on the quote: the image is NOT read; the quote is sent a neutral placeholder and says when the image is read", async () => {
+      const { fastify, calls } = routes()
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE })
+      expect(res.isError).toBeFalsy()
+      expect(urls(calls)).toEqual(["/v1/video-remake/estimate"])
+      expect(calls[0]!.payload).toEqual({ ...BODY, style: "motion", direction: { customStyle: CUSTOM_STYLE_QUOTE_PLACEHOLDER } })
+      // The address never reaches the quote.
+      expect(JSON.stringify(calls[0]!.payload)).not.toContain(IMAGE)
+      expect(res.content[0]!.text).toContain("The image's style is read when the run is confirmed; the price does not depend on it.")
+      expect(res.structuredContent).toMatchObject({ confirmed: false, totalCredits: 12 })
+    })
+
+    it("the placeholder is plain words the route takes: not blank, no curly braces, within the limit", () => {
+      expect(CUSTOM_STYLE_QUOTE_PLACEHOLDER.trim().length).toBeGreaterThan(0)
+      expect(CUSTOM_STYLE_QUOTE_PLACEHOLDER.length).toBeLessThanOrEqual(CUSTOM_STYLE_MAX_CHARS)
+      expect(CUSTOM_STYLE_QUOTE_PLACEHOLDER).not.toMatch(/[{}]/)
+    })
+
+    it("an image, on the confirmed run: its style is put into words first, then the run carries that text; one call, no round trip", async () => {
+      const { fastify, calls } = routes()
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, confirm: true, client_request_id: "req-12345678" })
+      expect(res.isError).toBeFalsy()
+      // The describe step, the run, then the job read back for the words it recorded.
+      expect(urls(calls)).toEqual(["/v1/video-remake/describe-style", "/v1/video-remake", `/v1/jobs/${JOB}`])
+      expect(calls[0]!.method).toBe("POST")
+      expect(calls[0]!.payload).toEqual({ imageUrl: IMAGE })
+      // The describe call is the session's user's, through the platform's own door.
+      expect(calls[0]!.headers).toMatchObject({ "x-internal-user-id": "u1", "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET })
+      // It is no run: it carries no idempotency key; the run does.
+      expect(Object.keys(calls[0]!.headers ?? {}).map((k) => k.toLowerCase())).not.toContain("idempotency-key")
+      expect(calls[1]!.payload).toEqual({ ...BODY, style: "motion", direction: { customStyle: DESCRIBED } })
+      expect(JSON.stringify(calls[1]!.payload)).not.toContain(IMAGE)
+      // The words the image was read as, for information only: nothing waits on them.
+      expect(res.structuredContent).toEqual({ jobId: JOB, confirmed: true, custom_style_text: DESCRIBED })
+      expect(res.content[0]!.text).toContain(`Video Remake started (job ${JOB}).`)
+      expect(res.content[0]!.text).toContain(`The image's style was read as: "${DESCRIBED}"`)
+      expect(res.content[0]!.text).not.toMatch(/confirm/i)
+    })
+
+    it("names the style the answered job recorded: a repeat that answers an earlier job says that job's words, not the ones just read", async () => {
+      const EARLIER = "Thick oil paint, visible brush strokes, deep saturated colour"
+      const { fastify, calls } = stubFastify({
+        "/v1/video-remake/describe-style": { statusCode: 200, body: { text: DESCRIBED } },
+        "/v1/video-remake": { statusCode: 200, body: { jobId: JOB, deduped: true } },
+        [`/v1/jobs/${JOB}`]: { statusCode: 200, body: { data: { id: JOB, input_data: { direction: { customStyle: EARLIER } } } } },
+      })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, confirm: true, client_request_id: "req-12345678" })
+      expect(calls[2]).toMatchObject({ method: "GET", url: `/v1/jobs/${JOB}` })
+      expect(res.structuredContent).toEqual({ jobId: JOB, confirmed: true, custom_style_text: EARLIER })
+      expect(res.content[0]!.text).toContain(`The image's style was read as: "${EARLIER}"`)
+    })
+
+    it("a run without an image reads no job back and says nothing of a style", async () => {
+      const { fastify, calls } = routes()
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", custom_style: TEXT, confirm: true })
+      expect(urls(calls)).toEqual(["/v1/video-remake"])
+      expect(res.structuredContent).toEqual({ jobId: JOB, confirmed: true })
+      expect(res.content[0]!.text).not.toMatch(/image's style/)
+    })
+
+    it("an image and text: the text is a note on the image's style — the quote's text, and the describe step's note", async () => {
+      const { fastify, calls } = routes()
+      const server = serverWith(fastify)
+      const both = { ...ARGS, style: "motion", custom_style_image_url: IMAGE, custom_style: "like this, but darker" }
+      await callTool(server, "video_remake", both)
+      await callTool(server, "video_remake", { ...both, confirm: true })
+      const sent = calls.filter((c) => c.url !== NOTE_LIMIT_URL && !c.url!.startsWith("/v1/jobs/"))
+      expect(urls(sent)).toEqual(["/v1/video-remake/estimate", "/v1/video-remake/describe-style", "/v1/video-remake"])
+      expect(sent[0]!.payload).toMatchObject({ direction: { customStyle: "like this, but darker" } })
+      expect(sent[1]!.payload).toEqual({ imageUrl: IMAGE, note: "like this, but darker" })
+      // The run carries what the image was read as, never the note itself.
+      expect(sent[2]!.payload).toMatchObject({ direction: { customStyle: DESCRIBED } })
+      // A blank text beside an image is no note, and asks the engine no limit.
+      calls.length = 0
+      await callTool(server, "video_remake", { ...both, custom_style: "   ", confirm: true })
+      expect(calls[0]!.payload).toEqual({ imageUrl: IMAGE })
+      expect(urls(calls)).not.toContain(NOTE_LIMIT_URL)
+    })
+
+    it("a note's limit is the engine's own: one past it is refused on the quote already, typed, before any quote, describe or run", async () => {
+      const { fastify, calls } = stubFastify({
+        "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+        "/v1/video-remake/describe-style": { statusCode: 200, body: { text: DESCRIBED } },
+        "/v1/video-remake": { statusCode: 202, body: { jobId: JOB } },
+        // An engine whose describe step takes a shorter note than a style's 600 characters.
+        [NOTE_LIMIT_URL]: { statusCode: 200, body: { noteMaxChars: 300, maxChars: 600 } },
+      })
+      const server = serverWith(fastify)
+      const note = "x".repeat(301)
+      for (const confirm of [undefined, true]) {
+        const res = await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, custom_style: note, ...(confirm ? { confirm } : {}) })
+        expect(res.isError).toBe(true)
+        expect(res.content[0]!.text).toBe(
+          "Nodaro rejected the request (400 custom_style_note_too_long): With custom_style_image_url, custom_style is a note on the image's style of at most 300 characters.",
+        )
+      }
+      // The engine was asked its limit once (as the platform, for the session's user) and nothing else was sent.
+      expect(urls(calls)).toEqual([NOTE_LIMIT_URL])
+      expect(calls[0]).toMatchObject({ method: "POST", payload: {} })
+      expect(calls[0]!.headers).toMatchObject({ "x-internal-user-id": "u1", "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET })
+      // A note at the engine's limit goes through, the limit not asked again.
+      calls.length = 0
+      await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, custom_style: "x".repeat(300) })
+      expect(urls(calls)).toEqual(["/v1/video-remake/estimate"])
+      // The same long text with no image is a style of its own, within a style's limit.
+      calls.length = 0
+      await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style: note })
+      expect(urls(calls)).toEqual(["/v1/video-remake/estimate"])
+    })
+
+    it("with an image the note may be as long as a style (600) where the engine says so, and where its limit cannot be read", async () => {
+      expect(CUSTOM_STYLE_NOTE_MAX_CHARS_FALLBACK).toBe(CUSTOM_STYLE_MAX_CHARS)
+      const note = "x".repeat(CUSTOM_STYLE_MAX_CHARS)
+      for (const limit of [
+        { statusCode: 200, body: { noteMaxChars: 600 } },
+        { statusCode: 200, body: { data: { noteMaxChars: 600 } } },
+        // No answer, a refusal, or an answer without a usable figure: the fallback, asked again next time.
+        undefined,
+        { statusCode: 500, body: { error: { code: "boom" } } },
+        { statusCode: 200, body: { noteMaxChars: "many" } },
+        { statusCode: 200, body: "not json" },
+      ]) {
+        _resetCustomStyleNoteLimitForTests()
+        const { fastify, calls } = stubFastify({
+          "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+          "/v1/video-remake/describe-style": { statusCode: 200, body: { text: DESCRIBED } },
+          "/v1/video-remake": { statusCode: 202, body: { jobId: JOB } },
+          ...(limit ? { [NOTE_LIMIT_URL]: limit } : {}),
+        })
+        const server = serverWith(fastify)
+        const quote = await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, custom_style: note })
+        expect(quote.isError, JSON.stringify(limit)).toBeFalsy()
+        await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, custom_style: note, confirm: true })
+        const describe = calls.find((c) => c.url === "/v1/video-remake/describe-style")!
+        expect(describe.payload, JSON.stringify(limit)).toEqual({ imageUrl: IMAGE, note })
+        // A figure the engine gave is kept for the process; anything else is asked again.
+        expect(calls.filter((c) => c.url === NOTE_LIMIT_URL)).toHaveLength(limit && limit.statusCode === 200 && typeof limit.body === "object" && JSON.stringify(limit.body).includes("600") ? 1 : 2)
+      }
+    })
+
+    it("refuses a custom style beside art_style, text or image, before any call (one style a run)", async () => {
+      const { fastify, calls } = routes()
+      const server = serverWith(fastify)
+      for (const custom of [{ custom_style: TEXT }, { custom_style_image_url: IMAGE }, { custom_style: TEXT, custom_style_image_url: IMAGE }]) {
+        for (const confirm of [undefined, true]) {
+          const res = await callTool(server, "video_remake", { ...ARGS, style: "motion", art_style: "pop-art", ...custom, ...(confirm ? { confirm } : {}) })
+          expect(res.isError, JSON.stringify(custom)).toBe(true)
+          expect(res.content[0]!.text).toBe(
+            "Nodaro rejected the request (400 custom_style_with_art_style): Give an art style (art_style) or a custom style (custom_style, custom_style_image_url), not both.",
+          )
+        }
+      }
+      expect(calls).toEqual([])
+    })
+
+    it("a describe refusal is the tool's answer, typed, and nothing runs or is held", async () => {
+      for (const [statusCode, code, message] of [
+        [400, "image_unreadable", "The image could not be read."],
+        [502, "describe_style_failed", "The image's style could not be described just now."],
+        [422, "style_not_described", "No style could be described from this image."],
+        [403, "custom_style_not_available", "A custom style is not available here."],
+        // The describe step's own limit per account: worded as every rate limit is.
+        [429, "rate limited", "Too many requests. Retry in 20s."],
+      ] as const) {
+        const { fastify, calls } = routes({ statusCode, body: { error: { code, message } } })
+        const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, confirm: true })
+        expect(res.isError, code).toBe(true)
+        expect(res.content[0]!.text, code).toContain(code)
+        // The run route is never reached: no job, no hold.
+        expect(urls(calls), code).toEqual(["/v1/video-remake/describe-style"])
+      }
+    })
+
+    it("an answer with no usable text starts nothing either", async () => {
+      for (const body of [{}, { text: "   " }, { text: 7 }, "not json"]) {
+        const { fastify, calls } = routes({ statusCode: 200, body })
+        const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, style: "motion", custom_style_image_url: IMAGE, confirm: true })
+        expect(res.isError, JSON.stringify(body)).toBe(true)
+        expect(res.content[0]!.text).toBe("The image's style could not be read. Nothing was started or charged.")
+        expect(urls(calls)).toEqual(["/v1/video-remake/describe-style"])
+      }
+    })
+
+    it("leaves the custom style's rules to the route: its refusal comes back as a tool error, quote and run alike", async () => {
+      const refused = { statusCode: 403, body: { error: { code: "custom_style_not_available", message: "A custom style is not available here. Choose an art style from the list instead." } } }
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": refused, "/v1/video-remake": refused })
+      const server = serverWith(fastify)
+      for (const confirm of [undefined, true]) {
+        const res = await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style: TEXT, ...(confirm ? { confirm } : {}) })
+        expect(res.isError).toBe(true)
+        expect(res.content[0]!.text).toContain("custom_style_not_available")
+      }
+      expect(urls(calls)).toEqual(["/v1/video-remake/estimate", "/v1/video-remake"])
+    })
+
+    it("refuses a text past 600 characters and an image that is not an https address, before any call", async () => {
+      const { fastify, calls } = routes()
+      const server = serverWith(fastify)
+      for (const bad of [
+        { custom_style: "x".repeat(CUSTOM_STYLE_MAX_CHARS + 1) },
+        { custom_style: 7 },
+        { custom_style_image_url: "http://cdn.example/look.png" },
+        { custom_style_image_url: "data:image/png;base64,AAAA" },
+        { custom_style_image_url: "look.png" },
+      ]) {
+        const res = await callTool(server, "video_remake", { ...ARGS, style: "motion", ...bad })
+        expect(res.isError, JSON.stringify(bad)).toBe(true)
+      }
+      expect(calls).toEqual([])
+      const atLimit = "x".repeat(CUSTOM_STYLE_MAX_CHARS)
+      await callTool(server, "video_remake", { ...ARGS, style: "motion", custom_style: atLimit })
+      expect(calls[0]!.payload).toMatchObject({ direction: { customStyle: atLimit } })
     })
   })
 

@@ -35,6 +35,7 @@ import {
 import {
   applyDefaultVideoSelection,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   pricedOutputDurationSec,
   resolveVideoProviderForMode,
 } from "@nodaro/shared/models"
@@ -83,7 +84,7 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v !== 
 function draftProviderOf(type: string, data: Record<string, unknown>): string | undefined {
   if (data.draft !== true) return undefined
   if (type === "video-to-video") {
-    const provider = str(data.provider)
+    const provider = videoToVideoProviderOf(data.provider)
     return isSeedanceVideoEditProvider(provider) && isSeedanceDraftCapable(provider) ? provider : undefined
   }
   const selected = type === "generate-video"

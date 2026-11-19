@@ -1,18 +1,22 @@
 # Video to Video
 
-> Transform existing video using AI with a text prompt.
+> Edit an existing video by instruction with a text prompt.
 
 ## Overview
 
-The Video to Video node applies AI-powered transformations to an existing video based on a text prompt. Use it for style transfer, content modification, or creative re-interpretation of video footage.
+The Video to Video node edits an existing video from a text instruction: change the weather, the time of day, an object, a colour grade.
 
-What happens to your clip depends on the model. The edit models (Seedance 2.5 Edit, Wan 2.7 VideoEdit, HappyHorse Edit) change the clip itself. **Wan 2.6** and **Wan 2.6 Flash**, the default, do not: they take the subject of your clip and make a new clip of the scene your prompt describes — see [Supported Providers](#supported-providers).
+What happens to your clip depends on the model. The edit models (**Seedance 2.5 Edit**, the default, Seedance 2.5 Flash Edit, Wan 2.7 VideoEdit, HappyHorse Edit) change the clip itself. **Wan 2.6** and **Wan 2.6 Flash** do not: they take the subject of your clip and make a new clip of the scene your prompt describes — see [Supported Providers](#supported-providers).
+
+**Video Remake is the recommended way to edit, modify, restyle or transfer the motion of a clip.** It keeps the clip's motion, camera and timing and changes what you ask: the cast, a prop, the place, the look (on Nodaro Cloud; elsewhere, where it is offered). Use MCP `video_remake`, the API's `POST /v1/video-remake`, or the SDK's `client.videoRemake.run(…)`. For a restyle (anime, claymation, watercolor, …) give it an art style: `art_style` on MCP, `direction: { "style": "<style id>" }` on the API and the SDK; the style is an id of the `style` picker catalog, on the Nodaro Prism engine. The edit models of this node are for edits by instruction. Over the API, Video Remake's two engines are also named providers of this node's route, which answer its price quote: see [Video Remake's engines as providers](#video-remakes-engines-as-providers-api).
+
+**A node or an API request that names no model runs Seedance 2.5 Edit.** (MCP `modify_video` with no model answers Video Remake's price quote where Video Remake is offered, and runs Seedance 2.5 Edit elsewhere; see [MCP tools](../../mcp/tools.md).) That includes a Video to Video node saved before this was the default and never given a model. Such a run needs a prompt (the edit instruction) and a source clip of 4–30 seconds, renders at 480p unless a resolution is set (an API request that names `seedance-2-5` itself and no resolution keeps that lane's own 720p), keeps the clip's length and aspect ratio, and is priced as described under [Seedance 2.5 Edit — credits](#seedance-25-edit--credits). On an account that has never paid, and on a deployment that does not offer Seedance 2.5, it is refused with that reason; pick another model there.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | Select | wan | AI model for transformation |
+| Provider | Select | seedance-2-5 | AI model for the edit (a node with none set runs this one) |
 | Prompt | Textarea | — | Description of the desired transformation |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
@@ -132,6 +136,49 @@ the woman wears {image:1} and stands in {image:2}
 negative field, and Seedance has no native `negative_prompt`. Put what you want
 avoided into the instruction itself.
 
+## Video Remake's engines as providers (API)
+
+`POST /v1/video-to-video` (SDK: `client.nodes.run("video-to-video", …)`) also takes Video Remake's two engines as named providers: `"nodaro-prism"` (Nodaro Prism) and `"nodaro-pulse"` (Nodaro Pulse). They are additions: a request that names no provider still runs Seedance 2.5 Edit, and every other provider runs as before.
+
+**For these two providers the route starts nothing.** It answers `200` with Video Remake's price quote for the clip and the prompt, and the request to send to `POST /v1/video-remake` to run it. No job is created and no credits are held; there is no `jobId` in the answer, and `quoteOnly` is `true`:
+
+```json
+{
+  "quoteOnly": true,
+  "message": "Nodaro Prism is a Video Remake engine: this is its price quote, and nothing was started. To run it, send videoRemake.run.body to POST /v1/video-remake.",
+  "videoRemake": {
+    "quote": {
+      "engine": "nodaro-prism",
+      "engineName": "Nodaro Prism",
+      "totalCredits": 0,
+      "expectedCredits": 0,
+      "breakdown": { "base": 0, "references": 0, "motion": 0, "motionExpected": 0 },
+      "settlesLower": true
+    },
+    "run": {
+      "method": "POST",
+      "path": "/v1/video-remake",
+      "body": { "videoUrl": "https://…/clip.mp4", "roles": [], "postPrompt": "make it night", "engine": "nodaro-prism" }
+    }
+  }
+}
+```
+
+(The zeros stand for the figures of your own clip.) `videoRemake.quote` is what [`POST /v1/video-remake/estimate`](../../api-integration.md#13f-video-remake-cloud-edition) answers for `videoRemake.run.body`, with the engine's name: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged, and `privacyCredits`, when present, is charged only if a refused clip is retried (a run needs the balance for both). Send `videoRemake.run.body` to `POST /v1/video-remake` as it is to run it (SDK: `client.videoRemake.run(result.videoRemake.run.body)`); add roles, references or an art style there for more than an instruction.
+
+What the request may carry:
+
+- `videoUrl` (the clip, 4–30 s) and `prompt` (what to change; required). The prompt becomes the run's `postPrompt`; the run has no roles.
+- `resolution` and `draft`, which are Video Remake's own: Nodaro Prism renders 480p (its default), 720p or 1080p and takes `draft`; Nodaro Pulse renders 720p (its default) or 1080p and takes no draft.
+- Every other field of this route (`duration`, `aspectRatio`, `seed`, `audio`, `multiShots`, `negativePrompt`, `videoEditDuration`, `audioSetting`, `promptExtend`) does not apply to Video Remake and is ignored.
+- A reference list (`referenceImageUrl`, `referenceImageUrls`, `referenceVideoUrls`, `referenceAudioUrls`) is refused with `400 validation_error`: Video Remake takes pictures as roles and fixed references, on its own route.
+
+Refusals, each before anything is asked of the engine: `404 not_available` where Video Remake is not served (a self-hosted install); `403 node_not_available` where the deployment does not offer you Video to Video or Video Remake; `403 model_not_available` where it withholds the engine; `503 engine_unavailable` where the engine is not released on the deployment yet. Video Remake's own refusals (a clip outside 4–30 s, an unreadable clip, `draft` on Nodaro Pulse, …) are answered as its estimate route gives them. Nothing falls back to another model.
+
+`POST /v1/quote` with `type: "video-to-video"` and one of these providers answers the same quote in the node quote's shape: `reserve` is `totalCredits`, `expected` is `expectedCredits` when it differs, and `warnings` carries `quote_only_provider` (the run route only quotes this provider).
+
+Only these two ids are taken. They are choices of the API route alone: the Video to Video node in the editor does not list them, and a node that names one is refused (`provider_not_supported`), in a workflow or app run and on the node's own run (a request that carries a `nodeId` or `workflowId`). In a workflow, use the node's own models.
+
 ## Supported Providers
 
 | Provider | Credits | Notes |
@@ -248,21 +295,20 @@ measured are all one place — see Generate Video →
 ## Best Practices
 
 - Keep source video short (5-10s) for best results
-- On a model that edits the clip, describe the transformation clearly: "change to anime style" rather than describing the entire scene. On Wan 2.6 and Wan 2.6 Flash, describe the scene the new clip should show
+- On a model that edits the clip, describe the change clearly: "turn the day into a rainy night" rather than describing the entire scene. On Wan 2.6 and Wan 2.6 Flash, describe the scene the new clip should show
 - For Seedance 2.5 Edit: write the prompt as an instruction about the clip ("make it black and white", "the woman wears {image:1}") — it is read as one. Start at 480p while iterating; the reservation scales with resolution
 - For Wan 2.7 VideoEdit: connect a reference image to guide the visual style of the output
 - Use **Expand prompt** when your prompt is very brief — the AI fills in cinematic details
-- **Wan 2.6** and **Wan 2.6 Flash** do not edit your clip: they take its subject and make a new 5 s or 10 s clip of the scene your prompt describes. To restyle or edit the clip itself, pick **Seedance 2.5 Edit**, **Wan 2.7 VideoEdit** or **HappyHorse Edit**
+- **Wan 2.6** and **Wan 2.6 Flash** do not edit your clip: they take its subject and make a new 5 s or 10 s clip of the scene your prompt describes. To edit the clip itself, pick **Seedance 2.5 Edit** (the default), **Wan 2.7 VideoEdit** or **HappyHorse Edit**. A restyle is best done with Video Remake and an art style
 
 ## Common Use Cases
 
-- Apply artistic styles to recorded footage (painterly, anime, cinematic)
 - Change scene characteristics (day to night, summer to winter)
-- Create variations of existing video content
-- Transform live-action footage into animated styles
+- Change, add or remove something in the clip by instruction
+- Dress a person in a reference image, or place the scene in one (Seedance 2.5 Edit)
 
 ## Tips
 
-- V2V works best when the transformation is stylistic rather than structural — changing colors and textures works better than adding or removing objects
+- A new art style on the same motion (anime, claymation, a 3D look) is best done with Video Remake and an art style; this node's **Looks** presets are edits by instruction
 - For structural changes, consider using Image-to-Image on keyframes then Image-to-Video instead
 - Use consistent prompts when processing multiple clips for a project

@@ -116,7 +116,12 @@ export function attemptRanWithInputs(
   const inputsNow = Object.fromEntries(
     (["mediaUrls", "masterAudioUrl", "musicUrl", "introCardUrl"] as const).flatMap((k) => (now[k] !== undefined ? [[k, now[k]] as const] : [])),
   )
-  return settingsUnchanged(stored, d.resolveSettings(now, mediaKind, shape), d.resolveSettings({ ...inputsNow, ...stored }, mediaKind, shape))
+  return settingsUnchanged(
+    stored,
+    d.resolveSettings(now, mediaKind, shape),
+    d.resolveSettings({ ...inputsNow, ...stored }, mediaKind, shape),
+    d.newDefaultSettings ?? [],
+  )
 }
 
 const isPlainRecord = (v: unknown): v is Readonly<Record<string, unknown>> => typeof v === "object" && v !== null && !Array.isArray(v)
@@ -131,7 +136,10 @@ const isPlainRecord = (v: unknown): v is Readonly<Record<string, unknown>> => ty
  *    default for that attempt (`defaults`: the current resolver's reading of
  *    the attempt's settings, so the default a resolver derives from another
  *    setting is the attempt's). A new setting's default is the behaviour the
- *    code had before it existed, so it is what the attempt ran with;
+ *    code had before it existed, so it is what the attempt ran with —
+ *    except a setting in `newDefault` (the descriptor's `newDefaultSettings`):
+ *    its default changed what a run does, so an attempt stored without it ran
+ *    something no current value reproduces, and differs;
  *  - a setting the attempt stored that `current` no longer has (one removed
  *    since) differs: what the attempt made with it cannot be told.
  * `undefined` reads as absent, as in the stored jsonb. Pure.
@@ -140,13 +148,14 @@ export function settingsUnchanged(
   ran: Readonly<Record<string, unknown>>,
   current: Readonly<Record<string, unknown>>,
   defaults: Readonly<Record<string, unknown>>,
+  newDefault: readonly string[] = [],
 ): boolean {
   const has = (r: Readonly<Record<string, unknown>>, k: string) => Object.prototype.hasOwnProperty.call(r, k) && r[k] !== undefined
   const keys = new Set([...Object.keys(ran), ...Object.keys(current)])
   for (const k of keys) {
     if (has(ran, k)) {
       if (!has(current, k) || canonical(ran[k]) !== canonical(current[k])) return false
-    } else if (has(current, k) && canonical(current[k]) !== canonical(defaults[k])) {
+    } else if (has(current, k) && (newDefault.includes(k) || canonical(current[k]) !== canonical(defaults[k]))) {
       return false
     }
   }

@@ -159,6 +159,9 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   // A trend's face mask, made once by the same engine (the platform's own
   // internal call from the trend editor).
   "/v1/cast-swap/face-mask": "cast-swap",
+  // A picture's visual style put into words, for a run's custom style: no job
+  // and no charge, but a model the same engine runs (its model and node checks).
+  "/v1/cast-swap/describe-style": "cast-swap",
   "/v1/video-face-mesh": "cast-swap",
   "/v1/mask-erase": "cast-swap",
   "/v1/mask-outline": "cast-swap",
@@ -232,6 +235,10 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   "/v1/video-remake",
   "/v1/video-remake/:jobId/full-quality",
   "/v1/video-remake/face-mask",
+  // The model and node checks alone (no price, no reservation): a picture's
+  // style in words, for a run's custom style.
+  "/v1/cast-swap/describe-style",
+  "/v1/video-remake/describe-style",
   "/v1/competitor-scan",
   "/v1/topic-scan",
   "/v1/content-ideas",

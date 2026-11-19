@@ -27,12 +27,12 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
 import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, geminiOmniExtendQuoteCreditId, motionTransferResolution } from "@nodaro/shared/credits"
-import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
+import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders, uiResolutionFill } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
@@ -56,6 +56,8 @@ import { plannableEditPlanModes } from "../../private-plugins/plannable-edit-pla
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
+import { videoRemakeQuote, videoRemakeRefusal, type VideoRemakeInstructionRun } from "./cast-swap.js"
+import { MOTION_TRANSFER_REMAKE_POINTER, RECAST_POINTER, recastOffered, videoRemakeOffered } from "./_video-lanes.js"
 
 // Derive video model enums from MODEL_CATALOG. `includeHidden: true` keeps
 // legacy ids (seedance V1.5 etc.) accepted for cached Claude.ai sessions —
@@ -349,9 +351,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-video",
+        resourceUri: "ui://nodaro/widget/v5/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -699,9 +701,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-video",
+        resourceUri: "ui://nodaro/widget/v5/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -897,9 +899,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-video",
+        resourceUri: "ui://nodaro/widget/v5/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -1047,9 +1049,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-video",
+        resourceUri: "ui://nodaro/widget/v5/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -1141,8 +1143,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -1276,9 +1278,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-video",
+        resourceUri: "ui://nodaro/widget/v5/job-video",
         visibility: ["model", "app"],
       },
     },
@@ -1391,9 +1393,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
     _meta: {
-      "ui/resourceUri": "ui://nodaro/widget/v4/job-image",
+      "ui/resourceUri": "ui://nodaro/widget/v5/job-image",
       ui: {
-        resourceUri: "ui://nodaro/widget/v4/job-image",
+        resourceUri: "ui://nodaro/widget/v5/job-image",
         visibility: ["model", "app"],
       },
     },
@@ -1552,9 +1554,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -1654,33 +1656,57 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── modify_video (video-to-video) ──
-  // Wan 2.6 / Wan Flash make a new clip featuring the input video's subject
-  // (reference-to-video, not an edit); the Seedance 2.5 edit models, Wan 2.7
-  // VideoEdit and HappyHorse Edit edit the clip itself; Runway Aleph for stylised
-  // edits with reference-image guidance. Mirrors modify_image for the video
-  // domain — gallery widget already pushes "edit this video" follow-ups.
+  // The default, Seedance 2.5, edits the clip by instruction (as do Seedance 2.5
+  // Flash, Wan 2.7 VideoEdit and HappyHorse Edit). Wan 2.6 / Wan Flash stay
+  // selectable but make a new clip featuring the input video's subject
+  // (reference-to-video, not an edit). A restyle (a new art style on the same
+  // motion) is Video Remake's (`video_remake`), never this tool's.
+  // Where `video_remake` is offered it is the recommended way to edit a clip, and
+  // its two engines are listed first, as models of this tool: a call that names
+  // one, or names NO model (then on `REMAKE_ENGINE_WHEN_NO_MODEL`), is QUOTED
+  // through `video_remake`'s own path (`videoRemakeQuote`: the clip, the prompt as
+  // the run's `post_prompt`, no role) and runs nothing here: the run is
+  // `video_remake` with `confirm: true`. Where it is not offered, a call that
+  // names no model is a Seedance 2.5 edit that runs at once, as on every other
+  // surface (the route, the node and the SDK keep that default everywhere).
+  const remakeEngines = videoRemakeOffered(session) ? NODARO_MOTION_ENGINES : []
+  const REMAKE_ENGINE_WHEN_NO_MODEL: (typeof NODARO_MOTION_ENGINES)[number] = "nodaro-prism"
+  const DIRECT_EDIT_INSTEAD = 'To run an instruction edit at once instead, call modify_video again with model: "seedance-2-5" (or another edit model).'
   server.registerTool(
     "modify_video",
     {
       title: "Modify Video",
       description:
-        "PRIMARY tool for video-to-video / restyle / clip-edit workflows. Use " +
+        "PRIMARY tool for editing a clip by instruction (video-to-video). Use " +
         "it directly; do NOT search the apps marketplace.\n\n" +
+        (remakeEngines.length
+          ? ""
+          : "To RESTYLE a clip (keep its motion, camera and timing, change the art " +
+            "style: anime, claymation, …) use `video_remake` with `art_style` " +
+            "where it is offered, not this tool.\n\n") +
         "Provide `video_url` (public HTTPS) or `video_asset_id` (a Nodaro job " +
-        "id whose output is a video), plus a `prompt` describing the change " +
-        "(on `wan` / `wan-flash`: the new scene).\n\n" +
-        "**Models**:\n" +
-        "  • **`wan`** (default, Wan 2.6) — NOT a restyle or an edit: a NEW 5s or " +
-        "10s clip (720p or 1080p) featuring the input video's subject, in the " +
-        "scene the prompt describes.\n" +
-        "  • **`wan-flash`** — the same, faster; `audio: true` generates it with " +
-        "audio, `multi_shots: true` allows several shots.\n" +
-        "  • To restyle or edit the clip itself, pick a model that edits it: " +
-        "`seedance-2-5` / `seedance-2-5-flash` (by instruction, keeps length and " +
-        "ratio), `wan-videoedit` (guided edit) or `happyhorse-edit` (by " +
-        "instruction, e.g. a style transfer).\n" +
-        "  • **`runway-aleph`** — stylised edits guided by an optional " +
-        "`reference_image_url`; more aspect ratios.",
+        "id whose output is a video), plus a `prompt` saying what to change.\n\n" +
+        (remakeEngines.length
+          ? "**Recommended: Video Remake** to edit, modify or restyle a clip — models " +
+            "`nodaro-prism` / `nodaro-pulse`, Nodaro's own, and what a call that names " +
+            "no model gets (on `nodaro-prism`). Nodaro Prism keeps the clip's motion, " +
+            "camera and timing and changes what you ask: the cast, a prop, the place, " +
+            "the look. Nodaro Pulse: the lighter engine; no art style. Such a call " +
+            "returns the PRICE QUOTE only and runs nothing: once the user accepts, run " +
+            "it with `video_remake` and `confirm: true` (clip 4-30s). For a new art " +
+            "style (anime, claymation, …) or reference images call `video_remake` itself.\n\n" +
+            "**Direct edit, runs at once** — name one of these models:\n"
+          : "**Models**:\n") +
+        `  • **\`seedance-2-5\`**${remakeEngines.length ? "" : " (default)"} / \`seedance-2-5-flash\` — edit the clip ` +
+        "by instruction; the result keeps its length and ratio (clip 4-30s).\n" +
+        "  • `wan-videoedit` (guided edit) and `happyhorse-edit` (edit by " +
+        "instruction) also edit the clip itself.\n" +
+        "  • **`runway-aleph`** — edits guided by an optional " +
+        "`reference_image_url`; more aspect ratios.\n" +
+        "  • `wan` / `wan-flash` — NOT an edit or a restyle: a NEW 5s or 10s clip " +
+        "featuring the input video's subject, in the scene the prompt describes " +
+        "(`wan-flash`: faster; `audio`, `multi_shots`)." +
+        (recastOffered(session) ? `\n\n${RECAST_POINTER}` : ""),
       inputSchema: {
         prompt: z.string().min(1).max(8000),
         video_url: z.string().url().optional(),
@@ -1689,15 +1715,18 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
-            "`wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. " +
+            (remakeEngines.length
+              ? "No model: a Video Remake quote on `nodaro-prism` (nothing runs); name `seedance-2-5` for an edit that runs at once. "
+              : "Default `seedance-2-5`. ") +
+            `Options: ${[...remakeEngines, ...VIDEO_TO_VIDEO_NODE_PROVIDERS].join(", ")}. ` +
             "An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping " +
             "length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). " +
+            "`wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. " +
             "`happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged " +
             `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Wan / Wan Flash / happyhorse-edit (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p)."),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe(`seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? ", nodaro-prism (480p default) / nodaro-pulse (720p default, or 1080p)" : ""}.`),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
@@ -1712,7 +1741,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
       },
       outputSchema: {
-        jobId: z.string(),
+        // Absent from a Video Remake engine's quote, which starts no job and answers `videoRemake` alone.
+        jobId: z.string().optional(),
+        ...(remakeEngines.length
+          ? { videoRemake: z.record(z.string(), z.unknown()).optional().describe("nodaro-prism / nodaro-pulse: the price `quote` and the video_remake `arguments` that run it. Nothing ran.") }
+          : {}),
         prompt: z.string().optional(),
         model: z.string().optional(),
         aspectRatio: z.string().optional(),
@@ -1726,14 +1759,40 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
     },
     async (args) => {
+      // A Video Remake engine, by its public id only (an older id is not this tool's).
+      const namedEngine = NODARO_MOTION_ENGINES.find((e) => e === args.model)
+      // Not offered here (the edition, or the deployment's offer), judged as the call is made.
+      const withheld = namedEngine || !args.model ? await videoRemakeRefusal(session) : undefined
+      // A call that names no model: Video Remake where it is offered, else the Seedance edit below.
+      const byDefault = !args.model && !withheld
+      const remakeEngine = namedEngine ?? (byDefault ? REMAKE_ENGINE_WHEN_NO_MODEL : undefined)
+      // Said with every answer of a call that named no model, so it is never left without a way on.
+      const instead = byDefault ? ` ${DIRECT_EDIT_INSTEAD}` : ""
+      if (remakeEngine) {
+        // A named engine that is not offered: refused before anything is read.
+        if (withheld) return withheld
+        // Video Remake takes pictures as roles and fixed references, never as these lists:
+        // refused rather than quoted without them.
+        if (args.reference_image_url || args.reference_image_urls || args.reference_video_urls || args.reference_audio_urls) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Model ${remakeEngine} takes no reference_image_url, reference_image_urls, reference_video_urls or reference_audio_urls here. Call video_remake instead: its roles and references take the pictures.${instead}`,
+              },
+            ],
+            isError: true,
+          }
+        }
+      }
       const videoUrl =
         args.video_url ??
         (args.video_asset_id
@@ -1751,7 +1810,27 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           isError: true,
         }
       }
-      const provider = args.model ?? "wan"
+      if (remakeEngine) {
+        // The run `video_remake` makes of this call: the clip, the prompt as its instruction, no role.
+        // `resolution` and `draft` are Video Remake's own; every other lever of this tool is not sent.
+        const run: VideoRemakeInstructionRun = {
+          video_url: videoUrl,
+          roles: [],
+          post_prompt: args.prompt,
+          engine: remakeEngine,
+          ...(args.resolution ? { resolution: args.resolution } : {}),
+          ...(args.draft !== undefined ? { draft: args.draft } : {}),
+        }
+        const answer = await videoRemakeQuote({ session, fastify }, run, {
+          next:
+            `modify_video runs nothing ${byDefault ? "when no model is named" : "for this model"}. Once they accept, call video_remake with confirm: true and these arguments: ` +
+            `${JSON.stringify(run)}. Adding preview: true there renders 4 s first, a cheaper check (it has its own quote).${instead}`,
+        })
+        // The estimate refused it (the clip's length, the prompt's): the refusal, and the way on.
+        if (answer.isError && instead) return { ...answer, content: answer.content.map((c, i) => (i === 0 ? { ...c, text: `${c.text}${instead}` } : c)) }
+        return answer
+      }
+      const provider = videoToVideoProviderOf(args.model)
       // Seedance edits a REFERENCE video (no v2v endpoint): dispatch through the
       // one Seedance reference-video lane, in edit shape, the clip as {video:1}.
       if (!isSeedanceVideoEditProvider(provider) && (args.reference_image_urls || args.reference_video_urls || args.reference_audio_urls)) {
@@ -1761,6 +1840,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         }
       }
       if (isSeedanceVideoEditProvider(provider)) {
+        const editResolution = args.resolution ?? (!args.model && args.draft !== true ? uiResolutionFill(provider) : undefined)
         // Same numbering as POST /v1/video-to-video: reference_image_url first.
         const refs = [...(args.reference_image_url ? [args.reference_image_url] : []), ...(args.reference_image_urls ?? [])]
         return dispatchJob(fastify, session, {
@@ -1771,7 +1851,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             ...SEEDANCE_VIDEO_EDIT_SHAPE,
             // Requested; the route declares it only when the clips qualify.
             referenceTaskType: SEEDANCE_VIDEO_EDIT_TASK_TYPE,
-            ...(args.resolution ? { resolution: args.resolution } : {}),
+            // No model and no resolution: the size a node with none set renders (as the route fills it).
+            ...(editResolution ? { resolution: editResolution } : {}),
             ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
             referenceVideoUrls: [videoUrl, ...(args.reference_video_urls ?? [])],
             ...(refs.length ? { referenceImageUrls: refs } : {}),
@@ -1782,7 +1863,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           },
           label: "video-to-video",
           widgetKind: "video",
-          widgetData: { prompt: args.prompt, model: provider, aspectRatio: SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio, resolution: args.resolution },
+          widgetData: { prompt: args.prompt, model: provider, aspectRatio: SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio, resolution: editResolution },
         })
       }
       const payload: Record<string, unknown> = {
@@ -1864,9 +1945,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2006,9 +2087,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2157,9 +2238,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2277,9 +2358,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2405,9 +2486,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2513,9 +2594,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2614,9 +2695,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2701,7 +2782,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "provider `kling`; resolution 480p-1080p (default 720p; `wan-animate-move` 720p only); " +
         "`character_orientation` `image` (default) or `video`. Priced by the driver " +
         "video's length: 3-10 s (30 s with `video` or Wan Animate), else refused uncharged. " +
-        motionTransferPriceHint(),
+        motionTransferPriceHint() +
+        (videoRemakeOffered(session) ? ` ${MOTION_TRANSFER_REMAKE_POINTER}` : ""),
       inputSchema: {
         image_url: z.string().url().optional(),
         image_asset_id: z.string().optional(),
@@ -2738,9 +2820,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         openWorldHint: true,
       },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/job-video",
+          resourceUri: "ui://nodaro/widget/v5/job-video",
           visibility: ["model", "app"],
         },
       },
@@ -2843,8 +2925,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2896,8 +2978,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -2976,8 +3058,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3027,8 +3109,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {
@@ -3307,8 +3389,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {

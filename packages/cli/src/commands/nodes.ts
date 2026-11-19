@@ -1,5 +1,6 @@
 import { Command } from "commander"
 import type { GenerateImageBatchResult } from "@nodaro/sdk/nodes"
+import { isVideoToVideoRemakeQuote } from "@nodaro/sdk/nodes"
 import { SEEDANCE_REFERENCE_TASK_TYPES } from "@nodaro/shared/models"
 import { buildClient, handleError } from "../client.js"
 import { detail, emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
@@ -250,6 +251,19 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
               intervalMs: opts.pollInterval,
               json: opts.json,
             })
+            return
+          }
+
+          // A Video Remake engine on video-to-video: a price quote, nothing started (with --watch too: no job to follow).
+          if (isVideoToVideoRemakeQuote(result)) {
+            if (opts.json) {
+              emit(result, opts)
+              return
+            }
+            const quote = result.videoRemake.quote
+            info(`${quote.engineName} quote: about ${quote.expectedCredits ?? quote.totalCredits} credits (${quote.totalCredits} held while it runs). Nothing was started.`)
+            dim(`run it with POST ${result.videoRemake.run.path} (client.videoRemake.run) and this body:`)
+            detail(result.videoRemake.run.body)
             return
           }
 

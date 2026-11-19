@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const api = vi.hoisted(() => ({
   answer: { jobId: "job-pack", tools: [] as Array<{ tool: string; jobId: string; executionId: string | null }>, notStarted: undefined as undefined | Array<{ tool: string; error: { code: string; message: string } }> },
   executionStatus: 403 as number | null,
+  execution: null as null | Record<string, unknown>,
 }))
 
 vi.mock("@/lib/api", () => ({
   podcastPack: vi.fn(async () => api.answer),
   getWorkflowExecution: vi.fn(async () => {
+    if (api.execution) return api.execution
     throw Object.assign(new Error("forbidden"), { status: api.executionStatus })
   }),
   getJobStatusLean: vi.fn(async () => ({ status: "completed", output_data: { plan: { version: 1, chapters: [{ startMs: 0, title: "Start" }] } } })),
@@ -25,6 +27,7 @@ const ctx = () => ({ signal: new AbortController().signal }) as unknown as RunCo
 beforeEach(() => {
   vi.clearAllMocks()
   api.answer = { jobId: "job-pack", tools: [], notStarted: undefined }
+  api.execution = null
 })
 
 describe("the podcast pack behind Edit with AI", () => {
@@ -45,6 +48,22 @@ describe("the podcast pack behind Edit with AI", () => {
     api.answer.tools = [{ tool: "episode-chapters", jobId: "job-ch", executionId: "exec-ch" }]
     const plans = startPack(ctx(), "https://cdn.example.com/v.mp4", { chapters: true })
     await expect(plans.chapters).resolves.toMatchObject({ chapters: [{ title: "Start" }] })
+  })
+
+  it("reads the clips from a run whose plan step answers them as a bare list", async () => {
+    const clips = [{ segments: [{ inMs: 0, outMs: 2000 }] }, { segments: [{ inMs: 3000, outMs: 5000 }] }]
+    api.answer.tools = [{ tool: "clip-pack", jobId: "job-cl", executionId: "exec-cl" }]
+    api.execution = { id: "exec-cl", status: "running", nodeStates: { "uc-plan": { status: "completed", output: { json: clips } } } }
+    const plans = startPack(ctx(), "https://cdn.example.com/v.mp4", { clips: { count: 2 } })
+    await expect(plans.clips).resolves.toEqual(clips)
+  })
+
+  it("reads the clips from a plan that wraps them", async () => {
+    const clips = [{ segments: [{ inMs: 0, outMs: 2000 }] }]
+    api.answer.tools = [{ tool: "clip-pack", jobId: "job-cl", executionId: "exec-cl" }]
+    api.execution = { id: "exec-cl", status: "running", nodeStates: { "uc-plan": { status: "completed", output: { json: { version: 1, clips } } } } }
+    const plans = startPack(ctx(), "https://cdn.example.com/v.mp4", { clips: { count: 1 } })
+    await expect(plans.clips).resolves.toEqual(clips)
   })
 
   it("fails only a tool the pack could not start, with the server's reason", async () => {

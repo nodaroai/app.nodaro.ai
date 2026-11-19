@@ -6,6 +6,8 @@
 
 The Motion Transfer node takes motion from a reference video and applies it to a character image, creating a video where the character performs the movements from the reference. Supports several models; every run is priced per second of the motion video.
 
+**For motion transfer or motion control on a whole clip, use Video Remake.** Video Remake (on Nodaro Cloud; elsewhere, where it is offered) keeps a clip's motion, camera and timing and changes what you ask: the cast, a prop, the place, the look or the art style. This node animates one still character image instead. See [Motion Transfer or Video Remake](#motion-transfer-or-video-remake).
+
 ## Configuration
 
 | Field | Type | Default | Description |
@@ -25,6 +27,21 @@ The Motion Transfer node takes motion from a reference video and applies it to a
 
 **Outputs:**
 - Generated video with transferred motion
+## Motion Transfer or Video Remake
+
+Both keep the motion of a video. They differ in what you start from and in what changes.
+
+| | Motion Transfer (this node) | Video Remake |
+|---|---|---|
+| You give it | One character image and a motion reference video | A clip of 4–30 seconds, and your images, a prompt or both |
+| What stays | The moves of the reference video | The clip's motion, camera and timing |
+| What changes | The character who performs the moves | What you ask: the cast, a prop, the place, the look or the art style |
+| Where it runs | A node in a workflow; MCP `motion_transfer`; `POST /v1/motion-transfer` | Its own page (`/video/remake` on nodaro.ai); MCP `video_remake`; `POST /v1/video-remake`; SDK `client.videoRemake` |
+
+- **Use Video Remake** (on Nodaro Cloud; elsewhere, where it is offered) for motion control of a whole clip: to swap its people, pets, products or place for your own pictures, to edit a video with a prompt alone, or to restyle a video in an art style. A prompt alone is a valid change. A 4-second preview is offered, and `POST /v1/video-remake/estimate` quotes a run for free. An art style is taken by the Nodaro Prism engine only. See [Video Remake](../../api-integration.md#13f-video-remake-cloud-edition).
+- **Use Motion Transfer** when you have one still character and want it to perform the dance or gesture of a reference video.
+- **To recreate a whole video from zero**, at any length, with its own cast and new music, use Recast (MCP `start_recast`; [Recast](../../api-integration.md#13c-recast-cloud-edition)). Recast can also change the motion itself.
+
 ## Motion video length
 
 The server reads the motion video's length before anything is charged, and every price below is read from that length. A length you send (the API's `videoDuration`, MCP's `video_duration`, or a length stored on the node) is accepted for older clients and ignored.

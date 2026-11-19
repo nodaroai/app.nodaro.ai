@@ -28,6 +28,7 @@ The output is data, not media — feed it into data/JSON consumers (for example,
 ```
 
 - `ranges` — the silent spans, in milliseconds on the **source** clock, ordered as they occur. `endMs` is exclusive and always greater than `startMs`.
+- `allRanges` — only when `allRangesMinMs` is set: every silence at least that long, **unpadded**, in the same order and clock. A long silence appears in both lists; its `ranges` copy is the padded one.
 - `durationMs` — the total source duration, in milliseconds.
 
 ## Configuration
@@ -37,6 +38,7 @@ The output is data, not media — feed it into data/JSON consumers (for example,
 | **Silence threshold** (`thresholdDb`) | `-35` | Audio quieter than this (in dBFS) counts as silence. A lower value is stricter (only near-total quiet is silence). The slider runs from -60 to -10; the API takes -90 to 0. |
 | **Minimum silence** (`minSilenceMs`) | `700` | Only gaps at least this long (in ms) are reported. The length is measured before the padding below shrinks the span, so a reported range can be shorter than this. The slider runs from 100 to 3000 ms; the API takes 1 to 600000. |
 | **Speech padding** (`padMs`) | `120` | Padding kept around speech (in ms; the slider runs from 0 to 1000, the API takes 0 to 60000). Each detected span is shrunk **inward** by this amount at both ends so a downstream cut doesn't clip a breath or the attack of a word. A span that would collapse to nothing after padding is dropped. |
+| `allRangesMinMs` (API and workflow JSON only) | — | Also list every silence at least this long (in ms, 20 to 600000; a lower value in a workflow's JSON is read as 20), unpadded, as `allRanges`. Found in the same pass, at no extra cost. [Tighten Episode](../processing-video/tighten-episode.md) sets it to 50 to place its cuts around removed words. Absent: no list. |
 
 ## Credits
 

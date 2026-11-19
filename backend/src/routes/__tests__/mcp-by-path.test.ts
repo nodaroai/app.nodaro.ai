@@ -359,7 +359,7 @@ describe("MCP by path — booted with mcp.byPath on", () => {
         method: "POST",
         url: "/v1/mcp",
         headers: { host: "second.example.com", authorization: `Bearer ${TOKEN}`, accept: "application/json, text/event-stream", "content-type": "application/json" },
-        payload: { jsonrpc: "2.0", id: 8, method: "resources/read", params: { uri: "ui://nodaro/widget/v4/upload-image" } },
+        payload: { jsonrpc: "2.0", id: 8, method: "resources/read", params: { uri: "ui://nodaro/widget/v5/upload-image" } },
       })
       expect(res.statusCode, res.body).toBe(200)
       const content = (res.json() as { result: { contents: Array<{ _meta: { ui: { csp: { connectDomains: string[] } } } }> } }).result.contents[0]!

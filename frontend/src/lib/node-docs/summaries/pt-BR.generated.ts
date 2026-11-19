@@ -37,7 +37,7 @@ export const NODE_DOCS_SUMMARIES: Readonly<Record<string, string>> = {
   "extend-video": "Continue um vídeo com novas imagens a partir do prompt, com Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO ou Runway. Encadeie para tomadas longas.",
   "edit-video-pro": "Substitua um trecho de um vídeo, de 4 segundos a 2 minutos, por novas imagens do Seedance unidas de volta ao clipe, para que o resto dele continue igual.",
   "video-retake": "Gere de novo uma janela de tempo de um vídeo existente com o LTX 2.3 Pro. Substitua só o som, só a imagem ou os dois, e mantenha tudo fora da janela.",
-  "video-to-video": "Transforme um vídeo inteiro com um prompt: mude o estilo para anime ou massinha, faça o dia virar noite ou edite por instrução com o Seedance 2.5 Edit.",
+  "video-to-video": "Edite um vídeo existente por instrução: faça o dia virar noite, mude o clima ou troque um objeto. O Seedance 2.5 Edit mantém a duração e o enquadramento.",
   "switchx": "Reilumine um assunto, troque ou reestilize o fundo, ou insira novos elementos em um vídeo a partir dos pixels do clipe, de uma máscara e de uma referência.",
   "video-depth": "Transforme qualquer vídeo em um vídeo de profundidade, com perto claro e longe escuro, com o Video Depth Anything ou o Depth Anything por quadro.",
   "video-mask": "Descreva um objeto e receba um vídeo de máscara em preto e branco que o acompanha ao longo do clipe, com SAM 3.1 ou SAM 3, em clipes de até 5 minutos.",

@@ -519,7 +519,7 @@ const PRESET_GROUPS_JA: Record<string, string> = {
   "Realism & Authentic": "リアリズムと自然さ",
   "Reference Sheet": "リファレンスシート",
   "Relight & Composite": "リライティングと合成",
-  "Restyle Looks": "スタイル変換",
+  "Looks": "ルック",
   "Revoice Styles": "ボイス変換スタイル",
   "Scene Recipes": "シーンレシピ",
   "Seedance Director": "Seedance ディレクター",

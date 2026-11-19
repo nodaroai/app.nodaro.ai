@@ -10,6 +10,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { ALL_RANGES_MIN_FLOOR_MS } from "../providers/audio/silence-detect-limits.js"
 
 // Keyless, ffmpeg-only: one `silencedetect` pass over the source's audio proxy.
 // `audioUrl` accepts an audio OR a video source — the worker reads the shared
@@ -23,6 +24,9 @@ const silenceDetectBody = z.object({
   minSilenceMs: z.number().int().min(1).max(600_000).optional().default(700),
   // Padding kept around speech (ms) — shrinks each reported range inward.
   padMs: z.number().int().min(0).max(60_000).optional().default(120),
+  // Also list every silence at least this long, unpadded, as `allRanges` (ms). Absent: no list.
+  // A shorter floor could outgrow the captured ffmpeg log (the provider clamps to the same one).
+  allRangesMinMs: z.number().int().min(ALL_RANGES_MIN_FLOOR_MS).max(600_000).optional(),
   userId: z.string().uuid().optional(),
 })
 

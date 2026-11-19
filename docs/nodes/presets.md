@@ -184,11 +184,15 @@ list from the line, its end time and the timed words. A caption plan in Hebrew (
 sets the Rubik font on both segments, so a Latin brand inside a Hebrew line is drawn in the same
 font, and keeps its letters as written.
 
-### Video restyle factory catalog
+### Video to Video looks factory catalog
 
-**Video to Video** ships *Restyle Looks* — Anime, Claymation, Cyberpunk Neon, Oil Painting, 3D
-Animated, Watercolor, Phone Footage Look (an everyday handheld look for b-roll that keeps the clip's own sound and length — it re-renders faces, so not for talking clips) — each a restyle prompt (the original motion is preserved) on a video-restyle
-provider.
+**Video to Video** ships *Looks* — Anime, Claymation, Cyberpunk Neon, Oil Painting, 3D
+Animated, Watercolor, Phone Footage Look (an everyday handheld look for b-roll that keeps the clip's own sound and length — it re-renders faces, so not for talking clips) — each an edit instruction for that look (the original motion is preserved) on a model that edits the clip:
+Seedance 2.5 Edit for the six looks, Wan 2.7 VideoEdit for Phone Footage Look. None runs on Wan 2.6.
+
+A restyle — changing a clip's art style while keeping its motion, camera and timing — is best done
+with **Video Remake** and an art style (on Nodaro Cloud; elsewhere, where it is offered). The Looks
+are edits by instruction on this node, a lighter way to try a look on a short clip.
 
 ### Combine Videos factory catalog
 
@@ -262,7 +266,7 @@ prompt field free for your own additions and the run wraps whatever you type:
   **Stylized Subject** family and the **Edits** folder (Background Remove, Colorize, Restore Photo,
   Doodle Overlay ×2, Add Skin Realism, Natural Photo Finish, Phone Camera Look, Undo Beauty Filter).
 - **SwitchX:** all five operation recipes.
-- **Video to Video:** the seven **Restyle Looks**.
+- **Video to Video:** the seven **Looks**.
 - **Generate Video:** **Edit Video** (the `edit {video:1} as follows:` instruction as pre-text, the
   keep-unchanged tail as post-text).
 

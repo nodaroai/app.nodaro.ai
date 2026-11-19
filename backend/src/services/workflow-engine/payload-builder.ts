@@ -179,6 +179,7 @@ import {
   isVeoProvider,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   isTailExtendProvider,
   isPixverseExtendProvider,
   isGrokExtendProvider,
@@ -334,6 +335,7 @@ import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromN
 import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
+import { assertNoVideoRemakeEngineOnNode } from "../../lib/video-remake-engine-quote.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { imagePromptTooShort } from "../../lib/image-prompt-minimum.js"
 import { baseImageReservedSeats, imageInputLimitProblem } from "../../lib/image-input-limit.js"
@@ -5453,7 +5455,10 @@ function buildPayloadOf(
     }
 
     case "video-to-video": {
-      const v2vProvider = (data.provider as string) ?? "wan"
+      // A node that stores no model runs the default (Seedance 2.5 edit).
+      const v2vProvider = videoToVideoProviderOf(data.provider)
+      // A Video Remake engine is a named choice of the REST route, which only quotes it: never a node's model.
+      assertNoVideoRemakeEngineOnNode(v2vProvider, nodeLabel)
       // Resolve @-mentions in the v2v prompt. v2v has only a single
       // `referenceImageUrl` slot — when an upstream ref image is wired we
       // keep it; otherwise the first resolved mention URL fills it. Extra
@@ -5481,6 +5486,14 @@ function buildPayloadOf(
       // The source clip is reference video 1, which is what `{video:1}` in the
       // edit instruction resolves against. Mirrors the FE run (execute-node.ts).
       if (isSeedanceVideoEditProvider(v2vProvider)) {
+        // An edit needs an instruction, as the route refuses one without (and
+        // so does the editor): the bare "edit @video_1 as follows:" frame would
+        // run, and charge for, an edit of nothing.
+        if (!v2vPrompt?.trim()) {
+          const err = new Error(`prompt_required: node "${nodeLabel}" needs a prompt saying what to change in the clip.`) as Error & { code?: string }
+          err.code = "prompt_required"
+          throw err
+        }
         const editVideoUrl = (resolvedInputs.videoUrl || data.videoUrl) as string | undefined
         const editMention = resolveVideoPromptMentions(buildSeedanceVideoEditPrompt(v2vPrompt), node.id, buildCtx, readExtraRefs(data), {
           referenceOrder: readStringArray(data.referenceOrder),
@@ -7703,6 +7716,8 @@ function buildPayloadOf(
         thresholdDb: data.thresholdDb,
         minSilenceMs: data.minSilenceMs,
         padMs: data.padMs,
+        // Absent on every node but a Tighten run's own (its plan places cuts in the list).
+        ...(data.allRangesMinMs !== undefined ? { allRangesMinMs: data.allRangesMinMs } : {}),
         usageLogId,
       })
 

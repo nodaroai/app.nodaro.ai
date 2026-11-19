@@ -92,10 +92,10 @@ const RECORD = process.env.MCP_LANE_FIXTURE_RECORD === "1"
 const HOSTS = ["mcp.nodaro.ai", "app.nodaro.ai", "studio.example.com", "unlisted.example.net"] as const
 
 const WIDGETS = [
-  "ui://nodaro/widget/v4/job-image",
-  "ui://nodaro/widget/v4/job-auto",
-  "ui://nodaro/widget/v4/workflow",
-  "ui://nodaro/widget/v4/upload-image",
+  "ui://nodaro/widget/v5/job-image",
+  "ui://nodaro/widget/v5/job-auto",
+  "ui://nodaro/widget/v5/workflow",
+  "ui://nodaro/widget/v5/upload-image",
 ]
 
 /** The random parts of an upload link: the signed token, and the key's uuid. */

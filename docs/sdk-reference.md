@@ -2208,6 +2208,13 @@ edition only**: these routes 404 on self-hosted installs. Also importable as
 `@nodaro/sdk/video-remake`. Routes: [Video Remake](./api-integration.md#13f-video-remake-cloud-edition);
 MCP: `video_remake`, `estimate_full_quality`, `full_quality`.
 
+Use it to edit a video, to restyle a video, and for motion transfer or motion
+control on a whole clip: it keeps the clip's motion, camera and timing and
+changes what you ask (the cast, a prop, the place, the look or the art style).
+Your own words alone (`prePrompt` / `postPrompt`) are a valid change, and an
+art style (`direction`) is taken by Nodaro Prism only. `client.recast`
+recreates a whole video from zero instead.
+
 ```ts
 run(params: VideoRemakeParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/video-remake → 202 (200 + deduped on a keyed repeat)
 estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> // POST /v1/video-remake/estimate, free
@@ -2215,6 +2222,8 @@ fullQualityEstimate(jobId: string): Promise<VideoRemakeFullQualityEstimate> // P
 fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemakeFullQualityResult> // POST /v1/video-remake/:jobId/full-quality → 202 (200 + existing)
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
 advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, public
+describeStyle(params: { imageUrl: string; note?: string }): Promise<VideoRemakeDescribedStyle> // POST /v1/video-remake/describe-style, free
+artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
 ```
 
 ```ts
@@ -2239,6 +2248,7 @@ interface VideoRemakeParams {
   engine?: VideoRemakeEngine          // "nodaro-prism" (default) | "nodaro-pulse" (see below)
   style?: VideoRemakeStyle            // "precise" (default) | "motion" (see below)
   direction?: { style: string }    // an art style, a `style` picker id, nodaro-prism only: Flex (see Style only), or Precise where styleChoice() says so
+           | { customStyle: string } // or the style in your own words, ≤ 600 characters, where styleChoice() answers customStyle (see A custom style)
   motionLength?: "cut-end" | "cut-start" // VideoRemakeMotionLength, nodaro-pulse only; default "cut-end"
   resolution?: "480p" | "720p" | "1080p" // default "480p"; nodaro-pulse: "720p" (default) or "1080p"
   draft?: boolean                  // default false (480p is plain); true = a 480p draft whose same take
@@ -2336,7 +2346,7 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean } }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean } }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2350,7 +2360,11 @@ request as a Motion run, which this does not say: see An art style on a Precise
 run below); it answers `false` until the engine takes such runs. All three follow the engine alone, so read them
 with `engines`: on an engine answered `"flex"` every run is a Motion run. Nodaro Pulse is always
 `false` in all three, and an older server leaves them out (read them as `false`
-for every engine). Public (works signed
+for every engine). `customStyle` says, per engine, whether a run takes the
+style in your own words there (A custom style, below): `true` only where the
+engine takes one and Nodaro offers it on this deployment, so unlike the three
+above it can change without an engine change; Nodaro Pulse is always `false`,
+and an older server leaves it out (read it as `false`). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
@@ -2428,6 +2442,60 @@ Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
 
+**A custom style** (`direction: { customStyle }`, `describeStyle()`): where
+`styleChoice()` answers `customStyle` `true` for the engine (Nodaro Prism
+only), a direct run takes the style in your own words in place of a catalog
+art style: `direction: { customStyle: "<text>" }`. Describe the visual style
+only: the medium (drawn, 3D-rendered or filmed), line, colour, lighting and
+texture; not who or what is in the video. At most 600 characters, never blank.
+It goes wherever a catalog art style goes and counts as the run's change
+wherever one does (Style only and An art style on a Precise run, above), and
+`estimate()` answers what it would for a catalog art style: the words change
+no price. The text is used as written, and the job records it as sent in
+`input_data.direction.customStyle`. Send one of `style` and `customStyle`,
+never both.
+
+```ts
+const { customStyle } = await client.videoRemake.styleChoice()
+if (customStyle?.["nodaro-prism"] === true) {
+  // Optional: start from an image. Free; nothing of the image is kept.
+  const { text } = await client.videoRemake.describeStyle({
+    imageUrl: "https://example.com/look.png",
+    note: "like this, but darker", // optional, ≤ 600 characters
+  })
+  const { jobId } = await client.videoRemake.run({
+    videoUrl,
+    roles: [],
+    style: "motion",
+    direction: { customStyle: text }, // or your own words
+  })
+}
+```
+
+`describeStyle({ imageUrl, note? })` (`POST /v1/video-remake/describe-style`)
+answers `{ text, medium?, tones? }` (`VideoRemakeDescribedStyle`): `text` is
+the image's visual style in words, never its content, at most 600 characters,
+ready to show, edit and send as `customStyle`; `medium` (`"2d"`, `"3d"` or
+`"photo"`) and `tones` (`"colour"`, `"black-and-white"` or `"one-colour"`) are
+a hint for an interface only (a run works out its style's medium itself, from
+the words it is sent). The image is a public http(s) PNG, JPEG, WebP or GIF of
+at most 10 MB. It starts no job and charges nothing, needs a signed-in account
+and is limited to 10 calls a minute per account.
+
+Refusals (`VideoRemakeCustomStyleRefusalCode`), all before anything is charged.
+On `run()` and `estimate()`: `400 custom_style_with_art_style` (both `style`
+and `customStyle` sent), `400 custom_style_empty` (blank, or nothing left once
+its curly braces are taken out), `400 custom_style_too_long` (more than 600
+characters), `403 custom_style_not_available` (not offered here: choose a
+catalog art style), `400 raw_reference_token` (the text holds `{image:…}`,
+`{video:…}` or `{audio:…}`), and where a catalog art style could not go either
+`400 art_style_needs_prism` (Nodaro Pulse) or `400 art_style_needs_flex` (a
+trend run). On `describeStyle()`: `401 unauthorized`, `400 validation_error`,
+`400 unsafe_url`, `403 custom_style_not_available`, `400 image_unreadable`
+(the image could not be fetched, is too large or is not a picture),
+`502 describe_style_failed` (try again), `422 style_not_described` (try another
+image, or write the style yourself) and `429 rate_limit_exceeded` past the limit.
+
 **The Advanced options on the Video Remake page** (`advanced()`,
 `VideoRemakeAdvanced`, `GET /v1/video-remake/advanced`, public):
 `{ show: boolean }`, whether the Video Remake page shows `prepareReferences`
@@ -2438,6 +2506,25 @@ minute old.
 
 ```ts
 const { show } = await client.videoRemake.advanced()
+```
+
+**The art styles the Video Remake page offers** (`artStyles()`,
+`VideoRemakeArtStyle`, `GET /v1/video-remake/art-styles`, public): the styles
+its art style picker offers, in its order, each
+`{ id, label, clipUrl, stillUrl }`. `id` is a run's `direction.style`; `label`
+is the style's name in `locale` (a Nodaro language id such as `"he"`, `"ja"`,
+`"ko"` or `"pt-BR"`), English when it is left out, is not one of Nodaro's
+languages, or the language does not name the style; `clipUrl` is a short clip
+of real footage wiping into the style and `stillUrl` a still frame cut from
+it, both absolute `https` addresses. The list is empty on a deployment that
+does not show Nodaro's previews, or one without Video Remake or its art
+styles. It lists what the picker shows: whether a run takes an art style on
+an engine is `styleChoice()`'s to say. The answer may be up to five minutes
+old.
+
+```ts
+const styles = await client.videoRemake.artStyles({ locale: "he" })
+// [{ id: "anime", label: "אנימה", clipUrl: "https://…", stillUrl: "https://…" }, …]
 ```
 
 **Preparing the clip.** How the source clip is prepared for the video model
@@ -3758,6 +3845,34 @@ other model; numbering and caps in [Video to Video → Seedance 2.5 Edit](nodes/
 The edit is built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
 so you send the same body as for any other edit model.
 
+Video Remake ([`client.videoRemake`](#clientvideoremake)) is the recommended
+way to edit, modify, restyle or transfer the motion of a clip. Its two engines
+are also named providers here: `nodes.run("video-to-video", { videoUrl, prompt,
+provider: "nodaro-prism" | "nodaro-pulse", resolution?, draft? })`
+(`VideoToVideoRemakeParams`) starts **no job** and resolves a
+`VideoToVideoRemakeQuote`: `{ quoteOnly: true, message, videoRemake: { quote,
+run } }`, where `quote` is Video Remake's estimate (`totalCredits`,
+`expectedCredits`, `breakdown`, `privacyCredits?`, `settlesLower`, `engine`,
+`engineName`) and `run.body` is the body for `client.videoRemake.run`. Nothing
+is held.
+
+```ts
+const quoted = await client.nodes.run("video-to-video", {
+  videoUrl, prompt: "make it night", provider: "nodaro-prism",
+})
+// quoted.quoteOnly === true; quoted.videoRemake.quote.totalCredits is the hold
+const { jobId } = await client.videoRemake.run(quoted.videoRemake.run.body)
+```
+
+The other Video to Video fields are ignored for these two providers and a
+reference list is refused (400). `isVideoToVideoRemakeQuote(result)` tells the
+quote from a started job when the provider is not known at compile time.
+`nodes.quote("video-to-video", …)` answers the same figures as a `NodeQuote`
+with a `quote_only_provider` warning. `nodes.runAndWait` rejects with a
+`NodaroError` of code `quote_only_provider` before anything is sent, since
+there is no job to wait for. Details and refusals:
+[Video to Video → Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api).
+
 #### `quote(type, params?)`
 
 ```ts
@@ -4995,11 +5110,6 @@ Object-specific defaults vs location:
   (`1:1` / `3:4` / `16:9` / `9:16` / `4:3`) with `4:3` added vs. the
   character set to support classic product-catalogue aspect ratios.
 
-Pass `refineFromVideoUrl` to route through video-to-video using that clip
-as the source instead of running Generate Video from `sourceImageUrl` —
-use to iterate an existing clip with a new prompt without shifting
-composition.
-
 > `sourceImageUrl` is REQUIRED. Image-to-video needs a source frame and
 > the route has no fallback — supply the canonical product-shot URL
 > explicitly.
@@ -5013,16 +5123,6 @@ const { jobId } = await client.objects.generateMotion({
   provider: "kling-turbo",
   attachToObjectId: objectId,
   attachName: "rotate-360",
-})
-
-// Refine an existing clip (video-to-video)
-const { jobId: refineJobId } = await client.objects.generateMotion({
-  name: "Antique Lantern",
-  motionPrompt: "same shot but slow hover instead of rotation",
-  sourceImageUrl: mainImageUrl,
-  refineFromVideoUrl: existingRotationClipUrl,
-  provider: "wan-i2v",
-  attachToObjectId: objectId,
 })
 ```
 
@@ -9986,6 +10086,7 @@ music bed under it. Only the recording is required (`mediaUrl`, or
 | `instructions` | `string` | no | Editing instructions for the planner (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
+| `tightness` | `"light" \| "standard" \| "tight"` | no | How tightly the pauses are cut ([Pauses and filler](./nodes/processing-video/tighten-episode.md#pauses-and-filler)): `"light"` shortens pauses over 600 ms to 350 ms, `"standard"` (absent) pauses over 350 ms to 220 ms, `"tight"` pauses over 250 ms to 150 ms. |
 | `speakerNames` | `Record<string, string>` | no | Speaker label (as the run's transcript names them, e.g. `"speaker_0"`) → the name to show, up to 80 characters; at most 32 speakers. The job keeps them and returns them on `output_data.speakers[].name`; the run never reads them (nothing is renamed in the captions, transcript or edit), and a continuation keeps them. A blank name is dropped; a label nobody in the recording has is ignored. Over the limits: `400 validation_error`. |
 
 Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a

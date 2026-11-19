@@ -61,8 +61,8 @@ export function registerReplaceAudioTools({ server, session, fastify }: Register
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
-        ui: { resourceUri: "ui://nodaro/widget/v4/job-video", visibility: ["model", "app"] },
+        "ui/resourceUri": "ui://nodaro/widget/v5/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v5/job-video", visibility: ["model", "app"] },
       },
     },
     async (args) => {

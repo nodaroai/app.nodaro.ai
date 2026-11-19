@@ -1,4 +1,4 @@
-import { canonicalVideoProvider, isCatalogExtendProvider, isGrokExtendProvider, isSeedanceVideoEditProvider, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
+import { canonicalVideoProvider, isCatalogExtendProvider, isGrokExtendProvider, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMapper, type RouteMappers } from "./kit.js"
 
 /** `loopTrim`: the route takes a Loop trim (the text-to-video route drops one, so its node must not keep it). */
@@ -430,7 +430,7 @@ const videoToVideo: RouteMapper = {
   fields: new Set(["videoUrl", "prompt", "provider", "duration", "resolution", "aspectRatio", "audio", "multiShots", "seed"]),
   map(body: Body) {
     const videoUrl = str(body.videoUrl)
-    const provider = str(body.provider) ?? "wan"
+    const provider = videoToVideoProviderOf(body.provider)
     if (!videoUrl || isSeedanceVideoEditProvider(provider)) return null
     const prompt = str(body.prompt) ?? ""
     return videoNode("video-to-video", "video", videoUrl, {

@@ -267,6 +267,28 @@ describe("tighten_episode's framing source (decided 2026-10-17/20)", () => {
   })
 })
 
+describe("tighten_episode's tightness (decided 2026-11-18)", () => {
+  it("sends each level as tightness", async () => {
+    const { server, seen } = await setup()
+    for (const tightness of ["light", "standard", "tight"] as const) {
+      await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", tightness })
+      expect(seen.body).toEqual({ mediaUrls: ["https://r2/ep.mp4"], tightness, mcp_client: "Claude", userId: "u1" })
+    }
+  })
+
+  it("left out, nothing is sent (the route reads standard)", async () => {
+    const { server, seen } = await setup()
+    await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4" })
+    expect(seen.body).not.toHaveProperty("tightness")
+  })
+
+  it("refuses any other value in the schema", async () => {
+    const { server, seen } = await setup()
+    expect((await callTool(server, "tighten_episode", { media_url: "https://r2/ep.mp4", tightness: "loose" })).isError).toBe(true)
+    expect(seen.url).toBeUndefined()
+  })
+})
+
 describe("tighten_episode on several recordings (decided 2026-10-19)", () => {
   it("posts the recordings in order, the Master audio and the Cameras settings camelCased", async () => {
     const { server, seen } = await setup()

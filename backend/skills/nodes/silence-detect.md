@@ -1,7 +1,7 @@
 ---
 node_type: silence-detect
-generated_at: 2026-10-14T00:02:35.190Z
-generated_from: b83a9467d
+generated_at: 2026-11-18T15:41:36.138Z
+generated_from: 14e3f9daf
 ---
 
 # Silence Detect
@@ -20,6 +20,7 @@ generated_from: b83a9467d
 - `thresholdDb?: number`
 - `minSilenceMs?: number`
 - `padMs?: number`
+- `allRangesMinMs?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `currentJobId?: string`

@@ -155,6 +155,8 @@ import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style
 import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
 import { engineTakesNoPersonSourceClip, noPersonForPlugin } from "../nodaro-motion-no-person.js"
 import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
+import { customStyleForPlugin, engineTakesCustomStyle } from "../nodaro-motion-custom-style.js"
+import { customStyleOfferedByDefault } from "../nodaro-motion-custom-style-default.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1728,6 +1730,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   errorHintPromptSubject: true,
   // tk.settings.nodaroMotionPreciseStyleRoute(): whether a direct Prism Precise run with an art style runs as Flex, and who skips it.
   nodaroMotionPreciseStyleRoute: true,
+  // tk.settings.nodaroMotionCustomStyle(): whether this deployment offers Video Remake's custom style (resolved here), and the admin's two LLM steps.
+  nodaroMotionCustomStyle: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2473,6 +2477,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (!route || route.faceMeshLayers === undefined || engineDrawsFaceMeshLayers(cs)) return route
         const { faceMeshLayers: _layers, ...rest } = route
         return Object.keys(rest).length > 0 ? rest : null
+      },
+      // Same rules: a failed read throws (the engine reads that as not offered, with an alert). Null only to an
+      // engine that does not declare `castSwap.customStyle` (it never asks). Otherwise ALWAYS an object, never
+      // saved included: the engine reads null as not offered, and `enabled` is resolved here (the admin's saved
+      // choice, else this deployment's default: on for Nodaro's own, off under a white-label surface profile).
+      nodaroMotionCustomStyle: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_custom_style: the app settings could not be read")
+        if (!engineTakesCustomStyle(getPluginSupports().castSwap)) return null
+        return customStyleForPlugin(settings.nodaro_motion_custom_style, customStyleOfferedByDefault())
       },
     },
     deployment: { publicUrl: appBaseUrl() },

@@ -631,7 +631,7 @@ nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker
                                                          # --lag-ms delays each cut by this long (0–5000 ms, default 0): --lead-ms's counterpart.
                                                          # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
                                                          # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
-nodaro edit tighten-episode --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--music <url> [--music-duck-amount <0-100>]] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip] [--framing-source auto|static|tracking]] (--layout and --framing-source only with --framing) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--estimate] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit tighten-episode --media <url> [--media <url> ...] [--master-audio <url>] [--wide-camera <n>] [--synced] [--speaker-camera <speaker>=<recording> ...] [--music <url> [--music-duck-amount <0-100>]] [--tightness light|standard|tight] [--output video|audio] [--framing 16:9|9:16|1:1|4:5 [--layout auto|single|side-by-side|stacked|grid|pip] [--framing-source auto|static|tracking]] (--layout and --framing-source only with --framing) [--no-captions | --caption-style subtitle|word-highlight|karaoke|tiktok-words|word-pop|bouncy] [--review] [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--estimate] [--watch] [--poll-interval <ms>] [--json]
                                                          # Tighten Episode: one recording (video or audio, up to 3 hours) in, the tightened
                                                          # episode out — transcribe, plan, render, plus captions / music / framing as set.
                                                          # Several cameras: repeat --media (in order), --master-audio for the mixer track;
@@ -647,6 +647,9 @@ nodaro edit tighten-episode --media <url> [--media <url> ...] [--master-audio <u
                                                          # --music-duck-amount (with --music): how far the music dips under the voice,
                                                          # 0–100 (default 75). --caption-style the captions' look (default word-highlight).
                                                          # --style-guide: a style guide for the planner (up to 4,000 characters).
+                                                         # --tightness: how far long pauses are shortened — standard (default)
+                                                         # pauses over 350 ms to 220 ms; light over 600 ms to 350 ms;
+                                                         # tight over 250 ms to 150 ms.
                                                          # --idempotency-key: a retry with the same key answers the run already started.
 nodaro edit episode-chapters --media <url> [--plan-tier economy|standard|premium] [--instructions <text>] [--style-guide <text>] [--idempotency-key <key>] [--watch] [--poll-interval <ms>] [--json]
                                                          # Chapters: one recording (video or audio, up to 3 hours) in, its chapters out —

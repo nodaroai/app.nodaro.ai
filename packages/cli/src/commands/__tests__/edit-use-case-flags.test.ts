@@ -180,9 +180,23 @@ describe("edit tighten-episode: idempotency key, style guide, caption style, mus
     [["--caption-style", "neon"], /^--caption-style must be/],
     [["--no-captions", "--caption-style", "karaoke"], /^--caption-style applies with captions on/],
     [["--style-guide", "x".repeat(4001)], /^--style-guide is at most 4000 characters/],
+    [["--tightness", "loose"], /^--tightness must be light, standard, tight/],
   ])("refuses %j before any request", async (flags, message) => {
     await expect(runCmd("edit", "tighten-episode", ...MEDIA, ...flags)).rejects.toThrow("process.exit(1)")
     expect(mocks.tightenEpisode).not.toHaveBeenCalled()
     expect(vi.mocked(warn).mock.calls[0]?.[0]).toMatch(message)
+  })
+})
+
+describe("edit tighten-episode --tightness (decided 2026-11-18)", () => {
+  it("sends each level as tightness, and nothing without the flag", async () => {
+    for (const level of ["light", "standard", "tight"]) {
+      mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-1" })
+      await runCmd("edit", "tighten-episode", ...MEDIA, "--tightness", level, "--json")
+      expect(mocks.tightenEpisode).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4", tightness: level }, undefined)
+    }
+    mocks.tightenEpisode.mockResolvedValueOnce({ jobId: "job-1" })
+    await runCmd("edit", "tighten-episode", ...MEDIA, "--json")
+    expect(mocks.tightenEpisode).toHaveBeenLastCalledWith({ mediaUrl: "https://r2/ep.mp4" }, undefined)
   })
 })

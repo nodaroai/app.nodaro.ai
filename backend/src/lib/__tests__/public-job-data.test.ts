@@ -90,6 +90,13 @@ describe("redactPrivateJobData — server-only input_data keys", () => {
   it("keeps nested (non-top-level) __ keys inside input_data values", () => {
     expect(redactPrivateJobData({ input_data: { a: { __b: 1 } } })).toEqual({ input_data: { a: { __b: 1 } } })
   })
+  it("shows a Video Remake run's custom style as sent, and hides the medium and tones the run decided for it", () => {
+    const row = {
+      input_data: { type: "cast-swap", direction: { customStyle: "Hand-drawn ink on rough paper, heavy lines" }, __customStyleKind: { medium: "2d", tones: "black-and-white" } },
+    }
+    const read = nonAdminJobInputData(redactPrivateJobData(row).input_data)
+    expect(read).toEqual({ type: "cast-swap", direction: { customStyle: "Hand-drawn ink on rough paper, heavy lines" } })
+  })
   it("keeps a trend run's provenance stamp (preparedPreview, sourceAsset): visible keys, no URL in them", () => {
     const sourceAsset = { kind: "preview", sha256: "b".repeat(64), startSec: 2, durationSec: 5, recipe: "1" }
     const row = { input_data: { type: "cast-swap", preparedPreview: true, sourceAsset, __videoUrl: "https://x/clip.mp4" }, output_data: { videoUrl: "v", sourceAsset } }

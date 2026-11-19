@@ -3,12 +3,15 @@ import { ALL_CAPTION_STYLES, type CaptionStyle } from "@nodaro/shared/captions"
 import { EDL_TARGET_ASPECTS } from "@nodaro/shared/edl"
 import {
   TIGHTEN_EPISODE_DEFAULTS,
+  TIGHTEN_PAUSES,
+  TIGHTEN_TIGHTNESS_LEVELS,
   drawnTightenFraming,
   resolveTightenEpisodeSettings,
   tightenFramingLayouts,
   usecaseDescriptor,
   type TightenFramingAspect,
   type TightenFramingLayout,
+  type TightenTightness,
 } from "@nodaro/render-rules"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -28,6 +31,13 @@ import type { TightenEpisodeData } from "./types"
 
 const NO_FRAMING = "none"
 const D = TIGHTEN_EPISODE_DEFAULTS
+
+/** Each tightness's option label: its numbers come from TIGHTEN_PAUSES, never from the text. */
+const TIGHTNESS_LABEL_KEYS: Record<TightenTightness, "proccfg.tightenTightnessLight" | "proccfg.tightenTightnessStandard" | "proccfg.tightenTightnessTight"> = {
+  light: "proccfg.tightenTightnessLight",
+  standard: "proccfg.tightenTightnessStandard",
+  tight: "proccfg.tightenTightnessTight",
+}
 
 /**
  * Tighten Episode's settings. What the run would read differently from the
@@ -161,6 +171,25 @@ export function ConfigPanel({ data: raw, onUpdate, nodeId, nodes, edges, sources
           <Switch id="tighten-review" aria-label={t("proccfg.tightenReview")} checked={data.reviewBeforeRender === true} onCheckedChange={(v) => onUpdate({ reviewBeforeRender: v })} />
         </div>
         <p className="text-xs text-muted-foreground">{t("proccfg.tightenReviewHint")}</p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>{t("proccfg.tightenTightness")}</Label>
+        {/* Absent shows standard, what it runs. An unknown stored value (hand-edited JSON) shows standard too, and the route refuses it until a level is picked, as it does a stale caption style. */}
+        <Select
+          value={(TIGHTEN_TIGHTNESS_LEVELS as readonly string[]).includes(data.tightness ?? "") ? data.tightness : D.tightness}
+          onValueChange={(v) => onUpdate({ tightness: v as TightenTightness })}
+        >
+          <SelectTrigger aria-label={t("proccfg.tightenTightness")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {TIGHTEN_TIGHTNESS_LEVELS.map((level) => (
+              <SelectItem key={level} value={level}>
+                {t(TIGHTNESS_LABEL_KEYS[level], { min: TIGHTEN_PAUSES[level].minPauseMs, kept: TIGHTEN_PAUSES[level].keptMs })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">{t("proccfg.tightenTightnessHint")}</p>
       </div>
 
       <UseCasePlanFields data={data} onUpdate={onUpdate} defaultTier={D.planTier} tierLabelKey="proccfg.tightenPlanTier" idPrefix="tighten" />

@@ -2,7 +2,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
@@ -892,7 +892,8 @@ export function getModelIdentifier(
   // node-type row (mirror of the backend estimator).
   const nodeDefault = data.provider ? undefined : defaultImageModelForNode(nodeType, data.aspectRatio as string | undefined)
   // A Lip Sync naming no model runs the default one (`LIP_SYNC_DEFAULT_PROVIDER`), as the server estimate quotes it.
-  const provider = (data.provider as string | undefined)
+  // A Video to Video naming no model runs the default (Seedance 2.5 edit), as the server estimate quotes it.
+  const provider = (nodeType === "video-to-video" ? videoToVideoProviderOf(data.provider) : data.provider as string | undefined)
     ?? (nodeType === "extend-video" ? EXTEND_VIDEO_DEFAULT_PROVIDER : undefined)
     ?? (nodeType === "lip-sync" ? LIP_SYNC_DEFAULT_PROVIDER : undefined)
     ?? (nodeDefault && isPricedPerInputImage(nodeDefault) ? nodeDefault : undefined)

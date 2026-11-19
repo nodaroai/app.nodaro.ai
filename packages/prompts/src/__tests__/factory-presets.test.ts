@@ -9,7 +9,7 @@ import {
   IMAGE_GEN_PROVIDERS,
   MODIFY_IMAGE_PROVIDERS,
   VIDEO_GEN_PROVIDERS,
-  VIDEO_TO_VIDEO_PROVIDERS,
+  VIDEO_TO_VIDEO_NODE_PROVIDERS,
   MUSIC_PROVIDERS,
   SUNO_MODELS,
   TTS_PROVIDERS,
@@ -863,8 +863,31 @@ describe("video-to-video factory preset data validity", () => {
   it("uses a known video-to-video provider when set", () => {
     for (const p of presets) {
       if (p.data.provider === undefined) continue
-      expect(VIDEO_TO_VIDEO_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+      expect(VIDEO_TO_VIDEO_NODE_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
     }
+  })
+
+  it("the six restyle looks run on Seedance 2.5 edit, each with an instruction it can run", () => {
+    const looks = ["anime", "claymation", "cyberpunk-neon", "oil-painting", "pixar-3d", "watercolor"].map((id) => {
+      const preset = presets.find((p) => p.id === `video-to-video/${id}`)
+      expect(preset, id).toBeDefined()
+      return preset!
+    })
+    for (const p of looks) {
+      expect(p.data.provider, p.id).toBe("seedance-2-5")
+      // The edit needs an instruction: the preset's own text is one, with no user prompt.
+      expect(String(p.data.promptPrefix), p.id).toMatch(/^Restyle /)
+      // Nothing the Seedance edit lane refuses or renders differently: no Wan length, sound or shot lever.
+      for (const field of ["duration", "v2vDuration", "audio", "multiShots", "seed", "videoEditDuration", "audioSetting", "promptExtend", "aspectRatio"]) {
+        expect(p.data, `${p.id}: ${field}`).not.toHaveProperty(field)
+      }
+      // Unset: the edit renders at the model's first resolution.
+      expect(p.data, p.id).not.toHaveProperty("v2vResolution")
+    }
+  })
+
+  it("no preset of the node runs on a model that does not edit the clip", () => {
+    for (const p of presets) expect(["wan", "wan-flash"], p.id).not.toContain(p.data.provider)
   })
 
   it("respects prompt (5000) and negativePrompt (500) caps", () => {

@@ -29,3 +29,4 @@ export {
   type SidecarLoader,
 } from "../i18n/index.js"
 export { NON_EN_LOCALE_IDS, type LocaleCatalogMap } from "../i18n/types.js"
+export { STYLE_SIDECAR_LOADERS } from "../i18n/style-sidecar-loaders.js"

@@ -54,6 +54,7 @@ const PROVIDER_IS_ITS_MODEL: Readonly<Record<string, string>> = {
   "lip-sync": "each value is the model it runs: lip-sync models outside the catalog, and video models it runs in lip-sync mode under their own ids",
   "extend-video": "an extension runs the catalog model it names (LTX 2.3 Pro's extend task is `ltx-2.3-pro`)",
   "video-retake": "it runs LTX 2.3 Pro's retake task, the catalog's `ltx-2.3-pro`",
+  "video-to-video": "each value is the catalog model it runs: Wan 2.6 and Wan 2.6 Flash make a new clip from the input video's subject, so the catalog lists neither under the edit mode (`v2v`) its other models carry",
   "face-swap": "its engine is its own model outside the catalog: only an explicit `models.deny` names it",
   "video-sfx": "its engine is its own model outside the catalog: only an explicit `models.deny` names it",
   "switchx": "its engine is its own model outside the catalog: only an explicit `models.deny` names it",

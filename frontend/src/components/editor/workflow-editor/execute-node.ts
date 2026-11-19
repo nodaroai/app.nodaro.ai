@@ -51,6 +51,7 @@ import {
   isSeedance2Provider,
   trimVideoReferencesToLimits,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   isCatalogExtendProvider,
   isGrokExtendProvider,
   canonicalVideoProvider,
@@ -3332,8 +3333,8 @@ function executeNodeCore(
     // the {image:N} strip can gate on its `reference-image` capability (mirror of
     // assembleVideoPrompt / the i2v branch): ref-capable providers keep the
     // tokens for @image_N binding below; the rest strip to the bare label.
-    const provider =
-      typeof v2vData.provider === "string" ? v2vData.provider : undefined;
+    // A node that stores no model runs the default (Seedance 2.5 edit).
+    const provider = videoToVideoProviderOf(v2vData.provider);
     const v2vProviderSupportsRefs = !!provider && hasFeature(provider, "reference-image");
     let prompt: string | undefined = promptOf("video-to-video")
     if (!v2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
@@ -3360,6 +3361,12 @@ function executeNodeCore(
     // already carrying the cinematography hints + identity clause above, the
     // edit instruction wraps THAT, and only then are mentions resolved.
     if (isSeedanceVideoEditProvider(provider)) {
+      // An edit needs an instruction, as the route and the workflow run refuse
+      // one without: the bare edit frame would run, and charge for, an edit of nothing.
+      if (!prompt?.trim()) {
+        toast.error(nodeRunError(v2vData.label, "nodeRun.noPromptFound"));
+        return Promise.reject(new Error("No prompt"));
+      }
       // Always a string (at minimum the instruction itself) — the `??` below is
       // only the type floor for a resolver that never returns undefined here.
       const editPrompt = buildSeedanceVideoEditPrompt(prompt);
@@ -8502,6 +8509,7 @@ function executeNodeCore(
         thresholdDb: d.thresholdDb,
         minSilenceMs: d.minSilenceMs,
         padMs: d.padMs,
+        allRangesMinMs: d.allRangesMinMs,
         userId: ctx.userId,
       })
         .then(({ jobId }) => {

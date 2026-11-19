@@ -5173,7 +5173,7 @@ The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. Wit
 
 `POST /v1/quote` returns what a node run will reserve, before you start it. Send the node type and **exactly the body you would send to its run route**: the server prices it with the run route's own code — the same body validation, the same reference-clip measurement, the same credit id and the same arithmetic — so the quote is what the run reserves. Nothing is started and nothing is charged. Cloud only; requires authentication; rate-limited to 30 requests a minute. SDK: `client.nodes.quote(type, params)`.
 
-Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read) and `split-into-layers`. Any other type is a `400 quote_unsupported` that lists them. A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
+Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read) and `split-into-layers`. Any other type is a `400 quote_unsupported` that lists them. On `video-to-video`, a Video Remake engine as the `provider` (`nodaro-prism`, `nodaro-pulse`) is quoted as Video Remake quotes it (`reserve` its hold, `expected` its expected charge, a `quote_only_provider` warning: the run route answers that quote too and starts nothing; see [Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api)). A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
 
 ```json
 {"type":"text-to-video","params":{"prompt":"edit {video:1} as follows:
@@ -5588,12 +5588,25 @@ self-hosted installs
 (SDK: [`client.videoRemake`](./sdk-reference.md#clientvideoremake), MCP: the
 [`video_remake`](./mcp/tools.md) verb).
 
+**Use Video Remake to edit a video, to restyle a video, and for motion transfer
+or motion control on a whole clip.** It keeps the clip's motion, camera and
+timing and changes what you ask: the cast, a prop, the place, the look or the
+art style. Your own words alone (`prePrompt` or `postPrompt`) are a valid
+change; an art style (`direction`) is taken by Nodaro Prism only; `preview`
+renders 4 seconds first. Related lanes: `POST /v1/motion-transfer` makes ONE
+still character image perform the moves of a reference video;
+`POST /v1/video-to-video` is an edit by instruction with a model you choose;
+[Recast](#13c-recast-cloud-edition) recreates a whole video from zero, at any
+length, with its own cast and new music, and can change the motion itself.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 | `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
+| `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
+| `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
 `{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
@@ -5611,7 +5624,7 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `style` (see below), `direction` (an art
-style, see below), `resolution` (`"480p"` — the default —
+style from the catalog, or a custom style in your own words, see below), `resolution` (`"480p"` — the default —
 `"720p"` or `"1080p"`; on Nodaro Pulse `"720p"` — its default — or
 `"1080p"`), `draft` (off by default, so a 480p run is plain; `true` makes a
 480p draft whose same take [Full Quality](#full-quality) can finish at 1080p;
@@ -5658,7 +5671,9 @@ run ignores it: the trend decides.
 Motion: every run and estimate on that engine then uses it, whatever `style`
 says. `GET /v1/video-remake/style-choice` (public, no
 sign-in needed) says which, per engine:
-`{ engines: { "nodaro-prism": Choice, "nodaro-pulse": Choice } }`, where
+`{ engines: { "nodaro-prism": Choice, "nodaro-pulse": Choice } }` (with the
+`styleOnly`, `preciseArtStyle`, `preciseArtStyleAlone` and `customStyle` maps
+described below), where
 `Choice` is `"user"` (you choose, as above), `"precise"` or `"flex"` (Motion,
 `style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style choice, and every run
@@ -5738,6 +5753,64 @@ Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
 
+**Video Remake is the recommended way to edit, modify, restyle or transfer
+the motion of a clip.** Its two engines are also named providers of
+`POST /v1/video-to-video`: a request there with `provider: "nodaro-prism"` or
+`"nodaro-pulse"` starts nothing and answers `200` with this section's quote
+and the request to send here:
+`{ "quoteOnly": true, "message": "…", "videoRemake": { "quote": { engine, engineName, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }, "run": { "method": "POST", "path": "/v1/video-remake", "body": { videoUrl, roles: [], postPrompt, engine, resolution?, draft? } } } }`.
+There is no `jobId` and nothing is held. The run is `POST /v1/video-remake`
+with `videoRemake.run.body`. The request's `prompt` becomes `postPrompt`; the
+other Video to Video fields are ignored, and a reference list is a
+`400 validation_error`. A request that names no provider is unchanged (a
+Seedance 2.5 edit). See
+[Video to Video → Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api).
+
+**A custom style.** Where `GET /v1/video-remake/style-choice` answers
+`customStyle` `true` for the engine (Nodaro Prism only), a direct run takes the
+style in your own words in place of a catalog art style:
+`direction: { customStyle: "<text>" }`. Describe the visual style only: the
+medium (drawn, 3D-rendered or filmed), line, colour, lighting and texture; not
+who or what is in the video. At most 600 characters, never blank. It goes
+wherever a catalog art style goes and counts as the run's change wherever one
+does (style only and an art style on a Precise run, above), and the estimate
+(sent with the same body) answers what it would for a catalog art style: the
+words change no price. The text is used as written, and the job records it as
+sent in `input_data.direction.customStyle`. Send `style` or `customStyle`,
+never both.
+
+`customStyle: { "nodaro-prism": boolean, "nodaro-pulse": boolean }` in the
+`style-choice` answer is `true` only where the engine takes a custom style and
+Nodaro offers it on this deployment; Nodaro Pulse is always `false`, and a
+server from before it leaves it out (read that as `false`).
+
+`POST /v1/video-remake/describe-style` writes such a text from an image: body
+`{ imageUrl, note? }`, where `imageUrl` is a public http(s) PNG, JPEG, WebP or
+GIF of at most 10 MB and `note` is a wish about the style of at most 600
+characters ("like this, but darker"). It answers `{ text, medium?, tones? }`:
+`text` is the image's visual style in words, never its content, at most 600
+characters, ready to show, edit and send as `customStyle`; `medium` (`"2d"`,
+`"3d"` or `"photo"`) and `tones` (`"colour"`, `"black-and-white"` or
+`"one-colour"`) are a hint for an interface only (a run works out its style's
+medium itself, from the words it is sent). It starts no job, charges nothing
+and keeps nothing of the image; it needs a signed-in account and is limited to
+10 calls a minute per account.
+
+Refusals, all before anything is charged. On a run and its estimate:
+`400 custom_style_with_art_style` (both `style` and `customStyle` sent),
+`400 custom_style_empty` (blank, or nothing left once its curly braces are
+taken out), `400 custom_style_too_long` (more than 600 characters),
+`403 custom_style_not_available` (not offered here: choose a catalog art
+style), `400 raw_reference_token` (the text holds `{image:…}`, `{video:…}` or
+`{audio:…}`), and where a catalog art style could not go either
+`400 art_style_needs_prism` (Nodaro Pulse) or `400 art_style_needs_flex` (a
+trend run). On `describe-style`: `401 unauthorized`, `400 validation_error`,
+`400 unsafe_url` (not a public http(s) address), `403
+custom_style_not_available`, `400 image_unreadable` (the image could not be
+fetched, is too large or is not a picture), `502 describe_style_failed` (try
+again), `422 style_not_described` (try another image, or write the style
+yourself) and `429 rate_limit_exceeded` past the limit.
+
 **The Advanced options on the Video Remake page.** The Video Remake page
 offers two of the body's fields, `prepareReferences` (see Reference
 preparation below) and `prePrompt`, only under its Advanced options, which
@@ -5747,6 +5820,28 @@ needed) answers `{ show: boolean }`, so an app built on this API can show or
 hide the same options. It describes the page only: every run and estimate
 takes `prepareReferences` and `prePrompt` as described here, whatever it
 answers. The answer may be up to a minute old.
+
+**The art styles the Video Remake page offers.**
+`GET /v1/video-remake/art-styles?locale=<id>` (public, no sign-in needed)
+lists the art styles the Video Remake page's art style picker offers, in its
+order, so an app or a menu can show the same list:
+
+```json
+{ "data": [{ "id": "anime", "label": "Anime", "clipUrl": "https://…", "stillUrl": "https://…" }] }
+```
+
+`id` is what a run takes as `direction.style` (an id of the `style` picker
+catalog). `label` is the style's name in `locale`, a Nodaro language id (`he`,
+`ja`, `ko`, `pt-BR`, …): English when `locale` is left out, is not one of
+Nodaro's languages, or the language does not name the style. `clipUrl` is a
+short clip of real footage wiping into the style and `stillUrl` a still frame
+cut from it, both absolute `https` addresses. The list is the styles of the
+`style` picker catalog that are offered for video, hold up as a restyle of
+filmed footage and have such a clip. It is empty (`{ "data": [] }`) on a
+deployment that does not show Nodaro's previews, or one without Video Remake
+or its art styles. It lists what the picker shows: whether a run takes an art
+style on an engine is `style-choice`'s to say (above). The answer may be up to
+five minutes old.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
 for one, whether faces are hidden first, and whether a clip the model refuses
@@ -7877,11 +7972,11 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/split-media` | Cut a video and/or an audio file into consecutive parts, local FFmpeg, **22 credits**<!-- credits: split-media --> per run whatever the number of parts (`{ videoUrl?, audioUrl? (at least one; both are each split on their own), chunkDuration: ≥ 1 (seconds, the longest a part may be), minPartDuration?: ≥ 0 (seconds, default 4; above `chunkDuration` is a `400 validation_error`), audioFormat?: mp3\|wav\|aac — aac parts are `.m4a` files }`; `output_data` = `{ videoUrls?: string[], audioUrls?: string[], chunkCount, partDurationsSec?: number[], audioPartDurationsSec?: number[] (only when both were split) }`). Video is cut on whole frames, each part's sound ending at most ~21 ms before its picture; audio-only parts are sample-exact in mp3/wav and on whole AAC frames in aac; sources up to 3 hours, at most 200 parts per input — a source that needs more, is shorter than the minimum, or cannot be cut into parts between the two lengths fails with a message saying so. `{ videoUrl, mode: "shots" }` instead cuts a video into one part per shot at the cuts measured from the file (no part length, a video only — a separate `audioUrl` is a `400 validation_error`; up to 30 minutes and 200 shots; the same price), and `output_data` adds `shotCount` and `shots: [{ index, startSec, endSec, durationSec }]`. Full rules: [Split into Chunks](./nodes/processing-audio/split-media.md). → job. |
 | `POST` | `/v1/shot-cuts` | Where every shot of a video starts and ends, measured from the file — local FFmpeg, keyless, **2 credits**<!-- credits: shot-cuts --> flat per run, with or without frames (`{ videoUrl, frames?: boolean }`; videos up to 30 minutes and about 10.7 GiB, MP4/MOV/MKV/WebM). Every decoded frame is scored and each hard cut starts a new shot (dissolves and fades are not cuts). `output_data.json` = `{ shotCount, cutsSec: number[] (ascending, never 0, [] for one shot), durationSec, shots: [{ index, startSec, endSec, durationSec, firstFrameUrl?, lastFrameUrl? }] }` (seconds from the first frame, to the millisecond); with `frames: true` each shot's exact first and last frame are saved as PNG (up to 1,000 shots) and also listed in shot order on `output_data.firstFrames` / `output_data.lastFrames`. A file that is not a readable video, a file over about 10.7 GiB, a video past 30 minutes, or more than 1,000 shots with frames on fails and is refunded. Full reference: [Shot Cuts](./nodes/processing-video/shot-cuts.md). → job. |
 | `POST` | `/v1/add-captions` | Burn captions into a video (`{ videoUrl, text? \| captions?[] \| transcript? \| auto_transcribe?, transcribe_provider?: incredibly-fast-whisper\|elevenlabs-stt\|whisper\|nemotron-3-5-transcribe, style?: subtitle\|word-highlight\|karaoke\|tiktok-words\|word-pop\|bouncy, position?, positionY?, fontSize?, color?, backgroundColor?, look?: outline\|clean, fontFamily?, fontWeight?, strokeColor?, strokeWidth?, uppercase?, maxWordsPerLine?, highlightColor?, animate?, wordLevel?, segments?[] }`) → job. Caption-source precedence: `captions[]` > `transcript` > `text` on `subtitle` > auto-transcription. On a top-level `subtitle` (no `segments`) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit it to caption the speech. On a kinetic style `text` is only the fallback (used when transcription returns nothing or `auto_transcribe` is `false`, spread evenly across the video). An unset `look` is `outline` on the kinetic styles and `clean` on `subtitle`. `maxWordsPerLine` (integer 1–20, optional) caps the words on one caption line — or one `tiktok-words` page — **on top of** the frame-width budget, sentence ends and ≥0.5 s pauses (`1`–`2` = the punchy CapCut read, unset = fit the width); it counts words, not caption entries (a phrase-level entry holding more than N words is split into sub-phrases of at most N words; on a `text` subtitle it only sets the line breaks of the one static block); it exists top-level and per `segments[]` entry (a segment inherits the top-level value) and is inert on `word-pop`. `word-highlight`, `karaoke` and `bouncy` show one held line at a time. `highlightColor` and `animate` are kinetic-only (`400` on `subtitle`); every other lever, `maxWordsPerLine` included, also styles a `subtitle`. A kinetic style needs a `transcribe_provider` that returns word timings (`incredibly-fast-whisper`, the default, `elevenlabs-stt` or `nemotron-3-5-transcribe`) — `whisper` is a `400` on `transcribe_provider` there when transcription is the render's only caption source; `subtitle` needs phrase timing only and works with any engine. On `nemotron-3-5-transcribe` a render that transcribes is one charge, the render plus the video's started minutes: the video (an https link to a public host, up to 60 minutes) is measured before anything is held and the run is charged for the length the model decoded ([Add Captions](./nodes/processing-video/add-captions.md#nemotron-35-transcribe)). A bare plain-text `subtitle` is the cheap FFmpeg burn; a kinetic style, any styling lever, timed captions, auto-transcription or `segments` renders via Remotion, bills at the kinetic price and keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). Full reference: [Add Captions](./nodes/processing-video/add-captions.md). |
-| `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **11 credits**<!-- credits: silence-detect -->, keyless (`{ audioUrl (an audio or video file), thresholdDb?: -90–0 (default -35), minSilenceMs?: 1–600000 (default 700), padMs?: 0–60000 (default 120) }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], durationMs }`). A file with no sound (a picture-only video) fails and is refunded. → job. |
+| `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **11 credits**<!-- credits: silence-detect -->, keyless (`{ audioUrl (an audio or video file), thresholdDb?: -90–0 (default -35), minSilenceMs?: 1–600000 (default 700), padMs?: 0–60000 (default 120), allRangesMinMs?: 20–600000 }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], allRanges?: [{ startMs, endMs }], durationMs }` — `allRanges`, only with `allRangesMinMs`, lists every silence at least that long, unpadded). A file with no sound (a picture-only video) fails and is refunded. → job. |
 | `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **11 × (sources − 1) credits** (2 → 11<!-- credits: audio-sync:2src -->, 4 → 33<!-- credits: audio-sync:4src -->, 6 → 55<!-- credits: audio-sync:6src -->), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |
 | `POST` | `/v1/speaker-map` | Which camera each speaker is on, from the cameras' own microphones — local FFmpeg, keyless, **11 credits**<!-- credits: speaker-map --> flat per run (`{ sources: [{ id, url, kind?: "video" | "audio" }] (2–6, unique ids; `kind: "audio"` = a sound-only recording, never anyone's camera), transcript (with speaker labels), offsets?: <an /v1/audio-sync result>, masterSourceId?, wideSourceId?, marginDb?: <0–30, default 3> }`; the master and the wide are no one's camera). While a speaker talks, the camera that hears them loudest by at least `marginDb` is theirs, else `""` (shown on the wide shot, or with none on any camera with picture). `400 validation_error` (a repeated id, a master or wide id that is not a source, a wide sent as `kind: "audio"`, a wide that is also the master, fewer than 2 or more than 6 sources, `offsets` that are not an Audio Sync result) and `422 no_speakers` before anything is reserved; `output_data.json` = `{ version, speakerMap, confidence, notes, edl? }` (`edl`: the recordings as one edit, also on `output_data.edl`). Send its `speakerMap` to `/v1/camera-switch` as `speakerMap`. Full reference: [Speaker Map](./nodes/processing-audio/speaker-map.md). → job. |
 | `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters\|trailer, planTier?: economy\|standard\|premium (default standard), transcript, sources: [{ id?, url, kind?: video\|audio, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`, an EDL for `trailer`). A mode the server does not plan ([Edit Plan modes](#edit-plan-modes)) or does not know answers `400 mode_not_available` before anything is charged; on nodaro.ai, a request with no `mode` answers `422 unknown_mode`. Also refused before anything is charged, on nodaro.ai: no source with a media URL (`422 no_source`), a master source whose length cannot be read (`422 probe_failed`) or that reports none (`422 invalid_duration`), a source over 180 minutes (`422 source_too_long`), and a transcript with no timed words (`400 empty_transcript`). Priced per source-minute × tier — per started minute of the master source, or the 15/30/60/90/120/180-minute step its length rounds up to, as `GET /v1/edit-plan/capabilities` says (`perMinute`) — plus a flat term in `clips` and `trailer` modes: `per_minute(tier) × minutes + (clips or trailer ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
-| `POST` | `/v1/tighten-episode` | [Tighten Episode](./nodes/processing-video/tighten-episode.md): a recording tightened in one run — Transcribe, Silence Detect, Edit Plan in Tighten mode, then the render (Speaker View with framing, Apply EDL without), Add Captions when captions are on and the music bed when one is given, each its own job (`{ mediaUrls: [<recording URL>, …] (one video or audio recording, up to 3 hours, with sound — or up to six of one conversation, see [Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras)), masterAudioUrl?, cameras?, musicUrl?, output?: video\|audio (default video; an audio recording makes an audio episode), framing?: { aspect: "16:9"\|"9:16"\|"1:1"\|"4:5", layout } \| null (default null, no framing), framingSource?: auto\|static\|tracking (absent = static; see [Following faces](./nodes/processing-video/tighten-episode.md#following-faces)), captions? (default true), captionStyle? (default word-highlight), reviewBeforeRender? (default false), planTier?: economy\|standard\|premium (default standard), instructions?, styleGuide?, musicDuckAmount?: 0–100 (default 75), speakerNames?: { <speaker label>: <name> } (up to 80 characters a name, at most 32 speakers; kept by the job and returned, never read by the run) }`; `output_data` = the episode (`videoUrl`, or `audioUrl` for an audio episode), `durationSec` (the cut's length, when the run knows it), `json` = the edit, `transcript`, and `quality` (`proxy` for a review run's preview, `final` otherwise); `speakers` = `[{ label, name?, talkMs }]`, each speaker first heard first, the name `speakerNames` gave them and how long they talk across the recording, in ms (see [The speakers, over the API](./nodes/processing-video/tighten-episode.md#the-speakers-over-the-api)); a run of several recordings or a Master audio adds `cameras`; a failed run keeps what completed and names the step that failed (`failedStep`)). Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:tighten-episode -->. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). Several recordings or a Master audio where Speaker Map is not available to you are refused `403 node_not_available`. On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). → `202 { jobId, executionId }`. |
+| `POST` | `/v1/tighten-episode` | [Tighten Episode](./nodes/processing-video/tighten-episode.md): a recording tightened in one run — Transcribe, Silence Detect, Edit Plan in Tighten mode, then the render (Speaker View with framing, Apply EDL without), Add Captions when captions are on and the music bed when one is given, each its own job (`{ mediaUrls: [<recording URL>, …] (one video or audio recording, up to 3 hours, with sound — or up to six of one conversation, see [Several cameras](./nodes/processing-video/tighten-episode.md#several-cameras)), masterAudioUrl?, cameras?, musicUrl?, output?: video\|audio (default video; an audio recording makes an audio episode), framing?: { aspect: "16:9"\|"9:16"\|"1:1"\|"4:5", layout } \| null (default null, no framing), framingSource?: auto\|static\|tracking (absent = static; see [Following faces](./nodes/processing-video/tighten-episode.md#following-faces)), captions? (default true), captionStyle? (default word-highlight), reviewBeforeRender? (default false), planTier?: economy\|standard\|premium (default standard), instructions?, styleGuide?, musicDuckAmount?: 0–100 (default 75), tightness?: light\|standard\|tight (absent = standard; see [Pauses and filler](./nodes/processing-video/tighten-episode.md#pauses-and-filler)), speakerNames?: { <speaker label>: <name> } (up to 80 characters a name, at most 32 speakers; kept by the job and returned, never read by the run) }`; `output_data` = the episode (`videoUrl`, or `audioUrl` for an audio episode), `durationSec` (the cut's length, when the run knows it), `json` = the edit, `transcript`, and `quality` (`proxy` for a review run's preview, `final` otherwise); `speakers` = `[{ label, name?, talkMs }]`, each speaker first heard first, the name `speakerNames` gave them and how long they talk across the recording, in ms (see [The speakers, over the API](./nodes/processing-video/tighten-episode.md#the-speakers-over-the-api)); a run of several recordings or a Master audio adds `cameras`; a failed run keeps what completed and names the step that failed (`failedStep`)). Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:tighten-episode -->. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). Several recordings or a Master audio where Speaker Map is not available to you are refused `403 node_not_available`. On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). → `202 { jobId, executionId }`. |
 | `POST` | `/v1/tighten-episode/estimate` | The same body; answers `{ data: { totalCredits, stepsCredits, feeCredits, durationSec } }` (plus `estimate: true` when a step is a metered LLM call's estimate) and starts nothing (the credit figures are 0 on an edition without credits). |
 | `POST` | `/v1/tighten-episode/continue` | `{ jobId, mode, editedEdl? }`: `"mode": "from-failed"` runs what a failed Tighten Episode run did not complete, as a new job (finished steps are kept and not charged again; the fee is held again, the failed run's was refunded); `"mode": "render-final"` renders a review run's final, with your edit of the plan (`editedEdl`, optional) and no fee. Refusals: the [continuation codes](#continuing-a-run); a Render final of a run that was not a preview is `409 render_final_not_preview`, of an edit already rendered `409 render_final_already_rendered`. |
 | `POST` | `/v1/episode-chapters` | [Chapters](./nodes/processing-video/episode-chapters.md): a recording's chapters in one run — Transcribe, then Edit Plan in Chapters mode, each its own job; nothing is rendered (`{ mediaUrls: [<recording URL>] (one, up to 3 hours, with sound), planTier?: economy\|standard\|premium (default economy), instructions?, styleGuide? }`; `output_data.text` = the show notes, one `M:SS Title` line per chapter (once a chapter starts at 1:00:00 or later, every line is `H:MM:SS`; the first at 0:00, the times strictly increasing — two chapters in the same second keep the first), `output_data.json` = `[{ startMs, title }]`, the same rows; the first starts at 0). A run that finds no chapters fails and its fee is refunded. Its steps at their own rates plus a per-run fee of **11 credits**<!-- credits: use-case-fee:episode-chapters -->. An `Idempotency-Key` makes a retry answer the same run (`deduped: true`). On a self-hosted install it needs a nodaro.ai connection (`503 nodaro_connection_required` otherwise, nothing created). → `202 { jobId, executionId }`. |

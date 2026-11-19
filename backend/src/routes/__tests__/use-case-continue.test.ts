@@ -420,7 +420,11 @@ describe("a run P1 code stored (its output map names no kind)", () => {
     expect(isStoredInlineGraph(stored)).toBe(true)
     expect((stored as unknown as { outputMap: Record<string, unknown> }).outputMap).not.toHaveProperty("kind")
     expect(usecaseGraphHash(stored as never)).toBe(stored.hash)
-    expect(stored.hash).toBe(recordedHash)
+    // P1's own hash, as P1 recorded it: the snapshot is never re-recorded. Today's build of the
+    // same row (`recordedHash`) differs since Tighten's Silence Detect runs by tightness (ruled
+    // 2026-11-18, fixtures README); a run P1 stored continues on the graph it stored.
+    expect(stored.hash).toBe("283661b8871add16")
+    expect(recordedHash).not.toBe(stored.hash)
   })
 
   it("continues from where it failed, on its snapshot and settings as stored", async () => {

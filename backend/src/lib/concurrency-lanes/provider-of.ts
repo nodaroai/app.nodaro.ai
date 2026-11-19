@@ -63,7 +63,7 @@ import { isTailRecipeProvider, TAIL_RECIPES } from "../extend-recipe.js"
 import {
   CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf,
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER,
-  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER,
+  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, QUEUED_VIDEO_TO_VIDEO_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER,
   VOICED_VIDEO_DEFAULT_PROVIDER, type GenerateImageModelInput,
 } from "../../workers/handlers/default-models.js"
 import { composeRecord, unitRecord } from "../unit-compose.js"
@@ -175,9 +175,9 @@ function videoUpscaleProvider(d: Data): string | null {
   return route("video-upscale", VIDEO_UPSCALE_DEFAULT_PROVIDER)
 }
 
-/** An entity motion: image-to-video from its still, or video-to-video when it refines a clip. */
-const entityMotion = (defaultModel: string, canRefine: boolean) => (d: Data): string | null =>
-  route(canRefine && str(d.refineFromVideoUrl) ? "video-to-video" : "image-to-video", str(d.provider) ?? defaultModel)
+/** An entity motion: image-to-video from its still. */
+const entityMotion = (defaultModel: string) => (d: Data): string | null =>
+  route("image-to-video", str(d.provider) ?? defaultModel)
 
 const entityImage = (d: Data): string | null =>
   route("image-generation", str(d.provider) ?? IMAGE_MODEL_ROLE_DEFAULTS.character)
@@ -212,7 +212,8 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "edit-image": (d) => route("image-editing", str(d.provider) ?? EDIT_IMAGE_DEFAULT_PROVIDER),
   "image-to-video": (d) => route("image-to-video", str(d.provider) ?? IMAGE_TO_VIDEO_DEFAULT_PROVIDER),
   "text-to-video": (d) => route("text-to-video", str(d.provider) ?? TEXT_TO_VIDEO_DEFAULT_PROVIDER),
-  "video-to-video": (d) => route("video-to-video", str(d.provider) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER),
+  // No provider = a job queued before the default moved off Wan 2.6 (default-models.ts).
+  "video-to-video": (d) => route("video-to-video", str(d.provider) ?? QUEUED_VIDEO_TO_VIDEO_PROVIDER),
   "motion-transfer": (d) => route("motion-transfer", str(d.provider) ?? MOTION_TRANSFER_DEFAULT_PROVIDER),
   "speech-to-video": () => route("speech-to-video", "speech-to-video"),
   "lip-sync": lipSyncProvider,
@@ -226,10 +227,10 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "generate-creature-asset": entityImage,
   "generate-location": entityImage,
   "generate-location-asset": entityImage,
-  "generate-character-motion": entityMotion(CHARACTER_MOTION_DEFAULT_PROVIDER, false),
-  "generate-location-motion": entityMotion(LOCATION_MOTION_DEFAULT_PROVIDER, true),
-  "generate-object-motion": entityMotion(OBJECT_MOTION_DEFAULT_PROVIDER, true),
-  "generate-creature-motion": entityMotion(CREATURE_MOTION_DEFAULT_PROVIDER, true),
+  "generate-character-motion": entityMotion(CHARACTER_MOTION_DEFAULT_PROVIDER),
+  "generate-location-motion": entityMotion(LOCATION_MOTION_DEFAULT_PROVIDER),
+  "generate-object-motion": entityMotion(OBJECT_MOTION_DEFAULT_PROVIDER),
+  "generate-creature-motion": entityMotion(CREATURE_MOTION_DEFAULT_PROVIDER),
   // The clip is image-to-video; its dialogue track (ElevenLabs) is a side call.
   "voiced-video": (d) => route("image-to-video", str(d.provider) ?? VOICED_VIDEO_DEFAULT_PROVIDER),
   "extend-video": extendVideoProvider,

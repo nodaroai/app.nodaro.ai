@@ -57,4 +57,44 @@ describe("runSilenceDetectOnFile (e2e, real ffmpeg)", () => {
     expect(result.ranges).toHaveLength(0)
     expect(Math.abs(result.durationMs - 4000)).toBeLessThan(250)
   }, 60_000)
+
+  // A 6 s tone muted for 0.12 s at t=1 and for 0.6 s at t=3: a breath and a pause.
+  async function makeToneWithTwoGaps(path: string): Promise<void> {
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+      "-af", "volume=enable='between(t,1,1.12)+between(t,3,3.6)':volume=0",
+      path,
+    ])
+  }
+
+  it("with allRangesMinMs, lists every silence unpadded beside the long ones padded — from one pass", async () => {
+    const src = join(dir, `${randomUUID()}.wav`)
+    await makeToneWithTwoGaps(src)
+
+    const result = await runSilenceDetectOnFile(src, { thresholdDb: -35, minSilenceMs: 350, padMs: 110, allRangesMinMs: 50 })
+
+    // The pause alone is long enough to cut, shrunk by 110 ms at each end.
+    expect(result.ranges).toHaveLength(1)
+    expect(result.ranges[0]!.startMs).toBeGreaterThan(3050)
+    expect(result.ranges[0]!.endMs).toBeLessThan(3550)
+    // Both silences, unpadded, in order.
+    expect(result.allRanges).toHaveLength(2)
+    const [breath, pause] = result.allRanges!
+    expect(breath!.startMs).toBeGreaterThan(950)
+    expect(breath!.endMs).toBeLessThan(1170)
+    expect(pause!.startMs).toBeLessThan(result.ranges[0]!.startMs)
+    expect(pause!.endMs).toBeGreaterThan(result.ranges[0]!.endMs)
+    // The long one is the same span either way: its padded copy sits 110 ms inside it.
+    expect(result.ranges[0]!.startMs - pause!.startMs).toBe(110)
+    expect(pause!.endMs - result.ranges[0]!.endMs).toBe(110)
+  }, 60_000)
+
+  it("without allRangesMinMs the result is the one it always was: no list", async () => {
+    const src = join(dir, `${randomUUID()}.wav`)
+    await makeToneWithTwoGaps(src)
+
+    const result = await runSilenceDetectOnFile(src, { thresholdDb: -35, minSilenceMs: 350, padMs: 110 })
+    expect(result).not.toHaveProperty("allRanges")
+    expect(result.ranges).toHaveLength(1)
+  }, 60_000)
 })

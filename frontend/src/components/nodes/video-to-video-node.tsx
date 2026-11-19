@@ -19,7 +19,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
-import { isSeedanceVideoEditProvider } from "@nodaro/shared/models"
+import { isSeedanceVideoEditProvider, videoToVideoProviderOf } from "@nodaro/shared/models"
 import { seedanceVideoEditCreditId } from "@nodaro/shared/credits"
 import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import { useExactUnitQuote } from "@/hooks/use-unit-quote-credits"
@@ -73,7 +73,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const v2vProvider = (nodeData.provider as string | undefined) ?? "wan"
+  const v2vProvider = videoToVideoProviderOf(nodeData.provider)
   // The Seedance lane reserves on the reference-video ladder at the model's
   // LONGEST clip (Auto duration) — the exact identifier payload-builder.ts
   // builds, a draft at 480p — so the pill quotes what the run will actually

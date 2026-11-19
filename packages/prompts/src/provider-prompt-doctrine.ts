@@ -336,7 +336,7 @@ const WAN_DOCTRINE: ProviderPromptDoctrine = {
     "Multi-shot (2.6/2.7): Overall description + shot number + timestamp + per-shot content. For ONE continuous take write 'Generate single shot' (the shot_type parameter is gone in 2.7).",
     "References go by 'Image 1' / 'Video 1' (capitalized, with a space). Anti-patterns: naming real people, demanding exact legible text, rapid scene changes in one clip, very long choreography.",
     "Style words are strong levers: cyberpunk, claymation, pixel style, felt style, tilt-shift, time-lapse. wan-videoedit: describe the transform, keep motion + identity.",
-    "Video-to-video on wan / wan-flash is reference-to-video: the input clip supplies the subject and the prompt describes a NEW scene. It does not restyle or edit the clip — use wan-videoedit for that.",
+    "Video-to-video on wan / wan-flash is reference-to-video: the clip supplies the subject, the prompt a NEW scene. Not an edit or a restyle: edit with seedance-2-5 or wan-videoedit, restyle with Video Remake.",
   ],
   doctrine: `Prompt structure (Alibaba Model Studio's official formulas):
 - Basic: Entity + Scene + Motion.
@@ -349,7 +349,8 @@ const WAN_DOCTRINE: ProviderPromptDoctrine = {
 **Video-to-video on wan / wan-flash (Wan 2.6) is reference-to-video**
 - The input clip is a REFERENCE for its subject; the output is a NEW clip of that subject in the scene the prompt describes. It is not an edit, a restyle or a style transfer of the input clip.
 - The prompt describes the scene: what the subject does and where.
-- To restyle or edit the clip itself, the model is wan-videoedit (describe the transform, keep motion + identity).
+- To edit the clip itself by instruction, the model is an edit model: seedance-2-5 (the Video to Video default) or wan-videoedit (describe the transform, keep motion + identity).
+- To restyle the clip (keep its motion, camera and timing, change the art style), use Video Remake with an art style, not a Wan model.
 
 **Camera vocabulary**
 push-in (intimacy/tension), pull-out (scale/isolation), tracking shot, orbit, fixed camera, and compound movements chained sequentially for epic scale.
