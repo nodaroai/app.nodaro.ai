@@ -3838,6 +3838,34 @@ other model; numbering and caps in [Video to Video → Seedance 2.5 Edit](nodes/
 The edit is built server-side (see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit)),
 so you send the same body as for any other edit model.
 
+Video Remake ([`client.videoRemake`](#clientvideoremake)) is the recommended
+way to edit, modify, restyle or transfer the motion of a clip. Its two engines
+are also named providers here: `nodes.run("video-to-video", { videoUrl, prompt,
+provider: "nodaro-prism" | "nodaro-pulse", resolution?, draft? })`
+(`VideoToVideoRemakeParams`) starts **no job** and resolves a
+`VideoToVideoRemakeQuote`: `{ quoteOnly: true, message, videoRemake: { quote,
+run } }`, where `quote` is Video Remake's estimate (`totalCredits`,
+`expectedCredits`, `breakdown`, `privacyCredits?`, `settlesLower`, `engine`,
+`engineName`) and `run.body` is the body for `client.videoRemake.run`. Nothing
+is held.
+
+```ts
+const quoted = await client.nodes.run("video-to-video", {
+  videoUrl, prompt: "make it night", provider: "nodaro-prism",
+})
+// quoted.quoteOnly === true; quoted.videoRemake.quote.totalCredits is the hold
+const { jobId } = await client.videoRemake.run(quoted.videoRemake.run.body)
+```
+
+The other Video to Video fields are ignored for these two providers and a
+reference list is refused (400). `isVideoToVideoRemakeQuote(result)` tells the
+quote from a started job when the provider is not known at compile time.
+`nodes.quote("video-to-video", …)` answers the same figures as a `NodeQuote`
+with a `quote_only_provider` warning. `nodes.runAndWait` rejects with a
+`NodaroError` of code `quote_only_provider` before anything is sent, since
+there is no job to wait for. Details and refusals:
+[Video to Video → Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api).
+
 #### `quote(type, params?)`
 
 ```ts

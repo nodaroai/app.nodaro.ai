@@ -495,6 +495,40 @@ describe("POST /v1/quote refusals", () => {
     await app.close()
   })
 
+  it("a Video Remake engine on video-to-video: the quote and the run route answer Video Remake's own figures, and nothing is reserved", async () => {
+    const { routeNodeGate } = await import("../../../lib/route-node-gate.js")
+    // The door the route asks for Video Remake is the cast-swap node's.
+    expect(routeNodeGate("/v1/cast-swap", {})).toMatchObject({ kind: "node", types: ["cast-swap"] })
+    const app = await buildApp()
+    const asked: unknown[] = []
+    // The engine's estimate route, stood in for: what it is asked and what it answers.
+    app.post("/v1/cast-swap/estimate", async (req) => {
+      asked.push(req.body)
+      return { engine: "nodaro-prism", totalCredits: 480, expectedCredits: 300, breakdown: { base: 20, references: 0, motion: 460, motionExpected: 280 }, settlesLower: true }
+    })
+    const params = { videoUrl: CLIP, prompt: "make it night", provider: "nodaro-prism" }
+    const q = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-to-video", params } })
+    expect(q.statusCode, q.body).toBe(200)
+    const quote = (q.json() as { data: Quote }).data
+    expect(quote).toMatchObject({ identifier: "nodaro-prism", reserve: 480, expected: 300 })
+    expect(quote.warnings.map((w) => w.code)).toEqual(["quote_only_provider", "settles_to_actual"])
+
+    const ran = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: params })
+    expect(ran.statusCode, ran.body).toBe(200)
+    const body = ran.json() as { quoteOnly: boolean; jobId?: string; videoRemake: { quote: { totalCredits: number; expectedCredits: number }; run: { path: string; body: unknown } } }
+    expect(body.quoteOnly).toBe(true)
+    expect(body.jobId).toBeUndefined()
+    expect(body.videoRemake.quote.totalCredits).toBe(quote.reserve)
+    expect(body.videoRemake.quote.expectedCredits).toBe(quote.expected)
+    expect(body.videoRemake.run).toMatchObject({ path: "/v1/video-remake", body: { videoUrl: CLIP, roles: [], postPrompt: "make it night", engine: "nodaro-prism" } })
+    expect(asked).toEqual([
+      { videoUrl: CLIP, roles: [], postPrompt: "make it night", engine: "seedance-2-5" },
+      { videoUrl: CLIP, roles: [], postPrompt: "make it night", engine: "seedance-2-5" },
+    ])
+    expect(reserveSpy).not.toHaveBeenCalled()
+    await app.close()
+  })
+
   it("refuses a model this deployment does not offer, as the run does", async () => {
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "video-to-video", params: { videoUrl: CLIP, provider: "runway-aleph" } } })

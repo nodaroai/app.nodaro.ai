@@ -92,9 +92,14 @@ export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY } from "@nodaro/shared/nodes"
 
 export type { ReferenceCaptionParams, AssembleNarratedVideoParams, RunNodeOptions } from "../resources/nodes.js"
 
+export { isVideoToVideoRemakeQuote } from "../resources/nodes-video-params.js"
+
 export type {
   // `nodes.run("video-to-video", …)` and `nodes.quote(type, params)`.
   VideoToVideoParams,
+  VideoToVideoRemakeParams,
+  VideoToVideoRemakeRun,
+  VideoToVideoRemakeQuote,
   NodeQuote,
   QuoteAdjustment,
   QuoteWarning,

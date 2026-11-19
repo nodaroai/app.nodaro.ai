@@ -5173,7 +5173,7 @@ The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. Wit
 
 `POST /v1/quote` returns what a node run will reserve, before you start it. Send the node type and **exactly the body you would send to its run route**: the server prices it with the run route's own code — the same body validation, the same reference-clip measurement, the same credit id and the same arithmetic — so the quote is what the run reserves. Nothing is started and nothing is charged. Cloud only; requires authentication; rate-limited to 30 requests a minute. SDK: `client.nodes.quote(type, params)`.
 
-Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read) and `split-into-layers`. Any other type is a `400 quote_unsupported` that lists them. A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
+Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read) and `split-into-layers`. Any other type is a `400 quote_unsupported` that lists them. On `video-to-video`, a Video Remake engine as the `provider` (`nodaro-prism`, `nodaro-pulse`) is quoted as Video Remake quotes it (`reserve` its hold, `expected` its expected charge, a `quote_only_provider` warning: the run route answers that quote too and starts nothing; see [Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api)). A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
 
 ```json
 {"type":"text-to-video","params":{"prompt":"edit {video:1} as follows:
@@ -5741,6 +5741,19 @@ Motion runs use); the estimate (sent with the same body) shows it. The job recor
 Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
+
+**Video Remake is the recommended way to edit, modify, restyle or transfer
+the motion of a clip.** Its two engines are also named providers of
+`POST /v1/video-to-video`: a request there with `provider: "nodaro-prism"` or
+`"nodaro-pulse"` starts nothing and answers `200` with this section's quote
+and the request to send here:
+`{ "quoteOnly": true, "message": "…", "videoRemake": { "quote": { engine, engineName, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }, "run": { "method": "POST", "path": "/v1/video-remake", "body": { videoUrl, roles: [], postPrompt, engine, resolution?, draft? } } } }`.
+There is no `jobId` and nothing is held. The run is `POST /v1/video-remake`
+with `videoRemake.run.body`. The request's `prompt` becomes `postPrompt`; the
+other Video to Video fields are ignored, and a reference list is a
+`400 validation_error`. A request that names no provider is unchanged (a
+Seedance 2.5 edit). See
+[Video to Video → Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api).
 
 **A custom style.** Where `GET /v1/video-remake/style-choice` answers
 `customStyle` `true` for the engine (Nodaro Prism only), a direct run takes the

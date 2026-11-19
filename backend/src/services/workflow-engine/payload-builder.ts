@@ -335,6 +335,7 @@ import { scene3DFrameFromNode, scene3DNodePreflightError, scene3DReferencesFromN
 import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
+import { assertNoVideoRemakeEngineOnNode } from "../../lib/video-remake-engine-quote.js"
 import { viduQ4InputProblem } from "../../lib/vidu-q4-inputs.js"
 import { imagePromptTooShort } from "../../lib/image-prompt-minimum.js"
 import { baseImageReservedSeats, imageInputLimitProblem } from "../../lib/image-input-limit.js"
@@ -5456,6 +5457,8 @@ function buildPayloadOf(
     case "video-to-video": {
       // A node that stores no model runs the default (Seedance 2.5 edit).
       const v2vProvider = videoToVideoProviderOf(data.provider)
+      // A Video Remake engine is a named choice of the REST route, which only quotes it: never a node's model.
+      assertNoVideoRemakeEngineOnNode(v2vProvider, nodeLabel)
       // Resolve @-mentions in the v2v prompt. v2v has only a single
       // `referenceImageUrl` slot — when an upstream ref image is wired we
       // keep it; otherwise the first resolved mention URL fills it. Extra

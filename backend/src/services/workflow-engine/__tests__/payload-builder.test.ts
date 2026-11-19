@@ -417,6 +417,16 @@ describe("buildPayload", () => {
   })
 
   describe("video-to-video", () => {
+    it.each(["nodaro-prism", "nodaro-pulse"])("refuses %s as the node's model: a Video Remake engine is never a node's", (provider) => {
+      let thrown: (Error & { code?: string }) | undefined
+      try {
+        buildPayload(node("n1", "video-to-video", { provider, prompt: "make it night" }), jobId, { videoUrl: "https://cdn.test/clip.mp4" })
+      } catch (err) {
+        thrown = err as Error & { code?: string }
+      }
+      expect(thrown?.code).toBe("provider_not_supported")
+    })
+
     it("builds payload", () => {
       const n = node("n1", "video-to-video", { provider: "wan" })
       const inputs: ResolvedInputs = { videoUrl: "https://v.mp4", prompt: "make it anime" }
