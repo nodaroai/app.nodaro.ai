@@ -339,7 +339,7 @@ Needs `assets:read`.
 | `kind` | string |  | Filter by media kind. Omit for all uploads. One of `image`, `video`, `audio`. |
 | `limit` | integer |  | Max items to return (default 40, max 100). From 1 to 100. |
 | `cursor` | string |  | Asset id from a prior result's nextCursor for pagination. |
-| `search` | string |  | Optional filename search: words that must all appear (any case). At most 200 characters. |
+| `search` | string |  | Optional search: words that must all appear (any case) in the filename or a song's title. At most 200 characters. |
 
 ## `build_ugc_cards`
 

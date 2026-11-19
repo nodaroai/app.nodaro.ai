@@ -309,11 +309,11 @@ describe("search on browse_uploads and browse_gallery", () => {
     return callTool(server, tool, args)
   }
 
-  it("browse_uploads matches the filename literally, ignoring case", async () => {
+  it("browse_uploads matches the filename or the name a file is shown by literally, ignoring case", async () => {
     const queries = recordOrs()
     await call("browse_uploads", { search: " 50%_off*.png " })
 
-    const filter = String.raw`filename.imatch."50%_off\\*\\.png"`
+    const filter = String.raw`filename.imatch."50%_off\\*\\.png",metadata->>name.imatch."50%_off\\*\\.png"`
     expect(queries.filter((q) => q.table === "assets").map((q) => q.ors)).toEqual([[filter], [filter]])
   })
 

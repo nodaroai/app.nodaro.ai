@@ -8798,8 +8798,8 @@ list(params?: ListLibraryParams): Promise<ListLibraryResult>
 `GET /v1/library` → the user's stored media with a storage summary. Filter by
 `type` (`image` / `video` / `audio`), paginate with `cursor`/`limit`. A library row whose file is missing (its stored copy is gone) is not listed and not counted in `totalCount`, so every row's `url` is a string. Each row carries `jobId`, the job that made the file (`null` for an upload; absent from servers before this field), and `title`, the name its owner gave that job ([`client.jobs.rename`](#renameid-title); `null` when unnamed or there is no job; not the file's `filename`, which stays the download name; absent from servers before this field).
 
-`q` searches the filename by words: only the files whose filename contains
-every word of it (the first 5), ignoring case, every character of a word
+`q` searches by words: only the files whose filename, or the name they are
+shown by (`metadata.name`, a song's title), contains every word of it (the first 5), ignoring case, every character of a word
 matched as itself (`%`, `_` and `*` are not wildcards). `search` is its
 earlier name and still works, but is deprecated; when both are given, `q` is
 sent.

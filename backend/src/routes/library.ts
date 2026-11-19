@@ -14,6 +14,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
 import { titleEmbedSelect } from "../lib/jobs-title-column.js"
 import { ASSET_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
+import { cleanAssetName, savedSongName } from "../lib/asset-names.js"
 
 // ============================================================
 // Schemas
@@ -543,6 +544,15 @@ export async function libraryRoutes(app: FastifyInstance) {
         return { data: { id: existing.id, isLibraryItem } }
       }
 
+      // A song's take saved from the canvas (its second take is filed only so)
+      // is named after its title, read off the caller's own job that made it,
+      // as the worker names the first take (lib/asset-names.ts); a name the
+      // caller sends is kept.
+      const songName =
+        type === "audio" && target.kind === "owned" && !cleanAssetName(metadata?.name)
+          ? await savedSongName(userId, r2Key, [url, r2Url])
+          : undefined
+
       // Create asset record with in_library = true
       const { data: asset, error: insertError } = await supabase
         .from("assets")
@@ -554,7 +564,7 @@ export async function libraryRoutes(app: FastifyInstance) {
           size_bytes: 0,
           r2_key: r2Key,
           r2_url: r2Url,
-          metadata: metadata ?? {},
+          metadata: { ...(metadata ?? {}), ...(songName ? { name: songName } : {}) },
           is_library_item: isLibraryItem,
           upload_source: "generated",
           // Which surface saved this into the library (migration 285). There

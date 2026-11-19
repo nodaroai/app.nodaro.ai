@@ -4400,7 +4400,7 @@ you own (uploads and generations, saved or not). Query:
 | Param | Meaning |
 |---|---|
 | `type` | `all` (default), `image`, `video` or `audio`. |
-| `q` | Search: only the files whose filename contains every word of `q` (up to 5), ignoring case — the [`q` rule](#search-q) of the entity lists. Every character of a word is matched as itself (`%`, `_` and `*` are not wildcards); a blank `q` is no search; up to 200 characters. `search` is the earlier name of this parameter and still works. A `q` that is not blank wins over `search`; a blank `q` counts as no `q`, so `?q=&search=poster` searches for `poster`. |
+| `q` | Search: only the files whose filename or name contains every word of `q` (up to 5), ignoring case — the [`q` rule](#search-q) of the entity lists. A file's name is the one it is shown by when the job that made it gave it one (`metadata.name`): a song made with Suno is found by its title. Each word may match either. Every character of a word is matched as itself (`%`, `_` and `*` are not wildcards); a blank `q` is no search; up to 200 characters. `search` is the earlier name of this parameter and still works. A `q` that is not blank wins over `search`; a blank `q` counts as no `q`, so `?q=&search=poster` searches for `poster`. |
 | `owned=true` | Every file you own instead of the library view. |
 | `source` | Only media from one surface: `internal`, `mcp`, `app`, `cli`, `sdk`, `extension`, `web` or `api`. Files from before origin tracking have none, so they appear only when this is left out. |
 | `limit` | Page size, 1–100 (default 40). |
@@ -4408,19 +4408,21 @@ you own (uploads and generations, saved or not). Query:
 
 The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
 `type`, `filename`, `mimeType`, `sizeBytes`, `url`, `thumbnailUrl`,
-`metadata`, `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
+`metadata` (with `name`, the name a file is shown by, when its job gave it one: a song's title), `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
 `jobId` (the job that made the file; `null` for an upload) and `createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
 of matching files, comes with the first page only. A library row whose file is
 missing (its stored copy is gone) is not listed and not counted, so every item
 has a `url`. SDK:
 `client.library.list(params)`. The MCP tool `browse_uploads` reads the
-`owned=true` view, with the same filename search as its `search` argument.
+`owned=true` view, with the same search as its `search` argument.
 
 Saving a file to your library (`POST /v1/library/save-generated`, body
 `{ url, type }`) takes a file on Nodaro storage only when it is yours: one of
 your generations, a file you uploaded, or one in your upload folder. Any other
 file on Nodaro storage is refused with `403 forbidden`, the same answer whether
-or not the file exists. A link to any other site is saved as given. A permanent
+or not the file exists. A link to any other site is saved as given. A take of a
+song you generated is saved under the song's title (`metadata.name`) unless the
+body's `metadata` names it, so the search finds it by that title. A permanent
 delete of a library item removes its stored file only under the same rule (see
 "What a permanent delete removes from storage" in the objects section).
 

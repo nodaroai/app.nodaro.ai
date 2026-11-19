@@ -232,7 +232,7 @@ describe("the searchable columns", () => {
     expect([...SAVED_ENTITY_SEARCH_COLUMNS]).toEqual(["name", "description"])
   })
 
-  it("are the filename for a media asset", () => {
-    expect([...ASSET_SEARCH_COLUMNS]).toEqual(["filename"])
+  it("are the filename and the name a media asset is shown by (a song's title)", () => {
+    expect([...ASSET_SEARCH_COLUMNS]).toEqual(["filename", "metadata->>name"])
   })
 })

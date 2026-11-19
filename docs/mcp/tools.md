@@ -1771,7 +1771,7 @@ outputs). Use to retrieve existing upload URLs to feed into generation
 tools. An item that is an Apply EDL preview (a render at `proxy` quality)
 carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it. A file whose stored copy is gone is not listed and not counted.
 
-**Input:** `kind`, `limit`, `cursor`, `search` — up to 5 words that must all appear in the filename, ignoring case, each matched as written (the `q` of `GET /v1/library`).
+**Input:** `kind`, `limit`, `cursor`, `search` — up to 5 words that must all appear in the filename or the name a file is shown by (a song's title), ignoring case, each matched as written (the `q` of `GET /v1/library`).
 
 ---
 

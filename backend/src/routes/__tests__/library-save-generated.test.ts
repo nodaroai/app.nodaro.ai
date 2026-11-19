@@ -40,6 +40,10 @@ const fake = vi.hoisted(() => {
         tests.push((r) => vs.includes(r[col]))
         return chain
       },
+      is: (col: string, v: unknown) => {
+        tests.push((r) => (r[col] ?? null) === v)
+        return chain
+      },
       limit: (n: number) => {
         cap = n
         return chain
@@ -282,5 +286,49 @@ describe("POST /v1/library/save-generated — whose file", () => {
     expect(res.json().error.code).toBe("internal_error")
     expect(JSON.stringify(res.json())).not.toContain("jobs timeout")
     expect(fake.state.inserts).toEqual([])
+  })
+})
+
+describe("POST /v1/library/save-generated — a song's take is named after its title", () => {
+  const TAKE_2 = `https://cdn.test/audios/${SELF_JOB}-v1.wav`
+  const song = (over: Record<string, unknown> = {}) => ({
+    id: SELF_JOB,
+    user_id: SELF,
+    status: "completed",
+    output_data: {
+      audioUrl: `https://cdn.test/audios/${SELF_JOB}.wav`,
+      sunoTracks: [
+        { id: "s1", title: "I Found My Love in Portofino", audioUrl: `https://cdn.test/audios/${SELF_JOB}.wav` },
+        { id: "s2", title: "  A Portofino ho trovato l'amore  ", audioUrl: TAKE_2 },
+      ],
+    },
+    ...over,
+  })
+  const saveSound = (url: string, extra: Record<string, unknown> = {}) =>
+    app.inject({ method: "POST", url: "/v1/library/save-generated", payload: { url, type: "audio", ...extra } })
+
+  it("names the second take, saved from the canvas, from the caller's own finished job", async () => {
+    fake.state.jobs = [song()]
+    const res = await saveSound(TAKE_2)
+    expect(res.statusCode).toBe(200)
+    expect(fake.state.inserts[0]).toMatchObject({ r2_key: `audios/${SELF_JOB}-v1.wav`, metadata: { name: "A Portofino ho trovato l'amore" } })
+  })
+
+  it("keeps a name the caller sends", async () => {
+    fake.state.jobs = [song()]
+    await saveSound(TAKE_2, { metadata: { name: "My mix" } })
+    expect(fake.state.inserts[0]).toMatchObject({ metadata: { name: "My mix" } })
+  })
+
+  it("names nothing for a job in the Trash, one not finished, a take with no title, or a picture", async () => {
+    fake.state.jobs = [song({ deleted_at: "2026-11-19T00:00:00Z" })]
+    await saveSound(TAKE_2)
+    fake.state.jobs = [song({ status: "processing" })]
+    await saveSound(TAKE_2)
+    fake.state.jobs = [song({ output_data: { sunoTracks: [{ id: "s2", audioUrl: TAKE_2 }] } })]
+    await saveSound(TAKE_2)
+    fake.state.jobs = [song()]
+    await save(`https://cdn.test/${SELF_OUTPUT}`)
+    expect(fake.state.inserts.map((row) => row.metadata)).toEqual([{}, {}, {}, {}])
   })
 })
