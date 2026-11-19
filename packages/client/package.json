@@ -240,6 +240,11 @@
       "import": "./dist/entries/sessions.js",
       "require": "./dist/entries/sessions.cjs"
     },
+    "./shares": {
+      "types": "./dist/entries/shares.d.ts",
+      "import": "./dist/entries/shares.js",
+      "require": "./dist/entries/shares.cjs"
+    },
     "./shots": {
       "types": "./dist/entries/shots.d.ts",
       "import": "./dist/entries/shots.js",

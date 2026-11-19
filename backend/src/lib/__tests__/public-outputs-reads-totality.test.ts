@@ -112,6 +112,11 @@ const PUBLIC_ROUTE_READS: Readonly<Record<string, Read>> = {
   "* /v1/gallery/report": asks("the gallery's report form: every item answers as not in the gallery", "routes/gallery.ts"),
   "GET /v1/public/workflows/*": asks("a workflow shared with settings.studio.shared: every caller but the signed-in owner gets the unshared 404", "routes/workflows.ts"),
   "GET /v1/shots/*": asks("a Cine shot's share link: a public shot reads as a private one for everyone but its owner", "routes/shots.ts"),
+  "GET /v1/public/shares/*": asks(
+    "a share link to a result, a session or a project: every link answers 404, and no link can be turned on",
+    "routes/shares.ts",
+  ),
+  "* /og/s/*": asks("a share link's card for link previews: every card is the 404 page that says nothing about any content", "routes/share-card.ts"),
   "* /v1/download*": none(
     "streams a file of this deployment's storage by an address the caller already holds (isOurCdnUrl), which the storage serves without this route; the prefix also covers the download-video routes, which act for the signed-in caller",
     "routes/download.ts",

@@ -319,6 +319,8 @@ import { scene3DRevisionEditRoutes } from "./routes/scene3d-revision-edits.js"
 import { pro3DRenderRoutes } from "./routes/pro-3d-render.js"
 import { scene3DPrivateStore } from "./lib/private-plugins/scene3d-storage.js"
 import { shotsRoutes } from "./routes/shots.js"
+import { shareRoutes } from "./routes/shares.js"
+import { shareCardRoutes } from "./routes/share-card.js"
 import { modelsRoutes } from "./routes/models.js"
 import { voicesRoutes } from "./routes/voices.js"
 import { voiceFavoriteRoutes } from "./routes/voice-favorites.js"
@@ -975,6 +977,10 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   await app.register(scene3DRevisionEditRoutes, { store: scene3DPrivateStore() })
   await app.register(pro3DRenderRoutes)
   await app.register(shotsRoutes)
+  // Share links (migration 680): view-only links to a result, a session or a project.
+  await app.register(shareRoutes)
+  // Its card: the HTML a link's own address (`/s/<token>`, frontend/Caddyfile) answers, for link previews.
+  await app.register(shareCardRoutes)
   await app.register(modelsRoutes)
   await app.register(surfaceAvailabilityRoutes)
   // Which Edit Plan modes the loaded plugin plans (read per request — the

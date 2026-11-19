@@ -1375,6 +1375,66 @@ it, stored on the job and never sent to the model) and `count` / `models`
 
 ---
 
+### `client.shares`
+
+View-only share links to one result (a job), a generation session or a
+project. The link shows the result(s), the prompt as it was written, the model
+and the settings; with `allowCopy`, also the reference files the result was
+made from. Each item has one link: off makes it answer 404, on again brings
+back the same token. See [API integration § 4h](./api-integration.md#4h-share-links).
+
+```ts
+const share = await client.shares.set({ kind: "job", targetId: jobId, shared: true })
+// share.token → build your share page's address from it
+
+// Anyone can read it, signed in or not.
+const shown = await client.shares.getPublic(share.token)
+if (shown.kind === "session") {
+  const { data: results, nextCursor } = await client.shares.publicItems(share.token)
+}
+```
+
+| Method | Signature | Notes |
+|--------|-----------|-------|
+| `get` | `get(params: GetShareParams): Promise<Share \| null>` | `{ kind, targetId }` of one of your items; `null` when it was never shared. A 404 `NodaroError` when the item is not yours. |
+| `set` | `set(input: SetShareInput): Promise<Share>` | `{ kind, targetId, shared, allowCopy? }`. The first call makes the link; later calls keep its token. `allowCopy` omitted keeps its value (`false` on a new link). Turning on an item that cannot be shared now is a 422 `NodaroError` `share_not_allowed` with a `reason` (`not_completed`, `no_media`, `private_output`, `content_filtered`, `restricted`, `workspace`, `sharing_disabled`); turning off always works, a job in the Trash included. An OAuth app needs `assets:write` and `jobs:read`. |
+| `getPublic` | `getPublic(token: string): Promise<PublicShare>` | Works signed out. `{ kind, allowCopy, job? \| session? \| project? }`. A 404 `NodaroError` for a link that is unknown, turned off, or whose item is gone or may no longer be shown. |
+| `publicItems` | `publicItems(token: string, params?: PublicShareItemsParams): Promise<PublicShareItemsPage>` | Works signed out. A shared session's results, newest first: `{ data: SharedJob[], nextCursor }`. A shared project needs `sessionId` (one of the sessions `getPublic` lists). `limit` 1–100, `cursor`. A page may hold fewer than `limit`: follow `nextCursor` until it is `null`. |
+
+```ts
+type ShareKind = "job" | "session" | "project"
+
+interface Share { token: string; kind: ShareKind; targetId: string; shared: boolean; allowCopy: boolean; createdAt: string; updatedAt: string }
+
+interface SharedJob {
+  id: string; type: string; mediaKind: "image" | "video" | "audio"
+  outputUrl: string; outputUrls?: string[]; width?: number; height?: number; durationSec?: number
+  title: string | null; createdAt: string
+  prompt: string | null              // as written; null for a trend run
+  negativePrompt?: string | null
+  model: { id: string; name: string } | null   // the public model name, never the provider
+  settings: Record<string, SharedSettingValue> // never an address or an id
+  references?: Array<{ url: string; kind: "image" | "video" | "audio" }> // only with allowCopy
+  trend?: { slug: string; name: string }       // a trend run: no prompt or settings
+}
+
+interface SharedSession { title: string | null; tool: string | null; createdAt: string; itemCount: number }
+interface SharedProject { name: string; sessions: Array<{ id: string; title: string | null; tool: string | null; itemCount: number; coverUrl: string | null }> }
+```
+
+A link shows only finished results of its owner that the platform would let
+anyone see: nothing in the Trash, removed from its session, restricted, kept
+private or tripping the content filter, and nothing of a workspace. That is
+decided again on every read, so a result moved to the Trash after it was
+shared stops showing at once.
+
+The address to hand out for previews on social networks and chats is the
+share card, `${SHARE_SITE_ORIGIN}/s/<token>` (on Nodaro `https://nodaro.ai/s/<token>`):
+its HTML carries the Open Graph and Twitter tags, and it sends people on to
+`${SHARE_SITE_ORIGIN}/shared/<token>`. See [API integration § The share card](./api-integration.md#the-share-card-link-previews).
+
+---
+
 ### `client.trash`
 
 The Trash: the items you removed from sessions and the jobs you deleted. A

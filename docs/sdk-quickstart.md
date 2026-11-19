@@ -703,6 +703,27 @@ Nodaro Pulse trends have no draft and no Full Quality. `client.trends.tags()` li
 the catalog's tags with their labels in your language, to filter `list({ tag })`
 by. See [SDK Reference → client.trends](./sdk-reference.md#clienttrends).
 
+### Share a result by link
+
+Turn on a view-only link to one of your results (or a session, or a project),
+then read what it shows from anywhere — a page opened by someone who is not
+signed in reads it with a client that has no token:
+
+```ts
+const share = await client.shares.set({ kind: "job", targetId: jobId, shared: true, allowCopy: false })
+
+const guest = createClient({ baseUrl: "https://app.nodaro.ai", auth: new CallbackAuth(() => null) })
+const { job } = await guest.shares.getPublic(share.token)
+console.log(job?.outputUrl, job?.prompt, job?.model?.name, job?.settings)
+
+// Off: the link answers 404. On again later: the same token works again.
+await client.shares.set({ kind: "job", targetId: jobId, shared: false })
+```
+
+A shared session or project lists its results a page at a time with
+`client.shares.publicItems(token, { sessionId, cursor })`. See
+[SDK Reference → client.shares](./sdk-reference.md#clientshares).
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,

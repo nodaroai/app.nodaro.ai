@@ -384,6 +384,8 @@ export const envSchema = z.object({
   /** Moving the app's pages to their own host (docs/deployment.md): read by the bundled proxy and /config.js; checked here at boot (lib/moved-pages-settings.ts). */
   FLOW_UI_ORIGIN: z.string().default(""),
   LEGACY_UI_HOSTS: z.string().default(""),
+  /** The site a share link lives on (lib/share-links/card.ts): the address people share is `<origin>/s/<token>` (the card's `og:url` and canonical; that site forwards it to this server's `/s/<token>`), and the card sends people on to `<origin>/shared/<token>`, the share page. An http(s) origin; anything else reads as the default. */
+  SHARE_SITE_ORIGIN: z.string().default("https://nodaro.ai"),
   /** Public base URL of the MCP host when it differs from PUBLIC_URL (on Nodaro Cloud: https://mcp.nodaro.ai, a subdomain host-routed to the same backend). Drives the RFC 9728 protected-resource identity and MCP upload-proxy links. Self-hosters serving MCP on their main host should set this to the same value as PUBLIC_URL; empty = the Nodaro Cloud default. */
   MCP_PUBLIC_URL: z.string().default(""),
   /** Email of the platform owner whose super_admin role is protected from changes by other admins. Empty = no protected owner (self-host default). */
