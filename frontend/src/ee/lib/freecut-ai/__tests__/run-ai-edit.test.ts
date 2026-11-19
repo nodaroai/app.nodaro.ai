@@ -13,8 +13,7 @@ const api = vi.hoisted(() => {
     transcribeNoCredits: false,
     transcribeJobFails: false,
     musicJobFails: false,
-    feeFails: false,
-    trailerPlanned: true,
+    packFails: false,
     words: [] as Array<{ text: string; startMs: number; endMs: number; speaker?: string }>,
     order: [] as string[],
   }
@@ -71,10 +70,19 @@ vi.mock("@/lib/api", () => ({
     return { jobId: "job-frames" }
   }),
   cameraSwitch: vi.fn(async () => ({ jobId: "job-cameras" })),
-  chargeUseCaseFee: vi.fn(async (p: { type: string }) => {
-    api.order.push(`fee:${p.type}`)
-    if (api.feeFails) throw new Error("no credits for the fee")
-    return { jobId: "job-fee" }
+  podcastPack: vi.fn(async (p: { tools: Record<string, unknown> }) => {
+    api.order.push(`pack:${Object.keys(p.tools).join(",")}`)
+    if (api.packFails) throw new Error("no credits for the pack")
+    return { jobId: "job-pack", tools: Object.keys(p.tools).map((tool) => ({ tool, jobId: `job-${tool}`, executionId: `exec-${tool}` })) }
+  }),
+  getWorkflowExecution: vi.fn(async (id: string) => {
+    const plans: Record<string, unknown> = {
+      "exec-clip-pack": { version: 1, clips: [{ segments: [{ inMs: 1000, outMs: 4000 }] }, { segments: [{ inMs: 3500, outMs: 4000 }] }] },
+      "exec-episode-trailer": { version: 1, clock: "master", sources: [], segments: [{ inMs: 1000, outMs: 2000 }] },
+      "exec-episode-chapters": { version: 1, chapters: [{ startMs: 1000, title: "Hello" }, { startMs: 3500, title: "Again" }] },
+    }
+    // The tool's run goes on rendering; its plan step is already done.
+    return { id, status: "running", nodeStates: { "uc-plan": { status: "completed", output: { json: plans[id] } } } }
   }),
   getJobStatusLean: vi.fn(async (id: string) => {
     if (id === "job-transcribe") {
@@ -88,16 +96,12 @@ vi.mock("@/lib/api", () => ({
     if (id === "job-frames") return { status: "completed", output_data: { json: { url: "https://cdn.example.com/tracks.json" } } }
     if (id === "job-cameras") return { status: "completed", output_data: { json: { segments: [{ inMs: 0, outMs: 3000, video: "media-1" }, { inMs: 3000, outMs: 6000, video: "media-2" }] } } }
     if (id === "job-plan-tighten") return { status: "completed", output_data: { version: 1, clock: "master", sources: [], segments: [], dropped: [{ inMs: 2000, outMs: 3000, reason: "false-start" }, { inMs: 4200, outMs: 4600, reason: "silence" }] } }
-    if (id === "job-plan-clips") return { status: "completed", output_data: { version: 1, clips: [{ segments: [{ inMs: 1000, outMs: 4000 }] }, { segments: [{ inMs: 3500, outMs: 4000 }] }] } }
-    if (id === "job-plan-trailer") return { status: "completed", output_data: { version: 1, clock: "master", sources: [], segments: [{ inMs: 1000, outMs: 2000 }] } }
-    if (id === "job-plan-chapters") return { status: "completed", output_data: { version: 1, chapters: [{ startMs: 1000, title: "Hello" }, { startMs: 3500, title: "Again" }] } }
     return { status: "completed", output_data: {} }
   }),
 }))
 
-vi.mock("@/lib/edit-plan-modes", () => ({ isEditPlanModeSupported: () => api.trailerPlanned }))
 
-import { cameraSwitch, cancelJob, chargeUseCaseFee, editPlan, generateImage, llmStructuredApi, speakerFrames, sunoGenerateApi, transcribeApi, trimVideoApi, videoToVideo } from "@/lib/api"
+import { cameraSwitch, cancelJob, editPlan, generateImage, llmStructuredApi, podcastPack, speakerFrames, sunoGenerateApi, transcribeApi, trimVideoApi, videoToVideo } from "@/lib/api"
 import type { EditorLink, OpsResult, PresenceCursor } from "../editor-link"
 import { EDIT_STEPS } from "../edit-plan"
 import { RunDeclined, RunFailed, RunStopped, musicFileOf, openedVideoMedia, runAiEdit, undoAiEdit, type RunEvent } from "../run-ai-edit"
@@ -273,8 +277,7 @@ beforeEach(() => {
   api.transcribeNoCredits = false
   api.transcribeJobFails = false
   api.musicJobFails = false
-  api.feeFails = false
-  api.trailerPlanned = true
+  api.packFails = false
   api.words = WORDS
   api.order = []
   vi.stubGlobal(
@@ -489,23 +492,25 @@ describe("runAiEdit: the other agents", () => {
 })
 
 describe("runAiEdit: made from the video", () => {
-  it("marks the chapters on the ruler and charges the node's fee once made", async () => {
+  it("marks the chapters on the ruler, planned by the podcast pack", async () => {
     const link = fakeLink()
     const events: RunEvent[] = []
     const summary = await run(link, events, undefined, { request: "make chapters" })
     expect(opsOf(link, "addMarkers")[0]).toMatchObject({ markers: [{ label: "Hello" }, { label: "Again" }] })
-    expect(chargeUseCaseFee).toHaveBeenCalledWith({ type: "episode-chapters" })
+    expect(podcastPack).toHaveBeenCalledWith(expect.objectContaining({ mediaUrls: [VIDEO_URL], tools: { "episode-chapters": {} } }))
+    expect(editPlan).not.toHaveBeenCalledWith(expect.objectContaining({ mode: "chapters" }))
     expect(events.find((e) => e.type === "made")).toMatchObject({ result: { kind: "chapters" } })
     expect(summary.chapters).toBe(2)
   })
 
-  it("makes each clip in its own tab, out of the undo history, and charges the fee once", async () => {
+  it("makes each clip in its own tab, out of the undo history, from one pack", async () => {
     const link = fakeLink()
     const summary = await run(link, [], undefined, { request: "make 2 short clips" })
     const tabs = link.applied.filter((a) => a.ops.some((o) => o.op === "createSequence"))
     expect(tabs).toHaveLength(2)
     expect(tabs.every((a) => a.history === false)).toBe(true)
-    expect(chargeUseCaseFee).toHaveBeenCalledTimes(1)
+    expect(podcastPack).toHaveBeenCalledTimes(1)
+    expect(podcastPack).toHaveBeenCalledWith(expect.objectContaining({ tools: { "clip-pack": { count: 2 } } }))
     expect(summary.clips).toBe(2)
   })
 
@@ -531,20 +536,22 @@ describe("runAiEdit: made from the video", () => {
     expect(link.state.markers.map((m) => m.label)).toEqual(["By hand", "Hello", "Again"])
   })
 
-  it("says so when the fee could not be charged, instead of hiding it", async () => {
-    api.feeFails = true
-    const events: RunEvent[] = []
-    await run(fakeLink(), events, undefined, { request: "make chapters" })
-    expect(events.some((e) => e.type === "feed" && e.key === "freecutAi.feeFailed")).toBe(true)
+  it("asks clips, a trailer and chapters of one pack, charged once", async () => {
+    api.planner = { ...api.planner, steps: ["clips", "trailer", "chapters"], clips: 2 }
+    const link = fakeLink()
+    const summary = await run(link, [], undefined, { request: "make clips, a trailer and chapters" })
+    expect(podcastPack).toHaveBeenCalledTimes(1)
+    expect(podcastPack).toHaveBeenCalledWith(expect.objectContaining({ tools: { "clip-pack": { count: 2 }, "episode-trailer": {}, "episode-chapters": {} } }))
+    expect(summary).toMatchObject({ clips: 2, trailer: true, chapters: 2 })
   })
 
-  it("picks a trailer's moments itself when the server cannot plan one", async () => {
-    api.trailerPlanned = false
-    const link = fakeLink()
-    await run(link, [], undefined, { request: "make a trailer" })
-    expect(editPlan).not.toHaveBeenCalledWith(expect.objectContaining({ mode: "trailer" }))
-    expect(llmStructuredApi).toHaveBeenCalledWith(expect.objectContaining({ schemaName: "edit_choices" }))
-    expect(link.applied.some((a) => a.ops.some((o) => o.op === "createSequence"))).toBe(true)
+  it("a pack that cannot start fails only what it plans; the edit itself goes on", async () => {
+    api.packFails = true
+    api.planner = { ...api.planner, steps: ["pauses", "chapters"] }
+    const events: RunEvent[] = []
+    await run(fakeLink(), events, undefined, { request: "cut the pauses and make chapters" })
+    expect(events.some((e) => e.type === "step" && e.step === "chapters" && e.state === "failed")).toBe(true)
+    expect(events.some((e) => e.type === "step" && e.step === "pauses" && e.state === "done")).toBe(true)
   })
 })
 

@@ -182,8 +182,9 @@ export interface TrendDetailSlot {
    * whatever its kind; without one, a person takes the chosen example's (none
    * on a trend with no example, or when that example has none for it), and a
    * place, product or pet none: a slot with no pictures stays as in the
-   * original. A Full depth trend never uses an example; a trend that hides its
-   * original fills every empty optional slot from the example.
+   * original. A Full depth trend never uses an example; on a trend that hides
+   * its original, the original look is the shown original's (see
+   * {@link TrendDetailSlot.defaultImages}) and no example is used.
    */
   required: boolean
   hint?: string
@@ -195,16 +196,18 @@ export interface TrendDetailSlot {
   hintImageUrl?: string
   /**
    * An optional slot's original look: 1–3 pictures (https) of this role as it
-   * is in the original, when the trend has them; you may show them on the
-   * empty slot. Absent on a required slot, and on a trend that hides its
-   * original. Which pictures a run sends for an empty optional slot is said
-   * on {@link TrendDetailSlot.required}.
+   * is in the original, exactly the ones a run sends for it when you leave it
+   * empty (`emptyFill` `"default"`); you may show them on the empty slot. On a
+   * trend that hides its original they are the shown original's
+   * ({@link TrendDetail.original}, the trend's first example) pictures for
+   * this slot. Absent on a required slot, and when there are none.
    */
   defaultImages?: string[]
   /**
    * An optional slot's: what a run takes for it when you leave it empty, as
    * the trend's own rule decides (absent on a required slot):
-   * - `"default"`: its original look ({@link TrendDetailSlot.defaultImages});
+   * - `"default"`: its original look ({@link TrendDetailSlot.defaultImages}; on
+   *   a trend that hides its original, the shown original's pictures);
    * - `"example"`: the chosen example's pictures for this slot
    *   (`examples[n].slots[key]`); when that example has none for it, the run
    *   sends none and the role stays as in the original;
@@ -399,7 +402,8 @@ export interface TrendRunDisplaySlot extends TrendChips {
   /**
    * `true` when the slot was left empty and its original look
    * ({@link TrendDetailSlot.defaultImages}) filled it (`fromExample` is then
-   * `false`). Absent otherwise.
+   * `false`); on a trend that hides its original, the shown original's
+   * pictures. Absent otherwise.
    */
   fromDefault?: true
 }

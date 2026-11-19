@@ -603,6 +603,19 @@ export interface VideoRemakeStyleChoice {
   preciseArtStyleAlone?: Partial<Record<VideoRemakeEngine, boolean>>
 }
 
+/**
+ * What {@link VideoRemakeResource.advanced} answers: whether the Video Remake
+ * page shows its Advanced options.
+ */
+export interface VideoRemakeAdvanced {
+  /**
+   * Whether the Video Remake page shows `prepareReferences` and `prePrompt`
+   * under its Advanced options: `false` until Nodaro turns them on, one
+   * setting for the whole page, the same for every engine.
+   */
+  show: boolean
+}
+
 export class VideoRemakeResource {
   constructor(private client: NodaroClientCore) {}
 
@@ -638,6 +651,20 @@ export class VideoRemakeResource {
    */
   styleChoice(): Promise<VideoRemakeStyleChoice> {
     return this.client.request("GET", "/v1/video-remake/style-choice")
+  }
+
+  /**
+   * Whether the Video Remake page shows its Advanced options
+   * (`GET /v1/video-remake/advanced`): `show` is `true` where the page offers
+   * `prepareReferences` and `prePrompt`, and `false` until Nodaro turns them
+   * on. One answer for the whole page, whatever the engine, so an app built
+   * on the SDK can show or hide the same options. It describes the page only:
+   * {@link run} and {@link estimate} take both fields as sent, whatever it
+   * answers.
+   * Public (no sign-in needed); the answer may be up to a minute old.
+   */
+  advanced(): Promise<VideoRemakeAdvanced> {
+    return this.client.request("GET", "/v1/video-remake/advanced")
   }
 
   /** Quote a run before starting it (`POST /v1/video-remake/estimate`); spends nothing. */

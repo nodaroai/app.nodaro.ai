@@ -46,7 +46,7 @@ vi.mock("@/ee/lib/freecut-ai/editor-link", () => ({
 }))
 
 vi.mock("@/ee/components/freecut-ai/panel/use-edit-prices", () => ({
-  useEditPrices: () => ({ read: 1, listen: 22, choose: 2, steps: { music: 33, mistakes: 6, broll: 30, picture: 120, phone: 12, cameras: 18, clips: 40, trailer: 25, chapters: 15 }, readEstimate: false }),
+  useEditPrices: () => ({ read: 1, listen: 22, choose: 2, pack: 50, steps: { music: 33, mistakes: 6, broll: 30, picture: 120, phone: 12, cameras: 18, clips: 40 }, readEstimate: false }),
 }))
 
 // The run itself is tested in run-ai-edit.test.ts; here it plays a short, fixed run of the steps asked for.
@@ -234,7 +234,8 @@ describe("Edit with AI panel: before a run", () => {
     expect(row("Trailer")).toBeTruthy()
     expect(row("Chapters")).toBeTruthy()
     expect(cta().textContent).toMatch(/^Make it/)
-    expect(screen.getByText("62 CR · nothing is charged until you start")).toBeTruthy()
+    // The listening, the pack and the clips' face tracking.
+    expect(screen.getByText("112 CR · nothing is charged until you start")).toBeTruthy()
   })
 
   it("an editor not updated yet is offered only what it can do, and no Make tab", () => {

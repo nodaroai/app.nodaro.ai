@@ -37,7 +37,8 @@ import { joinCuts, mistakeRanges, runCuts, speechCuts, type CutRange } from "./r
 import { JobUnreadable, keyOf, untilStopped, wordsOf } from "./run/jobs"
 import { listen } from "./run/listen"
 import { runColor, runZoom } from "./run/look"
-import { buildChapters, buildClips, buildTrailer, plansTrailer, startPlan, TRAILER_SECONDS, type MadeOutcome } from "./run/make"
+import { buildChapters, buildClips, buildTrailer } from "./run/make"
+import { startPack } from "./run/pack"
 import { composeMusic, placeMusic, refitMusic } from "./run/music"
 import { captionsOnSeam, clearEarlierLayout, faceTracks, runLayout } from "./run/layout"
 import { applyPhone, framingOf, TRACK_MS } from "./run/phone"
@@ -251,7 +252,6 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     }
     const refused = (step: EditStep, reason: string | undefined) => ctx.step(step, "failed", "freecutAi.editorRefused", undefined, 1, reason)
     const count = (step: EditStep, n: number, one: MessageKey, many: MessageKey, vars: Vars = {}) => ctx.step(step, "done", n === 1 ? one : many, { n, ...vars }, 1)
-    const feeNote = (step: EditStep, out: MadeOutcome) => (out.feeFailed ? ctx.feed("lead", "freecutAi.feeFailed", { reason: out.feeFailed }) : undefined)
     /** While an agent waits for its job, its cursor shows the work at its own place. */
     const waitingShow = (agent: AgentId, target: string, startedAt: number, expectMs: number, note: (p: number) => string, until: Promise<unknown>) => {
       const id = setInterval(() => {
@@ -294,7 +294,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     // ── every slow job starts now ──
     const fillersGoneAtStart = steps.has("fillers") || !!opts.done?.includes("fillers")
     const speech = listened ? speechCuts(words, listened.language, ctx.mediaSeconds, { pauses: steps.has("pauses"), fillers: steps.has("fillers"), fillersGone: fillersGoneAtStart }) : []
-    const creative: Promise<CreativeChoices | null> = (steps.has("broll") || steps.has("titles") || steps.has("zoom") || (steps.has("trailer") && !plansTrailer())) && listened
+    const creative: Promise<CreativeChoices | null> = (steps.has("broll") || steps.has("titles") || steps.has("zoom")) && listened
       ? creativePass(ctx, words, {
           broll: steps.has("broll"),
           brollCount: brollCount(ctx.mediaSeconds, opts.brollCount),
@@ -302,7 +302,7 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
           titleCount: titleCount(ctx.mediaSeconds, opts.titleCount),
           zoom: steps.has("zoom"),
           musicStyle: steps.has("music") && plan.params.musicStyle === null,
-          trailer: steps.has("trailer") && !plansTrailer(),
+          trailer: false,
           request: opts.request,
         }).catch((error: unknown) => {
           if (signal.aborted) throw new RunStopped()
@@ -333,9 +333,17 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
       ctx.step("picture", "skipped", "freecutAi.pictureNoShot")
       steps.delete("picture")
     }
-    const clipsPlan = quiet(steps.has("clips") && listened ? startPlan(ctx, listened, opts.videoUrl, "clips", { count: plan.params.clips }) : null)
-    const trailerPlan = quiet(steps.has("trailer") && listened && plansTrailer() ? startPlan(ctx, listened, opts.videoUrl, "trailer", { targetDurationSec: TRAILER_SECONDS }) : null)
-    const chaptersPlan = quiet(steps.has("chapters") && listened ? startPlan(ctx, listened, opts.videoUrl, "chapters") : null)
+    // Clips, the trailer and the chapters: one podcast pack, one price for the video's length.
+    const packed = listened
+      ? startPack(ctx, opts.videoUrl, {
+          ...(steps.has("clips") ? { clips: { count: plan.params.clips } } : {}),
+          trailer: steps.has("trailer"),
+          chapters: steps.has("chapters"),
+        })
+      : {}
+    const clipsPlan = quiet(packed.clips ?? null)
+    const trailerPlan = quiet(packed.trailer ?? null)
+    const chaptersPlan = quiet(packed.chapters ?? null)
 
     // The waiting agents, shown at work in their places while the others take their turns.
     if (music) waitingShow("sound", "panel.media", musicStarted, 45_000, (p) => opts.say("freecutAi.note.composing", { p: Math.round(p * 100) }), music)
@@ -543,7 +551,6 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     if (chaptersPlan) {
       await attempt("chapters", async () => {
         const out = await buildChapters(ctx, chaptersPlan)
-        feeNote("chapters", out)
         summary.chapters = out.made[0]?.chapters?.length ?? 0
         count("chapters", summary.chapters, "freecutAi.chaptersDoneOne", "freecutAi.chaptersDone")
       })
@@ -551,15 +558,13 @@ export async function runAiEdit(opts: RunAiEditOptions): Promise<RunSummary> {
     if (clipsPlan && listened) {
       await attempt("clips", async () => {
         const out = await buildClips(ctx, clipsPlan, listened, plan.params.clips, framing, (n) => opts.say("freecutAi.made.clip", { n }))
-        feeNote("clips", out)
         summary.clips = out.made.length
         count("clips", out.made.length, "freecutAi.clipsDoneOne", "freecutAi.clipsDone")
       })
     }
-    if (steps.has("trailer") && listened) {
+    if (trailerPlan && listened) {
       await attempt("trailer", async () => {
-        const out = await buildTrailer(ctx, trailerPlan, await creative, listened, opts.say("freecutAi.made.trailer"))
-        feeNote("trailer", out)
+        const out = await buildTrailer(ctx, trailerPlan, listened, opts.say("freecutAi.made.trailer"))
         summary.trailer = out.made.length > 0
         ctx.step("trailer", "done", "freecutAi.trailerDone", undefined, 1)
       })

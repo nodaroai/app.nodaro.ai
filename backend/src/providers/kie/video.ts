@@ -3374,7 +3374,9 @@ export class KieVideoProvider
       return { url: outputUrl, cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
-    // Standard createTask endpoint for Wan V2V providers (Wan 2.6, Wan Flash)
+    // Standard createTask endpoint for Wan V2V providers (Wan 2.6, Wan Flash).
+    // Both are reference-to-video: the clip is a reference for its subject and
+    // the result is a new clip, not an edit of this one.
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
       prompt: finalPrompt,

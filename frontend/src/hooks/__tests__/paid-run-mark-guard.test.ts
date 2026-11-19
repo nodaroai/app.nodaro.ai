@@ -250,7 +250,7 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["ee/lib/freecut-ai/run/picture.ts", { refs: 2, why: `${EDIT_WITH_AI} (the shot's trim and its picture change)` }],
   ["ee/lib/freecut-ai/run/layout.ts", { refs: 1, why: `${EDIT_WITH_AI} (the face tracking)` }],
   ["ee/lib/freecut-ai/run/cameras.ts", { refs: 1, why: `${EDIT_WITH_AI} (the camera switching)` }],
-  ["ee/lib/freecut-ai/run/make.ts", { refs: 2, why: `${EDIT_WITH_AI} (the clips', trailer's and chapters' edit plans, and the fee of what is made)` }],
+  ["ee/lib/freecut-ai/run/pack.ts", { refs: 1, why: `${EDIT_WITH_AI} (the podcast pack that plans the clips, the trailer and the chapters)` }],
   ["routes/video-director-page.tsx", { refs: 1, why: "the Video Director: a page of its own, with no canvas" }],
   ["components/editor/scene-editor-modal.tsx", { refs: 2, why: UNMOUNTED, check: importedOnlyBy(SCENE_EDITOR, []) }],
   ["components/editor/scene-config.tsx", { refs: 1, why: UNMOUNTED, check: importedOnlyBy("components/editor/scene-config", [`${SCENE_EDITOR}.tsx`]) }],

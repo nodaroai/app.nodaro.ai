@@ -795,7 +795,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's (not on Full depth or hidden-original trends); otherwise it stays as in the original. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
 | `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |
@@ -2357,12 +2357,12 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `video_url` | string (URL) |  |  |
 | `video_asset_id` | string |  |  |
-| `model` | string |  | v2v model. Default `wan`. Options: wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
+| `model` | string |  | v2v model. Default `wan`. Options: wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. `wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
 | `duration` | string |  | Wan / Wan Flash only — 5s or 10s output. One of `5`, `10`. |
 | `resolution` | string |  | Wan / Wan Flash / happyhorse-edit (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p). One of `480p`, `720p`, `1080p`. |
 | `aspect_ratio` | string |  | Runway Aleph only. One of `16:9`, `9:16`, `4:3`, `3:4`, `1:1`, `21:9`. |
-| `audio` | boolean |  | Wan Flash only — preserve/regenerate audio. |
-| `multi_shots` | boolean |  | Wan Flash only — allow multi-shot scene changes. |
+| `audio` | boolean |  | Wan Flash only — generate the clip with audio. |
+| `multi_shots` | boolean |  | Wan Flash only — several shots with transitions instead of one continuous shot. |
 | `reference_image_url` | string (URL) |  | Runway Aleph only — style reference image. |
 | `reference_image_urls` | string (URL)[] |  | seedance-2-5 only — cite as {image:N} in the prompt. At most 30 items. |
 | `reference_video_urls` | string (URL)[] |  | seedance-2-5 only — extra clips: the source is {video:1}, these are {video:2}, {video:3}, … (all clips billed by length). At most 9 items. |
@@ -2810,7 +2810,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `slug` | string | yes | The trend's slug (from list_trends). |
-| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's; otherwise it stays as in the original (Full depth trends never use an example; one that hides its original always does). Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
+| `slots` | object (map of object) | yes | By the trend's slot keys (get_trend): 1–3 image URLs of ONE subject each. Every required slot needs images; an optional slot left out takes its defaultImages if set, else a person the chosen example's (not on Full depth or hidden-original trends); otherwise it stays as in the original. Chips, each "new" (from the images) or "original" (as in the clip): only those get_trend lists in the slot's chips. |
 | `example` | integer |  | The example (1-based, as get_trend lists its examples; default 1) whose pictures fill optional slots left out, as slots says. Leave out if the trend has none. At least 1. |
 | `details` | string |  | The user's own words; mention a slot as {slot:&lt;key>}. At most 1000 characters. |
 | `preview` | boolean |  | true = a 4 s preview (when the trend's previewSec is 4). |

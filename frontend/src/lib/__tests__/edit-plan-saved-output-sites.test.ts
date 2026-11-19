@@ -367,7 +367,7 @@ describe("a plan landing keeps the review made on it (decided 2026-10-05)", () =
     const { "lib/use-case-run-result.ts": _useCase, ...unwrapped } = calls
     // Edit with AI reads a plan to cut it live in the video editor; it never
     // lands one on a canvas node, so it has no review to keep.
-    const NO_NODE = ["ee/lib/freecut-ai/run/cut.ts", "ee/lib/freecut-ai/run/make.ts"]
+    const NO_NODE = ["ee/lib/freecut-ai/run/cut.ts", "ee/lib/freecut-ai/run/pack.ts"]
     expect(Object.fromEntries(Object.entries(unwraps).filter(([where]) => !NO_NODE.includes(where)))).toEqual(unwrapped)
     const engine = FILES.find(({ where }) => where === "components/editor/workflow-editor/execute-node.ts")!.text
     expect(engine).not.toMatch(/generatedJson:\s*plan\b/)

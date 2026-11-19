@@ -7,6 +7,7 @@ import {
   StaticTokenAuth,
   type CastSwapEngine,
   type CastSwapParams,
+  type VideoRemakeAdvanced,
   type VideoRemakeEngine,
   type VideoRemakeEstimate,
   type VideoRemakeFullQualityEstimate,
@@ -425,6 +426,33 @@ describe("videoRemake resource", () => {
     expect(code).toBe("full_quality_pending")
     expect((err as NodaroError).status).toBe(409)
     expect((err as NodaroError).details.retryable).toBe(true)
+  })
+
+  it("advanced GETs /v1/video-remake/advanced and answers whether the page shows its Advanced options", async () => {
+    for (const show of [true, false]) {
+      const answer: VideoRemakeAdvanced = { show }
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))
+      const client = make(fetchMock)
+
+      const got = await client.videoRemake.advanced()
+      expect(got).toEqual(answer)
+      const shown: boolean = got.show
+      expect(shown).toBe(show)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe("https://api.example.com/v1/video-remake/advanced")
+      expect(init.method).toBe("GET")
+      expect(init.body).toBeUndefined()
+    }
+  })
+
+  it("advanced is the same method on the castSwap alias", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ show: true }))
+    const client = make(fetchMock)
+
+    expect(await client.castSwap.advanced()).toEqual({ show: true })
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/advanced")
   })
 
   it("styleChoice GETs /v1/video-remake/style-choice and answers every engine's choice", async () => {

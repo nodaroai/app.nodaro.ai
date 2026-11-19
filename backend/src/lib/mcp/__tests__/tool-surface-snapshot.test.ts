@@ -1789,7 +1789,10 @@ const COMPETITOR_SEARCH_TERMS_BYTES = 291
 // RAISED again by a slot's `emptyFill`: `get_trend` names it (what a run takes for an optional slot
 // left out: default, example or original), 55 B more. No tool was added, so the membership fixture
 // does NOT move. Measured by this suite: 549_077 B in all; the list keeps the same headroom.
-const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55
+// LOWERED by the hidden-original fill: the `slots` wording of estimate_trend and run_trend no longer
+// says a trend that hides its original fills from the example, 36 B less in each (72 B in all).
+// Measured by this suite: 552_774 B in all before, 552_702 B after; the list keeps its headroom.
+const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55 - 72
 // RAISED 2026-11-18 by one NEW tool, `make_podcast_pack` (verbs-use-case-pack.ts: the MCP face of
 // POST /v1/podcast-pack — several podcast tools on one recording for one price — and, with
 // `estimate_only`, of its quote), and nothing else. Registered beside the use-case verbs and gated
@@ -1801,6 +1804,13 @@ const TRENDS_ORIGINAL_LOOK_BYTES = 45 - 42 + 55
 // and once, a tool its pack paid for that did not start) then added 552_508 − 552_188 = 320 B: 3_786 B,
 // the same 28 B of headroom.
 const PODCAST_PACK_TOOL_BYTES = 3_786
+// RAISED by modify_video's wording and nothing else: its description and its `model`, `audio` and
+// `multi_shots` arguments say what the two Wan 2.6 video-to-video models do (a new clip featuring
+// the input video's subject, not an edit of the clip) and which models edit the clip itself. No tool
+// was added, so the membership fixtures do NOT move. Measured by this suite on the same tree with
+// the wording before and after: 555_530 B, then 556_034 B, 504 B more; the list keeps the headroom
+// it had.
+const WAN_REFERENCE_TO_VIDEO_WORDING_BYTES = 504
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -2027,7 +2037,8 @@ export const TOOL_WIRE_BUDGET = {
     SUNO_SPEECH_COVER_ID_STEM_WAV_BYTES +
     COMPETITOR_SEARCH_TERMS_BYTES +
     TRENDS_ORIGINAL_LOOK_BYTES +
-    PODCAST_PACK_TOOL_BYTES,
+    PODCAST_PACK_TOOL_BYTES +
+    WAN_REFERENCE_TO_VIDEO_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

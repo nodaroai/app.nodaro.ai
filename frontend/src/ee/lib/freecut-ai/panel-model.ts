@@ -140,6 +140,8 @@ export interface EditPrices {
   readonly listen?: number
   /** The creative pass (b-roll moments, zoom lines, a trailer's moments). */
   readonly choose?: number
+  /** The podcast pack that plans the clips, the trailer and the chapters: one price for any of them. */
+  readonly pack?: number
   readonly steps: Partial<Record<EditStep, number>>
 }
 
@@ -150,20 +152,24 @@ export interface Cost {
 }
 
 /** The steps that are paid, beyond reading and listening. */
-export const PAID_STEPS: readonly EditStep[] = ["mistakes", "music", "broll", "picture", "phone", "layout", "cameras", "clips", "trailer", "chapters"]
+export const PAID_STEPS: readonly EditStep[] = ["mistakes", "music", "broll", "picture", "phone", "layout", "cameras", "clips"]
+/** The steps the podcast pack plans, charged once together. */
+const PACK_STEPS: readonly EditStep[] = ["clips", "trailer", "chapters"]
 /** The steps that need the creative pass. */
 const CHOOSES: readonly EditStep[] = ["broll", "titles", "zoom"]
 
 /**
  * What a request is charged at the platform's prices: reading it (only words
  * of the person's own), listening to the video (once per video, only for a
- * step that reads its words), the creative pass, and each paid step.
+ * step that reads its words), the creative pass, the podcast pack once for
+ * whatever it plans, and each paid step.
  */
 export function costOf(steps: readonly EditStep[], { heard, read, prices }: { readonly heard: boolean; readonly read: boolean; readonly prices: EditPrices }): Cost {
   const parts: Array<{ key: MessageKey; vars?: Vars; credits?: number }> = []
   if (read) parts.push({ key: "freecutAi.cost.read", credits: prices.read })
   if (!heard && listensFor(steps)) parts.push({ key: "freecutAi.cost.listen", credits: prices.listen })
   if (steps.some((s) => CHOOSES.includes(s))) parts.push({ key: "freecutAi.cost.choose", credits: prices.choose })
+  if (steps.some((s) => PACK_STEPS.includes(s))) parts.push({ key: "freecutAi.cost.pack", credits: prices.pack })
   for (const step of steps) {
     if (PAID_STEPS.includes(step)) parts.push({ key: `freecutAi.cost.${step}` as MessageKey, credits: prices.steps[step] })
   }
