@@ -1,5 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-Video Remake takes a custom style: `direction: { customStyle: "<text>" }` on `videoRemake.run()` and `estimate()` gives the style in your own words in place of a catalog art style (`direction: { style }`; never both), at most 600 characters, on Nodaro Prism. `videoRemake.describeStyle({ imageUrl, note? })` (`POST /v1/video-remake/describe-style`, free, signed in, 10 calls a minute per account) answers `{ text, medium?, tones? }` (`VideoRemakeDescribedStyle`): an image's visual style in words, ready to send as `customStyle`. `styleChoice()` answers `customStyle` per engine: offer it only where it is `true`. New types, also from `@nodaro/sdk/video-remake`: `VideoRemakeArtStyleDirection`, `VideoRemakeCustomStyleDirection`, `VideoRemakeDescribeStyleParams`, `VideoRemakeDescribedStyle`, `VideoRemakeStyleMedium`, `VideoRemakeStyleTones` and `VideoRemakeCustomStyleRefusalCode` (`custom_style_with_art_style`, `custom_style_empty`, `custom_style_too_long`, `custom_style_not_available`, `image_unreadable`, `describe_style_failed`, `style_not_described`).

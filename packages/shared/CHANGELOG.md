@@ -1,5 +1,23 @@
 # @nodaro/shared
 
+## 3.72.0
+
+### Minor Changes
+
+- a859468: `videoRemake.artStyles({ locale })` (`GET /v1/video-remake/art-styles`, public) lists the art styles the Video Remake page's art style picker offers, in its order: each `{ id, label, clipUrl, stillUrl }` (`VideoRemakeArtStyle`, also from `@nodaro/sdk/video-remake`). `id` is a run's `direction.style`, `label` the style's name in `locale` (English when left out, unknown, or not named in that language), `clipUrl` a short preview clip and `stillUrl` a still cut from it, both absolute. The list is empty on a deployment that does not show Nodaro's previews, or one without Video Remake or its art styles. No sign-in needed; the answer may be up to five minutes old.
+
+  `@nodaro/shared/i18n` exports `STYLE_SIDECAR_LOADERS`: the `style` catalog's locale sidecars as lazy loaders for `registerSidecarLoaders`, for a host with no bundler glob of its own (a Node server). Each language stays its own chunk.
+
+- 0602c24: The default Video to Video model is now Seedance 2.5 Edit (`seedance-2-5`), which edits the clip by instruction and keeps its length and aspect ratio. A `POST /v1/video-to-video` request, an MCP `modify_video` call, an SDK `nodes.run("video-to-video", …)` call or a Video to Video node that names no model runs it, including a node saved earlier with no model: it needs a prompt (the edit instruction) and a 4–30 second clip, renders at 480p unless a resolution is given, and is priced as a Seedance 2.5 edit. Wan 2.6 (`wan`) and Wan 2.6 Flash (`wan-flash`) stay selectable and unchanged; they make a new clip featuring the input video's subject and are no longer a default.
+
+  `@nodaro/shared/models`: `DEFAULT_VIDEO_TO_VIDEO_PROVIDER` is `"seedance-2-5"`; new `videoToVideoProviderOf(named)` (the model a request or node runs on: the one it names, else the default) and `QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER` (`"wan"`: the model of a `video-to-video` job queued earlier with no provider).
+
+  `@nodaro/prompts`: the six Video to Video look presets (Anime, Claymation, Cyberpunk Neon, Oil Painting, 3D Animated, Watercolor) run on `seedance-2-5`, and the node's preset group "Restyle Looks" is renamed "Looks"; the Wan prompt guidance points an edit at an edit model and a restyle at Video Remake.
+
+  `@nodaro/sdk`: `VideoToVideoParams.provider` documents the new default. To restyle a clip (keep its motion, camera and timing, change the art style) use `client.videoRemake.run({ …, direction: { style } })`.
+
+- ff7a56e: Wan 2.6 (`wan`) and Wan 2.6 Flash (`wan-flash`) are no longer listed as edit models. The catalog mode `v2v` lists the models that edit the clip they are given, and Wan 2.6 video-to-video makes a new clip featuring the input video's subject instead. `wan` now carries `modes: ["t2v"]` and `wan-flash` carries no mode, so neither is returned by `GET /v1/models?mode=v2v` or MCP `list_models` with `mode: "v2v"`, and a client that builds an "edit" list from that mode no longer offers them. `wan` keeps its text-to-video listing. Both remain Video to Video providers (`VIDEO_TO_VIDEO_PROVIDERS`): the node's menu still offers them and a request that names `provider: "wan"` or `"wan-flash"` runs as before, at the same price. The catalog label of `wan-flash` is now "Wan 2.6 Flash" (was "Wan Flash V2V"); its id is unchanged.
+
 ## 3.71.0
 
 ### Minor Changes
