@@ -1,5 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-`edit.podcastPack(input, options?)` runs several podcast tools (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout) on one recording for one price, set by the recording's length with every chosen tool included, and `edit.estimatePodcastPack(input)` quotes it with nothing created or charged. The input takes the recording once (`mediaUrl` or `mediaUrls`, with `masterAudioUrl` and `cameras`), `speakerNames`, and `tools`: each tool's own settings, typed as what its own method takes without the recording fields. The answer names the pack's job and each tool's job, plus any tool that did not start; an `Idempotency-Key` retry answers `{ jobId, deduped: true }`. A tool that fails is continued free with `continueUseCase`. New exports from `@nodaro/sdk/edit`: `PODCAST_PACK_TOOLS` and the `PodcastPack*` types. `edit.startPodcastPackTool(packJobId, tool)` starts, free and once per tool, a tool the pack paid for that did not start (`PodcastPackToolStarted`).
