@@ -89,6 +89,13 @@ export interface TightenEpisodeInput extends UseCaseRecordingsInput {
   styleGuide?: string
   /** How far the music dips under the voice, 0–100 (default 75). */
   musicDuckAmount?: number
+  /**
+   * How tightly the pauses are cut. `"light"` shortens pauses over 600 ms to
+   * 350 ms, `"standard"` (the default) pauses over 350 ms to 220 ms, and
+   * `"tight"` pauses over 250 ms to 150 ms. A pause is never cut away whole,
+   * and a shorter one is left as it is.
+   */
+  tightness?: "light" | "standard" | "tight"
   /** See {@link UseCaseSpeakerNamesInput.speakerNames}. */
   speakerNames?: UseCaseSpeakerNamesInput["speakerNames"]
 }

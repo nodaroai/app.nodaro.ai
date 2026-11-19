@@ -13691,5 +13691,10 @@ export const ko: ChromeDict = {
   "proccfg.tightenPlanTier": "편집 품질",
   "proccfg.tightenReview": "렌더링 전에 검토",
   "proccfg.tightenReviewHint": "검토하고 편집할 수 있는 빠른 미리보기에서 멈춥니다. “최종 렌더링”으로 최고 품질의 에피소드를 만듭니다",
+  "proccfg.tightenTightness": "쉼",
+  "proccfg.tightenTightnessHint": "긴 쉼은 줄이기만 하고 통째로 자르지 않아 말의 리듬이 유지됩니다",
+  "proccfg.tightenTightnessLight": "가볍게 — {min}ms 넘는 쉼을 {kept}ms로",
+  "proccfg.tightenTightnessStandard": "표준 — {min}ms 넘는 쉼을 {kept}ms로",
+  "proccfg.tightenTightnessTight": "촘촘하게 — {min}ms 넘는 쉼을 {kept}ms로",
   // gen:units end
 }

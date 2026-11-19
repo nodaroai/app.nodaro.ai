@@ -14000,6 +14000,11 @@ export const en = {
   "proccfg.tightenPlanTier": "Editing quality",
   "proccfg.tightenReview": "Review before render",
   "proccfg.tightenReviewHint": "Stops at a quick preview you can review and edit; Render final makes the full-quality episode",
+  "proccfg.tightenTightness": "Pauses",
+  "proccfg.tightenTightnessHint": "A long pause is shortened, never cut away whole, so the speech keeps its rhythm",
+  "proccfg.tightenTightnessLight": "Light — pauses over {min} ms kept at {kept} ms",
+  "proccfg.tightenTightnessStandard": "Standard — pauses over {min} ms kept at {kept} ms",
+  "proccfg.tightenTightnessTight": "Tight — pauses over {min} ms kept at {kept} ms",
   // gen:units end
 } as const
 

@@ -13691,5 +13691,10 @@ export const ptBR: ChromeDict = {
   "proccfg.tightenPlanTier": "Qualidade da edição",
   "proccfg.tightenReview": "Revisar antes de renderizar",
   "proccfg.tightenReviewHint": "Para em uma prévia rápida que você pode revisar e editar; “Renderização final” gera o episódio em qualidade total",
+  "proccfg.tightenTightness": "Pausas",
+  "proccfg.tightenTightnessHint": "Uma pausa longa é encurtada, nunca cortada por inteiro, e a fala mantém o ritmo",
+  "proccfg.tightenTightnessLight": "Leve — pausas acima de {min} ms ficam com {kept} ms",
+  "proccfg.tightenTightnessStandard": "Padrão — pausas acima de {min} ms ficam com {kept} ms",
+  "proccfg.tightenTightnessTight": "Justo — pausas acima de {min} ms ficam com {kept} ms",
   // gen:units end
 }

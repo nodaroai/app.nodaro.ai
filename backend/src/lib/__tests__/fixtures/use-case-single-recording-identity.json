@@ -3943,8 +3943,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -4134,8 +4135,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -4376,8 +4378,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -4700,8 +4703,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -4936,8 +4940,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -5182,8 +5187,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -5454,8 +5460,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -5718,8 +5725,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -5955,8 +5963,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -6307,8 +6316,9 @@
               "fieldMappings": {},
               "label": "Silence Detect",
               "thresholdDb": -35,
-              "minSilenceMs": 700,
-              "padMs": 120
+              "minSilenceMs": 350,
+              "padMs": 110,
+              "allRangesMinMs": 50
             }
           },
           {
@@ -12108,6 +12118,14 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100
+        },
+        "tightness": {
+          "type": "string",
+          "enum": [
+            "light",
+            "standard",
+            "tight"
+          ]
         },
         "speakerNames": {
           "type": "object",

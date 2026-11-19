@@ -1275,19 +1275,21 @@ const handleSplitMedia: HandlerFn = async function handleSplitMedia(job, ctx) {
 handleSplitMedia.livenessBudgetMs = (job) => declaredJobBudgetMs("split-media", job.data)
 
 const handleSilenceDetect: HandlerFn = async function handleSilenceDetect(job, ctx) {
-  const { audioUrl, thresholdDb, minSilenceMs, padMs } = job.data as {
+  const { audioUrl, thresholdDb, minSilenceMs, padMs, allRangesMinMs } = job.data as {
     jobId: string
     audioUrl: string
     thresholdDb?: number
     minSilenceMs?: number
     padMs?: number
+    allRangesMinMs?: number
   }
-  console.log(`[worker] silence-detect ${ctx.jobId} (threshold=${thresholdDb ?? -35}dB, minSilence=${minSilenceMs ?? 700}ms, pad=${padMs ?? 120}ms)`)
+  console.log(`[worker] silence-detect ${ctx.jobId} (threshold=${thresholdDb ?? -35}dB, minSilence=${minSilenceMs ?? 700}ms, pad=${padMs ?? 120}ms${allRangesMinMs !== undefined ? `, all from ${allRangesMinMs}ms` : ""})`)
 
   const result = await detectSilence(audioUrl, {
     thresholdDb: thresholdDb ?? -35,
     minSilenceMs: minSilenceMs ?? 700,
     padMs: padMs ?? 120,
+    ...(allRangesMinMs !== undefined ? { allRangesMinMs } : {}),
   })
   await setJobProgress(job, ctx.jobId, 100)
 

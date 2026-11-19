@@ -161,6 +161,9 @@ describe("attemptMediaKind", () => {
  * here and to the type's `settingKeys`.
  */
 const PINNED_SETTING_KEYS: Readonly<Record<UseCaseNodeType, readonly string[]>> = {
+  // `tightness` (decided 2026-11-18): its default is NOT the behaviour before it existed (absent
+  // reads standard, which shortens pauses the chain used to leave), so it is declared in the
+  // type's `newDefaultSettings` and an attempt stored before it runs fresh — pinned below.
   "tighten-episode": [
     "captionStyle",
     "captions",
@@ -171,6 +174,7 @@ const PINNED_SETTING_KEYS: Readonly<Record<UseCaseNodeType, readonly string[]>> 
     "planTier",
     "reviewBeforeRender",
     "styleGuide",
+    "tightness",
   ],
   "episode-chapters": ["instructions", "planTier", "styleGuide"],
   "episode-trailer": ["formats", "instructions", "planTier", "reviewBeforeRender", "styleGuide"],
@@ -251,6 +255,43 @@ describe("guard: the use-case resolvers' setting keys are pinned", () => {
       }
     }
   }
+})
+
+/**
+ * Tighten's tightness (decided 2026-11-18): its absent default, standard, is
+ * NOT what an attempt stored before it ran (Silence Detect then cut only
+ * pauses of 700 ms or more) — the descriptor's `newDefaultSettings` — so such
+ * an attempt runs fresh whatever the node holds, and one stored with a level
+ * resumes only against that level.
+ */
+describe("attemptRanWithInputs (tighten-episode): tightness", () => {
+  const type = "tighten-episode" as const
+  const d = usecaseDescriptor(type)
+  const now = (data: Record<string, unknown> = {}) => ({ mediaUrls: [MEDIA], ...data })
+  const storedBefore = (() => {
+    const { tightness: _gone, ...rest } = d.resolveSettings({}, "video") as Record<string, unknown>
+    return rest
+  })()
+  it("is declared a setting whose default changed what a run does", () => {
+    expect(d.newDefaultSettings).toEqual(["tightness"])
+  })
+  it("an attempt stored before it runs fresh, against a node that sends none or any level", () => {
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: storedBefore }, "video", now())).toBe(false)
+    for (const tightness of ["light", "standard", "tight"]) {
+      expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: storedBefore }, "video", now({ tightness }))).toBe(false)
+    }
+  })
+  it("an attempt stored with standard resumes against a node that sends none or standard, and runs fresh against another level", () => {
+    const standard = d.resolveSettings({}, "video") as Record<string, unknown>
+    expect(standard.tightness).toBe("standard")
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: standard }, "video", now())).toBe(true)
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: standard }, "video", now({ tightness: "standard" }))).toBe(true)
+    expect(attemptRanWithInputs(type, { mediaUrl: MEDIA, settings: standard }, "video", now({ tightness: "tight" }))).toBe(false)
+  })
+  it("settingsUnchanged reads a new-default setting the attempt lacks as changed, any other as its default", () => {
+    expect(settingsUnchanged({}, { a: 1 }, { a: 1 }, ["a"])).toBe(false)
+    expect(settingsUnchanged({}, { a: 1 }, { a: 1 })).toBe(true)
+  })
 })
 
 /**

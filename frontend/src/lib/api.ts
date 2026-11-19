@@ -4307,13 +4307,14 @@ export async function extractAudioApi(videoUrl: string, userId?: string): Promis
 }
 
 export async function silenceDetectApi(
-  params: { audioUrl: string; thresholdDb?: number; minSilenceMs?: number; padMs?: number; userId?: string },
+  params: { audioUrl: string; thresholdDb?: number; minSilenceMs?: number; padMs?: number; allRangesMinMs?: number; userId?: string },
 ): Promise<{ jobId: string }> {
-  const { audioUrl, thresholdDb, minSilenceMs, padMs, userId } = params
+  const { audioUrl, thresholdDb, minSilenceMs, padMs, allRangesMinMs, userId } = params
   const body: Record<string, unknown> = { audioUrl }
   if (thresholdDb !== undefined) body.thresholdDb = thresholdDb
   if (minSilenceMs !== undefined) body.minSilenceMs = minSilenceMs
   if (padMs !== undefined) body.padMs = padMs
+  if (allRangesMinMs !== undefined) body.allRangesMinMs = allRangesMinMs
   if (userId) body.userId = userId
   return apiJson("/v1/silence-detect", {
     body,

@@ -1,10 +1,11 @@
 /**
  * What both halves of Tighten Episode's builder share (the one-recording chain
  * in tighten-episode-graph.ts, the several-recordings chain in
- * tighten-episode-multicam.ts): the built node ids, the render types, and the
- * tail every episode ends with — captions on the render, the music bed mixed
- * under it, and the output map. A leaf (it imports neither half), so the two
- * halves never load each other in a loop. Pure.
+ * tighten-episode-multicam.ts): the built node ids, the render types, the
+ * Silence Detect each tightness runs, and the tail every episode ends with —
+ * captions on the render, the music bed mixed under it, and the output map. A
+ * leaf (it imports neither half), so the two halves never load each other in a
+ * loop. Pure.
  */
 import type { EpisodeOutputMap, UseCaseGraphEdge, UseCaseGraphNode, UseCaseHandleRef } from "./use-case-graph"
 import { usecaseEdge, usecaseNode } from "./use-case-graph-parts"
@@ -28,6 +29,47 @@ export const TIGHTEN_RENDER_TYPE = "apply-edl"
 export const TIGHTEN_FRAMED_RENDER_TYPE = "speaker-view"
 
 const ID = TIGHTEN_NODE_IDS
+
+/** How tightly an episode's pauses are cut (decided 2026-11-18). */
+export const TIGHTEN_TIGHTNESS_LEVELS = ["light", "standard", "tight"] as const
+export type TightenTightness = (typeof TIGHTEN_TIGHTNESS_LEVELS)[number]
+
+/**
+ * The pauses each tightness shortens, and what it leaves of them. Silence
+ * Detect reports every silence of `minPauseMs` or more shrunk by half of
+ * `keptMs` at each end, and the plan cuts what it reports, so such a pause
+ * comes out `keptMs` long — never cut away whole, so the speech keeps its
+ * rhythm — and a shorter one is left as it is. Standard is what a node or a
+ * request that names no tightness runs (decided 2026-11-18: until then every
+ * episode cut only pauses of 700 ms or more, down to 240 ms).
+ */
+export const TIGHTEN_PAUSES: Readonly<Record<TightenTightness, { readonly minPauseMs: number; readonly keptMs: number }>> = Object.freeze({
+  light: Object.freeze({ minPauseMs: 600, keptMs: 350 }),
+  standard: Object.freeze({ minPauseMs: 350, keptMs: 220 }),
+  tight: Object.freeze({ minPauseMs: 250, keptMs: 150 }),
+})
+
+/** Silence Detect's threshold for a Tighten run: quieter than this is silence. */
+export const TIGHTEN_SILENCE_THRESHOLD_DB = -35
+/**
+ * The shortest silence Silence Detect also lists, unpadded (`allRanges`): the
+ * plan places the cut around a removed word ("um", a false start) inside the
+ * silences next to it, so it never leaves part of the word or takes the start
+ * of the next one.
+ */
+export const TIGHTEN_SILENCE_ALL_RANGES_MIN_MS = 50
+
+/** The Silence Detect node a Tighten run builds at `tightness`. */
+export function tightenSilenceNode(tightness: TightenTightness): UseCaseGraphNode {
+  const { minPauseMs, keptMs } = TIGHTEN_PAUSES[tightness]
+  return usecaseNode(ID.silence, "silence-detect", 1, 2, {
+    label: "Silence Detect",
+    thresholdDb: TIGHTEN_SILENCE_THRESHOLD_DB,
+    minSilenceMs: minPauseMs,
+    padMs: keptMs / 2,
+    allRangesMinMs: TIGHTEN_SILENCE_ALL_RANGES_MIN_MS,
+  })
+}
 
 /** The chain up to and including the render, and whether the render is framed (Speaker View). */
 export interface TightenChainHead {

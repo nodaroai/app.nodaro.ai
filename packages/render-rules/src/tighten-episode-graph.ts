@@ -37,7 +37,15 @@ import type {
   UseCaseMediaSource,
 } from "./use-case-graph"
 import { usecaseEdge, usecaseNode, usecaseSourceNode, usecaseTranscribeNode } from "./use-case-graph-parts"
-import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, withTightenTail } from "./tighten-episode-parts"
+import {
+  TIGHTEN_FRAMED_RENDER_TYPE,
+  TIGHTEN_NODE_IDS,
+  TIGHTEN_RENDER_TYPE,
+  TIGHTEN_TIGHTNESS_LEVELS,
+  tightenSilenceNode,
+  withTightenTail,
+  type TightenTightness,
+} from "./tighten-episode-parts"
 import { buildTightenMulticamGraph } from "./tighten-episode-multicam"
 import { resolveUseCaseCameras, usecaseShapeIsMulticam, type UseCaseCameras, type UseCaseSourcesShape } from "./use-case-cameras"
 import { usecaseIsMulticam } from "./use-case-multicam"
@@ -45,6 +53,7 @@ import { resolveUseCaseFramingSource, usecaseFramesNode, usecaseFramesWires, typ
 import type { UseCaseSources } from "./use-case-registry"
 
 export type { PlanTier, UseCaseMediaKind, UseCaseMediaSource } from "./use-case-graph"
+export { TIGHTEN_PAUSES, TIGHTEN_TIGHTNESS_LEVELS, type TightenTightness } from "./tighten-episode-parts"
 
 /** Edit Plan's and Apply EDL's ceiling: a longer recording is refused up front. */
 export const TIGHTEN_MAX_EPISODE_SEC = 180 * 60
@@ -68,6 +77,8 @@ export interface TightenEpisodeSettings {
   readonly instructions: string
   readonly styleGuide: string
   readonly musicDuckAmount: number
+  /** How tightly the pauses are cut (`TIGHTEN_PAUSES`): the Silence Detect the chain runs. */
+  readonly tightness: TightenTightness
   /**
    * The Cameras settings, resolved only for two or more recordings or a Master
    * audio (absent otherwise, so a one-recording run's settings are what they
@@ -101,6 +112,7 @@ export const TIGHTEN_EPISODE_DEFAULTS: TightenEpisodeSettings = Object.freeze({
   instructions: "",
   styleGuide: "",
   musicDuckAmount: 75,
+  tightness: "standard",
 })
 
 export interface TightenEpisodeSources {
@@ -170,6 +182,9 @@ export function resolveTightenEpisodeSettings(
     instructions: str(r.instructions, d.instructions),
     styleGuide: str(r.styleGuide, d.styleGuide),
     musicDuckAmount: duck,
+    // Absent reads standard, for every caller (decided 2026-11-18). An unknown value reads standard
+    // here too, as every setting's does — though the route's body refuses one before a run builds.
+    tightness: includes(TIGHTEN_TIGHTNESS_LEVELS, r.tightness) ? (r.tightness as TightenTightness) : d.tightness,
     ...(usecaseShapeIsMulticam(shape) ? { cameras: resolveUseCaseCameras(r.cameras, shape) } : {}),
     // Absent reads the spec's absent default (written in by the descriptor); a direct call reads the same value.
     ...(framing && resolveUseCaseFramingSource(r.framingSource, TIGHTEN_ABSENT_FRAMING_SOURCE) === "tracking" ? { framingSource: "tracking" as const } : {}),
@@ -193,7 +208,7 @@ export function buildTightenEpisodeGraph(settings: TightenEpisodeSettings, sourc
   const nodes: UseCaseGraphNode[] = [
     usecaseSourceNode(ID.source, sources.media, 0, 1),
     usecaseTranscribeNode(ID.transcribe, 1, 0),
-    usecaseNode(ID.silence, "silence-detect", 1, 2, { label: "Silence Detect", thresholdDb: -35, minSilenceMs: 700, padMs: 120 }),
+    tightenSilenceNode(settings.tightness),
     usecaseNode(ID.plan, "edit-plan", 2, 1, {
       label: "Tighten Plan", mode: "tighten", planTier: settings.planTier, instructions: settings.instructions,
       ...(settings.styleGuide ? { styleGuide: settings.styleGuide } : {}),

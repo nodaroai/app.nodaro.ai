@@ -102,6 +102,16 @@ export interface UseCaseDescriptor {
    * new node. A type whose builder never follows faces declares `static`.
    */
   readonly absentFramingSource: UseCaseFramingSource
+  /**
+   * Settings added with a default that is NOT the behaviour the type had
+   * before they existed (decided 2026-11-18: Tighten's `tightness`, whose
+   * absent default shortens pauses the chain used to leave). An attempt
+   * stored without one ran that old behaviour, which no value now
+   * reproduces, so the resume match never takes it for the node's current
+   * settings: it runs fresh. Any other added setting's default IS the old
+   * behaviour, which an attempt without it ran — and resumes against.
+   */
+  readonly newDefaultSettings?: readonly string[]
   /** `shape`: how many recordings the run has and whether Master audio is wired (a one-recording run's settings never depend on it). */
   resolveSettings(raw: UseCaseSettings | undefined, mediaKind: UseCaseMediaKind, shape?: UseCaseSourcesShape): UseCaseSettings
   build(settings: UseCaseSettings, sources: UseCaseSources): UseCaseGraph

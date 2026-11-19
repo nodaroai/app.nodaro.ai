@@ -3433,6 +3433,7 @@ Needs `workflows:execute`.
 | `instructions` | string |  | Editing instructions for the plan. At most 4000 characters. |
 | `style_guide` | string |  | Style guide for the plan. At most 4000 characters. |
 | `music_duck_amount` | number |  | How far the music dips under speech, 0–100 (default 75). From 0 to 100. |
+| `tightness` | string |  | Shortens pauses: light over 600 ms to 350 ms, standard (default) over 350 ms to 220 ms, tight over 250 ms to 150 ms. One of `light`, `standard`, `tight`. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `train_character`

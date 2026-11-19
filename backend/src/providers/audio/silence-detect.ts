@@ -33,6 +33,7 @@ import {
   probeMediaDuration,
 } from "../video/ffmpeg-utils.js"
 import { ensureMediaProxy } from "../../services/media-proxy.js"
+import { ALL_RANGES_MIN_FLOOR_MS } from "./silence-detect-limits.js"
 
 /** Wire version of the emitted `data` payload. Bump only on a breaking shape
  *  change (a new major of the node's output contract). */
@@ -48,6 +49,9 @@ export interface SilenceRange {
 export interface SilenceDetectResult {
   readonly version: typeof SILENCE_DETECT_VERSION
   readonly ranges: SilenceRange[]
+  /** Every silence of at least `allRangesMinMs`, unpadded — only when that
+   *  setting was given. */
+  readonly allRanges?: SilenceRange[]
   /** Total source duration, integer ms. */
   readonly durationMs: number
 }
@@ -61,6 +65,12 @@ export interface SilenceDetectSettings {
   /** Padding kept around speech, ms — shrinks each range inward by this at both
    *  ends. Default 120. */
   readonly padMs: number
+  /** Also list every silence at least this long, unpadded, as `allRanges`
+   *  (decided 2026-11-18: Tighten Episode's plan places the cut around a
+   *  removed word inside the short silences next to it). Read from the same
+   *  pass, run at the shorter of the two lengths. Absent: no list, and the
+   *  pass is exactly the one it always was. */
+  readonly allRangesMinMs?: number
 }
 
 export const SILENCE_DETECT_DEFAULTS: SilenceDetectSettings = {
@@ -83,11 +93,28 @@ export function parseSilenceRanges(
   stderr: string,
   opts: { padMs: number; durationMs: number },
 ): SilenceRange[] {
-  const pad = Math.max(0, Math.round(opts.padMs))
-  const durationMs = Math.max(0, Math.round(opts.durationMs))
-  const ranges: SilenceRange[] = []
+  return padSilences(parseSilenceSpans(stderr, opts.durationMs), opts.padMs)
+}
 
-  let openStartMs: number | null = null
+/**
+ * The `silencedetect` markers paired into source-clock spans as ffmpeg found
+ * them — unpadded, in emission order. A dangling `silence_start` (source ends
+ * mid-silence) is closed at `durationMs`. Pure.
+ */
+export function parseSilenceSpans(stderr: string, durationMsIn: number): SilenceRange[] {
+  return parseTimedSilences(stderr, durationMsIn).map(({ startMs, endMs }) => ({ startMs, endMs }))
+}
+
+/** A span with its length as ffmpeg measured it, before the edges were rounded to the millisecond. */
+interface TimedSilence extends SilenceRange {
+  readonly lengthSec: number
+}
+
+function parseTimedSilences(stderr: string, durationMsIn: number): TimedSilence[] {
+  const durationMs = Math.max(0, Math.round(durationMsIn))
+  const spans: TimedSilence[] = []
+
+  let open: { ms: number; sec: number } | null = null
   // Scan line by line so start/end stay in emission order even if a stray
   // token appears elsewhere on a line.
   for (const line of stderr.split("\n")) {
@@ -95,34 +122,56 @@ export function parseSilenceRanges(
     if (startMatch) {
       // A new start before the previous one closed (shouldn't happen, but be
       // defensive): drop the earlier unterminated span.
-      openStartMs = Math.max(0, Math.round(parseFloat(startMatch[1]!) * 1000))
+      const sec = parseFloat(startMatch[1]!)
+      open = { ms: Math.max(0, Math.round(sec * 1000)), sec }
       continue
     }
     const endMatch = /silence_end:\s*(-?[0-9]+(?:\.[0-9]+)?)/.exec(line)
-    if (endMatch && openStartMs !== null) {
-      const endMs = Math.max(0, Math.round(parseFloat(endMatch[1]!) * 1000))
-      pushPadded(ranges, openStartMs, endMs, pad)
-      openStartMs = null
+    if (endMatch && open !== null) {
+      const sec = parseFloat(endMatch[1]!)
+      spans.push({ startMs: open.ms, endMs: Math.max(0, Math.round(sec * 1000)), lengthSec: sec - open.sec })
+      open = null
     }
   }
   // Source ended while still silent — close the final span at the duration.
-  if (openStartMs !== null && durationMs > openStartMs) {
-    pushPadded(ranges, openStartMs, durationMs, pad)
+  if (open !== null && durationMs > open.ms) {
+    spans.push({ startMs: open.ms, endMs: durationMs, lengthSec: durationMs / 1000 - open.sec })
   }
-  return ranges
+  return spans
 }
 
-function pushPadded(out: SilenceRange[], rawStartMs: number, rawEndMs: number, pad: number): void {
-  const startMs = rawStartMs + pad
-  const endMs = rawEndMs - pad
-  // Drop spans that vanish (or invert) once the pad is applied on both sides.
-  if (endMs > startMs) out.push({ startMs, endMs })
+/** Whether a span is at least `ms` long as ffmpeg's own `d=` reads it: on its
+ *  measured length, to the microsecond it prints — never on the rounded edges,
+ *  which can make a span 0.06 ms short of the minimum read as long enough. */
+const atLeastMs = (s: TimedSilence, ms: number) => s.lengthSec * 1000 + 1e-3 >= ms
+
+/** Each span shrunk inward by `padMs` at both ends; a span that vanishes (or inverts) is dropped. */
+function padSilences(spans: readonly SilenceRange[], padMs: number): SilenceRange[] {
+  const pad = Math.max(0, Math.round(padMs))
+  const out: SilenceRange[] = []
+  for (const s of spans) {
+    const startMs = s.startMs + pad
+    const endMs = s.endMs - pad
+    if (endMs > startMs) out.push({ startMs, endMs })
+  }
+  return out
+}
+
+export { ALL_RANGES_MIN_FLOOR_MS }
+
+/** `allRangesMinMs` as a whole-ms length of at least ALL_RANGES_MIN_FLOOR_MS;
+ *  absent (no list) for anything but a finite number or a numeric string, so a
+ *  bad value never reaches ffmpeg's `d=`. */
+function allRangesFloorMs(v: unknown): number | undefined {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN
+  return Number.isFinite(n) ? Math.max(ALL_RANGES_MIN_FLOOR_MS, Math.round(n)) : undefined
 }
 
 /**
  * Run one `silencedetect` pass over a LOCAL media file and return the padded
- * ranges + the file's duration. Real ffmpeg; no network. This is the unit the
- * lavfi e2e test drives directly.
+ * ranges (+ the unpadded `allRanges` when `allRangesMinMs` is set) and the
+ * file's duration. Real ffmpeg; no network. This is the unit the lavfi e2e
+ * test drives directly.
  */
 export async function runSilenceDetectOnFile(
   localPath: string,
@@ -134,7 +183,11 @@ export async function runSilenceDetectOnFile(
   // negative or fractional minSilenceMs the config-panel slider never produces,
   // and a negative `d=` makes ffmpeg error. Coerce-not-reject so the DAG path
   // yields the same result as single-node "Run from here" (not a silent empty).
-  const durationSec = Math.max(1, Math.round(settings.minSilenceMs ?? SILENCE_DETECT_DEFAULTS.minSilenceMs)) / 1000
+  const minMs = Math.max(1, Math.round(settings.minSilenceMs ?? SILENCE_DETECT_DEFAULTS.minSilenceMs))
+  const allMinMs = allRangesFloorMs(settings.allRangesMinMs)
+  // One pass finds both lists: ffmpeg reports each silence at its true start
+  // whatever the minimum, so the longer ones are the same spans either way.
+  const durationSec = (allMinMs === undefined ? minMs : Math.min(minMs, allMinMs)) / 1000
 
   let stderr = ""
   try {
@@ -156,14 +209,24 @@ export async function runSilenceDetectOnFile(
     // present. A genuine ffmpeg failure (bad args, unreadable input) has NO
     // silence_* lines and must PROPAGATE — never masquerade as "0 silences
     // detected", which would commit a credit for a wrong empty result.
-    const e = err as { stderr?: string }
-    if (!e?.stderr || !/silence_(start|end)/.test(e.stderr)) throw err
+    // Nor is a pass that was stopped (killed, timed out) or whose log was cut
+    // short (`truncated`: past the capture's buffer) a whole one: its last
+    // silence_start would be closed at the end of the file, a "silence" over
+    // everything after it, and a plan would cut all of that.
+    const e = err as { stderr?: string; killed?: boolean; timedOut?: boolean; truncated?: boolean }
+    if (!e?.stderr || !/silence_(start|end)/.test(e.stderr) || e.killed || e.timedOut || e.truncated) throw err
     stderr = e.stderr
   }
 
   const durationMs = Math.round((await probeMediaDuration(localPath)) * 1000)
-  const ranges = parseSilenceRanges(stderr, { padMs: settings.padMs, durationMs })
-  return { version: SILENCE_DETECT_VERSION, ranges, durationMs }
+  if (allMinMs === undefined) {
+    const ranges = parseSilenceRanges(stderr, { padMs: settings.padMs, durationMs })
+    return { version: SILENCE_DETECT_VERSION, ranges, durationMs }
+  }
+  const spans = parseTimedSilences(stderr, durationMs)
+  const ranges = padSilences(spans.filter((s) => atLeastMs(s, minMs)), settings.padMs)
+  const allRanges = spans.filter((s) => atLeastMs(s, allMinMs)).map(({ startMs, endMs }) => ({ startMs, endMs }))
+  return { version: SILENCE_DETECT_VERSION, ranges, allRanges, durationMs }
 }
 
 /**

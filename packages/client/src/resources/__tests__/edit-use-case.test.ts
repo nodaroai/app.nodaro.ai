@@ -36,6 +36,23 @@ describe("edit.tightenEpisode's framing source (decided 2026-10-17/20)", () => {
   })
 })
 
+describe("edit.tightenEpisode's tightness (decided 2026-11-18)", () => {
+  const bodyOf = (fetchMock: ReturnType<typeof vi.fn>) => JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+  it("sends tightness as given, for the run and its estimate, and nothing when it is left out", async () => {
+    for (const tightness of ["light", "standard", "tight"] as const) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+      await client(fetchMock).edit.tightenEpisode({ mediaUrl: "https://r2/a.mp4", tightness })
+      expect(bodyOf(fetchMock)).toEqual({ mediaUrls: ["https://r2/a.mp4"], tightness })
+    }
+    const estimate = vi.fn().mockReturnValueOnce(mockOk({ data: { totalCredits: 1, stepsCredits: 0, feeCredits: 1, durationSec: null } }))
+    await client(estimate).edit.estimateTightenEpisode({ mediaUrl: "https://r2/a.mp4", tightness: "tight" })
+    expect(bodyOf(estimate)).toEqual({ mediaUrls: ["https://r2/a.mp4"], tightness: "tight" })
+    const plain = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+    await client(plain).edit.tightenEpisode({ mediaUrl: "https://r2/a.mp4" })
+    expect(bodyOf(plain)).not.toHaveProperty("tightness")
+  })
+})
+
 describe("edit.tightenEpisode on several recordings (decided 2026-10-19)", () => {
   const bodyOf = (fetchMock: ReturnType<typeof vi.fn>) => JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
 

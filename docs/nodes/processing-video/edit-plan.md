@@ -40,7 +40,7 @@ Because the plan is just data, an agent or you can decide *what* the edit is; th
 | Handle | Type | Required | Description |
 |--------|------|----------|-------------|
 | Transcript | json | **Yes** | The timed, word-level transcript. Wire it from a Transcribe node's `json` output. |
-| Silence | json | No | Silence ranges from a Silence Detect node — helps the tighten pass cut dead air precisely. |
+| Silence | json | No | Silence ranges from a Silence Detect node — helps the tighten pass cut dead air precisely. When it also carries `allRanges` (Silence Detect's `allRangesMinMs`), the cut around a removed word is placed inside the silences next to it. |
 | Offsets (Audio Sync) | json | No | Multicam: an [Audio Sync](../processing-audio/audio-sync.md) node's Offsets output. Each source's measured offset is applied before the plan runs — see [Multicam](#multicam-recordings-on-different-clocks). |
 | Sources | video/audio | **Yes** | The media the edit draws from (1–6). Each connected source becomes an EDL source; set each one's role and offset in the config panel. |
 

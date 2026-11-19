@@ -1811,6 +1811,14 @@ const PODCAST_PACK_TOOL_BYTES = 3_786
 // the wording before and after: 555_530 B, then 556_034 B, 504 B more; the list keeps the headroom
 // it had.
 const WAN_REFERENCE_TO_VIDEO_WORDING_BYTES = 504
+// RAISED 2026-11-18 by Tighten Episode's pauses (decided that day): `tighten_episode` (and
+// `estimate_use_case` through it) gained `tightness` (`light` / `standard` / `tight`, how far long
+// pauses are shortened), its description trimmed to the three levels' numbers. No tool was added,
+// so the membership fixture does NOT move (the recorded tool list, tool-list-wire.json, does). Not
+// near the per-tool budget. Measured by this suite on top of modify_video's wording, on the same
+// tree with and without it: 556_233 total − 556_034 = 199 B; the list keeps the 7 B of headroom it
+// had.
+const TIGHTEN_TIGHTNESS_BYTES = 199
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -2038,7 +2046,8 @@ export const TOOL_WIRE_BUDGET = {
     COMPETITOR_SEARCH_TERMS_BYTES +
     TRENDS_ORIGINAL_LOOK_BYTES +
     PODCAST_PACK_TOOL_BYTES +
-    WAN_REFERENCE_TO_VIDEO_WORDING_BYTES,
+    WAN_REFERENCE_TO_VIDEO_WORDING_BYTES +
+    TIGHTEN_TIGHTNESS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -7703,6 +7703,8 @@ function buildPayloadOf(
         thresholdDb: data.thresholdDb,
         minSilenceMs: data.minSilenceMs,
         padMs: data.padMs,
+        // Absent on every node but a Tighten run's own (its plan places cuts in the list).
+        ...(data.allRangesMinMs !== undefined ? { allRangesMinMs: data.allRangesMinMs } : {}),
         usageLogId,
       })
 

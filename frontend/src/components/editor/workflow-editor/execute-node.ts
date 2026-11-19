@@ -8502,6 +8502,7 @@ function executeNodeCore(
         thresholdDb: d.thresholdDb,
         minSilenceMs: d.minSilenceMs,
         padMs: d.padMs,
+        allRangesMinMs: d.allRangesMinMs,
         userId: ctx.userId,
       })
         .then(({ jobId }) => {

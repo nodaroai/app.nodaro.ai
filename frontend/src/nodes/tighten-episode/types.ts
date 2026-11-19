@@ -28,6 +28,8 @@ export type TightenEpisodeData = {
   instructions?: string
   styleGuide?: string
   musicDuckAmount?: number
+  /** How tightly the pauses are cut (`TIGHTEN_PAUSES`). Absent = "standard", for a saved node too (ruled 2026-11-18). */
+  tightness?: "light" | "standard" | "tight"
   /** Editor-only: the Output and Captions an audio recording turned off, given back when a video is wired again (lib/use-case-audio-lock.ts). The run never reads it. */
   settingsBeforeAudio?: { output?: "video" | "audio"; captions?: boolean }
   /** The run's wrapper job (Continue / Render final address it). */

@@ -19,12 +19,11 @@ import { usecaseEdge, usecaseNode, usecaseTranscribeNode } from "./use-case-grap
 import { usecaseMulticamSoundNode } from "./use-case-multicam"
 import { usecaseMulticamPlanChain } from "./use-case-multicam-chain"
 import { usecaseFramesNode, usecaseFramesWires } from "./use-case-framing"
-import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, withTightenTail } from "./tighten-episode-parts"
+import { TIGHTEN_FRAMED_RENDER_TYPE, TIGHTEN_NODE_IDS, TIGHTEN_RENDER_TYPE, tightenSilenceNode, withTightenTail } from "./tighten-episode-parts"
 import type { TightenEpisodeGraph, TightenEpisodeSettings } from "./tighten-episode-graph"
 
 const ID = TIGHTEN_NODE_IDS
 
-const silenceNode = () => usecaseNode(ID.silence, "silence-detect", 1, 2, { label: "Silence Detect", thresholdDb: -35, minSilenceMs: 700, padMs: 120 })
 const planNode = (settings: TightenEpisodeSettings, sourceOrder: readonly string[], sourceConfig: Readonly<Record<string, unknown>>) =>
   usecaseNode(ID.plan, "edit-plan", 2, 1, {
     label: "Tighten Plan", mode: "tighten", planTier: settings.planTier, instructions: settings.instructions,
@@ -43,7 +42,7 @@ export function buildTightenMulticamGraph(settings: TightenEpisodeSettings, sour
     const nodes: UseCaseGraphNode[] = [
       sound,
       usecaseTranscribeNode(ID.transcribe, 1, 0),
-      silenceNode(),
+      tightenSilenceNode(settings.tightness),
       planNode(settings, [sound.id], {}),
       usecaseNode(ID.render, TIGHTEN_RENDER_TYPE, 3, 1, { label: "Apply Cut", output: "audio", quality, crossfadeMs: 0 }),
     ]
@@ -64,7 +63,7 @@ export function buildTightenMulticamGraph(settings: TightenEpisodeSettings, sour
     transcribeId: ID.transcribe,
     planId: ID.plan,
     plan: (order, config) => planNode(settings, order, config),
-    listeners: [{ node: silenceNode(), input: "in", output: "json", planInput: "silence" }],
+    listeners: [{ node: tightenSilenceNode(settings.tightness), input: "in", output: "json", planInput: "silence" }],
     switchAt: { column: 3, row: 1 },
   })
   const { nodes, edges, edit, named } = chain

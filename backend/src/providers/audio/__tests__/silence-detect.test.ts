@@ -7,7 +7,7 @@
  * exercised separately in silence-detect.e2e.test.ts.
  */
 import { describe, it, expect } from "vitest"
-import { parseSilenceRanges } from "../silence-detect.js"
+import { parseSilenceRanges, parseSilenceSpans } from "../silence-detect.js"
 
 describe("parseSilenceRanges", () => {
   it("pairs start/end markers and shrinks each range inward by padMs", () => {
@@ -56,5 +56,30 @@ describe("parseSilenceRanges", () => {
       { startMs: 1000, endMs: 2000 },
       { startMs: 5000, endMs: 7000 },
     ])
+  })
+})
+
+describe("parseSilenceSpans — the spans as ffmpeg found them (allRanges)", () => {
+  it("keeps every span unpadded, a short one included", () => {
+    const stderr = [
+      "silence_start: 1.0",
+      "silence_end: 1.08 | silence_duration: 0.08",
+      "silence_start: 3.0",
+      "silence_end: 3.6 | silence_duration: 0.6",
+    ].join("\n")
+    expect(parseSilenceSpans(stderr, 6000)).toEqual([
+      { startMs: 1000, endMs: 1080 },
+      { startMs: 3000, endMs: 3600 },
+    ])
+  })
+
+  it("closes a dangling start at the duration, as the padded ranges do", () => {
+    expect(parseSilenceSpans("silence_start: 8.0", 10_000)).toEqual([{ startMs: 8000, endMs: 10_000 }])
+  })
+
+  it("is what the padded ranges are made from: padding a span gives parseSilenceRanges' range", () => {
+    const stderr = "silence_start: 2.0\nsilence_end: 4.0 | silence_duration: 2.0"
+    const [span] = parseSilenceSpans(stderr, 6000)
+    expect(parseSilenceRanges(stderr, { padMs: 120, durationMs: 6000 })).toEqual([{ startMs: span!.startMs + 120, endMs: span!.endMs - 120 }])
   })
 })

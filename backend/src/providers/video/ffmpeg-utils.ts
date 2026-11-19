@@ -495,7 +495,7 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
  * caller can classify without parsing text (Video Overlay: a timeout is
  * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
  */
-function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true } {
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true } {
   const killed = error.killed === true
   return {
     killed,
@@ -504,6 +504,9 @@ function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut
     ...(typeof error.syscall === "string" && error.syscall.startsWith("spawn") ? { notStarted: true as const } : {}),
     // Stopped by its caller's signal.
     ...(error.name === "AbortError" ? { aborted: true as const } : {}),
+    // Its output outgrew the capture buffer and was cut short (Node may not set `killed` for it):
+    // a caller that parses the captured log must not read it as whole.
+    ...(error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" ? { truncated: true as const } : {}),
   }
 }
 

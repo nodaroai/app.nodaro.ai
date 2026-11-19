@@ -13901,5 +13901,10 @@ export const he: ChromeDict = {
   "proccfg.tightenPlanTier": "איכות העריכה",
   "proccfg.tightenReview": "סקירה לפני רינדור",
   "proccfg.tightenReviewHint": "עוצר בתצוגה מקדימה מהירה לסקירה ועריכה; רינדור סופי יוצר את הפרק באיכות מלאה",
+  "proccfg.tightenTightness": "הפסקות",
+  "proccfg.tightenTightnessHint": "הפסקה ארוכה מתקצרת ולא נחתכת לגמרי, כך שהדיבור שומר על הקצב שלו",
+  "proccfg.tightenTightnessLight": "קל — הפסקות מעל {min} ms מתקצרות ל-{kept} ms",
+  "proccfg.tightenTightnessStandard": "רגיל — הפסקות מעל {min} ms מתקצרות ל-{kept} ms",
+  "proccfg.tightenTightnessTight": "הדוק — הפסקות מעל {min} ms מתקצרות ל-{kept} ms",
   // gen:units end
 }

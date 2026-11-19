@@ -11,6 +11,17 @@ It was recorded once, on the unmodified P1 code, before the use-case registry
 refactor (`WRITE_TIGHTEN_IDENTITY=1`). **Never re-record it after the
 refactor**: a re-recording takes whatever the code then builds as the truth.
 
+Every row's `hash` was corrected by hand, never re-recorded, when a Tighten
+run's pauses came to be cut by its tightness (ruled 2026-11-18: a node or a
+request that names none runs `standard`, whoever sends it). Its Silence Detect
+now reports silences of 350 ms or more padded by 110 ms (was 700 ms and
+120 ms), and lists every silence of 50 ms or more for the plan
+(`allRangesMinMs`). Each hash was recomputed with the test's own functions, and
+a row was rewritten only where its graph, with that one node's data put back,
+gives the recorded hash exactly. Every `outputMap` and first-run subset is
+unchanged, and the stored snapshot stays P1's: a run already started continues
+on the graph it stored.
+
 ## `episode-trailer-identity.json`
 
 Trailer's composed facts on the server before it became a node unit: its
@@ -263,6 +274,16 @@ test's own function: `bodySchemas["tighten-episode"]` gains `framingSource`
 (`auto`, `static` or `tracking`). Absent reads `static`, the even split, and
 the resolved settings carry it only when a framed episode follows faces, so
 every other row is unchanged.
+
+Eleven records were corrected by hand, never re-recorded, when a Tighten run's
+pauses came to be cut by its tightness (ruled 2026-11-18, the correction
+`tighten-episode-identity.json` describes), recomputed with the test's own
+functions: the ten Tighten Episode `expansions`, whose Silence Detect node now
+reads `minSilenceMs` 350, `padMs` 110 and `allRangesMinMs` 50 (each rewritten
+only where putting that node's old data back gives the record exactly), and
+`bodySchemas["tighten-episode"]`, which gains `tightness` (`light`, `standard`
+or `tight`). A run sends `tightness` only when its node holds one, so every
+`bodies` row is unchanged.
 
 ## `svg/`
 

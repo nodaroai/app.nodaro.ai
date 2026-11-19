@@ -13691,5 +13691,10 @@ export const ja: ChromeDict = {
   "proccfg.tightenPlanTier": "編集の品質",
   "proccfg.tightenReview": "レンダリング前に確認",
   "proccfg.tightenReviewHint": "確認・編集できる簡易プレビューで止まります。「最終レンダリング」でフル品質のエピソードを作成します",
+  "proccfg.tightenTightness": "ポーズ",
+  "proccfg.tightenTightnessHint": "長いポーズは短くするだけで、丸ごと切ることはありません。話のリズムはそのままです",
+  "proccfg.tightenTightnessLight": "軽め — {min} ms を超えるポーズを {kept} ms に",
+  "proccfg.tightenTightnessStandard": "標準 — {min} ms を超えるポーズを {kept} ms に",
+  "proccfg.tightenTightnessTight": "詰める — {min} ms を超えるポーズを {kept} ms に",
   // gen:units end
 }

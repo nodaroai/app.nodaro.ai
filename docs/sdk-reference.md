@@ -9986,6 +9986,7 @@ music bed under it. Only the recording is required (`mediaUrl`, or
 | `instructions` | `string` | no | Editing instructions for the planner (up to 4 000 characters). |
 | `styleGuide` | `string` | no | A style guide for the planner (up to 4 000 characters). |
 | `musicDuckAmount` | `number` | no | How far the music dips under the voice, 0–100 (default 75). |
+| `tightness` | `"light" \| "standard" \| "tight"` | no | How tightly the pauses are cut ([Pauses and filler](./nodes/processing-video/tighten-episode.md#pauses-and-filler)): `"light"` shortens pauses over 600 ms to 350 ms, `"standard"` (absent) pauses over 350 ms to 220 ms, `"tight"` pauses over 250 ms to 150 ms. |
 | `speakerNames` | `Record<string, string>` | no | Speaker label (as the run's transcript names them, e.g. `"speaker_0"`) → the name to show, up to 80 characters; at most 32 speakers. The job keeps them and returns them on `output_data.speakers[].name`; the run never reads them (nothing is renamed in the captions, transcript or edit), and a continuation keeps them. A blank name is dropped; a label nobody in the recording has is ignored. Over the limits: `400 validation_error`. |
 
 Passing both `mediaUrl` and `mediaUrls`, or neither, rejects with a
