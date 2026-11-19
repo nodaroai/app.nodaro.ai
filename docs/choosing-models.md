@@ -43,6 +43,8 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | motion transfer (drive a subject by another video) | Kling 2.6 Motion Transfer, Kling 3.0 Motion Transfer | Kling 2.6 base is cheap; Kling 3.0 is premium. |
 <!-- AUTO-GEN:END model-recommendations -->
 
+**Editing or restyling a video, motion transfer and motion control.** To edit a video or restyle a video and keep its motion, camera and timing, or for motion transfer or motion control on a whole clip, use **Video Remake** (on Nodaro Cloud; elsewhere, where it is offered), not a model from the tables below: it changes the cast, a prop, the place, the look or the art style of a 4–30 second clip, on its Nodaro Prism and Nodaro Pulse engines (MCP `video_remake`; API `POST /v1/video-remake`). The motion-transfer models above make one still character perform the moves of a reference video. Wan 2.6 and Wan 2.6 Flash video-to-video make a new clip featuring the input video's subject; they neither edit nor restyle the clip.
+
 ## Image models
 
 Text-to-image, image-to-image, editing, upscaling, and background removal. For everyday drafts and storyboards, the Everyday tier is plenty; switch to a Premium model for final, high-detail or text-heavy images.

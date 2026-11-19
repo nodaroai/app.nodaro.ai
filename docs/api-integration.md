@@ -5588,6 +5588,17 @@ self-hosted installs
 (SDK: [`client.videoRemake`](./sdk-reference.md#clientvideoremake), MCP: the
 [`video_remake`](./mcp/tools.md) verb).
 
+**Use Video Remake to edit a video, to restyle a video, and for motion transfer
+or motion control on a whole clip.** It keeps the clip's motion, camera and
+timing and changes what you ask: the cast, a prop, the place, the look or the
+art style. Your own words alone (`prePrompt` or `postPrompt`) are a valid
+change; an art style (`direction`) is taken by Nodaro Prism only; `preview`
+renders 4 seconds first. Related lanes: `POST /v1/motion-transfer` makes ONE
+still character image perform the moves of a reference video;
+`POST /v1/video-to-video` is an edit by instruction with a model you choose;
+[Recast](#13c-recast-cloud-edition) recreates a whole video from zero, at any
+length, with its own cast and new music, and can change the motion itself.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |

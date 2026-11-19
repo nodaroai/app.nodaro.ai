@@ -2208,6 +2208,13 @@ edition only**: these routes 404 on self-hosted installs. Also importable as
 `@nodaro/sdk/video-remake`. Routes: [Video Remake](./api-integration.md#13f-video-remake-cloud-edition);
 MCP: `video_remake`, `estimate_full_quality`, `full_quality`.
 
+Use it to edit a video, to restyle a video, and for motion transfer or motion
+control on a whole clip: it keeps the clip's motion, camera and timing and
+changes what you ask (the cast, a prop, the place, the look or the art style).
+Your own words alone (`prePrompt` / `postPrompt`) are a valid change, and an
+art style (`direction`) is taken by Nodaro Prism only. `client.recast`
+recreates a whole video from zero instead.
+
 ```ts
 run(params: VideoRemakeParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/video-remake → 202 (200 + deduped on a keyed repeat)
 estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> // POST /v1/video-remake/estimate, free
