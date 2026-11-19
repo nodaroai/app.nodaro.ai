@@ -267,6 +267,13 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   // other Video Remake route stays behind a credential.
   { method: "GET", path: "/v1/video-remake/advanced" },
   { method: "GET", path: "/v1/cast-swap/advanced" },
+  // Video Remake's art styles (ee/routes/cast-swap-art-styles.ts, Cloud): the
+  // styles its picker offers, each with its name and preview clip — a catalog
+  // read, the same answer for every caller, no user data, so a guest's menu
+  // lists them too. Exact path (and its /v1/cast-swap alias), GET only: every
+  // other Video Remake route stays behind a credential.
+  { method: "GET", path: "/v1/video-remake/art-styles" },
+  { method: "GET", path: "/v1/cast-swap/art-styles" },
   { method: "GET", path: "/v1/gallery/items" },
   { path: "/v1/gallery/report" },
   // Public share-by-link read of an OPT-IN-shared workflow (studio /example/:id).

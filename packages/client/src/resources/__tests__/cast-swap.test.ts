@@ -8,6 +8,7 @@ import {
   type CastSwapEngine,
   type CastSwapParams,
   type VideoRemakeAdvanced,
+  type VideoRemakeArtStyle,
   type VideoRemakeEngine,
   type VideoRemakeEstimate,
   type VideoRemakeFullQualityEstimate,
@@ -453,6 +454,40 @@ describe("videoRemake resource", () => {
     expect(await client.castSwap.advanced()).toEqual({ show: true })
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe("https://api.example.com/v1/video-remake/advanced")
+  })
+
+  it("artStyles GETs /v1/video-remake/art-styles in the language asked for and answers the list", async () => {
+    const answer: VideoRemakeArtStyle[] = [
+      { id: "anime", label: "אנימה", clipUrl: "https://cdn.example.com/a.mp4", stillUrl: "https://cdn.example.com/a.jpg" },
+      { id: "watercolor", label: "צבעי מים", clipUrl: "https://cdn.example.com/w.mp4", stillUrl: "https://cdn.example.com/w.jpg" },
+    ]
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: answer }))
+    const client = make(fetchMock)
+
+    const got = await client.videoRemake.artStyles({ locale: "he" })
+    expect(got).toEqual(answer)
+    const first: VideoRemakeArtStyle = got[0]!
+    expect(first.id).toBe("anime")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/art-styles?locale=he")
+    expect(init.method).toBe("GET")
+    expect(init.body).toBeUndefined()
+  })
+
+  it("artStyles sends no locale when none is asked for, and answers an empty list as it is", async () => {
+    const fetchMock = vi.fn().mockReturnValue(mockOk({ data: [] }))
+    const client = make(fetchMock)
+
+    expect(await client.videoRemake.artStyles()).toEqual([])
+    expect(await client.videoRemake.artStyles({})).toEqual([])
+    expect(await client.castSwap.artStyles({ locale: "pt-BR" })).toEqual([])
+    const urls = fetchMock.mock.calls.map((c) => (c as [string, RequestInit])[0])
+    expect(urls).toEqual([
+      "https://api.example.com/v1/video-remake/art-styles",
+      "https://api.example.com/v1/video-remake/art-styles",
+      "https://api.example.com/v1/video-remake/art-styles?locale=pt-BR",
+    ])
   })
 
   it("styleChoice GETs /v1/video-remake/style-choice and answers every engine's choice", async () => {

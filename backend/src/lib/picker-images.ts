@@ -1,4 +1,4 @@
-import type { PickerImageOptions, PickerOwnPicture } from "@nodaro/prompts/picker-art"
+import { RESTYLE_PREVIEWS, restylePreviewStillUrl, type PickerImageOptions, type PickerOwnPicture } from "@nodaro/prompts/picker-art"
 import { isCloud } from "./config.js"
 import { appBaseUrl } from "./deployment-urls.js"
 import { hasRegisteredPickerPictures, registeredPickerPicture } from "./picker-pictures.js"
@@ -79,6 +79,30 @@ function shownPictures(): "platform" | "own" | "none" {
   // Exactly "default": a value this reader does not know shows nothing.
   if (setting === "default") return "platform"
   return setting === "own" && hasRegisteredPickerPictures() ? "own" : "none"
+}
+
+/** An art style's restyle preview as a reply carries it: the clip and a still cut from it, both absolute. */
+export interface ShownRestylePreview {
+  readonly clipUrl: string
+  readonly stillUrl: string
+}
+
+/**
+ * The platform's restyle previews (an approved clip of real footage wiping
+ * into an art style, with its still), by `style` catalog option id — or
+ * undefined where this deployment does not show the platform's rendered
+ * previews: the same rule as every look preview above (`catalogs.images`
+ * exactly `"default"`, on Nodaro Cloud). A style with no approved clip, or
+ * whose clip has no still, has no entry.
+ */
+export function shownRestylePreviews(): ReadonlyMap<string, ShownRestylePreview> | undefined {
+  if (shownPictures() !== "platform" || !isCloud()) return undefined
+  const shown = new Map<string, ShownRestylePreview>()
+  for (const [styleId, preview] of Object.entries(RESTYLE_PREVIEWS)) {
+    const stillUrl = restylePreviewStillUrl(preview)
+    if (stillUrl) shown.set(styleId, { clipUrl: preview.url, stillUrl })
+  }
+  return shown
 }
 
 function ownPicture(catalogId: string, optionId: string, reader: Parameters<typeof sitePictureAddress>[1]): PickerOwnPicture | undefined {

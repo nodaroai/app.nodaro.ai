@@ -47,7 +47,7 @@
 | `models` | Model catalog: capabilities + credit prices, each model's maker + the maker's `logoUrl` (`GET /v1/models`) |
 | `shots` | Saved shots: prompt, references, results; private or public |
 | `recast` | Recast runs: quote, buy, follow, answer picks, import a script |
-| `videoRemake` | Video Remake: replace the people, pets, products and/or location in a short video on Nodaro Prism or Nodaro Pulse (`engine`: `"nodaro-prism"` / `"nodaro-pulse"`) — `run`, `estimate`, `styleChoice`, `advanced`, `fullQualityEstimate`, `fullQuality` (Cloud) |
+| `videoRemake` | Video Remake: replace the people, pets, products and/or location in a short video on Nodaro Prism or Nodaro Pulse (`engine`: `"nodaro-prism"` / `"nodaro-pulse"`) — `run`, `estimate`, `styleChoice`, `advanced`, `artStyles`, `fullQualityEstimate`, `fullQuality` (Cloud) |
 | `trends` | Trends: ready-made Video Remake recipes — browse (`list`, `get`), `estimate`, `run` with your own pictures, your `runs`, `favorite` / `unfavorite` (Cloud) |
 | `trendRadar` | Trend Radar: the candidate trends the daily radar run found and an admin's decisions on them — `summary`, `candidates`, `candidate`, `approve` (a draft trend), `watch`, `reject`, `settings`, `updateSettings`, `run` (Cloud; a signed-in admin session only) |
 | `studio` | Studio productions: plan, edit, stills and clips, share, copy |

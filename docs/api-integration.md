@@ -5594,6 +5594,7 @@ self-hosted installs
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 | `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
 `{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
@@ -5747,6 +5748,28 @@ needed) answers `{ show: boolean }`, so an app built on this API can show or
 hide the same options. It describes the page only: every run and estimate
 takes `prepareReferences` and `prePrompt` as described here, whatever it
 answers. The answer may be up to a minute old.
+
+**The art styles the Video Remake page offers.**
+`GET /v1/video-remake/art-styles?locale=<id>` (public, no sign-in needed)
+lists the art styles the Video Remake page's art style picker offers, in its
+order, so an app or a menu can show the same list:
+
+```json
+{ "data": [{ "id": "anime", "label": "Anime", "clipUrl": "https://…", "stillUrl": "https://…" }] }
+```
+
+`id` is what a run takes as `direction.style` (an id of the `style` picker
+catalog). `label` is the style's name in `locale`, a Nodaro language id (`he`,
+`ja`, `ko`, `pt-BR`, …): English when `locale` is left out, is not one of
+Nodaro's languages, or the language does not name the style. `clipUrl` is a
+short clip of real footage wiping into the style and `stillUrl` a still frame
+cut from it, both absolute `https` addresses. The list is the styles of the
+`style` picker catalog that are offered for video, hold up as a restyle of
+filmed footage and have such a clip. It is empty (`{ "data": [] }`) on a
+deployment that does not show Nodaro's previews, or one without Video Remake
+or its art styles. It lists what the picker shows: whether a run takes an art
+style on an engine is `style-choice`'s to say (above). The answer may be up to
+five minutes old.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
 for one, whether faces are hidden first, and whether a clip the model refuses

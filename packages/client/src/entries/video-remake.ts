@@ -32,4 +32,5 @@ export {
   type VideoRemakeStyleChoiceOption,
   type VideoRemakeStyleChoice,
   type VideoRemakeAdvanced,
+  type VideoRemakeArtStyle,
 } from "../resources/cast-swap.js"

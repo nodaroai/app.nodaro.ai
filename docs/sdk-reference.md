@@ -2215,6 +2215,7 @@ fullQualityEstimate(jobId: string): Promise<VideoRemakeFullQualityEstimate> // P
 fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemakeFullQualityResult> // POST /v1/video-remake/:jobId/full-quality → 202 (200 + existing)
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
 advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, public
+artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
 ```
 
 ```ts
@@ -2438,6 +2439,25 @@ minute old.
 
 ```ts
 const { show } = await client.videoRemake.advanced()
+```
+
+**The art styles the Video Remake page offers** (`artStyles()`,
+`VideoRemakeArtStyle`, `GET /v1/video-remake/art-styles`, public): the styles
+its art style picker offers, in its order, each
+`{ id, label, clipUrl, stillUrl }`. `id` is a run's `direction.style`; `label`
+is the style's name in `locale` (a Nodaro language id such as `"he"`, `"ja"`,
+`"ko"` or `"pt-BR"`), English when it is left out, is not one of Nodaro's
+languages, or the language does not name the style; `clipUrl` is a short clip
+of real footage wiping into the style and `stillUrl` a still frame cut from
+it, both absolute `https` addresses. The list is empty on a deployment that
+does not show Nodaro's previews, or one without Video Remake or its art
+styles. It lists what the picker shows: whether a run takes an art style on
+an engine is `styleChoice()`'s to say. The answer may be up to five minutes
+old.
+
+```ts
+const styles = await client.videoRemake.artStyles({ locale: "he" })
+// [{ id: "anime", label: "אנימה", clipUrl: "https://…", stillUrl: "https://…" }, …]
 ```
 
 **Preparing the clip.** How the source clip is prepared for the video model

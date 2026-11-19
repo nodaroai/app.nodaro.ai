@@ -616,6 +616,21 @@ export interface VideoRemakeAdvanced {
   show: boolean
 }
 
+/**
+ * One art style of {@link VideoRemakeResource.artStyles}: a style Video
+ * Remake's art style picker offers, with its preview.
+ */
+export interface VideoRemakeArtStyle {
+  /** The style's id: what a run takes as `direction.style` (an id of the `style` picker catalog). */
+  id: string
+  /** The style's name in the language asked for; English where that language does not name it. */
+  label: string
+  /** A short clip of real footage wiping into the style (an absolute https address). */
+  clipUrl: string
+  /** A still frame cut from that clip (an absolute https address). */
+  stillUrl: string
+}
+
 export class VideoRemakeResource {
   constructor(private client: NodaroClientCore) {}
 
@@ -665,6 +680,26 @@ export class VideoRemakeResource {
    */
   advanced(): Promise<VideoRemakeAdvanced> {
     return this.client.request("GET", "/v1/video-remake/advanced")
+  }
+
+  /**
+   * The art styles Video Remake's art style picker offers
+   * (`GET /v1/video-remake/art-styles`), in the picker's order: each with its
+   * `id` (a run's `direction.style`), its name in `locale` (a Nodaro language
+   * id such as `"he"`, `"ja"`, `"ko"` or `"pt-BR"`; English when left out,
+   * for a language Nodaro does not have, and for a style the language does
+   * not name) and its preview, a clip and a still cut from it. The list is
+   * empty where there is nothing to offer: a deployment that does not show
+   * Nodaro's previews, or one without Video Remake or its art styles. It
+   * lists what the picker shows; whether a run takes an art style on an
+   * engine is {@link styleChoice}'s to say.
+   * Public (no sign-in needed); the answer may be up to five minutes old.
+   */
+  async artStyles(params: { locale?: string } = {}): Promise<VideoRemakeArtStyle[]> {
+    const query: Record<string, string> = {}
+    if (params.locale) query.locale = params.locale
+    const res = await this.client.request<{ data: VideoRemakeArtStyle[] }>("GET", "/v1/video-remake/art-styles", { query })
+    return res.data
   }
 
   /** Quote a run before starting it (`POST /v1/video-remake/estimate`); spends nothing. */

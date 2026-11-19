@@ -9,7 +9,8 @@
  * 1. Only picker-images.ts imports the platform's picture maps
  *    (`@nodaro/prompts/picker-art`, the package root that re-exports it, or a
  *    path into the package's files), and from there it takes only the options
- *    type and the URL resize helper.
+ *    type, the URL resize helper and the restyle previews it serves itself
+ *    (`shownRestylePreviews`).
  * 2. Only picker-images.ts asks for the setting (`surfaceCatalogImages`), and
  *    nothing but surface-profile.ts reads `catalogs.images` off the profile.
  * 3. Every catalog projection (`projectPickerCatalog`, `projectAllCatalogs`,
@@ -69,7 +70,7 @@ const REPO = join(BACKEND, "..")
 const DECIDER = "src/lib/picker-images.ts"
 const PROFILE = "src/lib/surface-profile.ts"
 /** What the decider may take from the picture maps' module. */
-const DECIDER_TAKES = ["PickerImageOptions", "PickerOwnPicture", "lookPreviewStillUrl"]
+const DECIDER_TAKES = ["PickerImageOptions", "PickerOwnPicture", "RESTYLE_PREVIEWS", "lookPreviewStillUrl", "restylePreviewStillUrl"]
 
 /** The deployment's own pictures: the registry, its readers and who may use them. */
 const REGISTRY = "src/lib/picker-pictures.ts"
@@ -315,7 +316,7 @@ describe("picker pictures have one decider on the server", () => {
     expect([...scans.values()].flatMap((s) => s.violations)).toEqual([])
   })
 
-  it("the decider takes only the options type and the resize helper from the picture maps' module", () => {
+  it("the decider takes only the options type, the resize helper and the restyle previews from the picture maps' module", () => {
     expect([...scans.get(DECIDER)!.pictureNames].sort()).toEqual([...DECIDER_TAKES].sort())
   })
 
