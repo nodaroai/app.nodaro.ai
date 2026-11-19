@@ -2214,6 +2214,7 @@ estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> // POST /v1/vi
 fullQualityEstimate(jobId: string): Promise<VideoRemakeFullQualityEstimate> // POST /v1/video-remake/:jobId/full-quality/estimate, free
 fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemakeFullQualityResult> // POST /v1/video-remake/:jobId/full-quality → 202 (200 + existing)
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
+advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, public
 ```
 
 ```ts
@@ -2427,13 +2428,17 @@ Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
 
-**The Advanced options on the Video Remake page**
-(`GET /v1/video-remake/advanced`, public): `{ show: boolean }`, whether the
-Video Remake page shows `prepareReferences` and `prePrompt` under its
-Advanced options; `false` until Nodaro turns them on, one setting for the
-whole page. It describes the page only: `run()` and `estimate()` take both
-fields whatever it says. The answer may be up to a minute old. The SDK has no
-method for it yet; read it with `client.request()`.
+**The Advanced options on the Video Remake page** (`advanced()`,
+`VideoRemakeAdvanced`, `GET /v1/video-remake/advanced`, public):
+`{ show: boolean }`, whether the Video Remake page shows `prepareReferences`
+and `prePrompt` under its Advanced options; `false` until Nodaro turns them
+on, one setting for the whole page. It describes the page only: `run()` and
+`estimate()` take both fields whatever it says. The answer may be up to a
+minute old.
+
+```ts
+const { show } = await client.videoRemake.advanced()
+```
 
 **Preparing the clip.** How the source clip is prepared for the video model
 (for one, whether faces are hidden first, and whether a clip the model

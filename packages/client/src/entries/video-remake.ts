@@ -31,4 +31,5 @@ export {
   type VideoRemakeFullQualityRefusalCode,
   type VideoRemakeStyleChoiceOption,
   type VideoRemakeStyleChoice,
+  type VideoRemakeAdvanced,
 } from "../resources/cast-swap.js"
