@@ -475,9 +475,9 @@ describe("UGC Monologue Writer — Hebrew paragraph", () => {
 })
 
 describe("Wave 2 — Phone Footage Look", () => {
-  it("is a Restyle Look on Wan 2.7 VideoEdit that keeps the source's own sound and length, whose description warns it is for b-roll, with the finish sentence and no device in its text", () => {
+  it("is a Look on Wan 2.7 VideoEdit that keeps the source's own sound and length, whose description warns it is for b-roll, with the finish sentence and no device in its text", () => {
     const p = preset("video-to-video", "video-to-video/phone-footage-look")
-    expect(p.group).toBe("Restyle Looks")
+    expect(p.group).toBe("Looks")
     expect(leversOf(p.data, "promptPrefix", "negativePrompt")).toEqual({
       provider: "wan-videoedit", v2vResolution: "720p", videoEditDuration: "0", audioSetting: "origin", promptExtend: false,
     })

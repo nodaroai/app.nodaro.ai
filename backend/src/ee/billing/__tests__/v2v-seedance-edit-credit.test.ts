@@ -56,6 +56,13 @@ describe("video-to-video — Seedance edit lane credit identifier", () => {
     }
   })
 
+  it("a node that stores no model is quoted as the Seedance 2.5 edit it runs", () => {
+    expect(estimate({})).toBe(estimate({ provider: "seedance-2-5" }))
+    expect(estimate({})).toBe(worstCase("seedance-2-5", "480p", VIDEO_DURATION_AUTO))
+    expect(estimate({ v2vResolution: "720p" })).toBe(estimate({ provider: "seedance-2-5", v2vResolution: "720p" }))
+    expect(estimate({})).not.toBe(estimate({ provider: "wan" }))
+  })
+
   it("leaves every /v1/video-to-video ROUTE provider on its own flat key, but the two priced by their clip", () => {
     for (const provider of VIDEO_TO_VIDEO_PROVIDERS) {
       const flat = STATIC_CREDIT_COSTS[provider]

@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-11-19T02:11:49.134Z
-generated_from: 0e15d8fd67
+generated_at: 2026-11-19T07:28:22.309Z
+generated_from: 18485e3c9e
 ---
 
 # image-to-video
@@ -408,7 +408,8 @@ Prompt structure (Alibaba Model Studio's official formulas):
 **Video-to-video on wan / wan-flash (Wan 2.6) is reference-to-video**
 - The input clip is a REFERENCE for its subject; the output is a NEW clip of that subject in the scene the prompt describes. It is not an edit, a restyle or a style transfer of the input clip.
 - The prompt describes the scene: what the subject does and where.
-- To restyle or edit the clip itself, the model is wan-videoedit (describe the transform, keep motion + identity).
+- To edit the clip itself by instruction, the model is an edit model: seedance-2-5 (the Video to Video default) or wan-videoedit (describe the transform, keep motion + identity).
+- To restyle the clip (keep its motion, camera and timing, change the art style), use Video Remake with an art style, not a Wan model.
 
 **Camera vocabulary**
 push-in (intimacy/tension), pull-out (scale/isolation), tracking shot, orbit, fixed camera, and compound movements chained sequentially for epic scale.

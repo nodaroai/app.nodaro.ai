@@ -519,7 +519,7 @@ const PRESET_GROUPS_PT_BR: Record<string, string> = {
   "Realism & Authentic": "Realismo e autenticidade",
   "Reference Sheet": "Folha de referência",
   "Relight & Composite": "Reiluminação e composição",
-  "Restyle Looks": "Novos looks",
+  "Looks": "Looks",
   "Revoice Styles": "Estilos de troca de voz",
   "Scene Recipes": "Receitas de cena",
   "Seedance Director": "Direção com Seedance",

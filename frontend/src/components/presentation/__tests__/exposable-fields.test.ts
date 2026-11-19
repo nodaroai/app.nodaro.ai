@@ -54,7 +54,7 @@ describe("getExposableFields — hand-declared fields plus the strip's controls"
   })
 
   it("an unset node's default is the node's own: defaultData, else the model the strip says it runs as", () => {
-    expect(field("video-to-video", "provider")?.defaultValue).toBe("wan")
+    expect(field("video-to-video", "provider")?.defaultValue).toBe("seedance-2-5")
     expect(field("assemble-narrated-video", "voiceVolume")?.defaultValue).toBe(
       (NODE_DEFINITIONS.find((d) => d.type === "assemble-narrated-video")!.defaultData as Record<string, unknown>).voiceVolume,
     )

@@ -5,7 +5,7 @@
 // as the handler will, so neither keeps its own copy. Kept apart from the
 // handler files: importing those pulls in the provider and ffmpeg runtimes.
 import { defaultImageModel } from "@nodaro/shared/model-catalog"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
+import { QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER, T2I_TO_I2I_VARIANT } from "@nodaro/shared/models"
 
 /**
  * lip-sync, motion-transfer and edit-image (handlers/video-ai.ts,
@@ -21,8 +21,14 @@ export const IMAGE_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 export const TEXT_TO_VIDEO_DEFAULT_PROVIDER = "minimax"
 /** voiced-video: its clip is image-to-video (handlers/video-ai.ts). */
 export const VOICED_VIDEO_DEFAULT_PROVIDER = "minimax"
-/** video-to-video (handlers/video-ai.ts) — the shared default the editor's menu shows too. */
-export const VIDEO_TO_VIDEO_DEFAULT_PROVIDER = DEFAULT_VIDEO_TO_VIDEO_PROVIDER
+/**
+ * video-to-video (handlers/video-ai.ts): a job ALREADY QUEUED with no provider.
+ * It is by construction a Wan 2.6 job: it was created and priced while that
+ * was the default, and the default a new request takes (Seedance 2.5 edit,
+ * `videoToVideoProviderOf`) never runs as a `video-to-video` job. Every new
+ * request reaches the queue with its provider named.
+ */
+export const QUEUED_VIDEO_TO_VIDEO_PROVIDER = QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER
 /** video-upscale (handlers/video-ai.ts). */
 export const VIDEO_UPSCALE_DEFAULT_PROVIDER = "topaz"
 /** video-depth (handlers/video-depth.ts). */

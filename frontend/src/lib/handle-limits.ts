@@ -1,4 +1,4 @@
-import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoProviderAppendsFrames, videoKeyframesMiddleCap } from "@nodaro/shared/models"
+import { imageReferenceLimit, VIDEO_REF_LIMITS_BY_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, videoProviderAppendsFrames, videoKeyframesMiddleCap } from "@nodaro/shared/models"
 import { getModel, hasFeature, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
 import { isAnalyzablePicker } from "@nodaro/prompts/picker-catalogs"
 import {
@@ -335,8 +335,9 @@ export function getHandleConnectionLimit(
   // node has no frame handles, and the source clip rides
   // `referenceVideoUrls` — a separate array from `reference_image_urls`.
   if (node.type === "video-to-video" && (handleId === "imageReferences" || handleId === "audioReferences")) {
-    const provider = (node.data as { provider?: string } | undefined)?.provider
-    const providerLabel = (provider && getModel(provider)?.label) ?? provider ?? "Video to Video"
+    // A node that stores no model runs the default (Seedance 2.5 edit).
+    const provider = videoToVideoProviderOf((node.data as { provider?: string } | undefined)?.provider)
+    const providerLabel = getModel(provider)?.label ?? provider
     if (!isSeedanceVideoEditProvider(provider)) {
       return { limit: 0, providerLabel, isMultiProviderMin: false }
     }

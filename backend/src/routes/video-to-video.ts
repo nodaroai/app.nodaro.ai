@@ -10,8 +10,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
-import { VIDEO_TO_VIDEO_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
-import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, isSeedanceVideoEditProvider } from "@nodaro/shared/models"
+import { VIDEO_TO_VIDEO_NODE_PROVIDERS, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, isSeedanceVideoEditProvider, videoToVideoProviderOf } from "@nodaro/shared/models"
+import { uiResolutionFill } from "@nodaro/shared/video"
 import { buildSeedanceVideoEditPrompt } from "@nodaro/prompts/assembly"
 import { handleTextToVideoRequest, textToVideoBody, textToVideoPricing } from "./text-to-video.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -59,7 +59,8 @@ export const videoToVideoBody = z.object({
   referenceVideoUrls: z.array(safeUrlSchema).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).optional(),
 }).superRefine((b, ctx) => {
-  if (isSeedanceVideoEditProvider(b.provider)) return
+  // A body naming no model is the default's (a Seedance edit).
+  if (isSeedanceVideoEditProvider(videoToVideoProviderOf(b.provider))) return
   if (b.resolution === "480p") {
     ctx.addIssue({ code: "custom", path: ["resolution"], message: "480p is available on the Seedance edit models only" })
   }
@@ -69,6 +70,30 @@ export const videoToVideoBody = z.object({
     }
   }
 })
+
+/**
+ * The route's FIRST pre-check: a body that names no model gets the default
+ * written into it (`videoToVideoProviderOf`, Seedance 2.5 edit), so everything
+ * after it reads one model off the body: the Seedance rewrite, the guard's
+ * model door and free-plan rule, the price, the hold and the job. `POST
+ * /v1/quote` runs it too, with the route's other pre-checks.
+ */
+export async function nameDefaultVideoToVideoModel(req: FastifyRequest): Promise<undefined> {
+  const body = req.body
+  if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+    const record = body as Record<string, unknown>
+    if (record.provider === undefined || record.provider === null || record.provider === "") {
+      const model = videoToVideoProviderOf(undefined)
+      record.provider = model
+      // With no resolution either, the default renders at the size a node with
+      // none set renders (`uiResolutionFill`: the model's first, 480p). A
+      // request that names its model keeps the lane's own handling.
+      const fill = uiResolutionFill(model)
+      if ((record.resolution === undefined || record.resolution === null) && record.draft !== true && fill !== undefined) record.resolution = fill
+    }
+  }
+  return undefined
+}
 
 /** A Seedance edit, before or after its body is rewritten — decided by the model alone. */
 function isSeedanceEdit(req: FastifyRequest): boolean {
@@ -154,9 +179,9 @@ function clipOf(req: FastifyRequest): VideoToVideoClipStash | undefined {
   return requestMeasure<VideoToVideoClipStash>(req, CLIP)
 }
 
-/** The model a non-Seedance request runs on: the one it names, else the route's default. */
+/** The model a request runs on: the one its body names (the first pre-check names the default). */
 function runProvider(req: FastifyRequest): string {
-  return ((req.body as Record<string, unknown> | undefined)?.provider as string | undefined) ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
+  return videoToVideoProviderOf((req.body as Record<string, unknown> | undefined)?.provider)
 }
 
 /**
@@ -216,7 +241,7 @@ const onlyForSeedanceEdit = (precheck: (req: FastifyRequest, reply: FastifyReply
  *   rewritten body — the clip's length, settled to what was rendered.
  */
 export const videoToVideoPricing: RoutePricing = {
-  prechecks: [rewriteSeedanceEdit, ...textToVideoPricing.prechecks.map(onlyForSeedanceEdit)],
+  prechecks: [nameDefaultVideoToVideoModel, rewriteSeedanceEdit, ...textToVideoPricing.prechecks.map(onlyForSeedanceEdit)],
   modelResolver: (req) => {
     if (isSeedanceEdit(req)) return textToVideoPricing.modelResolver(req)
     const provider = runProvider(req)
@@ -268,7 +293,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
     parsed.data.negativePrompt = finalNegativePrompt
 
     const mcpClient = extractMcpClient(req.body)
-    const runModel = provider ?? VIDEO_TO_VIDEO_DEFAULT_PROVIDER
+    const runModel = videoToVideoProviderOf(provider)
     // A model priced by its clip: the length the server read from the clip
     // (never one the request sent) is recorded on the job and the queue
     // payload, and the run reserves the row that length chose. HappyHorse Edit

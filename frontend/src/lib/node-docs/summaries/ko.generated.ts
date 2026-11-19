@@ -37,7 +37,7 @@ export const NODE_DOCS_SUMMARIES: Readonly<Record<string, string>> = {
   "extend-video": "Seedance 2.5, Seedance 2.0, Kling 4, LTX 2.3 Pro, VEO, Runway로 프롬프트에 따라 새 영상을 이어 붙여 동영상을 연장하세요. 실행을 연결하면 긴 샷이 됩니다.",
   "edit-video-pro": "기존 동영상에서 고른 구간을 4초부터 2분까지 새 Seedance 영상으로 교체하고 다시 이어 붙여, 클립의 나머지는 그대로 유지합니다.",
   "video-retake": "LTX 2.3 Pro로 기존 동영상의 한 구간을 다시 생성하세요. 소리만, 화면만, 또는 둘 다 바꾸고 구간 밖은 그대로 유지합니다.",
-  "video-to-video": "프롬프트로 동영상 전체를 바꾸세요. 영상을 애니메이션이나 클레이 애니메이션으로 바꾸고, 낮을 밤으로 바꾸거나, Seedance 2.5 Edit으로 지시문을 써서 클립을 편집합니다.",
+  "video-to-video": "기존 동영상을 지시문으로 편집하세요. 낮을 밤으로 바꾸고, 날씨를 바꾸거나 사물을 교체합니다. Seedance 2.5 Edit은 클립의 길이와 구도를 유지합니다.",
   "switchx": "클립 자체의 픽셀, 마스크, 레퍼런스 이미지를 바탕으로 피사체의 조명을 바꾸고, 배경을 교체하거나 스타일을 바꾸고, 동영상에 새 요소를 합성하세요.",
   "video-depth": "어떤 동영상이든 가까운 곳은 밝게, 먼 곳은 어둡게 표시되는 깊이 동영상으로 바꿉니다. Video Depth Anything 또는 프레임별 Depth Anything으로, 그레이스케일이나 컬러맵으로 만듭니다.",
   "video-mask": "말로 설명한 대상을 SAM 3.1 또는 SAM 3으로 클립 전체에서 추적해 흑백 마스크 동영상을 만듭니다. 최대 5분 클립까지 지원합니다.",

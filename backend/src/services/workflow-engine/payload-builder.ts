@@ -179,6 +179,7 @@ import {
   isVeoProvider,
   isSeedance2Provider,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   isTailExtendProvider,
   isPixverseExtendProvider,
   isGrokExtendProvider,
@@ -5453,7 +5454,8 @@ function buildPayloadOf(
     }
 
     case "video-to-video": {
-      const v2vProvider = (data.provider as string) ?? "wan"
+      // A node that stores no model runs the default (Seedance 2.5 edit).
+      const v2vProvider = videoToVideoProviderOf(data.provider)
       // Resolve @-mentions in the v2v prompt. v2v has only a single
       // `referenceImageUrl` slot — when an upstream ref image is wired we
       // keep it; otherwise the first resolved mention URL fills it. Extra
@@ -5481,6 +5483,14 @@ function buildPayloadOf(
       // The source clip is reference video 1, which is what `{video:1}` in the
       // edit instruction resolves against. Mirrors the FE run (execute-node.ts).
       if (isSeedanceVideoEditProvider(v2vProvider)) {
+        // An edit needs an instruction, as the route refuses one without (and
+        // so does the editor): the bare "edit @video_1 as follows:" frame would
+        // run, and charge for, an edit of nothing.
+        if (!v2vPrompt?.trim()) {
+          const err = new Error(`prompt_required: node "${nodeLabel}" needs a prompt saying what to change in the clip.`) as Error & { code?: string }
+          err.code = "prompt_required"
+          throw err
+        }
         const editVideoUrl = (resolvedInputs.videoUrl || data.videoUrl) as string | undefined
         const editMention = resolveVideoPromptMentions(buildSeedanceVideoEditPrompt(v2vPrompt), node.id, buildCtx, readExtraRefs(data), {
           referenceOrder: readStringArray(data.referenceOrder),

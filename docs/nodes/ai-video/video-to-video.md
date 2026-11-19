@@ -1,18 +1,22 @@
 # Video to Video
 
-> Transform existing video using AI with a text prompt.
+> Edit an existing video by instruction with a text prompt.
 
 ## Overview
 
-The Video to Video node applies AI-powered transformations to an existing video based on a text prompt. Use it for style transfer, content modification, or creative re-interpretation of video footage.
+The Video to Video node edits an existing video from a text instruction: change the weather, the time of day, an object, a colour grade.
 
-What happens to your clip depends on the model. The edit models (Seedance 2.5 Edit, Wan 2.7 VideoEdit, HappyHorse Edit) change the clip itself. **Wan 2.6** and **Wan 2.6 Flash**, the default, do not: they take the subject of your clip and make a new clip of the scene your prompt describes — see [Supported Providers](#supported-providers).
+What happens to your clip depends on the model. The edit models (**Seedance 2.5 Edit**, the default, Seedance 2.5 Flash Edit, Wan 2.7 VideoEdit, HappyHorse Edit) change the clip itself. **Wan 2.6** and **Wan 2.6 Flash** do not: they take the subject of your clip and make a new clip of the scene your prompt describes — see [Supported Providers](#supported-providers).
+
+**A restyle is best done with Video Remake.** To change a clip's art style (anime, claymation, watercolor, …) while keeping its motion, camera and timing, use **Video Remake** with an art style (on Nodaro Cloud; elsewhere, where it is offered), not this node: MCP `video_remake` with `art_style`, the API's `POST /v1/video-remake` with `direction: { "style": "<style id>" }`, or the SDK's `client.videoRemake.run({ …, direction: { style } })`. The style is an id of the `style` picker catalog, on the Nodaro Prism engine. The edit models here are for edits by instruction.
+
+**A node, request or tool call that names no model runs Seedance 2.5 Edit.** That includes a Video to Video node saved before this was the default and never given a model. Such a run needs a prompt (the edit instruction) and a source clip of 4–30 seconds, renders at 480p unless a resolution is set (an API request that names `seedance-2-5` itself and no resolution keeps that lane's own 720p), keeps the clip's length and aspect ratio, and is priced as described under [Seedance 2.5 Edit — credits](#seedance-25-edit--credits). On an account that has never paid, and on a deployment that does not offer Seedance 2.5, it is refused with that reason; pick another model there.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | Select | wan | AI model for transformation |
+| Provider | Select | seedance-2-5 | AI model for the edit (a node with none set runs this one) |
 | Prompt | Textarea | — | Description of the desired transformation |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
@@ -248,21 +252,20 @@ measured are all one place — see Generate Video →
 ## Best Practices
 
 - Keep source video short (5-10s) for best results
-- On a model that edits the clip, describe the transformation clearly: "change to anime style" rather than describing the entire scene. On Wan 2.6 and Wan 2.6 Flash, describe the scene the new clip should show
+- On a model that edits the clip, describe the change clearly: "turn the day into a rainy night" rather than describing the entire scene. On Wan 2.6 and Wan 2.6 Flash, describe the scene the new clip should show
 - For Seedance 2.5 Edit: write the prompt as an instruction about the clip ("make it black and white", "the woman wears {image:1}") — it is read as one. Start at 480p while iterating; the reservation scales with resolution
 - For Wan 2.7 VideoEdit: connect a reference image to guide the visual style of the output
 - Use **Expand prompt** when your prompt is very brief — the AI fills in cinematic details
-- **Wan 2.6** and **Wan 2.6 Flash** do not edit your clip: they take its subject and make a new 5 s or 10 s clip of the scene your prompt describes. To restyle or edit the clip itself, pick **Seedance 2.5 Edit**, **Wan 2.7 VideoEdit** or **HappyHorse Edit**
+- **Wan 2.6** and **Wan 2.6 Flash** do not edit your clip: they take its subject and make a new 5 s or 10 s clip of the scene your prompt describes. To edit the clip itself, pick **Seedance 2.5 Edit** (the default), **Wan 2.7 VideoEdit** or **HappyHorse Edit**. A restyle is best done with Video Remake and an art style
 
 ## Common Use Cases
 
-- Apply artistic styles to recorded footage (painterly, anime, cinematic)
 - Change scene characteristics (day to night, summer to winter)
-- Create variations of existing video content
-- Transform live-action footage into animated styles
+- Change, add or remove something in the clip by instruction
+- Dress a person in a reference image, or place the scene in one (Seedance 2.5 Edit)
 
 ## Tips
 
-- V2V works best when the transformation is stylistic rather than structural — changing colors and textures works better than adding or removing objects
+- A new art style on the same motion (anime, claymation, a 3D look) is best done with Video Remake and an art style; this node's **Looks** presets are edits by instruction
 - For structural changes, consider using Image-to-Image on keyframes then Image-to-Video instead
 - Use consistent prompts when processing multiple clips for a project

@@ -1819,6 +1819,12 @@ const WAN_REFERENCE_TO_VIDEO_WORDING_BYTES = 504
 // tree with and without it: 556_233 total − 556_034 = 199 B; the list keeps the 7 B of headroom it
 // had.
 const TIGHTEN_TIGHTNESS_BYTES = 199
+// RAISED by modify_video's wording and nothing else: its description and its `model` and `resolution`
+// arguments name Seedance 2.5 edit as the default, send a restyle to `video_remake` and keep the two
+// Wan 2.6 models out of any edit. No tool was added, so the membership fixtures do NOT move. Measured
+// by this suite on the same tree with the wording before and after (on top of the pauses above): 556_233 B, then 556_290 B, 57 B
+// more; the list keeps the headroom it had.
+const MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES = 57
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -2047,7 +2053,8 @@ export const TOOL_WIRE_BUDGET = {
     TRENDS_ORIGINAL_LOOK_BYTES +
     PODCAST_PACK_TOOL_BYTES +
     WAN_REFERENCE_TO_VIDEO_WORDING_BYTES +
-    TIGHTEN_TIGHTNESS_BYTES,
+    TIGHTEN_TIGHTNESS_BYTES +
+    MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

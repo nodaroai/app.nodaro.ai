@@ -218,9 +218,16 @@ describe("normalizeNodeModelParams — a stored reference task type (decided 202
     nodes.forEach((n, i) => expect(n).toBe(input[i]))
   })
 
-  it("a node naming no model is judged on the model its run uses (none of today's defaults lists one)", () => {
+  it("a node naming no model is judged on the model its run uses", () => {
     for (const type of VIDEO_TYPES) {
-      const { nodes, adjustments } = normalizeNodeModelParams([node("d", type, { referenceTaskType: "edit" })])
+      const input = [node("d", type, { referenceTaskType: "edit" })]
+      const { nodes, adjustments } = normalizeNodeModelParams(input)
+      // Video to Video's default is Seedance 2.5 edit, which lists task types: the field stays.
+      if (type === "video-to-video") {
+        expect(nodes[0], type).toBe(input[0])
+        expect(adjustments, type).toEqual([])
+        continue
+      }
       expect(nodes[0]!.data, type).toStrictEqual({})
       expect(adjustments.map((a) => a.field), type).toEqual(["referenceTaskType"])
     }

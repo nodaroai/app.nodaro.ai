@@ -32,7 +32,7 @@ import {
 } from "@nodaro/shared/credits"
 import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPE_IDS, VIDEO_PRODUCER_TYPES, settingsProviderModels } from "@nodaro/shared/nodes"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { canonicalVideoProvider, DEFAULT_VIDEO_TO_VIDEO_PROVIDER, isGrokExtendProvider, isPixverseExtendProvider, isSeedanceVideoEditProvider, pricedOutputDurationSec, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE } from "@nodaro/shared/models"
+import { canonicalVideoProvider, videoToVideoProviderOf, isGrokExtendProvider, isPixverseExtendProvider, isSeedanceVideoEditProvider, pricedOutputDurationSec, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE } from "@nodaro/shared/models"
 import { PRO3D_RENDER_LIMITS } from "@nodaro/shared/scene3d"
 import { maskCompositeLeadHandle } from "@nodaro/shared/media"
 import { referenceModalityForHandle } from "@nodaro/shared/workflow"
@@ -253,7 +253,7 @@ const STITCH_SLACK_SEC = 1
 export function seedanceEditChargedLength(node: OutputLengthNode, inputs: readonly OutputWireInput[]): OutputWireLength | undefined {
   if (node.type !== "video-to-video") return undefined
   const data = dataOf(node)
-  const provider = typeof data.provider === "string" && data.provider !== "" ? data.provider : DEFAULT_VIDEO_TO_VIDEO_PROVIDER
+  const provider = videoToVideoProviderOf(data.provider)
   if (!isSeedanceVideoEditProvider(provider)) return undefined
   const bound = lengthFollowingBoundSec({ provider, duration: SEEDANCE_VIDEO_EDIT_SHAPE.duration })
   if (bound === undefined) return undefined
@@ -363,7 +363,7 @@ function motionTransferLength(_node: OutputLengthNode, inputs: readonly OutputWi
 function videoToVideoLength(node: OutputLengthNode, inputs: readonly OutputWireInput[], ctx?: OutputLengthContext): OutputWireLength {
   const data = dataOf(node)
   const input = knownOutputLength(videoIn(inputs))
-  const provider = data.provider as string | undefined
+  const provider = videoToVideoProviderOf(data.provider)
   if (ctx?.measured && isSeedanceVideoEditProvider(provider)) {
     const clip = input && input.perEpisodeSec === 0 ? input.fixedSec : undefined
     const auto = SEEDANCE_VIDEO_EDIT_SHAPE.duration

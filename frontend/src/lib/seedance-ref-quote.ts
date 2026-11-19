@@ -28,6 +28,7 @@ import {
   billsReferenceVideoSeconds,
   isGeminiOmniPerSecondProvider,
   isSeedanceVideoEditProvider,
+  videoToVideoProviderOf,
   listedSeedanceTaskType,
 } from "@nodaro/shared/models"
 import {
@@ -117,7 +118,8 @@ export function seedanceRefQuoteRequest(
     resolution = data.resolution as string | undefined
     duration = sel.duration
   } else {
-    provider = (data.provider as string | undefined) ?? ""
+    // A node that stores no model runs the default (Seedance 2.5 edit).
+    provider = videoToVideoProviderOf(data.provider)
     if (!isSeedanceVideoEditProvider(provider)) return undefined
     resolution = data.v2vResolution as string | undefined
     duration = VIDEO_DURATION_AUTO

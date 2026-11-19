@@ -944,13 +944,13 @@
       "family": "Continue & Restyle",
       "link": "https://nodaro.ai/docs/node/video-to-video",
       "page": "https://nodaro.ai/docs/nodes/video/video-to-video",
-      "summary": "Transform a whole video from a prompt. Restyle footage as anime or claymation, turn day into night, or edit a clip by instruction with Seedance 2.5 Edit.",
+      "summary": "Edit an existing video by instruction: turn day into night, change the weather or swap an object. Seedance 2.5 Edit keeps the clip's length and framing.",
       "summaries": {
-        "en": "Transform a whole video from a prompt. Restyle footage as anime or claymation, turn day into night, or edit a clip by instruction with Seedance 2.5 Edit.",
-        "ja": "プロンプトで動画全体を変換します。映像をアニメ風やクレイアニメ風に変えたり、昼を夜にしたり、Seedance 2.5 Edit で指示どおりにクリップを編集したりできます。",
-        "ko": "프롬프트로 동영상 전체를 바꾸세요. 영상을 애니메이션이나 클레이 애니메이션으로 바꾸고, 낮을 밤으로 바꾸거나, Seedance 2.5 Edit으로 지시문을 써서 클립을 편집합니다.",
-        "pt-BR": "Transforme um vídeo inteiro com um prompt: mude o estilo para anime ou massinha, faça o dia virar noite ou edite por instrução com o Seedance 2.5 Edit.",
-        "he": "שנו סרטון שלם לפי פרומפט: עצבו אותו מחדש כאנימה או כאנימציית פלסטלינה, הפכו יום ללילה, או ערכו קליפ לפי הוראה עם Seedance 2.5 Edit."
+        "en": "Edit an existing video by instruction: turn day into night, change the weather or swap an object. Seedance 2.5 Edit keeps the clip's length and framing.",
+        "ja": "既存の動画を指示どおりに編集します。昼を夜にしたり、天気を変えたり、物を入れ替えたりできます。Seedance 2.5 Edit はクリップの長さと構図を保ちます。",
+        "ko": "기존 동영상을 지시문으로 편집하세요. 낮을 밤으로 바꾸고, 날씨를 바꾸거나 사물을 교체합니다. Seedance 2.5 Edit은 클립의 길이와 구도를 유지합니다.",
+        "pt-BR": "Edite um vídeo existente por instrução: faça o dia virar noite, mude o clima ou troque um objeto. O Seedance 2.5 Edit mantém a duração e o enquadramento.",
+        "he": "ערכו סרטון קיים לפי הוראה: הפכו יום ללילה, שנו את מזג האוויר או החליפו חפץ. Seedance 2.5 Edit שומר על אורך הקליפ ועל הפריים."
       },
       "sections": [
         "when-to-use",

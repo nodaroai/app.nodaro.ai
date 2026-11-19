@@ -519,7 +519,7 @@ const PRESET_GROUPS_KO: Record<string, string> = {
   "Realism & Authentic": "사실감과 자연스러움",
   "Reference Sheet": "레퍼런스 시트",
   "Relight & Composite": "조명 변경 및 합성",
-  "Restyle Looks": "스타일 변환",
+  "Looks": "룩",
   "Revoice Styles": "보이스 변환 스타일",
   "Scene Recipes": "장면 레시피",
   "Seedance Director": "Seedance 디렉터",

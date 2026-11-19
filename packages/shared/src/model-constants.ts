@@ -1559,11 +1559,31 @@ export const VIDEO_TO_VIDEO_NODE_PROVIDERS = [...VIDEO_TO_VIDEO_PROVIDERS, ...SE
 export type VideoToVideoNodeProvider = typeof VIDEO_TO_VIDEO_NODE_PROVIDERS[number]
 
 /**
- * The model a Video to Video request or node that names none runs on: the
- * route's and the worker's default, and what the node's model menu shows for an
- * unset model. One constant, so the server and the editor cannot disagree.
+ * The model a Video to Video request or node that names none runs on: Seedance
+ * 2.5, which edits the clip by instruction. One constant, read through
+ * {@link videoToVideoProviderOf} by the route, the MCP tool, the workflow run
+ * and every editor surface, so a quote, a hold and a run always name the same
+ * model.
  */
-export const DEFAULT_VIDEO_TO_VIDEO_PROVIDER: VideoToVideoNodeProvider = "wan"
+export const DEFAULT_VIDEO_TO_VIDEO_PROVIDER: VideoToVideoNodeProvider = "seedance-2-5"
+
+/**
+ * The model a Video to Video request body or node runs on: the one it names,
+ * else {@link DEFAULT_VIDEO_TO_VIDEO_PROVIDER}. Anything but a non-empty string
+ * reads as unnamed. The ONE place the default is resolved.
+ */
+export function videoToVideoProviderOf(named: unknown): string {
+  return typeof named === "string" && named !== "" ? named : DEFAULT_VIDEO_TO_VIDEO_PROVIDER
+}
+
+/**
+ * The model of a `video-to-video` job that is ALREADY QUEUED with no provider.
+ * Such a job was created while the default was Wan 2.6 and was priced as one,
+ * and a Seedance edit is never a `video-to-video` job (it runs as
+ * `text-to-video`), so it is by construction a Wan job. Only the worker side
+ * reads this; a new request never does.
+ */
+export const QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER: VideoToVideoProvider = "wan"
 
 /**
  * The request shape Seedance edit mode requires, sent UP FRONT by the Video to

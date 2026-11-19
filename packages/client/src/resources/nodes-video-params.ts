@@ -3,8 +3,10 @@ import type { GenerationSessionParams } from "./nodes.js"
 
 /**
  * Typed request body for `nodes.run("video-to-video", …)` / `runAndWait` /
- * `quote` — `POST /v1/video-to-video`: change or restyle an existing clip from
- * a prompt. Mirrors the route's body; fields a model does not use are ignored
+ * `quote` — `POST /v1/video-to-video`: edit an existing clip by instruction.
+ * To restyle a clip (keep its motion, camera and timing, change the art style)
+ * use `client.videoRemake.run({ …, direction: { style } })` (Nodaro Cloud)
+ * instead. Mirrors the route's body; fields a model does not use are ignored
  * by that model.
  */
 export interface VideoToVideoParams extends GenerationSessionParams {
@@ -15,15 +17,19 @@ export interface VideoToVideoParams extends GenerationSessionParams {
   prompt?: string
   /** The person's own words, kept for the record when `prompt` was rewritten. */
   userPrompt?: string
-  /** Default `"wan"`. `seedance-2-5` edits the whole clip and is priced by the
-   *  clip's length (see `nodes.quote`). The platform tells Seedance the run is
+  /** Default `"seedance-2-5"`, which edits the whole clip by instruction (it
+   *  needs a `prompt` and a 4–30 s clip) and is priced by the clip's length
+   *  (see `nodes.quote`). `wan` / `wan-flash` do not edit the clip: they make a
+   *  new clip featuring its subject. The platform tells Seedance the run is
    *  an edit when every clip (`videoUrl` and `referenceVideoUrls`) is 4–30 s
    *  long (a draft included), so this lane takes no `referenceTaskType` of its own. */
   provider?: VideoToVideoNodeProvider
   /** Wan / Wan Flash. A Seedance edit ignores it: the result keeps the source
    *  clip's own length. */
   duration?: "5" | "10"
-  /** `480p` is Seedance only. */
+  /** `480p` is Seedance only. A request naming neither a `provider` nor a
+   *  `resolution` renders at 480p; one naming `seedance-2-5` and no resolution
+   *  renders at 720p. */
   resolution?: "480p" | "720p" | "1080p"
   /** Native audio: Wan Flash's audio track, Seedance's generated sound. */
   audio?: boolean

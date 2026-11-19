@@ -27,12 +27,12 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
 import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, geminiOmniExtendQuoteCreditId, motionTransferResolution } from "@nodaro/shared/credits"
-import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders } from "@nodaro/shared/video"
+import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders, uiResolutionFill } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
 import { applyPromptAffixes } from "@nodaro/prompts/prompt-fields"
@@ -1654,33 +1654,33 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── modify_video (video-to-video) ──
-  // Wan 2.6 / Wan Flash make a new clip featuring the input video's subject
-  // (reference-to-video, not an edit); the Seedance 2.5 edit models, Wan 2.7
-  // VideoEdit and HappyHorse Edit edit the clip itself; Runway Aleph for stylised
-  // edits with reference-image guidance. Mirrors modify_image for the video
-  // domain — gallery widget already pushes "edit this video" follow-ups.
+  // The default, Seedance 2.5, edits the clip by instruction (as do Seedance 2.5
+  // Flash, Wan 2.7 VideoEdit and HappyHorse Edit). Wan 2.6 / Wan Flash stay
+  // selectable but make a new clip featuring the input video's subject
+  // (reference-to-video, not an edit). A restyle (a new art style on the same
+  // motion) is Video Remake's (`video_remake`), never this tool's.
   server.registerTool(
     "modify_video",
     {
       title: "Modify Video",
       description:
-        "PRIMARY tool for video-to-video / restyle / clip-edit workflows. Use " +
+        "PRIMARY tool for editing a clip by instruction (video-to-video). Use " +
         "it directly; do NOT search the apps marketplace.\n\n" +
+        "To RESTYLE a clip (keep its motion, camera and timing, change the art " +
+        "style: anime, claymation, …) use `video_remake` with `art_style` " +
+        "where it is offered, not this tool.\n\n" +
         "Provide `video_url` (public HTTPS) or `video_asset_id` (a Nodaro job " +
-        "id whose output is a video), plus a `prompt` describing the change " +
-        "(on `wan` / `wan-flash`: the new scene).\n\n" +
+        "id whose output is a video), plus a `prompt` saying what to change.\n\n" +
         "**Models**:\n" +
-        "  • **`wan`** (default, Wan 2.6) — NOT a restyle or an edit: a NEW 5s or " +
-        "10s clip (720p or 1080p) featuring the input video's subject, in the " +
-        "scene the prompt describes.\n" +
-        "  • **`wan-flash`** — the same, faster; `audio: true` generates it with " +
-        "audio, `multi_shots: true` allows several shots.\n" +
-        "  • To restyle or edit the clip itself, pick a model that edits it: " +
-        "`seedance-2-5` / `seedance-2-5-flash` (by instruction, keeps length and " +
-        "ratio), `wan-videoedit` (guided edit) or `happyhorse-edit` (by " +
-        "instruction, e.g. a style transfer).\n" +
-        "  • **`runway-aleph`** — stylised edits guided by an optional " +
-        "`reference_image_url`; more aspect ratios.",
+        "  • **`seedance-2-5`** (default) / `seedance-2-5-flash` — edit the clip " +
+        "by instruction; the result keeps its length and ratio (clip 4-30s).\n" +
+        "  • `wan-videoedit` (guided edit) and `happyhorse-edit` (edit by " +
+        "instruction) also edit the clip itself.\n" +
+        "  • **`runway-aleph`** — edits guided by an optional " +
+        "`reference_image_url`; more aspect ratios.\n" +
+        "  • `wan` / `wan-flash` — NOT an edit or a restyle: a NEW 5s or 10s clip " +
+        "featuring the input video's subject, in the scene the prompt describes " +
+        "(`wan-flash`: faster; `audio`, `multi_shots`).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
         video_url: z.string().url().optional(),
@@ -1689,15 +1689,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
-            "`wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. " +
+            `Default \`seedance-2-5\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
             "An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping " +
             "length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). " +
+            "`wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. " +
             "`happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged " +
             `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Wan / Wan Flash / happyhorse-edit (720p/1080p), seedance-2-5 (480p-1080p), seedance-2-5-flash (480p/720p)."),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)."),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
@@ -1751,7 +1751,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           isError: true,
         }
       }
-      const provider = args.model ?? "wan"
+      const provider = videoToVideoProviderOf(args.model)
       // Seedance edits a REFERENCE video (no v2v endpoint): dispatch through the
       // one Seedance reference-video lane, in edit shape, the clip as {video:1}.
       if (!isSeedanceVideoEditProvider(provider) && (args.reference_image_urls || args.reference_video_urls || args.reference_audio_urls)) {
@@ -1761,6 +1761,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         }
       }
       if (isSeedanceVideoEditProvider(provider)) {
+        const editResolution = args.resolution ?? (!args.model && args.draft !== true ? uiResolutionFill(provider) : undefined)
         // Same numbering as POST /v1/video-to-video: reference_image_url first.
         const refs = [...(args.reference_image_url ? [args.reference_image_url] : []), ...(args.reference_image_urls ?? [])]
         return dispatchJob(fastify, session, {
@@ -1771,7 +1772,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             ...SEEDANCE_VIDEO_EDIT_SHAPE,
             // Requested; the route declares it only when the clips qualify.
             referenceTaskType: SEEDANCE_VIDEO_EDIT_TASK_TYPE,
-            ...(args.resolution ? { resolution: args.resolution } : {}),
+            // No model and no resolution: the size a node with none set renders (as the route fills it).
+            ...(editResolution ? { resolution: editResolution } : {}),
             ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
             referenceVideoUrls: [videoUrl, ...(args.reference_video_urls ?? [])],
             ...(refs.length ? { referenceImageUrls: refs } : {}),
@@ -1782,7 +1784,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           },
           label: "video-to-video",
           widgetKind: "video",
-          widgetData: { prompt: args.prompt, model: provider, aspectRatio: SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio, resolution: args.resolution },
+          widgetData: { prompt: args.prompt, model: provider, aspectRatio: SEEDANCE_VIDEO_EDIT_SHAPE.aspectRatio, resolution: editResolution },
         })
       }
       const payload: Record<string, unknown> = {

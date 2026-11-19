@@ -533,7 +533,7 @@ const PRESET_GROUPS_HE: Record<string, string> = {
   "Realism & Authentic": "ריאליזם ואותנטיות",
   "Reference Sheet": "גיליון ייחוס",
   "Relight & Composite": "תאורה מחדש והרכבה",
-  "Restyle Looks": "עיצוב מראה מחדש",
+  "Looks": "מראות",
   "Revoice Styles": "סגנונות החלפת קול",
   "Scene Recipes": "מתכוני סצנה",
   "Seedance Director": "בימוי Seedance",

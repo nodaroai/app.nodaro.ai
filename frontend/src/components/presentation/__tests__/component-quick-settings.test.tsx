@@ -23,8 +23,9 @@ describe("quickExposedSetting — what a component publishes for a strip-derived
 
   it("an unset field publishes the value the node runs as", () => {
     const s = quickExposedSetting(field("video-to-video", "provider"), { id: "v2v", type: "video-to-video", data: {} }, "Restyle — Model")
-    expect(s.defaultValue).toBe("wan")
+    expect(s.defaultValue).toBe("seedance-2-5")
     // A fixed list keeps its options and typed allowed values.
+    expect(s.allowedValues).toContain("seedance-2-5")
     expect(s.allowedValues).toContain("wan")
   })
 

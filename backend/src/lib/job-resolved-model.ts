@@ -32,7 +32,7 @@ import { DEFAULT_VIDEO_MASK_PROVIDER } from "@nodaro/shared/media"
 import {
   CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf,
   IMAGE_TO_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER,
-  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_DEPTH_DEFAULT_PROVIDER, VIDEO_RETAKE_MODEL, VIDEO_TO_VIDEO_DEFAULT_PROVIDER,
+  OBJECT_MOTION_DEFAULT_PROVIDER, TEXT_TO_VIDEO_DEFAULT_PROVIDER, VIDEO_DEPTH_DEFAULT_PROVIDER, VIDEO_RETAKE_MODEL, QUEUED_VIDEO_TO_VIDEO_PROVIDER,
   VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER, type GenerateImageModelInput,
 } from "../workers/handlers/default-models.js"
 import { lottieModelId } from "./lottie-request.js"
@@ -94,7 +94,9 @@ export const RESOLVED_MODEL_OF_JOB: Readonly<Record<string, (d: Data) => string 
   "image-to-video": withDefault(IMAGE_TO_VIDEO_DEFAULT_PROVIDER),
   "text-to-video": withDefault(TEXT_TO_VIDEO_DEFAULT_PROVIDER),
   "voiced-video": withDefault(VOICED_VIDEO_DEFAULT_PROVIDER),
-  "video-to-video": withDefault(VIDEO_TO_VIDEO_DEFAULT_PROVIDER),
+  // No provider = a job queued before the default moved off Wan 2.6 (default-models.ts);
+  // the route names the provider in the body before its guard reads this.
+  "video-to-video": withDefault(QUEUED_VIDEO_TO_VIDEO_PROVIDER),
   "motion-transfer": motionTransfer,
   "lip-sync": withDefault(LIP_SYNC_DEFAULT_PROVIDER),
   "video-upscale": videoUpscale,

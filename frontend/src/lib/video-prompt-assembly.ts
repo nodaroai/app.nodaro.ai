@@ -17,7 +17,7 @@
 
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ExtraRef } from "@/types/nodes"
 import { aliasRetiredCharacterMentions, characterMentionSlug, characterMentionableAssetArrays, characterOwnName, entityImageUrl, resolveEffectiveSourceType, wiredCharacterBySlug, wiredCharacterNamesOf, type WiredCharacterName } from "@nodaro/shared/entities"
-import { isGeminiOmniProvider, isSeedanceVideoEditProvider, extractCharacterLoraFields, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { isGeminiOmniProvider, isSeedanceVideoEditProvider, videoToVideoProviderOf, extractCharacterLoraFields, resolveVideoProviderForMode } from "@nodaro/shared/models"
 import { hasFeature } from "@nodaro/shared/model-catalog"
 import { countRefModalityEdges, type ReferenceModality } from "@nodaro/shared/workflow"
 import { appendPromptHints, computeNodePrompt } from "@nodaro/prompts/prompt-fields"
@@ -548,7 +548,8 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   // handler's reference-image feature check, so split-id models (Grok/Wan) gate
   // refs by the right id. Mirror that remap here. Standalone i2v/t2v already store
   // a mode-specific id, so they pass through untouched (no behaviour change).
-  const rawProvider = data.provider as string | undefined
+  // A Video to Video node that stores no model runs the default (Seedance 2.5 edit).
+  const rawProvider = nodeType === "video-to-video" ? videoToVideoProviderOf(data.provider) : data.provider as string | undefined
   const provider =
     nodeType === "generate-video" && rawProvider
       ? resolveVideoProviderForMode(rawProvider, effectiveType as "image-to-video" | "text-to-video")

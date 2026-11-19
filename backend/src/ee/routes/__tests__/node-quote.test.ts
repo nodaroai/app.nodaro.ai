@@ -682,3 +682,97 @@ describe("POST /v1/quote reads the run body as the run's route does", () => {
     expect(vi.mocked(callerBodyOf).mock.results[0]?.value).toEqual({ prompt: "a quiet street at dawn" })
   })
 })
+
+// A request that names no model is a Seedance 2.5 edit: the route's first
+// pre-check writes the default into the body, so the quote, the guard's model
+// door, the hold and the queued job all read that one model.
+describe("/v1/video-to-video with no model named", () => {
+  const BARE = { videoUrl: CLIP, prompt: "make it black and white" }
+
+  it("quotes, holds and queues the Seedance 2.5 edit, at the model's first resolution", async () => {
+    const { seedanceVideoEditCreditId } = await import("@nodaro/shared/credits")
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const { quote, identifier, reserved } = await quoteThenRun("video-to-video", BARE)
+    expect(identifier).toBe(seedanceVideoEditCreditId("seedance-2-5", "480p"))
+    expect(identifier).toBe(seedanceVideoEditCreditId("seedance-2-5"))
+    expect(quote.identifier).toBe(identifier)
+    expect(quote.reserve).toBe(reserved)
+    // The 10 s clip, in and out, on the 480p reference ladder.
+    expect(quote.expected).toBe(mk(Math.ceil(42.5 * 20)))
+    const [name, queued] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+    expect(name).toBe("text-to-video")
+    expect(queued).toMatchObject({
+      provider: "seedance-2-5",
+      prompt: "edit @video_1 as follows:\nmake it black and white",
+      duration: -1,
+      aspectRatio: "adaptive",
+      resolution: "480p",
+      referenceVideoUrls: [CLIP],
+    })
+  })
+
+  it("is the very request an explicit seedance-2-5 makes, the levers of the former default dropped", async () => {
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const queuedFor = async (payload: Record<string, unknown>) => {
+      vi.clearAllMocks()
+      const app = await buildApp()
+      const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload })
+      expect(res.statusCode, res.body).toBe(200)
+      const [name, queued] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+      const [, , identifier, , , options] = reserveSpy.mock.calls[0]! as [string, string, string, number, number, { creditOverride?: number }]
+      await app.close()
+      return { name, queued, identifier, creditOverride: options?.creditOverride }
+    }
+    // With no model and no resolution the default renders at its first resolution, as a node with none set does.
+    const named = await queuedFor({ ...BARE, provider: "seedance-2-5", resolution: "480p" })
+    // What a caller of the former default sent: a length, an aspect ratio, a multi-shot switch.
+    const bare = await queuedFor({ ...BARE, duration: "10", aspectRatio: "16:9", multiShots: true })
+    expect(bare.name).toBe(named.name)
+    expect(bare.identifier).toBe(named.identifier)
+    expect(bare.creditOverride).toBe(named.creditOverride)
+    expect(bare.queued).toEqual(named.queued)
+    expect(bare.queued).toMatchObject({ duration: -1, aspectRatio: "adaptive" })
+    expect(bare.queued).not.toHaveProperty("multiShots")
+  })
+
+  it("is refused without a prompt, by the quote and by the run, with nothing held", async () => {
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const app = await buildApp()
+    for (const url of ["/v1/quote", "/v1/video-to-video"]) {
+      const payload = url === "/v1/quote" ? { type: "video-to-video", params: { videoUrl: CLIP } } : { videoUrl: CLIP }
+      const res = await app.inject({ method: "POST", url, payload })
+      expect(res.statusCode, `${url}: ${res.body}`).toBe(400)
+      expect(res.json().error.message, url).toContain("prompt is required for a Seedance edit")
+    }
+    expect(reserveSpy).not.toHaveBeenCalled()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it("is refused where the deployment does not offer Seedance 2.5, as an explicit request is", async () => {
+    deniedModels.add("seedance-2-5")
+    try {
+      const app = await buildApp()
+      for (const payload of [BARE, { ...BARE, provider: "seedance-2-5" }]) {
+        const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload })
+        expect(res.statusCode, res.body).toBe(403)
+        expect(res.json().error.code).toBe("model_not_available")
+      }
+      expect(reserveSpy).not.toHaveBeenCalled()
+      await app.close()
+    } finally {
+      deniedModels.delete("seedance-2-5")
+    }
+  })
+
+  it("an explicit wan request is unchanged: its flat row, its own lane, its own levers", async () => {
+    const { videoQueue } = await import("../../../lib/queue.js")
+    const { quote, identifier, reserved } = await quoteThenRun("video-to-video", { videoUrl: CLIP, provider: "wan", duration: "10", resolution: "1080p" })
+    expect(identifier).toBe("wan")
+    expect(quote).toMatchObject({ identifier: "wan", reserve: reserved, adjustments: [], warnings: [] })
+    const [name, queued] = vi.mocked(videoQueue.add).mock.calls.at(-1)! as [string, Record<string, unknown>]
+    expect(name).toBe("video-to-video")
+    expect(queued).toMatchObject({ provider: "wan", duration: "10", resolution: "1080p", videoUrl: CLIP })
+    expect(queued).not.toHaveProperty("referenceVideoUrls")
+  })
+})

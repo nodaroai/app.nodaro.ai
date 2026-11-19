@@ -47,6 +47,22 @@ describe("Seedance 2.5 reference-video quote — Generate Video ≡ Video to Vid
     expect(videoToVideo({ v2vResolution: "720p", draft: true })).toBe("seedance-2-5:30s:480p-ref")
   })
 
+  // A Video to Video node that stores no model runs the default, Seedance 2.5 edit.
+  it("a Video to Video node with no model is quoted as the Seedance 2.5 edit it runs", () => {
+    const bare = (data: Record<string, unknown>) => {
+      const v2v = node("v2v", "video-to-video", data)
+      const edges = [{ id: "e1", source: "clip", target: "v2v", sourceHandle: "video", targetHandle: "video" } as WorkflowEdge]
+      return getModelIdentifier(v2v, edges, [clip, v2v])
+    }
+    expect(bare({})).toBe(videoToVideo({}))
+    expect(bare({})).toBe("seedance-2-5:30s:480p-ref")
+    expect(bare({ v2vResolution: "720p" })).toBe(videoToVideo({ v2vResolution: "720p" }))
+    // What a node saved under the former default carries changes nothing.
+    expect(bare({ duration: 5, v2vDuration: "10", multiShots: true })).toBe("seedance-2-5:30s:480p-ref")
+    // A node naming Wan 2.6 keeps its own flat row.
+    expect(bare({ provider: "wan" })).toBe("wan")
+  })
+
   it("Generate Video with no reference video wired stays on the plain ladder", () => {
     expect(generateVideo({ resolution: "720p" }, false)).toBe("seedance-2-5:30s:720p")
   })

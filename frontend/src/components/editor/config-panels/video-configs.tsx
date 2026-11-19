@@ -70,7 +70,7 @@ import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
-import { DEFAULT_VIDEO_TO_VIDEO_PROVIDER, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
+import { videoToVideoProviderOf, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
@@ -1466,9 +1466,9 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     snippets: promptSnippets,
     negativeSnippets,
     // Video negative-routing prediction — matches this panel's effective provider.
-    videoProvider: data.provider || DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
+    videoProvider: videoToVideoProviderOf(data.provider),
   })
-  const provider = data.provider || DEFAULT_VIDEO_TO_VIDEO_PROVIDER
+  const provider = videoToVideoProviderOf(data.provider)
   const offeredV2vModels = useOfferedModels(VIDEO_V2V_MODELS, { nodeType: "video-to-video" }, provider)
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
