@@ -37,6 +37,8 @@ const NOT_SETTINGS: Readonly<Record<string, string>> = {
   "POST /v1/admin/video-remake/steps/check": "asks the engine to check a steps draft; writes nothing",
   "GET /v1/admin/video-remake/custom-style/defaults": "the engine's defaults for the custom style's two steps",
   "POST /v1/admin/video-remake/custom-style/check": "asks the engine to check a custom style draft; writes nothing",
+  "GET /v1/admin/video-remake/plan-roles/defaults": "the engine's defaults for the planning step of roles from the prompt",
+  "POST /v1/admin/video-remake/plan-roles/check": "asks the engine to check a plan-roles draft; writes nothing",
   "GET /v1/admin/video-remake/settings-sets": "the stored sets themselves",
   "POST /v1/admin/video-remake/settings-sets": "the stored sets themselves",
   "PUT /v1/admin/video-remake/settings-sets/:id": "the stored sets themselves",
@@ -62,6 +64,7 @@ const SAMPLES: Readonly<Record<string, unknown>> = {
   "precise-style-route": { preciseStyleRoute: { routing: "off", bypassEmails: [" Tester@Example.com ", "tester@example.com"] } },
   advanced: { show: true },
   "custom-style": { customStyle: { enabled: false, medium: { instructions: "Read the words.", model: " some-model " }, describe: { instructions: "  " } } },
+  "plan-roles": { planRoles: { enabled: false, plan: { instructions: "Place each image.", model: " some-model " } } },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces.", avoid: "" } } } },
 }
 

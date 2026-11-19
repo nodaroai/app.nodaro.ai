@@ -157,6 +157,8 @@ import { engineTakesNoPersonSourceClip, noPersonForPlugin } from "../nodaro-moti
 import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
 import { customStyleForPlugin, engineTakesCustomStyle } from "../nodaro-motion-custom-style.js"
 import { customStyleOfferedByDefault } from "../nodaro-motion-custom-style-default.js"
+import { engineTakesPlanRoles, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
+import { planRolesOfferedByDefault } from "../nodaro-motion-plan-roles-default.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1732,6 +1734,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionPreciseStyleRoute: true,
   // tk.settings.nodaroMotionCustomStyle(): whether this deployment offers Video Remake's custom style (resolved here), and the admin's two LLM steps.
   nodaroMotionCustomStyle: true,
+  // tk.settings.nodaroMotionPlanRoles(): whether this deployment offers Video Remake's roles planned from the prompt (resolved here), and the admin's planning step.
+  nodaroMotionPlanRoles: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2487,6 +2491,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_custom_style: the app settings could not be read")
         if (!engineTakesCustomStyle(getPluginSupports().castSwap)) return null
         return customStyleForPlugin(settings.nodaro_motion_custom_style, customStyleOfferedByDefault())
+      },
+      // Same rules again: a failed read throws (the engine reads that as not offered, with an alert). Null only to
+      // an engine that does not declare `castSwap.planRoles` (it never asks). Otherwise ALWAYS an object, never
+      // saved included, with `enabled` resolved here (the admin's saved choice, else this deployment's default:
+      // on for Nodaro's own, off under a white-label surface profile).
+      nodaroMotionPlanRoles: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_plan_roles: the app settings could not be read")
+        if (!engineTakesPlanRoles(getPluginSupports().castSwap)) return null
+        return planRolesForPlugin(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault())
       },
     },
     deployment: { publicUrl: appBaseUrl() },

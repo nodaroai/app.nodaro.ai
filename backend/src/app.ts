@@ -405,6 +405,7 @@ import { registerAuthHook } from "./middleware/auth.js"
 import { registerInputLinkJudge } from "./middleware/input-links.js"
 import { registerNetworkBlockHook } from "./middleware/network-block.js"
 import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
+import { registerPlanRolesDailyLimit } from "./lib/plan-roles-daily-limit.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
@@ -655,6 +656,8 @@ export async function buildApp() {
   if (hasAdmin()) app.addHook("onResponse", async (req, reply) => recordUserSurface(req, reply.statusCode))
   // App-token scopes for routes a private plugin serves (it cannot see the grant).
   registerPluginRouteScopeHook(app)
+  // An account's daily allowance of Video Remake's role planning (a free route the engine serves).
+  registerPlanRolesDailyLimit(app)
   // A personal API key limited to some workflows reaches only the routes that
   // declare which workflow they touch (`config.workflowScope`); everything
   // else refuses it. Before every route's own preHandlers (creditGuard among

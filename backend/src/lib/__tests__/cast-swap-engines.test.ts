@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, withWireLengthKey } from "../cast-swap-engines.js"
+import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, withWireLengthKey } from "../cast-swap-engines.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
 /**
@@ -82,6 +82,20 @@ describe("loadedEngineTakesCustomStyle", () => {
     expect(loadedEngineTakesCustomStyle()).toBe(false)
     setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: true, customStyle: true } as never })
     expect(loadedEngineTakesCustomStyle()).toBe(true)
+  })
+})
+
+describe("loadedEngineTakesPlanRoles", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("is true only where the loaded engine declares roles planned from the prompt (castSwap.planRoles), whatever else it takes", () => {
+    expect(loadedEngineTakesPlanRoles()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, customStyle: true } as never })
+    expect(loadedEngineTakesPlanRoles()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, customStyle: true, planRoles: false } as never })
+    expect(loadedEngineTakesPlanRoles()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, customStyle: true, planRoles: true } as never })
+    expect(loadedEngineTakesPlanRoles()).toBe(true)
   })
 })
 

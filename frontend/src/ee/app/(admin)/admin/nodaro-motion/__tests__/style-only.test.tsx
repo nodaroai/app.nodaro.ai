@@ -75,6 +75,7 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
   // The custom style (custom-style.test.tsx): never saved, and an engine that takes none (nothing more is asked).
   routes["GET /v1/admin/video-remake/custom-style"] = () => ({ body: { data: { customStyle: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
+  routes["GET /v1/admin/video-remake/plan-roles"] = () => ({ body: { data: { planRoles: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
   routes["GET /v1/admin/video-remake/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
   routes[`GET ${PARTS}`] = () => partsView(null)
   routes[`POST ${PARTS}/preview`] = (init) => {

@@ -162,6 +162,9 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   // A picture's visual style put into words, for a run's custom style: no job
   // and no charge, but a model the same engine runs (its model and node checks).
   "/v1/cast-swap/describe-style": "cast-swap",
+  // Roles planned from a person's request and loose reference images: no job
+  // and no charge, but a model the same engine runs (its model and node checks).
+  "/v1/cast-swap/plan-roles": "cast-swap",
   "/v1/video-face-mesh": "cast-swap",
   "/v1/mask-erase": "cast-swap",
   "/v1/mask-outline": "cast-swap",
@@ -239,6 +242,9 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   // style in words, for a run's custom style.
   "/v1/cast-swap/describe-style",
   "/v1/video-remake/describe-style",
+  // The same checks alone: roles planned from the prompt.
+  "/v1/cast-swap/plan-roles",
+  "/v1/video-remake/plan-roles",
   "/v1/competitor-scan",
   "/v1/topic-scan",
   "/v1/content-ideas",

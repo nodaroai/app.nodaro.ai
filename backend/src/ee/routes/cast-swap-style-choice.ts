@@ -8,7 +8,8 @@
  *                                      styleOnly: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      preciseArtStyle: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      preciseArtStyleAlone: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
- *                                      customStyle: { "nodaro-prism": boolean, "nodaro-pulse": false } }
+ *                                      customStyle: { "nodaro-prism": boolean, "nodaro-pulse": false },
+ *                                      planRoles: boolean }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -68,6 +69,17 @@
  * read that failed answers it false; an engine that does not declare it
  * answers false whatever is saved. A client reading a server from before it
  * finds none and treats every engine as false.
+ *
+ * `planRoles` says whether roles can be planned from the prompt here
+ * (`POST /v1/video-remake/plan-roles`): one boolean for the deployment, never
+ * per engine (the route takes either engine). True only while this
+ * environment's engine declares `castSwap.planRoles` AND this deployment
+ * offers it (the admin's saved choice in `nodaro_motion_plan_roles`, else the
+ * deployment's default: on for Nodaro's own, off under a white-label surface
+ * profile; lib/nodaro-motion-plan-roles.ts). It reads the settings as
+ * `customStyle` does: a failed read answers false, and so does an engine that
+ * does not declare it, whatever is saved. A client reading a server from
+ * before it finds none and treats it as false.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -77,6 +89,8 @@ import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
 import { engineTakesPreciseArtStyle, engineTakesPreciseArtStyleAlone } from "../../lib/nodaro-motion-precise-art-style.js"
 import { customStyleEnabled, engineTakesCustomStyle } from "../../lib/nodaro-motion-custom-style.js"
 import { customStyleOfferedByDefault } from "../../lib/nodaro-motion-custom-style-default.js"
+import { engineTakesPlanRoles, planRolesEnabled } from "../../lib/nodaro-motion-plan-roles.js"
+import { planRolesOfferedByDefault } from "../../lib/nodaro-motion-plan-roles-default.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 
 /** How long a client (or a CDN) may keep the answer: about the settings cache's own life. */
@@ -115,6 +129,7 @@ export function withPreviousEngineIds<T>(byEngine: Record<NodaroMotionEngine, T>
 function answer(
   engines: Record<NodaroMotionEngine, unknown>,
   maps: Record<"styleOnly" | "preciseArtStyle" | "preciseArtStyleAlone" | "customStyle", Record<NodaroMotionEngine, boolean>>,
+  planRoles: boolean,
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -122,6 +137,7 @@ function answer(
     preciseArtStyle: withPreviousEngineIds(maps.preciseArtStyle),
     preciseArtStyleAlone: withPreviousEngineIds(maps.preciseArtStyleAlone),
     customStyle: withPreviousEngineIds(maps.customStyle),
+    planRoles,
   }
 }
 
@@ -138,10 +154,11 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const preciseArtStyleAlone = preciseArtStyleAloneEngines(castSwap)
   const takesStyleChoice = engineTakesStyleChoice(castSwap)
   const takesCustomStyle = engineTakesCustomStyle(castSwap)
-  // What the answer says without the settings: people choose the style, no custom style.
-  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) })
-  // Nothing of the answer reads the settings for this engine: it enforces no Style choice and takes no custom style.
-  if (!takesStyleChoice && !takesCustomStyle) {
+  const takesPlanRoles = engineTakesPlanRoles(castSwap)
+  // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt.
+  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false)
+  // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style and plans no roles.
+  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles) {
     return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
   }
   let settings: Awaited<ReturnType<typeof getAppSettings>> | null = null
@@ -154,11 +171,15 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
     return reply.header("Cache-Control", "no-store").send(withoutSettings())
   }
   return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(
-    answer(styleChoices(takesStyleChoice ? settings.nodaro_motion_style : null), {
-      styleOnly,
-      preciseArtStyle,
-      preciseArtStyleAlone,
-      customStyle: customStyleEngines(takesCustomStyle && customStyleEnabled(settings.nodaro_motion_custom_style, customStyleOfferedByDefault())),
-    }),
+    answer(
+      styleChoices(takesStyleChoice ? settings.nodaro_motion_style : null),
+      {
+        styleOnly,
+        preciseArtStyle,
+        preciseArtStyleAlone,
+        customStyle: customStyleEngines(takesCustomStyle && customStyleEnabled(settings.nodaro_motion_custom_style, customStyleOfferedByDefault())),
+      },
+      takesPlanRoles && planRolesEnabled(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault()),
+    ),
   )
 }

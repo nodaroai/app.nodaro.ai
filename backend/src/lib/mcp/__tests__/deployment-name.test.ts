@@ -411,7 +411,7 @@ const NAME_FILES: Readonly<Record<string, { count: number; how: string; funnel?:
   "tools/_verb-helpers.ts": { count: 7, how: `the route refusals (${REFUSALS}); the card sentence of a started job through statedName`, funnel: true },
   "tools/apps.ts": { count: 4, how: LIST_AND_REFUSALS },
   "tools/cast-swap-full-quality.ts": { count: 1, how: LIST_AND_REFUSALS },
-  "tools/cast-swap.ts": { count: 10, how: `${LIST_AND_REFUSALS}; the quote's engine and the started sentence through statedName`, funnel: true },
+  "tools/cast-swap.ts": { count: 13, how: `${LIST_AND_REFUSALS}; the quote's engine and the started sentence through statedName`, funnel: true },
   "tools/characters.ts": { count: 1, how: LIST },
   "tools/components.ts": { count: 2, how: LIST_AND_REFUSALS },
   "tools/film-director.ts": { count: 16, how: `the doctrine's fallback (${DOCUMENT}); ${LIST}` },

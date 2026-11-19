@@ -55,6 +55,30 @@
  * the words it was read as (`custom_style_text`, for information only), as
  * the job recorded them. A note's limit is the engine's own (`noteMaxChars`
  * of its custom-style route), never a figure kept here.
+ *
+ * Roles planned from the prompt (`reference_image_urls`): the caller passes
+ * loose reference images and may say in `post_prompt` who or what each
+ * replaces. The prompt may say nothing of an image, or be left out: the engine
+ * then places the image itself, and says so (`decisions`, where the engine
+ * answers them: per planned role, whether it came from the request or was
+ * inferred, and when it was a guess, what else it could have been). The quote's
+ * text names every guessed role and its alternatives, so the user hears of a
+ * guess before accepting.
+ * The QUOTE (no `confirm`) has the engine plan the roles
+ * (`POST /v1/video-remake/plan-roles`: free, no job), then quotes the run with
+ * them, and answers the price with `planned` (the new roles and references,
+ * what is left of the prompt, what was taken out of it) and `arguments`: the
+ * exact call that runs it — the caller's own roles first, the planned ones
+ * after (so a `{role:N}` of the caller's keeps its number), the planned
+ * `post_prompt`, and no `reference_image_urls`. The run is that ordinary call
+ * with `confirm: true`: the tool never plans and runs in one call
+ * (`reference_image_urls` with `confirm: true` is refused, `quote_first`), so
+ * what runs is always what the user was shown. An image the plan could not
+ * place is never guessed: the answer is then `needs_clarification` (no price,
+ * nothing started), for the agent to ask the user; with nothing planned at
+ * all, `roles_not_planned`. An engine that does not declare role planning, or
+ * a deployment that does not offer it, is never asked
+ * (`plan_roles_unavailable`).
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -77,7 +101,7 @@ import { hasCredits } from "../../config.js"
 import { RECAST_POINTER, recastOffered } from "./_video-lanes.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
-import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle } from "../../cast-swap-engines.js"
+import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles } from "../../cast-swap-engines.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
@@ -248,6 +272,117 @@ async function recordedCustomStyle(fastify: FastifyInstance, session: McpSession
  */
 export const CUSTOM_STYLE_QUOTE_PLACEHOLDER = "A custom visual style taken from a reference image."
 
+/** The most loose reference images one call takes (a run's own total). */
+export const REFERENCE_IMAGES_MAX = 30
+
+/** A role as the plan-roles route answers it: a run's own role (the route's key names). */
+type PlannedRole = { kind?: unknown; name?: unknown; images?: unknown; previewName?: unknown; inPreview?: unknown } & Record<string, unknown>
+
+/** The plan-roles route's answer, read field by field. */
+interface PlannedRoles {
+  roles: PlannedRole[]
+  /** How each role was decided, indexed like `roles`; absent from an engine that does not say. */
+  decisions?: PlannedDecision[]
+  references: Array<{ images: string[]; line: string }>
+  postPrompt: string
+  removed: string[]
+  unresolved: Array<{ images: string[]; reason: string; candidates?: string[] }>
+}
+
+/** How one planned role was decided, read field by field (an unknown value is dropped, never passed on). */
+interface PlannedDecision {
+  /** The role's position in the planned roles, from 0. */
+  role: number
+  basis?: "request" | "inferred"
+  /** The request's own words that asked for the role. */
+  evidence?: string
+  confidence?: "clear" | "guess"
+  alternatives?: string[]
+}
+
+function plannedDecisionOf(raw: unknown, role: number): PlannedDecision {
+  if (typeof raw !== "object" || raw === null) return { role }
+  const d = raw as { basis?: unknown; evidence?: unknown; confidence?: unknown; alternatives?: unknown }
+  const alternatives = strings(d.alternatives)
+  return {
+    role,
+    ...(d.basis === "request" || d.basis === "inferred" ? { basis: d.basis } : {}),
+    ...(typeof d.evidence === "string" && d.evidence !== "" ? { evidence: d.evidence } : {}),
+    ...(d.confidence === "clear" || d.confidence === "guess" ? { confidence: d.confidence } : {}),
+    ...(alternatives.length > 0 ? { alternatives } : {}),
+  }
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [])
+
+/** The route's answer (bare or under `data`), or undefined when it is no plan. */
+function plannedRolesOf(body: string): PlannedRoles | undefined {
+  let raw: unknown
+  try {
+    const parsed = JSON.parse(body) as { data?: unknown }
+    raw = parsed?.data ?? parsed
+  } catch {
+    return undefined
+  }
+  if (typeof raw !== "object" || raw === null) return undefined
+  const plan = raw as Record<string, unknown>
+  if (!Array.isArray(plan.roles) || !Array.isArray(plan.references) || !Array.isArray(plan.unresolved)) return undefined
+  // Kept only when it lines up with `roles` one for one: `decisions[i]` is `roles[i]`'s (its `role` is that index).
+  const decisions = Array.isArray(plan.decisions) && plan.decisions.length === plan.roles.length && plan.roles.every((r) => typeof r === "object" && r !== null) ? plan.decisions.map((d, i) => plannedDecisionOf(d, i)) : undefined
+  return {
+    ...(decisions ? { decisions } : {}),
+    roles: plan.roles.filter((r): r is PlannedRole => typeof r === "object" && r !== null),
+    references: plan.references.flatMap((r) => {
+      const ref = r as { images?: unknown; line?: unknown } | null
+      return ref && typeof ref.line === "string" ? [{ images: strings(ref.images), line: ref.line }] : []
+    }),
+    postPrompt: typeof plan.postPrompt === "string" ? plan.postPrompt : "",
+    removed: strings(plan.removed),
+    unresolved: plan.unresolved.flatMap((u) => {
+      const item = u as { images?: unknown; reason?: unknown; candidates?: unknown } | null
+      if (!item || typeof item.reason !== "string") return []
+      const candidates = strings(item.candidates)
+      return [{ images: strings(item.images), reason: item.reason, ...(candidates.length > 0 ? { candidates } : {}) }]
+    }),
+  }
+}
+
+/** A planned role as this tool's own `roles` argument takes it (snake_case preview keys; the rest as the route names it). */
+function plannedRoleArg({ previewName, inPreview, ...role }: PlannedRole): Record<string, unknown> {
+  return {
+    ...role,
+    ...(previewName !== undefined ? { preview_name: previewName } : {}),
+    ...(inPreview !== undefined ? { in_preview: inPreview } : {}),
+  }
+}
+
+/** "image 1 replaces the woman on the left (person)": which image each planned role and reference takes, by its number among the images sent. */
+function plannedSentence(plan: PlannedRoles, sent: readonly string[]): string {
+  const numbers = (images: unknown): string => {
+    const ns = strings(images).map((url) => sent.indexOf(url) + 1).filter((n) => n > 0)
+    return `image${ns.length > 1 ? "s" : ""} ${ns.join(", ")}`
+  }
+  const subject = (r: PlannedRole): string => (typeof r.name === "string" && r.name.trim() !== "" ? r.name : `the ${String(r.kind)}`)
+  const parts = [
+    ...plan.roles.map((r) => `${numbers(r.images)} replaces ${subject(r)} (${String(r.kind)})`),
+    ...plan.references.map((r) => `${numbers(r.images)} is brought in as ${r.line}`),
+  ]
+  // Every role the engine marked a guess, with what else it could have been: said before the user accepts.
+  const guesses = plan.roles.flatMap((r, i) => {
+    const decision = plan.decisions?.[i]
+    if (decision?.confidence !== "guess") return []
+    const others = decision.alternatives?.length ? ` (it could also be: ${decision.alternatives.join("; ")})` : ""
+    return [`${numbers(r.images)} for ${subject(r)}${others}`]
+  })
+  const guessed = guesses.length > 0 ? ` GUESSED, not said in the prompt: ${guesses.join("; ")}. Tell the user and let them correct it before confirming.` : ""
+  return `Planned from the prompt: ${parts.join("; ")}.${guessed}`
+}
+
+const PLAN_ROLES_UNAVAILABLE = {
+  content: [{ type: "text" as const, text: "Nodaro: roles cannot be planned from reference images on this deployment. Set the roles yourself (roles), each with its images. [plan_roles_unavailable]" }],
+  isError: true as const,
+}
+
 /** A Nodaro Pulse run's length fits. */
 const LENGTHS = ["cut-end", "cut-start"] as const
 
@@ -283,6 +418,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         "Video Remake: the way to edit, modify, restyle or remake a video (a 4–30 s clip). " +
         "It keeps the clip's motion, camera, timing and sound and changes what you ask: the cast, a prop, the place, the look or the art style. " +
         "A prompt alone is enough (`post_prompt`, with `roles: []`); to replace people, pets, products and/or the place, give each role the user's reference images. " +
+        "Or pass loose reference images (`reference_image_urls`, with `roles: []`); `post_prompt` may say who or what each one replaces: Nodaro works out the roles, guesses the ones you left unsaid, and shows them with the price. " +
         "Also the way to do motion transfer / motion control: it keeps a clip's motion and puts your own cast into it (give each role images of who or what takes its place). " +
         "Each role names a subject (or the setting) in the video and takes 0–3 images of ONE subject or place; a role with none stays as in the video. " +
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
@@ -339,6 +475,12 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           .max(5)
           .optional()
           .describe('Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30.'),
+        reference_image_urls: z
+          .array(z.url({ protocol: /^https$/ }).max(4096))
+          .min(1)
+          .max(REFERENCE_IMAGES_MAX)
+          .optional()
+          .describe("Loose reference images (public https) for Nodaro to turn into roles. post_prompt may say who or what in the video each replaces; an image it does not mention is placed by best fit and marked a guess. Quote only (never with confirm: true): the quote returns the planned roles and the arguments to confirm with. Roles you give are kept; the planned ones are added after them."),
         pre_prompt: z
           .string()
           .max(4000)
@@ -462,6 +604,25 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           }),
         )
       }
+      // Loose reference images: roles are planned from the prompt, on the quote only.
+      const looseImages = args.reference_image_urls
+      if (looseImages !== undefined) {
+        // An engine that plans no roles has no such route: never asked (said directly, as for art_style).
+        if (!loadedEngineTakesPlanRoles()) return PLAN_ROLES_UNAVAILABLE
+        // Never plan and run blind: what runs is what the user was shown with the price.
+        if (args.confirm === true) {
+          return errorResult(
+            400,
+            JSON.stringify({
+              error: {
+                code: "quote_first",
+                message:
+                  "reference_image_urls cannot be sent with confirm: true. Call without confirm first: the quote returns the planned roles and the arguments to confirm with (they carry the roles and no reference_image_urls).",
+              },
+            }),
+          )
+        }
+      }
       // An older client's `kling_length` (not listed; checked as `motion_length` is).
       const legacyLength = (args as Record<string, unknown>).kling_length
       if (args.motion_length === undefined && legacyLength !== undefined && !LENGTHS.includes(legacyLength as never)) {
@@ -503,9 +664,91 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
       }
 
       if (args.confirm !== true) {
+        // Loose reference images: the roles are planned first (free, no job), and the quote is the planned run's.
+        let quoted: Record<string, unknown> = body
+        let plannedAnswer: { sentence: string; planned: Record<string, unknown>; arguments: Record<string, unknown> } | undefined
+        if (looseImages !== undefined) {
+          // The original files, never a CDN display rendition; the planned roles carry these very addresses.
+          const sent = originalCdnImageUrls(looseImages)
+          const planRes = await mcpInject(fastify, session, {
+            method: "POST",
+            url: "/v1/video-remake/plan-roles",
+            payload: {
+              videoUrl: body.videoUrl,
+              // May be left out: the images alone are enough (the engine then places each by what it shows).
+              ...(args.post_prompt !== undefined ? { prompt: args.post_prompt } : {}),
+              images: sent,
+              ...(engine !== undefined ? { engine } : {}),
+              ...(body.roles.length > 0 ? { roles: body.roles } : {}),
+              ...(body.references !== undefined ? { references: body.references } : {}),
+              ...(args.preview !== undefined ? { preview: args.preview } : {}),
+              ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
+            },
+          })
+          if (planRes.statusCode >= 400) {
+            // Not offered on this deployment, or (despite the engine's word) no such route.
+            if (isRouterNotFound(planRes.statusCode, planRes.body) || /"plan_roles_not_available"/.test(planRes.body)) return PLAN_ROLES_UNAVAILABLE
+            return refusal(planRes.statusCode, planRes.body)
+          }
+          const plan = plannedRolesOf(planRes.body)
+          if (!plan) return { content: [{ type: "text" as const, text: "The planned roles could not be read. Nothing was started or charged." }], isError: true as const }
+          const plannedRoles = plan.roles.map(plannedRoleArg)
+          const planned = {
+            roles: plannedRoles,
+            // How each planned role was decided, indexed like `roles`, where the engine says.
+            ...(plan.decisions ? { decisions: plan.decisions } : {}),
+            references: plan.references,
+            post_prompt: plan.postPrompt,
+            removed: plan.removed,
+          }
+          const needsClarification = plan.unresolved.map((u) => ({ image_urls: u.images, reason: u.reason, candidates: u.candidates ?? [] }))
+          const nothingPlanned = plan.roles.length + plan.references.length === 0
+          // An image that could not be placed is never guessed and never dropped: no price, nothing started.
+          if (nothingPlanned || needsClarification.length > 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: nothingPlanned
+                    ? "No role could be planned from the prompt and the reference images, so there is no quote and nothing was started. Ask the user who or what in the video each image replaces, then call again with a clearer post_prompt, or with explicit roles. [roles_not_planned]"
+                    : `${plannedSentence(plan, sent)} ${needsClarification.length} image entr${needsClarification.length === 1 ? "y" : "ies"} could not be placed, so there is no quote and nothing was started. Ask the user about each (needs_clarification: its image_urls, the reason, and the candidates it could be), then call again with explicit roles for those images (planned.roles are ready to reuse) or a clearer post_prompt. [needs_clarification]`,
+                },
+              ],
+              structuredContent: {
+                code: nothingPlanned ? "roles_not_planned" : "needs_clarification",
+                needs_clarification: needsClarification,
+                ...(nothingPlanned ? {} : { planned }),
+                confirmed: false,
+              },
+            }
+          }
+          const references = [...(body.references ?? []), ...plan.references]
+          quoted = {
+            ...body,
+            roles: [...body.roles, ...plan.roles],
+            ...(references.length > 0 ? { references } : {}),
+            postPrompt: plan.postPrompt,
+          }
+          if (plan.postPrompt.trim() === "") delete quoted.postPrompt
+          // The call that runs it: the caller's own arguments, its roles first and the planned ones after, the
+          // planned post_prompt, no loose images.
+          const { reference_image_urls: _loose, confirm: _confirm, post_prompt: _request, ...own } = args as Record<string, unknown>
+          const argReferences = [...(args.references ?? []), ...plan.references]
+          plannedAnswer = {
+            sentence: plannedSentence(plan, sent),
+            planned,
+            arguments: {
+              ...own,
+              roles: [...args.roles, ...plannedRoles],
+              ...(argReferences.length > 0 ? { references: argReferences } : {}),
+              ...(plan.postPrompt.trim() !== "" ? { post_prompt: plan.postPrompt } : {}),
+              confirm: true,
+            },
+          }
+        }
         // A quote never reads the image: it is sent the caller's note, else a neutral placeholder. Sound,
         // because the price does not depend on the style's words; the image is read once the run is confirmed.
-        const payload = customImage !== undefined ? { ...body, direction: { customStyle: customNote ?? CUSTOM_STYLE_QUOTE_PLACEHOLDER } } : body
+        const payload = customImage !== undefined ? { ...quoted, direction: { customStyle: customNote ?? CUSTOM_STYLE_QUOTE_PLACEHOLDER } } : quoted
         const est = await mcpInject(fastify, session, { method: "POST", url: "/v1/video-remake/estimate", payload })
         if (est.statusCode >= 400) return refusal(est.statusCode, est.body)
         let quote: CastSwapQuote
@@ -548,7 +791,13 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
               type: "text" as const,
               text:
                 `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower}${imageStyle} ` +
-                `${QUOTE_NEXT}${quoteFor?.next ?? "call video_remake again with the same arguments and confirm: true once they accept."}`,
+                (plannedAnswer ? `${plannedAnswer.sentence} ` : "") +
+                `${QUOTE_NEXT}${
+                  quoteFor?.next ??
+                  (plannedAnswer
+                    ? "show them which image replaces whom, and once they accept call video_remake again with the returned `arguments` (the planned roles and post_prompt, no reference_image_urls, confirm: true)."
+                    : "call video_remake again with the same arguments and confirm: true once they accept.")
+                }`,
             },
           ],
           // Built field by field: the engine's old key names never reach the agent.
@@ -562,6 +811,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
             ...(privacyCredits !== undefined ? { privacyCredits: statedAmount(privacyCredits) } : {}),
             settlesLower: quote.settlesLower === true,
             confirmed: false,
+            ...(plannedAnswer ? { planned: plannedAnswer.planned, arguments: plannedAnswer.arguments } : {}),
             ...unitFields(),
           },
         }

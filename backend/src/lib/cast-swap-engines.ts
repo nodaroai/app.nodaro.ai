@@ -61,6 +61,16 @@ export function loadedEngineTakesCustomStyle(): boolean {
 }
 
 /**
+ * Whether this process's Cast Swap engine plans roles from the prompt
+ * (`POST /v1/video-remake/plan-roles`): it declares `castSwap.planRoles`. An
+ * older one has no such route, so a caller must not ask it. Whether the
+ * deployment offers it is the route's to say (`plan_roles_not_available`).
+ */
+export function loadedEngineTakesPlanRoles(): boolean {
+  return getPluginSupports().castSwap?.planRoles === true
+}
+
+/**
  * The request key for a Nodaro Pulse run's length fit: `motionLength`
  * where the loaded engine takes Video Remake's names (`engineAliases`,
  * 0.394.0+), else the old `klingLength` (an older engine knows only that one

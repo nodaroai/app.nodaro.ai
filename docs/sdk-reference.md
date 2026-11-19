@@ -2223,6 +2223,7 @@ fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemake
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
 advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, public
 describeStyle(params: { imageUrl: string; note?: string }): Promise<VideoRemakeDescribedStyle> // POST /v1/video-remake/describe-style, free
+planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free
 artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
 ```
 
@@ -2346,7 +2347,7 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean } }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2364,7 +2365,11 @@ for every engine). `customStyle` says, per engine, whether a run takes the
 style in your own words there (A custom style, below): `true` only where the
 engine takes one and Nodaro offers it on this deployment, so unlike the three
 above it can change without an engine change; Nodaro Pulse is always `false`,
-and an older server leaves it out (read it as `false`). Public (works signed
+and an older server leaves it out (read it as `false`). `planRoles` is one
+boolean, not per engine: whether roles can be planned from the prompt here
+(Roles planned from the prompt, below), `true` only where the engine plans
+them and Nodaro offers it on this deployment; an older server leaves it out
+(read it as `false`). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
@@ -2495,6 +2500,87 @@ trend run). On `describeStyle()`: `401 unauthorized`, `400 validation_error`,
 (the image could not be fetched, is too large or is not a picture),
 `502 describe_style_failed` (try again), `422 style_not_described` (try another
 image, or write the style yourself) and `429 rate_limit_exceeded` past the limit.
+
+**Roles planned from the prompt** (`planRoles()`): where `styleChoice()`
+answers `planRoles` `true`, a person can write what they want in their own
+words and add loose reference images, and `planRoles()` answers which subject
+of the video each image replaces, as ordinary `roles` and fixed `references`,
+with the rest of the request as `postPrompt`. Nothing runs: show the plan,
+then send it to `estimate()` and `run()` as any roles.
+
+```ts
+const { planRoles } = await client.videoRemake.styleChoice()
+if (planRoles === true) {
+  const plan = await client.videoRemake.planRoles({
+    videoUrl,
+    prompt: "put the first photo in place of the woman on the left, use the second as the room, and make it rain",
+    images: ["https://example.com/anna.png", "https://example.com/beach.png"], // 1–30
+    // engine, roles (the ones you already have), references, preview, previewStart: optional
+  })
+  if (plan.unresolved.length > 0) {
+    // Ask the person: each entry names its images, a reason and, when ambiguous, the candidates.
+  }
+  const guessed = plan.roles.filter((_, i) => plan.decisions?.[i]?.confidence === "guess")
+  // Show the guessed roles (and decisions[i].alternatives) for the person to correct.
+  const params = { videoUrl, roles: [...myRoles, ...plan.roles], references: plan.references, postPrompt: plan.postPrompt }
+  const quote = await client.videoRemake.estimate(params)
+  // …show the roles and the price, then client.videoRemake.run(params)
+}
+```
+
+`planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? })`
+(`POST /v1/video-remake/plan-roles`): `prompt` is the request, at most 4000
+characters, in any language, and may be empty or left out (the images alone
+are enough); `images` are 1–30 public http(s) PNG, JPEG, WebP
+or GIF pictures of at most 10 MB each, in the order the person gave them;
+`roles` and `references` are what you already have (never changed or repeated,
+and counted against a run's limits); `engine`, `preview` and `previewStart` as
+a run takes them (Nodaro Pulse sends fewer images; a preview is planned from
+its own 4 s). It answers `VideoRemakePlannedRoles`:
+
+- `prompt`: the request, untouched;
+- `roles`: the NEW roles, each exactly as `run()` takes one (`name` says which
+  subject of the video it replaces); add them after your own, so a
+  `{role:N}` you already use keeps its number;
+- `decisions`: how each of `roles` was decided, one entry per role in the same
+  order, kept out of the role so that `roles` goes to a run as it is:
+  `{ role: number, basis: "request" | "inferred", evidence?: string, confidence?: "clear" | "guess", alternatives?: string[] }`.
+  `role` is the role's position in `roles`. `"request"`: the request's own
+  words asked for it (`evidence`: those words). `"inferred"`: the request said
+  nothing about its images, which were placed by what they show and what the
+  clip shows; `confidence` is then `"clear"` (exactly one subject of its kind
+  fitted) or `"guess"` (the best fit among several, the others named in
+  `alternatives`): tell the person before running;
+- `references`: the NEW fixed references (`{ images, line }`);
+- `postPrompt`: what is left of the request once the parts the roles and
+  references now say are taken out: only the request's own characters, in
+  order, in its own language; `""` when nothing is left, the whole request
+  when nothing was planned;
+- `removed`: the parts taken out, as the request had them;
+- `unresolved`: `[{ images, imageIndexes, reason, candidates? }]`, every image
+  that became no role and no reference (`imageIndexes`: its positions in
+  `images`, from 0). `reason` is `"ambiguous_subject"` (`candidates` names the
+  subjects it could be), `"subject_not_in_clip"`, `"kind_unclear"`,
+  `"same_subject_unclear"`, `"over_limit"` or `"not_placed"` (left out of the
+  plan, or the request asked for something its words do not show).
+
+Every image sent is in exactly one of `roles`, `references` and `unresolved`.
+An image the request does not mention is placed from the image and the video,
+and a role picked as the best fit among several is marked a guess
+(`decisions`); a plan with no role at all is still an answer. It starts no job, charges nothing and
+keeps nothing of the clip or the images; it needs a signed-in account and is
+limited to 6 calls a minute and 60 a day per account.
+
+Refusals (`VideoRemakePlanRolesRefusalCode`): `401 unauthorized`,
+`400 validation_error`, `400 unsafe_url`, `403 plan_roles_not_available` (not
+offered here: set the roles yourself; a server from before it answers 404),
+`403 model_not_available` / `403 node_not_available`, `400 video_unreadable`,
+`400 clip_out_of_range` (not 4–30 s), `400 preview_out_of_range`,
+`400 image_unreadable` (an image could not be fetched, is too large or is not
+a picture; the envelope's `details.index`, read as
+`err.details.details.index`, says which), `502 plan_roles_failed` (try again,
+or set the roles yourself) and `429 rate_limit_exceeded` past either limit
+(`Retry-After` says how long).
 
 **The Advanced options on the Video Remake page** (`advanced()`,
 `VideoRemakeAdvanced`, `GET /v1/video-remake/advanced`, public):
@@ -3858,7 +3944,7 @@ is held.
 
 ```ts
 const quoted = await client.nodes.run("video-to-video", {
-  videoUrl, prompt: "make it night", provider: "nodaro-prism",
+  videoUrl, prompt: "make it rain", provider: "nodaro-prism",
 })
 // quoted.quoteOnly === true; quoted.videoRemake.quote.totalCredits is the hold
 const { jobId } = await client.videoRemake.run(quoted.videoRemake.run.body)

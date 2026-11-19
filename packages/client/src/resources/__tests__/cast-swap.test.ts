@@ -19,6 +19,10 @@ import {
   type VideoRemakeFullQualityResult,
   type VideoRemakeFaceMasking,
   type VideoRemakeParams,
+  type VideoRemakePlanRolesDecision,
+  type VideoRemakePlanRolesParams,
+  type VideoRemakePlanRolesRefusalCode,
+  type VideoRemakePlannedRoles,
   type VideoRemakeStyle,
   type VideoRemakeStyleChoice,
   type VideoRemakeStyleChoiceOption,
@@ -648,6 +652,154 @@ describe("a custom style: the style in your own words", () => {
     client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" } })))
     got = await client.videoRemake.styleChoice()
     expect(got.customStyle?.["nodaro-prism"] === true).toBe(false)
+  })
+})
+
+describe("roles planned from the prompt", () => {
+  const CLIP = "https://cdn.example.com/clip.mp4"
+  const IMAGES = ["https://cdn.example.com/anna.png", "https://cdn.example.com/beach.png", "https://cdn.example.com/mystery.png"]
+  const REQUEST = "put the first photo in place of the woman on the left, use the second as the room, and make it rain"
+  const PLANNED: VideoRemakePlannedRoles = {
+    prompt: REQUEST,
+    roles: [
+      { kind: "person", name: "the woman in the red scarf on the left", images: [IMAGES[0]!] },
+      { kind: "location", name: "the living room", images: [IMAGES[1]!] },
+    ],
+    references: [],
+    postPrompt: "make it rain",
+    removed: ["put the first photo in place of the woman on the left", "use the second as the room"],
+    unresolved: [{ images: [IMAGES[2]!], imageIndexes: [2], reason: "not_placed" }],
+  }
+
+  it("planRoles POSTs /v1/video-remake/plan-roles with the clip, the request and the images alone, and answers the plan", async () => {
+    const fetchMock = vi.fn().mockReturnValue(mockOk(PLANNED))
+    const client = make(fetchMock)
+
+    const got = await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES })
+    expect(got).toEqual(PLANNED)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/plan-roles")
+    expect(init.method).toBe("POST")
+    // Nothing the caller left out is sent (the route's body is strict).
+    expect(JSON.parse(init.body as string)).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES })
+  })
+
+  it("sends the engine, the roles and references the caller already has, and the preview, as given", async () => {
+    const fetchMock = vi.fn().mockReturnValue(mockOk(PLANNED))
+    const client = make(fetchMock)
+    const params: VideoRemakePlanRolesParams = {
+      videoUrl: CLIP,
+      prompt: REQUEST,
+      images: IMAGES,
+      engine: "nodaro-pulse",
+      roles: [{ kind: "pet", name: "the dog", images: ["https://cdn.example.com/rex.png"], coat: "original" }],
+      references: [{ images: ["https://cdn.example.com/glass.png"], line: "the glass she drinks from" }],
+      preview: true,
+      previewStart: 2,
+    }
+    // The castSwap alias is the same method.
+    await client.castSwap.planRoles(params)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/plan-roles")
+    expect(JSON.parse(init.body as string)).toEqual(params)
+  })
+
+  it("the plan goes to estimate and run as it is: its roles after the caller's own, its postPrompt as the run's", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk(PLANNED))
+      .mockReturnValueOnce(mockOk({ totalCredits: 3, breakdown: {}, settlesLower: false }))
+    const client = make(fetchMock)
+    const mine: VideoRemakeParams["roles"] = [{ kind: "pet", name: "the dog", images: null }]
+    const plan = await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES, roles: mine })
+    const run: VideoRemakeParams = { videoUrl: CLIP, roles: [...mine, ...plan.roles], references: plan.references, postPrompt: plan.postPrompt }
+    await client.videoRemake.estimate(run)
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({ videoUrl: CLIP, roles: [...mine, ...PLANNED.roles], references: [], postPrompt: "make it rain" })
+    // What could not be placed is typed for a caller to ask about.
+    const [first] = plan.unresolved
+    const indexes: number[] = first!.imageIndexes
+    const candidates: string[] | undefined = first!.candidates
+    expect(indexes).toEqual([2])
+    expect(candidates).toBeUndefined()
+  })
+
+  it("a refusal surfaces its code, and an unreadable image says which", async () => {
+    const refusals: Array<[number, VideoRemakePlanRolesRefusalCode]> = [
+      [403, "plan_roles_not_available"],
+      [400, "clip_out_of_range"],
+      [400, "preview_out_of_range"],
+      [400, "video_unreadable"],
+      [502, "plan_roles_failed"],
+      [429, "rate_limit_exceeded"],
+    ]
+    for (const [status, code] of refusals) {
+      const client = make(vi.fn().mockReturnValue(mockErr(status, { error: { code, message: "refused" } })))
+      const err = await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES }).catch((e: unknown) => e)
+      expect(err, code).toBeInstanceOf(NodaroError)
+      const got: VideoRemakePlanRolesRefusalCode = (err as NodaroError).code
+      expect(got).toBe(code)
+      expect((err as NodaroError).status).toBe(status)
+    }
+    const client = make(vi.fn().mockReturnValue(mockErr(400, { error: { code: "image_unreadable", message: "Image 2 could not be read.", details: { index: 1 } } })))
+    const err = (await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES }).catch((e: unknown) => e)) as NodaroError
+    expect(err.code).toBe("image_unreadable")
+    // The envelope's own `details`, among the envelope's other fields.
+    expect(err.details).toEqual({ details: { index: 1 } })
+  })
+
+  it("an empty request is sent as it is, and the plan's decisions come back typed, one per role; an older server sends none", async () => {
+    const decided: VideoRemakePlannedRoles = {
+      ...PLANNED,
+      prompt: "",
+      postPrompt: "",
+      removed: [],
+      unresolved: [],
+      decisions: [
+        { role: 0, basis: "inferred", confidence: "guess", alternatives: ["the woman by the window"] },
+        { role: 1, basis: "request", evidence: "use the second as the room" },
+      ],
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(decided)).mockReturnValueOnce(mockOk(decided)).mockReturnValueOnce(mockOk(PLANNED))
+    const client = make(fetchMock)
+
+    const got = await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: "", images: IMAGES })
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({ videoUrl: CLIP, prompt: "", images: IMAGES })
+    const first: VideoRemakePlanRolesDecision | undefined = got.decisions?.[0]
+    expect(first).toEqual({ role: 0, basis: "inferred", confidence: "guess", alternatives: ["the woman by the window"] })
+    const evidence: string | undefined = got.decisions?.[1]?.evidence
+    expect(evidence).toBe("use the second as the room")
+    // Left out, the request is not sent at all (the route reads that as empty).
+    await client.videoRemake.planRoles({ videoUrl: CLIP, images: IMAGES })
+    expect(JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string)).toEqual({ videoUrl: CLIP, images: IMAGES })
+    // One per role, in the roles' order.
+    expect(got.decisions).toHaveLength(got.roles.length)
+    const guessed = got.roles.filter((_, i) => got.decisions?.[i]?.confidence === "guess")
+    expect(guessed).toEqual([PLANNED.roles[0]])
+
+    const older = await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES })
+    expect(older.decisions).toBeUndefined()
+    expect(older.roles.filter((_, i) => older.decisions?.[i]?.confidence === "guess")).toEqual([])
+  })
+
+  it("a server from before the route answers 404: an error to read as not offered, never a plan", async () => {
+    const client = make(vi.fn().mockReturnValue(mockErr(404, { message: "Route POST:/v1/video-remake/plan-roles not found", error: "Not Found" })))
+    const err = await client.videoRemake.planRoles({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).status).toBe(404)
+  })
+
+  it("styleChoice passes planRoles through, one boolean; an older server has none", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, planRoles: true }
+    let client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    let got = await client.videoRemake.styleChoice()
+    const offered: boolean | undefined = got.planRoles
+    expect(offered).toBe(true)
+
+    client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" } })))
+    got = await client.videoRemake.styleChoice()
+    expect(got.planRoles === true).toBe(false)
   })
 })
 

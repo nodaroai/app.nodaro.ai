@@ -3714,6 +3714,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `references` | object[] |  | Fixed references no role replaces: 1–3 images of ONE thing each, and the line naming it, e.g. "the glass she drinks from" ({image} = its first image). Their images count toward the 30. At most 5 items. |
 | `references[].images` | string (URL)[] | yes | From 1 to 3 items. |
 | `references[].line` | string | yes | From 1 to 500 characters. |
+| `reference_image_urls` | string (URL)[] |  | Loose reference images (public https) for Nodaro to turn into roles. post_prompt may say who or what in the video each replaces; an image it does not mention is placed by best fit and marked a guess. Quote only (never with confirm: true): the quote returns the planned roles and the arguments to confirm with. Roles you give are kept; the planned ones are added after them. From 1 to 30 items. |
 | `pre_prompt` | string |  | Instructions placed before the role instructions. Mention roles as in post_prompt. At most 4000 characters. |
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |

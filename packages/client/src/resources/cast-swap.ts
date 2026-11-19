@@ -474,6 +474,171 @@ export interface VideoRemakeDescribedStyle {
   tones?: VideoRemakeStyleTones
 }
 
+/** What {@link VideoRemakeResource.planRoles} takes. */
+export interface VideoRemakePlanRolesParams {
+  /** The clip, a public http(s) URL, 4–30 s. */
+  videoUrl: string
+  /**
+   * The request in the person's own words, at most 4000 characters, in any
+   * language: who or what each image replaces, and whatever else they want
+   * changed. For example `"put the first photo in place of the woman on the
+   * left, use the second as the room, and make it rain"`. It may say nothing
+   * of an image, be empty or be left out: the images alone are enough, and an
+   * image the request does not place is placed by what it shows and what the
+   * clip shows (see {@link VideoRemakePlanRolesDecision}).
+   */
+  prompt?: string
+  /** 1–30 public http(s) images (PNG, JPEG, WebP or GIF, at most 10 MB each): the loose reference pictures, in the order the person gave them. */
+  images: string[]
+  /** The engine the run will use (default Nodaro Prism). Nodaro Pulse sends fewer images, so more may come back unresolved. */
+  engine?: VideoRemakeEngine | VideoRemakeEngineLegacyId
+  /** The roles the caller already has, as a run takes them: never changed or repeated, and counted against the limits. */
+  roles?: VideoRemakeRole[]
+  /** The fixed references the caller already has, as a run takes them: counted against the limits. */
+  references?: VideoRemakeReference[]
+  /** `true` when the run will be a 4 s preview: the plan is then made from those 4 s alone. */
+  preview?: boolean
+  /** Where the preview starts, in seconds (default 0); `previewStart + 4` must fit the clip. */
+  previewStart?: number
+}
+
+/**
+ * Why an image became no role and no reference
+ * ({@link VideoRemakePlannedRoles.unresolved}):
+ * - `ambiguous_subject`: the request could mean several subjects in the video
+ *   (`candidates` lists them);
+ * - `subject_not_in_clip`: nobody and nothing in the clip matches the request;
+ * - `kind_unclear`: the image could be a person, a pet, a product or a
+ *   location, and the request does not settle which;
+ * - `same_subject_unclear`: several images may or may not be of one subject;
+ * - `over_limit`: a run takes fewer roles of that kind, images for one
+ *   subject, references or images in all than were asked for;
+ * - `not_placed`: the image was left out of the plan, or the request asked
+ *   for something its words do not show.
+ *
+ * Open-ended: a reason not listed here may still arrive.
+ */
+export type VideoRemakePlanRolesUnresolvedReason =
+  | "ambiguous_subject"
+  | "subject_not_in_clip"
+  | "kind_unclear"
+  | "same_subject_unclear"
+  | "over_limit"
+  | "not_placed"
+  | (string & {})
+
+/**
+ * How one planned role was decided ({@link VideoRemakePlannedRoles.decisions}):
+ * - `role`: the role's position in `roles`, from 0 (`decisions[i].role` is
+ *   `i`);
+ * - `basis`: `"request"` when the request's own words asked for it
+ *   (`evidence`: those words), `"inferred"` when the request said nothing
+ *   about its images and they were placed by what they show and what the clip
+ *   shows;
+ * - `confidence`, for an inferred role: `"clear"` when exactly one subject of
+ *   its kind fitted, `"guess"` when it is the best fit among several: show a
+ *   guess to the person before running;
+ * - `alternatives`: with a guess, the other subjects it could have been, each
+ *   named as a role's `name` names one.
+ *
+ * Open-ended: a value not listed here may still arrive.
+ */
+export interface VideoRemakePlanRolesDecision {
+  role: number
+  basis: "request" | "inferred" | (string & {})
+  evidence?: string
+  confidence?: "clear" | "guess" | (string & {})
+  alternatives?: string[]
+}
+
+/** Images {@link VideoRemakeResource.planRoles} could not place: ask the person, then set a role for them or plan again with a clearer request. */
+export interface VideoRemakePlanRolesUnresolved {
+  /** The images, as they were sent. */
+  images: string[]
+  /** Their positions in the `images` sent, from 0. */
+  imageIndexes: number[]
+  reason: VideoRemakePlanRolesUnresolvedReason
+  /** With `ambiguous_subject`: the subjects of the video it could be, each a short description. */
+  candidates?: string[]
+}
+
+/**
+ * What {@link VideoRemakeResource.planRoles} answers. Every image sent is in
+ * exactly one of `roles`, `references` and `unresolved`.
+ */
+export interface VideoRemakePlannedRoles {
+  /** The request, untouched. */
+  prompt: string
+  /**
+   * The NEW roles, each exactly as a run's `roles` takes one (`name` says
+   * which subject of the video it replaces; its `images` are addresses that
+   * were sent). Add them after the roles you already have.
+   */
+  roles: VideoRemakeRole[]
+  /**
+   * How each of `roles` was decided, one entry per role in the same order
+   * (`decisions[i]` is about `roles[i]`), kept out of the role so that
+   * `roles` goes to a run as it is. Optional in the type only for a server
+   * from before it: treat every role as said by the request there.
+   */
+  decisions?: VideoRemakePlanRolesDecision[]
+  /** The NEW fixed references, each as a run's `references` takes one. */
+  references: VideoRemakeReference[]
+  /**
+   * What is left of the request once the parts the roles and references now
+   * say are taken out: send it as the run's `postPrompt`. Only ever the
+   * request's own characters, in order and in its own language; `""` when
+   * nothing is left, and the whole request when nothing was planned.
+   */
+  postPrompt: string
+  /** The parts of the request that were taken out, as the request had them. */
+  removed: string[]
+  /** The images that became no role and no reference, with why. Empty when every image was placed. */
+  unresolved: VideoRemakePlanRolesUnresolved[]
+}
+
+/**
+ * The `code` of a refusal of {@link VideoRemakeResource.planRoles}
+ * (`NodaroError.code`). Nothing is ever charged.
+ *
+ * - `unauthorized` (401): no authenticated user;
+ * - `validation_error` (400), `unsafe_url` (400): the body, or an address that
+ *   is not a public http(s) one;
+ * - `plan_roles_not_available` (403): roles are not planned from the prompt
+ *   here (see {@link VideoRemakeStyleChoice.planRoles}); set the roles
+ *   yourself;
+ * - `model_not_available` / `node_not_available` (403): Video Remake is not
+ *   offered to this account;
+ * - `video_unreadable` (400): the clip's length could not be read;
+ * - `clip_out_of_range` (400): the clip is not 4–30 s long;
+ * - `preview_out_of_range` (400): `previewStart + 4` does not fit the clip;
+ * - `image_unreadable` (400): an image could not be fetched, is larger than
+ *   10 MB, or is not a PNG, JPEG, WebP or GIF (the envelope's `details.index`, read as
+ *   `NodaroError.details.details.index`: its position in `images`, from 0);
+ * - `plan_roles_failed` (502): the roles could not be planned just now; try
+ *   again, or set the roles yourself;
+ * - `rate_limit_exceeded` (429): too many calls for this account, in a minute
+ *   or in a day (`Retry-After` says how long).
+ *
+ * A route missing altogether (404, an older server) means the same as
+ * `plan_roles_not_available`. Open-ended: a code not listed here may still
+ * arrive.
+ */
+export type VideoRemakePlanRolesRefusalCode =
+  | "unauthorized"
+  | "validation_error"
+  | "unsafe_url"
+  | "plan_roles_not_available"
+  | "model_not_available"
+  | "node_not_available"
+  | "video_unreadable"
+  | "clip_out_of_range"
+  | "preview_out_of_range"
+  | "image_unreadable"
+  | "plan_roles_failed"
+  | "rate_limit_exceeded"
+  | (string & {})
+
 export interface VideoRemakeEstimate {
   /**
    * The engine the run would use, by its public id (absent from an older
@@ -717,6 +882,14 @@ export interface VideoRemakeStyleChoice {
    * styles alone; a custom style sent anyway is refused).
    */
   customStyle?: Partial<Record<VideoRemakeEngine, boolean>>
+  /**
+   * Whether roles can be planned from the prompt here
+   * ({@link VideoRemakeResource.planRoles}): one answer for the deployment,
+   * not per engine. `true` only where the engine plans roles and Nodaro
+   * offers it on this deployment. Absent from an older server: `false` (offer
+   * the roles to be set by hand; a planning call sent anyway is refused).
+   */
+  planRoles?: boolean
 }
 
 /**
@@ -779,7 +952,9 @@ export class VideoRemakeResource {
    * Precise run takes an art style there too, and its `preciseArtStyleAlone`
    * whether that art style alone is the run's change. Its `customStyle` says,
    * per engine, whether a run takes the style in your own words there
-   * (`direction: { customStyle }`, and {@link describeStyle}).
+   * (`direction: { customStyle }`, and {@link describeStyle}), and its
+   * `planRoles` whether roles can be planned from the prompt here
+   * ({@link planRoles}).
    * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<VideoRemakeStyleChoice> {
@@ -816,6 +991,38 @@ export class VideoRemakeResource {
   describeStyle(params: VideoRemakeDescribeStyleParams): Promise<VideoRemakeDescribedStyle> {
     const body = { imageUrl: params.imageUrl, ...(params.note !== undefined ? { note: params.note } : {}) }
     return this.client.request("POST", "/v1/video-remake/describe-style", { body })
+  }
+
+  /**
+   * Plan a run's roles from a request in the person's own words
+   * (`POST /v1/video-remake/plan-roles`): given the clip, the request and the
+   * loose reference images, it answers which subject of the video each image
+   * replaces, as ordinary `roles` and fixed `references`, with the rest of the
+   * request as `postPrompt`. Nothing runs: send the answer to
+   * {@link estimate} and {@link run} as any roles (after the roles you
+   * already have), and show it to the person first — `unresolved` lists the
+   * images it could not place, with why. An image the request does not mention
+   * is placed from the image and the video, and a role picked as the best fit
+   * among several is marked a guess (`decisions`): tell the person which.
+   *
+   * Free: it starts no job and charges nothing, and nothing of the clip or
+   * the images is kept. Needs a signed-in account, and is limited to 6 calls a
+   * minute and 60 a day per account. Only where {@link styleChoice} answers
+   * `planRoles` true (403 `plan_roles_not_available` elsewhere). Refusals:
+   * {@link VideoRemakePlanRolesRefusalCode}.
+   */
+  planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> {
+    const body = {
+      videoUrl: params.videoUrl,
+      ...(params.prompt !== undefined ? { prompt: params.prompt } : {}),
+      images: params.images,
+      ...(params.engine !== undefined ? { engine: params.engine } : {}),
+      ...(params.roles !== undefined ? { roles: params.roles } : {}),
+      ...(params.references !== undefined ? { references: params.references } : {}),
+      ...(params.preview !== undefined ? { preview: params.preview } : {}),
+      ...(params.previewStart !== undefined ? { previewStart: params.previewStart } : {}),
+    }
+    return this.client.request("POST", "/v1/video-remake/plan-roles", { body })
   }
 
   /**
