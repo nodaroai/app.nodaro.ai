@@ -1,5 +1,34 @@
 # @nodaro/sdk
 
+## 2.78.0
+
+### Minor Changes
+
+- 73f23e8: `refineFromVideoUrl` is removed from `GenerateObjectMotionInput` and `GenerateCreatureMotionInput` (`objects.generateMotion()`, `creatures.generateMotion()`). The option could not run: a motion clip is made from `sourceImageUrl` on an image-to-video model, and none of the models these routes accept takes a clip as its source, so a request that set it failed. `POST /v1/generate-location-motion`, `/v1/generate-object-motion` and `/v1/generate-creature-motion` now refuse a body that sends it with a 400 `validation_error` (path `refineFromVideoUrl`) before anything is reserved. Code that sets the field no longer type-checks: drop it. To keep a clip's motion, camera and timing and change what is in it, use Video Remake (`client.videoRemake`, `POST /v1/video-remake`); to edit a clip by instruction, `POST /v1/video-to-video`. A request without the field is unchanged.
+- c9dce77: Tighten Episode takes `tightness` (`"light" | "standard" | "tight"`), how far long pauses are shortened: light shortens pauses over 600 ms to 350 ms, standard (the default) pauses over 350 ms to 220 ms, tight pauses over 250 ms to 150 ms. It is on `TightenEpisodeInput` (`client.edit.tightenEpisode` and `client.edit.estimateTightenEpisode`) and on `nodaro edit tighten-episode` as `--tightness`.
+- a859468: `videoRemake.artStyles({ locale })` (`GET /v1/video-remake/art-styles`, public) lists the art styles the Video Remake page's art style picker offers, in its order: each `{ id, label, clipUrl, stillUrl }` (`VideoRemakeArtStyle`, also from `@nodaro/sdk/video-remake`). `id` is a run's `direction.style`, `label` the style's name in `locale` (English when left out, unknown, or not named in that language), `clipUrl` a short preview clip and `stillUrl` a still cut from it, both absolute. The list is empty on a deployment that does not show Nodaro's previews, or one without Video Remake or its art styles. No sign-in needed; the answer may be up to five minutes old.
+
+  `@nodaro/shared/i18n` exports `STYLE_SIDECAR_LOADERS`: the `style` catalog's locale sidecars as lazy loaders for `registerSidecarLoaders`, for a host with no bundler glob of its own (a Node server). Each language stays its own chunk.
+
+- 8801c82: Video Remake takes a custom style: `direction: { customStyle: "<text>" }` on `videoRemake.run()` and `estimate()` gives the style in your own words in place of a catalog art style (`direction: { style }`; never both), at most 600 characters, on Nodaro Prism. `videoRemake.describeStyle({ imageUrl, note? })` (`POST /v1/video-remake/describe-style`, free, signed in, 10 calls a minute per account) answers `{ text, medium?, tones? }` (`VideoRemakeDescribedStyle`): an image's visual style in words, ready to send as `customStyle`. `styleChoice()` answers `customStyle` per engine: offer it only where it is `true`. New types, also from `@nodaro/sdk/video-remake`: `VideoRemakeArtStyleDirection`, `VideoRemakeCustomStyleDirection`, `VideoRemakeDescribeStyleParams`, `VideoRemakeDescribedStyle`, `VideoRemakeStyleMedium`, `VideoRemakeStyleTones` and `VideoRemakeCustomStyleRefusalCode` (`custom_style_with_art_style`, `custom_style_empty`, `custom_style_too_long`, `custom_style_not_available`, `image_unreadable`, `describe_style_failed`, `style_not_described`).
+- 0602c24: The default Video to Video model is now Seedance 2.5 Edit (`seedance-2-5`), which edits the clip by instruction and keeps its length and aspect ratio. A `POST /v1/video-to-video` request, an MCP `modify_video` call, an SDK `nodes.run("video-to-video", …)` call or a Video to Video node that names no model runs it, including a node saved earlier with no model: it needs a prompt (the edit instruction) and a 4–30 second clip, renders at 480p unless a resolution is given, and is priced as a Seedance 2.5 edit. Wan 2.6 (`wan`) and Wan 2.6 Flash (`wan-flash`) stay selectable and unchanged; they make a new clip featuring the input video's subject and are no longer a default.
+
+  `@nodaro/shared/models`: `DEFAULT_VIDEO_TO_VIDEO_PROVIDER` is `"seedance-2-5"`; new `videoToVideoProviderOf(named)` (the model a request or node runs on: the one it names, else the default) and `QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER` (`"wan"`: the model of a `video-to-video` job queued earlier with no provider).
+
+  `@nodaro/prompts`: the six Video to Video look presets (Anime, Claymation, Cyberpunk Neon, Oil Painting, 3D Animated, Watercolor) run on `seedance-2-5`, and the node's preset group "Restyle Looks" is renamed "Looks"; the Wan prompt guidance points an edit at an edit model and a restyle at Video Remake.
+
+  `@nodaro/sdk`: `VideoToVideoParams.provider` documents the new default. To restyle a clip (keep its motion, camera and timing, change the art style) use `client.videoRemake.run({ …, direction: { style } })`.
+
+- 0bc2a4f: `nodes.run("video-to-video", …)` takes Video Remake's two engines as named providers, `"nodaro-prism"` and `"nodaro-pulse"` (`VideoToVideoRemakeParams`). For these the platform starts no job: the call resolves a `VideoToVideoRemakeQuote` (`quoteOnly: true`, Video Remake's quote, and the body to pass to `client.videoRemake.run`). Every other call is typed and answered as before, and a request naming no provider still runs the default. New exports: `VideoToVideoRemakeParams`, `VideoToVideoRemakeQuote`, `VideoToVideoRemakeRun` and the guard `isVideoToVideoRemakeQuote`. `nodes.quote("video-to-video", …)` accepts the same providers, and `nodes.runAndWait` rejects them with `quote_only_provider` before anything is sent.
+
+### Patch Changes
+
+- Updated dependencies [a859468]
+- Updated dependencies [0602c24]
+- Updated dependencies [ff7a56e]
+  - @nodaro/shared@3.72.0
+  - @nodaro/prompts@1.60.0
+
 ## 2.77.0
 
 ### Minor Changes
