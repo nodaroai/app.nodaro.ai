@@ -106,7 +106,7 @@ const GRANTS: ReadonlyArray<readonly Scope[]> = [
 const PINNED: ReadonlyArray<{ id: string; token: RegExp; why: string; followedBy?: RegExp }> = [
   { id: "engine id", token: /^nodaro-(?:prism|pulse)$/, why: "a Video Remake engine's public id, which a client sends as `engine` and reads back" },
   { id: "engine name", token: /^(?:Nodaro|NODARO)$/, followedBy: /^\s+(?:Prism|Pulse|PRISM|PULSE)\b/, why: "a Video Remake engine's name (Nodaro Prism, Nodaro Pulse), the same on every deployment" },
-  { id: "widget resource URI", token: /^ui:\/\/nodaro\/widget\/(?:v[234]\/)?[a-z-]+$/, why: "the resource a tool's `_meta.ui.resourceUri` names: an id the host stores with the tool list and asks for by name" },
+  { id: "widget resource URI", token: /^ui:\/\/nodaro\/widget\/(?:v[2345]\/)?[a-z-]+$/, why: "the resource a tool's `_meta.ui.resourceUri` names: an id the host stores with the tool list and asks for by name" },
   { id: "house model id", token: /^nodaro-(?:image|video)-upscale$/, why: "a model id a client passes as `model` (its label is the deployment's: \"Acme Studio Image Upscale\")" },
   { id: "maker id", token: /^nodaro$/, why: "`maker.id` of the platform's own models in list_models, and the `_meta.nodaro` key of the Studio tools: ids, beside a maker name that says the deployment's" },
   { id: "package name", token: /^@nodaro\/[a-z0-9-]+(?:\/[a-z0-9-]+)?$/, why: "a public package's name, where a document points at the contract or type it publishes (`@nodaro/shared` `Edl`)" },
@@ -275,7 +275,7 @@ describe("the rules: what a sentence says instead", () => {
     ["or a connected nodaro.ai\naccount", "or a connected Cloud\naccount"],
     ["\"https://cdn.nodaro.ai/uploads/device.png\"", "\"https://example.com/uploads/device.png\""],
     // identifiers stay
-    ["`nodaro-video-upscale`, nodaro_connection_required, @nodaro/shared, ui://nodaro/widget/v4/job-auto, window.NodaroMCP", "`nodaro-video-upscale`, nodaro_connection_required, @nodaro/shared, ui://nodaro/widget/v4/job-auto, window.NodaroMCP"],
+    ["`nodaro-video-upscale`, nodaro_connection_required, @nodaro/shared, ui://nodaro/widget/v5/job-auto, window.NodaroMCP", "`nodaro-video-upscale`, nodaro_connection_required, @nodaro/shared, ui://nodaro/widget/v5/job-auto, window.NodaroMCP"],
     ["the `Nodaro-Signature` header and `X-Nodaro-Workspace`", "the `Nodaro-Signature` header and `X-Nodaro-Workspace`"],
     // an address the deployment's configuration gives is its own
     ["open it in the editor: https://studio.acme.example/editor/w1", "open it in the editor: https://studio.acme.example/editor/w1"],
@@ -438,7 +438,7 @@ const NAME_FILES: Readonly<Record<string, { count: number; how: string; funnel?:
   "tools/verbs-use-case.ts": { count: 4, how: REFUSALS },
   "tools/verbs-video-mask.ts": { count: 4, how: LIST },
   "tools/verbs-video-overlay.ts": { count: 1, how: LIST },
-  "tools/verbs-video.ts": { count: 23, how: LIST },
+  "tools/verbs-video.ts": { count: 26, how: LIST },
   "tools/video-director-tools.ts": { count: 1, how: LIST },
   "tools/video-director.ts": { count: 18, how: `the doctrine's header and fallback: ${DOCUMENT}` },
   "tools/workflows.ts": { count: 2, how: REFUSALS },

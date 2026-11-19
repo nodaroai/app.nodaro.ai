@@ -1825,6 +1825,16 @@ const TIGHTEN_TIGHTNESS_BYTES = 199
 // by this suite on the same tree with the wording before and after (on top of the pauses above): 556_233 B, then 556_290 B, 57 B
 // more; the list keeps the headroom it had.
 const MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES = 57
+// RAISED by the wording of the three ways to change a video, and nothing else. No tool was added,
+// so the membership fixtures do NOT move. `modify_video` lists Video Remake's two engines first, as
+// the recommended way to edit a clip (a call that names one, or names no model, answers a quote and
+// runs nothing), then the models that run at once, and lists the quote's output key; `video_remake`
+// leads with the words an agent searches by (edit, modify, restyle, remake, motion transfer);
+// `start_recast` leads with its own (recreate, reshoot, remix); `motion_transfer` recommends Video
+// Remake; each names the others in one sentence. Measured by this suite on the same tree before and
+// after: 555_964 B, then 557_979 B, 2_015 B more. 333 B of it fitted the headroom the list had;
+// the budget is raised by the 1_682 B that did not, so the list is left with none.
+const VIDEO_LANES_WORDING_BYTES = 1_682
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -2054,7 +2064,8 @@ export const TOOL_WIRE_BUDGET = {
     PODCAST_PACK_TOOL_BYTES +
     WAN_REFERENCE_TO_VIDEO_WORDING_BYTES +
     TIGHTEN_TIGHTNESS_BYTES +
-    MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES,
+    MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES +
+    VIDEO_LANES_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

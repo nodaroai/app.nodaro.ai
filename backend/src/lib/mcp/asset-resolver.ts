@@ -63,6 +63,9 @@ const VIDEO_TYPES = new Set<string>([
   "speech-to-video",
   // UGC Clip: one rendered clip of a UGC video (a plugin job; `videoUrl` on completion).
   "ugc-clip",
+  // Video Remake (and a trend run, which is one) and its Full Quality version: `videoUrl` on completion.
+  "cast-swap",
+  "cast-swap-full-quality",
 ])
 
 /**

@@ -72,6 +72,9 @@ import {
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
+import { refusalResult, resolveToolOffer } from "../tool-offer.js"
+import { hasCredits } from "../../config.js"
+import { RECAST_POINTER, recastOffered } from "./_video-lanes.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
 import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle } from "../../cast-swap-engines.js"
@@ -83,12 +86,79 @@ import { statedName } from "../deployment-name.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
+/** Where a quote's text turns from the price to what to do next. */
+const QUOTE_NEXT = "Present this to the user; "
+
 const NOT_AVAILABLE = "Video Remake is a Nodaro Cloud feature and is not served on this deployment."
 
 export interface RegisterCastSwapToolsOpts {
-  server: McpServer
+  server: Pick<McpServer, "registerTool">
   session: McpSession
   fastify: FastifyInstance
+  /** Set by `videoRemakeQuote` only: the quote is asked for through another tool. */
+  quoteFor?: VideoRemakeQuoteFor
+}
+
+/**
+ * A quote asked for through another tool (`modify_video`, for a call that names one of the
+ * engines): how its last sentence says to run it.
+ */
+export interface VideoRemakeQuoteFor {
+  next: string
+}
+
+/** The arguments of the `video_remake` call another tool quotes: a clip and an instruction, no role. */
+export interface VideoRemakeInstructionRun {
+  video_url: string
+  roles: []
+  post_prompt: string
+  engine: NodaroMotionEngine
+  resolution?: "480p" | "720p" | "1080p"
+  draft?: boolean
+}
+
+/**
+ * The refusal of a call that asks for a Video Remake engine through another tool where
+ * `video_remake` is not offered, judged when the call is made (as a call to the tool itself is):
+ * `not_available` off Nodaro Cloud, else the offer's own refusal. Undefined where it is offered.
+ */
+export async function videoRemakeRefusal(session: McpSession) {
+  if (!hasCredits()) return errorResult(404, JSON.stringify({ error: { code: "not_available", message: NOT_AVAILABLE } }))
+  const withheld = (await resolveToolOffer(session.userId))?.refusalOf("video_remake")
+  return withheld ? refusalResult(withheld) : undefined
+}
+
+/**
+ * The quote `video_remake` gives for `run`, asked for through another tool. It IS a `video_remake`
+ * call: the tool's own handler, registered for this session on a stand-in that only keeps it, is
+ * called with `run` and no `confirm`, so the refusals, the estimate and every figure are the tool's.
+ * Nothing is started: only a `video_remake` call with `confirm: true` runs.
+ *
+ * The answer's structured content is ONE key, `videoRemake`: `quote`, the tool's quote as it gives
+ * it, `arguments`, the `video_remake` call that runs it, and `summary`, the quote's price sentence
+ * (what the asking tool's card shows). One key, since the asking tool's output schema is closed
+ * and lists it.
+ *
+ * The handler is reached through a stand-in registration so that this file keeps its layout while
+ * other changes to it are in flight; a plain exported function that the tool and this both call is
+ * the cleaner form once those have landed.
+ */
+export async function videoRemakeQuote(opts: Pick<RegisterCastSwapToolsOpts, "session" | "fastify">, run: VideoRemakeInstructionRun, quoteFor: VideoRemakeQuoteFor) {
+  type Answer = { content: { type: "text"; text: string }[]; isError?: true; structuredContent?: Record<string, unknown> }
+  let handler: ((args: VideoRemakeInstructionRun) => Promise<Answer>) | undefined
+  const server = {
+    registerTool: (name: string, _config: unknown, cb: unknown) => {
+      if (name === "video_remake") handler = cb as typeof handler
+    },
+  } as unknown as Pick<McpServer, "registerTool">
+  registerCastSwapTools({ ...opts, server, quoteFor })
+  // Not registered: the session may not run it (the tool's own scope gate).
+  if (!handler) return errorResult(403, JSON.stringify({ error: { code: "forbidden", message: "This session may not run Video Remake." } }))
+  const answer = await handler(run)
+  if (answer.isError || !answer.structuredContent) return answer
+  // The price sentence: the quote's text up to where it says what to do next.
+  const summary = (answer.content[0]?.text ?? "").split(QUOTE_NEXT)[0]!.trim()
+  return { ...answer, structuredContent: { videoRemake: { quote: answer.structuredContent, arguments: run, summary } } }
 }
 
 /** The engine's quote as it arrives (old or new key names, `nodaro-motion-quote.ts`). */
@@ -201,7 +271,7 @@ function refusal(statusCode: number, body: string) {
   return errorResult(statusCode, body)
 }
 
-export function registerCastSwapTools({ server, session, fastify }: RegisterCastSwapToolsOpts): void {
+export function registerCastSwapTools({ server, session, fastify, quoteFor }: RegisterCastSwapToolsOpts): void {
   if (!passesGate(session, executeGate)) return
   // What the deployment offers decides whether its tools are listed (lib/mcp/tool-needs.ts).
 
@@ -210,13 +280,17 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
     {
       title: "Video Remake",
       description:
-        "Video Remake: replace the people, pets, products and/or the place in a 4–30 s video with the user's reference images, keeping its motion, framing, timing and sound. " +
+        "Video Remake: the way to edit, modify, restyle or remake a video (a 4–30 s clip). " +
+        "It keeps the clip's motion, camera, timing and sound and changes what you ask: the cast, a prop, the place, the look or the art style. " +
+        "A prompt alone is enough (`post_prompt`, with `roles: []`); to replace people, pets, products and/or the place, give each role the user's reference images. " +
+        "Also the way to do motion transfer / motion control: it keeps a clip's motion and puts your own cast into it (give each role images of who or what takes its place). " +
         "Each role names a subject (or the setting) in the video and takes 0–3 images of ONE subject or place; a role with none stays as in the video. " +
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default; 480p, 720p, 1080p) or "nodaro-pulse" (Nodaro Pulse; 720p default or 1080p, no draft). ' +
         "Image and video URLs must be http(s): upload local files with the upload tools first." +
+        (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
         amountsNote(),
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
       // takes an older client's `kling_length` as `motion_length` and ignores `face_masking`
@@ -474,7 +548,7 @@ export function registerCastSwapTools({ server, session, fastify }: RegisterCast
               type: "text" as const,
               text:
                 `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower}${imageStyle} ` +
-                "Present this to the user; call video_remake again with the same arguments and confirm: true once they accept.",
+                `${QUOTE_NEXT}${quoteFor?.next ?? "call video_remake again with the same arguments and confirm: true once they accept."}`,
             },
           ],
           // Built field by field: the engine's old key names never reach the agent.

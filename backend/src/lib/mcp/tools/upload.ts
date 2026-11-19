@@ -162,9 +162,9 @@ export function registerUploadTools({ server, session }: RegisterUploadOpts): vo
  * accept-MIME and copy.
  */
 const WIDGET_URI_FOR_KIND: Record<KindMeta["kind"], string> = {
-  image: "ui://nodaro/widget/v4/upload-image",
-  audio: "ui://nodaro/widget/v4/upload-audio",
-  video: "ui://nodaro/widget/v4/upload-video",
+  image: "ui://nodaro/widget/v5/upload-image",
+  audio: "ui://nodaro/widget/v5/upload-audio",
+  video: "ui://nodaro/widget/v5/upload-video",
 }
 
 /** Reasonable upper bound — identity-training flows typically accept up to ~10 photos. */

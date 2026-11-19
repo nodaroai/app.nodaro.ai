@@ -5,7 +5,7 @@
  * `_meta.ui.resourceUri` on the tool definition. The host then fetches that
  * URI via `resources/read` to get the iframe HTML.
  *
- * This module owns the URI scheme `ui://nodaro/widget/v4/{kind}` and keeps the
+ * This module owns the URI scheme `ui://nodaro/widget/v5/{kind}` and keeps the
  * widget HTML on the server side. Per-call data is delivered to the iframe
  * via the host's `ui/notifications/tool-input` and
  * `ui/notifications/tool-result` events (NOT embedded in the HTML).
@@ -22,18 +22,18 @@ import { WIDGET_MEDIA_ORIGINS } from "./csp-origins.js"
 import type { McpLaneAddresses } from "../../mcp-lane-addresses.js"
 
 export const WIDGET_URI = {
-  jobImage: "ui://nodaro/widget/v4/job-image",
-  jobVideo: "ui://nodaro/widget/v4/job-video",
-  jobAudio: "ui://nodaro/widget/v4/job-audio",
-  jobGeneric: "ui://nodaro/widget/v4/job-generic",
-  jobAuto: "ui://nodaro/widget/v4/job-auto",
-  workflow: "ui://nodaro/widget/v4/workflow",
-  gallery: "ui://nodaro/widget/v4/gallery",
-  appRun: "ui://nodaro/widget/v4/app-run",
-  uploadImage: "ui://nodaro/widget/v4/upload-image",
-  uploadAudio: "ui://nodaro/widget/v4/upload-audio",
-  uploadVideo: "ui://nodaro/widget/v4/upload-video",
-  recast: "ui://nodaro/widget/v4/recast",
+  jobImage: "ui://nodaro/widget/v5/job-image",
+  jobVideo: "ui://nodaro/widget/v5/job-video",
+  jobAudio: "ui://nodaro/widget/v5/job-audio",
+  jobGeneric: "ui://nodaro/widget/v5/job-generic",
+  jobAuto: "ui://nodaro/widget/v5/job-auto",
+  workflow: "ui://nodaro/widget/v5/workflow",
+  gallery: "ui://nodaro/widget/v5/gallery",
+  appRun: "ui://nodaro/widget/v5/app-run",
+  uploadImage: "ui://nodaro/widget/v5/upload-image",
+  uploadAudio: "ui://nodaro/widget/v5/upload-audio",
+  uploadVideo: "ui://nodaro/widget/v5/upload-video",
+  recast: "ui://nodaro/widget/v5/recast",
 } as const
 
 const WIDGETS: Array<{
@@ -142,7 +142,7 @@ function widgetCsp(addresses: McpLaneAddresses) {
 }
 
 /**
- * Historical URI prefixes we register at, in addition to the current `/v4/`.
+ * Historical URI prefixes we register at, in addition to the current `/v5/`.
  *
  * Claude.ai caches `tools/list` AND `resources/read` aggressively — once a
  * connector is paired, the host may keep using the OLD `_meta.ui.resourceUri`
@@ -161,9 +161,10 @@ const LEGACY_URI_PREFIXES = [
   "ui://nodaro/widget/", // v0 (initial release)
   "ui://nodaro/widget/v2/", // v2 cache-bust
   "ui://nodaro/widget/v3/", // v3 → demoted on the v4 cache-bust (grace-timer + task-augmentation fixes never loaded under the cached v3 URI)
+  "ui://nodaro/widget/v4/", // v4 → demoted on the v5 cache-bust (the job card's price-quote state: a cached v4 card shows "No result returned." for a quote)
 ] as const
 
-const CURRENT_URI_PREFIX = "ui://nodaro/widget/v4/"
+const CURRENT_URI_PREFIX = "ui://nodaro/widget/v5/"
 
 const KIND_OF = {
   jobImage: "job-image",

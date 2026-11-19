@@ -11,6 +11,7 @@ import { supabase } from "../../supabase.js"
 import { amountsNote, amountWord, statedAmount, statedAmountFields, statedAmountRecord, unitFields } from "../amounts.js"
 import { statedDocument } from "../served-documents.js"
 import { deploymentName } from "../deployment-name.js"
+import { VIDEO_REMAKE_POINTER, videoRemakeOffered } from "./_video-lanes.js"
 
 /**
  * RECAST AUTHORED-SCRIPT VERBS (spec 2026-08-06 §5 — P2).
@@ -387,7 +388,11 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
       {
         title: "Start Recast Render",
         description:
-          "Quote and render an imported recast — the render half of the MCP movie " +
+          "Recast: recreate, reshoot or remix a whole video from scratch: any length, " +
+          "your own cast, new music, anything changed, the motion too. " +
+          (videoRemakeOffered(session) ? `${VIDEO_REMAKE_POINTER} ` : "") +
+          "This tool quotes and renders an imported recast (a script written with " +
+          "`get_recast_authoring_skill`, then `import_recast_script`) — the render half of the MCP movie " +
           "lane. Without `confirm` it returns the PRICE QUOTE only (nothing is " +
           "charged). With `confirm: true` — only after the user accepted the quoted " +
           "credits — it buys the plan and the render. Call it again if a run is " +

@@ -1818,28 +1818,8 @@ describe("modify_video verb", () => {
     expect(received.body?.duration).toBe("10")
   })
 
-  it("no model is a Seedance 2.5 edit: the reference lane, in edit shape, at the model's first resolution", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-default" })
-    const server = buildServer()
-    registerVerbs({ server, session: executeSession(), fastify })
-    const result = await callTool(server, "modify_video", {
-      prompt: "make it night",
-      video_url: "https://a/v.mp4",
-      // What a caller of the former default sent; the edit takes neither.
-      duration: "10",
-      multi_shots: true,
-    })
-    expect(result.isError).toBeUndefined()
-    expect(received.body).toMatchObject({
-      provider: "seedance-2-5",
-      prompt: "edit {video:1} as follows:\nmake it night",
-      aspectRatio: "adaptive",
-      duration: -1,
-      resolution: "480p",
-      referenceVideoUrls: ["https://a/v.mp4"],
-    })
-    expect(received.body).not.toHaveProperty("multiShots")
-  })
+  // A call that names no model: `modify-video-remake-engines.test.ts` (a Video Remake quote where
+  // `video_remake` is offered, a Seedance 2.5 edit that runs at once where it is not).
 
   it("seedance-2-5 dispatches through the Seedance reference-video lane, in edit shape", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-edit" })

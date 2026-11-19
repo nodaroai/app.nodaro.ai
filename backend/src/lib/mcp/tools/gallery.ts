@@ -340,9 +340,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v5/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/gallery",
+          resourceUri: "ui://nodaro/widget/v5/gallery",
           visibility: ["model", "app"],
         },
       },
@@ -549,9 +549,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v4/gallery",
+          "ui/resourceUri": "ui://nodaro/widget/v5/gallery",
           ui: {
-            resourceUri: "ui://nodaro/widget/v4/gallery",
+            resourceUri: "ui://nodaro/widget/v5/gallery",
             visibility: ["model", "app"],
           },
         },
@@ -690,9 +690,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v4/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v5/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v4/gallery",
+          resourceUri: "ui://nodaro/widget/v5/gallery",
           visibility: ["model", "app"],
         },
       },
@@ -1037,9 +1037,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // valid without an outputSchema.
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v4/job-auto",
+          "ui/resourceUri": "ui://nodaro/widget/v5/job-auto",
           ui: {
-            resourceUri: "ui://nodaro/widget/v4/job-auto",
+            resourceUri: "ui://nodaro/widget/v5/job-auto",
             visibility: ["model", "app"],
           },
         },

@@ -24,7 +24,7 @@ const ALL_GRANTED: Scope[] = [
   "apps:read",
 ]
 
-const JOB_AUTO_URI = "ui://nodaro/widget/v4/job-auto"
+const JOB_AUTO_URI = "ui://nodaro/widget/v5/job-auto"
 
 /** Every previously widget-less job verb that must now bind the job-auto card. */
 const JOB_AUTO_VERBS = [
