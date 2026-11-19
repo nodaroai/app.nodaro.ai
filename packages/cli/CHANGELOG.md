@@ -1,5 +1,31 @@
 # @nodaro/cli
 
+## 1.53.0
+
+### Minor Changes
+
+- 119eb24: `nodaro edit podcast-pack` runs several podcast tools on one recording for one price, set by the recording's length: `--tool` picks each tool (repeat it, or comma-separate tools that take their defaults), `--tool <tool>=<json or file>` gives a tool its own settings, the recording flags are those of `edit tighten-episode`, and `--estimate` quotes the pack with nothing created or charged. It prints the pack's job, each tool's job and any tool that did not start. `nodaro edit podcast-pack-start <packJobId> <tool>` starts, free and once per tool, a tool the pack paid for that did not start.
+
+### Patch Changes
+
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [e1e0748]
+- Updated dependencies [21718eb]
+- Updated dependencies [f9f120e]
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [9574d1f]
+- Updated dependencies [9574d1f]
+- Updated dependencies [119eb24]
+- Updated dependencies [6b43b7b]
+- Updated dependencies [2c1fbf6]
+- Updated dependencies [1465e79]
+- Updated dependencies [18485e3]
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [e42ff95]
+  - @nodaro/shared@3.71.0
+  - @nodaro/sdk@2.77.0
+  - @nodaro/prompts@1.59.1
+
 ## 1.52.0
 
 ### Minor Changes
