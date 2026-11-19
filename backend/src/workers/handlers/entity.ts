@@ -3,7 +3,7 @@ import {
   CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, OBJECT_MOTION_DEFAULT_PROVIDER,
 } from "./default-models.js"
 import { localLlmKeySet } from "../../lib/llm/anthropic-availability.js"
-import { generateImage, imageToVideo, videoToVideo } from "../../providers/index.js"
+import { generateImage, imageToVideo } from "../../providers/index.js"
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
 import type { LlmAdvancedInput } from "../../lib/llm-advanced-mode.js"
 import {
@@ -407,7 +407,6 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
   const {
     prompt,
     sourceImageUrl,
-    refineFromVideoUrl,
     provider,
     aspectRatio,
     attachToLocationId,
@@ -417,9 +416,6 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     jobId: string
     prompt: string
     sourceImageUrl: string
-    /** When set, refine this clip via video-to-video instead of running
-     *  image-to-video from sourceImageUrl. */
-    refineFromVideoUrl?: string
     provider?: string
     aspectRatio?: string
     attachToLocationId?: string
@@ -427,31 +423,22 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     attachName?: string
   }
   const resolvedProvider = provider ?? LOCATION_MOTION_DEFAULT_PROVIDER
-  const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
-  console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
+  console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
 
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
     providerKindForVideoModel(resolvedProvider),
   )
 
-  const result = refineFromVideoUrl
-    ? await videoToVideo(
-        refineFromVideoUrl,
-        resolvedProvider,
-        prompt,
-        aspectRatio ? { aspectRatio } : undefined,
-        { onTaskCreated },
-      )
-    : await imageToVideo(
-        sourceImageUrl,
-        resolvedProvider,
-        prompt,
-        undefined,
-        undefined,
-        aspectRatio ? { aspectRatio } : undefined,
-        { onTaskCreated },
-      )
+  const result = await imageToVideo(
+    sourceImageUrl,
+    resolvedProvider,
+    prompt,
+    undefined,
+    undefined,
+    aspectRatio ? { aspectRatio } : undefined,
+    { onTaskCreated },
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   // Shared entity completion tail — see lib/entity-finalize.ts. The reconcile
@@ -503,7 +490,6 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
   const {
     prompt,
     sourceImageUrl,
-    refineFromVideoUrl,
     provider,
     duration,
     aspectRatio,
@@ -514,9 +500,6 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
     jobId: string
     prompt: string
     sourceImageUrl: string
-    /** When set, refine this clip via video-to-video instead of running
-     *  image-to-video from sourceImageUrl. */
-    refineFromVideoUrl?: string
     provider?: string
     /** Per-model clip duration (seconds), route-validated against the
      *  provider's allowed durations. Undefined → model default. */
@@ -527,8 +510,7 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
     attachName?: string
   }
   const resolvedProvider = provider ?? OBJECT_MOTION_DEFAULT_PROVIDER
-  const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
-  console.log(`[worker] generate-object-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
+  console.log(`[worker] generate-object-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
 
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
@@ -536,27 +518,16 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
   )
 
   // Per-model clip duration (route-validated against the provider's allowed
-  // durations). i2v takes it as the positional `duration` arg; v2v takes it via
-  // ProviderOptions.duration (string). Undefined → the model's own default.
-  const result = refineFromVideoUrl
-    ? await videoToVideo(
-        refineFromVideoUrl,
-        resolvedProvider,
-        prompt,
-        aspectRatio || duration !== undefined
-          ? { ...(aspectRatio ? { aspectRatio } : {}), ...(duration !== undefined ? { duration: String(duration) } : {}) }
-          : undefined,
-        { onTaskCreated },
-      )
-    : await imageToVideo(
-        sourceImageUrl,
-        resolvedProvider,
-        prompt,
-        duration,
-        undefined,
-        aspectRatio ? { aspectRatio } : undefined,
-        { onTaskCreated },
-      )
+  // durations), the positional `duration` arg. Undefined → the model's own default.
+  const result = await imageToVideo(
+    sourceImageUrl,
+    resolvedProvider,
+    prompt,
+    duration,
+    undefined,
+    aspectRatio ? { aspectRatio } : undefined,
+    { onTaskCreated },
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   // Shared entity completion tail — see lib/entity-finalize.ts. The reconcile
@@ -608,7 +579,6 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
   const {
     prompt,
     sourceImageUrl,
-    refineFromVideoUrl,
     provider,
     duration,
     aspectRatio,
@@ -619,9 +589,6 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
     jobId: string
     prompt: string
     sourceImageUrl: string
-    /** When set, refine this clip via video-to-video instead of running
-     *  image-to-video from sourceImageUrl. */
-    refineFromVideoUrl?: string
     provider?: string
     /** Per-model clip duration (seconds), route-validated against the
      *  provider's allowed durations. Undefined → model default. */
@@ -632,8 +599,7 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
     attachName?: string
   }
   const resolvedProvider = provider ?? CREATURE_MOTION_DEFAULT_PROVIDER
-  const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
-  console.log(`[worker] generate-creature-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
+  console.log(`[worker] generate-creature-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
 
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
@@ -641,27 +607,16 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
   )
 
   // Per-model clip duration (route-validated against the provider's allowed
-  // durations). i2v takes it as the positional `duration` arg; v2v takes it via
-  // ProviderOptions.duration (string). Undefined → the model's own default.
-  const result = refineFromVideoUrl
-    ? await videoToVideo(
-        refineFromVideoUrl,
-        resolvedProvider,
-        prompt,
-        aspectRatio || duration !== undefined
-          ? { ...(aspectRatio ? { aspectRatio } : {}), ...(duration !== undefined ? { duration: String(duration) } : {}) }
-          : undefined,
-        { onTaskCreated },
-      )
-    : await imageToVideo(
-        sourceImageUrl,
-        resolvedProvider,
-        prompt,
-        duration,
-        undefined,
-        aspectRatio ? { aspectRatio } : undefined,
-        { onTaskCreated },
-      )
+  // durations), the positional `duration` arg. Undefined → the model's own default.
+  const result = await imageToVideo(
+    sourceImageUrl,
+    resolvedProvider,
+    prompt,
+    duration,
+    undefined,
+    aspectRatio ? { aspectRatio } : undefined,
+    { onTaskCreated },
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   // Shared entity completion tail — see lib/entity-finalize.ts. The reconcile

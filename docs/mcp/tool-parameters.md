@@ -1021,7 +1021,6 @@ Needs `workflows:execute`.
 | `attach_to_creature_id` | string |  | When set, append the result to this creature's motion_clips[] bucket. Ownership is re-verified BEFORE credit reservation, so a forged id is rejected with `not_found` and no credits are charged. |
 | `attach_name` | string |  | Display name for the motion-clip entry (defaults to motion description). From 1 to 200 characters. |
 | `aspect_ratio` | string |  | Output aspect ratio. Defaults to 1:1 (centered reference-clip framing) — creatures favor square framing vs. location's 16:9 cinematic default. One of `1:1`, `3:4`, `16:9`, `9:16`, `4:3`. |
-| `refine_from_video_url` | string (URL) |  | Refinement path: when set, route to video-to-video using THIS clip as the source instead of running image-to-video from `source_image_url`. Use to iterate on an existing motion clip with a new prompt (e.g. 'same shot but faster rotation'). Routes through providers with video-to-video capability. |
 
 ## `generate_dialogue`
 
@@ -1179,7 +1178,6 @@ Needs `workflows:execute`.
 | `canonical_description` | string |  | Canonical scene description (preferred prompt context; falls back to category + name). At most 4000 characters. |
 | `attach_to_location_id` | string |  | When set, append the result to this location's atmosphere_motions[] bucket. |
 | `attach_name` | string |  | Display name for the atmosphere-motion entry (defaults to motion description). From 1 to 200 characters. |
-| `refine_from_video_url` | string (URL) |  | Refinement path: when set, route to video-to-video using THIS clip as the source instead of running image-to-video from `source_image_url`. Use to iterate on an existing atmosphere clip with a new prompt (e.g. 'same shot but light rain instead of fog'). Routes through providers with video-to-video capability. |
 
 ## `generate_mask`
 
@@ -1244,7 +1242,6 @@ Needs `workflows:execute`.
 | `attach_to_object_id` | string |  | When set, append the result to this object's motion_clips[] bucket. Ownership is re-verified BEFORE credit reservation, so a forged id is rejected with `not_found` and no credits are charged. |
 | `attach_name` | string |  | Display name for the motion-clip entry (defaults to motion description). From 1 to 200 characters. |
 | `aspect_ratio` | string |  | Output aspect ratio. Defaults to 1:1 (product-showcase framing) — objects favor square framing vs. location's 16:9 cinematic default. One of `1:1`, `3:4`, `16:9`, `9:16`, `4:3`. |
-| `refine_from_video_url` | string (URL) |  | Refinement path: when set, route to video-to-video using THIS clip as the source instead of running image-to-video from `source_image_url`. Use to iterate on an existing motion clip with a new prompt (e.g. 'same shot but faster rotation'). Routes through providers with video-to-video capability. |
 
 ## `generate_prompt`
 

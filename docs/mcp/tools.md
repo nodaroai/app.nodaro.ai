@@ -1586,8 +1586,7 @@ Generate a main image (`kind: "main"`) or a variant asset (`kind: "asset"` + `as
 **Scope:** `workflows:execute`
 
 Animate the location's establishing shot into an atmospheric motion clip
-(image-to-video). Pass `refine_from_video_url` to route through video-to-video
-for iterating on an existing clip.
+(image-to-video).
 
 ---
 
@@ -1660,9 +1659,8 @@ Re-run the LLM caption against the current main image. Charged like the approval
 
 Animate the object's main image into a motion clip (image-to-video).
 Provider defaults to `"kling-turbo"`, aspect ratio defaults to `"1:1"`.
-Pass `refine_from_video_url` to use video-to-video refinement.
 
-**Input:** `motion_prompt`, `source_image_url` (required), `name`, `attach_to_object_id`, `provider`, `aspect_ratio`, `refine_from_video_url`
+**Input:** `motion_prompt`, `source_image_url` (required), `name`, `attach_to_object_id`, `provider`, `aspect_ratio`
 
 ---
 
@@ -1741,9 +1739,9 @@ Re-run the LLM caption against the current main image. Charged like the approval
 
 Animate the creature's main image into an ambient motion clip
 (image-to-video). Provider defaults to `"kling-turbo"`, aspect ratio defaults
-to `"1:1"`. Pass `refine_from_video_url` to use video-to-video refinement.
+to `"1:1"`.
 
-**Input:** `motion_prompt`, `source_image_url` (required), `name`, `canonical_description`, `category`, `style`, `attach_to_creature_id`, `attach_name`, `provider`, `aspect_ratio`, `refine_from_video_url`
+**Input:** `motion_prompt`, `source_image_url` (required), `name`, `canonical_description`, `category`, `style`, `attach_to_creature_id`, `attach_name`, `provider`, `aspect_ratio`
 
 ---
 

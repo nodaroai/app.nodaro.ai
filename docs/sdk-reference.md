@@ -4995,11 +4995,6 @@ Object-specific defaults vs location:
   (`1:1` / `3:4` / `16:9` / `9:16` / `4:3`) with `4:3` added vs. the
   character set to support classic product-catalogue aspect ratios.
 
-Pass `refineFromVideoUrl` to route through video-to-video using that clip
-as the source instead of running Generate Video from `sourceImageUrl` —
-use to iterate an existing clip with a new prompt without shifting
-composition.
-
 > `sourceImageUrl` is REQUIRED. Image-to-video needs a source frame and
 > the route has no fallback — supply the canonical product-shot URL
 > explicitly.
@@ -5013,16 +5008,6 @@ const { jobId } = await client.objects.generateMotion({
   provider: "kling-turbo",
   attachToObjectId: objectId,
   attachName: "rotate-360",
-})
-
-// Refine an existing clip (video-to-video)
-const { jobId: refineJobId } = await client.objects.generateMotion({
-  name: "Antique Lantern",
-  motionPrompt: "same shot but slow hover instead of rotation",
-  sourceImageUrl: mainImageUrl,
-  refineFromVideoUrl: existingRotationClipUrl,
-  provider: "wan-i2v",
-  attachToObjectId: objectId,
 })
 ```
 

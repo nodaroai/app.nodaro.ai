@@ -81,6 +81,7 @@ import { generateCreatureMotionRoutes } from "../generate-creature-motion.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { REFINE_FROM_VIDEO_REMOVED_MESSAGE } from "../../lib/entity-motion-refine.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -335,6 +336,24 @@ describe("POST /v1/generate-creature-motion", () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("refuses a body that sends refineFromVideoUrl: nothing is reserved or queued", async () => {
+    setupSupabaseMock({ creatureRow: { id: TEST_CREATURE_ID } })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-creature-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: basePayload({ refineFromVideoUrl: "https://example.com/clip.mp4" }),
+    })
+
+    expect(res.statusCode).toBe(400)
+    const { error } = res.json()
+    expect(error.code).toBe("validation_error")
+    expect(error.issues).toEqual([{ path: "refineFromVideoUrl", message: REFINE_FROM_VIDEO_REMOVED_MESSAGE }])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 

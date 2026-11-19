@@ -356,8 +356,6 @@ export interface GenerateObjectMotionInput extends GenerationSessionParams {
   sourceImageUrl: string
   provider?: string
   name: string
-  /** Source clip URL — when set, worker routes to video-to-video refine. */
-  refineFromVideoUrl?: string
   category?: string
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   canonicalDescription?: string

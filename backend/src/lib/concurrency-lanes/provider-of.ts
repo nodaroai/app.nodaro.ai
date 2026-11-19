@@ -175,9 +175,9 @@ function videoUpscaleProvider(d: Data): string | null {
   return route("video-upscale", VIDEO_UPSCALE_DEFAULT_PROVIDER)
 }
 
-/** An entity motion: image-to-video from its still, or video-to-video when it refines a clip. */
-const entityMotion = (defaultModel: string, canRefine: boolean) => (d: Data): string | null =>
-  route(canRefine && str(d.refineFromVideoUrl) ? "video-to-video" : "image-to-video", str(d.provider) ?? defaultModel)
+/** An entity motion: image-to-video from its still. */
+const entityMotion = (defaultModel: string) => (d: Data): string | null =>
+  route("image-to-video", str(d.provider) ?? defaultModel)
 
 const entityImage = (d: Data): string | null =>
   route("image-generation", str(d.provider) ?? IMAGE_MODEL_ROLE_DEFAULTS.character)
@@ -226,10 +226,10 @@ export const ROUTED_JOBS: Readonly<Record<string, (d: Data) => string | null>> =
   "generate-creature-asset": entityImage,
   "generate-location": entityImage,
   "generate-location-asset": entityImage,
-  "generate-character-motion": entityMotion(CHARACTER_MOTION_DEFAULT_PROVIDER, false),
-  "generate-location-motion": entityMotion(LOCATION_MOTION_DEFAULT_PROVIDER, true),
-  "generate-object-motion": entityMotion(OBJECT_MOTION_DEFAULT_PROVIDER, true),
-  "generate-creature-motion": entityMotion(CREATURE_MOTION_DEFAULT_PROVIDER, true),
+  "generate-character-motion": entityMotion(CHARACTER_MOTION_DEFAULT_PROVIDER),
+  "generate-location-motion": entityMotion(LOCATION_MOTION_DEFAULT_PROVIDER),
+  "generate-object-motion": entityMotion(OBJECT_MOTION_DEFAULT_PROVIDER),
+  "generate-creature-motion": entityMotion(CREATURE_MOTION_DEFAULT_PROVIDER),
   // The clip is image-to-video; its dialogue track (ElevenLabs) is a side call.
   "voiced-video": (d) => route("image-to-video", str(d.provider) ?? VOICED_VIDEO_DEFAULT_PROVIDER),
   "extend-video": extendVideoProvider,

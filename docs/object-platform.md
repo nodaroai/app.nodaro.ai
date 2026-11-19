@@ -115,30 +115,6 @@ nodes or as B-roll loops in product cuts.
   image-to-video generation on that provider. See
   `docs/nodes/ai-video/generate-video.md` for the per-provider table.
 
-#### Refinement (video-to-video)
-
-Pass `refineFromVideoUrl` (REST) / `refine_from_video_url` (MCP) to route
-the worker through video-to-video using THAT clip as the source instead of
-running image-to-video from the source frame. Use to iterate on an existing
-motion clip with a new prompt without shifting composition:
-
-```bash
-# REST — refine an existing rotation clip into a slow hover
-curl -X POST $API/v1/generate-object-motion \
-  -H "Authorization: Bearer $NODARO_API_KEY" \
-  -d '{
-    "motionPrompt": "same shot but slow hover instead of rotation",
-    "sourceImageUrl": "https://r2/obj.png",
-    "refineFromVideoUrl": "https://r2/obj-rotation.mp4",
-    "provider": "wan-i2v",
-    "name": "Antique Lantern"
-  }'
-```
-
-Routes through providers with the `video-to-video` capability (currently
-Wan 2.6 via KIE). Same auto-attach behavior — the refined clip lands in
-`motion_clips[]` when `attachToObjectId` is set.
-
 ## Reference photos (mood-board)
 
 The mood-board is a small array of caller-supplied reference images that
@@ -603,15 +579,6 @@ generate_object_motion({
   name: "Antique Lantern",
   attach_to_object_id: "obj-uuid",
   attach_name: "rotate-360"
-})
-
-// Refinement — iterate an existing clip via video-to-video.
-generate_object_motion({
-  motion_prompt: "same shot but slow hover instead of rotation",
-  source_image_url: "https://r2/obj.png",
-  refine_from_video_url: "https://r2/obj-rotation.mp4",
-  provider: "wan-i2v",
-  name: "Antique Lantern"
 })
 ```
 
