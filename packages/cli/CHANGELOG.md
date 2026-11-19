@@ -1,5 +1,25 @@
 # @nodaro/cli
 
+## 1.54.0
+
+### Minor Changes
+
+- c9dce77: Tighten Episode takes `tightness` (`"light" | "standard" | "tight"`), how far long pauses are shortened: light shortens pauses over 600 ms to 350 ms, standard (the default) pauses over 350 ms to 220 ms, tight pauses over 250 ms to 150 ms. It is on `TightenEpisodeInput` (`client.edit.tightenEpisode` and `client.edit.estimateTightenEpisode`) and on `nodaro edit tighten-episode` as `--tightness`.
+
+### Patch Changes
+
+- 0bc2a4f: `nodaro nodes run video-to-video` with a Video Remake engine as the provider (`nodaro-prism`, `nodaro-pulse`) prints the price quote it is answered, says nothing was started, and shows the body to run it with. `--json` prints the answer as it is.
+- Updated dependencies [73f23e8]
+- Updated dependencies [c9dce77]
+- Updated dependencies [a859468]
+- Updated dependencies [8801c82]
+- Updated dependencies [0602c24]
+- Updated dependencies [0bc2a4f]
+- Updated dependencies [ff7a56e]
+  - @nodaro/sdk@2.78.0
+  - @nodaro/shared@3.72.0
+  - @nodaro/prompts@1.60.0
+
 ## 1.53.0
 
 ### Minor Changes
