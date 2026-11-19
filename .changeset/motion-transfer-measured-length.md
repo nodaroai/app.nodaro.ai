@@ -1,5 +1,0 @@
----
-"@nodaro/shared": minor
----
-
-Motion Transfer is priced from the length of its driving video as the server measures it. New exports from `@nodaro/shared/credits`: `motionTransferPrice` (the row a run reserves and, for a per-second rate, its units), `checkMotionTransferLength` (the 3-second minimum and each model's limit: 10 s on Kling while the character keeps the image's orientation, 30 s following the video's, 30 s on Wan Animate), `motionTransferBilledSeconds`, `motionTransferEstimatePrice` / `motionTransferEstimateSeconds` (an estimate quotes the orientation's limit when the length is not known), `motionTransferRateOf`, `motionTransferMaxSec`, `motionTransferOrientation`, and the `MOTION_TRANSFER_*` constants. Kling 3.0 at 720p is charged per second of the video through a new four-second row, `kling-3.0-motion:720p:per-4s`, listed in its catalog entry's pricing; every other model and size keeps its rows. `buildMotionCreditModelIdentifier` is unchanged and names the tier rows only.

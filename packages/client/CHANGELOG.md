@@ -1,5 +1,30 @@
 # @nodaro/sdk
 
+## 2.77.0
+
+### Minor Changes
+
+- 9574d1f: `edit.tightenEpisode` and `edit.speakerLayout` take `speakerNames` (speaker label → the name to show): the job keeps the names and returns them on `output_data.speakers[].name`, and the run itself never reads them. The results of the podcast runs are typed and exported from `@nodaro/sdk/edit`: `ClipPackClip` / `ClipPackOutputData` (each clip's `sourceStartMs`, `sourceEndMs` and `sourceSpans` in the recording, and `failedClipList`, the clips that could not be rendered, as `ClipPackFailedClip`) and `UseCaseSpeaker` / `TightenEpisodeOutputData` / `SpeakerLayoutOutputData` (`speakers`, with each one's `talkMs`). Every field is optional: a run that finished before them has none.
+- 119eb24: `edit.podcastPack(input, options?)` runs several podcast tools (Tighten Episode, Chapters, Trailer, Clip Pack, Speaker Layout) on one recording for one price, set by the recording's length with every chosen tool included, and `edit.estimatePodcastPack(input)` quotes it with nothing created or charged. The input takes the recording once (`mediaUrl` or `mediaUrls`, with `masterAudioUrl` and `cameras`), `speakerNames`, and `tools`: each tool's own settings, typed as what its own method takes without the recording fields. The answer names the pack's job and each tool's job, plus any tool that did not start; an `Idempotency-Key` retry answers `{ jobId, deduped: true }`. A tool that fails is continued free with `continueUseCase`. New exports from `@nodaro/sdk/edit`: `PODCAST_PACK_TOOLS` and the `PodcastPack*` types. `edit.startPodcastPackTool(packJobId, tool)` starts, free and once per tool, a tool the pack paid for that did not start (`PodcastPackToolStarted`).
+- 6b43b7b: Replace Audio (Nodaro Cloud): `@nodaro/sdk` adds `media.replaceAudio(input, options?)` — `POST /v1/replace-audio`, keep a video's speech and replace its music (or all its sound) as one job, the music a file or a prompt — with the `ReplaceAudioInput`, `ReplaceAudioOutput` and `ReplaceAudioRunStep` types. `@nodaro/shared` counts the `replace-audio` node among the video producers, so its output connects wherever a video goes.
+- 2c1fbf6: Trends: `TrendDetailSlot.emptyFill` says, on each optional slot of a trend's page, what a run takes when you leave that slot empty: `"default"` (its original look, `defaultImages`), `"example"` (the chosen example's pictures for it; none when that example has none) or `"original"` (no pictures: the role stays as in the original). Absent on a required slot. The doc comments state the rule behind it: an empty optional slot takes its original look when it has one, whatever its kind; without one, a person takes the chosen example's pictures and a place, product or pet stays as in the original. A Full depth trend never uses an example, and a trend that hides its original fills every such slot from the example.
+- 18485e3: `videoRemake.advanced()` (`GET /v1/video-remake/advanced`, public) answers `{ show: boolean }` (`VideoRemakeAdvanced`, also from `@nodaro/sdk/video-remake`): whether the Video Remake page shows `prepareReferences` and `prePrompt` under its Advanced options, `false` until Nodaro turns them on. It describes the page only: `run()` and `estimate()` take both fields as sent. No sign-in needed; the answer may be up to a minute old.
+
+### Patch Changes
+
+- 1465e79: Trends: the doc comments on `TrendDetailSlot.defaultImages`, `TrendDetailSlot.emptyFill` and `TrendRunDisplaySlot.fromDefault` say that on a trend that hides its original, an optional slot left empty takes the pictures of the example shown as the original, served as that slot's `defaultImages` with `emptyFill: "default"`. No type changed.
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [e1e0748]
+- Updated dependencies [21718eb]
+- Updated dependencies [f9f120e]
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [9574d1f]
+- Updated dependencies [6b43b7b]
+- Updated dependencies [2b8f8b5]
+- Updated dependencies [e42ff95]
+  - @nodaro/shared@3.71.0
+  - @nodaro/prompts@1.59.1
+
 ## 2.76.0
 
 ### Minor Changes
