@@ -290,6 +290,9 @@ describe("both pages show it", { timeout: 20_000 }, () => {
     // The custom style (custom-style.test.tsx): never saved, and an engine that takes none (nothing more is asked).
     routes["GET /v1/admin/video-remake/custom-style"] = () => ({ body: { data: { customStyle: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
     routes["GET /v1/admin/video-remake/plan-roles"] = () => ({ body: { data: { planRoles: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
+    // The 3D previz clips and the shot lock (previz-shot-lock.test.tsx): never saved, and an engine that takes neither.
+    routes["GET /v1/admin/video-remake/previz"] = () => ({ body: { data: { previz: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
+    routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
     routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
     routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({
       body: { data: { set: "precise", parts: [], assembled: "edit {video:1} as follows:", length: 26, max: 8000, problems: [] } },

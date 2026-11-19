@@ -514,6 +514,9 @@ export const queryKeys = {
     nodaroMotionCustomStyleCheck: (steps: string) => ["admin", "nodaro-motion", "custom-style", "check", steps] as const,
     /** Admin → Video Remake: the roles-from-the-prompt setting, the engine's defaults for it, and one check of its step (as a string). */
     nodaroMotionPlanRoles: () => ["admin", "nodaro-motion", "plan-roles"] as const,
+    /** Admin → Video Remake: whether a 3D previz clip is accepted, and the shot lock per engine. */
+    nodaroMotionPreviz: () => ["admin", "nodaro-motion", "previz"] as const,
+    nodaroMotionShotLock: () => ["admin", "nodaro-motion", "shot-lock"] as const,
     nodaroMotionPlanRolesDefaults: () => ["admin", "nodaro-motion", "plan-roles", "defaults"] as const,
     nodaroMotionPlanRolesCheck: (steps: string) => ["admin", "nodaro-motion", "plan-roles", "check", steps] as const,
     nodaroMotionStyleOnly: () => ["admin", "nodaro-motion", "style-only"] as const,

@@ -71,6 +71,18 @@ export function loadedEngineTakesPlanRoles(): boolean {
 }
 
 /**
+ * Whether this process's Cast Swap engine takes a 3D previz clip
+ * (`clipKind: "previz"` on the run and the estimate): it declares
+ * `castSwap.previz`. An older one drops the key and would run an ordinary
+ * edit of the clip, so a body naming one must be held back rather than sent.
+ * Whether the deployment accepts it is the route's to say
+ * (`previz_not_available`).
+ */
+export function loadedEngineTakesPreviz(): boolean {
+  return getPluginSupports().castSwap?.previz === true
+}
+
+/**
  * The request key for a Nodaro Pulse run's length fit: `motionLength`
  * where the loaded engine takes Video Remake's names (`engineAliases`,
  * 0.394.0+), else the old `klingLength` (an older engine knows only that one

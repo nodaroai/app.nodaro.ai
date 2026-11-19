@@ -10,7 +10,9 @@
  *
  * `maskFill: "none"` only to an engine that declares `castSwap.maskFillNone`;
  * `promptWording` only to one whose `castSwap.promptWordings` lists it;
- * `styleOnly` only to one that declares `castSwap.styleOnly`.
+ * `styleOnly` only to one that declares `castSwap.styleOnly`; `shotLock` only
+ * to one that declares `castSwap.shotLock`; `clipKind` only to one that
+ * declares `castSwap.previz`.
  * `promptStyle`, `scene`, `faceMesh`, `roleOutlines` and `shotList` are sent
  * only to an engine that declares them (`castSwap.promptStyles`,
  * `castSwap.fullDepthScenes`, `.faceMesh`, `.roleOutlines`, `.shotList`): one from before them
@@ -30,6 +32,8 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { engineDrawsDepthColormap, engineDrawsFillNone } from "../../lib/cast-swap-face-masking.js"
 import { engineTakesPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
 import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
+import { engineTakesPreviz } from "../../lib/nodaro-motion-previz.js"
+import { engineTakesShotLock } from "../../lib/nodaro-motion-shot-lock.js"
 import { engineRequest, isRec, parseJson, relay } from "./trends/run-helpers.js"
 import { promptPartsAnswerSchema, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 
@@ -43,7 +47,7 @@ export function loadedEngineHasPromptParts(): boolean {
 /** The request without the keys the loaded engine does not declare (a new object). */
 export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
   const cs = getPluginSupports().castSwap
-  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, promptWording, styleOnly, ...rest } = body
+  const { promptStyle, scene, faceMesh, roleOutlines, shotList, depthColormap, maskFill, promptWording, styleOnly, shotLock, clipKind, ...rest } = body
   // The depth look by its map (and the fill it rides with) only to an engine that draws that map.
   const colormap = depthColormap !== undefined && engineDrawsDepthColormap(cs, depthColormap) ? depthColormap : undefined
   // The fill none (the fill-none mesh line) only to an engine that draws it; a depth fill rides with its map as before.
@@ -61,6 +65,10 @@ export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
     ...(promptWording && engineTakesPromptWording(cs, promptWording) ? { promptWording } : {}),
     // The style-only set only to an engine that runs style-only runs (the callers refuse to ask any other).
     ...(styleOnly === true && engineTakesStyleOnly(cs) ? { styleOnly } : {}),
+    // The shot lock's line only to an engine that writes it: an older one is asked as before.
+    ...(shotLock === true && engineTakesShotLock(cs) ? { shotLock } : {}),
+    // The previz set only to an engine that takes a 3D previz clip (the callers refuse to ask any other).
+    ...(clipKind === "previz" && engineTakesPreviz(cs) ? { clipKind } : {}),
   }
 }
 

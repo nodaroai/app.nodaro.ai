@@ -120,8 +120,23 @@ export interface VideoRemakeRolePreviewSettings {
   inPreview?: boolean
 }
 
+/**
+ * What a role is on a run whose clip is a 3D previz (`clipKind: "previz"`), on
+ * every role kind; any other run ignores it.
+ */
+export interface VideoRemakeRolePrevizSettings {
+  /**
+   * What the role IS in the video to make, in your own words (`"the
+   * detective"`, `"a delivery van"`; 1–200 characters). On a previz run the
+   * role's `name` is the LOCATOR of its model in the clip (its colour, or its
+   * shape and position: `"the pink model"`), and `subject` is what the
+   * result's script calls it. Left out: the script calls it by its picture.
+   */
+  subject?: string
+}
+
 /** A person in the video to recast. */
-export interface VideoRemakePersonRole extends VideoRemakeRolePreviewSettings {
+export interface VideoRemakePersonRole extends VideoRemakeRolePreviewSettings, VideoRemakeRolePrevizSettings {
   kind: "person"
   /** How the person is told apart in the video, e.g. `"the woman that attacks"`.
    *
@@ -142,7 +157,7 @@ export interface VideoRemakePersonRole extends VideoRemakeRolePreviewSettings {
 }
 
 /** The place the video happens in. */
-export interface VideoRemakeLocationRole extends VideoRemakeRolePreviewSettings {
+export interface VideoRemakeLocationRole extends VideoRemakeRolePreviewSettings, VideoRemakeRolePrevizSettings {
   kind: "location"
   /** How the place is named. Default `"the setting"`. */
   name?: string
@@ -151,7 +166,7 @@ export interface VideoRemakeLocationRole extends VideoRemakeRolePreviewSettings 
 }
 
 /** An animal in the video to recast. */
-export interface VideoRemakePetRole extends VideoRemakeRolePreviewSettings {
+export interface VideoRemakePetRole extends VideoRemakeRolePreviewSettings, VideoRemakeRolePrevizSettings {
   kind: "pet"
   /** How the animal is told apart in the video, e.g. `"the dog"`.
    *
@@ -170,7 +185,7 @@ export interface VideoRemakePetRole extends VideoRemakeRolePreviewSettings {
 }
 
 /** An object in the video to recast. */
-export interface VideoRemakeProductRole extends VideoRemakeRolePreviewSettings {
+export interface VideoRemakeProductRole extends VideoRemakeRolePreviewSettings, VideoRemakeRolePrevizSettings {
   kind: "product"
   /** How the object is told apart in the video, e.g. `"the can"`.
    *
@@ -330,6 +345,18 @@ export interface VideoRemakeParams {
    */
   direction?: VideoRemakeArtStyleDirection | VideoRemakeCustomStyleDirection
   /**
+   * What the clip is (see {@link VideoRemakeClipKind}). `"previz"` says it is
+   * a 3D previz: the clip is then RENDERED into the run's look instead of
+   * edited. Only where {@link VideoRemakeResource.styleChoice} answers
+   * `previz` true, on Nodaro Prism, never as a draft; refusals:
+   * {@link VideoRemakePrevizRefusalCode}. Left out, or `"footage"`: an
+   * ordinary clip, the run as before. The job records it in
+   * `input_data.clipKind`.
+   */
+  clipKind?: VideoRemakeClipKind
+  /** A previz run's options (see {@link VideoRemakePrevizOptions}): only with `clipKind: "previz"`. */
+  previz?: VideoRemakePrevizOptions
+  /**
    * Nodaro Pulse only (Prism ignores it): which end of the clip is cut to
    * whole seconds (see {@link VideoRemakeMotionLength}). Default `"cut-end"`.
    */
@@ -375,6 +402,69 @@ export interface VideoRemakeParams {
 }
 
 /** What a run would cost, in credits. */
+/**
+ * What a run's clip is, as the caller states it (nothing detects it):
+ * - `"footage"` (the default): an ordinary filmed or generated clip, edited as
+ *   every run was before;
+ * - `"previz"`: a 3D previz — simple untextured ("clay") models moved and
+ *   filmed as the video to make will be. Its camera, rhythm, blocking and
+ *   motion are followed and its look is not: it is rendered into the run's
+ *   art style or custom style (`direction`), and with neither into real-world,
+ *   live-action footage. Name each role by its model in the clip (its colour,
+ *   or its shape and position: `name: "the pink model"`), say what it is in
+ *   `subject`, and give it the pictures that replace the model.
+ */
+export type VideoRemakeClipKind = "footage" | "previz"
+
+/** A previz run's options ({@link VideoRemakeParams.previz}). */
+export interface VideoRemakePrevizOptions {
+  /**
+   * `true`: the clip's lighting direction and its lighting changes are
+   * followed too. Default `false`: the camera, the rhythm and the motion
+   * alone.
+   */
+  lighting?: boolean
+  /**
+   * Whose sound the result has: `"clip"` keeps the clip's own sound,
+   * `"generated"` has the engine make it (environmental and action sounds, no
+   * music). Left out: the clip's sound when it has an audio track, generated
+   * when it has none. Only an engine that takes the choice accepts the field;
+   * an older one answers 400 `validation_error`.
+   */
+  sound?: "clip" | "generated"
+}
+
+/**
+ * The `code` of a refusal that is about a 3D previz clip
+ * (`NodaroError.code`), on {@link VideoRemakeResource.run},
+ * {@link VideoRemakeResource.estimate} and
+ * {@link VideoRemakeResource.fullQuality}. Nothing is charged.
+ *
+ * - `previz_not_available` (403): a 3D previz clip is not accepted here (see
+ *   {@link VideoRemakeStyleChoice.previz}); send an ordinary clip;
+ * - `previz_needs_prism` (400): it runs on Nodaro Prism only;
+ * - `previz_not_for_trends` (400): never on a trend run;
+ * - `previz_no_draft` (400): it has no draft; run it at 480p, 720p or 1080p;
+ * - `previz_role_needs_locator` (400): a role with pictures has no `name`;
+ *   name each role by its model in the clip (its colour, or its shape and
+ *   position);
+ * - `previz_needs_clip_kind` (400): `previz` was sent without
+ *   `clipKind: "previz"`;
+ * - `previz_no_full_quality` (409): a previz run has no Full Quality; run it
+ *   again at the resolution you need.
+ *
+ * Open-ended: a code not listed here may still arrive.
+ */
+export type VideoRemakePrevizRefusalCode =
+  | "previz_not_available"
+  | "previz_needs_prism"
+  | "previz_not_for_trends"
+  | "previz_no_draft"
+  | "previz_role_needs_locator"
+  | "previz_needs_clip_kind"
+  | "previz_no_full_quality"
+  | (string & {})
+
 /** A run's art style from the catalog: a `style` picker id (see {@link VideoRemakeParams}'s `direction`). */
 export interface VideoRemakeArtStyleDirection {
   style: string
@@ -890,6 +980,15 @@ export interface VideoRemakeStyleChoice {
    * the roles to be set by hand; a planning call sent anyway is refused).
    */
   planRoles?: boolean
+  /**
+   * Whether a run may state that its clip is a 3D previz here
+   * (`clipKind: "previz"`, see {@link VideoRemakeClipKind}): one answer for
+   * the deployment, not per engine. `true` only where the engine takes such a
+   * clip and Nodaro accepts it on this deployment. Absent from an older
+   * server: `false` (offer ordinary clips alone; a previz run sent anyway is
+   * refused 403 `previz_not_available`).
+   */
+  previz?: boolean
 }
 
 /**
@@ -954,7 +1053,8 @@ export class VideoRemakeResource {
    * per engine, whether a run takes the style in your own words there
    * (`direction: { customStyle }`, and {@link describeStyle}), and its
    * `planRoles` whether roles can be planned from the prompt here
-   * ({@link planRoles}).
+   * ({@link planRoles}), and its `previz` whether a run may state a 3D previz
+   * clip here (`clipKind: "previz"`).
    * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<VideoRemakeStyleChoice> {

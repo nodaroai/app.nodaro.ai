@@ -5,7 +5,7 @@
  * (`TrendVersionData.promptParts`).
  *
  * The `app_settings` row `nodaro_motion_prompt_parts`:
- * `{ "nodaro-prism"?: { precise?: Parts, motion?: Parts, styleOnly?: Parts }, "nodaro-pulse"?: … }`,
+ * `{ "nodaro-prism"?: { precise?: Parts, motion?: Parts, styleOnly?: Parts, previz?: Parts }, "nodaro-pulse"?: … }`,
  * keyed by Video Remake's PUBLIC engine ids, `Parts` the override text per
  * Cast Swap prompt part (1–2000 characters; `"-"` removes the part). No row
  * = never saved: every direct run uses the engine's defaults. A row keyed by
@@ -22,6 +22,14 @@
  * An app from before the key reads an entry holding it as invalid (its schema
  * is strict) and drops the engine's whole entry, so a `styleOnly` key is saved
  * only once every environment's engine runs style-only runs (the admin route).
+ *
+ * `previz` is a 3D previz clip's own parts (a direct Prism run that states
+ * `clipKind: "previz"`): the engine reads only `previz` for such a run and
+ * never for any other. An app from before the key drops the engine's whole
+ * entry likewise, and so does one from before the part ids that came with it
+ * (`shotLock`, `sound`, `referenceOnly`) for an override of one of those, so
+ * either is saved only once every environment's platform takes them (the
+ * admin route's platform hold).
  *
  * Who reads it: the Cast Swap engine, through
  * `tk.settings.nodaroMotionPromptParts()` (advertised as
@@ -46,10 +54,10 @@ export const NODARO_MOTION_PROMPT_PARTS_KEY = "nodaro_motion_prompt_parts"
 /** One style's overrides: the text per part. */
 export type NodaroMotionPromptPartTexts = Partial<Record<CastSwapPromptPartId, string>>
 
-/** The keys of one engine's entry: the run styles, then a style-only run's own set. */
-export const NODARO_MOTION_PROMPT_PARTS_KEYS = [...CAST_SWAP_STYLES, "styleOnly"] as const
+/** The keys of one engine's entry: the run styles, then a style-only run's own set, then a 3D previz clip's. */
+export const NODARO_MOTION_PROMPT_PARTS_KEYS = [...CAST_SWAP_STYLES, "styleOnly", "previz"] as const
 
-/** One key of an engine's entry: a run style (`precise`, `motion`) or `styleOnly`. */
+/** One key of an engine's entry: a run style (`precise`, `motion`), `styleOnly` or `previz`. */
 export type NodaroMotionPromptPartsKey = (typeof NODARO_MOTION_PROMPT_PARTS_KEYS)[number]
 
 /** One engine's overrides, per key (a key left out uses the defaults). */

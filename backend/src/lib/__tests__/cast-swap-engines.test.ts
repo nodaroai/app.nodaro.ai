@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, withWireLengthKey } from "../cast-swap-engines.js"
+import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, loadedEngineTakesPreviz, withWireLengthKey } from "../cast-swap-engines.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
 /**
@@ -96,6 +96,20 @@ describe("loadedEngineTakesPlanRoles", () => {
     expect(loadedEngineTakesPlanRoles()).toBe(false)
     setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, customStyle: true, planRoles: true } as never })
     expect(loadedEngineTakesPlanRoles()).toBe(true)
+  })
+})
+
+describe("loadedEngineTakesPreviz", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("is true only where the loaded engine declares 3D previz clips (castSwap.previz), whatever else it takes", () => {
+    expect(loadedEngineTakesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, customStyle: true, planRoles: true, shotLock: true } as never })
+    expect(loadedEngineTakesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, previz: false } as never })
+    expect(loadedEngineTakesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, previz: true } as never })
+    expect(loadedEngineTakesPreviz()).toBe(true)
   })
 })
 

@@ -32,6 +32,9 @@
  *                                         whether a run may take the style in the person's own words, and the instructions and model of its two LLM steps (admin-nodaro-motion-custom-style.ts)
  *   GET/PUT /v1/admin/video-remake/plan-roles, GET …/plan-roles/defaults, POST …/plan-roles/check
  *                                         whether roles can be planned from a person's prompt and loose images, and the instructions and model of its planning step (admin-nodaro-motion-plan-roles.ts)
+ *   GET/PUT /v1/admin/video-remake/previz  whether a run may state that its clip is a 3D previz, rendered into its look instead of edited (admin-nodaro-motion-previz.ts)
+ *   GET/PUT /v1/admin/video-remake/shot-lock
+ *                                         per engine, whether a direct run's prompt carries the line that keeps the shot order and adds no shot (admin-nodaro-motion-shot-lock.ts)
  *   GET/POST /v1/admin/video-remake/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
  *                                         named copies of every setting above, kept to load as a draft (admin-nodaro-motion-settings-sets.ts)
  *
@@ -117,6 +120,8 @@ import { NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION, registerNodaroMotionPreciseS
 import { NODARO_MOTION_ADVANCED_SECTION, registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
 import { NODARO_MOTION_CUSTOM_STYLE_SECTION, registerNodaroMotionCustomStyleRoutes } from "./admin-nodaro-motion-custom-style.js"
 import { NODARO_MOTION_PLAN_ROLES_SECTION, registerNodaroMotionPlanRolesRoutes } from "./admin-nodaro-motion-plan-roles.js"
+import { NODARO_MOTION_PREVIZ_SECTION, registerNodaroMotionPrevizRoutes } from "./admin-nodaro-motion-previz.js"
+import { NODARO_MOTION_SHOT_LOCK_SECTION, registerNodaroMotionShotLockRoutes } from "./admin-nodaro-motion-shot-lock.js"
 import { registerNodaroMotionSettingsSetsRoutes } from "./admin-nodaro-motion-settings-sets.js"
 
 /**
@@ -210,6 +215,8 @@ export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSe
   NODARO_MOTION_ADVANCED_SECTION,
   NODARO_MOTION_CUSTOM_STYLE_SECTION,
   NODARO_MOTION_PLAN_ROLES_SECTION,
+  NODARO_MOTION_PREVIZ_SECTION,
+  NODARO_MOTION_SHOT_LOCK_SECTION,
   NODARO_MOTION_PROMPT_PARTS_SECTION,
 ]
 
@@ -258,6 +265,8 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionAdvancedRoutes(app)
   registerNodaroMotionCustomStyleRoutes(app)
   registerNodaroMotionPlanRolesRoutes(app)
+  registerNodaroMotionPrevizRoutes(app)
+  registerNodaroMotionShotLockRoutes(app)
   registerNodaroMotionSettingsSetsRoutes(app, NODARO_MOTION_SETTINGS_SECTIONS)
   app.get("/v1/admin/video-remake/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {

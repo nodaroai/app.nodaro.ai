@@ -33,9 +33,11 @@ import Fastify, { type FastifyInstance } from "fastify"
  *    boolean, never per engine — true only while the engine declares
  *    `castSwap.planRoles` AND the deployment offers it, by the same rule as
  *    the custom style). An engine without the flag (every engine before it)
- *    answers false whatever is saved, and a failed read answers false.
+ *    answers false whatever is saved, and a failed read answers false;
+ *  - and whether a run may state a 3D previz clip here (`previz`: ONE
+ *    boolean, by the same rule, on `castSwap.previz` and its own setting).
  */
-const h = vi.hoisted(() => ({ style: null as unknown, customStyle: null as unknown, planRoles: null as unknown, offeredByDefault: true, planRolesByDefault: true, failed: false, throws: false, reads: 0 }))
+const h = vi.hoisted(() => ({ style: null as unknown, customStyle: null as unknown, planRoles: null as unknown, previz: null as unknown, offeredByDefault: true, planRolesByDefault: true, previzByDefault: true, failed: false, throws: false, reads: 0 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../../lib/app-settings.js", async (importOriginal) => ({
@@ -43,13 +45,14 @@ vi.mock("../../../lib/app-settings.js", async (importOriginal) => ({
   getAppSettings: async () => {
     h.reads++
     if (h.throws) throw new Error("boom")
-    return { nodaro_motion_style: h.style, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles }
+    return { nodaro_motion_style: h.style, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz }
   },
   settingsReadFailed: () => h.failed,
 }))
 
 vi.mock("../../../lib/nodaro-motion-custom-style-default.js", () => ({ customStyleOfferedByDefault: () => h.offeredByDefault }))
 vi.mock("../../../lib/nodaro-motion-plan-roles-default.js", () => ({ planRolesOfferedByDefault: () => h.planRolesByDefault }))
+vi.mock("../../../lib/nodaro-motion-previz-default.js", () => ({ previzOfferedByDefault: () => h.previzByDefault }))
 
 const { castSwapStyleChoiceRoutes, STYLE_CHOICE_MAX_AGE_SECONDS } = await import("../cast-swap-style-choice.js")
 const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../../lib/private-plugins/supports-registry.js")
@@ -60,7 +63,7 @@ const NO_STYLE_ONLY = { "nodaro-prism": false, "nodaro-pulse": false, "motion-pr
 const NO_PRECISE_ART_STYLE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
 const NO_PRECISE_ART_STYLE_ALONE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
 const NO_CUSTOM_STYLE = { "nodaro-prism": false, "nodaro-pulse": false, "motion-prism": false, "motion-pulse": false }
-const USER = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user", "motion-prism": "user", "motion-pulse": "user" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false }
+const USER = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user", "motion-prism": "user", "motion-pulse": "user" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, previz: false }
 
 let app: FastifyInstance
 
@@ -68,6 +71,8 @@ beforeEach(async () => {
   h.style = null
   h.customStyle = null
   h.planRoles = null
+  h.previz = null
+  h.previzByDefault = true
   h.offeredByDefault = true
   h.planRolesByDefault = true
   h.failed = false
@@ -94,9 +99,9 @@ describe("GET /v1/cast-swap/style-choice", () => {
 
   it("answers each forced engine's choice, the other 'user'", async () => {
     h.style = { "nodaro-pulse": "flex" }
-    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false })
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, previz: false })
     h.style = { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }
-    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false })
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual({ engines: { "nodaro-prism": "precise", "nodaro-pulse": "flex", "motion-prism": "precise", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, previz: false })
   })
 
   it("answers 'user' everywhere while this environment's engine does not enforce it, without reading the settings", async () => {
@@ -133,7 +138,7 @@ describe("styleOnly: which engines take a style-only run", () => {
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, styleOnly: true } })
     h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false })
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, previz: false })
     first.styleOnly["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().styleOnly).toEqual(STYLE_ONLY)
   })
@@ -176,7 +181,7 @@ describe("preciseArtStyle: which engines take an art style on a Precise run", ()
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyle: true } })
     h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false })
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: PRECISE_ART_STYLE, preciseArtStyleAlone: NO_PRECISE_ART_STYLE_ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, previz: false })
     first.preciseArtStyle["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyle).toEqual(PRECISE_ART_STYLE)
   })
@@ -209,7 +214,7 @@ describe("preciseArtStyleAlone: where an art style alone is a Precise run's chan
     setPluginSupports({ castSwap: { ...CS, styleChoice: true, preciseArtStyleAlone: true } })
     h.style = { "nodaro-pulse": "flex" }
     const first = (await app.inject({ method: "GET", url: URL })).json()
-    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false })
+    expect(first).toEqual({ engines: { "nodaro-prism": "user", "nodaro-pulse": "flex", "motion-prism": "user", "motion-pulse": "flex" }, styleOnly: NO_STYLE_ONLY, preciseArtStyle: NO_PRECISE_ART_STYLE, preciseArtStyleAlone: ALONE, customStyle: NO_CUSTOM_STYLE, planRoles: false, previz: false })
     first.preciseArtStyleAlone["nodaro-pulse"] = true
     expect((await app.inject({ method: "GET", url: URL })).json().preciseArtStyleAlone).toEqual(ALONE)
   })
@@ -407,6 +412,69 @@ describe("planRoles: whether roles can be planned from the prompt", () => {
   it("answers false, uncached, when the settings could not be read or the read threw", async () => {
     setPluginSupports({ castSwap: { ...CS, planRoles: true } })
     h.planRoles = { enabled: true }
+    for (const fail of [{ failed: true, throws: false }, { failed: false, throws: true }]) {
+      Object.assign(h, fail)
+      const res = await app.inject({ method: "GET", url: URL })
+      expect(res.statusCode).toBe(200)
+      expect(res.json(), JSON.stringify(fail)).toEqual(USER)
+      expect(res.headers["cache-control"]).toBe("no-store")
+    }
+  })
+})
+
+describe("previz: whether a run may state a 3D previz clip", () => {
+  const read = async () => (await app.inject({ method: "GET", url: URL })).json().previz
+
+  it("answers false for an engine that does not declare castSwap.previz, whatever is saved, without reading the settings for it", async () => {
+    h.previz = { enabled: true }
+    for (const castSwap of [CS, { ...CS, previz: false }, { ...CS, shotLock: true, styleOnly: true }]) {
+      setPluginSupports({ castSwap })
+      const res = await app.inject({ method: "GET", url: URL })
+      expect(res.json().previz, JSON.stringify(castSwap)).toBe(false)
+    }
+    // No engine at all (no plugin loaded): the whole answer is the one from before the field, plus false.
+    _resetPluginSupportsForTests()
+    expect((await app.inject({ method: "GET", url: URL })).json()).toEqual(USER)
+    setPluginSupports({ castSwap: CS })
+    h.reads = 0
+    expect(await read()).toBe(false)
+    expect(h.reads).toBe(0)
+  })
+
+  it("answers the deployment's default while no choice is saved: on for Nodaro's own, off under a white-label profile", async () => {
+    setPluginSupports({ castSwap: { ...CS, previz: true } })
+    for (const saved of [null, {}]) {
+      h.previz = saved
+      h.previzByDefault = true
+      expect(await read(), JSON.stringify(saved)).toBe(true)
+      h.previzByDefault = false
+      expect(await read(), JSON.stringify(saved)).toBe(false)
+    }
+    expect(h.reads).toBeGreaterThan(0)
+  })
+
+  it("answers the admin's saved choice over the default, either way, and follows no other switch", async () => {
+    setPluginSupports({ castSwap: { ...CS, previz: true } })
+    h.previz = { enabled: false }
+    h.previzByDefault = true
+    expect(await read()).toBe(false)
+    h.previz = { enabled: true }
+    h.previzByDefault = false
+    h.planRoles = { enabled: false }
+    h.customStyle = { enabled: false }
+    expect(await read()).toBe(true)
+  })
+
+  it("is one boolean, not a map by engine, and leaves the other answers as they were", async () => {
+    setPluginSupports({ castSwap: { ...CS, previz: true } })
+    const res = await app.inject({ method: "GET", url: URL })
+    expect(res.json()).toEqual({ ...USER, previz: true })
+    expect(res.headers["cache-control"]).toBe(`public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
+  })
+
+  it("answers false, uncached, when the settings could not be read or the read threw", async () => {
+    setPluginSupports({ castSwap: { ...CS, previz: true } })
+    h.previz = { enabled: true }
     for (const fail of [{ failed: true, throws: false }, { failed: false, throws: true }]) {
       Object.assign(h, fail)
       const res = await app.inject({ method: "GET", url: URL })

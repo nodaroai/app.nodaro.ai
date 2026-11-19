@@ -3880,6 +3880,19 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionPlanRoles?: boolean
   /**
+   * `tk.settings.nodaroMotionPreviz()` exists: the deployment's setting for
+   * Video Remake's 3D previz clips (whether a run may state
+   * `clipKind: "previz"`). An older host has no such member: such a run is
+   * refused there.
+   */
+  readonly nodaroMotionPreviz?: boolean
+  /**
+   * `tk.settings.nodaroMotionShotLock()` exists: the shot lock an admin set
+   * per Video Remake engine for DIRECT runs on ordinary clips ("off" or
+   * "on"). An older host has no such member: no run writes the line.
+   */
+  readonly nodaroMotionShotLock?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -4129,6 +4142,7 @@ export type PluginNodaroMotionMasking = Partial<
 export type PluginPromptPartId =
   | "opener"
   | "motionLock"
+  | "shotLock"
   | "artStyle"
   | "artStyleMandatory"
   | "original"
@@ -4136,6 +4150,7 @@ export type PluginPromptPartId =
   | "quality"
   | "keep"
   | "audio"
+  | "sound"
   | "face"
   | "depthGuard"
   | "faceMesh"
@@ -4147,6 +4162,7 @@ export type PluginPromptPartId =
   | "location"
   | "pictureRoles"
   | "avoid"
+  | "referenceOnly"
   | "restate"
   | "postHeader"
 
@@ -4165,6 +4181,8 @@ export type NodaroMotionPromptParts = {
     readonly motion?: Partial<Record<PluginPromptPartId, string>>
     /** A style-only run's own parts on the "original" path (`castSwap.styleOnly`); never the depth path's `motion` set, nor read by it. */
     readonly styleOnly?: Partial<Record<PluginPromptPartId, string>>
+    /** A 3D previz clip's own parts (`castSwap.previz`, a run with `clipKind: "previz"`); never the `motion` set, nor read by it. */
+    readonly previz?: Partial<Record<PluginPromptPartId, string>>
   }
 }
 
@@ -4333,6 +4351,45 @@ export interface PluginSettingsToolkit {
    * offered). Advertised as `capabilities.nodaroMotionPlanRoles`.
    */
   nodaroMotionPlanRoles?(): Promise<PluginNodaroMotionPlanRoles | null>
+  /**
+   * Video Remake's 3D previz clips (`clipKind: "previz"` on the run and the
+   * estimate), for the whole deployment:
+   * - `enabled`: whether this deployment accepts such a run, ALREADY RESOLVED
+   *   by the host: the admin's saved choice, else the deployment's default
+   *   (on for Nodaro's own, off under a white-label surface profile). Only
+   *   `true` accepts one; a plugin cannot tell the deployments apart itself.
+   * Always an object while this host's engine declares `castSwap.previz`
+   * (never saved answers `{ enabled }` too); null to an engine that does not
+   * declare it (it never asks). Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read (a plugin reads that as not
+   * accepted). Advertised as `capabilities.nodaroMotionPreviz`.
+   */
+  nodaroMotionPreviz?(): Promise<PluginNodaroMotionPreviz | null>
+  /**
+   * The admin's shot lock per Video Remake engine, for direct runs on
+   * ordinary clips: only the engines that are on, each answered under its
+   * current AND its earlier keys, or null when it was never saved or every
+   * engine is off (then no prompt carries the line), and to an engine that
+   * does not declare `castSwap.shotLock` (it never asks). There is no
+   * deployment default: off until an admin turns it on. Returns a copy the
+   * plugin may change freely. REJECTS when the settings could not be read.
+   * Advertised as `capabilities.nodaroMotionShotLock`.
+   */
+  nodaroMotionShotLock?(): Promise<PluginNodaroMotionShotLock | null>
+}
+
+/** Video Remake's 3D previz setting as a plugin is answered it: `enabled` resolved by the host. */
+export type PluginNodaroMotionPreviz = {
+  readonly enabled?: boolean
+}
+
+/**
+ * Video Remake's shot lock per engine, keyed by the PUBLIC engine ids
+ * (current and earlier): an engine listed is on; one left out is off
+ * (`"off"` is never answered).
+ */
+export type PluginNodaroMotionShotLock = {
+  readonly [publicEngineId: string]: "off" | "on"
 }
 
 /** Video Remake's plan-roles setting as a plugin is answered it: `enabled` resolved by the host, the step as an admin set it. */
@@ -4894,6 +4951,26 @@ export interface PluginSupports {
    *   Additive-optional: absent ⇒ the engine has no such route and the host
    *   answers that planning is not offered
    *   (lib/nodaro-motion-plan-roles.ts `engineTakesPlanRoles`).
+   * - `previz`: a DIRECT run on Nodaro Prism (and its estimate) takes
+   *   `clipKind: "previz"`: its clip is a 3D previz (simple untextured models
+   *   moved and filmed as the video to make will be), sent as the engine's
+   *   one reference video and RENDERED into the run's look (its art style or
+   *   custom style, else real-world live-action footage), never edited. On
+   *   such a run a role's `name` is its model's locator in the clip, its
+   *   optional `subject` what it is in the result, and `previz` holds its
+   *   options (`{ lighting?, sound? }`). Only while the deployment accepts it
+   *   (`tk.settings.nodaroMotionPreviz()`'s `enabled: true`; anything else:
+   *   403 `previz_not_available`). Additive-optional: absent ⇒ the engine
+   *   drops a `clipKind` it does not know and would run an ordinary edit, so
+   *   the host refuses such a body before the engine sees it
+   *   (lib/cast-swap-previz-gate.ts; lib/nodaro-motion-previz.ts
+   *   `engineTakesPreviz`).
+   * - `shotLock`: an ordinary DIRECT run's prompt carries the `shotLock`
+   *   part while the admin's per-engine setting says "on"
+   *   (`tk.settings.nodaroMotionShotLock()`), and the prompt-parts route
+   *   takes `shotLock: true` to show it. Additive-optional: absent ⇒ the
+   *   engine never reads the setting and is never sent the key
+   *   (lib/nodaro-motion-shot-lock.ts `engineTakesShotLock`).
    * - `maskFillNone`: a faces hidden masking setting (the Video Remake
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
@@ -5058,6 +5135,8 @@ export interface PluginSupports {
     readonly shotListSpeech?: boolean
     readonly customStyle?: boolean
     readonly planRoles?: boolean
+    readonly previz?: boolean
+    readonly shotLock?: boolean
   }
 }
 

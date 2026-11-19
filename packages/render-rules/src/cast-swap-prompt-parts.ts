@@ -12,10 +12,16 @@
  * Every prompt part, in the engine's own order (its `PROMPT_PART_IDS`). The
  * new wording's movement lock comes right after the opener here, though the
  * engine writes a Flex run's art style line before both.
+ *
+ * `shotLock` is the shot lock's line (the `nodaro_motion_shot_lock` setting),
+ * `sound` and `referenceOnly` a 3D previz clip's own (`clipKind: "previz"`).
+ * The engine lists each only in an answer to a request that names what it
+ * belongs to (`CAST_SWAP_SHOT_LOCK_PART_IDS`, `CAST_SWAP_PREVIZ_PART_IDS`).
  */
 export const CAST_SWAP_PROMPT_PART_IDS = [
   "opener",
   "motionLock",
+  "shotLock",
   "artStyle",
   "artStyleMandatory",
   "original",
@@ -23,6 +29,7 @@ export const CAST_SWAP_PROMPT_PART_IDS = [
   "quality",
   "keep",
   "audio",
+  "sound",
   "face",
   "depthGuard",
   "faceMesh",
@@ -34,6 +41,7 @@ export const CAST_SWAP_PROMPT_PART_IDS = [
   "location",
   "pictureRoles",
   "avoid",
+  "referenceOnly",
   "restate",
   "postHeader",
 ] as const
@@ -48,6 +56,8 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   opener: ["{video}"],
   // The new Flexible wording only (`promptWording: "new"`): every person moves exactly as in the clip.
   motionLock: ["{video}"],
+  // A direct run of an ordinary clip whose engine's shot lock is on only: keep the shot order, add no shot.
+  shotLock: ["{video}"],
   // Flex (flexible) direct runs with an art style only: the style's own wording (the platform's `style` catalog).
   artStyle: ["{style}"],
   // Flex (flexible) direct runs with an art style only: the line under the style's wording that holds every frame
@@ -60,6 +70,8 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   quality: [],
   keep: ["{video}"],
   audio: [],
+  // A 3D previz clip only, when the engine makes the sound: what sound to make.
+  sound: [],
   face: [],
   depthGuard: ["{video}"],
   // Runs whose clip has the face mesh drawn on it only (`faceMasking.faceMesh`, faces drawn > 0): what the lines mean.
@@ -77,6 +89,8 @@ export const CAST_SWAP_PROMPT_PART_PLACEHOLDERS: Readonly<Record<CastSwapPromptP
   // The new Flexible wording only, on a run with a person, pet or product role: what to take from their pictures.
   pictureRoles: ["{video}"],
   avoid: [],
+  // A 3D previz clip only: the closing requirement that the clip's own look is not taken.
+  referenceOnly: ["{video}"],
   // The new Flexible wording only: the closing restatement of the movement and the looks.
   restate: ["{video}"],
   postHeader: [],
@@ -100,6 +114,32 @@ export type CastSwapPromptWording = (typeof CAST_SWAP_PROMPT_WORDINGS)[number]
  * so a request that may carry an override of one names it.
  */
 export const CAST_SWAP_PROMPT_WORDING_PART_IDS = ["motionLock", "pictureRoles", "restate"] as const satisfies readonly CastSwapPromptPartId[]
+
+/**
+ * The shot lock's part. The engine lists it in a prompt-parts answer only when
+ * the request names the shot lock (`shotLock: true`), so a request that may
+ * carry an override of it names it.
+ */
+export const CAST_SWAP_SHOT_LOCK_PART_IDS = ["shotLock"] as const satisfies readonly CastSwapPromptPartId[]
+
+/**
+ * The parts only a 3D previz clip's prompt writes. The engine lists them in a
+ * prompt-parts answer only to a previz request (`clipKind: "previz"`).
+ */
+export const CAST_SWAP_PREVIZ_PART_IDS = ["sound", "referenceOnly"] as const satisfies readonly CastSwapPromptPartId[]
+
+/**
+ * The part ids added with the shot lock and the 3D previz clips. An app from
+ * before them reads a stored override of one as invalid (its schemas are
+ * strict over the part ids), so one is saved only once every environment's
+ * platform takes them.
+ */
+export const CAST_SWAP_PREVIZ_ERA_PART_IDS = [...CAST_SWAP_SHOT_LOCK_PART_IDS, ...CAST_SWAP_PREVIZ_PART_IDS] as const satisfies readonly CastSwapPromptPartId[]
+
+/** Whether `overrides` holds a non-empty text for the shot lock's part. */
+export function overridesShotLockPart(overrides: Readonly<Partial<Record<CastSwapPromptPartId, string>>> | undefined): boolean {
+  return CAST_SWAP_SHOT_LOCK_PART_IDS.some((id) => (overrides?.[id] ?? "").trim() !== "")
+}
 
 /** Whether `overrides` holds a non-empty text for one of the new wording's parts. */
 export function overridesWordingPart(overrides: Readonly<Partial<Record<CastSwapPromptPartId, string>>> | undefined): boolean {

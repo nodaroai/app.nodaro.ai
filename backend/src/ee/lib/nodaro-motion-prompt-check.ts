@@ -27,7 +27,9 @@ import {
 import { depthColormapSent, faceMeshOn, faceMeshPartsSent, type FaceMasking } from "../../lib/cast-swap-face-masking.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { loadedEngineTakesShotList, type CastSwapSteps } from "../../lib/cast-swap-steps.js"
-import { overridesWordingPart, type CastSwapPromptWording } from "@nodaro/render-rules"
+import { overridesShotLockPart, overridesWordingPart, type CastSwapPromptWording } from "@nodaro/render-rules"
+import { engineTakesShotLock, type NodaroMotionShotLock, type NodaroMotionShotLockValue } from "../../lib/nodaro-motion-shot-lock.js"
+import { readNodaroMotionShotLock } from "../../lib/nodaro-motion-shot-lock-store.js"
 import { engineTakesPromptWording, type NodaroMotionPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
 import { readNodaroMotionPromptWording } from "../../lib/nodaro-motion-prompt-wording-store.js"
 import type { NodaroMotionPromptPartsKey } from "../../lib/nodaro-motion-prompt-parts.js"
@@ -63,7 +65,22 @@ export function loadedEngineHasPromptStyles(): boolean {
  * none), with a clip with sound and `body`'s pre and post prompts and
  * overrides. Nothing else shapes it: no masking, no face mesh, no depth look,
  * no shot list and no wording (the "new" Flex wording never reaches it), so
- * `entry`, `preciseMasking`, `steps` and `wording` are not read.
+ * `entry`, `preciseMasking`, `steps`, `wording` and `shotLock` are not read.
+ *
+ * `shotLock` is the engine's shot lock (`nodaro_motion_shot_lock`, or a
+ * preview's choice): `"on"` says so (`shotLock: true`) on a Precise or a
+ * Motion request, so the engine assembles and measures the line and lists its
+ * part; a request whose overrides hold the part names it too, whatever the
+ * setting (so the override can be seen and reset, and is checked at its
+ * longest). It reaches only an engine that declares `castSwap.shotLock`
+ * (`forLoadedEngine`).
+ *
+ * `"previz"` (a 3D previz clip's own set): `clipKind: "previz"` on a Flex
+ * request, with `body`'s roles, fixed references, prompts and overrides, and
+ * a clip WITHOUT sound, so the engine counts the sound line it then writes
+ * (such a prompt at its longest). Nothing else shapes it: no masking, no face
+ * mesh, no depth look, no wording and no shot lock (its opener carries those
+ * sentences already).
  */
 export function directRunRequest(
   engine: NodaroMotionEngine,
@@ -73,8 +90,10 @@ export function directRunRequest(
   preciseMasking?: FaceMasking,
   steps?: CastSwapSteps,
   wording?: CastSwapPromptWording,
+  shotLock?: NodaroMotionShotLockValue,
 ): PromptPartsRequest {
   if (style === "styleOnly") return styleOnlyRunRequest(engine, body)
+  if (style === "previz") return previzRunRequest(engine, body)
   const shotList = loadedEngineTakesShotList()
   const named = promptWordingNamed(style, entry, wording, body.overrides)
   return {
@@ -88,7 +107,24 @@ export function directRunRequest(
     ...(style === "precise" && steps?.shotList?.precise?.mode === "on" ? { shotList: true as const } : {}),
     // The Flex wording a run of this style is worded with (named so the engine lists the new wording's parts).
     ...(named ? { promptWording: named } : {}),
+    // The shot lock's line: on for the engine, or an override of its part to show and check.
+    ...(shotLock === "on" || overridesShotLockPart(body.overrides) ? { shotLock: true as const } : {}),
     ...body,
+  }
+}
+
+/** The previz set's request (`directRunRequest`'s `"previz"`): `body`'s roles, references, prompts and overrides, on a clip without sound. */
+function previzRunRequest(engine: NodaroMotionEngine, body: Omit<PromptPartsRequest, "engine" | "style">): PromptPartsRequest {
+  return {
+    engine: CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine],
+    style: "motion",
+    clipKind: "previz",
+    hasAudio: false,
+    roles: body.roles,
+    ...(body.references ? { references: body.references } : {}),
+    ...(body.prePrompt !== undefined ? { prePrompt: body.prePrompt } : {}),
+    ...(body.postPrompt !== undefined ? { postPrompt: body.postPrompt } : {}),
+    ...(body.overrides ? { overrides: body.overrides } : {}),
   }
 }
 
@@ -154,9 +190,22 @@ export async function savedFlexWording(): Promise<NodaroMotionPromptWording | nu
 }
 
 /**
+ * The saved shot lock per engine (`nodaro_motion_shot_lock`), read only when
+ * this environment's engine writes the line (`castSwap.shotLock`): an engine
+ * without it is never sent the key, so its checks need no read. Pass each
+ * engine's (`shotLockOf`) to `directRunRequest` / `directRunPromptProblems`,
+ * so an override is checked on the prompt the engine's direct runs send.
+ */
+export async function savedShotLock(): Promise<NodaroMotionShotLock | null> {
+  if (!engineTakesShotLock(getPluginSupports().castSwap)) return null
+  return (await readNodaroMotionShotLock()).shotLock
+}
+
+/**
  * The problems of `texts` for this engine and style on a large direct run
  * (empty = they may be saved), worded in `wording` (the engine's saved Flex
- * wording, `savedFlexWording`; a Precise check ignores it). For `"styleOnly"`
+ * wording, `savedFlexWording`; a Precise check ignores it), with the engine's
+ * saved shot lock (`savedShotLock`). For `"styleOnly"`
  * the large run is its pre and post prompts alone (a style-only run has no
  * role or reference). Null after replying (the engine could not
  * be asked or answered unusably).
@@ -172,9 +221,10 @@ export async function directRunPromptProblems(
   preciseMasking?: FaceMasking,
   steps?: CastSwapSteps,
   wording?: CastSwapPromptWording,
+  shotLock?: NodaroMotionShotLockValue,
 ): Promise<DirectRunPromptProblem[] | null> {
   const run = largeDirectRun(CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine])
-  const answer = await askPromptParts(app, req, reply, directRunRequest(engine, style, entry, { ...run, overrides: texts }, preciseMasking, steps, wording))
+  const answer = await askPromptParts(app, req, reply, directRunRequest(engine, style, entry, { ...run, overrides: texts }, preciseMasking, steps, wording, shotLock))
   if (!answer) return null
   return answer.problems.map((p) => ({ ...p, engine, style }))
 }
