@@ -171,6 +171,24 @@
 		}
 	}
 
+	# A share link's card (/s/<token>): a small HTML page the backend writes
+	# (GET /og/s/:token, backend/src/routes/share-card.ts) with the link's Open
+	# Graph and Twitter tags, which social networks and chats read without
+	# running a script, and which sends every visitor on to the share page at
+	# once. The address people share is SHARE_SITE_ORIGIN's /s/<token>, which
+	# that site forwards here. For every caller, not only crawlers: the card is
+	# what people are redirected from. The backend sets this answer's headers
+	# itself (Cache-Control, X-Robots-Tag, its CSP), so the page rules below
+	# leave it out.
+	handle /s/* {
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		rewrite * /og{uri}
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
+	}
+
 	# BEGIN GENERATED: page homes (tools/gen-route-homes.mjs from frontend/src/route-homes.json)
 	# A page of the app moved to its own host: a top-level visit to a moved page on a
 	# host named in LEGACY_UI_HOSTS answers one redirect to the same path and query on
@@ -460,6 +478,8 @@
 		# The archive fallback above writes its own Cache-Control.
 		not path /assets/*
 		not path /v1/trends /v1/trends/*
+		# A share card sets its own (a few minutes, so a preview can be cached).
+		not path /s/*
 	}
 	header @html Cache-Control "no-cache"
 	@trendReads path /v1/trends /v1/trends/*
@@ -474,7 +494,7 @@
 	# actually prerenders this one.
 	@spa_document {
 		path_regexp spa_doc ^([^.]*|/.*\.html)$
-		not path /assets/* /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/* /mcp*
+		not path /assets/* /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/* /mcp* /s/*
 	}
 	header @spa_document Supports-Loading-Mode "credentialed-prerender"
 
@@ -501,7 +521,7 @@
 	@spa_noindex {
 		path_regexp spa_route ^([^.]*|/.*\.html)$
 		not path / /login /signup /gallery /app/* /tutorials/*
-		not path /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/*
+		not path /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/* /s/*
 	}
 	header @spa_noindex X-Robots-Tag "noindex"
 }

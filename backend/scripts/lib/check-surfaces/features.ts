@@ -79,6 +79,9 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "catalogs", cli: ["catalog"], routePrefixes: ["/v1/catalogs"], mcpFiles: [] },
   { id: "models", cli: ["models"], routePrefixes: ["/v1/models", "/v1/model-makers"], mcpFiles: ["models.ts"] },
   { id: "shots", cli: ["shots"], routePrefixes: ["/v1/shots"], mcpFiles: ["shot-shapes.ts"] },
+  // Share links (migration 680): the owner's link to a result, a session or a project, and the public
+  // read of a link (the longest prefix wins over workflows' `/v1/public`). No CLI or MCP surface yet.
+  { id: "shares", cli: [], routePrefixes: ["/v1/shares", "/v1/public/shares"], mcpFiles: [] },
   { id: "recast", cli: ["recast"], routePrefixes: ["/v1/recast"], mcpFiles: ["recast.ts"] },
   // Video Remake: the routes are the Cloud plugin's (the host's own Style choice and Advanced switch beside them),
   // under /v1/video-remake and its /v1/cast-swap alias; the CLI group has Full Quality only (`cast-swap` its hidden alias).

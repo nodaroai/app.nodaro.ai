@@ -46,6 +46,7 @@
 | `catalogs` | Catalog packs a deployment registered (`GET /v1/catalogs`) |
 | `models` | Model catalog: capabilities + credit prices, each model's maker + the maker's `logoUrl` (`GET /v1/models`) |
 | `shots` | Saved shots: prompt, references, results; private or public |
+| `shares` | View-only share links to one result, a session or a project: `get` / `set` your link (on, off, "allow copy"; the same token when turned on again); `getPublic` / `publicItems` read what a link shows, signed out |
 | `recast` | Recast runs: quote, buy, follow, answer picks, import a script |
 | `videoRemake` | Video Remake: edit or restyle a short video and keep its motion, camera and timing (the lane for motion transfer and motion control on a whole clip) — replace the people, pets, products and/or location, or change the look with a prompt or an art style, on Nodaro Prism or Nodaro Pulse (`engine`: `"nodaro-prism"` / `"nodaro-pulse"`) — `run`, `estimate`, `styleChoice`, `advanced`, `artStyles`, `describeStyle` (an image's style in words, for a run's `direction: { customStyle }`), `planRoles` (roles and references planned from a request in the person's own words and loose reference images, to send to `estimate` / `run`), `fullQualityEstimate`, `fullQuality` (Cloud) |
 | `trends` | Trends: ready-made Video Remake recipes — browse (`list`, `get`), `estimate`, `run` with your own pictures, your `runs`, `favorite` / `unfavorite` (Cloud) |

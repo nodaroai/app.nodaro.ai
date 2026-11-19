@@ -305,6 +305,7 @@ try {
 | `client.presets` | Node presets: your own (create, update, delete, import, reorder, folders) and the factory catalog; favorites; `needsImage` / `previewUrl` |
 | `client.pickerCatalogs` | Parameter-picker catalog discovery + text→pickers AI Fill (`analyzeText`) |
 | `client.shots` | Cine share → remix records (create, read, visibility, delete) |
+| `client.shares` | View-only share links to a result, a session or a project (on / off / allow copy), and what a link shows — readable signed out |
 | `client.community` | Shared characters/locations/objects: browse, clone, favorites |
 | `client.templates` | Workflow templates: browse + clone |
 | `client.tutorials` | Guided tutorial catalog |
@@ -316,7 +317,7 @@ try {
 The root `@nodaro/sdk` exports everything. Each resource is also published as
 its own entry point, which loads only that resource's module:
 
-`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shares`, `/shots`, `/studio`, `/templates`, `/tutorials`, `/uploads`, `/video-pro`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 ```ts
 import { NotFoundError } from "@nodaro/sdk/errors"

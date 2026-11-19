@@ -42,6 +42,7 @@ import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 import { CatalogsResource } from "./resources/catalogs.js"
 import { ModelsResource } from "./resources/models.js"
 import { ShotsResource } from "./resources/shots.js"
+import { SharesResource } from "./resources/shares.js"
 import { RecastResource } from "./resources/recast.js"
 import { VideoRemakeResource } from "./resources/cast-swap.js"
 import { TrendsResource } from "./resources/trends.js"
@@ -120,6 +121,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly catalogs: CatalogsResource
   readonly models: ModelsResource
   readonly shots: ShotsResource
+  /** View-only share links to a result, a session or a project, and what a link shows (works signed out). */
+  readonly shares: SharesResource
   readonly recast: RecastResource
   /** Video Remake: replace the people, pets, products and/or location in a short video (Cloud). */
   readonly videoRemake: VideoRemakeResource
@@ -185,6 +188,7 @@ export class NodaroClient extends NodaroClientCore {
     this.catalogs = new CatalogsResource(this)
     this.models = new ModelsResource(this)
     this.shots = new ShotsResource(this)
+    this.shares = new SharesResource(this)
     this.recast = new RecastResource(this)
     this.videoRemake = new VideoRemakeResource(this)
     this.castSwap = this.videoRemake

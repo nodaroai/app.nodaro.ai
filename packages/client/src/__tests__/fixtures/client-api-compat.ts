@@ -43,7 +43,7 @@ type PublicMembers =
   | "developerApps" | "oauth" | "webhooks" | "apps" | "characters" | "locations" | "objects" | "creatures"
   | "pipelines" | "reduce" | "promptHelper" | "voices" | "dubbing" | "llm" | "media" | "contentRights" | "audio" | "credits" | "billing" | "surface"
   | "uploads" | "library" | "gallery" | "presets" | "savedPosts" | "collections" | "palettes" | "moodboards"
-  | "competitors" | "pickerCatalogs" | "catalogs" | "models" | "shots" | "recast" | "videoRemake" | "castSwap" | "trends" | "studio" | "copilot"
+  | "competitors" | "pickerCatalogs" | "catalogs" | "models" | "shots" | "shares" | "recast" | "videoRemake" | "castSwap" | "trends" | "studio" | "copilot"
   | "community" | "templates" | "tutorials" | "organizations" | "workspaces" | "edit" | "keepers" | "userSettings" | "trendRadar"
 assert<Equal<keyof NodaroClient, PublicMembers>>()
 

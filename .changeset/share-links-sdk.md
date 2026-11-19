@@ -1,0 +1,5 @@
+---
+"@nodaro/sdk": minor
+---
+
+`client.shares` (also `@nodaro/sdk/shares`): view-only share links to one result (a job), a generation session or a project. `get({ kind, targetId })` reads your link for one of your items (`null` when it was never shared); `set({ kind, targetId, shared, allowCopy? })` turns it on or off — turning it on again brings back the same token, and `allowCopy` omitted keeps its value. `getPublic(token)` and `publicItems(token, { cursor?, limit?, sessionId? })` read what a link shows and work signed out: the result(s), the prompt as it was written, the public model name and the settings (never an address or an id), plus the reference files when the owner allowed copying; a trend run shows as its trend. A link that is turned off, unknown, or whose item is gone answers 404. New types: `ShareKind`, `Share`, `GetShareParams`, `SetShareInput`, `PublicShare`, `SharedJob`, `SharedSession`, `SharedProject`, `SharedReference`, `SharedSettingValue`, `PublicShareItemsParams`, `PublicShareItemsPage`.

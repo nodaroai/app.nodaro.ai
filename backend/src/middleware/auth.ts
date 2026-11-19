@@ -282,6 +282,17 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   // Cine share links (/s/:id): GET is public BY DESIGN — the opaque id is the
   // capability; the handler 404s private shots for non-owners (shots.ts).
   { method: "GET", path: "/v1/shots/", prefix: true },
+  // Share links (routes/shares.ts, migration 680): the public reads of a link
+  // to a result, a session or a project. The 43-character token is the
+  // capability; the handler answers 404 for a link that is unknown, turned off,
+  // or whose item is gone or may not be shown. GET only — turning a link on or
+  // off (`/v1/shares`) stays behind a credential.
+  { method: "GET", path: "/v1/public/shares/", prefix: true },
+  // A share link's card (routes/share-card.ts): the HTML its own address,
+  // `/s/<token>`, answers through the bundled proxy, for link previews. Any
+  // method, so a preview reader's HEAD is answered like its GET; the route is
+  // GET (and Fastify's HEAD) only, and answers what the JSON read answers.
+  { path: "/og/s/", prefix: true },
   { path: "/v1/download", prefix: true },
   { path: "/v1/billing/stripe-webhook" },
   // B2: deployment-level billing surface — no per-user data, must answer tokenless

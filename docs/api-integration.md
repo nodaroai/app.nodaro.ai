@@ -1437,6 +1437,140 @@ job, so code that reads it keeps working.
   model, `models` together with `provider`, more than 8 images. A model the
   deployment does not offer answers `403 model_not_available`.
 
+## 4h. Share links
+
+Anyone signed in can share **one result** (a job), a **generation session** or
+a **project** by an unguessable link, **view only**. The link shows the
+result(s), the prompt as it was written, the model and the settings. With
+**allow copy** on, it also hands out the reference files the result was made
+from. Each item has one link: turning it off makes it answer `404`, and
+turning it on again brings back the **same** token, so a link handed out
+before works again.
+
+```bash
+# Turn the link of one of your jobs on (allowCopy omitted: kept; false on a new link).
+TOKEN=$(curl -s -X PUT "$BASE/v1/shares" \
+  -H "Authorization: Bearer $API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"kind":"job","targetId":"<job-id>","shared":true}' | jq -r .data.token)
+
+# What the link shows — no credential needed.
+curl -s "$BASE/v1/public/shares/$TOKEN"
+```
+
+| Route | What it does |
+|-------|--------------|
+| `GET /v1/shares?kind=&targetId=` | Your link for one of your items: `{ data: Share \| null }` (`null` when it was never shared). `kind`: `job`, `session` or `project`. `404` when the item is not yours. |
+| `PUT /v1/shares` | Body `{ kind, targetId, shared, allowCopy? }`. The first call makes the link; later calls keep its token. `allowCopy` omitted keeps its current value. Answers `{ data: Share }`. Turning a link off always works; turning one on answers `422 share_not_allowed` with a `reason` when the item cannot be shared now (below). `404` when the item is not yours. |
+| `GET /v1/public/shares/:token` | **No credential.** What the link shows: `{ data: { kind, allowCopy, job? \| session? \| project? } }`. |
+| `GET /v1/public/shares/:token/items` | **No credential.** A shared session's results, newest first: `{ data: SharedJob[], nextCursor }`. For a shared project, `sessionId` (one of the sessions the link lists) is required (`400` otherwise). `limit` 1–100 (default 50), `cursor`. A page may hold fewer than `limit`: follow `nextCursor` until it is `null`. |
+
+`Share` is `{ token, kind, targetId, shared, allowCopy, createdAt, updatedAt }`.
+A shared **job** is `{ id, type, mediaKind, outputUrl, outputUrls?, width?,
+height?, durationSec?, title, createdAt, prompt, negativePrompt?, model,
+settings, references?, trend? }`:
+
+- `prompt` is the prompt as it was written (`userPrompt` when your app sent
+  one); `model` is the public model id and its name (`null` for a model the
+  public catalog does not list) — never the provider a model runs on.
+- `settings` is the job's input without the prompt and model fields, without
+  anything internal (ids of rows, credits and prices, webhooks, the provider,
+  tokens, storage keys, error text) and without **any value that is an
+  address or an id** — a link, a uuid, a path or storage key, a host or file
+  name, an email, a long id or hash — whatever its field is called. A nested
+  object that held one (an image and its role, a mention and its character) is
+  left out whole.
+- `references` (`[{ url, kind }]`, https files only, never an address that
+  carries a signature, a token, a key or a password, at most 32) is there only
+  when the link allows copying.
+- A **trend run** shows as `trend: { slug, name }` with `prompt: null`, empty
+  `settings` and no `references`: the trend's recipe is the platform's.
+
+A shared **session** is `{ title, tool, createdAt, itemCount }`; a shared
+**project** is `{ name, sessions: [{ id, title, tool, itemCount, coverUrl }] }`
+— its personal, unarchived sessions that show at least one result, most
+recently active first, at most 200. `itemCount` counts only what the link
+shows; `coverUrl` is the session's cover when it is shown, else its newest
+shown image.
+
+**What a link shows, and what it never shows.** Only finished results of the
+link's owner that the platform would let anyone see. Not shown — and refused
+when you turn a link on for it (`422 share_not_allowed`, `reason`):
+
+| `reason` | |
+|---|---|
+| `not_completed` | The job has not finished, failed or was cancelled. |
+| `no_media` | It made no image, video or sound. |
+| `private_output` | It is kept private: made from private inputs, a preview render, or work done in a workspace. |
+| `content_filtered` | Its prompt or name trips the content filter that keeps work out of the public gallery. |
+| `restricted` | An administrator restricted it. |
+| `workspace` | A session or project of a workspace: work in a workspace is never public. |
+| `sharing_disabled` | This deployment does not allow public work: no link opens there. |
+
+A job in the Trash, an item removed from its session, a step of a larger run
+(a child job) and a deleted session or project are never shown; neither is
+anything of an account that is blocked. All of this is decided again on every
+read, so a result that is moved to the Trash or restricted after it was shared
+stops showing at once — its link answers `404` (a session's link simply stops
+listing it). The public reads are never cached (`Cache-Control: no-store`)
+and are limited per network: 60 a minute for a link, 120 for its items
+(`429 rate_limit_exceeded`). A link to a job you moved to the Trash keeps its
+state: `GET /v1/shares` still reads it and `PUT … shared: false` turns it off,
+so it does not come back on when the job is restored; it cannot be turned on
+while the job is in the Trash. A session that is archived still opens through
+its own link, but a shared project lists only its unarchived sessions.
+
+**Paging the items.** A result the link may not show is skipped, and the page
+reads on to fill `limit`. `nextCursor` is always the position of the last
+result shown, never of one left out, so walking the pages reveals nothing
+about what is hidden.
+
+**Scopes (OAuth apps):** reading your link needs `jobs:read`; turning one on
+or off needs both `assets:write` and `jobs:read` (the token it hands back
+reads what the link shows). A personal API key limited to some workflows
+cannot reach the owner routes.
+
+### The share card: link previews
+
+A link pasted on a social network, in a chat or a messenger shows a preview
+read from its address's HTML, with no script run. The address people share is
+**`${SHARE_SITE_ORIGIN}/s/<token>`** (on Nodaro, `https://nodaro.ai/s/<token>`).
+That site forwards it, for every client, to the platform's own
+**`/s/<token>`**, which answers the link's **card**: `200 text/html`, a small
+page with:
+
+- `og:type` (`video.other` for a video, else `website`), `og:site_name`
+  (`Nodaro`), `og:title`, `og:description`, `og:url` and
+  `<link rel="canonical">` (both `${SHARE_SITE_ORIGIN}/s/<token>`), `og:image`
+  (+ `og:image:width` / `height` when known);
+- `twitter:card` `summary_large_image`, `twitter:title`,
+  `twitter:description`, `twitter:image`;
+- for a video, `og:video`, `og:video:secure_url`, `og:video:type` and its width
+  and height when known, pointing at the result's https file.
+
+The title is the result's name, else the start of its prompt (about 70
+characters); the description is the prompt, trimmed to about 200 characters.
+A trend run is named by its trend, never a prompt. The picture is the result
+itself for an image, the poster for a video, and for a sound the track's cover
+when it has one, else the platform's own logo (`/logo-512.png`, 512 × 512). A
+shared session or project is named by its title or name, with its first shown
+result's picture. A card never hands out the reference files, whatever the
+link allows.
+
+People are sent on at once to the page that shows the link,
+`${SHARE_SITE_ORIGIN}/shared/<token>`: by a `<meta http-equiv="refresh">`, a
+one-line script, and a plain link. Every value on the page is HTML-escaped,
+only https addresses are written, and its `Content-Security-Policy` allows that
+one script and nothing else. The card says `noindex` (`X-Robots-Tag` and a
+robots meta) and may be cached for five minutes (`Cache-Control: public,
+max-age=300`), so a link turned off stops previewing within minutes. A link
+that is unknown, turned off, or whose item is gone or may not be shown answers
+a `404` page that says nothing about any content (`no-store`). The card is
+limited per network like the other public reads (120 a minute).
+
+On a deployment's own server the card is the bundled proxy's `/s/*`, handed to
+the API's `GET /og/s/:token`; `SHARE_SITE_ORIGIN` is set in
+[deployment.md](./deployment.md).
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`
@@ -1784,6 +1918,7 @@ All errors share the same shape:
 | 409 | `large_upload_unavailable` | — | `POST /v1/uploads/large/start` (or `/complete`) on a deployment that checks every upload's bytes with an upload policy: the large-upload lane would bypass it, so it is closed there. Send the file with `POST /v1/upload` instead. See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
 | 422 | `media_too_long` | — | The file is longer than 30 minutes, the most media imported into the editor may be (`POST /v1/uploads/large/complete`, and `POST /v1/download-video` for a direct file whose header says so). A stored copy was removed and nothing was counted against storage. A direct file that turns out too long once downloaded fails the same way, on its progress stream. |
 | 422 | `media_too_large` | — | The file is over 10 GiB, the most a file imported into the editor may be (`POST /v1/uploads/large/start`, `POST /v1/download-video`). |
+| 422 | `share_not_allowed` | — | `PUT /v1/shares` turned on the link of an item that cannot be shared now; `reason` says why (`not_completed`, `no_media`, `private_output`, `content_filtered`, `restricted`, `workspace`, `sharing_disabled`). No link was made or turned on. See [§ 4h](#4h-share-links). |
 | 422 | `media_bitrate_implausible` | — | The file is far larger than its stated length allows (over 2,500 Mbit/s on average for video, 50 Mbit/s for audio, the first 16 MiB not counted). See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
 | 429 | `too_many_open_uploads` | — | `POST /v1/uploads/large/start` while 3 of your large uploads are still open. Complete or abort one; an abandoned one frees itself when its token expires. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |

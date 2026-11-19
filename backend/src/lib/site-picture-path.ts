@@ -51,6 +51,7 @@ export const RESERVED_SITE_FOLDERS: ReadonlyMap<string, string> = new Map([
   ["health", "the proxy hands /health and everything under it to the API (the container's health check)"],
   ["og", "the API answers it with link previews"],
   ["app", "a link-preview bot asking for it is answered by the API"],
+  ["s", "the proxy hands it to the API: a share link's card (routes/share-card.ts)"],
   ["embed", "a host that has moved the app's pages redirects it"],
   ["present", "a host that has moved the app's pages redirects it"],
   ["storage", "the proxy answers it from the bundled media store"],
