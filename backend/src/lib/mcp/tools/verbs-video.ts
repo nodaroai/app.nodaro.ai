@@ -1654,7 +1654,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── modify_video (video-to-video) ──
-  // Wan 2.6 / Wan Flash for KIE-side restyles, Runway Aleph for stylised
+  // Wan 2.6 / Wan Flash make a new clip featuring the input video's subject
+  // (reference-to-video, not an edit); the Seedance 2.5 edit models, Wan 2.7
+  // VideoEdit and HappyHorse Edit edit the clip itself; Runway Aleph for stylised
   // edits with reference-image guidance. Mirrors modify_image for the video
   // domain — gallery widget already pushes "edit this video" follow-ups.
   server.registerTool(
@@ -1665,12 +1667,18 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "PRIMARY tool for video-to-video / restyle / clip-edit workflows. Use " +
         "it directly; do NOT search the apps marketplace.\n\n" +
         "Provide `video_url` (public HTTPS) or `video_asset_id` (a Nodaro job " +
-        "id whose output is a video), plus a `prompt` describing the change.\n\n" +
+        "id whose output is a video), plus a `prompt` describing the change " +
+        "(on `wan` / `wan-flash`: the new scene).\n\n" +
         "**Models**:\n" +
-        "  • **`wan`** (default, Wan 2.6) — restyle / transformation, 5s or 10s, " +
-        "720p or 1080p.\n" +
-        "  • **`wan-flash`** — faster Wan; `audio: true` keeps / regenerates " +
-        "audio, `multiShots: true` for multi-shot scene changes.\n" +
+        "  • **`wan`** (default, Wan 2.6) — NOT a restyle or an edit: a NEW 5s or " +
+        "10s clip (720p or 1080p) featuring the input video's subject, in the " +
+        "scene the prompt describes.\n" +
+        "  • **`wan-flash`** — the same, faster; `audio: true` generates it with " +
+        "audio, `multi_shots: true` allows several shots.\n" +
+        "  • To restyle or edit the clip itself, pick a model that edits it: " +
+        "`seedance-2-5` / `seedance-2-5-flash` (by instruction, keeps length and " +
+        "ratio), `wan-videoedit` (guided edit) or `happyhorse-edit` (by " +
+        "instruction, e.g. a style transfer).\n" +
         "  • **`runway-aleph`** — stylised edits guided by an optional " +
         "`reference_image_url`; more aspect ratios.",
       inputSchema: {
@@ -1682,6 +1690,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             `v2v model. Default \`wan\`. Options: ${VIDEO_TO_VIDEO_NODE_PROVIDERS.join(", ")}. ` +
+            "`wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. " +
             "An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping " +
             "length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). " +
             "`happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged " +
@@ -1693,8 +1702,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
           .describe("Runway Aleph only."),
-        audio: z.boolean().optional().describe("Wan Flash only — preserve/regenerate audio."),
-        multi_shots: z.boolean().optional().describe("Wan Flash only — allow multi-shot scene changes."),
+        audio: z.boolean().optional().describe("Wan Flash only — generate the clip with audio."),
+        multi_shots: z.boolean().optional().describe("Wan Flash only — several shots with transitions instead of one continuous shot."),
         reference_image_url: z.string().url().optional().describe("Runway Aleph only — style reference image."),
         reference_image_urls: z.array(z.string().url()).max(30).optional().describe("seedance-2-5 only — cite as {image:N} in the prompt."),
         reference_video_urls: z.array(z.string().url()).max(9).optional().describe("seedance-2-5 only — extra clips: the source is {video:1}, these are {video:2}, {video:3}, … (all clips billed by length)."),

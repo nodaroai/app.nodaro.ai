@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-11-16T19:06:39.891Z
-generated_from: 2141c3f3e4
+generated_at: 2026-11-19T02:11:49.155Z
+generated_from: 0e15d8fd67
 ---
 
 # Generate Video
@@ -397,6 +397,11 @@ Prompt structure (Alibaba Model Studio's official formulas):
 - Multi-shot (2.6/2.7): Overall description + Shot number + Timestamp + Shot content.
 - Reference-to-video (2.6/2.7): Reference identifier + Action + Scene + optional Lines + optional BGM.
 
+**Video-to-video on wan / wan-flash (Wan 2.6) is reference-to-video**
+- The input clip is a REFERENCE for its subject; the output is a NEW clip of that subject in the scene the prompt describes. It is not an edit, a restyle or a style transfer of the input clip.
+- The prompt describes the scene: what the subject does and where.
+- To restyle or edit the clip itself, the model is wan-videoedit (describe the transform, keep motion + identity).
+
 **Camera vocabulary**
 push-in (intimacy/tension), pull-out (scale/isolation), tracking shot, orbit, fixed camera, and compound movements chained sequentially for epic scale.
 
@@ -416,6 +421,8 @@ push-in (intimacy/tension), pull-out (scale/isolation), tracking shot, orbit, fi
 
 Source: Alibaba Cloud Model Studio — "Text-to-video / image-to-video prompt guide"
 (alibabacloud.com/help/en/model-studio/text-to-video-prompt). Captured 2026-08-09.
+Video-to-video on wan / wan-flash: KIE Wan 2.6 market contract
+(docs.kie.ai/market/wan/2-6-video-to-video, docs.kie.ai/market/wan/2-6-flash-video-to-video). Captured 2026-11-19.
 
 ### Wan 3.0 (wan-3, wan-3-prime)
 

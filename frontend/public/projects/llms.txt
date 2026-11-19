@@ -550,7 +550,7 @@ Transform existing video with AI.
   "type": "video-to-video",
   "data": {
     "label": "Video to Video",
-    "prompt": "Convert to anime style",
+    "prompt": "The dancer performs on a neon-lit rooftop at night",
     "duration": 5,
     "fieldMappings": {}
   }
@@ -558,6 +558,8 @@ Transform existing video with AI.
 ```
 
 **Providers:** `wan`, `luma-modify`, `runway-aleph`
+
+`wan` (the default) makes a new clip featuring the subject of the input video, in the scene the prompt describes; it does not restyle or edit the clip.
 
 | Input Handles | Output Handles |
 |---------------|----------------|

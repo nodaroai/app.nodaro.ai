@@ -335,7 +335,7 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 
 | Provider | Capability Description |
 |----------|----------------------|
-| `wan` | Style transfer and video transformation |
+| `wan` | New clip featuring the subject of the input video, in the scene the prompt describes — not a restyle or edit of the clip |
 | `luma-modify` | Video modification preserving structure |
 | `runway-aleph` | Advanced video transformation |
 

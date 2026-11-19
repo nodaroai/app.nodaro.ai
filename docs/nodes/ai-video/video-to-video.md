@@ -6,6 +6,8 @@
 
 The Video to Video node applies AI-powered transformations to an existing video based on a text prompt. Use it for style transfer, content modification, or creative re-interpretation of video footage.
 
+What happens to your clip depends on the model. The edit models (Seedance 2.5 Edit, Wan 2.7 VideoEdit, HappyHorse Edit) change the clip itself. **Wan 2.6** and **Wan 2.6 Flash**, the default, do not: they take the subject of your clip and make a new clip of the scene your prompt describes — see [Supported Providers](#supported-providers).
+
 ## Configuration
 
 | Field | Type | Default | Description |
@@ -136,8 +138,8 @@ avoided into the instruction itself.
 |----------|---------|-------|
 | **Seedance 2.5 Edit** (`seedance-2-5`) | dynamic — see below | Whole-clip prompt-driven edit; keeps source length + ratio; 30 image / 10 audio references; native audio |
 | **Seedance 2.5 Flash Edit** (`seedance-2-5-flash`) | dynamic — see below | The same edit, faster and lower-cost: 480p / 720p, 10 image / 5 audio references (WAV or MP3), no draft; native audio |
-| **Wan 2.6** (`wan`) | 193 cr<!-- credits: wan --> | General-purpose V2V, reliable results |
-| **Wan 2.6 Flash** (`wan-flash`) | 110 cr<!-- credits: wan-flash --> | Fast V2V with optional audio & multi-shot |
+| **Wan 2.6** (`wan`) | 193 cr<!-- credits: wan --> | Makes a **new** clip featuring the subject of your video, in the scene your prompt describes — it does not edit or restyle the clip; 5 s or 10 s |
+| **Wan 2.6 Flash** (`wan-flash`) | 110 cr<!-- credits: wan-flash --> | The same as Wan 2.6, faster: a new clip featuring your video's subject, with optional audio & multi-shot — not an edit of the clip |
 | **Wan 2.7 VideoEdit** (`wan-videoedit`) | by the clip's length, at least 352 cr<!-- credits: wan-videoedit --> — see below | Guided editing with reference image, audio control, prompt extend; clip 2–10 s |
 | **Luma Modify** (`luma-modify`) | 352 cr<!-- credits: luma-modify --> | Strong at style transfer and artistic modifications |
 | **Runway Aleph** (`runway-aleph`) | 385 cr<!-- credits: runway-aleph --> | High-quality transformations, flexible aspect ratio |
@@ -246,11 +248,11 @@ measured are all one place — see Generate Video →
 ## Best Practices
 
 - Keep source video short (5-10s) for best results
-- Describe the transformation clearly: "change to anime style" rather than describing the entire scene
+- On a model that edits the clip, describe the transformation clearly: "change to anime style" rather than describing the entire scene. On Wan 2.6 and Wan 2.6 Flash, describe the scene the new clip should show
 - For Seedance 2.5 Edit: write the prompt as an instruction about the clip ("make it black and white", "the woman wears {image:1}") — it is read as one. Start at 480p while iterating; the reservation scales with resolution
 - For Wan 2.7 VideoEdit: connect a reference image to guide the visual style of the output
 - Use **Expand prompt** when your prompt is very brief — the AI fills in cinematic details
-- Test with the cheapest provider (Wan Flash) before upgrading to Runway or Luma
+- **Wan 2.6** and **Wan 2.6 Flash** do not edit your clip: they take its subject and make a new 5 s or 10 s clip of the scene your prompt describes. To restyle or edit the clip itself, pick **Seedance 2.5 Edit**, **Wan 2.7 VideoEdit** or **HappyHorse Edit**
 
 ## Common Use Cases
 

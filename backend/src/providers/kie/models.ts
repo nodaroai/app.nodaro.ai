@@ -2152,6 +2152,11 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
 // =============================================================================
 export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Wan 2.6 - Standard createTask endpoint, input: video_urls array
+  // See: docs.kie.ai/market/wan/2-6-video-to-video.md
+  // Reference-to-video, not an edit: "Generates a new video featuring the
+  // subject of the reference video(s); the scene is described by your prompt."
+  // The input clip is not restyled or edited (that is wan-videoedit, below).
+  // Takes: duration (5/10s, default 5), resolution (720p/1080p), multi_shots (bool)
   "wan": {
     model: "wan/2-6-video-to-video",
     safetyLevers: [NSFW_CHECKER_LEVER],
@@ -2161,9 +2166,11 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: {},
   },
 
-  // Wan 2.6 Flash - faster V2V variant with audio + multi-shot support
+  // Wan 2.6 Flash - faster variant of the same reference-to-video model (a new
+  // clip featuring the input video's subject; not an edit of the clip), with
+  // audio + multi-shot support
   // See: docs.kie.ai/market/wan/2-6-flash-video-to-video.md
-  // Supports: duration (5/10s), resolution (720p/1080p), audio (bool), multi_shots (bool)
+  // Supports: duration (5/10s, default 5), resolution (720p/1080p), audio (bool), multi_shots (bool)
   // Prompt max 1500 chars (vs 5000 for standard)
   "wan-flash": {
     model: "wan/2-6-flash-video-to-video",

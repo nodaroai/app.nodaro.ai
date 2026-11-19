@@ -260,8 +260,8 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoNodeProvider; label
   { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
   { value: "happyhorse-edit", label: "HappyHorse Edit", desc: "Video-to-video editing, up to 60s input" },
   { value: "wan-videoedit", label: "Wan 2.7 VideoEdit", desc: "Guided video editing with reference image support" },
-  { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
-  { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
+  { value: "wan", label: "Wan 2.6", desc: "New clip featuring your video's subject, in the scene your prompt describes — does not edit the clip" },
+  { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Faster: a new clip featuring your video's subject, in the scene your prompt describes — optional audio & multi-shot; does not edit the clip" },
 ]
 
 /** Seedance first, one row per model (decided 2026-11-11), then Kling 4, then Gemini Omni Flash 1.2, then VEO, Runway and LTX 2.3 Pro, then PixVerse V6, then Grok; a new Extend node still starts on VEO (`EXTEND_VIDEO_DEFAULT_PROVIDER`). */

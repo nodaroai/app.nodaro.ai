@@ -336,6 +336,7 @@ const WAN_DOCTRINE: ProviderPromptDoctrine = {
     "Multi-shot (2.6/2.7): Overall description + shot number + timestamp + per-shot content. For ONE continuous take write 'Generate single shot' (the shot_type parameter is gone in 2.7).",
     "References go by 'Image 1' / 'Video 1' (capitalized, with a space). Anti-patterns: naming real people, demanding exact legible text, rapid scene changes in one clip, very long choreography.",
     "Style words are strong levers: cyberpunk, claymation, pixel style, felt style, tilt-shift, time-lapse. wan-videoedit: describe the transform, keep motion + identity.",
+    "Video-to-video on wan / wan-flash is reference-to-video: the input clip supplies the subject and the prompt describes a NEW scene. It does not restyle or edit the clip — use wan-videoedit for that.",
   ],
   doctrine: `Prompt structure (Alibaba Model Studio's official formulas):
 - Basic: Entity + Scene + Motion.
@@ -344,6 +345,11 @@ const WAN_DOCTRINE: ProviderPromptDoctrine = {
 - Sound (2.5/2.6/2.7): … + Sound description (voice / sound effects / background music).
 - Multi-shot (2.6/2.7): Overall description + Shot number + Timestamp + Shot content.
 - Reference-to-video (2.6/2.7): Reference identifier + Action + Scene + optional Lines + optional BGM.
+
+**Video-to-video on wan / wan-flash (Wan 2.6) is reference-to-video**
+- The input clip is a REFERENCE for its subject; the output is a NEW clip of that subject in the scene the prompt describes. It is not an edit, a restyle or a style transfer of the input clip.
+- The prompt describes the scene: what the subject does and where.
+- To restyle or edit the clip itself, the model is wan-videoedit (describe the transform, keep motion + identity).
 
 **Camera vocabulary**
 push-in (intimacy/tension), pull-out (scale/isolation), tracking shot, orbit, fixed camera, and compound movements chained sequentially for epic scale.
@@ -363,7 +369,9 @@ push-in (intimacy/tension), pull-out (scale/isolation), tracking shot, orbit, fi
 - Style words are strong levers: cyberpunk, line-art illustration, felt style, 3D cartoon, pixel style, puppet animation, claymation, black-and-white animation, tilt-shift, time-lapse.
 
 Source: Alibaba Cloud Model Studio — "Text-to-video / image-to-video prompt guide"
-(alibabacloud.com/help/en/model-studio/text-to-video-prompt). Captured 2026-08-09.`,
+(alibabacloud.com/help/en/model-studio/text-to-video-prompt). Captured 2026-08-09.
+Video-to-video on wan / wan-flash: KIE Wan 2.6 market contract
+(docs.kie.ai/market/wan/2-6-video-to-video, docs.kie.ai/market/wan/2-6-flash-video-to-video). Captured 2026-11-19.`,
 }
 
 // Wan 3.0 is a SEPARATE doctrine from WAN_DOCTRINE on purpose: Wan 2.x binds
