@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, withWireLengthKey } from "../cast-swap-engines.js"
+import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, withWireLengthKey } from "../cast-swap-engines.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
 /**
@@ -68,6 +68,20 @@ describe("loadedEngineTakesArtStyle", () => {
     expect(loadedEngineTakesArtStyle()).toBe(false)
     setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: true } as never })
     expect(loadedEngineTakesArtStyle()).toBe(true)
+  })
+})
+
+describe("loadedEngineTakesCustomStyle", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("is true only where the loaded engine declares custom styles (castSwap.customStyle), whatever else it takes", () => {
+    expect(loadedEngineTakesCustomStyle()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: true } as never })
+    expect(loadedEngineTakesCustomStyle()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: true, customStyle: false } as never })
+    expect(loadedEngineTakesCustomStyle()).toBe(false)
+    setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, artStyle: true, customStyle: true } as never })
+    expect(loadedEngineTakesCustomStyle()).toBe(true)
   })
 })
 

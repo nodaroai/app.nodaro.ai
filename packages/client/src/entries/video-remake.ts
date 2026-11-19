@@ -32,5 +32,12 @@ export {
   type VideoRemakeStyleChoiceOption,
   type VideoRemakeStyleChoice,
   type VideoRemakeAdvanced,
+  type VideoRemakeArtStyleDirection,
+  type VideoRemakeCustomStyleDirection,
+  type VideoRemakeCustomStyleRefusalCode,
+  type VideoRemakeDescribeStyleParams,
+  type VideoRemakeDescribedStyle,
+  type VideoRemakeStyleMedium,
+  type VideoRemakeStyleTones,
   type VideoRemakeArtStyle,
 } from "../resources/cast-swap.js"

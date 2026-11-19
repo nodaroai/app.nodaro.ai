@@ -411,7 +411,21 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
     new Error(message),
     errObj?.code ? { code: errObj.code } : {},
     serverMessage !== undefined ? { serverMessage } : {},
+    // A 400 `validation_error` names each refused field (`{ path, message }`); kept so a form can say each at its field.
+    Array.isArray(errObj?.issues) ? { issues: errObj.issues } : {},
   )
+}
+
+/** The fields a refused request named (a 400 `validation_error`'s `issues`), each with a text path and message; [] for any other error. */
+export function validationIssuesOf(err: unknown): Array<{ path: string; code?: string; message: string }> {
+  const issues = err instanceof Error ? (err as { issues?: unknown }).issues : undefined
+  if (!Array.isArray(issues)) return []
+  return issues.flatMap((i) => {
+    if (typeof i !== "object" || i === null) return []
+    const { path, code, message } = i as { path?: unknown; code?: unknown; message?: unknown }
+    if (typeof path !== "string" || typeof message !== "string") return []
+    return [{ path, message, ...(typeof code === "string" ? { code } : {}) }]
+  })
 }
 
 /**
@@ -13915,6 +13929,89 @@ export async function saveNodaroMotionAdvanced(show: boolean): Promise<NodaroMot
       body: { show },
     })
   ).data
+}
+
+// ---- Admin: Video Remake's custom style (/v1/admin/video-remake/custom-style, admin-nodaro-motion-custom-style.ts) ----
+
+/** One of the engine's custom-style LLM steps: the admin's own instructions and model; a field left out is the engine's default. */
+export interface NodaroMotionCustomStyleStep {
+  instructions?: string
+  model?: string
+}
+
+/** The saved setting. `enabled` left out: the deployment's default. A step left out: the engine's defaults. */
+export interface NodaroMotionCustomStyle {
+  enabled?: boolean
+  /** The step that reads a run's words and decides the style's medium and tones. */
+  medium?: NodaroMotionCustomStyleStep
+  /** The step that puts an image's visual style into words. */
+  describe?: NodaroMotionCustomStyleStep
+}
+
+export type NodaroMotionCustomStyleStepName = "medium" | "describe"
+
+export interface NodaroMotionCustomStyleView {
+  /** null = never saved. Only what an admin set is listed. */
+  customStyle: NodaroMotionCustomStyle | null
+  /** Whether this deployment offers a custom style: the saved choice, else `enabledByDefault`. */
+  enabled: boolean
+  /** What this deployment answers while no choice is saved (off on a white-label deployment). */
+  enabledByDefault: boolean
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine takes a custom style. */
+  supported: boolean
+}
+
+/** The engine's own answer for the custom style: each step's default, and the limits it applies (read at run time). */
+export interface NodaroMotionCustomStyleDefaults {
+  maxChars?: number
+  noteMaxChars?: number
+  mediums?: unknown
+  tones?: unknown
+  fallback?: unknown
+  describeRateLimit?: unknown
+  defaults: Record<NodaroMotionCustomStyleStepName, { model: string; instructions: string }>
+}
+
+/** A problem the engine found in a step, at its path in the PUT's body (`customStyle.medium.model`). */
+export interface NodaroMotionCustomStyleProblem {
+  path: string
+  code: string
+  message: string
+}
+
+const ADMIN_NODARO_MOTION_CUSTOM_STYLE = "/v1/admin/video-remake/custom-style"
+
+export async function fetchNodaroMotionCustomStyle(): Promise<NodaroMotionCustomStyleView> {
+  return (await apiRequest<{ data: NodaroMotionCustomStyleView }>(ADMIN_NODARO_MOTION_CUSTOM_STYLE, "apiErr.loadNodaroMotion")).data
+}
+
+/**
+ * Saves the whole setting. A step this environment's engine finds wrong is a 400 `validation_error` whose `issues`
+ * name each field (`validationIssuesOf`); 502 `engine_error` when the engine answered unexpectedly.
+ */
+export async function saveNodaroMotionCustomStyle(customStyle: NodaroMotionCustomStyle): Promise<NodaroMotionCustomStyleView> {
+  return (
+    await apiRequest<{ data: NodaroMotionCustomStyleView }>(ADMIN_NODARO_MOTION_CUSTOM_STYLE, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { customStyle },
+    })
+  ).data
+}
+
+/** The engine's defaults and limits for the custom style; null where this environment's engine has no custom style yet. */
+export async function fetchNodaroMotionCustomStyleDefaults(): Promise<NodaroMotionCustomStyleDefaults | null> {
+  return (await apiRequest<{ data: NodaroMotionCustomStyleDefaults | null }>(`${ADMIN_NODARO_MOTION_CUSTOM_STYLE}/defaults`, "apiErr.loadNodaroMotion")).data
+}
+
+/** What this environment's engine finds wrong with the setting's steps (empty = nothing). Nothing is saved. */
+export async function checkNodaroMotionCustomStyle(customStyle: NodaroMotionCustomStyle): Promise<NodaroMotionCustomStyleProblem[]> {
+  return (
+    await apiRequest<{ data: { problems: NodaroMotionCustomStyleProblem[] } }>(`${ADMIN_NODARO_MOTION_CUSTOM_STYLE}/check`, "apiErr.loadNodaroMotion", {
+      method: "POST",
+      body: { customStyle },
+    })
+  ).data.problems
 }
 
 // ---- Admin: Video Remake's Pulse audio for direct runs (/v1/admin/video-remake/pulse-audio, admin-nodaro-motion-pulse-audio.ts) ----

@@ -45,6 +45,13 @@ const STORED: Readonly<Record<string, unknown>> = {
     },
   },
   advanced: { show: true },
+  "custom-style": {
+    customStyle: {
+      enabled: false,
+      medium: { instructions: "Stand-in instructions for the medium step.", model: "stand-in-model" },
+      describe: { instructions: "Stand-in instructions for the describe step." },
+    },
+  },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces." }, motion: { avoid: "-" } } } },
 }
 

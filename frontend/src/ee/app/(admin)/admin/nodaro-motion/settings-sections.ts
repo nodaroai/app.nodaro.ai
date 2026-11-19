@@ -14,6 +14,7 @@ import type {
   CastSwapPrismReferenceAudioByResolution,
   CastSwapPulseAudioId,
   CastSwapPulseReferenceAudioByResolution,
+  NodaroMotionCustomStyle,
   NodaroMotionMasking,
   NodaroMotionMotion,
   NodaroMotionNoPerson,
@@ -36,6 +37,7 @@ import { preciseArtStyleToSaved } from "./components/PreciseArtStyleColumn"
 import { noPersonToSaved } from "./components/NoPersonColumn"
 import { preciseStyleRouteDraftOf, preciseStyleRouteToSaved, type PreciseStyleRouteDraft } from "./components/PreciseStyleRouteColumn"
 import { promptPartsToSave, promptWordingToSave } from "./components/PromptPartsTabs"
+import { customStyleToSaved } from "./components/CustomStyleSection"
 
 /** Every section a stored set holds, by the server's key. */
 export const MOTION_SETTINGS_KEYS = [
@@ -52,6 +54,7 @@ export const MOTION_SETTINGS_KEYS = [
   "no-person",
   "precise-style-route",
   "advanced",
+  "custom-style",
   "prompt-parts",
 ] as const
 
@@ -150,6 +153,17 @@ export const ADVANCED_SPEC = spec<boolean, boolean, { show: boolean }>({
   saveArgOf: (body) => body.show,
 })
 
+/**
+ * The custom style: the draft is kept in its saved form, `enabled` left out while the deployment's default decides
+ * (the page shows that default; CustomStyleSection.tsx), a step field left empty the engine's default.
+ */
+export const CUSTOM_STYLE_SPEC = spec<NodaroMotionCustomStyle, NodaroMotionCustomStyle, { customStyle: NodaroMotionCustomStyle }>({
+  draftOf: (stored) => customStyleToSaved(stored),
+  bodyOf: (draft) => ({ customStyle: customStyleToSaved(draft) }),
+  storedOfBody: (body) => body.customStyle,
+  saveArgOf: (body) => body.customStyle,
+})
+
 export const STYLE_ONLY_SPEC = spec<NodaroMotionStyleOnly, NodaroMotionStyleOnly, { styleOnly: NodaroMotionStyleOnly }>({
   draftOf: (stored) => structuredClone(stored ?? {}),
   bodyOf: (draft) => ({ styleOnly: styleOnlyToSaved(draft) }),
@@ -207,6 +221,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   "no-person": NO_PERSON_SPEC,
   "precise-style-route": PRECISE_STYLE_ROUTE_SPEC,
   advanced: ADVANCED_SPEC,
+  "custom-style": CUSTOM_STYLE_SPEC,
   "prompt-parts": PROMPT_PARTS_SPEC,
 }
 

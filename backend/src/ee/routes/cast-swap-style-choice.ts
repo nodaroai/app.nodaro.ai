@@ -7,7 +7,8 @@
  *   GET /v1/video-remake/style-choice   { engines: { "nodaro-prism": Choice, "nodaro-pulse": Choice },
  *                                      styleOnly: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      preciseArtStyle: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
- *                                      preciseArtStyleAlone: { "nodaro-prism": boolean, "nodaro-pulse": boolean } }
+ *                                      preciseArtStyleAlone: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
+ *                                      customStyle: { "nodaro-prism": boolean, "nodaro-pulse": false } }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -55,6 +56,18 @@
  * Such a request may run as Flex all the same: while the admin's Precise
  * art-style route is on the engine runs it as Flex, which this does not say and
  * the estimate shows.
+ *
+ * `customStyle` says, per engine, whether a direct run takes the style in the
+ * person's own words there (`direction.customStyle`, in place of
+ * `direction.style`): Nodaro Prism while this environment's engine declares
+ * `castSwap.customStyle` AND this deployment offers it (the admin's saved
+ * choice in `nodaro_motion_custom_style`, else the deployment's default: on
+ * for Nodaro's own, off under a white-label surface profile;
+ * lib/nodaro-motion-custom-style.ts), Nodaro Pulse never (it takes no art
+ * style). Unlike the three maps above it reads the settings, so a settings
+ * read that failed answers it false; an engine that does not declare it
+ * answers false whatever is saved. A client reading a server from before it
+ * finds none and treats every engine as false.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -62,6 +75,8 @@ import { getAppSettings, settingsReadFailed } from "../../lib/app-settings.js"
 import { engineTakesStyleChoice, styleChoices } from "../../lib/nodaro-motion-style.js"
 import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
 import { engineTakesPreciseArtStyle, engineTakesPreciseArtStyleAlone } from "../../lib/nodaro-motion-precise-art-style.js"
+import { customStyleEnabled, engineTakesCustomStyle } from "../../lib/nodaro-motion-custom-style.js"
+import { customStyleOfferedByDefault } from "../../lib/nodaro-motion-custom-style-default.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 
 /** How long a client (or a CDN) may keep the answer: about the settings cache's own life. */
@@ -82,6 +97,11 @@ function preciseArtStyleAloneEngines(castSwap: Parameters<typeof engineTakesPrec
   return { "nodaro-prism": engineTakesPreciseArtStyleAlone(castSwap), "nodaro-pulse": false }
 }
 
+/** Whether each engine takes a custom style: Prism when its engine declares it and the deployment offers it (`offered`), Pulse never (no art style). A new object. */
+function customStyleEngines(offered: boolean): Record<NodaroMotionEngine, boolean> {
+  return { "nodaro-prism": offered, "nodaro-pulse": false }
+}
+
 type PreviousEngineId = (typeof NODARO_MOTION_LEGACY_ENGINE_OF)[NodaroMotionEngine]
 
 /** A map by engine with each value also under the engine's previous id (a new object). */
@@ -92,12 +112,16 @@ export function withPreviousEngineIds<T>(byEngine: Record<NodaroMotionEngine, T>
 }
 
 /** The answer: every map with the previous ids beside the current ones. */
-function answer(engines: Record<NodaroMotionEngine, unknown>, maps: Record<"styleOnly" | "preciseArtStyle" | "preciseArtStyleAlone", Record<NodaroMotionEngine, boolean>>) {
+function answer(
+  engines: Record<NodaroMotionEngine, unknown>,
+  maps: Record<"styleOnly" | "preciseArtStyle" | "preciseArtStyleAlone" | "customStyle", Record<NodaroMotionEngine, boolean>>,
+) {
   return {
     engines: withPreviousEngineIds(engines),
     styleOnly: withPreviousEngineIds(maps.styleOnly),
     preciseArtStyle: withPreviousEngineIds(maps.preciseArtStyle),
     preciseArtStyleAlone: withPreviousEngineIds(maps.preciseArtStyleAlone),
+    customStyle: withPreviousEngineIds(maps.customStyle),
   }
 }
 
@@ -112,10 +136,13 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const styleOnly = styleOnlyEngines(castSwap)
   const preciseArtStyle = preciseArtStyleEngines(castSwap)
   const preciseArtStyleAlone = preciseArtStyleAloneEngines(castSwap)
-  if (!engineTakesStyleChoice(castSwap)) {
-    return reply
-      .header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
-      .send(answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone }))
+  const takesStyleChoice = engineTakesStyleChoice(castSwap)
+  const takesCustomStyle = engineTakesCustomStyle(castSwap)
+  // What the answer says without the settings: people choose the style, no custom style.
+  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) })
+  // Nothing of the answer reads the settings for this engine: it enforces no Style choice and takes no custom style.
+  if (!takesStyleChoice && !takesCustomStyle) {
+    return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
   }
   let settings: Awaited<ReturnType<typeof getAppSettings>> | null = null
   try {
@@ -124,9 +151,14 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
     req.log.warn({ err: e }, "cast-swap style-choice: the app settings could not be read")
   }
   if (!settings || settingsReadFailed(settings)) {
-    return reply.header("Cache-Control", "no-store").send(answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone }))
+    return reply.header("Cache-Control", "no-store").send(withoutSettings())
   }
-  return reply
-    .header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`)
-    .send(answer(styleChoices(settings.nodaro_motion_style), { styleOnly, preciseArtStyle, preciseArtStyleAlone }))
+  return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(
+    answer(styleChoices(takesStyleChoice ? settings.nodaro_motion_style : null), {
+      styleOnly,
+      preciseArtStyle,
+      preciseArtStyleAlone,
+      customStyle: customStyleEngines(takesCustomStyle && customStyleEnabled(settings.nodaro_motion_custom_style, customStyleOfferedByDefault())),
+    }),
+  )
 }

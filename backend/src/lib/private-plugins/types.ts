@@ -3865,6 +3865,14 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionPreciseStyleRoute?: boolean
   /**
+   * `tk.settings.nodaroMotionCustomStyle()` exists: the deployment's
+   * custom-style setting for Video Remake (whether a run may take the style in
+   * the person's own words, and the admin's instructions and models for its
+   * two LLM steps). An older host has no such member: a custom style is not
+   * offered there.
+   */
+  readonly nodaroMotionCustomStyle?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -4285,6 +4293,36 @@ export interface PluginSettingsToolkit {
    * `capabilities.nodaroMotionPreciseStyleRoute`.
    */
   nodaroMotionPreciseStyleRoute?(): Promise<PluginNodaroMotionPreciseStyleRoute | null>
+  /**
+   * Video Remake's custom style (`direction.customStyle`, the style in the
+   * person's own words), for the whole deployment:
+   * - `enabled`: whether this deployment offers it, ALREADY RESOLVED by the
+   *   host: the admin's saved choice, else the deployment's default (on for
+   *   Nodaro's own, off under a white-label surface profile). Only `true`
+   *   offers it; a plugin cannot tell the deployments apart itself.
+   * - `medium` / `describe`: the admin's own instructions and model for the two
+   *   LLM steps (`{ instructions?, model? }` each; absent: the engine's
+   *   defaults).
+   * Always an object while this host's engine declares `castSwap.customStyle`
+   * (never saved answers `{ enabled }` alone); null to an engine that does not
+   * declare it (it never asks). Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read (a plugin reads that as not
+   * offered). Advertised as `capabilities.nodaroMotionCustomStyle`.
+   */
+  nodaroMotionCustomStyle?(): Promise<PluginNodaroMotionCustomStyle | null>
+}
+
+/** One LLM step of Video Remake's custom style, as an admin set it; a field left out is the engine's default. */
+export type PluginNodaroMotionCustomStyleStep = {
+  readonly instructions?: string
+  readonly model?: string
+}
+
+/** Video Remake's custom-style setting as a plugin is answered it: `enabled` resolved by the host. */
+export type PluginNodaroMotionCustomStyle = {
+  readonly enabled?: boolean
+  readonly medium?: PluginNodaroMotionCustomStyleStep
+  readonly describe?: PluginNodaroMotionCustomStyleStep
 }
 
 /**
@@ -4794,6 +4832,23 @@ export interface PluginSupports {
    *   platform sends the shot list without the key and refuses to save a
    *   shared Video Remake steps setting that asks for speech while any
    *   environment lacks it (lib/cast-swap-steps.ts `engineTakesShotListSpeech`).
+   * - `customStyle`: a DIRECT run on Nodaro Prism takes `direction: {
+   *   customStyle: "<the style in the person's own words>" }` in place of
+   *   `direction.style` (both sent: 400 `custom_style_with_art_style`),
+   *   wherever a catalog art style goes; at most 600 characters
+   *   (`custom_style_too_long`), never blank (`custom_style_empty`). Only
+   *   while the deployment offers it (`tk.settings.nodaroMotionCustomStyle()`'s
+   *   `enabled: true`; anything else: 403 `custom_style_not_available`). The
+   *   run decides the style's medium and tones itself and stores them hidden
+   *   (`input_data.__customStyleKind`). The engine also serves
+   *   `POST /v1/cast-swap/describe-style` (`{ imageUrl, note? }` → `{ text,
+   *   medium?, tones? }`: a picture's visual style in words; free, an
+   *   account's, rate-limited) and the platform's own
+   *   `POST /v1/cast-swap/custom-style` (the two steps' default instructions
+   *   and what is wrong with a setting). Additive-optional: absent ⇒ the host
+   *   must not send `direction.customStyle` (an older engine's strict schema
+   *   refuses the key) and answers that a custom style is not offered
+   *   (lib/nodaro-motion-custom-style.ts `engineTakesCustomStyle`).
    * - `maskFillNone`: a faces hidden masking setting (the Video Remake
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
@@ -4956,6 +5011,7 @@ export interface PluginSupports {
     readonly preciseStyleRoutePerStyle?: boolean
     readonly preciseStyleRoute?: boolean
     readonly shotListSpeech?: boolean
+    readonly customStyle?: boolean
   }
 }
 

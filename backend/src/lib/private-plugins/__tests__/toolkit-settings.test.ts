@@ -30,7 +30,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -39,11 +39,13 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle }
     },
     settingsReadFailed: () => h.failed,
   }
 })
+
+vi.mock("../../nodaro-motion-custom-style-default.js", () => ({ customStyleOfferedByDefault: () => h.offeredByDefault }))
 
 const { buildToolkit } = await import("../toolkit.js")
 const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../private-plugins/supports-registry.js")
@@ -952,5 +954,65 @@ describe("tk.settings.nodaroMotionPreciseStyleRoute", () => {
 describe("capabilities.videoFaceMeshContours", () => {
   it("is advertised: the face mesh route draws the contours", () => {
     expect(buildToolkit().capabilities?.videoFaceMeshContours).toBe(true)
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionCustomStyle()`: whether this deployment offers Video Remake's custom style, with `enabled`
+ * ALREADY RESOLVED here (the admin's saved choice, else the deployment's default), and the admin's two LLM steps. The
+ * engine reads null as not offered, so an engine that declares `castSwap.customStyle` is always answered an object.
+ */
+describe("tk.settings.nodaroMotionCustomStyle", () => {
+  beforeEach(() => {
+    h.customStyle = null
+    h.offeredByDefault = true
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const customEngine = () => setPluginSupports({ castSwap: { ...CS, customStyle: true } } as never)
+  const read = () => buildToolkit().settings!.nodaroMotionCustomStyle!()
+
+  it("advertises nodaroMotionCustomStyle and answers null to an engine without castSwap.customStyle", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionCustomStyle).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionCustomStyle).toBe("function")
+    h.customStyle = { enabled: true }
+    expect(await read()).toBeNull()
+    setPluginSupports({ castSwap: { ...CS, customStyle: false } } as never)
+    expect(await read()).toBeNull()
+  })
+
+  it("rejects when the settings could not be read, never answering a switch", async () => {
+    customEngine()
+    h.failed = true
+    await expect(read()).rejects.toThrow(/could not be read/)
+  })
+
+  it("never saved: an object with the deployment's default — on for Nodaro's own, off under a white-label profile", async () => {
+    customEngine()
+    expect(await read()).toStrictEqual({ enabled: true })
+    h.offeredByDefault = false
+    expect(await read()).toStrictEqual({ enabled: false })
+    // Steps saved without a choice: the default still decides.
+    h.customStyle = { describe: { model: "another-model" } }
+    expect(await read()).toStrictEqual({ enabled: false, describe: { model: "another-model" } })
+  })
+
+  it("an admin's saved choice wins over the deployment's default, either way", async () => {
+    customEngine()
+    h.customStyle = { enabled: false }
+    expect(await read()).toStrictEqual({ enabled: false })
+    h.offeredByDefault = false
+    h.customStyle = { enabled: true }
+    expect(await read()).toStrictEqual({ enabled: true })
+  })
+
+  it("answers the admin's steps, a copy the plugin may change", async () => {
+    customEngine()
+    h.customStyle = { enabled: true, medium: { instructions: "Read the words.", model: "some-model" }, describe: { instructions: "Describe the look." } }
+    const got = await read()
+    expect(got).toStrictEqual({ enabled: true, medium: { instructions: "Read the words.", model: "some-model" }, describe: { instructions: "Describe the look." } })
+    ;(got as { medium: { model: string } }).medium.model = "changed"
+    expect((h.customStyle as { medium: { model: string } }).medium.model).toBe("some-model")
   })
 })

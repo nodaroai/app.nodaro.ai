@@ -8,6 +8,8 @@ import {
   type CastSwapEngine,
   type CastSwapParams,
   type VideoRemakeAdvanced,
+  type VideoRemakeCustomStyleRefusalCode,
+  type VideoRemakeDescribedStyle,
   type VideoRemakeArtStyle,
   type VideoRemakeEngine,
   type VideoRemakeEstimate,
@@ -555,6 +557,97 @@ describe("videoRemake resource", () => {
     const prism: boolean | undefined = got.preciseArtStyleAlone?.["nodaro-prism"]
     expect(prism).toBe(true)
     expect(got.preciseArtStyleAlone?.["nodaro-pulse"]).toBe(false)
+  })
+})
+
+describe("a custom style: the style in your own words", () => {
+  const TEXT = "Hand-drawn ink on rough paper, heavy outlines, flat muted colours"
+
+  it("run and estimate send direction.customStyle as written, in place of direction.style", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ jobId: "job-c" }, 202))
+      .mockReturnValueOnce(mockOk({ totalCredits: 3, breakdown: {}, settlesLower: false }))
+    const client = make(fetchMock)
+    const params: VideoRemakeParams = { videoUrl: "https://cdn.example.com/clip.mp4", roles: [], style: "motion", direction: { customStyle: TEXT } }
+
+    await client.videoRemake.run(params)
+    await client.videoRemake.estimate(params)
+    const [runUrl, runInit] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [estimateUrl, estimateInit] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(runUrl).toBe("https://api.example.com/v1/video-remake")
+    expect(estimateUrl).toBe("https://api.example.com/v1/video-remake/estimate")
+    for (const init of [runInit, estimateInit]) {
+      expect(JSON.parse(init.body as string).direction).toEqual({ customStyle: TEXT })
+    }
+  })
+
+  it("direction is a catalog art style or a custom style, never both (types)", () => {
+    const catalog: VideoRemakeParams["direction"] = { style: "pop-art" }
+    const custom: VideoRemakeParams["direction"] = { customStyle: TEXT }
+    // @ts-expect-error a run has one style: a catalog id or its own words
+    const both: VideoRemakeParams["direction"] = { style: "pop-art", customStyle: TEXT }
+    // @ts-expect-error a direction names one of the two
+    const neither: VideoRemakeParams["direction"] = {}
+    expect([catalog, custom, both, neither]).toHaveLength(4)
+  })
+
+  it("describeStyle POSTs /v1/video-remake/describe-style and answers the image's style in words", async () => {
+    const answer: VideoRemakeDescribedStyle = { text: TEXT, medium: "2d", tones: "colour" }
+    const fetchMock = vi.fn().mockReturnValue(mockOk(answer))
+    const client = make(fetchMock)
+
+    const got = await client.videoRemake.describeStyle({ imageUrl: "https://cdn.example.com/look.png", note: "like this, but darker" })
+    expect(got).toEqual(answer)
+    const text: string = got.text
+    expect(text).toBe(TEXT)
+    let [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/describe-style")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({ imageUrl: "https://cdn.example.com/look.png", note: "like this, but darker" })
+
+    // Without a note the body carries the image alone; the castSwap alias is the same method.
+    await client.castSwap.describeStyle({ imageUrl: "https://cdn.example.com/look.png" })
+    ;[url, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/describe-style")
+    expect(JSON.parse(init.body as string)).toEqual({ imageUrl: "https://cdn.example.com/look.png" })
+  })
+
+  it("a refusal surfaces its code: not offered here, an unreadable image, a style that could not be described", async () => {
+    const refusals: Array<[number, VideoRemakeCustomStyleRefusalCode]> = [
+      [403, "custom_style_not_available"],
+      [400, "image_unreadable"],
+      [502, "describe_style_failed"],
+      [422, "style_not_described"],
+    ]
+    for (const [status, code] of refusals) {
+      const client = make(vi.fn().mockReturnValue(mockErr(status, { error: { code, message: "refused" } })))
+      const err = await client.videoRemake.describeStyle({ imageUrl: "https://cdn.example.com/look.png" }).catch((e: unknown) => e)
+      expect(err, code).toBeInstanceOf(NodaroError)
+      const got: VideoRemakeCustomStyleRefusalCode = (err as NodaroError).code
+      expect(got).toBe(code)
+      expect((err as NodaroError).status).toBe(status)
+    }
+    const run = make(vi.fn().mockReturnValue(mockErr(400, { error: { code: "custom_style_with_art_style", message: "refused" } })))
+    const err = await run.videoRemake.run({ videoUrl: "https://cdn.example.com/clip.mp4", roles: [], direction: { customStyle: TEXT } }).catch((e: unknown) => e)
+    expect((err as NodaroError).code).toBe("custom_style_with_art_style")
+  })
+
+  it("styleChoice passes customStyle through, per engine, typed; an older server has none", async () => {
+    const answer: VideoRemakeStyleChoice = {
+      engines: { "nodaro-prism": "user", "nodaro-pulse": "user" },
+      customStyle: { "nodaro-prism": true, "nodaro-pulse": false },
+    }
+    let client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    let got = await client.videoRemake.styleChoice()
+    expect(got).toEqual(answer)
+    const prism: boolean | undefined = got.customStyle?.["nodaro-prism"]
+    expect(prism).toBe(true)
+    expect(got.customStyle?.["nodaro-pulse"]).toBe(false)
+
+    client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" } })))
+    got = await client.videoRemake.styleChoice()
+    expect(got.customStyle?.["nodaro-prism"] === true).toBe(false)
   })
 })
 

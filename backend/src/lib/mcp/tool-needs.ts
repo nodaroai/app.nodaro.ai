@@ -346,7 +346,8 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   suno_speech: runs("/v1/suno-speech"),
 
   // ── Video Remake (cast-swap) and trends ────────────────────────────────
-  video_remake: runs("/v1/video-remake"),
+  // The run, and the step that puts an image's style into words for it (a custom style from an image).
+  video_remake: runs("/v1/video-remake", "/v1/video-remake/describe-style"),
   estimate_full_quality: runs("/v1/video-remake/:jobId/full-quality"),
   full_quality: runs("/v1/video-remake/:jobId/full-quality"),
   list_trends: TREND,

@@ -142,6 +142,9 @@ const PLUGIN_GUARDED_ROUTE_NODES: Readonly<Record<string, string>> = {
   "/v1/video-remake": "cast-swap",
   "/v1/video-remake/:jobId/full-quality": "cast-swap",
   "/v1/video-remake/face-mask": "cast-swap",
+  // A picture's style in words, for a run's custom style: the model and node checks alone, under both prefixes.
+  "/v1/cast-swap/describe-style": "cast-swap",
+  "/v1/video-remake/describe-style": "cast-swap",
   "/v1/competitor-scan": "competitor-scan",
   "/v1/topic-scan": "topic-scan",
   "/v1/content-ideas": "content-ideas",
@@ -204,6 +207,7 @@ describe("routeNodeGate — the Cloud plugin's credit-guarded routes", () => {
       ["/v1/video-remake/estimate", "/v1/cast-swap/estimate"],
       ["/v1/video-remake/:jobId/full-quality", "/v1/cast-swap/:jobId/full-quality"],
       ["/v1/video-remake/face-mask", "/v1/cast-swap/face-mask"],
+      ["/v1/video-remake/describe-style", "/v1/cast-swap/describe-style"],
     ]) {
       expect(routeNodeGate(remake!, {}), remake).toEqual(routeNodeGate(cast!, {}))
     }

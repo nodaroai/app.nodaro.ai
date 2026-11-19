@@ -5594,6 +5594,7 @@ self-hosted installs
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 | `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
+| `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -5612,7 +5613,7 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `style` (see below), `direction` (an art
-style, see below), `resolution` (`"480p"` — the default —
+style from the catalog, or a custom style in your own words, see below), `resolution` (`"480p"` — the default —
 `"720p"` or `"1080p"`; on Nodaro Pulse `"720p"` — its default — or
 `"1080p"`), `draft` (off by default, so a 480p run is plain; `true` makes a
 480p draft whose same take [Full Quality](#full-quality) can finish at 1080p;
@@ -5659,7 +5660,9 @@ run ignores it: the trend decides.
 Motion: every run and estimate on that engine then uses it, whatever `style`
 says. `GET /v1/video-remake/style-choice` (public, no
 sign-in needed) says which, per engine:
-`{ engines: { "nodaro-prism": Choice, "nodaro-pulse": Choice } }`, where
+`{ engines: { "nodaro-prism": Choice, "nodaro-pulse": Choice } }` (with the
+`styleOnly`, `preciseArtStyle`, `preciseArtStyleAlone` and `customStyle` maps
+described below), where
 `Choice` is `"user"` (you choose, as above), `"precise"` or `"flex"` (Motion,
 `style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style choice, and every run
@@ -5738,6 +5741,51 @@ Motion runs use); the estimate (sent with the same body) shows it. The job recor
 Precise run with an art style answers `400 art_style_needs_flex`. Nodaro
 Pulse takes none (`400 art_style_needs_prism`, on a Precise run as on a Motion
 one).
+
+**A custom style.** Where `GET /v1/video-remake/style-choice` answers
+`customStyle` `true` for the engine (Nodaro Prism only), a direct run takes the
+style in your own words in place of a catalog art style:
+`direction: { customStyle: "<text>" }`. Describe the visual style only: the
+medium (drawn, 3D-rendered or filmed), line, colour, lighting and texture; not
+who or what is in the video. At most 600 characters, never blank. It goes
+wherever a catalog art style goes and counts as the run's change wherever one
+does (style only and an art style on a Precise run, above), and the estimate
+(sent with the same body) answers what it would for a catalog art style: the
+words change no price. The text is used as written, and the job records it as
+sent in `input_data.direction.customStyle`. Send `style` or `customStyle`,
+never both.
+
+`customStyle: { "nodaro-prism": boolean, "nodaro-pulse": boolean }` in the
+`style-choice` answer is `true` only where the engine takes a custom style and
+Nodaro offers it on this deployment; Nodaro Pulse is always `false`, and a
+server from before it leaves it out (read that as `false`).
+
+`POST /v1/video-remake/describe-style` writes such a text from an image: body
+`{ imageUrl, note? }`, where `imageUrl` is a public http(s) PNG, JPEG, WebP or
+GIF of at most 10 MB and `note` is a wish about the style of at most 600
+characters ("like this, but darker"). It answers `{ text, medium?, tones? }`:
+`text` is the image's visual style in words, never its content, at most 600
+characters, ready to show, edit and send as `customStyle`; `medium` (`"2d"`,
+`"3d"` or `"photo"`) and `tones` (`"colour"`, `"black-and-white"` or
+`"one-colour"`) are a hint for an interface only (a run works out its style's
+medium itself, from the words it is sent). It starts no job, charges nothing
+and keeps nothing of the image; it needs a signed-in account and is limited to
+10 calls a minute per account.
+
+Refusals, all before anything is charged. On a run and its estimate:
+`400 custom_style_with_art_style` (both `style` and `customStyle` sent),
+`400 custom_style_empty` (blank, or nothing left once its curly braces are
+taken out), `400 custom_style_too_long` (more than 600 characters),
+`403 custom_style_not_available` (not offered here: choose a catalog art
+style), `400 raw_reference_token` (the text holds `{image:…}`, `{video:…}` or
+`{audio:…}`), and where a catalog art style could not go either
+`400 art_style_needs_prism` (Nodaro Pulse) or `400 art_style_needs_flex` (a
+trend run). On `describe-style`: `401 unauthorized`, `400 validation_error`,
+`400 unsafe_url` (not a public http(s) address), `403
+custom_style_not_available`, `400 image_unreadable` (the image could not be
+fetched, is too large or is not a picture), `502 describe_style_failed` (try
+again), `422 style_not_described` (try another image, or write the style
+yourself) and `429 rate_limit_exceeded` past the limit.
 
 **The Advanced options on the Video Remake page.** The Video Remake page
 offers two of the body's fields, `prepareReferences` (see Reference
