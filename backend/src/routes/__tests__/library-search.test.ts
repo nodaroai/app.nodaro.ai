@@ -84,37 +84,37 @@ function searchFilters(): string[][] {
 }
 
 describe("GET /v1/library search", () => {
-  it("q keeps the files whose filename contains it, every character literal, on the page and its count", async () => {
+  it("q keeps the files whose filename or name contains it, every character literal, on the page and its count", async () => {
     const res = await get(`q=${encodeURIComponent(" 50%_off*.png ")}`)
 
     expect(res.statusCode).toBe(200)
-    const filter = String.raw`filename.imatch."50%_off\\*\\.png"`
+    const filter = String.raw`filename.imatch."50%_off\\*\\.png",metadata->>name.imatch."50%_off\\*\\.png"`
     expect(searchFilters()).toEqual([[filter], [filter]])
   })
 
   it("needs every word: one or= per word, on the page and its count", async () => {
     await get(`q=${encodeURIComponent("summer  poster")}`)
 
-    const words = ['filename.imatch."summer"', 'filename.imatch."poster"']
+    const words = ['filename.imatch."summer",metadata->>name.imatch."summer"', 'filename.imatch."poster",metadata->>name.imatch."poster"']
     expect(searchFilters()).toEqual([words, words])
   })
 
   it("search is still accepted, as an alias of q", async () => {
     await get("search=report")
 
-    expect(searchFilters()).toEqual([['filename.imatch."report"'], ['filename.imatch."report"']])
+    expect(searchFilters()).toEqual([['filename.imatch."report",metadata->>name.imatch."report"'], ['filename.imatch."report",metadata->>name.imatch."report"']])
   })
 
   it("a non-blank q wins when both are sent", async () => {
     await get("q=poster&search=report")
 
-    expect(searchFilters()).toEqual([['filename.imatch."poster"'], ['filename.imatch."poster"']])
+    expect(searchFilters()).toEqual([['filename.imatch."poster",metadata->>name.imatch."poster"'], ['filename.imatch."poster",metadata->>name.imatch."poster"']])
   })
 
   it("a blank q is no q, so search applies", async () => {
     await get("q=%20&search=report")
 
-    expect(searchFilters()).toEqual([['filename.imatch."report"'], ['filename.imatch."report"']])
+    expect(searchFilters()).toEqual([['filename.imatch."report",metadata->>name.imatch."report"'], ['filename.imatch."report",metadata->>name.imatch."report"']])
   })
 
   it("reads a blank q as no search", async () => {
@@ -131,7 +131,7 @@ describe("GET /v1/library search", () => {
     const ors = page.calls.filter((c) => c.method === "or").map((c) => c.args[0])
     expect(ors).toEqual([
       `and(user_id.eq.${USER},in_library.eq.true),is_library_item.eq.true`,
-      'filename.imatch."poster"',
+      'filename.imatch."poster",metadata->>name.imatch."poster"',
     ])
   })
 
@@ -140,7 +140,7 @@ describe("GET /v1/library search", () => {
 
     const page = db.queries.find((q) => q.table === "assets" && q.calls.some((c) => c.method === "limit"))!
     expect(page.calls).toContainEqual({ method: "eq", args: ["user_id", USER] })
-    expect(page.calls.filter((c) => c.method === "or").map((c) => c.args[0])).toEqual(['filename.imatch."poster"'])
+    expect(page.calls.filter((c) => c.method === "or").map((c) => c.args[0])).toEqual(['filename.imatch."poster",metadata->>name.imatch."poster"'])
   })
 
   it("pages a search: the cursor's predicate is ANDed with it", async () => {
@@ -148,7 +148,7 @@ describe("GET /v1/library search", () => {
 
     const page = db.queries.find((q) => q.table === "assets" && q.calls.some((c) => c.method === "limit"))!
     const ors = page.calls.filter((c) => c.method === "or").map((c) => String(c.args[0]))
-    expect(ors).toContain('filename.imatch."poster"')
+    expect(ors).toContain('filename.imatch."poster",metadata->>name.imatch."poster"')
     expect(ors).toContain(`created_at.lt.2026-08-01T00:00:00+00:00,and(created_at.eq.2026-08-01T00:00:00+00:00,id.lt.${CURSOR})`)
   })
 

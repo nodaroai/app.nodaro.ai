@@ -54,6 +54,7 @@ beforeEach(() => {
   routes[`GET ${ADVANCED_URL}`] = () => view(false)
   // The custom style (custom-style.test.tsx): never saved, and an engine that takes none (nothing more is asked).
   routes["GET /v1/admin/video-remake/custom-style"] = () => ({ body: { data: { customStyle: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
+  routes["GET /v1/admin/video-remake/plan-roles"] = () => ({ body: { data: { planRoles: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
 })
 afterEach(() => vi.unstubAllGlobals())
 

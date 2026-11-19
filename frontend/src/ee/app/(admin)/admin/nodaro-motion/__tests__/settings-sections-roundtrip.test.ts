@@ -52,6 +52,12 @@ const STORED: Readonly<Record<string, unknown>> = {
       describe: { instructions: "Stand-in instructions for the describe step." },
     },
   },
+  "plan-roles": {
+    planRoles: {
+      enabled: false,
+      plan: { instructions: "Stand-in instructions for the planning step, at most <maxPersons> persons.", model: "stand-in-model" },
+    },
+  },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces." }, motion: { avoid: "-" } } } },
 }
 

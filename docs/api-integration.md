@@ -4400,7 +4400,7 @@ you own (uploads and generations, saved or not). Query:
 | Param | Meaning |
 |---|---|
 | `type` | `all` (default), `image`, `video` or `audio`. |
-| `q` | Search: only the files whose filename contains every word of `q` (up to 5), ignoring case — the [`q` rule](#search-q) of the entity lists. Every character of a word is matched as itself (`%`, `_` and `*` are not wildcards); a blank `q` is no search; up to 200 characters. `search` is the earlier name of this parameter and still works. A `q` that is not blank wins over `search`; a blank `q` counts as no `q`, so `?q=&search=poster` searches for `poster`. |
+| `q` | Search: only the files whose filename or name contains every word of `q` (up to 5), ignoring case — the [`q` rule](#search-q) of the entity lists. A file's name is the one it is shown by when the job that made it gave it one (`metadata.name`): a song made with Suno is found by its title. Each word may match either. Every character of a word is matched as itself (`%`, `_` and `*` are not wildcards); a blank `q` is no search; up to 200 characters. `search` is the earlier name of this parameter and still works. A `q` that is not blank wins over `search`; a blank `q` counts as no `q`, so `?q=&search=poster` searches for `poster`. |
 | `owned=true` | Every file you own instead of the library view. |
 | `source` | Only media from one surface: `internal`, `mcp`, `app`, `cli`, `sdk`, `extension`, `web` or `api`. Files from before origin tracking have none, so they appear only when this is left out. |
 | `limit` | Page size, 1–100 (default 40). |
@@ -4408,19 +4408,21 @@ you own (uploads and generations, saved or not). Query:
 
 The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
 `type`, `filename`, `mimeType`, `sizeBytes`, `url`, `thumbnailUrl`,
-`metadata`, `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
+`metadata` (with `name`, the name a file is shown by, when its job gave it one: a song's title), `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
 `jobId` (the job that made the file; `null` for an upload) and `createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
 of matching files, comes with the first page only. A library row whose file is
 missing (its stored copy is gone) is not listed and not counted, so every item
 has a `url`. SDK:
 `client.library.list(params)`. The MCP tool `browse_uploads` reads the
-`owned=true` view, with the same filename search as its `search` argument.
+`owned=true` view, with the same search as its `search` argument.
 
 Saving a file to your library (`POST /v1/library/save-generated`, body
 `{ url, type }`) takes a file on Nodaro storage only when it is yours: one of
 your generations, a file you uploaded, or one in your upload folder. Any other
 file on Nodaro storage is refused with `403 forbidden`, the same answer whether
-or not the file exists. A link to any other site is saved as given. A permanent
+or not the file exists. A link to any other site is saved as given. A take of a
+song you generated is saved under the song's title (`metadata.name`) unless the
+body's `metadata` names it, so the search finds it by that title. A permanent
 delete of a library item removes its stored file only under the same rule (see
 "What a permanent delete removes from storage" in the objects section).
 
@@ -5606,6 +5608,7 @@ length, with its own cast and new music, and can change the motion itself.
 | `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
+| `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
@@ -5810,6 +5813,83 @@ custom_style_not_available`, `400 image_unreadable` (the image could not be
 fetched, is too large or is not a picture), `502 describe_style_failed` (try
 again), `422 style_not_described` (try another image, or write the style
 yourself) and `429 rate_limit_exceeded` past the limit.
+
+**Roles planned from the prompt.** Where `GET /v1/video-remake/style-choice`
+answers `planRoles: true` (one boolean, not per engine: `true` only where the
+engine plans roles and Nodaro offers it on this deployment; a server from
+before it leaves it out, read that as `false`), a person can write what they
+want in their own words and add loose reference images, and
+`POST /v1/video-remake/plan-roles` answers which subject of the video each
+image replaces. Nothing runs: the answer is ordinary `roles` and
+`references` and a `postPrompt`, for you to show and then send to the
+estimate and the run as any others.
+
+Body (strict): `videoUrl` (the clip, 4–30 s); `prompt` (the request, at most 4000
+characters, in any language; it may say nothing of an image, be empty or be
+left out, the images alone being enough; e.g. "put the first photo in place of the
+woman on the left, use the second as the room, and make it rain"); `images` (1–30
+public http(s) PNG, JPEG, WebP or GIF pictures of at most 10 MB each, in the
+order the person gave them); and, optional, `engine` (as a run takes it;
+Nodaro Pulse sends fewer images), `roles` and `references` (what you already
+have, as a run takes them: never changed or repeated, and counted against a
+run's limits), `preview` / `previewStart` (as a run takes them: a preview is
+planned from its own 4 s).
+
+```json
+{
+  "prompt": "put the first photo in place of the woman on the left, use the second as the room, and make it rain",
+  "roles": [
+    { "kind": "person", "name": "the woman in the red scarf on the left", "images": ["https://example.com/anna.png"] },
+    { "kind": "location", "name": "the living room", "images": ["https://example.com/beach.png"] }
+  ],
+  "decisions": [
+    { "role": 0, "basis": "request", "evidence": "put the first photo in place of the woman on the left" },
+    { "role": 1, "basis": "request", "evidence": "use the second as the room" }
+  ],
+  "references": [],
+  "postPrompt": "make it rain",
+  "removed": ["put the first photo in place of the woman on the left", "use the second as the room"],
+  "unresolved": [{ "images": ["https://example.com/other.png"], "imageIndexes": [2], "reason": "not_placed" }]
+}
+```
+
+`roles` and `references` are the NEW ones only, each exactly as a run takes
+it (a role's `name` says which subject of the video it replaces): add the
+roles after your own, so a `{role:N}` you already use keeps its number.
+`postPrompt` is what is left of the request once the parts the roles and
+references now say are taken out (`removed`): only the request's own
+characters, in order, in its own language; `""` when nothing is left, the
+whole request when nothing was planned. `unresolved` lists every image that
+became no role and no reference, with its positions in `images`
+(`imageIndexes`, from 0) and a `reason`: `"ambiguous_subject"` (more than one
+subject of the video fits; `candidates` names them), `"subject_not_in_clip"`,
+`"kind_unclear"`, `"same_subject_unclear"`, `"over_limit"` or `"not_placed"`
+(left out of the plan, or the request asked for something its words do not
+show). Every image sent
+is in exactly one of the three, and a plan with no role at all is still a
+`200`.
+
+`decisions` says how each of `roles` was decided, one entry per role in the
+same order (kept out of the role so that `roles` goes to a run as it is):
+`{ role, basis, evidence?, confidence?, alternatives? }`. `role` is the role's
+position in `roles`, from 0. `basis` is `"request"` (the request's own words
+asked for it; `evidence` is those words) or `"inferred"` (the request said
+nothing about its images, which were placed by what they show and what the
+clip shows). An inferred role has a `confidence`: `"clear"` (exactly one
+subject of its kind fitted) or `"guess"` (the best fit among several, the
+others named in `alternatives`). Show a guess to the person before running.
+
+It starts no job, charges nothing and keeps nothing of the clip or the
+images. It needs a signed-in account and is limited per account to 6 calls a
+minute and 60 in 24 hours (both `429 rate_limit_exceeded`, with
+`Retry-After`). Refusals: `401 unauthorized`, `400 validation_error`,
+`400 unsafe_url` (not a public http(s) address), `403
+plan_roles_not_available` (not offered here: set the roles yourself),
+`403 model_not_available` / `403 node_not_available`, `400 video_unreadable`,
+`400 clip_out_of_range` (not 4–30 s), `400 preview_out_of_range`,
+`400 image_unreadable` (an image could not be fetched, is too large or is not
+a picture; `error.details.index` is its position in `images`, from 0) and
+`502 plan_roles_failed` (try again, or set the roles yourself).
 
 **The Advanced options on the Video Remake page.** The Video Remake page
 offers two of the body's fields, `prepareReferences` (see Reference

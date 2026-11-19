@@ -512,6 +512,10 @@ export const queryKeys = {
     nodaroMotionCustomStyle: () => ["admin", "nodaro-motion", "custom-style"] as const,
     nodaroMotionCustomStyleDefaults: () => ["admin", "nodaro-motion", "custom-style", "defaults"] as const,
     nodaroMotionCustomStyleCheck: (steps: string) => ["admin", "nodaro-motion", "custom-style", "check", steps] as const,
+    /** Admin → Video Remake: the roles-from-the-prompt setting, the engine's defaults for it, and one check of its step (as a string). */
+    nodaroMotionPlanRoles: () => ["admin", "nodaro-motion", "plan-roles"] as const,
+    nodaroMotionPlanRolesDefaults: () => ["admin", "nodaro-motion", "plan-roles", "defaults"] as const,
+    nodaroMotionPlanRolesCheck: (steps: string) => ["admin", "nodaro-motion", "plan-roles", "check", steps] as const,
     nodaroMotionStyleOnly: () => ["admin", "nodaro-motion", "style-only"] as const,
     nodaroMotionPreciseArtStyle: () => ["admin", "nodaro-motion", "precise-art-style"] as const,
     nodaroMotionNoPerson: () => ["admin", "nodaro-motion", "no-person"] as const,

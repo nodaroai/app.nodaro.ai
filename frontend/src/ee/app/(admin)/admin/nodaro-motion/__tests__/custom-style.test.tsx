@@ -93,6 +93,7 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/advanced"] = () => ({ body: { data: { show: false, updatedAt: null } } })
   routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: ENVIRONMENTS } })
   routes["GET /v1/admin/llm-models"] = () => ({ body: { data: { models: MODELS, tierCosts: {}, featureCosts: {} } } })
+  routes["GET /v1/admin/video-remake/plan-roles"] = () => ({ body: { data: { planRoles: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
   routes[`GET ${URL_}`] = () => view()
   routes[`GET ${URL_}/defaults`] = () => ({ body: { data: DEFAULTS } })
   routes[`POST ${URL_}/check`] = () => ({ body: { data: { problems: [] } } })

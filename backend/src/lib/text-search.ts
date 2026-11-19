@@ -64,8 +64,13 @@ export const SEARCH_MAX_WORDS = 5
  */
 export const SAVED_ENTITY_SEARCH_COLUMNS = ["name", "description"] as const
 
-/** What a search over the media library looks at. */
-export const ASSET_SEARCH_COLUMNS = ["filename"] as const
+/**
+ * What a search over the media library looks at: the file's name, and the name
+ * it is shown by when its job gave it one (`metadata.name`: a song's title, a
+ * file a job filed under a name — `createAssetFromJob`; migration 679 named the
+ * songs filed before). A word may match either.
+ */
+export const ASSET_SEARCH_COLUMNS = ["filename", "metadata->>name"] as const
 
 const REGEX_METACHARACTERS = /[\\^$.|?*+()[\]{}]/g
 const QUOTED_VALUE_SPECIALS = /[\\"]/g

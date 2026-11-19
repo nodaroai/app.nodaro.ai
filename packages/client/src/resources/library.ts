@@ -52,8 +52,9 @@ export interface ListLibraryParams {
   /** Filter by media kind; `"all"` (default) returns every kind. */
   readonly type?: "all" | "image" | "video" | "audio"
   /**
-   * Search words: only the assets whose filename contains every word (split
-   * on spaces, the first 5), ignoring case. Each word is matched as written
+   * Search words: only the assets whose filename, or the name they are shown
+   * by (`metadata.name`: a song's title), contains every word (split on
+   * spaces, the first 5), ignoring case; a word may match either. Each word is matched as written
    * (`%`, `_` and `*` are not wildcards); blank means no search; up to 200
    * characters.
    */
@@ -95,7 +96,7 @@ export interface ListLibraryResult {
  * Library — the caller's media assets (uploaded files + saved generations).
  *
  * Read surface over `GET /v1/library`: a cursor-paginated, type-filterable,
- * filename-searchable list. This is the "bring from your media" source for
+ * name-searchable list (the filename, or a song's title). This is the "bring from your media" source for
  * pickers that also offer upload + in-production stills. Writes (saving a
  * generation, promoting/removing) stay on their dedicated routes — not exposed
  * here until a consumer needs them.
@@ -106,7 +107,7 @@ export class LibraryResource {
   /**
    * `GET /v1/library` → a page of the caller's media assets (newest first) plus
    * a `nextCursor`. Pass the returned `nextCursor` back as `cursor` for the next
-   * page. Filter by `type` and search the filename with `q`; `owned: true`
+   * page. Filter by `type` and search the filename or a song's title with `q`; `owned: true`
    * returns the full Storage set (uploads + generations), the default only
    * library-saved + shared items.
    */

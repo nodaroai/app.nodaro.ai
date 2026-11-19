@@ -3873,6 +3873,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionCustomStyle?: boolean
   /**
+   * `tk.settings.nodaroMotionPlanRoles()` exists: the deployment's setting for
+   * Video Remake's roles planned from the prompt (whether it is offered, and
+   * the admin's instructions and model for its one LLM step). An older host
+   * has no such member: planning is not offered there.
+   */
+  readonly nodaroMotionPlanRoles?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -4310,6 +4317,28 @@ export interface PluginSettingsToolkit {
    * offered). Advertised as `capabilities.nodaroMotionCustomStyle`.
    */
   nodaroMotionCustomStyle?(): Promise<PluginNodaroMotionCustomStyle | null>
+  /**
+   * Video Remake's roles planned from the prompt
+   * (`POST /v1/video-remake/plan-roles`), for the whole deployment:
+   * - `enabled`: whether this deployment offers it, ALREADY RESOLVED by the
+   *   host: the admin's saved choice, else the deployment's default (on for
+   *   Nodaro's own, off under a white-label surface profile). Only `true`
+   *   offers it; a plugin cannot tell the deployments apart itself.
+   * - `plan`: the admin's own instructions and model for the one LLM step
+   *   (`{ instructions?, model? }`; absent: the engine's defaults).
+   * Always an object while this host's engine declares `castSwap.planRoles`
+   * (never saved answers `{ enabled }` alone); null to an engine that does not
+   * declare it (it never asks). Returns a copy the plugin may change freely.
+   * REJECTS when the settings could not be read (a plugin reads that as not
+   * offered). Advertised as `capabilities.nodaroMotionPlanRoles`.
+   */
+  nodaroMotionPlanRoles?(): Promise<PluginNodaroMotionPlanRoles | null>
+}
+
+/** Video Remake's plan-roles setting as a plugin is answered it: `enabled` resolved by the host, the step as an admin set it. */
+export type PluginNodaroMotionPlanRoles = {
+  readonly enabled?: boolean
+  readonly plan?: PluginNodaroMotionCustomStyleStep
 }
 
 /** One LLM step of Video Remake's custom style, as an admin set it; a field left out is the engine's default. */
@@ -4849,6 +4878,22 @@ export interface PluginSupports {
    *   must not send `direction.customStyle` (an older engine's strict schema
    *   refuses the key) and answers that a custom style is not offered
    *   (lib/nodaro-motion-custom-style.ts `engineTakesCustomStyle`).
+   * - `planRoles`: the engine serves `POST /v1/cast-swap/plan-roles` (`{
+   *   videoUrl, prompt?, images, engine?, roles?, references?, preview?,
+   *   previewStart? }` → `{ prompt, roles, decisions, references, postPrompt,
+   *   removed, unresolved }`; free, an account's, rate-limited, no job and no
+   *   hold; `decisions[i]` says how `roles[i]` was decided): it
+   *   reads a person's request, their loose reference images and the clip,
+   *   and answers ordinary roles and fixed references with the rest of the
+   *   request as the post prompt, for the caller to send to the run or
+   *   estimate route as it is. Only while the deployment offers it
+   *   (`tk.settings.nodaroMotionPlanRoles()`'s `enabled: true`; anything
+   *   else: 403 `plan_roles_not_available`). The platform's own
+   *   `POST /v1/cast-swap/plan-roles-setting` (the step's default
+   *   instructions and what is wrong with a setting) comes with it.
+   *   Additive-optional: absent ⇒ the engine has no such route and the host
+   *   answers that planning is not offered
+   *   (lib/nodaro-motion-plan-roles.ts `engineTakesPlanRoles`).
    * - `maskFillNone`: a faces hidden masking setting (the Video Remake
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
@@ -5012,6 +5057,7 @@ export interface PluginSupports {
     readonly preciseStyleRoute?: boolean
     readonly shotListSpeech?: boolean
     readonly customStyle?: boolean
+    readonly planRoles?: boolean
   }
 }
 

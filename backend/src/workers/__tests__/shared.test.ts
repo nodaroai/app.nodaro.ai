@@ -1330,6 +1330,26 @@ describe("createAssetFromJob", () => {
     expect(mocks.mockInsert).toHaveBeenLastCalledWith(expect.objectContaining({ type: "audio", mime_type: "audio/mpeg" }))
   })
 
+  // A song is filed under its storage name; the name it is shown and searched
+  // by rides as `metadata.name` (migration 679 named the songs filed before).
+  it("names a song's file after its title", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: {
+        status: "completed",
+        job_type: "suno-generate",
+        output_data: {
+          audioUrl: "https://r2.example.com/audios/job-1.wav",
+          sunoTitle: "I Found My Love in Portofino",
+          sunoTracks: [{ id: "s1", title: "I Found My Love in Portofino", audioUrl: "https://r2.example.com/audios/job-1.wav" }],
+        },
+      },
+      error: null,
+    })
+    mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+    await createAssetFromJob("job-1", "user-1")
+    expect(mocks.mockInsert).toHaveBeenCalledWith(expect.objectContaining({ type: "audio", filename: "job-1.wav", metadata: { name: "I Found My Love in Portofino" } }))
+  })
+
   // A child job (`parent_job_id` set) is a step of its parent's run — the
   // parent's result is what reaches the Library, never each step.
   it("createAssetFromJob skips a child job", async () => {

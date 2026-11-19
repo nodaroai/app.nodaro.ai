@@ -8,6 +8,7 @@ import { renderResultStamp, isRenderNodeType } from "@nodaro/shared/nodes"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { coveredMarkOf } from "../lib/covered-step.js"
+import { cleanAssetName } from "../lib/asset-names.js"
 import { getAppSettings } from "../lib/app-settings.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, getR2ObjectSize } from "../lib/storage.js"
@@ -1782,18 +1783,37 @@ export async function completeFfmpegAudioJob(
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+export { ASSET_NAME_MAX } from "../lib/asset-names.js"
+
 /**
- * The `metadata` of a generated asset row: its thumbnail, and — for a render —
- * the quality it was made at, so My Library and the asset lists label a
- * Preview (`quality: "proxy"`) from the asset itself (A1b, F1).
+ * The name a generated file is shown and searched by (`metadata.name`), when
+ * its job gave it one: a song's title, for the audio of a Suno job (its first
+ * take, the one `audioUrl` names: `sunoTitle`, else the first track's
+ * `title`). Trimmed and kept to `ASSET_NAME_MAX` (`cleanAssetName`); undefined
+ * for a blank title and for every other file.
  */
-export function generatedAssetMetadata(output: Record<string, unknown>, jobType: unknown): Record<string, unknown> {
+export function generatedAssetName(output: Record<string, unknown>, type: "image" | "video" | "audio"): string | undefined {
+  if (type !== "audio") return undefined
+  const tracks = Array.isArray(output.sunoTracks) ? output.sunoTracks : []
+  const first = tracks[0] && typeof tracks[0] === "object" ? (tracks[0] as Record<string, unknown>).title : undefined
+  return cleanAssetName(typeof output.sunoTitle === "string" ? output.sunoTitle : first)
+}
+
+/**
+ * The `metadata` of a generated asset row: its thumbnail, its name when its job
+ * gave it one (a song's title, `generatedAssetName`), and — for a render — the
+ * quality it was made at, so My Library and the asset lists label a Preview
+ * (`quality: "proxy"`) from the asset itself (A1b, F1).
+ */
+export function generatedAssetMetadata(output: Record<string, unknown>, jobType: unknown, type?: "image" | "video" | "audio"): Record<string, unknown> {
   const thumbnailUrl = (output.thumbnail_url ?? output.thumbnailUrl ?? null) as string | null
   // Only a render's quality is a render quality (another job's output may use
   // the word for something else).
   const { quality } = isRenderNodeType(jobType) ? renderResultStamp(output) : {}
+  const name = type ? generatedAssetName(output, type) : undefined
   return {
     ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
+    ...(name ? { name } : {}),
     ...(quality ? { quality } : {}),
   }
 }
@@ -1917,7 +1937,7 @@ export async function createAssetFromJob(
         // Immutable once written — a job's calling surface never changes.
         source: job.source ?? null,
         source_detail: job.source_detail ?? null,
-        metadata: generatedAssetMetadata(output, job.job_type),
+        metadata: generatedAssetMetadata(output, job.job_type, type),
       })
     }
 

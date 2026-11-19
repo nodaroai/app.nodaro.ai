@@ -30,7 +30,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, offeredByDefault: true, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -39,13 +39,14 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles }
     },
     settingsReadFailed: () => h.failed,
   }
 })
 
 vi.mock("../../nodaro-motion-custom-style-default.js", () => ({ customStyleOfferedByDefault: () => h.offeredByDefault }))
+vi.mock("../../nodaro-motion-plan-roles-default.js", () => ({ planRolesOfferedByDefault: () => h.planRolesByDefault }))
 
 const { buildToolkit } = await import("../toolkit.js")
 const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../private-plugins/supports-registry.js")
@@ -1014,5 +1015,81 @@ describe("tk.settings.nodaroMotionCustomStyle", () => {
     expect(got).toStrictEqual({ enabled: true, medium: { instructions: "Read the words.", model: "some-model" }, describe: { instructions: "Describe the look." } })
     ;(got as { medium: { model: string } }).medium.model = "changed"
     expect((h.customStyle as { medium: { model: string } }).medium.model).toBe("some-model")
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionPlanRoles()`: whether this deployment offers Video Remake's roles planned from the prompt,
+ * with `enabled` ALREADY RESOLVED here (the admin's saved choice, else the deployment's default), and the admin's
+ * planning step. The engine reads null as not offered, so an engine that declares `castSwap.planRoles` is always
+ * answered an object.
+ */
+describe("tk.settings.nodaroMotionPlanRoles", () => {
+  beforeEach(() => {
+    h.planRoles = null
+    h.planRolesByDefault = true
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const planEngine = () => setPluginSupports({ castSwap: { ...CS, planRoles: true } } as never)
+  const read = () => buildToolkit().settings!.nodaroMotionPlanRoles!()
+
+  it("advertises nodaroMotionPlanRoles and answers null to an engine without castSwap.planRoles, whatever is saved", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionPlanRoles).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionPlanRoles).toBe("function")
+    h.planRoles = { enabled: true }
+    // No engine loaded, one from before the flag, one that declares it false, one with the custom style alone.
+    expect(await read()).toBeNull()
+    for (const castSwap of [CS, { ...CS, planRoles: false }, { ...CS, customStyle: true }]) {
+      setPluginSupports({ castSwap } as never)
+      expect(await read(), JSON.stringify(castSwap)).toBeNull()
+    }
+  })
+
+  it("rejects when the settings could not be read, never answering a switch", async () => {
+    planEngine()
+    h.failed = true
+    await expect(read()).rejects.toThrow(/could not be read/)
+    // The same for an engine that does not declare it: a failed read is never read as "not this engine's".
+    _resetPluginSupportsForTests()
+    await expect(read()).rejects.toThrow(/could not be read/)
+  })
+
+  it("never saved: an object with the deployment's default — on for Nodaro's own, off under a white-label profile", async () => {
+    planEngine()
+    expect(await read()).toStrictEqual({ enabled: true })
+    h.planRolesByDefault = false
+    expect(await read()).toStrictEqual({ enabled: false })
+    // A step saved without a choice: the default still decides.
+    h.planRoles = { plan: { model: "another-model" } }
+    expect(await read()).toStrictEqual({ enabled: false, plan: { model: "another-model" } })
+  })
+
+  it("an admin's saved choice wins over the deployment's default, either way", async () => {
+    planEngine()
+    h.planRoles = { enabled: false }
+    expect(await read()).toStrictEqual({ enabled: false })
+    h.planRolesByDefault = false
+    h.planRoles = { enabled: true }
+    expect(await read()).toStrictEqual({ enabled: true })
+  })
+
+  it("does not follow the custom style's switch or default", async () => {
+    planEngine()
+    h.customStyle = { enabled: false }
+    h.offeredByDefault = false
+    expect(await read()).toStrictEqual({ enabled: true })
+    h.customStyle = null
+    h.offeredByDefault = true
+  })
+
+  it("answers the admin's step, a copy the plugin may change", async () => {
+    planEngine()
+    h.planRoles = { enabled: true, plan: { instructions: "Place each image.", model: "some-model" } }
+    const got = await read()
+    expect(got).toStrictEqual({ enabled: true, plan: { instructions: "Place each image.", model: "some-model" } })
+    ;(got as { plan: { model: string } }).plan.model = "changed"
+    expect((h.planRoles as { plan: { model: string } }).plan.model).toBe("some-model")
   })
 })

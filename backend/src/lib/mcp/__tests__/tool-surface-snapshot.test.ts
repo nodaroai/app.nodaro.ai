@@ -1835,6 +1835,21 @@ const MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES = 57
 // after: 555_964 B, then 557_979 B, 2_015 B more. 333 B of it fitted the headroom the list had;
 // the budget is raised by the 1_682 B that did not, so the list is left with none.
 const VIDEO_LANES_WORDING_BYTES = 1_682
+// RAISED by `video_remake`'s roles planned from the prompt, and nothing else: the tool gained the
+// `reference_image_urls` argument (1–30 public https images) and one sentence of its description
+// (pass loose reference images; the prompt may say who or what each replaces, and an image it does
+// not mention is placed by best fit and marked a guess). No tool was added, so the membership
+// fixtures do NOT move (the recorded tool list, tool-list-wire.json, does). Not near the per-tool
+// budget (`video_remake` is 9_873 B). Measured by this suite on the same tree before and after:
+// 557_979 B, then 558_715 B, 736 B more; the list had no headroom, so the budget is raised by all of
+// it and the list is left with none.
+const VIDEO_REMAKE_REFERENCE_IMAGES_BYTES = 736
+// RAISED by `browse_uploads`'s `search` saying it also finds a song by its title (the Library search
+// reads `metadata.name` beside the filename, migration 679), and nothing else. No tool was added, so
+// the membership fixtures do NOT move, and the tool is nowhere near the per-tool budget. Measured by
+// this suite on the same tree before and after: 558_715 B, then 558_740 B, 25 B more; the list had
+// no headroom left.
+const LIBRARY_SONG_NAME_SEARCH_BYTES = 25
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES,
@@ -2065,7 +2080,9 @@ export const TOOL_WIRE_BUDGET = {
     WAN_REFERENCE_TO_VIDEO_WORDING_BYTES +
     TIGHTEN_TIGHTNESS_BYTES +
     MODIFY_VIDEO_DEFAULT_EDIT_WORDING_BYTES +
-    VIDEO_LANES_WORDING_BYTES,
+    VIDEO_LANES_WORDING_BYTES +
+    VIDEO_REMAKE_REFERENCE_IMAGES_BYTES +
+    LIBRARY_SONG_NAME_SEARCH_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

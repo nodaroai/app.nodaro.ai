@@ -14014,6 +14014,93 @@ export async function checkNodaroMotionCustomStyle(customStyle: NodaroMotionCust
   ).data.problems
 }
 
+// ---- Admin: Video Remake's roles from the prompt (/v1/admin/video-remake/plan-roles, admin-nodaro-motion-plan-roles.ts) ----
+
+/** The engine's planning step: the admin's own instructions and model; a field left out is the engine's default. */
+export interface NodaroMotionPlanRolesStep {
+  instructions?: string
+  model?: string
+}
+
+/** The saved setting. `enabled` left out: the deployment's default. The step left out: the engine's defaults. */
+export interface NodaroMotionPlanRoles {
+  enabled?: boolean
+  /** The step that says which subject of the video each of a person's reference images replaces. */
+  plan?: NodaroMotionPlanRolesStep
+}
+
+export interface NodaroMotionPlanRolesView {
+  /** null = never saved. Only what an admin set is listed. */
+  planRoles: NodaroMotionPlanRoles | null
+  /** Whether this deployment offers roles planned from the prompt: the saved choice, else `enabledByDefault`. */
+  enabled: boolean
+  /** What this deployment answers while no choice is saved (off on a white-label deployment). */
+  enabledByDefault: boolean
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine plans roles from the prompt. */
+  supported: boolean
+}
+
+/** The engine's own answer for the planning step: its default, the template of its instructions and the limits it applies (read at run time). */
+export interface NodaroMotionPlanRolesDefaults {
+  promptMaxChars?: number
+  maxImages?: number
+  maxFrames?: number
+  timeoutMs?: number
+  limits?: unknown
+  roleKinds?: unknown
+  traits?: unknown
+  /** How a planned role can have been decided (`"request"`, `"inferred"`), and how sure an inferred one is (`"clear"`, `"guess"`). */
+  bases?: string[]
+  confidences?: string[]
+  reasons?: unknown
+  rateLimit?: { max?: number; timeWindow?: unknown }
+  defaults: { plan: { model: string; instructions: string } }
+  /** The default instructions with their `<max…>` placeholders, which the engine fills (an admin's own text may carry them too). */
+  instructionsTemplate?: string
+}
+
+/** A problem the engine found in the step, at its path in the PUT's body (`planRoles.plan.model`). */
+export interface NodaroMotionPlanRolesProblem {
+  path: string
+  code: string
+  message: string
+}
+
+const ADMIN_NODARO_MOTION_PLAN_ROLES = "/v1/admin/video-remake/plan-roles"
+
+export async function fetchNodaroMotionPlanRoles(): Promise<NodaroMotionPlanRolesView> {
+  return (await apiRequest<{ data: NodaroMotionPlanRolesView }>(ADMIN_NODARO_MOTION_PLAN_ROLES, "apiErr.loadNodaroMotion")).data
+}
+
+/**
+ * Saves the whole setting. A step this environment's engine finds wrong is a 400 `validation_error` whose `issues`
+ * name each field (`validationIssuesOf`); 502 `engine_error` when the engine answered unexpectedly.
+ */
+export async function saveNodaroMotionPlanRoles(planRoles: NodaroMotionPlanRoles): Promise<NodaroMotionPlanRolesView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPlanRolesView }>(ADMIN_NODARO_MOTION_PLAN_ROLES, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { planRoles },
+    })
+  ).data
+}
+
+/** The engine's defaults and limits for the planning step; null where this environment's engine plans no roles. */
+export async function fetchNodaroMotionPlanRolesDefaults(): Promise<NodaroMotionPlanRolesDefaults | null> {
+  return (await apiRequest<{ data: NodaroMotionPlanRolesDefaults | null }>(`${ADMIN_NODARO_MOTION_PLAN_ROLES}/defaults`, "apiErr.loadNodaroMotion")).data
+}
+
+/** What this environment's engine finds wrong with the setting's step (empty = nothing). Nothing is saved. */
+export async function checkNodaroMotionPlanRoles(planRoles: NodaroMotionPlanRoles): Promise<NodaroMotionPlanRolesProblem[]> {
+  return (
+    await apiRequest<{ data: { problems: NodaroMotionPlanRolesProblem[] } }>(`${ADMIN_NODARO_MOTION_PLAN_ROLES}/check`, "apiErr.loadNodaroMotion", {
+      method: "POST",
+      body: { planRoles },
+    })
+  ).data.problems
+}
+
 // ---- Admin: Video Remake's Pulse audio for direct runs (/v1/admin/video-remake/pulse-audio, admin-nodaro-motion-pulse-audio.ts) ----
 
 export interface NodaroMotionPulseAudioView {

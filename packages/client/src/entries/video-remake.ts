@@ -39,5 +39,11 @@ export {
   type VideoRemakeDescribedStyle,
   type VideoRemakeStyleMedium,
   type VideoRemakeStyleTones,
+  type VideoRemakePlanRolesParams,
+  type VideoRemakePlanRolesUnresolvedReason,
+  type VideoRemakePlanRolesUnresolved,
+  type VideoRemakePlanRolesDecision,
+  type VideoRemakePlannedRoles,
+  type VideoRemakePlanRolesRefusalCode,
   type VideoRemakeArtStyle,
 } from "../resources/cast-swap.js"

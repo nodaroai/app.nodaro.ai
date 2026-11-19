@@ -15,6 +15,7 @@ import { NODARO_MOTION_PRECISE_ART_STYLE_KEY, parseNodaroMotionPreciseArtStyle, 
 import { NODARO_MOTION_PRECISE_STYLE_ROUTE_KEY, parseNodaroMotionPreciseStyleRoute, type NodaroMotionPreciseStyleRoute } from "./nodaro-motion-precise-style-route.js"
 import { NODARO_MOTION_ADVANCED_KEY, parseNodaroMotionAdvanced, type NodaroMotionAdvanced } from "./nodaro-motion-advanced.js"
 import { NODARO_MOTION_CUSTOM_STYLE_KEY, parseNodaroMotionCustomStyle, type NodaroMotionCustomStyle } from "./nodaro-motion-custom-style.js"
+import { NODARO_MOTION_PLAN_ROLES_KEY, parseNodaroMotionPlanRoles, type NodaroMotionPlanRoles } from "./nodaro-motion-plan-roles.js"
 import { NODARO_MOTION_STEPS_KEY, parseNodaroMotionSteps, type NodaroMotionSteps } from "./nodaro-motion-steps.js"
 import { NODARO_MOTION_PULSE_AUDIO_KEY, parseNodaroMotionPulseAudio, type CastSwapPulseAudio } from "./cast-swap-pulse-audio.js"
 import {
@@ -202,6 +203,14 @@ export interface AppSettings {
    */
   nodaro_motion_custom_style: NodaroMotionCustomStyle | null
   /**
+   * Video Remake's roles planned from the prompt
+   * (nodaro-motion-plan-roles.ts): the admin's own choice of whether it is
+   * offered, and the instructions and model of its planning step. null = never
+   * saved: the deployment's default decides whether it is offered, and the
+   * engine's defaults run. Read field by field.
+   */
+  nodaro_motion_plan_roles: NodaroMotionPlanRoles | null
+  /**
    * Whether a link import without a content rights confirmation is refused
    * (lib/content-rights.ts). Off by default: the server records a
    * confirmation when one arrives and refuses nothing, until every client
@@ -283,7 +292,7 @@ async function refreshSettings(): Promise<AppSettings> {
   if (error) {
     console.error("[getAppSettings] Error fetching settings:", error.message)
     // Return defaults on error
-    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_pulse_reference_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_precise_art_style: null, nodaro_motion_no_person: null, nodaro_motion_precise_style_route: null, nodaro_motion_advanced: null, nodaro_motion_custom_style: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY, provider_safety_overrides: {}, cost_shortfall_auto_pause_enabled: true }
+    const fallback: AppSettings = { ai_provider: "replicate", cost_markup_percent: 0, service_margin_percent: {}, carousel_video_autoplay: true, apps_page_video_autoplay: true, featured_app_ids: [], featured_apps_limit: 20, apps_auto_scroll_seconds: 4, nodaro_provider_prefs: null, copilot_enabled: true, copilot_default_tier: null, copilot_tier_caps: null, gallery_blocked_words: [], gallery_banned_users: [], gallery_banned_email_patterns: [], model_maker_logos: [], nodaro_motion_masking: null, nodaro_motion_prompt_parts: null, nodaro_motion_motion: null, nodaro_motion_pulse_audio: null, nodaro_motion_pulse_reference_audio: null, nodaro_motion_prism_reference_audio: null, nodaro_motion_steps: null, nodaro_motion_style: null, nodaro_motion_prompt_wording: null, nodaro_motion_style_only: null, nodaro_motion_precise_art_style: null, nodaro_motion_no_person: null, nodaro_motion_precise_style_route: null, nodaro_motion_advanced: null, nodaro_motion_custom_style: null, nodaro_motion_plan_roles: null, content_rights_required: false, rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY, provider_safety_overrides: {}, cost_shortfall_auto_pause_enabled: true }
     readFailures.add(fallback)
     return fallback
   }
@@ -320,6 +329,7 @@ async function refreshSettings(): Promise<AppSettings> {
     nodaro_motion_precise_style_route: null,
     nodaro_motion_advanced: null,
     nodaro_motion_custom_style: null,
+    nodaro_motion_plan_roles: null,
     content_rights_required: false,
     rights_repeat_infringer_policy: DEFAULT_REPEAT_INFRINGER_POLICY,
     provider_safety_overrides: {},
@@ -381,6 +391,10 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === NODARO_MOTION_CUSTOM_STYLE_KEY) {
       settings.nodaro_motion_custom_style = parseNodaroMotionCustomStyle(row.value)
+      continue
+    }
+    if (row.key === NODARO_MOTION_PLAN_ROLES_KEY) {
+      settings.nodaro_motion_plan_roles = parseNodaroMotionPlanRoles(row.value)
       continue
     }
     if (row.key === NODARO_MOTION_STEPS_KEY) {

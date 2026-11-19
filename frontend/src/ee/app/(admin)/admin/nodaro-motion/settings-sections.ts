@@ -18,6 +18,7 @@ import type {
   NodaroMotionMasking,
   NodaroMotionMotion,
   NodaroMotionNoPerson,
+  NodaroMotionPlanRoles,
   NodaroMotionPreciseArtStyle,
   NodaroMotionPreciseStyleRoute,
   NodaroMotionPromptParts,
@@ -38,6 +39,7 @@ import { noPersonToSaved } from "./components/NoPersonColumn"
 import { preciseStyleRouteDraftOf, preciseStyleRouteToSaved, type PreciseStyleRouteDraft } from "./components/PreciseStyleRouteColumn"
 import { promptPartsToSave, promptWordingToSave } from "./components/PromptPartsTabs"
 import { customStyleToSaved } from "./components/CustomStyleSection"
+import { planRolesToSaved } from "./components/PlanRolesSection"
 
 /** Every section a stored set holds, by the server's key. */
 export const MOTION_SETTINGS_KEYS = [
@@ -55,6 +57,7 @@ export const MOTION_SETTINGS_KEYS = [
   "precise-style-route",
   "advanced",
   "custom-style",
+  "plan-roles",
   "prompt-parts",
 ] as const
 
@@ -164,6 +167,17 @@ export const CUSTOM_STYLE_SPEC = spec<NodaroMotionCustomStyle, NodaroMotionCusto
   saveArgOf: (body) => body.customStyle,
 })
 
+/**
+ * The roles from the prompt: the draft is kept in its saved form, `enabled` left out while the deployment's default
+ * decides (the page shows that default; PlanRolesSection.tsx), a step field left empty the engine's default.
+ */
+export const PLAN_ROLES_SPEC = spec<NodaroMotionPlanRoles, NodaroMotionPlanRoles, { planRoles: NodaroMotionPlanRoles }>({
+  draftOf: (stored) => planRolesToSaved(stored),
+  bodyOf: (draft) => ({ planRoles: planRolesToSaved(draft) }),
+  storedOfBody: (body) => body.planRoles,
+  saveArgOf: (body) => body.planRoles,
+})
+
 export const STYLE_ONLY_SPEC = spec<NodaroMotionStyleOnly, NodaroMotionStyleOnly, { styleOnly: NodaroMotionStyleOnly }>({
   draftOf: (stored) => structuredClone(stored ?? {}),
   bodyOf: (draft) => ({ styleOnly: styleOnlyToSaved(draft) }),
@@ -222,6 +236,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   "precise-style-route": PRECISE_STYLE_ROUTE_SPEC,
   advanced: ADVANCED_SPEC,
   "custom-style": CUSTOM_STYLE_SPEC,
+  "plan-roles": PLAN_ROLES_SPEC,
   "prompt-parts": PROMPT_PARTS_SPEC,
 }
 

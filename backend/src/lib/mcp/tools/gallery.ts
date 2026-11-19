@@ -539,7 +539,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .string()
             .max(200)
             .optional()
-            .describe("Optional filename search: words that must all appear (any case)."),
+            .describe("Optional search: words that must all appear (any case) in the filename or a song's title."),
         },
         outputSchema: {
           items: z.array(z.object({}).passthrough()).optional(),

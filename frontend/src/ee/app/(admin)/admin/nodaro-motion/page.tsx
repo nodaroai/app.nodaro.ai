@@ -59,6 +59,10 @@
 // option only: no run reads it. Below it, the custom style (CustomStyleSection.tsx,
 // use-custom-style-section.tsx): whether a Prism run may take the style in the
 // person's own words, and its two LLM steps (PUT /v1/admin/video-remake/custom-style).
+// Below it, the roles from the prompt (PlanRolesSection.tsx,
+// use-plan-roles-section.tsx): whether a run may take its roles planned from
+// the person's own words and loose reference images, and its one LLM step
+// (PUT /v1/admin/video-remake/plan-roles).
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -132,6 +136,7 @@ import { SettingsSetsManager } from "./components/SettingsSetsManager"
 import type { MotionDraftOrigin } from "./components/DraftBanner"
 import { useSectionDraft } from "./use-section-draft"
 import { useCustomStyleSection } from "./use-custom-style-section"
+import { usePlanRolesSection } from "./use-plan-roles-section"
 import {
   ADVANCED_SPEC,
   MASKING_SPEC,
@@ -253,6 +258,7 @@ export default function AdminNodaroMotionPage() {
   const preciseArtStyle = useSectionDraft(PRECISE_ART_STYLE_SPEC, preciseArtStyleQuery.data, (v) => v.preciseArtStyle, savePreciseArtStyle.mutateAsync, held)
   const noPerson = useSectionDraft(NO_PERSON_SPEC, noPersonQuery.data, (v) => v.noPerson, saveNoPerson.mutateAsync, held)
   const customStyle = useCustomStyleSection(held)
+  const planRoles = usePlanRolesSection(held)
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
   const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
   const wording = useSectionDraft(PROMPT_WORDING_SPEC, wordingQuery.data, (v) => v.promptWording, saveWording.mutateAsync, held)
@@ -289,6 +295,7 @@ export default function AdminNodaroMotionPage() {
     "precise-style-route": preciseStyleRoute.binding,
     advanced: advanced.binding,
     "custom-style": customStyle.binding,
+    "plan-roles": planRoles.binding,
     "prompt-parts": promptParts.binding,
   }
   const [draft, setDraft] = [masking.draft, masking.setDraft]
@@ -375,7 +382,8 @@ export default function AdminNodaroMotionPage() {
     !preciseArtStyleChanged &&
     !noPersonChanged &&
     !preciseStyleRouteChanged &&
-    !customStyle.changed
+    !customStyle.changed &&
+    !planRoles.changed
   const pending =
     save.isPending ||
     saveMotion.isPending ||
@@ -389,7 +397,8 @@ export default function AdminNodaroMotionPage() {
     saveNoPerson.isPending ||
     savePreciseStyleRoute.isPending ||
     saveAdvanced.isPending ||
-    customStyle.pending
+    customStyle.pending ||
+    planRoles.pending
 
   if (!hasAdmin()) return null
 
@@ -415,6 +424,8 @@ export default function AdminNodaroMotionPage() {
       if (advancedChanged) await saveAdvanced.mutateAsync(advancedDraft)
       // Its refusal is also said at its fields (CustomStyleSection).
       if (customStyle.changed) await customStyle.save()
+      // Its refusal is also said at its fields (PlanRolesSection).
+      if (planRoles.changed) await planRoles.save()
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -444,7 +455,8 @@ export default function AdminNodaroMotionPage() {
               !noPersonChanged &&
               !preciseStyleRouteChanged &&
               !advancedChanged &&
-              !customStyle.changed) ||
+              !customStyle.changed &&
+              !planRoles.changed) ||
             issues.length > 0 ||
             preciseStyleRouteHeld ||
             pending ||
@@ -468,6 +480,7 @@ export default function AdminNodaroMotionPage() {
         )}
       </div>
       {customStyle.node}
+      {planRoles.node}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

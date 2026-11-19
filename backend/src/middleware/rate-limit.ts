@@ -14,6 +14,8 @@ interface RateLimitOptions {
    * SPEND routes — an outage must not also remove the limit on spending.
    */
   failClosed?: boolean
+  /** The 429's message, for a window that reads badly in seconds (a day). Default: the limit per window in seconds. */
+  message?: string
 }
 
 /**
@@ -44,7 +46,7 @@ export function rateLimiter(opts: RateLimitOptions) {
         return reply.status(429).send({
           error: {
             code: "rate_limit_exceeded",
-            message: `Too many requests. Limit: ${opts.max} per ${windowSec}s. Try again later.`,
+            message: opts.message ?? `Too many requests. Limit: ${opts.max} per ${windowSec}s. Try again later.`,
           },
         })
       }
