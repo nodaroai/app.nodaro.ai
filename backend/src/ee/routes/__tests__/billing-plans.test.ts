@@ -16,7 +16,13 @@ import Fastify, { type FastifyInstance } from "fastify"
  * need this file edited — only a change to where a figure comes from does.
  */
 
-const h = vi.hoisted(() => ({ retrieve: vi.fn(), lanesEnforced: vi.fn(), lastMirroredEnforced: vi.fn(), cloudPlanSizes: vi.fn() }))
+const h = vi.hoisted(() => ({
+  retrieve: vi.fn(),
+  lanesEnforced: vi.fn(),
+  lastMirroredEnforced: vi.fn(),
+  cloudPlanSizes: vi.fn(),
+  getFreeVideoLimits: vi.fn(),
+}))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/ee/billing/stripe-client.js", () => ({
@@ -32,6 +38,12 @@ vi.mock("@/lib/concurrency-lanes/sizes.js", () => ({
   lastMirroredEnforced: h.lastMirroredEnforced,
 }))
 vi.mock("@/ee/concurrency-lanes/plan-sizes.js", () => ({ cloudPlanSizes: h.cloudPlanSizes }))
+// The free plan's video limits are the runtime settings the credit check
+// refuses by: only their database read is replaced, the module stays real.
+vi.mock("@/ee/lib/free-video-config.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ee/lib/free-video-config.js")>()),
+  getFreeVideoLimits: h.getFreeVideoLimits,
+}))
 
 import { billingRoutes } from "../billing.js"
 import { config } from "../../../lib/config.js"
@@ -47,6 +59,7 @@ import {
 } from "../../billing/plans.js"
 import { STRIPE_PRODUCTS, TIER_CREDITS, TIER_PARALLELISM, TIER_STORAGE_LIMITS, TOP_UPS } from "../../billing/stripe-config.js"
 import { LOAD_CURRENCY, LOAD_RATE_ANCHORS, MAX_LOAD_USD, MIN_LOAD_USD } from "../../billing/load-rate.js"
+import { FREE_VIDEO_LIMITS_DEFAULTS } from "../../billing/free-video-limits.js"
 
 const PLANS = Object.entries(STRIPE_PRODUCTS)
 const PLAN_PRICE_IDS = PLANS.flatMap(([, p]) => [p.monthly, p.yearly])
@@ -108,6 +121,7 @@ beforeEach(async () => {
   h.lanesEnforced.mockRejectedValue(new Error("the plans route must not read the switch from Redis"))
   h.lastMirroredEnforced.mockReturnValue(false)
   h.cloudPlanSizes.mockRejectedValue(new Error("cloudPlanSizes is not read in this test"))
+  h.getFreeVideoLimits.mockImplementation(async () => ({ ...FREE_VIDEO_LIMITS_DEFAULTS }))
 
   app = Fastify({ logger: false })
   await app.register(async (i) => {
@@ -598,5 +612,44 @@ describe("the publishable key for the in-page payment form", () => {
   it("leaves every other field of the answer as it was", async () => {
     const { stripePublishableKey: _k, ...rest } = (await getPlans()).json()
     expect(Object.keys(rest).sort()).toEqual(["data", "topUpRange", "topUps"])
+  })
+})
+
+describe("the free plan's video limits (readable before sign-in)", () => {
+  it("the free plan states the settings the credit check refuses a never-paid account's video by", async () => {
+    const settings = { enabled: true, maxSeconds: FREE_VIDEO_LIMITS_DEFAULTS.maxSeconds + 3 }
+    h.getFreeVideoLimits.mockResolvedValue(settings)
+    const free = planOf((await getPlans()).json(), "free")
+    expect(free.freeVideoLimits).toEqual(settings)
+  })
+
+  it("says so when the settings turn them off", async () => {
+    const settings = { enabled: false, maxSeconds: FREE_VIDEO_LIMITS_DEFAULTS.maxSeconds }
+    h.getFreeVideoLimits.mockResolvedValue(settings)
+    expect(planOf((await getPlans()).json(), "free").freeVideoLimits).toEqual(settings)
+  })
+
+  it("a paid plan states none: any payment lifts them", async () => {
+    const body = (await getPlans()).json()
+    for (const [id] of PLANS) {
+      expect(planOf(body, id), id).toHaveProperty("freeVideoLimits", null)
+    }
+  })
+
+  it("an admin's change shows on the next answer, with no second Stripe read", async () => {
+    await getPlans()
+    const reads = h.retrieve.mock.calls.length
+    const changed = { enabled: true, maxSeconds: FREE_VIDEO_LIMITS_DEFAULTS.maxSeconds + 1 }
+    h.getFreeVideoLimits.mockResolvedValue(changed)
+    expect(planOf((await getPlans()).json(), "free").freeVideoLimits).toEqual(changed)
+    expect(h.retrieve.mock.calls.length).toBe(reads)
+  })
+
+  it("is laid over each answer, never written into the cached plans", async () => {
+    const first = { enabled: true, maxSeconds: FREE_VIDEO_LIMITS_DEFAULTS.maxSeconds + 2 }
+    h.getFreeVideoLimits.mockResolvedValue(first)
+    await getPlans()
+    h.getFreeVideoLimits.mockResolvedValue({ ...FREE_VIDEO_LIMITS_DEFAULTS })
+    expect(planOf((await getPlans()).json(), "free").freeVideoLimits).toEqual(FREE_VIDEO_LIMITS_DEFAULTS)
   })
 })

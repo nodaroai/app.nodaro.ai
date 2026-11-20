@@ -149,7 +149,7 @@ import { allowanceEnforcementActive, deploymentPayerActive, payerCoverage } from
 import { attemptAutoRecharge, autoRechargeTargetFor } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
-import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideoRequest } from "./free-video-limits.js"
+import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideoLimits, type FreeVideoRequest } from "./free-video-limits.js"
 import { hasPurchaseOnRecord } from "./purchase-on-record.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
@@ -509,6 +509,13 @@ export interface CreditCheckSurface {
    * allowance or a day's spend, which the pack's own charge was held to.
    */
   covered?: boolean
+  /**
+   * The run is the video step of a Video Remake job (`video-remake-child.ts`,
+   * verified by the guard): the free-credit video limits are not asked of it.
+   * Everything else is, as for any run: the admin's switch, the tier
+   * restriction, the balance, the day's spend.
+   */
+  freeVideoLimitsLifted?: boolean
 }
 
 export interface CreditCheckResult {
@@ -535,10 +542,10 @@ export interface CreditCheckResult {
 }
 
 export interface UserBalance {
-  /** The free-credit video limits (`@nodaro/render-rules` free-video-limits),
-   *  present only when they apply to this account: it never paid. The editor
-   *  locks the options the credit preflight would refuse. */
-  freeVideoLimits?: { enabled: boolean; maxSeconds: number }
+  /** The free-credit video limits (`@nodaro/shared/free-video-limits`),
+   *  present only when they apply to this account: it never paid. The editor,
+   *  and any app on the SDK, locks the options the credit preflight would refuse. */
+  freeVideoLimits?: FreeVideoLimits
   total: number
   subscription: number
   topup: number
@@ -4379,7 +4386,9 @@ export class CreditsService {
     // parameters is judged in full; otherwise only the reserved model id's
     // model-level locks apply (a lane that names no `provider`, e.g. the
     // upscale route's default Topaz, is still seen).
-    if (isFree && userTier === "free") {
+    // A Video Remake job's own video step is not limited (`freeVideoLimitsLifted`):
+    // the run is open to every account, and its price is its own gate.
+    if (isFree && userTier === "free" && surface?.freeVideoLimitsLifted !== true) {
       const limits = await getFreeVideoLimits()
       const base = modelIdentifier.split(":")[0] ?? ""
       const refusal = surface?.video

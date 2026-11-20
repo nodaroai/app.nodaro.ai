@@ -208,7 +208,7 @@ describe("the previz request", () => {
     expect(h.calls).toHaveLength(1)
     const call = h.calls[0]!
     expect(call).toMatchObject({ engine: "seedance-2-5", style: "motion", clipKind: "previz", hasAudio: false, overrides: { opener: "Render {video}." } })
-    expect((call.roles as unknown[]).length).toBe(13)
+    expect((call.roles as unknown[]).length).toBe(15)
     expect((call.references as unknown[]).length).toBeGreaterThan(0)
     expect((call.prePrompt as string).length).toBe(1000)
     expect((call.postPrompt as string).length).toBe(1000)

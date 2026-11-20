@@ -4621,7 +4621,7 @@ are not registered and return 404.
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead; `tier` and `effectiveTier` there are the deployment's plan, the billing account's grade (a pay-as-you-go billing account reads `free` / `payg`). |
-| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance `tier`, `effectiveTier` and `features` report the deployment's plan (the billing account's grade, `tier` in its stored form), `dailyLimit` is `null` (no daily cap applies there), and it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Where the deployment names its unit per interface language it also carries `unitLabels` (locale id → word): show the entry for your interface language, else `unit`. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
+| `GET` | `/v1/user/credits` | — | The fuller balance payload. It carries `freeVideoLimits: { enabled, maxSeconds }` only while the free-credit video limits apply to the account (it never paid, and the deployment has them on): lock the video options they refuse with `@nodaro/shared/free-video-limits` ([Free credits § Video on free credits](./features/free-credits.md#video-on-free-credits)); absent, nothing is locked. On a deployment-payer instance `tier`, `effectiveTier` and `features` report the deployment's plan (the billing account's grade, `tier` in its stored form), `dailyLimit` is `null` (no daily cap applies there), and it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Where the deployment names its unit per interface language it also carries `unitLabels` (locale id → word): show the entry for your interface language, else `unit`. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 | `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
 
@@ -5001,7 +5001,9 @@ account's runs. The shape, with placeholders for the figures:
 {
   "data": [
     { "id": "free", "name": "Free", "prices": null,
-      "signupCredits": <credits>, "parallelism": <n>, "storageBytes": <bytes> },
+      "signupCredits": <credits>,
+      "freeVideoLimits": { "enabled": <boolean>, "maxSeconds": <seconds> },
+      "parallelism": <n>, "storageBytes": <bytes> },
     { "id": "basic", "name": "Basic",
       "prices": {
         "monthly": { "amount": <amount>, "currency": "USD",
@@ -5009,7 +5011,8 @@ account's runs. The shape, with placeholders for the figures:
         "yearly":  { "amount": <amount>, "currency": "USD", "perMonth": <amount>,
                      "credits": { "amount": <credits>, "per": "month" } }
       },
-      "signupCredits": null, "parallelism": <n>, "storageBytes": <bytes> },
+      "signupCredits": null, "freeVideoLimits": null,
+      "parallelism": <n>, "storageBytes": <bytes> },
     …
   ],
   "topUps": [
@@ -5027,6 +5030,7 @@ account's runs. The shape, with placeholders for the figures:
 | `prices` | `null` for the free plan. Otherwise `monthly` and `yearly`: `amount` in the currency's major unit, `currency` an ISO-4217 code, and `yearly.perMonth` the yearly amount spread over its months. A price Stripe cannot sell right now (it could not be read, or it is archived) is `null` — show it as unavailable, never as free. |
 | `prices.*.credits` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does; unused subscription credits expire at each monthly reset, and top-up credits are untouched. `null` when the price does not state it. |
 | `signupCredits` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `freeVideoLimits` | The free plan's video limits: what an account that never paid may generate as video ([Free credits § Video on free credits](./features/free-credits.md#video-on-free-credits)). `{ enabled, maxSeconds }`; `enabled: false` means no limits. `null` on a paid plan, since any payment lifts them. Readable signed out, so a page can lock the same options before sign-in; once signed in, `GET /v1/user/credits` says whether they apply to that account. |
 | `parallelism` | How many nodes of one workflow run at once. |
 | `storageBytes` | Storage for your media, in bytes. |
 | `topUps` | The credit packs, `{ id, credits, price }`, smallest first. Top-up credits are valid for 12 months. `price` is `null` when it cannot be stated right now. |
@@ -5754,12 +5758,23 @@ length, with its own cast and new music, and can change the motion itself.
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
-Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
-`{ kind: "person", name?, images, body?, outfit?, hair?, face? }`, at most 1
-`{ kind: "location", name?, images }`, at most 3
-`{ kind: "pet", name?, images, body?, coat? }` and at most 3
-`{ kind: "product", name?, images, shape?, finish? }`, each with 0–3 images and
-at most 30 images in all; a role with no images keeps that subject or place as
+Both take the same body: `videoUrl` (the source clip), `roles` (at most 15 in
+all, in any mix of
+`{ kind: "person", name?, images, body?, outfit?, hair?, face? }`,
+`{ kind: "location", name?, images }`,
+`{ kind: "pet", name?, images, body?, coat? }` and
+`{ kind: "product", name?, images, shape?, finish? }`, each with 0–3 images; more
+than one location role is allowed, each naming a different setting of the
+video, so each needs its own `name`; a run sends at most 30 images in all,
+counted as sent: with `prepareReferences` on, a person, pet or product role
+sends one prepared picture whatever the number given, a location role and
+every role with it off sends its pictures as given, and the fixed references'
+pictures count too; when a role's picture cannot be prepared its own pictures
+are sent instead, and a run that this takes past the engine's limit (30, or 10
+on Nodaro Pulse) fails with the code `too_many_images_prism` (on Nodaro Pulse,
+`too_many_images`) — the run's own fee is
+refunded, and the pictures already prepared stay charged; a
+trend's run keeps its trend's own slots; a role with no images keeps that subject or place as
 in the video; a person, pet or product role may leave `name` out (or empty):
 it is then named by its first picture, matched to the subject in the video it
 fits best, and needs at least one image; each trait is `"new"` — the default, from your images — or
@@ -6186,11 +6201,12 @@ Refusals, all before anything is charged (bodies are
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `validation_error` | The body does not validate: no role with images, no reference, no `prePrompt` or `postPrompt` and no art style ("Add images to at least one role, a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Prism)."; an art style counts only where `styleOnly` is answered `true`, and an engine from before style-only runs words this message without it), more than 5 references, a reference with no image or more than 3, more roles of a kind than allowed ("At most 3 pet roles.", "At most 3 product roles.", …), more than 3 images on a role, more than 30 images in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, an invalid `origin`, or a `style` other than `"precise"` or `"motion"`. |
+| `400` | `validation_error` | The body does not validate: no role with images, no reference, no `prePrompt` or `postPrompt` and no art style ("Add images to at least one role, a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Prism)."; an art style counts only where `styleOnly` is answered `true`, and an engine from before style-only runs words this message without it), more than 5 references, a reference with no image or more than 3, more than 15 roles in all ("At most 15 roles in all (people, pets, products and places together)."), more than 3 images on a role, more than 30 images sent in all ("At most 30 images in all."), `draft: true` with `resolution` `"720p"` or `"1080p"` ("Draft is 480p only."), a `prePrompt` or `postPrompt` over 4,000 characters, an invalid `origin`, or a `style` other than `"precise"` or `"motion"`. |
 | `400` | `draft_unsupported` | `draft: true` with `engine: "nodaro-pulse"`, which has no draft. |
 | `400` | `resolution_unsupported` | `resolution: "480p"` with `engine: "nodaro-pulse"`. |
 | `400` | `output_format_unsupported` | A MOV edit output asked of `engine: "nodaro-pulse"` (only a Nodaro Prism edit can be one). |
 | `400` | `too_many_images` | More than 10 images in an `engine: "nodaro-pulse"` run, across every role and fixed reference. |
+| `400` | `place_roles_need_names` | Two location roles with the same `name`. An unnamed location role is "the setting", so two unnamed ones collide: give each its own name, saying which setting of the video it replaces. A previz clip (`clipKind: "previz"`) takes several location roles too, each named by the words its set is found by. |
 | `400` | `raw_reference_token` | A role's `name` or `previewName`, a reference's `line`, the `prePrompt` or the `postPrompt` contains a raw reference token (`{image:`, `{video:` or `{audio:`, in any case). |
 | `400` | `invalid_role_mention` | `prePrompt` or `postPrompt` mentions `{role:N}` with N outside 1..`roles.length`. N counts every role in `roles`, empty ones included (`{role:1}` is `roles[0]`). Also any `{role:N}` in a reference's `line`: a line describes the thing itself. |
 | `400` | `unsafe_url` | `videoUrl`, a role image or a reference image is not a public http(s) address. |
@@ -6199,13 +6215,13 @@ Refusals, all before anything is charged (bodies are
 | `400` | `unnamed_role_needs_picture` | A person, pet or product role with no `name` (left out or empty) and no image: an unnamed role is named by its first picture, so it needs one. |
 | `400` | `role_name_required` | A trend run with an unnamed role: a trend's roles are always named (only a direct run's may leave `name` out). |
 | `400` | `no_roles_in_preview` | A preview that would change nothing, judged on what it sends: no role kept in it (`inPreview` not `false`) that has images, no fixed reference, no `prePrompt` or `postPrompt` and no art style. Each of those counts, so a preview with every role left out is still run when it has a reference, a prompt or, where `styleOnly` is answered `true`, an art style (an engine from before style-only runs refuses that last one, with a message that does not name an art style). "The preview would change nothing: keep a role with images in it (inPreview), or add a fixed reference, a pre or post prompt, or an art style (Flex on Nodaro Prism)." |
-| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Pulse's is 8,000 characters). |
+| `400` | `prompt_too_long` | The prompt would build too long. A `{role:N}` reads as the role's name when it sends no images, so prompts within their own 4,000 characters can still add up past the engine's limit (Nodaro Pulse's is 8,000 characters). Many roles or long role names can pass it too: each role with images adds its own sentences. |
 | `400` | `clip_too_long_for_style` | `style: "motion"` only, and only while the way Nodaro prepares Motion runs for the engine (a setting of Nodaro's, not of the run) limits the clip: a full run (not a preview) whose clip is over 27.9 s (on Nodaro Pulse, once it is cut to whole seconds). "This clip is too long for Motion. Use a shorter clip or choose Precise." |
 | `400` | `prompt_parts_not_allowed` | The body sends `promptParts`: only the Nodaro platform itself may (a trend's engine prompt). |
 | `400` | `prompt_style_not_allowed` | The body sends `promptStyle`: only the Nodaro platform itself may. A run's wording follows its `style`. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. An account that never bought anything is not refused for that: the [free-credit video limits](features/free-credits.md#video-on-free-credits) do not apply to a Video Remake run or its Full Quality. |
 | `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/video-remake` only). |
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/video-remake` only). |
 | `503` | `host_too_old` | This platform version cannot run Video Remake (both routes). |

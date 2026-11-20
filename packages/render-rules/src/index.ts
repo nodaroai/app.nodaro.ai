@@ -732,6 +732,7 @@ export {
   effectiveDubbedSeconds,
 } from "./dubbing-span"
 // What an account that never paid may generate as video: the backend's credit preflight refuses with it, the editor locks options with it.
+// The rule is published in `@nodaro/shared/free-video-limits`, so an app on the SDK locks with the same function; re-exported here unchanged.
 export {
   FREE_BLOCKED_VIDEO_MODELS,
   FREE_BLOCKED_VIDEO_SERIES,
@@ -748,7 +749,7 @@ export {
   type FreeVideoLock,
   type FreeVideoModelLockOptions,
   type FreeVideoRequest,
-} from "./free-video-limits"
+} from "@nodaro/shared/free-video-limits"
 // The recordings of one conversation as one master-clock edit (Speaker Layout on two or more recordings).
 export { wholeEpisodeEdl, type WholeEpisodeEdlSource } from "./whole-episode-edl"
 // Which audio a Suno Separate run separates: the editor's run and lane hint, the workflow payload, the route and the worker.

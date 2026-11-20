@@ -190,6 +190,8 @@ describe("Admin → Video Remake → Roles from the prompt", () => {
 
   it("names each placeholder of a template once, in order", () => {
     expect(templatePlaceholders(TEMPLATE)).toEqual(["<maxPersons>", "<maxImages>"])
+    // The shared cap's placeholder, and the ones of before it that an older text may still carry.
+    expect(templatePlaceholders("At most <maxRoles> roles in all; before: <maxPersons> persons, <maxPets> pets, <maxProducts> products.")).toEqual(["<maxRoles>", "<maxPersons>", "<maxPets>", "<maxProducts>"])
     expect(templatePlaceholders("No placeholder here.")).toEqual([])
     expect(templatePlaceholders(undefined)).toEqual([])
   })

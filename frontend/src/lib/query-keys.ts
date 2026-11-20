@@ -517,6 +517,8 @@ export const queryKeys = {
     /** Admin → Video Remake: whether a 3D previz clip is accepted, and the shot lock per engine. */
     nodaroMotionPreviz: () => ["admin", "nodaro-motion", "previz"] as const,
     nodaroMotionShotLock: () => ["admin", "nodaro-motion", "shot-lock"] as const,
+    /** Admin → Video Remake: the flash-model test per engine (a test switch, read only once its block is opened). */
+    nodaroMotionFlashModel: () => ["admin", "nodaro-motion", "flash-model"] as const,
     nodaroMotionPlanRolesDefaults: () => ["admin", "nodaro-motion", "plan-roles", "defaults"] as const,
     nodaroMotionPlanRolesCheck: (steps: string) => ["admin", "nodaro-motion", "plan-roles", "check", steps] as const,
     nodaroMotionStyleOnly: () => ["admin", "nodaro-motion", "style-only"] as const,

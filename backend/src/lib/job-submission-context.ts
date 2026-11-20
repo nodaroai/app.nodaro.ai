@@ -313,6 +313,21 @@ export function createsChildJob(req: FastifyRequest): boolean {
 }
 
 /**
+ * The job whose worker-side handler sent THIS request through the plugin
+ * toolkit (`tk.http.workerRequest` with a parent), else undefined: internal
+ * auth AND, on this very request, the toolkit's own server-only scope naming
+ * a parent for the same caller. Never read from a header or the body, so no
+ * caller can claim it; any other internal hop that names a parent (it is not
+ * the toolkit's) is undefined too. The id is the handler's word for its own
+ * job: a reader that grants something on it checks the row itself.
+ */
+export function trustedPluginParentJobId(req: FastifyRequest): string | undefined {
+  if (req.authKind !== "internal") return undefined
+  const scope = scopeOf(req)
+  return scope?.trustedPluginCaller === true ? scope.parentJobId : undefined
+}
+
+/**
  * Whether this request may name a CHILD job (`parent_job_id` set) as the
  * source of the job it creates or prices: only trusted plugin code reaching a
  * route as the caller — internal auth AND, on this very request, a server-only

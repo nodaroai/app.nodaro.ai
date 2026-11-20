@@ -106,6 +106,7 @@ describe("GET /v1/billing/plans under a test-mode deployment", () => {
     vi.doUnmock("../../../lib/config.js")
     vi.doUnmock("../stripe-client.js")
     vi.doUnmock("../../../lib/concurrency-lanes/sizes.js")
+    vi.doUnmock("../../lib/free-video-config.js")
     vi.unstubAllEnvs()
     vi.resetModules()
   })
@@ -118,6 +119,9 @@ describe("GET /v1/billing/plans under a test-mode deployment", () => {
     const real = await vi.importActual<typeof import("../../../lib/config.js")>("../../../lib/config.js")
     vi.doMock("../../../lib/config.js", () => ({ ...real, config: { ...real.config, STRIPE_SECRET_KEY: "sk_test_x" } }))
     vi.doMock("../../../lib/concurrency-lanes/sizes.js", () => ({ lastMirroredEnforced: () => false, lanesEnforced: async () => false }))
+    // The free plan's video limits are read from the settings table: only that read is replaced.
+    const settings = await vi.importActual<typeof import("../../lib/free-video-config.js")>("../../lib/free-video-config.js")
+    vi.doMock("../../lib/free-video-config.js", () => ({ ...settings, getFreeVideoLimits: async () => ({ enabled: true, maxSeconds: 4 }) }))
     const packUsd: Record<string, number> = { price_TestPack10: 10, price_TestPack25: 25, price_TestPack50: 50, price_TestPack100: 100 }
     vi.doMock("../stripe-client.js", () => ({
       getStripe: () => ({

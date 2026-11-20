@@ -64,7 +64,7 @@ export const PLAN_ROLES_STEP = {
   hint: "Reads the person's request and their reference images, and says which subject of the video each image replaces.",
 } as const
 
-/** The placeholders a template carries (`<maxPersons>`), each once, in the order they first appear. */
+/** The placeholders a template carries (`<maxRoles>`; an older text may still carry `<maxPersons>`, which the engine goes on filling), each once, in the order they first appear. */
 export function templatePlaceholders(template: string | undefined): string[] {
   return [...new Set(template?.match(/<max[A-Za-z0-9_]*>/g) ?? [])]
 }

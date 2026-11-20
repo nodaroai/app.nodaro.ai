@@ -3893,6 +3893,14 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionShotLock?: boolean
   /**
+   * `tk.settings.nodaroMotionFlashModel(userId)` exists: the flash-model
+   * test an admin set per Video Remake engine ("off" or "on"), answered only
+   * for a run started by an admin account (the host verifies the role). An
+   * older host has no such member: every run is made on its engine's own
+   * model.
+   */
+  readonly nodaroMotionFlashModel?: boolean
+  /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
    * never calls it, and runs every plugin job type as a coordinator.
@@ -4376,6 +4384,30 @@ export interface PluginSettingsToolkit {
    * Advertised as `capabilities.nodaroMotionShotLock`.
    */
   nodaroMotionShotLock?(): Promise<PluginNodaroMotionShotLock | null>
+  /**
+   * The admin's flash-model test per Video Remake engine, for ONE run: it
+   * applies only to a run started by an admin account. `userId` is the
+   * account the run's request was authenticated as; the host reads its role
+   * itself and answers the engines that are on (each under its current AND
+   * its earlier keys) only when that account is an admin. Null otherwise:
+   * no `userId`, an account that is no admin, never saved or every engine
+   * off, and to an engine that does not declare `castSwap.flashModel` (it
+   * never asks). There is no deployment default: off until an admin turns
+   * it on. Returns a copy the plugin may change freely. REJECTS when the
+   * settings or the account's role could not be read (the engine then makes
+   * the run on its own model).
+   * Advertised as `capabilities.nodaroMotionFlashModel`.
+   */
+  nodaroMotionFlashModel?(userId?: string): Promise<PluginNodaroMotionFlashModel | null>
+}
+
+/**
+ * Video Remake's flash-model test per engine, keyed by the PUBLIC engine ids
+ * (current and earlier): an engine listed is on; one left out is off
+ * (`"off"` is never answered).
+ */
+export type PluginNodaroMotionFlashModel = {
+  readonly [publicEngineId: string]: "off" | "on"
 }
 
 /** Video Remake's 3D previz setting as a plugin is answered it: `enabled` resolved by the host. */
@@ -4971,6 +5003,13 @@ export interface PluginSupports {
    *   takes `shotLock: true` to show it. Additive-optional: absent ⇒ the
    *   engine never reads the setting and is never sent the key
    *   (lib/nodaro-motion-shot-lock.ts `engineTakesShotLock`).
+   * - `flashModel`: while the admin's per-engine flash-model test says "on"
+   *   (`tk.settings.nodaroMotionFlashModel(userId)`), the engine makes a new
+   *   run of that engine STARTED BY AN ADMIN ACCOUNT on the faster model of
+   *   the same family (every other account's run is unchanged), and
+   *   refuses a run that model cannot take. Additive-optional: absent ⇒ the
+   *   engine never reads the setting
+   *   (lib/nodaro-motion-flash-model.ts `engineTakesFlashModel`).
    * - `roleFace` (Cast Swap engine ≥ 0.495.0, decided 2026-11-20): a person
    *   role (a direct run's, its estimate's and a trend run's) takes
    *   `face: "new" | "original"` beside `body` / `outfit` / `hair`. Absent
@@ -5159,6 +5198,7 @@ export interface PluginSupports {
     readonly planRoles?: boolean
     readonly previz?: boolean
     readonly shotLock?: boolean
+    readonly flashModel?: boolean
     readonly roleFace?: boolean
     readonly roleFaceStoredMask?: boolean
   }

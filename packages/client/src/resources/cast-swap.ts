@@ -38,9 +38,10 @@ import type { NodaroClientCore } from "../core.js"
  * Refusals (thrown as a `NodaroError` subclass; body `{ error: { code, message } }`), before
  * anything is charged: 400 `validation_error` (the body: no role with images,
  * no reference, no `prePrompt` or `postPrompt` and no art style (Flex on
- * Nodaro Prism), more roles of a kind
- * than allowed, more than 30 images in all, `draft: true` above 480p, a
- * `prePrompt` or `postPrompt` over 4,000 characters); on Nodaro Pulse,
+ * Nodaro Prism), more than 15 roles in all, more than 30 images sent in all
+ * (a role whose pictures are prepared sends one), `draft: true` above 480p, a
+ * `prePrompt` or `postPrompt` over 4,000 characters); `place_roles_need_names`
+ * (two place roles with the same name: an unnamed place is "the setting"); on Nodaro Pulse,
  * `draft_unsupported` (`draft: true`), `resolution_unsupported` (480p),
  * `output_format_unsupported` (a MOV edit output) and `too_many_images` (more
  * than 10 images in the run, across every role and fixed reference);
@@ -260,8 +261,20 @@ export interface VideoRemakeParams {
   /** The source clip, 4–30 seconds. */
   videoUrl: string
   /**
-   * Who and what to swap: at most 6 person roles, 1 location role, 3 pet roles
-   * and 3 product roles, with at most 30 images in all. A role with no images
+   * Who and what to swap: at most 15 roles in all, in any mix of person,
+   * pet, product and location roles. More than one location role is allowed:
+   * each names a different setting of the video, so give each its own `name`
+   * (two with the same name, or two left unnamed, are refused with
+   * `place_roles_need_names`). A run sends at most 30 images in all: with
+   * `prepareReferences` on, a person, pet or product role sends ONE prepared
+   * picture whatever the number given; a location role, and every role with
+   * it off, sends its pictures as given; each fixed reference's count too. On
+   * Nodaro Pulse a run sends at most 10. If a role's picture cannot be
+   * prepared, its own pictures are sent instead, and a run that this takes
+   * past the engine's limit fails with `too_many_images_prism` (on Nodaro
+   * Pulse, `too_many_images`): the run's own fee
+   * is refunded, and the pictures already prepared stay charged. A
+   * trend's run keeps its trend's own slots. A role with no images
    * is skipped (that subject or place stays as in the video). At least one role
    * with images, a fixed reference, a `prePrompt` or `postPrompt`, or an art
    * style (`direction`, Flex on Nodaro Prism) is required. With an art

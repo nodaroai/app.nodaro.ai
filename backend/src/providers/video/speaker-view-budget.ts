@@ -42,7 +42,20 @@
  * pieces after the transcript's speakers, and must not narrow an unnamed
  * edit's six.
  *
- * THE PAYLOAD it reads: `{ edl, transcript?, quality? }` — the EDL the handler
+ * THE SHOT SPLIT (decided 2026-11-20). With face tracks wired, the handler
+ * also splits a segment at the scene cuts of the cameras it follows — a
+ * recording that cuts from a wide shot to a close-up is framed per shot —
+ * after dispatch, like the turn split, and of NAMED segments too. A cut piece
+ * is what a turn piece is to the bound below (a contiguous piece of its
+ * segment that keeps its sources; only the first keeps its transition), so it
+ * enters the same bound as one more piece per cut: every cut the tracks list
+ * (`tracks.sources[].cuts`, source clock; on the master clock by the source's
+ * `offsetMs`) that falls strictly inside a segment. That is an upper bound on
+ * what the plugin cuts: it drops a cut the faces are continuous across, one
+ * under 400 ms from a piece's edge and one inside a transition, and only
+ * splits at the cameras a slot follows.
+ *
+ * THE PAYLOAD it reads: `{ edl, transcript?, tracks?, quality? }` — the EDL the handler
  * will render (sources, segments on the master clock) and the transcript it
  * splits it with (an object or its JSON string). A jobs row whose transcript
  * was slimmed to `transcriptWordCount` reads as a transcript that may split.
@@ -108,8 +121,10 @@ export function speakerViewJobBudgetMs(data: unknown): number | undefined {
   if (edlDurationMs(edl) > APPLY_EDL_MAX_OUTPUT_MS) return undefined
   const slots = speakerViewWorstCaseSlots(edl)
   const given = edlTimelineRenderBudgetMs(edl, { output: "video", assumeSlots: slots })
-  if (!turnSplitPossible(edl, data as Record<string, unknown>)) return given
-  const bound = turnSplitBoundMs(edl, slots)
+  const turns = turnSplitPossible(edl, data as Record<string, unknown>)
+  const cuts = shotCutPieces(edl, (data as { tracks?: unknown }).tracks)
+  if (!turns && cuts.every((n) => n === 0)) return given
+  const bound = turnSplitBoundMs(edl, slots, turns, cuts)
   return Number.isFinite(bound) ? Math.max(given, bound) : given
 }
 
@@ -137,6 +152,48 @@ function turnSplitPossible(edl: Edl, data: Record<string, unknown>): boolean {
   return Array.isArray(words) && words.some((w) => !!w && typeof w === "object" && typeof (w as { speaker?: unknown }).speaker === "string" && (w as { speaker: string }).speaker.length > 0)
 }
 
+/**
+ * Per segment of `edl`: the most pieces the shot split can ADD to it — the
+ * scene cuts the face tracks list that fall strictly inside it on the master
+ * clock (see THE SHOT SPLIT). All zero without tracks, or with tracks that
+ * cannot be read: the plugin then refuses the render or frames it without
+ * them, and neither splits.
+ */
+export function shotCutPieces(edl: Edl, rawTracks: unknown): number[] {
+  const none = () => edl.segments.map(() => 0)
+  let tracks = rawTracks
+  if (typeof tracks === "string") {
+    try {
+      tracks = JSON.parse(tracks)
+    } catch {
+      return none()
+    }
+  }
+  const sources = tracks && typeof tracks === "object" ? (tracks as { sources?: unknown }).sources : undefined
+  if (!Array.isArray(sources)) return none()
+  const offsetOf = new Map(edl.sources.map((s) => [s.id, typeof s.offsetMs === "number" && Number.isFinite(s.offsetMs) ? s.offsetMs : 0] as const))
+  const at = new Set<number>()
+  for (const s of sources) {
+    if (!s || typeof s !== "object") continue
+    const { sourceId, cuts } = s as { sourceId?: unknown; cuts?: unknown }
+    // A row for a camera the edit does not have frames nothing.
+    if (typeof sourceId !== "string" || !Array.isArray(cuts) || !offsetOf.has(sourceId)) continue
+    const off = offsetOf.get(sourceId)!
+    for (const c of cuts) if (typeof c === "number" && Number.isFinite(c)) at.add(Math.round(c + off))
+  }
+  if (at.size === 0) return none()
+  const sorted = [...at].sort((a, b) => a - b)
+  return (edl.segments as readonly (EdlSegment | null | undefined)[]).map((seg) => {
+    if (!seg || typeof seg !== "object") return 0
+    let n = 0
+    for (const m of sorted) {
+      if (m >= seg.outMs) break
+      if (m > seg.inMs) n++
+    }
+    return n
+  })
+}
+
 /** The most pieces the turn split can cut one segment of `durMs` into: its
  *  cuts are points of the shot timeline strictly inside it, at least
  *  `SPEAKER_VIEW_MIN_SHOT_MS` apart, so at most ⌈durMs / min shot⌉ of them. */
@@ -151,11 +208,15 @@ const overlapAsked = (seg: EdlSegment): boolean =>
 
 /**
  * An upper bound (ms) on `edlTimelineRenderBudgetMs(split, { output: "video",
- * assumeSlots: slots })` for EVERY turn split of `edl`. Term by term:
+ * assumeSlots: slots })` for EVERY turn split of `edl` (when `turns`), each
+ * segment i then cut into at most `cutPieces[i]` more pieces by the shot split
+ * — pieces of the same kind (see THE SHOT SPLIT). Term by term:
  *
  *  - PREP is the edit's own: the pieces read the sources their segments read.
- *  - PLAN SIZE. The split has at most P = Σ `maxTurnPieces` segments (named
- *    ones are never cut), and its overlap boundaries are the edit's own (X of
+ *  - PLAN SIZE. The split has at most P = Σ (`maxTurnPieces`, or 1 for a
+ *    segment the turn split never cuts: a named one, or any without a
+ *    transcript to split by) + Σ `cutPieces` segments, and its overlap
+ *    boundaries are the edit's own (X of
  *    them: only a first piece keeps its transition). The planner closes a
  *    chunk either full (≥ cap segments), or inside a crossfade run (once per
  *    overlap boundary at most, adding at most one split half); so a plan has
@@ -175,7 +236,7 @@ const overlapAsked = (seg: EdlSegment): boolean =>
  *    split (its tail re-reads its head).
  *  - ASSEMBLY (every video render past one chunk) is charged always.
  */
-function turnSplitBoundMs(edl: Edl, slots: number): number {
+function turnSplitBoundMs(edl: Edl, slots: number, turns: boolean, cutPieces: readonly number[]): number {
   const secs = (ms: number) => ms / 1000
   const segs = edl.segments
   const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id
@@ -196,7 +257,7 @@ function turnSplitBoundMs(edl: Edl, slots: number): number {
     const durMs = Math.max(0, seg.outMs - seg.inMs)
     outMs += durMs
     maxSegMs = Math.max(maxSegMs, durMs)
-    pieces += named(seg) ? 1 : maxTurnPieces(durMs)
+    pieces += (turns && !named(seg) ? maxTurnPieces(durMs) : 1) + (cutPieces[i] ?? 0)
     if (i > 0 && overlapAsked(seg)) overlaps++
     for (const id of pictureSourceIdsOf(edl, seg)) note("video", id, seg)
     note("audio", audioSourceId(edl, seg, masterAudioId), seg)

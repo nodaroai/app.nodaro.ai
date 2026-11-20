@@ -386,7 +386,16 @@ function plannedSentence(plan: PlannedRoles, sent: readonly string[]): string {
     return [`${numbers(r.images)} for ${subject(r)}${others}`]
   })
   const guessed = guesses.length > 0 ? ` GUESSED, not said in the prompt: ${guesses.join("; ")}. Tell the user and let them correct it before confirming.` : ""
-  return `Planned from the prompt: ${parts.join("; ")}.${guessed}`
+  // Every role the prompt asked for whose words the engine could not find in it (no `evidence`): they were not taken
+  // out. A role marked a guess is said as a guess only.
+  const unmatched = plan.roles.flatMap((r, i) => {
+    const decision = plan.decisions?.[i]
+    return decision?.basis === "request" && decision.evidence === undefined && decision.confidence !== "guess" ? [`${numbers(r.images)} for ${subject(r)}`] : []
+  })
+  // With no planned post_prompt there is nothing for the words to stay in.
+  const stay = plan.postPrompt.trim() !== "" ? ", so they stay in post_prompt" : ""
+  const kept = unmatched.length > 0 ? ` ASKED FOR in the prompt, but its words could not be matched there${stay}: ${unmatched.join("; ")}. Tell the user.` : ""
+  return `Planned from the prompt: ${parts.join("; ")}.${guessed}${kept}`
 }
 
 const PLAN_ROLES_UNAVAILABLE = {
@@ -504,7 +513,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
+          .describe("At most 15 roles, any kinds (name each place if several); 30 images sent. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
         references: z
           .array(reference)
           .max(5)

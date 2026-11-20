@@ -1,3 +1,4 @@
+import type { FreeVideoLimits } from "@nodaro/shared/free-video-limits"
 import type { NodaroClientCore } from "../core.js"
 
 /**
@@ -24,6 +25,17 @@ export interface UserBalance {
   /** Present when a deployment uses an external shared wallet. Raw credits;
    * null means unavailable. Do not substitute the personal `total` balance. */
   externalWallet?: { available: number | null }
+  /**
+   * The free-credit video limits, present only while they apply to this
+   * account: it never paid (no credit pack, no paid plan) and the deployment
+   * has them on. Absent = no limits apply. Lock the video options they refuse
+   * with `freeVideoModelLock`, `freeVideoDurationLock` and
+   * `freeVideoResolutionLock` from `@nodaro/shared/free-video-limits`: the
+   * same rule the server refuses a run with (402 `free_video_limit`), so a
+   * locked option is exactly one the server would refuse. Before sign-in, the
+   * free plan of `billing.plans()` carries the same limits.
+   */
+  freeVideoLimits?: FreeVideoLimits
   /**
    * Where the account's free signup grant stands. `"withheld"` means the
    * account works but the grant did not land — show the activation path.

@@ -1,6 +1,7 @@
 // The free-credit video limits, as the backend refuses with them. The rule
-// itself is `@nodaro/render-rules` (`free-video-limits.ts`) — the editor locks
-// options with the SAME function, so the two can never disagree. This file
+// itself is `@nodaro/shared/free-video-limits` (re-exported by
+// `@nodaro/render-rules`) — the editor, and any app on the SDK, locks options
+// with the SAME function, so the two can never disagree. This file
 // adds the backend's two pieces: reading a request body / node payload, and
 // the English refusal message (worded in `lib/stated-credit-messages.ts`,
 // where the advice to pay rides only where self-serve is on).

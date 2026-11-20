@@ -117,6 +117,17 @@ Until an account buys anything, its video runs within these limits:
   available, and an "Auto" length is not accepted. Name the resolution: a
   request that leaves it out is refused, because the model would render its
   own default.
+- **Video Remake is not limited.** A Video Remake run (either engine, a
+  preview or the whole clip), a draft's Full Quality and a trend run work on
+  free credits like on any account: the limits above are not applied to the
+  video a Video Remake run makes for itself. The run still needs enough
+  credits to cover its quote. Calling the same video models yourself (Generate
+  Video, Video Upscale, the API's `/v1/generate-video` and
+  `/v1/video-upscale`) stays within the limits.
+  The video a Video Remake run delivers is watermarked like any other free
+  tier result. The clips and pictures the run prepares for itself along the
+  way (a depth map, a mask, a reference picture) are never results and carry
+  no watermark; the same tools run on their own are watermarked as usual.
 
 A run outside these limits is refused before anything is charged, with a
 message naming the limit (HTTP 402, error code `free_video_limit`). A real
@@ -125,3 +136,11 @@ subscription invoice — also after the subscription ends. A card on file or a
 trial is not a payment.
 The default Generate Video settings (Seedance 2 Fast, 4 seconds) run as they
 are.
+
+An app can lock these options before a run instead of meeting the refusal. The
+rule the server refuses with is published in the SDK's companion package,
+`@nodaro/shared/free-video-limits`, and the server states the limits it
+applies: `GET /v1/user/credits` carries `freeVideoLimits` (`{ enabled,
+maxSeconds }`) only while they apply to the signed-in account, and the free
+plan of `GET /v1/billing/plans` carries them for a page shown before sign-in.
+See [SDK reference § Locking video options on free credits](../sdk-reference.md#locking-video-options-on-free-credits).

@@ -13780,6 +13780,41 @@ export async function saveNodaroMotionShotLock(shotLock: NodaroMotionShotLock): 
   ).data
 }
 
+// ---- Admin: Video Remake's flash-model test (/v1/admin/video-remake/flash-model, admin-nodaro-motion-flash-model.ts) ----
+
+/** One engine's flash-model test: whether an admin account's new runs of it are made on the faster model of the same family. */
+export type NodaroMotionFlashModelValue = "off" | "on"
+
+/** The flash-model test per engine, keyed by public id; an engine left out (or "off") runs on its own model. */
+export type NodaroMotionFlashModel = Partial<Record<NodaroMotionEngine, NodaroMotionFlashModelValue>>
+
+export interface NodaroMotionFlashModelView {
+  /** null = never saved: off for every engine. Only the engines that are on are listed. */
+  flashModel: NodaroMotionFlashModel | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine runs the test. */
+  supported: boolean
+  /** Every environment whose engine reads the setting: where "on" changes new runs. */
+  environments: string[]
+}
+
+const ADMIN_NODARO_MOTION_FLASH_MODEL = "/v1/admin/video-remake/flash-model"
+
+export async function fetchNodaroMotionFlashModel(): Promise<NodaroMotionFlashModelView> {
+  return (await apiRequest<{ data: NodaroMotionFlashModelView }>(ADMIN_NODARO_MOTION_FLASH_MODEL, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves every engine's flash-model test; "on" is refused (409 `engine_unsupported`) while no environment's engine runs it. */
+export async function saveNodaroMotionFlashModel(flashModel: NodaroMotionFlashModel): Promise<NodaroMotionFlashModelView> {
+  return (
+    await apiRequest<{ data: NodaroMotionFlashModelView }>(ADMIN_NODARO_MOTION_FLASH_MODEL, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { flashModel },
+    })
+  ).data
+}
+
 // ---- Admin: Video Remake's 3D previz clips (/v1/admin/video-remake/previz, admin-nodaro-motion-previz.ts) ----
 
 /** The saved setting. `enabled` left out: the deployment's default. */
