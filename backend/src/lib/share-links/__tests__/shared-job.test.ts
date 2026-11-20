@@ -125,6 +125,7 @@ describe("toSharedJob", () => {
       title: "Red car",
       createdAt: "2026-11-19T10:00:00.000Z",
       prompt: "a red car",
+      displayPrompt: "a red car",
       negativePrompt: "blur",
       model: { id: "nano-banana-pro", name: "Nano Banana Pro" },
       settings: { aspectRatio: "16:9", resolution: "2K" },
@@ -143,6 +144,26 @@ describe("toSharedJob", () => {
     expect(JSON.stringify(shared)).not.toContain(OWNER)
     expect(JSON.stringify(shared)).not.toContain("hooks.example")
     expect(JSON.stringify(shared)).not.toContain(UUID)
+  })
+
+  it("reads the prompt as a person does, from the pills' names, and keeps the prompt as sent", () => {
+    const shared = toSharedJob(
+      job({
+        input_data: {
+          type: "generate-image",
+          userPrompt: "@maya:1 in @image-1:2:background",
+          connectedReferences: [
+            { id: "c1", defaultName: "Maya", source: "wired-character", characterSlug: "maya", url: "https://cdn.example/uploads/maya.png" },
+            { id: "c2", defaultName: "Image 1", source: "manual", url: "https://cdn.example/uploads/bg.png" },
+          ],
+        },
+      }),
+      { allowCopy: false },
+    )
+    expect(shared?.prompt).toBe("@maya:1 in @image-1:2:background")
+    expect(shared?.displayPrompt).toBe("@Maya in @Image 1")
+    // The names only: never a reference's address in the display text or the settings.
+    expect(JSON.stringify(shared)).not.toContain("uploads/")
   })
 
   it("hands out the reference files only when the link allows copying", () => {
@@ -173,6 +194,7 @@ describe("toSharedJob", () => {
       mediaKind: "video",
       durationSec: 8,
       prompt: null,
+      displayPrompt: null,
       settings: {},
       model: { id: "nodaro-prism", name: "Nodaro Prism" },
       trend: { slug: "office-dance", name: "Office Dance" },

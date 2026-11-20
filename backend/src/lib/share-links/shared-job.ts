@@ -20,6 +20,7 @@ import { CAST_SWAP_ENGINE_WHEN_OMITTED, NODARO_MOTION_ENGINE_NAMES, nodaroMotion
 import { isPromptBlocked } from "../../config/content-filter.js"
 import { redactPrivateJobOutput } from "../public-job-data.js"
 import { isShareableAddress, publicSettingsOf, referencesOf } from "./settings.js"
+import { displayPromptOf } from "./display-prompt.js"
 import type { SharedJob, SharedMediaKind, SharedReference, ShareRefusal } from "./types.js"
 
 /** The job columns a share read selects (and `title` once the column exists, lib/jobs-title-column.ts). */
@@ -178,6 +179,7 @@ export function toSharedJob(
     title: str(row.title),
     createdAt: row.created_at,
     prompt,
+    displayPrompt: displayPromptOf(prompt, input),
     ...(negativePrompt ? { negativePrompt } : {}),
     model: sharedModelOf(input),
     settings: trend ? {} : publicSettingsOf(input, fromText ? ["text"] : []),

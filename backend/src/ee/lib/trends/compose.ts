@@ -169,7 +169,8 @@ import {
   type FaceMaskingSource,
   type FaceMaskingTarget,
 } from "../../../lib/cast-swap-face-masking.js"
-import { CHIPS_BY_KIND, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
+import { CHIPS_BY_KIND, OPT_IN_CHIPS, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
+import { keepsAnyFace, mixesFaces, roleFaceRemakeFor, type RoleFaceRemake } from "./role-face.js"
 import { pickText } from "./localize.js"
 import { faceMaskHasErasedMarks, faceMaskStoredRequired, storedFaceMaskFor } from "./face-mask.js"
 import { faceMaskVariantFor, markedPeople } from "./face-mask-variants.js"
@@ -238,7 +239,7 @@ export class TrendRunError extends Error {
   }
 }
 
-type Chips = { body?: Choice; outfit?: Choice; hair?: Choice; coat?: Choice; shape?: Choice; finish?: Choice }
+type Chips = { body?: Choice; outfit?: Choice; hair?: Choice; face?: Choice; coat?: Choice; shape?: Choice; finish?: Choice }
 
 export interface TrendRunDisplaySlot extends Chips {
   key: string
@@ -309,6 +310,18 @@ export interface TrendRunBody {
      * listing it (`withoutUnsupportedStoredMask`).
      */
     depthColormap?: FaceMaskingDepthColormap
+    /**
+     * A run that keeps some people's own faces while a pictured person takes a
+     * new one (the Face chip, decided 2026-11-20; role-face.ts): the mask before
+     * its marks (`raw`), the trend's "erased" boxes (`erase`) and each person
+     * role's boxes (`roleBoxes`), so the engine remakes the mask without the
+     * kept faces. Only in that case, each only when the trend kept it, and only
+     * to an engine that declares `castSwap.roleFaceStoredMask`
+     * (`withoutUnsupportedStoredMask`).
+     */
+    raw?: RoleFaceRemake["raw"]
+    erase?: RoleFaceRemake["erase"]
+    roleBoxes?: RoleFaceRemake["roleBoxes"]
   }
   /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
   engine?: CastSwapEngine
@@ -436,6 +449,12 @@ export interface ComposedTrendRun {
     trendPrePrompt: boolean
     /** The trend's video engine (Seedance 2.5 when it names none). */
     engine: CastSwapEngine
+    /**
+     * A person role keeps its own face (`face: "original"`, the Face chip): an
+     * engine that does not declare `castSwap.roleFace` would ignore it and hide
+     * the face, so it is refused rather than sent. Absent otherwise.
+     */
+    roleFace?: true
   }
   /**
    * The trend's masking leaves `zone` out, so `body.faceMasking.zone` is the
@@ -478,6 +497,9 @@ function entryOf(req: TrendRunRequest, key: string): TrendRunSlot | undefined {
  * The slot kind's chips: a chip the request may set (shown to the person, or
  * any chip on an admin test run) is the request's, else the slot's default,
  * else "new"; a chip hidden from the person is fixed at the default, else "new".
+ * An opt-in chip (`OPT_IN_CHIPS`: the Face chip) has no "new" of its own: it is
+ * there only when the request or the slot's default chose it, so a run that
+ * never chose a face sends no `face` (and records none), as before the chip.
  */
 function chipsOf(slot: TrendSlot, entry: TrendRunSlot | undefined, allowHiddenChips: boolean): Chips {
   const defaults = (slot.defaults ?? {}) as Chips
@@ -485,7 +507,9 @@ function chipsOf(slot: TrendSlot, entry: TrendRunSlot | undefined, allowHiddenCh
   const out: Chips = {}
   for (const chip of CHIPS_BY_KIND[slot.kind]) {
     const settable = allowHiddenChips || shown.includes(chip)
-    out[chip] = (settable ? entry?.[chip] : undefined) ?? defaults[chip] ?? "new"
+    const chosen = (settable ? entry?.[chip] : undefined) ?? defaults[chip]
+    if (chosen !== undefined) out[chip] = chosen
+    else if (!OPT_IN_CHIPS.includes(chip)) out[chip] = "new"
   }
   return out
 }
@@ -675,6 +699,11 @@ export function composeTrendRun(
         ? faceMaskStoredRequired(data) ? { ...stored, required: true as const, ...outlinesOf(data.faceMask?.outlines) } : stored
         : undefined,
   )
+  // A run on the approved base mask that keeps some people's own faces while a pictured person takes a new one
+  // (decided 2026-11-20): what the engine remakes the mask from, beside it (role-face.ts). Every other run's mask is
+  // sent exactly as before; a per-person variant is sent none (the engine then refuses a mixed run on it).
+  const remake = storedFaceMask && variant === undefined && mixesFaces(slots) ? roleFaceRemakeFor(data) : undefined
+  const storedFaceMaskSent = storedFaceMask && remake ? { ...storedFaceMask, ...remake } : storedFaceMask
   // A preview's prepared input clip (preview-clip.ts), as a candidate for `withPreparedPreview`:
   // only with a current clip, and never beside a per-person variant (the clip carries a cut of
   // the BASE mask alone); a run that sends the base mask needs the clip's cut of it.
@@ -742,7 +771,7 @@ export function composeTrendRun(
     ...(sourceFirst ? { sourceClip: true as const } : {}),
     // A trend with erased marks, or a person variant: the run must use it — the engine fails rather
     // than masks per run.
-    ...(storedFaceMask ? { storedFaceMask } : {}),
+    ...(storedFaceMaskSent ? { storedFaceMask: storedFaceMaskSent } : {}),
     ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
@@ -788,6 +817,8 @@ export function composeTrendRun(
       storedFaceMask: storedFaceMask !== undefined && "required" in storedFaceMask,
       trendPrePrompt: !!texts.prePrompt,
       engine,
+      // Only when a role keeps its own face: every other run's needs are as before.
+      ...(keepsAnyFace(slots) ? { roleFace: true as const } : {}),
     },
     // Full depth reads no zone at all.
     maskingZoneLeftOut: runMasking !== undefined && runMasking.zone === undefined && faceMaskingSourceOf(runMasking) !== "full-depth",

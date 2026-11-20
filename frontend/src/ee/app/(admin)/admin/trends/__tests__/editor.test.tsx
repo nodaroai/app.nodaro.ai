@@ -101,6 +101,21 @@ describe("the trend editor", { timeout: 20_000 }, () => {
     expect(body.data.slots).toEqual([{ ...slot(), chips: ["outfit"] }])
   })
 
+  it("offers the Face chip hidden by default, with its line, and saves every chip listed once it is shown", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
+    renderEditor()
+    const face = await screen.findByRole("switch", { name: "Slot 1 Face shown to people" })
+    expect(face).not.toBeChecked()
+    expect(screen.getByText("Hidden: from the picture")).toBeInTheDocument()
+    expect(screen.getByText(/From the video keeps the person's own face/)).toBeInTheDocument()
+    await user.click(face)
+    await user.click(screen.getByRole("button", { name: /save draft/i }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/draft`)).toHaveLength(1))
+    const [body] = sentTo(`PUT ${BASE}/draft`) as Array<{ data: { slots: AdminTrendSlot[] } }>
+    expect(body.data.slots).toEqual([{ ...slot(), chips: ["body", "outfit", "hair", "face"] }])
+  })
+
   it("shows a stored hidden chip as hidden, fixed at its value", async () => {
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({}, { slots: [slot({ defaults: { hair: "original" }, chips: ["body", "outfit"] })] }) } })
     renderEditor()

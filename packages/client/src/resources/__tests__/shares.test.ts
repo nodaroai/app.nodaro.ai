@@ -31,7 +31,8 @@ const JOB: SharedJob = {
   outputUrl: "https://cdn.example/images/a1.png",
   title: null,
   createdAt: "2026-11-19T10:00:00Z",
-  prompt: "a red car",
+  prompt: "@maya:1 in a red car",
+  displayPrompt: "@Maya in a red car",
   model: { id: "nano-banana-pro", name: "Nano Banana Pro" },
   settings: { aspectRatio: "16:9" },
 }

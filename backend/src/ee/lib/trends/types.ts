@@ -42,7 +42,14 @@ export type TrendSlotKind = "person" | "location" | "product" | "pet"
 export type Choice = "new" | "original"
 
 /** The chips each kind carries (Cast Swap's per-role traits). A location has none. */
-export interface PersonChips { body?: Choice; outfit?: Choice; hair?: Choice }
+/**
+ * A person's `face` (the Face chip, decided 2026-11-20): "new" from the
+ * pictures, "original" keeps the person's own face from the clip. Unlike the
+ * other chips it is offered only where a slot lists it in `chips`, and a run
+ * sends it only when it was chosen (the slot's default or the person's pick):
+ * a trend that never names it sends no `face` at all.
+ */
+export interface PersonChips { body?: Choice; outfit?: Choice; hair?: Choice; face?: Choice }
 export interface PetChips { body?: Choice; coat?: Choice }
 export interface ProductChips { shape?: Choice; finish?: Choice }
 
@@ -81,8 +88,10 @@ interface TrendSlotBase {
 
 /**
  * A slot's `defaults` are the chips of its own kind. Its `chips` are the ones
- * shown to the person (absent = all of the kind's; `[]` = none). A chip not
- * shown is fixed at its default (else "new"): a run cannot change it.
+ * shown to the person (absent = all of the kind's but the Face chip, which is
+ * shown only when listed; `[]` = none). A chip not shown is fixed at its
+ * default (else "new"; the Face chip with no default is not sent at all): a
+ * run cannot change it.
  */
 export type TrendSlot =
   | (TrendSlotBase & { kind: "person"; defaults?: PersonChips; chips?: Array<keyof PersonChips> })

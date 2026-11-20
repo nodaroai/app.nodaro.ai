@@ -58,8 +58,13 @@ export interface SharedJob {
   /** The owner's name for the result, or null. */
   readonly title: string | null
   readonly createdAt: string
-  /** The prompt as the person wrote it; null for a trend run. */
+  /** The prompt as the person wrote it, exactly as sent; null for a trend run. */
   readonly prompt: string | null
+  /**
+   * The prompt as a person reads it: each reference token (`@maya:1`, `{video:1:clip}`)
+   * shown as the name on its pill (`@Maya`, `@clip`). Null when `prompt` is (a trend run).
+   */
+  readonly displayPrompt: string | null
   readonly negativePrompt?: string | null
   /** The public model id and its display name; null when the model is not in the public catalog. */
   readonly model: { readonly id: string; readonly name: string } | null

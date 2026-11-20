@@ -1411,6 +1411,7 @@ interface SharedJob {
   outputUrl: string; outputUrls?: string[]; width?: number; height?: number; durationSec?: number
   title: string | null; createdAt: string
   prompt: string | null              // as written; null for a trend run
+  displayPrompt?: string | null      // as a person reads it: @maya:1 → @Maya, {video:1:clip} → @clip
   negativePrompt?: string | null
   model: { id: string; name: string } | null   // the public model name, never the provider
   settings: Record<string, SharedSettingValue> // never an address or an id
@@ -2292,7 +2293,8 @@ interface VideoRemakeParams {
   videoUrl: string                 // the source clip, 4–30 s
   roles: Array<
     | { kind: "person"; name: string; images: string[] | null
-        body?: "new" | "original"; outfit?: "new" | "original"; hair?: "new" | "original" } // each default "new"
+        body?: "new" | "original"; outfit?: "new" | "original"; hair?: "new" | "original";
+        face?: "new" | "original" } // each default "new"; face "original" only where styleChoice() answers roleFace
     | { kind: "location"; name?: string; images: string[] | null }                          // name default "the setting"
     | { kind: "pet"; name: string; images: string[] | null
         body?: "new" | "original"; coat?: "new" | "original" }                              // each default "new"
@@ -2363,9 +2365,13 @@ stays as in the video. A person, pet or product role of a direct run may leave
 subject in the video it fits best, and needs at least one image (`400
 unnamed_role_needs_picture` otherwise); a trend run's roles are always named. At least one role with images, a reference, a
 `prePrompt` or `postPrompt`, or an art style (`direction`, Flex on Nodaro
-Prism; see Style only below) is required. Each trait (`body`, `outfit`, `hair`; a pet's `body`, `coat`; a
+Prism; see Style only below) is required. Each trait (`body`, `outfit`, `hair`, `face`; a pet's `body`, `coat`; a
 product's `shape`, `finish`) is `"new"`, from your images, or `"original"`,
-kept from the video.
+kept from the video. Face: from the picture (default) or from the video. From
+the video keeps the person's own face; use it to change only clothes, hair or
+build. `face: "original"` is taken only where `styleChoice()` answers
+`roleFace: true` (absent from an older server: read it as `false`); elsewhere
+`run()` and `estimate()` reject with 409 `engine_unsupported`.
 
 **Fixed references** (`references`, `VideoRemakeReference[]`, at most 5): things
 the video should show that no role replaces, each 1–3 images of ONE thing and
@@ -2407,7 +2413,7 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, previz?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, previz?: boolean, roleFace?: boolean }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2855,9 +2861,9 @@ method needs a signed-in caller.
 ```ts
 type TrendSlotKind = "person" | "location" | "product" | "pet"
 type TrendChoice = "new" | "original"       // make the trait anew from your pictures, or keep the clip's
-// The chips of a slot's kind: person body/outfit/hair, pet body/coat, product shape/finish, location none
-interface TrendChips { body?: TrendChoice; outfit?: TrendChoice; hair?: TrendChoice; coat?: TrendChoice; shape?: TrendChoice; finish?: TrendChoice }
-type TrendChipKey = keyof TrendChips          // "body" | "outfit" | "hair" | "coat" | "shape" | "finish"
+// The chips of a slot's kind: person body/outfit/hair/face, pet body/coat, product shape/finish, location none
+interface TrendChips { body?: TrendChoice; outfit?: TrendChoice; hair?: TrendChoice; face?: TrendChoice; coat?: TrendChoice; shape?: TrendChoice; finish?: TrendChoice }
+type TrendChipKey = keyof TrendChips          // "body" | "outfit" | "hair" | "face" | "coat" | "shape" | "finish"
 
 interface ListTrendsParams {
   q?: string; tag?: string
@@ -2998,7 +3004,12 @@ the original (no pictures, `fromExample: false`) and the run records
 `chip_not_offered` (a chip of the kind that the slot's `chips` does not list:
 the trend fixes it; `err.details` is `{ slot, chip }`), `example_out_of_range`, `preview_unavailable`, `invalid_slot_mention` (a
 `{slot:<key>}` naming no slot), `prompt_too_long` and `validation_error`; the
-slot errors carry the key as `slot`. Other refusals: `401`, `404 not_found`
+slot errors carry the key as `slot`. `run()` may also answer `400
+role_face_with_stored_mask` (one person keeps their face while another takes a
+new one, and the trend cannot remake its stored face mask for that: set Face
+to `"new"` for everyone, or keep every face), and `estimate()` and `run()`
+`400 roles_keep_everything` (every role keeps everything from the original:
+set at least one chip to `"new"`). Other refusals: `401`, `404 not_found`
 (the trend is not published; for `run()` also a `sessionId` you may not use),
 `409 trend_unavailable` (the trend's setup is out of date: it cannot run until
 it is updated), `502 engine_error`, `503 engine_unsupported` /

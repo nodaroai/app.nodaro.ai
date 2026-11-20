@@ -154,6 +154,14 @@ export interface VideoRemakePersonRole extends VideoRemakeRolePreviewSettings, V
   outfit?: VideoRemakeTraitSource
   /** Hairstyle and haircut from the references or the video. Default `"new"`. */
   hair?: VideoRemakeTraitSource
+  /**
+   * Face: from the picture (`"new"`, the default) or from the video
+   * (`"original"`). From the video keeps the person's own face; use it to
+   * change only clothes, hair or build. Only where
+   * {@link VideoRemakeResource.styleChoice} answers `roleFace` true; elsewhere
+   * `"original"` is refused 409 `engine_unsupported`.
+   */
+  face?: VideoRemakeTraitSource
 }
 
 /** The place the video happens in. */
@@ -989,6 +997,14 @@ export interface VideoRemakeStyleChoice {
    * refused 403 `previz_not_available`).
    */
   previz?: boolean
+  /**
+   * Whether a person role may keep its own face from the video here (the Face
+   * chip, `face: "original"` on a {@link VideoRemakePersonRole}): one answer
+   * for the deployment, not per engine. `true` only where the engine keeps
+   * faces. Absent from an older server: `false` (offer no Face choice; a run
+   * sent `face: "original"` anyway is refused 409 `engine_unsupported`).
+   */
+  roleFace?: boolean
 }
 
 /**
@@ -1054,7 +1070,8 @@ export class VideoRemakeResource {
    * (`direction: { customStyle }`, and {@link describeStyle}), and its
    * `planRoles` whether roles can be planned from the prompt here
    * ({@link planRoles}), and its `previz` whether a run may state a 3D previz
-   * clip here (`clipKind: "previz"`).
+   * clip here (`clipKind: "previz"`), and its `roleFace` whether a person role
+   * may keep its own face here (`face: "original"`).
    * Public (no sign-in needed); the answer may be up to a minute old.
    */
   styleChoice(): Promise<VideoRemakeStyleChoice> {

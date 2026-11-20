@@ -25,7 +25,11 @@ const SharedJob = z.object({
   durationSec: z.number().optional(),
   title: z.string().nullable().describe("The owner's name for the result."),
   createdAt: z.string(),
-  prompt: z.string().nullable().describe("The prompt as it was written; null for a trend run."),
+  prompt: z.string().nullable().describe("The prompt as it was written, exactly as sent; null for a trend run."),
+  displayPrompt: z
+    .string()
+    .nullable()
+    .describe("The prompt as a person reads it: each reference token (`@maya:1`, `{video:1:clip}`) shown as the name on its pill (`@Maya`, `@clip`). Null for a trend run."),
   negativePrompt: z.string().nullable().optional(),
   model: z.object({ id: z.string(), name: z.string() }).nullable().describe("The public model id and its name."),
   settings: z.record(z.string(), z.unknown()).describe("The settings the result was made with — never an address or an id."),

@@ -177,6 +177,29 @@ describe("GET /og/s/:token", () => {
     expect(t["og:image:width"]).toBe("512")
   })
 
+  it("the title, description and page title read the prompt as a person does", async () => {
+    share("job", JOB)
+    db.jobs.push(
+      jobRow({
+        input_data: {
+          type: "generate-image",
+          userPrompt: "@image-1:1 Viral entrepreneurial transformation",
+          connectedReferences: [{ id: "c1", defaultName: "Image 1", source: "manual", url: "https://cdn.example/uploads/me.png" }],
+        },
+      }),
+    )
+    const res = await card()
+    expect(tags(res.body)).toMatchObject({
+      "og:title": "@Image 1 Viral entrepreneurial transformation",
+      "og:description": "@Image 1 Viral entrepreneurial transformation",
+      "twitter:title": "@Image 1 Viral entrepreneurial transformation",
+      "twitter:description": "@Image 1 Viral entrepreneurial transformation",
+    })
+    expect(res.body).toContain("<title>@Image 1 Viral entrepreneurial transformation — Nodaro</title>")
+    expect(res.body).not.toContain("@image-1:1")
+    expect(res.body).not.toContain("uploads/me.png")
+  })
+
   it("a trend run: the trend's name, never its prompt", async () => {
     share("job", JOB)
     db.jobs.push(

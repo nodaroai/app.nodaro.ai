@@ -473,6 +473,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
                 body: trait.describe('"new" (default) from the images, or "original" from the video.'),
                 outfit: trait.describe("As body."),
                 hair: trait.describe("Hairstyle and haircut; as body."),
+                face: trait.describe('As body; "original" keeps their own face (to change only clothes, hair or build).'),
                 ...castSwapRolePreviewArgs,
                 ...castSwapRolePrevizArgs,
               }),

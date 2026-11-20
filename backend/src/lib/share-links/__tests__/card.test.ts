@@ -34,6 +34,7 @@ function job(over: Partial<SharedJob> = {}): SharedJob {
     title: null,
     createdAt: "2026-11-19T10:00:00Z",
     prompt: "a red car on a beach at sunset",
+    displayPrompt: "a red car on a beach at sunset",
     model: { id: "nano-banana-pro", name: "Nano Banana Pro" },
     settings: {},
     ...over,
@@ -73,14 +74,24 @@ describe("jobCardContent", () => {
     expect(jobCardContent(sound, { imageUrl: "https://covers.example/c.jpeg" }, () => true).image).toBeNull()
   })
 
+  it("reads the prompt as a person does: the pills' names, never the raw tokens", () => {
+    const content = jobCardContent(job({ prompt: "@image-1:1 Viral entrepreneurial transformation", displayPrompt: "@Image 1 Viral entrepreneurial transformation" }), {})
+    expect(content.title).toBe("@Image 1 Viral entrepreneurial transformation")
+    expect(content.description).toBe("@Image 1 Viral entrepreneurial transformation")
+    // The result's own name comes first.
+    expect(jobCardContent(job({ title: "Launch day", displayPrompt: "@Maya at the launch" }), {}).title).toBe("Launch day")
+    // An older projection without it falls back to the prompt.
+    expect(jobCardContent(job({ displayPrompt: undefined as unknown as null }), {}).description).toBe("a red car on a beach at sunset")
+  })
+
   it("a trend run: the trend's name, never a prompt", () => {
-    const content = jobCardContent(job({ prompt: null, trend: { slug: "office-dance", name: "Office Dance" } }), {})
+    const content = jobCardContent(job({ prompt: null, displayPrompt: null, trend: { slug: "office-dance", name: "Office Dance" } }), {})
     expect(content.title).toBe("Office Dance")
     expect(content.description).toBe("Made with the Office Dance trend on Nodaro.")
   })
 
   it("a long prompt is cut: about 70 characters for the title, 200 for the description", () => {
-    const content = jobCardContent(job({ prompt: "word ".repeat(100) }), {})
+    const content = jobCardContent(job({ prompt: "word ".repeat(100), displayPrompt: "word ".repeat(100) }), {})
     expect(Array.from(content.title).length).toBeLessThanOrEqual(70)
     expect(Array.from(content.description!).length).toBeLessThanOrEqual(200)
     expect(content.description!.endsWith("…")).toBe(true)
@@ -154,7 +165,7 @@ describe("shareCardHtml", () => {
 
   it('escapes every value: a prompt with "<script> stays inert', () => {
     const evil = `"><script>alert(1)</script><meta property="og:image" content="https://evil.example/x.png`
-    const { html } = shareCardHtml(jobCardContent(job({ prompt: evil, title: `'<b>"&` }), {}), PLACE)
+    const { html } = shareCardHtml(jobCardContent(job({ prompt: evil, displayPrompt: evil, title: `'<b>"&` }), {}), PLACE)
     expect(html).not.toContain("<script>alert(1)</script>")
     expect(html).not.toContain('content="https://evil.example/x.png"')
     expect(html).toContain("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;")

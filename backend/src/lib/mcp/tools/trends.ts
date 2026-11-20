@@ -76,6 +76,7 @@ const slotInput = z.object({
   body: chip,
   outfit: chip,
   hair: chip,
+  face: chip,
   coat: chip,
   shape: chip,
   finish: chip,
@@ -127,7 +128,7 @@ const num = (v: unknown): number => (typeof v === "number" ? v : 0)
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [])
 
 const NEED_KINDS = ["person", "location", "product", "pet"] as const
-const CHIPS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
+const CHIPS = ["body", "outfit", "hair", "face", "coat", "shape", "finish"] as const
 
 /** `{ data }` unwrapped, or null when the body is not JSON. */
 function dataOf(body: string): unknown {

@@ -3706,6 +3706,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `roles[].body` | string |  | "new" (default) from the images, or "original" from the video. One of `new`, `original`. Only when `kind` is `person` or `pet`. |
 | `roles[].outfit` | string |  | As body. One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
+| `roles[].face` | string |  | As body; "original" keeps their own face (to change only clothes, hair or build). One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
 | `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
 | `roles[].subject` | string |  | previz only: what the role is, used in the script; name is then the locator of its model. At most 200 characters. |

@@ -25,7 +25,7 @@ import { CAST_SWAP_PROMPT_PART_IDS } from "@nodaro/render-rules"
 import { placeholderImageUrl, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../../lib/cast-swap-prompt-parts-contract.js"
 
 export { placeholderImageUrl }
-import { CHIPS_BY_KIND, MAX_IMAGES_PER_SLOT, engineOf } from "./schemas.js"
+import { CHIPS_BY_KIND, MAX_IMAGES_PER_SLOT, OPT_IN_CHIPS, engineOf } from "./schemas.js"
 import { withPromptsFor, type TrendPromptMode } from "./prompt-parts.js"
 import { promptStyleOf, trendPromptWordingNamed, trendSceneOf, trendSourceOf } from "./prompt-style.js"
 import type { TrendPromptPartOverrides, TrendSlot, TrendVersionData } from "./types.js"
@@ -66,10 +66,18 @@ export function storedOverridesFrom(texts: PromptPartTexts, answer: PromptPartsA
   return out
 }
 
-/** The slot's chips as a run with nothing chosen sends them: its defaults, else "new". */
+/**
+ * The slot's chips as a run with nothing chosen sends them: its defaults, else "new"; an opt-in chip
+ * (`OPT_IN_CHIPS`, the Face chip) only when its default is set (a run with nothing chosen sends none).
+ */
 function defaultChips(slot: TrendSlot): Record<string, string> {
   const defaults = (slot.defaults ?? {}) as Record<string, string | undefined>
-  return Object.fromEntries(CHIPS_BY_KIND[slot.kind].map((chip) => [chip, defaults[chip] ?? "new"]))
+  return Object.fromEntries(
+    CHIPS_BY_KIND[slot.kind].flatMap((chip) => {
+      const value = defaults[chip] ?? (OPT_IN_CHIPS.includes(chip) ? undefined : "new")
+      return value === undefined ? [] : [[chip, value]]
+    }),
+  )
 }
 
 /**

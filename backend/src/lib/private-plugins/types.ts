@@ -4971,6 +4971,28 @@ export interface PluginSupports {
    *   takes `shotLock: true` to show it. Additive-optional: absent ⇒ the
    *   engine never reads the setting and is never sent the key
    *   (lib/nodaro-motion-shot-lock.ts `engineTakesShotLock`).
+   * - `roleFace` (Cast Swap engine ≥ 0.495.0, decided 2026-11-20): a person
+   *   role (a direct run's, its estimate's and a trend run's) takes
+   *   `face: "new" | "original"` beside `body` / `outfit` / `hair`. Absent
+   *   means "new" (the face from the role's pictures); "original" keeps the
+   *   person's own face from the video, and that person is never face-masked.
+   *   Additive-optional: absent ⇒ the engine ignores `face`, so a person sent
+   *   "original" would be face-masked with nothing to replace the face. The
+   *   platform therefore refuses `face: "original"` before such an engine sees
+   *   it (lib/cast-swap-role-face.ts `registerCastSwapRoleFaceGate`, a trend
+   *   run by `engineSupports`), and holds a trend that offers it back from
+   *   publishing there (need `roleFace`).
+   * - `roleFaceStoredMask`: a trend run on a stored face mask whose person
+   *   roles mix "original" and new faces takes three optional keys on
+   *   `storedFaceMask`, from which the engine remakes the mask for that run:
+   *   `raw` (`{ url, depthUrl? }`, the mask before any mark was applied, and
+   *   its depth view on a depth fill), `erase` (the trend's "erased" boxes, at
+   *   most 50) and `roleBoxes` (`[{ role, boxes }]`, at most 6: each person
+   *   role's boxes, role N the run's Nth role). A box is `{ fromFrame,
+   *   toFrame, leftPct, topPct, rightPct, bottomPct }` in source-clip frames.
+   *   Sent only in that mixed case. An engine that cannot remake such a run
+   *   refuses it, 400 `role_face_with_stored_mask`. Additive-optional: absent
+   *   ⇒ the platform never sends the three keys (`withoutUnsupportedStoredMask`).
    * - `maskFillNone`: a faces hidden masking setting (the Video Remake
    *   Precise setting, read through `tk.settings`) may name
    *   `fill: "none"` (always with `faceMesh: true`): the engine finds the
@@ -5137,6 +5159,8 @@ export interface PluginSupports {
     readonly planRoles?: boolean
     readonly previz?: boolean
     readonly shotLock?: boolean
+    readonly roleFace?: boolean
+    readonly roleFaceStoredMask?: boolean
   }
 }
 

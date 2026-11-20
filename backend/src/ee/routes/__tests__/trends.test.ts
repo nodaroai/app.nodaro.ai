@@ -702,6 +702,23 @@ describe("GET /v1/trends/:slug", () => {
     expect(none.json().data.slots[0]).toEqual({ key: "lead", label: "Lead dancer", kind: "person", required: true, hint: "A clear face", chips: [] })
   })
 
+  it("lists the Face chip, and its default, only while this environment's engine can keep a face", async () => {
+    const [lead, place] = versionData().slots
+    mem.trends[0]!.versions[2] = versionData({
+      slots: [{ ...lead!, defaults: { face: "original" }, chips: ["outfit", "face"] } as TrendSlot, place!],
+    })
+    const without = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(without.json().data.slots[0]).toMatchObject({ chips: ["outfit"] })
+    expect(without.json().data.slots[0]).not.toHaveProperty("defaults")
+    setPluginSupports({ castSwap: { ...CAST_SWAP_ALL, roleKinds: [...CAST_SWAP_ALL.roleKinds], resolutions: [...CAST_SWAP_ALL.resolutions], roleFace: true } })
+    const withFace = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(withFace.json().data.slots[0]).toMatchObject({ chips: ["outfit", "face"], defaults: { face: "original" } })
+    // A slot that lists no chips never offers Face, whatever the engine.
+    mem.trends[0]!.versions[2] = versionData({ slots: [{ ...lead!, chips: undefined } as TrendSlot, place!] })
+    const plain = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })
+    expect(plain.json().data.slots[0].chips).toEqual(["body", "outfit", "hair"])
+  })
+
   it("previewSec is null when the trend offers no preview", async () => {
     mem.trends[0]!.versions[2] = versionData({ previewStart: null })
     const res = await app.inject({ method: "GET", url: "/v1/trends/neon-dance", headers: as() })

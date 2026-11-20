@@ -326,7 +326,7 @@ describe("recordPlatformClaim (the heartbeat's write)", () => {
     expect(db.log).toHaveLength(1)
     expect(db.log[0]!.table).toBe("engine_environments")
     expect(db.log[0]!.ops).toEqual([
-      { m: "update", a: [{ platform_supports: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, pulseReferenceAudio: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true, shotListSpeech: true, previzPromptParts: true }, platform_claimed_at: "2026-11-03T12:00:00.000Z" }] },
+      { m: "update", a: [{ platform_supports: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, pulseReferenceAudio: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true, shotListSpeech: true, previzPromptParts: true, roleFace: true }, platform_claimed_at: "2026-11-03T12:00:00.000Z" }] },
       { m: "eq", a: ["env", "staging"] },
       { m: "select", a: ["env"] },
     ])
@@ -418,7 +418,7 @@ describe("the platform claim's heartbeat", () => {
     expect(withFreshPlatform(env!)).toEqual({
       env: "staging",
       pluginBuildId: "@nodaroai/cloud-plugins@2.0.0",
-      supports: { ...SUPPORTS, platform: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, pulseReferenceAudio: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true, shotListSpeech: true, previzPromptParts: true } },
+      supports: { ...SUPPORTS, platform: { faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, pulseReferenceAudio: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true, shotListSpeech: true, previzPromptParts: true, roleFace: true } },
       updatedAt: "2026-11-03T12:00:00.000Z",
     })
   })
@@ -621,5 +621,13 @@ describe("PLATFORM_SUPPORTS: the Precise art-style route's Filmed fallback", () 
 describe("PLATFORM_SUPPORTS: the shot list's speech", () => {
   it("this platform claims it", () => {
     expect(PLATFORM_SUPPORTS.shotListSpeech).toBe(true)
+  })
+})
+
+// The Face chip (decided 2026-11-20): this build's trend schemas take a person slot's `face` default and its place in
+// `chips`, and its runs send it, and claim so, so a trend may store it once every environment's platform does.
+describe("PLATFORM_SUPPORTS: the Face chip", () => {
+  it("this platform claims it", () => {
+    expect(PLATFORM_SUPPORTS.roleFace).toBe(true)
   })
 })

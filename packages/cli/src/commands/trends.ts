@@ -14,7 +14,7 @@ const RESOLUTIONS: readonly TrendResolution[] = ["480p", "720p", "1080p"]
 const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
 /** `--slot` pictures are split only where a new URL starts, so a URL holding commas stays whole. */
 const URL_SPLIT_RE = /,(?=\s*https?:\/\/)/i
-const CHIPS: ReadonlyArray<keyof TrendChips> = ["body", "outfit", "hair", "coat", "shape", "finish"]
+const CHIPS: ReadonlyArray<keyof TrendChips> = ["body", "outfit", "hair", "face", "coat", "shape", "finish"]
 
 /** The flags `estimate` and `run` share: what goes in the run's body. */
 interface RunFlags {

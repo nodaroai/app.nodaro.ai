@@ -64,13 +64,22 @@ export const SLOT_CAPS: Readonly<Record<TrendSlotKind, number>> = { person: 6, l
 
 /** The chips each slot kind carries (Cast Swap's per-role traits). */
 export const CHIPS_BY_KIND = {
-  person: ["body", "outfit", "hair"],
+  person: ["body", "outfit", "hair", "face"],
   pet: ["body", "coat"],
   product: ["shape", "finish"],
   location: [],
 } as const satisfies Record<TrendSlotKind, readonly string[]>
 
 export type ChipKey = (typeof CHIPS_BY_KIND)[Exclude<TrendSlotKind, "location">][number]
+
+/**
+ * The chips a slot offers only when its `chips` lists them (decided
+ * 2026-11-20): the Face chip came after trends, so a slot that lists no
+ * `chips` ("every chip") keeps offering exactly what it offered before, and a
+ * run of it sends no `face`. Its value is sent only when chosen
+ * (`chipsOf`, compose.ts).
+ */
+export const OPT_IN_CHIPS: readonly ChipKey[] = ["face"]
 
 const SLOT_KEY_RE = /^[a-z0-9_]{1,32}$/
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -135,7 +144,7 @@ function chips<K extends ChipKey>(keys: readonly K[]) {
 
 /**
  * The chips a slot shows to the person: only its kind's own, each once.
- * Absent = all of them; `[]` = none.
+ * Absent = all of them but the opt-in ones (`OPT_IN_CHIPS`); `[]` = none.
  */
 function shown<K extends ChipKey>(keys: readonly [K, ...K[]]) {
   return z.array(z.enum(keys)).refine((list) => new Set(list).size === list.length, "A chip is listed twice in `chips`.")
@@ -502,6 +511,7 @@ const trendRunSlotSchema = z.strictObject({
   body: choice.optional(),
   outfit: choice.optional(),
   hair: choice.optional(),
+  face: choice.optional(),
   coat: choice.optional(),
   shape: choice.optional(),
   finish: choice.optional(),
@@ -545,11 +555,12 @@ export function misplacedChip(
 
 /**
  * The chips a slot shows to the person, in its kind's order: its `chips`, or
- * every chip of its kind when it has none listed. A location shows none.
+ * every chip of its kind but the opt-in ones (`OPT_IN_CHIPS`, the Face chip)
+ * when it has none listed. A location shows none.
  */
 export function shownChips(slot: Pick<TrendSlot, "kind" | "chips">): ChipKey[] {
   const kindChips: readonly ChipKey[] = CHIPS_BY_KIND[slot.kind]
-  if (!slot.chips) return [...kindChips]
+  if (!slot.chips) return kindChips.filter((c) => !OPT_IN_CHIPS.includes(c))
   const listed: readonly string[] = slot.chips
   return kindChips.filter((c) => listed.includes(c))
 }

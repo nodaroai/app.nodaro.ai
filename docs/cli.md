@@ -322,7 +322,7 @@ nodaro trends estimate <slug> --slot <key>=<url>[,<url>] [--slot ...] [--choice 
 #   pictures are split where a new http(s) URL starts, so a URL holding commas stays whole; a slot key is
 #   1-32 of a-z, 0-9 and _, checked before anything is sent);
 #   --choice keeps a trait of the clip (original) or makes it anew from your pictures (new): a person's
-#   body / outfit / hair, a pet's body / coat, a product's shape / finish. --resolution is one the trend offers
+#   body / outfit / hair / face, a pet's body / coat, a product's shape / finish. --resolution is one the trend offers
 #   (`trends get`); default its first: 480p, or 720p on a Nodaro Pulse trend. A run is plain unless you pass
 #   --draft: a 480p draft (Nodaro Prism only) that Full Quality can finish at 1080p. --no-draft is still accepted.
 nodaro trends run <slug> [the estimate flags] [--session <id>] [--idempotency-key <key>] [--json]
