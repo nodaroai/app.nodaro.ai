@@ -90,6 +90,16 @@
  * answers `previz_unavailable` before anything is asked, and so does a
  * deployment that does not accept such a clip (the route's
  * `previz_not_available`). Every other rule of the mode is the route's.
+ *
+ * A 3D previz clip WITH loose reference images: the plan is told the clip is
+ * one (`clipKind: "previz"` and the `previz` options, as the run takes them)
+ * only where the engine plans such a clip's roles
+ * (`castSwap.planRolesPreviz`). Each planned role then comes back as a previz
+ * run's role, its `name` the locator of its model in the clip and its
+ * `subject` what it becomes, and the quote's text says both. An engine that
+ * does not declare it refuses the key on its plan route, so it is not sent:
+ * the roles are planned as an ordinary clip's, as before it, and the run
+ * still states the clip.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -112,7 +122,15 @@ import { hasCredits } from "../../config.js"
 import { RECAST_POINTER, recastOffered } from "./_video-lanes.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
-import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, loadedEngineTakesPreviz } from "../../cast-swap-engines.js"
+import {
+  castSwapLengthKey,
+  loadedEngineRuns,
+  loadedEngineTakesArtStyle,
+  loadedEngineTakesCustomStyle,
+  loadedEngineTakesPlanRoles,
+  loadedEngineTakesPlanRolesPreviz,
+  loadedEngineTakesPreviz,
+} from "../../cast-swap-engines.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
@@ -367,7 +385,11 @@ function plannedRoleArg({ previewName, inPreview, ...role }: PlannedRole): Recor
   }
 }
 
-/** "image 1 replaces the woman on the left (person)": which image each planned role and reference takes, by its number among the images sent. */
+/**
+ * "image 1 replaces the woman on the left (person)": which image each planned role and reference takes, by its number
+ * among the images sent. A 3D previz clip's role says what its model becomes too, where the plan answers it (`subject`):
+ * "image 1 replaces the tall model on the left (person), which becomes the pilot".
+ */
 function plannedSentence(plan: PlannedRoles, sent: readonly string[]): string {
   const numbers = (images: unknown): string => {
     const ns = strings(images).map((url) => sent.indexOf(url) + 1).filter((n) => n > 0)
@@ -375,7 +397,7 @@ function plannedSentence(plan: PlannedRoles, sent: readonly string[]): string {
   }
   const subject = (r: PlannedRole): string => (typeof r.name === "string" && r.name.trim() !== "" ? r.name : `the ${String(r.kind)}`)
   const parts = [
-    ...plan.roles.map((r) => `${numbers(r.images)} replaces ${subject(r)} (${String(r.kind)})`),
+    ...plan.roles.map((r) => `${numbers(r.images)} replaces ${subject(r)} (${String(r.kind)})${typeof r.subject === "string" && r.subject.trim() !== "" ? `, which becomes ${r.subject.trim()}` : ""}`),
     ...plan.references.map((r) => `${numbers(r.images)} is brought in as ${r.line}`),
   ]
   // Every role the engine marked a guess, with what else it could have been: said before the user accepts.
@@ -751,8 +773,13 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
               ...(body.references !== undefined ? { references: body.references } : {}),
               ...(args.preview !== undefined ? { preview: args.preview } : {}),
               ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
+              // A 3D previz clip is stated to the plan only where the engine plans one's roles (any other refuses the
+              // key): the run's own statement and options. Elsewhere the plan is an ordinary clip's, as before.
+              ...(body.clipKind !== undefined && loadedEngineTakesPlanRolesPreviz() ? { clipKind: body.clipKind, ...(body.previz !== undefined ? { previz: body.previz } : {}) } : {}),
             },
           })
+          // A deployment that does not accept a 3D previz clip answers as an engine without the mode does.
+          if (previzNotAvailable(planRes.statusCode, planRes.body)) return PREVIZ_UNAVAILABLE
           if (planRes.statusCode >= 400) {
             // Not offered on this deployment, or (despite the engine's word) no such route.
             if (isRouterNotFound(planRes.statusCode, planRes.body) || /"plan_roles_not_available"/.test(planRes.body)) return PLAN_ROLES_UNAVAILABLE

@@ -10,6 +10,7 @@
  *                                      preciseArtStyleAlone: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      customStyle: { "nodaro-prism": boolean, "nodaro-pulse": false },
  *                                      planRoles: boolean,
+ *                                      planRolesPreviz: boolean,
  *                                      previz: boolean,
  *                                      roleFace: boolean }
  *
@@ -93,6 +94,17 @@
  * that does not declare it, whatever is saved. A client reading a server from
  * before it finds none and treats it as false.
  *
+ * `planRolesPreviz` says whether the roles of a 3D previz clip can be planned
+ * here (`clipKind: "previz"` on `POST /v1/video-remake/plan-roles`: each role
+ * answered with its model's locator and what it becomes): one boolean for the
+ * deployment. True only while this environment's engine declares
+ * `castSwap.planRolesPreviz` (with `planRoles` and `previz`) AND `planRoles`
+ * and `previz` above are both true: it has no switch of its own. So a failed
+ * read answers false, and so does an engine that does not declare it. A
+ * client reading a server from before it finds none and treats it as false:
+ * it then sends no `clipKind` to the plan route (an engine without it refuses
+ * the key, 400 `validation_error`).
+ *
  * `roleFace` says whether a person role may keep its own face from the video
  * (the Face chip, `face: "original"`, decided 2026-11-20): one boolean for the
  * deployment, true only while this environment's engine declares
@@ -110,7 +122,7 @@ import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
 import { engineTakesPreciseArtStyle, engineTakesPreciseArtStyleAlone } from "../../lib/nodaro-motion-precise-art-style.js"
 import { customStyleEnabled, engineTakesCustomStyle } from "../../lib/nodaro-motion-custom-style.js"
 import { customStyleOfferedByDefault } from "../../lib/nodaro-motion-custom-style-default.js"
-import { engineTakesPlanRoles, planRolesEnabled } from "../../lib/nodaro-motion-plan-roles.js"
+import { engineTakesPlanRoles, engineTakesPlanRolesPreviz, planRolesEnabled } from "../../lib/nodaro-motion-plan-roles.js"
 import { planRolesOfferedByDefault } from "../../lib/nodaro-motion-plan-roles-default.js"
 import { engineTakesPreviz, previzEnabled } from "../../lib/nodaro-motion-previz.js"
 import { previzOfferedByDefault } from "../../lib/nodaro-motion-previz-default.js"
@@ -156,6 +168,8 @@ function answer(
   planRoles: boolean,
   previz: boolean,
   roleFace: boolean,
+  /** The engine plans a previz clip's roles (`castSwap.planRolesPreviz`); answered only with `planRoles` and `previz`. */
+  takesPlanRolesPreviz: boolean,
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -164,6 +178,7 @@ function answer(
     preciseArtStyleAlone: withPreviousEngineIds(maps.preciseArtStyleAlone),
     customStyle: withPreviousEngineIds(maps.customStyle),
     planRoles,
+    planRolesPreviz: takesPlanRolesPreviz && planRoles && previz,
     previz,
     roleFace,
   }
@@ -186,7 +201,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const takesPreviz = engineTakesPreviz(castSwap)
   const roleFace = engineTakesRoleFace(castSwap)
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
-  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace)
+  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false)
   // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles and takes no 3D previz clip.
   if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz) {
     return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
@@ -212,6 +227,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
       takesPlanRoles && planRolesEnabled(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault()),
       takesPreviz && previzEnabled(settings.nodaro_motion_previz, previzOfferedByDefault()),
       roleFace,
+      engineTakesPlanRolesPreviz(castSwap),
     ),
   )
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, loadedEngineTakesPreviz, withWireLengthKey } from "../cast-swap-engines.js"
+import { castSwapEnginesOf, castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, loadedEngineTakesPlanRolesPreviz, loadedEngineTakesPreviz, withWireLengthKey } from "../cast-swap-engines.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
 /**
@@ -110,6 +110,25 @@ describe("loadedEngineTakesPreviz", () => {
     expect(loadedEngineTakesPreviz()).toBe(false)
     setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true, previz: true } as never })
     expect(loadedEngineTakesPreviz()).toBe(true)
+  })
+})
+
+describe("loadedEngineTakesPlanRolesPreviz", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it("is true only where the loaded engine declares it (castSwap.planRolesPreviz) and also plans roles and takes a 3D previz clip", () => {
+    const engines = { engines: ["nodaro-prism", "nodaro-pulse"], engineAliases: true }
+    expect(loadedEngineTakesPlanRolesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { ...engines, planRoles: true, previz: true } as never })
+    expect(loadedEngineTakesPlanRolesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { ...engines, planRoles: true, planRolesPreviz: true } as never })
+    expect(loadedEngineTakesPlanRolesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { ...engines, previz: true, planRolesPreviz: true } as never })
+    expect(loadedEngineTakesPlanRolesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { ...engines, planRoles: true, previz: true, planRolesPreviz: false } as never })
+    expect(loadedEngineTakesPlanRolesPreviz()).toBe(false)
+    setPluginSupports({ castSwap: { ...engines, planRoles: true, previz: true, planRolesPreviz: true } as never })
+    expect(loadedEngineTakesPlanRolesPreviz()).toBe(true)
   })
 })
 

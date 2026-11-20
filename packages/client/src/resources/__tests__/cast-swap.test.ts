@@ -718,6 +718,19 @@ describe("roles planned from the prompt", () => {
     expect(JSON.parse(init.body as string)).toEqual(params)
   })
 
+  it("planRoles sends a 3D previz clip's statement and options as given, and answers each role's locator and subject", async () => {
+    const planned: VideoRemakePlannedRoles = { ...PLANNED, roles: [{ kind: "person", name: "the tall model on the left", subject: "the pilot", images: [IMAGES[0]!] }] }
+    const fetchMock = vi.fn().mockReturnValue(mockOk(planned))
+    const client = make(fetchMock)
+    const params: VideoRemakePlanRolesParams = { videoUrl: CLIP, prompt: REQUEST, images: IMAGES, clipKind: "previz", previz: { lighting: true, sound: "generated" } }
+    const got = await client.videoRemake.planRoles(params)
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toEqual(params)
+    expect(got.roles[0]).toEqual({ kind: "person", name: "the tall model on the left", subject: "the pilot", images: [IMAGES[0]] })
+    // A refusal of such a clip is a run's own code.
+    const refused: VideoRemakePlanRolesRefusalCode = "previz_needs_prism"
+    expect(refused).toBe("previz_needs_prism")
+  })
+
   it("the plan goes to estimate and run as it is: its roles after the caller's own, its postPrompt as the run's", async () => {
     const fetchMock = vi
       .fn()
@@ -906,6 +919,18 @@ describe("a 3D previz clip (clipKind, previz, a role's subject)", () => {
     client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, planRoles: true })))
     got = await client.videoRemake.styleChoice()
     expect(got.previz === true).toBe(false)
+  })
+
+  it("styleChoice passes planRolesPreviz through, one boolean; an older server has none", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, planRoles: true, previz: true, planRolesPreviz: true }
+    let client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    let got = await client.videoRemake.styleChoice()
+    const offered: boolean | undefined = got.planRolesPreviz
+    expect(offered).toBe(true)
+
+    client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, planRoles: true, previz: true })))
+    got = await client.videoRemake.styleChoice()
+    expect(got.planRolesPreviz === true).toBe(false)
   })
 })
 

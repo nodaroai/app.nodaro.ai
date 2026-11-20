@@ -22,6 +22,7 @@ import {
   type NodaroMotionEngine,
 } from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
+import { engineTakesPlanRolesPreviz } from "./nodaro-motion-plan-roles.js"
 
 export function castSwapEnginesOf(cs: { readonly engines?: readonly string[] } | undefined): readonly CastSwapEngine[] {
   if (!cs?.engines) return [CAST_SWAP_ENGINE_WHEN_OMITTED]
@@ -80,6 +81,17 @@ export function loadedEngineTakesPlanRoles(): boolean {
  */
 export function loadedEngineTakesPreviz(): boolean {
   return getPluginSupports().castSwap?.previz === true
+}
+
+/**
+ * Whether this process's Cast Swap engine plans the roles of a 3D previz clip
+ * (`clipKind: "previz"` on `POST /v1/video-remake/plan-roles`): it declares
+ * `castSwap.planRolesPreviz`, plans roles and takes such a clip. An older
+ * one's plan route refuses the key (400 `validation_error`), so a caller must
+ * not send it there: the clip's roles are then planned as an ordinary clip's.
+ */
+export function loadedEngineTakesPlanRolesPreviz(): boolean {
+  return engineTakesPlanRolesPreviz(getPluginSupports().castSwap)
 }
 
 /**

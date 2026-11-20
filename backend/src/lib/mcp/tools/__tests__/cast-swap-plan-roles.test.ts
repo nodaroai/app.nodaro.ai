@@ -406,6 +406,87 @@ describe("video_remake with reference_image_urls: an image that could not be pla
   })
 })
 
+describe("video_remake with reference_image_urls on a 3D previz clip", () => {
+  const SUPPORTS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p"], trendRun: true, planRoles: true, previz: true }
+  /** The route's answer for such a clip: each role's name its model's locator, its subject what it becomes. */
+  const PREVIZ_PLAN = {
+    ...PLAN,
+    roles: [
+      { kind: "person", name: "the tall model on the left", subject: "the pilot", images: [ANNA] },
+      // A role the plan found no subject for is answered without one.
+      { kind: "location", name: "the setting", images: [BEACH] },
+    ],
+  }
+  const PREVIZ_ARGS = { ...ARGS, clip_kind: "previz" as const, previz_lighting: true, previz_sound: "generated" as const }
+
+  it("an engine that plans such a clip's roles is told the clip is one, with the run's own options, and the quote says the locator and what it becomes", async () => {
+    setPluginSupports({ castSwap: { ...SUPPORTS, planRolesPreviz: true } as never })
+    const { fastify, calls } = stubFastify(routes(PREVIZ_PLAN))
+    const res = await callTool(serverWith(fastify), "video_remake", PREVIZ_ARGS)
+
+    expect(res.isError).toBeFalsy()
+    expect(urls(calls)).toEqual(["/v1/video-remake/plan-roles", "/v1/video-remake/estimate"])
+    expect(calls[0]!.payload).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: [ANNA, BEACH], clipKind: "previz", previz: { lighting: true, sound: "generated" } })
+    // The quote is the planned run's, the clip stated as before, each role's subject as the plan answered it.
+    expect(calls[1]!.payload).toEqual({ videoUrl: CLIP, roles: PREVIZ_PLAN.roles, postPrompt: "make it rain", clipKind: "previz", previz: { lighting: true, sound: "generated" } })
+    expect(res.content[0]!.text).toContain("Planned from the prompt: image 1 replaces the tall model on the left (person), which becomes the pilot; image 2 replaces the setting (location).")
+    // The arguments to confirm with carry the subject and the clip's statement, and run the body that was quoted.
+    const again = (res.structuredContent as { arguments: Record<string, unknown> }).arguments
+    expect(again).toMatchObject({ roles: PREVIZ_PLAN.roles, clip_kind: "previz", previz_lighting: true, previz_sound: "generated", confirm: true })
+    const run = stubFastify(routes(PREVIZ_PLAN))
+    await callTool(serverWith(run.fastify), "video_remake", again)
+    expect(urls(run.calls)).toEqual(["/v1/video-remake"])
+    expect(run.calls[0]!.payload).toEqual(calls[1]!.payload)
+  })
+
+  it("with no option given, the plan is sent the statement alone", async () => {
+    setPluginSupports({ castSwap: { ...SUPPORTS, planRolesPreviz: true } as never })
+    const { fastify, calls } = stubFastify(routes(PREVIZ_PLAN))
+    await callTool(serverWith(fastify), "video_remake", { ...ARGS, clip_kind: "previz" })
+    expect(calls[0]!.payload).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: [ANNA, BEACH], clipKind: "previz" })
+  })
+
+  it("an engine that does not declare it is never sent the statement on its plan route: planned as an ordinary clip's, the run still states the clip", async () => {
+    for (const castSwap of [SUPPORTS, { ...SUPPORTS, planRolesPreviz: false }]) {
+      setPluginSupports({ castSwap: castSwap as never })
+      const { fastify, calls } = stubFastify(routes())
+      const res = await callTool(serverWith(fastify), "video_remake", PREVIZ_ARGS)
+      expect(res.isError, JSON.stringify(castSwap)).toBeFalsy()
+      expect(calls[0]!.payload).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: [ANNA, BEACH] })
+      expect(calls[1]!.payload).toEqual({ videoUrl: CLIP, roles: PLAN.roles, postPrompt: "make it rain", clipKind: "previz", previz: { lighting: true, sound: "generated" } })
+      // No role has a subject: the sentence is the one of before.
+      expect(res.content[0]!.text).toContain("Planned from the prompt: image 1 replaces the woman in the red scarf on the left (person); image 2 replaces the living room (location).")
+    }
+  })
+
+  it("an ordinary clip's plan is never sent the statement, on an engine that declares it too", async () => {
+    setPluginSupports({ castSwap: { ...SUPPORTS, planRolesPreviz: true } as never })
+    for (const over of [{}, { clip_kind: "footage" }]) {
+      const { fastify, calls } = stubFastify(routes())
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, ...over })
+      expect(calls[0]!.payload).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: [ANNA, BEACH] })
+    }
+  })
+
+  it("a deployment that does not accept such a clip (the plan's 403) answers previz_unavailable, and nothing is quoted", async () => {
+    setPluginSupports({ castSwap: { ...SUPPORTS, planRolesPreviz: true } as never })
+    const { fastify, calls } = stubFastify(routes({ error: { code: "previz_not_available", message: "A 3D previz clip is not available here." } }, 403))
+    const res = await callTool(serverWith(fastify), "video_remake", PREVIZ_ARGS)
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("[previz_unavailable]")
+    expect(urls(calls)).toEqual(["/v1/video-remake/plan-roles"])
+  })
+
+  it("any other refusal of such a plan is the route's own, relayed", async () => {
+    setPluginSupports({ castSwap: { ...SUPPORTS, planRolesPreviz: true } as never })
+    const { fastify, calls } = stubFastify(routes({ error: { code: "previz_needs_prism", message: "A 3D previz clip runs on Nodaro Prism only." } }, 400))
+    const res = await callTool(serverWith(fastify), "video_remake", PREVIZ_ARGS)
+    expect(res.isError).toBe(true)
+    expect(res.content[0]!.text).toContain("Nodaro Prism only")
+    expect(urls(calls)).toEqual(["/v1/video-remake/plan-roles"])
+  })
+})
+
 describe("video_remake with reference_image_urls where roles are not planned", () => {
   const UNAVAILABLE = "Nodaro: roles cannot be planned from reference images on this deployment. Set the roles yourself (roles), each with its images. [plan_roles_unavailable]"
 
