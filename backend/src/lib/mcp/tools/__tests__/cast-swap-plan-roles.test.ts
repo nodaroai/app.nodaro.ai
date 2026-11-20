@@ -18,8 +18,10 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
  *    (`quote_first`);
  *  - the prompt may be silent about an image, or missing: the images alone are
  *    planned, and where the engine says how each role was decided
- *    (`decisions`) the quote names every GUESSED role and its alternatives; an
- *    engine that says nothing of it is read as before;
+ *    (`decisions`) the quote names every GUESSED role and its alternatives,
+ *    and every role the prompt asked for whose words were not found in it
+ *    (they stay in the planned post_prompt); an engine that says nothing of it
+ *    is read as before;
  *  - an image the plan could not place is asked about, never guessed: a
  *    non-error `needs_clarification` with no price and nothing started; with
  *    nothing planned at all, `roles_not_planned`;
@@ -290,12 +292,63 @@ describe("video_remake with reference_image_urls: how each role was decided", ()
     expect(text).not.toMatch(/GUESSED[^.]*image 1/)
   })
 
+  it("a role the prompt asked for whose words were found in it gets no note", async () => {
+    const { fastify } = stubFastify(routes({ ...PLAN, decisions: [{ role: 0, basis: "request", evidence: "put the first photo in place of the woman on the left" }, { role: 1, basis: "request", evidence: "use the second as the room" }] }))
+    const text = (await callTool(serverWith(fastify), "video_remake", ARGS)).content[0]!.text
+    expect(text).not.toContain("ASKED FOR")
+    expect(text).not.toContain("GUESSED")
+  })
+
+  it("a role the prompt asked for with no words found (none, or empty) is named: its words stay in post_prompt", async () => {
+    for (const evidence of [undefined, ""]) {
+      const decisions = [{ role: 0, basis: "request", evidence: "put the first photo in place of the woman on the left" }, { role: 1, basis: "request", ...(evidence !== undefined ? { evidence } : {}) }]
+      // Its words were not found, so nothing of it was taken out of the prompt.
+      const plan = { ...PLAN, postPrompt: "use the second as the room, make it rain", removed: [PLAN.removed[0]], decisions }
+      const { fastify } = stubFastify(routes(plan))
+      const res = await callTool(serverWith(fastify), "video_remake", ARGS)
+      const text = res.content[0]!.text
+      expect(text).toContain("ASKED FOR in the prompt, but its words could not be matched there, so they stay in post_prompt: image 2 for the living room. Tell the user.")
+      expect(text).not.toMatch(/ASKED FOR[^.]*image 1/)
+      expect(text).not.toContain("GUESSED")
+      // The decisions say the same, in the shape they already had.
+      expect((res.structuredContent as { planned: { decisions: unknown[] } }).planned.decisions[1]).toEqual({ role: 1, basis: "request" })
+    }
+  })
+
+  it("with no planned post_prompt the note does not say the words stay in it", async () => {
+    for (const postPrompt of ["", "  "]) {
+      const decisions = [{ role: 0, basis: "request", evidence: "put the first photo in place of the woman on the left" }, { role: 1, basis: "request" }]
+      const { fastify } = stubFastify(routes({ ...PLAN, postPrompt, decisions }))
+      const res = await callTool(serverWith(fastify), "video_remake", ARGS)
+      const text = res.content[0]!.text
+      expect(text).toContain("ASKED FOR in the prompt, but its words could not be matched there: image 2 for the living room. Tell the user.")
+      expect(text).not.toContain("stay in post_prompt")
+      expect((res.structuredContent as { arguments: Record<string, unknown> }).arguments).not.toHaveProperty("post_prompt")
+    }
+  })
+
+  it("a role asked for with no words found that is also a guess is said as a guess only", async () => {
+    const decisions = [{ role: 0, basis: "request", evidence: "put the first photo in place of the woman on the left" }, { role: 1, basis: "request", confidence: "guess", alternatives: ["the kitchen"] }]
+    const { fastify } = stubFastify(routes({ ...PLAN, decisions }))
+    const text = (await callTool(serverWith(fastify), "video_remake", ARGS)).content[0]!.text
+    expect(text).toContain("GUESSED, not said in the prompt: image 2 for the living room (it could also be: the kitchen). Tell the user and let them correct it before confirming.")
+    expect(text).not.toContain("ASKED FOR")
+  })
+
+  it("an inferred guess keeps its own note and gets no other", async () => {
+    const { fastify } = stubFastify(routes({ ...PLAN, decisions: DECISIONS }))
+    const text = (await callTool(serverWith(fastify), "video_remake", ARGS)).content[0]!.text
+    expect(text).toContain("GUESSED, not said in the prompt: image 1 for the woman in the red scarf on the left (it could also be: the woman by the window; the woman at the door). Tell the user and let them correct it before confirming.")
+    expect(text).not.toContain("ASKED FOR")
+  })
+
   it("an engine that says nothing of it, or whose list does not line up with the roles, is read as before: no guess is claimed", async () => {
     for (const decisions of [undefined, [], [{ confidence: "guess" }], "none", [null, null, null]]) {
       const { fastify } = stubFastify(routes({ ...PLAN, ...(decisions !== undefined ? { decisions } : {}) }))
       const res = await callTool(serverWith(fastify), "video_remake", ARGS)
       expect(res.isError, JSON.stringify(decisions)).toBeFalsy()
       expect(res.content[0]!.text).not.toContain("GUESSED")
+      expect(res.content[0]!.text).not.toContain("ASKED FOR")
       expect((res.structuredContent as { planned: Record<string, unknown> }).planned).not.toHaveProperty("decisions")
     }
   })
