@@ -9,7 +9,11 @@ import Fastify, { type FastifyInstance } from "fastify"
 //    itself is refused as before;
 //  - nothing a caller can send claims the step: a body field, a header, an
 //    internal hop that is not the plugin toolkit's, another user's job, a job
-//    that is no Video Remake run.
+//    that is no Video Remake run;
+//  - the watermark the guard decides for each job: a run's helper clips and
+//    pictures (a depth map, a mask, a prepared reference) are stored unmarked
+//    on every account, the job that makes the delivered video keeps the
+//    account's rule, and the same helper routes asked directly keep it too.
 // The routes here stand in for /v1/generate-video and /v1/video-upscale: each
 // runs the guard under the id, and with the video request, its route gives it.
 // ---------------------------------------------------------------------------
@@ -116,9 +120,10 @@ beforeEach(async () => {
       req.userId = USER
     }
   })
-  const admitted = async (_req: unknown, reply: import("fastify").FastifyReply) => {
+  // The watermark the guard decided: what the reservation writes on the job (`should_watermark`).
+  const admitted = async (req: import("fastify").FastifyRequest, reply: import("fastify").FastifyReply) => {
     started()
-    return reply.status(202).send({ jobId: "child-1" })
+    return reply.status(202).send({ jobId: "child-1", watermark: req.creditReservation?.watermark })
   }
   // As /v1/generate-video: the reserved id and the video request are the body's own model, length and resolution.
   app.post("/v1/generate-video", {
@@ -132,6 +137,8 @@ beforeEach(async () => {
   app.post("/v1/video-upscale", {
     preHandler: creditGuard(() => "seedance-2-5-hd:8s", { computeCredits: () => 100 }),
   }, admitted)
+  // A run's helper routes, each under its own (non-video-model) id.
+  for (const url of HELPERS) app.post(url, { preHandler: creditGuard(() => "helper-step", { computeCredits: () => 10 }) }, admitted)
   await app.ready()
 })
 
@@ -139,6 +146,7 @@ afterEach(async () => {
   await app.close()
 })
 
+const HELPERS = ["/v1/video-depth", "/v1/video-mask", "/v1/mask-composite", "/v1/mask-erase", "/v1/mask-outline", "/v1/video-face-mesh", "/v1/generate-image"] as const
 const GENERATE = "/v1/generate-video"
 const UPSCALE = "/v1/video-upscale"
 const PRISM = { provider: "seedance-2-5", prompt: "p", duration: 8, resolution: "720p", referenceVideoUrls: ["https://cdn.example.com/clip.mp4"] }
@@ -256,5 +264,93 @@ describe("an account that paid", () => {
     expect((await direct(UPSCALE, FINALIZE)).statusCode).toBe(202)
     expect((await child(GENERATE, PULSE)).statusCode).toBe(202)
     expect((await child(UPSCALE, FINALIZE)).statusCode).toBe(202)
+  })
+})
+
+describe("the watermark of a Video Remake run's own jobs", () => {
+  const markOf = (res: { statusCode: number; json: () => { watermark?: boolean } }): boolean | undefined => {
+    expect(res.statusCode).toBe(202)
+    return res.json().watermark
+  }
+  const HELPER_BODY = { videoUrl: "https://cdn.example.com/clip.mp4" }
+
+  describe("on an account that never paid", () => {
+    beforeEach(() => profile(false))
+
+    it.each(HELPERS)("stores the helper job of %s unmarked", async (url) => {
+      parent(remakeRun())
+      expect(markOf(await child(url, HELPER_BODY))).toBe(false)
+    })
+
+    it("stores a Full Quality job's helper unmarked too", async () => {
+      parent(remakeRun({ job_type: "cast-swap-full-quality" }))
+      expect(markOf(await child("/v1/video-depth", HELPER_BODY))).toBe(false)
+    })
+
+    it.each([
+      ["a Prism run's take", GENERATE, PRISM, "cast-swap"],
+      ["a 4 s preview's take", GENERATE, PREVIEW, "cast-swap"],
+      ["a Pulse run's take", GENERATE, PULSE, "cast-swap"],
+      ["a Full Quality finalize", UPSCALE, FINALIZE, "cast-swap-full-quality"],
+      ["a Full Quality new take", GENERATE, PULSE, "cast-swap-full-quality"],
+    ])("still marks %s, the video the run delivers", async (_name, url, body, type) => {
+      parent(remakeRun({ job_type: type }))
+      expect(markOf(await child(url, body))).toBe(true)
+    })
+
+    it("still marks a result route reached with a query string", async () => {
+      parent(remakeRun())
+      const url = `${GENERATE}?x=1`
+      const res = await withJobSubmissionContext({ userId: USER, method: "POST", url, parentJobId: PARENT, trustedPluginCaller: true }, () =>
+        app.inject({ method: "POST", url, payload: PRISM, headers: internal() }))
+      expect(markOf(res)).toBe(true)
+    })
+
+    it.each(HELPERS)("still marks %s asked directly", async (url) => {
+      parent(remakeRun())
+      expect(markOf(await direct(url, HELPER_BODY))).toBe(true)
+    })
+
+    it("still marks a helper route whose caller names the parent or the kind itself", async () => {
+      parent(remakeRun())
+      const claims = { parentJobId: PARENT, parent_job_id: PARENT, trustedPluginCaller: true, watermark: false, shouldWatermark: false, helper: true, videoRemakeStep: "helper" }
+      expect(markOf(await direct("/v1/video-depth", { ...HELPER_BODY, ...claims }))).toBe(true)
+      expect(markOf(await direct("/v1/video-depth", HELPER_BODY, { "x-parent-job-id": PARENT, "x-video-remake-step": "helper", "x-internal-user-id": USER, "x-internal-orchestrator-secret": "a-guess" }))).toBe(true)
+    })
+
+    it("still marks a helper route on an internal request that is not a Video Remake job's own", async () => {
+      parent(remakeRun())
+      // The secret alone.
+      expect(markOf(await direct("/v1/video-depth", HELPER_BODY, internal()))).toBe(true)
+      // A parent named by a scope that is not the toolkit's.
+      expect(markOf(await child("/v1/video-depth", HELPER_BODY, { parentJobId: PARENT }))).toBe(true)
+      // The toolkit's request with no parent job.
+      expect(markOf(await child("/v1/video-depth", HELPER_BODY, { trustedPluginCaller: true }))).toBe(true)
+    })
+
+    it.each([
+      ["another user's Video Remake run", remakeRun({ user_id: OTHER_USER })],
+      ["a job that is no Video Remake run", remakeRun({ job_type: "generate-video-pro", input_data: { type: "generate-video-pro" } })],
+      ["a trend's face-mask make", remakeRun({ job_type: "cast-swap-face-mask", input_data: { type: "cast-swap-face-mask" } })],
+      ["a job that does not exist", null],
+    ])("still marks a helper whose parent is %s", async (_name, row) => {
+      parent(row)
+      expect(markOf(await child("/v1/video-depth", HELPER_BODY))).toBe(true)
+    })
+
+    it("still marks a helper when the parent cannot be read", async () => {
+      parent(null, { message: "unavailable" })
+      expect(markOf(await child("/v1/video-mask", HELPER_BODY))).toBe(true)
+    })
+  })
+
+  it("leaves an account that paid unmarked on every path, as before", async () => {
+    profile(true)
+    parent(remakeRun())
+    expect(markOf(await direct("/v1/video-depth", HELPER_BODY))).toBe(false)
+    expect(markOf(await child("/v1/video-depth", HELPER_BODY))).toBe(false)
+    expect(markOf(await direct(GENERATE, PRISM))).toBe(false)
+    expect(markOf(await child(GENERATE, PRISM))).toBe(false)
+    expect(markOf(await child(UPSCALE, FINALIZE))).toBe(false)
   })
 })

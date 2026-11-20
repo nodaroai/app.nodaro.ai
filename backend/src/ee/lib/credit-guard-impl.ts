@@ -12,7 +12,7 @@ import type { CreditReservation, StorageSnapshot, CreditGuardOpts, PayerAffordab
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { isWebFreeModeCandidate, sendSubscriptionRequired, SUBSCRIPTION_REQUIRED_BODY } from "./payg-surface-guard.js"
 import { freeVideoRequestOf, readsVideoBody } from "../billing/free-video-limits.js"
-import { isVideoRemakeVideoStep } from "./video-remake-child.js"
+import { videoRemakeStepOf } from "./video-remake-child.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
@@ -439,7 +439,8 @@ export function creditGuardImpl(
     try {
       // A Video Remake job's own video step runs on every account: the
       // free-credit video limits are not asked of it (video-remake-child.ts).
-      const freeVideoLimitsLifted = await isVideoRemakeVideoStep(req)
+      const videoRemakeStep = await videoRemakeStepOf(req)
+      const freeVideoLimitsLifted = videoRemakeStep !== null
       const checkModel = (identifier: string) => CreditsService.checkCreditsWithProfile(
         userId,
         profile as CreditProfile,
@@ -515,7 +516,11 @@ export function creditGuardImpl(
       const reservation: CreditReservation = {
         usageLogId: "",
         creditsReserved: 0,
-        watermark: creditCheck.watermark ?? false,
+        // A Video Remake run's helper clip or picture (a depth map, a mask, a
+        // prepared reference) is what the video model is sent, never a result:
+        // stored unmarked on every account. The job that makes the delivered
+        // video keeps the account's rule (video-remake-child.ts).
+        watermark: videoRemakeStep === "helper" ? false : (creditCheck.watermark ?? false),
         // A batch total is never an override: every job of the batch would
         // reserve the whole batch. Each prices its own identifier instead.
         creditOverride: batchIds ? undefined : computedCreditOverride,

@@ -124,6 +124,10 @@ Until an account buys anything, its video runs within these limits:
   credits to cover its quote. Calling the same video models yourself (Generate
   Video, Video Upscale, the API's `/v1/generate-video` and
   `/v1/video-upscale`) stays within the limits.
+  The video a Video Remake run delivers is watermarked like any other free
+  tier result. The clips and pictures the run prepares for itself along the
+  way (a depth map, a mask, a reference picture) are never results and carry
+  no watermark; the same tools run on their own are watermarked as usual.
 
 A run outside these limits is refused before anything is charged, with a
 message naming the limit (HTTP 402, error code `free_video_limit`). A real

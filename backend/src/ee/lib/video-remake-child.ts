@@ -27,7 +27,8 @@ import { trustedPluginParentJobId } from "../../lib/job-submission-context.js"
  */
 const VIDEO_REMAKE_JOB_TYPES: ReadonlySet<string> = new Set(["cast-swap", "cast-swap-full-quality"])
 
-export async function isVideoRemakeVideoStep(req: FastifyRequest): Promise<boolean> {
+/** Whether the job this request names as its parent, through the plugin toolkit, is the caller's own Video Remake run. */
+async function hasVideoRemakeParent(req: FastifyRequest): Promise<boolean> {
   const parentJobId = trustedPluginParentJobId(req)
   if (parentJobId === undefined || !req.userId) return false
   try {
@@ -48,4 +49,37 @@ export async function isVideoRemakeVideoStep(req: FastifyRequest): Promise<boole
   } catch {
     return false
   }
+}
+
+/**
+ * The routes whose job makes the video a Video Remake run DELIVERS: the take
+ * on the engine's model, and a draft's Full Quality (its 1080p finalize, or a
+ * new take). What such a job stores is the result the person gets, so it
+ * follows the account's watermark rule like any other result.
+ */
+const RESULT_ROUTES: ReadonlySet<string> = new Set(["/v1/generate-video", "/v1/video-upscale"])
+
+/**
+ * What a request is to a Video Remake run, or null when it is no step of one
+ * (the two checks above). Either kind has the free-credit video limits lifted;
+ * they differ in the watermark:
+ *
+ *  - `"result"`: the job that makes the video the run delivers;
+ *  - `"helper"`: any other job the run makes for itself (a depth map, a mask,
+ *    a prepared reference picture). Its output is never shown or delivered:
+ *    it is what the video model is SENT, so the guard stores it without the
+ *    free tier's watermark, which the model would otherwise read as part of
+ *    the picture.
+ *
+ * The route is the one the server matched (its registered path), never a
+ * header or a body field: a caller cannot name its request a helper. A route
+ * not listed as a result is a helper only under a verified Video Remake
+ * parent; everywhere else the watermark rule is asked as before.
+ */
+export type VideoRemakeStep = "result" | "helper"
+
+export async function videoRemakeStepOf(req: FastifyRequest): Promise<VideoRemakeStep | null> {
+  if (!(await hasVideoRemakeParent(req))) return null
+  const route = req.routeOptions?.url ?? (req.url.split("?")[0] ?? "")
+  return RESULT_ROUTES.has(route) ? "result" : "helper"
 }
