@@ -117,6 +117,13 @@ Until an account buys anything, its video runs within these limits:
   available, and an "Auto" length is not accepted. Name the resolution: a
   request that leaves it out is refused, because the model would render its
   own default.
+- **Video Remake is not limited.** A Video Remake run (either engine, a
+  preview or the whole clip), a draft's Full Quality and a trend run work on
+  free credits like on any account: the limits above are not applied to the
+  video a Video Remake run makes for itself. The run still needs enough
+  credits to cover its quote. Calling the same video models yourself (Generate
+  Video, Video Upscale, the API's `/v1/generate-video` and
+  `/v1/video-upscale`) stays within the limits.
 
 A run outside these limits is refused before anything is charged, with a
 message naming the limit (HTTP 402, error code `free_video_limit`). A real

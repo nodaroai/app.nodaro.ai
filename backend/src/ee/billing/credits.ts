@@ -509,6 +509,13 @@ export interface CreditCheckSurface {
    * allowance or a day's spend, which the pack's own charge was held to.
    */
   covered?: boolean
+  /**
+   * The run is the video step of a Video Remake job (`video-remake-child.ts`,
+   * verified by the guard): the free-credit video limits are not asked of it.
+   * Everything else is, as for any run: the admin's switch, the tier
+   * restriction, the balance, the day's spend.
+   */
+  freeVideoLimitsLifted?: boolean
 }
 
 export interface CreditCheckResult {
@@ -4379,7 +4386,9 @@ export class CreditsService {
     // parameters is judged in full; otherwise only the reserved model id's
     // model-level locks apply (a lane that names no `provider`, e.g. the
     // upscale route's default Topaz, is still seen).
-    if (isFree && userTier === "free") {
+    // A Video Remake job's own video step is not limited (`freeVideoLimitsLifted`):
+    // the run is open to every account, and its price is its own gate.
+    if (isFree && userTier === "free" && surface?.freeVideoLimitsLifted !== true) {
       const limits = await getFreeVideoLimits()
       const base = modelIdentifier.split(":")[0] ?? ""
       const refusal = surface?.video

@@ -6205,7 +6205,7 @@ Refusals, all before anything is charged (bodies are
 | `400` | `prompt_style_not_allowed` | The body sends `promptStyle`: only the Nodaro platform itself may. A run's wording follows its `style`. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. An account that never bought anything is not refused for that: the [free-credit video limits](features/free-credits.md#video-on-free-credits) do not apply to a Video Remake run or its Full Quality. |
 | `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/video-remake` only). |
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/video-remake` only). |
 | `503` | `host_too_old` | This platform version cannot run Video Remake (both routes). |

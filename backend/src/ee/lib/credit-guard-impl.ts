@@ -12,6 +12,7 @@ import type { CreditReservation, StorageSnapshot, CreditGuardOpts, PayerAffordab
 import { resolveEffectiveTier } from "@nodaro/shared/credits"
 import { isWebFreeModeCandidate, sendSubscriptionRequired, SUBSCRIPTION_REQUIRED_BODY } from "./payg-surface-guard.js"
 import { freeVideoRequestOf, readsVideoBody } from "../billing/free-video-limits.js"
+import { isVideoRemakeVideoStep } from "./video-remake-child.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 import { payerProfileId } from "../billing/org-entitlements.js"
 import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
@@ -436,6 +437,9 @@ export function creditGuardImpl(
 
     // Step 2: credit check
     try {
+      // A Video Remake job's own video step runs on every account: the
+      // free-credit video limits are not asked of it (video-remake-child.ts).
+      const freeVideoLimitsLifted = await isVideoRemakeVideoStep(req)
       const checkModel = (identifier: string) => CreditsService.checkCreditsWithProfile(
         userId,
         profile as CreditProfile,
@@ -457,6 +461,7 @@ export function creditGuardImpl(
           // only where the route RESERVES a video model: a text route that
           // merely names a target video model (Prompt Helper) is not a run.
           video: req.freeVideoRequest ?? (readsVideoBody(identifier.split(":")[0] ?? "") ? freeVideoRequestOf(req.body as Record<string, unknown> | undefined) : undefined),
+          ...(freeVideoLimitsLifted ? { freeVideoLimitsLifted: true } : {}),
         },
       )
       // A batch asks once per DISTINCT model, each against the whole batch's
