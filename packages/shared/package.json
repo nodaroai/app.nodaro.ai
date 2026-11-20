@@ -50,6 +50,11 @@
       "import": "./dist/entries/entities.js",
       "require": "./dist/entries/entities.cjs"
     },
+    "./free-video-limits": {
+      "types": "./dist/entries/free-video-limits.d.ts",
+      "import": "./dist/entries/free-video-limits.js",
+      "require": "./dist/entries/free-video-limits.cjs"
+    },
     "./i18n": {
       "types": "./dist/entries/i18n.d.ts",
       "import": "./dist/entries/i18n.js",

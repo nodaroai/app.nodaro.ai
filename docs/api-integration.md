@@ -4621,7 +4621,7 @@ are not registered and return 404.
 | Method | Path | Query | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier, effectiveTier }`. `total = subscription + topup`. `effectiveTier` is the entitlement tier actually enforced — `"payg"` = no subscription but purchased credits (all models unlocked, no watermark, no daily cap). On a deployment-payer instance this is the caller's own pool, which does not fund their runs — read the allowance below instead; `tier` and `effectiveTier` there are the deployment's plan, the billing account's grade (a pay-as-you-go billing account reads `free` / `payg`). |
-| `GET` | `/v1/user/credits` | — | The fuller balance payload. On a deployment-payer instance `tier`, `effectiveTier` and `features` report the deployment's plan (the billing account's grade, `tier` in its stored form), `dailyLimit` is `null` (no daily cap applies there), and it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Where the deployment names its unit per interface language it also carries `unitLabels` (locale id → word): show the entry for your interface language, else `unit`. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
+| `GET` | `/v1/user/credits` | — | The fuller balance payload. It carries `freeVideoLimits: { enabled, maxSeconds }` only while the free-credit video limits apply to the account (it never paid, and the deployment has them on): lock the video options they refuse with `@nodaro/shared/free-video-limits` ([Free credits § Video on free credits](./features/free-credits.md#video-on-free-credits)); absent, nothing is locked. On a deployment-payer instance `tier`, `effectiveTier` and `features` report the deployment's plan (the billing account's grade, `tier` in its stored form), `dailyLimit` is `null` (no daily cap applies there), and it adds `allowance: { granted, remaining, enforced } \| null` — the caller's per-user allowance in credits, `enforced` telling you whether the deployment refuses runs beyond it (`false` = shown, not enforced). `null` for the billing account itself (it holds the real pool) or when the figure could not be read; never treat `null` as zero. On a deployment that shows its own unit instead of credits it also carries `display`: the same figures converted by the server, `{ unit, decimals, total, subscription, topup, dailySpent, dailyLimit, monthlyAllocation, appCreditsAllowance }` plus `allowance: { granted, remaining }`, `externalWallet: { available }` and `welcomeOffer: { credits }` exactly when the raw keys are present. `unit` is the unit's label and `decimals` the places its figures carry; render them as they are and never convert credits yourself (`null` = unavailable). Where the deployment names its unit per interface language it also carries `unitLabels` (locale id → word): show the entry for your interface language, else `unit`. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). Every raw field is unchanged. |
 | `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
 | `GET` | `/v1/credits/usage-summary` | `from` / `to` (an ISO timestamp, or a date alone — `2026-10-01` is that whole UTC day; inclusive; default the last 30 days up to now; at most a year apart, else `400`), `bucket` (`day`, `week` or `month`; default `day`) | The period's usage summed for a billing screen: `{ data: UsageSummary }`. On a deployment-payer instance the billing account's own session only (`403 payer_balance_jwt_only` to its tokens). |
 
@@ -5001,7 +5001,9 @@ account's runs. The shape, with placeholders for the figures:
 {
   "data": [
     { "id": "free", "name": "Free", "prices": null,
-      "signupCredits": <credits>, "parallelism": <n>, "storageBytes": <bytes> },
+      "signupCredits": <credits>,
+      "freeVideoLimits": { "enabled": <boolean>, "maxSeconds": <seconds> },
+      "parallelism": <n>, "storageBytes": <bytes> },
     { "id": "basic", "name": "Basic",
       "prices": {
         "monthly": { "amount": <amount>, "currency": "USD",
@@ -5009,7 +5011,8 @@ account's runs. The shape, with placeholders for the figures:
         "yearly":  { "amount": <amount>, "currency": "USD", "perMonth": <amount>,
                      "credits": { "amount": <credits>, "per": "month" } }
       },
-      "signupCredits": null, "parallelism": <n>, "storageBytes": <bytes> },
+      "signupCredits": null, "freeVideoLimits": null,
+      "parallelism": <n>, "storageBytes": <bytes> },
     …
   ],
   "topUps": [
@@ -5027,6 +5030,7 @@ account's runs. The shape, with placeholders for the figures:
 | `prices` | `null` for the free plan. Otherwise `monthly` and `yearly`: `amount` in the currency's major unit, `currency` an ISO-4217 code, and `yearly.perMonth` the yearly amount spread over its months. A price Stripe cannot sell right now (it could not be read, or it is archived) is `null` — show it as unavailable, never as free. |
 | `prices.*.credits` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does; unused subscription credits expire at each monthly reset, and top-up credits are untouched. `null` when the price does not state it. |
 | `signupCredits` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `freeVideoLimits` | The free plan's video limits: what an account that never paid may generate as video ([Free credits § Video on free credits](./features/free-credits.md#video-on-free-credits)). `{ enabled, maxSeconds }`; `enabled: false` means no limits. `null` on a paid plan, since any payment lifts them. Readable signed out, so a page can lock the same options before sign-in; once signed in, `GET /v1/user/credits` says whether they apply to that account. |
 | `parallelism` | How many nodes of one workflow run at once. |
 | `storageBytes` | Storage for your media, in bytes. |
 | `topUps` | The credit packs, `{ id, credits, price }`, smallest first. Top-up credits are valid for 12 months. `price` is `null` when it cannot be stated right now. |

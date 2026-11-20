@@ -54,7 +54,7 @@ import { describeToPickerModel, structuredOutputModel, structuredVisionModel } f
 import { PROVIDER_NODE_CATEGORY_MODELS, validProviderSelection } from "./provider-node-categories"
 import { llmFeatureDefaultModel, motionTransferModelOf } from "./provider-model"
 import { EDIT_IMAGE_DEFAULT_PROVIDER, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, MOTION_TRANSFER_DEFAULT_PROVIDER } from "./node-default-models"
-import type { FreeVideoModelLockOptions } from "./free-video-limits"
+import type { FreeVideoModelLockOptions } from "@nodaro/shared/free-video-limits"
 
 type Data = Readonly<Record<string, unknown>>
 

@@ -1,29 +1,34 @@
 /**
- * What an account that never paid may generate as video (owner decisions
- * 2026-10-14, after a signup farm spent a whole free grant on two 1080p Kling
- * clips). One rule, run by the backend (the credit preflight refuses with it,
- * before anything is reserved) and by the editor (it locks the options it
- * would refuse, with the reason), so the two can never disagree:
+ * What an account that never paid may generate as video on free credits. One
+ * rule, run by the server (its credit check refuses a request with it — HTTP
+ * 402, error code `free_video_limit` — before anything is reserved) and by any
+ * client that locks the options the server would refuse, with the reason, so
+ * the two can never disagree:
  *
  *   1. No Kling (any model of the catalog's Kling series, except the ids in
- *      `FREE_OPEN_VIDEO_MODELS` — Kling 4.0 Flash, decided 2026-11-11), no
- *      Seedance 2.5 (and every `seedance-2-5-…` variant: its HD finalizer and
- *      its extend; except the ids in `FREE_OPEN_VIDEO_MODELS` — Seedance 2.5
- *      Flash, decided 2026-11-16), no video upscaling (any
- *      `video-upscale` model), no video extension (any `extend` model, or any
- *      request marked `extend` — an Extend Video run on a model that extends
- *      under its generation id).
+ *      `FREE_OPEN_VIDEO_MODELS`), no Seedance 2.5 (and every `seedance-2-5-…`
+ *      variant: its HD finalizer and its extend; except the ids in
+ *      `FREE_OPEN_VIDEO_MODELS`), no video upscaling (any `video-upscale`
+ *      model), no video extension (any `extend` model, or any request marked
+ *      `extend` — an Extend Video run on a model that extends under its
+ *      generation id).
  *   2. Every other video GENERATION model (an i2v / t2v mode) runs only at its
  *      lowest resolution and at most `maxSeconds` long; a model whose shortest
  *      clip is longer is unavailable, and "Auto" length is refused (it reserves
  *      the longest clip).
  *
+ * The limits themselves (`FreeVideoLimits`: on or off, and `maxSeconds`) are
+ * the deployment's own settings. A signed-in account reads them from
+ * `GET /v1/user/credits` (`freeVideoLimits`, present only while they apply to
+ * it); before sign-in, the free plan of `GET /v1/billing/plans` carries them.
+ *
  * Judged from the catalog, never from a list of ids: a new Kling SKU or a new
  * generation model is covered the day it is added. The answer is STRUCTURED
  * (`FreeVideoLock`), so each side words it in its own language.
  */
-import { MODEL_CATALOG, isAutoVideoDuration, type ModelCatalogEntry } from "@nodaro/shared/model-catalog"
-import { PRICING_DEFAULT_RESOLUTION, VIDEO_MODE_ALIASES, videoDefaultDurationSec } from "@nodaro/shared/models"
+import { MODEL_CATALOG, type ModelCatalogEntry } from "./model-catalog.js"
+import { PRICING_DEFAULT_RESOLUTION, VIDEO_MODE_ALIASES, videoDefaultDurationSec } from "./model-constants.js"
+import { isAutoVideoDuration } from "./video-duration-auto.js"
 
 /** The video parameters of one request, as a route body or a node payload carries them. */
 export interface FreeVideoRequest {
@@ -36,16 +41,18 @@ export interface FreeVideoRequest {
    * The request EXTENDS a video (an Extend Video run), whatever model its
    * provider names. Most extend providers are extend models of their own (the
    * catalog's `extend` mode says so), but LTX 2.3 Pro extends under its
-   * generation model's id, which the catalog cannot mark — the lane marks it.
+   * generation model's id, which the catalog cannot mark — the request marks it.
    */
   extend?: boolean
 }
 
+/** The deployment's free-credit video limits: whether they are on, and the longest clip they allow. */
 export interface FreeVideoLimits {
   enabled: boolean
   maxSeconds: number
 }
 
+/** The limits a deployment runs with until its operator changes them. */
 export const FREE_VIDEO_LIMITS_DEFAULTS: FreeVideoLimits = { enabled: true, maxSeconds: 4 }
 
 /** Catalog series whose every model is paid-only. */
@@ -54,12 +61,12 @@ export const FREE_BLOCKED_VIDEO_SERIES: readonly string[] = ["Kling"]
 export const FREE_BLOCKED_VIDEO_MODELS: readonly string[] = ["seedance-2-5"]
 /**
  * Model ids open to free credits although their SERIES is paid-only (Kling 4.0
- * Flash, decided 2026-11-11), or although their id is a `<id>-…` variant of a
- * `FREE_BLOCKED_VIDEO_MODELS` id (Seedance 2.5 Flash, decided 2026-11-16).
- * Exact ids, never a prefix: a later variant is judged by its series and its
- * blocked prefix again. An id here still runs only within rule 2 (the lowest
- * resolution, at most `maxSeconds`), and an id LISTED in
- * `FREE_BLOCKED_VIDEO_MODELS` itself is never opened by it.
+ * Flash), or although their id is a `<id>-…` variant of a
+ * `FREE_BLOCKED_VIDEO_MODELS` id (Seedance 2.5 Flash). Exact ids, never a
+ * prefix: a later variant is judged by its series and its blocked prefix
+ * again. An id here still runs only within rule 2 (the lowest resolution, at
+ * most `maxSeconds`), and an id LISTED in `FREE_BLOCKED_VIDEO_MODELS` itself is
+ * never opened by it.
  */
 export const FREE_OPEN_VIDEO_MODELS: readonly string[] = ["kling-4-flash", "seedance-2-5-flash"]
 
@@ -190,9 +197,9 @@ export function freeVideoDurationLock(provider: string, duration: FreeVideoReque
  * resolution is judged as the declared billed-and-rendered default
  * (`PRICING_DEFAULT_RESOLUTION`, e.g. Wan 3.0's 720p) when there is one, and
  * otherwise as unknown — locked on a model with more than one resolution,
- * because the provider renders its own default (KIE's is often 720p) whatever
- * the cheapest tier is. The routes and the payload builder fill the value
- * they bill, so a request that went through them always names one.
+ * because the provider renders its own default (often 720p) whatever the
+ * cheapest tier is. The server's routes fill the value they bill, so a request
+ * that went through them always names one: a client should name it too.
  */
 export function freeVideoResolutionLock(provider: string, resolution: string | null | undefined, limits: FreeVideoLimits): FreeVideoLock | null {
   if (!limits.enabled) return null

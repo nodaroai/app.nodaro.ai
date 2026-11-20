@@ -149,7 +149,7 @@ import { allowanceEnforcementActive, deploymentPayerActive, payerCoverage } from
 import { attemptAutoRecharge, autoRechargeTargetFor } from "./auto-recharge.js"
 import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } from "./org-entitlements.js"
 import { modelAvailabilityRefusal } from "./model-availability.js"
-import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideoRequest } from "./free-video-limits.js"
+import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideoLimits, type FreeVideoRequest } from "./free-video-limits.js"
 import { hasPurchaseOnRecord } from "./purchase-on-record.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
@@ -542,10 +542,10 @@ export interface CreditCheckResult {
 }
 
 export interface UserBalance {
-  /** The free-credit video limits (`@nodaro/render-rules` free-video-limits),
-   *  present only when they apply to this account: it never paid. The editor
-   *  locks the options the credit preflight would refuse. */
-  freeVideoLimits?: { enabled: boolean; maxSeconds: number }
+  /** The free-credit video limits (`@nodaro/shared/free-video-limits`),
+   *  present only when they apply to this account: it never paid. The editor,
+   *  and any app on the SDK, locks the options the credit preflight would refuse. */
+  freeVideoLimits?: FreeVideoLimits
   total: number
   subscription: number
   topup: number

@@ -16,9 +16,10 @@ import type { UserBalance } from "@/lib/api"
 /**
  * The editor's half of the free-credit video limits: which video options to
  * LOCK (shown greyed, with the reason, never removed and never snapped) for an
- * account that never paid. The rule is `@nodaro/render-rules`, the same
- * function the server's credit preflight refuses with, so a locked option is
- * exactly an option the server would refuse.
+ * account that never paid. The rule is `@nodaro/shared/free-video-limits`
+ * (re-exported by `@nodaro/render-rules`), the same function the server's
+ * credit preflight refuses with, so a locked option is exactly an option the
+ * server would refuse.
  *
  * Whether the limits apply comes from the server: the balance carries
  * `freeVideoLimits` only for an account they apply to. Null = no locks.

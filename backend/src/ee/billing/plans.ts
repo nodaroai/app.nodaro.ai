@@ -19,7 +19,10 @@
  *  - the credit packs and the custom-amount range: the load rate
  *    (load-rate.ts), the function the top-up checkout prices with — each pack's
  *    price confirmed against the Stripe price the fixed-pack checkout sells it
- *    by (`TOP_UPS`).
+ *    by (`TOP_UPS`);
+ *  - the free plan's video limits: the runtime settings the credit check
+ *    refuses a never-paid account's video run by (free-video-config.ts), laid
+ *    over per answer like the live parallelism.
  *
  * Not read, on purpose: `tier_config.price_usd` (stale, read by nothing —
  * migration 287) and the frontend's display tables (a copy of these).
@@ -44,6 +47,8 @@ import { STRIPE_PRODUCTS, TIER_CREDITS, TIER_PARALLELISM, TIER_STORAGE_LIMITS, T
 import { LOAD_CURRENCY, LOAD_RATE_ANCHORS, MAX_LOAD_USD, MIN_LOAD_USD, type LoadRateAnchor } from "./load-rate.js"
 import { lastMirroredEnforced } from "../../lib/concurrency-lanes/sizes.js"
 import { cloudPlanSizes } from "../concurrency-lanes/plan-sizes.js"
+import { freePlanVideoLimits } from "../lib/free-plan-video-limits.js"
+import type { FreeVideoLimits } from "./free-video-limits.js"
 
 /** A sum of money in its currency's major unit (12 = 12.00), with the ISO-4217 code. */
 export interface PlanMoney {
@@ -86,6 +91,14 @@ export interface BillingPlan {
   prices: PlanPrices | null
   /** The free plan's one-time grant at sign-up; null on a paid plan, whose credits come with each price. */
   signupCredits: number | null
+  /**
+   * The free plan's video limits (`@nodaro/shared/free-video-limits`): what an
+   * account that never paid may generate as video, so a page can lock the same
+   * options before sign-in. Read per answer from the runtime settings
+   * (withFreeVideoLimits), never cached with the prices. null on a paid plan:
+   * any payment lifts them.
+   */
+  freeVideoLimits: FreeVideoLimits | null
   /**
    * How many generations run at once. While concurrency lanes are not enforced:
    * how many nodes of one workflow run at once (`TIER_PARALLELISM`). While they
@@ -178,7 +191,20 @@ export async function readBillingPlans(): Promise<BillingPlansResult> {
   } catch (error) {
     return { ok: false, code: "plan_prices_unavailable", error }
   }
-  return { ok: true, plans: await withLiveParallelism(plans) }
+  return { ok: true, plans: await withFreeVideoLimits(await withLiveParallelism(plans)) }
+}
+
+/**
+ * The list with the free plan's video limits laid over, as the settings read
+ * now (their own short cache, so an admin's change never waits for a Stripe
+ * re-read). Never written into the cached snapshot. Copies.
+ */
+async function withFreeVideoLimits(plans: BillingPlans): Promise<BillingPlans> {
+  const limits = await freePlanVideoLimits()
+  return {
+    ...plans,
+    data: plans.data.map((plan) => (plan.id === FREE_PLAN ? { ...plan, freeVideoLimits: limits } : plan)),
+  }
 }
 
 /**
@@ -322,11 +348,13 @@ function assemble(prices: PriceTable): BillingPlans {
         yearly: yearlyOf(id, product.yearly, prices.get(product.yearly)),
       },
       signupCredits: null,
+      freeVideoLimits: null,
     }),
   )
   const currency = LOAD_CURRENCY.toUpperCase()
   return {
-    data: [{ ...tierFacts(FREE_PLAN), prices: null, signupCredits: TIER_CREDITS[FREE_PLAN]! }, ...paid],
+    // The free plan's video limits are laid over per answer (withFreeVideoLimits).
+    data: [{ ...tierFacts(FREE_PLAN), prices: null, signupCredits: TIER_CREDITS[FREE_PLAN]!, freeVideoLimits: null }, ...paid],
     topUps: LOAD_RATE_ANCHORS.map((anchor) => {
       const pack = packPrice(anchor, prices)
       return { id: `topup-${anchor.usd}`, credits: anchor.credits, price: pack.price, priceId: pack.priceId }

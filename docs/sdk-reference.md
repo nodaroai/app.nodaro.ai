@@ -8330,6 +8330,7 @@ Throws `UnauthorizedError` (401) when signed out.
 | `welcomeOffer` | `WelcomeOfferState?` | Present only while the deployment has the welcome offer switched on — absent means no popup, no banner, no block. See [`claimWelcomeOffer`](#claimwelcomeofferinput). |
 | `allowance` | `BalanceAllowance \| null?` | Deployment-payer instances only: `{ granted, remaining, enforced }`, the caller's own allowance in credits — the figure to show there, since `total` is the personal balance, which does not fund runs on such a deployment. `enforced: false` means it is shown, not enforced. `null` for the billing account itself or when it could not be read (never 0). Absent elsewhere. |
 | `display` | `BalanceDisplay?` | On a deployment that shows its own unit instead of credits: the same figures converted by the server. Render these as they are; never convert credits yourself. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). |
+| `freeVideoLimits` | `FreeVideoLimits?` | `{ enabled, maxSeconds }`, present only while the free-credit video limits apply to this account: it never paid (no credit pack, no paid plan) and the deployment has them on. Absent = nothing is locked. See [Locking video options on free credits](#locking-video-options-on-free-credits). |
 
 **`BalanceDisplay`:** `unit` (the unit's label), `decimals` (the places its
 figures carry, 0–4), then `total`, `subscription`, `topup`, `dailySpent`,
@@ -8353,6 +8354,62 @@ the deployment names its unit per interface language it also carries
 const balance = await client.credits.balance()
 console.log(`${balance.total} credits available (${balance.tier} tier)`)
 ```
+
+#### Locking video options on free credits
+
+An account that never paid generates video only within the free-credit limits
+([Free credits § Video on free credits](./features/free-credits.md#video-on-free-credits)),
+and the server refuses a run outside them before anything is charged: an
+`InsufficientCreditsError` (status 402) whose `code` is `"free_video_limit"`.
+To lock those
+options in a picker instead, judge them with the rule the server refuses with,
+published in `@nodaro/shared/free-video-limits`, against the limits the server
+states:
+
+- **Signed in:** `balance().freeVideoLimits`, present only while the limits
+  apply to that account. Absent: lock nothing.
+- **Signed out:** the free plan's `freeVideoLimits` from `billing.plans()` —
+  what a new account runs under (`enabled: false`: no limits).
+
+The limits concern the video models an app runs itself (Generate Video, the
+video routes). A Video Remake run, its Full Quality and a trend run are not
+limited, so their options need no lock.
+
+```ts
+import {
+  freeVideoDurationLock,
+  freeVideoModelLock,
+  freeVideoResolutionLock,
+  type FreeVideoLock,
+} from "@nodaro/shared/free-video-limits"
+
+const limits = (await client.credits.balance()).freeVideoLimits
+
+/** Why this option is locked, or null when the server would run it. */
+function lockOf(model: string, seconds: number, resolution: string): FreeVideoLock | null {
+  if (!limits) return null
+  return (
+    freeVideoModelLock(model, limits) ??
+    freeVideoDurationLock(model, seconds, limits) ??
+    freeVideoResolutionLock(model, resolution, limits)
+  )
+}
+
+lockOf("seedance-2-fast", 8, "480p") // { kind: "duration", label: "Seedance 2 Fast", max: 4 }
+lockOf("seedance-2-fast", 4, "720p") // { kind: "resolution", label: "Seedance 2 Fast", lowest: "480p" }
+lockOf("seedance-2-fast", 4, "480p") // null: runs
+lockOf("kling-4", 5, "720p")         // { kind: "model", label: "Kling 4.0" }
+```
+
+The lock is structured, so you word it in your own language: `model` (the
+model is not available on free credits), `upscale` and `extend` (no upscaling
+or extending), `shortest` (even the model's shortest clip, `shortest`, is
+longer than `max` seconds), `auto` (an Auto length is not accepted), `duration`
+(longer than `max` seconds), `resolution` (only `lowest` is available) and
+`size` (Hailuo's high size). Name the resolution: on a model with several, a
+missing one is locked, because the server refuses a request that leaves it out
+(the model would render its own default). `freeVideoLock({ provider, duration,
+resolution }, limits)` judges a whole request at once.
 
 #### `modelCosts(ids)`
 
@@ -8754,6 +8811,7 @@ const { granted } = await client.billing.checkoutStatus(sessionId!)
 | `prices` | `{ monthly, yearly } \| null` | `null` for the free plan. `monthly` is `{ priceId, amount, currency, credits }` (`BillingMonthlyPrice`); `yearly` adds `perMonth`, the yearly amount spread over its months (`BillingYearlyPrice`). `priceId` is the Stripe price id: what `checkout()` and `changePlan()` take, and what the subscription's `stripe_price_id` matches (so the slot it matches is the current interval). `amount` is in the currency's major unit (`12` = 12.00) and `currency` is the ISO-4217 code (`"USD"`). Either may be `null` when Stripe cannot sell it right now (it could not be read, or it is archived) — show it as unavailable, never as free. |
 | `prices.*.credits` | `BillingPriceCredits \| null` | What the price grants: `{ amount, per }`, `per` being `"month"` or `"year"`. A yearly price grants the plan's credits every month, as a monthly price does. `null` when the price does not state it. |
 | `signupCredits` | `number \| null` | The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. |
+| `freeVideoLimits` | `FreeVideoLimits \| null` (optional) | The free plan's video limits: `{ enabled, maxSeconds }`, what an account that never paid may generate as video (`enabled: false` = no limits). `null` on a paid plan: any payment lifts them. Readable signed out, so a page can lock the same options before sign-in — see [Locking video options on free credits](#locking-video-options-on-free-credits). Absent on a server released before this field. |
 | `parallelism` | `number` | How many nodes of one workflow run at once. Once Nodaro Cloud enforces its concurrency limits, the plan's limit on generations running at once, shared by all of an account's runs (it then follows the plan sizes the platform sets). |
 | `storageBytes` | `number` | Storage for your media, in bytes. |
 

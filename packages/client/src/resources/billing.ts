@@ -1,3 +1,4 @@
+import type { FreeVideoLimits } from "@nodaro/shared/free-video-limits"
 import type { NodaroClientCore } from "../core.js"
 
 /**
@@ -57,6 +58,16 @@ export interface BillingPlan {
   prices: BillingPlanPrices | null
   /** The free plan's one-time grant at sign-up; `null` on a paid plan, whose credits come with each price. */
   signupCredits: number | null
+  /**
+   * The free plan's video limits: what an account that never paid may
+   * generate as video (`enabled: false` = no limits). `null` on a paid plan:
+   * any payment lifts them. Readable before sign-in, so a signed-out page can
+   * lock the same options; once signed in, read `credits.balance()`'s
+   * `freeVideoLimits`, which says whether they apply to that account. Lock
+   * with the functions of `@nodaro/shared/free-video-limits`. Absent on a
+   * server released before this field.
+   */
+  freeVideoLimits?: FreeVideoLimits | null
   /**
    * How many nodes of one workflow run at once. Once Nodaro Cloud enforces its
    * concurrency limits, the plan's limit on generations running at once,

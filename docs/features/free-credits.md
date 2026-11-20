@@ -136,3 +136,11 @@ subscription invoice — also after the subscription ends. A card on file or a
 trial is not a payment.
 The default Generate Video settings (Seedance 2 Fast, 4 seconds) run as they
 are.
+
+An app can lock these options before a run instead of meeting the refusal. The
+rule the server refuses with is published in the SDK's companion package,
+`@nodaro/shared/free-video-limits`, and the server states the limits it
+applies: `GET /v1/user/credits` carries `freeVideoLimits` (`{ enabled,
+maxSeconds }`) only while they apply to the signed-in account, and the free
+plan of `GET /v1/billing/plans` carries them for a page shown before sign-in.
+See [SDK reference § Locking video options on free credits](../sdk-reference.md#locking-video-options-on-free-credits).
