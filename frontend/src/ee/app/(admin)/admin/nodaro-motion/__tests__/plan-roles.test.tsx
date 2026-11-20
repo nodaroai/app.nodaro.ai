@@ -99,6 +99,9 @@ beforeEach(() => {
   routes["GET /v1/admin/llm-models"] = () => ({ body: { data: { models: MODELS, tierCosts: {}, featureCosts: {} } } })
   // The custom style on an engine that takes none: it asks nothing of its own (no defaults, no models).
   routes["GET /v1/admin/video-remake/custom-style"] = () => ({ body: { data: { customStyle: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
+  // The 3D previz clips and the shot lock (previz-shot-lock.test.tsx): never saved, and an engine that takes neither.
+  routes["GET /v1/admin/video-remake/previz"] = () => ({ body: { data: { previz: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
+  routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   routes[`GET ${URL_}`] = () => view()
   routes[`GET ${URL_}/defaults`] = () => ({ body: { data: DEFAULTS } })
   routes[`POST ${URL_}/check`] = () => ({ body: { data: { problems: [] } } })

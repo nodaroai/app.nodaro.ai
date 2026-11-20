@@ -22,6 +22,7 @@ export const PROMPT_PART_MAX = 2000
 export const PROMPT_PART_LABELS: Readonly<Record<CastSwapPromptPartId, string>> = {
   opener: "Opening line",
   motionLock: "Movement lock (new wording)",
+  shotLock: "Shot lock",
   artStyle: "Art style (Flex)",
   artStyleMandatory: "Art style MANDATORY line (Flex)",
   original: "The original video",
@@ -29,6 +30,7 @@ export const PROMPT_PART_LABELS: Readonly<Record<CastSwapPromptPartId, string>> 
   quality: "Quality",
   keep: "Keep motion and timing",
   audio: "Sound and lip sync",
+  sound: "Sound to make (3D previz)",
   face: "Identity",
   depthGuard: "Depth guard",
   faceMesh: "Face mesh lines",
@@ -40,6 +42,7 @@ export const PROMPT_PART_LABELS: Readonly<Record<CastSwapPromptPartId, string>> 
   location: "Each location",
   pictureRoles: "Picture roles (new wording)",
   avoid: "Avoid list",
+  referenceOnly: "Closing requirement (3D previz)",
   restate: "Closing restatement (new wording)",
   postHeader: "Header before the post prompt",
 }

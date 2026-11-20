@@ -79,6 +79,17 @@
  * all, `roles_not_planned`. An engine that does not declare role planning, or
  * a deployment that does not offer it, is never asked
  * (`plan_roles_unavailable`).
+ *
+ * A 3D previz clip (`clip_kind: "previz"`): the clip is rendered into the
+ * run's look instead of edited. `clip_kind` is sent as `clipKind` only for
+ * "previz" (an ordinary clip sends no key, the body of before),
+ * `previz_lighting` and `previz_sound` as `previz: { lighting, sound }`, and a
+ * role's `subject` as it is (its `name` is then the locator of its model in
+ * the clip). An engine that does not declare the mode would drop the keys and
+ * run an ordinary edit, so it is never sent any of them: a call that names one
+ * answers `previz_unavailable` before anything is asked, and so does a
+ * deployment that does not accept such a clip (the route's
+ * `previz_not_available`). Every other rule of the mode is the route's.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -101,7 +112,7 @@ import { hasCredits } from "../../config.js"
 import { RECAST_POINTER, recastOffered } from "./_video-lanes.js"
 import { registerTask } from "../tasks.js"
 import { isRouterNotFound } from "./_studio-helpers.js"
-import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles } from "../../cast-swap-engines.js"
+import { castSwapLengthKey, loadedEngineRuns, loadedEngineTakesArtStyle, loadedEngineTakesCustomStyle, loadedEngineTakesPlanRoles, loadedEngineTakesPreviz } from "../../cast-swap-engines.js"
 import { neutralBreakdown, privacyCreditsOf } from "../../nodaro-motion-quote.js"
 import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
@@ -383,6 +394,17 @@ const PLAN_ROLES_UNAVAILABLE = {
   isError: true as const,
 }
 
+const PREVIZ_UNAVAILABLE = {
+  content: [{ type: "text" as const, text: "Nodaro: a 3D previz clip is not available on this deployment. Send an ordinary clip instead, with no clip_kind, previz_lighting, previz_sound or role subject. [previz_unavailable]" }],
+  isError: true as const,
+}
+
+/** Whether a refusal is the route's own "a 3D previz clip is not accepted here". */
+const previzNotAvailable = (statusCode: number, body: string): boolean => statusCode === 403 && /"previz_not_available"/.test(body)
+
+/** What a run's clip is. */
+const CLIP_KINDS = ["footage", "previz"] as const
+
 /** A Nodaro Pulse run's length fits. */
 const LENGTHS = ["cut-end", "cut-start"] as const
 
@@ -398,6 +420,14 @@ export const castSwapRolePreviewArgs = {
   preview_name: z.string().trim().min(1).max(200).optional().describe("Name used instead of name in a preview."),
   in_preview: z.boolean().optional().describe("false = left out of a preview (not prepared or charged). Default true."),
 }
+
+/**
+ * A previz run's own role setting, on every role kind; any other run ignores it. Said in full on a person role and
+ * pointed at from the others (each kind's copy is in the tool list). Exported for the schema walk.
+ */
+const roleSubject = (description: string) => ({ subject: z.string().max(200).optional().describe(description) })
+export const castSwapRolePrevizArgs = roleSubject("previz only: what the role is, used in the script; name is then the locator of its model.")
+export const castSwapRolePrevizArgsBrief = roleSubject("As a person's subject.")
 
 function refusal(statusCode: number, body: string) {
   if (isRouterNotFound(statusCode, body)) {
@@ -444,6 +474,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
                 outfit: trait.describe("As body."),
                 hair: trait.describe("Hairstyle and haircut; as body."),
                 ...castSwapRolePreviewArgs,
+                ...castSwapRolePrevizArgs,
               }),
               z.object({
                 kind: z.literal("pet"),
@@ -452,6 +483,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
                 body: trait.describe("As a person's body."),
                 coat: trait.describe("Fur, colors and markings; as body."),
                 ...castSwapRolePreviewArgs,
+                ...castSwapRolePrevizArgsBrief,
               }),
               z.object({
                 kind: z.literal("product"),
@@ -460,12 +492,14 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
                 shape: trait.describe("Shape and proportions; as a person's body."),
                 finish: trait.describe("Colors, materials and markings; as shape."),
                 ...castSwapRolePreviewArgs,
+                ...castSwapRolePrevizArgsBrief,
               }),
               z.object({
                 kind: z.literal("location"),
                 name: z.string().max(200).optional().describe('Default "the setting".'),
                 images,
                 ...castSwapRolePreviewArgs,
+                ...castSwapRolePrevizArgsBrief,
               }),
             ]),
           )
@@ -516,6 +550,12 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           .max(4096)
           .optional()
           .describe("A public https image whose visual style the video should take. Nodaro reads the image's style (never its content) and restyles the clip in it. With custom_style too, your text is a note on the image's style (for example 'like this, but darker'). Not with art_style."),
+        clip_kind: z
+          .enum(CLIP_KINDS)
+          .optional()
+          .describe('"previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model\'s colour or position; with no art_style or custom_style the result is real-world, live-action footage. Default "footage".'),
+        previz_lighting: z.boolean().optional().describe("previz only: also take the lighting direction and lighting changes from the clip."),
+        previz_sound: z.enum(["clip", "generated"]).optional().describe("previz only: keep the clip's sound, or have it generated."),
         motion_length: z
           .enum(LENGTHS)
           .optional()
@@ -604,6 +644,14 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           }),
         )
       }
+      // A 3D previz clip, by any of its arguments. An engine that does not declare the mode drops the keys and would
+      // run (and charge for) an ordinary edit: never sent any of them (quote or run). Said directly, as for art_style.
+      const previzNamed =
+        args.clip_kind === "previz" ||
+        args.previz_lighting !== undefined ||
+        args.previz_sound !== undefined ||
+        args.roles.some((role) => (role as { subject?: unknown }).subject !== undefined)
+      if (previzNamed && !loadedEngineTakesPreviz()) return PREVIZ_UNAVAILABLE
       // Loose reference images: roles are planned from the prompt, on the quote only.
       const looseImages = args.reference_image_urls
       if (looseImages !== undefined) {
@@ -654,6 +702,16 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         // The caller's own words, as written (the route says what they may be). With an image, the quote's
         // text and the run's are set below.
         ...(customImage === undefined && customText !== undefined ? { direction: { customStyle: customText } } : {}),
+        // A 3D previz clip alone is named: an ordinary clip sends no key, the body of before.
+        ...(args.clip_kind === "previz" ? { clipKind: "previz" as const } : {}),
+        ...(args.previz_lighting !== undefined || args.previz_sound !== undefined
+          ? {
+              previz: {
+                ...(args.previz_lighting !== undefined ? { lighting: args.previz_lighting } : {}),
+                ...(args.previz_sound !== undefined ? { sound: args.previz_sound } : {}),
+              },
+            }
+          : {}),
         // Under the key this environment's engine takes (`motionLength`, else the old `klingLength`).
         ...(length !== undefined ? { [castSwapLengthKey()]: length } : {}),
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
@@ -750,6 +808,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         // because the price does not depend on the style's words; the image is read once the run is confirmed.
         const payload = customImage !== undefined ? { ...quoted, direction: { customStyle: customNote ?? CUSTOM_STYLE_QUOTE_PLACEHOLDER } } : quoted
         const est = await mcpInject(fastify, session, { method: "POST", url: "/v1/video-remake/estimate", payload })
+        // A deployment that does not accept a 3D previz clip answers as an engine without the mode does.
+        if (previzNotAvailable(est.statusCode, est.body)) return PREVIZ_UNAVAILABLE
         if (est.statusCode >= 400) return refusal(est.statusCode, est.body)
         let quote: CastSwapQuote
         try {
@@ -851,6 +911,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         // route ignores a relayed body's `sessionId`).
         ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
       })
+      if (previzNotAvailable(res.statusCode, res.body)) return PREVIZ_UNAVAILABLE
       if (res.statusCode >= 400) return refusal(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) {

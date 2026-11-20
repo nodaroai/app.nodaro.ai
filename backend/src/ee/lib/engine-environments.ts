@@ -105,6 +105,15 @@ export interface PlatformSupports {
    * engine's whole steps entry, when it reads the row.
    */
   readonly shotListSpeech?: boolean
+  /**
+   * The prompt parts that came with the shot lock and the 3D previz clips
+   * (lib/nodaro-motion-prompt-parts.ts): the `previz` key of an engine's
+   * entry in `nodaro_motion_prompt_parts`, and the part ids `shotLock`,
+   * `sound` and `referenceOnly`. Its schemas take them, and they are answered
+   * to its engine. A build from before refuses either when it reads the row,
+   * and with it the engine's whole entry (every override of that engine).
+   */
+  readonly previzPromptParts?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
@@ -117,6 +126,7 @@ export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   preciseStyleRoutePerStyle: true,
   preciseStyleRouteFilmedFallback: true,
   shotListSpeech: true,
+  previzPromptParts: true,
 })
 
 /**

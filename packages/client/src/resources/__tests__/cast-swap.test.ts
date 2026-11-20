@@ -23,6 +23,9 @@ import {
   type VideoRemakePlanRolesParams,
   type VideoRemakePlanRolesRefusalCode,
   type VideoRemakePlannedRoles,
+  type VideoRemakeClipKind,
+  type VideoRemakePrevizOptions,
+  type VideoRemakePrevizRefusalCode,
   type VideoRemakeStyle,
   type VideoRemakeStyleChoice,
   type VideoRemakeStyleChoiceOption,
@@ -800,6 +803,98 @@ describe("roles planned from the prompt", () => {
     client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" } })))
     got = await client.videoRemake.styleChoice()
     expect(got.planRoles === true).toBe(false)
+  })
+})
+
+describe("a 3D previz clip (clipKind, previz, a role's subject)", () => {
+  const CLIP = "https://cdn.example.com/previz.mp4"
+  const previzRun: VideoRemakeParams = {
+    videoUrl: CLIP,
+    clipKind: "previz",
+    previz: { lighting: true, sound: "generated" },
+    roles: [
+      { kind: "person", name: "the pink model", subject: "the detective", images: ["https://cdn.example.com/detective.png"] },
+      { kind: "product", name: "the blue box on the table", subject: "a delivery parcel", images: ["https://cdn.example.com/parcel.png"] },
+      { kind: "pet", name: "the small grey model", subject: "the dog", images: null },
+      { kind: "location", subject: "a rainy street", images: ["https://cdn.example.com/street.png"] },
+    ],
+    postPrompt: "At night, in the rain.",
+    resolution: "720p",
+  }
+
+  it("run and estimate post clipKind, previz and each role's subject unchanged", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ totalCredits: 400, breakdown: { video: 400 }, settlesLower: false }))
+      .mockReturnValueOnce(mockOk({ jobId: "job-1" }, 202))
+    const client = make(fetchMock)
+    await client.videoRemake.estimate(previzRun)
+    expect(await client.videoRemake.run(previzRun)).toEqual({ jobId: "job-1" })
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(["https://api.example.com/v1/video-remake/estimate", "https://api.example.com/v1/video-remake"])
+    for (const call of fetchMock.mock.calls) expect(JSON.parse(call[1].body as string)).toEqual(previzRun)
+  })
+
+  it("an ordinary run sends none of them: the body of before", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }, 202))
+    await make(fetchMock).videoRemake.run(params)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+    expect(body).not.toHaveProperty("clipKind")
+    expect(body).not.toHaveProperty("previz")
+    for (const role of body.roles) expect(role).not.toHaveProperty("subject")
+  })
+
+  it("the kinds and the options are typed: footage or previz, lighting, and whose sound", () => {
+    const kinds: VideoRemakeClipKind[] = ["footage", "previz"]
+    const options: VideoRemakePrevizOptions[] = [{}, { lighting: false }, { sound: "clip" }, { lighting: true, sound: "generated" }]
+    expect(kinds).toHaveLength(2)
+    expect(options).toHaveLength(4)
+    // @ts-expect-error a clip is footage or a previz
+    const wrongKind: VideoRemakeClipKind = "animation"
+    // @ts-expect-error the sound is the clip's or generated
+    const wrongSound: VideoRemakePrevizOptions = { sound: "silent" }
+    expect([wrongKind, wrongSound]).toHaveLength(2)
+  })
+
+  it("each refusal arrives as a NodaroError with its code, on the run and the estimate", async () => {
+    const refusals: Array<[number, VideoRemakePrevizRefusalCode]> = [
+      [403, "previz_not_available"],
+      [400, "previz_needs_prism"],
+      [400, "previz_not_for_trends"],
+      [400, "previz_no_draft"],
+      [400, "previz_role_needs_locator"],
+      [400, "previz_needs_clip_kind"],
+    ]
+    for (const [status, code] of refusals) {
+      for (const call of ["run", "estimate"] as const) {
+        const client = make(vi.fn().mockReturnValue(mockErr(status, { error: { code, message: "Refused." } })))
+        const err = await client.videoRemake[call](previzRun).catch((e: unknown) => e)
+        expect(err, `${code} on ${call}`).toBeInstanceOf(NodaroError)
+        const got: VideoRemakePrevizRefusalCode = (err as NodaroError).code
+        expect(got).toBe(code)
+        expect((err as NodaroError).status).toBe(status)
+      }
+    }
+  })
+
+  it("a Full Quality asked of a previz run is refused 409 previz_no_full_quality", async () => {
+    const client = make(vi.fn().mockReturnValue(mockErr(409, { error: { code: "previz_no_full_quality", message: "A 3D previz run has no Full Quality." } })))
+    const err = (await client.videoRemake.fullQuality("job-1").catch((e: unknown) => e)) as NodaroError
+    expect(err).toBeInstanceOf(NodaroError)
+    const code: VideoRemakePrevizRefusalCode = err.code
+    expect(code).toBe("previz_no_full_quality")
+    expect(err.status).toBe(409)
+  })
+
+  it("styleChoice passes previz through, one boolean; an older server has none", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, planRoles: true, previz: true }
+    let client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    let got = await client.videoRemake.styleChoice()
+    const offered: boolean | undefined = got.previz
+    expect(offered).toBe(true)
+
+    client = make(vi.fn().mockReturnValueOnce(mockOk({ engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, planRoles: true })))
+    got = await client.videoRemake.styleChoice()
+    expect(got.previz === true).toBe(false)
   })
 })
 

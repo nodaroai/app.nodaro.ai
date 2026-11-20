@@ -35,6 +35,18 @@
 // the engine's whole entry when it reads one, so the server refuses a change
 // until then. Its preview never sends a wording. Save sends the whole draft
 // either way, so stored style-only parts are kept (a key left out is deleted).
+//
+// Prism also has a "3D previz" tab (the key `previz`): the parts of a run
+// whose clip is a 3D previz, rendered into its look instead of edited, its own
+// set, never the Motion tab's. It is listed while this environment's engine
+// lists the key (`styles`), and hidden on Pulse (it takes no such clip). Its
+// preview sends neither a wording nor the shot lock. The server holds a new
+// or changed previz text, and one of the parts that came with it, until every
+// environment's platform takes them, and says so when it refuses the save.
+//
+// The Precise and the Motion tabs' previews follow the shot lock as it is set
+// above on the page (a change not saved yet included), so the "Shot lock" part
+// shows as written once the engine's switch is on.
 
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react"
 import { Loader2 } from "lucide-react"
@@ -53,6 +65,8 @@ import {
   type NodaroMotionMotionEntry,
   type NodaroMotionPromptParts,
   type NodaroMotionPromptWording,
+  type NodaroMotionShotLock,
+  type NodaroMotionShotLockValue,
   type PromptPartProblem,
   type PromptPartTexts,
 } from "@/lib/api"
@@ -74,6 +88,7 @@ const STYLE_LABELS: Readonly<Record<NodaroMotionPromptPartsKey, { label: string;
   precise: { label: "Precise", hint: "Follows the clip exactly (the default)." },
   motion: { label: "Motion", hint: "Follows the clip's movement and takes the looks from the photos, more freely than Precise." },
   styleOnly: { label: "Style only", hint: "A run with a video and an art style and nothing to swap, sent as the Original clip: its own parts, never the Motion tab's." },
+  previz: { label: "3D previz", hint: "A run whose clip is a 3D previz, rendered into its look instead of edited: its own parts, never the Motion tab's." },
 }
 
 /** Why the Style only tab is greyed out: an environment's engine does not run style-only runs yet. */
@@ -81,9 +96,14 @@ export function STYLE_ONLY_TAB_UNOFFERED(missing: readonly string[]): string {
   return `Style only is not editable yet: the Cast Swap engine of ${missing.join(", ")} does not run style-only runs, and these prompts are shared by every environment.`
 }
 
-/** The keys an engine's tabs show: Pulse takes no art style, so it has no Style only tab. */
+/** The keys an engine's tabs show: Pulse takes no art style and no 3D previz clip, so it has neither tab. */
 export function tabsOf(engine: NodaroMotionEngine, styles: readonly NodaroMotionPromptPartsKey[]): NodaroMotionPromptPartsKey[] {
-  return styles.filter((s) => s !== "styleOnly" || engine === "nodaro-prism")
+  return styles.filter((s) => (s !== "styleOnly" && s !== "previz") || engine === "nodaro-prism")
+}
+
+/** Whether a key is a run style (`precise`, `motion`), whose prompt may carry the shot lock. */
+function isRunStyle(style: NodaroMotionPromptPartsKey): style is CastSwapStyleId {
+  return style === "precise" || style === "motion"
 }
 
 const PROMPT_STYLE_NAMES: Readonly<Record<CastSwapPromptStyleId, string>> = { precise: "Precise", flexible: "Flexible" }
@@ -93,9 +113,9 @@ export function promptStyleOfRun(style: CastSwapStyleId, motion: NodaroMotionMot
   return style === "precise" ? "precise" : (motion?.promptStyle ?? "flexible")
 }
 
-/** A tab's name: the run's style, and for Motion the prompt style its parts are; Style only as it is. */
+/** A tab's name: the run's style, and for Motion the prompt style its parts are; Style only and 3D previz as they are. */
 export function styleTabLabel(style: NodaroMotionPromptPartsKey, motion: NodaroMotionMotionEntry | undefined): string {
-  if (style === "styleOnly") return STYLE_LABELS.styleOnly.label
+  if (style === "styleOnly" || style === "previz") return STYLE_LABELS[style].label
   const label = STYLE_LABELS[style]?.label ?? style
   return style === "motion" ? `${label} (${PROMPT_STYLE_NAMES[promptStyleOfRun(style, motion)]} prompt)` : label
 }
@@ -144,6 +164,7 @@ export function PromptPartsTabs({
   onDraft: setDraft,
   wordingDraft,
   onWordingDraft: setWordingDraft,
+  shotLockUnsaved,
   held = false,
 }: {
   readonly internalNames: Readonly<Record<AdminTrendEngine, string>>
@@ -153,6 +174,8 @@ export function PromptPartsTabs({
   /** The Flex wording's draft, likewise. */
   readonly wordingDraft: NodaroMotionPromptWording
   readonly onWordingDraft: Dispatch<SetStateAction<NodaroMotionPromptWording>>
+  /** The shot lock as changed on the page and not saved yet, per engine; an engine left out is previewed as stored. */
+  readonly shotLockUnsaved?: NodaroMotionShotLock
   /** A stored set is loaded: it saves whole, through Save all in its banner, never from here. */
   readonly held?: boolean
 }) {
@@ -183,6 +206,10 @@ export function PromptPartsTabs({
   const styleOnlyEdited = (data?.engines ?? []).some(
     (e) => JSON.stringify(next[e.id]?.styleOnly ?? null) !== JSON.stringify(promptPartsToSave(data?.promptParts ?? {})[e.id]?.styleOnly ?? null),
   )
+  // Likewise a new or changed previz entry (503 `engine_unsupported` from an engine that takes no such clip).
+  const previzEdited = (data?.engines ?? []).some(
+    (e) => JSON.stringify(next[e.id]?.previz ?? null) !== JSON.stringify(promptPartsToSave(data?.promptParts ?? {})[e.id]?.previz ?? null),
+  )
   const pending = save.isPending || saveWording.isPending
 
   const setTexts = (engine: NodaroMotionEngine, style: NodaroMotionPromptPartsKey, texts: PromptPartTexts) =>
@@ -199,7 +226,7 @@ export function PromptPartsTabs({
       if (err instanceof PromptPartsInvalidError) setProblems(err.problems)
       else {
         const e = err instanceof Error ? err : new Error(String(err))
-        toast.error(isPromptPartsEngineOutOfDate(e) && !wordingChanged && !styleOnlyEdited ? ENGINE_OUT_OF_DATE : e.message)
+        toast.error(isPromptPartsEngineOutOfDate(e) && !wordingChanged && !styleOnlyEdited && !previzEdited ? ENGINE_OUT_OF_DATE : e.message)
       }
     }
   }
@@ -273,6 +300,7 @@ export function PromptPartsTabs({
                     onChange={(texts) => setTexts(engine.id, style, texts)}
                     saveProblems={problems.filter((p) => p.engine === engine.id && p.style === style)}
                     disabled={pending}
+                    shotLock={isRunStyle(style) ? shotLockUnsaved?.[engine.id] : undefined}
                     wording={
                       style === "motion" && wordingQuery.data
                         ? {
@@ -302,6 +330,7 @@ function StylePanel({
   saveProblems,
   disabled,
   wording,
+  shotLock,
 }: {
   readonly engine: NodaroMotionEngine
   readonly style: NodaroMotionPromptPartsKey
@@ -311,6 +340,8 @@ function StylePanel({
   readonly onChange: (texts: PromptPartTexts) => void
   readonly saveProblems: readonly PromptPartProblem[]
   readonly disabled: boolean
+  /** Precise and Motion: the engine's shot lock as changed on the page and not saved yet (undefined: the saved one). */
+  readonly shotLock?: NodaroMotionShotLockValue
   /** Motion: the engine's Flex prompt wording as edited (shown while its prompt is Flexible), and what offers "New". */
   readonly wording?: {
     readonly value: CastSwapPromptWordingId
@@ -324,7 +355,7 @@ function StylePanel({
   const flexible = style === "motion" && promptStyleOfRun(style, motion) === "flexible"
   // The saved Motion setting is part of the question: its prompt style and clip preparation decide the parts.
   // The Flex wording as chosen here (a Precise prompt never reads it, so none is sent for it).
-  const preview = useNodaroMotionPromptPreview(engine, style, overrides, JSON.stringify(motion ?? {}), true, flexible ? wording?.value : undefined)
+  const preview = useNodaroMotionPromptPreview(engine, style, overrides, JSON.stringify(motion ?? {}), true, flexible ? wording?.value : undefined, shotLock)
   const answer = preview.data
   const problems = saveProblems.length > 0 ? saveProblems : (answer?.problems ?? [])
   return (

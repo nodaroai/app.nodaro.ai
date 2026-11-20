@@ -2407,7 +2407,7 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, previz?: boolean }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2429,7 +2429,10 @@ and an older server leaves it out (read it as `false`). `planRoles` is one
 boolean, not per engine: whether roles can be planned from the prompt here
 (Roles planned from the prompt, below), `true` only where the engine plans
 them and Nodaro offers it on this deployment; an older server leaves it out
-(read it as `false`). Public (works signed
+(read it as `false`). `previz` is one boolean too: whether a run may state
+that its clip is a 3D previz here (A 3D previz clip, below), `true` only where
+the engine takes such a clip and Nodaro accepts it on this deployment; an
+older server leaves it out (read it as `false`). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
@@ -2641,6 +2644,55 @@ a picture; the envelope's `details.index`, read as
 `err.details.details.index`, says which), `502 plan_roles_failed` (try again,
 or set the roles yourself) and `429 rate_limit_exceeded` past either limit
 (`Retry-After` says how long).
+
+**A 3D previz clip** (`clipKind`, `previz`, a role's `subject`): where
+`styleChoice()` answers `previz` `true`, `run()` and `estimate()` take
+`clipKind: "previz"` (`VideoRemakeClipKind`: `"footage"`, the default, or
+`"previz"`). It says the clip is a 3D previz: simple untextured ("clay")
+models moved and filmed as the video to make will be. Nothing detects it; you
+state it. Such a clip is not edited: its camera, rhythm, blocking and motion
+are followed and its look is not. It is rendered into the run's art style or
+custom style (`direction`) and, with neither, into real-world, live-action
+footage.
+
+```ts
+const { previz } = await client.videoRemake.styleChoice()
+if (previz === true) {
+  const run = {
+    videoUrl: "https://example.com/previz.mp4",
+    clipKind: "previz",
+    previz: { lighting: true },
+    roles: [
+      { kind: "person", name: "the pink model", subject: "the detective", images: ["https://example.com/detective.png"] },
+    ],
+    postPrompt: "At night, in the rain.",
+    resolution: "720p",
+  } satisfies VideoRemakeParams
+  const quote = await client.videoRemake.estimate(run)
+  const { jobId } = await client.videoRemake.run(run)
+}
+```
+
+On a previz run each role's `name` is the locator of its model in the clip
+(its colour, or its shape and position: `"the pink model"`); a role with
+pictures and no name is refused. `subject` (`VideoRemakeRolePrevizSettings`,
+on every role kind, 1–200 characters) says what the role is in the result,
+which its script calls it by; any other run ignores it. `previz`
+(`VideoRemakePrevizOptions`): `lighting: true` also follows the clip's
+lighting direction and lighting changes; `sound` is `"clip"` (keep the clip's
+own sound) or `"generated"` (the engine makes environmental and action sounds,
+no music), and left out it is the clip's sound when the clip has an audio
+track and generated when it has none (an engine from before the choice refuses
+the field with `400 validation_error`). Nodaro Prism only, never a draft, and
+no Full Quality: run it again at the resolution you need. The job keeps
+`clipKind` and `previz` in `input_data`.
+
+Refusals (`VideoRemakePrevizRefusalCode`): `403 previz_not_available` (not
+accepted here: send an ordinary clip), `400 previz_needs_prism`,
+`400 previz_not_for_trends`, `400 previz_no_draft`,
+`400 previz_role_needs_locator`, `400 previz_needs_clip_kind` (`previz`
+without `clipKind: "previz"`) and, from `fullQuality()`,
+`409 previz_no_full_quality`.
 
 **The Advanced options on the Video Remake page** (`advanced()`,
 `VideoRemakeAdvanced`, `GET /v1/video-remake/advanced`, public):

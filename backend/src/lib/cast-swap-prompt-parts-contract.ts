@@ -136,6 +136,24 @@ export interface PromptPartsRequest {
    * the request as a plain Flex one.
    */
   styleOnly?: true
+  /**
+   * The shot lock's line (a direct run on an ordinary clip whose engine's
+   * `nodaro_motion_shot_lock` is on): the engine assembles and measures it,
+   * and lists its part (`shotLock`). Only ever `true`, never on a style-only
+   * or a previz request, and sent only to an engine that declares
+   * `castSwap.shotLock` (`askPromptParts`); an older engine's answer is the
+   * one of before.
+   */
+  shotLock?: true
+  /**
+   * A 3D previz clip's set (a direct Prism run that states
+   * `clipKind: "previz"`): the engine answers that set's parts, the two it
+   * alone has (`sound`, `referenceOnly`) among them. Only ever `"previz"`,
+   * and sent only to an engine that declares `castSwap.previz`
+   * (`askPromptParts`); an engine without it would read the request as a
+   * plain Flex one.
+   */
+  clipKind?: "previz"
   hasAudio: boolean
   roles: unknown[]
   references?: { images: string[]; line: string }[]

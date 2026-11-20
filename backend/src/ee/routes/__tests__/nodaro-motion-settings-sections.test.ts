@@ -65,6 +65,8 @@ const SAMPLES: Readonly<Record<string, unknown>> = {
   advanced: { show: true },
   "custom-style": { customStyle: { enabled: false, medium: { instructions: "Read the words.", model: " some-model " }, describe: { instructions: "  " } } },
   "plan-roles": { planRoles: { enabled: false, plan: { instructions: "Place each image.", model: " some-model " } } },
+  previz: { previz: { enabled: false } },
+  "shot-lock": { shotLock: { "nodaro-prism": "on", "nodaro-pulse": "off" } },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces.", avoid: "" } } } },
 }
 

@@ -5740,7 +5740,7 @@ length, with its own cast and new music, and can change the motion itself.
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, and whether a Precise run takes an art style (see Style below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), and whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
@@ -6025,6 +6025,58 @@ plan_roles_not_available` (not offered here: set the roles yourself),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; `error.details.index` is its position in `images`, from 0) and
 `502 plan_roles_failed` (try again, or set the roles yourself).
+
+**A 3D previz clip.** Where `GET /v1/video-remake/style-choice` answers
+`previz: true` (one boolean, not per engine: `true` only where the engine
+takes such a clip and Nodaro accepts it on this deployment; a server from
+before it leaves it out, read that as `false`), a run and its estimate take
+`clipKind: "previz"`. It says the clip is a 3D previz: simple untextured
+("clay") models moved and filmed as the video to make will be. Nothing detects
+it; you state it. Such a clip is not edited: its camera, rhythm, blocking and
+motion are followed, and its look is not. It is rendered into the run's art
+style or custom style (`direction`) and, with neither, into real-world,
+live-action footage. `clipKind: "footage"` (or the field left out) is an
+ordinary clip, the run as before.
+
+On a previz run:
+
+- each role's `name` is the **locator** of its model in the clip: its colour,
+  or its shape and position (`"the pink model"`, `"the tall model on the
+  left"`). A role with pictures and no name is refused;
+- each role may say what it is in `subject` (`"the detective"`, `"a delivery
+  van"`, 1–200 characters), which the result's script calls it by; left out,
+  the script calls it by its picture. Any other run ignores `subject`;
+- `previz` holds its options: `lighting: true` also follows the clip's
+  lighting direction and lighting changes (default `false`); `sound` is
+  `"clip"` (keep the clip's own sound) or `"generated"` (the engine makes
+  environmental and action sounds, no music), and left out it is the clip's
+  sound when the clip has an audio track and generated when it has none. An
+  engine from before the sound choice refuses `previz.sound` with
+  `400 validation_error`.
+
+```json
+{
+  "videoUrl": "https://example.com/previz.mp4",
+  "clipKind": "previz",
+  "previz": { "lighting": true },
+  "roles": [
+    { "kind": "person", "name": "the pink model", "subject": "the detective", "images": ["https://example.com/detective.png"] },
+    { "kind": "product", "name": "the blue box on the table", "subject": "a delivery parcel", "images": ["https://example.com/parcel.png"] }
+  ],
+  "postPrompt": "At night, in the rain.",
+  "resolution": "720p"
+}
+```
+
+It runs on Nodaro Prism only, never as a draft, and has no Full Quality (run
+it again at the resolution you need). The job keeps `clipKind` and `previz`
+in `input_data`. Refusals, on the run and the estimate: `403
+previz_not_available` (not accepted here: send an ordinary clip), `400
+previz_needs_prism` (Nodaro Pulse), `400 previz_not_for_trends`, `400
+previz_no_draft`, `400 previz_role_needs_locator` (a role with pictures and no
+name) and `400 previz_needs_clip_kind` (`previz` without `clipKind:
+"previz"`); a Full Quality asked of such a run answers `409
+previz_no_full_quality`.
 
 **The Advanced options on the Video Remake page.** The Video Remake page
 offers two of the body's fields, `prepareReferences` (see Reference

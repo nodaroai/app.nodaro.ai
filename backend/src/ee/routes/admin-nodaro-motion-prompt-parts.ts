@@ -5,7 +5,7 @@
  *
  *   GET  /v1/admin/video-remake/prompt-parts           the overrides (null = never saved), the engines and the keys (`styles`)
  *   PUT  /v1/admin/video-remake/prompt-parts           { promptParts }: save the whole setting, each entry checked by the engine first; audit-logged
- *   POST /v1/admin/video-remake/prompt-parts/preview   { engine, style, overrides?, promptWording? }: the engine's parts, assembled prompt and problems
+ *   POST /v1/admin/video-remake/prompt-parts/preview   { engine, style, overrides?, promptWording?, shotLock? }: the engine's parts, assembled prompt and problems
  *
  * The setting (`nodaro_motion_prompt_parts`, lib/nodaro-motion-prompt-parts.ts)
  * is read by the Cast Swap engine for every DIRECT run of the engine and style
@@ -55,12 +55,33 @@
  * entry when it reads one. A save that leaves every `styleOnly` entry as it is,
  * or removes one, is never held by that rule. Saving one key never alters
  * another: each is checked and stored on its own.
+ *
+ * The previz key (`previz`): a 3D previz clip's own parts (a direct Prism run
+ * that states `clipKind: "previz"`). The GET lists it in `styles` only while
+ * this environment's engine takes such a clip (`castSwap.previz`); its preview
+ * and its check ask the engine for the previz set (`directRunRequest`: the
+ * roles, a clip without sound, no masking, no wording, no shot lock), and
+ * only an engine with the flag (else 503 `engine_unsupported`). Pulse takes
+ * no previz clip, so a Pulse `previz` entry or preview is 400 `previz_engine`.
+ *
+ * The shot lock's part (`shotLock`, the `nodaro_motion_shot_lock` setting):
+ * the preview's `shotLock` (`"off"` / `"on"`) is the shot lock to preview on
+ * a Precise or a Motion tab, left out = the engine's saved one; a save's
+ * check uses the saved one. It is said only to an engine that declares
+ * `castSwap.shotLock`.
+ *
+ * The platform hold: a save that sets or changes a `previz` entry, or an
+ * override of a part id that came with it (`shotLock`, `sound`,
+ * `referenceOnly`, under any key), is 422 `platform_unsupported` (`envs`)
+ * until every environment's platform takes them
+ * (`platformHoldOfPrevizPromptParts`): an app from before them reads such an
+ * entry as invalid and drops the engine's whole entry. A save that leaves
+ * them as they are, or removes them, is never held.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import {
   CAST_SWAP_ENGINE_OF_NODARO_MOTION,
-  CAST_SWAP_STYLES,
   NODARO_MOTION_ENGINES,
   NODARO_MOTION_ENGINE_NAMES,
   type NodaroMotionEngine,
@@ -88,9 +109,13 @@ import {
   directRunPromptProblems,
   directRunRequest,
   savedFlexWording,
+  savedShotLock,
   type DirectRunPromptProblem,
 } from "../lib/nodaro-motion-prompt-check.js"
 import { promptWordingOf } from "../../lib/nodaro-motion-prompt-wording.js"
+import { NODARO_MOTION_SHOT_LOCKS, shotLockOf, type NodaroMotionShotLockValue } from "../../lib/nodaro-motion-shot-lock.js"
+import { engineTakesPreviz } from "../../lib/nodaro-motion-previz.js"
+import { PULSE_TAKES_NO_PREVIZ_MESSAGE, platformHoldOfPrevizPromptParts, previzPromptPartsSetOrChanged } from "../lib/nodaro-motion-previz-prompt-parts-gate.js"
 import { CAST_SWAP_PROMPT_WORDINGS, type CastSwapPromptWording } from "@nodaro/render-rules"
 import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
@@ -127,6 +152,8 @@ const previewBody = z.strictObject({
   style,
   overrides: promptPartEditsSchema.optional(),
   promptWording: z.enum(CAST_SWAP_PROMPT_WORDINGS).optional(),
+  // Left out = the engine's saved shot lock (`nodaro_motion_shot_lock`).
+  shotLock: z.enum(NODARO_MOTION_SHOT_LOCKS).optional(),
 })
 
 /** A sample direct run: one person with three pictures, each its own address. */
@@ -149,6 +176,7 @@ function preview(
   masking: NodaroMotionMasking | null,
   steps: NodaroMotionSteps | null,
   wording: CastSwapPromptWording,
+  shotLock: NodaroMotionShotLockValue,
 ) {
   return askPromptParts(
     app,
@@ -162,6 +190,7 @@ function preview(
       masking?.[engine],
       steps?.[engine],
       wording,
+      shotLock,
     ),
   )
 }
@@ -199,6 +228,33 @@ const STYLE_ONLY_UNSUPPORTED: NodaroMotionSaveRefusal = {
 /** 400 for anything style-only on Pulse (it takes no art style, so the entry would never be read). */
 const PULSE_RUNS_NO_STYLE_ONLY: NodaroMotionSaveRefusal = { status: 400, error: { code: "style_only_engine", message: PULSE_RUNS_NO_STYLE_ONLY_MESSAGE } }
 
+/** Whether this environment's engine takes a 3D previz clip, so its set may be previewed and checked. */
+function loadedEngineTakesPreviz(): boolean {
+  return engineTakesPreviz(getPluginSupports().castSwap)
+}
+
+/** 503 for a previz preview or check on an engine that takes no 3D previz clip (it would answer the plain Flex set). */
+const PREVIZ_UNSUPPORTED: NodaroMotionSaveRefusal = {
+  status: 503,
+  error: { code: "engine_unsupported", message: "This environment's Cast Swap engine takes no 3D previz clip yet, so it cannot show or check its prompt parts." },
+}
+
+/** 400 for anything previz on Pulse (it takes no previz clip, so the entry would never be read). */
+const PULSE_TAKES_NO_PREVIZ: NodaroMotionSaveRefusal = { status: 400, error: { code: "previz_engine", message: PULSE_TAKES_NO_PREVIZ_MESSAGE } }
+
+/** Whether `next` sets or changes any engine's `previz` entry over `before` (removing one does not count). */
+function setsOrChangesPreviz(next: NodaroMotionPromptParts, before: NodaroMotionPromptParts | null): boolean {
+  return NODARO_MOTION_ENGINES.some((engine) => {
+    const texts = next[engine]?.previz
+    return texts !== undefined && !sameTexts(texts, before?.[engine]?.previz)
+  })
+}
+
+/** The keys this environment's engine can show: the styles, and each extra set only with its flag. */
+function shownKeys(): NodaroMotionPromptPartsKey[] {
+  return NODARO_MOTION_PROMPT_PARTS_KEYS.filter((key) => (key !== "styleOnly" || loadedEngineTakesStyleOnly()) && (key !== "previz" || loadedEngineTakesPreviz()))
+}
+
 function styleOnlyUnsupported(reply: FastifyReply) {
   return sendRefusal(reply, STYLE_ONLY_UNSUPPORTED)
 }
@@ -228,7 +284,7 @@ async function view() {
     promptParts,
     updatedAt,
     engines: NODARO_MOTION_ENGINES.map((id) => ({ id, name: NODARO_MOTION_ENGINE_NAMES[id], internal: CAST_SWAP_ENGINE_OF_NODARO_MOTION[id] })),
-    styles: loadedEngineTakesStyleOnly() ? [...NODARO_MOTION_PROMPT_PARTS_KEYS] : [...CAST_SWAP_STYLES],
+    styles: shownKeys(),
   }
 }
 
@@ -241,14 +297,29 @@ export const NODARO_MOTION_PROMPT_PARTS_SECTION = defineNodaroMotionSettingsSect
   prepare: (body) => {
     const next = savedFrom(body.promptParts)
     if (next["nodaro-pulse"]?.styleOnly) return { refusal: PULSE_RUNS_NO_STYLE_ONLY }
+    if (next["nodaro-pulse"]?.previz) return { refusal: PULSE_TAKES_NO_PREVIZ }
     return { value: { promptParts: next } }
   },
   // A new or changed style-only entry waits for every environment's engine (an older app drops the entry it holds).
+  // A new or changed previz entry, or override of a part id that came with it, waits for every environment's platform.
   engineRefusal: async ({ promptParts }, before) => {
-    if (!setsOrChangesStyleOnly(promptParts, before?.promptParts ?? null)) return null
-    const envs = environmentsThatCannotRunStyleOnly(await listEngineEnvironments())
-    if (envs.length > 0) return { status: 409, error: { code: "engine_unsupported", message: cannotRunStyleOnlyMessage(envs), envs } }
-    return loadedEngineTakesStyleOnly() ? null : STYLE_ONLY_UNSUPPORTED
+    const stored = before?.promptParts ?? null
+    const styleOnly = setsOrChangesStyleOnly(promptParts, stored)
+    const previzEra = previzPromptPartsSetOrChanged(promptParts, stored)
+    if (!styleOnly && !previzEra) return null
+    const environments = await listEngineEnvironments()
+    if (previzEra) {
+      const hold = platformHoldOfPrevizPromptParts(environments)
+      if (hold) return { status: 422, error: hold }
+    }
+    if (styleOnly) {
+      const envs = environmentsThatCannotRunStyleOnly(environments)
+      if (envs.length > 0) return { status: 409, error: { code: "engine_unsupported", message: cannotRunStyleOnlyMessage(envs), envs } }
+      if (!loadedEngineTakesStyleOnly()) return STYLE_ONLY_UNSUPPORTED
+    }
+    // A previz entry is checked by this environment's engine: one that takes no previz clip cannot.
+    if (setsOrChangesPreviz(promptParts, stored) && !loadedEngineTakesPreviz()) return PREVIZ_UNSUPPORTED
+    return null
   },
   readLive: async () => {
     const { promptParts } = await readNodaroMotionPromptParts()
@@ -272,10 +343,13 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const { engine, style: s } = parsed.data
       if (s === "styleOnly" && engine === "nodaro-pulse") return pulseRunsNoStyleOnly(reply)
       if (s === "styleOnly" && !loadedEngineTakesStyleOnly()) return styleOnlyUnsupported(reply)
+      if (s === "previz" && engine === "nodaro-pulse") return sendRefusal(reply, PULSE_TAKES_NO_PREVIZ)
+      if (s === "previz" && !loadedEngineTakesPreviz()) return sendRefusal(reply, PREVIZ_UNSUPPORTED)
       const overrides = parsed.data.overrides
         ? nonEmptyTexts(parsed.data.overrides)
         : (await readNodaroMotionPromptParts()).promptParts?.[engine]?.[s]
       const wording = parsed.data.promptWording ?? promptWordingOf(await savedFlexWording(), engine)
+      const shotLock = parsed.data.shotLock ?? shotLockOf(await savedShotLock(), engine)
       const answer = await preview(
         app,
         req,
@@ -287,6 +361,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
         (await readNodaroMotionMasking()).masking,
         await stepsForShotList(),
         wording,
+        shotLock,
       )
       if (!answer) return reply
       return { data: answer }
@@ -311,12 +386,16 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
       const steps = await stepsForShotList()
       // A Flex run's overrides are checked worded as the engine's direct Flex runs are (the new wording is longer).
       const wording = await savedFlexWording()
+      // And with the engine's shot lock, whose line counts against the prompt's limit.
+      const shotLock = await savedShotLock()
       for (const engine of NODARO_MOTION_ENGINES) {
         for (const s of NODARO_MOTION_PROMPT_PARTS_KEYS) {
           const texts = next[engine]?.[s]
           if (!texts) continue
           // An unchanged style-only entry on an engine that cannot ask for its set (only reached unchanged): kept as checked when saved.
           if (s === "styleOnly" && !loadedEngineTakesStyleOnly()) continue
+          // An unchanged previz entry likewise.
+          if (s === "previz" && !loadedEngineTakesPreviz()) continue
           const found = await directRunPromptProblems(
             app,
             req,
@@ -328,6 +407,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
             masking?.[engine],
             steps?.[engine],
             promptWordingOf(wording, engine),
+            shotLockOf(shotLock, engine),
           )
           if (!found) return reply
           problems.push(...found)
