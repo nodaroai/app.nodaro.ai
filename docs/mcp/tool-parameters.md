@@ -3699,7 +3699,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | string (URL) | yes | The source clip, 4–30 s. |
-| `roles` | object[] | yes | At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
+| `roles` | object[] | yes | At most 15 roles, any kinds (name each place if several); 30 images sent. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip). |
 | `roles[].kind` | string | yes | One of `person`, `pet`, `product`, `location`. |
 | `roles[].name` | string |  | Who in the video, e.g. "the woman that attacks". Unset: named by its first image (needs one). At most 200 characters. |
 | `roles[].images` | string (URL)[] or null |  | At most 3 items. |

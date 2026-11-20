@@ -2301,8 +2301,8 @@ interface VideoRemakeParams {
     | { kind: "product"; name: string; images: string[] | null
         shape?: "new" | "original"; finish?: "new" | "original" }                           // each default "new"
   >                                // every role also takes previewName? / inPreview? (preview only, see below);
-                                   // ≤ 6 person, ≤ 1 location, ≤ 3 pet, ≤ 3 product roles;
-                                   // 0–3 images of ONE subject / place each, ≤ 30 images in all
+                                   // ≤ 15 roles in all, any mix of kinds (several locations: name each);
+                                   // 0–3 images of ONE subject / place each, ≤ 30 images sent in all
   references?: Array<{ images: string[]; line: string }> // ≤ 5 fixed references (see below)
   prePrompt?: string               // your own words at the start, before the role instructions; {role:N} as in postPrompt
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
@@ -2737,8 +2737,23 @@ refuses is retried once) is set by Nodaro for each engine; a run cannot
 change it. `faceMasking` (`VideoRemakeFaceMasking`) is deprecated: it is still
 typed and sent, so older code keeps working, and the server ignores it.
 
-Both routes answer `400` before charging for more roles of a kind than allowed
-or more than 30 images in all (`validation_error`), `draft: true` with
+A run takes at most 15 roles in all, in any mix of person, pet, product and
+location roles. More than one location role is allowed, each naming a
+different setting of the video: give each its own `name` (two with the same
+name, or two left unnamed, answer `400 place_roles_need_names`). A run sends at
+most 30 images in all, counted as sent: with `prepareReferences` on, a person,
+pet or product role sends one prepared picture whatever the number given; a
+location role, and every role with it off, sends its pictures as given; the
+fixed references' pictures count too. If a role's picture cannot be prepared,
+its own pictures are sent instead; a run that this takes past 30 fails with the
+code `too_many_images_prism` (a Nodaro Pulse run past its 10: `too_many_images`):
+the run's own fee is refunded, and the pictures already
+prepared stay charged. A trend's run keeps its trend's own slots. A previz clip
+(`clipKind: "previz"`) takes several location roles too, each named by the words
+its set is found by.
+
+Both routes answer `400` before charging for more than 15 roles
+or more than 30 images sent in all (`validation_error`), `draft: true` with
 `resolution` `"720p"` or `"1080p"` (`validation_error`, "Draft is 480p only."),
 a `prePrompt` or `postPrompt` over 4,000 characters (`validation_error`), a `{role:N}` with N outside
 1..`roles.length` (empty roles count), a raw `{image:` / `{video:` / `{audio:` token in a role's `name`, the
@@ -2784,7 +2799,8 @@ fraction of a second at that end. A Pulse quote names `engine`, with
 `expectedCredits` = `totalCredits` and `settlesLower: false`. Its own
 refusals: `draft_unsupported`, `resolution_unsupported`,
 `output_format_unsupported`, `too_many_images` (over 10 images) and, past its
-8,000-character prompt cap, `prompt_too_long`. The job records it in
+8,000-character prompt cap, `prompt_too_long` (many roles or long role names
+can pass it by themselves: each role with images adds its own sentences). The job records it in
 `input_data.engine`, and a completed job's output in its `engine`. The ids an
 older client sent (`VideoRemakeEngineLegacyId`) are still accepted in a request
 and read as Prism and Pulse. The trend routes and `estimate()` answer the

@@ -101,9 +101,13 @@ const TOO_LONG = { code: "prompt_too_long", message: "The prompt is too long." }
 describe("largeDirectRun", () => {
   it("fills every role, then every fixed reference, then more pictures, to the engine's image cap", () => {
     const prism = largeDirectRun("seedance-2-5")
+    // A direct run's shared cap: 15 roles in a varied mix (the 13 of before the shared cap first, in their order).
     expect(prism.roles.map((r) => (r as { kind: string }).kind)).toEqual([
-      ...Array(6).fill("person"), ...Array(3).fill("pet"), ...Array(3).fill("product"), "location",
+      ...Array(6).fill("person"), ...Array(3).fill("pet"), ...Array(3).fill("product"), "location", "person", "person",
     ])
+    expect(prism.roles).toHaveLength(CAST_SWAP_RUN_LIMITS.maxRoles)
+    expect(CAST_SWAP_RUN_LIMITS.maxRoles).toBe(15)
+    expect(CAST_SWAP_RUN_LIMITS.roles.reduce((n: number, [, count]) => n + count, 0)).toBe(CAST_SWAP_RUN_LIMITS.maxRoles)
     const images = (run: ReturnType<typeof largeDirectRun>) =>
       run.roles.reduce((n: number, r) => n + (r as { images: string[] }).images.length, 0) + run.references.reduce((n: number, r) => n + r.images.length, 0)
     expect(images(prism)).toBe(CAST_SWAP_RUN_LIMITS.maxImages)
@@ -123,6 +127,10 @@ describe("largeDirectRun", () => {
     expect(images(pulse)).toBe(10)
     expect(pulse.references).toEqual([])
     expect(pulse.roles.filter((r) => (r as { images: string[] }).images.length > 0)).toHaveLength(10)
+    // The pictured ones are the first 10, as before the shared cap: 6 people, 3 pets and a product.
+    expect(pulse.roles.filter((r) => (r as { images: string[] }).images.length > 0).map((r) => (r as { kind: string }).kind)).toEqual([
+      ...Array(6).fill("person"), ...Array(3).fill("pet"), "product",
+    ])
   })
 })
 

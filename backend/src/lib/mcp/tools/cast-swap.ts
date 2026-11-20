@@ -513,7 +513,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
               }),
             ]),
           )
-          .describe("At most 6 person, 1 location, 3 pet and 3 product roles; 30 images in all. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
+          .describe("At most 15 roles, any kinds (name each place if several); 30 images sent. At least one role with images, a reference, a pre_prompt or post_prompt — or, on a nodaro-prism Flex run where the engine takes style-only runs, an art_style alone (restyles the whole clip)."),
         references: z
           .array(reference)
           .max(5)

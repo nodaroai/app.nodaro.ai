@@ -215,18 +215,27 @@ export function placeholderReferenceUrl(reference: number): string {
 
 /**
  * What one direct run may carry, as the Cast Swap engine's run body fixes it
- * (the plugin's `input.ts`, mirrored here): 6 person, 3 pet, 3 product and 1
- * location roles of 1–3 images each, 30 images in all (on Kling 4,
- * `CAST_SWAP_KLING_MAX_IMAGES`), 5 fixed references of 1–3 images with a line
- * of up to 500 characters, and role names of up to 200.
+ * (mirrored here): `maxRoles` roles in all — person, pet, product and
+ * location roles in any mix, with no cap per kind — of 1–3 images each, 30
+ * images in all (on Kling 4, `CAST_SWAP_KLING_MAX_IMAGES`), 5 fixed
+ * references of 1–3 images with a line of up to 500 characters, and role
+ * names of up to 200.
+ *
+ * `roles` is the mix the large run is built with (`largeDirectRun`): a varied
+ * cast of `maxRoles` roles, not the only one a run may send. Its first 13 are
+ * the mix of before the shared cap, in the same order, so the roles that get
+ * a picture on Kling 4 (the first 10) are the ones that got one before.
  */
 export const CAST_SWAP_RUN_LIMITS = {
-  /** In the order the engine writes the roles' blocks. */
+  /** The most roles of a direct run, every kind together. */
+  maxRoles: 15,
+  /** The large run's mix, in the order its pictures are given out. */
   roles: [
     ["person", 6],
     ["pet", 3],
     ["product", 3],
     ["location", 1],
+    ["person", 2],
   ],
   imagesPerRole: 3,
   maxImages: 30,
