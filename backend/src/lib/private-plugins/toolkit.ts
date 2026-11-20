@@ -162,6 +162,7 @@ import { planRolesOfferedByDefault } from "../nodaro-motion-plan-roles-default.j
 import { engineTakesPreviz, previzForPlugin } from "../nodaro-motion-previz.js"
 import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
 import { engineTakesShotLock, shotLockForPlugin } from "../nodaro-motion-shot-lock.js"
+import { engineTakesFlashModel, flashModelForPlugin } from "../nodaro-motion-flash-model.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1743,6 +1744,8 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionPreviz: true,
   // tk.settings.nodaroMotionShotLock(): the admin's shot lock per Video Remake engine.
   nodaroMotionShotLock: true,
+  // tk.settings.nodaroMotionFlashModel(): the admin's flash-model test per Video Remake engine.
+  nodaroMotionFlashModel: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2527,6 +2530,22 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_shot_lock: the app settings could not be read")
         if (!engineTakesShotLock(getPluginSupports().castSwap)) return null
         return shotLockForPlugin(settings.nodaro_motion_shot_lock)
+      },
+      // The flash-model test, for ONE run: answered only for a run started by an admin account. `userId` is the
+      // account the request was authenticated as (never a body field or a header), and its role is read here, by the
+      // host (`checkIsAdmin`, the admin routes' own check). Null when no user is named, when the user is no admin,
+      // when it was never saved or every engine is off, AND to an engine that does not declare `castSwap.flashModel`
+      // (it never asks); else each engine that is on under its current AND its earlier keys. A failed settings read
+      // or a failed role read throws: the engine reads that as off, with an alert, so a run whose admin status
+      // cannot be verified is made on its engine's own model.
+      nodaroMotionFlashModel: async (userId?: string) => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_flash_model: the app settings could not be read")
+        if (!engineTakesFlashModel(getPluginSupports().castSwap)) return null
+        const on = flashModelForPlugin(settings.nodaro_motion_flash_model)
+        if (on === null) return null
+        if (typeof userId !== "string" || userId === "") return null
+        return (await checkIsAdmin(userId)) ? on : null
       },
     },
     deployment: { publicUrl: appBaseUrl() },

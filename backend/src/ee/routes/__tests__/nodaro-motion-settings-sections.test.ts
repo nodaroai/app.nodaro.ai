@@ -39,6 +39,8 @@ const NOT_SETTINGS: Readonly<Record<string, string>> = {
   "POST /v1/admin/video-remake/custom-style/check": "asks the engine to check a custom style draft; writes nothing",
   "GET /v1/admin/video-remake/plan-roles/defaults": "the engine's defaults for the planning step of roles from the prompt",
   "POST /v1/admin/video-remake/plan-roles/check": "asks the engine to check a plan-roles draft; writes nothing",
+  "GET /v1/admin/video-remake/flash-model": "a test switch, kept out of the stored sets: loading a set must never turn a test on",
+  "PUT /v1/admin/video-remake/flash-model": "a test switch, kept out of the stored sets: loading a set must never turn a test on",
   "GET /v1/admin/video-remake/settings-sets": "the stored sets themselves",
   "POST /v1/admin/video-remake/settings-sets": "the stored sets themselves",
   "PUT /v1/admin/video-remake/settings-sets/:id": "the stored sets themselves",

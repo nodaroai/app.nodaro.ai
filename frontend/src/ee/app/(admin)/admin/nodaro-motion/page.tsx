@@ -146,6 +146,7 @@ import { useCustomStyleSection } from "./use-custom-style-section"
 import { usePlanRolesSection } from "./use-plan-roles-section"
 import { usePrevizSection } from "./use-previz-section"
 import { useShotLockSection } from "./use-shot-lock-section"
+import { FlashModelTest } from "./components/FlashModelTest"
 import {
   ADVANCED_SPEC,
   MASKING_SPEC,
@@ -762,6 +763,7 @@ export default function AdminNodaroMotionPage() {
         shotLockUnsaved={shotLock.unsaved}
         held={held}
       />
+      <FlashModelTest />
     </div>
   )
 }
