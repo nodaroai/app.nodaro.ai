@@ -13578,10 +13578,11 @@ export async function saveAdminTrendEnginePrompt(
 export type CastSwapStyleId = "precise" | "motion"
 
 /**
- * One key of an engine's prompt-parts entry: a run style (`precise`, `motion`), or `styleOnly` — a style-only run's
- * own parts (a direct Prism Flex run with an art style and nothing to swap, on the original clip).
+ * One key of an engine's prompt-parts entry: a run style (`precise`, `motion`), `styleOnly` — a style-only run's
+ * own parts (a direct Prism Flex run with an art style and nothing to swap, on the original clip) — or `previz`, a 3D
+ * previz clip's own parts (a direct Prism run whose clip is rendered into its look instead of edited).
  */
-export type NodaroMotionPromptPartsKey = CastSwapStyleId | "styleOnly"
+export type NodaroMotionPromptPartsKey = CastSwapStyleId | "styleOnly" | "previz"
 
 /** Video Remake's direct-run overrides: per engine (public id), per key, the text per part. */
 export type NodaroMotionPromptParts = Partial<Record<NodaroMotionEngine, Partial<Record<NodaroMotionPromptPartsKey, PromptPartTexts>>>>
@@ -13591,7 +13592,7 @@ export interface NodaroMotionPromptPartsView {
   promptParts: NodaroMotionPromptParts | null
   updatedAt: string | null
   engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
-  /** The keys this environment's engine shows: the styles, and `styleOnly` while it runs style-only runs. */
+  /** The keys this environment's engine shows: the styles, `styleOnly` while it runs style-only runs, and `previz` while it takes a 3D previz clip. */
   styles: NodaroMotionPromptPartsKey[]
 }
 
@@ -13618,6 +13619,8 @@ export async function previewNodaroMotionPromptParts(input: {
   overrides?: PromptPartTexts
   /** The Flex wording to preview (left out: the engine's saved one). Read only for a Flex run worded Flexible. */
   promptWording?: CastSwapPromptWordingId
+  /** The shot lock to preview (left out: the engine's saved one). Read only for a Precise or a Motion run. */
+  shotLock?: NodaroMotionShotLockValue
 }): Promise<PromptPartsAnswer> {
   return (
     await apiRequest<{ data: PromptPartsAnswer }>(`${ADMIN_NODARO_MOTION_PROMPT_PARTS}/preview`, "apiErr.loadNodaroMotion", {
@@ -13732,6 +13735,74 @@ export async function saveNodaroMotionPromptWording(promptWording: NodaroMotionP
     await apiRequest<{ data: NodaroMotionPromptWordingView }>(ADMIN_NODARO_MOTION_PROMPT_WORDING, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { promptWording },
+    })
+  ).data
+}
+
+// ---- Admin: Video Remake's shot lock for direct runs (/v1/admin/video-remake/shot-lock, admin-nodaro-motion-shot-lock.ts) ----
+
+/** One engine's shot lock: whether its direct runs' prompt on an ordinary clip carries the line that keeps the shot order. */
+export type NodaroMotionShotLockValue = "off" | "on"
+
+/** The shot lock per engine, keyed by public id; an engine left out (or "off") writes no such line. */
+export type NodaroMotionShotLock = Partial<Record<NodaroMotionEngine, NodaroMotionShotLockValue>>
+
+export interface NodaroMotionShotLockView {
+  /** null = never saved: off for every engine. Only the engines that are on are listed. */
+  shotLock: NodaroMotionShotLock | null
+  updatedAt: string | null
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
+  /** Whether this environment's Cast Swap engine writes the shot lock's line. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_SHOT_LOCK = "/v1/admin/video-remake/shot-lock"
+
+export async function fetchNodaroMotionShotLock(): Promise<NodaroMotionShotLockView> {
+  return (await apiRequest<{ data: NodaroMotionShotLockView }>(ADMIN_NODARO_MOTION_SHOT_LOCK, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves every engine's shot lock; "on" is refused (409 `engine_unsupported`) while no environment's engine writes the line. */
+export async function saveNodaroMotionShotLock(shotLock: NodaroMotionShotLock): Promise<NodaroMotionShotLockView> {
+  return (
+    await apiRequest<{ data: NodaroMotionShotLockView }>(ADMIN_NODARO_MOTION_SHOT_LOCK, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { shotLock },
+    })
+  ).data
+}
+
+// ---- Admin: Video Remake's 3D previz clips (/v1/admin/video-remake/previz, admin-nodaro-motion-previz.ts) ----
+
+/** The saved setting. `enabled` left out: the deployment's default. */
+export interface NodaroMotionPreviz {
+  enabled?: boolean
+}
+
+export interface NodaroMotionPrevizView {
+  /** null = never saved. Only what an admin set is listed. */
+  previz: NodaroMotionPreviz | null
+  /** Whether this deployment accepts a 3D previz clip: the saved choice, else `enabledByDefault`. */
+  enabled: boolean
+  /** What this deployment answers while no choice is saved (off on a white-label deployment). */
+  enabledByDefault: boolean
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine takes a 3D previz clip. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_PREVIZ = "/v1/admin/video-remake/previz"
+
+export async function fetchNodaroMotionPreviz(): Promise<NodaroMotionPrevizView> {
+  return (await apiRequest<{ data: NodaroMotionPrevizView }>(ADMIN_NODARO_MOTION_PREVIZ, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting, whatever the engines (one that takes no 3D previz clip never reads it). */
+export async function saveNodaroMotionPreviz(previz: NodaroMotionPreviz): Promise<NodaroMotionPrevizView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPrevizView }>(ADMIN_NODARO_MOTION_PREVIZ, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { previz },
     })
   ).data
 }

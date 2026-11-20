@@ -18,6 +18,7 @@ import {
   type CastSwapPromptWordingId,
   type NodaroMotionPromptPartsKey,
   type NodaroMotionEngine,
+  type NodaroMotionShotLockValue,
   type PromptPartTexts,
 } from "@/lib/api"
 
@@ -92,11 +93,12 @@ export function useNodaroMotionPromptPreview(
   shape = "",
   enabled = true,
   promptWording?: CastSwapPromptWordingId,
+  shotLock?: NodaroMotionShotLockValue,
 ) {
-  const key = `${JSON.stringify(overrides)}|${shape}|${promptWording ?? ""}`
+  const key = `${JSON.stringify(overrides)}|${shape}|${promptWording ?? ""}${shotLock ? `|${shotLock}` : ""}`
   return useQuery({
     queryKey: queryKeys.admin.nodaroMotionPromptPreview(engine, style, key),
-    queryFn: () => previewNodaroMotionPromptParts({ engine, style, overrides, ...(promptWording ? { promptWording } : {}) }),
+    queryFn: () => previewNodaroMotionPromptParts({ engine, style, overrides, ...(promptWording ? { promptWording } : {}), ...(shotLock ? { shotLock } : {}) }),
     enabled: hasAdmin() && enabled,
     placeholderData: keepPreviousData,
     retry: false,

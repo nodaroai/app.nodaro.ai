@@ -159,6 +159,9 @@ import { customStyleForPlugin, engineTakesCustomStyle } from "../nodaro-motion-c
 import { customStyleOfferedByDefault } from "../nodaro-motion-custom-style-default.js"
 import { engineTakesPlanRoles, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
 import { planRolesOfferedByDefault } from "../nodaro-motion-plan-roles-default.js"
+import { engineTakesPreviz, previzForPlugin } from "../nodaro-motion-previz.js"
+import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
+import { engineTakesShotLock, shotLockForPlugin } from "../nodaro-motion-shot-lock.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1736,6 +1739,10 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionCustomStyle: true,
   // tk.settings.nodaroMotionPlanRoles(): whether this deployment offers Video Remake's roles planned from the prompt (resolved here), and the admin's planning step.
   nodaroMotionPlanRoles: true,
+  // tk.settings.nodaroMotionPreviz(): whether this deployment accepts Video Remake's 3D previz clips (resolved here).
+  nodaroMotionPreviz: true,
+  // tk.settings.nodaroMotionShotLock(): the admin's shot lock per Video Remake engine.
+  nodaroMotionShotLock: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2501,6 +2508,25 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_plan_roles: the app settings could not be read")
         if (!engineTakesPlanRoles(getPluginSupports().castSwap)) return null
         return planRolesForPlugin(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault())
+      },
+      // Same rules again: a failed read throws (the engine reads that as not accepted, with an alert). Null only to
+      // an engine that does not declare `castSwap.previz` (it never asks). Otherwise ALWAYS an object, never saved
+      // included, with `enabled` resolved here (the admin's saved choice, else this deployment's default: on for
+      // Nodaro's own, off under a white-label surface profile).
+      nodaroMotionPreviz: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_previz: the app settings could not be read")
+        if (!engineTakesPreviz(getPluginSupports().castSwap)) return null
+        return previzForPlugin(settings.nodaro_motion_previz, previzOfferedByDefault())
+      },
+      // Same rules: a failed read throws (null would take the line out of every direct run). Null when never saved or
+      // every engine is off, AND to an engine that does not declare `castSwap.shotLock` (it never asks); else each
+      // engine that is on under its current AND its earlier keys (the masking setting's shim).
+      nodaroMotionShotLock: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_shot_lock: the app settings could not be read")
+        if (!engineTakesShotLock(getPluginSupports().castSwap)) return null
+        return shotLockForPlugin(settings.nodaro_motion_shot_lock)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

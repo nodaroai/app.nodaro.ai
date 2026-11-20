@@ -51,10 +51,10 @@ describe("Video Remake enums", () => {
     expect(isMainFaceMaskMark({ label: { slot: "guest" } })).toBe(false)
   })
 
-  it("the 22 prompt parts, in the engine's order (the new wording's movement lock right after the opener, Flex's art style after it, its MANDATORY line right after it, the face mesh after the depth guard, the fill-none mesh line right after it, the role outlines after them, the picture roles after the role parts, the closing restatement before the post header)", () => {
+  it("the 25 prompt parts, in the engine's order (the new wording's movement lock right after the opener, the shot lock after it, a previz clip's sound line after the audio line and its closing requirement after the avoid list, Flex's art style after the shot lock, its MANDATORY line right after it, the face mesh after the depth guard, the fill-none mesh line right after it, the role outlines after them, the picture roles after the role parts, the closing restatement before the post header)", () => {
     expect(CAST_SWAP_PROMPT_PART_IDS).toEqual([
-      "opener", "motionLock", "artStyle", "artStyleMandatory", "original", "scene", "quality", "keep", "audio", "face", "depthGuard", "faceMesh", "faceMeshFillNone",
-      "roleOutlines", "person", "pet", "product", "location", "pictureRoles", "avoid", "restate", "postHeader",
+      "opener", "motionLock", "shotLock", "artStyle", "artStyleMandatory", "original", "scene", "quality", "keep", "audio", "sound", "face", "depthGuard", "faceMesh", "faceMeshFillNone",
+      "roleOutlines", "person", "pet", "product", "location", "pictureRoles", "avoid", "referenceOnly", "restate", "postHeader",
     ])
   })
 
@@ -62,6 +62,7 @@ describe("Video Remake enums", () => {
     expect(CAST_SWAP_PROMPT_PART_PLACEHOLDERS).toEqual({
       opener: ["{video}"],
       motionLock: ["{video}"],
+      shotLock: ["{video}"],
       artStyle: ["{style}"],
       artStyleMandatory: [],
       original: ["{original}"],
@@ -69,6 +70,7 @@ describe("Video Remake enums", () => {
       quality: [],
       keep: ["{video}"],
       audio: [],
+      sound: [],
       face: [],
       depthGuard: ["{video}"],
       faceMesh: ["{video}"],
@@ -80,6 +82,7 @@ describe("Video Remake enums", () => {
       location: ["{name}", "{image}"],
       pictureRoles: ["{video}"],
       avoid: [],
+      referenceOnly: ["{video}"],
       restate: ["{video}"],
       postHeader: [],
     })

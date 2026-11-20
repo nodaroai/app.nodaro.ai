@@ -21,8 +21,10 @@ import type {
   NodaroMotionPlanRoles,
   NodaroMotionPreciseArtStyle,
   NodaroMotionPreciseStyleRoute,
+  NodaroMotionPreviz,
   NodaroMotionPromptParts,
   NodaroMotionPromptWording,
+  NodaroMotionShotLock,
   NodaroMotionSteps,
   NodaroMotionStyle,
   NodaroMotionStyleOnly,
@@ -40,6 +42,8 @@ import { preciseStyleRouteDraftOf, preciseStyleRouteToSaved, type PreciseStyleRo
 import { promptPartsToSave, promptWordingToSave } from "./components/PromptPartsTabs"
 import { customStyleToSaved } from "./components/CustomStyleSection"
 import { planRolesToSaved } from "./components/PlanRolesSection"
+import { previzToSaved } from "./components/PrevizSection"
+import { shotLockToSaved } from "./components/ShotLockSection"
 
 /** Every section a stored set holds, by the server's key. */
 export const MOTION_SETTINGS_KEYS = [
@@ -58,6 +62,8 @@ export const MOTION_SETTINGS_KEYS = [
   "advanced",
   "custom-style",
   "plan-roles",
+  "previz",
+  "shot-lock",
   "prompt-parts",
 ] as const
 
@@ -178,6 +184,25 @@ export const PLAN_ROLES_SPEC = spec<NodaroMotionPlanRoles, NodaroMotionPlanRoles
   saveArgOf: (body) => body.planRoles,
 })
 
+/**
+ * The 3D previz clips: the draft is kept in its saved form, `enabled` left out while the deployment's default decides
+ * (the page shows that default; PrevizSection.tsx).
+ */
+export const PREVIZ_SPEC = spec<NodaroMotionPreviz, NodaroMotionPreviz, { previz: NodaroMotionPreviz }>({
+  draftOf: (stored) => previzToSaved(stored),
+  bodyOf: (draft) => ({ previz: previzToSaved(draft) }),
+  storedOfBody: (body) => body.previz,
+  saveArgOf: (body) => body.previz,
+})
+
+/** The shot lock: each engine that is on (one that is off is left out, the same as never set). */
+export const SHOT_LOCK_SPEC = spec<NodaroMotionShotLock, NodaroMotionShotLock, { shotLock: NodaroMotionShotLock }>({
+  draftOf: (stored) => shotLockToSaved(stored),
+  bodyOf: (draft) => ({ shotLock: shotLockToSaved(draft) }),
+  storedOfBody: (body) => body.shotLock,
+  saveArgOf: (body) => body.shotLock,
+})
+
 export const STYLE_ONLY_SPEC = spec<NodaroMotionStyleOnly, NodaroMotionStyleOnly, { styleOnly: NodaroMotionStyleOnly }>({
   draftOf: (stored) => structuredClone(stored ?? {}),
   bodyOf: (draft) => ({ styleOnly: styleOnlyToSaved(draft) }),
@@ -237,6 +262,8 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   advanced: ADVANCED_SPEC,
   "custom-style": CUSTOM_STYLE_SPEC,
   "plan-roles": PLAN_ROLES_SPEC,
+  previz: PREVIZ_SPEC,
+  "shot-lock": SHOT_LOCK_SPEC,
   "prompt-parts": PROMPT_PARTS_SPEC,
 }
 

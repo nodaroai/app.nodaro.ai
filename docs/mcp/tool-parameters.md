@@ -3708,6 +3708,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `roles[].hair` | string |  | Hairstyle and haircut; as body. One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
 | `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
+| `roles[].subject` | string |  | previz only: what the role is, used in the script; name is then the locator of its model. At most 200 characters. |
 | `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
 | `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
 | `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
@@ -3724,6 +3725,9 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `art_style` | string |  | An art style on Nodaro Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |
 | `custom_style` | string |  | The style in your own words, instead of art_style (never both). Write it yourself: describe the visual style only — the medium (drawn, 3D-rendered or filmed), line, colour, lighting and texture — never who or what is in the video, and no names of people. At most 600 characters. Nodaro Prism only. At most 600 characters. |
 | `custom_style_image_url` | string (URL) |  | A public https image whose visual style the video should take. Nodaro reads the image's style (never its content) and restyles the clip in it. With custom_style too, your text is a note on the image's style (for example 'like this, but darker'). Not with art_style. At most 4096 characters. |
+| `clip_kind` | string |  | "previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model's colour or position; with no art_style or custom_style the result is real-world, live-action footage. Default "footage". One of `footage`, `previz`. |
+| `previz_lighting` | boolean |  | previz only: also take the lighting direction and lighting changes from the clip. |
+| `previz_sound` | string |  | previz only: keep the clip's sound, or have it generated. One of `clip`, `generated`. |
 | `motion_length` | string |  | nodaro-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
 | `resolution` | string |  | Default "480p" (nodaro-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |

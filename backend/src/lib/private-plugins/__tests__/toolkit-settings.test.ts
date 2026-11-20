@@ -11,6 +11,8 @@ import type {
   PluginNodaroMotionStyleOnly,
   PluginNodaroMotionPreciseArtStyle,
   PluginNodaroMotionNoPerson,
+  PluginNodaroMotionPreviz,
+  PluginNodaroMotionShotLock,
   PluginPromptPartId,
   PluginSupports,
 } from "../types.js"
@@ -23,6 +25,8 @@ import type { NodaroMotionStyleOnlyEntry } from "../../nodaro-motion-style-only.
 import type { NodaroMotionPreciseArtStyleForPlugin } from "../../nodaro-motion-precise-art-style.js"
 import type { NodaroMotionNoPersonEntry } from "../../nodaro-motion-no-person.js"
 import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
+import type { NodaroMotionPrevizForPlugin } from "../../nodaro-motion-previz.js"
+import type { NodaroMotionShotLockForPlugin } from "../../nodaro-motion-shot-lock.js"
 
 /**
  * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Video
@@ -30,7 +34,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, offeredByDefault: true, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -39,7 +43,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -47,6 +51,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
 
 vi.mock("../../nodaro-motion-custom-style-default.js", () => ({ customStyleOfferedByDefault: () => h.offeredByDefault }))
 vi.mock("../../nodaro-motion-plan-roles-default.js", () => ({ planRolesOfferedByDefault: () => h.planRolesByDefault }))
+vi.mock("../../nodaro-motion-previz-default.js", () => ({ previzOfferedByDefault: () => h.previzByDefault }))
 
 const { buildToolkit } = await import("../toolkit.js")
 const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../private-plugins/supports-registry.js")
@@ -1091,5 +1096,136 @@ describe("tk.settings.nodaroMotionPlanRoles", () => {
     expect(got).toStrictEqual({ enabled: true, plan: { instructions: "Place each image.", model: "some-model" } })
     ;(got as { plan: { model: string } }).plan.model = "changed"
     expect((h.planRoles as { plan: { model: string } }).plan.model).toBe("some-model")
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionPreviz()`: whether this deployment accepts a Video Remake run whose clip is a 3D previz,
+ * with `enabled` ALREADY RESOLVED here (the admin's saved choice, else the deployment's default). The engine reads
+ * null as not accepted, so an engine that declares `castSwap.previz` is always answered an object.
+ */
+describe("tk.settings.nodaroMotionPreviz", () => {
+  beforeEach(() => {
+    h.previz = null
+    h.previzByDefault = true
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const previzEngine = () => setPluginSupports({ castSwap: { ...CS, previz: true } } as never)
+  const read = () => buildToolkit().settings!.nodaroMotionPreviz!()
+
+  it("advertises nodaroMotionPreviz and answers null to an engine without castSwap.previz, whatever is saved", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionPreviz).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionPreviz).toBe("function")
+    h.previz = { enabled: true }
+    // No engine loaded, one from before the flag, one that declares it false, one with the roles from the prompt alone.
+    expect(await read()).toBeNull()
+    for (const castSwap of [CS, { ...CS, previz: false }, { ...CS, planRoles: true, customStyle: true }]) {
+      setPluginSupports({ castSwap } as never)
+      expect(await read(), JSON.stringify(castSwap)).toBeNull()
+    }
+  })
+
+  it("rejects when the settings could not be read, never answering a switch", async () => {
+    previzEngine()
+    h.failed = true
+    await expect(read()).rejects.toThrow(/could not be read/)
+    // The same for an engine that does not declare it: a failed read is never read as "not this engine's".
+    _resetPluginSupportsForTests()
+    await expect(read()).rejects.toThrow(/could not be read/)
+  })
+
+  it("never saved: an object with the deployment's default — on for Nodaro's own, off under a white-label profile", async () => {
+    previzEngine()
+    expect(await read()).toStrictEqual({ enabled: true })
+    h.previz = {}
+    expect(await read()).toStrictEqual({ enabled: true })
+    h.previzByDefault = false
+    expect(await read()).toStrictEqual({ enabled: false })
+  })
+
+  it("an admin's saved choice wins over the deployment's default, either way", async () => {
+    previzEngine()
+    h.previz = { enabled: false }
+    expect(await read()).toStrictEqual({ enabled: false })
+    h.previzByDefault = false
+    h.previz = { enabled: true }
+    expect(await read()).toStrictEqual({ enabled: true })
+  })
+
+  it("does not follow the roles' or the custom style's switch, and answers a copy", async () => {
+    previzEngine()
+    h.planRoles = { enabled: false }
+    h.customStyle = { enabled: false }
+    h.previz = { enabled: true }
+    const got = await read()
+    expect(got).toStrictEqual({ enabled: true })
+    ;(got as { enabled: boolean }).enabled = false
+    expect(h.previz).toEqual({ enabled: true })
+    h.planRoles = null
+    h.customStyle = null
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionPreviz", () => {
+    expectTypeOf<NodaroMotionPrevizForPlugin>().toExtend<PluginNodaroMotionPreviz>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionShotLock()`: the admin's shot lock per Video Remake engine, read by the Cast Swap engine
+ * for a DIRECT run on an ordinary clip: null when never saved, every engine is off, or this host's engine does not
+ * declare `castSwap.shotLock`; else only the engines that are on.
+ */
+describe("tk.settings.nodaroMotionShotLock", () => {
+  beforeEach(() => {
+    h.shotLock = null
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const shotLockEngine = () => setPluginSupports({ castSwap: { ...CS, shotLock: true } } as never)
+  const read = () => buildToolkit().settings!.nodaroMotionShotLock!()
+
+  it("advertises nodaroMotionShotLock and answers null to an engine without castSwap.shotLock, whatever is saved", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionShotLock).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionShotLock).toBe("function")
+    h.shotLock = { "nodaro-prism": "on", "nodaro-pulse": "on" }
+    expect(await read()).toBeNull()
+    for (const castSwap of [CS, { ...CS, shotLock: false }, { ...CS, previz: true }]) {
+      setPluginSupports({ castSwap } as never)
+      expect(await read(), JSON.stringify(castSwap)).toBeNull()
+    }
+  })
+
+  it("rejects when the settings could not be read, never answering null (off)", async () => {
+    shotLockEngine()
+    h.failed = true
+    await expect(read()).rejects.toThrow(/could not be read/)
+    _resetPluginSupportsForTests()
+    await expect(read()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers null when it was never saved, or every engine is off: there is no deployment default", async () => {
+    shotLockEngine()
+    expect(await read()).toBeNull()
+    h.shotLock = {}
+    expect(await read()).toBeNull()
+    h.shotLock = { "nodaro-prism": "off" }
+    expect(await read()).toBeNull()
+    expect(h.reads).toBe(3)
+  })
+
+  it("answers each engine that is on under the current and the earlier keys, a copy the plugin may change", async () => {
+    shotLockEngine()
+    h.shotLock = { "nodaro-pulse": "on" }
+    const got = await read()
+    expect(got).toEqual({ "nodaro-pulse": "on", "motion-pulse": "on", "motion-lite": "on" })
+    ;(got as Record<string, string>)["nodaro-pulse"] = "off"
+    expect(h.shotLock).toEqual({ "nodaro-pulse": "on" })
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionShotLock", () => {
+    expectTypeOf<NodaroMotionShotLockForPlugin>().toExtend<PluginNodaroMotionShotLock>()
   })
 })

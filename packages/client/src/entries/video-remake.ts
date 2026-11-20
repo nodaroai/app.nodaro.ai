@@ -45,5 +45,9 @@ export {
   type VideoRemakePlanRolesDecision,
   type VideoRemakePlannedRoles,
   type VideoRemakePlanRolesRefusalCode,
+  type VideoRemakeClipKind,
+  type VideoRemakePrevizOptions,
+  type VideoRemakePrevizRefusalCode,
+  type VideoRemakeRolePrevizSettings,
   type VideoRemakeArtStyle,
 } from "../resources/cast-swap.js"
