@@ -69,7 +69,10 @@
 // (ShotLockSection.tsx, use-shot-lock-section.tsx): per engine, whether a
 // run's prompt on an ordinary clip carries the line that keeps the shot order
 // (PUT /v1/admin/video-remake/shot-lock); the engine prompt's previews below
-// follow its draft.
+// follow its draft. And the shot list's frame rate (ShotListFpsSection.tsx,
+// use-shot-list-fps-section.tsx): how many frames a second the model that
+// writes a run's shot list is shown of the clip
+// (PUT /v1/admin/video-remake/shot-list-fps).
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -146,6 +149,7 @@ import { useCustomStyleSection } from "./use-custom-style-section"
 import { usePlanRolesSection } from "./use-plan-roles-section"
 import { usePrevizSection } from "./use-previz-section"
 import { useShotLockSection } from "./use-shot-lock-section"
+import { useShotListFpsSection } from "./use-shot-list-fps-section"
 import { FlashModelTest } from "./components/FlashModelTest"
 import {
   ADVANCED_SPEC,
@@ -271,6 +275,7 @@ export default function AdminNodaroMotionPage() {
   const planRoles = usePlanRolesSection(held)
   const previz = usePrevizSection(held)
   const shotLock = useShotLockSection(held)
+  const shotListFps = useShotListFpsSection(held)
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
   const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
   const wording = useSectionDraft(PROMPT_WORDING_SPEC, wordingQuery.data, (v) => v.promptWording, saveWording.mutateAsync, held)
@@ -310,6 +315,7 @@ export default function AdminNodaroMotionPage() {
     "plan-roles": planRoles.binding,
     previz: previz.binding,
     "shot-lock": shotLock.binding,
+    "shot-list-fps": shotListFps.binding,
     "prompt-parts": promptParts.binding,
   }
   const [draft, setDraft] = [masking.draft, masking.setDraft]
@@ -399,7 +405,8 @@ export default function AdminNodaroMotionPage() {
     !customStyle.changed &&
     !planRoles.changed &&
     !previz.changed &&
-    !shotLock.changed
+    !shotLock.changed &&
+    !shotListFps.changed
   const pending =
     save.isPending ||
     saveMotion.isPending ||
@@ -416,7 +423,8 @@ export default function AdminNodaroMotionPage() {
     customStyle.pending ||
     planRoles.pending ||
     previz.pending ||
-    shotLock.pending
+    shotLock.pending ||
+    shotListFps.pending
 
   if (!hasAdmin()) return null
 
@@ -447,6 +455,8 @@ export default function AdminNodaroMotionPage() {
       // Their refusals are also said under their switches (PrevizSection, ShotLockSection).
       if (previz.changed) await previz.save()
       if (shotLock.changed) await shotLock.save()
+      // Its refusal is also said under its select (ShotListFpsSection).
+      if (shotListFps.changed) await shotListFps.save()
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -479,7 +489,8 @@ export default function AdminNodaroMotionPage() {
               !customStyle.changed &&
               !planRoles.changed &&
               !previz.changed &&
-              !shotLock.changed) ||
+              !shotLock.changed &&
+              !shotListFps.changed) ||
             issues.length > 0 ||
             preciseStyleRouteHeld ||
             pending ||
@@ -506,6 +517,7 @@ export default function AdminNodaroMotionPage() {
       {planRoles.node}
       {previz.node}
       {shotLock.node}
+      {shotListFps.node}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

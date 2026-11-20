@@ -13850,6 +13850,45 @@ export async function saveNodaroMotionPreviz(previz: NodaroMotionPreviz): Promis
   ).data
 }
 
+// ---- Admin: Video Remake's shot-list frame rate (/v1/admin/video-remake/shot-list-fps, admin-nodaro-motion-shot-list-fps.ts) ----
+
+/** The saved setting. `fps` left out: the engine's own default (the recommended rate). */
+export interface NodaroMotionShotListFps {
+  fps?: number
+}
+
+export interface NodaroMotionShotListFpsView {
+  /** null = never saved. Only what an admin set is listed. */
+  shotListFps: NodaroMotionShotListFps | null
+  /** The rate in effect, frames a second: the saved choice, else `defaultFps`. */
+  fps: number
+  /** What the engine applies while no choice is saved: the recommended rate. */
+  defaultFps: number
+  /** The rates an admin may choose. */
+  options: number[]
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine reads its shot list's clip at a frame rate. */
+  supported: boolean
+  /** Whether this deployment can serve a call that carries a frame rate; false: clips are read at 1 whatever is saved. */
+  rateCarried: boolean
+}
+
+const ADMIN_NODARO_MOTION_SHOT_LIST_FPS = "/v1/admin/video-remake/shot-list-fps"
+
+export async function fetchNodaroMotionShotListFps(): Promise<NodaroMotionShotListFpsView> {
+  return (await apiRequest<{ data: NodaroMotionShotListFpsView }>(ADMIN_NODARO_MOTION_SHOT_LIST_FPS, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting, whatever the engines (one that reads no frame rate never reads it). */
+export async function saveNodaroMotionShotListFps(shotListFps: NodaroMotionShotListFps): Promise<NodaroMotionShotListFpsView> {
+  return (
+    await apiRequest<{ data: NodaroMotionShotListFpsView }>(ADMIN_NODARO_MOTION_SHOT_LIST_FPS, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { shotListFps },
+    })
+  ).data
+}
+
 // ---- Admin: Video Remake's style-only setting (/v1/admin/video-remake/style-only, admin-nodaro-motion-style-only.ts) ----
 
 /** What a style-only run sends: the original clip restyled, with no depth (the default), or the depth path of any art-style Flex run. */

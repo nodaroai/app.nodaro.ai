@@ -75,6 +75,8 @@ beforeEach(() => {
   // The 3D previz clips and the shot lock (previz-shot-lock.test.tsx): never saved, and an engine that takes neither.
   routes["GET /v1/admin/video-remake/previz"] = () => ({ body: { data: { previz: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: false } } })
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
+  // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
+  routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
   routes[`PUT ${BASE}/advanced`] = (init) => {
     advancedShown = JSON.parse(String(init?.body)).show
     return { body: { data: { show: advancedShown, updatedAt: "2026-11-06T10:00:00.000Z" } } }

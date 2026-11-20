@@ -162,6 +162,8 @@ import { planRolesOfferedByDefault } from "../nodaro-motion-plan-roles-default.j
 import { engineTakesPreviz, previzForPlugin } from "../nodaro-motion-previz.js"
 import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
 import { engineTakesShotLock, shotLockForPlugin } from "../nodaro-motion-shot-lock.js"
+import { engineTakesShotListFps, shotListFpsForPlugin } from "../nodaro-motion-shot-list-fps.js"
+import { geminiKeySet } from "../llm/anthropic-availability.js"
 import { engineTakesFlashModel, flashModelForPlugin } from "../nodaro-motion-flash-model.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
@@ -1744,6 +1746,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   nodaroMotionPreviz: true,
   // tk.settings.nodaroMotionShotLock(): the admin's shot lock per Video Remake engine.
   nodaroMotionShotLock: true,
+  // tk.settings.nodaroMotionShotListFps(): the admin's frame rate for the clip a Video Remake shot list is written from;
+  // the chat route carries that rate (`referenceVideoFps`, with `referenceVideoUrls` and `advancedMode`, on a Gemini model).
+  nodaroMotionShotListFps: true,
   // tk.settings.nodaroMotionFlashModel(): the admin's flash-model test per Video Remake engine.
   nodaroMotionFlashModel: true,
   jobLanes: true,
@@ -2530,6 +2535,16 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_shot_lock: the app settings could not be read")
         if (!engineTakesShotLock(getPluginSupports().castSwap)) return null
         return shotLockForPlugin(settings.nodaro_motion_shot_lock)
+      },
+      // Same rules: a failed read throws (the engine then asks for its own default, with an alert). Null to an engine
+      // that does not declare `castSwap.shotListFps` (it never asks). Otherwise ALWAYS an object: `fps` when an admin
+      // chose a rate, none while the engine's default decides, and `fps: 1` (the clip as before) on a deployment that
+      // cannot serve a call carrying a rate (it rides only on the model provider's own API: no key for it here).
+      nodaroMotionShotListFps: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_shot_list_fps: the app settings could not be read")
+        if (!engineTakesShotListFps(getPluginSupports().castSwap)) return null
+        return shotListFpsForPlugin(settings.nodaro_motion_shot_list_fps, geminiKeySet())
       },
       // The flash-model test, for ONE run: answered only for a run started by an admin account. `userId` is the
       // account the request was authenticated as (never a body field or a header), and its role is read here, by the

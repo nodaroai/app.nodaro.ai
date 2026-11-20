@@ -3893,6 +3893,15 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionShotLock?: boolean
   /**
+   * `tk.settings.nodaroMotionShotListFps()` exists: the frame rate an admin
+   * set for the clip a Video Remake shot list is written from. And the chat
+   * route (`POST /v1/llm-chat/generate`) carries that rate: a request with
+   * `referenceVideoUrls`, `referenceVideoFps` and `advancedMode: true` on a
+   * Gemini model is read at it. An older host has no such member: the clip
+   * is sent as before and read at one frame a second.
+   */
+  readonly nodaroMotionShotListFps?: boolean
+  /**
    * `tk.settings.nodaroMotionFlashModel(userId)` exists: the flash-model
    * test an admin set per Video Remake engine ("off" or "on"), answered only
    * for a run started by an admin account (the host verifies the role). An
@@ -4385,6 +4394,17 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionShotLock?(): Promise<PluginNodaroMotionShotLock | null>
   /**
+   * The admin's frame rate for the clip a Video Remake shot list is written
+   * from: `{ fps }` when an admin chose a rate, an object with no `fps`
+   * while the engine's own default decides, and `{ fps: 1 }` (the clip as it
+   * was read before) on a deployment that cannot serve a call carrying a
+   * rate. Null to an engine that does not declare `castSwap.shotListFps`
+   * (it never asks). Returns a copy the plugin may change freely. REJECTS
+   * when the settings could not be read (the engine then asks for its own
+   * default). Advertised as `capabilities.nodaroMotionShotListFps`.
+   */
+  nodaroMotionShotListFps?(): Promise<PluginNodaroMotionShotListFps | null>
+  /**
    * The admin's flash-model test per Video Remake engine, for ONE run: it
    * applies only to a run started by an admin account. `userId` is the
    * account the run's request was authenticated as; the host reads its role
@@ -4422,6 +4442,11 @@ export type PluginNodaroMotionPreviz = {
  */
 export type PluginNodaroMotionShotLock = {
   readonly [publicEngineId: string]: "off" | "on"
+}
+
+/** Video Remake's shot-list frame rate as a plugin is answered it: `fps` (frames a second) only when a rate is set. */
+export type PluginNodaroMotionShotListFps = {
+  readonly fps?: unknown
 }
 
 /** Video Remake's plan-roles setting as a plugin is answered it: `enabled` resolved by the host, the step as an admin set it. */
@@ -5014,6 +5039,12 @@ export interface PluginSupports {
    *   takes `shotLock: true` to show it. Additive-optional: absent ⇒ the
    *   engine never reads the setting and is never sent the key
    *   (lib/nodaro-motion-shot-lock.ts `engineTakesShotLock`).
+   * - `shotListFps`: the engine reads the clip a shot list is written from
+   *   at the admin's frame rate (`tk.settings.nodaroMotionShotListFps()`:
+   *   the clip sent as a video reference with `referenceVideoFps`), and
+   *   checks the written list once against the clip's measured cuts.
+   *   Additive-optional: absent ⇒ the engine never reads the setting
+   *   (lib/nodaro-motion-shot-list-fps.ts `engineTakesShotListFps`).
    * - `flashModel`: while the admin's per-engine flash-model test says "on"
    *   (`tk.settings.nodaroMotionFlashModel(userId)`), the engine makes a new
    *   run of that engine STARTED BY AN ADMIN ACCOUNT on the faster model of
@@ -5211,6 +5242,7 @@ export interface PluginSupports {
     readonly previz?: boolean
     readonly shotLock?: boolean
     readonly flashModel?: boolean
+    readonly shotListFps?: boolean
     readonly roleFace?: boolean
     readonly roleFaceStoredMask?: boolean
   }
