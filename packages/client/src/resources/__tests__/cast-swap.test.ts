@@ -56,6 +56,7 @@ const params: VideoRemakeParams = {
       images: ["https://cdn.example.com/me.png"],
       body: "original",
       outfit: "new",
+      face: "original",
     },
     { kind: "person", name: "the man", images: null, previewName: "the tall man", inPreview: false },
     { kind: "location", images: ["https://cdn.example.com/beach.png"] },
@@ -551,6 +552,16 @@ describe("videoRemake resource", () => {
     const prism: boolean | undefined = got.preciseArtStyle?.["nodaro-prism"]
     expect(prism).toBe(true)
     expect(got.preciseArtStyle?.["nodaro-pulse"]).toBe(false)
+  })
+
+  it("styleChoice passes roleFace through, typed; an older server's answer has none", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, roleFace: true }
+    const client = make(vi.fn().mockReturnValueOnce(mockOk(answer)))
+    const got = await client.videoRemake.styleChoice()
+    const keeps: boolean | undefined = got.roleFace
+    expect(keeps).toBe(true)
+    const older = make(vi.fn().mockReturnValueOnce(mockOk({ engines: answer.engines })))
+    expect((await older.videoRemake.styleChoice()).roleFace === true).toBe(false)
   })
 
   it("styleChoice passes preciseArtStyleAlone through, per engine, typed", async () => {

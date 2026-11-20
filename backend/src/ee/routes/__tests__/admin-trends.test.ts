@@ -4383,3 +4383,92 @@ describe("a trend's shot list speech: stored only when on, held until every envi
     })
   })
 })
+
+/**
+ * The Face chip on a person slot (decided 2026-11-20): a draft save that changes what the trend stores of it waits for
+ * every environment's platform claim (422; any stored value, since an older platform's strict slot schema refuses the
+ * key), then, when its runs can keep a face, its engine flag `roleFace` (409); a publish that changes it from the live
+ * version waits for the claim (422), its engine by the publish need `roleFace`. What was not changed, or was taken
+ * away, is never refused.
+ */
+describe("a trend's Face chip: held until every environment's platform and engine take it", () => {
+  const FACE = { ...CAST_SWAP_ALL, roleFace: true }
+  const CLAIM = { roleFace: true }
+  const COVERED = () => [envRow("production", FACE, CLAIM), envRow("staging", FACE, CLAIM)]
+  const slotsWith = (lead: Record<string, unknown>) => [
+    { key: "lead", label: { en: "Lead dancer" }, kind: "person", required: true, roleName: "the woman on the left", ...lead },
+    { key: "dog", label: { en: "Dog" }, kind: "pet", required: false, roleName: "the dog" },
+  ] as TrendVersionData["slots"]
+  const OFFERED = { chips: ["body", "outfit", "hair", "face"] }
+  const withFace = (lead: Record<string, unknown>, over: Partial<TrendVersionData> = {}) => draftData({ examples: [EXAMPLE], slots: slotsWith(lead), ...over })
+  const save = async (lead: Record<string, unknown>, over: Partial<TrendVersionData> = {}) =>
+    call("PUT", `/v1/admin/trends/${T1}/draft`, { data: withFace(lead, over), revision: await revisionOf() })
+  const publish = () => call("POST", `/v1/admin/trends/${T1}/publish`)
+  const stored = () => mem.trends[0]!.versions[mem.trends[0]!.draftVersion]!.data
+
+  describe("a draft save", () => {
+    it("stores the chip offered and its default once every environment takes it", async () => {
+      seed({}, withFace({}))
+      world.envs = COVERED()
+      expect((await save({ ...OFFERED, defaults: { face: "original" } })).statusCode).toBe(200)
+      expect(stored().slots[0]).toMatchObject({ chips: ["body", "outfit", "hair", "face"], defaults: { face: "original" } })
+    })
+
+    it("is held while one environment's platform does not claim it, a stored \"new\" too; nothing is saved", async () => {
+      seed({}, withFace({}))
+      world.envs = [envRow("production", FACE), envRow("staging", FACE, CLAIM)]
+      const before = structuredClone(stored())
+      for (const lead of [OFFERED, { defaults: { face: "new" } }]) {
+        const res = await save(lead)
+        expect(res.statusCode).toBe(422)
+        expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["production"], message: expect.stringMatching(/does not take the Face chip yet/) })
+      }
+      expect(stored()).toEqual(before)
+    })
+
+    it("is refused while one environment's engine lacks the flag, every platform claiming it", async () => {
+      seed({}, withFace({}))
+      world.envs = [envRow("production", FACE, CLAIM), envRow("staging", CAST_SWAP_ALL, CLAIM)]
+      const res = await save(OFFERED)
+      expect(res.statusCode).toBe(409)
+      expect(res.json().error).toMatchObject({ code: "engine_unsupported", envs: ["staging"] })
+      // A face that can only be "new" asks no engine to keep one.
+      expect((await save({ defaults: { face: "new" } })).statusCode).toBe(200)
+    })
+
+    it("what was not changed, or was taken away, is never refused", async () => {
+      seed({}, withFace(OFFERED))
+      world.envs = [envRow("production", CAST_SWAP_ALL), envRow("staging", CAST_SWAP_ALL)]
+      expect((await save(OFFERED, { name: { en: "Renamed" } })).statusCode).toBe(200)
+      expect((await save({})).statusCode).toBe(200)
+      expect(stored().slots[0]).not.toHaveProperty("chips")
+    })
+  })
+
+  describe("a publish", () => {
+    it("of a chip never published is held while one environment's platform does not claim it", async () => {
+      seed({}, withFace(OFFERED))
+      world.envs = [envRow("production", FACE, CLAIM), envRow("staging", FACE)]
+      const res = await publish()
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error).toMatchObject({ code: "platform_unsupported", envs: ["staging"] })
+      expect(mem.trends[0]!.status).toBe("draft")
+    })
+
+    it("is blocked while one environment's engine lacks the flag (the publish need), every platform claiming it", async () => {
+      seed({}, withFace(OFFERED))
+      world.envs = [envRow("production", FACE, CLAIM), envRow("staging", CAST_SWAP_ALL, CLAIM)]
+      const res = await publish()
+      expect(res.statusCode).toBe(409)
+      expect(reasonsOf(res)).toContainEqual({ code: "engine_unsupported", env: "staging", need: "roleFace" })
+    })
+
+    it("goes through once every environment's claim and flag cover it", async () => {
+      seed({}, withFace(OFFERED))
+      world.envs = COVERED()
+      const res = await publish()
+      expect(res.statusCode, JSON.stringify(res.json())).toBe(200)
+      expect(mem.trends[0]!.status).toBe("published")
+    })
+  })
+})

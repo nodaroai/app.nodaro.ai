@@ -11826,7 +11826,7 @@ export type TrendLocalizedText = { en: string } & Partial<Record<string, string>
 
 export type TrendSlotKind = "person" | "location" | "product" | "pet"
 export type TrendChoice = "new" | "original"
-export type TrendChipKey = "body" | "outfit" | "hair" | "coat" | "shape" | "finish"
+export type TrendChipKey = "body" | "outfit" | "hair" | "face" | "coat" | "shape" | "finish"
 export type TrendResolution = "480p" | "720p" | "1080p"
 
 export interface AdminTrendSlot {
@@ -11849,12 +11849,13 @@ export interface AdminTrendSlot {
   roleName: string
   /** Who this is in the 4 s preview (hidden; ≤ 200). Empty or absent = `roleName`; only a preview run reads it. */
   previewRoleName?: string
-  /** The kind's own chips (person body/outfit/hair, pet body/coat, product shape/finish); none on a location. */
+  /** The kind's own chips (person body/outfit/hair/face, pet body/coat, product shape/finish); none on a location. */
   defaults?: Partial<Record<TrendChipKey, TrendChoice>>
   /**
    * The chips shown to people (only the kind's own, each once). Absent = all
-   * of them; `[]` = none. A chip not shown is fixed at its default (else
-   * "new"): a user's run cannot set it; an admin test run can.
+   * of them but the Face chip (shown only when listed); `[]` = none. A chip
+   * not shown is fixed at its default (else "new"; a Face chip with no
+   * default is not sent): a user's run cannot set it; an admin test run can.
    */
   chips?: TrendChipKey[]
 }
@@ -12521,6 +12522,7 @@ export interface AdminTrendRunSlot {
   body?: TrendChoice
   outfit?: TrendChoice
   hair?: TrendChoice
+  face?: TrendChoice
   coat?: TrendChoice
   shape?: TrendChoice
   finish?: TrendChoice
@@ -12654,6 +12656,10 @@ export interface TrendEngineEnvironment {
       preciseStyleRoutePerStyle?: boolean
       /** With the shot list, the engine writes who speaks into it (`steps.shotList.<style>.speech`); absent = it cannot. */
       shotListSpeech?: boolean
+      /** A person role takes `face` (the Face chip: "original" keeps the person's own face); absent = the engine ignores it. */
+      roleFace?: boolean
+      /** A trend run on a stored face mask may mix kept and new faces (the engine remakes the mask for it); absent = it cannot. */
+      roleFaceStoredMask?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12677,6 +12683,8 @@ export interface TrendEngineEnvironment {
       preciseStyleRouteFilmedFallback?: boolean
       /** The shot list's speech (`steps.shotList.<style>.speech`): its steps schemas take the key. */
       shotListSpeech?: boolean
+      /** The Face chip on a trend's person slot (`defaults.face`, `chips` with "face"): its trend schemas take the key. */
+      roleFace?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string

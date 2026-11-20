@@ -94,6 +94,15 @@
  * lacks it; a publish that changes one from the live version (the published
  * version of a trend that is published, on Kling 4) is held the same way (its
  * engine by the publish checks) (nodaro-motion-pulse-reference-audio-holds.ts).
+ *
+ * Likewise a person slot's Face chip (its `face` default and its place in
+ * `chips`, decided 2026-11-20), which an older platform's strict slot schema
+ * refuses outright: a draft save that changes it to something is 422
+ * `platform_unsupported` while any environment's platform does not claim it,
+ * then, when the draft's runs can keep a face, 409 `engine_unsupported` while
+ * any environment's engine lacks `castSwap.roleFace`; a publish that changes
+ * it from the live version is 422 the same way (its engine by the publish
+ * checks) (nodaro-motion-role-face-holds.ts).
  */
 import { CHILD_JOB_COLUMN } from "../../lib/public-job-data.js"
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -110,6 +119,8 @@ import { faceMeshMinFaceHeightCarried, platformHoldOfFaceMeshMinFaceHeight } fro
 import { prismReferenceAudioPlatformHold, prismReferenceAudioRefusalOf } from "../lib/nodaro-motion-prism-reference-audio-modes.js"
 import { pulseReferenceAudioPlatformHold, pulseReferenceAudioRefusalOf } from "../lib/nodaro-motion-pulse-reference-audio-holds.js"
 import { platformHoldOfShotListSpeech, shotListSpeechTrendRefusal } from "../lib/nodaro-motion-steps-gate.js"
+import { faceChipChanged, roleFacePlatformHold, roleFaceTrendRefusal } from "../lib/nodaro-motion-role-face-holds.js"
+import { faceChipStored } from "../lib/trends/role-face.js"
 import { shotListSpeechKey, shotListSpeechSet } from "../../lib/cast-swap-steps.js"
 import { parseNodaroMotionPulseReferenceAudio, pulseReferenceAudioChangesToOffDefault } from "../../lib/cast-swap-pulse-reference-audio.js"
 import {
@@ -695,8 +706,13 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       const speechChanged =
         shotListSpeechSet(valid.data.steps?.shotList) && shotListSpeechKey(valid.data.steps?.shotList) !== shotListSpeechKey(loaded.draft.steps?.shotList)
       // Read only when the draft needs them for a hold (once, for all); a failed read is a 500, never a save.
+      // Whether this save changes the Face chip a person slot stores (decided 2026-11-20): the draft's own left as it
+      // is, or taken away, is never held.
+      const faceChanged = faceChipChanged(valid.data, loaded.draft)
       const environments =
-        audioRequirements.length > 0 || pulseInChanged || speechChanged || faceMeshMinFaceHeightCarried(valid.data.faceMasking) ? await listEngineEnvironments() : undefined
+        audioRequirements.length > 0 || pulseInChanged || speechChanged || faceChanged || faceMeshMinFaceHeightCarried(valid.data.faceMasking)
+          ? await listEngineEnvironments()
+          : undefined
       // Full depth's smallest face with mesh lines, held while any environment's platform does not take it: trends are
       // in the database every environment shares, and an older platform keys the stored clip without it (its runs
       // refused).
@@ -714,6 +730,10 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
       // and an older engine is sent the shot list without them.
       const speechRefusal = speechChanged && environments ? shotListSpeechTrendRefusal(valid.data.steps, loaded.draft.steps, environments) : null
       if (speechRefusal) return reply.status(speechRefusal.status).send({ error: speechRefusal.error })
+      // The Face chip likewise: an older platform's strict slot schema refuses the key (and with it the draft), and an
+      // older engine ignores it and hides the face.
+      const faceRefusal = faceChanged && environments ? roleFaceTrendRefusal(valid.data, loaded.draft, environments) : null
+      if (faceRefusal) return reply.status(faceRefusal.status).send({ error: faceRefusal.error })
       // The preview's input clip, cut (again) when the source, the window or the face mask moved. A cut that
       // fails never loses the save: the draft is saved as it is (its clip missing or stale, which blocks
       // publish — the blocker carries the reason — but not the admin's other edits), and the answer says why.
@@ -1022,6 +1042,18 @@ export async function adminTrendsRoutes(app: FastifyInstance) {
         if (shotListSpeechKey(loaded.draft.steps?.shotList) !== shotListSpeechKey(live?.steps?.shotList)) {
           const speechHeld = platformHoldOfShotListSpeech([loaded.draft.steps], await listEngineEnvironments(), Date.now(), "publish")
           if (speechHeld) return reply.status(422).send({ error: speechHeld })
+        }
+      }
+      // The Face chip likewise, where this publish changes it from the live version (the published version of a trend
+      // that is published); its engine is the publish checks' (`ROLE_FACE_NEED`, `ROLE_FACE_STORED_MASK_NEED`).
+      if (faceChipStored(loaded.draft)) {
+        let live: TrendVersionData | null = null
+        if (trend.status === "published" && trend.publishedVersion !== null) {
+          live = trend.publishedVersion === trend.draftVersion ? loaded.draft : await getVersion(trend.id, trend.publishedVersion)
+        }
+        if (faceChipChanged(loaded.draft, live ?? undefined)) {
+          const faceHeld = roleFacePlatformHold("publish", await listEngineEnvironments())
+          if (faceHeld) return reply.status(422).send({ error: faceHeld })
         }
       }
       // The preview's input clip, made (again) first so a stale or missing one never blocks on its own:

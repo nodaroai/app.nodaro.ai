@@ -86,19 +86,23 @@ export type TrendSlotKind = "person" | "location" | "product" | "pet"
 export type TrendChoice = "new" | "original"
 
 /**
- * The chips a slot can take, by its kind: a person `body` / `outfit` / `hair`,
- * a pet `body` / `coat`, a product `shape` / `finish`, a location none.
+ * The chips a slot can take, by its kind: a person `body` / `outfit` / `hair`
+ * / `face`, a pet `body` / `coat`, a product `shape` / `finish`, a location
+ * none. A slot lists the ones a run may set; `face` (from the picture, the
+ * default, or from the video: the person keeps their own face) only on a trend
+ * that offers it, where the engine keeps faces.
  */
 export interface TrendChips {
   body?: TrendChoice
   outfit?: TrendChoice
   hair?: TrendChoice
+  face?: TrendChoice
   coat?: TrendChoice
   shape?: TrendChoice
   finish?: TrendChoice
 }
 
-/** A chip's name: `body`, `outfit`, `hair`, `coat`, `shape` or `finish`. */
+/** A chip's name: `body`, `outfit`, `hair`, `face`, `coat`, `shape` or `finish`. */
 export type TrendChipKey = keyof TrendChips
 
 export type TrendResolution = "480p" | "720p" | "1080p"

@@ -75,6 +75,7 @@ import {
   setFavorite,
 } from "../lib/trends/store.js"
 import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
+import { loadedEngineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
 import { pickText } from "../lib/trends/localize.js"
 import { emptyFillLookOf, emptyFillOf, type TrendEmptyFill } from "../lib/trends/empty-fill.js"
 import { PUBLIC_READ_LIMIT, guestKeep, guestLocale, keptHit, sendPublicRead } from "../lib/trends/public-read.js"
@@ -116,7 +117,7 @@ export type { TrendRun } from "../lib/trends/run-helpers.js"
 
 // ── public shapes (mirrored by the SDK) ─────────────────────────────────────
 
-type Chips = Partial<Record<"body" | "outfit" | "hair" | "coat" | "shape" | "finish", Choice>>
+type Chips = Partial<Record<"body" | "outfit" | "hair" | "face" | "coat" | "shape" | "finish", Choice>>
 
 /**
  * One video as a public answer shows it. `webUrl` / `webSizeBytes`: its web
@@ -370,11 +371,21 @@ function toCard(row: TrendRow, data: TrendVersionData, locale: string, isFavorit
   }
 }
 
-/** The slot's defaults of the chips it shows (a hidden chip's value is the trend's, not a starting value). */
+/**
+ * The chips a slot lets people adjust, as its page lists them: the ones it shows (`shownChips`), less the Face chip
+ * while this environment's engine cannot keep a face (`castSwap.roleFace`, decided 2026-11-20), so a client that renders
+ * whatever chips a slot lists offers Face only where a run can keep one.
+ */
+export function offeredChips(slot: TrendSlot): ChipKey[] {
+  const shown = shownChips(slot)
+  return loadedEngineTakesRoleFace() ? shown : shown.filter((c) => c !== "face")
+}
+
+/** The slot's defaults of the chips it offers (a hidden chip's value is the trend's, not a starting value). */
 function slotDefaults(slot: TrendSlot): Chips | undefined {
   const given = (slot.defaults ?? {}) as Chips
   const out: Chips = {}
-  for (const chip of shownChips(slot)) {
+  for (const chip of offeredChips(slot)) {
     const v = given[chip]
     if (v === "new" || v === "original") out[chip] = v
   }
@@ -410,7 +421,7 @@ export function detailSlotOf(data: TrendVersionData, s: TrendVersionData["slots"
     ...(s.hintImageUrl ? { hintImageUrl: s.hintImageUrl } : {}),
     ...(looks.length > 0 ? { defaultImages: looks } : {}),
     ...(emptyFill ? { emptyFill } : {}),
-    chips: shownChips(s),
+    chips: offeredChips(s),
     ...(defaults ? { defaults } : {}),
   }
 }

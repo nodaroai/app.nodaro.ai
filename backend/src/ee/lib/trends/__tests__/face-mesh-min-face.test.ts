@@ -388,7 +388,7 @@ describe("the platform hold", () => {
   })
 
   it("this platform says it takes the field", () => {
-    expect(PLATFORM_SUPPORTS).toEqual({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, pulseReferenceAudio: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true, shotListSpeech: true, previzPromptParts: true })
+    expect(PLATFORM_SUPPORTS).toEqual({ faceMeshMinFaceHeightPct: true, prismReferenceAudioPitch: true, pulseReferenceAudio: true, faceMeshLayers: true, preciseStyleRoutePhotographic: true, preciseStyleRoutePerStyle: true, preciseStyleRouteFilmedFallback: true, shotListSpeech: true, previzPromptParts: true, roleFace: true })
     expect(Object.isFrozen(PLATFORM_SUPPORTS)).toBe(true)
   })
 

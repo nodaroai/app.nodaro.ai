@@ -5748,14 +5748,14 @@ length, with its own cast and new music, and can change the motion itself.
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), and whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), and whether a person role may keep its own face (`roleFace`, see The Face chip below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 6
-`{ kind: "person", name?, images, body?, outfit?, hair? }`, at most 1
+`{ kind: "person", name?, images, body?, outfit?, hair?, face? }`, at most 1
 `{ kind: "location", name?, images }`, at most 3
 `{ kind: "pet", name?, images, body?, coat? }` and at most 3
 `{ kind: "product", name?, images, shape?, finish? }`, each with 0–3 images and
@@ -6033,6 +6033,18 @@ plan_roles_not_available` (not offered here: set the roles yourself),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; `error.details.index` is its position in `images`, from 0) and
 `502 plan_roles_failed` (try again, or set the roles yourself).
+
+**The Face chip.** A person role also takes `face`: from the picture
+(`"new"`, the default, also when `face` is left out) or from the video
+(`"original"`). From the video keeps the person's own face; use it to change
+only clothes, hair or build. Such a person's face is never masked. It is
+offered where `GET /v1/video-remake/style-choice` answers `roleFace: true`
+(one boolean, not per engine; a server from before it leaves it out, read that
+as `false`). Elsewhere a run or estimate with `face: "original"` on any role is
+refused with `409 engine_unsupported` before anything is held or charged;
+`face: "new"` runs everywhere, as a role without it does. A run (or estimate,
+or preview) in which every role keeps everything from the video, the face
+included, has nothing to change and is refused with `400 roles_keep_everything`.
 
 **A 3D previz clip.** Where `GET /v1/video-remake/style-choice` answers
 `previz: true` (one boolean, not per engine: `true` only where the engine
@@ -6331,11 +6343,18 @@ The estimate and run body is
   page's `original` is the trend's own first example and its `examples` list
   starts after it: `example` still numbers that list (`1` is its first entry),
   and leaving `example` out names the example shown as the original. The chips are the ones the slot's
-  `chips` lists (of its kind's own: a person `body` / `outfit` / `hair`, a pet
-  `body` / `coat`, a product `shape` / `finish`, a location none), each
-  `"new"` (from your pictures) or `"original"` (as in the clip). A chip the
-  slot does not list is fixed by the trend (at its default, else `"new"`);
-  sending it is refused with `chip_not_offered`.
+  `chips` lists (of its kind's own: a person `body` / `outfit` / `hair` /
+  `face`, a pet `body` / `coat`, a product `shape` / `finish`, a location
+  none), each `"new"` (from your pictures) or `"original"` (as in the clip). A
+  chip the slot does not list is fixed by the trend (at its default, else
+  `"new"`); sending it is refused with `chip_not_offered`. `face` is listed
+  only on a trend that offers it and only where the engine keeps faces: from
+  the picture (`"new"`) or from the video (`"original"`, the person keeps
+  their own face; use it to change only clothes, hair or build). A run that
+  keeps one person's face while another person takes a new one can be refused
+  with `400 role_face_with_stored_mask` when the trend cannot remake its
+  stored face mask for it; set Face to `"new"` for everyone, or keep every
+  face.
 - `details`: your own words, at most 1,000 characters; mention a slot as
   `{slot:<key>}`.
 - `preview: true` runs 4 seconds (only when the trend's `previewSec` is 4).
@@ -6400,6 +6419,8 @@ anything is charged:
 | `400` | `too_many_images` | A Nodaro Pulse trend's run would send more than 10 pictures (yours, the slot's original look or the example's for slots you left empty, and the trend's own): send fewer per slot. |
 | `400` | `role_name_required` | A role of the trend has no name (the trend's own data; a trend's roles are always named). |
 | `400` | `chip_not_offered` | A chip of the slot's kind that the trend does not offer on that slot (not in its `chips`): the trend fixes it. Carries `slot` and `chip`. |
+| `400` | `role_face_with_stored_mask` | The run keeps one person's own face (Face `"original"`) while another person takes a new one, and the trend's stored face mask cannot be made again for it: set Face to `"new"` for everyone, or keep every face. |
+| `400` | `roles_keep_everything` | Every role keeps everything from the original (each chip, Face included, `"original"`): there is nothing to change. Set at least one chip to `"new"`. |
 | `400` | `example_out_of_range` | `example` names an example the trend page does not list (any `example` on a trend with none; on a trend that hides its original, more than the length of its `examples`). |
 | `400` | `preview_unavailable` | `preview: true` on a trend that offers no preview. |
 | `400` | `invalid_slot_mention` | `details` mentions `{slot:<key>}` with a key the trend does not have. |

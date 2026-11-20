@@ -29,7 +29,9 @@ import type { TrendChipKey, TrendChoice, TrendSlotKind } from "@/lib/api"
 import { useTrendMedia } from "@/ee/hooks/queries/use-admin-queries"
 import {
   CHIPS_BY_KIND,
+  CHIP_HINTS,
   CHIP_LABELS,
+  OPT_IN_CHIPS,
   SLOT_CAPS,
   SLOT_KEY_RE,
   SLOT_KINDS,
@@ -325,8 +327,13 @@ function SlotCard({ trendId, slot, index, count, hasPreview, fullDepth, hideOrig
                       checked={shown}
                       onCheckedChange={(on) => onChange(withChipShown(slot, chip, on))}
                     />
-                    {shown ? "Shown to people" : `Hidden: fixed at ${fixedLabel(slot.defaults?.[chip])}`}
+                    {shown
+                      ? "Shown to people"
+                      : OPT_IN_CHIPS.includes(chip) && slot.defaults?.[chip] === undefined
+                        ? "Hidden: from the picture"
+                        : `Hidden: fixed at ${fixedLabel(slot.defaults?.[chip])}`}
                   </label>
+                  {CHIP_HINTS[chip] && <span className="text-xs text-muted-foreground">{CHIP_HINTS[chip]}</span>}
                 </div>
               )
             })}

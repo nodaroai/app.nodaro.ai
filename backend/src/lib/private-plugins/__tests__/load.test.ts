@@ -595,6 +595,34 @@ describe("supports — what a plugin's own handlers can do (plugin → host)", (
     expect(getPluginSupports().castSwap?.trendPrePrompt).toBeUndefined()
   })
 
+  // The Face chip (decided 2026-11-20) is additive-optional the same way: an engine from before it declares neither
+  // flag, which reads as "not supported" (it would ignore a role's `face`).
+  it("publishes the Cast Swap engine's roleFace and roleFaceStoredMask flags, and an older engine's absence of them", async () => {
+    const castSwap = {
+      roleKinds: ["person", "location", "product", "pet"] as const,
+      fixedReferences: true,
+      fullQuality: true,
+      resolutions: ["480p", "720p", "1080p"] as const,
+      trendRun: true,
+    }
+    await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [makePlugin({ name: "cast-swap", supports: () => ({ castSwap: { ...castSwap, roleFace: true, roleFaceStoredMask: true } }) })],
+      }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports().castSwap?.roleFace).toBe(true)
+    expect(getPluginSupports().castSwap?.roleFaceStoredMask).toBe(true)
+
+    await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, plugins: [makePlugin({ name: "cast-swap", supports: () => ({ castSwap }) })] }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports().castSwap?.roleFace).toBeUndefined()
+    expect(getPluginSupports().castSwap?.roleFaceStoredMask).toBeUndefined()
+  })
+
   it("is cleared from getPluginSupports() when a later load fails or loads nothing", async () => {
     const declaring = async () => ({
       contractVersion: 1,

@@ -10,7 +10,8 @@
  *                                      preciseArtStyleAlone: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
  *                                      customStyle: { "nodaro-prism": boolean, "nodaro-pulse": false },
  *                                      planRoles: boolean,
- *                                      previz: boolean }
+ *                                      previz: boolean,
+ *                                      roleFace: boolean }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -91,6 +92,15 @@
  * Read as `planRoles` is: a failed read answers false, and so does an engine
  * that does not declare it, whatever is saved. A client reading a server from
  * before it finds none and treats it as false.
+ *
+ * `roleFace` says whether a person role may keep its own face from the video
+ * (the Face chip, `face: "original"`, decided 2026-11-20): one boolean for the
+ * deployment, true only while this environment's engine declares
+ * `castSwap.roleFace` (lib/cast-swap-role-face.ts; a run asking for it on any
+ * other engine is refused, 409 `engine_unsupported`). Like `styleOnly` it
+ * follows the engine alone and is in every answer, the failed-read one
+ * included. A client reading a server from before it finds none and treats it
+ * as false.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -105,6 +115,7 @@ import { planRolesOfferedByDefault } from "../../lib/nodaro-motion-plan-roles-de
 import { engineTakesPreviz, previzEnabled } from "../../lib/nodaro-motion-previz.js"
 import { previzOfferedByDefault } from "../../lib/nodaro-motion-previz-default.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
+import { engineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
 
 /** How long a client (or a CDN) may keep the answer: about the settings cache's own life. */
 export const STYLE_CHOICE_MAX_AGE_SECONDS = 60
@@ -144,6 +155,7 @@ function answer(
   maps: Record<"styleOnly" | "preciseArtStyle" | "preciseArtStyleAlone" | "customStyle", Record<NodaroMotionEngine, boolean>>,
   planRoles: boolean,
   previz: boolean,
+  roleFace: boolean,
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -153,6 +165,7 @@ function answer(
     customStyle: withPreviousEngineIds(maps.customStyle),
     planRoles,
     previz,
+    roleFace,
   }
 }
 
@@ -171,8 +184,9 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const takesCustomStyle = engineTakesCustomStyle(castSwap)
   const takesPlanRoles = engineTakesPlanRoles(castSwap)
   const takesPreviz = engineTakesPreviz(castSwap)
+  const roleFace = engineTakesRoleFace(castSwap)
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
-  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false)
+  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace)
   // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles and takes no 3D previz clip.
   if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz) {
     return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
@@ -197,6 +211,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
       },
       takesPlanRoles && planRolesEnabled(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault()),
       takesPreviz && previzEnabled(settings.nodaro_motion_previz, previzOfferedByDefault()),
+      roleFace,
     ),
   )
 }

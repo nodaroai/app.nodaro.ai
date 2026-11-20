@@ -131,7 +131,7 @@ describe("trends command", () => {
 
   it("a bad --choice value is refused without calling the API", async () => {
     await expect(runCmd("trends", "run", "dance", "--choice", "person.outfit=maybe")).rejects.toThrow(/new or original/)
-    await expect(runCmd("trends", "run", "dance", "--choice", "person.wings=new")).rejects.toThrow(/body, outfit, hair, coat, shape or finish/)
+    await expect(runCmd("trends", "run", "dance", "--choice", "person.wings=new")).rejects.toThrow(/body, outfit, hair, face, coat, shape or finish/)
     await expect(runCmd("trends", "run", "dance", "--choice", "outfit=new")).rejects.toThrow(/--choice/)
     expect(mocks.run).not.toHaveBeenCalled()
   })

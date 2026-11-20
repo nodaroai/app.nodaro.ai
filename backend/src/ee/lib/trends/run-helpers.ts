@@ -49,6 +49,7 @@ import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
+import { engineTakesRoleFace, engineTakesRoleFaceStoredMask } from "../../../lib/cast-swap-role-face.js"
 import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
 import {
   engineTakesPulseReferenceAudio,
@@ -127,10 +128,10 @@ export interface TrendRun {
   fullQualityUntil: string | null
 }
 
-type Chips = Partial<Record<"body" | "outfit" | "hair" | "coat" | "shape" | "finish", Choice>>
+type Chips = Partial<Record<"body" | "outfit" | "hair" | "face" | "coat" | "shape" | "finish", Choice>>
 
 export const SLOT_KINDS: readonly TrendSlotKind[] = ["person", "location", "product", "pet"]
-const CHIP_KEYS = ["body", "outfit", "hair", "coat", "shape", "finish"] as const
+const CHIP_KEYS = ["body", "outfit", "hair", "face", "coat", "shape", "finish"] as const
 /** A completed draft run can be redone in Full Quality for this long (its depth map kept past it: cast-swap-depth-clips-sweep.ts). */
 const FULL_QUALITY_WINDOW_MS = CAST_SWAP_FULL_QUALITY_WINDOW_MS
 
@@ -471,6 +472,9 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   // A trend with marks runs on its stored mask only, never masked per run: the engine must take it
   // (`withoutUnsupportedStoredMask` would strip it) and honour `required` (an older one strips that too).
   if (composed.needs.storedFaceMask && (cs.storedFaceMask !== true || cs.storedFaceMaskRequired !== true)) return false
+  // A role that keeps its own face: an engine from before the Face chip ignores `face` and would hide that face with
+  // nothing in its place, so the run is refused rather than sent (never stripped).
+  if (composed.needs.roleFace && !engineTakesRoleFace(cs)) return false
   return cs.resolutions.includes(composed.body.resolution)
 }
 
@@ -500,6 +504,13 @@ export function withoutUnsupportedStoredMask(composed: ComposedTrendRun): void {
   const outlined = composed.body.storedFaceMask
   if (outlined && outlined.outlines !== undefined && !engineDrawsRoleOutlines(cs)) {
     const { outlines: _outlines, ...rest } = outlined
+    composed.body.storedFaceMask = rest
+  }
+  // What a run that mixes kept and new faces sends for the engine to remake the mask (role-face.ts): only to an engine
+  // that declares `castSwap.roleFaceStoredMask`; any other is sent the mask of before (and refuses a mixed run itself).
+  const remade = composed.body.storedFaceMask
+  if (remade && (remade.raw !== undefined || remade.erase !== undefined || remade.roleBoxes !== undefined) && !engineTakesRoleFaceStoredMask(cs)) {
+    const { raw: _raw, erase: _erase, roleBoxes: _roleBoxes, ...rest } = remade
     composed.body.storedFaceMask = rest
   }
   // The colormap the stored clip was drawn with (a gray fill under role outlines, or the chosen map): only
@@ -761,6 +772,10 @@ export function withPreparedPreview(composed: ComposedTrendRun): void {
   if (!clip || body.preview !== true) return
   // The clip's cut of the base mask; a run sent no mask (the engine takes none, or the trend has none) gets none.
   if (body.storedFaceMask && !clip.faceMask) return
+  // A run that keeps some faces and remakes others (role-face.ts) sends the raw mask and the boxes in the whole
+  // source clip's frames: the 4 s cut would not match them, so the engine cuts the whole clip and mask itself.
+  const m = body.storedFaceMask
+  if (m && (m.raw !== undefined || m.erase !== undefined || m.roleBoxes !== undefined)) return
   body.videoUrl = clip.videoUrl
   body.previewStart = 0
   body.preparedPreview = true
@@ -988,12 +1003,33 @@ const PUBLIC_400: Readonly<Record<string, string>> = {
   video_unreadable: "This trend's clip could not be read.",
   unsafe_url: "A picture's address is not a public http(s) address.",
   raw_reference_token: "Your details contain a reserved token ({image:, {video: or {audio:).",
+  // A run that keeps one person's own face while another takes a new one, on a stored face mask the engine cannot
+  // remake for it (the Face chip, decided 2026-11-20).
+  role_face_with_stored_mask: "This trend can't keep one person's own face while it gives another a new one. Set Face to new for everyone, or keep every face.",
+  // A run in which every role keeps everything from the clip (each chip, the Face chip included, "original"): there
+  // is nothing to make.
+  roles_keep_everything: "Every person and thing keeps everything from the original, so there is nothing to change: set at least one chip to new.",
   // A Kling 4 trend's own limits (the trend routes refuse a draft and 480p before the engine is asked).
   draft_unsupported: "This trend has no draft: run it at 720p or 1080p.",
   resolution_unsupported: "This trend does not run at that resolution.",
   too_many_images: "This trend's model takes fewer pictures in one run: use fewer pictures per slot.",
   // Every role of a trend run is named (only a direct run's may be unnamed): the trend's own data.
   role_name_required: "A role of this trend has no name.",
+}
+
+/** The engine's 400 codes it may carry on an issue rather than on the envelope, kept by the public routes. */
+const ISSUE_CARRIED_400: ReadonlySet<string> = new Set(["role_face_with_stored_mask", "roles_keep_everything"])
+
+/** The first issue code (`params.code`, else `code`) of `ISSUE_CARRIED_400`, or null. */
+function issueCodeOf(issues: unknown): string | null {
+  if (!Array.isArray(issues)) return null
+  for (const issue of issues) {
+    if (!isRec(issue)) continue
+    for (const c of [isRec(issue.params) ? issue.params.code : undefined, issue.code]) {
+      if (typeof c === "string" && ISSUE_CARRIED_400.has(c)) return c
+    }
+  }
+  return null
 }
 
 export const TREND_RUN_REJECTED = { code: "trend_run_rejected", message: "This trend couldn't run with these inputs." } as const
@@ -1029,6 +1065,9 @@ export function publicRefusal(reply: FastifyReply, res: { statusCode: number; bo
   if (error && status >= 400 && status < 500) {
     if (status === 400) {
       if (code && Object.hasOwn(PUBLIC_400, code)) return send(400, code, PUBLIC_400[code]!)
+      // A code the engine carries on an issue (`issues[i].params.code`, or `issues[i].code`) instead of the envelope.
+      const carried = issueCodeOf(error.issues)
+      if (carried) return send(400, carried, PUBLIC_400[carried]!)
       return send(400, TREND_RUN_REJECTED.code, TREND_RUN_REJECTED.message)
     }
     if (status === 401) return send(401, "unauthorized", "Authentication required")

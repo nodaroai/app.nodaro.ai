@@ -143,7 +143,7 @@ export const SLOT_CAPS: Readonly<Record<TrendSlotKind, number>> = { person: 6, l
 
 /** The chips each kind carries (Cast Swap's per-role traits). A location has none. */
 export const CHIPS_BY_KIND: Readonly<Record<TrendSlotKind, readonly TrendChipKey[]>> = {
-  person: ["body", "outfit", "hair"],
+  person: ["body", "outfit", "hair", "face"],
   pet: ["body", "coat"],
   product: ["shape", "finish"],
   location: [],
@@ -153,9 +153,32 @@ export const CHIP_LABELS: Readonly<Record<TrendChipKey, string>> = {
   body: "Body",
   outfit: "Outfit",
   hair: "Hair",
+  face: "Face",
   coat: "Coat",
   shape: "Shape",
   finish: "Finish",
+}
+
+/**
+ * The chips a slot shows only when its `chips` lists them (the server's `OPT_IN_CHIPS`, decided 2026-11-20): the Face
+ * chip came after trends, so a slot with no `chips` keeps showing what it did, and a run of it sends no face.
+ */
+export const OPT_IN_CHIPS: readonly TrendChipKey[] = ["face"]
+
+/** What a slot with no `chips` shows: every chip of its kind but the opt-in ones. */
+function defaultShownChips(kind: TrendSlotKind): TrendChipKey[] {
+  return CHIPS_BY_KIND[kind].filter((c) => !OPT_IN_CHIPS.includes(c))
+}
+
+/** Whether a list of shown chips (in the kind's order) is what a slot with no `chips` shows. */
+function isDefaultShown(kind: TrendSlotKind, shown: readonly TrendChipKey[]): boolean {
+  const all = defaultShownChips(kind)
+  return shown.length === all.length && all.every((c) => shown.includes(c))
+}
+
+/** A chip's line under its select, where it needs one. */
+export const CHIP_HINTS: Readonly<Partial<Record<TrendChipKey, string>>> = {
+  face: "From the picture (default) or from the video. From the video keeps the person's own face; use it to change only clothes, hair or build.",
 }
 
 export interface FormSlot extends AdminTrendSlot {
@@ -381,25 +404,26 @@ function cleanSlot(s: FormSlot): AdminTrendSlot {
   }
   if (Object.keys(defaults).length > 0) out.defaults = defaults
   const shown = shownChips(s)
-  // Every chip shown is saved as none listed (the server's default), so a trend nobody limited stays as it was.
-  if (shown.length < CHIPS_BY_KIND[s.kind].length) out.chips = shown
+  // What a slot with no chips shows is saved as none listed (the server's default), so a trend nobody limited stays as
+  // it was; showing the Face chip lists them all.
+  if (!isDefaultShown(s.kind, shown)) out.chips = shown
   return out
 }
 
-/** The chips a slot shows to people, in its kind's order: its `chips`, else all of its kind's. */
+/** The chips a slot shows to people, in its kind's order: its `chips`, else all of its kind's but the Face chip. */
 export function shownChips(s: Pick<AdminTrendSlot, "kind" | "chips">): TrendChipKey[] {
   const all = CHIPS_BY_KIND[s.kind]
-  return s.chips ? all.filter((c) => s.chips!.includes(c)) : [...all]
+  return s.chips ? all.filter((c) => s.chips!.includes(c)) : defaultShownChips(s.kind)
 }
 
-/** Show (or hide) one chip of a slot to people. All shown again = none listed. */
+/** Show (or hide) one chip of a slot to people. Back to what a slot with no chips shows = none listed. */
 export function withChipShown(s: FormSlot, chip: TrendChipKey, show: boolean): FormSlot {
   const all = CHIPS_BY_KIND[s.kind]
   const shown = shownChips(s)
   const next = all.filter((c) => (c === chip ? show : shown.includes(c)))
   const rest: FormSlot = { ...s }
   delete rest.chips
-  return next.length === all.length ? rest : { ...rest, chips: next }
+  return isDefaultShown(s.kind, next) ? rest : { ...rest, chips: next }
 }
 
 /**
@@ -688,6 +712,8 @@ const NEED_LABELS: Readonly<Record<string, string>> = {
   clipBodySheet: "the Body from the clip step",
   shotList: "the shot list step",
   shotListSpeech: "Speech in the script",
+  roleFace: "the Face chip (keeping a person's own face)",
+  roleFaceStoredMask: "the Face chip on a stored face mask (one face kept, another new)",
   styleRefs: "the Style the role pictures step",
   "promptWording:new": "the new Flex prompt wording",
   promptParts: "engine prompt changes",

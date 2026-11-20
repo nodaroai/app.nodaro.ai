@@ -114,6 +114,15 @@ export interface PlatformSupports {
    * and with it the engine's whole entry (every override of that engine).
    */
   readonly previzPromptParts?: boolean
+  /**
+   * The Face chip on a trend's person slot (decided 2026-11-20,
+   * lib/nodaro-motion-role-face-holds.ts): its trend schemas take `face` in a
+   * person slot's `defaults` and in its `chips`, and a run's slot `face`; its
+   * runs send a person role's `face` only when it was chosen, and only to an
+   * engine that declares `castSwap.roleFace`. A build from before refuses the
+   * key in its strict slot schema, and with it the whole trend version.
+   */
+  readonly roleFace?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
@@ -127,6 +136,7 @@ export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   preciseStyleRouteFilmedFallback: true,
   shotListSpeech: true,
   previzPromptParts: true,
+  roleFace: true,
 })
 
 /**

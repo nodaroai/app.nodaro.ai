@@ -105,7 +105,14 @@
  * trend on the new prompt wording (`promptWording: "new"`,
  * `trendPromptWordingSent`) needs an engine that lists it in
  * `castSwap.promptWordings` (need `PROMPT_WORDING_NEED`): an engine without
- * it is sent no wording and words the prompt as today.
+ * it is sent no wording and words the prompt as today. A trend whose runs
+ * can keep a person's own face (the Face chip, decided 2026-11-20: a person
+ * slot's default "original", or the chip offered) needs an engine that
+ * declares `castSwap.roleFace` (need `ROLE_FACE_NEED`), and, when it masks,
+ * `castSwap.roleFaceStoredMask` too (need `ROLE_FACE_STORED_MASK_NEED`); a
+ * masked one also needs what such a run's mask is remade from
+ * (`face_chip_needs_role_outlines`, `face_chip_needs_raw_mask`), and none
+ * whose mixed runs would use a per-person variant (`face_chip_with_person_masks`).
  *
  * A trend whose prompt style is not its clip preparation's default
  * (`promptStyle`), or a full-depth trend whose scene source an engine does not
@@ -197,8 +204,10 @@ import { promptPartTexts } from "./prompt-parts-store.js"
 import { FULL_DEPTH_ORIGINAL_PUBLISH_MAX_SEC, fullDepthClipTooLong, promptStyleBlockers, trendPromptWordingSent } from "./prompt-style.js"
 import { engineTakesPromptWording } from "../../../lib/nodaro-motion-prompt-wording.js"
 import { faceMaskState, faceMaskStoredRequired, type FaceMaskOutOfDate } from "./face-mask.js"
+import { faceSlotsWithoutOutlines, facesHiddenMask, roleFaceRemakeFor, trendMayKeepFaces } from "./role-face.js"
+import { engineTakesRoleFace, engineTakesRoleFaceStoredMask } from "../../../lib/cast-swap-role-face.js"
 import { previewClipState, type PreviewClipState } from "./preview-clip.js"
-import { MAX_MARKED_PEOPLE, faceMaskVariantsApply, faceMaskVariantsState, markedPeople } from "./face-mask-variants.js"
+import { MAX_MARKED_PEOPLE, emptiablePeople, faceMaskVariantsApply, faceMaskVariantsState, markedPeople } from "./face-mask-variants.js"
 import type { TrendPromptPartProblem } from "./prompt-parts-check.js"
 import type { CastSwapEngine, TrendResolution, TrendSlotKind, TrendVersionData } from "./types.js"
 
@@ -227,10 +236,13 @@ export interface PublishBlocker {
     | "prompt_style_unsupported"
     | "full_depth_scene_unsupported"
     | "full_depth_clip_too_long"
+    | "face_chip_needs_role_outlines"
+    | "face_chip_needs_raw_mask"
+    | "face_chip_with_person_masks"
   env?: string
   /**
    * What the engine lacks: a slot kind, "fixedReferences", "faceMasking",
-   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "pulseReferenceAudio", "steps", "clipBodySheet", "shotList", "shotListSpeech", "styleRefs", "promptWording:new", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
+   * "storedFaceMask", "faceMaskTarget:face", "faceMaskTarget:body", "faceMaskHideTarget:body", "faceMesh", "roleOutlines", "depthColormap:<map>" (e.g. "depthColormap:inferno"), "depthModelSize:<size>" (e.g. "depthModelSize:small"), "prismReferenceAudio:<mode>" (e.g. "prismReferenceAudio:one-tone"), "prismReferenceAudioPitch", "pulseReferenceAudio", "steps", "clipBodySheet", "shotList", "shotListSpeech", "styleRefs", "promptWording:new", "roleFace", "roleFaceStoredMask", "trendPrePrompt", a video engine ("kling-4"), a resolution, "fullQuality",
    * "trendRun" or "castSwap".
    */
   need?: string
@@ -357,6 +369,15 @@ export const STYLE_REFS_NEED = "styleRefs"
 /** The need of a Flexible trend on the new prompt wording (`promptWording: "new"`, `castSwap.promptWordings`). */
 export const PROMPT_WORDING_NEED = "promptWording:new"
 
+/** The need of a trend whose runs can keep a person's own face (the Face chip, `castSwap.roleFace`). */
+export const ROLE_FACE_NEED = "roleFace"
+
+/**
+ * The need of a masked trend whose runs can keep a person's own face: a run that keeps one face while another person
+ * takes a new one needs its stored mask remade (`castSwap.roleFaceStoredMask`).
+ */
+export const ROLE_FACE_STORED_MASK_NEED = "roleFaceStoredMask"
+
 const SOURCE_MODE_NAMES: Readonly<Record<FaceMaskingSource, string>> = {
   faces: "Faces hidden",
   "full-depth": "Full depth",
@@ -412,6 +433,10 @@ function needsOf(data: TrendVersionData, livePrismReferenceAudio?: unknown): str
     ...(styleRefsNeedsEngine(data.steps?.styleRefs) ? [STYLE_REFS_NEED] : []),
     // The new Flex wording: an engine without it is sent none (and words the prompt as today).
     ...(trendPromptWordingSent(data) ? [PROMPT_WORDING_NEED] : []),
+    // The Face chip: an engine without it ignores `face` and would hide a face nothing replaces; on a stored mask, one
+    // that cannot remake it refuses the runs that keep one face and remake another.
+    ...(trendMayKeepFaces(data) ? [ROLE_FACE_NEED] : []),
+    ...(trendMayKeepFaces(data) && faceMaskingOn(data.faceMasking) ? [ROLE_FACE_STORED_MASK_NEED] : []),
     // A pre prompt either run sends: the full run's, or the preview's own while it offers one.
     ...(promptModesOf(data).some((mode) => withPromptsFor(data, mode).prePrompt) ? ["trendPrePrompt"] : []),
     // Seedance 2.5 is every engine's: only another engine is a need of its own.
@@ -481,6 +506,8 @@ function missingNeeds(env: EngineEnvironment, needs: string[]): string[] {
     if (need === SHOT_LIST_SPEECH_NEED) return !engineTakesShotListSpeech(cs)
     if (need === STYLE_REFS_NEED) return !engineTakesStyleRefs(cs)
     if (need === PROMPT_WORDING_NEED) return !engineTakesPromptWording(cs, "new")
+    if (need === ROLE_FACE_NEED) return !engineTakesRoleFace(cs)
+    if (need === ROLE_FACE_STORED_MASK_NEED) return !engineTakesRoleFaceStoredMask(cs)
     if (need === PULSE_REFERENCE_AUDIO_NEED) return !engineTakesPulseReferenceAudioIn(cs)
     if (need === "trendPrePrompt") return cs.trendPrePrompt !== true
     if ((CAST_SWAP_ENGINES as readonly string[]).includes(need)) return !(castSwapEnginesOf(cs) as readonly string[]).includes(need)
@@ -592,6 +619,7 @@ export function publishBlockers(
       out.push({ code: "face_mask_out_of_date", why: r.why, ...(r.why === "plugin_recipe" ? { env: r.env } : {}), message: OUT_OF_DATE_MESSAGES[r.why] })
     }
     out.push(...variantBlockers(data, mask.status === "approved"))
+    out.push(...faceChipStoredMaskBlockers(data, mask.status === "approved"))
   }
 
   const needs = needsOf(data, livePrismReferenceAudio)
@@ -621,6 +649,51 @@ export function publishBlockers(
     }
     out.push(...promptStyleBlockers(data, env, row.supports.castSwap))
     for (const need of missingNeeds(row, needs)) out.push({ code: "engine_unsupported", env, need })
+  }
+  return out
+}
+
+/**
+ * The Face chip on a stored mask (decided 2026-11-20, role-face.ts): a run that
+ * keeps one person's face while another takes a new one is sent what the
+ * engine remakes the mask from, and refused without it
+ * (`role_face_with_stored_mask`). So a faces-hidden trend (`facesHiddenMask`; a depth
+ * preparation is left to the engine) with two people or more
+ * whose runs can keep a face needs, for each slot that can keep its own,
+ * that slot's role outline (role outlines on, with marks of the slot:
+ * `face_chip_needs_role_outlines`, `slots` those people), and, once its mask
+ * is approved, the mask as it was before its marks from these base settings
+ * (`face_chip_needs_raw_mask`); and, when its runs can leave a marked person
+ * empty (`faceMaskVariantsApply`), `face_chip_with_person_masks`: those runs
+ * use a per-person variant, which cannot be remade for a kept face.
+ */
+function faceChipStoredMaskBlockers(data: TrendVersionData, maskApproved: boolean): PublishBlocker[] {
+  const out: PublishBlocker[] = []
+  const people = faceSlotsWithoutOutlines(data)
+  if (people.length > 0) {
+    out.push({
+      code: "face_chip_needs_role_outlines",
+      slots: people,
+      message: `People can keep their own face in ${people.join(", ")}, and this trend runs on a stored face mask: turn on role outlines and draw ${people.length === 1 ? "that person's" : "each of those people's"} boxes, or hide Face there, or runs that keep one face and give another a new one are refused.`,
+    })
+  }
+  const mayKeep = facesHiddenMask(data) && data.slots.filter((s) => s.kind === "person").length >= 2 && trendMayKeepFaces(data)
+  if (mayKeep && maskApproved && roleFaceRemakeFor(data).raw === undefined) {
+    out.push({
+      code: "face_chip_needs_raw_mask",
+      message: "People can keep their own face in this trend, but its approved face mask kept no copy from before its marks, so a run that keeps one face and gives another a new one is refused. Make the face mask again.",
+    })
+  }
+  // A run that leaves a marked person empty is sent that person's mask (a per-person variant), which no engine can
+  // remake for a kept face: the variant keeps a filled person's share of a blob (its `keep` boxes), which the remake's
+  // raw mask, erase and role boxes cannot say. So such a run that mixes faces would be refused (decided 2026-11-20).
+  const emptiable = mayKeep ? emptiablePeople(data) : []
+  if (emptiable.length > 0) {
+    out.push({
+      code: "face_chip_with_person_masks",
+      slots: emptiable,
+      message: `People can keep their own face in this trend, and runs that leave ${emptiable.join(", ")} empty use a person mask, which cannot be made again for a kept face: such runs that keep one face and give another a new one are refused. Hide Face, or give ${emptiable.length === 1 ? "that person" : "those people"} pictures in every example.`,
+    })
   }
   return out
 }

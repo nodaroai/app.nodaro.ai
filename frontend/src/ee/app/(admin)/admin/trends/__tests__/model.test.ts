@@ -260,6 +260,19 @@ describe("the chips a slot shows to people", () => {
     expect(fromForm(toForm(d)).slots[0]).not.toHaveProperty("chips")
   })
 
+  it("the Face chip is shown only when listed: showing it lists them all, hiding it again lists none", () => {
+    const [form] = toForm(draft({ slots: [lead()] })).slots
+    expect(shownChips(form!)).toEqual(["body", "outfit", "hair"])
+    const face = withChipShown(form!, "face", true)
+    expect(face.chips).toEqual(["body", "outfit", "hair", "face"])
+    expect(fromForm({ ...toForm(draft()), slots: [face] }).slots[0]!.chips).toEqual(["body", "outfit", "hair", "face"])
+    expect(withChipShown(face, "face", false)).not.toHaveProperty("chips")
+    // A Face default is saved as set, and never written by itself.
+    expect(fromForm(toForm(draft({ slots: [lead()] }))).slots[0]).not.toHaveProperty("defaults")
+    const d = draft({ slots: [lead({ defaults: { face: "original" }, chips: ["outfit", "face"] })] })
+    expect(fromForm(toForm(d))).toEqual(savedOf(d))
+  })
+
   it("a kind change shows every chip of the new kind; a location saves no chips", () => {
     const [form] = toForm(draft({ slots: [lead({ chips: ["outfit"] })] })).slots
     expect(withKind(form!, "pet")).not.toHaveProperty("chips")

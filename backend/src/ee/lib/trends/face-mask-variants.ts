@@ -84,7 +84,7 @@ export function faceMaskVariantsOverCap(data: MarksData): boolean {
  * no examples; with examples, those some example has no pictures for (the
  * example fills every other one).
  */
-function emptiablePeople(data: MarksData & Pick<TrendVersionData, "examples">): string[] {
+export function emptiablePeople(data: MarksData & Pick<TrendVersionData, "examples">): string[] {
   const people = markedPeople(data)
   if (data.examples.length === 0) return people
   return people.filter((k) => data.examples.some((ex) => !exampleHasPictures(ex, k)))
