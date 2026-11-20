@@ -143,7 +143,7 @@ Nodaro fees, and no watermark.
 
 ## Editing video
 
-Any video result has an **Edit video** action that opens the NodarCut editor.
+Any video result has an **Edit video** action that opens the NodaroCut editor.
 The editor page loads from `freecut.nodaro.ai`; **your video does not go with
 it** — the app reads the file from your own storage and hands the bytes to the
 editor inside your browser, and the editing and export happen there.

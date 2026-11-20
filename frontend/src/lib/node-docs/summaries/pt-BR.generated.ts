@@ -53,7 +53,7 @@ export const NODE_DOCS_SUMMARIES: Readonly<Record<string, string>> = {
   "video-composer": "Descreva o vídeo, e um modelo de IA organiza imagens, clipes e áudio conectados em uma composição multipista com tempos, que o Renderizar vídeo renderiza.",
   "split-media": "Corte vídeo ou áudio em partes exatas no quadro, entre uma duração mínima e uma máxima, ou um vídeo em uma parte por tomada, e execute o próximo nó em cada uma.",
   "shot-cuts": "Encontre onde cada plano de um vídeo começa e termina, medido no próprio arquivo, e, se quiser, salve o primeiro e o último quadro de cada plano como imagens.",
-  "manual-edit": "Abra clipes, imagens e áudio no editor de vídeo NodarCut, corte e organize tudo à mão e repasse o vídeo editado, ou pause o workflow até você terminar.",
+  "manual-edit": "Abra clipes, imagens e áudio no editor de vídeo NodaroCut, corte e organize tudo à mão e repasse o vídeo editado, ou pause o workflow até você terminar.",
   "edit-plan": "Planeje uma edição a partir da transcrição da gravação: enxugue, encontre clipes, marque capítulos ou corte um trailer, em uma EDL que o Aplicar EDL renderiza.",
   "camera-switch": "Coloque cada corte de um podcast ou entrevista multicâmera na câmera de quem está falando, a partir de uma transcrição com falantes. O som nunca muda.",
   "speaker-frames": "Descubra onde está o rosto de cada falante, ao longo do tempo, em todas as câmeras de uma edição multicâmera, e gere trilhas de rosto para o Visão de falantes.",

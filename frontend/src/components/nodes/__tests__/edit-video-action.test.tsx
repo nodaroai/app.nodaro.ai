@@ -98,7 +98,7 @@ function renderNode(Node: unknown, data: Record<string, unknown>) {
   return render(<C id="N1" data={{ label: "Node", ...data }} selected={false} />)
 }
 
-const editButton = (name: RegExp = /edit in nodarcut/i) => screen.queryByRole("button", { name })
+const editButton = (name: RegExp = /edit in nodarocut/i) => screen.queryByRole("button", { name })
 
 function setEditor(freecutUrl: string | undefined) {
   window.__NODARO_RUNTIME__ = freecutUrl === undefined ? {} : { freecutUrl }
@@ -120,7 +120,7 @@ describe.each([
     )
     const button = editButton()
     expect(button).not.toBeNull()
-    expect(button).toHaveAttribute("title", "Edit in NodarCut")
+    expect(button).toHaveAttribute("title", "Edit in NodaroCut")
     fireEvent.click(button!)
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
@@ -140,7 +140,7 @@ describe.each([
   it("a hand-written button (Upload Video) opens the uploaded video, with its tooltip", () => {
     renderNode(UploadVideoNode, { url: VIDEO, r2Url: VIDEO })
     const button = editButton()
-    expect(button).toHaveAttribute("title", "Edit in NodarCut")
+    expect(button).toHaveAttribute("title", "Edit in NodaroCut")
     fireEvent.click(button!)
     expect(openFreeCut).toHaveBeenCalledWith("N1", VIDEO, undefined)
   })
@@ -175,7 +175,7 @@ describe.each(["off", "OFF", " none ", "false", "disabled"])("Edit video with FR
   const assertAbsent = () => {
     expect(editButton()).toBeNull()
     expect(editButton(/^edit video$/i)).toBeNull()
-    expect(screen.queryByTitle("Edit in NodarCut")).toBeNull()
+    expect(screen.queryByTitle("Edit in NodaroCut")).toBeNull()
   }
 
   it("the shared result overlay draws no button, though the node hands it one", () => {
@@ -223,13 +223,13 @@ describe.each(["off", "OFF", " none ", "false", "disabled"])("Edit video with FR
 })
 
 describe("EditVideoButton", () => {
-  it("is named and titled Edit in NodarCut by default, and opens without reaching the node beneath", () => {
+  it("is named and titled Edit in NodaroCut by default, and opens without reaching the node beneath", () => {
     setEditor(undefined)
     const onEdit = vi.fn()
     const onNodeClick = vi.fn()
     render(<div onClick={onNodeClick}><EditVideoButton onEdit={onEdit} /></div>)
     const button = editButton()!
-    expect(button).toHaveAttribute("title", "Edit in NodarCut")
+    expect(button).toHaveAttribute("title", "Edit in NodaroCut")
     fireEvent.click(button)
     expect(onEdit).toHaveBeenCalledTimes(1)
     expect(onNodeClick).not.toHaveBeenCalled()
