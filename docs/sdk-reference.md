@@ -1411,6 +1411,7 @@ interface SharedJob {
   outputUrl: string; outputUrls?: string[]; width?: number; height?: number; durationSec?: number
   title: string | null; createdAt: string
   prompt: string | null              // as written; null for a trend run
+  displayPrompt?: string | null      // as a person reads it: @maya:1 → @Maya, {video:1:clip} → @clip
   negativePrompt?: string | null
   model: { id: string; name: string } | null   // the public model name, never the provider
   settings: Record<string, SharedSettingValue> // never an address or an id

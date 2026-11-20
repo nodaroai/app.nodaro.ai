@@ -68,8 +68,15 @@ export interface SharedJob {
   /** The owner's name for the result, or `null`. */
   title: string | null
   createdAt: string
-  /** The prompt as it was written; `null` for a trend run. */
+  /** The prompt as it was written, exactly as sent (reference tokens included); `null` for a trend run. */
   prompt: string | null
+  /**
+   * The prompt as a person reads it: each reference token (`@maya:1`,
+   * `@image-1:1:background`, `{video:1:clip}`) shown as the name on its pill
+   * (`@Maya`, `@Image 1`, `@clip`). Show this; send `prompt` back to reuse it.
+   * `null` for a trend run; absent from an older server.
+   */
+  displayPrompt?: string | null
   negativePrompt?: string | null
   /** The public model id and its name; `null` when the model is not in the public catalog. */
   model: { id: string; name: string } | null

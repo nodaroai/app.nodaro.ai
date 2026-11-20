@@ -87,7 +87,8 @@ function videoTypeOf(url: string): string {
  */
 export function jobCardContent(job: SharedJob, output: unknown, refuse?: (url: string) => boolean): ShareCardContent {
   const out = record(output)
-  const prompt = job.trend ? null : job.prompt
+  // What a person reads: the pills' names in place of the reference tokens.
+  const prompt = job.trend ? null : (job.displayPrompt ?? job.prompt)
   const title = job.title ?? (job.trend ? job.trend.name : prompt ? clip(prompt, TITLE_MAX) : "A result shared on Nodaro")
   const description = job.trend
     ? `Made with the ${job.trend.name} trend on Nodaro.`

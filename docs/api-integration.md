@@ -1466,11 +1466,17 @@ curl -s "$BASE/v1/public/shares/$TOKEN"
 
 `Share` is `{ token, kind, targetId, shared, allowCopy, createdAt, updatedAt }`.
 A shared **job** is `{ id, type, mediaKind, outputUrl, outputUrls?, width?,
-height?, durationSec?, title, createdAt, prompt, negativePrompt?, model,
-settings, references?, trend? }`:
+height?, durationSec?, title, createdAt, prompt, displayPrompt, negativePrompt?,
+model, settings, references?, trend? }`:
 
 - `prompt` is the prompt as it was written (`userPrompt` when your app sent
-  one); `model` is the public model id and its name (`null` for a model the
+  one), exactly as sent. `displayPrompt` is the same prompt as a person reads
+  it: each reference token becomes the name on its pill — `@<slug>:<N>` (with
+  its role, variant or `~lock`) the name of the reference it names in
+  `connectedReferences` / `describedReferences`, else the slug made readable
+  (`@image-1:1` → `@Image 1`); `{video:N:label}` / `{audio:N:label}` /
+  `{image:N:label}` → `@label`. Only names come from the references, never an
+  address or an id. Both are `null` for a trend run; `model` is the public model id and its name (`null` for a model the
   public catalog does not list) — never the provider a model runs on.
 - `settings` is the job's input without the prompt and model fields, without
   anything internal (ids of rows, credits and prices, webhooks, the provider,
@@ -1549,6 +1555,8 @@ page with:
 
 The title is the result's name, else the start of its prompt (about 70
 characters); the description is the prompt, trimmed to about 200 characters.
+Both read the prompt as a person does (`displayPrompt`: `@Maya`, never
+`@maya:1`).
 A trend run is named by its trend, never a prompt. The picture is the result
 itself for an image, the poster for a video, and for a sound the track's cover
 when it has one, else the platform's own logo (`/logo-512.png`, 512 × 512). A
