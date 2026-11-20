@@ -266,13 +266,21 @@ describe("Text to Dialogue — cloned voices on 3.8 Flash", () => {
     expect(screen.queryByTestId("dialogue-clones")).toBeNull()
   })
 
-  it("add a clone, give a line its voice, edit another line: the first keeps the clone; rename and remove rewrite the lines", async () => {
+  // One journey, split into three tests at its seams: each store write
+  // re-renders the whole real panel, and the journey's ~20 of them together
+  // ran 1.7–2.2 s on CI against the 5 s per-test limit (it timed out once).
+  // Each later part starts from exactly the node state the part before it
+  // asserts (the data a click writes is plain node data, so seeding it is the
+  // same state the panel would have produced).
+  const pendingClone = { replica: { sourceAudioUrl: "", consentAudioUrl: "" } }
+
+  it("add a clone, give a line its voice, edit another line: the first keeps the clone", async () => {
     mount([dialogueNode("A", { provider: FLASH, dialogue: lines })])
     await tick()
     const user = userEvent.setup()
-    await user.click(screen.getByRole("button", { name: /Add a cloned voice/ }))
+    await user.click(within(screen.getByTestId("dialogue-clones")).getByRole("button", { name: /Add a cloned voice/ }))
     await tick()
-    expect(dataOf("A").speakers).toEqual([{ voice: "Cloned voice 1", replica: { sourceAudioUrl: "", consentAudioUrl: "" } }])
+    expect(dataOf("A").speakers).toEqual([{ voice: "Cloned voice 1", ...pendingClone }])
 
     // Line 1's picker offers the clone beside the model's voices.
     await user.click(screen.getAllByTestId("tts-named-voice")[0]!)
@@ -284,7 +292,17 @@ describe("Text to Dialogue — cloned voices on 3.8 Flash", () => {
     await user.type(screen.getByPlaceholderText(/Line 2/), "!")
     await tick()
     expect((dataOf("A").dialogue as Array<Record<string, unknown>>).map((l) => l.voice)).toEqual(["Cloned voice 1", "Kore"])
+  })
 
+  it("rename: an empty name is refused; a new one rewrites the lines that speak with the clone", async () => {
+    // Where the test above leaves the node.
+    mount([dialogueNode("A", {
+      provider: FLASH,
+      dialogue: [{ ...lines[0], voice: "Cloned voice 1", voiceLabel: "Cloned voice 1" }, { ...lines[1], text: "Hello!" }],
+      speakers: [{ voice: "Cloned voice 1", ...pendingClone }],
+    })])
+    await tick()
+    const user = userEvent.setup()
     const clone = screen.getByTestId("dialogue-clone")
     const name = within(clone).getByRole("textbox", { name: "Name" })
     await user.clear(name)
@@ -294,7 +312,18 @@ describe("Text to Dialogue — cloned voices on 3.8 Flash", () => {
     await tick()
     expect((dataOf("A").dialogue as Array<Record<string, unknown>>)[0]!.voice).toBe("Ana")
     expect((dataOf("A").speakers as Array<Record<string, unknown>>)[0]!.voice).toBe("Ana")
+  })
 
+  it("recordings and the consent box give the clone its consent; remove rewrites its lines", async () => {
+    // Where the test above leaves the node.
+    mount([dialogueNode("A", {
+      provider: FLASH,
+      dialogue: [{ ...lines[0], voice: "Ana", voiceLabel: "Ana" }, { ...lines[1], text: "Hello!" }],
+      speakers: [{ voice: "Ana", ...pendingClone }],
+    })])
+    await tick()
+    const user = userEvent.setup()
+    const clone = screen.getByTestId("dialogue-clone")
     await upload(clone, "clone-reference", replica.sourceAudioUrl)
     await upload(clone, "clone-consent", replica.consentAudioUrl)
     await user.click(within(clone).getByRole("checkbox"))
