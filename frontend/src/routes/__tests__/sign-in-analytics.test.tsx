@@ -71,17 +71,36 @@ describe("the OAuth callback", () => {
   })
 
   it("a popup sign-in reports nothing: its window hands the session over and closes", async () => {
-    Object.defineProperty(window, "opener", { value: { postMessage: vi.fn() }, configurable: true })
-    vi.spyOn(window, "close").mockImplementation(() => {})
-    render(
-      <MemoryRouter initialEntries={["/auth/callback?code=abc"]}>
-        <AuthCallback />
-      </MemoryRouter>,
-    )
-    await act(async () => {
-      for (let i = 0; i < 5; i++) await Promise.resolve()
-    })
-    expect(reportSignIn).not.toHaveBeenCalled()
+    // The pop-up closes on a 200 ms timer after handing the session over. On
+    // the real clock that timer outlived this file: it fired after the jsdom
+    // window was torn down and failed the run with "window is not defined".
+    // On a fake clock the test runs it, and checks the window does close.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const postMessage = vi.fn()
+    Object.defineProperty(window, "opener", { value: { postMessage }, configurable: true })
+    const close = vi.spyOn(window, "close").mockImplementation(() => {})
+    try {
+      render(
+        <MemoryRouter initialEntries={["/auth/callback?code=abc"]}>
+          <AuthCallback />
+        </MemoryRouter>,
+      )
+      await act(async () => {
+        for (let i = 0; i < 5; i++) await Promise.resolve()
+      })
+      expect(reportSignIn).not.toHaveBeenCalled()
+      expect(postMessage).toHaveBeenCalled()
+      expect(close).not.toHaveBeenCalled()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(close).toHaveBeenCalled()
+      expect(reportSignIn).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+      close.mockRestore()
+    }
   })
 })
 
