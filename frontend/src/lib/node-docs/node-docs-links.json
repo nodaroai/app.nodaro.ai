@@ -1364,13 +1364,13 @@
       "family": "Cut & Assemble",
       "link": "https://nodaro.ai/docs/node/manual-edit",
       "page": "https://nodaro.ai/docs/nodes/video/manual-edit",
-      "summary": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
+      "summary": "Open clips, images and audio in the NodaroCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
       "summaries": {
-        "en": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
-        "ja": "クリップ、画像、オーディオを NodarCut 動画エディターで開き、手作業でカットして並べ、編集した動画を次に渡します。編集が終わるまでワークフローを一時停止することもできます。",
-        "ko": "NodarCut 동영상 편집기에서 클립, 이미지, 오디오를 열고 직접 자르고 배치해 편집한 동영상을 넘기거나, 편집을 마칠 때까지 워크플로를 멈추세요.",
-        "pt-BR": "Abra clipes, imagens e áudio no editor de vídeo NodarCut, corte e organize tudo à mão e repasse o vídeo editado, ou pause o workflow até você terminar.",
-        "he": "פתחו קליפים, תמונות ואודיו בעורך הווידאו NodarCut, חתכו וסדרו אותם ידנית והעבירו הלאה את הסרטון הערוך, או עצרו את התהליך עד שתסיימו."
+        "en": "Open clips, images and audio in the NodaroCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
+        "ja": "クリップ、画像、オーディオを NodaroCut 動画エディターで開き、手作業でカットして並べ、編集した動画を次に渡します。編集が終わるまでワークフローを一時停止することもできます。",
+        "ko": "NodaroCut 동영상 편집기에서 클립, 이미지, 오디오를 열고 직접 자르고 배치해 편집한 동영상을 넘기거나, 편집을 마칠 때까지 워크플로를 멈추세요.",
+        "pt-BR": "Abra clipes, imagens e áudio no editor de vídeo NodaroCut, corte e organize tudo à mão e repasse o vídeo editado, ou pause o workflow até você terminar.",
+        "he": "פתחו קליפים, תמונות ואודיו בעורך הווידאו NodaroCut, חתכו וסדרו אותם ידנית והעבירו הלאה את הסרטון הערוך, או עצרו את התהליך עד שתסיימו."
       },
       "sections": [
         "when-to-use",

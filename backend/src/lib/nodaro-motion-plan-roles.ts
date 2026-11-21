@@ -148,3 +148,15 @@ export function planRolesForPlugin(setting: NodaroMotionPlanRoles | null | undef
 export function engineTakesPlanRoles(cs: { readonly planRoles?: boolean } | undefined): boolean {
   return cs?.planRoles === true
 }
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine plans the roles of a 3D
+ * previz clip (`castSwap.planRolesPreviz`): its plan route takes
+ * `clipKind: "previz"` and answers each role's locator and `subject`. Only an
+ * engine that also plans roles and takes such a clip at all. An engine
+ * without it refuses the key on that route (its body is strict), so it is
+ * never sent there.
+ */
+export function engineTakesPlanRolesPreviz(cs: { readonly planRoles?: boolean; readonly previz?: boolean; readonly planRolesPreviz?: boolean } | undefined): boolean {
+  return cs?.planRolesPreviz === true && cs.planRoles === true && cs.previz === true
+}

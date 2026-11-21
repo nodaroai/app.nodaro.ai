@@ -611,6 +611,28 @@ export interface VideoRemakePlanRolesParams {
   preview?: boolean
   /** Where the preview starts, in seconds (default 0); `previewStart + 4` must fit the clip. */
   previewStart?: number
+  /**
+   * What the clip is, as the run will state it (see
+   * {@link VideoRemakeClipKind}). `"previz"` says it is a 3D previz: the plan
+   * is then made for stand-in models, and each planned role comes back as a
+   * previz run's role, its `name` the locator of its model in the clip and
+   * its `subject` who or what the model becomes (taken from the request where
+   * it says so, else from what the role's images show; left out when none
+   * could be had). Send the same `clipKind` to {@link VideoRemakeResource.estimate}
+   * and {@link VideoRemakeResource.run} with the planned roles. Only where
+   * {@link VideoRemakeResource.styleChoice} answers `planRolesPreviz` true:
+   * elsewhere leave it out (a server that does not plan such a clip refuses
+   * the field, 400 `validation_error`). Refused as a run refuses such a clip
+   * (see {@link VideoRemakePlanRolesRefusalCode}). Left out or `"footage"`:
+   * an ordinary clip, the plan as before.
+   */
+  clipKind?: VideoRemakeClipKind
+  /**
+   * The previz options the run will carry (see
+   * {@link VideoRemakePrevizOptions}): only with `clipKind: "previz"`. They
+   * are checked as a run's and change nothing of the plan.
+   */
+  previz?: VideoRemakePrevizOptions
 }
 
 /**
@@ -683,7 +705,10 @@ export interface VideoRemakePlannedRoles {
   /**
    * The NEW roles, each exactly as a run's `roles` takes one (`name` says
    * which subject of the video it replaces; its `images` are addresses that
-   * were sent). Add them after the roles you already have.
+   * were sent). Add them after the roles you already have. Planned for a 3D
+   * previz clip (`clipKind: "previz"`): `name` is the locator of the role's
+   * model in the clip and `subject`, where one could be had, who or what the
+   * model becomes.
    */
   roles: VideoRemakeRole[]
   /**
@@ -728,6 +753,12 @@ export interface VideoRemakePlannedRoles {
  *   `NodaroError.details.details.index`: its position in `images`, from 0);
  * - `plan_roles_failed` (502): the roles could not be planned just now; try
  *   again, or set the roles yourself;
+ * - with `clipKind: "previz"`, a run's own refusals of such a clip (see
+ *   {@link VideoRemakePrevizRefusalCode}): `previz_not_available` (403),
+ *   `previz_needs_prism` (400), `previz_needs_clip_kind` (400: `previz`
+ *   without `clipKind: "previz"`), `previz_role_needs_locator` (400: a role
+ *   you already have has pictures and no `name`) and `previz_not_for_trends`
+ *   (400);
  * - `rate_limit_exceeded` (429): too many calls for this account, in a minute
  *   or in a day (`Retry-After` says how long).
  *
@@ -747,6 +778,11 @@ export type VideoRemakePlanRolesRefusalCode =
   | "preview_out_of_range"
   | "image_unreadable"
   | "plan_roles_failed"
+  | "previz_not_available"
+  | "previz_needs_prism"
+  | "previz_needs_clip_kind"
+  | "previz_role_needs_locator"
+  | "previz_not_for_trends"
   | "rate_limit_exceeded"
   | (string & {})
 
@@ -1002,6 +1038,15 @@ export interface VideoRemakeStyleChoice {
    */
   planRoles?: boolean
   /**
+   * Whether the roles of a 3D previz clip can be planned here
+   * ({@link VideoRemakeResource.planRoles} with `clipKind: "previz"`): one
+   * answer for the deployment, not per engine. `true` only where the engine
+   * plans such a clip's roles and both `planRoles` and `previz` are `true`.
+   * Absent from an older server: `false` (send no `clipKind` to
+   * `planRoles()`; one sent anyway is refused 400 `validation_error`).
+   */
+  planRolesPreviz?: boolean
+  /**
    * Whether a run may state that its clip is a 3D previz here
    * (`clipKind: "previz"`, see {@link VideoRemakeClipKind}): one answer for
    * the deployment, not per engine. `true` only where the engine takes such a
@@ -1082,7 +1127,8 @@ export class VideoRemakeResource {
    * per engine, whether a run takes the style in your own words there
    * (`direction: { customStyle }`, and {@link describeStyle}), and its
    * `planRoles` whether roles can be planned from the prompt here
-   * ({@link planRoles}), and its `previz` whether a run may state a 3D previz
+   * ({@link planRoles}), its `planRolesPreviz` whether a 3D previz clip's
+   * roles can be planned too, and its `previz` whether a run may state a 3D previz
    * clip here (`clipKind: "previz"`), and its `roleFace` whether a person role
    * may keep its own face here (`face: "original"`).
    * Public (no sign-in needed); the answer may be up to a minute old.
@@ -1138,7 +1184,10 @@ export class VideoRemakeResource {
    * Free: it starts no job and charges nothing, and nothing of the clip or
    * the images is kept. Needs a signed-in account, and is limited to 6 calls a
    * minute and 60 a day per account. Only where {@link styleChoice} answers
-   * `planRoles` true (403 `plan_roles_not_available` elsewhere). Refusals:
+   * `planRoles` true (403 `plan_roles_not_available` elsewhere). For a 3D
+   * previz clip send `clipKind: "previz"` (where {@link styleChoice} answers
+   * `planRolesPreviz` true): each role then comes back with its model's
+   * locator as `name` and what it becomes as `subject`. Refusals:
    * {@link VideoRemakePlanRolesRefusalCode}.
    */
   planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> {
@@ -1151,6 +1200,8 @@ export class VideoRemakeResource {
       ...(params.references !== undefined ? { references: params.references } : {}),
       ...(params.preview !== undefined ? { preview: params.preview } : {}),
       ...(params.previewStart !== undefined ? { previewStart: params.previewStart } : {}),
+      ...(params.clipKind !== undefined ? { clipKind: params.clipKind } : {}),
+      ...(params.previz !== undefined ? { previz: params.previz } : {}),
     }
     return this.client.request("POST", "/v1/video-remake/plan-roles", { body })
   }

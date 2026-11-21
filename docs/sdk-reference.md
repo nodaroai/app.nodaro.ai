@@ -2413,7 +2413,7 @@ clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, previz?: boolean, roleFace?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every
@@ -2438,7 +2438,11 @@ them and Nodaro offers it on this deployment; an older server leaves it out
 (read it as `false`). `previz` is one boolean too: whether a run may state
 that its clip is a 3D previz here (A 3D previz clip, below), `true` only where
 the engine takes such a clip and Nodaro accepts it on this deployment; an
-older server leaves it out (read it as `false`). Public (works signed
+older server leaves it out (read it as `false`). `planRolesPreviz` is one
+boolean as well: whether such a clip's roles can be planned
+(`planRoles({ clipKind: "previz" })`, below), `true` only where the engine
+plans them and both `planRoles` and `previz` are `true`; an older server
+leaves it out (read it as `false`). Public (works signed
 out); the answer may be up to a minute old. A trend run keeps its trend's
 style.
 
@@ -2597,7 +2601,7 @@ if (planRoles === true) {
 }
 ```
 
-`planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? })`
+`planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? })`
 (`POST /v1/video-remake/plan-roles`): `prompt` is the request, at most 4000
 characters, in any language, and may be empty or left out (the images alone
 are enough); `images` are 1–30 public http(s) PNG, JPEG, WebP
@@ -2650,6 +2654,39 @@ a picture; the envelope's `details.index`, read as
 `err.details.details.index`, says which), `502 plan_roles_failed` (try again,
 or set the roles yourself) and `429 rate_limit_exceeded` past either limit
 (`Retry-After` says how long).
+
+**Planning the roles of a 3D previz clip** (`clipKind`, `previz` on
+`planRoles()`): where `styleChoice()` answers `planRolesPreviz` `true`,
+`planRoles()` takes `clipKind: "previz"` and `previz`
+(`VideoRemakePrevizOptions`), as `run()` does. Each planned role then comes
+back as a previz run's role: its `name` is the locator of its model in the
+clip and its `subject` says who or what the model becomes (from the request
+where it says so, else from what the role's images show; left out when none
+could be had). `previz` is checked as a run's and changes nothing of the
+plan. Send the roles on with the same `clipKind` and `previz`:
+
+```ts
+const { planRolesPreviz } = await client.videoRemake.styleChoice()
+if (planRolesPreviz === true) {
+  const clip = { videoUrl: "https://example.com/previz.mp4", clipKind: "previz" as const }
+  const plan = await client.videoRemake.planRoles({
+    ...clip,
+    prompt: "the pink model is the detective from the first photo, at night",
+    images: ["https://example.com/detective.png"],
+  })
+  // plan.roles[0]: { kind: "person", name: "the pink model on the left", subject: "the detective", images: [...] }
+  const params = { ...clip, roles: plan.roles, references: plan.references, postPrompt: plan.postPrompt }
+  const quote = await client.videoRemake.estimate(params)
+}
+```
+
+Refused as a run refuses such a clip (the codes are in
+`VideoRemakePlanRolesRefusalCode` too): `403 previz_not_available`,
+`400 previz_needs_prism`, `400 previz_needs_clip_kind`,
+`400 previz_role_needs_locator` (a role you already have has pictures and no
+`name`) and `400 previz_not_for_trends`. Where `planRolesPreviz` is not `true`
+leave `clipKind` out of `planRoles()`: a server that does not plan such a clip
+refuses the field with `400 validation_error`.
 
 **A 3D previz clip** (`clipKind`, `previz`, a role's `subject`): where
 `styleChoice()` answers `previz` `true`, `run()` and `estimate()` take

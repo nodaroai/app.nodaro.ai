@@ -243,7 +243,7 @@ Component-layer sweep of `frontend/src` for `<canvas>`, `onPointerDown/onPointer
 
 | node type | surface | what the pointer does |
 |---|---|---|
-| `manual-edit` | `freecut-editor-modal.tsx` — the NodarCut/FreeCut editor in an `<iframe>` (postMessage protocol, `VITE_FREECUT_URL`), hosted by `workflow-editor-main.tsx` when the node sets `isEditorOpen` | full timeline edit; the node's output IS the editor's export |
+| `manual-edit` | `freecut-editor-modal.tsx` — the NodaroCut/FreeCut editor in an `<iframe>` (postMessage protocol, `VITE_FREECUT_URL`), hosted by `workflow-editor-main.tsx` when the node sets `isEditorOpen` | full timeline edit; the node's output IS the editor's export |
 | `paint-mask` | `editor/mask-painter-modal.tsx` (`<canvas>`, `handlePointerMove` brush, `lib/mask-utils.ts`), opened from the node itself | paint the mask by hand; the painted PNG IS the node's output |
 | `reference-board` | `reference-board-node.tsx:406` → `editor/mask-painter-modal.tsx` (`<canvas>`, `handlePointerMove` brush, `lib/mask-utils.ts`) | paint a refine mask over the board, straight from the node |
 | `generate-image` | `generate-image-node.tsx:385` → `editor/extract-references-modal.tsx` (`<canvas>`, rectangle drag + lasso point capture, `lib/image-utils.ts` `cropPolygonToBlob`) | draw a rect/lasso over the result to cut out a character / location / object reference |

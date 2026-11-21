@@ -4983,6 +4983,17 @@ export interface PluginSupports {
    *   Additive-optional: absent ⇒ the engine has no such route and the host
    *   answers that planning is not offered
    *   (lib/nodaro-motion-plan-roles.ts `engineTakesPlanRoles`).
+   * - `planRolesPreviz`: `POST /v1/cast-swap/plan-roles` takes `clipKind:
+   *   "previz"` (and `previz`, a run's options, checked as a run's): the
+   *   step is told the clip's figures are stand-in models, and each planned
+   *   role is a previz run's role: its `name` the locator of its model in
+   *   the clip, its `subject` who or what it becomes (left out when none
+   *   could be had). Refused as a run refuses such a clip, with a run's
+   *   codes. Only with `planRoles` and `previz`. Additive-optional: absent ⇒
+   *   the plan's strict body refuses `clipKind` (400 `validation_error`), so
+   *   the host must not send it and answers that a previz clip's roles are
+   *   not planned (lib/nodaro-motion-plan-roles.ts
+   *   `engineTakesPlanRolesPreviz`).
    * - `previz`: a DIRECT run on Nodaro Prism (and its estimate) takes
    *   `clipKind: "previz"`: its clip is a 3D previz (simple untextured models
    *   moved and filmed as the video to make will be), sent as the engine's
@@ -5196,6 +5207,7 @@ export interface PluginSupports {
     readonly shotListSpeech?: boolean
     readonly customStyle?: boolean
     readonly planRoles?: boolean
+    readonly planRolesPreviz?: boolean
     readonly previz?: boolean
     readonly shotLock?: boolean
     readonly flashModel?: boolean

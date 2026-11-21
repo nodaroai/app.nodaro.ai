@@ -53,7 +53,7 @@ export const NODE_DOCS_SUMMARIES: Readonly<Record<string, string>> = {
   "video-composer": "Describe the video you want, and an AI model arranges your connected images, clips and audio into a timed, multi-track composition that Render Video renders.",
   "split-media": "Cut a video or audio file into frame-exact parts between a minimum and a maximum length, or a video into one part per shot, and run the next node on each.",
   "shot-cuts": "Find where every shot of a video starts and ends, measured from the file itself, and optionally save each shot's first and last frame as images.",
-  "manual-edit": "Open clips, images and audio in the NodarCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
+  "manual-edit": "Open clips, images and audio in the NodaroCut video editor, cut and arrange them by hand, and pass the edited video on, or pause a workflow until you finish.",
   "edit-plan": "Plan an edit from a recording's transcript. Tighten it, find short clips, mark chapters or cut a trailer, as an edit decision list that Apply EDL renders.",
   "camera-switch": "Put each cut of a multicam podcast or interview edit on the camera of whoever is speaking, from a transcript with speaker labels. The sound never changes.",
   "speaker-frames": "Find where each speaker's face is, over time, on every camera of a multicam edit, and get a face-track file that Speaker View's tracked framing reads.",

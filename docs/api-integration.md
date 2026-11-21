@@ -5752,10 +5752,10 @@ length, with its own cast and new music, and can change the motion itself.
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), and whether a person role may keep its own face (`roleFace`, see The Face chip below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), and whether a person role may keep its own face (`roleFace`, see The Face chip below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
-| `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
+| `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 15 in
@@ -6048,6 +6048,53 @@ plan_roles_not_available` (not offered here: set the roles yourself),
 `400 image_unreadable` (an image could not be fetched, is too large or is not
 a picture; `error.details.index` is its position in `images`, from 0) and
 `502 plan_roles_failed` (try again, or set the roles yourself).
+
+**Planning the roles of a 3D previz clip.** Where `style-choice` answers
+`planRolesPreviz: true` (one boolean, not per engine: `true` only where the
+engine plans such a clip's roles and both `planRoles` and `previz` are `true`;
+a server from before it leaves it out, read that as `false`), the plan body
+also takes `clipKind: "previz"` and `previz`, as a run takes them (see A 3D
+previz clip below). The plan is then made for stand-in models, and each
+planned role comes back as a previz run's role: its `name` is the **locator**
+of its model in the clip (its colour, its shape or size, its position) and
+its `subject` says who or what the model becomes, taken from the request
+where it says so and otherwise from what the role's images show. A role no
+subject could be had for comes back without one (the result's script then
+calls it by its picture). `previz` is checked as a run's and changes nothing
+of the plan. Send the planned roles to the estimate and the run as they are,
+with the same `clipKind` and `previz`.
+
+```json
+{
+  "videoUrl": "https://example.com/previz.mp4",
+  "clipKind": "previz",
+  "prompt": "the pink model is the detective from the first photo, at night",
+  "images": ["https://example.com/detective.png"]
+}
+```
+
+```json
+{
+  "prompt": "the pink model is the detective from the first photo, at night",
+  "roles": [
+    { "kind": "person", "name": "the pink model on the left", "subject": "the detective", "images": ["https://example.com/detective.png"] }
+  ],
+  "decisions": [{ "role": 0, "basis": "request", "evidence": "the pink model is the detective from the first photo" }],
+  "references": [],
+  "postPrompt": "at night",
+  "removed": ["the pink model is the detective from the first photo"],
+  "unresolved": []
+}
+```
+
+Such a plan is refused as a run refuses such a clip, with the same codes:
+`403 previz_not_available`, `400 previz_needs_prism` (Nodaro Pulse), `400
+previz_needs_clip_kind` (`previz` without `clipKind: "previz"`), `400
+previz_role_needs_locator` (a role you already have has pictures and no name)
+and `400 previz_not_for_trends`. Where `planRolesPreviz` is not `true`, send no
+`clipKind` to the plan: a server that does not plan such a clip refuses the
+field with `400 validation_error`. `clipKind: "footage"` (or the field left
+out) is an ordinary clip, the plan as before.
 
 **The Face chip.** A person role also takes `face`: from the picture
 (`"new"`, the default, also when `face` is left out) or from the video
