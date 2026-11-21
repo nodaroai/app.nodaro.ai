@@ -285,6 +285,7 @@
         "backend/src/ee/billing/stripe-event-retry.ts",
         "backend/src/ee/billing/subscription-grant.ts",
         "backend/src/ee/billing/subscription-renewal.ts",
+        "backend/src/ee/billing/subscription-self-heal.ts",
         "backend/src/ee/billing/tier-columns.ts",
         "backend/src/ee/billing/ugc-listing-unpriced.ts",
         "backend/src/ee/billing/ugc-run-set.ts",

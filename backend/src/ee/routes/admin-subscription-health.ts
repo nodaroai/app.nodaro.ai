@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
-import { getStripe } from "../billing/stripe-client.js"
+import { syncGrantedSubscriptionFromStripe } from "../billing/subscription-self-heal.js"
 import { getTierFromPriceId } from "../billing/stripe-config.js"
 import { tierColumns } from "../billing/tier-columns.js"
 
@@ -179,45 +179,35 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
       })
     }
 
-    // Fetch active subscription from Stripe
-    let subs
+    // Refreshes only the subscription this account was granted; never creates
+    // a row or marks an ungranted one active (billing/subscription-self-heal.ts).
+    let synced
     try {
-      subs = await getStripe().subscriptions.list({
-        customer: custRow.stripe_customer_id,
-        status: "active",
-        limit: 1,
+      synced = await syncGrantedSubscriptionFromStripe({
+        userId,
+        stripeCustomerId: custRow.stripe_customer_id,
+        tierFor: (item) => getTierFromPriceId(item.price.id),
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Stripe API error"
-      return reply.status(502).send({ error: { message: `Stripe API failed: ${msg}` } })
+      return reply.status(502).send({ error: { message: `Sync failed: ${msg}` } })
     }
 
-    const activeSub = subs.data[0]
-    if (!activeSub) {
+    if (synced.outcome === "no_active_stripe_subscription") {
       return reply.status(404).send({ error: { message: "No active Stripe subscription found" } })
     }
-
-    const item = activeSub.items.data[0]
-    if (!item) {
-      return reply.status(404).send({ error: { message: "Subscription has no line items" } })
+    if (synced.outcome === "not_granted") {
+      return reply.status(409).send({
+        error: {
+          message:
+            `Stripe has an active subscription (${synced.stripeSubscriptionIds.join(", ")}) that this account was never granted here: ` +
+            "not recorded yet, still unpaid, or refused as a second subscription. Nothing was synced. " +
+            "To record a missing one, resend its Stripe event from the Stripe dashboard.",
+        },
+      })
     }
 
-    const freshStart = new Date(item.current_period_start * 1000).toISOString()
-    const freshEnd = new Date(item.current_period_end * 1000).toISOString()
-    const tier = getTierFromPriceId(item.price.id)
-
-    // Upsert subscription
-    await supabase
-      .from("subscriptions")
-      .upsert({
-        user_id: userId,
-        stripe_subscription_id: activeSub.id,
-        stripe_price_id: item.price.id,
-        tier,
-        status: "active",
-        current_period_start: freshStart,
-        current_period_end: freshEnd,
-      }, { onConflict: "stripe_subscription_id" })
+    const { tier, periodStart: freshStart, periodEnd: freshEnd } = synced
 
     // Update profile
     await supabase
@@ -228,7 +218,7 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
     return {
       data: {
         synced: true,
-        stripeSubscriptionId: activeSub.id,
+        stripeSubscriptionId: synced.stripeSubscriptionId,
         tier,
         periodStart: freshStart,
         periodEnd: freshEnd,
