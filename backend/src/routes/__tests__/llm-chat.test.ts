@@ -688,6 +688,40 @@ describe("POST /v1/llm-chat/generate — a video frame rate (referenceVideoFps)"
     }
   })
 
+  it("takes a plugin's rated call whole: a clip at 6 frames a second beside five pictures, on the provider's own lane", async () => {
+    // What the Video Remake engine sends for a shot list where this host advertises
+    // `capabilities.nodaroMotionShotListFps`: the clip as a video reference with its rate and Advanced mode, the
+    // role pictures as images, its own temperature and output cap.
+    const restore = await withGeminiKey()
+    try {
+      const app = await buildApp()
+      const pictures = [1, 2, 3, 4, 5].map((n) => `https://media.example/role-${n}.png`)
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/llm-chat/generate",
+        payload: {
+          systemPrompt: "You write a shot list of this video.",
+          userInput: "The cuts, measured from the file, are at these seconds: 0.9, 1.2.",
+          referenceImageUrls: pictures,
+          referenceVideoUrls: ["https://media.example/cut.mp4"],
+          referenceVideoFps: 6,
+          advancedMode: true,
+          llmModel: "gemini-3.8-flash",
+          temperature: 0.3,
+          maxTokens: 32768,
+          forcePrivate: true,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const request = vi.mocked(llmComplete).mock.calls[0]![0]
+      expect(videoBlocks()).toEqual([{ type: "video", url: "https://media.example/cut.mp4", fps: 6 }])
+      expect((request.messages[0]!.content as Array<Record<string, unknown>>).filter((b) => b.type === "image").map((b) => b.url)).toEqual(pictures)
+      expect(request).toMatchObject({ modelId: "gemini-3.8-flash", requireLane: "direct", advancedMode: true, temperature: 0.3, maxTokens: 32768 })
+    } finally {
+      restore()
+    }
+  })
+
   it("no rate asked: the video block carries none, as before the field existed", async () => {
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload({}) })

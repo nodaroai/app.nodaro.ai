@@ -24,6 +24,7 @@ import type {
   NodaroMotionPreviz,
   NodaroMotionPromptParts,
   NodaroMotionPromptWording,
+  NodaroMotionShotListFps,
   NodaroMotionShotLock,
   NodaroMotionSteps,
   NodaroMotionStyle,
@@ -44,6 +45,7 @@ import { customStyleToSaved } from "./components/CustomStyleSection"
 import { planRolesToSaved } from "./components/PlanRolesSection"
 import { previzToSaved } from "./components/PrevizSection"
 import { shotLockToSaved } from "./components/ShotLockSection"
+import { shotListFpsToSaved } from "./components/ShotListFpsSection"
 
 /** Every section a stored set holds, by the server's key. */
 export const MOTION_SETTINGS_KEYS = [
@@ -64,6 +66,7 @@ export const MOTION_SETTINGS_KEYS = [
   "plan-roles",
   "previz",
   "shot-lock",
+  "shot-list-fps",
   "prompt-parts",
 ] as const
 
@@ -195,12 +198,26 @@ export const PREVIZ_SPEC = spec<NodaroMotionPreviz, NodaroMotionPreviz, { previz
   saveArgOf: (body) => body.previz,
 })
 
-/** The shot lock: each engine that is on (one that is off is left out, the same as never set). */
+/**
+ * The shot lock: each engine that turns something on, as it is stored — by run type, or "on" (the value of before run
+ * types, and of a draft that says exactly that); one that turns nothing on is left out, the same as never set.
+ */
 export const SHOT_LOCK_SPEC = spec<NodaroMotionShotLock, NodaroMotionShotLock, { shotLock: NodaroMotionShotLock }>({
   draftOf: (stored) => shotLockToSaved(stored),
   bodyOf: (draft) => ({ shotLock: shotLockToSaved(draft) }),
   storedOfBody: (body) => body.shotLock,
   saveArgOf: (body) => body.shotLock,
+})
+
+/**
+ * The shot list's frame rate: the draft is kept in its saved form, `fps` left out while the engine's own default
+ * decides (the page shows that default as recommended; ShotListFpsSection.tsx).
+ */
+export const SHOT_LIST_FPS_SPEC = spec<NodaroMotionShotListFps, NodaroMotionShotListFps, { shotListFps: NodaroMotionShotListFps }>({
+  draftOf: (stored) => shotListFpsToSaved(stored),
+  bodyOf: (draft) => ({ shotListFps: shotListFpsToSaved(draft) }),
+  storedOfBody: (body) => body.shotListFps,
+  saveArgOf: (body) => body.shotListFps,
 })
 
 export const STYLE_ONLY_SPEC = spec<NodaroMotionStyleOnly, NodaroMotionStyleOnly, { styleOnly: NodaroMotionStyleOnly }>({
@@ -264,6 +281,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   "plan-roles": PLAN_ROLES_SPEC,
   previz: PREVIZ_SPEC,
   "shot-lock": SHOT_LOCK_SPEC,
+  "shot-list-fps": SHOT_LIST_FPS_SPEC,
   "prompt-parts": PROMPT_PARTS_SPEC,
 }
 

@@ -13,6 +13,7 @@ import type {
   PluginNodaroMotionNoPerson,
   PluginNodaroMotionPreviz,
   PluginNodaroMotionShotLock,
+  PluginNodaroMotionShotListFps,
   PluginNodaroMotionFlashModel,
   PluginPromptPartId,
   PluginSupports,
@@ -28,6 +29,7 @@ import type { NodaroMotionNoPersonEntry } from "../../nodaro-motion-no-person.js
 import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
 import type { NodaroMotionPrevizForPlugin } from "../../nodaro-motion-previz.js"
 import type { NodaroMotionShotLockForPlugin } from "../../nodaro-motion-shot-lock.js"
+import type { NodaroMotionShotListFpsForPlugin } from "../../nodaro-motion-shot-list-fps.js"
 import type { NodaroMotionFlashModelForPlugin } from "../../nodaro-motion-flash-model.js"
 
 /**
@@ -36,7 +38,7 @@ import type { NodaroMotionFlashModelForPlugin } from "../../nodaro-motion-flash-
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, flashModel: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashModel: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -45,11 +47,16 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_flash_model: h.flashModel }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_model: h.flashModel }
     },
     settingsReadFailed: () => h.failed,
   }
 })
+
+vi.mock("../../llm/anthropic-availability.js", async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  geminiKeySet: () => h.geminiKey,
+}))
 
 vi.mock("../../admin-check.js", async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -1235,8 +1242,96 @@ describe("tk.settings.nodaroMotionShotLock", () => {
     expect(h.shotLock).toEqual({ "nodaro-pulse": "on" })
   })
 
+  it("answers an entry by run type only to an engine that declares castSwap.shotLockRunTypes; any other is answered only \"on\" entries", async () => {
+    const byType = { ordinary: "on", styleAlone: "on", styles: { cinematic: "off" } }
+    h.shotLock = { "nodaro-prism": byType, "nodaro-pulse": "on" }
+    setPluginSupports({ castSwap: { ...CS, shotLock: true, shotLockRunTypes: true } } as never)
+    expect(await read()).toEqual({
+      "nodaro-prism": byType,
+      "motion-prism": byType,
+      "motion-pro": byType,
+      "nodaro-pulse": "on",
+      "motion-pulse": "on",
+      "motion-lite": "on",
+    })
+    // An engine from before run types reads only "on": the entry by run type is left out (off there, never on by accident).
+    shotLockEngine()
+    expect(await read()).toEqual({ "nodaro-pulse": "on", "motion-pulse": "on", "motion-lite": "on" })
+    h.shotLock = { "nodaro-prism": byType }
+    expect(await read()).toBeNull()
+    // A value from before run types is answered to both, as before.
+    h.shotLock = { "nodaro-prism": "on" }
+    expect(await read()).toEqual({ "nodaro-prism": "on", "motion-prism": "on", "motion-pro": "on" })
+    setPluginSupports({ castSwap: { ...CS, shotLock: true, shotLockRunTypes: true } } as never)
+    expect(await read()).toEqual({ "nodaro-prism": "on", "motion-prism": "on", "motion-pro": "on" })
+  })
+
   it("what the host answers is the plugin's PluginNodaroMotionShotLock", () => {
     expectTypeOf<NodaroMotionShotLockForPlugin>().toExtend<PluginNodaroMotionShotLock>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionShotListFps()`: the admin's frame rate for the clip a Video Remake shot list is written
+ * from, read by the Cast Swap engine: null to an engine that does not declare `castSwap.shotListFps`; else always an
+ * object — the admin's rate, none while the engine's own default decides, and 1 on a deployment that cannot serve a
+ * call carrying a rate.
+ */
+describe("tk.settings.nodaroMotionShotListFps", () => {
+  beforeEach(() => {
+    h.shotListFps = null
+    h.geminiKey = true
+    h.reads = 0
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const rateEngine = () => setPluginSupports({ castSwap: { ...CS, shotListFps: true } } as never)
+  const read = () => buildToolkit().settings!.nodaroMotionShotListFps!()
+
+  it("advertises nodaroMotionShotListFps and answers null to an engine without castSwap.shotListFps, whatever is saved", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionShotListFps).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionShotListFps).toBe("function")
+    h.shotListFps = { fps: 4 }
+    expect(await read()).toBeNull()
+    for (const castSwap of [CS, { ...CS, shotListFps: false }, { ...CS, shotLock: true }]) {
+      setPluginSupports({ castSwap } as never)
+      expect(await read(), JSON.stringify(castSwap)).toBeNull()
+    }
+  })
+
+  it("rejects when the settings could not be read (the engine then asks for its own default)", async () => {
+    rateEngine()
+    h.failed = true
+    await expect(read()).rejects.toThrow(/could not be read/)
+    _resetPluginSupportsForTests()
+    await expect(read()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers the admin's rate, and an object with no rate while none is saved: the engine's default, never 1", async () => {
+    rateEngine()
+    expect(await read()).toEqual({})
+    h.shotListFps = {}
+    expect(await read()).toEqual({})
+    h.shotListFps = { fps: 4 }
+    const got = await read()
+    expect(got).toEqual({ fps: 4 })
+    ;(got as { fps?: number }).fps = 12
+    expect(h.shotListFps).toEqual({ fps: 4 })
+    h.shotListFps = { fps: 1 }
+    expect(await read()).toEqual({ fps: 1 })
+    expect(h.reads).toBe(4)
+  })
+
+  it("answers 1 (the clip as before) where this deployment cannot serve a call carrying a rate, whatever is saved", async () => {
+    rateEngine()
+    h.geminiKey = false
+    expect(await read()).toEqual({ fps: 1 })
+    h.shotListFps = { fps: 12 }
+    expect(await read()).toEqual({ fps: 1 })
+  })
+
+  it("what the host answers is the plugin's PluginNodaroMotionShotListFps", () => {
+    expectTypeOf<NodaroMotionShotListFpsForPlugin>().toExtend<PluginNodaroMotionShotListFps>()
   })
 })
 

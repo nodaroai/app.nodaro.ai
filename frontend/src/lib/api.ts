@@ -13749,19 +13749,39 @@ export async function saveNodaroMotionPromptWording(promptWording: NodaroMotionP
 
 // ---- Admin: Video Remake's shot lock for direct runs (/v1/admin/video-remake/shot-lock, admin-nodaro-motion-shot-lock.ts) ----
 
-/** One engine's shot lock: whether its direct runs' prompt on an ordinary clip carries the line that keeps the shot order. */
+/** One switch of the shot lock: whether a run's prompt carries the line that keeps the shot order. */
 export type NodaroMotionShotLockValue = "off" | "on"
 
+/**
+ * One engine's shot lock by run type: a run with no art style (`ordinary`), an art style with roles
+ * (`styleWithRoles`), an art style alone (`styleAlone`), and the art styles whose own value wins over them (`styles`:
+ * a style's id, or "custom" for a custom style). A switch left out is off.
+ */
+export interface NodaroMotionShotLockByRunType {
+  ordinary?: NodaroMotionShotLockValue
+  styleWithRoles?: NodaroMotionShotLockValue
+  styleAlone?: NodaroMotionShotLockValue
+  styles?: Record<string, NodaroMotionShotLockValue>
+}
+
+/** One engine's entry: by run type, or the value of before run types ("on" = `ordinary` and `styleWithRoles`). */
+export type NodaroMotionShotLockEntry = NodaroMotionShotLockValue | NodaroMotionShotLockByRunType
+
 /** The shot lock per engine, keyed by public id; an engine left out (or "off") writes no such line. */
-export type NodaroMotionShotLock = Partial<Record<NodaroMotionEngine, NodaroMotionShotLockValue>>
+export type NodaroMotionShotLock = Partial<Record<NodaroMotionEngine, NodaroMotionShotLockEntry>>
+
+/** What a draft of the shot lock changes for the engine prompt's previews, per engine: the run types a preview shows. */
+export type NodaroMotionShotLockUnsaved = Partial<Record<NodaroMotionEngine, { ordinary?: NodaroMotionShotLockValue; styleAlone?: NodaroMotionShotLockValue }>>
 
 export interface NodaroMotionShotLockView {
-  /** null = never saved: off for every engine. Only the engines that are on are listed. */
+  /** null = never saved: off for every engine. Only the engines that turn something on are listed, each as it is stored. */
   shotLock: NodaroMotionShotLock | null
   updatedAt: string | null
   engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
   /** Whether this environment's Cast Swap engine writes the shot lock's line. */
   supported: boolean
+  /** The entry by run type: whether one may be saved (some environment's engine reads it), and the environments whose engine does not read one. */
+  runTypes?: { offered: boolean; missingIn: string[] }
 }
 
 const ADMIN_NODARO_MOTION_SHOT_LOCK = "/v1/admin/video-remake/shot-lock"
@@ -13770,7 +13790,7 @@ export async function fetchNodaroMotionShotLock(): Promise<NodaroMotionShotLockV
   return (await apiRequest<{ data: NodaroMotionShotLockView }>(ADMIN_NODARO_MOTION_SHOT_LOCK, "apiErr.loadNodaroMotion")).data
 }
 
-/** Saves every engine's shot lock; "on" is refused (409 `engine_unsupported`) while no environment's engine writes the line. */
+/** Saves every engine's shot lock; "on" is refused (409 `engine_unsupported`) while no environment's engine writes the line, an entry by run type while none reads one. */
 export async function saveNodaroMotionShotLock(shotLock: NodaroMotionShotLock): Promise<NodaroMotionShotLockView> {
   return (
     await apiRequest<{ data: NodaroMotionShotLockView }>(ADMIN_NODARO_MOTION_SHOT_LOCK, "apiErr.saveNodaroMotion", {
@@ -13846,6 +13866,45 @@ export async function saveNodaroMotionPreviz(previz: NodaroMotionPreviz): Promis
     await apiRequest<{ data: NodaroMotionPrevizView }>(ADMIN_NODARO_MOTION_PREVIZ, "apiErr.saveNodaroMotion", {
       method: "PUT",
       body: { previz },
+    })
+  ).data
+}
+
+// ---- Admin: Video Remake's shot-list frame rate (/v1/admin/video-remake/shot-list-fps, admin-nodaro-motion-shot-list-fps.ts) ----
+
+/** The saved setting. `fps` left out: the engine's own default (the recommended rate). */
+export interface NodaroMotionShotListFps {
+  fps?: number
+}
+
+export interface NodaroMotionShotListFpsView {
+  /** null = never saved. Only what an admin set is listed. */
+  shotListFps: NodaroMotionShotListFps | null
+  /** The rate in effect, frames a second: the saved choice, else `defaultFps`. */
+  fps: number
+  /** What the engine applies while no choice is saved: the recommended rate. */
+  defaultFps: number
+  /** The rates an admin may choose. */
+  options: number[]
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine reads its shot list's clip at a frame rate. */
+  supported: boolean
+  /** Whether this deployment can serve a call that carries a frame rate; false: clips are read at 1 whatever is saved. */
+  rateCarried: boolean
+}
+
+const ADMIN_NODARO_MOTION_SHOT_LIST_FPS = "/v1/admin/video-remake/shot-list-fps"
+
+export async function fetchNodaroMotionShotListFps(): Promise<NodaroMotionShotListFpsView> {
+  return (await apiRequest<{ data: NodaroMotionShotListFpsView }>(ADMIN_NODARO_MOTION_SHOT_LIST_FPS, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting, whatever the engines (one that reads no frame rate never reads it). */
+export async function saveNodaroMotionShotListFps(shotListFps: NodaroMotionShotListFps): Promise<NodaroMotionShotListFpsView> {
+  return (
+    await apiRequest<{ data: NodaroMotionShotListFpsView }>(ADMIN_NODARO_MOTION_SHOT_LIST_FPS, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { shotListFps },
     })
   ).data
 }

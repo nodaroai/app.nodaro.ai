@@ -35,6 +35,8 @@
  *   GET/PUT /v1/admin/video-remake/previz  whether a run may state that its clip is a 3D previz, rendered into its look instead of edited (admin-nodaro-motion-previz.ts)
  *   GET/PUT /v1/admin/video-remake/shot-lock
  *                                         per engine, whether a direct run's prompt carries the line that keeps the shot order and adds no shot (admin-nodaro-motion-shot-lock.ts)
+ *   GET/PUT /v1/admin/video-remake/shot-list-fps
+ *                                         how many frames a second the model that writes a run's shot list is shown of the clip (admin-nodaro-motion-shot-list-fps.ts)
  *   GET/PUT /v1/admin/video-remake/flash-model
  *                                         per engine, a test switch that makes an admin account's new runs on the faster model of the engine's family; never part of a stored settings set (admin-nodaro-motion-flash-model.ts)
  *   GET/POST /v1/admin/video-remake/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
@@ -124,6 +126,7 @@ import { NODARO_MOTION_CUSTOM_STYLE_SECTION, registerNodaroMotionCustomStyleRout
 import { NODARO_MOTION_PLAN_ROLES_SECTION, registerNodaroMotionPlanRolesRoutes } from "./admin-nodaro-motion-plan-roles.js"
 import { NODARO_MOTION_PREVIZ_SECTION, registerNodaroMotionPrevizRoutes } from "./admin-nodaro-motion-previz.js"
 import { NODARO_MOTION_SHOT_LOCK_SECTION, registerNodaroMotionShotLockRoutes } from "./admin-nodaro-motion-shot-lock.js"
+import { NODARO_MOTION_SHOT_LIST_FPS_SECTION, registerNodaroMotionShotListFpsRoutes } from "./admin-nodaro-motion-shot-list-fps.js"
 import { registerNodaroMotionFlashModelRoutes } from "./admin-nodaro-motion-flash-model.js"
 import { registerNodaroMotionSettingsSetsRoutes } from "./admin-nodaro-motion-settings-sets.js"
 
@@ -220,6 +223,7 @@ export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSe
   NODARO_MOTION_PLAN_ROLES_SECTION,
   NODARO_MOTION_PREVIZ_SECTION,
   NODARO_MOTION_SHOT_LOCK_SECTION,
+  NODARO_MOTION_SHOT_LIST_FPS_SECTION,
   NODARO_MOTION_PROMPT_PARTS_SECTION,
 ]
 
@@ -270,6 +274,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPlanRolesRoutes(app)
   registerNodaroMotionPrevizRoutes(app)
   registerNodaroMotionShotLockRoutes(app)
+  registerNodaroMotionShotListFpsRoutes(app)
   registerNodaroMotionFlashModelRoutes(app)
   registerNodaroMotionSettingsSetsRoutes(app, NODARO_MOTION_SETTINGS_SECTIONS)
   app.get("/v1/admin/video-remake/masking", { preHandler: requireAdmin }, async (req, reply) => {

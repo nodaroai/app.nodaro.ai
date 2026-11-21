@@ -114,6 +114,20 @@ describe("an llm-chat node with its own expected usage", () => {
     expect(await price(chat(OPUS, { inputTokens: 1, outputTokens: 50_000 }))).toBeGreaterThan(today)
   })
 
+  it("a node that says it runs in Advanced mode is priced at its expected usage on the provider's own lane", async () => {
+    // A plugin's quote of a call it sends with `advancedMode: true` (a clip read at a frame rate): the same usage
+    // costs what the provider's own API charges for it, not the default lane's price.
+    const FLASH = "gemini-3.8-flash"
+    const usage = { inputTokens: 220_000, outputTokens: 60_000 }
+    const advanced = (expectedUsage?: unknown): EstimateNode => ({ id: "chat", type: "llm-chat", data: { llmModel: FLASH, advancedMode: true, ...(expectedUsage !== undefined ? { expectedUsage } : {}) } })
+    const plain = await price(chat(FLASH, usage))
+    const direct = await price(advanced(usage))
+    expect(direct).toBeGreaterThan(plain * 3)
+    // Its size still counts there: a larger call is dearer, and the field can only raise the typical call's price.
+    expect(await price(advanced({ inputTokens: 440_000, outputTokens: 60_000 }))).toBeGreaterThan(direct)
+    expect(direct).toBeGreaterThan(await price(advanced()))
+  })
+
   it("under the rollback, nothing changes", async () => {
     rollback(true)
     expect(await price(chat(OPUS, { inputTokens: 400_000, outputTokens: 40_000 }))).toBe(await price(chat(OPUS)))

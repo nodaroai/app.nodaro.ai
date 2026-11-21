@@ -65,7 +65,7 @@ import {
   type NodaroMotionMotionEntry,
   type NodaroMotionPromptParts,
   type NodaroMotionPromptWording,
-  type NodaroMotionShotLock,
+  type NodaroMotionShotLockUnsaved,
   type NodaroMotionShotLockValue,
   type PromptPartProblem,
   type PromptPartTexts,
@@ -174,8 +174,11 @@ export function PromptPartsTabs({
   /** The Flex wording's draft, likewise. */
   readonly wordingDraft: NodaroMotionPromptWording
   readonly onWordingDraft: Dispatch<SetStateAction<NodaroMotionPromptWording>>
-  /** The shot lock as changed on the page and not saved yet, per engine; an engine left out is previewed as stored. */
-  readonly shotLockUnsaved?: NodaroMotionShotLock
+  /**
+   * The shot lock as changed on the page and not saved yet, per engine: Ordinary run for the Precise and Motion
+   * previews, Art style alone for the style-only one; one left out is previewed as stored.
+   */
+  readonly shotLockUnsaved?: NodaroMotionShotLockUnsaved
   /** A stored set is loaded: it saves whole, through Save all in its banner, never from here. */
   readonly held?: boolean
 }) {
@@ -300,7 +303,7 @@ export function PromptPartsTabs({
                     onChange={(texts) => setTexts(engine.id, style, texts)}
                     saveProblems={problems.filter((p) => p.engine === engine.id && p.style === style)}
                     disabled={pending}
-                    shotLock={isRunStyle(style) ? shotLockUnsaved?.[engine.id] : undefined}
+                    shotLock={style === "styleOnly" ? shotLockUnsaved?.[engine.id]?.styleAlone : isRunStyle(style) ? shotLockUnsaved?.[engine.id]?.ordinary : undefined}
                     wording={
                       style === "motion" && wordingQuery.data
                         ? {
@@ -340,7 +343,7 @@ function StylePanel({
   readonly onChange: (texts: PromptPartTexts) => void
   readonly saveProblems: readonly PromptPartProblem[]
   readonly disabled: boolean
-  /** Precise and Motion: the engine's shot lock as changed on the page and not saved yet (undefined: the saved one). */
+  /** Precise, Motion and style-only: the shot lock for this tab's kind of run as changed on the page and not saved yet (undefined: the saved one). */
   readonly shotLock?: NodaroMotionShotLockValue
   /** Motion: the engine's Flex prompt wording as edited (shown while its prompt is Flexible), and what offers "New". */
   readonly wording?: {

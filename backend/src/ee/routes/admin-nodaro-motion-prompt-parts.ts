@@ -66,9 +66,13 @@
  *
  * The shot lock's part (`shotLock`, the `nodaro_motion_shot_lock` setting):
  * the preview's `shotLock` (`"off"` / `"on"`) is the shot lock to preview on
- * a Precise or a Motion tab, left out = the engine's saved one; a save's
- * check uses the saved one. It is said only to an engine that declares
- * `castSwap.shotLock`.
+ * a Precise, a Motion or a style-only tab, left out = the engine's saved one
+ * for that tab (`shotLockShownOn`: the Precise and Motion previews are a run
+ * with no art style, the style-only preview a style-only run); a save's
+ * check asks for the line whenever some run made with the entry may carry it
+ * (`shotLockMayBeOn`: an art style's switch or exception counts). It is said
+ * only to an engine that declares `castSwap.shotLock`, and on a style-only
+ * request only to one that declares `castSwap.shotLockRunTypes`.
  *
  * The platform hold: a save that sets or changes a `previz` entry, or an
  * override of a part id that came with it (`shotLock`, `sound`,
@@ -113,7 +117,7 @@ import {
   type DirectRunPromptProblem,
 } from "../lib/nodaro-motion-prompt-check.js"
 import { promptWordingOf } from "../../lib/nodaro-motion-prompt-wording.js"
-import { NODARO_MOTION_SHOT_LOCKS, shotLockOf, type NodaroMotionShotLockValue } from "../../lib/nodaro-motion-shot-lock.js"
+import { NODARO_MOTION_SHOT_LOCKS, shotLockMayBeOn, shotLockShownOn, type NodaroMotionShotLockValue } from "../../lib/nodaro-motion-shot-lock.js"
 import { engineTakesPreviz } from "../../lib/nodaro-motion-previz.js"
 import { PULSE_TAKES_NO_PREVIZ_MESSAGE, platformHoldOfPrevizPromptParts, previzPromptPartsSetOrChanged } from "../lib/nodaro-motion-previz-prompt-parts-gate.js"
 import { CAST_SWAP_PROMPT_WORDINGS, type CastSwapPromptWording } from "@nodaro/render-rules"
@@ -152,7 +156,7 @@ const previewBody = z.strictObject({
   style,
   overrides: promptPartEditsSchema.optional(),
   promptWording: z.enum(CAST_SWAP_PROMPT_WORDINGS).optional(),
-  // Left out = the engine's saved shot lock (`nodaro_motion_shot_lock`).
+  // Left out = the engine's saved shot lock for this tab (`nodaro_motion_shot_lock`, `shotLockShownOn`).
   shotLock: z.enum(NODARO_MOTION_SHOT_LOCKS).optional(),
 })
 
@@ -349,7 +353,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
         ? nonEmptyTexts(parsed.data.overrides)
         : (await readNodaroMotionPromptParts()).promptParts?.[engine]?.[s]
       const wording = parsed.data.promptWording ?? promptWordingOf(await savedFlexWording(), engine)
-      const shotLock = parsed.data.shotLock ?? shotLockOf(await savedShotLock(), engine)
+      const shotLock = parsed.data.shotLock ?? shotLockShownOn(await savedShotLock(), engine, s)
       const answer = await preview(
         app,
         req,
@@ -407,7 +411,7 @@ export function registerNodaroMotionPromptPartRoutes(app: FastifyInstance): void
             masking?.[engine],
             steps?.[engine],
             promptWordingOf(wording, engine),
-            shotLockOf(shotLock, engine),
+            shotLockMayBeOn(shotLock, engine, s),
           )
           if (!found) return reply
           problems.push(...found)

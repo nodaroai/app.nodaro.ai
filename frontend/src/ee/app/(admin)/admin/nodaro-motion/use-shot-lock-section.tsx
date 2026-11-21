@@ -6,18 +6,19 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import { useNodaroMotionShotLock, useSaveNodaroMotionShotLock } from "@/ee/hooks/queries/use-nodaro-motion-shot-lock"
-import type { NodaroMotionShotLock, NodaroMotionShotLockView } from "@/lib/api"
-import { SHOT_LOCK_HEADING, ShotLockSection, shotLockToSaved } from "./components/ShotLockSection"
+import type { NodaroMotionEngine, NodaroMotionShotLock, NodaroMotionShotLockUnsaved, NodaroMotionShotLockView } from "@/lib/api"
+import { SHOT_LOCK_HEADING, ShotLockSection, shotLockResolved, shotLockToSaved } from "./components/ShotLockSection"
 import { SHOT_LOCK_SPEC, type MotionSettingsBinding } from "./settings-sections"
 import { useSectionDraft } from "./use-section-draft"
 
 export interface ShotLockSectionState {
   readonly binding: MotionSettingsBinding
   /**
-   * What the draft changes over what is stored, per engine ("on" or "off"); an engine left as stored is left out, so a
-   * preview of it follows the stored setting. Empty until the setting has loaded.
+   * What the draft changes over what is stored, per engine, for the run types a preview shows: `ordinary` (the
+   * Precise and Motion previews: a run with no art style) and `styleAlone` (the style-only preview), each "on" or
+   * "off"; one left as stored is left out, so its preview follows the stored setting. Empty until the setting has loaded.
    */
-  readonly unsaved: NodaroMotionShotLock
+  readonly unsaved: NodaroMotionShotLockUnsaved
   /** Whether the draft differs from what is stored (never before the setting has loaded). */
   readonly changed: boolean
   readonly pending: boolean
@@ -27,12 +28,21 @@ export interface ShotLockSectionState {
   readonly node: ReactNode
 }
 
-/** Each engine whose value in `next` differs from `stored`, with its value in `next` (both as saved: only the engines that are on). */
-export function shotLockChanges(next: NodaroMotionShotLock, stored: NodaroMotionShotLock): NodaroMotionShotLock {
-  const out: NodaroMotionShotLock = {}
-  for (const engine of new Set([...Object.keys(next), ...Object.keys(stored)]) as Set<keyof NodaroMotionShotLock>) {
-    const value = next[engine] === "on" ? "on" : "off"
-    if (value !== (stored[engine] === "on" ? "on" : "off")) out[engine] = value
+/**
+ * Each engine whose Ordinary run or Art style alone switch in `next` differs from `stored`, with its value in `next`
+ * (either may be in either shape). The other run type and the exceptions change no preview: a preview carries no art
+ * style with roles.
+ */
+export function shotLockChanges(next: NodaroMotionShotLock, stored: NodaroMotionShotLock): NodaroMotionShotLockUnsaved {
+  const out: NodaroMotionShotLockUnsaved = {}
+  for (const engine of new Set([...Object.keys(next), ...Object.keys(stored)]) as Set<NodaroMotionEngine>) {
+    const a = shotLockResolved(next[engine], engine)
+    const b = shotLockResolved(stored[engine], engine)
+    const changed = {
+      ...(a.ordinary !== b.ordinary ? { ordinary: a.ordinary ? ("on" as const) : ("off" as const) } : {}),
+      ...(a.styleAlone !== b.styleAlone ? { styleAlone: a.styleAlone ? ("on" as const) : ("off" as const) } : {}),
+    }
+    if (Object.keys(changed).length > 0) out[engine] = changed
   }
   return out
 }
