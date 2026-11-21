@@ -50,4 +50,5 @@ export {
   type VideoRemakePrevizRefusalCode,
   type VideoRemakeRolePrevizSettings,
   type VideoRemakeArtStyle,
+  type VideoRemakePreview,
 } from "../resources/cast-swap.js"

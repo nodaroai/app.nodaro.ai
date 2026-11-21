@@ -1093,6 +1093,36 @@ export interface VideoRemakeArtStyle {
   stillUrl: string
 }
 
+/**
+ * One preview of {@link VideoRemakeResource.previews}: a before-and-after of
+ * what Video Remake does, as Nodaro's pages show it. Every address is an
+ * absolute https address; every clip is silent and 16:9.
+ */
+export interface VideoRemakePreview {
+  /** The preview's id, stable across languages. */
+  id: string
+  /** What it shows Video Remake doing. */
+  kind: "restyle" | "motion" | "object" | "background" | "edit"
+  /** Its title in the language asked for; English where that language has none. */
+  title: string
+  /** Its caption in the language asked for; English where that language has none. */
+  caption: string
+  /** The source clip. */
+  sourceUrl: string
+  /** The result clip. */
+  resultUrl: string
+  /** The source wiping into the result. */
+  sweepUrl: string
+  /** The source above the result, the same frames. */
+  stackedUrl: string
+  /** A still frame of `sweepUrl`, for showing before (or instead of) the clip. */
+  posterUrl: string
+  /** The same frame of `stackedUrl`. */
+  stackedPosterUrl: string
+  /** The page of the Nodaro tools site the preview leads to (a path, e.g. `/video/remake`). */
+  href: string
+}
+
 export class VideoRemakeResource {
   constructor(private client: NodaroClientCore) {}
 
@@ -1223,6 +1253,24 @@ export class VideoRemakeResource {
     const query: Record<string, string> = {}
     if (params.locale) query.locale = params.locale
     const res = await this.client.request<{ data: VideoRemakeArtStyle[] }>("GET", "/v1/video-remake/art-styles", { query })
+    return res.data
+  }
+
+  /**
+   * Video Remake's before-and-after previews (`GET /v1/video-remake/previews`),
+   * in the order Nodaro's pages show them: each with its clips, two stills cut
+   * from them, its title and caption in `locale` (a Nodaro language id such as
+   * `"he"`, `"ja"`, `"ko"` or `"pt-BR"`; English when left out, for a language
+   * Nodaro does not have, and where the language has no copy for a preview)
+   * and the tools-site page it leads to. The list is empty where there is
+   * nothing to show: a deployment that does not show Nodaro's previews, or one
+   * without Video Remake.
+   * Public (no sign-in needed); the answer may be up to five minutes old.
+   */
+  async previews(params: { locale?: string } = {}): Promise<VideoRemakePreview[]> {
+    const query: Record<string, string> = {}
+    if (params.locale) query.locale = params.locale
+    const res = await this.client.request<{ data: VideoRemakePreview[] }>("GET", "/v1/video-remake/previews", { query })
     return res.data
   }
 
