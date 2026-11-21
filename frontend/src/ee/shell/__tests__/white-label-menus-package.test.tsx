@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { QueryClient } from "@tanstack/react-query"
 import type { ComponentType } from "react"
 import { WHITE_LABEL_WORLD_PATHS } from "../site"
-import { WHITE_LABEL_MENU_PAGES, whiteLabelWorldMenus } from "../white-label"
+import { WHITE_LABEL_MENU_PAGES, WHITE_LABEL_MENU_PAGES_NEVER_NAMED, whiteLabelWorldMenus } from "../white-label"
 import type { SiteHeaderProps, SiteHeaderTranslate } from "../types"
 
 /**
@@ -11,12 +11,13 @@ import type { SiteHeaderProps, SiteHeaderTranslate } from "../types"
  * (@nodaroai/shell ≥ 0.24.7: a white-label header draws such a page only where
  * the host names it), held to the pinned package:
  *
- *   - every page the package lists for a world this header draws is one the
- *     app names by its rule (`WHITE_LABEL_MENU_PAGES`), and no other — a new
- *     page in the package fails here until it is mapped to what it runs;
+ *   - every page the package lists for a world this header draws is decided:
+ *     one the app names by its rule (`WHITE_LABEL_MENU_PAGES`) or one it never
+ *     names (`WHITE_LABEL_MENU_PAGES_NEVER_NAMED`), never both, and no other —
+ *     a new page in the package fails here until it is decided;
  *   - the real header, given what the app passes, draws Video's Translate
- *     where the viewer is offered it and nothing of it otherwise, and its menu
- *     names the deployment, never Nodaro.
+ *     where the viewer is offered it and nothing of it otherwise, never draws
+ *     Video's Editor, and its menu names the deployment, never Nodaro.
  *
  * Runs wherever the package is installed — the shared-header contract job
  * installs it and sets SHARED_HEADER_TESTS_REQUIRE_PACKAGE=1, under which a
@@ -122,6 +123,9 @@ async function openVideoMenu() {
 /** The menu's Translate category, if it draws one. */
 const translateCategory = (menu: HTMLElement) => menu.querySelector<HTMLElement>('[data-ns-category="translate"]')
 
+/** The menu's Editor category (@nodaroai/shell ≥ 0.31), if it draws one. */
+const editorCategory = (menu: HTMLElement) => menu.querySelector<HTMLElement>('[data-ns-category="editor"]')
+
 beforeEach(() => {
   window.history.replaceState(null, "", "/projects")
   // A 1440 px desktop: every width query answers as such a window would.
@@ -139,17 +143,23 @@ afterEach(() => {
 })
 
 describe.skipIf(!pkg)("the white-label header's pages below a world, held to the pinned package", () => {
-  it("every page the package lists for a world this header draws is named by the app's rule, and no other", () => {
+  it("every page the package lists for a world this header draws is named by the app's rule or never named, and no other", () => {
     for (const [world, pages] of Object.entries(pkg!.WORLD_MENU_PAGES)) {
       const mapped = Object.keys(WHITE_LABEL_MENU_PAGES[world as keyof typeof WHITE_LABEL_MENU_PAGES] ?? {})
+      const never = [...(WHITE_LABEL_MENU_PAGES_NEVER_NAMED[world as keyof typeof WHITE_LABEL_MENU_PAGES_NEVER_NAMED] ?? [])]
       if (WHITE_LABEL_WORLD_PATHS[world as keyof typeof WHITE_LABEL_WORLD_PATHS] === undefined) {
-        // A world this header never draws (Speech: no address on the site) names nothing.
+        // A world this header never draws (Speech: no address on the site) decides nothing.
         expect(mapped, world).toEqual([])
+        expect(never, world).toEqual([])
         continue
       }
-      expect([...mapped].sort(), world).toEqual([...pages].sort())
+      // Each page decided once: named by the rule, or never named.
+      expect(mapped.filter((page) => never.includes(page)), world).toEqual([])
+      expect([...mapped, ...never].sort(), world).toEqual([...pages].sort())
     }
-    for (const world of Object.keys(WHITE_LABEL_MENU_PAGES)) expect(Object.keys(pkg!.WORLD_MENU_PAGES)).toContain(world)
+    for (const world of [...Object.keys(WHITE_LABEL_MENU_PAGES), ...Object.keys(WHITE_LABEL_MENU_PAGES_NEVER_NAMED)]) {
+      expect(Object.keys(pkg!.WORLD_MENU_PAGES)).toContain(world)
+    }
   })
 
   it("dubbing offered: Video's menu draws Translate, opening the worlds app's page, made by the deployment", async () => {
@@ -162,8 +172,18 @@ describe.skipIf(!pkg)("the white-label header's pages below a world, held to the
     const named = await within(menu).findAllByText("Translate a video")
     const links = named.map((element) => element.closest("a")?.getAttribute("href")).filter(Boolean)
     expect(links).toEqual(["/video/translate"])
+    // Editor is never named here, so never drawn, nor anything leading to it.
+    expect(editorCategory(menu)).toBeNull()
+    expect(menu.querySelector('a[href$="/editor"]')).toBeNull()
     expect(within(menu).getAllByText(BRAND).length).toBeGreaterThan(0)
     expect(menu.textContent).not.toMatch(/Nodaro/)
+  })
+
+  it("the Editor check sees the category: a white-label header that were told to name Editor would draw it", async () => {
+    // A control for the assertions above — the app never passes this.
+    mount({ video: { pages: ["translate", "editor"] as unknown as NonNullable<NonNullable<SiteHeaderProps["worldMenus"]>["video"]>["pages"] } })
+    const menu = await openVideoMenu()
+    expect(editorCategory(menu)).not.toBeNull()
   })
 
   it("dubbing withheld, or the viewer's answer not in yet: no Translate at all", async () => {
@@ -171,6 +191,7 @@ describe.skipIf(!pkg)("the white-label header's pages below a world, held to the
       mount(menus)
       const menu = await openVideoMenu()
       expect(translateCategory(menu)).toBeNull()
+      expect(editorCategory(menu)).toBeNull()
       expect(within(menu).queryByText("Translate a video")).toBeNull()
       // Nor does a search find it.
       fireEvent.change(within(menu).getByRole("searchbox"), { target: { value: "translate" } })

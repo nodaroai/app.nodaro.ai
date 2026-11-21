@@ -6,6 +6,7 @@ import {
   imageOriginsFor,
   unitTranslator,
   WHITE_LABEL_MENU_PAGES,
+  WHITE_LABEL_MENU_PAGES_NEVER_NAMED,
   whiteLabelWorldMenus,
   whiteLabelWorlds,
   withHeaderBalance,
@@ -64,6 +65,17 @@ describe("whiteLabelWorldMenus", () => {
       expect(WHITE_LABEL_WORLD_PATHS[world as keyof typeof WHITE_LABEL_WORLD_PATHS]).toBeDefined()
     }
     expect(Object.keys(whiteLabelWorldMenus(withheld()))).toEqual(Object.keys(WHITE_LABEL_MENU_PAGES))
+  })
+
+  it("never a page it never names (Video's Editor), whatever is withheld or awaited", () => {
+    expect(WHITE_LABEL_MENU_PAGES_NEVER_NAMED.video).toContain("editor")
+    for (const judge of [null, withheld(), withheld("dubbing"), withheld("generate-image")]) {
+      const menus = whiteLabelWorldMenus(judge)
+      for (const [world, never] of Object.entries(WHITE_LABEL_MENU_PAGES_NEVER_NAMED)) {
+        const pages: readonly string[] = menus[world as keyof typeof menus]?.pages ?? []
+        for (const page of never ?? []) expect(pages, `${world}/${page}`).not.toContain(page)
+      }
+    }
   })
 })
 

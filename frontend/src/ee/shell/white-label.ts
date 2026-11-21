@@ -37,14 +37,30 @@ export function whiteLabelWorlds(offered: readonly WorldId[]): SiteWorldId[] {
  * deployment that set node lists is judged by them: no Translate where they
  * withhold `dubbing` (outside `nodes.allow`, or in `nodes.deny`).
  *
- * Every page the package lists for a world this header draws is here
- * (`white-label-menus-package.test.tsx` fails one that is not); a world with
- * none, or one this header does not draw (Speech), is left out.
+ * Every page the package lists for a world this header draws is decided:
+ * here, or never named (`WHITE_LABEL_MENU_PAGES_NEVER_NAMED`, with why), and
+ * never both (`white-label-menus-package.test.tsx` fails a page that is
+ * undecided); a world with none, or one this header does not draw (Speech), is
+ * left out.
  */
 export const WHITE_LABEL_MENU_PAGES: Readonly<Partial<Record<SiteWorldId, Readonly<Partial<Record<SiteWorldMenuPage, readonly string[]>>>>>> =
   Object.freeze({
     video: Object.freeze({ translate: Object.freeze(["dubbing"]) }),
   })
+
+/**
+ * The pages below a world (the package's `WORLD_MENU_PAGES`) that the
+ * white-label header never names, whatever the viewer is offered, so it never
+ * draws them:
+ *
+ *   - Video's Editor (`/video/editor`, @nodaroai/shell ≥ 0.31): Nodaro's own
+ *     video editor, which the worlds app offers only on Nodaro's sites, never
+ *     on a deployment of its own, so no white-label site serves that page (and
+ *     the menu's text about it names Nodaro).
+ */
+export const WHITE_LABEL_MENU_PAGES_NEVER_NAMED: Readonly<Partial<Record<SiteWorldId, readonly string[]>>> = Object.freeze({
+  video: Object.freeze(["editor"]),
+})
 
 /**
  * The white-label header's `worldMenus`: for each world above, the pages the

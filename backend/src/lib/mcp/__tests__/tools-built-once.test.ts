@@ -152,6 +152,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+// Each case here registers the whole tool list several times over (up to six
+// real builds), which takes 2–5 s alone and has passed the default 5 s limit on
+// a loaded runner. The limit is for this file only: a build that hangs still
+// fails, and no case builds less than it did.
+vi.setConfig({ testTimeout: 20_000 })
+
 describe("one build per build shape", () => {
   it("serves every request of one shape from one build, with the list a request's own build gives", async () => {
     const first = await bothLists(opts())

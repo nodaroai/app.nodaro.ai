@@ -2260,7 +2260,9 @@ logo is dropped with a warning and the rest of `brand` is kept.
     is judged by them from the first paint: Translate is listed unless
     `nodes.allow` leaves `dubbing` out or `nodes.deny` names it. Where no
     node lists are set, Translate appears only once the answer is in (or the
-    request has failed), so it is never drawn and then taken away. Image's
+    request has failed), so it is never drawn and then taken away. Video's
+    Editor (Nodaro's video editor, at `/video/editor` on Nodaro's own sites)
+    is never listed, whatever the deployment offers. Image's
     Presets is listed only where the deployment has presets, and the menu
     names the deployment (`brand.productName`) as the maker of its own tools;
   - the deployment's name (`brand.productName`) and logo (`brand.logo`);
