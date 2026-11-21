@@ -151,7 +151,8 @@ describe("Admin → Video Remake → runs with no person", { timeout: 20_000 }, 
   it("shows a saved off on that engine alone", async () => {
     routes[`GET ${URL_}`] = () => view({ "nodaro-pulse": { sourceClip: false } })
     renderWith(<AdminNodaroMotionPage />)
-    await waitFor(async () => expect(await switchOf("Pulse")).not.toBeChecked())
+    const pulse = await switchOf("Pulse")
+    await waitFor(() => expect(pulse).not.toBeChecked())
     expect(await switchOf("Prism")).toBeChecked()
     expect(saveButton()).toBeDisabled()
   })
@@ -172,9 +173,10 @@ describe("Admin → Video Remake → runs with no person", { timeout: 20_000 }, 
     let answer: (reply: { body: unknown }) => void = () => undefined
     routes["GET /v1/admin/trends/engine-environments"] = () => new Promise((resolve) => (answer = resolve))
     renderWith(<AdminNodaroMotionPage />)
-    expect(await switchOf("Pulse")).toBeDisabled()
+    const toggle = await switchOf("Pulse")
+    expect(toggle).toBeDisabled()
     answer({ body: { data: BOTH } })
-    await waitFor(async () => expect(await switchOf("Pulse")).toBeEnabled())
+    await waitFor(() => expect(toggle).toBeEnabled())
   })
 
   it("a saved off can be taken back while no environment's engine reads it", async () => {
@@ -182,8 +184,8 @@ describe("Admin → Video Remake → runs with no person", { timeout: 20_000 }, 
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: NEITHER } })
     routes[`GET ${URL_}`] = () => view({ "nodaro-pulse": { sourceClip: false } })
     renderWith(<AdminNodaroMotionPage />)
-    await waitFor(async () => expect(await switchOf("Pulse")).not.toBeChecked())
     const toggle = await switchOf("Pulse")
+    await waitFor(() => expect(toggle).not.toBeChecked())
     expect(toggle).toBeEnabled()
     expect(await switchOf("Prism")).toBeDisabled()
     await user.click(toggle)
@@ -227,8 +229,9 @@ describe("Admin → Video Remake → runs with no person", { timeout: 20_000 }, 
     await user.click(toggle)
     await user.click(saveButton())
     expect(await within(await columnOf("Pulse")).findByRole("alert")).toHaveTextContent(message)
+    const column = await columnOf("Pulse")
     await user.click(await switchOf("Pulse"))
-    await waitFor(async () => expect(within(await columnOf("Pulse")).queryByRole("alert")).not.toBeInTheDocument())
+    await waitFor(() => expect(within(column).queryByRole("alert")).not.toBeInTheDocument())
   })
 
   it("Advanced saved with it keeps the runs' toast: a run reads this setting", async () => {

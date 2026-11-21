@@ -118,7 +118,9 @@ const editableInstructionsOf = async (title: "Medium step" | "Describe step") =>
 const modelOf = async (title: "Medium step" | "Describe step") => within(await stepGroup(title)).getByRole("combobox", { name: `${title}: Model` })
 const saveButton = () => screen.getByRole("button", { name: "Save" })
 
-describe("Admin → Video Remake → Custom style", () => {
+// The whole page renders in each test, and a test that types into it takes about 1.5-1.8 s on a CI runner and three
+// times that on a slow one: the folder's 20 s limit, not Vitest's default 5 s.
+describe("Admin → Video Remake → Custom style", { timeout: 20_000 }, () => {
   it("shows the resolved switch and names this deployment's default (on), Save off", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const toggle = await customSwitch()
