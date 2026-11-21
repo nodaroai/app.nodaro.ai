@@ -9,8 +9,10 @@
  * - Where this environment's engine takes no such clip, it says so and the
  *   switch still saves.
  *
- * The shot lock: per engine, whether a run's prompt on an ordinary clip
- * carries the line that keeps the shot order.
+ * The shot lock: per engine, whether a run's prompt carries the line that
+ * keeps the shot order (by run type: shot-lock-run-types.test.tsx; here, the
+ * setting while no engine reads run types: Ordinary run and Art style +
+ * roles move together, saved as "on").
  * - Off for every engine until it is turned on; Save sends the engines that
  *   are on, and off everywhere as an empty setting.
  * - Its hint says what the line does; a refused save is said under it.
@@ -32,7 +34,7 @@ import { toast } from "sonner"
 import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "../../trends/__tests__/harness"
 import AdminNodaroMotionPage from "../page"
 import { PREVIZ_HEADING, PREVIZ_SWITCH_LABEL, PREVIZ_SWITCH_NAME, PREVIZ_UNSUPPORTED, previzSwitchHint, previzToSaved } from "../components/PrevizSection"
-import { SHOT_LOCK_HEADING, SHOT_LOCK_HINT, SHOT_LOCK_UNSUPPORTED, shotLockToSaved } from "../components/ShotLockSection"
+import { SHOT_LOCK_HEADING, SHOT_LOCK_HINT, SHOT_LOCK_RUN_TYPES_UNOFFERED, SHOT_LOCK_UNSUPPORTED, shotLockToSaved } from "../components/ShotLockSection"
 import { PLAN_ROLES_SWITCH_LABEL } from "../components/PlanRolesSection"
 import { shotLockChanges } from "../use-shot-lock-section"
 import { tabsOf } from "../components/PromptPartsTabs"
@@ -86,7 +88,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 const previzSwitch = () => screen.findByRole("switch", { name: PREVIZ_SWITCH_NAME })
 const shotLockGroup = () => screen.findByRole("group", { name: SHOT_LOCK_HEADING })
-const shotLockSwitch = async (engine: string) => within(await shotLockGroup()).findByRole("switch", { name: engine })
+const shotLockSwitch = async (engine: string) => within(await shotLockGroup()).findByRole("switch", { name: `${engine} Ordinary run` })
 const saveButton = () => screen.getByRole("button", { name: "Save" })
 /** The previews asked for one engine and style, in order. */
 const previewsOf = (engine: string, style: string) => (sentTo(PREVIEW) as Array<Record<string, unknown>>).filter((b) => b.engine === engine && b.style === style)
@@ -169,15 +171,17 @@ describe("Admin → Video Remake → 3D previz clips", () => {
 })
 
 describe("Admin → Video Remake → Shot lock", () => {
-  it("shows one switch per engine, off, with the hint that says what the line does", async () => {
+  it("shows each engine's Ordinary run switch, off, under the hint that says what the line does", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const prism = await shotLockSwitch("Nodaro Prism")
     const pulse = await shotLockSwitch("Nodaro Pulse")
     expect(prism).not.toBeChecked()
     expect(pulse).not.toBeChecked()
-    expect(prism).toHaveAccessibleDescription(SHOT_LOCK_HINT)
+    expect(prism).toHaveAccessibleDescription("A run with no art style.")
+    expect(within(await shotLockGroup()).getByRole("group", { name: "Nodaro Prism" })).toHaveAccessibleDescription(SHOT_LOCK_HINT)
     expect(SHOT_LOCK_HINT).toMatch(/^Adds a line to the prompt that tells the engine to keep the clip's shot order and not add shots\./)
-    expect(within(await shotLockGroup()).queryByRole("status")).toBeNull()
+    // No engine reads run types here: said once, and nothing else.
+    expect(within(await shotLockGroup()).getAllByRole("status").map((n) => n.textContent)).toEqual([SHOT_LOCK_RUN_TYPES_UNOFFERED])
     expect(saveButton()).toBeDisabled()
   })
 
@@ -237,8 +241,8 @@ describe("Admin → Video Remake → Shot lock", () => {
     expect(shotLockToSaved({ "nodaro-prism": "off", "nodaro-pulse": "on" })).toEqual({ "nodaro-pulse": "on" })
     expect(shotLockChanges({}, {})).toEqual({})
     expect(shotLockChanges({ "nodaro-prism": "on" }, { "nodaro-prism": "on" })).toEqual({})
-    expect(shotLockChanges({ "nodaro-prism": "on" }, {})).toEqual({ "nodaro-prism": "on" })
-    expect(shotLockChanges({}, { "nodaro-pulse": "on" })).toEqual({ "nodaro-pulse": "off" })
+    expect(shotLockChanges({ "nodaro-prism": "on" }, {})).toEqual({ "nodaro-prism": { ordinary: "on" } })
+    expect(shotLockChanges({}, { "nodaro-pulse": "on" })).toEqual({ "nodaro-pulse": { ordinary: "off" } })
   })
 })
 

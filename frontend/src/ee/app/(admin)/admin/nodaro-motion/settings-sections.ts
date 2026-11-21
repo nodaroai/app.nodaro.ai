@@ -198,7 +198,10 @@ export const PREVIZ_SPEC = spec<NodaroMotionPreviz, NodaroMotionPreviz, { previz
   saveArgOf: (body) => body.previz,
 })
 
-/** The shot lock: each engine that is on (one that is off is left out, the same as never set). */
+/**
+ * The shot lock: each engine that turns something on, as it is stored — by run type, or "on" (the value of before run
+ * types, and of a draft that says exactly that); one that turns nothing on is left out, the same as never set.
+ */
 export const SHOT_LOCK_SPEC = spec<NodaroMotionShotLock, NodaroMotionShotLock, { shotLock: NodaroMotionShotLock }>({
   draftOf: (stored) => shotLockToSaved(stored),
   bodyOf: (draft) => ({ shotLock: shotLockToSaved(draft) }),

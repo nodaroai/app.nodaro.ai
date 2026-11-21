@@ -2529,12 +2529,13 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       },
       // Same rules: a failed read throws (null would take the line out of every direct run). Null when never saved or
       // every engine is off, AND to an engine that does not declare `castSwap.shotLock` (it never asks); else each
-      // engine that is on under its current AND its earlier keys (the masking setting's shim).
+      // engine that is on under its current AND its earlier keys (the masking setting's shim). An entry by run type
+      // only to an engine that declares `castSwap.shotLockRunTypes`: any other reads only "on", so it is left out.
       nodaroMotionShotLock: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_shot_lock: the app settings could not be read")
         if (!engineTakesShotLock(getPluginSupports().castSwap)) return null
-        return shotLockForPlugin(settings.nodaro_motion_shot_lock)
+        return shotLockForPlugin(settings.nodaro_motion_shot_lock, getPluginSupports().castSwap)
       },
       // Same rules: a failed read throws (the engine then asks for its own default, with an alert). Null to an engine
       // that does not declare `castSwap.shotListFps` (it never asks). Otherwise ALWAYS an object: `fps` when an admin

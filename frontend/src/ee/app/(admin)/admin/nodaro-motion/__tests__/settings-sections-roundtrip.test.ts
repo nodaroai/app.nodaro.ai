@@ -59,7 +59,7 @@ const STORED: Readonly<Record<string, unknown>> = {
     },
   },
   previz: { previz: { enabled: false } },
-  "shot-lock": { shotLock: { "nodaro-pulse": "on" } },
+  "shot-lock": { shotLock: { "nodaro-prism": { ordinary: "on", styleAlone: "on", styles: { cinematic: "off", custom: "on" } }, "nodaro-pulse": "on" } },
   "shot-list-fps": { shotListFps: { fps: 4 } },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces." }, motion: { avoid: "-" }, previz: { referenceOnly: "Only the camera of {video}." } } } },
 }

@@ -66,9 +66,10 @@
 // Then the 3D previz clips (PrevizSection.tsx, use-previz-section.tsx):
 // whether a run may say that its clip is a 3D previz, rendered into its look
 // instead of edited (PUT /v1/admin/video-remake/previz). And the shot lock
-// (ShotLockSection.tsx, use-shot-lock-section.tsx): per engine, whether a
-// run's prompt on an ordinary clip carries the line that keeps the shot order
-// (PUT /v1/admin/video-remake/shot-lock); the engine prompt's previews below
+// (ShotLockSection.tsx, use-shot-lock-section.tsx): per engine and per kind
+// of run (no art style, an art style with roles, an art style alone, and the
+// art styles excepted), whether a run's prompt carries the line that keeps
+// the shot order (PUT /v1/admin/video-remake/shot-lock); the engine prompt's previews below
 // follow its draft. And the shot list's frame rate (ShotListFpsSection.tsx,
 // use-shot-list-fps-section.tsx): how many frames a second the model that
 // writes a run's shot list is shown of the clip

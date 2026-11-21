@@ -304,16 +304,14 @@ describe("an engine that takes no 3D previz clip (every engine before it)", () =
 describe("the shot lock in a Precise or a Motion request", () => {
   const body = { hasAudio: true, roles: [] }
 
-  it("is named while the engine's shot lock is on, never for off, and never on a style-only or a previz request", () => {
+  it("is named while the shot lock is on for the request, never for off, and never on a previz request", () => {
     for (const style of ["precise", "motion"] as const) {
       expect(directRunRequest("nodaro-prism", style, undefined, body, undefined, undefined, undefined, "on"), style).toMatchObject({ shotLock: true })
       expect(directRunRequest("nodaro-prism", style, undefined, body, undefined, undefined, undefined, "off"), style).not.toHaveProperty("shotLock")
       // Left out: the request of before, key for key.
       expect(directRunRequest("nodaro-prism", style, undefined, body, undefined, undefined, undefined, "off")).toEqual(directRunRequest("nodaro-prism", style, undefined, body))
     }
-    for (const style of ["styleOnly", "previz"] as const) {
-      expect(directRunRequest("nodaro-prism", style, undefined, body, undefined, undefined, undefined, "on"), style).not.toHaveProperty("shotLock")
-    }
+    expect(directRunRequest("nodaro-prism", "previz", undefined, body, undefined, undefined, undefined, "on")).not.toHaveProperty("shotLock")
   })
 
   it("is named for an override of its part whatever the setting, so it can be seen, checked and reset", () => {
@@ -353,6 +351,80 @@ describe("the shot lock in a Precise or a Motion request", () => {
     await previewOf({ engine: "nodaro-prism", style: "precise" })
     expect(h.calls[0]).not.toHaveProperty("shotLock")
     expect(h.calls[0]).toEqual(h.calls[1])
+  })
+})
+
+/**
+ * The shot lock on a style-only request (the shot lock by run type, "art
+ * style alone"): named when it is on for the request or its overrides hold
+ * the part, and sent only to an engine that declares
+ * `castSwap.shotLockRunTypes` (one from before writes no line on such a run).
+ * The previews carry no art style: Precise and Motion follow the ordinary
+ * switch, style-only the art-style-alone switch; a save's check asks for the
+ * line whenever some run made with the entry may carry it.
+ */
+describe("the shot lock by run type in the prompt requests", () => {
+  const body = { hasAudio: true, roles: [] }
+  const RUN_TYPES_ENGINE = { ...PREVIZ_ENGINE, shotLockRunTypes: true }
+
+  it("a style-only request names it while it is on, or for an override of its part; off is the request of before", () => {
+    expect(directRunRequest("nodaro-prism", "styleOnly", undefined, body, undefined, undefined, undefined, "on")).toMatchObject({ styleOnly: true, shotLock: true })
+    expect(directRunRequest("nodaro-prism", "styleOnly", undefined, body, undefined, undefined, undefined, "off")).toEqual(directRunRequest("nodaro-prism", "styleOnly", undefined, body))
+    expect(directRunRequest("nodaro-prism", "styleOnly", undefined, body)).not.toHaveProperty("shotLock")
+    expect(directRunRequest("nodaro-prism", "styleOnly", undefined, { ...body, overrides: { shotLock: "Keep the shots of {video}." } })).toMatchObject({ shotLock: true })
+  })
+
+  it("is sent on a style-only request only to an engine that reads run types; a Precise or a Motion request as before", () => {
+    const styleOnly: Parameters<typeof forLoadedEngine>[0] = { engine: "seedance-2-5", style: "motion", promptStyle: "flexible", styleOnly: true as const, shotLock: true as const, hasAudio: true, roles: [] }
+    expect(forLoadedEngine(styleOnly)).toMatchObject({ styleOnly: true })
+    expect(forLoadedEngine(styleOnly)).not.toHaveProperty("shotLock")
+    expect(forLoadedEngine({ engine: "seedance-2-5", style: "motion", shotLock: true, hasAudio: true, roles: [] })).toMatchObject({ shotLock: true })
+    setPluginSupports({ castSwap: RUN_TYPES_ENGINE } as never)
+    expect(forLoadedEngine(styleOnly)).toMatchObject({ styleOnly: true, shotLock: true })
+  })
+
+  it("a preview follows its own run type's switch: Precise and Motion the ordinary one, style-only art style alone; or the choice it is sent", async () => {
+    setPluginSupports({ castSwap: RUN_TYPES_ENGINE } as never)
+    h.shotLockRow = { value: { "nodaro-prism": { styleWithRoles: "on", styleAlone: "on", styles: { cinematic: "on" } } }, updated_at: AT }
+    await previewOf({ engine: "nodaro-prism", style: "precise" })
+    await previewOf({ engine: "nodaro-prism", style: "motion" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
+    expect(h.calls.map((c) => c.shotLock)).toEqual([undefined, undefined, true])
+    h.calls = []
+    h.shotLockRow = { value: { "nodaro-prism": { ordinary: "on" } }, updated_at: AT }
+    await previewOf({ engine: "nodaro-prism", style: "precise" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly", shotLock: "on" })
+    expect(h.calls.map((c) => c.shotLock)).toEqual([true, undefined, true])
+    // A value from before run types: the Precise preview as before, never the style-only one.
+    h.calls = []
+    h.shotLockRow = { value: { "nodaro-prism": "on" }, updated_at: AT }
+    await previewOf({ engine: "nodaro-prism", style: "precise" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
+    expect(h.calls.map((c) => c.shotLock)).toEqual([true, undefined])
+  })
+
+  it("an engine from before run types: an entry by run type is off for it, and a style-only request is never sent the key", async () => {
+    h.shotLockRow = { value: { "nodaro-prism": { ordinary: "on", styleAlone: "on" } }, updated_at: AT }
+    await previewOf({ engine: "nodaro-prism", style: "precise" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly" })
+    await previewOf({ engine: "nodaro-prism", style: "styleOnly", shotLock: "on" })
+    for (const call of h.calls) expect(call).not.toHaveProperty("shotLock")
+  })
+
+  it("a save checks each key at its longest: the line whenever some run made with the entry may carry it", async () => {
+    setPluginSupports({ castSwap: RUN_TYPES_ENGINE } as never)
+    const parts = { "nodaro-prism": { precise: { avoid: "A" }, motion: { avoid: "B" }, styleOnly: { avoid: "C" } } }
+    const asked = async (entry: unknown) => {
+      h.calls = []
+      h.shotLockRow = { value: { "nodaro-prism": entry }, updated_at: AT }
+      expect((await put(parts)).statusCode).toBe(200)
+      return h.calls.map((c) => c.shotLock === true)
+    }
+    expect(await asked({ styleWithRoles: "on" })).toEqual([true, true, false])
+    expect(await asked({ styleAlone: "on" })).toEqual([false, false, true])
+    expect(await asked({ styles: { cinematic: "on" } })).toEqual([true, true, true])
+    expect(await asked("on")).toEqual([true, true, false])
   })
 })
 

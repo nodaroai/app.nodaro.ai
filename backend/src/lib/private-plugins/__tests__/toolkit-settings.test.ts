@@ -1242,6 +1242,30 @@ describe("tk.settings.nodaroMotionShotLock", () => {
     expect(h.shotLock).toEqual({ "nodaro-pulse": "on" })
   })
 
+  it("answers an entry by run type only to an engine that declares castSwap.shotLockRunTypes; any other is answered only \"on\" entries", async () => {
+    const byType = { ordinary: "on", styleAlone: "on", styles: { cinematic: "off" } }
+    h.shotLock = { "nodaro-prism": byType, "nodaro-pulse": "on" }
+    setPluginSupports({ castSwap: { ...CS, shotLock: true, shotLockRunTypes: true } } as never)
+    expect(await read()).toEqual({
+      "nodaro-prism": byType,
+      "motion-prism": byType,
+      "motion-pro": byType,
+      "nodaro-pulse": "on",
+      "motion-pulse": "on",
+      "motion-lite": "on",
+    })
+    // An engine from before run types reads only "on": the entry by run type is left out (off there, never on by accident).
+    shotLockEngine()
+    expect(await read()).toEqual({ "nodaro-pulse": "on", "motion-pulse": "on", "motion-lite": "on" })
+    h.shotLock = { "nodaro-prism": byType }
+    expect(await read()).toBeNull()
+    // A value from before run types is answered to both, as before.
+    h.shotLock = { "nodaro-prism": "on" }
+    expect(await read()).toEqual({ "nodaro-prism": "on", "motion-prism": "on", "motion-pro": "on" })
+    setPluginSupports({ castSwap: { ...CS, shotLock: true, shotLockRunTypes: true } } as never)
+    expect(await read()).toEqual({ "nodaro-prism": "on", "motion-prism": "on", "motion-pro": "on" })
+  })
+
   it("what the host answers is the plugin's PluginNodaroMotionShotLock", () => {
     expectTypeOf<NodaroMotionShotLockForPlugin>().toExtend<PluginNodaroMotionShotLock>()
   })

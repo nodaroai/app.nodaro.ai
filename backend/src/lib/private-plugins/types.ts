@@ -4383,11 +4383,15 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionPreviz?(): Promise<PluginNodaroMotionPreviz | null>
   /**
-   * The admin's shot lock per Video Remake engine, for direct runs on
-   * ordinary clips: only the engines that are on, each answered under its
-   * current AND its earlier keys, or null when it was never saved or every
-   * engine is off (then no prompt carries the line), and to an engine that
-   * does not declare `castSwap.shotLock` (it never asks). There is no
+   * The admin's shot lock per Video Remake engine, for direct runs: only the
+   * engines that turn something on, each answered under its current AND its
+   * earlier keys, or null when it was never saved or every engine is off
+   * (then no prompt carries the line), and to an engine that does not
+   * declare `castSwap.shotLock` (it never asks). An entry is `"on"` (a run
+   * with no art style, and one with an art style that is not style-only) or,
+   * only to an engine that declares `castSwap.shotLockRunTypes`, the entry by
+   * run type with its per-style exceptions (lib/nodaro-motion-shot-lock.ts);
+   * such an entry is left out for any other engine. There is no
    * deployment default: off until an admin turns it on. Returns a copy the
    * plugin may change freely. REJECTS when the settings could not be read.
    * Advertised as `capabilities.nodaroMotionShotLock`.
@@ -4437,11 +4441,23 @@ export type PluginNodaroMotionPreviz = {
 
 /**
  * Video Remake's shot lock per engine, keyed by the PUBLIC engine ids
- * (current and earlier): an engine listed is on; one left out is off
- * (`"off"` is never answered).
+ * (current and earlier): an engine listed turns something on; one left out is
+ * off (`"off"` is never answered). `"on"`: a run with no art style and one
+ * with an art style that is not style-only. By run type (only to an engine
+ * that declares `castSwap.shotLockRunTypes`): a switch per run type, a switch
+ * left out being off, and `styles`, the art styles (a catalog id, or
+ * `"custom"`) whose own value wins over the run type's.
  */
 export type PluginNodaroMotionShotLock = {
-  readonly [publicEngineId: string]: "off" | "on"
+  readonly [publicEngineId: string]:
+    | "off"
+    | "on"
+    | {
+        readonly ordinary?: "off" | "on"
+        readonly styleWithRoles?: "off" | "on"
+        readonly styleAlone?: "off" | "on"
+        readonly styles?: { readonly [style: string]: "off" | "on" }
+      }
 }
 
 /** Video Remake's shot-list frame rate as a plugin is answered it: `fps` (frames a second) only when a rate is set. */
@@ -5039,6 +5055,14 @@ export interface PluginSupports {
    *   takes `shotLock: true` to show it. Additive-optional: absent ⇒ the
    *   engine never reads the setting and is never sent the key
    *   (lib/nodaro-motion-shot-lock.ts `engineTakesShotLock`).
+   * - `shotLockRunTypes`: the engine reads that setting's entry BY RUN TYPE
+   *   too (`{ ordinary?, styleWithRoles?, styleAlone?, styles? }`: a switch
+   *   per run type and per-style exceptions), writes the line on a
+   *   style-only run its entry turns it on for, and its prompt-parts route
+   *   takes `shotLock: true` beside `styleOnly: true`. Additive-optional:
+   *   absent ⇒ the engine reads only `"on"`, so it is answered no entry by
+   *   run type, and a style-only request is never sent `shotLock`
+   *   (lib/nodaro-motion-shot-lock.ts `engineTakesShotLockRunTypes`).
    * - `shotListFps`: the engine reads the clip a shot list is written from
    *   at the admin's frame rate (`tk.settings.nodaroMotionShotListFps()`:
    *   the clip sent as a video reference with `referenceVideoFps`), and
@@ -5241,6 +5265,7 @@ export interface PluginSupports {
     readonly planRolesPreviz?: boolean
     readonly previz?: boolean
     readonly shotLock?: boolean
+    readonly shotLockRunTypes?: boolean
     readonly flashModel?: boolean
     readonly shotListFps?: boolean
     readonly roleFace?: boolean

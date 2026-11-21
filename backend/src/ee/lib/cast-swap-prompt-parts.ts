@@ -33,7 +33,7 @@ import { engineDrawsDepthColormap, engineDrawsFillNone } from "../../lib/cast-sw
 import { engineTakesPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
 import { engineTakesStyleOnly } from "../../lib/nodaro-motion-style-only.js"
 import { engineTakesPreviz } from "../../lib/nodaro-motion-previz.js"
-import { engineTakesShotLock } from "../../lib/nodaro-motion-shot-lock.js"
+import { engineTakesShotLock, engineTakesShotLockRunTypes } from "../../lib/nodaro-motion-shot-lock.js"
 import { engineRequest, isRec, parseJson, relay } from "./trends/run-helpers.js"
 import { promptPartsAnswerSchema, type PromptPartTexts, type PromptPartsAnswer, type PromptPartsRequest } from "../../lib/cast-swap-prompt-parts-contract.js"
 
@@ -65,8 +65,9 @@ export function forLoadedEngine(body: PromptPartsRequest): PromptPartsRequest {
     ...(promptWording && engineTakesPromptWording(cs, promptWording) ? { promptWording } : {}),
     // The style-only set only to an engine that runs style-only runs (the callers refuse to ask any other).
     ...(styleOnly === true && engineTakesStyleOnly(cs) ? { styleOnly } : {}),
-    // The shot lock's line only to an engine that writes it: an older one is asked as before.
-    ...(shotLock === true && engineTakesShotLock(cs) ? { shotLock } : {}),
+    // The shot lock's line only to an engine that writes it: an older one is asked as before. On a style-only
+    // request, only to an engine that reads the shot lock by run type (any other writes no line on such a run).
+    ...(shotLock === true && engineTakesShotLock(cs) && (styleOnly !== true || engineTakesShotLockRunTypes(cs)) ? { shotLock } : {}),
     // The previz set only to an engine that takes a 3D previz clip (the callers refuse to ask any other).
     ...(clipKind === "previz" && engineTakesPreviz(cs) ? { clipKind } : {}),
   }

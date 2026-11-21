@@ -28,7 +28,7 @@ import { depthColormapSent, faceMeshOn, faceMeshPartsSent, type FaceMasking } fr
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { loadedEngineTakesShotList, type CastSwapSteps } from "../../lib/cast-swap-steps.js"
 import { overridesShotLockPart, overridesWordingPart, type CastSwapPromptWording } from "@nodaro/render-rules"
-import { engineTakesShotLock, type NodaroMotionShotLock, type NodaroMotionShotLockValue } from "../../lib/nodaro-motion-shot-lock.js"
+import { engineTakesShotLock, shotLockAsEngineReads, type NodaroMotionShotLock, type NodaroMotionShotLockValue } from "../../lib/nodaro-motion-shot-lock.js"
 import { readNodaroMotionShotLock } from "../../lib/nodaro-motion-shot-lock-store.js"
 import { engineTakesPromptWording, type NodaroMotionPromptWording } from "../../lib/nodaro-motion-prompt-wording.js"
 import { readNodaroMotionPromptWording } from "../../lib/nodaro-motion-prompt-wording-store.js"
@@ -63,17 +63,19 @@ export function loadedEngineHasPromptStyles(): boolean {
  * `"styleOnly"` (a style-only run's own set): a Flex run with the Flexible
  * prompt style and `styleOnly: true`, no role and no fixed reference (it has
  * none), with a clip with sound and `body`'s pre and post prompts and
- * overrides. Nothing else shapes it: no masking, no face mesh, no depth look,
- * no shot list and no wording (the "new" Flex wording never reaches it), so
- * `entry`, `preciseMasking`, `steps`, `wording` and `shotLock` are not read.
+ * overrides. Of the rest only the shot lock shapes it: no masking, no face
+ * mesh, no depth look, no shot list and no wording (the "new" Flex wording
+ * never reaches it), so `entry`, `preciseMasking`, `steps` and `wording` are
+ * not read.
  *
- * `shotLock` is the engine's shot lock (`nodaro_motion_shot_lock`, or a
- * preview's choice): `"on"` says so (`shotLock: true`) on a Precise or a
- * Motion request, so the engine assembles and measures the line and lists its
- * part; a request whose overrides hold the part names it too, whatever the
- * setting (so the override can be seen and reset, and is checked at its
- * longest). It reaches only an engine that declares `castSwap.shotLock`
- * (`forLoadedEngine`).
+ * `shotLock` is the shot lock for the request (`nodaro_motion_shot_lock`
+ * read for its key, or a preview's choice): `"on"` says so
+ * (`shotLock: true`) on a Precise, a Motion or a style-only request, so the
+ * engine assembles and measures the line and lists its part; a request whose
+ * overrides hold the part names it too, whatever the setting (so the
+ * override can be seen and reset, and is checked at its longest). It reaches
+ * only an engine that declares `castSwap.shotLock`, and a style-only request
+ * only one that declares `castSwap.shotLockRunTypes` (`forLoadedEngine`).
  *
  * `"previz"` (a 3D previz clip's own set): `clipKind: "previz"` on a Flex
  * request, with `body`'s roles, fixed references, prompts and overrides, and
@@ -92,7 +94,7 @@ export function directRunRequest(
   wording?: CastSwapPromptWording,
   shotLock?: NodaroMotionShotLockValue,
 ): PromptPartsRequest {
-  if (style === "styleOnly") return styleOnlyRunRequest(engine, body)
+  if (style === "styleOnly") return styleOnlyRunRequest(engine, body, shotLock)
   if (style === "previz") return previzRunRequest(engine, body)
   const shotList = loadedEngineTakesShotList()
   const named = promptWordingNamed(style, entry, wording, body.overrides)
@@ -128,8 +130,11 @@ function previzRunRequest(engine: NodaroMotionEngine, body: Omit<PromptPartsRequ
   }
 }
 
-/** The style-only set's request (`directRunRequest`'s `"styleOnly"`): `body`'s prompts and overrides, never its roles or references. */
-function styleOnlyRunRequest(engine: NodaroMotionEngine, body: Omit<PromptPartsRequest, "engine" | "style">): PromptPartsRequest {
+/**
+ * The style-only set's request (`directRunRequest`'s `"styleOnly"`): `body`'s prompts and overrides, never its roles or
+ * references; the shot lock's line when it is on for the request, or its overrides hold the part.
+ */
+function styleOnlyRunRequest(engine: NodaroMotionEngine, body: Omit<PromptPartsRequest, "engine" | "style">, shotLock?: NodaroMotionShotLockValue): PromptPartsRequest {
   return {
     engine: CAST_SWAP_ENGINE_OF_NODARO_MOTION[engine],
     style: "motion",
@@ -137,6 +142,7 @@ function styleOnlyRunRequest(engine: NodaroMotionEngine, body: Omit<PromptPartsR
     styleOnly: true,
     hasAudio: true,
     roles: [],
+    ...(shotLock === "on" || overridesShotLockPart(body.overrides) ? { shotLock: true as const } : {}),
     ...(body.prePrompt !== undefined ? { prePrompt: body.prePrompt } : {}),
     ...(body.postPrompt !== undefined ? { postPrompt: body.postPrompt } : {}),
     ...(body.overrides ? { overrides: body.overrides } : {}),
@@ -190,22 +196,27 @@ export async function savedFlexWording(): Promise<NodaroMotionPromptWording | nu
 }
 
 /**
- * The saved shot lock per engine (`nodaro_motion_shot_lock`), read only when
- * this environment's engine writes the line (`castSwap.shotLock`): an engine
- * without it is never sent the key, so its checks need no read. Pass each
- * engine's (`shotLockOf`) to `directRunRequest` / `directRunPromptProblems`,
- * so an override is checked on the prompt the engine's direct runs send.
+ * The saved shot lock per engine (`nodaro_motion_shot_lock`) as this
+ * environment's engine reads it (`shotLockAsEngineReads`: an entry by run
+ * type only when it declares `castSwap.shotLockRunTypes`), read only when it
+ * writes the line (`castSwap.shotLock`): an engine without it is never sent
+ * the key, so its checks need no read. Pass what it says for the engine and
+ * the key — `shotLockShownOn` to a preview, `shotLockMayBeOn` to a check —
+ * to `directRunRequest` / `directRunPromptProblems`, so an override is
+ * checked on the longest prompt the engine's direct runs send.
  */
 export async function savedShotLock(): Promise<NodaroMotionShotLock | null> {
-  if (!engineTakesShotLock(getPluginSupports().castSwap)) return null
-  return (await readNodaroMotionShotLock()).shotLock
+  const cs = getPluginSupports().castSwap
+  if (!engineTakesShotLock(cs)) return null
+  const { shotLock } = await readNodaroMotionShotLock()
+  return shotLock === null ? null : shotLockAsEngineReads(shotLock, cs)
 }
 
 /**
  * The problems of `texts` for this engine and style on a large direct run
  * (empty = they may be saved), worded in `wording` (the engine's saved Flex
  * wording, `savedFlexWording`; a Precise check ignores it), with the engine's
- * saved shot lock (`savedShotLock`). For `"styleOnly"`
+ * saved shot lock (`savedShotLock`, `shotLockMayBeOn`). For `"styleOnly"`
  * the large run is its pre and post prompts alone (a style-only run has no
  * role or reference). Null after replying (the engine could not
  * be asked or answered unusably).

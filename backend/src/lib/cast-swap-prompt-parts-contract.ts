@@ -137,12 +137,13 @@ export interface PromptPartsRequest {
    */
   styleOnly?: true
   /**
-   * The shot lock's line (a direct run on an ordinary clip whose engine's
-   * `nodaro_motion_shot_lock` is on): the engine assembles and measures it,
-   * and lists its part (`shotLock`). Only ever `true`, never on a style-only
-   * or a previz request, and sent only to an engine that declares
-   * `castSwap.shotLock` (`askPromptParts`); an older engine's answer is the
-   * one of before.
+   * The shot lock's line (a direct run whose engine's
+   * `nodaro_motion_shot_lock` turns it on for the run): the engine assembles
+   * and measures it, and lists its part (`shotLock`). Only ever `true`, never
+   * on a previz request, and sent only to an engine that declares
+   * `castSwap.shotLock` — beside `styleOnly: true`, only to one that declares
+   * `castSwap.shotLockRunTypes` (`askPromptParts`); an older engine's answer
+   * is the one of before.
    */
   shotLock?: true
   /**

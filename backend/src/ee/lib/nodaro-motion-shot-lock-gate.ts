@@ -14,8 +14,14 @@
  * without the line, and get it the day its engine does.
  *
  * Off everywhere needs nothing: it is what every engine does today.
+ *
+ * An entry BY RUN TYPE (the three switches and the per-style exceptions) is
+ * read only by an engine that declares `castSwap.shotLockRunTypes`; any other
+ * engine that writes the line reads only `"on"` and is answered nothing for
+ * such an entry (off there). The same rule holds for it: saved once at least
+ * one environment's engine declares it (`noEnvironmentReadsShotLockRunTypes`).
  */
-import { engineTakesShotLock } from "../../lib/nodaro-motion-shot-lock.js"
+import { engineTakesShotLock, engineTakesShotLockRunTypes } from "../../lib/nodaro-motion-shot-lock.js"
 import { TREND_PUBLISH_ENVIRONMENTS, type EngineEnvironment } from "./engine-environments.js"
 
 function writesShotLock(environments: readonly EngineEnvironment[], name: string): boolean {
@@ -41,6 +47,29 @@ export function noEnvironmentWritesShotLock(environments: readonly EngineEnviron
 export function environmentsThatCannotWriteShotLock(environments: readonly EngineEnvironment[]): string[] {
   return TREND_PUBLISH_ENVIRONMENTS.filter((name) => !writesShotLock(environments, name))
 }
+
+function readsRunTypes(environments: readonly EngineEnvironment[], name: string): boolean {
+  const env = environments.find((e) => e.env === name)
+  return !!env && engineTakesShotLock(env.supports.castSwap) && engineTakesShotLockRunTypes(env.supports.castSwap)
+}
+
+/** True when no environment of `TREND_PUBLISH_ENVIRONMENTS` has a recorded engine that reads an entry by run type. */
+export function noEnvironmentReadsShotLockRunTypes(environments: readonly EngineEnvironment[]): boolean {
+  return !TREND_PUBLISH_ENVIRONMENTS.some((name) => readsRunTypes(environments, name))
+}
+
+/**
+ * The environments (of `TREND_PUBLISH_ENVIRONMENTS`, in that order) whose
+ * engine does not read an entry by run type: there such an entry is off.
+ * Empty = every one does.
+ */
+export function environmentsThatCannotReadShotLockRunTypes(environments: readonly EngineEnvironment[]): string[] {
+  return TREND_PUBLISH_ENVIRONMENTS.filter((name) => !readsRunTypes(environments, name))
+}
+
+/** The refusal's sentence while `noEnvironmentReadsShotLockRunTypes`. */
+export const NO_ENGINE_READS_SHOT_LOCK_RUN_TYPES_MESSAGE =
+  "No Cast Swap engine reads the shot lock by run type yet: turn Ordinary run and Art style + roles on together with nothing else, or wait for the engine."
 
 /** The refusal's sentence while `noEnvironmentWritesShotLock`. */
 export const NO_ENGINE_WRITES_SHOT_LOCK_MESSAGE = "No Cast Swap engine writes the shot lock yet: keep it off, or wait for the engine."
