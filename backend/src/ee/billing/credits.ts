@@ -5443,40 +5443,20 @@ export class CreditsService {
             .eq("user_id", userId)
             .single()
           if (custRow?.stripe_customer_id) {
-            const { getStripe } = await import("./stripe-client.js")
-            const subs = await getStripe().subscriptions.list({
-              customer: custRow.stripe_customer_id,
-              status: "active",
-              limit: 1,
+            // Refreshes only a subscription this account was granted; never
+            // creates a row or marks an ungranted one active (subscription-self-heal.ts).
+            const { syncGrantedSubscriptionFromStripe } = await import("./subscription-self-heal.js")
+            const synced = await syncGrantedSubscriptionFromStripe({
+              userId,
+              stripeCustomerId: custRow.stripe_customer_id,
+              tierFor: () => storedTier,
             })
-            const activeSub = subs.data[0]
-            if (activeSub) {
-              const item = activeSub.items.data[0]
-              const freshEnd = item
-                ? new Date(item.current_period_end * 1000).toISOString()
-                : null
-              if (freshEnd) {
-                periodEnd = freshEnd
-                // Self-heal: update DB so we don't hit Stripe again
-                const freshStart = item
-                  ? new Date(item.current_period_start * 1000).toISOString()
-                  : null
-                await supabase
-                  .from("subscriptions")
-                  .upsert({
-                    user_id: userId,
-                    stripe_subscription_id: activeSub.id,
-                    stripe_price_id: activeSub.items.data[0]?.price?.id ?? "",
-                    tier: storedTier,
-                    status: "active",
-                    current_period_start: freshStart,
-                    current_period_end: freshEnd,
-                  }, { onConflict: "stripe_subscription_id" })
-                await supabase
-                  .from("profiles")
-                  .update({ current_period_end: freshEnd })
-                  .eq("id", userId)
-              }
+            if (synced.outcome === "synced") {
+              periodEnd = synced.periodEnd
+              await supabase
+                .from("profiles")
+                .update({ current_period_end: synced.periodEnd })
+                .eq("id", userId)
             }
           }
         } catch (err) {

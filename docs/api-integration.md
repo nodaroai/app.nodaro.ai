@@ -5757,6 +5757,7 @@ length, with its own cast and new music, and can change the motion itself.
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/previews` | Before-and-after previews of what Video Remake does, each with its clips, stills, title and caption (see below). Public: no sign-in needed. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 15 in
 all, in any mix of
@@ -6191,6 +6192,30 @@ deployment that does not show Nodaro's previews, or one without Video Remake
 or its art styles. It lists what the picker shows: whether a run takes an art
 style on an engine is `style-choice`'s to say (above). The answer may be up to
 five minutes old.
+
+**Before-and-after previews.**
+`GET /v1/video-remake/previews?locale=<id>` (public, no sign-in needed) lists
+the before-and-after previews Nodaro's pages show of what Video Remake does,
+in their order, so an app or a menu can show the same ones:
+
+```json
+{ "data": [{ "id": "…", "kind": "restyle", "title": "…", "caption": "…", "sourceUrl": "https://…", "resultUrl": "https://…", "sweepUrl": "https://…", "stackedUrl": "https://…", "posterUrl": "https://…", "stackedPosterUrl": "https://…", "href": "/video/remake?art-style=anime" }] }
+```
+
+`kind` says what the preview shows Video Remake doing: `restyle`, `motion`,
+`object`, `background` or `edit`. `title` and `caption` are in `locale`, a
+Nodaro language id (`he`, `ja`, `ko`, `pt-BR`, …): English when `locale` is
+left out, is not one of Nodaro's languages, or the language has no copy for
+the preview. `sourceUrl` is the original clip and `resultUrl` the remade one;
+`sweepUrl` shows the original wiping into the result, and `stackedUrl` the
+original above the result, frame for frame. Every clip is silent and 16:9.
+`posterUrl` and `stackedPosterUrl` are still frames of `sweepUrl` and
+`stackedUrl`, to show before a clip plays or instead of it. `href` is the page
+of the Nodaro tools site the preview leads to, as a path (`/video/remake`, or
+`/video/remake?art-style=<id>` for a restyle). Every address but `href` is an
+absolute `https` address. It is empty (`{ "data": [] }`) on a deployment that
+does not show Nodaro's previews, or one without Video Remake. The answer may
+be up to five minutes old.
 
 **Preparing the clip.** How the source clip is prepared for the video model —
 for one, whether faces are hidden first, and whether a clip the model refuses

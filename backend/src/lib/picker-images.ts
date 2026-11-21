@@ -81,6 +81,16 @@ function shownPictures(): "platform" | "own" | "none" {
   return setting === "own" && hasRegisteredPickerPictures() ? "own" : "none"
 }
 
+/**
+ * Whether this deployment shows the platform's rendered previews (the look
+ * previews, the restyle previews, Video Remake's previews): its
+ * `catalogs.images` is exactly `"default"`, on Nodaro Cloud, whose CDN they
+ * live on.
+ */
+export function platformPicturesShown(): boolean {
+  return shownPictures() === "platform" && isCloud()
+}
+
 /** An art style's restyle preview as a reply carries it: the clip and a still cut from it, both absolute. */
 export interface ShownRestylePreview {
   readonly clipUrl: string
@@ -96,7 +106,7 @@ export interface ShownRestylePreview {
  * whose clip has no still, has no entry.
  */
 export function shownRestylePreviews(): ReadonlyMap<string, ShownRestylePreview> | undefined {
-  if (shownPictures() !== "platform" || !isCloud()) return undefined
+  if (!platformPicturesShown()) return undefined
   const shown = new Map<string, ShownRestylePreview>()
   for (const [styleId, preview] of Object.entries(RESTYLE_PREVIEWS)) {
     const stillUrl = restylePreviewStillUrl(preview)

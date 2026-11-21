@@ -2286,6 +2286,7 @@ advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, publi
 describeStyle(params: { imageUrl: string; note?: string }): Promise<VideoRemakeDescribedStyle> // POST /v1/video-remake/describe-style, free
 planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free
 artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
+previews(params?: { locale?: string }): Promise<VideoRemakePreview[]> // GET /v1/video-remake/previews, public
 ```
 
 ```ts
@@ -2766,6 +2767,23 @@ old.
 ```ts
 const styles = await client.videoRemake.artStyles({ locale: "he" })
 // [{ id: "anime", label: "אנימה", clipUrl: "https://…", stillUrl: "https://…" }, …]
+```
+
+**Before-and-after previews** (`previews()`, `VideoRemakePreview`,
+`GET /v1/video-remake/previews`, public): the previews Nodaro's pages show of
+what Video Remake does, in their order, each
+`{ id, kind, title, caption, sourceUrl, resultUrl, sweepUrl, stackedUrl, posterUrl, stackedPosterUrl, href }`.
+`kind` is `"restyle"`, `"motion"`, `"object"`, `"background"` or `"edit"`;
+`title` and `caption` are in `locale`, English when it is left out, is not one
+of Nodaro's languages, or the language has no copy for the preview.
+`sweepUrl` shows the original wiping into the result and `stackedUrl` the
+original above the result; `posterUrl` and `stackedPosterUrl` are still frames
+of those two clips. `href` is a path on the Nodaro tools site. The list is
+empty on a deployment that does not show Nodaro's previews, or one without
+Video Remake. The answer may be up to five minutes old.
+
+```ts
+const previews = await client.videoRemake.previews({ locale: "he" })
 ```
 
 **Preparing the clip.** How the source clip is prepared for the video model

@@ -11,6 +11,7 @@ import {
   type VideoRemakeCustomStyleRefusalCode,
   type VideoRemakeDescribedStyle,
   type VideoRemakeArtStyle,
+  type VideoRemakePreview,
   type VideoRemakeEngine,
   type VideoRemakeEstimate,
   type VideoRemakeFullQualityEstimate,
@@ -498,6 +499,46 @@ describe("videoRemake resource", () => {
       "https://api.example.com/v1/video-remake/art-styles",
       "https://api.example.com/v1/video-remake/art-styles?locale=pt-BR",
     ])
+  })
+
+  it("previews GETs /v1/video-remake/previews in the language asked for and answers the list", async () => {
+    const answer: VideoRemakePreview[] = [
+      {
+        id: "restyle-street",
+        kind: "restyle",
+        title: "רחוב",
+        caption: "אותה הליכה",
+        sourceUrl: "https://cdn.example.com/s.mp4",
+        resultUrl: "https://cdn.example.com/r.mp4",
+        sweepUrl: "https://cdn.example.com/w.mp4",
+        stackedUrl: "https://cdn.example.com/st.mp4",
+        posterUrl: "https://cdn.example.com/w.jpg",
+        stackedPosterUrl: "https://cdn.example.com/st.jpg",
+        href: "/video/remake?art-style=anime",
+      },
+    ]
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: answer }))
+    const client = make(fetchMock)
+
+    const got = await client.videoRemake.previews({ locale: "he" })
+    expect(got).toEqual(answer)
+    const first: VideoRemakePreview = got[0]!
+    expect(first.kind).toBe("restyle")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/previews?locale=he")
+    expect(init.method).toBe("GET")
+    expect(init.body).toBeUndefined()
+  })
+
+  it("previews sends no locale when none is asked for, and answers an empty list as it is", async () => {
+    const fetchMock = vi.fn().mockReturnValue(mockOk({ data: [] }))
+    const client = make(fetchMock)
+
+    expect(await client.videoRemake.previews()).toEqual([])
+    expect(await client.videoRemake.previews({})).toEqual([])
+    const urls = fetchMock.mock.calls.map((c) => (c as [string, RequestInit])[0])
+    expect(urls).toEqual(["https://api.example.com/v1/video-remake/previews", "https://api.example.com/v1/video-remake/previews"])
   })
 
   it("styleChoice GETs /v1/video-remake/style-choice and answers every engine's choice", async () => {
