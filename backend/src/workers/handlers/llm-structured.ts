@@ -18,6 +18,7 @@ import { StructuredLlmError } from "../../lib/llm/structured.js"
 import { attachLlmSpend, markJobCompleted, setJobProgress, workerLlmBilling, type HandlerFn, type JobContext, type WorkerLlmBilling } from "../shared.js"
 import type { LlmRequest } from "../../lib/llm/types.js"
 import type { LlmStructuredBody } from "../../lib/llm-structured-request.js"
+import { jobCostColumns } from "../../lib/job-cost-columns.js"
 
 /** The BullMQ `job.data` the route enqueues and this handler reads. The full
  *  `system` / `jsonSchema` ride HERE, not on the row (the row stores a digest
@@ -259,7 +260,7 @@ export const handleLlmStructured: HandlerFn = async function handleLlmStructured
     if ((cost !== null && !metered) || lane) {
       const { error } = await supabase
         .from("jobs")
-        .update({ ...(metered ? {} : { provider_cost: cost }), ...(lane ? { provider: lane } : {}) })
+        .update({ ...(metered ? {} : await jobCostColumns(cost)), ...(lane ? { provider: lane } : {}) })
         .eq("id", ctx.jobId)
       if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record the failed draft's provider cost: ${error.message}`)
     }

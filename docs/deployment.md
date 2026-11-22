@@ -2748,6 +2748,7 @@ not by a global switch:
 | `gemini-3.1-pro` | Direct Google | always (KIE is the fallback) |
 | `gemini-4-argon` | Direct Google — ONLY | always; it has no KIE lane, so without the key it fails as provider-unavailable |
 | `gemini-4-carbon` | KIE | KIE fails |
+| `gemini-4-neon` | KIE — ONLY | never; it has no direct lane, so `GEMINI_API_KEY` does not affect it and without `KIE_API_KEY` it fails as provider-unavailable |
 | `gemini-4-hydrogen` | KIE | KIE fails |
 | **video-analysis (any tier)** | **Direct Google — ONLY** | **always; there is no fallback** |
 

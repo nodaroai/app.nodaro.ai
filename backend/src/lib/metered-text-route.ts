@@ -17,6 +17,7 @@ import { writeLlmBillingLedger } from "./llm-billing-ledger.js"
 import { LlmContentRefusalError, LlmOutputTruncatedError, LlmStreamAbortedError } from "./llm-errors.js"
 import { llmPrecheckBaseCredits, type LlmSettleOutcome, type LlmSpend, type MeteredLlmFeature } from "./llm-billing.js"
 import type { LlmRequest } from "./llm/types.js"
+import { jobCostColumns } from "./job-cost-columns.js"
 
 /** The characters of every string in `values` (arrays and plain objects walked), never anything else. */
 function textChars(values: readonly unknown[]): number {
@@ -150,7 +151,7 @@ export async function recordMeteredJobOutput(
   try {
     const { error } = await supabase
       .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-      .update({ output_data: output, provider_cost: providerCost })
+      .update({ output_data: output, ...(await jobCostColumns(providerCost)) })
       .eq("id", jobId)
     if (error) console.warn(`[metered-text-route] failed to record the output of job ${jobId}: ${error.message}`)
   } catch (err) {

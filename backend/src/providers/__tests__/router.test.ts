@@ -338,7 +338,7 @@ describe("routeAndExecute (via generateImage)", () => {
     )
   })
 
-  it("applies markup using resolveMarkup and applyMarkup", async () => {
+  it("marks the cost up only for its log line: the result carries the cost alone (the row derives display_cost, lib/job-cost-columns.ts)", async () => {
     const generate = vi.fn().mockResolvedValue({ url: "u", cost: 1 })
     configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"], markup: 50 }))
     configMocks.resolveMarkup.mockReturnValue(40) // override
@@ -355,7 +355,7 @@ describe("routeAndExecute (via generateImage)", () => {
       "kie",
     )
     expect(configMocks.applyMarkup).toHaveBeenCalledWith(1, 40)
-    expect(result.displayCost).toBe(2)
+    expect(result).not.toHaveProperty("displayCost")
     expect(result.cost).toBe(1)
   })
 
@@ -370,7 +370,7 @@ describe("routeAndExecute (via generateImage)", () => {
     const result = await generateImage("p", "m")
 
     expect(result.cost).toBeNull()
-    expect(result.displayCost).toBeNull()
+    expect(result).not.toHaveProperty("displayCost")
   })
 
   it("propagates passthrough fields: kieTaskId, seed, fallbackFlag, providerMs", async () => {

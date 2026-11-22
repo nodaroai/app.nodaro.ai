@@ -78,7 +78,7 @@ describe("handleVideoDepth", () => {
     expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith({
       jobId: "job-1",
       jobType: "video-depth",
-      result: { url: "https://fal.media/depth.mp4", cost: 0.12, displayCost: 0.12, providerUsed: "fal" },
+      result: { url: "https://fal.media/depth.mp4", cost: 0.12, providerUsed: "fal" },
       mediaUrl: "https://r2/out.mp4",
       extraOutputData: { thumbnailUrl: "https://r2/thumb.png" },
     })

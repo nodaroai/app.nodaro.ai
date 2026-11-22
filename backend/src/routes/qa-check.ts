@@ -22,6 +22,7 @@ import { markJobFailed } from "../lib/job-failure.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const qaCheckBody = z.object({
   content: z.string().min(1).max(50000),
@@ -193,7 +194,7 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
                 checkType,
                 usage: response.usage,
               },
-              provider_cost: response.providerCost ?? null,
+              ...(await jobCostColumns(response.providerCost ?? null)),
             })
             .eq("id", job.id)
 

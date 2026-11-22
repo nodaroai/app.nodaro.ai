@@ -29,6 +29,7 @@ import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -202,7 +203,7 @@ Overlay style: ${prompt}${assetSection}`
               status: "completed",
               ...completedJobColumns(),
               output_data: outputData,
-              provider_cost: response.providerCost ?? null,
+              ...(await jobCostColumns(response.providerCost ?? null)),
             })
             .eq("id", job.id)
 

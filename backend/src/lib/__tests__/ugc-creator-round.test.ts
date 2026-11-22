@@ -191,7 +191,7 @@ describe("the creator round: the remaining rules", () => {
 describe("the refusals that stop the round: the run cannot pay", () => {
   it("are the credit guard's and the reservation's payment refusals, and nothing else", () => {
     expect([...UGC_SPEND_REFUSAL_CODES].sort()).toEqual([
-      "budget_exceeded", "external_wallet_denied", "instance_cap_reached", "insufficient_app_credits",
+      "budget_exceeded", "external_wallet_denied", "first_remake_in_progress", "instance_cap_reached", "insufficient_app_credits",
       "insufficient_credits", "member_cap_exceeded", "subscription_required", "user_allowance_exceeded",
     ])
   })

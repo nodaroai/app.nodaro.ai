@@ -8,7 +8,7 @@
  *  1. Builds a routing decision (provider chain + markup)
  *  2. Walks the chain until a provider supports the requested model
  *  3. Calls the user-supplied executor function
- *  4. Wraps the result with cost / displayCost / providerUsed
+ *  4. Wraps the result with cost / providerUsed (the display figure is derived at the row write — lib/job-cost-columns.ts)
  *
  * IMPORTANT: Fallback is for UNSUPPORTED models only.
  * If KIE supports a model but returns an error, that error propagates.
@@ -63,8 +63,11 @@ export interface RouteResult {
    *  ProviderResult.extraUrls — workers upload these to R2 and frontends list
    *  them as alternates. */
   extraUrls?: readonly string[]
+  /** What the provider billed, in USD. The row's `display_cost` is derived
+   *  from the cost a handler finally records (lib/job-cost-columns.ts), never
+   *  carried on this result: a handler may replace this figure with a measured
+   *  one, and a second figure beside it would keep the old value. */
   cost: number | null
-  displayCost: number | null
   providerUsed: ProviderUsed
   /** See ProviderResult.autoQualityKieCredits (GPT Image 2.6 at quality Auto). */
   autoQualityKieCredits?: number
@@ -280,7 +283,6 @@ async function walkChainAndExecute(
       url: result.url,
       ...(result.extraUrls?.length ? { extraUrls: result.extraUrls } : {}),
       cost: result.cost,
-      displayCost,
       providerUsed,
       kieTaskId: result.kieTaskId,
       ...(result.segments?.length ? { segments: result.segments } : {}),

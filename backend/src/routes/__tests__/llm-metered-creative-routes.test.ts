@@ -796,7 +796,7 @@ describe("scrape analysis bills metered", () => {
     expect(h.order).toEqual(["job:ledger", "job:ledger", "job:ledger", "job:ledger", "job:completed", "commit", "job:billing", "job:ledger"])
     const jobOps = h.ops.filter((o) => o.table === "jobs" && o.op === "update")
     const settle = jobOps.find((o) => (o.values as { credits_actual?: unknown }).credits_actual !== undefined)
-    expect(settle!.values).toEqual({ credits_actual: scrapeCharged + 72, provider_cost: expect.closeTo(0.096) })
+    expect(settle!.values).toEqual({ credits_actual: scrapeCharged + 72, provider_cost: expect.closeTo(0.096), display_cost: null })
     const ledger = (jobOps.filter((o) => "llm_billing" in (o.values as object)).at(-1)!.values as { llm_billing: { calls: number; chargeId: string } }).llm_billing
     expect(ledger.calls).toBe(2)
     expect(ledger.chargeId).toBe(`meta-ads-analysis:${ANALYST}`)

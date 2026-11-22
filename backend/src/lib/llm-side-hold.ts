@@ -138,6 +138,7 @@ export type LlmSideHoldRefusalCode =
   | "external_wallet_denied"
   | "external_wallet_unavailable"
   | "access_blocked"
+  | "first_remake_in_progress"
   /** Anything else (a transport error): nothing is known to be reserved; the sweep releases a hold that was. */
   | "reservation_failed"
 

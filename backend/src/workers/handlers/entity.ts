@@ -216,7 +216,6 @@ function makeEntityImageHandler(
         url: result.url,
         providerUsed: result.providerUsed,
         cost: result.cost,
-        displayCost: result.displayCost,
         ...(result.autoQualityKieCredits !== undefined && { autoQualityKieCredits: result.autoQualityKieCredits }),
       },
       afterUpload: () => setJobProgress(job, ctx.jobId, 100),
@@ -375,7 +374,6 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
       url: result.url,
       providerUsed: result.providerUsed,
       cost: result.cost,
-      displayCost: result.displayCost,
     },
     afterUpload: () => setJobProgress(job, ctx.jobId, 100),
   })
@@ -458,7 +456,6 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
       url: result.url,
       providerUsed: result.providerUsed,
       cost: result.cost,
-      displayCost: result.displayCost,
     },
     afterUpload: () => setJobProgress(job, ctx.jobId, 100),
   })
@@ -547,7 +544,6 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
       url: result.url,
       providerUsed: result.providerUsed,
       cost: result.cost,
-      displayCost: result.displayCost,
     },
     afterUpload: () => setJobProgress(job, ctx.jobId, 100),
   })
@@ -636,7 +632,6 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
       url: result.url,
       providerUsed: result.providerUsed,
       cost: result.cost,
-      displayCost: result.displayCost,
     },
     afterUpload: () => setJobProgress(job, ctx.jobId, 100),
   })

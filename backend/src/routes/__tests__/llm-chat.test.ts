@@ -435,6 +435,59 @@ describe("POST /v1/llm-chat/generate — documents (referenceFileUrls)", () => {
   })
 })
 
+// Gemini 4 Neon takes at most 10 attachments in one call (its provider's
+// documented limit, decided 2026-11-22): an 11th is refused before anything is
+// fetched or held, on both routes. Other models keep the routes' own limits.
+describe("POST /v1/llm-chat/generate — Gemini 4 Neon's attachment limit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    jobInserts.length = 0
+    files.prepared.length = 0
+    files.refuse = null
+  })
+  const urls = (n: number, ext: string) => Array.from({ length: n }, (_, i) => `https://media.example/${i}.${ext}`)
+  // 5 images + 3 videos + 3 audio clips: 11 attachments, each list within the route's own limit.
+  const eleven = { referenceImageUrls: urls(5, "png"), referenceVideoUrls: urls(3, "mp4"), referenceAudioUrls: urls(3, "mp3") }
+
+  it.each(["/v1/llm-chat/generate", "/v1/llm-chat/generate-stream"])("%s refuses an 11th attachment with 400 too_many_attachments — nothing fetched, no job, nothing held", async (url) => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url, payload: { systemPrompt: "", userInput: "describe", llmModel: "gemini-4-neon", ...eleven } })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error).toMatchObject({ code: "too_many_attachments", message: expect.stringContaining("at most 10") })
+    expect(files.prepared).toEqual([])
+    expect(jobInserts).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("counts documents with the media: 5 images + 3 videos + 3 PDFs is 11", async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: { systemPrompt: "", userInput: "describe", llmModel: "gemini-4-neon", referenceImageUrls: urls(5, "png"), referenceVideoUrls: urls(3, "mp4"), referenceFileUrls: urls(3, "pdf") },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe("too_many_attachments")
+    expect(files.prepared).toEqual([])
+  })
+
+  it("is Neon's limit only: the same 11 attachments on Gemini 4 Hydrogen pass it", async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: { systemPrompt: "", userInput: "describe", llmModel: "gemini-4-hydrogen", ...eleven } })
+    expect(JSON.parse(res.body).error?.code).not.toBe("too_many_attachments")
+  })
+
+  it("10 attachments on Neon pass it", async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: { systemPrompt: "", userInput: "describe", llmModel: "gemini-4-neon", referenceImageUrls: urls(4, "png"), referenceVideoUrls: urls(3, "mp4"), referenceAudioUrls: urls(3, "mp3") },
+    })
+    expect(JSON.parse(res.body).error?.code).not.toBe("too_many_attachments")
+  })
+})
+
 // Gemini 4 Hydrogen reads documents too (decided 2026-11-17). A call whose
 // attachments are files runs on the aggregator's lane like a text call, with
 // a floor that catches a dropped file. That lane takes files inline up to a
@@ -584,7 +637,7 @@ describe("POST /v1/llm-chat/generate — documents on Gemini 4 Hydrogen", () => 
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: payload("gemini-4-carbon", ["https://media.example/a.pdf"]) })
     expect(res.statusCode).toBe(400)
-    expect(JSON.parse(res.body).error).toEqual({ code: "modality_not_supported", message: "Model gemini-4-carbon does not read files. Switch to Gemini 4 Hydrogen or GPT-6.1 Terra." })
+    expect(JSON.parse(res.body).error).toEqual({ code: "modality_not_supported", message: "Model gemini-4-carbon does not read files. Switch to Gemini 4 Neon, Gemini 4 Hydrogen, GPT-6.2 Astra, GPT-6.2 Sol or GPT-6.1 Terra." })
     expect(files.prepared).toEqual([])
   })
 })

@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { writeFile } from "node:fs/promises"
+import sharp from "sharp"
 import { mp3ChainTail, mp3EncodeArgs } from "../../video/mp3-encode.js"
 
 const state = vi.hoisted(() => ({
@@ -31,11 +32,17 @@ const state = vi.hoisted(() => ({
   kieInputs: [] as Array<Record<string, unknown>>,
   /** The size of the file ffmpeg writes (a conversion or a padding). */
   convertedBytes: 50_000,
+  /** Real image bytes served by URL (the portrait). */
+  images: new Map<string, Buffer>(),
+  /** Images written to the job's scratch folder: the enlarged portrait. */
+  uploadedImages: [] as Array<{ buffer: Buffer; name: string; ext: string }>,
 }))
 
 vi.mock("../../../lib/safe-fetch.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/safe-fetch.js")>()),
   safeFetch: async (url: string) => {
+    const image = state.images.get(url)
+    if (image) return new Response(new Uint8Array(image), { status: 200, headers: { "content-length": String(image.length) } })
     const next = state.served.get(url)?.shift()
     if (!next) return new Response(null, { status: 404 })
     const body = new ReadableStream<Uint8Array>({
@@ -83,6 +90,10 @@ vi.mock("../../../lib/job-scratch.js", async (importOriginal) => ({
     state.uploaded.push({ name, ext, type })
     return `https://cdn.test/scratch/${name}.${ext}`
   },
+  uploadJobScratchBuffer: async (buffer: Buffer, name: string, ext: string) => {
+    state.uploadedImages.push({ buffer, name, ext })
+    return `https://cdn.test/scratch/${name}.${ext}`
+  },
 }))
 vi.mock("../client.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -115,7 +126,14 @@ const prepare = (held: number | undefined) => prepareRateLipSyncAudio(URL_, rate
 /** The encode's audio chain (its `-af`): every pad and cut is in it. */
 const audioChain = (args: readonly string[]) => args[args.indexOf("-af") + 1]
 
-beforeEach(() => {
+const FACE = "https://cdn.test/face.png"
+const solidPng = (width: number, height: number) =>
+  sharp({ create: { width, height, channels: 3, background: "#c8a080" } }).png().toBuffer()
+
+beforeEach(async () => {
+  state.images.clear()
+  state.images.set(FACE, await solidPng(400, 400))
+  state.uploadedImages = []
   state.served.clear()
   state.measures = []
   state.measureCaps = []
@@ -196,6 +214,41 @@ describe("an honest file runs, billed as reserved, and the model gets OUR encode
     const out = await new KieVideoProvider().lipSync("https://cdn.test/face.png", URL_, "hi", "omnihuman-2-0", undefined, 10.04, undefined, { billedSeconds: 11 })
     expect(state.kieInputs).toEqual([{ image_urls: ["https://cdn.test/face.png"], audio_url: "https://cdn.test/scratch/lip-sync-prepared.mp3", prompt: "hi", enable_watermark: false }])
     expect(out.cost).toBe(lipSyncKieCostUsd(14, 11))
+  })
+})
+
+describe("the portrait", () => {
+  it("one under 300 px on a side is enlarged to 300, shape kept, and the enlarged copy is sent", async () => {
+    state.images.set(FACE, await solidPng(250, 400))
+    serve({ bytes: 400_000 })
+    state.measures = [10.04, 10.04]
+    await new KieVideoProvider().lipSync(FACE, URL_, "hi", "omnihuman-2-0", undefined, 10.04, undefined, { billedSeconds: 11 })
+    expect(state.uploadedImages).toHaveLength(1)
+    const [{ buffer, name, ext }] = state.uploadedImages
+    expect([name, ext]).toEqual(["provider-enlarged", "png"])
+    const meta = await sharp(buffer).metadata()
+    expect([meta.width, meta.height]).toEqual([300, 480])
+    expect(state.kieInputs[0]?.image_urls).toEqual(["https://cdn.test/scratch/provider-enlarged.png"])
+  })
+
+  it.each([
+    ["a GIF", () => sharp({ create: { width: 400, height: 500, channels: 3, background: "#c8a080" } }).gif().toBuffer(), "https://cdn.test/face.gif"],
+    ["a JPEG with EXIF metadata", () => sharp({ create: { width: 400, height: 500, channels: 3, background: "#c8a080" } }).withMetadata({ exif: { IFD0: { Software: "Generator" } } }).jpeg().toBuffer(), "https://cdn.test/face.jpg"],
+  ])("%s that already fits is sent exactly as given: never converted, stripped or re-encoded", async (_label, make, url) => {
+    state.images.set(url, await make())
+    serve({ bytes: 400_000 })
+    state.measures = [10.04, 10.04]
+    await new KieVideoProvider().lipSync(url, URL_, "hi", "omnihuman-2-0", undefined, 10.04, undefined, { billedSeconds: 11 })
+    expect(state.uploadedImages).toEqual([])
+    expect(state.kieInputs[0]?.image_urls).toEqual([url])
+  })
+
+  it("one that already fits is sent as it is", async () => {
+    serve({ bytes: 400_000 })
+    state.measures = [10.04, 10.04]
+    await new KieVideoProvider().lipSync(FACE, URL_, "hi", "omnihuman-2-0", undefined, 10.04, undefined, { billedSeconds: 11 })
+    expect(state.uploadedImages).toEqual([])
+    expect(state.kieInputs[0]?.image_urls).toEqual([FACE])
   })
 })
 

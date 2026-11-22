@@ -25,6 +25,7 @@ import { describeErrorChain } from "../lib/llm-errors.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const imageToTextBody = z.object({
   imageUrl: safeUrlSchema,
@@ -173,7 +174,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
                 detailLevel,
                 usage: response.usage,
               },
-              provider_cost: response.providerCost ?? null,
+              ...(await jobCostColumns(response.providerCost ?? null)),
               // Which LLM lane served the answer, a fallback included.
               // `provider` is admin-only — outside PUBLIC_JOB_KEYS (routes/jobs.ts) and
               // outside the browser's column grant on jobs (migration 347) — while

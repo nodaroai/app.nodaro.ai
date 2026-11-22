@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   finalizeJobWithMedia: vi.fn(),
   setJobProgress: vi.fn(async () => {}),
   faceSwapSettle: vi.fn(async (_cost: unknown): Promise<Record<string, unknown>> => ({})),
+  faceSwapFaceImage: vi.fn(async (url: string, _jobId: string) => url),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
@@ -22,6 +23,7 @@ vi.mock("../../../providers/replicate/face-swap.js", () => ({ replicateFaceSwap:
 vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalizeJobWithMedia }))
 vi.mock("../face-swap-audio.js", () => ({ uploadSwapWithSourceAudio: mocks.uploadSwapWithSourceAudio }))
 vi.mock("../../../lib/face-swap-input.js", () => ({ faceSwapSettle: mocks.faceSwapSettle }))
+vi.mock("../../../lib/face-swap-face-image.js", () => ({ faceSwapFaceImage: mocks.faceSwapFaceImage }))
 vi.mock("../../../lib/reconcile/persistence.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/reconcile/persistence.js")>()),
   makeOnTaskCreated: vi.fn(() => vi.fn()),
@@ -51,6 +53,7 @@ beforeEach(() => {
   mocks.uploadSwapWithSourceAudio.mockResolvedValue("https://r2.example/videos/job-1.mp4")
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://r2.example/thumbnails/job-1.png")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.faceSwapFaceImage.mockImplementation(async (url: string) => url)
 })
 
 describe("face-swap handler", () => {
@@ -61,6 +64,18 @@ describe("face-swap handler", () => {
     // The model returns the picture only; the source clip is where the sound comes from.
     expect(mocks.uploadSwapWithSourceAudio).toHaveBeenCalledWith("https://replicate.example/out.mp4", VIDEO, ctx)
     expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example/videos/job-1.mp4" }))
+  })
+
+  it("sends the face photo as fitted for the swap model (a large photo failed it)", async () => {
+    mocks.faceSwapFaceImage.mockResolvedValueOnce("https://r2.example/tmp/provider-input/job-1/face-swap-face-x.jpg")
+    await handler(job({ faceImageUrl: FACE, videoUrl: VIDEO }) as never, ctx as never)
+
+    expect(mocks.faceSwapFaceImage).toHaveBeenCalledWith(FACE, "job-1")
+    expect(mocks.replicateFaceSwap).toHaveBeenCalledWith(
+      "https://r2.example/tmp/provider-input/job-1/face-swap-face-x.jpg",
+      VIDEO,
+      expect.anything(),
+    )
   })
 
   it("a run within its row: finalize records what Replicate billed and commits the reserved tier", async () => {

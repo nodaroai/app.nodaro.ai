@@ -96,6 +96,13 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // total = prompt + completion), so the reported output count is the billed
   // output — nothing adds the reasoning on top, nothing subtracts it.
   "gemini-4-hydrogen": { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
+  // KIE list price 240/1200 KIE-credits per M ($0.005/credit), read
+  // 2026-11-22; cached input 12 credits/M, unmodelled as for Hydrogen (no
+  // probe reply reported `cached_tokens`). `credits_consumed` came back on
+  // every probe call, the stream's last chunk included, and matched these
+  // rates × the reported counts. Its `completion_tokens` INCLUDES the
+  // reasoning, as Hydrogen's. KIE only: no direct row (no direct lane).
+  "gemini-4-neon":     { inputPricePerM: 1.20,  outputPricePerM: 6.00 },
   // KIE-routed models below are pinned to KIE's published list prices
   // (kie.ai/claude-opus-4-7, kie.ai/gpt-5-4, kie.ai/gpt-5-5, kie.ai/gpt-5-6,
   // kie.ai/claude-sonnet-5, kie.ai/claude-opus-4-8).
@@ -133,6 +140,14 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // `usage.input_tokens`, and those include the instructions KIE adds to every
   // call (see KIE_ADDED_INPUT_TOKENS below), which KIE bills.
   "gpt-6.1-terra":     { inputPricePerM: 0.30,  outputPricePerM: 1.50 },
+  // GPT-6.2 Sol / Astra — KIE list prices ($0.005/credit), read 2026-11-22.
+  // Sol: 120/600 credits per M, cached input 6, cache writes 150. Astra:
+  // 480/2400, cached input 24, cache writes 600. Flat uncached band only, as
+  // for the rows above (cache tiers unmodelled). Both report REAL top-level
+  // `usage.input_tokens`, and `credits_consumed` matched these rates × the
+  // reported counts on the probe calls, the streamed ones included.
+  "gpt-6.2-sol":       { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
+  "gpt-6.2-astra":     { inputPricePerM: 2.40,  outputPricePerM: 12.00 },
   // KIE list price 160/480 KIE-credits per M ($0.005/credit) — 40% of xAI's
   // official $2/$6 (confirmed 2026-08-18, docs.kie.ai/market/grok/grok-4-6).
   // Cached input reprices to $0.20/M on KIE's side; the table models the flat
@@ -484,9 +499,18 @@ interface LaneAddedInput {
  * a hold or an estimate, which sizes the call from the request alone, adds them
  * through {@link llmLaneAddedInputTokens} so the quote matches the charge.
  *
- * The other GPT-6 models on the same endpoint report `input_tokens: 0`
+ * The GPT-6 / 6.1 Sol models on the same endpoint report `input_tokens: 0`
  * (`kieInputUntrusted`), so nothing is known to add there; GPT-5.6 Terra
- * carries about 5,300 either way, unmodelled.
+ * carries about 5,300 either way, unmodelled. GPT-6.2 Sol and Astra report
+ * real counts and no row (probed 2026-11-22): Sol's 9 calls counted the
+ * prompt alone; one of Astra's 12 counted 26,903 tokens for a 53-token prompt,
+ * and KIE's stated charge for it was far below what that count would imply.
+ * Nothing is added to the quote or the hold (decided 2026-11-22): a reply that
+ * states a charge, a stream's last frame included, is charged that statement;
+ * a reply that states none is charged its reported input unless that count is
+ * implausible (over `KIE_INPUT_IMPLAUSIBLE_FACTOR` times the request's size),
+ * when the size is charged instead (`kieInputCheckedWhenUnstated`,
+ * backend/src/lib/llm/kie-cost.ts).
  *
  * A model whose two figures differ is `effortPriced` in the registry (its
  * price key names the effort), and only such a model — a backend test holds

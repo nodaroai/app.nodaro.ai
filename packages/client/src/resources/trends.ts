@@ -1,5 +1,5 @@
 import type { NodaroClientCore } from "../core.js"
-import type { VideoRemakeEngine } from "./cast-swap.js"
+import type { FirstRemakeOfferQuote, VideoRemakeEngine } from "./cast-swap.js"
 
 /**
  * Trends — ready-made Video Remake recipes. A trend is a short clip with slots
@@ -379,6 +379,8 @@ export interface TrendEstimate {
   privacyCredits?: number
   /** @deprecated read {@link privacyCredits} (an older server answered this name). */
   maskingCredits?: number
+  /** Present only while the account may still take its first Remake on us; see `VideoRemakeEstimate.firstRemakeOffer`. */
+  firstRemakeOffer?: FirstRemakeOfferQuote
 }
 
 /** Per-call options for {@link TrendsResource.run}. */

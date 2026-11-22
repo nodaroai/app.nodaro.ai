@@ -345,6 +345,15 @@ describe("LLMChatConfig — documents (referenceFileUrls)", () => {
     expect(within(refs).getByText("Upload PDF")).toBeInTheDocument()
   })
 
+  it.each(["gemini-4-neon", "gpt-6.2-sol", "gpt-6.2-astra"])("shows the file input for %s too (decided 2026-11-22), and keeps the node's files", (llmModel) => {
+    const { onUpdate } = renderConfig({ llmModel, referenceFileUrls: ["https://media.example/uploads/documents/report.pdf"] })
+    openReferences()
+    const refs = screen.getByTestId("llm-file-refs")
+    expect(within(refs).getByText("Files (PDF)")).toBeInTheDocument()
+    expect(within(refs).getByText("report.pdf")).toBeInTheDocument()
+    expect(onUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ referenceFileUrls: undefined }))
+  })
+
   it("keeps the node's files on Gemini 4 Hydrogen", () => {
     const { onUpdate } = renderConfig({ llmModel: "gemini-4-hydrogen", referenceFileUrls: ["https://media.example/a.pdf"] })
     expect(onUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ referenceFileUrls: undefined }))

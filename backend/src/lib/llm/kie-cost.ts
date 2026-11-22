@@ -74,9 +74,46 @@ export function documentInputFloorTokens(req: LlmRequest): number {
  * `usage.attribution`). Named one by one, never by an id prefix: GPT-6.1 Terra
  * shares the endpoint and the `gpt-6` prefix but reports its real input count,
  * the instructions KIE adds included (measured 2026-11-12), so costing it from
- * the request's size would leave those billed tokens out.
+ * the request's size would leave those billed tokens out. GPT-6.2 Sol and
+ * GPT-6.2 Astra report their real input count too (probed 2026-11-22), so
+ * neither is listed (their unstated-charge rule is {@link KIE_INPUT_CHECKED_WHEN_UNSTATED}).
  */
 const KIE_INPUT_UNREPORTED: ReadonlySet<string> = new Set(["gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"])
+
+/**
+ * The models whose reported input count is real but can carry instructions of
+ * KIE's own far beyond the request (decided 2026-11-22): GPT-6.2 Astra
+ * reported 26,903 input tokens for a 53-token prompt on one probe call in
+ * twelve (2026-11-22), and KIE's stated charge for that call was far below
+ * what the reported count would imply. GPT-6.2 Sol is on the same endpoint
+ * and wire. A reply that states a charge is billed that charge, as for every
+ * model. A reply that states none has its reported input checked against our
+ * own size estimate of the request ({@link kieInputCheckedWhenUnstated}): an
+ * implausible count (over {@link KIE_INPUT_IMPLAUSIBLE_FACTOR} times the
+ * estimate) is replaced by the estimate, and any other count is billed as
+ * reported. The output count is always billed as reported. Quotes and holds
+ * are unchanged: nothing is added for these models.
+ *
+ * Deliberately NOT {@link KIE_INPUT_UNREPORTED}: membership there bills every
+ * unstated reply from the request's size and drops the document floor
+ * (`documentInputFloorTokens`) for a call that sent files; these models keep
+ * both their genuine counts and that floor.
+ */
+const KIE_INPUT_CHECKED_WHEN_UNSTATED: ReadonlySet<string> = new Set(["gpt-6.2-sol", "gpt-6.2-astra"])
+
+/**
+ * How many times our size estimate a reported input count may be before it is
+ * implausible (decided 2026-11-22). The estimate counts 4 characters a token;
+ * genuinely dense input (CJK text, code) runs to at most about 4 times that,
+ * while the observed padding was hundreds of times the estimate.
+ */
+export const KIE_INPUT_IMPLAUSIBLE_FACTOR = 4
+
+/** Whether a `modelId` reply with no stated charge has its reported input checked against the request's size ({@link KIE_INPUT_CHECKED_WHEN_UNSTATED}). */
+export function kieInputCheckedWhenUnstated(modelId: string): boolean {
+  const model = getLlmModel(modelId)
+  return Boolean(model && KIE_INPUT_CHECKED_WHEN_UNSTATED.has(model.id))
+}
 
 /**
  * Whether KIE's reported INPUT token count for `modelId` cannot be billed

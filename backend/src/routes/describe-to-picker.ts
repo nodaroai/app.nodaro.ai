@@ -37,6 +37,7 @@ import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { acquireStreamLane, llmProviderOf, restampProviderCallStart } from "../lib/concurrency-lanes/live-routes.js"
 import { pickerAnalyzerProvider, wantsEventStream, withDescribeToPickerDefaults } from "../lib/describe-to-picker-request.js"
 import { llmRunModel } from "../lib/run-model.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 // Shared with text-to-picker, which imports them from here.
 export { pickerAnalyzerProvider, withDescribeToPickerDefaults }
@@ -546,7 +547,7 @@ async function completeAnalysis(analysis: Analysis, { output, inputTokens, outpu
         // (migration 347) — while output_data is owner-readable through both, so
         // neither ever rides there.
         provider: lane,
-        provider_cost: providerCost ?? null,
+        ...(await jobCostColumns(providerCost ?? null)),
       })
       .eq("id", jobId)
       .eq("user_id", userId)

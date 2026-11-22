@@ -104,7 +104,9 @@ const ctx = { jobId: "job-1", jobUserId: "user-1", usageLogId: "log-1", shouldWa
 
 const RAW_URL = "https://kie.example/out.mp4"
 const REFS = ["https://r2.example.com/videos/ref.mp4"]
-const RESULT = { url: RAW_URL, providerUsed: "seedance-2-5", cost: 1.25, displayCost: 1.5625 }
+// What the router returns: the adapter's cost and nothing derived from it (the
+// display figure is derived at the row write, lib/job-cost-columns.ts).
+const RESULT = { url: RAW_URL, providerUsed: "seedance-2-5", cost: 1.25 }
 
 const finalizeArg = () => mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
 /** What the settle shim answers when it measured nothing (or the measurement failed). */
@@ -359,6 +361,25 @@ describe("Seedance 2.5 — the recorded provider cost", () => {
     expect(finalizeArg().meteredBaseCredits).toBeUndefined()
   })
 
+  it("a 23 s text-to-video with reference images and audio (no reference video): the 23 s figure, and nothing beside it to go stale", async () => {
+    // The run that showed one display figure for every length: its cost was
+    // replaced here, while the router's figure for the adapter's cost rode on.
+    mocks.mockMeasure.mockResolvedValueOnce(measured(3993, 23, 0))
+    await t2v(
+      makeJob("text-to-video", {
+        prompt: "a street at night", provider: "seedance-2-5", resolution: "720p", duration: 23,
+        referenceImageUrls: ["https://x.png", "https://y.png"], referenceAudioUrls: ["https://a.mp3"],
+      }) as never,
+      ctx as never,
+    )
+    const cost = seedance25CostUsd({ resolution: "720p", draft: false, hasVideoRef: false, outputSec: 23, inputSec: 0 })
+    expect(finalResult().cost).toBe(cost)
+    expect(cost).not.toBe(RESULT.cost)
+    expect(finalResult()).not.toHaveProperty("displayCost")
+    // The charge is the settle's measure, untouched by the recorded cost.
+    expect(finalizeArg().meteredBaseCredits).toBe(3993)
+  })
+
   it("an Auto run with nothing wired bills the length it chose", async () => {
     mocks.mockMeasure.mockResolvedValueOnce(measured(311, 9, 0))
     await t2v(makeJob("text-to-video", { prompt: "a sunset", provider: "seedance-2-5", resolution: "480p", duration: -1 }) as never, ctx as never)
@@ -409,7 +430,7 @@ describe("Seedance 2.5 — the recorded provider cost", () => {
   })
 
   it("a relayed run records no cost: the far end's account paid, not this install", async () => {
-    const relayed = { url: RAW_URL, providerUsed: "nodaro", cost: null, displayCost: null, relayJobId: "far-job", relayCredits: 120 }
+    const relayed = { url: RAW_URL, providerUsed: "nodaro", cost: null, relayJobId: "far-job", relayCredits: 120 }
     mocks.mockImageToVideo.mockResolvedValueOnce(relayed)
     mocks.mockMeasure.mockResolvedValueOnce(measured(1900, 10, 10))
     await i2v(

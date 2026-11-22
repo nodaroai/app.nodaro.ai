@@ -31,6 +31,7 @@ export { meteredSpendFromRow }
 import { hasJobPolicyFor, type HeldCommitReplay } from "../lib/job-policy.js"
 import { completedJobColumns } from "../lib/job-status.js"
 import { withOutputImageDimensions } from "../lib/job-output-dimensions.js"
+import { jobCostColumns, withPairedDisplayCost } from "../lib/job-cost-columns.js"
 import { isMissingFunctionError } from "../lib/postgrest-errors.js"
 // Pure key-family predicate (no S3 client, no supabase) — the one half of the
 // relay delete rule that is decidable at asset-creation time.
@@ -310,7 +311,9 @@ export async function markJobCompletedDetailed(
    *  committing a ceiling (Q2). */
   commitReplay?: HeldCommitReplay,
 ): Promise<MarkJobCompletedOutcome> {
-  const stamped = await withOutputImageDimensions(fields)
+  // `display_cost` is derived here from the row's own `provider_cost`, before
+  // the gate, so a held row parks the pair and approve writes it as it is.
+  const stamped = await withPairedDisplayCost(await withOutputImageDimensions(fields))
 
   if (hasJobPolicyFor("result")) {
     const { applyResultGate } = await import("../lib/job-policy-gate.js")
@@ -1117,7 +1120,7 @@ export async function workerLlmBilling(
           if (!Number.isFinite(cost) || cost <= 0) return
           const { error } = await supabase
             .from("jobs")
-            .update({ provider_cost: cost })
+            .update(await jobCostColumns(cost))
             .eq("id", ctx.jobId)
             .or(`provider_cost.is.null,provider_cost.lt.${cost}`)
           if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far: ${error.message}`)
@@ -1210,7 +1213,7 @@ export async function workerLlmBilling(
           if (cost === undefined) return
           const { error } = await supabase
             .from("jobs")
-            .update({ provider_cost: cost })
+            .update(await jobCostColumns(cost))
             .eq("id", ctx.jobId)
             .or(`provider_cost.is.null,provider_cost.lt.${cost}`)
           if (error) console.warn(`[worker] Job ${ctx.jobId}: could not record its spend so far: ${error.message}`)

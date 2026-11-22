@@ -57,6 +57,15 @@ vi.mock("../../kie/audio.js", () => ({
   },
 }))
 
+// The audio conversion downloads and runs ffmpeg — only that step is mocked; which
+// lane needs it and which URL already is an audio file stay REAL. A converted
+// file comes back unchanged by default; the conversion cases below set their own.
+const audioFile = vi.hoisted(() => ({ convert: vi.fn(), discard: vi.fn() }))
+vi.mock("../transcribable-audio.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../transcribable-audio.js")>()),
+  toTranscribableAudio: audioFile.convert,
+}))
+
 // Nemotron 3.5 Transcribe runs on KIE through its own runner (kie/nemotron-transcribe.ts).
 const nemotron = vi.hoisted(() => ({ run: vi.fn() }))
 vi.mock("../../kie/nemotron-transcribe.js", () => ({ runNemotronTranscribe: nemotron.run }))
@@ -133,6 +142,8 @@ const RIGHTS = { userId: "u1", lane: "route" as const }
 beforeEach(() => {
   vi.clearAllMocks()
   // Sensible defaults
+  audioFile.convert.mockImplementation(async (url: string) => ({ url, discard: audioFile.discard }))
+  audioFile.discard.mockResolvedValue(undefined)
   mocks.fsAccess.mockResolvedValue(undefined)
   mocks.fsUnlink.mockResolvedValue(undefined)
   mocks.uploadFileToR2.mockResolvedValue("https://r2/uploaded.mp3")
@@ -703,6 +714,61 @@ describe("transcribe — provider: incredibly-fast-whisper", () => {
     await expect(
       transcribe("u", "incredibly-fast-whisper", undefined, { wordTimestamps: true }),
     ).rejects.toThrow(/no word timestamps/)
+  })
+})
+
+describe("transcribe — a lane that reads only an audio file gets one", () => {
+  const VIDEO = "https://cdn.example.com/videos/clip.mp4"
+  const STORED = "https://cdn.example.com/scratch/transcribe-audio-1.mp3"
+
+  beforeEach(() => {
+    audioFile.convert.mockImplementation(async (url: string) => ({
+      url: url === VIDEO ? STORED : url,
+      discard: audioFile.discard,
+    }))
+    mocks.predictionsCreate.mockResolvedValue({ id: "p-video" })
+    mocks.replicateWait.mockResolvedValue({ output: { text: "hi", chunks: [] }, metrics: { predict_time: 1 } })
+  })
+
+  it.each(["incredibly-fast-whisper", "whisper"] as const)("%s is sent the video's audio track, never the video", async (lane) => {
+    await transcribe(VIDEO, lane)
+
+    expect(audioFile.convert).toHaveBeenCalledWith(VIDEO)
+    expect(mocks.predictionsCreate.mock.calls[0][0].input.audio).toBe(STORED)
+    expect(audioFile.discard).toHaveBeenCalledTimes(1)
+  })
+
+  it("sends an mp3, wav or flac file as it is", async () => {
+    await transcribe("https://cdn.example.com/audios/a.mp3", "incredibly-fast-whisper")
+
+    expect(audioFile.convert).not.toHaveBeenCalled()
+    expect(mocks.predictionsCreate.mock.calls[0][0].input.audio).toBe("https://cdn.example.com/audios/a.mp3")
+  })
+
+  it("leaves Scribe the video: it reads video files itself", async () => {
+    mocks.directStt.mockResolvedValueOnce({ text: "hi", language: "en", words: [{ text: "hi", start: 0, end: 0.2 }] })
+
+    await transcribe(VIDEO, "elevenlabs-stt")
+
+    expect(audioFile.convert).not.toHaveBeenCalled()
+    expect(mocks.directStt).toHaveBeenCalledWith(VIDEO, expect.anything())
+  })
+
+  it("deletes the stored audio when the transcription fails", async () => {
+    mocks.replicateWait.mockRejectedValueOnce(new Error("provider down"))
+
+    await expect(transcribe(VIDEO, "incredibly-fast-whisper")).rejects.toThrow()
+    expect(audioFile.discard).toHaveBeenCalledTimes(1)
+  })
+
+  it("converts once, whatever the stored file's name looks like", async () => {
+    // A stored name with no audio extension must not send it round again.
+    audioFile.convert.mockResolvedValueOnce({ url: "https://cdn.example.com/scratch/no-extension", discard: audioFile.discard })
+
+    await transcribe(VIDEO, "incredibly-fast-whisper")
+
+    expect(audioFile.convert).toHaveBeenCalledTimes(1)
+    expect(mocks.predictionsCreate.mock.calls[0][0].input.audio).toBe("https://cdn.example.com/scratch/no-extension")
   })
 })
 

@@ -32,30 +32,42 @@ export async function uploadSwapWithSourceAudio(
 ): Promise<string> {
   const workDir = await createWorkDir("face-swap-audio")
   try {
-    const localPath = await swapWithSourceAudio(workDir, swapUrl, sourceVideoUrl, target.jobId)
-    return localPath
-      ? await watermarkLocalVideoAndUpload(localPath, target.jobId, target.jobUserId, target.shouldWatermark)
+    const local = await swapWithSourceAudio(workDir, swapUrl, sourceVideoUrl, target.jobId)
+    return local
+      ? await watermarkLocalVideoAndUpload(local.path, target.jobId, target.jobUserId, target.shouldWatermark)
       : await uploadVideoMaybeWatermark(swapUrl, target.jobId, target.jobUserId, target.shouldWatermark)
   } finally {
     await cleanupWorkDir(workDir)
   }
 }
 
+/** The swap downloaded beside the source: the file to deliver and whether it
+ *  carries the source's sound. */
+export interface LocalSwap {
+  readonly path: string
+  /** False when the source has no sound: `path` is the swap as it came back. */
+  readonly hasSourceAudio: boolean
+}
+
 /** The local file to deliver: the swap with the source's sound, the swap alone
- *  when the source is silent, or undefined when restoring failed. */
-async function swapWithSourceAudio(
+ *  when the source is silent, or undefined when restoring failed. Shared with
+ *  the reconcile lane (`lib/reconcile/face-swap-audio.ts`), which delivers a
+ *  swap its worker did not live to finish. */
+export async function swapWithSourceAudio(
   workDir: string,
   swapUrl: string,
   sourceVideoUrl: string,
   jobId: string,
-): Promise<string | undefined> {
+): Promise<LocalSwap | undefined> {
   const swapped = join(workDir, "swapped.mp4")
   const source = join(workDir, "source.mp4")
   const withAudio = join(workDir, "with-audio.mp4")
   try {
     await downloadFile(swapUrl, swapped)
     await downloadFile(sourceVideoUrl, source)
-    return (await restoreVideoAudioFromSource(swapped, source, withAudio)) ? withAudio : swapped
+    return (await restoreVideoAudioFromSource(swapped, source, withAudio))
+      ? { path: withAudio, hasSourceAudio: true }
+      : { path: swapped, hasSourceAudio: false }
   } catch (err) {
     console.warn(
       `[worker] face-swap ${jobId}: could not restore the source audio, delivering the swap as returned: ${err instanceof Error ? err.message : String(err)}`,

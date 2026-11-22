@@ -30,6 +30,7 @@ import { extendSocketTimeout } from "../lib/llm-route-timeout.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -209,7 +210,7 @@ Title prompt: ${prompt}`
               status: "completed",
               ...completedJobColumns(),
               output_data: outputData,
-              provider_cost: response.providerCost ?? null,
+              ...(await jobCostColumns(response.providerCost ?? null)),
             })
             .eq("id", job.id)
 

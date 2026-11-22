@@ -750,6 +750,8 @@ export async function trendRoutes(app: FastifyInstance) {
             breakdown: neutralBreakdown(quote.breakdown),
             // A retry of a refused clip: charged only if it runs (not in the hold).
             ...(privacyCredits !== undefined ? { privacyCredits } : {}),
+            // "First Remake on us": what the offer would cover, as the Video Remake quote says (ee/lib/first-remake-offer.ts).
+            ...(isRec(quote.firstRemakeOffer) ? { firstRemakeOffer: quote.firstRemakeOffer } : {}),
           },
         }
       } catch (e) {

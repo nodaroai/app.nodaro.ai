@@ -145,7 +145,6 @@ function makeHandler(engine: PluginSurroundEngine): HandlerFn {
       },
       provider: result.providerUsed,
       provider_cost: refineCost ? (result.cost ?? 0) + refineCost : result.cost,
-      display_cost: result.displayCost,
     })
     if (!ok) return
 

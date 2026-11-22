@@ -260,7 +260,7 @@ describe("handleLlmStructured", () => {
       new StructuredLlmError("llm-structured: validation failed after 3 attempt(s): x", { inputTokens: 40_000, outputTokens: 9_000, providerCost: 0.0871, complete: true }, { lane: "direct-anthropic" }),
     )
     await expect(handleLlmStructured(job(base), ctx)).rejects.toThrow("validation failed")
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ provider_cost: 0.0871, provider: "direct-anthropic" })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ provider_cost: 0.0871, display_cost: expect.any(Number), provider: "direct-anthropic" })
     expect(mocks.markJobCompleted).not.toHaveBeenCalled()
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
   })

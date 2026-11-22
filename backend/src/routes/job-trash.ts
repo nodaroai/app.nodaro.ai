@@ -34,7 +34,7 @@ openApiRegistry.registerPath({
     200: { description: "Deleted", content: { "application/json": { schema: z.object({ success: z.literal(true) }) } } },
     401: { description: "Unauthorized" },
     404: { description: "Job not found" },
-    409: { description: "`forever=true` on a job that is not in the Trash (`not_in_trash`)" },
+    409: { description: "`forever=true` on a job that is not in the Trash (`not_in_trash`), or the job is a first Remake run still finishing (`first_remake_run_active`: it can be deleted once it and its steps have finished)" },
   },
 })
 

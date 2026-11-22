@@ -12,6 +12,7 @@ import { supabase } from "../supabase.js"
 import { markJobFailed, FAILABLE_STATUSES } from "../job-failure.js"
 import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE, loadUsageLogId } from "../job-finalize.js"
 import { recoveredMaskComposite } from "./mask-paste-back.js"
+import { recoveredFaceSwapWithAudio } from "./face-swap-audio.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
@@ -483,6 +484,9 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
     // A recovered inpaint gets the composite its worker runs before finalize
     // (a failure throws into the catch below, never a raw result finalized).
     const composite = await recoveredMaskComposite(row, urls[0]!)
+    // A recovered Face Swap gets the source clip's sound back, as its worker's
+    // delivery does (the swap model returns the picture only).
+    const swapWithSound = await recoveredFaceSwapWithAudio(row, urls[0]!)
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: row.job_type,
@@ -491,10 +495,9 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
       ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
       ...(composite?.extraOutputData && { extraOutputData: composite.extraOutputData }),
       result: {
-        url: composite?.url ?? urls[0]!,
+        url: composite?.url ?? swapWithSound ?? urls[0]!,
         extraUrls: composite ? [] : urls.slice(1),
         cost: outputCost ?? billedCost ?? lipSyncRunCost,
-        ...(outputCost !== null ? { displayCost: outputCost } : {}),
         ...faceSwapSettleFields,
         providerUsed: "replicate",
         providerMs,

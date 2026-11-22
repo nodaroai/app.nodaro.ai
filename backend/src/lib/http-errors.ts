@@ -4,6 +4,7 @@ import { isGenerationSessionNotFound } from "./generation-session-error.js"
 import { CLIENT_ORIGIN_RULE, isInvalidClientOrigin } from "./client-origin-error.js"
 import { RetainedImageInUseError, RetainedVideoInUseError } from "./retained-image-errors.js"
 import { UploadBlockedError, uploadBlockedBody } from "./upload-policy.js"
+import { firstRemakeRunRefusal } from "./first-remake-run-refusal.js"
 
 /** The single generic string every unmarked `internal_error` 500 collapses to. */
 const GENERIC_INTERNAL_MESSAGE = "Internal server error"
@@ -341,6 +342,10 @@ export function sendInternalError(
   // error must not be reported as a server failure or logged at error level.
   // (The 500-sanitizer net only rewrites `internal_error` 500 bodies, so this
   // 422 passes through it untouched.)
+  // A running first Remake run (or what holds it) the database refused to
+  // trash or delete: 409 with its own code, never the database's text.
+  const firstRemake = firstRemakeRunRefusal(err)
+  if (firstRemake) return reply.status(firstRemake.statusCode).send(firstRemake.body)
   if (err instanceof RetainedImageInUseError || err instanceof RetainedVideoInUseError) {
     return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } })
   }

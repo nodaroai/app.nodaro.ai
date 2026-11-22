@@ -116,6 +116,10 @@ describe("calculateLlmCost", () => {
     ["gemini-4-carbon", 0.80, 4.00],
     // 2026-11-16 addition — KIE list credits/M × $0.005, read that day.
     ["gemini-4-hydrogen", 0.60, 3.00],
+    // 2026-11-22 additions — KIE list credits/M × $0.005, read that day.
+    ["gemini-4-neon", 1.20, 6.00],
+    ["gpt-6.2-sol", 0.60, 3.00],
+    ["gpt-6.2-astra", 2.40, 12.00],
   ])("prices %s at KIE list rates ($%s / $%s per M)", (id, inUsd, outUsd) => {
     expect(calculateLlmCost(id, { inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(inUsd, 10)
     expect(calculateLlmCost(id, { inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(outUsd, 10)

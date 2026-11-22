@@ -63,7 +63,8 @@ describe("settleFixedPlusLlmCalls — what the settle writes on the job", () => 
     expect(out).toMatchObject({ outcome: "charged", charged: 130 })
     expect(h.commit).toHaveBeenCalledWith("log-1", 130, { collectOverHold: true })
     expect(h.updates).toEqual([
-      { credits_actual: 130, provider_cost: 0.05 },
+      // The settings are not readable here, so no display figure is derived.
+      { credits_actual: 130, provider_cost: 0.05, display_cost: null },
       { llm_billing: { costUsd: 0.05, source: "kie-stated", calls: 1, lanes: ["kie"], chargeId: CHARGE_ID } },
     ])
   })

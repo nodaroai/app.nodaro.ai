@@ -253,14 +253,32 @@ describe("checkLipSyncInputs — OmniHuman 2.0", () => {
     expect(lipSyncMeasureSlots.held()).toBe(0)
   })
 
+  it("an image under 300 px on a side is accepted: the run enlarges it to 300, shape kept", async () => {
+    for (const size of [{ width: 250, height: 400 }, { width: 50, height: 50 }, { width: 120, height: 300 }]) {
+      state.image = { size, sizeBytes: 100_000 }
+      expect(await check(), JSON.stringify(size)).toMatchObject({ ok: true })
+    }
+  })
+
   it.each([
-    ["250 px wide", { width: 250, height: 400 }],
     ["over 6,000 px", { width: 6001, height: 4000 }],
+    ["under 300 px and wider than 2.5 : 1", { width: 260, height: 100 }],
     ["wider than 2.5 : 1", { width: 2600, height: 1000 }],
     ["taller than 1 : 2.5", { width: 400, height: 1001 }],
   ])("an image %s is refused", async (_label, size) => {
     state.image = { size, sizeBytes: 1_000_000 }
     expect(await check()).toMatchObject({ ok: false, code: "image_out_of_bounds" })
+  })
+
+  it("a refusal names the enlarge only for an image under the minimum side", async () => {
+    state.image = { size: { width: 2600, height: 1000 }, sizeBytes: 1_000_000 }
+    const wide = await check()
+    expect(wide).toMatchObject({ ok: false, code: "image_out_of_bounds" })
+    expect(JSON.stringify(wide)).not.toMatch(/enlarged/)
+    state.image = { size: { width: 260, height: 100 }, sizeBytes: 1_000_000 }
+    const small = await check()
+    expect(small).toMatchObject({ ok: false, code: "image_out_of_bounds" })
+    expect(JSON.stringify(small)).toMatch(/A smaller image is enlarged to fit, but not one of this shape/)
   })
 
   it("the bounds themselves are accepted (300 px, 6,000 px, 0.4 and 2.5)", async () => {

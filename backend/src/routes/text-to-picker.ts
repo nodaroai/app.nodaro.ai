@@ -28,6 +28,7 @@ import { chargedFailureMessage, llmPrecheckBody, llmTextChars, plannedStructured
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 /**
  * POST /v1/text-to-picker — free text in, pickerJson out.
@@ -329,7 +330,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
             // (migration 347) — while output_data is owner-readable through both,
             // so neither ever rides there.
             provider: servedLanes(results.map((r) => r.lane)),
-            provider_cost: providerCost,
+            ...(await jobCostColumns(providerCost)),
           })
           .eq("id", job.id)
           .eq("user_id", userId)

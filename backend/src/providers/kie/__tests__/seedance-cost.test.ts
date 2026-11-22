@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { KIE_CREDIT_USD } from "../models.js"
+import { KIE_CREDIT_USD, KIE_TEXT_TO_VIDEO_MODELS, KIE_VIDEO_MODELS } from "../models.js"
 import {
   SEEDANCE_25_KIE_CREDITS_PER_SEC,
   SEEDANCE_DRAFT_FINALIZE_KIE_CREDITS_PER_SEC,
   seedance25CostUsd,
+  seedance25FlashCostUsd,
   seedanceDraftFinalizeCostUsd,
 } from "../seedance-cost.js"
 
@@ -80,5 +81,17 @@ describe("seedanceDraftFinalizeCostUsd", () => {
 
   it("a draft without one: the plain rate over its output seconds", () => {
     expect(seedanceDraftFinalizeCostUsd(8, false)).toBe(158 * 8 * KIE_CREDIT_USD)
+  })
+})
+
+describe("the Seedance 2.5 model entries' fallback cost", () => {
+  // The figure an adapter reports when the task record names no credits: a
+  // two-second floor, not a run (models.ts, the Seedance note above
+  // KIE_VIDEO_MODELS). Pinned to the rate tables so the note cannot drift.
+  it("is two seconds at 720p with no reference video, in both maps", () => {
+    for (const map of [KIE_VIDEO_MODELS, KIE_TEXT_TO_VIDEO_MODELS]) {
+      expect(map["seedance-2-5"]!.cost).toBeCloseTo(seedance25CostUsd({ resolution: "720p", draft: false, hasVideoRef: false, outputSec: 2, inputSec: 0 }), 12)
+      expect(map["seedance-2-5-flash"]!.cost).toBeCloseTo(seedance25FlashCostUsd({ resolution: "720p", hasVideoRef: false, outputSec: 2, inputSec: 0 }), 12)
+    }
   })
 })

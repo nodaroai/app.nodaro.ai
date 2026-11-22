@@ -21,6 +21,7 @@ export type {
   SignupGrantClaimResult,
   FreeGrantState,
   WelcomeOfferState,
+  FirstRemakeOfferState,
   WelcomeOfferClaimInput,
   WelcomeOfferClaimResult,
   WelcomeOfferSeenEvent,

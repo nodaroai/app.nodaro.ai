@@ -1058,3 +1058,48 @@ describe("Gemini 4 Hydrogen with a video or audio reference — metered (decided
     }
   })
 })
+
+describe("Gemini 4 Neon with a video or audio reference — metered (decided 2026-11-22)", () => {
+  const NEON = "gemini-4-neon"
+  const withGeminiKey = async (key: string | undefined) => {
+    const { config } = (await import("../../lib/config.js")) as unknown as { config: Record<string, unknown> }
+    const before = config.GEMINI_API_KEY
+    config.GEMINI_API_KEY = key
+    return () => {
+      config.GEMINI_API_KEY = before
+    }
+  }
+  const body = (extra: Record<string, unknown>) => ({ systemPrompt: "", userInput: "describe it", llmModel: NEON, ...extra })
+  const VIDEO = { referenceVideoUrls: ["https://media.example/cut.mp4"] }
+  const sent = () => h.llmComplete.mock.calls[0]![0] as LlmRequest & { requireLane?: string; minPromptTokens?: number }
+  const held = () => (h.reserveCreditsForJob.mock.calls[0]![4] as { holdCredits: number }).holdCredits
+
+  it("stays on KIE and carries the not-read floor even where this install has a Gemini key — it has no direct lane", async () => {
+    for (const key of ["gem", undefined]) {
+      const restore = await withGeminiKey(key)
+      try {
+        h.llmComplete.mockReset()
+        h.llmComplete.mockRejectedValue(new Error("stop here"))
+        const app = await buildApp()
+        await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body(VIDEO) })
+        expect(sent().requireLane, String(key)).toBeUndefined()
+        expect(sent().minPromptTokens, String(key)).toBe(61)
+      } finally {
+        restore()
+      }
+    }
+  })
+
+  it("holds a call with one video at least what the probe's 52 s trailer cost on KIE (5,507 prompt tokens) at its output cap", async () => {
+    h.llmComplete.mockReset()
+    h.reserveCreditsForJob.mockClear()
+    h.llmComplete.mockRejectedValue(new Error("stop here"))
+    const app = await buildApp()
+    await app.inject({ method: "POST", url: "/v1/llm-chat/generate", payload: body(VIDEO) })
+    const { calculateLlmCost } = await import("../../lib/pricing/llm-cost.js")
+    const { usdToCredits } = await import("@nodaro/shared/credits")
+    const probeCharge = applyServiceMarkup(usdToCredits(calculateLlmCost(NEON, { inputTokens: 5_507, outputTokens: 32768 }, "kie")), MARKUP, `llm-chat:${NEON}`)
+    expect(held()).toBe(applyServiceMarkup(llmHoldBaseCredits(NEON, { request: sent() }), MARKUP, `llm-chat:${NEON}`))
+    expect(held()).toBeGreaterThanOrEqual(probeCharge)
+  })
+})

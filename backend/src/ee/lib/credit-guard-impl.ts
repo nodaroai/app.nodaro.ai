@@ -24,6 +24,8 @@ import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { getWelcomeOfferConfig } from "./welcome-offer-config.js"
 import { consentBlockExempt, sendConsentRequired } from "./welcome-consent-gate.js"
 import { LlmUnpricedModelError } from "../billing/llm-metered.js"
+import { abandonFirstRemakeCover, firstRemakeAdmit, firstRemakeCoverAvailable, pendingFirstRemakeCover, takeFirstRemakeOffer } from "./first-remake-offer.js"
+import { trustedPluginParentJobId } from "../../lib/job-submission-context.js"
 import { sendLlmModelUnpriced } from "../billing/llm-unpriced-reply.js"
 
 /** 403 body code when an extension-granted account has not consented yet. */
@@ -441,9 +443,19 @@ export function creditGuardImpl(
       // free-credit video limits are not asked of it (video-remake-child.ts).
       const videoRemakeStep = await videoRemakeStepOf(req)
       const freeVideoLimitsLifted = videoRemakeStep !== null
+      // "First Remake on us": a Video Remake run admitted for the offer's cover
+      // (first-remake-offer.ts) has its fee checked against the balance the
+      // cover will make it — the cover lands with the job, at its reservation.
+      const pendingCover = pendingFirstRemakeCover(req)
+      // ...and a step of the covered run (its trusted parent is the run) may
+      // draw on what is left of the cover, held apart from the pools (684).
+      const runCover = videoRemakeStep !== null ? await firstRemakeCoverAvailable(userId, trustedPluginParentJobId(req), req.billingContext) : 0
+      const checkedProfile: CreditProfile = pendingCover
+        ? { ...(profile as CreditProfile), subscription_credits: ((profile as CreditProfile).subscription_credits ?? 0) + pendingCover.cover }
+        : (profile as CreditProfile)
       const checkModel = (identifier: string) => CreditsService.checkCreditsWithProfile(
         userId,
-        profile as CreditProfile,
+        checkedProfile,
         identifier,
         req.isAppRun,
         computedCreditOverride,
@@ -463,6 +475,7 @@ export function creditGuardImpl(
           // merely names a target video model (Prompt Helper) is not a run.
           video: req.freeVideoRequest ?? (readsVideoBody(identifier.split(":")[0] ?? "") ? freeVideoRequestOf(req.body as Record<string, unknown> | undefined) : undefined),
           ...(freeVideoLimitsLifted ? { freeVideoLimitsLifted: true } : {}),
+          ...(runCover > 0 ? { firstRemakeCover: runCover } : {}),
         },
       )
       // A batch asks once per DISTINCT model, each against the whole batch's
@@ -589,6 +602,13 @@ export async function checkPayerCanAffordImpl(
   const webFreeMode = req.webFreeMode === true || isWebFreeModeCandidate(req)
   const check = await checkRunSetCredits(userId, credits, { billingContext: ctx, webFreeMode })
   if (!check.sufficient) {
+    // "First Remake on us" (first-remake-offer.ts): a never-paid account's one
+    // Video Remake run its balance cannot cover is admitted with a pending
+    // cover, or refused with the offer's own code when it is not a run the
+    // offer covers. Anything else: the refusal of before.
+    const offer = dep ? null : await firstRemakeAdmit(req, ctx, credits)
+    if (offer?.kind === "cover") return { ok: true }
+    if (offer?.kind === "locked") return { ok: false, statusCode: offer.statusCode, body: offer.body }
     return {
       ok: false,
       ...insufficientCreditsRefusal(
@@ -644,6 +664,22 @@ export async function reserveCreditsForJobImpl(
   // before the RPC, so a short balance is a clear 402 with no usage log left.
   const holdCredits = options?.holdCredits
   if (holdCredits !== undefined && !(await holdCovered(req, reply, jobId, modelIdentifier, holdCredits, routeName, options))) {
+    return undefined
+  }
+
+  // "First Remake on us": now that the run's job exists, the account's first
+  // Video Remake run takes the offer, before the fee is reserved — with the
+  // cover it was admitted for, or none (its balance paid). A run admitted for
+  // its cover that could not take it (the offer was taken meanwhile) is
+  // refused as the balance check would have refused it.
+  const firstRemakeCover = pendingFirstRemakeCover(req)
+  if (!(await takeFirstRemakeOffer(req, jobId, modelIdentifier)) && firstRemakeCover) {
+    await abandonFirstRemakeCover(userId, jobId)
+    if (!options?.oncePerJob && !options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)
+    reply.status(402).send({
+      error: { code: "insufficient_credits", message: "Insufficient credits" },
+      required: firstRemakeCover.quote,
+    })
     return undefined
   }
 
@@ -710,6 +746,9 @@ export async function reserveCreditsForJobImpl(
           `[credit-guard] ${routeName} ambiguous reservation refund failed job=${jobId}: ${(refundError as Error).message}`,
         )
       })
+      // A cover granted for this run goes back before its job does: a deleted
+      // job fires no status trigger.
+      if (modelIdentifier === "cast-swap") await abandonFirstRemakeCover(userId, jobId)
       // Legacy callers discard an unconfirmed job; resumable callers retain it.
       await supabase.from("jobs").delete().eq("id", jobId)
     }
@@ -760,9 +799,11 @@ async function holdCovered(
   const userId = req.userId!
   let check: Awaited<ReturnType<typeof CreditsService.checkCredits>>
   try {
+    const runCover = await firstRemakeCoverAvailable(userId, jobId, req.billingContext)
     check = await CreditsService.checkCredits(userId, modelIdentifier, req.isAppRun, holdCredits, {
       billingContext: req.billingContext,
       webFreeMode: req.webFreeMode ?? false,
+      ...(runCover > 0 ? { firstRemakeCover: runCover } : {}),
     })
   } catch (err) {
     if (!options?.retainJobOnFailure) await supabase.from("jobs").delete().eq("id", jobId)

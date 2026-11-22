@@ -139,6 +139,9 @@ vi.mock("../../config.js", () => ({ config: { REPLICATE_API_TOKEN: "test-token" 
 // Face Swap's settle reads its live row (lib/face-swap-input.ts): within it by default.
 const faceSwap = vi.hoisted(() => ({ settle: vi.fn(async (_cost: unknown): Promise<Record<string, unknown>> => ({})) }))
 vi.mock("../../face-swap-input.js", () => ({ faceSwapSettle: faceSwap.settle }))
+// A recovered Face Swap's sound (face-swap-audio.ts, its own tests): none restored by default.
+const swapAudio = vi.hoisted(() => ({ recover: vi.fn(async (_row: unknown, _url: string): Promise<string | undefined> => undefined) }))
+vi.mock("../face-swap-audio.js", () => ({ recoveredFaceSwapWithAudio: swapAudio.recover }))
 vi.mock("../../../workers/shared.js", () => ({
   markJobCompleted: mocks.markCompletedMock,
   commitJobCredits: mocks.commitMock,
@@ -271,6 +274,16 @@ describe("reconcileReplicateJob", () => {
     expect(input.result).not.toHaveProperty("meteredCost")
     expect(input.result).not.toHaveProperty("collectOverHold")
     expect(input).not.toHaveProperty("meteredBaseCredits")
+  })
+
+  it("a recovered Face Swap is delivered with the source clip's sound, as its worker delivers it", async () => {
+    swapAudio.recover.mockResolvedValueOnce("https://r2.example/tmp/provider-input/j-fs3/face-swap-audio-x.mp4")
+    setPrediction({ id: "p-fs3", status: "succeeded", output: "https://replicate.example/swap.mp4", metrics: { predict_time: 40 } })
+    const row = { id: "j-fs3", provider_kind: "replicate-prediction", provider_task_id: "p-fs3", reconcile_attempts: 0, job_type: "face-swap", input_data: { videoUrl: "https://cdn.example/clip.mp4" } }
+    await reconcileReplicateJob(row)
+    expect(swapAudio.recover).toHaveBeenCalledWith(row, "https://replicate.example/swap.mp4")
+    const input = mocks.finalizeMock.mock.calls.at(-1)![0] as Record<string, unknown> & { result: Record<string, unknown> }
+    expect(input.result.url).toBe("https://r2.example/tmp/provider-input/j-fs3/face-swap-audio-x.mp4")
   })
 
   it("a recovered Face Swap Replicate billed past its row is settled as its worker settles it: the run's cost, collected above the hold", async () => {

@@ -23,6 +23,7 @@ import { maybeSendMonthlyStatements } from "../notifications/monthly-statement.j
 import { getNotifyConfig } from "../notifications/notify-config.js"
 import { runCostShortfallSweep } from "./cost-shortfall-store.js"
 import { COST_SHORTFALL_SWEEP } from "./cost-shortfall.js"
+import { sweepFirstRemakeOffers } from "../lib/first-remake-offer.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -51,6 +52,10 @@ export function startCleanupCron(): void {
     return
   }
 
+  // "First Remake on us" (ee/lib/first-remake-offer.ts) -- every 5 minutes:
+  // finalizes an offer still in use whose run ended without its trigger
+  // finalizing it, and alerts on a cover that could not all be taken back.
+  cron.schedule("*/5 * * * *", () => { void sweepFirstRemakeOffers() })
   // Expire subscriptions -- every hour
   cron.schedule("* * * * *", () => { void reconcileExternalWallet() })
   // Stale dynamic-client registrations (MCP clients + community instances

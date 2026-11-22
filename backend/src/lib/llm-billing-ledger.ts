@@ -20,6 +20,7 @@ import { supabase } from "./supabase.js"
 import type { LlmServedLane } from "./llm/types.js"
 import { LLM_BILLING_LEDGER_COLUMN } from "./llm-metered-schema-probe.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
+import { jobCostColumns } from "./job-cost-columns.js"
 
 /** The `jobs` column the ledger lives in (migration 552) — declared beside the R33 probe, a leaf module. */
 export { LLM_BILLING_LEDGER_COLUMN }
@@ -154,7 +155,7 @@ export async function writeLlmBillingLedger(
   try {
     const { error } = await supabase
       .from("jobs")
-      .update({ [LLM_BILLING_LEDGER_COLUMN]: ledger, ...(opts.providerCost !== undefined ? { provider_cost: opts.providerCost } : {}) })
+      .update({ [LLM_BILLING_LEDGER_COLUMN]: ledger, ...(await jobCostColumns(opts.providerCost)) })
       .eq("id", jobId)
     if (!error) return true
     console.warn(`[llm-billing] failed to record the billing ledger on job ${jobId}: ${error.message}`)

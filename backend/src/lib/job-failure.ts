@@ -58,7 +58,8 @@ export interface MarkJobFailedInput {
   /** Extra columns to keep on the failed row. The RESULT gate passes the
    *  caller's completion fields MINUS `output_data`, so `provider`,
    *  `provider_cost`, `display_cost` and `provider_task_id` survive a policy
-   *  block — the provider spend is real and the admin needs to see it. */
+   *  block — the provider spend is real and the admin needs to see it.
+   *  `display_cost` is always re-derived from `provider_cost` here. */
   readonly extra?: Record<string, unknown>
   /** Reconcile writers' bookkeeping. */
   readonly reconcile_attempts?: number
@@ -89,6 +90,7 @@ export type JobFailureOutcome = "flipped" | "missed" | "error"
  * path.
  */
 export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedInput): Promise<JobFailureOutcome> {
+  const extra = await extraWithPairedDisplayCost(input.extra)
   const { data, error } = await supabase
     .from("jobs")
     .update({
@@ -99,7 +101,7 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
       ...(input.reconcile_attempts !== undefined ? { reconcile_attempts: input.reconcile_attempts } : {}),
       ...(input.reconcile_last_error ? { reconcile_last_error: input.reconcile_last_error } : {}),
       completed_at: new Date().toISOString(),
-      ...(input.extra ?? {}),
+      ...extra,
     })
     .eq("id", jobId)
     .in("status", [...(input.from ?? FAILABLE_STATUSES)])
@@ -120,6 +122,28 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
   // Lazy, so this module's static graph stays supabase + job-status.
   void import("./concurrency-lanes/withdraw.js").then((m) => m.withdrawFromLane(jobId)).catch(() => undefined)
   return "flipped"
+}
+
+/**
+ * The caller's extra columns with `display_cost` derived from their own
+ * `provider_cost` (lib/job-cost-columns.ts) — a failed run the provider billed
+ * shows the same pair a completed one does. Lazy, and only for a write that
+ * carries a cost, so this module's static graph stays supabase + job-status;
+ * never throws (a failure writer must not).
+ */
+async function extraWithPairedDisplayCost(extra: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
+  if (!extra) return {}
+  if (!("provider_cost" in extra) && !("display_cost" in extra)) return extra
+  try {
+    const { withPairedDisplayCost } = await import("./job-cost-columns.js")
+    return await withPairedDisplayCost(extra)
+  } catch {
+    // The pairing module could not load: no display figure beside a cost it
+    // was not derived from (job-cost-columns.ts is its only writer).
+    const { display_cost: _dropped, ...rest } = extra
+    void _dropped
+    return rest
+  }
 }
 
 /**

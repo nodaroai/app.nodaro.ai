@@ -76,7 +76,7 @@ describe("the serving lane never reaches a job's owner", () => {
       expect(source, route).not.toMatch(/usage\s*[:=]\s*\{[^}]*\blane\b/)
       expect(source, route).not.toMatch(/output_data:\s*\{[^}]*\bproviderCost\b/)
       expect(source, route).toMatch(/provider:\s*[^,\n]*lane/i)
-      expect(source, route).toMatch(/provider_cost:/)
+      expect(source, route).toMatch(/provider_cost:|jobCostColumns\(/)
     }
   })
 })

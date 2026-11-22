@@ -83,6 +83,7 @@ export async function reserveLlmCallImpl(
 // Pure: sized from the calls alone, in a leaf (no credits.ts / credit-guard import) so a price
 // surface (the UGC quote) can size a hold without joining this module's import cycle.
 import { llmHoldForCalls } from "./llm-hold-for-calls.js"
+import { jobCostColumns } from "../../lib/job-cost-columns.js"
 export { llmHoldForCalls }
 
 export function llmPrecheckBaseCreditsImpl(
@@ -130,7 +131,7 @@ async function writeJobBilling(jobId: string, billing: JobBillingLedger, charged
       const { error } = await supabase
         .from("jobs")
         .update({
-          ...(billing.costUsd !== null ? { provider_cost: billing.costUsd } : {}),
+          ...(billing.costUsd !== null ? await jobCostColumns(billing.costUsd) : {}),
           ...(charged !== undefined ? { credits_actual: charged } : {}),
         })
         .eq("id", jobId)

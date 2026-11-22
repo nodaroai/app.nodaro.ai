@@ -139,7 +139,7 @@ interface JobRow {
 }
 
 const PURCHASE_SOURCES = ["one_time_purchase", "subscription_created", "subscription_renewal"]
-const GRANT_SOURCES = ["signup_grant", "admin_adjustment"]
+const GRANT_SOURCES = ["signup_grant", "admin_adjustment", "first_remake_cover"]
 const REFUND_SOURCES = ["refund", "stripe_refund", "paddle_refund"]
 /** The ledger row a settlement below the hold writes (migration 392): the hold's unused part going back, not a refund. */
 const RELEASED_HOLD = "Unused job reservation"

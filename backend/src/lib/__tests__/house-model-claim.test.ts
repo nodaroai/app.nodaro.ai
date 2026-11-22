@@ -28,6 +28,13 @@ vi.mock("@/lib/supabase.js", () => {
   return { supabase: { from: (table: string) => chain(table) } }
 })
 
+// The planned cost is written with its display figure (lib/job-cost-columns.ts),
+// at a made-up markup.
+vi.mock("@/lib/app-settings.js", async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  getAppSettings: async () => ({ cost_markup_percent: 20 }),
+}))
+
 import { HOUSE_MODEL_CLAIM_REF, claimHouseModelStart, isHouseModelReference, saveHouseModelReference } from "../house-model-claim.js"
 
 beforeEach(() => {
@@ -75,7 +82,7 @@ describe("saveHouseModelReference", () => {
     db.answers.push({ data: [{ id: "job-1" }], error: null })
     await expect(saveHouseModelReference("job-1", "ref-1", 0.25)).resolves.toBe("saved")
     const [update, ...filters] = ops()
-    expect(update![1]).toMatchObject({ provider_task_id: "ref-1", provider_cost: 0.25 })
+    expect(update![1]).toMatchObject({ provider_task_id: "ref-1", provider_cost: 0.25, display_cost: 0.3 })
     expect(filters).toContainEqual(["eq", "provider_kind", "house-model"])
     expect(filters).toContainEqual(["eq", "provider_task_id", HOUSE_MODEL_CLAIM_REF])
     // Live only: a job a re-pick failed and refunded while `start` ran is not written over.

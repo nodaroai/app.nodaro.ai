@@ -352,6 +352,48 @@ describe("gemini-4-hydrogen: KIE first, Google's own API as its fallback and Adv
   })
 })
 
+describe("gemini-4-neon: KIE only — no direct lane, even with a Gemini key set", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.resetModules()
+    callGeminiDirect.mockReset()
+    configMock.KIE_API_KEY = "test-kie-key"
+    configMock.GEMINI_API_KEY = "test-gemini-key"
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("an unpinned call is served by KIE on its own slug", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    fetchMock.mockResolvedValue(kieOk())
+
+    const res = await llmComplete({ modelId: "gemini-4-neon", ...baseReq, reasoningEffort: "xhigh" })
+
+    expect(res.text).toBe("from-kie")
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/\/gemini-4-neon-openai\/v1\/chat\/completions$/)
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+  })
+
+  it("a KIE failure is not retried on Google's API", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockRejectedValue(new Error("kie down"))
+
+    await expect(llmComplete({ modelId: "gemini-4-neon", ...baseReq })).rejects.toThrow()
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+  })
+
+  it("refuses a direct pin rather than serving it elsewhere", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+
+    await expect(llmComplete({ modelId: "gemini-4-neon", ...baseReq, requireLane: "direct" })).rejects.toThrow()
+    expect(callGeminiDirect).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("gemini-3.7-flash (retired) still runs: KIE lane on 3.8's endpoint, direct lane real 3.7", () => {
   let fetchMock: ReturnType<typeof vi.fn>
 

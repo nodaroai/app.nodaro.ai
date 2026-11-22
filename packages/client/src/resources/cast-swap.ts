@@ -860,6 +860,22 @@ export interface VideoRemakeEstimate {
    * at about `expectedCredits`. `false` on Nodaro Pulse.
    */
   settlesLower: boolean
+  /**
+   * Present only while the signed-in account may still take its first
+   * Remake on us (it never bought anything and has not used it; see
+   * `UserBalance.firstRemakeOffer`). `allowed`: these options are a run the
+   * offer covers; `coverCredits`: what the offer would cover of this quote
+   * (0 when the balance covers it, or the options are not covered).
+   */
+  firstRemakeOffer?: FirstRemakeOfferQuote
+}
+
+/** `VideoRemakeEstimate.firstRemakeOffer` / `TrendEstimate.firstRemakeOffer`. */
+export interface FirstRemakeOfferQuote {
+  /** Whether this request's options are a run the offer covers. */
+  allowed: boolean
+  /** The credits the offer would cover of this quote; 0 when the balance covers it, or `allowed` is false. */
+  coverCredits: number
 }
 
 /** Per-call options for {@link VideoRemakeResource.run}. */

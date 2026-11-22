@@ -193,7 +193,6 @@ export interface EntityFinalizeInput {
     url: string
     providerUsed?: string | null
     cost?: number | null
-    displayCost?: number | null
     /** See ProviderResult.autoQualityKieCredits (GPT Image 2.6 at quality Auto). */
     autoQualityKieCredits?: number
   }
@@ -238,7 +237,6 @@ export async function finalizeEntityJob(input: EntityFinalizeInput): Promise<str
     // data-quality residual `finalizeJobWithMedia` documents at its own CAS).
     ...(result.providerUsed != null && { provider: result.providerUsed }),
     ...(result.cost != null && { provider_cost: result.cost }),
-    ...(result.displayCost != null && { display_cost: result.displayCost }),
   })
   if (!ok) return null
 

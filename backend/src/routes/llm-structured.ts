@@ -30,6 +30,7 @@ import { StructuredLlmError } from "../lib/llm/structured.js"
 import { llmErrorCode, userFacingMessage } from "../lib/user-facing-error.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { llmRunModel } from "../lib/run-model.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 /**
  * The pre-flight, the body schema and the completion live in
@@ -177,7 +178,7 @@ export async function llmStructuredRoutes(app: FastifyInstance) {
             // grant on jobs (migration 347) — while output_data is owner-
             // readable, so neither rides there.
             provider: lane,
-            provider_cost: providerCost ?? null,
+            ...(await jobCostColumns(providerCost ?? null)),
           })
           .eq("id", job.id)
           .eq("user_id", userId)

@@ -2345,6 +2345,10 @@ interface VideoRemakeEstimate {
                           // motion and motionExpected are alternatives, so read the totals, never the sum
   privacyCredits?: number // charged only if the clip is refused and the run is retried; not in the totals
   settlesLower: boolean   // Auto length (Prism): the final charge is expected to be lower
+  firstRemakeOffer?: { allowed: boolean; coverCredits: number }
+                          // FirstRemakeOfferQuote: only while the account may still take its first
+                          // Remake on us — allowed: these options are a covered run; coverCredits: what
+                          // the offer would cover of this quote (0 when the balance covers it)
 }
 
 interface VideoRemakeFullQualityEstimate {
@@ -8405,6 +8409,7 @@ Throws `UnauthorizedError` (401) when signed out.
 | `allowance` | `BalanceAllowance \| null?` | Deployment-payer instances only: `{ granted, remaining, enforced }`, the caller's own allowance in credits — the figure to show there, since `total` is the personal balance, which does not fund runs on such a deployment. `enforced: false` means it is shown, not enforced. `null` for the billing account itself or when it could not be read (never 0). Absent elsewhere. |
 | `display` | `BalanceDisplay?` | On a deployment that shows its own unit instead of credits: the same figures converted by the server. Render these as they are; never convert credits yourself. Absent where no unit is configured, and for the billing account's own read on a deployment-payer instance (its balance is the deployment's pool, kept in credits). |
 | `freeVideoLimits` | `FreeVideoLimits?` | `{ enabled, maxSeconds }`, present only while the free-credit video limits apply to this account: it never paid (no credit pack, no paid plan) and the deployment has them on. Absent = nothing is locked. See [Locking video options on free credits](#locking-video-options-on-free-credits). |
+| `firstRemakeOffer` | `FirstRemakeOfferState?` | `{ status, allowed }`, present only while the account never bought anything and has not used its first Remake on us: `status` is `"available"`, or `"in_use"` while a run holds it; `allowed` lists the runs it covers (`{ engine, resolution, preview: true }`: Nodaro Prism at 480p, Nodaro Pulse at 720p). Offer only those Video Remake options while it is present. See [API integration § First Remake on us](./api-integration.md#first-remake-on-us). |
 
 **`BalanceDisplay`:** `unit` (the unit's label), `decimals` (the places its
 figures carry, 0–4), then `total`, `subscription`, `topup`, `dailySpent`,

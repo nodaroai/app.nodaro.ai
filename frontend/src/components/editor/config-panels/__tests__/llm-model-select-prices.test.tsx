@@ -67,6 +67,17 @@ describe("LlmModelSelect prices", () => {
     expect(screen.getByTestId(`llm-model-price-${GROK}`)).toHaveTextContent("≈2 CR")
   })
 
+  it.each(["gpt-6.2-sol", "gpt-6.2-astra", "gemini-4-neon"])("a node's effort leaves the %s row on its bare key", async (model) => {
+    const key = llmPriceKey("llm-chat", model)
+    api.answer = { data: { [key]: 4 }, missing: [], estimates: [key] }
+    render(<LlmModelSelect feature="llm-chat" value={model} reasoningEffort="high" onChange={() => {}} />)
+    await waitFor(() => expect(api.calls).toHaveLength(1))
+    expect(key).toBe(`llm-chat:${model}`)
+    expect(api.calls[0]).toContain(key)
+    expect(api.calls[0]!.some((id) => id.includes(":effort-"))).toBe(false)
+    await waitFor(() => expect(screen.getByTestId("llm-model-price")).toHaveTextContent("≈4 CR"))
+  })
+
   it("a node's effort leaves the GPT-6.1 Terra row on its bare key (its price does not depend on it)", async () => {
     const terra = llmPriceKey("llm-chat", "gpt-6.1-terra")
     api.answer = { data: { [terra]: 3 }, missing: [], estimates: [terra] }
