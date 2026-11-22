@@ -14230,10 +14230,14 @@ export async function checkNodaroMotionCustomStyle(customStyle: NodaroMotionCust
 
 // ---- Admin: Video Remake's roles from the prompt (/v1/admin/video-remake/plan-roles, admin-nodaro-motion-plan-roles.ts) ----
 
-/** The engine's planning step: the admin's own instructions and model; a field left out is the engine's default. */
+/** How the engine checks a plan after it is answered: narrow checks where they apply ("targeted", the engine's default), or one more call that corrects the whole plan ("full"). */
+export type NodaroMotionPlanRolesReview = "targeted" | "full"
+
+/** The engine's planning step: the admin's own instructions, model and review mode; a field left out is the engine's default. */
 export interface NodaroMotionPlanRolesStep {
   instructions?: string
   model?: string
+  review?: NodaroMotionPlanRolesReview
 }
 
 /** The saved setting. `enabled` left out: the deployment's default. The step left out: the engine's defaults. */
@@ -14253,6 +14257,10 @@ export interface NodaroMotionPlanRolesView {
   updatedAt: string | null
   /** Whether this environment's Cast Swap engine plans roles from the prompt. */
   supported: boolean
+  /** Whether a review mode may be saved: some environment's engine reads it (absent on an older server: no). */
+  reviewSupported?: boolean
+  /** The environments whose engine does not read a review mode yet (there it is the engine's own default). */
+  reviewMissingIn?: string[]
 }
 
 /** The engine's own answer for the planning step: its default, the template of its instructions and the limits it applies (read at run time). */
@@ -14269,7 +14277,9 @@ export interface NodaroMotionPlanRolesDefaults {
   confidences?: string[]
   reasons?: unknown
   rateLimit?: { max?: number; timeWindow?: unknown }
-  defaults: { plan: { model: string; instructions: string } }
+  defaults: { plan: { model: string; instructions: string }; review?: string }
+  /** The review modes the engine reads (absent from an engine that has none). */
+  reviewModes?: string[]
   /** The default instructions with their `<max…>` placeholders, which the engine fills (an admin's own text may carry them too). */
   instructionsTemplate?: string
 }

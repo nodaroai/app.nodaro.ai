@@ -159,7 +159,7 @@ import { PRECISE_UPSCALE_ALL_OFF, effectivePreciseUpscale, engineTakesPreciseUps
 import { topazVideoDisabledHere } from "../topaz-video-availability.js"
 import { customStyleForPlugin, engineTakesCustomStyle } from "../nodaro-motion-custom-style.js"
 import { customStyleOfferedByDefault } from "../nodaro-motion-custom-style-default.js"
-import { engineTakesPlanRoles, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
+import { engineTakesPlanRoles, engineTakesPlanRolesReview, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
 import { planRolesOfferedByDefault } from "../nodaro-motion-plan-roles-default.js"
 import { engineTakesPreviz, previzForPlugin } from "../nodaro-motion-previz.js"
 import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
@@ -2531,8 +2531,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       nodaroMotionPlanRoles: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_plan_roles: the app settings could not be read")
-        if (!engineTakesPlanRoles(getPluginSupports().castSwap)) return null
-        return planRolesForPlugin(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault())
+        const cs = getPluginSupports().castSwap
+        if (!engineTakesPlanRoles(cs)) return null
+        // The step's review mode only to an engine that reads it (`castSwap.planRolesReview`).
+        return planRolesForPlugin(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault(), engineTakesPlanRolesReview(cs))
       },
       // Same rules again: a failed read throws (the engine reads that as not accepted, with an alert). Null only to
       // an engine that does not declare `castSwap.previz` (it never asks). Otherwise ALWAYS an object, never saved

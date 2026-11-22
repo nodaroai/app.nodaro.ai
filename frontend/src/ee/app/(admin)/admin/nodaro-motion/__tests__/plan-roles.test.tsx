@@ -28,7 +28,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 import { toast } from "sonner"
 import { ENVIRONMENTS, fetchMock, renderWith, resetRoutes, routes, sentTo } from "../../trends/__tests__/harness"
 import AdminNodaroMotionPage from "../page"
-import { PLAN_ROLES_SWITCH_LABEL, PLAN_ROLES_UNSUPPORTED, planRolesSwitchHint, templatePlaceholders } from "../components/PlanRolesSection"
+import { PLAN_ROLES_REVIEW, PLAN_ROLES_SWITCH_LABEL, PLAN_ROLES_UNSUPPORTED, planRolesSwitchHint, templatePlaceholders } from "../components/PlanRolesSection"
 
 const URL_ = "/v1/admin/video-remake/plan-roles"
 const ENGINES = [
@@ -61,9 +61,10 @@ interface ViewOver {
   planRoles?: unknown
   enabledByDefault?: boolean
   supported?: boolean
+  reviewSupported?: boolean
 }
 /** The GET's answer: `enabled` resolved as the server resolves it. */
-const view = ({ planRoles = null, enabledByDefault = true, supported = true }: ViewOver = {}) => {
+const view = ({ planRoles = null, enabledByDefault = true, supported = true, reviewSupported = true }: ViewOver = {}) => {
   const chosen = (planRoles as { enabled?: unknown } | null)?.enabled
   return {
     body: {
@@ -73,6 +74,7 @@ const view = ({ planRoles = null, enabledByDefault = true, supported = true }: V
         enabledByDefault,
         updatedAt: planRoles ? "2026-11-19T10:00:00.000Z" : null,
         supported,
+        reviewSupported,
       },
     },
   }
@@ -124,6 +126,7 @@ const editableInstructions = async () => {
 }
 const modelSelect = async () => within(await stepGroup()).getByRole("combobox", { name: `${STEP}: Model` })
 const saveButton = () => screen.getByRole("button", { name: "Save" })
+const reviewSelect = async () => within(await stepGroup()).getByRole("combobox", { name: `${STEP}: ${PLAN_ROLES_REVIEW.label}` })
 
 describe("Admin → Video Remake → Roles from the prompt", () => {
   it("shows the resolved switch and names this deployment's default (on), Save off", async () => {
@@ -240,6 +243,46 @@ describe("Admin → Video Remake → Roles from the prompt", () => {
     await user.selectOptions(model, "other-stand-in-model")
     await user.click(saveButton())
     await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ planRoles: { plan: { model: "other-stand-in-model" } } }]))
+  })
+
+  it("the review mode: the engine's default (targeted) unsent, the full review pass saved as the step's review, with its note", async () => {
+    const user = userEvent.setup()
+    renderWith(<AdminNodaroMotionPage />)
+    const review = await reviewSelect()
+    await waitFor(() => expect(review).toBeEnabled())
+    expect(within(review).getAllByRole("option").map((o) => o.textContent)).toEqual([PLAN_ROLES_REVIEW.defaultOption, PLAN_ROLES_REVIEW.fullOption])
+    expect(within(await stepGroup()).getByText(PLAN_ROLES_REVIEW.note)).toBeInTheDocument()
+    await user.selectOptions(review, "full")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ planRoles: { plan: { review: "full" } } }]))
+  })
+
+  it("a saved full review taken back to the default sends the step left out", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${URL_}`] = () => view({ planRoles: { plan: { review: "full" } } })
+    renderWith(<AdminNodaroMotionPage />)
+    const review = await reviewSelect()
+    await waitFor(() => expect(review).toHaveValue("full"))
+    await user.selectOptions(review, "")
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL_}`)).toEqual([{ planRoles: {} }]))
+  })
+
+  it("names the environments whose engine does not read the review mode yet", async () => {
+    routes[`GET ${URL_}`] = () => ({ body: { data: { ...view().body.data, reviewMissingIn: ["production"] } } })
+    renderWith(<AdminNodaroMotionPage />)
+    await editableInstructions()
+    expect(within(await stepGroup()).getByText(new RegExp(`Not read yet in: production`))).toBeInTheDocument()
+  })
+
+  it("where no engine reads a review mode: only the default, greyed out, and it says so", async () => {
+    routes[`GET ${URL_}`] = () => view({ reviewSupported: false })
+    renderWith(<AdminNodaroMotionPage />)
+    await editableInstructions()
+    const review = await reviewSelect()
+    expect(review).toBeDisabled()
+    expect(within(review).getAllByRole("option").map((o) => o.textContent)).toEqual([PLAN_ROLES_REVIEW.defaultOption])
+    expect(within(await stepGroup()).getByText(PLAN_ROLES_REVIEW.unsupported)).toBeInTheDocument()
   })
 
   it("Reset to default empties saved instructions, and saving sends the step left out", async () => {

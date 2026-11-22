@@ -4,6 +4,7 @@ import {
   PLAN_ROLES_INSTRUCTIONS_STORED_MAX_CHARS,
   PLAN_ROLES_MODEL_MAX_CHARS,
   engineTakesPlanRoles,
+  engineTakesPlanRolesReview,
   nodaroMotionPlanRolesSchema,
   parseNodaroMotionPlanRoles,
   planRolesEnabled,
@@ -31,7 +32,7 @@ describe("nodaro_motion_plan_roles", () => {
   })
 
   it("an admin's save is strict: the switch and the planning step, nothing else", () => {
-    for (const good of [{}, { enabled: true }, { enabled: false }, { plan: {} }, { enabled: true, plan: { instructions: "Place each image.", model: "some-model" } }]) {
+    for (const good of [{}, { enabled: true }, { enabled: false }, { plan: {} }, { enabled: true, plan: { instructions: "Place each image.", model: "some-model" } }, { plan: { review: "full" } }, { plan: { review: "targeted", model: "m" } }]) {
       expect(nodaroMotionPlanRolesSchema.safeParse(good).success, JSON.stringify(good)).toBe(true)
     }
     for (const bad of [
@@ -42,6 +43,8 @@ describe("nodaro_motion_plan_roles", () => {
       { plan: { instructions: 1 } },
       { plan: { prompt: "x" } },
       { plan: { model: ["a"] } },
+      { plan: { review: "always" } },
+      { plan: { review: true } },
       { medium: { model: "some-model" } },
       { plan: { instructions: "x".repeat(PLAN_ROLES_INSTRUCTIONS_STORED_MAX_CHARS + 1) } },
       { plan: { model: "m".repeat(PLAN_ROLES_MODEL_MAX_CHARS + 1) } },
@@ -61,6 +64,9 @@ describe("nodaro_motion_plan_roles", () => {
     expect(withoutDefaultPlanRoles({ enabled: true, plan: { instructions: "   ", model: " " } })).toEqual({ enabled: true })
     // The instructions as written, the model trimmed.
     expect(withoutDefaultPlanRoles({ plan: { instructions: " Place each image.\n", model: " some-model " } })).toEqual({ plan: { instructions: " Place each image.\n", model: "some-model" } })
+    // A step holding only its review mode is kept.
+    expect(withoutDefaultPlanRoles({ plan: { review: "full" } })).toEqual({ plan: { review: "full" } })
+    expect(withoutDefaultPlanRoles({ plan: { review: "targeted", model: " m " } })).toEqual({ plan: { review: "targeted", model: "m" } })
   })
 
   it("reads the stored row field by field: a bad field drops alone, with a warning", () => {
@@ -77,6 +83,11 @@ describe("nodaro_motion_plan_roles", () => {
     expect(warn).toHaveBeenCalledTimes(2)
     expect(parseNodaroMotionPlanRoles({ enabled: true, plan: "text" }, warn)).toEqual({ enabled: true })
     expect(warn).toHaveBeenCalledTimes(3)
+    // The review mode: kept when it is one, dropped alone (with a warning) when it is not.
+    expect(parseNodaroMotionPlanRoles({ plan: { review: "full" } }, warn)).toEqual({ plan: { review: "full" } })
+    expect(warn).toHaveBeenCalledTimes(3)
+    expect(parseNodaroMotionPlanRoles({ plan: { review: "sometimes", model: "m" } }, warn)).toEqual({ plan: { model: "m" } })
+    expect(warn).toHaveBeenCalledTimes(4)
     for (const [msg] of warn.mock.calls) expect(msg).toContain(NODARO_MOTION_PLAN_ROLES_KEY)
   })
 
@@ -90,13 +101,23 @@ describe("nodaro_motion_plan_roles", () => {
   })
 
   it("answers the engine an object every time, `enabled` resolved, the admin's step as stored, in new objects", () => {
-    expect(planRolesForPlugin(null, true)).toStrictEqual({ enabled: true })
-    expect(planRolesForPlugin(null, false)).toStrictEqual({ enabled: false })
-    expect(planRolesForPlugin({ enabled: true }, false)).toStrictEqual({ enabled: true })
+    expect(planRolesForPlugin(null, true, true)).toStrictEqual({ enabled: true })
+    expect(planRolesForPlugin(null, false, true)).toStrictEqual({ enabled: false })
+    expect(planRolesForPlugin({ enabled: true }, false, true)).toStrictEqual({ enabled: true })
     const saved = { enabled: false, plan: { instructions: "Place each image.", model: "some-model" } }
-    const got = planRolesForPlugin(saved, true)
+    const got = planRolesForPlugin(saved, true, true)
     expect(got).toStrictEqual({ enabled: false, plan: { instructions: "Place each image.", model: "some-model" } })
     expect(got.plan).not.toBe(saved.plan)
+  })
+
+  it("sends the step's review mode only to an engine that reads it (castSwap.planRolesReview)", () => {
+    const saved = { enabled: true, plan: { model: "some-model", review: "full" as const } }
+    expect(planRolesForPlugin(saved, true, true)).toStrictEqual({ enabled: true, plan: { model: "some-model", review: "full" } })
+    expect(planRolesForPlugin(saved, true, false)).toStrictEqual({ enabled: true, plan: { model: "some-model" } })
+    // A step that held only its review mode is no step to an engine that does not read it.
+    expect(planRolesForPlugin({ plan: { review: "full" } }, true, false)).toStrictEqual({ enabled: true })
+    expect(engineTakesPlanRolesReview({ planRolesReview: true })).toBe(true)
+    for (const cs of [undefined, {}, { planRoles: true }, { planRolesReview: false }]) expect(engineTakesPlanRolesReview(cs as never), JSON.stringify(cs)).toBe(false)
   })
 
   it("an engine plans roles only when it declares castSwap.planRoles", () => {

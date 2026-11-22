@@ -1089,6 +1089,14 @@ describe("tk.settings.nodaroMotionPlanRoles", () => {
     expect(await read()).toStrictEqual({ enabled: false, plan: { model: "another-model" } })
   })
 
+  it("passes the step's review mode through only to an engine that declares castSwap.planRolesReview", async () => {
+    h.planRoles = { enabled: true, plan: { model: "another-model", review: "full" } }
+    planEngine()
+    expect(await read()).toStrictEqual({ enabled: true, plan: { model: "another-model" } })
+    setPluginSupports({ castSwap: { ...CS, planRoles: true, planRolesReview: true } } as never)
+    expect(await read()).toStrictEqual({ enabled: true, plan: { model: "another-model", review: "full" } })
+  })
+
   it("an admin's saved choice wins over the deployment's default, either way", async () => {
     planEngine()
     h.planRoles = { enabled: false }

@@ -6038,6 +6038,13 @@ clip shows). An inferred role has a `confidence`: `"clear"` (exactly one
 subject of its kind fitted) or `"guess"` (the best fit among several, the
 others named in `alternatives`). Show a guess to the person before running.
 
+The plan may be checked again before it is answered, as this deployment's
+admin set it; a check can move an image the request said nothing about, or
+leave it out (`unresolved`), and can make a plan take longer: up to about
+three minutes, so wait at least 200 s for the answer. The answer has
+the same shape either way, and a role the request's own words asked for is
+never changed by a check.
+
 It starts no job, charges nothing and keeps nothing of the clip or the
 images. It needs a signed-in account and is limited per account to 6 calls a
 minute and 60 in 24 hours (both `429 rate_limit_exceeded`, with

@@ -2284,7 +2284,7 @@ fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemake
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
 advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, public
 describeStyle(params: { imageUrl: string; note?: string }): Promise<VideoRemakeDescribedStyle> // POST /v1/video-remake/describe-style, free
-planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free
+planRoles(params: VideoRemakePlanRolesParams, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free; waits 200 s by default
 artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
 previews(params?: { locale?: string }): Promise<VideoRemakePreview[]> // GET /v1/video-remake/previews, public
 ```
@@ -2605,6 +2605,11 @@ if (planRoles === true) {
   // …show the roles and the price, then client.videoRemake.run(params)
 }
 ```
+
+A plan, with the checks the server runs on it, can take up to about three
+minutes, so `planRoles()` waits 200 s by default whatever the client's
+`timeoutMs`; pass `{ timeoutMs }` as its second argument to wait another time,
+or `{ signal }` to cancel.
 
 `planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? })`
 (`POST /v1/video-remake/plan-roles`): `prompt` is the request, at most 4000

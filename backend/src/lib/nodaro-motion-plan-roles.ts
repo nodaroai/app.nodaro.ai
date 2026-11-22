@@ -7,7 +7,7 @@
  * whole deployment, never by the person running it.
  *
  * The `app_settings` row `nodaro_motion_plan_roles`:
- * `{ enabled?: boolean; plan?: { instructions?: string; model?: string } }`.
+ * `{ enabled?: boolean; plan?: { instructions?: string; model?: string; review?: "targeted" | "full" } }`.
  *
  * - `enabled`: the admin's own choice, stored only once an admin made one
  *   (either value). Absent, or no row: the deployment's default — offered on
@@ -16,7 +16,12 @@
  *   `planRolesEnabled` resolves the two; every reader goes through it.
  * - `plan`: the planning step. The admin's own `instructions` and `model`; a
  *   field left out (or blank) is the engine's default, which the engine alone
- *   holds and the admin's editor reads from it.
+ *   holds and the admin's editor reads from it. Its `review` is how the
+ *   engine checks a plan after it is answered: "targeted" (the engine's
+ *   default: narrow checks, each only where its trigger holds) or "full" (one
+ *   more call corrects the whole plan). Sent to the engine only while it
+ *   declares `castSwap.planRolesReview` (`engineTakesPlanRolesReview`); an
+ *   admin saves one only then.
  *
  * Read field by field, never by a strict schema
  * (`parseNodaroMotionPlanRoles`): the row is shared by every environment, so a
@@ -49,10 +54,17 @@ export const PLAN_ROLES_INSTRUCTIONS_STORED_MAX_CHARS = 20_000
 /** The longest model id stored for the step. */
 export const PLAN_ROLES_MODEL_MAX_CHARS = 200
 
-/** The planning step's setting: the admin's own instructions and model; a field left out is the engine's default. */
+/** How the engine checks a plan after it is answered (the step's `review`); left out: the engine's default, "targeted". */
+export const NODARO_MOTION_PLAN_ROLES_REVIEW_MODES = ["targeted", "full"] as const
+export type NodaroMotionPlanRolesReview = (typeof NODARO_MOTION_PLAN_ROLES_REVIEW_MODES)[number]
+
+const isReviewMode = (v: unknown): v is NodaroMotionPlanRolesReview => (NODARO_MOTION_PLAN_ROLES_REVIEW_MODES as readonly unknown[]).includes(v)
+
+/** The planning step's setting: the admin's own instructions, model and review mode; a field left out is the engine's default. */
 export interface NodaroMotionPlanRolesStep {
   instructions?: string
   model?: string
+  review?: NodaroMotionPlanRolesReview
 }
 
 /** The saved setting. Absent `enabled`: the deployment's default. Absent `plan`: the engine's defaults. */
@@ -64,6 +76,7 @@ export interface NodaroMotionPlanRoles {
 const stepSchema = z.strictObject({
   instructions: z.string().max(PLAN_ROLES_INSTRUCTIONS_STORED_MAX_CHARS).optional(),
   model: z.string().max(PLAN_ROLES_MODEL_MAX_CHARS).optional(),
+  review: z.enum(NODARO_MOTION_PLAN_ROLES_REVIEW_MODES).optional(),
 })
 
 /** What an admin saves: strict (an unknown key or a value of another type is refused). */
@@ -72,18 +85,19 @@ export const nodaroMotionPlanRolesSchema: z.ZodType<NodaroMotionPlanRoles> = z.s
   plan: stepSchema.optional(),
 })
 
-/** The step as stored: its instructions when they are not blank (as written), its model trimmed when it is not blank; undefined when neither. */
+/** The step as stored: its instructions when they are not blank (as written), its model trimmed when it is not blank, its review mode when it is one; undefined when none. */
 function storedStep(step: NodaroMotionPlanRolesStep | null | undefined): NodaroMotionPlanRolesStep | undefined {
   const out: NodaroMotionPlanRolesStep = {}
   if (typeof step?.instructions === "string" && step.instructions.trim() !== "") out.instructions = step.instructions
   if (typeof step?.model === "string" && step.model.trim() !== "") out.model = step.model.trim()
+  if (isReviewMode(step?.review)) out.review = step.review
   return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**
  * The setting as stored and sent: `enabled` only when an admin chose a value,
- * the step only when it holds an instruction or a model of the admin's own. A
- * new object.
+ * the step only when it holds an instruction, a model or a review mode of the
+ * admin's own. A new object.
  */
 export function withoutDefaultPlanRoles(setting: NodaroMotionPlanRoles | null | undefined): NodaroMotionPlanRoles {
   const out: NodaroMotionPlanRoles = {}
@@ -111,12 +125,14 @@ export function parseNodaroMotionPlanRoles(value: unknown, warn: (msg: string) =
     if (typeof raw !== "object" || Array.isArray(raw)) {
       warn(`[${NODARO_MOTION_PLAN_ROLES_KEY}] the planning step is not an object: the engine's defaults stand`)
     } else {
-      const { instructions, model } = raw as { instructions?: unknown; model?: unknown }
+      const { instructions, model, review } = raw as { instructions?: unknown; model?: unknown; review?: unknown }
       const step: NodaroMotionPlanRolesStep = {}
       if (typeof instructions === "string" && instructions.length <= PLAN_ROLES_INSTRUCTIONS_STORED_MAX_CHARS) step.instructions = instructions
       else if (instructions !== undefined && instructions !== null) warn(`[${NODARO_MOTION_PLAN_ROLES_KEY}] the planning step's instructions are not text this platform stores: the engine's default stands`)
       if (typeof model === "string" && model.length <= PLAN_ROLES_MODEL_MAX_CHARS) step.model = model
       else if (model !== undefined && model !== null) warn(`[${NODARO_MOTION_PLAN_ROLES_KEY}] the planning step's model is not a model id: the engine's default stands`)
+      if (isReviewMode(review)) step.review = review
+      else if (review !== undefined && review !== null) warn(`[${NODARO_MOTION_PLAN_ROLES_KEY}] the planning step's review is not a review mode: the engine's default stands`)
       out.plan = step
     }
   }
@@ -139,9 +155,22 @@ export interface NodaroMotionPlanRolesForPlugin {
   plan?: NodaroMotionPlanRolesStep
 }
 
-export function planRolesForPlugin(setting: NodaroMotionPlanRoles | null | undefined, offeredByDefault: boolean): NodaroMotionPlanRolesForPlugin {
-  const { enabled: _chosen, ...step } = withoutDefaultPlanRoles(setting)
-  return { enabled: planRolesEnabled(setting, offeredByDefault), ...step }
+/**
+ * `takesReview`: whether the engine declares `castSwap.planRolesReview` (`engineTakesPlanRolesReview`). The step's
+ * `review` is sent only then: an engine without it never reads one.
+ */
+export function planRolesForPlugin(setting: NodaroMotionPlanRoles | null | undefined, offeredByDefault: boolean, takesReview: boolean): NodaroMotionPlanRolesForPlugin {
+  const { enabled: _chosen, plan } = withoutDefaultPlanRoles(setting)
+  const enabled = planRolesEnabled(setting, offeredByDefault)
+  if (!plan) return { enabled }
+  const { review, ...rest } = plan
+  const step: NodaroMotionPlanRolesStep = takesReview && review !== undefined ? { ...rest, review } : rest
+  return Object.keys(step).length > 0 ? { enabled, plan: step } : { enabled }
+}
+
+/** Whether a Cast Swap engine reads the planning step's review mode (`castSwap.planRolesReview`): only then is a `review` saved or sent. */
+export function engineTakesPlanRolesReview(cs: { readonly planRolesReview?: boolean } | undefined): boolean {
+  return cs?.planRolesReview === true
 }
 
 /** Whether a (loaded or recorded) Cast Swap engine plans roles from the prompt (`castSwap.planRoles`). An engine without it has no such route and never reads the row. */

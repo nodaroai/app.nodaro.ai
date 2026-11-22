@@ -1134,6 +1134,12 @@ export interface VideoRemakePreview {
   href: string
 }
 
+/**
+ * How long {@link VideoRemakeResource.planRoles} waits by default: longer than the server gives the plan and its checks
+ * (about three minutes), so a slow plan is answered rather than cut off here.
+ */
+const PLAN_ROLES_TIMEOUT_MS = 200_000
+
 export class VideoRemakeResource {
   constructor(private client: NodaroClientCore) {}
 
@@ -1230,8 +1236,13 @@ export class VideoRemakeResource {
    * `planRolesPreviz` true): each role then comes back with its model's
    * locator as `name` and what it becomes as `subject`. Refusals:
    * {@link VideoRemakePlanRolesRefusalCode}.
+   *
+   * The plan and its checks can take up to about three minutes, so this call
+   * waits 200 s whatever the client's
+   * `timeoutMs`; pass `options.timeoutMs` to wait another time, and
+   * `options.signal` to cancel.
    */
-  planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> {
+  planRoles(params: VideoRemakePlanRolesParams, options: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<VideoRemakePlannedRoles> {
     const body = {
       videoUrl: params.videoUrl,
       ...(params.prompt !== undefined ? { prompt: params.prompt } : {}),
@@ -1244,7 +1255,11 @@ export class VideoRemakeResource {
       ...(params.clipKind !== undefined ? { clipKind: params.clipKind } : {}),
       ...(params.previz !== undefined ? { previz: params.previz } : {}),
     }
-    return this.client.request("POST", "/v1/video-remake/plan-roles", { body })
+    return this.client.request("POST", "/v1/video-remake/plan-roles", {
+      body,
+      timeoutMs: options.timeoutMs ?? PLAN_ROLES_TIMEOUT_MS,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    })
   }
 
   /**

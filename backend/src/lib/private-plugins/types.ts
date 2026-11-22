@@ -4378,7 +4378,10 @@ export interface PluginSettingsToolkit {
    *   Nodaro's own, off under a white-label surface profile). Only `true`
    *   offers it; a plugin cannot tell the deployments apart itself.
    * - `plan`: the admin's own instructions and model for the one LLM step
-   *   (`{ instructions?, model? }`; absent: the engine's defaults).
+   *   (`{ instructions?, model?, review? }`; absent: the engine's defaults).
+   *   `review` ("targeted" | "full"): how the engine checks a plan after it
+   *   is answered; sent only to an engine that declares
+   *   `castSwap.planRolesReview`.
    * Always an object while this host's engine declares `castSwap.planRoles`
    * (never saved answers `{ enabled }` alone); null to an engine that does not
    * declare it (it never asks). Returns a copy the plugin may change freely.
@@ -4486,7 +4489,8 @@ export type PluginNodaroMotionShotListFps = {
 /** Video Remake's plan-roles setting as a plugin is answered it: `enabled` resolved by the host, the step as an admin set it. */
 export type PluginNodaroMotionPlanRoles = {
   readonly enabled?: boolean
-  readonly plan?: PluginNodaroMotionCustomStyleStep
+  /** The planning step: a custom-style step's fields, and its `review` mode (only to an engine that declares `castSwap.planRolesReview`). */
+  readonly plan?: PluginNodaroMotionCustomStyleStep & { readonly review?: "targeted" | "full" }
 }
 
 /** One LLM step of Video Remake's custom style, as an admin set it; a field left out is the engine's default. */
@@ -5060,6 +5064,14 @@ export interface PluginSupports {
    *   the host must not send it and answers that a previz clip's roles are
    *   not planned (lib/nodaro-motion-plan-roles.ts
    *   `engineTakesPlanRolesPreviz`).
+   * - `planRolesReview`: the engine reads the planning step's `review`
+   *   (`tk.settings.nodaroMotionPlanRoles()`'s `plan.review`: "targeted",
+   *   its default — narrow checks after the plan, each only where its
+   *   trigger holds — or "full", one more call that corrects the whole
+   *   plan), and its `POST /v1/cast-swap/plan-roles-setting` answers
+   *   `reviewModes` and `defaults.review`. Additive-optional: absent ⇒ the
+   *   host neither saves nor sends a `review`
+   *   (lib/nodaro-motion-plan-roles.ts `engineTakesPlanRolesReview`).
    * - `previz`: a DIRECT run on Nodaro Prism (and its estimate) takes
    *   `clipKind: "previz"`: its clip is a 3D previz (simple untextured models
    *   moved and filmed as the video to make will be), sent as the engine's
@@ -5310,6 +5322,7 @@ export interface PluginSupports {
     readonly customStyle?: boolean
     readonly planRoles?: boolean
     readonly planRolesPreviz?: boolean
+    readonly planRolesReview?: boolean
     readonly previz?: boolean
     readonly shotLock?: boolean
     readonly shotLockRunTypes?: boolean

@@ -27,6 +27,13 @@
 // Where this environment's engine plans no roles (`supported` false, or no
 // defaults), the switch still saves; the step is greyed out, with only taking
 // back a saved value left choosable, as the preparation steps are.
+//
+// The step's review mode (`plan.review`): how the engine checks a plan after it
+// is answered. Left out: the engine's default, targeted checks; "full": one more
+// call corrects the whole plan. Choosable once some environment's engine reads
+// it (`reviewSupported`: the row is shared, one reader is enough), as the server
+// saves it only then; the environments whose engine does not read it yet are
+// named (`reviewMissingIn`). A saved mode can always be taken back.
 
 import { useEffect, useId, useState } from "react"
 import { getLlmModalityCaps } from "@nodaro/shared/llm-models"
@@ -64,22 +71,36 @@ export const PLAN_ROLES_STEP = {
   hint: "Reads the person's request and their reference images, and says which subject of the video each image replaces.",
 } as const
 
+/** The review mode's select: its label, its choices (the empty value is the engine's default) and its one-line note. */
+export const PLAN_ROLES_REVIEW = {
+  label: "Review",
+  defaultOption: "Targeted checks (default)",
+  targetedOption: "Targeted checks",
+  fullOption: "Full review pass",
+  note: "Targeted: short extra checks only where the plan placed people by itself. Full: one more model call re-checks the whole plan (slower, and it costs that call).",
+  unsupported: "No engine reads a review mode yet: each runs its own checks.",
+} as const
+
+/** Said where some environment's engine does not read the review mode yet. */
+export const planRolesReviewMissingIn = (envs: readonly string[]): string => `Not read yet in: ${envs.join(", ")} (its engine runs its own checks there).`
+
 /** The placeholders a template carries (`<maxRoles>`; an older text may still carry `<maxPersons>`, which the engine goes on filling), each once, in the order they first appear. */
 export function templatePlaceholders(template: string | undefined): string[] {
   return [...new Set(template?.match(/<max[A-Za-z0-9_]*>/g) ?? [])]
 }
 
-/** The step as saved: its instructions when not blank (as written), its model trimmed when not blank; undefined when neither. */
+/** The step as saved: its instructions when not blank (as written), its model trimmed when not blank, its review mode when one is chosen; undefined when none. */
 function stepToSaved(step: NodaroMotionPlanRolesStep | undefined): NodaroMotionPlanRolesStep | undefined {
   const out: NodaroMotionPlanRolesStep = {}
   if (typeof step?.instructions === "string" && step.instructions.trim() !== "") out.instructions = step.instructions
   if (typeof step?.model === "string" && step.model.trim() !== "") out.model = step.model.trim()
+  if (step?.review === "targeted" || step?.review === "full") out.review = step.review
   return Object.keys(out).length > 0 ? out : undefined
 }
 
 /**
  * The setting as it is saved (the server's own reading): `enabled` only when an admin chose a value, the step only when
- * it holds instructions or a model of the admin's own. A new object.
+ * it holds instructions, a model or a review mode of the admin's own. A new object.
  */
 export function planRolesToSaved(draft: NodaroMotionPlanRoles | null | undefined): NodaroMotionPlanRoles {
   const out: NodaroMotionPlanRoles = {}
@@ -185,6 +206,8 @@ export function PlanRolesSection({ view, value, onChange, saveError }: Props) {
         defaults={defaults}
         template={answer?.instructionsTemplate}
         models={defaults ? models : undefined}
+        reviewSupported={view.reviewSupported === true}
+        reviewMissingIn={view.reviewMissingIn ?? []}
         problems={under(problems, "planRoles.plan")}
         onChange={setStep}
       />
@@ -214,18 +237,23 @@ interface StepProps {
   /** The engine's default instructions with their placeholders (absent: nothing to start from). */
   readonly template: string | undefined
   readonly models: readonly AdminLlmModel[] | undefined
-  /** The problems for this step, their paths relative to it ("instructions", "model"; "" for the step itself). */
+  /** Whether this environment's engine reads the review mode (else only a saved one can be taken back). */
+  readonly reviewSupported: boolean
+  /** The environments whose engine does not read it yet. */
+  readonly reviewMissingIn: readonly string[]
+  /** The problems for this step, their paths relative to it ("instructions", "model", "review"; "" for the step itself). */
   readonly problems: readonly NodaroMotionPlanRolesProblem[]
   readonly onChange: (next: NodaroMotionPlanRolesStep | undefined) => void
 }
 
-function StepEditor({ title, hint, value, defaults, template, models, problems, onChange }: StepProps) {
+function StepEditor({ title, hint, value, defaults, template, models, reviewSupported, reviewMissingIn, problems, onChange }: StepProps) {
   const id = useId()
   const disabled = !defaults
   const set = (patch: Partial<NodaroMotionPlanRolesStep>) => {
     const next: NodaroMotionPlanRolesStep = { ...(value ?? {}), ...patch }
     if (next.instructions === undefined || next.instructions === "") delete next.instructions
     if (next.model === undefined || next.model === "") delete next.model
+    if (next.review !== "targeted" && next.review !== "full") delete next.review
     onChange(Object.keys(next).length > 0 ? next : undefined)
   }
   // The step is shown the person's reference images: only the models that take images are offered.
@@ -233,7 +261,9 @@ function StepEditor({ title, hint, value, defaults, template, models, problems, 
   const model = value?.model ?? ""
   const unlisted = model !== "" && !offered.some((m) => m.id === model)
   const at = (field: string) => problems.filter((p) => p.path === field || p.path.startsWith(`${field}.`))
-  const others = problems.filter((p) => !["instructions", "model"].includes(p.path.split(".")[0] ?? ""))
+  const others = problems.filter((p) => !["instructions", "model", "review"].includes(p.path.split(".")[0] ?? ""))
+  const review = value?.review ?? ""
+  const canReview = !!defaults && reviewSupported
   const placeholders = defaults ? templatePlaceholders(template) : []
 
   return (
@@ -313,6 +343,29 @@ function StepEditor({ title, hint, value, defaults, template, models, problems, 
             ` Start from the default puts in its template: the engine fills ${placeholders.join(", ")} at run time, in its text and in yours.`}
         </span>
         <Problems list={at("instructions")} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`${id}-review`} className="font-medium">
+          <span className="sr-only">{title}:</span> {PLAN_ROLES_REVIEW.label}
+        </label>
+        <select
+          id={`${id}-review`}
+          className="h-9 min-h-9 rounded-md border bg-background px-2 text-sm"
+          value={review}
+          // A saved mode can always be taken back, even where this environment's engine does not read one.
+          disabled={!canReview && review === ""}
+          aria-describedby={`${id}-review-hint`}
+          onChange={(e) => set({ review: e.target.value === "" ? undefined : (e.target.value as NodaroMotionPlanRolesStep["review"]) })}
+        >
+          <option value="">{PLAN_ROLES_REVIEW.defaultOption}</option>
+          {review === "targeted" && <option value="targeted">{PLAN_ROLES_REVIEW.targetedOption}</option>}
+          {(canReview || review === "full") && <option value="full">{PLAN_ROLES_REVIEW.fullOption}</option>}
+        </select>
+        <span id={`${id}-review-hint`} className="text-xs text-muted-foreground">
+          {defaults && !reviewSupported ? PLAN_ROLES_REVIEW.unsupported : PLAN_ROLES_REVIEW.note}
+          {defaults && reviewSupported && reviewMissingIn.length > 0 && ` ${planRolesReviewMissingIn(reviewMissingIn)}`}
+        </span>
+        <Problems list={at("review")} />
       </div>
       <Problems list={others} />
     </div>
