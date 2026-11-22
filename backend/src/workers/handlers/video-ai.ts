@@ -170,6 +170,7 @@ import { handleCinematicAvatar } from "./heygen-cinematic.js"
 import { handleBeebleSwitchX } from "./beeble-switchx.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { uploadSwapWithSourceAudio } from "./face-swap-audio.js"
+import { faceSwapFaceImage } from "../../lib/face-swap-face-image.js"
 import { DeterministicJobError, isDeterministicJobError } from "../../lib/deterministic-job-error.js"
 import {
   providerKindForVideoModel,
@@ -2455,9 +2456,12 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   }
   console.log(`[worker] face-swap ${ctx.jobId}`)
 
+  // A large, transparent or sideways face photo failed the swap model: it is
+  // sent as an upright JPEG of a size the model handles.
+  const faceToSend = await faceSwapFaceImage(faceImageUrl, ctx.jobId)
   const faceSwapOnTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
   const { videoUrl: outputUrl, cost } = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
-    replicateFaceSwap(faceImageUrl, videoUrl, { onTaskCreated: faceSwapOnTaskCreated }),
+    replicateFaceSwap(faceToSend, videoUrl, { onTaskCreated: faceSwapOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
 

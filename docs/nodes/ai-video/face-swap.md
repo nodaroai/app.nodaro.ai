@@ -15,7 +15,7 @@ The Face Swap node takes a video and a reference face image and replaces the fac
 ## Inputs & Outputs
 
 **Inputs:**
-- Face Image (required) — clear photo of the target face to apply. Connect an uploaded or generated image, or a Face or Character node (its portrait is used).
+- Face Image (required) — clear photo of the target face to apply. Connect an uploaded or generated image, or a Face or Character node (its portrait is used). Any size or format works: a photo longer than 1280 pixels on its long side, a transparent one, a non-JPEG one or a phone photo saved sideways is sent upright, as a JPEG fitted to 1280 pixels (on white where it was transparent).
 - Video (required) — source video containing the face to replace, up to **60 seconds** long
 
 A run without both inputs stops before it starts and names the missing one; no credits are charged.
