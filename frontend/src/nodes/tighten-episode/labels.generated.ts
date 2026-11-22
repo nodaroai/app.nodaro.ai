@@ -2,18 +2,21 @@
 
 export const labels = {
   "Master audio": {
+    "es": "Audio maestro",
     "he": "אודיו ראשי",
     "ja": "マスターオーディオ",
     "ko": "마스터 오디오",
     "pt-br": "Áudio principal"
   },
   "Recordings": {
+    "es": "Grabaciones",
     "he": "הקלטות",
     "ja": "録音",
     "ko": "녹음",
     "pt-br": "Gravações"
   },
   "Tighten Episode": {
+    "es": "Condensar episodio",
     "he": "הידוק פרק",
     "ja": "エピソードを引き締める",
     "ko": "에피소드 다듬기",

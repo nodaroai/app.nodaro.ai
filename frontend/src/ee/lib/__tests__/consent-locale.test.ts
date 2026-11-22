@@ -11,7 +11,7 @@ beforeEach(() => useLocaleStore.setState({ locale: "en" }))
 afterEach(() => useLocaleStore.setState({ locale: "en" }))
 
 describe("consentInterfaceLocale", () => {
-  it.each(["en", "he", "ja", "ko", "pt-BR"] as const)("is %s when that is the interface language and its chrome is translated", (locale) => {
+  it.each(["en", "es", "he", "ja", "ko", "pt-BR"] as const)("is %s when that is the interface language and its chrome is translated", (locale) => {
     useLocaleStore.setState({ locale })
     expect(consentInterfaceLocale()).toBe(locale)
   })

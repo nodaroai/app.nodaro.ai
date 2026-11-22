@@ -10,6 +10,7 @@ import { centralMentions, composerExportProblems, loadTimeRegistryReads, sideEff
 import { AGGREGATE_FILE, collectRegistries } from "../../../tools/test-select/registry.mjs"
 import { parseRegistryAnnotations } from "../../../tools/test-select/annotations.mjs"
 import { GEN_UNITS_OUTPUTS } from "../../../tools/units/gen.mjs"
+import { DICT_LOCALES } from "../../../tools/units/vocabulary.mjs"
 import { matchesAny } from "../../../tools/test-select/glob.mjs"
 import { isProductFile } from "../../../tools/structure/scanner.mjs"
 
@@ -34,7 +35,8 @@ const tracked = execFileSync("git", ["ls-files", "frontend/src", "backend/src", 
 const products = tracked.filter((p) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs)$/.test(p) && isProductFile(p))
 const units = loadUnits(ROOT)
 const unitTypes = units.map((u) => u.type)
-const DICTS = ["en", "he", "ja", "ko", "pt-br"].map((l) => `frontend/src/lib/i18n/${l}.ts`)
+// The complete dicts a strings.json key is spliced into (gen:units), so a new language is checked the day it joins.
+const DICTS = DICT_LOCALES.map((l: string) => `frontend/src/lib/i18n/${l}.ts`)
 const centralList = JSON.parse(read("tools/units/central-mentions.json")).mentions as Record<string, Record<string, string>>
 
 const inUnit = (p: string, type: string) => p.startsWith(`frontend/src/nodes/${type}/`) || p.startsWith(`backend/src/nodes/${type}/`)

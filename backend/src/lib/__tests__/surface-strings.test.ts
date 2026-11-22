@@ -265,7 +265,7 @@ describe("resolveSurfaceStrings — drop each bad entry with a warning, keep the
     warn.mockClear()
     expect(resolveFlow(raw)).toEqual(raw)
     expect(resolveFlow({ flow: { de: { [KEY]: "Keine Credits mehr." } } })).toBeUndefined()
-    expect(warn).toHaveBeenCalledWith("[surface-profile] strings.flow.de dropped — de is not offered (flow offers: en, he, ja, ko, pt-BR)")
+    expect(warn).toHaveBeenCalledWith(`[surface-profile] strings.flow.de dropped — de is not offered (flow offers: ${PLATFORM_LANGUAGES.join(", ")})`)
   })
 
   it("an unknown locale, a second spelling of one, and a non-object block are each dropped", () => {

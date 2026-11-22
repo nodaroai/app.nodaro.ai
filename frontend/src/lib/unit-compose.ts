@@ -667,13 +667,16 @@ export function unitSideBatchPatch(
 }
 
 /** The node-label tables' unit rows, by app locale ("pt-br" in strings.json is "pt-BR"). */
-export function unitNodeLabels(labels: ReadonlyArray<UnitLabels>): Partial<Record<"he" | "ja" | "ko" | "pt-BR", Record<string, string>>> {
-  const out: Partial<Record<"he" | "ja" | "ko" | "pt-BR", Record<string, string>>> = {}
+/** The interface languages a unit's strings.json `labels` carry (its "pt-br" key is the "pt-BR" locale). */
+export type UnitLabelLocaleId = "es" | "he" | "ja" | "ko" | "pt-BR"
+
+export function unitNodeLabels(labels: ReadonlyArray<UnitLabels>): Partial<Record<UnitLabelLocaleId, Record<string, string>>> {
+  const out: Partial<Record<UnitLabelLocaleId, Record<string, string>>> = {}
   for (const table of labels) {
     for (const [label, byLocale] of Object.entries(table)) {
       for (const [locale, text] of Object.entries(byLocale)) {
         if (!text) continue
-        const id = locale === "pt-br" ? "pt-BR" : (locale as "he" | "ja" | "ko")
+        const id: UnitLabelLocaleId = locale === "pt-br" ? "pt-BR" : (locale as Exclude<UnitLabelLocaleId, "pt-BR">)
         out[id] = { ...(out[id] ?? {}), [label]: text }
       }
     }

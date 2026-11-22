@@ -119,6 +119,7 @@ describe("a fresh run", () => {
       ["ja", "先に「エピソードを引き締める」に録音を接続してください"],
       ["ko", "먼저 “에피소드 다듬기”에 녹음을 연결하세요"],
       ["pt-BR", "Conecte primeiro uma gravação ao Enxugar episódio"],
+      ["es", "Conecta primero una grabación a Condensar episodio"],
     ]
     try {
       for (const [locale, sentence] of CASES) {

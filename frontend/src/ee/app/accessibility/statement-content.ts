@@ -300,12 +300,61 @@ const PT_BR: StatementContent = {
   },
 }
 
+const ES: StatementContent = {
+  lang: "es",
+  pageTitle: "Declaración de accesibilidad",
+  backToSite: "Volver al sitio",
+  title: "Declaración de accesibilidad",
+  intro:
+    "En Nodaro queremos que todo el mundo pueda usar nuestro producto, incluidas las personas con discapacidad. Nodaro es un único producto, formado por {products}. Esta declaración se aplica a todos ellos y describe su accesibilidad, conforme a la normativa israelí Equal Rights for Persons with Disabilities (Service Accessibility Adjustments) Regulations, 2013.",
+  levelTitle: "Nivel de accesibilidad",
+  level:
+    "Hemos realizado ajustes de accesibilidad en Nodaro siguiendo la norma israelí SI 5568 (parte 1, septiembre de 2023), que se basa en las pautas WCAG 2.0 en su nivel AA.",
+  doneTitle: "Qué hemos hecho accesible",
+  done: [
+    "Navegación mediante el teclado, con una indicación clara de dónde está el foco.",
+    "Compatibilidad con lectores de pantalla: los botones, los campos y las áreas de la página tienen nombres adecuados.",
+    "Un enlace «Saltar al contenido» y un nombre propio para cada página principal.",
+    "Estructura de encabezados y etiquetas para los campos de los formularios.",
+    "Contraste de color conforme a la norma en los botones y el texto de la interfaz, y texto con un tamaño legible.",
+    "Diseños para equipos de escritorio y teléfonos, y ampliación con el zoom del navegador.",
+    "Esta declaración y el menú de accesibilidad en todos los idiomas de la interfaz; la interfaz en hebreo se lee de derecha a izquierda.",
+    "Menos animaciones y transiciones para quien haya activado «Reducir movimiento» en su dispositivo.",
+    "En el editor de flujos de trabajo de App puedes moverte entre los nodos y conectarlos desde el teclado.",
+  ],
+  menuTitle: "El menú de accesibilidad",
+  menu:
+    "Un botón en la esquina de la pantalla abre el menú de accesibilidad, y Alt+A lo abre en cualquier página. En el menú puedes agrandar el texto, aumentar el contraste, invertir los colores, cambiar a contraste fuerte (amarillo sobre negro), resaltar los enlaces y los títulos, cambiar a una fuente legible, aumentar el espaciado, agrandar el cursor y reducir el movimiento. Solo puede estar activa una opción de contraste a la vez. También puedes ocultar el botón durante un mes, tres meses o seis meses; mientras está oculto, Alt+A sigue abriendo el menú. En el menú común a todos los productos también puedes mover el botón a otro lugar de la pantalla, y permanece allí. El menú es el mismo en todos los productos, y las opciones que elijas se guardan en tu navegador: se conservan para tu próxima visita y te acompañan de un producto a otro.",
+  limitsTitle: "Contenido que no es totalmente accesible",
+  limitsIntro: "A pesar de nuestros esfuerzos, es posible que algunos contenidos no sean totalmente accesibles:",
+  limits: [
+    "Imágenes, videos y audio que los usuarios crean o suben, incluido el contenido generado por IA.",
+    "Los editores integrados de imagen, audio y video, que provienen de terceros.",
+  ],
+  limitsOutro: "Si te encuentras con alguna dificultad, escríbenos y te ayudaremos.",
+  reportTitle: "¿Has encontrado un problema de accesibilidad?",
+  reportIntro: "Cuéntanos qué intentabas hacer y en qué página. Cada informe nos llega directamente. También puedes escribirnos por correo electrónico:",
+  updated: "Esta declaración se actualizó por última vez el 26 de octubre de 2026.",
+  form: {
+    message: "¿Cuál es el problema? (obligatorio)",
+    messageMissing: "Escribe unas palabras sobre el problema.",
+    page: "¿En qué página? (opcional)",
+    contact: "¿Cómo podemos contactarte? Correo electrónico o teléfono (opcional)",
+    send: "Enviar informe",
+    sending: "Enviando…",
+    sent: "Gracias. Tu informe nos ha llegado y lo atenderemos.",
+    failed: "No se pudo enviar el informe. Como alternativa, puedes escribirnos por correo electrónico.",
+    rateLimited: "Has enviado varios informes seguidos. Vuelve a intentarlo dentro de unos minutos o escríbenos por correo electrónico.",
+  },
+}
+
 export const STATEMENT_CONTENT: Partial<Record<LocaleId, StatementContent>> = {
   he: HE,
   en: EN,
   ja: JA,
   ko: KO,
   "pt-BR": PT_BR,
+  es: ES,
 }
 
 /** The copy for the interface language, or the English one. */

@@ -832,7 +832,7 @@ test("appFields: a field is one of the node's settings, exposed once, starting a
   expectProblem(problemsAfter((root) => rmSync(path.join(root, UNIT, "types.ts"))), /^fixture-echo: appFields needs frontend\/src\/nodes\/fixture-echo\/types\.ts: each field's values are held to its data type there/)
 })
 
-test("appFields: every label is a key of the unit's own strings.json (all five dicts)", () => {
+test("appFields: every label is a key of the unit's own strings.json (all six dicts)", () => {
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).labelKey = "field.size" })), /^fixture-echo: appFields\[0\]\.labelKey: "field\.size" is not a key of the unit's strings\.json keys/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { sizeField(m).options[0].labelKey = "fixtureEcho.size.nope" })), /^fixture-echo: appFields\[0\] \("size"\)\.options\[0\]\.labelKey: "fixtureEcho\.size\.nope" is not a key/)
   expectProblem(problemsAfter((root) => withManifest(root, (m) => { delete layersField(m).labelKey })), /^fixture-echo: appFields\[1\]\.labelKey must be a message key of the unit's strings\.json keys$/)

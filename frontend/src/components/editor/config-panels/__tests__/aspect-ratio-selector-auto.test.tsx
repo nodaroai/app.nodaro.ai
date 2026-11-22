@@ -27,9 +27,10 @@ describe("the Auto tile on a source-photo node", () => {
     expect(localizeOptionLabel(SOURCE_PHOTO_AUTO_LABEL, "ja")).toBe("自動（写真に合わせる）")
     expect(localizeOptionLabel(SOURCE_PHOTO_AUTO_LABEL, "ko")).toBe("자동(사진에 맞춤)")
     expect(localizeOptionLabel(SOURCE_PHOTO_AUTO_LABEL, "pt-BR")).toBe("Automático (Conforme a foto)")
+    expect(localizeOptionLabel(SOURCE_PHOTO_AUTO_LABEL, "es")).toBe("Automático (Igual que la foto)")
   })
 
-  for (const [locale, word] of [["en", "Auto"], ["he", "אוטומטי"], ["ja", "自動"], ["ko", "자동"], ["pt-BR", "Automático"]] as const) {
+  for (const [locale, word] of [["en", "Auto"], ["he", "אוטומטי"], ["ja", "自動"], ["ko", "자동"], ["pt-BR", "Automático"], ["es", "Automático"]] as const) {
     it(`shows "${word}" on the tile and the whole label as its tooltip (${locale})`, () => {
       act(() => useLocaleStore.getState().setLocale(locale))
       render(<AspectRatioSelector options={options} value="auto" onValueChange={() => {}} />)

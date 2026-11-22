@@ -1,5 +1,5 @@
 /**
- * The UGC node strings in the five complete dictionaries.
+ * The UGC node strings in the six complete dictionaries.
  *
  * - A sentence a UGC node fails with is, in English, exactly what the node writes: both engines
  *   write the shared English (`UGC_NODE_MESSAGES`), so the dictionary's English can never drift
@@ -14,12 +14,13 @@ import { UGC_CREATOR_NO_IMAGE_KEY, UGC_NODE_MESSAGE_KEYS, UGC_SCRIPT_NEEDS_CHANG
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { LABEL_TABLES } from "../labels"
 import { en, type MessageKey } from "../en"
+import { es } from "../es"
 import { he } from "../he"
 import { ja } from "../ja"
 import { ko } from "../ko"
 import { ptBR } from "../pt-br"
 
-const LOCALES = { he, ja, ko, "pt-BR": ptBR } as const
+const LOCALES = { es, he, ja, ko, "pt-BR": ptBR } as const
 const HEBREW = /[֐-׿]/
 
 /** Every key the UGC nodes brought: their cards, panels, prices, messages and the run's pick. */

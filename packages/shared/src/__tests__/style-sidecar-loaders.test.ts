@@ -25,5 +25,6 @@ describe("STYLE_SIDECAR_LOADERS", () => {
     expect(labels["./style.he.ts"]).toBe("צבעי מים")
     expect(labels["./style.ja.ts"]).toBe("水彩画")
     expect(labels["./style.pt-BR.ts"]).toBe("Aquarela")
+    expect(labels["./style.es.ts"]).toBe("Acuarela")
   })
 })

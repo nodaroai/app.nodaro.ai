@@ -120,6 +120,8 @@ describe("QueueBadge", () => {
     expect(queueBadgeText("en", { ...OWN_LINE, limit: 1 }).line).toBe("Waiting — 3rd in line, your plan runs 1 at once")
     expect(queueBadgeText("pt-BR", run(1)).line).toContain("permite 1 execução por vez")
     expect(queueBadgeText("pt-BR", run(4)).line).toContain("permite 4 execuções por vez")
+    expect(queueBadgeText("es", run(1)).line).toContain("permite 1 ejecución a la vez")
+    expect(queueBadgeText("es", run(4)).line).toContain("permite 4 ejecuciones a la vez")
     expect(queueBadgeText("he", run(1)).line).toContain("הרצה אחת")
     expect(queueBadgeText("he", { ...OWN_LINE, limit: 1 }).line).toContain("משימה אחת")
     expect(queueBadgeText("he", { ...OWN_LINE, limit: 4 }).line).toContain("4 משימות")
@@ -145,11 +147,12 @@ describe("queue ordinals", () => {
     expect(queueOrdinal("ja", 2)).toBe("2 番目")
     expect(queueOrdinal("ko", 2)).toBe("2번째")
     expect(queueOrdinal("pt-BR", 2)).toBe("2º")
+    expect(queueOrdinal("es", 2)).toBe("2.º")
   })
 
   it("a stub locale shows the English words with English rules", () => {
-    // Spanish ordinal rules put every number in "other": "1th" if they picked.
-    expect(queueOrdinal("es", 1)).toBe("1st")
-    expect(queueBadgeText("es", OWN_LINE).line).toBe("Waiting — 3rd in line, your plan runs 4 at once")
+    // German ordinal rules put every number in "other": "1th" if they picked.
+    expect(queueOrdinal("de", 1)).toBe("1st")
+    expect(queueBadgeText("de", OWN_LINE).line).toBe("Waiting — 3rd in line, your plan runs 4 at once")
   })
 })

@@ -54,13 +54,15 @@ vocabulary, e.g. `{ "workspace": "Cohort" }`). Both are replaced wholesale
 when updated, never merged.
 
 The interface shows the workspace word inside sentences. In languages with
-grammatical gender, such as Hebrew and Portuguese, the rest of the sentence
-agrees with the word. When you set your own `workspace` word, also set
+grammatical gender, such as Hebrew, Portuguese and Spanish, the rest of the
+sentence agrees with the word. When you set your own `workspace` word, also set
 `workspace_gender` to `"m"` or `"f"` in the same `vocabulary_overrides`
 object, for example `{ "workspace": "Grupo", "workspace_gender": "m" }`.
-Without it, the interface treats your word as feminine, the gender of the
-default words ("Class" and "Team" in those languages). Because the object is
-replaced wholesale, an update that omits `workspace_gender` removes it.
+Without it, the interface treats your word as feminine. The default words
+carry their own gender in each language: "Class" and "Team" are feminine in
+Hebrew and Portuguese; in Spanish "Team" (equipo) is masculine and "Class"
+(clase) feminine. Because the object is replaced wholesale, an update that
+omits `workspace_gender` removes it.
 
 Defaults by kind — **school**: admins edit, workflows private, members view
 shared work, members cannot create projects, caps on, personal space on,

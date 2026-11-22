@@ -63,7 +63,7 @@ function renderPanel(Panel: typeof LightingConfig, type: string, data: Record<st
 
 const text = (id: string) => screen.getByTestId(id).textContent
 
-describe.each(["ja", "pt-BR"] as const)("the picker panels in %s", (locale) => {
+describe.each(["es", "ja", "pt-BR"] as const)("the picker panels in %s", (locale) => {
   it("Lighting: section names, search, empty state and the multi-pick hint", () => {
     setLocale(locale)
     renderPanel(LightingConfig, "lighting", { label: "Lighting" })

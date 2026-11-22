@@ -40,6 +40,13 @@ describe("resolveInitialLocale — deployment default locale (A3)", () => {
     expect(resolveInitialLocale()).toBe("pt-BR")
   })
 
+  it("maps every region of Spanish to the one Spanish we ship (es-ES, es-419, es-MX → es)", () => {
+    for (const tag of ["es-ES", "es-419", "es-MX", "ES-mx", "es"]) {
+      window.__NODARO_RUNTIME__ = { defaultLocale: tag }
+      expect(resolveInitialLocale(), tag).toBe("es")
+    }
+  })
+
   it("does not remap a region we do not ship — zh-TW is not zh-CN", () => {
     const detected = resolveInitialLocale()
     window.__NODARO_RUNTIME__ = { defaultLocale: "zh-TW" }
@@ -122,6 +129,20 @@ describe("resolveInitialLocale — browser detection lands only on offered local
     withBrowserLanguages(["pt-PT"], () => {
       expect(resolveInitialLocale()).toBe("pt-BR")
     })
+  })
+
+  it("a Spanish browser from Spain lands on Spanish (offered)", () => {
+    withBrowserLanguages(["es-ES", "es"], () => {
+      expect(resolveInitialLocale()).toBe("es")
+    })
+  })
+
+  it("a Latin American Spanish browser lands on Spanish, with or without its bare tag", () => {
+    for (const tags of [["es-419", "es"], ["es-MX"], ["es-AR", "en"]]) {
+      withBrowserLanguages(tags, () => {
+        expect(resolveInitialLocale(), tags.join(", ")).toBe("es")
+      })
+    }
   })
 
   it("a Traditional Chinese browser does not land on Simplified Chinese", () => {

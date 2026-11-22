@@ -8,8 +8,8 @@ import { WORKSPACE_SENTENCE_MASCULINE, genderedWorkspaceKey } from "../org-vocab
 
 /**
  * The organization's workspace word ("Class", "Team", or a word the
- * organization chose) lands in sentences that, in Hebrew and Portuguese,
- * agree with its gender. Each such sentence has a masculine variant chosen by
+ * organization chose) lands in sentences that, in Hebrew, Portuguese and
+ * Spanish, agree with its gender. Each such sentence has a masculine variant chosen by
  * the word's gender; a sentence that reads the same either way is declared
  * neutral here. A new sentence with the word must take one side, or a
  * masculine word renders with feminine agreement ("צוות זו", "Esta grupo").
@@ -95,8 +95,12 @@ describe("sentences built around the workspace word", () => {
     expect(translate("pt-BR", genderedWorkspaceKey("org.newWorkspace", "m"), { workspace: "grupo" })).toBe("Novo grupo")
     expect(translate("he", genderedWorkspaceKey("org.joinCodeDesc", "m"), { workspace: "צוות" })).toContain("ל־צוות זה כחבר")
     expect(translate("pt-BR", genderedWorkspaceKey("org.joinCodeDesc", "m"), { workspace: "grupo" })).toContain("neste grupo")
+    expect(translate("es", genderedWorkspaceKey("org.workspaceIsArchived", "m"), { workspace: "equipo" })).toBe("Este equipo está archivado.")
+    expect(translate("es", genderedWorkspaceKey("org.newWorkspace", "m"), { workspace: "equipo" })).toBe("Nuevo equipo")
+    expect(translate("es", genderedWorkspaceKey("org.joinCodeDesc", "m"), { workspace: "equipo" })).toContain("a este equipo")
     // The feminine base is untouched.
     expect(translate("he", genderedWorkspaceKey("org.workspaceIsArchived", "f"), { workspace: "כיתה" })).toBe("כיתה זו בארכיון.")
+    expect(translate("es", genderedWorkspaceKey("org.workspaceIsArchived", "f"), { workspace: "clase" })).toBe("Esta clase está archivada.")
   })
 
   it("is only ever rendered through the gender — no call site uses a gendered key directly", () => {

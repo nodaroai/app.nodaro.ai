@@ -108,5 +108,6 @@ describe("Clip Pack is registered everywhere it must be", () => {
     expect(localizeNodeLabel("Clip Pack", "ja")).toBe("クリップパック")
     expect(localizeNodeLabel("Clip Pack", "ko")).toBe("클립 세트")
     expect(localizeNodeLabel("Clip Pack", "pt-BR")).toBe("Pacote de clipes")
+    expect(localizeNodeLabel("Clip Pack", "es")).toBe("Paquete de clips")
   })
 })

@@ -56,8 +56,8 @@ const genderOf = (value: string | undefined): WorkspaceGender => (value?.trim().
 /**
  * The gender of the workspace word the interface will show: a translated
  * default declares its own in the dictionary; an organization's own word
- * takes its `workspace_gender` override (feminine when none is given, the
- * gender of every default); with no word at all, the generic fallback word's.
+ * takes its `workspace_gender` override (feminine when none is given); with
+ * no word at all, the generic fallback word's.
  */
 function resolveWorkspaceGender(
   vocabulary: Readonly<Record<string, string>>,
@@ -110,10 +110,11 @@ export function workspaceGender(vocabulary: Readonly<Record<string, string>>, t:
 /**
  * The sentences built around the workspace word whose wording agrees with the
  * word's gender, each with its masculine form. The base key is written for a
- * feminine word, because every default (Class, Team, the generic fallback) is
- * feminine in the gendered languages we ship; an organization's own masculine
- * word takes the variant. A language without grammatical gender gives both
- * the same text. `org-workspace-gender.test.ts` makes every sentence with the
+ * feminine word and the variant for a masculine one, picked by the word's own
+ * gender: each dictionary declares its defaults' (Hebrew and Portuguese are
+ * feminine; Spanish "equipo" and "espacio de trabajo" are masculine, "clase"
+ * feminine), and an organization's own word takes its override. A language
+ * without grammatical gender gives both the same text. `org-workspace-gender.test.ts` makes every sentence with the
  * word either appear here or be declared neutral.
  */
 export const WORKSPACE_SENTENCE_MASCULINE: Readonly<Partial<Record<MessageKey, MessageKey>>> = {

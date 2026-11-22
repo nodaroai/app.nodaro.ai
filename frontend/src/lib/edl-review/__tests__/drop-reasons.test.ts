@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { translate } from "@/lib/i18n"
 import { en } from "@/lib/i18n/en"
+import { es } from "@/lib/i18n/es"
 import { he } from "@/lib/i18n/he"
 import { ja } from "@/lib/i18n/ja"
 import { ko } from "@/lib/i18n/ko"
@@ -14,11 +15,11 @@ describe("the drop-reason display registry", () => {
     expect([...DROP_REASONS].sort()).toEqual(["false-start", "filler", "manual", "no-picture", "silence", "tangent"])
   })
 
-  it("labels each reason in all five complete dictionaries", () => {
+  it("labels each reason in all six complete dictionaries", () => {
     for (const reason of DROP_REASONS) {
       const label = dropReasonLabel(reason, t)
       expect(label, reason).not.toBe(reason)
-      for (const [locale, dict] of [["en", en], ["he", he], ["ja", ja], ["ko", ko], ["pt-br", ptBR]] as const) {
+      for (const [locale, dict] of [["en", en], ["es", es], ["he", he], ["ja", ja], ["ko", ko], ["pt-br", ptBR]] as const) {
         const value = dropReasonLabel(reason, (key) => (dict as Record<string, string>)[key] ?? "")
         expect(value, `${locale}: ${reason}`).not.toBe("")
       }

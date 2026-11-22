@@ -10,6 +10,12 @@ describe("copilot reply language", () => {
     expect(line).toContain("exactly as they are")
   })
 
+  it("asks for Spanish replies when the interface is read in Spanish", () => {
+    const line = replyLanguageLine("es")
+    expect(line).toContain("Spanish (es)")
+    expect(line).toContain("Write every reply in Spanish")
+  })
+
   it("adds nothing for English, an unknown locale, or no locale — the turn stays byte-identical", () => {
     expect(replyLanguageLine("en")).toBeNull()
     expect(replyLanguageLine("zz")).toBeNull()

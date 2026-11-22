@@ -104,7 +104,7 @@ export const PROJECTIONS = [
 export const SPLICES = [
   {
     id: "i18n",
-    files: ["en", "he", "ja", "ko", "pt-br"].map((l) => ({ locale: l, path: `frontend/src/lib/i18n/${l}.ts` })),
+    files: ["en", "es", "he", "ja", "ko", "pt-br"].map((l) => ({ locale: l, path: `frontend/src/lib/i18n/${l}.ts` })),
     start: "  // gen:units start",
     end: "  // gen:units end",
     live: true,

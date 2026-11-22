@@ -442,8 +442,8 @@ describe("the other cards read only what they show", () => {
 describe("every UGC label is in every locale", () => {
   const locales = Object.keys(LABEL_TABLES) as Array<keyof typeof LABEL_TABLES>
 
-  it("covers the four locales with label tables", () => {
-    expect([...locales].sort()).toEqual(["he", "ja", "ko", "pt-BR"])
+  it("covers the five locales with label tables", () => {
+    expect([...locales].sort()).toEqual(["es", "he", "ja", "ko", "pt-BR"])
   })
 
   it.each(locales)("%s: the node labels and the family label", (locale) => {
@@ -458,7 +458,9 @@ describe("every UGC label is in every locale", () => {
   it.each(locales)("%s: every input pip label, the numbered screenshot slots included", (locale) => {
     const labels = Object.values(UGC_TARGET_HANDLES).flatMap((rows) => rows.map((r) => r.label))
     expect(labels).toContain("Screenshot 8")
-    const untranslated = labels.filter((l) => localizeHandleLabel(l, locale!) === l)
+    // A row in the locale's handle table is its reviewed word, even one it shares with English
+    // (Spanish "Video", "Clip"); a numbered slot translates through its dictionary key.
+    const untranslated = labels.filter((l) => !(l in (LABEL_TABLES[locale!]?.handle ?? {})) && localizeHandleLabel(l, locale!) === l)
     expect(untranslated).toEqual([])
   })
 })

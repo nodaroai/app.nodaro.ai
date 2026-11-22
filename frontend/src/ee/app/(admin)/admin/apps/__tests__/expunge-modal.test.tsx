@@ -86,6 +86,7 @@ describe("ExpungeModal", () => {
     ["ja", "実行のエラーメッセージ"],
     ["ko", "실행 오류 메시지"],
     ["pt-BR", "a mensagem de erro do processamento"],
+    ["es", "y su mensaje de error"],
   ] as Array<[LocaleId, string]>)("in %s, says each execution's error message is erased", (locale, phrase) => {
     renderIn(locale)
     expect(translate(locale, "adminExpunge.deletedExecutions")).toContain(phrase)
@@ -100,6 +101,7 @@ describe("ExpungeModal", () => {
     ["ja", "診断レポート"],
     ["ko", "진단 보고서"],
     ["pt-BR", "Os relatórios de diagnóstico"],
+    ["es", "Los informes de diagnóstico"],
   ] as Array<[LocaleId, string]>)("in %s, lists the diagnostic reports' titles and details as erased, the rows kept", (locale, phrase) => {
     renderIn(locale)
     const own = translate(locale, "adminExpunge.deletedReports")
@@ -108,7 +110,7 @@ describe("ExpungeModal", () => {
     expect(heading.parentElement!.querySelector("ul")!.textContent).toContain(own)
   })
 
-  it.each(["en", "he", "ja", "ko", "pt-BR"] as LocaleId[])(
+  it.each(["en", "es", "he", "ja", "ko", "pt-BR"] as LocaleId[])(
     "in %s, lists the untagged executions as a note, not as content kept for a legal or audit obligation",
     (locale) => {
       renderIn(locale)
@@ -179,7 +181,7 @@ describe("ExpungeModal", () => {
     )
   })
 
-  it.each(["he", "ja", "ko", "pt-BR"] as LocaleId[])("is fully translated in %s", (locale) => {
+  it.each(["es", "he", "ja", "ko", "pt-BR"] as LocaleId[])("is fully translated in %s", (locale) => {
     renderIn(locale)
     const text = document.body.textContent ?? ""
     for (const key of LIST_KEYS) {

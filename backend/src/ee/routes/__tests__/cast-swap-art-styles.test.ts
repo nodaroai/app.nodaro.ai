@@ -168,6 +168,7 @@ describe("GET /v1/video-remake/art-styles", () => {
     expect(labels(await list(`${URL}?locale=ja`))).toMatchObject({ anime: "アニメ", "oil-painting": "油絵", "felt-puppet": "フェルト人形" })
     expect(labels(await list(`${URL}?locale=ko`))).toMatchObject({ anime: "애니메이션", "oil-painting": "유화", "felt-puppet": "펠트 인형" })
     expect(labels(await list(`${URL}?locale=pt-BR`))).toMatchObject({ "comic-book": "Quadrinhos", "oil-painting": "Pintura a óleo", "felt-puppet": "Boneco de feltro" })
+    expect(labels(await list(`${URL}?locale=es`))).toMatchObject({ "comic-book": "Cómic", "oil-painting": "Pintura al óleo", "felt-puppet": "Títere de fieltro" })
     // The language's id in another letter case is the same language.
     expect(await list(`${URL}?locale=pt-br`)).toEqual(await list(`${URL}?locale=pt-BR`))
     // Only the label follows the language.

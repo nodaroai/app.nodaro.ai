@@ -2,18 +2,21 @@
 
 export const labels = {
   "Master audio": {
+    "es": "Audio maestro",
     "he": "אודיו ראשי",
     "ja": "マスターオーディオ",
     "ko": "마스터 오디오",
     "pt-br": "Áudio principal"
   },
   "Recordings": {
+    "es": "Grabaciones",
     "he": "הקלטות",
     "ja": "録音",
     "ko": "녹음",
     "pt-br": "Gravações"
   },
   "Trailer": {
+    "es": "Tráiler",
     "he": "טריילר",
     "ja": "トレーラー",
     "ko": "트레일러",

@@ -89,7 +89,7 @@ describe("RunUpToHereNotice", () => {
     render(unrun())
     const button = screen.getByRole("button", { name: "Run up to here · ≈240" })
     expect(button.getAttribute("title")).toBe(t("runUpToHere.tooltip"))
-    for (const locale of ["en", "he", "ja", "ko", "pt-BR"] as const) {
+    for (const locale of ["en", "es", "he", "ja", "ko", "pt-BR"] as const) {
       const label = translate(locale, "runUpToHere.buttonEstimate", { credits: 240 })
       expect(label, locale).toContain("≈240")
       expect(label, locale).not.toContain("~")

@@ -92,6 +92,7 @@ describe("a refused start or estimate names the node in each locale", () => {
     ["ja", "「エピソードを引き締める」を開始できませんでした", "「エピソードを引き締める」の見積もりができませんでした"],
     ["ko", "“에피소드 다듬기”를 시작하지 못했습니다", "“에피소드 다듬기”의 예상 비용을 계산하지 못했습니다"],
     ["pt-BR", "Não foi possível iniciar o Enxugar episódio", "Não foi possível estimar o Enxugar episódio"],
+    ["es", "No se pudo iniciar Condensar episodio", "No se pudo estimar Condensar episodio"],
   ]
   for (const [locale, start, estimate] of CASES) {
     it(locale, async () => {

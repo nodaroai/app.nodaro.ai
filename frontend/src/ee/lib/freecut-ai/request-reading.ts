@@ -2,7 +2,7 @@
  * Reading a request for Edit with AI: which abilities it asks for, read from
  * its own words, and the planner model's answer turned into a plan.
  *
- * The words are read in the five languages Nodaro speaks. A request made only
+ * The words are read in the six languages Nodaro speaks. A request made only
  * of the cards' own phrases is read here and needs no model at all
  * (`cardOnlyPlan`); anything written in the person's own words goes to the
  * planner first, and this reading is only the fallback when it cannot answer.
@@ -12,24 +12,25 @@ import { DEFAULT_MUSIC_STYLE, EDIT_STEPS, LOOKS, SPEAKER_LAYOUT_KINDS, type Edit
 
 // `\b` knows only ASCII letters: a word with accents or in another script is bounded by lookarounds.
 const INTENT_PATTERNS: Record<EditStep, RegExp> = {
-  pauses: /pause|silen|dead air|\bgaps?\b|tighten|שתיק|הפסק|רווח|שקט|מתים|間を|無音|沈黙|詰め|침묵|공백|쉼|pausa|silênc|silenc|respiro/iu,
+  pauses: /pause|silen|dead air|\bgaps?\b|tighten|שתיק|הפסק|רווח|שקט|מתים|間を|無音|沈黙|詰め|침묵|공백|쉼|pausa|silênc|silenc|respiro|tiempos? muertos?/iu,
   // Not a bare "um": in Portuguese it is the article ("coloque um fundo musical").
-  fillers: /filler|\bums\b|\bumm+s?\b|\buhs?\b|stutter|hesitat|מילות ה?מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})/iu,
-  mistakes: /mistake|repeat|re-?takes?|restart|false start|stumbl|flub|off[- ]topic|טעו|חזרו|התחל(?:ה|ות) (?:שגוי|מחדש)|לא קשור|言い間違|間違い|繰り返|やり直|실수|반복|다시 시작|(?<!\p{L})erros?(?!\p{L})|repeti|recome[cç]|fora do assunto/iu,
-  captions: /caption|subtit|text on screen|כתובי|תמליל על|字幕|テロップ|자막|legend/iu,
-  music: /music|\bsong\b|soundtrack|\bbeat\b|\bbgm\b|מוזיק|שיר|מנגינ|פסקול|音楽|ＢＧＭ|음악|배경음|브금|música|trilha/iu,
-  broll: /b[- ]?roll|cut-?aways?|stock (?:footage|shots?)|insert shots?|בי[- ]?רול|שוטים מכסים|インサート|[bＢ][- ]?ロール|b[- ]?롤|인서트|컷어웨이|imagens de apoio|cenas de cobertura/iu,
-  titles: /\btitles?\b|headline|key ?words? on|on-?screen text|pop-?up text|text overlays?|כותרות|מילות מפתח על|טקסט שקופץ|見出し|キーワードを画面|화면에 제목|키워드를 화면|títulos|palavras-chave na tela/iu,
+  fillers: /filler|\bums\b|\bumm+s?\b|\buhs?\b|stutter|hesitat|מילות ה?מילוי|אממ|גמגו|היסוס|フィラー|えーと|言い淀|필러|군말|더듬|vícios? de linguagem|muletas?|(?<!\p{L})hã(?!\p{L})|muletillas?|titube|tartamud/iu,
+  mistakes: /mistake|repeat|re-?takes?|restart|false start|stumbl|flub|off[- ]topic|טעו|חזרו|התחל(?:ה|ות) (?:שגוי|מחדש)|לא קשור|言い間違|間違い|繰り返|やり直|실수|반복|다시 시작|(?<!\p{L})erros?(?!\p{L})|repeti|recome[cç]|fora do assunto|(?<!\p{L})errores(?!\p{L})|equivoca|fuera de tema/iu,
+  captions: /caption|subtit|subtítul|text on screen|כתובי|תמליל על|字幕|テロップ|자막|legend/iu,
+  music: /music|\bsong\b|soundtrack|\bbeat\b|\bbgm\b|מוזיק|שיר|מנגינ|פסקול|音楽|ＢＧＭ|음악|배경음|브금|música|trilha|canci[óo]n|banda sonora/iu,
+  broll: /b[- ]?roll|cut-?aways?|stock (?:footage|shots?)|insert shots?|בי[- ]?רול|שוטים מכסים|インサート|[bＢ][- ]?ロール|b[- ]?롤|인서트|컷어웨이|imagens de apoio|cenas de cobertura|planos? de recurso|im[áa]genes de recurso/iu,
+  // "títulos" as a whole word: the Spanish for captions, "subtítulos", ends in it.
+  titles: /\btitles?\b|headline|key ?words? on|on-?screen text|pop-?up text|text overlays?|כותרות|מילות מפתח על|טקסט שקופץ|見出し|キーワードを画面|화면에 제목|키워드를 화면|(?<!\p{L})títulos|palavras-chave na tela|palabras clave en pantalla/iu,
   picture:
-    /background(?! (?:music|sound|track|score|noise))|backdrop|\bshirts?\b|clothes|outfit|jacket|\bdress\b|\bhair\b|\bcar\b|vehicle|\bsky\b|presenter|replace (?:the |him|her)|swap (?:the )?(?:person|face)|turn (?:it|him|her|them|the video) into|cartoon|anime|(?<!מוזיקת |מוסיקת |צלילי )רקע|חולצ|בגד|ז'קט|שמלה|שיער|רכב|מכונית|שמיים|מגיש|מצויר|אנימה|背景(?!音)|シャツ|服|髪|車|空を|アニメ風|배경(?!음)|옷|셔츠|머리를|자동차|하늘|만화|fundo(?! musical)|camisa|roupa|cabelo|carro|c[ée]u|desenho animado/iu,
+    /background(?! (?:music|sound|track|score|noise))|backdrop|\bshirts?\b|clothes|outfit|jacket|\bdress\b|\bhair\b|\bcar\b|vehicle|\bsky\b|presenter|replace (?:the |him|her)|swap (?:the )?(?:person|face)|turn (?:it|him|her|them|the video) into|cartoon|anime|(?<!מוזיקת |מוסיקת |צלילי )רקע|חולצ|בגד|ז'קט|שמלה|שיער|רכב|מכונית|שמיים|מגיש|מצויר|אנימה|背景(?!音)|シャツ|服|髪|車|空を|アニメ風|배경(?!음)|옷|셔츠|머리를|자동차|하늘|만화|fundo(?! musical)|camisa|roupa|cabelo|carro|c[ée]u|desenho animado|(?<!(?:música|musica|ruido|sonido) de |(?<!\p{L})a )fondo(?! musical| sonoro)|(?<!\p{L})ropa(?!\p{L})|chaqueta|cabello|automóvil|cielo|(?<!\p{L})presentador|dibujos? animados?/iu,
   color:
-    /colou?r grad|\bgrade\b|warm(?:er| up)?\b.{0,20}colou?r|colou?rs?.{0,20}warm|cinematic (?:look|colou?r)|\bLUT\b|black and white|b&w|gr[ae]yscale|לחמם|צבע חם|צבעים חמים|תיקון צבע|גרייד|שחור[- ]?לבן|色を暖|暖かい色|カラーグレーディング|色調補正|白黒|색감|색 보정|따뜻하게|흑백|cores? mais quentes|corre[cç][aã]o de cor|esquentar|preto e branco/iu,
-  zoom: /zoom|punch[- ]?in|push[- ]?in|close-?up on|זום|התקרב|ズーム|寄り|줌|확대|aproxim/iu,
-  phone: /9:16|vertical|portrait|\bphone\b|mobile|\bshorts\b|\breels?\b|tik ?tok|\bstories\b|אנכי|לטלפון|לנייד|טיקטוק|רילס|סטורי|縦|スマホ|ショート動画|リール|세로|휴대폰|모바일|쇼츠|릴스|celular|retrato/iu,
-  layout: /speaker (?:layout|view)|(?:every|each|both) speakers?|split[- ]?screen|\bstacked\b|side by side|כל דובר|פריסת דוברים|מסך מפוצל|話者ごと|話者レイアウト|分割画面|화자마다|화자 레이아웃|분할 화면|cada falante|layout dos falantes|tela dividida/iu,
-  cameras: /camera|\bangles?\b|multi-?cam|מצלמ|זוויות|カメラ|アングル|카메라|앵글|c[âa]mera|[âa]ngulo/iu,
+    /colou?r grad|\bgrade\b|warm(?:er| up)?\b.{0,20}colou?r|colou?rs?.{0,20}warm|cinematic (?:look|colou?r)|\bLUT\b|black and white|b&w|gr[ae]yscale|לחמם|צבע חם|צבעים חמים|תיקון צבע|גרייד|שחור[- ]?לבן|色を暖|暖かい色|カラーグレーディング|色調補正|白黒|색감|색 보정|따뜻하게|흑백|cores? mais quentes|corre[cç][aã]o de cor|esquentar|preto e branco|calentar|colores? más cálidos?|correcci[óo]n de color|blanco y negro/iu,
+  zoom: /zoom|punch[- ]?in|push[- ]?in|close-?up on|זום|התקרב|ズーム|寄り|줌|확대|aproxim|acercar/iu,
+  phone: /9:16|vertical|portrait|\bphone\b|mobile|\bshorts\b|\breels?\b|tik ?tok|\bstories\b|אנכי|לטלפון|לנייד|טיקטוק|רילס|סטורי|縦|スマホ|ショート動画|リール|세로|휴대폰|모바일|쇼츠|릴스|celular|retrato|tel[ée]fono|(?<!\p{L})m[óo]vil(?!\p{L})/iu,
+  layout: /speaker (?:layout|view)|(?:every|each|both) speakers?|split[- ]?screen|\bstacked\b|side by side|כל דובר|פריסת דוברים|מסך מפוצל|話者ごと|話者レイアウト|分割画面|화자마다|화자 레이아웃|분할 화면|cada falante|layout dos falantes|tela dividida|cada hablante|(?:disposici|distribuci)[óo]n de hablantes|pantalla dividida/iu,
+  cameras: /camera|\bangles?\b|multi-?cam|מצלמ|זוויות|カメラ|アングル|카메라|앵글|c[âa]mera|[âáa]ngulo|c[áa]mara/iu,
   clips: /\bclips?\b|highlights?|קליפ|ハイライト|クリップ|클립|하이라이트|clipes?|melhores momentos/iu,
-  trailer: /trailer|teaser|\bpromo\b|טריילר|טיזר|予告|トレーラー|티저|트레일러|예고편/iu,
+  trailer: /tr[áa]iler|teaser|\bpromo\b|טריילר|טיזר|予告|トレーラー|티저|트레일러|예고편/iu,
   chapters: /chapters?|timestamps|table of contents|פרקים|チャプター|目次|챕터|타임스탬프|cap[íi]tulos/iu,
 }
 
@@ -39,9 +40,9 @@ export function stepsInWords(request: string): EditStep[] {
 }
 
 const LOOK_WORDS: ReadonlyArray<readonly [Look, RegExp]> = [
-  ["bw", /black and white|b&w|gr[ae]yscale|שחור[- ]?לבן|白黒|흑백|preto e branco/iu],
-  ["cool", /\bcool(?:er)?\b|\bcold\b|קר(?!\p{L})|קרים|クール|寒色|차갑|frio|fria/iu],
-  ["vivid", /vivid|vibrant|punchy|saturat|עז|רווי|鮮やか|선명|생생|vibrante|vivo/iu],
+  ["bw", /black and white|b&w|gr[ae]yscale|שחור[- ]?לבן|白黒|흑백|preto e branco|blanco y negro/iu],
+  ["cool", /\bcool(?:er)?\b|\bcold\b|קר(?!\p{L})|קרים|クール|寒色|차갑|frio|fria|fr[íi][oa]s?(?!\p{L})/iu],
+  ["vivid", /vivid|vibrant|punchy|saturat|עז|רווי|鮮やか|선명|생생|vibrante|vivo|vívid|saturad/iu],
 ]
 
 /** The look a request asks for: warm unless it names another one. */
@@ -58,9 +59,9 @@ export function clipCountInWords(request: string): number {
 
 /** The layout a request asks for: stacked unless it names another one. */
 export function layoutInWords(request: string): SpeakerLayoutKind {
-  if (/side by side|זה לצד זה|横並び|나란히|lado a lado/iu.test(request)) return "side"
-  if (/\bgrid\b|רשת|グリッド|그리드|grade/iu.test(request)) return "grid"
-  if (/picture[- ]in[- ]picture|\bpip\b|תמונה בתוך תמונה|ピクチャーインピクチャー|화면 속 화면/iu.test(request)) return "pip"
+  if (/side by side|זה לצד זה|横並び|나란히|lado a lado|al lado del otro/iu.test(request)) return "side"
+  if (/\bgrid\b|רשת|グリッド|그리드|grade|cuadr[íi]cula/iu.test(request)) return "grid"
+  if (/picture[- ]in[- ]picture|\bpip\b|תמונה בתוך תמונה|ピクチャーインピクチャー|화면 속 화면|imagen (?:dentro de|en) (?:la )?imagen/iu.test(request)) return "pip"
   return "stacked"
 }
 

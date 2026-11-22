@@ -24,7 +24,7 @@ describe("AssetPickerConfigButton", () => {
     expect(screen.getByRole("button", { name: "Replace from Library / Gallery" })).toBeTruthy()
   })
 
-  it.each(["ja", "pt-BR"] as const)("follows the interface language (%s)", (locale) => {
+  it.each(["es", "ja", "pt-BR"] as const)("follows the interface language (%s)", (locale) => {
     act(() => useLocaleStore.getState().setLocale(locale))
     const { rerender } = render(<AssetPickerConfigButton kind="character" nodeId="n1" currentDbId={null} />)
     expect(screen.getByRole("button", { name: translate(locale, "assetPicker.chooseFromLibraryGallery") })).toBeTruthy()

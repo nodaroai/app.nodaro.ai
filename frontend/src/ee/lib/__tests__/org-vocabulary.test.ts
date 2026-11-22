@@ -113,10 +113,14 @@ describe("workspaceSentence", () => {
 describe("the workspace word's gender", () => {
   const heT: TFunction = (key, vars) => translate("he", key, vars)
   const ptT: TFunction = (key, vars) => translate("pt-BR", key, vars)
+  const esT: TFunction = (key, vars) => translate("es", key, vars)
 
   it("takes a translated default's gender from the dictionary", () => {
     expect(localizeVocabulary({ workspace: "Class" }, "he").workspace_gender).toBe("f")
     expect(localizeVocabulary({ workspace: "Team" }, "pt-BR").workspace_gender).toBe("f")
+    // Spanish: "Equipo" is masculine, "Clase" feminine.
+    expect(localizeVocabulary({ workspace: "Team" }, "es").workspace_gender).toBe("m")
+    expect(localizeVocabulary({ workspace: "Class" }, "es").workspace_gender).toBe("f")
   })
 
   it("takes the organization's own word's gender from its overrides", () => {
@@ -136,11 +140,20 @@ describe("the workspace word's gender", () => {
   it("uses the fallback word's gender when there is no vocabulary", () => {
     expect(workspaceGender({}, heT)).toBe("f")
     expect(workspaceGender({}, ptT)).toBe("f")
+    // Spanish's generic word, "espacio de trabajo", is masculine.
+    expect(workspaceGender({}, esT)).toBe("m")
   })
 
   it("renders the Portuguese masculine sentences", () => {
     expect(ptT(genderedWorkspaceKey("org.workspaceIsArchived", "m"), { workspace: "grupo" })).toBe("Este grupo está arquivado.")
     expect(workspaceSentence(ptT, "org.workspaceNamePlaceholder", "Grupo", "m")).toBe("Nome do grupo")
     expect(workspaceSentence(ptT, "org.workspaceNamePlaceholder", "Turma", "f")).toBe("Nome da turma")
+  })
+
+  it("renders the Spanish sentences in the word's gender", () => {
+    expect(esT(genderedWorkspaceKey("org.workspaceIsArchived", "m"), { workspace: "equipo" })).toBe("Este equipo está archivado.")
+    expect(esT(genderedWorkspaceKey("org.workspaceIsArchived", "f"), { workspace: "clase" })).toBe("Esta clase está archivada.")
+    expect(workspaceSentence(esT, "org.newWorkspace", "Equipo", "m")).toBe("Nuevo equipo")
+    expect(workspaceSentence(esT, "org.newWorkspace", "Clase", "f")).toBe("Nueva clase")
   })
 })

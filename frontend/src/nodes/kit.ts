@@ -199,7 +199,7 @@ export interface UnitOption {
 }
 
 /** The label locales of strings.json (tools/units/vocabulary.mjs LABEL_LOCALES); "pt-br" is LocaleId "pt-BR". */
-export type UnitLabelLocale = "he" | "ja" | "ko" | "pt-br"
+export type UnitLabelLocale = "es" | "he" | "ja" | "ko" | "pt-br"
 
 /** labels.generated.ts — node-label translations: English label → locale → text. */
 export type UnitLabels = Readonly<Record<string, Readonly<Partial<Record<UnitLabelLocale, string>>>>>

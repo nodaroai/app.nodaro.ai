@@ -18,13 +18,15 @@ import { registeredChromeLocales } from ".."
  * stub dictionary must never leak into it.
  */
 describe("offered locales — derived from chrome-dictionary coverage", () => {
-  it("English, Hebrew, Japanese, Korean and Brazilian Portuguese are offered (their dictionaries are complete)", () => {
+  it("English, Spanish, Hebrew, Japanese, Korean and Brazilian Portuguese are offered (their dictionaries are complete)", () => {
     expect(isOfferedLocale("en")).toBe(true)
+    expect(isOfferedLocale("es")).toBe(true)
     expect(isOfferedLocale("he")).toBe(true)
     expect(isOfferedLocale("ja")).toBe(true)
     expect(isOfferedLocale("ko")).toBe(true)
     expect(isOfferedLocale("pt-BR")).toBe(true)
     expect(chromeCoverage("en")).toBe(1)
+    expect(chromeCoverage("es")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
     expect(chromeCoverage("he")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
     expect(chromeCoverage("ja")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
     expect(chromeCoverage("ko")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
@@ -69,6 +71,7 @@ describe("languageMenuRows — the current locale stays visible even when not of
     expect(languageMenuRows("ja")).toEqual(offeredLanguages())
     expect(languageMenuRows("ko")).toEqual(offeredLanguages())
     expect(languageMenuRows("pt-BR")).toEqual(offeredLanguages())
+    expect(languageMenuRows("es")).toEqual(offeredLanguages())
     expect(languageMenuRows("en")).toEqual(offeredLanguages())
   })
 
