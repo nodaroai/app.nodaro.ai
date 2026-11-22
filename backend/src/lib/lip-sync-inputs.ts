@@ -59,6 +59,7 @@ import { join } from "node:path"
 import { stat } from "node:fs/promises"
 import { cleanupWorkDir, createWorkDir, downloadFile, type DownloadLimits } from "../providers/video/ffmpeg-utils.js"
 import { isAudioReadStopped, isStoppedLaunch, measureDecodedAudio, type DecodedAudioLength } from "../providers/video/decoded-audio-length.js"
+import { planImageSize } from "./image-min-size.js"
 import { probeImageSource } from "./image-source-probe.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
 import { LIP_SYNC_MEASURE_SLOT_WAIT_MS, LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS, lipSyncMeasureSlots } from "./lip-sync-download-slots.js"
@@ -363,16 +364,24 @@ async function imageRefusal(label: string, rule: LipSyncInputRule, imageUrl: str
   }
   const { width, height } = probe.size
   const ratio = width / height
-  if (
-    width < image.minSide || height < image.minSide || width > image.maxSide || height > image.maxSide ||
-    ratio < image.minRatio || ratio > image.maxRatio
-  ) {
+  // A picture under the minimum side is not refused for that: the run
+  // enlarges it, shape kept, before it is sent (lib/image-min-size.ts). Only a
+  // picture no enlarged copy of fits is refused.
+  const sizePlan = planImageSize(width, height, { minSide: image.minSide, maxSide: image.maxSide, minRatio: image.minRatio, maxRatio: image.maxRatio })
+  if (sizePlan.kind === "refuse" || width > image.maxSide || height > image.maxSide || ratio < image.minRatio || ratio > image.maxRatio) {
     return {
       ok: false,
       code: "image_out_of_bounds",
       message:
-        `${label} takes an image ${image.minSide} to ${image.maxSide} pixels on each side, with a width ÷ height ` +
-        `between ${image.minRatio} and ${image.maxRatio}; this one is ${width}×${height}.`,
+        `${label} takes an image of at most ${image.maxSide} pixels on each side, with a width ÷ height ` +
+        `between ${image.minRatio} and ${image.maxRatio}; this one is ${width}×${height}.` +
+        // The minimum side is named only for an image under it: it is never
+        // the refusal on its own, since a smaller image is enlarged.
+        (Math.min(width, height) < image.minSide
+          ? sizePlan.kind === "refuse" && sizePlan.reason === "max-side"
+            ? ` A smaller image is enlarged to fit, but enlarging this one's shorter side to ${image.minSide} pixels would make its longer side over ${image.maxSide}.`
+            : ` A smaller image is enlarged to fit, but not one of this shape.`
+          : ""),
     }
   }
   return undefined

@@ -32,6 +32,8 @@ Mode is chosen automatically at execution time from the wiring shape — there i
 
 `imageReferences`, `videoReferences`, and `audioReferences` are order-sensitive — drag-to-reorder writes `referenceImageOrder` (and friends) on the node so the order survives workflow saves and is honored at execution.
 
+**Small images are enlarged.** Some models take an input image only from a minimum size on each side (Kling 4.0, for example, from 300 pixels). A start frame, end frame or reference image smaller than its model's minimum is enlarged before it is sent, its shape kept, until its shorter side reaches the minimum: a 281×369 start frame goes to Kling 4.0 as 300×394. An image is refused only when no enlarged copy of it fits the model, because its width ÷ height is outside the range the model takes, or because its longer side would then pass the largest size sent (2048 px).
+
 ### Settings input
 
 One `settings` input takes the Generation Settings nodes — [Aspect Ratio](../parameters/aspect-ratio.md), [Duration](../parameters/duration.md), [Provider](../parameters/provider.md) and [Motion](../parameters/motion.md). The first three replace the node's own field at run time; Motion adds a clause to the prompt. The node lists what is wired as chips (e.g. `16:9 · 8s · Seedance 2`), and the settings panel shows those fields as connected.

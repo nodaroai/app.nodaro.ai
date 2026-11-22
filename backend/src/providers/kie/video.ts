@@ -63,7 +63,8 @@ import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { mp3EncodeArgs } from "../video/mp3-encode.js"
-import { lipSyncRateModelOf } from "../../lib/lip-sync-inputs.js"
+import { lipSyncRateModelOf, type LipSyncInputRule } from "../../lib/lip-sync-inputs.js"
+import { probeImageSource } from "../../lib/image-source-probe.js"
 import { LIP_SYNC_TRIM_MARGIN_SEC, prepareRateLipSyncAudio } from "./lip-sync-audio.js"
 import { ensureVideoFitsSize, KLING_4_REF_VIDEO_LIMIT } from "./reference-video-size.js"
 import { prepareReferenceAudioUrls } from "./reference-audio-convert.js"
@@ -74,6 +75,7 @@ import { originalCdnImageUrl } from "../../lib/cdn-original-url.js"
 import { imageHasMetadata } from "../../lib/image-metadata.js"
 import { labelInputFailure, urlForLog, type InputStep } from "./input-label.js"
 import { pictureShapeSentence } from "./aspect-ratio-sentence.js"
+import { displayedSize, planImageSize } from "../../lib/image-min-size.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -759,12 +761,55 @@ function unreadableImageError(context: string) {
   )
 }
 
+/** The portrait formats OmniHuman 2.0 reads, as sharp names them (lipSync). */
+const OMNIHUMAN_PORTRAIT_FORMATS: Set<string> = new Set(["jpeg", "png", "webp", "gif", "tiff"])
+
+/**
+ * The portrait a per-second lip-sync model is sent: the caller's own URL when
+ * it already meets the model's minimum side (or its size cannot be read from
+ * its header — the price check refused an unreadable one), else an enlarged
+ * copy from {@link ensureImageForProvider}.
+ */
+async function omnihumanPortraitUrl(imageUrl: string, provider: string, rule: LipSyncInputRule): Promise<string> {
+  const { image } = rule
+  const probe = await probeImageSource(imageUrl)
+  if (!probe.size) return imageUrl
+  const plan = planImageSize(probe.size.width, probe.size.height, {
+    minSide: image.minSide,
+    maxSide: image.maxSide,
+    minRatio: image.minRatio,
+    maxRatio: image.maxRatio,
+  })
+  if (plan.kind !== "enlarge") return imageUrl
+  return ensureImageForProvider(imageUrl, provider, {
+    context: "Lip sync generation",
+    inputLabel: "portrait image",
+    acceptedFormats: OMNIHUMAN_PORTRAIT_FORMATS,
+    minDimension: image.minSide,
+    maxDimension: image.maxSide,
+    minAspectRatio: image.minRatio,
+    maxAspectRatio: image.maxRatio,
+    // The model's own cap ("under 30 MB"), not the 10 MB default.
+    maxBytes: image.maxBytes - 1,
+  })
+}
+
+/** A model's name for a sentence the user reads: its catalog label, else its id. */
+function providerLabel(provider: string): string {
+  return getModel(provider)?.label ?? provider
+}
+
 interface ImageConstraints {
   /** Human-readable context for error messages */
   context: string
   /** Override accepted formats (defaults to provider-based lookup) */
   acceptedFormats?: Set<string>
-  /** Minimum pixel dimension (width AND height must be >= this) */
+  /**
+   * Minimum pixel dimension (width AND height must be >= this). A smaller
+   * picture is ENLARGED to it, its shape kept (lib/image-min-size.ts), and
+   * refused only when no copy of its shape fits `maxDimension` and the ratio
+   * bounds too, or when `preserveGeometry` holds its pixel grid.
+   */
   minDimension?: number
   /** Minimum aspect ratio (width/height) */
   minAspectRatio?: number
@@ -778,6 +823,8 @@ interface ImageConstraints {
   forceJpeg?: boolean
   /** Downscale (preserving aspect ratio) so neither side exceeds this many pixels. */
   maxDimension?: number
+  /** The largest file sent, in bytes (default {@link IMAGE_MAX_BYTES}, 10 MB). */
+  maxBytes?: number
   /**
    * Re-encode losslessly (WebP if the SKU accepts it, else PNG) rather than to
    * JPEG, falling back to the JPEG ladder only if the lossless result exceeds
@@ -856,6 +903,7 @@ async function prepareImageForProvider(
     ?? (JPEG_PNG_ONLY_PROVIDERS.has(provider) ? JPEG_PNG_ONLY : JPEG_PNG_WEBP)
 
   const context = constraints?.context ?? "Video generation"
+  const maxBytes = constraints?.maxBytes ?? IMAGE_MAX_BYTES
 
   // Download and inspect the image. safeFetch (DNS+IP gate at connect time)
   // because imageUrl is user-supplied and the bytes are decoded/processed
@@ -898,33 +946,64 @@ async function prepareImageForProvider(
   }
 
   at("check")
-  // Enforce minimum dimension
-  if (constraints?.minDimension && (width < constraints.minDimension || height < constraints.minDimension)) {
-    throw createSanitizedError(
-      `${provider} requires images at least ${constraints.minDimension}×${constraints.minDimension}px (got ${width}×${height})`,
-      context
-    )
-  }
+  // The picture as the provider will see it: `.rotate()` below applies its
+  // EXIF orientation, so a quarter-turned photo's sides are swapped.
+  const shown = displayedSize(width, height, meta.orientation)
 
   // Enforce aspect ratio bounds
   if (constraints?.minAspectRatio || constraints?.maxAspectRatio) {
-    const ratio = width / height
+    const ratio = shown.width / shown.height
     const min = constraints.minAspectRatio ?? 0
     const max = constraints.maxAspectRatio ?? Infinity
     if (ratio < min || ratio > max) {
       // The picture's own shape: no ratio setting would make it fit, so the
       // sentence names its size and the range the model takes.
       throw createSanitizedError(
-        `${provider} requires aspect ratio between ${min.toFixed(1)}:1 and ${max.toFixed(1)}:1 (got ${width}:${height})`,
+        `${provider} requires aspect ratio between ${min.toFixed(1)}:1 and ${max.toFixed(1)}:1 (got ${shown.width}:${shown.height})`,
         context,
         false,
         false,
-        { userSafeMessage: pictureShapeSentence(width, height, min, max) },
+        { userSafeMessage: pictureShapeSentence(shown.width, shown.height, min, max) },
       )
     }
   }
 
   const maxDim = constraints?.maxDimension
+  // A picture under the model's minimum side is ENLARGED to it, its shape kept
+  // (lib/image-min-size.ts) — refused only when no copy of its shape fits
+  // under the maximum side too, or when the caller has something aligned to
+  // its pixel grid (`preserveGeometry`: an inpainting mask) that a resize
+  // would de-align.
+  const sizePlan = planImageSize(shown.width, shown.height, {
+    minSide: constraints?.minDimension,
+    maxSide: maxDim,
+    minRatio: constraints?.minAspectRatio,
+    maxRatio: constraints?.maxAspectRatio,
+  }, providerLabel(provider))
+  if (sizePlan.kind === "refuse") {
+    throw createSanitizedError(
+      `${provider} requires images at least ${constraints?.minDimension}×${constraints?.minDimension}px (got ${shown.width}×${shown.height}; ${sizePlan.reason})`,
+      context,
+      false,
+      false,
+      { userSafeMessage: sizePlan.message },
+    )
+  }
+  if (sizePlan.kind === "enlarge" && constraints?.preserveGeometry === true) {
+    throw createSanitizedError(
+      `${provider} requires images at least ${constraints.minDimension}×${constraints.minDimension}px (got ${shown.width}×${shown.height}; its pixel grid is held)`,
+      context,
+      false,
+      false,
+      {
+        userSafeMessage:
+          `${providerLabel(provider)} needs a picture at least ${constraints.minDimension} pixels on each side; this one is ` +
+          `${shown.width}×${shown.height}, and it cannot be enlarged here because its mask is drawn to its exact size. ` +
+          `Use a larger picture and mask.`,
+      },
+    )
+  }
+  const enlargeTo = sizePlan.kind === "enlarge" ? sizePlan : undefined
   // PROBE PENDING (app-reports §11.3, P5 — the two seedance-2-5 i2v rows).
   // Those two runs DID pass through here and still came back "File type not
   // supported", so either the rejected input was not this image, or the format
@@ -938,8 +1017,9 @@ async function prepareImageForProvider(
   // __tests__/image-format-normalize.test.ts — not to widen the format set.
   const needsConversion =
     !acceptedFormats.has(format) || (constraints?.forceJpeg === true && format !== "jpeg")
-  const needsCompress = buffer.length > IMAGE_MAX_BYTES
-  const needsResize = maxDim !== undefined && (width > maxDim || height > maxDim)
+  const needsCompress = buffer.length > maxBytes
+  const needsEnlarge = enlargeTo !== undefined
+  const needsResize = !needsEnlarge && maxDim !== undefined && (width > maxDim || height > maxDim)
 
   // Embedded metadata (Content Credentials, EXIF, XMP, text chunks) never
   // reaches a provider: a model can refuse an input image because of it, and
@@ -947,7 +1027,7 @@ async function prepareImageForProvider(
   // this only adds a pass for a file that needed nothing else (lib/image-metadata.ts).
   const needsStrip = !needsConversion && imageHasMetadata(buffer, format)
 
-  if (!needsConversion && !needsCompress && !needsResize && !needsStrip) {
+  if (!needsConversion && !needsCompress && !needsResize && !needsStrip && !needsEnlarge) {
     return imageUrl
   }
 
@@ -957,7 +1037,8 @@ async function prepareImageForProvider(
     `[KIE.ai] Image preprocessing for ${provider}: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
     `${needsConversion ? ` → converting to ${webpAsPng ? "PNG" : "JPEG"}${acceptedFormats.has(format) ? " (forced)" : ` (${format} not accepted)`}` : ""}` +
     `${needsResize ? ` → downscaling to ≤${maxDim}px` : ""}` +
-    `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}` +
+    `${enlargeTo ? ` → enlarging to ${enlargeTo.width}×${enlargeTo.height} (minimum side ${constraints?.minDimension}px)` : ""}` +
+    `${needsCompress ? ` → compressing (>${maxBytes / 1024 / 1024}MB)` : ""}` +
     `${needsStrip ? " → stripping metadata" : ""}`
   )
 
@@ -965,8 +1046,10 @@ async function prepareImageForProvider(
   // orientation-tagged photo (every HEIC/AVIF off a phone, and plenty of
   // TIFFs) would otherwise be handed to the provider sideways — the pixels
   // survive, the orientation tag does not. Same one-word fix the repo already
-  // made in lib/anthropic-image.ts:34. Then optionally cap the longest side,
-  // preserving aspect ratio.
+  // made in lib/anthropic-image.ts:34. Then either enlarge a picture under the
+  // model's minimum side to the planned size (lanczos3, shape kept — the plan
+  // has already checked it fits the maximum), or cap the longest side,
+  // preserving aspect ratio. Never both: an enlarged picture fits the cap.
   //
   // sharp reads every HEIF header but cannot decode a 10-bit AVIF or any HEIC
   // (utils/heif-decode.ts), so the encodes below run on a source it CAN decode:
@@ -995,15 +1078,17 @@ async function prepareImageForProvider(
   }
   const pipeline = () => {
     const s = sharp(source).rotate()
+    if (enlargeTo) return s.resize(enlargeTo.width, enlargeTo.height, { fit: "fill", kernel: "lanczos3" })
     return maxDim !== undefined
       ? s.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true })
       : s
   }
 
-  // Metadata was the only reason to touch the file: re-encode it in its own
-  // format (PNG stays lossless and keeps its alpha), so stripping costs the
-  // input nothing a provider would see. Over the size cap it takes the ladder.
-  if (needsStrip && !needsResize && !needsCompress && (format === "png" || format === "jpeg" || format === "webp")) {
+  // Metadata, or a picture under the minimum side, was the only reason to
+  // touch the file: re-encode it in its own format (PNG stays lossless and
+  // keeps its alpha), so the pass costs the input nothing a provider would
+  // see. Over the size cap it takes the ladder.
+  if ((needsStrip || needsEnlarge) && !needsConversion && !needsResize && !needsCompress && (format === "png" || format === "jpeg" || format === "webp")) {
     const stripped = await encode(
       format === "png"
         ? pipeline().png()
@@ -1011,11 +1096,11 @@ async function prepareImageForProvider(
           ? pipeline().webp(constraints?.preferLossless === true ? { lossless: true } : { quality: 95 })
           : pipeline().jpeg({ quality: 95, mozjpeg: true }),
     )
-    if (stripped.length <= IMAGE_MAX_BYTES) {
+    if (stripped.length <= maxBytes) {
       at("upload")
       const ext = format === "jpeg" ? "jpg" : format
-      const strippedUrl = await uploadJobScratchBuffer(stripped, "provider-stripped", ext, `image/${format}`)
-      console.log(`[KIE.ai] Image metadata stripped (${format}): ${(stripped.length / 1024 / 1024).toFixed(1)}MB → ${strippedUrl.substring(0, 80)}...`)
+      const strippedUrl = await uploadJobScratchBuffer(stripped, needsEnlarge ? "provider-enlarged" : "provider-stripped", ext, `image/${format}`)
+      console.log(`[KIE.ai] Image ${needsEnlarge ? "enlarged" : "metadata stripped"} (${format}): ${(stripped.length / 1024 / 1024).toFixed(1)}MB → ${strippedUrl.substring(0, 80)}...`)
       return strippedUrl
     }
   }
@@ -1043,7 +1128,7 @@ async function prepareImageForProvider(
     const lossless = losslessFormat === "webp"
       ? await encode(pipeline().webp({ lossless: true }))
       : await encode(pipeline().png({ compressionLevel: 9 }))
-    if (lossless.length <= IMAGE_MAX_BYTES) {
+    if (lossless.length <= maxBytes) {
       at("upload")
       const losslessUrl = await uploadJobScratchBuffer(lossless, "provider-converted", losslessFormat, `image/${losslessFormat}`)
       console.log(
@@ -1052,7 +1137,7 @@ async function prepareImageForProvider(
       return losslessUrl
     }
     console.log(
-      `[KIE.ai] Lossless ${losslessFormat} is ${(lossless.length / 1024 / 1024).toFixed(1)}MB (> ${IMAGE_MAX_BYTES / 1024 / 1024}MB) — falling back to JPEG`
+      `[KIE.ai] Lossless ${losslessFormat} is ${(lossless.length / 1024 / 1024).toFixed(1)}MB (> ${maxBytes / 1024 / 1024}MB) — falling back to JPEG`
     )
   }
 
@@ -1061,7 +1146,7 @@ async function prepareImageForProvider(
   let converted = await encode(pipeline().jpeg({ quality, mozjpeg: true }))
 
   // If still over 10 MB, progressively lower quality
-  while (converted.length > IMAGE_MAX_BYTES && quality > 50) {
+  while (converted.length > maxBytes && quality > 50) {
     quality -= 10
     converted = await encode(pipeline().jpeg({ quality, mozjpeg: true }))
   }
@@ -1074,10 +1159,19 @@ async function prepareImageForProvider(
   // provider would edit the wrong region. `preserveGeometry` opts out: we ship
   // the ladder's best effort and let the provider reject an oversized file
   // honestly, rather than return a confidently wrong edit.
-  if (converted.length > IMAGE_MAX_BYTES && constraints?.preserveGeometry !== true) {
-    const effectiveWidth = maxDim !== undefined ? Math.min(width, maxDim) : width
-    const scale = Math.sqrt(IMAGE_MAX_BYTES / converted.length)
-    const newWidth = Math.round(effectiveWidth * scale)
+  if (converted.length > maxBytes && constraints?.preserveGeometry !== true) {
+    // The width `.rotate().resize(newWidth)` scales: the UPRIGHT picture's,
+    // after the enlarge or after the cap on its longer side.
+    const cappedScale = maxDim !== undefined ? Math.min(1, maxDim / Math.max(shown.width, shown.height)) : 1
+    const effectiveWidth = enlargeTo ? enlargeTo.width : Math.round(shown.width * cappedScale)
+    let newWidth = Math.round(effectiveWidth * Math.sqrt(maxBytes / converted.length))
+    // Never back under the model's minimum side (the cap is met at a lower
+    // JPEG quality long before a picture that small would need it).
+    const minSide = constraints?.minDimension
+    if (minSide) {
+      const shortAt = (w: number) => Math.min(w, (w * shown.height) / shown.width)
+      if (shortAt(newWidth) < minSide) newWidth = Math.ceil((minSide * shown.width) / Math.min(shown.width, shown.height) - 1e-9)
+    }
     converted = await encode(sharp(source)
       .rotate()
       .resize(newWidth)
@@ -3719,9 +3813,17 @@ export class KieVideoProvider
       ? await prepareRateLipSyncAudio(audioUrl, rateModel.rate, rateModel.rule, getModel(provider)?.label ?? provider, options?.billedSeconds)
       : undefined
     const effectiveAudioUrl = prepared?.url ?? (options?.audioPrepared ? audioUrl : await ensureAudioDuration(audioUrl, lipSyncAudioCapFor(provider)))
+    // After the audio (its refusals are the price check's, and come first),
+    // the portrait. One that already fits is sent exactly as given, as before:
+    // no download, no re-encode (OmniHuman reads GIF and TIFF, and an animated
+    // GIF must not be flattened). Only a portrait under the model's minimum
+    // side — measured from its header, as the price check did — goes through
+    // the one input step every KIE image takes, to be enlarged to it (rotated
+    // upright, metadata stripped, its own format where the model reads it).
+    const effectiveImageUrl = rateModel ? await omnihumanPortraitUrl(imageUrl, provider, rateModel.rule) : imageUrl
 
     const input = buildLipSyncInput(modelConfig, {
-      imageUrl,
+      imageUrl: effectiveImageUrl,
       audioUrl: effectiveAudioUrl,
       prompt,
       resolution,

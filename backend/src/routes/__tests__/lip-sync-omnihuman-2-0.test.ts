@@ -155,7 +155,7 @@ describe("POST /v1/lip-sync — OmniHuman 2.0", () => {
     ["audio of 300.5 s", () => { state.audio = { seconds: 300.5, bytes: 5_000_000 } }, "audio_too_long"],
     ["audio that plays past the cap (decoding stopped there)", () => { state.audio = { seconds: "over", bytes: 1_200_000 } }, "audio_too_long"],
     ["a file of 100 MB", () => { state.audio = { seconds: 290, bytes: 100_000_000 } }, "audio_too_large"],
-    ["an image 250 px wide", () => { state.image = { size: { width: 250, height: 400 }, sizeBytes: 100_000 } }, "image_out_of_bounds"],
+    ["an image wider than 2.5 : 1", () => { state.image = { size: { width: 2600, height: 1000 }, sizeBytes: 100_000 } }, "image_out_of_bounds"],
     ["an image that cannot be read", () => { state.image = {} }, "image_unreadable"],
   ])("refuses %s with a 400 before the credit guard — nothing held, no job", async (_label, arrange, code) => {
     arrange()

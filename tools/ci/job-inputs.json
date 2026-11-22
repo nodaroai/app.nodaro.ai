@@ -496,6 +496,7 @@
         "backend/src/lib/image-gen-normalize.ts",
         "backend/src/lib/image-input-limit.ts",
         "backend/src/lib/image-metadata.ts",
+        "backend/src/lib/image-min-size.ts",
         "backend/src/lib/image-prompt-minimum.ts",
         "backend/src/lib/image-source-probe.ts",
         "backend/src/lib/image-source-size.ts",
