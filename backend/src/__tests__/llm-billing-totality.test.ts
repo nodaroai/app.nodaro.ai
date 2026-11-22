@@ -141,6 +141,8 @@ const PURE_CLIENT_HELPERS: ReadonlyMap<string, string> = new Map([
   ["kieInputTokens", "KIE usage arithmetic"],
   ["kieCreditsUsdOf", "KIE cost arithmetic"],
   ["kieInputUntrusted", "KIE usage trust predicate"],
+  ["kieInputCheckedWhenUnstated", "KIE usage trust predicate: an implausible input count is billed from the request's size when no charge is stated"],
+  ["KIE_INPUT_IMPLAUSIBLE_FACTOR", "a constant"],
   ["requestChars", "request size arithmetic (the D2 estimate)"],
   ["documentInputFloorTokens", "request size arithmetic: the input floor of a call that sent documents"],
   ["sentSchemaText", "the schema text a request sends — request size arithmetic (the hold bound)"],

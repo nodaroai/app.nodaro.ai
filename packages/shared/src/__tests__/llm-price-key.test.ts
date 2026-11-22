@@ -113,6 +113,11 @@ describe("llmPriceKey: the effort, on a model whose price depends on it (`effort
     for (const effort of [undefined, ...LLM_REASONING_EFFORTS]) {
       expect(llmPriceKey("llm-chat", "gpt-6.1-terra", effort), String(effort)).toBe("llm-chat:gpt-6.1-terra")
       expect(llmPriceKey("ai-writer", "gpt-6.1-terra", effort), String(effort)).toBe("ai-writer:gpt-6.1-terra")
+      // GPT-6.2 Sol and Astra add nothing of KIE's own that is modelled: the bare key at every effort.
+      expect(llmPriceKey("llm-chat", "gpt-6.2-sol", effort), String(effort)).toBe("llm-chat:gpt-6.2-sol")
+      expect(llmPriceKey("llm-chat", "gpt-6.2-astra", effort), String(effort)).toBe("llm-chat:gpt-6.2-astra")
+      // Gemini 4 Neon has no direct lane: an Advanced-mode flag never moves its key.
+      expect(llmPriceKey("llm-chat", "gemini-4-neon", effort, true), String(effort)).toBe("llm-chat:gemini-4-neon")
     }
   })
 
@@ -177,6 +182,9 @@ describe("effortBelowLowestSendsLowest (Kimi K3 and K3.1 Pro)", () => {
     expect(effectiveReasoningEffort("gpt-6.1-terra", "none")).toBeUndefined()
     expect(effectiveReasoningEffort("gemini-4-carbon", "none")).toBeUndefined()
     expect(effectiveReasoningEffort("gemini-4-hydrogen", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gemini-4-neon", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gpt-6.2-sol", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gpt-6.2-astra", "none")).toBeUndefined()
   })
 })
 
@@ -211,6 +219,9 @@ describe("structured output: a trusted mode vs a schema hint", () => {
   it("llmSendsSchema: a model that sends its schema (trusted or hinted) counts it; one that sends none does not", () => {
     expect(llmSendsSchema("gemini-4-carbon")).toBe(true)
     expect(llmSendsSchema("gemini-4-hydrogen")).toBe(true)
+    expect(llmSendsSchema("gemini-4-neon")).toBe(true)
+    expect(llmSendsSchema("gpt-6.2-sol")).toBe(true)
+    expect(llmSendsSchema("gpt-6.2-astra")).toBe(true)
     expect(llmSendsSchema("gpt-6.1-terra")).toBe(true)
     expect(llmSendsSchema("gpt-5.2")).toBe(false)
     // Unset model = the feature's default; an unknown model counts it.

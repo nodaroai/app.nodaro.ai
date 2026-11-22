@@ -282,6 +282,15 @@ export interface LlmModelDef {
    */
   kieCollapseStream?: true
   /**
+   * The most attachments — images, videos, audio clips and documents
+   * together — one call to this model may carry, where its provider documents
+   * a limit below what the LLM routes allow (read it through
+   * {@link llmMaxAttachments}). A call with more is refused before anything
+   * is fetched or held, rather than failing at the provider. Absent = the
+   * routes' own limits only.
+   */
+  maxAttachments?: number
+  /**
    * true = the model reasons even when NO thinking parameter is sent, so its
    * reasoning tokens share the `max_tokens` budget on EVERY call — not just
    * effort-bearing ones. Claude Opus 5 flipped this default (on Opus 4.8/4.7
@@ -721,6 +730,61 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     thinkingDefaultOn: true,
   },
   {
+    id: "gemini-4-neon",
+    displayName: "Gemini 4 Neon",
+    series: "Gemini",
+    desc: "Gemini 4 between Hydrogen and Carbon, coding and analysis, 1M context",
+    tier: "premium",
+    kieFormat: "chat-completions",
+    // KIE serves it on the OpenAI-compatible dialect under this slug, the
+    // same shape as Hydrogen's and Carbon's. Its lane passed its probe
+    // (2026-11-22): every non-stream call answered (none failed), a stream
+    // ended with a final usage chunk carrying `credits_consumed`, no empty 200.
+    // KIE flags it "Chat only — not yet adapted for agent use", like Hydrogen
+    // and Carbon: it may not back a tool-loop feature (none does today).
+    kieSlugOrModel: "gemini-4-neon-openai",
+    vendor: "google",
+    // NO trusted `structuredOutputMode` (decided 2026-11-22), as Hydrogen: KIE
+    // did NOT enforce a `response_format` json_schema — the probe came back as
+    // JSON with prose ("delighted and thrilled") in the enum field. So it is
+    // not a STRUCTURED_VISION_MODELS member, and every answer is parsed,
+    // validated and re-asked by `llmCompleteStructured`. The schema still goes
+    // on the wire as a hint (`response_format`).
+    structuredOutputHint: "kie-response-format",
+    supportsImages: true,
+    // The registry's usual 16384, as Hydrogen. Every call is floored to the
+    // default 32768 (`thinkingDefaultOn`, below); KIE's doc states a default
+    // output budget of 65,536 tokens, thinking included.
+    maxOutputTokens: 16384,
+    // NO `directGeminiModel`: KIE only (decided 2026-11-22). Whether Google
+    // serves it on its own API was not determined, and a direct lane would
+    // need its own price. So no Advanced mode and no direct fallback.
+    //
+    // Reads PDF files on the KIE lane as an `image_url` part, Hydrogen's shape
+    // (probed 2026-11-22: a 2-page PDF as a `data:application/pdf` URL read
+    // correctly, 1,192 prompt tokens). Not measured: a PDF by link, more pages.
+    fileWire: { kie: "image-url" },
+    // KIE's documented enum, each level answered (probed 2026-11-22; xhigh
+    // reasoned clearly deeper: 469 reasoning tokens against 254 at high on the
+    // same puzzle). No `none`: a `none` request runs at Auto, `max` at xhigh.
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    // KIE's doc: temperature, topP and topK have no effect on Gemini 4. The
+    // probe agrees, on two samples: two calls at temperature 0 gave different
+    // answers (in-range values are accepted; 50 is a 400 from the provider).
+    // So it is never sent.
+    supportsTemperature: false,
+    // KIE documents more than 10 files in one message as an error. Two probe
+    // calls with 11 (2026-11-22: 11 images; 5 PDFs + 3 videos + 3 audio clips,
+    // all inline) answered and read them all, but the limit is the documented
+    // one, so a call with more is refused up front (decided 2026-11-22).
+    maxAttachments: 10,
+    // Reasons with no effort sent (165 reasoning tokens on a two-step puzzle
+    // at Auto). KIE's `completion_tokens` INCLUDES the reasoning
+    // (`reasoning_tokens` is a part of it; total = prompt + completion), as
+    // Hydrogen's, so the reported output count is billed as it stands.
+    thinkingDefaultOn: true,
+  },
+  {
     id: "gemini-4-hydrogen",
     displayName: "Gemini 4 Hydrogen",
     series: "Gemini",
@@ -909,11 +973,51 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // trade astra already makes.
     kieCollapseStream: true,
   },
+  // ── GPT-6.2 Astra ─────────────────────────────────────────────────────────
+  // The GPT-6 wire (codex/v1/responses, derived from `vendor`); KIE's doc is
+  // 6.2 Sol's page with the name swapped. Live-probed 2026-11-22 (12 calls):
+  // non-stream 11/11 and a stream that ended with usage and
+  // `credits_consumed`, `text.format` json_schema ENFORCED (asked for prose,
+  // it returned schema JSON with the enum honoured), data-URI vision, an
+  // inline PDF read. `temperature: 0.2` echoed back as 1 → ignored. It
+  // reports REAL top-level `usage.input_tokens`, so it is not in
+  // `kieInputUntrusted`'s list (backend/src/lib/llm/kie-cost.ts).
+  //
+  // KIE's own instructions: one call in twelve reported 26,903 input tokens
+  // for a 53-token prompt (the others reported the prompt alone). Not
+  // modelled (decided 2026-11-22); see `KIE_ADDED_INPUT_TOKENS` in
+  // backend/src/lib/pricing/llm-cost.ts.
+  {
+    id: "gpt-6.2-astra",
+    displayName: "GPT-6.2 Astra",
+    series: "GPT",
+    desc: "Flagship GPT-6.2, deepest reasoning",
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-6-2-astra",
+    vendor: "openai",
+    // A PDF goes inline as an `input_file` part, Terra's shape (probed 2026-11-22).
+    fileWire: { kie: "input-file" },
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // KIE's documented enum; each level was sent and echoed back (2026-11-22).
+    // No `none` in the doc: a `none` request runs at Auto.
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    // With no effort sent the echo read `medium` and the reply reported
+    // reasoning tokens (21 on a two-step puzzle), counted inside
+    // `output_tokens` (total = input + output).
+    thinkingDefaultOn: true,
+  },
   {
     id: "gpt-6-astra",
     displayName: "GPT-6 Astra",
     series: "GPT",
-    desc: "Flagship GPT-6, deepest reasoning",
+    // Demoted 2026-11-22 when gpt-6.2-astra registered above — the flagship
+    // copy is the current top GPT's only, and worded to stay distinct from
+    // gpt-5.6-sol's and gpt-5.5's "Previous flagship" lines.
+    desc: "Previous flagship GPT-6, deep reasoning",
     tier: "premium",
     kieFormat: "responses",
     // KIE serves GPT-6 on the responses dialect under the OpenAI family path —
@@ -1011,13 +1115,45 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsTemperature: false,
     thinkingDefaultOn: true,
   },
+  // ── GPT-6.2 Sol ───────────────────────────────────────────────────────────
+  // The GPT-6 wire, as 6.2 Astra (above). Live-probed 2026-11-22 (9 calls):
+  // non-stream 8/8 in 4–7 s and a stream that ended with usage and
+  // `credits_consumed`, `text.format` json_schema ENFORCED, data-URI vision, an
+  // inline PDF read, `temperature` ignored (echo 1), REAL top-level
+  // `usage.input_tokens` on every call (not in `kieInputUntrusted`'s list) and
+  // no instructions of KIE's own counted in them.
+  {
+    id: "gpt-6.2-sol",
+    displayName: "GPT-6.2 Sol",
+    series: "GPT",
+    desc: "Newest GPT-6 Sol, deep reasoning",
+    // The same tier as gpt-6.1-sol (decided 2026-11-22).
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-6-2-sol",
+    vendor: "openai",
+    // A PDF goes inline as an `input_file` part, Terra's shape (probed 2026-11-22).
+    fileWire: { kie: "input-file" },
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // KIE's documented enum; each level was sent and echoed back (2026-11-22).
+    // No `none` in the doc: a `none` request runs at Auto.
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    // With no effort sent the echo read `medium` and the reply reported
+    // reasoning tokens (18 on a two-step puzzle), counted inside
+    // `output_tokens` (total = input + output).
+    thinkingDefaultOn: true,
+  },
   {
     id: "gpt-6.1-sol",
     displayName: "GPT-6.1 Sol",
     series: "GPT",
     // Measured slow: 30–76 s for 500–1,100 output tokens (2026-10-08), roughly
     // twice gpt-6-sol on the same request — say so where the picker shows it.
-    desc: "Newest GPT-6 Sol, thorough but slower",
+    // No longer "Newest" since gpt-6.2-sol registered above (2026-11-22).
+    desc: "Previous GPT-6 Sol, thorough but slower",
     tier: "premium",
     kieFormat: "responses",
     kieSlugOrModel: "gpt-6-1-sol",
@@ -1681,8 +1817,9 @@ export function defaultReasoningEffort(feature: string, modelId?: string): LlmRe
  * input requires a separate audio-capable model we don't route to today.
  *
  * `file` (decided 2026-11-13): the model reads documents (PDF) sent with the
- * call. Declared on each model that does — GPT-6.1 Terra, and Gemini 4
- * Hydrogen from 2026-11-17 — and never derived for any other: absent means
+ * call. Declared on each model that does — GPT-6.1 Terra, Gemini 4 Hydrogen
+ * from 2026-11-17, and Gemini 4 Neon, GPT-6.2 Sol and GPT-6.2 Astra from
+ * 2026-11-22 — and never derived for any other: absent means
  * no. Read it through {@link llmAcceptsFiles}. A model that declares it also
  * declares how a file is sent to it (`fileWire` on its registry entry).
  */
@@ -1738,6 +1875,16 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // registry entry says how each lane is sent one). The `file` cap is read only
   // by the LLM nodes (`llmAcceptsFiles`), so it enrols the model in nothing else.
   "gemini-4-hydrogen": { image: true,  video: true,  audio: true,  file: true },
+  // gemini-4-neon takes video, audio and PDF ON THE LLM NODES ONLY (decided
+  // 2026-11-22), as Hydrogen: it is listed in LLM_NODE_ONLY_MEDIA_MODELS, so
+  // these caps enrol it in no Video Analysis tier, no trend clip step and no
+  // shot list. Probed on KIE 2026-11-22, each as the `image_url` part the
+  // chat-completions builder sends: a 5 s clip as a data URL (576 prompt
+  // tokens, its sound heard) and the 52 s, 4.4 MB 480p trailer by https link
+  // (5,507 prompt tokens, read correctly); a 3 s mp3 by data URL (transcribed)
+  // and by https link (described); a 2-page PDF as a data URL (read). It has
+  // no direct lane, so a media call stays on KIE with the not-read floor.
+  "gemini-4-neon":     { image: true,  video: true,  audio: true,  file: true },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
   "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
@@ -1757,6 +1904,10 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
   // Reads PDFs (`file`, probed 2026-11-13: KIE took a PDF inline and by link,
   // and refused a text file and a Word file — so PDF only).
   "gpt-6.1-terra":     { image: true,  video: false, audio: false, file: true },
+  // KIE's GPT-6.2 docs list text + image + file inputs; a PDF read inline on
+  // both (probed 2026-11-22). No video, no audio.
+  "gpt-6.2-sol":       { image: true,  video: false, audio: false, file: true },
+  "gpt-6.2-astra":     { image: true,  video: false, audio: false, file: true },
   "grok-4.6":          { image: true,  video: false, audio: false },
   "grok-4.7":          { image: true,  video: false, audio: false },
   "claude-sonnet-5":   { image: true,  video: false, audio: false },
@@ -1776,9 +1927,10 @@ export const LLM_MODALITY_CAPS: Record<string, LlmModalityCaps> = {
  * MCP `generate_text` tool and their API routes) and never enrol them in
  * another product that derives "the models that read video" from
  * {@link LLM_MODALITY_CAPS}: Video Analysis ({@link VIDEO_ANALYSIS_LLM_MODELS})
- * and a trend's clip-reading LLM step. Gemini 4 Hydrogen (decided 2026-11-16).
+ * and a trend's clip-reading LLM step. Gemini 4 Hydrogen (decided 2026-11-16)
+ * and Gemini 4 Neon (decided 2026-11-22).
  */
-export const LLM_NODE_ONLY_MEDIA_MODELS: readonly string[] = ["gemini-4-hydrogen"]
+export const LLM_NODE_ONLY_MEDIA_MODELS: readonly string[] = ["gemini-4-hydrogen", "gemini-4-neon"]
 
 /** Whether `modelId` reads video/audio on the LLM nodes only ({@link LLM_NODE_ONLY_MEDIA_MODELS}). */
 export function readsMediaOnLlmNodesOnly(modelId: string | undefined): boolean {
@@ -1823,6 +1975,11 @@ export function llmAcceptsFiles(modelId: string | undefined): boolean {
 /** How `modelId` is sent a document on each lane (`fileWire` on its registry entry); `undefined` for a model that reads none. */
 export function llmFileWire(modelId: string | undefined): LlmFileWire | undefined {
   return llmAcceptsFiles(modelId) ? LLM_MODELS.find((m) => m.id === modelId)?.fileWire : undefined
+}
+
+/** The most attachments one call to `modelId` may carry (`LlmModelDef.maxAttachments`); `undefined` = the routes' own limits only. */
+export function llmMaxAttachments(modelId: string | undefined): number | undefined {
+  return modelId ? getLlmModel(modelId)?.maxAttachments : undefined
 }
 
 /** The models that read documents, in registry order — what a refusal names. */

@@ -18,7 +18,7 @@ import { directFallbackAllowed, kieFallback, serveFromFallback } from "./lane-fa
 import { advancedModeRefusalOf, assertAdvancedModeServable, exhaustionKieFallback, serveIfDirectLatched } from "./exhaustion-fallback.js"
 import { callAnthropicDirect, streamAnthropicStructured } from "./anthropic-lane.js"
 import { streamKieMessages } from "./kie-lane.js"
-import { requestChars } from "./kie-cost.js"
+import { documentInputFloorTokens, requestChars } from "./kie-cost.js"
 import { directLaneVendor } from "./direct-vendor.js"
 import type { LlmAttemptSpend, LlmMessage, LlmRequest, LlmResponse, LlmServedLane } from "./types.js"
 
@@ -455,6 +455,7 @@ function addSpend(spend: StructuredSpend, resp: LlmResponse, attemptReq: LlmRequ
     outputTokens: resp.usage?.outputTokens ?? 0,
     ...(resp.providerCost !== undefined ? { providerCost: resp.providerCost } : {}),
     ...(resp.creditsUsd !== undefined ? { creditsUsd: resp.creditsUsd } : {}),
+    ...fileFloorOf(attemptReq),
   }
   return {
     inputTokens: spend.inputTokens + (resp.usage?.inputTokens ?? 0),
@@ -496,7 +497,14 @@ function failedAttempt(error: unknown, attemptReq: LlmRequest, laneHint?: LlmSer
     ...(u.providerCost !== undefined ? { providerCost: u.providerCost } : {}),
     ...(u.creditsUsd !== undefined ? { creditsUsd: u.creditsUsd } : {}),
     ...(error instanceof LlmStreamAbortedError ? { estimated: true as const } : {}),
+    ...fileFloorOf(attemptReq),
   }
+}
+
+/** The documents' input floor of an attempt's request, as an attempt carries it (absent for a call with none) — what the spend's other paths record too. */
+function fileFloorOf(attemptReq: LlmRequest): { fileInputFloor?: number } {
+  const floor = documentInputFloorTokens(attemptReq)
+  return floor > 0 ? { fileInputFloor: floor } : {}
 }
 
 /** The served lane `llmPrimaryLane` names for this request (a direct lane is the model's own API). */

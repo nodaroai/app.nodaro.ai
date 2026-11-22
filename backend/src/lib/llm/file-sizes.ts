@@ -49,6 +49,14 @@ const FILE_SIZES: Readonly<Record<string, LlmFileSizes>> = {
   // of blank pages, stays above it. Nothing is added per file. Pages with
   // text measured 1,280 to 2,670 a page.
   "gemini-4-hydrogen": { chargePageTokens: 520, chargeFileTokens: 0, estimatePageChars: 520 * 4, notReadPageTokens: 450 },
+  // Gemini 4 Neon reads a PDF the same way on the same lane (an `image_url`
+  // part), and its one measured document matched Hydrogen's shape: a 2-page
+  // PDF of one text line a page reported 1,192 prompt tokens with a 20-token
+  // question (2026-11-22) — about 585 a page, over the 520 image tokens a
+  // page. One document measured, so Hydrogen's figures are taken, its
+  // not-read floor included (the dialect is the one that dropped other
+  // document shapes for Hydrogen; not re-probed for Neon).
+  "gemini-4-neon": { chargePageTokens: 520, chargeFileTokens: 0, estimatePageChars: 520 * 4, notReadPageTokens: 450 },
 }
 
 /** The document sizes of `modelId`: its own row, else {@link DEFAULT_FILE_SIZES}. */

@@ -167,7 +167,7 @@ describe("GPT-6.1 Terra's reported input is read and trusted (the tokens KIE add
   // until the id is classified here — measured to report 0 input (and listed
   // in kie-cost.ts's KIE_INPUT_UNREPORTED) or measured to report real counts.
   it("every GPT-6 model in the registry is classified, so a new one cannot slip in as trusted", () => {
-    const REPORTS_REAL_INPUT = new Set(["gpt-6.1-terra"])
+    const REPORTS_REAL_INPUT = new Set(["gpt-6.1-terra", "gpt-6.2-sol", "gpt-6.2-astra"])
     const REPORTS_NO_INPUT = new Set(["gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"])
     const gpt6 = LLM_MODELS.filter((m) => m.id.startsWith("gpt-6")).map((m) => m.id).sort()
     expect(gpt6).toEqual([...REPORTS_REAL_INPUT, ...REPORTS_NO_INPUT].sort())

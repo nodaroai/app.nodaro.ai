@@ -41,6 +41,7 @@ import {
   LLM_CREDIT_RUNGS,
   LLM_MODALITY_CAPS,
   LLM_FILE_MODELS,
+  llmMaxAttachments,
   LLM_REFERENCE_FILES_MAX,
   LLM_REFERENCE_FILES_MAX_TOTAL_BYTES,
   LLM_REFERENCE_FILES_MAX_PAGES,
@@ -72,6 +73,7 @@ const EXPECTED_MODEL_IDS = [
   "gemini-3.1-pro",
   "gemini-4-argon",
   "gemini-4-carbon",
+  "gemini-4-neon",
   "gemini-4-hydrogen",
   "claude-opus-4.7",
   "gpt-5.4",
@@ -79,9 +81,11 @@ const EXPECTED_MODEL_IDS = [
   "gpt-5.6-luna",
   "gpt-5.6-terra",
   "gpt-5.6-sol",
+  "gpt-6.2-astra",
   "gpt-6-astra",
   "gpt-6-luna",
   "gpt-6-sol",
+  "gpt-6.2-sol",
   "gpt-6.1-sol",
   "gpt-6.1-terra",
   "grok-4.6",
@@ -139,14 +143,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 9 economy, 8 standard, 17 premium models", () => {
+  it("has 9 economy, 8 standard, 20 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
     expect(tierCounts.economy).toBe(9)
     expect(tierCounts.standard).toBe(8)
-    expect(tierCounts.premium).toBe(17)
+    expect(tierCounts.premium).toBe(20)
   })
 
   it("all three kieFormats are represented", () => {
@@ -709,6 +713,10 @@ describe("STRUCTURED_VISION_MODELS", () => {
         // declares no structured mode (parse, validate and re-ask instead).
         "gpt-6.1-terra",
         "kimi-k3.1-pro",
+        // 2026-11-22 — text.format json_schema enforced on KIE, vision read.
+        // gemini-4-neon is NOT here: KIE did not enforce its schema.
+        "gpt-6.2-sol",
+        "gpt-6.2-astra",
       ].sort(),
     )
   })
@@ -1218,7 +1226,7 @@ describe("gemini-4-hydrogen exposure", () => {
   })
 
   it("its media caps are for the LLM nodes only: no Video Analysis list, tier, legacy row or passthrough", () => {
-    expect(LLM_NODE_ONLY_MEDIA_MODELS).toEqual(["gemini-4-hydrogen"])
+    expect(LLM_NODE_ONLY_MEDIA_MODELS).toEqual(["gemini-4-hydrogen", "gemini-4-neon"])
     expect(readsMediaOnLlmNodesOnly("gemini-4-hydrogen")).toBe(true)
     expect(readsMediaOnLlmNodesOnly("gemini-4-carbon")).toBe(false)
     expect(readsMediaOnLlmNodesOnly(undefined)).toBe(false)
@@ -1292,10 +1300,10 @@ describe("gpt-6.1-terra exposure", () => {
 })
 
 describe("the `file` modality cap (documents, decided 2026-11-13)", () => {
-  it("is declared on GPT-6.1 Terra and Gemini 4 Hydrogen, and never derived for another model", () => {
-    const readers = ["gemini-4-hydrogen", "gpt-6.1-terra"]
+  it("is declared on GPT-6.1 Terra, GPT-6.2 Sol and Astra, Gemini 4 Hydrogen and Neon, and never derived for another model", () => {
+    const readers = ["gemini-4-neon", "gemini-4-hydrogen", "gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra"]
     expect(LLM_FILE_MODELS.map((m) => m.id)).toEqual(readers)
-    expect(Object.entries(LLM_MODALITY_CAPS).filter(([, c]) => c.file).map(([id]) => id).sort()).toEqual(readers)
+    expect(Object.entries(LLM_MODALITY_CAPS).filter(([, c]) => c.file).map(([id]) => id).sort()).toEqual([...readers].sort())
     for (const m of LLM_MODELS) expect(llmAcceptsFiles(m.id), m.id).toBe(readers.includes(m.id))
     expect(llmAcceptsFiles(undefined)).toBe(false)
     expect(llmAcceptsFiles("no-such-model")).toBe(false)
@@ -1313,6 +1321,12 @@ describe("the `file` modality cap (documents, decided 2026-11-13)", () => {
     // Probed 2026-11-17 on both lanes: an `image_url` part on the aggregator's
     // chat-completions dialect, an inline part on Google's own API.
     "gemini-4-hydrogen": { kie: "image-url", direct: "inline-data" },
+    // Probed 2026-11-22: an inline `input_file` part on the responses dialect.
+    "gpt-6.2-sol": { kie: "input-file" },
+    "gpt-6.2-astra": { kie: "input-file" },
+    // Probed 2026-11-22: an `image_url` part on the aggregator's
+    // chat-completions dialect. No direct lane.
+    "gemini-4-neon": { kie: "image-url" },
   }
 
   it("a model reads files exactly when it is listed with how each of its lanes is sent one (`fileWire`)", () => {
@@ -1346,6 +1360,131 @@ describe("the `file` modality cap (documents, decided 2026-11-13)", () => {
 
   it("a document never enrolls a model in video analysis", () => {
     expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gpt-6.1-terra")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-11-22 addition: Gemini 4 Neon (KIE lane probed that day). Hydrogen's
+// KIE lane shape, with no direct Google lane.
+// ---------------------------------------------------------------------------
+describe("gemini-4-neon exposure", () => {
+  it("premium Gemini on KIE only — no direct lane, so no Advanced mode", () => {
+    const m = getLlmModel("gemini-4-neon")!
+    expect(m.displayName).toBe("Gemini 4 Neon")
+    expect(m.series).toBe("Gemini")
+    expect(m.tier).toBe("premium")
+    expect(m.vendor).toBe("google")
+    expect(m.kieFormat).toBe("chat-completions")
+    expect(m.kieSlugOrModel).toBe("gemini-4-neon-openai")
+    expect(m.directGeminiModel).toBeUndefined()
+    expect(m.directOnly).toBeUndefined()
+    expect(m.preferDirect).toBeUndefined()
+    expect(supportsAdvancedMode("gemini-4-neon")).toBe(false)
+    expect(llmServesDirect("gemini-4-neon", "xhigh", true)).toBe(false)
+  })
+
+  it("sits between Gemini 4 Carbon and Gemini 4 Hydrogen in the registry", () => {
+    const ids = LLM_MODELS.map((m) => m.id)
+    expect(ids.indexOf("gemini-4-neon")).toBe(ids.indexOf("gemini-4-carbon") + 1)
+    expect(ids.indexOf("gemini-4-hydrogen")).toBe(ids.indexOf("gemini-4-neon") + 1)
+  })
+
+  it("declares NO trusted structured mode, only the response_format hint — callers parse and re-ask", () => {
+    const m = getLlmModel("gemini-4-neon")!
+    expect(m.structuredOutputMode).toBeUndefined()
+    expect(m.structuredOutputHint).toBe("kie-response-format")
+    expect(STRUCTURED_VISION_MODELS.map((x) => x.id)).not.toContain("gemini-4-neon")
+    expect(DESCRIBE_TO_PICKER_MODELS.map((x) => x.id)).not.toContain("gemini-4-neon")
+  })
+
+  it("offers low / medium / high / xhigh — `none` runs at Auto, `max` clamps to xhigh", () => {
+    expect(availableReasoningEfforts("gemini-4-neon")).toEqual(["low", "medium", "high", "xhigh"])
+    expect(effectiveReasoningEffort("gemini-4-neon", "none")).toBeUndefined()
+    expect(effectiveReasoningEffort("gemini-4-neon", "max")).toBe("xhigh")
+    expect(effectiveReasoningEffort("gemini-4-neon", "xhigh")).toBe("xhigh")
+    expect(getLlmModel("gemini-4-neon")?.directXhighThinking).toBeUndefined()
+  })
+
+  it("takes no temperature, reasons by default, floored at the default 32768", () => {
+    const m = getLlmModel("gemini-4-neon")!
+    expect(m.supportsTemperature).toBe(false)
+    expect(m.thinkingDefaultOn).toBe(true)
+    expect(reasoningOutputFloor(m)).toBe(REASONING_OUTPUT_FLOOR)
+    expect(m.maxOutputTokens).toBe(16384)
+  })
+
+  it("resolves by its id and its KIE slug, and backs no feature default", () => {
+    expect(getLlmModel("gemini-4-neon-openai")?.id).toBe("gemini-4-neon")
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain("gemini-4-neon")
+  })
+
+  it("reads images, video, audio and PDF files on the LLM nodes only", () => {
+    expect(getLlmModalityCaps("gemini-4-neon")).toEqual({ image: true, video: true, audio: true, file: true })
+    expect(llmFileWire("gemini-4-neon")).toEqual({ kie: "image-url" })
+    expect(readsMediaOnLlmNodesOnly("gemini-4-neon")).toBe(true)
+    expect(readsVideoOutsideLlmNodes("gemini-4-neon")).toBe(false)
+    expect(readsAudioOutsideLlmNodes("gemini-4-neon")).toBe(false)
+    expect(VIDEO_ANALYSIS_LLM_MODELS).not.toContain("gemini-4-neon")
+    expect(Object.values(VIDEO_ANALYSIS_TIERS)).not.toContain("gemini-4-neon")
+    expect(resolveVideoAnalysisModel("gemini-4-neon")).toBe(resolveVideoAnalysisModel("not-a-model"))
+  })
+
+  it("takes at most 10 attachments in one call (`maxAttachments`); no other model declares a limit", () => {
+    expect(llmMaxAttachments("gemini-4-neon")).toBe(10)
+    expect(LLM_MODELS.filter((m) => m.maxAttachments !== undefined).map((m) => m.id)).toEqual(["gemini-4-neon"])
+    expect(llmMaxAttachments("gemini-4-hydrogen")).toBeUndefined()
+    expect(llmMaxAttachments(undefined)).toBeUndefined()
+    expect(llmMaxAttachments("no-such-model")).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2026-11-22 addition: GPT-6.2 Sol and GPT-6.2 Astra (KIE codex responses lane
+// probed that day). Placed new-first: each directly above the model it leads.
+// ---------------------------------------------------------------------------
+describe("gpt-6.2 sol / astra exposure", () => {
+  it("are listed directly above GPT-6.1 Sol and GPT-6 Astra", () => {
+    const ids = LLM_MODELS.map((m) => m.id)
+    expect(ids.indexOf("gpt-6.1-sol")).toBe(ids.indexOf("gpt-6.2-sol") + 1)
+    expect(ids.indexOf("gpt-6-astra")).toBe(ids.indexOf("gpt-6.2-astra") + 1)
+  })
+
+  it.each([
+    ["gpt-6.2-sol", "gpt-6-2-sol", "GPT-6.2 Sol"],
+    ["gpt-6.2-astra", "gpt-6-2-astra", "GPT-6.2 Astra"],
+  ])("%s: premium GPT on the codex responses wire with an enforced schema, KIE only, non-stream", (id, slug, name) => {
+    const m = getLlmModel(id)!
+    expect(m.displayName).toBe(name)
+    expect(m.series).toBe("GPT")
+    expect(m.tier).toBe("premium")
+    expect(m.vendor).toBe("openai")
+    expect(m.kieFormat).toBe("responses")
+    expect(m.kieSlugOrModel).toBe(slug)
+    expect(getLlmModel(slug)?.id).toBe(id)
+    expect(m.structuredOutputMode).toBe("responses-json-schema")
+    expect(STRUCTURED_VISION_MODELS.map((x) => x.id)).toContain(id)
+    expect(m.supportsTemperature).toBe(false)
+    expect(m.kieCollapseStream).toBeUndefined()
+    expect(m.effortPriced).toBeUndefined()
+    expect(m.thinkingDefaultOn).toBe(true)
+    expect(supportsAdvancedMode(id)).toBe(false)
+    expect(getLlmModalityCaps(id)).toEqual({ image: true, video: false, audio: false, file: true })
+    expect(llmFileWire(id)).toEqual({ kie: "input-file" })
+    expect(Object.values(LLM_FEATURE_DEFAULTS)).not.toContain(id)
+  })
+
+  it.each(["gpt-6.2-sol", "gpt-6.2-astra"])("%s offers low…max with medium inside, never `none`", (id) => {
+    expect(availableReasoningEfforts(id)).toEqual(["low", "medium", "high", "xhigh", "max"])
+    expect(effectiveReasoningEffort(id, "none")).toBeUndefined()
+    expect(effectiveReasoningEffort(id, "max")).toBe("max")
+  })
+
+  it("Sol bills at GPT-6.1 Sol's tier; Astra takes the flagship copy and GPT-6 Astra no longer claims it", () => {
+    expect(getLlmTier("gpt-6.2-sol")).toBe(getLlmTier("gpt-6.1-sol"))
+    expect(getLlmModel("gpt-6.2-astra")?.desc).toMatch(/^Flagship/)
+    expect(getLlmModel("gpt-6-astra")?.desc).not.toMatch(/^Flagship/)
+    expect(getLlmModel("gpt-6.1-sol")?.desc).not.toMatch(/Newest/)
+    expect(LLM_MODELS.filter((m) => m.vendor === "openai" && m.desc.startsWith("Flagship")).map((m) => m.id)).toEqual(["gpt-6.2-astra"])
   })
 })
 

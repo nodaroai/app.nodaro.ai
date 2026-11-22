@@ -20,7 +20,7 @@ import type { LlmContentBlock, LlmRequest, LlmResponse } from "../lib/llm-client
 import { LLM_VIDEO_FPS_MAX } from "../lib/llm/types.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult, stampSyncLlmCallStart } from "../lib/llm-billing.js"
 import { abortOnClientDisconnect, addCallToSpend, billedEvidence, meteredFailureMessage, meteredTextPrecheck, recordMeteredJobOutput } from "../lib/metered-text-route.js"
-import { LLM_FILE_MODELS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_REFERENCE_FILES_MAX, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, llmAcceptsFiles, llmFileWire } from "@nodaro/shared/llm-models"
+import { LLM_FILE_MODELS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, LLM_REFERENCE_FILES_MAX, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps, llmAcceptsFiles, llmMaxAttachments, llmFileWire } from "@nodaro/shared/llm-models"
 import { LlmFileError, prepareLlmFiles, type LlmFileBlock } from "../lib/llm-files.js"
 import { discardLlmFileLinks, planLlmFileLinks, storeLlmFileLinks, type LlmFileLinkStep } from "../lib/llm-file-link.js"
 import { kieKeySet } from "../lib/llm/anthropic-availability.js"
@@ -200,12 +200,22 @@ function sendFilesRefusal(reply: FastifyReply, refusal: { status: number; error:
 
 /**
  * Return null if refs are valid for the model, or an error payload when the
- * caller passed video/audio refs to a model that doesn't support them.
+ * caller passed video/audio refs to a model that doesn't support them, or
+ * more attachments in all than the model takes in one call
+ * (`llmMaxAttachments`, a per-model registry figure).
  */
 function checkModalityOrError(
   llmModel: string,
-  refs: { videos?: string[]; audios?: string[]; files?: string[] },
+  refs: { images?: string[]; videos?: string[]; audios?: string[]; files?: string[] },
 ): { code: string; message: string } | null {
+  const maxAttachments = llmMaxAttachments(llmModel)
+  const attachments = (refs.images?.length ?? 0) + (refs.videos?.length ?? 0) + (refs.audios?.length ?? 0) + (refs.files?.length ?? 0)
+  if (maxAttachments !== undefined && attachments > maxAttachments) {
+    return {
+      code: "too_many_attachments",
+      message: `Model ${llmModel} takes at most ${maxAttachments} images, videos, audio clips and files in one call; this call has ${attachments}. Send fewer, or switch models.`,
+    }
+  }
   const caps = getLlmModalityCaps(llmModel)
   if (refs.videos?.length && !caps.video) {
     return { code: "modality_not_supported", message: `Model ${llmModel} does not support video references. Switch to a model that reads video.` }
@@ -214,7 +224,8 @@ function checkModalityOrError(
     return { code: "modality_not_supported", message: `Model ${llmModel} does not support audio references. Switch to a model that reads audio.` }
   }
   if (refs.files?.length && !llmAcceptsFiles(llmModel)) {
-    const readers = LLM_FILE_MODELS.map((m) => m.displayName).join(" or ")
+    const names = LLM_FILE_MODELS.map((m) => m.displayName)
+    const readers = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names.join("")
     return { code: "modality_not_supported", message: `Model ${llmModel} does not read files. Switch to ${readers}.` }
   }
   return null
@@ -355,7 +366,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
-      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls, files: referenceFileUrls })
+      const modalityError = checkModalityOrError(llmModel, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls, files: referenceFileUrls })
       if (modalityError) {
         return reply.status(400).send({ error: modalityError })
       }
@@ -572,7 +583,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
-      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls, files: referenceFileUrls })
+      const modalityError = checkModalityOrError(llmModel, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls, files: referenceFileUrls })
       if (modalityError) {
         return reply.status(400).send({ error: modalityError })
       }

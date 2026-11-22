@@ -54,6 +54,7 @@ export {
   llmFileWire,
   type LlmFileWire,
   LLM_FILE_MODELS,
+  llmMaxAttachments,
   LLM_REFERENCE_FILES_MAX,
   LLM_REFERENCE_FILES_MAX_TOTAL_BYTES,
   LLM_REFERENCE_FILES_MAX_PAGES,

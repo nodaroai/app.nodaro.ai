@@ -1871,6 +1871,13 @@ const LIBRARY_SONG_NAME_SEARCH_BYTES = 25
 const ROLE_FACE_BYTES = 253
 const ROLE_FACE_PER_TOOL_BYTES = 151
 
+// RAISED 2026-11-22 by three LLM ids added to the registry (gemini-4-neon, gpt-6.2-sol,
+// gpt-6.2-astra): every tool whose `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists them, and
+// nothing else moved. No tool was added, so the membership fixture does NOT move (the recorded tool
+// list, tool-list-wire.json, does). Measured by this suite with them: 560_198 B against the budget of
+// 559_970 B, so the budget is raised by the 228 B over it and is left with none.
+const KIE_LLMS_NEON_GPT_6_2_ID_BYTES = 228
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES,
   totalBytes:
@@ -2104,7 +2111,8 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_REMAKE_REFERENCE_IMAGES_BYTES +
     VIDEO_REMAKE_PREVIZ_BYTES +
     LIBRARY_SONG_NAME_SEARCH_BYTES +
-    ROLE_FACE_BYTES,
+    ROLE_FACE_BYTES +
+    KIE_LLMS_NEON_GPT_6_2_ID_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

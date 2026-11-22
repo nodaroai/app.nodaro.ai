@@ -9,7 +9,7 @@
 import { getLlmModel } from "@nodaro/shared/llm-models"
 import { CREDIT_BASE_USD } from "@nodaro/shared/models"
 import { LlmStreamAbortedError, LlmStreamResponseError } from "./llm-errors.js"
-import { kieCostUsd, kieInputUntrusted, documentInputFloorTokens, requestChars } from "./llm/kie-cost.js"
+import { KIE_INPUT_IMPLAUSIBLE_FACTOR, kieCostUsd, kieInputCheckedWhenUnstated, kieInputTokens, kieInputUntrusted, documentInputFloorTokens, requestChars } from "./llm/kie-cost.js"
 import { calculateLlmCost, llmPrimaryLane } from "./pricing/llm-cost.js"
 import { directLaneVendor } from "./llm/direct-vendor.js"
 import type { StructuredLlmOutput } from "./llm/structured.js"
@@ -44,12 +44,28 @@ function attemptSource(a: LlmAttemptSpend): AttemptSource {
   if (a.estimated) return "abort-estimate"
   if (a.creditsUsd !== undefined) return "kie-stated"
   if (a.lane === "kie" && kieInputUntrusted(a.modelId)) return "kie-size-estimate"
+  if (sizedInputTokens(a) !== undefined) return "kie-size-estimate"
   if (documentFloorApplies(a)) return "document-floor"
   return "provider-usage"
 }
 
 /**
- * Whether an attempt's input is charged at its documents' floor (rule 3 of
+ * The input an attempt is charged from its request's size instead of the count
+ * KIE reported (rule 3 of {@link llmAttemptCostUsd}), or undefined to bill by
+ * the other rules: a model in `kieInputCheckedWhenUnstated`, on the
+ * aggregator's lane, whose reply stated no charge, not a stopped stream's
+ * estimate (already sized from the request), and whose reported input is more
+ * than `KIE_INPUT_IMPLAUSIBLE_FACTOR` times the size — the request's
+ * characters ÷ 4, never below its documents' floor. Recorded as `kie-size-estimate`.
+ */
+function sizedInputTokens(a: LlmAttemptSpend): number | undefined {
+  if (a.lane !== "kie" || a.creditsUsd !== undefined || a.estimated || !kieInputCheckedWhenUnstated(a.modelId)) return undefined
+  const sized = Math.max(kieInputTokens(a.requestChars), a.fileInputFloor ?? 0)
+  return a.inputTokens > KIE_INPUT_IMPLAUSIBLE_FACTOR * sized ? sized : undefined
+}
+
+/**
+ * Whether an attempt's input is charged at its documents' floor (rule 4 of
  * {@link llmAttemptCostUsd}): it sent documents, its reply stated no charge,
  * its reported input is below the floor, its usage is not a stopped stream's
  * estimate, and it ran on the aggregator's lane. Such an attempt is recorded as `document-floor`.
@@ -69,14 +85,21 @@ function documentFloorApplies(a: LlmAttemptSpend): a is LlmAttemptSpend & { file
  *     never GPT-6.1 Terra, whose count is real): the size estimate — the request's
  *     characters ÷ 4 in, the reported output tokens out — at the KIE rate
  *     (`kieCostUsd`);
- *  3. for a request that sent documents whose reported input is below their
+ *  3. on the `kie` lane for a model whose reported input can carry KIE's own
+ *     instructions (`kieInputCheckedWhenUnstated`: GPT-6.2 Sol and Astra,
+ *     decided 2026-11-22), with no stated charge, not a stopped stream's
+ *     estimate, and a reported input over `KIE_INPUT_IMPLAUSIBLE_FACTOR` times
+ *     the request's size: that size in (characters ÷ 4, never below its
+ *     documents' floor when it sent files), the reported output out, at the
+ *     KIE rate. A plausible count, 0 included, goes on to the rules below;
+ *  4. for a request that sent documents whose reported input is below their
  *     measured size (`fileInputFloor`, `documentInputFloorTokens`; never a
  *     stopped stream's estimate): the lane's rate × that floor in, the
  *     reported output out;
- *  4. the adapter's `providerCost` — unless it is 0 beside real tokens (the
+ *  5. the adapter's `providerCost` — unless it is 0 beside real tokens (the
  *     rate-table fallback that found no rate, `llmCostOrZero`), which is
- *     recomputed by rule 5;
- *  5. the lane's rate × the reported tokens (`calculateLlmCost`).
+ *     recomputed by rule 6;
+ *  6. the lane's rate × the reported tokens (`calculateLlmCost`).
  * Each rate-based rule throws `LlmRateMissingError` on a missing rate; none
  * ever returns 0 for want of one.
  */
@@ -85,6 +108,9 @@ export function llmAttemptCostUsd(a: LlmAttemptSpend): number {
   if (a.lane === "kie" && kieInputUntrusted(a.modelId)) {
     return kieCostUsd(a.modelId, { promptChars: a.requestChars, answerChars: a.outputTokens * 4 })
   }
+  // An implausible reported input (KIE's own instructions counted in it): input from what was sent.
+  const sized = sizedInputTokens(a)
+  if (sized !== undefined) return calculateLlmCost(a.modelId, { inputTokens: sized, outputTokens: a.outputTokens }, "kie")
   // A call that sent documents and reported less input than they hold (a
   // stream's reply with no stated charge; a document call has reported 0):
   // its input is charged at its documents' measured size plus its text.
@@ -231,6 +257,7 @@ export class LlmSpend {
         inputTokens: o.inputTokens,
         outputTokens: o.outputTokens,
         providerCost: o.providerCost,
+        ...fileFloorOf(request),
       }))
       return
     }
@@ -276,6 +303,7 @@ export class LlmSpend {
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             providerCost: usage.providerCost,
+            ...fileFloorOf(request),
           }))
           return
         }

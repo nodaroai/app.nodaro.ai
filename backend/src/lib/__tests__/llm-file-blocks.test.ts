@@ -129,7 +129,7 @@ describe("the lanes a file call can take", () => {
   it("every model that reads files declares a shape for every lane it can be served on", async () => {
     const { LLM_FILE_MODELS } = await import("@nodaro/shared/llm-models")
     const { llmPossibleLanes } = await import("../pricing/llm-cost.js")
-    expect(LLM_FILE_MODELS.map((m) => m.id)).toEqual(["gemini-4-hydrogen", "gpt-6.1-terra"])
+    expect(LLM_FILE_MODELS.map((m) => m.id)).toEqual(["gemini-4-neon", "gemini-4-hydrogen", "gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-terra"])
     for (const model of LLM_FILE_MODELS) {
       expect(model.directFallbackModel, model.id).toBeUndefined()
       for (const effort of [undefined, ...(model.reasoningEfforts ?? [])]) {
@@ -141,6 +141,15 @@ describe("the lanes a file call can take", () => {
       }
       // The aggregator's shape is the one its dialect reads.
       expect(model.fileWire!.kie, model.id).toBe(model.kieFormat === "responses" ? "input-file" : "image-url")
+    }
+  })
+
+  it.each(["gemini-4-neon", "gpt-6.2-sol", "gpt-6.2-astra"])("%s is served on its KIE wire and nowhere else (no direct lane)", async (id) => {
+    const { llmPossibleLanes } = await import("../pricing/llm-cost.js")
+    const model = getLlmModel(id)!
+    expect(model.directGeminiModel).toBeUndefined()
+    for (const effort of [undefined, ...(model.reasoningEfforts ?? [])]) {
+      for (const advanced of [false, true]) expect(llmPossibleLanes(model, effort, advanced), `${effort} ${advanced}`).toEqual(["kie"])
     }
   })
 

@@ -60,6 +60,12 @@ describe("serving lane selects the rate band", () => {
     expect(calculateLlmCost("gemini-4-hydrogen", { inputTokens: 1000, outputTokens: 500 }, "direct")).toBeCloseTo(0.00525, 10)
   })
 
+  it("costs gemini-4-neon on KIE only: KIE's list price, and no direct row (it has no direct lane)", () => {
+    // KIE: 240/1200 KIE credits per M @ $0.005 = $1.20/$6.00 → (1000 * 1.20 + 500 * 6.00) / 1e6 = 0.0042.
+    expect(calculateLlmCost("gemini-4-neon", { inputTokens: 1000, outputTokens: 500 }, "kie")).toBeCloseTo(0.0042, 10)
+    expect(hasLlmRate("gemini-4-neon", "direct")).toBe(false)
+  })
+
   it("never prices the direct lane BELOW the aggregator", () => {
     // A direct row cheaper than its KIE row would mean the two bands got
     // swapped — a vendor's own list price is never the discounted one.
