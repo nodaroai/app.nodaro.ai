@@ -135,7 +135,7 @@ export const TILES_FAMILY_AND_EVENTS: readonly FactoryPreset[] = [
   {
     id: "generate-image/uc-115-family",
     name: "Winter Holiday Family Card",
-    description: "Heartwarming original fictional family of four posing candidly under cozy cabin porch string lights, fresh snow outside, tasteful lettering \"WARM WISHES\", welcoming season-neutral winter card design.",
+    description: "A fictional family of four in their own everyday sweaters, moved onto a cozy snowy chalet porch with warm string lights, no lettering.",
     group: "Family & Events",
     section: "From your photo",
     minReferences: 1,
@@ -143,8 +143,8 @@ export const TILES_FAMILY_AND_EVENTS: readonly FactoryPreset[] = [
       provider: "gpt-image-2",
       resolution: "1K",
       aspectRatio: "3:4",
-      prompt: "Edit the supplied reference image(s) to produce a FINISHED result for \"Winter Holiday Family Card\"; preserve essential content when reframing. Use the real uploaded family photograph and keep all faces, count and expressions recognizable. Transform the environment into a cozy snowy chalet card with natural warm porch lighting, without inventing new family members. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements. Render the words exactly as given; do not invent extra headlines.",
-      negativePrompt: "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      prompt: "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the real uploaded family photograph and keep all faces, count and expressions recognizable, and keep the clothing from the photo. Transform the environment into a cozy snowy chalet card with natural warm porch lighting, without inventing new family members. Add no words: do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      negativePrompt: "watermark, app UI mockup, random filler text, illegible nonsense copy, lettering, greeting text, headline, caption, changed clothing",
     },
   },
   {
@@ -207,7 +207,7 @@ export const TILES_FAMILY_AND_EVENTS: readonly FactoryPreset[] = [
   {
     id: "generate-image/uc-120-family",
     name: "Anniversary Celebration Card",
-    description: "Elegant fiftieth anniversary celebration card with original fictional elderly couple dancing lovingly in garden at sunset, subtle golden numeral \"50\", beautiful fine-art photo, sophisticated celebratory layout.",
+    description: "A fictional elderly couple in their own clothes placed into a sunlit garden anniversary card with roses and gold lettering, no invented year count.",
     group: "Family & Events",
     section: "From your photo",
     minReferences: 1,
@@ -215,8 +215,8 @@ export const TILES_FAMILY_AND_EVENTS: readonly FactoryPreset[] = [
       provider: "gpt-image-2",
       resolution: "1K",
       aspectRatio: "3:4",
-      prompt: "Edit the supplied reference image(s) to produce a FINISHED result for \"Anniversary Celebration Card\"; preserve essential content when reframing. Use the real uploaded anniversary couple photo. Keep both people’s facial identity, apparent age, clothes and relationship recognizable, placing them into a beautifully lit gentle garden celebration card with elegant gold anniversary numeral. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements. Render the words exactly as given; do not invent extra headlines.",
-      negativePrompt: "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      prompt: "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the real uploaded anniversary couple photo. Keep both people’s facial identity, apparent age, clothes and relationship recognizable, placing them into a beautifully lit gentle garden celebration card. Use only the words the user supplies, in elegant gold lettering. Never invent a number of years. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements. Render the words exactly as given; do not invent extra headlines.",
+      negativePrompt: "watermark, app UI mockup, random filler text, illegible nonsense copy, invented anniversary number, invented year count",
     },
   },
 ]

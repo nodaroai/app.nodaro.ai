@@ -31,9 +31,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     description: "Exaggerated cartoon head on a real scene.",
     data: {
       promptPrefix:
-        "Turn ONLY the person into a playful hand-illustrated caricature: enlarge the head, exaggerate their most recognizable features, and amplify expression with bold, confident linework and clean cel-style shading — while keeping them clearly identifiable. Leave everything else exactly as shot and photorealistic: the body proportions below the neck, the clothing, the background, props, and the scene's real lighting and shadows remain unchanged. Blend the caricature head onto the real photo seamlessly with matched lighting and a believable neckline.",
+        "Turn ONLY the person into a playful hand-illustrated caricature and push the caricature hard: a clearly oversized head on a small body, strongly exaggerated features, and amplified expression with bold, confident linework and clean cel-style shading — unmistakably hand-drawn, still recognizable, in the same clothing drawn in the same style. Leave everything else exactly as shot and photorealistic: the background, props, and the scene's real lighting and shadows remain unchanged. Seat the drawn figure into the real photo with matched lighting and grounded contact shadows.",
       negativePrompt:
-        "changing the background, altering the unstylized parts, restyling the body or clothing, relighting the scene, distorting the subject beyond intent, losing likeness, photorealistic head, harsh seam at the neck, deformed features",
+        "changing the background, restyling the props or environment, relighting the scene, distorting the subject beyond intent, losing likeness, subtle exaggeration, realistic proportions, photorealistic head or body on the person, harsh cut-out edges, deformed features",
     },
   },
   {
@@ -42,9 +42,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     description: "Subject → 2D anime, real environment.",
     data: {
       promptPrefix:
-        "Restyle ONLY the person as a crisp 2D anime character — clean ink outlines, flat cel shading with sharp shadow shapes, glossy stylized hair, and expressive anime eyes — while preserving their identity, pose, expression, and framing. Keep the real-world background, environment, props, and the original photographic lighting, shadows, and color completely untouched and photorealistic. Integrate the 2D figure into the live-action plate so the light direction and contact shadows read naturally.",
+        "Restyle ONLY the person in unmistakable 2D Japanese anime cel animation: flat cel shading, large expressive anime eyes, clean ink lines, simplified hair shapes. Not 3D and not a western cartoon. Preserve their identity, pose, expression, and framing. The background stays a real photo: keep the real-world environment, props, and the original photographic lighting, shadows, and color completely untouched and photorealistic. Integrate the 2D figure into the live-action plate so the light direction and contact shadows read naturally.",
       negativePrompt:
-        "changing the background, altering the unstylized parts, restyling the environment or props, relighting the scene, distorting the subject, 3D render look, photorealistic skin on the subject, extra fingers, warped anatomy, broken outlines",
+        "changing the background, altering the unstylized parts, restyling the environment or props, relighting the scene, distorting the subject, 3D render look, western cartoon look, semi-realistic face, photorealistic skin on the subject, extra fingers, warped anatomy, broken outlines",
     },
   },
   {
@@ -64,9 +64,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     description: "Subject → clay figure, real surroundings.",
     data: {
       promptPrefix:
-        "Restyle ONLY the person into a tactile stop-motion claymation figure — molded plasticine surface with visible fingerprints, tool marks, subtle seams, and a soft matte sheen, in the handmade spirit of Aardman puppets — while keeping their identity, pose, expression, and framing. Everything else stays exactly as shot and photorealistic: the real background, set, props, and the scene's natural lighting and shadows are unchanged. Seat the clay figure into the real plate with matched light direction and grounded contact shadows.",
+        "Restyle ONLY the person into a tactile stop-motion claymation figure. Make the whole person, including the face, obviously handmade plasticine: simple rounded sculpted features, bead-like eyes, thick clay hair, visible fingerprints, tool marks, subtle seams, and a soft matte sheen. Not realistic skin and not a wax figure. Keep their pose, expression, framing, and a recognizable likeness. The surroundings stay a real photo: the real background, set, props, and the scene's natural lighting and shadows are unchanged. Seat the clay figure into the real plate with matched light direction and grounded contact shadows.",
       negativePrompt:
-        "changing the background or set, altering the unstylized parts, restyling props, relighting the scene, distorting the subject, smooth plastic toy look, glossy CGI surface, melted or deformed figure, missing fingerprints, extra limbs",
+        "changing the background or set, altering the unstylized parts, restyling props, relighting the scene, distorting the subject, realistic skin, wax figure look, photoreal face, smooth plastic toy look, glossy CGI surface, melted or deformed figure, missing fingerprints, extra limbs",
     },
   },
 ]
@@ -144,9 +144,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     description: "Repair scratches, denoise, sharpen.",
     data: {
       promptPrefix:
-        "Restore this old, damaged photograph: remove scratches, dust, creases, stains, and noise, repair torn or missing areas by reconstructing what is plainly there, and gently recover sharpness and tonal detail. Keep the result authentic and true to the original — preserve identity, era, natural film grain, and composition. Repair only; do not beautify, restyle, or invent new features.",
+        "Restore this old, damaged photograph: remove every scratch, crack and tear completely, along with dust, creases, stains, and noise, repair torn or missing areas by reconstructing what is plainly there, and gently recover sharpness and tonal detail. Keep a black-and-white photo black and white. Keep the result authentic and true to the original — preserve identity, era, natural film grain, and composition. Repair only; do not beautify, restyle, or invent new features.",
       negativePrompt:
-        "over-smoothed, plastic skin, waxy or airbrushed look, hallucinated details, invented faces or objects, changing identity or age, removing authentic grain, modern restyling, oversharpening halos, altered composition",
+        "leftover scratches, cracks or tears, colorization, over-smoothed, plastic skin, waxy or airbrushed look, hallucinated details, invented faces or objects, changing identity or age, removing authentic grain, modern restyling, oversharpening halos, altered composition",
     },
   },
   {
@@ -207,7 +207,7 @@ const IMAGE_EDITS: ReadonlyArray<{
       provider: "nano-banana-2-1",
       aspectRatio: "auto",
       resolution: "2K",
-      promptPrefix: `Keep this photo as it is and take out only what makes it look rendered: smoothed, waxy or airbrushed skin, a glow, over-sharpened edges, hair too perfect to be real. ${REALISM_FINISH} Otherwise the same people, framing, pose and background.`,
+      promptPrefix: `Take out what makes this photo look rendered: smoothed, waxy or airbrushed skin, a plastic shine or glow, over-sharpened edges, hair too perfect to be real. When the input is over-smoothed, the change must be clearly visible: remove the plastic shine and bring back natural skin. ${REALISM_FINISH} Otherwise the same people, framing, pose and background.`,
     },
   },
   {
@@ -218,7 +218,7 @@ const IMAGE_EDITS: ReadonlyArray<{
       provider: "nano-banana-2-1",
       aspectRatio: "auto",
       resolution: "2K",
-      promptPrefix: `Re-finish this photo, changing nothing in it: ${REALISM_FINISH} Same people, framing, pose and background.`,
+      promptPrefix: `Re-finish this photo so it is unmistakably a casual everyday snapshot: slightly off-center handheld framing, mixed indoor light with a weak flash, visible sensor noise, imperfect white balance left uncorrected, no glamour retouching and no glossy skin. ${REALISM_FINISH} Keep the same people, pose, clothing and background.`,
     },
   },
   {
@@ -231,7 +231,7 @@ const IMAGE_EDITS: ReadonlyArray<{
       // run takes its listed ratio nearest the connected photo.
       aspectRatio: "auto",
       quality: "high",
-      promptPrefix: "Undo the beauty filter on this photo: bring back the person's real skin texture, the natural shape of the face, jaw, nose and eyes, and the real colour of skin and lips. Change nothing else: the same person, expression, hair, clothing, framing and background.",
+      promptPrefix: "Undo the beauty filter on this photo. Reverse the reshaping as well as the smoothing: return the eyes, nose, lips, jaw and cheeks to natural proportions, remove heavy contour and glow, and show real pores, uneven skin tone and the real colour of skin and lips. It must still be the same person. Change nothing else: the same expression, hair, clothing, framing and background.",
     },
   },
 ]
