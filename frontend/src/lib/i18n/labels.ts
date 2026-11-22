@@ -23,21 +23,24 @@ import { LABELS_KO } from "./labels.ko"
 import { PRESET_CONTENT_KO } from "./preset-content.ko"
 import { LABELS_PT_BR } from "./labels.pt-br"
 import { PRESET_CONTENT_PT_BR } from "./preset-content.pt-br"
-// The Create Image tiles' copy, generated from tools/preset-tiles/ledger.json (its build writes these four files).
+import { LABELS_ES } from "./labels.es"
+import { PRESET_CONTENT_ES } from "./preset-content.es"
+// The Create Image tiles' copy, generated from tools/preset-tiles/ledger.json (its build writes these five files).
+import { PRESET_TILES_ES } from "./preset-content-tiles.es.generated"
 import { PRESET_TILES_HE } from "./preset-content-tiles.he.generated"
 import { PRESET_TILES_JA } from "./preset-content-tiles.ja.generated"
 import { PRESET_TILES_KO } from "./preset-content-tiles.ko.generated"
 import { PRESET_TILES_PT_BR } from "./preset-content-tiles.pt-br.generated"
 import { translate, type MessageKey } from "./index"
 import { UNIT_LABELS } from "@/nodes/_generated/labels"
-import { unitNodeLabels } from "@/lib/unit-compose"
+import { unitNodeLabels, type UnitLabelLocaleId } from "@/lib/unit-compose"
 
 // Each node unit's node-label translations (frontend/src/nodes/<type>/strings.json
 // `labels`, projected into labels.generated.ts), by locale.
 const UNIT_NODE_LABELS = unitNodeLabels(Object.values(UNIT_LABELS))
 
 /** A locale's tables with the node units' node labels added (a legacy row of the same English label wins). */
-function withUnitLabels(locale: "he" | "ja" | "ko" | "pt-BR", tables: LocaleLabelTables): LocaleLabelTables {
+function withUnitLabels(locale: UnitLabelLocaleId, tables: LocaleLabelTables): LocaleLabelTables {
   const add = UNIT_NODE_LABELS[locale]
   return add ? { ...tables, node: { ...add, ...tables.node } } : tables
 }
@@ -48,6 +51,7 @@ function withUnitLabels(locale: "he" | "ja" | "ko" | "pt-BR", tables: LocaleLabe
  * Legacy tables ∪ the node units' node labels.
  */
 export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = {
+  es: withUnitLabels("es", LABELS_ES),
   he: withUnitLabels("he", LABELS_HE),
   ja: withUnitLabels("ja", LABELS_JA),
   ko: withUnitLabels("ko", LABELS_KO),
@@ -191,6 +195,7 @@ export function useLocalizeOptionLabel(): (label: string) => string {
  * English, so upstream additions never render blank.
  */
 export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = {
+  es: { ...PRESET_CONTENT_ES, ...PRESET_TILES_ES },
   he: { ...PRESET_CONTENT_HE, ...PRESET_TILES_HE },
   ja: { ...PRESET_CONTENT_JA, ...PRESET_TILES_JA },
   ko: { ...PRESET_CONTENT_KO, ...PRESET_TILES_KO },

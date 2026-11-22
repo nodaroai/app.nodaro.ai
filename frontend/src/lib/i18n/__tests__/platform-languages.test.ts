@@ -13,4 +13,9 @@ describe("the same languages in every product", () => {
     const offered = offeredLanguages().map((language) => language.id).sort()
     expect(offered, RULE).toEqual([...PLATFORM_LANGUAGES].sort())
   })
+
+  it("Spanish is one of them: on the platform's list and offered by the app", () => {
+    expect(PLATFORM_LANGUAGES, RULE).toContain("es")
+    expect(offeredLanguages().map((language) => language.id), RULE).toContain("es")
+  })
 })

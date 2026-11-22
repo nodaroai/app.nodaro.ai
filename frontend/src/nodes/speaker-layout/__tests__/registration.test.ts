@@ -83,5 +83,6 @@ describe("Speaker Layout is registered everywhere it must be", () => {
     expect(localizeNodeLabel("Speaker Layout", "ja")).toBe("スピーカーレイアウト")
     expect(localizeNodeLabel("Speaker Layout", "ko")).toBe("화자별 화면 배치")
     expect(localizeNodeLabel("Speaker Layout", "pt-BR")).toBe("Layout de locutores")
+    expect(localizeNodeLabel("Speaker Layout", "es")).toBe("Distribución de hablantes")
   })
 })

@@ -49,7 +49,7 @@ const JOB = "00000000-0000-4000-8000-0000000000c1"
 const REC = { useCaseMedia: [{ nodeId: "rec", url: "https://r2/ep.mp4" }] }
 const NOTES = "0:00 Intro\n12:34 Main"
 const ROWS = [{ startMs: 0, title: "Intro" }, { startMs: 754_000, title: "Main" }]
-const LOCALES: readonly LocaleId[] = ["en", "he", "ja", "ko", "pt-BR"]
+const LOCALES: readonly LocaleId[] = ["en", "es", "he", "ja", "ko", "pt-BR"]
 
 let stale = false
 function makeCtx(signal?: AbortSignal) {

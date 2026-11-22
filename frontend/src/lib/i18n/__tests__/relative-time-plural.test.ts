@@ -4,8 +4,9 @@ import { formatRelative } from ".."
 
 /**
  * "{n} months ago" spelled out needs a singular in languages that inflect it:
- * Portuguese reads "há 1 mês", never "há 1 meses". formatRelative picks
- * time.moAgoOne for exactly one month.
+ * Portuguese reads "há 1 mês", never "há 1 meses", and Spanish "hace 1 mes",
+ * never "hace 1 meses". formatRelative picks time.moAgoOne for exactly one
+ * month.
  */
 const NOW = new Date("2026-09-27T12:00:00Z").getTime()
 const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString()
@@ -24,6 +25,12 @@ describe("formatRelative — one month vs several", () => {
     useLocaleStore.setState({ locale: "pt-BR" })
     expect(formatRelative(daysAgo(40))).toBe("há 1 mês")
     expect(formatRelative(daysAgo(70))).toBe("há 2 meses")
+  })
+
+  it("Spanish uses the singular for one month and the plural for more", () => {
+    useLocaleStore.setState({ locale: "es" })
+    expect(formatRelative(daysAgo(40))).toBe("hace 1 mes")
+    expect(formatRelative(daysAgo(70))).toBe("hace 2 meses")
   })
 
   it("English keeps its abbreviation either way", () => {

@@ -935,7 +935,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "מהתמונה שלך: בגד אחר",
   },
   "generate-image/uc-051-products": {
-    name: "מצילום טלפון למוצר הירו",
+    name: "מצילום טלפון לתמונת פרסומת",
     description: "מהצילום שלך: תמונת מוצר מקצועית",
   },
   "generate-image/uc-052-products": {

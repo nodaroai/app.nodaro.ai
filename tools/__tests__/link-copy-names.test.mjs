@@ -27,7 +27,7 @@ const read = (rel) => readFileSync(join(root, rel), "utf8")
 // is lowercase with its dot.
 const SITE_NAMES = /\b(YouTube|TikTok|Instagram|Facebook|Twitter|Reels?|Shorts)\b|\byoutu\.be\b|\byoutube\.com\b|\btiktok\.com\b|\binstagram\.com\b|\bfacebook\.com\b|\bfb\.watch\b|\bx\.com\b/
 
-/** The i18n keys behind every link-taking field, in all five locales. */
+/** The i18n keys behind every link-taking field, in all six locales. */
 const LINK_COPY_KEYS = [
   "inputcfg.youtubeFacebookTiktokInstagramOrX",
   "present.videoLinkHint",
@@ -35,7 +35,7 @@ const LINK_COPY_KEYS = [
   "audiocfg.hintDubSourceUrl",
 ]
 
-const LOCALES = ["en", "he", "ja", "ko", "pt-br"]
+const LOCALES = ["en", "es", "he", "ja", "ko", "pt-br"]
 
 function i18nValue(source, key) {
   const match = source.match(new RegExp(`^\\s*"${key.replace(/\./g, "\\.")}":\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m"))

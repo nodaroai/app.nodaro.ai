@@ -83,7 +83,8 @@ own value (shipped in [PR #3250](https://github.com/nodaroai/app.nodaro.ai/pull/
 > it reads as one person aging rather than several different people. Feed it a clean, front-facing,
 > evenly-lit portrait for the tightest identity. The same identity-lock drives the sibling presets:
 > **Decade Timeline** (aging + period-accurate styling across the '80s–2020s) ages the subject, while
-> **Four Seasons** and **Times of Day** hold the subject at one age and vary only wardrobe/lighting.
+> **Four Seasons** and **Times of Day** hold the subject at one age and give each panel its own outdoor
+> scene: Four Seasons changes the wardrobe and the seasonal setting, Times of Day the light and the setting.
 
 ### Generate Video factory catalog
 

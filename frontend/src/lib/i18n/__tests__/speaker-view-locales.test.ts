@@ -1,20 +1,21 @@
 // @vitest-environment node
 /**
- * Speaker View's panel strings ship in the five product locales (English,
- * Hebrew, Japanese, Korean, Brazilian Portuguese). The other dictionaries are
- * partial by design and fall back to English, and the coverage report is
- * non-failing, so nothing else would notice a missing key: this pins every
- * `speakerView.*` key present, non-empty, and carrying exactly the English
- * value's {placeholders} in the four translated dictionaries.
+ * Speaker View's panel strings ship in the six product locales (English,
+ * Spanish, Hebrew, Japanese, Korean, Brazilian Portuguese). The other
+ * dictionaries are partial by design and fall back to English, and the
+ * coverage report is non-failing, so nothing else would notice a missing key:
+ * this pins every `speakerView.*` key present, non-empty, and carrying exactly
+ * the English value's {placeholders} in the five translated dictionaries.
  */
 import { describe, it, expect } from "vitest"
 import { en, type ChromeDict, type MessageKey } from "../en"
+import { es } from "../es"
 import { he } from "../he"
 import { ja } from "../ja"
 import { ko } from "../ko"
 import { ptBR } from "../pt-br"
 
-const DICTS: Record<string, ChromeDict> = { he, ja, ko, "pt-BR": ptBR }
+const DICTS: Record<string, ChromeDict> = { es, he, ja, ko, "pt-BR": ptBR }
 const KEYS = (Object.keys(en) as MessageKey[]).filter((k) => k.startsWith("speakerView."))
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
 
@@ -36,6 +37,7 @@ describe("Speaker View strings in every product locale", () => {
 describe("the two switch reasons (decided 2026-10-08, full stop on Pan's added round 2)", () => {
   const PAN: Record<string, string> = {
     en: "No speaker change can pan here.",
+    es: "Ningún cambio de hablante puede hacer pan aquí.",
     he: "אף החלפת דוברים לא יכולה לעשות פאן כאן.",
     ja: "ここでパンできる話者の切り替えはありません。",
     ko: "여기서 팬할 수 있는 화자 전환이 없습니다.",

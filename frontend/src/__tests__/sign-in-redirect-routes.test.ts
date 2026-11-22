@@ -49,6 +49,7 @@ describe("another product's pages on the same host", () => {
       "/voice-changer/convert/abc",
       "/he/voice-changer/convert/abc",
       "/pt-br/voice-changer",
+      "/es/voice-changer",
       "/image",
       "/video/abc",
       "/music",

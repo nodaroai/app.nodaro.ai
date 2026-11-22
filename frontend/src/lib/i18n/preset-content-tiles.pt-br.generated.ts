@@ -935,7 +935,7 @@ export const PRESET_TILES_PT_BR: Record<string, PresetCopy> = {
     description: "Da sua foto: outra roupa",
   },
   "generate-image/uc-051-products": {
-    name: "Foto de celular vira hero",
+    name: "Foto de celular vira foto de anúncio",
     description: "Da sua foto: imagem profissional de produto",
   },
   "generate-image/uc-052-products": {

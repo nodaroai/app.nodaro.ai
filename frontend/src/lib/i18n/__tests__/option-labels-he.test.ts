@@ -23,6 +23,7 @@ describe("localizeOptionLabel", () => {
     expect(localizeOptionLabel("Full cover (default)", "he")).toBe("כיסוי מלא (ברירת מחדל)")
     expect(localizeOptionLabel("Full cover (default)", "ja")).toBe("全面を覆う（デフォルト）")
     expect(localizeOptionLabel("Full cover (default)", "pt-BR")).toBe("Cobertura total (Padrão)")
+    expect(localizeOptionLabel("Full cover (default)", "es")).toBe("Cobertura total (Predeterminado)")
     expect(localizeOptionLabel("Full cover (default)", "en")).toBe("Full cover (default)")
   })
   it("translates the image output formats and SVG levels, the format names kept", () => {
@@ -30,6 +31,7 @@ describe("localizeOptionLabel", () => {
     expect(localizeOptionLabel("SVG (vector)", "ja")).toBe("SVG（ベクター）")
     expect(localizeOptionLabel("GIF (animated)", "ko")).toBe("GIF(애니메이션)")
     expect(localizeOptionLabel("SVG (vector)", "pt-BR")).toBe("SVG (Vetorial)")
+    expect(localizeOptionLabel("SVG (vector)", "es")).toBe("SVG (Vectorial)")
     expect(localizeOptionLabel("SVG Detailed", "he")).toBe("SVG מפורט")
     expect(localizeOptionLabel("SVG Max", "pt-BR")).toBe("SVG máximo")
     expect(localizeOptionLabel("WebP", "he")).toBe("WebP")
@@ -40,6 +42,7 @@ describe("localizeOptionLabel", () => {
     expect(localizeOptionLabel("Ultra", "ja")).toBe("ウルトラ")
     expect(localizeOptionLabel("Ultra", "ko")).toBe("울트라")
     expect(localizeOptionLabel("Ultra", "pt-BR")).toBe("Ultra")
+    expect(localizeOptionLabel("Ultra", "es")).toBe("Ultra")
     expect(localizeOptionLabel("Ultra", "en")).toBe("Ultra")
     expect(localizeOptionLabel("4K (Ultra)", "ja")).toBe("4K（超高画質）")
     expect(localizeOptionLabel("4K (Ultra)", "ko")).toBe("4K(초고화질)")

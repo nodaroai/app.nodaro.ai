@@ -2,6 +2,7 @@
 
 export const labels = {
   "Speaker Map": {
+    "es": "Mapa de hablantes",
     "he": "מפת דוברים",
     "ja": "話者マップ",
     "ko": "화자 맵",

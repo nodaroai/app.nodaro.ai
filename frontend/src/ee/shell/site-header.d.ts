@@ -11,6 +11,6 @@ declare module "virtual:site-header" {
   /** True only when the build resolved the real header. */
   export const headerAvailable: boolean
   export const NodaroShell: ComponentType<SiteHeaderProps>
-  /** The header's own translations for a locale tag (he, ja, ko, pt-BR); misses fall back to English. */
+  /** The header's own translations for a locale tag (es, he, ja, ko, pt-BR); misses fall back to English. */
   export function shellTranslator(locale: string | undefined): SiteHeaderTranslate
 }

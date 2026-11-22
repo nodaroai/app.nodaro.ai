@@ -21,6 +21,10 @@
         "url": "https://cdn.nodaro.ai/images/d756361f-82e4-44cf-bcec-b80013877d2f.png"
       },
       "copy": {
+        "es": {
+          "name": "Batalla versus",
+          "description": "Reseñadores de tecnología, pruebas de comida, comparativas de productos. 'X vs Y' cada semana."
+        },
         "he": {
           "name": "קרב מול",
           "description": "סוקרי טכנולוגיה, מבחני אוכל, השוואות מוצרים. 'X מול Y' כל שבוע."
@@ -57,6 +61,10 @@
         "url": "https://cdn.nodaro.ai/images/fab210bd-e4d4-419f-8d26-ef7ea9bcaaba.png"
       },
       "copy": {
+        "es": {
+          "name": "Objeto protagonista",
+          "description": "Tecnología, gadgets, utensilios de cocina, bricolaje. Solo el producto, sin rostro, grande y limpio."
+        },
         "he": {
           "name": "מוצר במרכז",
           "description": "טכנולוגיה, גאדג'טים, כלי מטבח, DIY. המוצר לבד, גדול ונקי."
@@ -93,6 +101,10 @@
         "url": "https://cdn.nodaro.ai/images/30641c93-dce0-41b4-9f13-781bd4055d03.png"
       },
       "copy": {
+        "es": {
+          "name": "Unboxing",
+          "description": "Canales de unboxing y reseñadores de gadgets. Manos + caja + sorpresa."
+        },
         "he": {
           "name": "אנבוקסינג",
           "description": "ערוצי אנבוקסינג וסוקרי גאדג'טים. ידיים, קופסה והלם."
@@ -129,6 +141,10 @@
         "url": "https://cdn.nodaro.ai/images/5b1346c9-1945-4405-98eb-95ee79f43eee.png"
       },
       "copy": {
+        "es": {
+          "name": "Glitch tecnológico",
+          "description": "Ciberseguridad, historias de hackers, drama tecnológico."
+        },
         "he": {
           "name": "גליץ' טכנולוגי",
           "description": "סייבר, סיפורי האקרים, דרמות טכנולוגיה."
@@ -165,6 +181,10 @@
         "url": "https://cdn.nodaro.ai/images/5aa420a2-435a-4211-be12-765824593815.png"
       },
       "copy": {
+        "es": {
+          "name": "Tecnología minimalista",
+          "description": "Reseñadores de tecnología al estilo Apple. Calma, blanco, un producto, una palabra."
+        },
         "he": {
           "name": "טכנולוגיה מינימלית",
           "description": "סוקרים בסגנון אפל. רגוע, לבן, מוצר אחד, מילה אחת."
@@ -201,6 +221,10 @@
         "url": "https://cdn.nodaro.ai/images/acc6db9e-aea6-40f4-a10c-569d138adc41.png"
       },
       "copy": {
+        "es": {
+          "name": "Nueva herramienta de IA",
+          "description": "Influencers de IA. 'Esta nueva IA hace X' cada día. Brillo de laptop, cara de asombro."
+        },
         "he": {
           "name": "חשיפת כלי AI",
           "description": "משפיעני AI. 'ה-AI החדש הזה עושה X' כל יום."
@@ -242,6 +266,10 @@
         "url": "https://cdn.nodaro.ai/images/413eb2dd-1103-495d-8bab-c7e3d35455b7.png"
       },
       "copy": {
+        "es": {
+          "name": "Tutorial de programación",
+          "description": "Canales de programación. Editor de código, insignia del lenguaje, 'en 10 minutos'."
+        },
         "he": {
           "name": "מדריך קוד",
           "description": "ערוצי תכנות. עורך קוד, תג שפה, 'ב-10 דקות'."
@@ -286,6 +314,10 @@
         "15 CONCEPTS"
       ],
       "copy": {
+        "es": {
+          "name": "Cuadrícula de funciones de IA",
+          "description": "Educadores de IA: 'cada función nueva explicada'. Hoy: horas en Figma haciendo tarjetas con iconos."
+        },
         "he": {
           "name": "רשת פיצ'רים של AI",
           "description": "מחנכי AI: 'כל פיצ'ר חדש מוסבר'. שורת כרטיסי אייקונים."
@@ -326,6 +358,10 @@
         "FOR YOUR BUSINESS"
       ],
       "copy": {
+        "es": {
+          "name": "Iconos de AI OS",
+          "description": "Consultores de IA que venden sistemas a empresas. Fila de iconos + una promesa."
+        },
         "he": {
           "name": "AI OS לעסק",
           "description": "יועצי AI שמוכרים מערכות לעסקים. שורת אייקונים והבטחה אחת."
@@ -366,6 +402,10 @@
         "WE TESTED IT"
       ],
       "copy": {
+        "es": {
+          "name": "Lanzamiento de modelo",
+          "description": "Canales de noticias de IA: 'hoy sale el modelo X, lo probamos'. Cada día."
+        },
         "he": {
           "name": "מודל חדש יצא",
           "description": "ערוצי חדשות AI: 'מודל X שוחרר היום, בדקנו'. יומי."
@@ -405,6 +445,10 @@
         "WHICH IS BETTER?"
       ],
       "copy": {
+        "es": {
+          "name": "Modelo VS modelo",
+          "description": "Reseñadores de IA que comparan dos modelos de imagen o video. '¿Cuál es mejor?'"
+        },
         "he": {
           "name": "מודל מול מודל",
           "description": "סוקרי AI שמשווים שני מודלי תמונה או וידאו. 'מי יותר טוב?'"
@@ -446,6 +490,10 @@
       },
       "who": "Automation and AI-agent channels: one person at the hub of a clean workflow diagram.",
       "copy": {
+        "es": {
+          "name": "Diagrama de nodos",
+          "description": "Canales de automatización y agentes de IA: una persona en el centro de un diagrama de flujo limpio."
+        },
         "he": {
           "name": "תרשים צמתים",
           "description": "ערוצי אוטומציה וסוכני AI: אדם אחד במרכז תרשים זרימה נקי."
@@ -483,6 +531,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Impacto financiero",
+          "description": "Canales de finanzas personales y cripto. Cifra de pérdida o ganancia, manos en la cabeza."
+        },
         "he": {
           "name": "הלם פיננסי",
           "description": "ערוצי כסף וקריפטו. מספר של הפסד או רווח, ראש בידיים."
@@ -524,6 +576,10 @@
       ],
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Prueba de ganancias",
+          "description": "Creadores de ingresos extra y de ganar dinero en línea. Captura de un panel, señalando con orgullo."
+        },
         "he": {
           "name": "הוכחת הכנסה",
           "description": "יוצרי 'איך להרוויח אונליין'. צילום מסך של דשבורד, הצבעה גאה."
@@ -561,6 +617,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Gráfico de crecimiento",
+          "description": "Creadores de crecimiento de canales y marketing. Una línea disparada, una cifra grande."
+        },
         "he": {
           "name": "צמיחה בגרף",
           "description": "יוצרי צמיחת ערוץ ושיווק. קו רקטה אחד, מספר גדול אחד."
@@ -598,6 +658,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Subida de cripto",
+          "description": "YouTubers de cripto / vendedores de señales en Telegram. Miniaturas diarias, moneda + cohete + cifra."
+        },
         "he": {
           "name": "פאמפ קריפטו",
           "description": "יוטיוברים של קריפטו. כיסוי יומי: מטבע, רקטה ומספר."
@@ -638,6 +702,10 @@
       ],
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Recomendación de acciones",
+          "description": "Canales de selección de acciones. Veredicto de compra o venta, gráfico, rostro serio."
+        },
         "he": {
           "name": "המלצת מניה",
           "description": "ערוצי מניות. קנייה/מכירה, גרף, פנים רציניות."
@@ -678,6 +746,10 @@
         "SUBSCRIBERS"
       ],
       "copy": {
+        "es": {
+          "name": "Hito del creador",
+          "description": "Cualquier creador que alcanza una cifra: 100K, 1M, el primer pago."
+        },
         "he": {
           "name": "אבן דרך",
           "description": "כל יוצר שמגיע למספר: 100K, מיליון, התשלום הראשון."
@@ -716,6 +788,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Historia del fundador",
+          "description": "Emprendedores y canales de startups. Oficina, cifra, 'cómo lo construí'."
+        },
         "he": {
           "name": "סיפור של מייסד",
           "description": "יזמים וערוצי סטארטאפ. משרד, מספר, 'איך בניתי'."
@@ -755,6 +831,10 @@
         "FREE TRAINING"
       ],
       "copy": {
+        "es": {
+          "name": "Lanzamiento de curso",
+          "description": "Vendedores de cursos y coaches. Aspecto de webinar, laptop, 'formación gratuita'."
+        },
         "he": {
           "name": "השקת קורס",
           "description": "מוכרי קורסים ומאמנים. מראה של וובינר, לפטופ, 'הדרכה חינם'."
@@ -791,6 +871,10 @@
         "url": "https://cdn.nodaro.ai/images/e78c77a6-85d7-4ce9-9b7d-6e830ce29174.png"
       },
       "copy": {
+        "es": {
+          "name": "Motivación",
+          "description": "Canales de motivación y mentalidad. Escenario oscuro, foco de luz, una frase contundente."
+        },
         "he": {
           "name": "מוטיבציה",
           "description": "ערוצי מוטיבציה ומיינדסט. במה חשוכה, ספוט, משפט מחץ."
@@ -832,6 +916,10 @@
         "SAVE YOU"
       ],
       "copy": {
+        "es": {
+          "name": "Charla en el escenario",
+          "description": "Ponentes de conferencias y fundadores de SaaS que republican sus charlas."
+        },
         "he": {
           "name": "הרצאה על במה",
           "description": "דוברים בכנסים ומייסדי SaaS שמעלים הרצאות."
@@ -873,6 +961,10 @@
       },
       "who": "Ads and marketing creators: floating phone screens sweep around a surprised host.",
       "copy": {
+        "es": {
+          "name": "Portales de pantalla",
+          "description": "Creadores de anuncios y marketing: pantallas de teléfono flotantes rodean a un presentador sorprendido."
+        },
         "he": {
           "name": "מסכים מרחפים",
           "description": "יוצרי פרסום ושיווק: מסכי טלפון מרחפים סביב מנחה מופתע."
@@ -913,6 +1005,10 @@
       },
       "who": "Entrepreneur channels: from anonymous silhouette to confident founder, one big yellow arrow.",
       "copy": {
+        "es": {
+          "name": "Flecha de transformación",
+          "description": "Canales de emprendimiento: de una silueta anónima a una fundadora segura de sí misma, con una gran flecha amarilla."
+        },
         "he": {
           "name": "חץ של טרנספורמציה",
           "description": "ערוצי יזמות: מצללית אנונימית למייסדת בטוחה, חץ צהוב אחד גדול."
@@ -953,6 +1049,10 @@
         "24 HOURS"
       ],
       "copy": {
+        "es": {
+          "name": "Reto con cronómetro",
+          "description": "Canales de retos: 24 horas, 30 días, el último en irse."
+        },
         "he": {
           "name": "אתגר עם טיימר",
           "description": "ערוצי אתגרים: 24 שעות, 30 יום, האחרון שעוזב."
@@ -990,6 +1090,10 @@
         "url": "https://cdn.nodaro.ai/images/283feac9-e9f1-4299-b570-452b6559e816.png"
       },
       "copy": {
+        "es": {
+          "name": "Tier list",
+          "description": "Canales de gaming y rankings. Filas de la S a la D, cara de jurado."
+        },
         "he": {
           "name": "טבלת דירוג",
           "description": "ערוצי גיימינג ודירוגים. שורות S עד D, פנים שופטות."
@@ -1030,6 +1134,10 @@
         "url": "https://cdn.nodaro.ai/images/4a85032f-e8ce-4c8e-983c-9af4ed7e303b.png"
       },
       "copy": {
+        "es": {
+          "name": "Adrenalina gamer",
+          "description": "Canales de gaming. Auriculares, neón, momento explosivo."
+        },
         "he": {
           "name": "אדרנלין גיימינג",
           "description": "ערוצי גיימינג. אוזניות, ניאון, רגע מתפוצץ."
@@ -1070,6 +1178,10 @@
         "url": "https://cdn.nodaro.ai/images/44110af3-5806-46a7-ac0c-fcd82de94202.png"
       },
       "copy": {
+        "es": {
+          "name": "Objeto dorado gamer",
+          "description": "YouTubers de gaming: rostro enorme + botín dorado brillante + mapa de fantasía. El formato n.º 1 del gaming."
+        },
         "he": {
           "name": "פריט זהב",
           "description": "יוטיוברים של גיימינג: פרצוף ענק + פריט זהב זוהר + מפה."
@@ -1106,6 +1218,10 @@
         "url": "https://cdn.nodaro.ai/images/8dd270a9-5d84-4420-89ad-3e056d2350ce.png"
       },
       "copy": {
+        "es": {
+          "name": "Caos del escuadrón",
+          "description": "Escuadrones de gaming y retos: tres amigos, un vehículo, caos."
+        },
         "he": {
           "name": "כאוס של חבורה",
           "description": "חבורות גיימינג ואתגרים: שלושה חברים, רכב אחד, כאוס."
@@ -1146,6 +1262,10 @@
         "AFTER"
       ],
       "copy": {
+        "es": {
+          "name": "Antes y después",
+          "description": "Reformas del hogar, belleza, fitness, detallado de autos. La pantalla dividida es el formato de toda la categoría."
+        },
         "he": {
           "name": "לפני ואחרי",
           "description": "שיפוץ, יופי, כושר, ניקוי רכב. מסך מפוצל זה הפורמט של הקטגוריה."
@@ -1183,6 +1303,10 @@
         "url": "https://cdn.nodaro.ai/images/73ad5615-b287-436d-a170-611214ca517c.png"
       },
       "copy": {
+        "es": {
+          "name": "Transformación física",
+          "description": "Coach de fitness / canal de transformaciones. Cuerpo dividido + cuenta de días."
+        },
         "he": {
           "name": "שינוי גוף",
           "description": "מאמני כושר וערוצי טרנספורמציה. פיצול גוף + ספירת ימים."
@@ -1219,6 +1343,10 @@
         "url": "https://cdn.nodaro.ai/images/d081b4eb-7764-405c-8a26-0aaf58f5cc81.png"
       },
       "copy": {
+        "es": {
+          "name": "Maquillaje",
+          "description": "Creadores de belleza. Medio rostro terminado y medio sin terminar, producto en la mano."
+        },
         "he": {
           "name": "איפור",
           "description": "יוצרות יופי. חצי פנים מאופרות / חצי לא, מוצר ביד."
@@ -1260,6 +1388,10 @@
         "url": "https://cdn.nodaro.ai/images/55f1dbd5-b173-4364-96dc-48316aa5cd4a.png"
       },
       "copy": {
+        "es": {
+          "name": "Plan de dieta",
+          "description": "Dietistas y coaches de nutrición. Plato dividido, calorías, 'lo que yo como'."
+        },
         "he": {
           "name": "תוכנית תזונה",
           "description": "דיאטניות ומאמני תזונה. צלחת מפוצלת, קלוריות, 'מה אני אוכל'."
@@ -1296,6 +1428,10 @@
         "url": "https://cdn.nodaro.ai/images/cc28f4a1-9e76-4dc6-9efd-6e6559e4ecc4.png"
       },
       "copy": {
+        "es": {
+          "name": "Médico explica",
+          "description": "Médicos y canales de salud. Bata blanca, un órgano o síntoma, advertencia."
+        },
         "he": {
           "name": "רופא מסביר",
           "description": "רופאים וערוצי בריאות. חלוק לבן, איבר או תסמין אחד, אזהרה."
@@ -1332,6 +1468,10 @@
         "url": "https://cdn.nodaro.ai/images/bd5c7e23-e834-4be7-816f-6a528306e783.png"
       },
       "copy": {
+        "es": {
+          "name": "Viajes",
+          "description": "Vloggers de viajes. Lugar épico, persona pequeña, una afirmación."
+        },
         "he": {
           "name": "טיולים",
           "description": "ולוגרים של טיולים. מקום אפי, אדם קטן, טענה אחת."
@@ -1368,6 +1508,10 @@
         "url": "https://cdn.nodaro.ai/images/27ff42d3-e4f6-47c4-ace1-ef36d7bc7cc3.png"
       },
       "copy": {
+        "es": {
+          "name": "Chincheta en el mapa",
+          "description": "Canales de viajes, geopolítica e historia. Un mapa, una chincheta, una pregunta."
+        },
         "he": {
           "name": "סיכה על מפה",
           "description": "ערוצי טיולים, גאופוליטיקה והיסטוריה. מפה, סיכה, שאלה."
@@ -1404,6 +1548,10 @@
         "url": "https://cdn.nodaro.ai/images/50f5d66e-ade1-4770-9ccb-1dd95c8e8fdf.png"
       },
       "copy": {
+        "es": {
+          "name": "Banquete",
+          "description": "Vloggers de comida y canales de recetas. Comida en primer plano, cara de hambre, un precio o una afirmación."
+        },
         "he": {
           "name": "סעודה",
           "description": "ולוגרים של אוכל וערוצי מתכונים. אוכל מקרוב, פנים רעבות, מחיר או טענה."
@@ -1446,6 +1594,10 @@
       },
       "who": "Travel and lifestyle vloggers: a sunny street, a big smile, hand-painted three-line type.",
       "copy": {
+        "es": {
+          "name": "Vlog luminoso",
+          "description": "Vloggers de viajes y estilo de vida: una calle soleada, una gran sonrisa, letras pintadas a mano en tres líneas."
+        },
         "he": {
           "name": "ולוג שמשי",
           "description": "ולוגרים של טיולים ולייף־סטייל: רחוב שמשי, חיוך גדול, כיתוב מצויר ביד."
@@ -1482,6 +1634,10 @@
         "url": "https://cdn.nodaro.ai/images/2b440d6b-33df-4f01-8661-11beee1553dd.png"
       },
       "copy": {
+        "es": {
+          "name": "Explicación científica",
+          "description": "Canales de ciencia y educación. Un objeto grande, una afirmación impactante."
+        },
         "he": {
           "name": "הסבר מדעי",
           "description": "ערוצי מדע וחינוך. אובייקט גדול אחד, טענת וואו אחת."
@@ -1523,6 +1679,10 @@
         "url": "https://cdn.nodaro.ai/images/91a68353-f693-4b1b-85be-237d0a58e0a2.png"
       },
       "copy": {
+        "es": {
+          "name": "Agente inmobiliario",
+          "description": "Agentes y canales de visitas a casas. Casa protagonista, precio, 'por dentro'."
+        },
         "he": {
           "name": "סוכן נדל\"ן",
           "description": "סוכנים וערוצי סיורי בתים. בית, מחיר, 'בפנים'."
@@ -1562,6 +1722,10 @@
         "IS THIS LEGAL?"
       ],
       "copy": {
+        "es": {
+          "name": "Abogado explica",
+          "description": "Abogados en YouTube. Mazo, palabra de veredicto, rostro de autoridad."
+        },
         "he": {
           "name": "עורך דין מסביר",
           "description": "עורכי דין ביוטיוב. פטיש, מילת פסק דין, פנים סמכותיות."
@@ -1601,6 +1765,10 @@
         "FLUENT IN 30 DAYS"
       ],
       "copy": {
+        "es": {
+          "name": "Aprender idiomas",
+          "description": "Profesores de idiomas. Banderas, bocadillo de diálogo, '30 días'."
+        },
         "he": {
           "name": "לימוד שפה",
           "description": "מורים לשפות. דגלים, בועת דיבור, '30 יום'."
@@ -1637,6 +1805,10 @@
         "url": "https://cdn.nodaro.ai/images/c7a00e93-6d7a-43c9-9ef0-519f416267bd.png"
       },
       "copy": {
+        "es": {
+          "name": "Reportaje documental",
+          "description": "Canales de historias reales e investigación. Ojos tachados, aspecto de periódico."
+        },
         "he": {
           "name": "חשיפה תיעודית",
           "description": "ערוצי סיפורים אמיתיים ותחקירים. עיניים מושחרות, מראה של עיתון."
@@ -1673,6 +1845,10 @@
         "url": "https://cdn.nodaro.ai/images/6f3da770-6270-4f16-96e6-412699fe2b66.png"
       },
       "copy": {
+        "es": {
+          "name": "Tablero de crimen real",
+          "description": "Canales de crimen real. Tablero de corcho, hilo rojo, fotos."
+        },
         "he": {
           "name": "לוח פשע",
           "description": "ערוצי פשע אמיתי. לוח שעם, חוט אדום, תמונות."
@@ -1709,6 +1885,10 @@
         "url": "https://cdn.nodaro.ai/images/76cf4f5a-b1c0-498c-8e54-09dc531ecebe.png"
       },
       "copy": {
+        "es": {
+          "name": "Última hora",
+          "description": "Canales de comentario de noticias y geopolítica. Banner rojo, rostro serio."
+        },
         "he": {
           "name": "מבזק",
           "description": "ערוצי פרשנות חדשות וגאופוליטיקה. באנר אדום, פנים רציניות."
@@ -1745,6 +1925,10 @@
         "url": "https://cdn.nodaro.ai/images/e0bdaab9-07ce-4269-a1b9-e31f4241f681.png"
       },
       "copy": {
+        "es": {
+          "name": "Entrevista a dos",
+          "description": "Canales de pódcast y entrevistas. Presentador + invitado, cita en el centro."
+        },
         "he": {
           "name": "ראיון בשניים",
           "description": "ערוצי פודקאסט וראיונות. מארח + אורח, ציטוט באמצע."
@@ -1785,6 +1969,10 @@
         "url": "https://cdn.nodaro.ai/images/87074d33-441e-4762-b107-aff46930c2a7.png"
       },
       "copy": {
+        "es": {
+          "name": "Show en vivo",
+          "description": "Músicos, DJs y promotores de eventos. Luces de escenario, público, título con fecha."
+        },
         "he": {
           "name": "הופעה חיה",
           "description": "מוזיקאים, DJ-ים, מפיקי אירועים. אורות במה, קהל, כותרת בסגנון תאריך."
@@ -1826,6 +2014,10 @@
         "(do this now!)"
       ],
       "copy": {
+        "es": {
+          "name": "Cita destacada",
+          "description": "Clips de pódcast y canales de entrevistas. Dos rostros, una cita, una palabra resaltada."
+        },
         "he": {
           "name": "ציטוט מודגש",
           "description": "קליפים של פודקאסטים. שתי פנים, ציטוט, מילה אחת מודגשת."
@@ -1862,6 +2054,10 @@
         "url": "https://cdn.nodaro.ai/images/22248a82-156c-4489-b35a-fb9525221d94.png"
       },
       "copy": {
+        "es": {
+          "name": "Pregunta candente",
+          "description": "YouTubers de explicación y comentario. Hoy: contratan a un diseñador por video o pasan una hora peleándose con Canva."
+        },
         "he": {
           "name": "שאלה בוערת",
           "description": "יוטיוברים של הסברים ופרשנות. היום: מעצב לכל סרטון או שעה בקנבה."
@@ -1902,6 +2098,10 @@
         "url": "https://cdn.nodaro.ai/images/f8964278-199b-404a-9d2d-d4efa3089e7f.png"
       },
       "copy": {
+        "es": {
+          "name": "Reacción de shock",
+          "description": "Canal de reacciones y entretenimiento. La clásica miniatura de «NO PUEDE SER», en cada video."
+        },
         "he": {
           "name": "תגובת הלם",
           "description": "ערוצי תגובות ובידור. הכיסוי הקלאסי של 'אין מצב'."
@@ -1942,6 +2142,10 @@
         "url": "https://cdn.nodaro.ai/images/55954d93-e648-413c-9e1f-421f84733384.png"
       },
       "copy": {
+        "es": {
+          "name": "Misterio borroso",
+          "description": "Canales de unboxing, revelaciones y filtraciones. La curiosidad es todo el clic."
+        },
         "he": {
           "name": "טשטוש מסתורי",
           "description": "ערוצי חשיפה והדלפות. פער סקרנות זה כל הקליק."
@@ -1982,6 +2186,10 @@
         "MISTAKES"
       ],
       "copy": {
+        "es": {
+          "name": "Número gigante",
+          "description": "Canales de top 10 y consejos. El número gigante es el gancho."
+        },
         "he": {
           "name": "מספר ענק",
           "description": "ערוצי טופ-10 וטיפים. המספר הענק הוא ההוק."
@@ -2022,6 +2230,10 @@
         "RIGHT"
       ],
       "copy": {
+        "es": {
+          "name": "X roja y check verde",
+          "description": "Canales de tutoriales y consejos: haz esto, no aquello."
+        },
         "he": {
           "name": "נכון ולא נכון",
           "description": "ערוצי הדרכה ועצות: ככה כן, ככה לא."
@@ -2062,6 +2274,10 @@
       },
       "who": "Animation and kids-content creators: a host surrounded by original 3D companions.",
       "copy": {
+        "es": {
+          "name": "Elenco divertido",
+          "description": "Creadores de animación y contenido infantil: un presentador rodeado de compañeros 3D originales."
+        },
         "he": {
           "name": "צוות משועשע",
           "description": "יוצרי אנימציה ותוכן לילדים: מנחה מוקף בדמויות תלת־ממד מקוריות."
@@ -2098,6 +2314,10 @@
         "url": "https://cdn.nodaro.ai/images/c3b9aef9-bf13-4ce9-a6b0-4d6b58ecd35f.png"
       },
       "copy": {
+        "es": {
+          "name": "Mascotas",
+          "description": "Canales de mascotas e historias de rescate animal."
+        },
         "he": {
           "name": "חיות מחמד",
           "description": "ערוצי חיות וסיפורי חילוץ."
@@ -2134,6 +2354,10 @@
         "url": "https://cdn.nodaro.ai/images/8befa92f-a592-4fbd-a27f-2533c1a99ce7.png"
       },
       "copy": {
+        "es": {
+          "name": "Jugada destacada",
+          "description": "Canales de deportes. Acción congelada, una palabra."
+        },
         "he": {
           "name": "הייליט ספורט",
           "description": "ערוצי ספורט. פעולה קפואה, מילה אחת."
@@ -2170,6 +2394,10 @@
         "url": "https://cdn.nodaro.ai/images/215a2fae-7552-4b31-8012-8bec16518063.png"
       },
       "copy": {
+        "es": {
+          "name": "Crianza",
+          "description": "Creadores de familia y crianza. Padre o madre + hijo, caos con el que todos se identifican."
+        },
         "he": {
           "name": "הורות",
           "description": "יוצרי משפחה והורות. הורה + ילד, כאוס שמזדהים איתו."
@@ -2211,6 +2439,10 @@
       },
       "who": "Designers, architects and brand channels: a Swiss print collage with a cut-out portrait and giant type.",
       "copy": {
+        "es": {
+          "name": "Collage suizo",
+          "description": "Diseñadores, arquitectos y canales de marca: un collage de impresión suiza con un retrato recortado y tipografía gigante."
+        },
         "he": {
           "name": "קולאז' שוויצרי",
           "description": "מעצבים ומותגים: קולאז' דפוס עם פורטרט גזור וטיפוגרפיה ענקית."
@@ -2251,6 +2483,10 @@
       },
       "who": "Fashion, beauty and culture channels: one face through one monumental word, campaign-poster restraint.",
       "copy": {
+        "es": {
+          "name": "Tipografía editorial",
+          "description": "Canales de moda, belleza y cultura: un rostro a través de una palabra monumental, con la sobriedad de un cartel de campaña."
+        },
         "he": {
           "name": "טיפוגרפיה עיתונאית",
           "description": "אופנה ותרבות: פנים דרך מילה אחת ענקית, איפוק של פוסטר קמפיין."
@@ -2292,6 +2528,10 @@
       },
       "who": "Motivation and mindset channels: two monumental words in fog, a tiny figure for scale.",
       "copy": {
+        "es": {
+          "name": "Portada de reel en negrita",
+          "description": "Canales de motivación y mentalidad: dos palabras monumentales entre la niebla, una figura diminuta para dar escala."
+        },
         "he": {
           "name": "שתי מילים בערפל",
           "description": "ערוצי מוטיבציה: שתי מילים ענקיות בערפל ודמות קטנה לקנה מידה."
@@ -2334,6 +2574,10 @@
         "YOU'RE THE COOK"
       ],
       "copy": {
+        "es": {
+          "name": "Gancho POV",
+          "description": "Creadores de TikTok: el formato POV, el gancho más copiado de la app. Hoy: plantilla vertical de Canva + una selfi."
+        },
         "he": {
           "name": "הוק POV",
           "description": "יוצרי טיקטוק: פורמט ה-POV, ההוק הכי מועתק באפליקציה."
@@ -2372,6 +2616,10 @@
         "url": "https://cdn.nodaro.ai/images/ddfbf640-a13a-473f-a921-27c3e8c970ef.png"
       },
       "copy": {
+        "es": {
+          "name": "Rutina de la mañana",
+          "description": "Creadores de estilo de vida y productividad: videos de un día en la vida y de rutinas."
+        },
         "he": {
           "name": "שגרת בוקר",
           "description": "יוצרי לייפסטייל ופרודוקטיביות. יום בחיים ושגרות."
@@ -2414,6 +2662,10 @@
         "TO FIX THIS"
       ],
       "copy": {
+        "es": {
+          "name": "Tres pasos",
+          "description": "Creadores de tutoriales y consejos: pasos numerados, una mano que señala, una promesa."
+        },
         "he": {
           "name": "שלושה צעדים",
           "description": "יוצרי הדרכות וטיפים: צעדים ממוספרים, יד מצביעה, הבטחה אחת."
@@ -2452,6 +2704,10 @@
         "url": "https://cdn.nodaro.ai/images/65ec5166-6e2e-4787-ab7c-e161d3a34b5c.png"
       },
       "copy": {
+        "es": {
+          "name": "Storytime",
+          "description": "Creadores de storytime: selfi en el auto, ojos muy abiertos, una palabra."
+        },
         "he": {
           "name": "סטוריטיים",
           "description": "יוצרי סטוריטיים: סלפי ברכב, עיניים גדולות, מילה אחת."
@@ -2490,6 +2746,10 @@
         "url": "https://cdn.nodaro.ai/images/b56a4d26-8d27-43c1-8e52-91c7cbc50a47.png"
       },
       "copy": {
+        "es": {
+          "name": "Receta rápida",
+          "description": "Creadores de comida: sartén vista desde arriba, un tenedor, una promesa de tiempo."
+        },
         "he": {
           "name": "מתכון מהיר",
           "description": "יוצרי אוכל: מחבת מלמעלה, מזלג, טענת זמן."
@@ -2528,6 +2788,10 @@
         "url": "https://cdn.nodaro.ai/images/38304905-a9c8-4aac-8211-62e609dec843.png"
       },
       "copy": {
+        "es": {
+          "name": "Ejercicio diario",
+          "description": "Coaches de fitness: un ejercicio, una orden."
+        },
         "he": {
           "name": "תרגיל יומי",
           "description": "מאמני כושר: תרגיל אחד, פקודה אחת."
@@ -2570,6 +2834,10 @@
         "FALL EDITION"
       ],
       "copy": {
+        "es": {
+          "name": "Outfit GRWM",
+          "description": "Creadores de moda: arréglate conmigo, selfi en el espejo, etiqueta de temporada."
+        },
         "he": {
           "name": "GRWM אאוטפיט",
           "description": "יוצרות אופנה: תתכוננו איתי, סלפי במראה, תווית עונה."
@@ -2613,6 +2881,10 @@
       ],
       "figureHeadline": true,
       "copy": {
+        "es": {
+          "name": "Ingresos extra",
+          "description": "TikTok de finanzas: una cifra, un gráfico, un dedo que señala."
+        },
         "he": {
           "name": "הכנסה צדדית",
           "description": "טיקטוק פיננסי: מספר, גרף, אצבע מצביעה."
@@ -2651,6 +2923,10 @@
         "url": "https://cdn.nodaro.ai/images/eeb85837-8d08-4b2f-8117-eb5ac91f6d7a.png"
       },
       "copy": {
+        "es": {
+          "name": "Herramienta de IA gratis",
+          "description": "Creadores de IA en TikTok y Shorts: 'esta herramienta es gratis', cara de asombro, brillo de laptop."
+        },
         "he": {
           "name": "כלי AI חינמי",
           "description": "יוצרי AI בטיקטוק ושורטס: 'הכלי הזה חינמי', פנים מופתעות, זוהר של לפטופ."
@@ -2689,6 +2965,10 @@
         "url": "https://cdn.nodaro.ai/images/06ec57d0-edbe-407c-b4dd-618c6f77ce4d.png"
       },
       "copy": {
+        "es": {
+          "name": "Tendencia de baile",
+          "description": "Creadores de baile y música: portada de tendencia, habitación de neón, movimiento."
+        },
         "he": {
           "name": "טרנד ריקוד",
           "description": "יוצרי ריקוד ומוזיקה: כיסוי טרנד, חדר ניאון, תנועה."
@@ -2732,6 +3012,10 @@
         "WITH AI AGENTS"
       ],
       "copy": {
+        "es": {
+          "name": "Viejo VS nuevo",
+          "description": "Influencers de tecnología en LinkedIn/Facebook: 'herramientas antiguas ✗ vs mi nueva forma ✓', rostro en el centro, texto debajo."
+        },
         "he": {
           "name": "ישן מול חדש",
           "description": "משפיעני טכנולוגיה בלינקדאין ופייסבוק: 'הכלים הישנים ✗ מול הדרך שלי ✓'."
@@ -2774,6 +3058,10 @@
         "HAPPENED NEXT"
       ],
       "copy": {
+        "es": {
+          "name": "Texto grande",
+          "description": "Cualquiera que publique una opinión fuerte: rostro + texto de 3 líneas. El formato más común de Facebook."
+        },
         "he": {
           "name": "כיתוב גדול",
           "description": "כל מי שמפרסם דעה: פנים + כיתוב של 3 שורות. הפורמט הכי נפוץ בפייסבוק."
@@ -2813,6 +3101,10 @@
         "7 AI TOOLS I USE EVERY DAY"
       ],
       "copy": {
+        "es": {
+          "name": "Portada de carrusel",
+          "description": "Creadores de carruseles de LinkedIn. Diapositiva 1 = gran promesa + flecha para deslizar."
+        },
         "he": {
           "name": "כיסוי קרוסלה",
           "description": "יוצרי קרוסלות בלינקדאין. שקף 1 = הבטחה גדולה + חץ החלקה."
@@ -2850,6 +3142,10 @@
         "url": "https://cdn.nodaro.ai/images/bc78f978-8cc0-4164-a229-5b7dbce26b28.png"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta de cita",
+          "description": "Coaches, ponentes, marcas. Una cita sobre un fondo con textura."
+        },
         "he": {
           "name": "כרטיס ציטוט",
           "description": "מאמנים, דוברים, מותגים. ציטוט על רקע עם טקסטורה."
@@ -2890,6 +3186,10 @@
         "SENIOR DESIGNER"
       ],
       "copy": {
+        "es": {
+          "name": "Estamos contratando",
+          "description": "RR. HH. y fundadores: publicación de «Estamos contratando». Cada semana en todas las empresas."
+        },
         "he": {
           "name": "מגייסים",
           "description": "HR ומייסדים: פוסט 'מגייסים'. כל שבוע בכל חברה."
@@ -2930,6 +3230,10 @@
         "DANA · ENGINEERING"
       ],
       "copy": {
+        "es": {
+          "name": "Conoce al equipo",
+          "description": "Responsables de marca empleadora. Retrato + banner con el nombre."
+        },
         "he": {
           "name": "הכירו את הצוות",
           "description": "מנהלי מיתוג מעסיק. פורטרט + באנר שם."
@@ -2973,6 +3277,10 @@
         "TEL AVIV"
       ],
       "copy": {
+        "es": {
+          "name": "Anuncio de evento",
+          "description": "Comunidades y empresas que anuncian un meetup o un webinar."
+        },
         "he": {
           "name": "הכרזת אירוע",
           "description": "קהילות וחברות שמכריזות על מיטאפ או וובינר."
@@ -3013,6 +3321,10 @@
         "NEW FREELANCERS MAKE"
       ],
       "copy": {
+        "es": {
+          "name": "Portada de carrusel",
+          "description": "Educadores y coaches de Instagram: diapositiva 1 de un carrusel, gran promesa, flecha para deslizar. Formato diario."
+        },
         "he": {
           "name": "כיסוי קרוסלה לאינסטגרם",
           "description": "מחנכים ומאמנים באינסטגרם: שקף 1, הבטחה גדולה, חץ החלקה. פורמט יומי."
@@ -3049,6 +3361,10 @@
         "url": "https://cdn.nodaro.ai/images/797ccb42-9f8b-4966-a8e4-bcb3baace242.png"
       },
       "copy": {
+        "es": {
+          "name": "Flat lay",
+          "description": "Marcas y creadores de estilo de vida: el flat lay tranquilo que llena un feed entre lanzamientos."
+        },
         "he": {
           "name": "פלאט-ליי",
           "description": "מותגי לייפסטייל ויוצרים: הפלאט-ליי הרגוע שממלא פיד בין השקות."
@@ -3085,6 +3401,10 @@
         "url": "https://cdn.nodaro.ai/images/3a81bab7-01f7-45d1-869b-b50e2bef1f93.png"
       },
       "copy": {
+        "es": {
+          "name": "Photo dump",
+          "description": "Creadores de viajes y estilo de vida: el collage de photo dump, cuatro momentos en una publicación."
+        },
         "he": {
           "name": "פוטו דאמפ",
           "description": "יוצרי טיולים ולייפסטייל: קולאז' של ארבעה רגעים בפוסט אחד."
@@ -3125,6 +3445,10 @@
         "TAG A FRIEND"
       ],
       "copy": {
+        "es": {
+          "name": "Sorteo",
+          "description": "Marcas y tiendas: publicación de sorteo, producto + confeti + 'etiqueta a un amigo'."
+        },
         "he": {
           "name": "הגרלה",
           "description": "מותגים וחנויות: פוסט הגרלה, מוצר + קונפטי + 'תייגו חבר'."
@@ -3165,6 +3489,10 @@
         "FRIDAY 10AM"
       ],
       "copy": {
+        "es": {
+          "name": "Nuevo drop",
+          "description": "Marcas de moda y de producto: anuncio de nuevo drop, un producto, una pared de color."
+        },
         "he": {
           "name": "דרופ חדש",
           "description": "מותגי אופנה ומוצרים: הכרזת דרופ, מוצר אחד, קיר צבע אחד."
@@ -3205,6 +3533,10 @@
         "DANA, STUDIO OWNER"
       ],
       "copy": {
+        "es": {
+          "name": "Testimonio",
+          "description": "Negocios de servicios: una cita de cliente con estrellas y una foto pequeña. Prueba social semanal."
+        },
         "he": {
           "name": "המלצת לקוח",
           "description": "עסקי שירות: ציטוט לקוח עם כוכבים ותמונה קטנה. הוכחה חברתית שבועית."
@@ -3241,6 +3573,10 @@
         "url": "https://cdn.nodaro.ai/images/833c47f7-996a-4523-be9f-5e56fbea9c9b.png"
       },
       "copy": {
+        "es": {
+          "name": "Esto o aquello",
+          "description": "Tiendas y creadores: una historia pensada para el sticker de encuesta, dos opciones arriba y abajo."
+        },
         "he": {
           "name": "זה או זה",
           "description": "חנויות ויוצרים: סטורי בנוי לסטיקר סקר, שתי אפשרויות למעלה ולמטה."
@@ -3277,6 +3613,10 @@
         "url": "https://cdn.nodaro.ai/images/c4f711a6-bf26-496b-ac97-4d74ab5302bd.png"
       },
       "copy": {
+        "es": {
+          "name": "Cuenta atrás",
+          "description": "Marcas antes de un lanzamiento: teaser oscuro con espacio para el sticker de cuenta atrás."
+        },
         "he": {
           "name": "ספירה לאחור",
           "description": "מותגים לפני השקה: טיזר כהה עם מקום לסטיקר ספירה לאחור."
@@ -3316,6 +3656,10 @@
         "NEW BLOG POST"
       ],
       "copy": {
+        "es": {
+          "name": "Enlace arriba",
+          "description": "Bloggers y newsletters: historia de «nueva publicación» con el sticker de enlace."
+        },
         "he": {
           "name": "קישור למעלה",
           "description": "בלוגרים וניוזלטרים: סטורי 'פוסט חדש' עם סטיקר קישור."
@@ -3356,6 +3700,10 @@
         "20% OFF ALL PASTRIES"
       ],
       "copy": {
+        "es": {
+          "name": "Oferta en el estado",
+          "description": "Tiendas pequeñas, panaderías, salones: una oferta en el estado de WhatsApp. Enorme en Israel, a diario."
+        },
         "he": {
           "name": "מבצע בסטטוס",
           "description": "חנויות קטנות, מאפיות, מספרות: מבצע בסטטוס וואטסאפ. ענק בישראל, יומי."
@@ -3396,6 +3744,10 @@
         "Someone using it will."
       ],
       "copy": {
+        "es": {
+          "name": "Tarjeta de frase",
+          "description": "Líderes de opinión en X: una opinión fuerte de una línea como imagen, para que el tuit lleve una imagen."
+        },
         "he": {
           "name": "כרטיס אמירה",
           "description": "מובילי דעה ב-X: אמירה חדה כתמונה, כדי שלציוץ תהיה תמונה."
@@ -3432,6 +3784,10 @@
         "url": "https://cdn.nodaro.ai/images/a71c47bf-7562-4b45-b8c1-3efdcede1947.png"
       },
       "copy": {
+        "es": {
+          "name": "Gráfico con una palabra",
+          "description": "Cuentas de finanzas y tecnología en X: una línea ascendente, una palabra."
+        },
         "he": {
           "name": "גרף עם מילה",
           "description": "חשבונות פיננסים וטכנולוגיה ב-X: קו עולה אחד, מילה אחת."
@@ -3472,6 +3828,10 @@
         "ONE BOWL · 40 MINUTES"
       ],
       "copy": {
+        "es": {
+          "name": "Receta",
+          "description": "Bloggers de recetas: el pin alto con una foto y una banda de texto que atrae tráfico al blog."
+        },
         "he": {
           "name": "פין מתכון",
           "description": "בלוגרים של מתכונים: הפין הגבוה עם תמונה ופס טקסט שמביא תנועה לבלוג."
@@ -3508,6 +3868,10 @@
         "url": "https://cdn.nodaro.ai/images/ff20b7a6-377e-4057-8331-2f7e2fefac15.png"
       },
       "copy": {
+        "es": {
+          "name": "Decoración del hogar",
+          "description": "Bloggers de hogar y decoración: el pin de lista sobre la foto de una habitación."
+        },
         "he": {
           "name": "פין עיצוב הבית",
           "description": "בלוגרים של בית ועיצוב: פין ליסטיקל על תמונת חדר."
@@ -3544,6 +3908,10 @@
         "url": "https://cdn.nodaro.ai/images/d0ab7238-7440-46a0-98cf-0800f5c11f59.png"
       },
       "copy": {
+        "es": {
+          "name": "Ideas de outfits",
+          "description": "Bloggers y tiendas de moda: pin con collage de outfits apilados."
+        },
         "he": {
           "name": "פין אאוטפיטים",
           "description": "בלוגרים וחנויות אופנה: פין קולאז' אאוטפיטים."
@@ -3584,6 +3952,10 @@
         "SUNDAY 7AM · CITY PARK"
       ],
       "copy": {
+        "es": {
+          "name": "Portada de evento",
+          "description": "Comunidades y clubes: portada de evento de Facebook con nombre, día y lugar."
+        },
         "he": {
           "name": "קאבר לאירוע בפייסבוק",
           "description": "קהילות ומועדונים: קאבר אירוע עם שם, יום ומקום."
@@ -3624,6 +3996,10 @@
         "WALKS · TIPS · MEETUPS"
       ],
       "copy": {
+        "es": {
+          "name": "Portada de grupo",
+          "description": "Administradores de grupos: portada de grupo de Facebook con el nombre del grupo y de qué trata."
+        },
         "he": {
           "name": "קאבר לקבוצה בפייסבוק",
           "description": "מנהלי קבוצות: קאבר עם שם הקבוצה ועל מה היא."
@@ -3660,6 +4036,10 @@
         "url": "https://cdn.nodaro.ai/images/ddf1f6e6-90d4-4541-a7a9-23b219f8c545.png"
       },
       "copy": {
+        "es": {
+          "name": "Certificado",
+          "description": "Profesionales: la publicación de certificación «Me complace compartir». Cada semana en LinkedIn."
+        },
         "he": {
           "name": "הסמכה",
           "description": "אנשי מקצוע: פוסט ה'שמח לשתף' עם תעודה. כל שבוע בלינקדאין."
@@ -3702,6 +4082,10 @@
         "DELEGATE"
       ],
       "copy": {
+        "es": {
+          "name": "Infografía",
+          "description": "Consultores y marketers B2B: una infografía de tres puntos, con iconos y etiquetas."
+        },
         "he": {
           "name": "אינפוגרפיקה",
           "description": "יועצים ומשווקי B2B: אינפוגרפיקה של שלוש נקודות, אייקונים ותוויות."
@@ -3742,6 +4126,10 @@
         "ONLY $14"
       ],
       "copy": {
+        "es": {
+          "name": "Especial del restaurante",
+          "description": "Dueños de restaurantes: el especial del día, para Instagram y el escaparate. Cada semana."
+        },
         "he": {
           "name": "הספיישל של הערב",
           "description": "בעלי מסעדות: המנה של היום, לאינסטגרם ולחלון. כל שבוע."
@@ -3783,6 +4171,10 @@
         "THIS WEEKEND ONLY"
       ],
       "copy": {
+        "es": {
+          "name": "Rebajas de tienda",
+          "description": "Dueños de tiendas: banner de Black Friday o de rebajas de fin de temporada."
+        },
         "he": {
           "name": "מבצע בחנות",
           "description": "בעלי חנויות: באנר בלאק פריידי או סוף עונה."
@@ -3822,6 +4214,10 @@
         "NEW CLIENTS -20%"
       ],
       "copy": {
+        "es": {
+          "name": "Promoción de salón",
+          "description": "Peluquerías y salones de uñas: oferta para clientes nuevos en Instagram."
+        },
         "he": {
           "name": "מבצע למספרה",
           "description": "מספרות ומכוני ציפורניים: הצעה ללקוחות חדשים באינסטגרם."
@@ -3861,6 +4257,10 @@
         "FIRST MONTH FREE"
       ],
       "copy": {
+        "es": {
+          "name": "Oferta de gimnasio",
+          "description": "Gimnasios y entrenadores: oferta de enero, reto de verano."
+        },
         "he": {
           "name": "הצעה לחדר כושר",
           "description": "חדרי כושר ומאמנים: מבצע ינואר, אתגר קיץ."
@@ -3902,6 +4302,10 @@
         "THIS MONTH"
       ],
       "copy": {
+        "es": {
+          "name": "Anuncio de clínica",
+          "description": "Clínicas dentales y médicas. Confianza + una oferta."
+        },
         "he": {
           "name": "מודעה למרפאה",
           "description": "מרפאות שיניים ורפואה. אמון + הצעה אחת."
@@ -3942,6 +4346,10 @@
         "SAME-DAY REPAIRS"
       ],
       "copy": {
+        "es": {
+          "name": "Servicio con furgoneta",
+          "description": "Fontaneros, electricistas, mudanzas. Anuncio de servicio local."
+        },
         "he": {
           "name": "שירות עם רכב",
           "description": "אינסטלטורים, חשמלאים, מובילים. מודעת שירות מקומי."
@@ -3983,6 +4391,10 @@
         "$890,000"
       ],
       "copy": {
+        "es": {
+          "name": "Anuncio inmobiliario",
+          "description": "Agentes inmobiliarios: tarjeta de «Recién publicado» para Instagram y portales."
+        },
         "he": {
           "name": "נכס חדש בשוק",
           "description": "סוכני נדל\"ן: כרטיס 'נכנס לשוק' לאינסטגרם ולפורטלים."
@@ -4022,6 +4434,10 @@
         "SAVE 2 HOURS A DAY"
       ],
       "copy": {
+        "es": {
+          "name": "Anuncio de leads en Facebook",
+          "description": "Marketers de rendimiento: un anuncio de captación de leads con una oferta y un botón."
+        },
         "he": {
           "name": "מודעת לידים",
           "description": "משווקי ביצועים: מודעת לידים עם הצעה אחת וכפתור אחד."
@@ -4058,6 +4474,10 @@
         "url": "https://cdn.nodaro.ai/images/978a7d66-9968-493d-96d2-904a488c3594.png"
       },
       "copy": {
+        "es": {
+          "name": "Captura para App Store",
+          "description": "Creadores de apps: captura para la App Store con un teléfono + una frase de beneficio."
+        },
         "he": {
           "name": "צילום מסך לאפ סטור",
           "description": "מפתחי אפליקציות: צילום מסך לחנות עם טלפון ושורת תועלת."
@@ -4095,6 +4515,10 @@
         "url": "https://cdn.nodaro.ai/images/5255571f-dfc3-40ac-b50b-6d7c426533e2.png"
       },
       "copy": {
+        "es": {
+          "name": "Foto de perfil",
+          "description": "Freelancers y fundadores: una foto de perfil limpia para LinkedIn / X."
+        },
         "he": {
           "name": "תמונת פרופיל",
           "description": "פרילנסרים ומייסדים: תמונת פרופיל נקייה ללינקדאין ול-X."
@@ -4131,6 +4555,10 @@
         "url": "https://cdn.nodaro.ai/images/9c568838-ef1f-497f-9e00-e8d34367ed79.png"
       },
       "copy": {
+        "es": {
+          "name": "Banner de LinkedIn",
+          "description": "Profesionales: banner de portada de LinkedIn con un eslogan."
+        },
         "he": {
           "name": "באנר לינקדאין",
           "description": "אנשי מקצוע: באנר קאבר ללינקדאין עם טאגליין."
@@ -4172,6 +4600,10 @@
         "LIVE EVERY NIGHT · 21:00"
       ],
       "copy": {
+        "es": {
+          "name": "Banner de Twitch",
+          "description": "Streamers: banner de canal de Twitch / YouTube."
+        },
         "he": {
           "name": "באנר לסטרימר",
           "description": "סטרימרים: באנר ערוץ לטוויץ' וליוטיוב."
@@ -4212,6 +4644,10 @@
         "THE DEEP WORK SHOW"
       ],
       "copy": {
+        "es": {
+          "name": "Portada de pódcast",
+          "description": "Podcasters: portada cuadrada para Spotify y Apple."
+        },
         "he": {
           "name": "עטיפת פודקאסט",
           "description": "פודקאסטרים: עטיפה מרובעת לספוטיפיי ולאפל."
@@ -4251,6 +4687,10 @@
         "MIDNIGHT RUN"
       ],
       "copy": {
+        "es": {
+          "name": "Portada vertical de promoción del sencillo",
+          "description": "Músicos: imagen promocional vertical para historias o un póster de video (una imagen estática, no una animación de Spotify Canvas)."
+        },
         "he": {
           "name": "קאבר פרומו אנכי לסינגל",
           "description": "מוזיקאים: תמונת פרומו אנכית לסטוריז או לפוסטר וידאו."
@@ -4288,6 +4728,10 @@
         "url": "https://cdn.nodaro.ai/images/ff184f35-340e-4ee7-b76e-0a5dd1e8d00a.png"
       },
       "copy": {
+        "es": {
+          "name": "Imagen principal de Amazon",
+          "description": "Vendedores de Amazon y Shopify: imagen principal del anuncio, fondo blanco, producto enorme."
+        },
         "he": {
           "name": "תמונה ראשית לאמזון",
           "description": "מוכרים באמזון ושופיפיי: תמונת מוצר ראשית, רקע לבן, מוצר ענק."
@@ -4325,6 +4769,10 @@
         "url": "https://cdn.nodaro.ai/images/8d819a7b-cf8a-44e2-946f-5b52b08683b3.png"
       },
       "copy": {
+        "es": {
+          "name": "Foto de estilo de vida",
+          "description": "Imagen secundaria de vendedores: producto en uso, entorno real."
+        },
         "he": {
           "name": "צילום לייפסטייל",
           "description": "תמונה משנית של מוכרים: המוצר בשימוש, בסביבה אמיתית."
@@ -4366,6 +4814,10 @@
         "BPA FREE"
       ],
       "copy": {
+        "es": {
+          "name": "Infografía de producto",
+          "description": "Imagen de características de vendedores: producto + 3 destacados."
+        },
         "he": {
           "name": "אינפוגרפיקת מוצר",
           "description": "תמונת פיצ'רים של מוכרים: מוצר + 3 הדגשות."
@@ -4402,6 +4854,10 @@
         "url": "https://cdn.nodaro.ai/images/3ed62b63-1891-4500-b898-f109f6ce43c1.png"
       },
       "copy": {
+        "es": {
+          "name": "Artesanal para Etsy",
+          "description": "Artesanos de Etsy: producto hecho a mano, flat lay acogedor."
+        },
         "he": {
           "name": "עבודת יד לאטסי",
           "description": "יוצרי אטסי: מוצר בעבודת יד, פלאט-ליי חמים."
@@ -4438,6 +4894,10 @@
         "url": "https://cdn.nodaro.ai/images/d92148b6-2a02-4e0d-add6-78d878171762.png"
       },
       "copy": {
+        "es": {
+          "name": "Maniquí fantasma",
+          "description": "Vendedores de ropa: foto de prenda con maniquí fantasma."
+        },
         "he": {
           "name": "בובת רפאים",
           "description": "מוכרי בגדים: צילום פריט על בובה בלתי נראית."
@@ -4479,6 +4939,10 @@
         "LIMITED TIME"
       ],
       "copy": {
+        "es": {
+          "name": "Sello de descuento",
+          "description": "Miniatura promocional de vendedores: producto + gran sello de descuento."
+        },
         "he": {
           "name": "תג מבצע",
           "description": "טייל מבצע של מוכרים: מוצר + תג הנחה גדול."
@@ -4519,6 +4983,10 @@
         "ANNUAL INSIGHTS REPORT"
       ],
       "copy": {
+        "es": {
+          "name": "Portada de informe",
+          "description": "Consultores y analistas: portada de un informe o whitepaper."
+        },
         "he": {
           "name": "כריכת דוח",
           "description": "יועצים ואנליסטים: כריכה לדוח או לנייר עמדה."
@@ -4559,6 +5027,10 @@
         "ISSUE #42"
       ],
       "copy": {
+        "es": {
+          "name": "Cabecera de correo",
+          "description": "Marketers: imagen de cabecera para newsletter / correo electrónico."
+        },
         "he": {
           "name": "כותרת למייל",
           "description": "משווקים: תמונת כותרת לניוזלטר או מייל."
@@ -4598,6 +5070,10 @@
         "PLAN YOUR WEEK IN 5 MINUTES"
       ],
       "copy": {
+        "es": {
+          "name": "Hero de landing page",
+          "description": "Fundadores: imagen hero de landing page con el producto en pantalla."
+        },
         "he": {
           "name": "הירו לדף נחיתה",
           "description": "מייסדים: תמונת הירו לדף נחיתה עם המוצר על המסך."
@@ -4638,6 +5114,10 @@
         "LESSON 3 · BIOLOGY"
       ],
       "copy": {
+        "es": {
+          "name": "Diapositiva de título",
+          "description": "Profesores, formadores y consultores: la diapositiva de título de una presentación."
+        },
         "he": {
           "name": "שקף פתיחה",
           "description": "מורים, מדריכים, יועצים: שקף כותרת למצגת."
@@ -4678,6 +5158,10 @@
         "GRADE 4"
       ],
       "copy": {
+        "es": {
+          "name": "Cabecera de ficha de actividades",
+          "description": "Profesores: cabecera de una ficha de actividades o material impreso."
+        },
         "he": {
           "name": "כותרת לדף עבודה",
           "description": "מורים: כותרת לדף עבודה או דף חלוקה."
@@ -4719,6 +5203,10 @@
         "/ˈæp.əl/"
       ],
       "copy": {
+        "es": {
+          "name": "Flashcard",
+          "description": "Estudiantes y apps de idiomas: tarjeta con palabra + imagen."
+        },
         "he": {
           "name": "כרטיסייה",
           "description": "תלמידים ואפליקציות שפה: כרטיסייה עם מילה ותמונה."
@@ -4756,6 +5244,10 @@
         "url": "https://cdn.nodaro.ai/images/b8f55176-2b84-418e-8560-20ba165afe58.png"
       },
       "copy": {
+        "es": {
+          "name": "Diseño de camiseta",
+          "description": "Vendedores de impresión bajo demanda: un gráfico para camiseta, estampado frontal."
+        },
         "he": {
           "name": "עיצוב לחולצה",
           "description": "מוכרי הדפסה לפי דרישה: גרפיקה לחולצה, הדפס קדמי."
@@ -4795,6 +5287,10 @@
         "TAKE THE LONG WAY"
       ],
       "copy": {
+        "es": {
+          "name": "Arte de estampado de camiseta independiente",
+          "description": "Vendedores de impresión bajo demanda: solo el arte plano del frente de la camiseta, sin la camiseta, sobre blanco para enmascarar."
+        },
         "he": {
           "name": "הדפס לחולצה בלבד",
           "description": "מוכרי הדפסה לפי דרישה: הגרפיקה לבדה, בלי חולצה, על רקע לבן."
@@ -4838,6 +5334,10 @@
       },
       "who": "Founders, coaches and personal brands: a 9:16 fashion-magazine cover with masthead, kicker and cover story.",
       "copy": {
+        "es": {
+          "name": "Portada de revista visionaria",
+          "description": "Fundadores, coaches y marcas personales: una portada de revista de moda 9:16 con cabecera, antetítulo y reportaje de portada."
+        },
         "he": {
           "name": "שער מגזין",
           "description": "יזמים ומותגים אישיים: שער מגזין אופנה אנכי עם כותרת ראשית וסיפור שער."
@@ -4875,6 +5375,10 @@
         "url": "https://cdn.nodaro.ai/images/bfd576b2-c67f-407f-9bb4-393f47dbe034.png"
       },
       "copy": {
+        "es": {
+          "name": "Hoja de pegatinas",
+          "description": "Vendedores de pegatinas y marcas: hoja de pegatinas troqueladas."
+        },
         "he": {
           "name": "גיליון מדבקות",
           "description": "מוכרי מדבקות ומותגים: גיליון מדבקות חתוכות."
@@ -4912,6 +5416,10 @@
         "url": "https://cdn.nodaro.ai/images/b26454f0-c818-4bed-a796-d8b6913a22e4.png"
       },
       "copy": {
+        "es": {
+          "name": "Taza",
+          "description": "Tiendas de regalos e impresión bajo demanda: mockup de taza con una frase."
+        },
         "he": {
           "name": "ספל",
           "description": "חנויות מתנות ו-POD: מוקאפ ספל עם ציטוט."
@@ -4953,6 +5461,10 @@
         "12 · 06 · 2027"
       ],
       "copy": {
+        "es": {
+          "name": "Invitación de boda",
+          "description": "Parejas y organizadores: invitación de boda. Un mercado enorme, todos pagan una vez."
+        },
         "he": {
           "name": "הזמנה לחתונה",
           "description": "זוגות ומפיקים: הזמנה לחתונה. שוק ענק, כולם משלמים פעם אחת."
@@ -4994,6 +5506,10 @@
         "SATURDAY · 16:00 · OUR BACKYARD"
       ],
       "copy": {
+        "es": {
+          "name": "Invitación de cumpleaños",
+          "description": "Padres y madres: invitación de cumpleaños infantil. Cada mes para toda familia con hijos."
+        },
         "he": {
           "name": "הזמנה ליום הולדת",
           "description": "הורים: הזמנה ליום הולדת לילדים. חודשי לכל משפחה."
@@ -5035,6 +5551,10 @@
         "SAT 28 · DOORS 23:00"
       ],
       "copy": {
+        "es": {
+          "name": "Flyer de discoteca",
+          "description": "Promotores y DJs: flyer de una noche de discoteca. Cada semana."
+        },
         "he": {
           "name": "פלייר למועדון",
           "description": "מפיקים ו-DJ-ים: פלייר ללילה במועדון. שבועי."
@@ -5078,6 +5598,10 @@
         "BERLIN"
       ],
       "copy": {
+        "es": {
+          "name": "Banner de conferencia",
+          "description": "Organizadores de eventos: banner hero de conferencia para el sitio web y LinkedIn."
+        },
         "he": {
           "name": "באנר לכנס",
           "description": "מארגני אירועים: באנר הירו לכנס, לאתר וללינקדאין."
@@ -5119,6 +5643,10 @@
         "FROM OUR TEAM TO YOURS"
       ],
       "copy": {
+        "es": {
+          "name": "Felicitación navideña",
+          "description": "Toda empresa y familia: tarjeta de felicitación de fiestas. Pico estacional."
+        },
         "he": {
           "name": "ברכת חג",
           "description": "כל עסק ומשפחה: כרטיס ברכה לחג."
@@ -5160,6 +5688,10 @@
         "BORN 03 · 04 · 2027 · 3.2 KG"
       ],
       "copy": {
+        "es": {
+          "name": "Baby shower",
+          "description": "Amigos y familia: baby shower / anuncio de recién nacido."
+        },
         "he": {
           "name": "הודעה על לידה",
           "description": "חברים ומשפחה: הודעת לידה או מסיבת לידה."
@@ -5197,6 +5729,10 @@
         "url": "https://cdn.nodaro.ai/images/909a6b00-5ec4-4835-a295-bd0bd3be978c.png"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta de cumpleaños",
+          "description": "Para todos: una tarjeta de cumpleaños para un amigo."
+        },
         "he": {
           "name": "כרטיס יום הולדת",
           "description": "לכולם: כרטיס יום הולדת לחבר."
@@ -5233,6 +5769,10 @@
         "url": "https://cdn.nodaro.ai/images/4fd13028-827c-4c0a-91f8-fdabaacd68c3.png"
       },
       "copy": {
+        "es": {
+          "name": "Retrato de mascota",
+          "description": "Dueños de mascotas: un retrato al estilo pintado de su mascota. Mercado de regalos."
+        },
         "he": {
           "name": "פורטרט חיית מחמד",
           "description": "בעלי חיות: פורטרט מצויר של החיה. שוק מתנות."
@@ -5274,6 +5814,10 @@
         "THE COHEN FAMILY · 2027"
       ],
       "copy": {
+        "es": {
+          "name": "Tarjeta navideña familiar",
+          "description": "Familias: tarjeta de fiestas con la foto familiar y un saludo."
+        },
         "he": {
           "name": "כרטיס חג משפחתי",
           "description": "משפחות: כרטיס חג עם תמונת המשפחה וברכה."
@@ -5310,6 +5854,10 @@
         "url": "https://cdn.nodaro.ai/images/34435c4b-1bc3-442a-9f18-af0f7e8653c1.png"
       },
       "copy": {
+        "es": {
+          "name": "Fondo de pantalla del teléfono",
+          "description": "Para todo el mundo: un fondo de pantalla para el teléfono. Volumen diario, gancho para el plan gratuito."
+        },
         "he": {
           "name": "רקע לטלפון",
           "description": "לכולם: רקע לטלפון. נפח יומי, מגנט לחינמי."
@@ -5347,6 +5895,10 @@
         "url": "https://cdn.nodaro.ai/images/aa3116a1-9dd7-41b8-85fd-e1105e146d5b.png"
       },
       "copy": {
+        "es": {
+          "name": "Plantilla de meme",
+          "description": "Para todo el mundo: una plantilla de meme de reacción con texto arriba."
+        },
         "he": {
           "name": "תבנית מם",
           "description": "לכולם: תבנית מם תגובה עם טקסט למעלה."
@@ -5383,6 +5935,10 @@
         "url": "https://cdn.nodaro.ai/images/f7f4396f-68bf-4b70-ac8c-6a34f88ca918.png"
       },
       "copy": {
+        "es": {
+          "name": "Perfil de citas",
+          "description": "Para solteros: una foto de perfil natural y favorecedora."
+        },
         "he": {
           "name": "תמונת פרופיל להיכרויות",
           "description": "רווקים: תמונת פרופיל טבעית ומחמיאה."
@@ -5425,6 +5981,10 @@
         "SAT · 20:00"
       ],
       "copy": {
+        "es": {
+          "name": "Día de partido",
+          "description": "Para clubes y ligas amateur: gráfico del día de partido. Semanal."
+        },
         "he": {
           "name": "יום משחק",
           "description": "מועדונים וליגות חובבים: גרפיקה ליום משחק. שבועי."
@@ -5466,6 +6026,10 @@
         "#23 · GUARD"
       ],
       "copy": {
+        "es": {
+          "name": "Tarjeta de jugador",
+          "description": "Para ligas juveniles y grupos de fantasy: una tarjeta de jugador estilo cromo coleccionable."
+        },
         "he": {
           "name": "כרטיס שחקן",
           "description": "ליגות נוער וקבוצות פנטזי: כרטיס שחקן בסגנון קלף."
@@ -5506,6 +6070,10 @@
         "PLANT 1,000 TREES"
       ],
       "copy": {
+        "es": {
+          "name": "Recaudación de fondos",
+          "description": "Para ONG y escuelas: cartel de recaudación de fondos."
+        },
         "he": {
           "name": "גיוס תרומות",
           "description": "עמותות ובתי ספר: פוסטר לגיוס תרומות."
@@ -5548,6 +6116,10 @@
         "COLD BREW 4.5"
       ],
       "copy": {
+        "es": {
+          "name": "Pizarra de menú",
+          "description": "Para cafeterías y food trucks: una pizarra de menú para imprimir."
+        },
         "he": {
           "name": "לוח תפריט",
           "description": "בתי קפה ופודטראקים: לוח תפריט להדפסה."
@@ -5582,6 +6154,9 @@
         "url": "https://cdn.nodaro.ai/images/3446449e-428c-4a59-8b8b-c45e928c3ff2.png"
       },
       "copy": {
+        "es": {
+          "name": "Storyboard de 6 cuadros"
+        },
         "he": {
           "name": "סטוריבורד 6 פאנלים"
         },
@@ -5615,6 +6190,9 @@
         "PRODUCTION STORYBOARD"
       ],
       "copy": {
+        "es": {
+          "name": "Storyboard de producción"
+        },
         "he": {
           "name": "סטוריבורד הפקה"
         },
@@ -5645,6 +6223,9 @@
         "url": "https://cdn.nodaro.ai/images/069ac0d9-193e-40d6-a235-d239aead0c87.png"
       },
       "copy": {
+        "es": {
+          "name": "Multitoma"
+        },
         "he": {
           "name": "ארבע זוויות"
         },
@@ -5675,6 +6256,9 @@
         "url": "https://cdn.nodaro.ai/images/9a6f8e29-ff37-4183-b28a-90e56ee68047.png"
       },
       "copy": {
+        "es": {
+          "name": "Cuadrícula 2×2"
+        },
         "he": {
           "name": "רשת 2×2"
         },
@@ -5705,6 +6289,9 @@
         "url": "https://cdn.nodaro.ai/images/333b9bb1-b5a0-48a7-b576-f484b0762ab1.png"
       },
       "copy": {
+        "es": {
+          "name": "Hoja sin cabeza"
+        },
         "he": {
           "name": "גיליון בלי ראש"
         },
@@ -5735,6 +6322,9 @@
         "url": "https://cdn.nodaro.ai/images/3913c215-d14b-4006-b789-156b9f384e7e.png"
       },
       "copy": {
+        "es": {
+          "name": "Sprite sheet"
+        },
         "he": {
           "name": "גיליון ספרייטים"
         },
@@ -5765,6 +6355,9 @@
         "url": "https://cdn.nodaro.ai/images/f8f834d2-8ea3-4c9f-b98c-819bf517f6a8.png"
       },
       "copy": {
+        "es": {
+          "name": "Hoja de utilería"
+        },
         "he": {
           "name": "גיליון אביזרים"
         },
@@ -5800,6 +6393,9 @@
         "KRAK!"
       ],
       "copy": {
+        "es": {
+          "name": "Página de cómic"
+        },
         "he": {
           "name": "עמוד קומיקס"
         },
@@ -5830,6 +6426,9 @@
         "url": "https://cdn.nodaro.ai/images/4fddbc49-6835-4489-b360-6484a05024c0.png"
       },
       "copy": {
+        "es": {
+          "name": "Blockbuster"
+        },
         "he": {
           "name": "בלוקבסטר"
         },
@@ -5860,6 +6459,9 @@
         "url": "https://cdn.nodaro.ai/images/6eb2fdc0-21d0-4845-a083-63d3d533fde0.png"
       },
       "copy": {
+        "es": {
+          "name": "Póster de terror"
+        },
         "he": {
           "name": "פוסטר אימה"
         },
@@ -5890,6 +6492,9 @@
         "url": "https://cdn.nodaro.ai/images/d903f431-7c1c-4d95-b1ce-7a54ca482afc.png"
       },
       "copy": {
+        "es": {
+          "name": "Cromo sci-fi"
+        },
         "he": {
           "name": "כרום מדע בדיוני"
         },
@@ -5920,6 +6525,9 @@
         "url": "https://cdn.nodaro.ai/images/085bdeb0-9d9f-449c-8407-9273a57be890.png"
       },
       "copy": {
+        "es": {
+          "name": "Western"
+        },
         "he": {
           "name": "מערבון"
         },
@@ -5950,6 +6558,9 @@
         "url": "https://cdn.nodaro.ai/images/729e79a6-0b15-426f-b897-00801b1d651e.png"
       },
       "copy": {
+        "es": {
+          "name": "Film noir"
+        },
         "he": {
           "name": "פילם נואר"
         },
@@ -5980,6 +6591,9 @@
         "url": "https://cdn.nodaro.ai/images/be61e8ae-2fc8-4703-9927-955eff94ddd0.png"
       },
       "copy": {
+        "es": {
+          "name": "Título de anime"
+        },
         "he": {
           "name": "כותרת אנימה"
         },
@@ -6010,6 +6624,9 @@
         "url": "https://cdn.nodaro.ai/images/039f4e81-1d4f-4347-9bfd-c1440a1e2766.png"
       },
       "copy": {
+        "es": {
+          "name": "Héroe de cómic"
+        },
         "he": {
           "name": "גיבור קומיקס"
         },
@@ -6040,6 +6657,9 @@
         "url": "https://cdn.nodaro.ai/images/f135b7cb-6a85-4893-9007-c2f5836f40a9.png"
       },
       "copy": {
+        "es": {
+          "name": "Serif retro años 70"
+        },
         "he": {
           "name": "סריף רטרו שנות ה-70"
         },
@@ -6073,6 +6693,9 @@
         "REWIND"
       ],
       "copy": {
+        "es": {
+          "name": "Brillo VHS"
+        },
         "he": {
           "name": "זוהר VHS"
         },
@@ -6103,6 +6726,9 @@
         "url": "https://cdn.nodaro.ai/images/668d940c-2a37-4d8e-9845-7d523498b5ff.png"
       },
       "copy": {
+        "es": {
+          "name": "Cromo Y2K"
+        },
         "he": {
           "name": "כרום Y2K"
         },
@@ -6133,6 +6759,9 @@
         "url": "https://cdn.nodaro.ai/images/05272bbd-2ee6-4c07-8664-70e53e08c7d6.png"
       },
       "copy": {
+        "es": {
+          "name": "Psicodélico años 60"
+        },
         "he": {
           "name": "פסיכדלי שנות ה-60"
         },
@@ -6163,6 +6792,9 @@
         "url": "https://cdn.nodaro.ai/images/721e2752-9e54-444b-9832-cfab375b8330.png"
       },
       "copy": {
+        "es": {
+          "name": "Disco funk"
+        },
         "he": {
           "name": "דיסקו פאנק"
         },
@@ -6193,6 +6825,9 @@
         "url": "https://cdn.nodaro.ai/images/7a5a774d-e938-4b3b-8953-f9a472c3f435.png"
       },
       "copy": {
+        "es": {
+          "name": "Art déco"
+        },
         "he": {
           "name": "ארט דקו"
         },
@@ -6223,6 +6858,9 @@
         "url": "https://cdn.nodaro.ai/images/af9ee26d-8fc9-4ff8-a5f8-0fff7233d299.png"
       },
       "copy": {
+        "es": {
+          "name": "Synthwave años 80"
+        },
         "he": {
           "name": "סינת'ווייב שנות ה-80"
         },
@@ -6253,6 +6891,9 @@
         "url": "https://cdn.nodaro.ai/images/2d7939bd-b41f-43f5-bd03-eef81aa29908.png"
       },
       "copy": {
+        "es": {
+          "name": "Pixel 8 bits"
+        },
         "he": {
           "name": "פיקסל 8 ביט"
         },
@@ -6283,6 +6924,9 @@
         "url": "https://cdn.nodaro.ai/images/f51583dc-91e5-4357-ac27-c7b102fd5c9e.png"
       },
       "copy": {
+        "es": {
+          "name": "Grafiti con chorreones"
+        },
         "he": {
           "name": "גרפיטי נוטף"
         },
@@ -6313,6 +6957,9 @@
         "url": "https://cdn.nodaro.ai/images/1f616828-dc97-4e5b-89db-06b4d616b715.png"
       },
       "copy": {
+        "es": {
+          "name": "Sello grunge"
+        },
         "he": {
           "name": "חותמת גראנג'"
         },
@@ -6343,6 +6990,9 @@
         "url": "https://cdn.nodaro.ai/images/d91654bc-045c-4b9f-b561-2d558cae23a2.png"
       },
       "copy": {
+        "es": {
+          "name": "Brutalista ácido"
+        },
         "he": {
           "name": "ברוטליזם חומצי"
         },
@@ -6373,6 +7023,9 @@
         "url": "https://cdn.nodaro.ai/images/82b06344-cbd4-48ef-84c0-92ebd2950731.png"
       },
       "copy": {
+        "es": {
+          "name": "Sticker pop"
+        },
         "he": {
           "name": "סטיקר פופ"
         },
@@ -6403,6 +7056,9 @@
         "url": "https://cdn.nodaro.ai/images/9925f9d6-23f7-465f-aefd-290ba1b57d65.png"
       },
       "copy": {
+        "es": {
+          "name": "Nota de rescate"
+        },
         "he": {
           "name": "מכתב סחיטה"
         },
@@ -6433,6 +7089,9 @@
         "url": "https://cdn.nodaro.ai/images/a31fad0a-904d-4daa-98cb-fc133fe059e2.png"
       },
       "copy": {
+        "es": {
+          "name": "Glitch"
+        },
         "he": {
           "name": "גליץ'"
         },
@@ -6463,6 +7122,9 @@
         "url": "https://cdn.nodaro.ai/images/eaa3e8e9-16f2-475b-a18b-bbbf938e2b24.png"
       },
       "copy": {
+        "es": {
+          "name": "Lámina de oro de lujo"
+        },
         "he": {
           "name": "נייר זהב יוקרתי"
         },
@@ -6493,6 +7155,9 @@
         "url": "https://cdn.nodaro.ai/images/0e20702e-5af7-4177-a8e6-6e958f0a7a76.png"
       },
       "copy": {
+        "es": {
+          "name": "Oro fundido"
+        },
         "he": {
           "name": "זהב מותך"
         },
@@ -6523,6 +7188,9 @@
         "url": "https://cdn.nodaro.ai/images/8d65a7a8-8a1d-4a30-8714-bc1f9d4a4a5a.png"
       },
       "copy": {
+        "es": {
+          "name": "Letrero de neón"
+        },
         "he": {
           "name": "שלט ניאון"
         },
@@ -6553,6 +7221,9 @@
         "url": "https://cdn.nodaro.ai/images/1edaeb11-8671-43b6-b7c6-ae7e2652c3e7.png"
       },
       "copy": {
+        "es": {
+          "name": "Vidrio esmerilado"
+        },
         "he": {
           "name": "זכוכית חלבית"
         },
@@ -6583,6 +7254,9 @@
         "url": "https://cdn.nodaro.ai/images/3d1f56c0-0242-4386-9043-5e8f015f41d4.png"
       },
       "copy": {
+        "es": {
+          "name": "Hielo"
+        },
         "he": {
           "name": "קרח"
         },
@@ -6613,6 +7287,9 @@
         "url": "https://cdn.nodaro.ai/images/3b2088a7-6929-4512-8b3b-f0726c5956cb.png"
       },
       "copy": {
+        "es": {
+          "name": "Agua líquida"
+        },
         "he": {
           "name": "מים נוזליים"
         },
@@ -6643,6 +7320,9 @@
         "url": "https://cdn.nodaro.ai/images/9bb093f5-db50-417a-b5db-4da690e72b78.png"
       },
       "copy": {
+        "es": {
+          "name": "Mármol tallado"
+        },
         "he": {
           "name": "חקוק בשיש"
         },
@@ -6673,6 +7353,9 @@
         "url": "https://cdn.nodaro.ai/images/db9cfb41-4efb-4d5b-a42d-20a51bfeef9d.png"
       },
       "copy": {
+        "es": {
+          "name": "Madera tallada"
+        },
         "he": {
           "name": "גילוף בעץ"
         },
@@ -6703,6 +7386,9 @@
         "url": "https://cdn.nodaro.ai/images/e4fd53ae-1be5-48e7-9049-35e4b85954df.png"
       },
       "copy": {
+        "es": {
+          "name": "Metal oxidado"
+        },
         "he": {
           "name": "מתכת חלודה"
         },
@@ -6733,6 +7419,9 @@
         "url": "https://cdn.nodaro.ai/images/aa4f4043-a4b0-4735-a163-5518298c461f.png"
       },
       "copy": {
+        "es": {
+          "name": "Holográfico"
+        },
         "he": {
           "name": "הולוגרפי"
         },
@@ -6763,6 +7452,9 @@
         "url": "https://cdn.nodaro.ai/images/e1b0429d-9d56-4097-ada9-4aa380334829.png"
       },
       "copy": {
+        "es": {
+          "name": "Fuego y brasas"
+        },
         "he": {
           "name": "אש וגחלים"
         },
@@ -6793,6 +7485,9 @@
         "url": "https://cdn.nodaro.ai/images/8c14704e-dd9d-449a-9c73-04a5744b0a8b.png"
       },
       "copy": {
+        "es": {
+          "name": "Humo"
+        },
         "he": {
           "name": "עשן"
         },
@@ -6823,6 +7518,9 @@
         "url": "https://cdn.nodaro.ai/images/03fcb1b5-4154-427b-8f0a-6c253b846929.png"
       },
       "copy": {
+        "es": {
+          "name": "Arcilla inflada"
+        },
         "he": {
           "name": "חימר מנופח"
         },
@@ -6853,6 +7551,9 @@
         "url": "https://cdn.nodaro.ai/images/60b93d51-e159-4fe3-bc35-81465db12b67.png"
       },
       "copy": {
+        "es": {
+          "name": "Globo metalizado"
+        },
         "he": {
           "name": "בלוני נייר כסף"
         },
@@ -6883,6 +7584,9 @@
         "url": "https://cdn.nodaro.ai/images/a29d574c-acf4-4123-8b02-2779884e1e4f.png"
       },
       "copy": {
+        "es": {
+          "name": "Pizarra"
+        },
         "he": {
           "name": "לוח גיר"
         },
@@ -6913,6 +7617,9 @@
         "url": "https://cdn.nodaro.ai/images/0fc9993e-3500-4b61-8cc1-1edba4358420.png"
       },
       "copy": {
+        "es": {
+          "name": "Máquina de escribir"
+        },
         "he": {
           "name": "מכונת כתיבה"
         },
@@ -6943,6 +7650,9 @@
         "url": "https://cdn.nodaro.ai/images/d0990520-e2f8-47ae-a1c2-881f557a4623.png"
       },
       "copy": {
+        "es": {
+          "name": "Rotulador a mano"
+        },
         "he": {
           "name": "כתב יד בטוש"
         },
@@ -6973,6 +7683,9 @@
         "url": "https://cdn.nodaro.ai/images/b0f66c1c-c083-4b9e-9449-1bfbe9c40dd6.png"
       },
       "copy": {
+        "es": {
+          "name": "Parche bordado"
+        },
         "he": {
           "name": "טלאי רקום"
         },
@@ -7003,6 +7716,9 @@
         "url": "https://cdn.nodaro.ai/images/3bec9085-ebc0-43a0-bc06-48fef590d2d9.png"
       },
       "copy": {
+        "es": {
+          "name": "Recorte de papel"
+        },
         "he": {
           "name": "גזירי נייר"
         },
@@ -7033,6 +7749,9 @@
         "url": "https://cdn.nodaro.ai/images/8f0b9a21-c7df-495a-8ac1-c62bed2d77bd.png"
       },
       "copy": {
+        "es": {
+          "name": "Serif botánico"
+        },
         "he": {
           "name": "סריף בוטני"
         },
@@ -7063,6 +7782,9 @@
         "url": "https://cdn.nodaro.ai/images/512624e9-1ffd-4b14-8564-3533999d5423.png"
       },
       "copy": {
+        "es": {
+          "name": "Caligrafía de boda"
+        },
         "he": {
           "name": "כתב חתונה"
         },
@@ -7093,6 +7815,9 @@
         "url": "https://cdn.nodaro.ai/images/e7a7cbee-6090-45b8-ae8c-3085e3560959.png"
       },
       "copy": {
+        "es": {
+          "name": "Fiesta infantil"
+        },
         "he": {
           "name": "מסיבת ילדים"
         },
@@ -7123,6 +7848,9 @@
         "url": "https://cdn.nodaro.ai/images/4a99c8d3-bc1f-401d-aa4d-ed0945b4969f.png"
       },
       "copy": {
+        "es": {
+          "name": "Deporte universitario"
+        },
         "he": {
           "name": "ספורט קולג'"
         },
@@ -7153,6 +7881,9 @@
         "url": "https://cdn.nodaro.ai/images/e97521ed-e52b-4a4e-a2ec-e90aa2ca7d76.png"
       },
       "copy": {
+        "es": {
+          "name": "Cartela de título indie"
+        },
         "he": {
           "name": "כותרת סרט אינדי"
         },

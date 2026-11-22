@@ -214,7 +214,7 @@ export function planScaffold(raw, { root, ctx = repoContext(root) } = {}) {
 /** The deliberately central steps a unit still takes after its folders exist (root CLAUDE.md). */
 export function nextSteps(o) {
   const useCase = o.kind === "use-case"
-  const strings = `add frontend/src/nodes/${o.type}/strings.json — the node label "${o.label}" in he/ja/ko/pt-br ("labels"), and any UI string the unit alone uses in all five dicts ("keys")`
+  const strings = `add frontend/src/nodes/${o.type}/strings.json — the node label "${o.label}" in es/he/ja/ko/pt-br ("labels"), and any UI string the unit alone uses in all six dicts ("keys")`
   const docs = `write its docs page docs/nodes/<folder>/${o.type}.md and swap unit.json docs.awaiting for docs.page (docs-node-registry-parity needs the page and its docs/nodes/README.md row, which gen:units writes from docs.page); until the page is on the docs site, list the type in AWAITING_DOCS_PAGE (frontend/src/lib/node-docs/__tests__/node-docs.test.ts), then refresh the snapshot (npm -w frontend run gen:node-docs -- --live) and drop that line`
   const creditId = useCase ? `use-case-fee:${o.type}` : o.type
   const seed = o.price === null ? [] : [`seed its price: a supabase/migrations/NNN_*.sql INSERT INTO model_pricing … ON CONFLICT DO NOTHING for "${creditId}" at the same ${o.price} credits as price.ee.ts`]

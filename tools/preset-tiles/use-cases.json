@@ -26,6 +26,10 @@
         "flowNodeId": "uc-001-business"
       },
       "copy": {
+        "es": {
+          "name": "Identidad de marca inicial",
+          "description": "Presentación completa y elegante de la identidad de una nueva panadería, con un emblema original, tarjeta de visita, bolsa de papel para pastelería, pegatina y rótulo de fachada sobre travertino cálido; crema, ciruela y amarillo mantequilla, con tipografía premium."
+        },
         "he": {
           "name": "ערכת זהות מותג",
           "description": "לוגו, כרטיס ביקור, שקית ושלט בסגנון אחד"
@@ -67,6 +71,10 @@
         "flowNodeId": "uc-002-business"
       },
       "copy": {
+        "es": {
+          "name": "Campaña de inauguración de salón",
+          "description": "Anuncio real de inauguración de salón, listo para publicar: foto de alta moda de cabello castaño brillante, formas curvas coral elegantes y el titular exacto y enorme «NOW OPEN», con espacio sobrio para la llamada a la acción."
+        },
         "he": {
           "name": "קמפיין פתיחת מספרה",
           "description": "מודעת פתיחה חגיגית עם כותרת ענקית"
@@ -108,6 +116,10 @@
         "flowNodeId": "uc-003-business"
       },
       "copy": {
+        "es": {
+          "name": "Diseño de carta de restaurante",
+          "description": "Fotografía cenital fotorrealista de comida de una cafetería mediterránea, integrada en una sofisticada carta impresa de brunch de dos páginas, con un plato estrella apetecible y títulos de sección legibles; oliva y marfil."
+        },
         "he": {
           "name": "עיצוב תפריט למסעדה",
           "description": "תפריט מודפס עם צילום אוכל"
@@ -149,6 +161,10 @@
         "flowNodeId": "uc-004-business"
       },
       "copy": {
+        "es": {
+          "name": "Anuncio de oferta relámpago",
+          "description": "Anuncio dinámico de comercio electrónico para redes sociales de unas zapatillas negras de correr modernas, con las palabras exactas y enormes «48H FLASH SALE», las zapatillas congeladas en pleno movimiento y una composición gráfica atrevida en amarillo, negro y blanco."
+        },
         "he": {
           "name": "מודעת מבצע בזק",
           "description": "מבצע מוגבל בזמן, מודעה נועזת"
@@ -190,6 +206,10 @@
         "flowNodeId": "uc-005-business"
       },
       "copy": {
+        "es": {
+          "name": "Anuncio de dentista de barrio",
+          "description": "Campaña fiable de una clínica dental local con un dentista ficticio cercano en una consulta moderna y luminosa, sonrisa espontánea, el título exacto «LOVE YOUR SMILE» y un diseño aireado y tranquilizador."
+        },
         "he": {
           "name": "מודעה למרפאת שיניים",
           "description": "מודעה שכונתית אמינה למרפאה"
@@ -231,6 +251,10 @@
         "flowNodeId": "uc-006-business"
       },
       "copy": {
+        "es": {
+          "name": "Portada de anuncio inmobiliario",
+          "description": "Portada promocional inmobiliaria de una espléndida villa moderna bañada por el sol, fotografía de arquitectura editorial, título grande y claro «JUST LISTED», casa despejada y un diseño pulido y sobrio con espacio para los datos de contacto."
+        },
         "he": {
           "name": "כיסוי לנכס למכירה",
           "description": "תמונת שער לפרסום נכס"
@@ -272,6 +296,10 @@
         "flowNodeId": "uc-007-business"
       },
       "copy": {
+        "es": {
+          "name": "Membresía de estudio de fitness",
+          "description": "Anuncio potente de lanzamiento de un gimnasio con una mujer atlética en un estudio de entrenamiento real y de alta gama, un momento de acción poderoso, el texto principal exacto «START STRONG», carbón y amarillo cítrico con tipografía contundente."
+        },
         "he": {
           "name": "מנוי לסטודיו כושר",
           "description": "מודעת מנוי לסטודיו"
@@ -313,6 +341,10 @@
         "flowNodeId": "uc-008-business"
       },
       "copy": {
+        "es": {
+          "name": "Hero de página de lanzamiento de producto",
+          "description": "Imagen hero de alta gama para un sitio web con un altavoz inalámbrico blanco sobre un pedestal de piedra escultural, luz suave de la mañana, tipografía editorial impactante con el texto exacto «PURE SOUND» y mucho espacio limpio para texto."
+        },
         "he": {
           "name": "הירו להשקת מוצר",
           "description": "תמונת פתיחה לדף השקה"
@@ -354,6 +386,10 @@
         "flowNodeId": "uc-009-business"
       },
       "copy": {
+        "es": {
+          "name": "Cartel de ofertas de empleo",
+          "description": "Cartel moderno de contratación para un restaurante, con una brigada de cocina alegre y auténtica preparando platos, un titular elegante y comedido «JOIN OUR TEAM», personalidad acogedora y una maquetación profesional y bien estructurada."
+        },
         "he": {
           "name": "פוסטר גיוס",
           "description": "מודעת דרושים מעוצבת"
@@ -395,6 +431,10 @@
         "flowNodeId": "uc-010-business"
       },
       "copy": {
+        "es": {
+          "name": "Testimonio de cliente verificado",
+          "description": "Diseño promocional que genera confianza: retrato de una clienta ficticia y feliz de un taller de cerámica junto a un cuenco de cerámica y una cita grande y exacta «MY FAVORITE PLACE», tono humano y cálido, sin cifras inventadas de valoraciones."
+        },
         "he": {
           "name": "המלצת לקוח",
           "description": "פורטרט לקוח עם ציטוט גדול"
@@ -436,6 +476,10 @@
         "flowNodeId": "uc-011-business"
       },
       "copy": {
+        "es": {
+          "name": "Folleto de tarifas de servicios",
+          "description": "Folleto elegante de tarifas de un estudio de masajes, listo para imprimir; fotografía realista y serena de manos y piedras, tipografía sobria con títulos claros y tres niveles de servicio creíbles, en crema y verde salvia."
+        },
         "he": {
           "name": "פלייר מחירון שירותים",
           "description": "מחירון מעוצב לעסק"
@@ -477,6 +521,10 @@
         "flowNodeId": "uc-012-business"
       },
       "copy": {
+        "es": {
+          "name": "Cheque regalo de spa",
+          "description": "Diseño de cheque regalo de lujo con detalles dorados en relieve, un bello fondo botánico minimalista, las palabras exactas «GIFT CARD», acabado de lámina y presentación de impresión de alta gama."
+        },
         "he": {
           "name": "שובר מתנה לספא",
           "description": "שובר מתנה מעוצב"
@@ -518,6 +566,10 @@
         "flowNodeId": "uc-013-business"
       },
       "copy": {
+        "es": {
+          "name": "Foto de marca para agente inmobiliario",
+          "description": "Profesional inmobiliario ficticio con una chaqueta beige de corte impecable junto a la ventana luminosa de un apartamento; campaña de marca personal limpia y premium, titular exacto «YOUR NEXT CHAPTER», mirada directa y amable."
+        },
         "he": {
           "name": "תמונת מותג לסוכן נדל\"ן",
           "description": "פורטרט מקצועי לסוכן"
@@ -559,6 +611,10 @@
         "flowNodeId": "uc-014-business"
       },
       "copy": {
+        "es": {
+          "name": "Anuncio hero de comida a domicilio",
+          "description": "Una apetitosa hamburguesa smash gourmet fotografiada en el aire con pepinillos y salsa flotando sobre un vibrante fondo coral cálido, titular exacto y enorme «DINNER SORTED», anuncio actual de comida a domicilio para redes sociales."
+        },
         "he": {
           "name": "מודעת משלוחי אוכל",
           "description": "מודעת הירו למשלוחים"
@@ -600,6 +656,10 @@
         "flowNodeId": "uc-015-business"
       },
       "copy": {
+        "es": {
+          "name": "Campaña de curso en línea",
+          "description": "Una ilustradora auténtica y experta trabajando, rodeada de papeles de dibujo de colores y una tableta; campaña de curso clara e impactante con el título exacto «LEARN TO DRAW» y una identidad de escuela de arte divertida."
+        },
         "he": {
           "name": "קמפיין לקורס אונליין",
           "description": "מודעה לקורס דיגיטלי"
@@ -641,6 +701,10 @@
         "flowNodeId": "uc-016-business"
       },
       "copy": {
+        "es": {
+          "name": "Banner de inscripción a un webinar",
+          "description": "Banner profesional de un webinar en línea, con el retrato cuidado del presentador a la derecha, un sutil diagrama abstracto de estrategia a la izquierda, el título exacto «GROW SMARTER» y una maquetación editorial premium en blanco, azul marino y ámbar."
+        },
         "he": {
           "name": "באנר הרשמה לוובינר",
           "description": "באנר עם תאריך והרשמה"
@@ -682,6 +746,10 @@
         "flowNodeId": "uc-017-business"
       },
       "copy": {
+        "es": {
+          "name": "Llamamiento de recaudación benéfica",
+          "description": "Fotografía documental cálida y emotiva de voluntarios de la comunidad plantando un huerto compartido, imagen esperanzadora para una campaña de recaudación con el titular simple y exacto «GROW TOGETHER»; evita emblemas benéficos falsos o datos de donaciones."
+        },
         "he": {
           "name": "קריאה לתרומה",
           "description": "מודעת גיוס תרומות לעמותה"
@@ -723,6 +791,10 @@
         "flowNodeId": "uc-018-business"
       },
       "copy": {
+        "es": {
+          "name": "Anuncio de una función de SaaS",
+          "description": "Anuncio moderno de lanzamiento de software, con la interfaz realista y cuidada de un producto de analítica en una ventana de navegador en perspectiva, el título preciso y exacto «MEET YOUR NEW WORKSPACE», en blanco y negro con un acento verde lima brillante."
+        },
         "he": {
           "name": "הכרזת פיצ'ר ב־SaaS",
           "description": "הכרזה על יכולת חדשה"
@@ -764,6 +836,10 @@
         "flowNodeId": "uc-019-business"
       },
       "copy": {
+        "es": {
+          "name": "Portada de caso de estudio B2B",
+          "description": "Portada de caso de estudio corporativa pero convincente, que muestra una fábrica de embalajes sostenibles en fotografía documental cinematográfica, tipografía comedida con el texto exacto «BETTER BY DESIGN», maquetación elegante orientada a las pruebas, sin estadísticas inventadas."
+        },
         "he": {
           "name": "שער למקרה בוחן B2B",
           "description": "כריכה למסמך מקרה בוחן"
@@ -805,6 +881,10 @@
         "flowNodeId": "uc-020-business"
       },
       "copy": {
+        "es": {
+          "name": "Diseño de stand de feria",
+          "description": "Maqueta fotorrealista de un pabellón de exposiciones con un stand modular moderno para la marca ficticia «NOVA», rótulo iluminado, un llamativo mostrador de recepción curvo y banners colgantes, visitantes a escala humana y materiales de marca profesionales."
+        },
         "he": {
           "name": "עיצוב דוכן לתערוכה",
           "description": "הדמיית דוכן ממותג"
@@ -846,6 +926,10 @@
         "flowNodeId": "uc-021-business"
       },
       "copy": {
+        "es": {
+          "name": "Maqueta de rótulo de fachada",
+          "description": "Fachada creíble de una cafetería artesanal a pie de calle antes de abrir, con un rótulo metálico de bandera premium que dice «MORNING CLUB», un toldo atractivo, vinilos en el escaparate y fotografía cálida de hora dorada."
+        },
         "he": {
           "name": "הדמיית שלט לחנות",
           "description": "שלט חזית על חנות"
@@ -887,6 +971,10 @@
         "flowNodeId": "uc-022-business"
       },
       "copy": {
+        "es": {
+          "name": "Imagen de portada de boletín",
+          "description": "Cabecera elegante de boletín empresarial para una consultora creativa, con papel plegado escultural y fotografía editorial minimalista, título simple y exacto «THE WEEKLY EDIT» y una jerarquía impecable."
+        },
         "he": {
           "name": "תמונת שער לניוזלטר",
           "description": "ויז'ואל פתיחה לניוזלטר"
@@ -928,6 +1016,10 @@
         "flowNodeId": "uc-023-business"
       },
       "copy": {
+        "es": {
+          "name": "Teaser de marca de lujo",
+          "description": "Imagen de campaña de moda de alta gama para una marca de relojes original: un dramático macro de un reloj mecánico parcialmente cubierto por lino transparente, sombras lujosas y exactamente una línea, «COMING SOON»."
+        },
         "he": {
           "name": "טיזר למותג יוקרה",
           "description": "טיזר יוקרתי ומאופק"
@@ -969,6 +1061,10 @@
         "flowNodeId": "uc-024-business"
       },
       "copy": {
+        "es": {
+          "name": "Pizarra de menú de cafetería",
+          "description": "Escena interior centrada en una pizarra de menú de café colgante, grande, legible y muy bien diseñada, con un pequeño mostrador de cafetería con tazas, tipografía cálida rotulada a mano y una identidad de local realista y encantadora."
+        },
         "he": {
           "name": "לוח תפריט לבית קפה",
           "description": "לוח תפריט מעוצב"
@@ -1010,6 +1106,10 @@
         "flowNodeId": "uc-025-business"
       },
       "copy": {
+        "es": {
+          "name": "Anuncio de descarga de app",
+          "description": "Anuncio divertido y pulido de una app ficticia de seguimiento de hábitos para teléfono, con una enorme pantalla de teléfono que muestra una lista de hábitos ilustrada y amigable, una persona alegre a su lado y el titular exacto «MAKE IT A HABIT»."
+        },
         "he": {
           "name": "מודעה להורדת אפליקציה",
           "description": "מודעה עם טלפון ותועלת"
@@ -1051,6 +1151,10 @@
         "flowNodeId": "uc-026-business"
       },
       "copy": {
+        "es": {
+          "name": "Kit de merchandising de marca",
+          "description": "Flat lay cenital profesional de identidad de marca con una bolsa de tela bordada, un pin esmaltado, una botella de agua y un cuaderno que llevan un logo original y coherente de sol geométrico, fondo neutro cálido y una puesta en escena de producto impecable."
+        },
         "he": {
           "name": "ערכת מרצ' ממותגת",
           "description": "מוצרים ממותגים בסט אחד"
@@ -1092,6 +1196,10 @@
         "flowNodeId": "uc-027-business"
       },
       "copy": {
+        "es": {
+          "name": "Gráfico explicativo de un servicio",
+          "description": "Infografía informativa y elegante de tres pasos para una suscripción de cuidado de plantas en casa, con regadera, planta y caja de envío ilustradas en un sofisticado estilo de papel recortado, 3 pasos numerados y texto mínimo y legible."
+        },
         "he": {
           "name": "גרפיקה שמסבירה שירות",
           "description": "הסבר ויזואלי של השירות"
@@ -1133,6 +1241,10 @@
         "flowNodeId": "uc-028-business"
       },
       "copy": {
+        "es": {
+          "name": "Campaña navideña para tienda",
+          "description": "Anuncio festivo y sofisticado de temporada para un pequeño negocio de chocolate, con una caja artesanal de bombones atada con cinta, follaje invernal y una cálida luz de velas, titular exacto «A LITTLE MAGIC», sin logos."
+        },
         "he": {
           "name": "קמפיין חג לחנות",
           "description": "מודעת חג לחנות"
@@ -1174,6 +1286,10 @@
         "flowNodeId": "uc-029-business"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta de visita de negocio local",
+          "description": "Hermosa maqueta de tarjeta de visita a doble cara para una diseñadora floral ficticia, «ELLA BLOOM», con logo serif grabado, símbolo botánico en relieve y papel sin estucar de textura ligera sobre piedra natural."
+        },
         "he": {
           "name": "כרטיס ביקור לעסק מקומי",
           "description": "כרטיס ביקור מעוצב"
@@ -1215,6 +1331,10 @@
         "flowNodeId": "uc-030-business"
       },
       "copy": {
+        "es": {
+          "name": "Cartel de inauguración de restaurante",
+          "description": "Cartel editorial para un nuevo restaurante japonés de ramen, con una extraordinaria fotografía de un cuenco humeante, un marco tipográfico seguro en bermellón y crema, el título principal exacto «RAMEN NIGHT» y un acabado de impresión profesional."
+        },
         "he": {
           "name": "פוסטר פתיחת מסעדה",
           "description": "פוסטר לפתיחה חדשה"
@@ -1241,22 +1361,26 @@
       "platforms": [],
       "aspectRatio": "4:3",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Old Family Photo Restoration\"; preserve essential content when reframing. Restore the uploaded OLD FAMILY PHOTOGRAPH itself. Keep every person, face, pose, clothing item, composition and historical context faithful. Remove cracks, faded areas and stains, then make restrained historically plausible colorization. For a demonstration result, show original on left and restored on right. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Restore the uploaded OLD FAMILY PHOTOGRAPH itself. Keep every person, face, pose, clothing item, composition and historical context faithful. Remove cracks, faded areas and stains. Restoration only: keep the photo's original colors, keep a black-and-white photo black and white, and do not colorize. For a demonstration result, show original on left and restored on right. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, colorization, added color, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "old family photo",
-      "who": "Sensitive before-and-after split demonstration: same fictional 1940s family portrait, left with cracks and sepia fading, right faithfully restored in subtle authentic natural color and preserved facial features, no text.",
+      "who": "A fictional 1940s black-and-white family portrait restored: cracks, creases and stains removed, faces, poses and clothing preserved, kept in black and white, no text.",
       "render": {
-        "jobId": "530dd02d-7ce4-438a-82f0-5c10adb71ae4",
-        "url": "https://cdn.nodaro.ai/images/530dd02d-7ce4-438a-82f0-5c10adb71ae4.png"
+        "jobId": "ea587acf-80df-4770-99de-692b5fe4058a",
+        "url": "https://cdn.nodaro.ai/images/ea587acf-80df-4770-99de-692b5fe4058a.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-031-personal"
       },
       "copy": {
+        "es": {
+          "name": "Restauración de una foto familiar antigua",
+          "description": "Demostración delicada de antes y después en pantalla dividida: el mismo retrato familiar ficticio de los años 40, a la izquierda con grietas y desvanecido en sepia, a la derecha fielmente restaurado con un color natural sutil y auténtico y los rasgos faciales preservados, sin texto."
+        },
         "he": {
           "name": "שחזור תמונה משפחתית ישנה",
           "description": "מהתמונה שלך: תיקון ושחזור"
@@ -1299,6 +1423,10 @@
         "flowNodeId": "uc-032-personal"
       },
       "copy": {
+        "es": {
+          "name": "Colorización de blanco y negro",
+          "description": "Retrato callejero auténtico de los años 60 de la misma mujer ficticia, en comparación lado a lado: a la izquierda en monocromo, a la derecha una versión colorizada realista y respetuosa con la época, que conserva la expresión, la ropa de época y el entorno original."
+        },
         "he": {
           "name": "צביעת תמונה בשחור-לבן",
           "description": "מהתמונה שלך: הוספת צבע"
@@ -1341,6 +1469,10 @@
         "flowNodeId": "uc-033-personal"
       },
       "copy": {
+        "es": {
+          "name": "Reparación de fotos rayadas",
+          "description": "Antes y después limpio y convincente de una fotografía ficticia antigua de infancia, rota y muy rayada frente a una restauración digital fiel y casi impecable, rostros alineados, sin personas adicionales inventadas."
+        },
         "he": {
           "name": "תיקון שריטות בתמונה",
           "description": "מהתמונה שלך: הסרת שריטות"
@@ -1367,22 +1499,26 @@
       "platforms": [],
       "aspectRatio": "4:3",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Faded Portrait Enhancement\"; preserve essential content when reframing. Enhance the uploaded faded portrait itself. Recover believable skin color, natural dynamic range and sharpness while keeping wrinkles, expression, age and identity intact. Show gentle faithful before-and-after. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Enhance the uploaded faded portrait itself. Correct the color cast fully to natural neutral skin tones and restore strong contrast, natural dynamic range and sharpness while keeping wrinkles, expression, age and identity intact. Show a faithful before-and-after with small Before/After labels only. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, leftover color cast, washed-out contrast, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "faded portrait",
-      "who": "Same fictional grandmother's old washed-out color portrait shown before and after gentle correction of exposure, warmth and facial detail, preserving natural wrinkles and authenticity.",
+      "who": "Before and after of a fictional grandmother's faded 1970s color portrait: the orange cast fully corrected to natural skin tones with strong contrast, small Before/After labels.",
       "render": {
-        "jobId": "0abb4cb4-b199-4cb2-b2b8-7f826bc7e0db",
-        "url": "https://cdn.nodaro.ai/images/0abb4cb4-b199-4cb2-b2b8-7f826bc7e0db.png"
+        "jobId": "f09e05bc-1ef7-42c3-8872-e79478437b9f",
+        "url": "https://cdn.nodaro.ai/images/f09e05bc-1ef7-42c3-8872-e79478437b9f.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-034-personal"
       },
       "copy": {
+        "es": {
+          "name": "Mejora de un retrato desvaído",
+          "description": "El mismo retrato antiguo y descolorido en color de una abuela ficticia, mostrado antes y después de una corrección suave de exposición, calidez y detalle facial, que conserva las arrugas naturales y la autenticidad."
+        },
         "he": {
           "name": "שיפור פורטרט דהוי",
           "description": "מהתמונה שלך: החייאת צבע וחדות"
@@ -1425,6 +1561,10 @@
         "flowNodeId": "uc-035-personal"
       },
       "copy": {
+        "es": {
+          "name": "Cambio de fondo de una foto",
+          "description": "Muestra de antes y después con la misma persona ficticia y la misma ropa: a la izquierda un patio trasero desordenado y corriente, a la derecha una bella y elegante escena natural junto a un lago, con luz y bordes de cabello creíblemente integrados, sin collage fuera de los dos paneles."
+        },
         "he": {
           "name": "החלפת רקע לתמונה",
           "description": "מהתמונה שלך: רקע חדש"
@@ -1467,6 +1607,10 @@
         "flowNodeId": "uc-036-personal"
       },
       "copy": {
+        "es": {
+          "name": "Mejora de foto de perfil corporativa",
+          "description": "Retrato corporativo auténtico y cercano, de cabeza y hombros, de una profesional ficticia, con ropa neutra a medida, favorecedora luz suave de ventana y un entorno de estudio limpio en gris cálido, indistinguible de una fotografía real."
+        },
         "he": {
           "name": "שדרוג תמונת פרופיל עסקית",
           "description": "מהתמונה שלך: הדשוט מקצועי"
@@ -1509,6 +1653,10 @@
         "flowNodeId": "uc-037-personal"
       },
       "copy": {
+        "es": {
+          "name": "Foto de casting para actor",
+          "description": "Foto de casting teatral, espontánea y expresiva, de un joven actor ficticio con pecas, con una camiseta neutra en tonos tierra, luz natural direccional suave y un fondo de estudio rico pero discreto."
+        },
         "he": {
           "name": "הדשוט לליהוק",
           "description": "מהתמונה שלך: תמונת שחקן"
@@ -1551,6 +1699,10 @@
         "flowNodeId": "uc-038-personal"
       },
       "copy": {
+        "es": {
+          "name": "Ejemplo de foto de carné profesional",
+          "description": "Muestra neutra de foto tipo pasaporte de un sujeto ficticio sobre fondo blanco liso, mirando directamente a la cámara, con iluminación pareja sin sombras, encuadre de cabeza y hombros; solo retrato fotográfico, sin documento de identidad."
+        },
         "he": {
           "name": "תמונת פספורט מקצועית",
           "description": "מהתמונה שלך: תמונת תעודה"
@@ -1577,8 +1729,8 @@
       "platforms": [],
       "aspectRatio": "4:3",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Try a New Haircut\"; preserve essential content when reframing. Apply a chic short-bob HAIRCUT to the hair of the person in the provided photograph. Keep the same exact face, head geometry, hair texture, age, expression and posture. Display a faithful original and an after version side by side. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Apply a chic short-bob HAIRCUT to the hair of the person in the provided photograph, and make the haircut change dramatic and obvious. Keep the same exact face, head geometry, hair texture, age, expression and posture. Display a faithful original and an after version side by side, with no labels. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, labels, printed title, headline, slogan or caption, barely changed haircut",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -1593,6 +1745,10 @@
         "flowNodeId": "uc-039-personal"
       },
       "copy": {
+        "es": {
+          "name": "Prueba un corte de pelo nuevo",
+          "description": "Retrato de la misma mujer ficticia lado a lado: antes con el pelo largo y liso, después con un corte bob corto y elegante, con la identidad del rostro preservada y la iluminación igualada."
+        },
         "he": {
           "name": "לנסות תסרוקת חדשה",
           "description": "מהתמונה שלך: תסרוקת אחרת"
@@ -1619,8 +1775,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Try a New Hair Color\"; preserve essential content when reframing. Show three plausible hair-color options on the exact person in the uploaded portrait: chestnut, honey blonde and copper auburn, keeping their face, hairstyle, light and skin tone consistent; no facial identity changes. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Show three plausible hair-color options on the exact person in the uploaded portrait: chestnut, honey blonde and copper auburn, keeping their face, hairstyle, light and skin tone consistent; no facial identity changes. Keep small color-name labels only. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -1635,6 +1791,10 @@
         "flowNodeId": "uc-040-personal"
       },
       "copy": {
+        "es": {
+          "name": "Prueba un color de pelo nuevo",
+          "description": "El mismo rostro y el mismo peinado rizado de una mujer ficticia en tres variaciones de retrato realistas, limpias y contiguas: castaño, rubio miel y cobrizo rojizo, con identidad y postura coherentes y luz diurna neutra."
+        },
         "he": {
           "name": "לנסות צבע שיער חדש",
           "description": "מהתמונה שלך: צבע שיער אחר"
@@ -1661,8 +1821,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Beard Style Preview\"; preserve essential content when reframing. Create a three-option beard preview for the exact adult male in the uploaded picture: clean shaven, tidy stubble and full sculpted beard. Preserve face, jaw structure and skin texture across matched realistic panels. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Create a three-option beard preview for the exact adult male in the uploaded picture: clean shaven, tidy stubble and full sculpted beard. Preserve face, jaw structure and skin texture across matched realistic panels. Keep small style labels only. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -1677,6 +1837,10 @@
         "flowNodeId": "uc-041-personal"
       },
       "copy": {
+        "es": {
+          "name": "Vista previa de estilo de barba",
+          "description": "Comparación limpia de tres looks en retrato del mismo hombre adulto ficticio: afeitado, barba de pocos días bien recortada y barba completa esculpida; con la misma iluminación, identidad facial fiel y un estilismo fotográfico sobrio."
+        },
         "he": {
           "name": "תצוגה מקדימה של זקן",
           "description": "מהתמונה שלך: סגנון זקן"
@@ -1703,22 +1867,26 @@
       "platforms": [],
       "aspectRatio": "3:4",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Tattoo Design Preview\"; preserve essential content when reframing. Show an original fine-line botanical tattoo DESIGN on the actual body area or arm photo supplied. Retain the natural anatomy, skin texture, lighting and pose; fit the tattoo naturally to the surface; include a small clean design preview. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Design an original fine-line botanical tattoo for the actual body area or arm photo supplied, and show the new tattoo applied on bare skin as the clear focus of the frame. Retain the natural anatomy, skin texture, lighting and pose; fit the tattoo naturally to the surface. No design card. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, design card, paper flash sheet, separate design preview, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "photo of desired tattoo body area",
-      "who": "Professional tattoo studio concept showing a refined botanical fine-line forearm tattoo in close-up, natural arm skin and beautiful ink details, plus small matching paper flash illustration in the composition.",
+      "who": "A new fine-line botanical lily tattoo applied on a fictional adult's bare forearm in natural daylight, the tattoo the clear focus of the frame, no design card.",
       "render": {
-        "jobId": "d70baca1-9779-4046-9f7e-21307bdc4d2b",
-        "url": "https://cdn.nodaro.ai/images/d70baca1-9779-4046-9f7e-21307bdc4d2b.png"
+        "jobId": "155fba19-3119-4ad3-bbb3-d2871a15a7e0",
+        "url": "https://cdn.nodaro.ai/images/155fba19-3119-4ad3-bbb3-d2871a15a7e0.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-042-personal"
       },
       "copy": {
+        "es": {
+          "name": "Vista previa de diseño de tatuaje",
+          "description": "Concepto profesional de estudio de tatuajes que muestra en primer plano un refinado tatuaje botánico de línea fina en el antebrazo, con piel natural y bellos detalles de tinta, además de una pequeña ilustración flash en papel a juego dentro de la composición."
+        },
         "he": {
           "name": "תצוגה מקדימה של קעקוע",
           "description": "מהתמונה שלך: קעקוע על הגוף"
@@ -1761,6 +1929,10 @@
         "flowNodeId": "uc-043-personal"
       },
       "copy": {
+        "es": {
+          "name": "Retoque de un retrato de boda",
+          "description": "Retrato de boda de buen gusto de una pareja ficticia al aire libre al atardecer, con tonos de piel naturalmente refinados, detalle recuperado en las zonas claras del vestido, una suave luz dorada realzada y fotografía de boda de arte premium."
+        },
         "he": {
           "name": "ריטוש פורטרט חתונה",
           "description": "מהתמונה שלך: ריטוש עדין"
@@ -1803,6 +1975,10 @@
         "flowNodeId": "uc-044-personal"
       },
       "copy": {
+        "es": {
+          "name": "Retrato de viaje en otro lugar",
+          "description": "Una viajera ficticia en solitario con ropa práctica de lino, fotografiada en las icónicas escaleras junto al mar de Positano en un cálido amanecer, editorial de viajes informal y auténtico con perspectiva atmosférica natural y texturas de piel realistas."
+        },
         "he": {
           "name": "להעביר פורטרט למקום אחר",
           "description": "מהתמונה שלך: רקע של יעד טיול"
@@ -1845,6 +2021,10 @@
         "flowNodeId": "uc-045-personal"
       },
       "copy": {
+        "es": {
+          "name": "Selfie de viaje imaginario",
+          "description": "Una joven ficticia y sonriente haciéndose un selfie espontáneo a brazo extendido en un bosque de bambú de Kioto después de la lluvia, con profundidad exuberante, perspectiva realista, energía de blog de viajes e imperfecciones naturales y espontáneas."
+        },
         "he": {
           "name": "סלפי טיול דמיוני",
           "description": "מהתמונה שלך: יעד דמיוני"
@@ -1887,6 +2067,10 @@
         "flowNodeId": "uc-046-personal"
       },
       "copy": {
+        "es": {
+          "name": "Retrato artístico de mascota",
+          "description": "Un querido golden retriever posando con porte regio en un retrato al óleo pictórico del siglo XIX, con una silla de terciopelo esmeralda, un rostro de perro realista y expresivo y una magnífica pincelada, calidad de museo."
+        },
         "he": {
           "name": "פורטרט אמנותי של חיית מחמד",
           "description": "מהתמונה שלך: ציור קלאסי"
@@ -1913,22 +2097,26 @@
       "platforms": [],
       "aspectRatio": "4:3",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Cartoon Avatar from Portrait\"; preserve essential content when reframing. Make a side-by-side realistic portrait and charming polished 3D cartoon avatar from the exact uploaded person. Preserve their signature face geometry, glasses, hairstyle, freckles and expression; clearly keep the stylized character recognizably the same person. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Produce one single image, with no before-and-after and no labels: a charming, clearly illustrated cartoon avatar of the exact uploaded person, with bold outlines, flat colors and simplified features. Preserve their signature face geometry, hairstyle, expression and any glasses or freckles they have; clearly keep the stylized character recognizably the same person. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, before-and-after split, side-by-side photo, labels, photorealistic face, 3D render, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "person portrait",
-      "who": "Split demonstration of an original fictional girl's realistic smiling photograph alongside faithful colorful 3D animated character avatar retaining distinctive glasses, haircut and freckles, polished studio illustration.",
+      "who": "A clearly illustrated cartoon avatar of a fictional young woman with bold outlines and flat colors, keeping her round glasses, freckles and bob haircut recognizable.",
       "render": {
-        "jobId": "ae52f5f0-f5af-46c4-80f7-10756c51ba2d",
-        "url": "https://cdn.nodaro.ai/images/ae52f5f0-f5af-46c4-80f7-10756c51ba2d.png"
+        "jobId": "81c0d98a-f95e-495f-bc08-377efd586c75",
+        "url": "https://cdn.nodaro.ai/images/81c0d98a-f95e-495f-bc08-377efd586c75.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-047-personal"
       },
       "copy": {
+        "es": {
+          "name": "Avatar de dibujos animados a partir de un retrato",
+          "description": "Demostración dividida de la fotografía realista y sonriente de una niña ficticia original junto a un fiel y colorido avatar de personaje animado en 3D que conserva sus gafas, su peinado y sus pecas distintivas, ilustración de estudio pulida."
+        },
         "he": {
           "name": "אווטאר מצויר מפורטרט",
           "description": "מהתמונה שלך: דמות מצוירת"
@@ -1971,6 +2159,10 @@
         "flowNodeId": "uc-048-personal"
       },
       "copy": {
+        "es": {
+          "name": "Selfie de cosplay de fantasía",
+          "description": "Una mujer ficticia corriente, joven adulta, reimaginada como una noble aventurera de fantasía con una intrincada armadura de cuero sin marcas, una cascada en un bosque cinematográfico, rostro coherente y reconociblemente humano y un vestuario de cine muy realista."
+        },
         "he": {
           "name": "סלפי קוספליי פנטזיה",
           "description": "מהתמונה שלך: דמות פנטזיה"
@@ -2013,6 +2205,10 @@
         "flowNodeId": "uc-049-personal"
       },
       "copy": {
+        "es": {
+          "name": "Retrato elegante de embarazo",
+          "description": "Retrato fotográfico de arte de embarazo de una futura madre adulta ficticia, con un vestido crema fluido y recatado frente a un telón de estudio beige cálido y escultural, expresión tierna y serena y una pose elegante y cómoda."
+        },
         "he": {
           "name": "פורטרט הריון אלגנטי",
           "description": "מהתמונה שלך: פורטרט הריון"
@@ -2039,8 +2235,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Virtual Outfit Preview\"; preserve essential content when reframing. Use the uploaded person as a fixed reference and display that SAME person in three smart interview outfits. Preserve face, height, body proportions, hair and pose; change only clothing and accessory combinations, with matched consistent studio lighting. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the uploaded person as a fixed reference and display that SAME person in three smart interview outfits. Preserve face, height, body proportions, hair and pose; change only clothing and accessory combinations, with matched consistent studio lighting. Keep small outfit labels only. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -2055,6 +2251,10 @@
         "flowNodeId": "uc-050-personal"
       },
       "copy": {
+        "es": {
+          "name": "Vista previa de ropa virtual",
+          "description": "El mismo rostro y la misma pose de una profesional ficticia con tres conjuntos de entrevista sofisticados y claramente distintos, en paneles editoriales alineados y limpios sobre un fondo de estudio neutro."
+        },
         "he": {
           "name": "תצוגה מקדימה של אאוטפיט",
           "description": "מהתמונה שלך: בגד אחר"
@@ -2081,24 +2281,28 @@
       "platforms": [],
       "aspectRatio": "4:3",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Phone Photo to Hero Product\"; preserve essential content when reframing. Transform the uploaded REAL product photo into a premium hero advertisement. Keep the same actual product geometry, branding, colors and surface details. Show a before-and-after comparison: the casual input photo then a dramatic premium staged version with realistic droplets and reflections. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; the uploaded photo supplies only the product. Turn the uploaded casual product photo into one premium hero advertisement image of that product. Keep the same actual product geometry, branding, colors and surface details. Replace everything around it: remove the original room, table, clutter and casual light completely, and stage the product as the single hero of a dramatic studio set designed for it, with a backdrop and surface whose colors and materials suit the product, sculpted cinematic lighting with a strong rim light, realistic reflections and a grounded contact shadow, the product large and centered. Add water or droplets only to products that belong with water. One single image: no before-and-after, no slider, arrow, icon, UI element or labels. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, before-and-after split, original room or table, cluttered background, casual snapshot lighting, slider, arrow, icon, UI element, labels, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "casual product photo",
-      "who": "Strong split before-and-after: same original matte cobalt water bottle photographed casually on kitchen table then transformed into dramatic premium advertising hero image with spray droplets and realistic reflections, exact object geometry.",
+      "who": "A fictional matte cobalt-blue water bottle from a casual kitchen snapshot, re-staged alone as a dramatic studio product shot: deep blue backdrop, rim light, reflective dark marble, no text.",
       "render": {
-        "jobId": "1b658735-edc7-4430-be5b-17baa19e29ff",
-        "url": "https://cdn.nodaro.ai/images/1b658735-edc7-4430-be5b-17baa19e29ff.png"
+        "jobId": "67817350-2d46-40b3-a863-131e06ddf42d",
+        "url": "https://cdn.nodaro.ai/images/67817350-2d46-40b3-a863-131e06ddf42d.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-051-products"
       },
       "copy": {
+        "es": {
+          "name": "De foto de teléfono a producto hero",
+          "description": "Antes y después contundente: la misma botella de agua original azul cobalto mate, fotografiada sin cuidado sobre una mesa de cocina y luego transformada en una dramática imagen hero publicitaria premium con gotas de agua y reflejos realistas, con la geometría exacta del objeto."
+        },
         "he": {
-          "name": "מצילום טלפון למוצר הירו",
+          "name": "מצילום טלפון לתמונת פרסומת",
           "description": "מהצילום שלך: תמונת מוצר מקצועית"
         },
         "ja": {
@@ -2110,7 +2314,7 @@
           "description": "내 사진을 전문 제품 사진으로"
         },
         "pt-BR": {
-          "name": "Foto de celular vira hero",
+          "name": "Foto de celular vira foto de anúncio",
           "description": "Da sua foto: imagem profissional de produto"
         }
       }
@@ -2139,6 +2343,10 @@
         "flowNodeId": "uc-052-products"
       },
       "copy": {
+        "es": {
+          "name": "Packshot limpio de comercio electrónico en blanco",
+          "description": "Imagen de catálogo impecable de un bolso bandolera moderno original de cuero color arena, flotando en un limpio ángulo de tres cuartos sobre un fondo de estudio blanco puro sin costuras, con sombra neutra fiel, textura precisa y realismo comercial."
+        },
         "he": {
           "name": "פקשוט על רקע לבן",
           "description": "מהצילום שלך: רקע לבן נקי"
@@ -2165,8 +2373,8 @@
       "platforms": [],
       "aspectRatio": "3:4",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Luxury Perfume Campaign\"; preserve essential content when reframing. Use the uploaded REAL perfume bottle without altering its faceting, colors, labels or cap geometry. Turn it into a cinematic luxury fragrance photograph on reflective black basalt and shallow water, with gold dawn light and subtle fog. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the uploaded REAL perfume bottle without altering its faceting, colors, labels or cap geometry. Turn it into a cinematic luxury fragrance photograph on reflective black basalt and shallow water, with gold dawn light and subtle fog. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -2181,6 +2389,10 @@
         "flowNodeId": "uc-053-products"
       },
       "copy": {
+        "es": {
+          "name": "Campaña de perfume de lujo",
+          "description": "Campaña cinematográfica de fragancia de lujo con un frasco de perfume original de vidrio transparente facetado sobre basalto oscuro pulido y agua reflectante, un haz de luz dorada del amanecer y una delicada niebla; sin logos de marca."
+        },
         "he": {
           "name": "קמפיין בושם יוקרתי",
           "description": "מהצילום שלך: קמפיין בושם"
@@ -2223,6 +2435,10 @@
         "flowNodeId": "uc-054-products"
       },
       "copy": {
+        "es": {
+          "name": "Cuidado de la piel con salpicadura de agua",
+          "description": "Campaña comercial refrescante para un sérum facial blanco minimalista sin marca, en un frasco de vidrio esmerilado, con una salpicadura de agua azul transparente congelada en el tiempo, reflejos exquisitos y una superficie perfectamente nítida y sin etiqueta."
+        },
         "he": {
           "name": "טיפוח עם התזת מים",
           "description": "מהצילום שלך: התזה ורעננות"
@@ -2265,6 +2481,10 @@
         "flowNodeId": "uc-055-products"
       },
       "copy": {
+        "es": {
+          "name": "Macro de cosméticos en estudio",
+          "description": "Primer plano editorial excepcional de maquillaje con un pintalabios original rosa coral de pigmento satinado y táctil y una pequeña nube de polvo, fondo rosa monocromo con dirección de arte e iluminación macro de estudio precisa."
+        },
         "he": {
           "name": "מאקרו קוסמטיקה בסטודיו",
           "description": "מהצילום שלך: תקריב סטודיו"
@@ -2307,6 +2527,10 @@
         "flowNodeId": "uc-056-products"
       },
       "copy": {
+        "es": {
+          "name": "Editorial de bolso de diseñador",
+          "description": "Un rico bolso de mujer de cuero color burdeos flotando sobre piedra caliza escultural y tela plegada color arena, fotografía editorial de moda con detalle táctil premium, diseño original sin marca."
+        },
         "he": {
           "name": "אדיטוריאל לתיק מעצבים",
           "description": "מהצילום שלך: צילום אופנה"
@@ -2349,6 +2573,10 @@
         "flowNodeId": "uc-057-products"
       },
       "copy": {
+        "es": {
+          "name": "Hero lifestyle de zapatillas",
+          "description": "Imagen promocional dinámica y fotorrealista de unas zapatillas de correr originales en crema y naranja, llevadas por un corredor que esprinta sobre un pavimento oscurecido por la lluvia, con la zapatilla perfectamente nítida, movimiento urbano enérgico de fondo y sin marcas."
+        },
         "he": {
           "name": "הירו לייפסטייל לסניקרס",
           "description": "מהצילום שלך: סניקרס בסצנה"
@@ -2391,6 +2619,10 @@
         "flowNodeId": "uc-058-products"
       },
       "copy": {
+        "es": {
+          "name": "Macro de joyería con gemas",
+          "description": "Extraordinario bodegón macro de anillos originales de oro rosa con esmeraldas sobre pizarra negra texturizada, con refracciones precisas de las gemas y suaves brillos lujosos, fotografía de catálogo de alta joyería."
+        },
         "he": {
           "name": "מאקרו אבן חן לתכשיט",
           "description": "מהצילום שלך: תקריב תכשיט"
@@ -2433,6 +2665,10 @@
         "flowNodeId": "uc-059-products"
       },
       "copy": {
+        "es": {
+          "name": "Detalles de reloj de lujo",
+          "description": "Fotografía comercial macro arquitectónica y premium de un reloj de pulsera automático de acero inoxidable sin marca, con una elegante esfera esqueleto y eslabones pulidos sobre hormigón en penumbra, sin marcas comerciales."
+        },
         "he": {
           "name": "פרטי שעון יוקרה",
           "description": "מהצילום שלך: תקריב שעון"
@@ -2474,6 +2710,10 @@
         "flowNodeId": "uc-060-products"
       },
       "copy": {
+        "es": {
+          "name": "Concepto de envase de café",
+          "description": "Diseño original de envase de café de especialidad de gama alta: bolsa mate terracota con cierre reutilizable y un emblema original sencillo de montaña abstracta, acompañada de granos esparcidos y una taza de espresso sobre piedra cálida, fotografía de producto profesional."
+        },
         "he": {
           "name": "קונספט אריזה לקפה",
           "description": "עיצוב אריזת קפה"
@@ -2516,6 +2756,10 @@
         "flowNodeId": "uc-061-products"
       },
       "copy": {
+        "es": {
+          "name": "Escaparate de productos de cerámica",
+          "description": "Jarrones artesanales hechos a mano de gres color crema, cada uno con una silueta única y orgánicamente asimétrica, dispuestos con ramas secas en una serena galería soleada de inspiración japonesa, foto artesanal para comercio electrónico."
+        },
         "he": {
           "name": "תצוגת מוצרי קרמיקה",
           "description": "מהצילום שלך: קרמיקה מוצגת"
@@ -2542,8 +2786,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Electronics Exploded Illustration\"; preserve essential content when reframing. Use the supplied product photo or accurate specification as the only source of design truth for a polished exploded-view technical illustration. Preserve recognizable earbud forms; avoid inventing unseen internal component locations as if factual. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the supplied product photo or accurate specification as the only source of design truth for a polished exploded-view technical illustration of the uploaded product. Separate the uploaded product into precise floating layers along one axis and preserve its recognizable forms; avoid inventing unseen internal component locations as if factual. No labels. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, labels, callouts, printed title",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -2558,6 +2802,10 @@
         "flowNodeId": "uc-062-products"
       },
       "copy": {
+        "es": {
+          "name": "Ilustración despiece de electrónica",
+          "description": "Visualización de vista despiece de alta calidad, técnica pero hermosa, de unos auriculares inalámbricos compactos separados en carcasa, drivers, batería y estuche de carga, flotando en capas claras y precisas, fondo grafito, sin etiquetas ni logos."
+        },
         "he": {
           "name": "איור מפורק של מוצר אלקטרוני",
           "description": "מהצילום שלך: מבט מפורק"
@@ -2600,6 +2848,10 @@
         "flowNodeId": "uc-063-products"
       },
       "copy": {
+        "es": {
+          "name": "Modelo de moda virtual",
+          "description": "Foto profesional de modelo para comercio electrónico de moda: una joven adulta ficticia con una blusa de lino esmeralda original y pantalones crema de talle alto, toma de cuerpo entero en estudio neutro, con caída de tela y confección realistas."
+        },
         "he": {
           "name": "דוגמן וירטואלי",
           "description": "מהצילום שלך: הבגד על דוגמן"
@@ -2626,8 +2878,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Inclusive Model Apparel Grid\"; preserve essential content when reframing. Use the actual uploaded denim jacket as a FIXED product reference across three different adult models in coordinated lookbook panels. Keep zipper/buttons, pockets, silhouette, texture and exact jacket color identical in all looks. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the actual uploaded denim jacket as a FIXED product reference across three different adult models in coordinated lookbook panels. Keep zipper/buttons, pockets, silhouette, texture and exact jacket color identical in all looks. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -2642,6 +2894,10 @@
         "flowNodeId": "uc-064-products"
       },
       "copy": {
+        "es": {
+          "name": "Cuadrícula de prenda con modelos diversos",
+          "description": "Imagen coherente de lookbook de moda con 3 personas: modelos adultos ficticios y diversos, cada uno con la misma chaqueta vaquera azul original sin marca, combinada de forma distinta, un tríptico de estudio limpio y atractivo con costuras de chaqueta coherentes."
+        },
         "he": {
           "name": "רשת דוגמנים מגוונת",
           "description": "מהצילום שלך: בגד על כמה דוגמנים"
@@ -2684,6 +2940,10 @@
         "flowNodeId": "uc-065-products"
       },
       "copy": {
+        "es": {
+          "name": "Campaña lifestyle de accesorio",
+          "description": "Gafas de sol de diseñador de carey llevadas por una mujer ficticia a la moda en un café callejero mediterráneo bañado por el sol, foto editorial sofisticada y espontánea centrada en la montura original y reconocible."
+        },
         "he": {
           "name": "קמפיין לייפסטייל לאקססורי",
           "description": "מהצילום שלך: אקססורי בשימוש"
@@ -2725,6 +2985,10 @@
         "flowNodeId": "uc-066-products"
       },
       "copy": {
+        "es": {
+          "name": "Flat lay de conjunto de moda",
+          "description": "Flat lay cenital, ordenado y con dirección de arte, de un armario cápsula masculino a la moda con camisa de lino, pantalones de pinzas, mocasines marrones, reloj de cuero y bolsa de tela, fondo neutro cálido sin costuras y luz de día suave."
+        },
         "he": {
           "name": "פלאט-ליי אופנה",
           "description": "אאוטפיט מסודר מלמעלה"
@@ -2751,22 +3015,26 @@
       "platforms": [],
       "aspectRatio": "1:1",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Four-Product Catalog Grid\"; preserve essential content when reframing. Use the uploaded brand packaging or products as references. Create a neat premium four-cell commercial catalog with accurate product shapes, label designs and finish, identical lighting and spacing, no invented pricing. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the uploaded brand packaging or products as references. Create a neat premium four-cell commercial catalog with one product per cell, accurate product shapes, label designs and finish, even spacing, no invented pricing. Give each product its own panel, styled in its own rich, distinct premium set. No product labels: add no captions or text beside the products, and keep each product's own packaging exactly as it is. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, product name captions, price tags, identical plain backdrops, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "product packaging photos",
-      "who": "Beautiful clean premium four-cell e-commerce catalog grid of coordinated unbranded sustainable skincare bottles each unique form and material, matched lighting, pure cream backdrop, no prices.",
+      "who": "Four unbranded skincare products, one per cell (pump bottle, tube, cream jar, dropper bottle), each in its own styled bathroom set with plants, towels or flowers, no captions or prices.",
       "render": {
-        "jobId": "2b80992a-2952-457e-bc81-83d914497b50",
-        "url": "https://cdn.nodaro.ai/images/2b80992a-2952-457e-bc81-83d914497b50.png"
+        "jobId": "f9577f90-8599-436d-902b-67d37cef2018",
+        "url": "https://cdn.nodaro.ai/images/f9577f90-8599-436d-902b-67d37cef2018.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-067-products"
       },
       "copy": {
+        "es": {
+          "name": "Cuadrícula de catálogo de cuatro productos",
+          "description": "Bella cuadrícula premium y limpia de catálogo de comercio electrónico con cuatro celdas, con frascos coordinados de cosmética sostenible sin marca, cada uno con forma y material únicos, iluminación igualada, fondo crema puro, sin precios."
+        },
         "he": {
           "name": "רשת קטלוג של 4 מוצרים",
           "description": "מהצילום שלך: 4 מוצרים ברשת"
@@ -2793,22 +3061,26 @@
       "platforms": [],
       "aspectRatio": "1:1",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Product Rotation Reference Sheet\"; preserve essential content when reframing. Use the uploaded product as the SAME fixed object in four realistic reference views: front, left side, rear and three-quarter. Preserve exact silhouette, materials, design and decorative details; do not manufacture contradictory rear details if not inferable from source. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Show the uploaded product as ONE single fixed object in four clearly different realistic views: front, side, back and top three-quarter. No labels. Do not print the template name, a headline, a slogan or a caption on the image. Preserve exact silhouette, materials, design and decorative details; do not manufacture contradictory rear details if not inferable from source. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, labels, near-identical views, several different objects, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "product photo, preferably multiple angles",
-      "who": "Reference-style commercial contact sheet showing SAME unique pale-green ceramic teapot from clean front, side, rear and three-quarter angles, identical material and proportions, simple studio background.",
+      "who": "The same pale-green ceramic teapot with a bamboo handle in four clearly different views (front, side, back and top three-quarter) on a wooden kitchen table, no labels.",
       "render": {
-        "jobId": "76de9de0-f1ca-4670-9462-05122877e3b2",
-        "url": "https://cdn.nodaro.ai/images/76de9de0-f1ca-4670-9462-05122877e3b2.png"
+        "jobId": "0c191fdc-98f9-4c88-a147-83c6b791cab3",
+        "url": "https://cdn.nodaro.ai/images/0c191fdc-98f9-4c88-a147-83c6b791cab3.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-068-products"
       },
       "copy": {
+        "es": {
+          "name": "Hoja de referencia de rotación del producto",
+          "description": "Hoja de contactos comercial estilo referencia que muestra la MISMA tetera de cerámica verde pálido, única, de frente, de lado, por detrás y en tres cuartos, con material y proporciones idénticos y un fondo de estudio sencillo."
+        },
         "he": {
           "name": "גיליון סיבוב מוצר",
           "description": "מהצילום שלך: המוצר מכמה זוויות"
@@ -2835,8 +3107,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Product Scale Comparison\"; preserve essential content when reframing. Use the uploaded real umbrella or compact product; preserve recognizable design and scale, then present a believable folded/unfolded visual size comparison beside an everyday standard coffee cup, clearly illustrative rather than measured proof. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the uploaded real umbrella or compact product; preserve recognizable design and scale, then present a believable folded/unfolded visual size comparison beside an everyday standard coffee cup, clearly illustrative rather than measured proof. No text, labels, measurements or slogans anywhere on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, text, labels, measurements, slogans",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -2851,6 +3123,10 @@
         "flowNodeId": "uc-069-products"
       },
       "copy": {
+        "es": {
+          "name": "Comparación de tamaño del producto",
+          "description": "Foto comercial explicativa lado a lado de un paraguas de viaje compacto original, plegado junto a una taza de café de cerámica estándar y luego desplegado sobre el mismo entorno de cafetería, con una escala física creíble."
+        },
         "he": {
           "name": "השוואת גודל של מוצר",
           "description": "מהצילום שלך: המוצר לצד קנה מידה"
@@ -2892,6 +3168,10 @@
         "flowNodeId": "uc-070-products"
       },
       "copy": {
+        "es": {
+          "name": "Maqueta de envase de alimento premium",
+          "description": "Concepto hiperrealista de envase listo para estantería de una tableta de chocolate negro ecológico, con un motivo botánico ilustrado de cacao sobre un envoltorio de papel negro reciclado, la tableta partida a su lado y una sofisticada marca de logo original."
+        },
         "he": {
           "name": "הדמיית אריזת מזון פרימיום",
           "description": "עיצוב אריזת מזון"
@@ -2933,6 +3213,10 @@
         "flowNodeId": "uc-071-creative"
       },
       "copy": {
+        "es": {
+          "name": "Portada de álbum de música indie",
+          "description": "Portada cuadrada final de un álbum imaginario de dream-pop atmosférico, con la silueta de una mujer sola en una azotea bajo un asombroso cielo ámbar del crepúsculo, sutil grano de película fotográfica, título mínimo y significativo «AFTER THE RAIN» y ningún otro texto."
+        },
         "he": {
           "name": "עטיפת אלבום אינדי",
           "description": "עטיפה עם שם האלבום"
@@ -2974,6 +3258,10 @@
         "flowNodeId": "uc-072-creative"
       },
       "copy": {
+        "es": {
+          "name": "Portada de música electrónica",
+          "description": "Portada cuadrada final de un lanzamiento de techno psicodélico: una escultura abstracta, cinética e imposible de anillo cromado sobre un salar volcánico agrietado, geometría láser verde ácido y negro profundo de noche, título «PULSE» con tipografía imponente e inusual."
+        },
         "he": {
           "name": "עטיפה למוזיקה אלקטרונית",
           "description": "עטיפה עם שם האלבום"
@@ -3015,6 +3303,10 @@
         "flowNodeId": "uc-073-creative"
       },
       "copy": {
+        "es": {
+          "name": "Sobrecubierta de thriller",
+          "description": "Una portada vertical completa y absorbente de thriller: una casa remota junto a un lago envuelto en niebla, una diminuta silueta solitaria que se acerca a una estrecha puerta iluminada, realismo fotográfico cinematográfico e inquietante, título grande y exacto de la novela «THE LAST WINDOW»."
+        },
         "he": {
           "name": "כריכה למותחן",
           "description": "כריכת ספר עם שם הספר"
@@ -3056,6 +3348,10 @@
         "flowNodeId": "uc-074-creative"
       },
       "copy": {
+        "es": {
+          "name": "Portada de novela romántica",
+          "description": "Una portada frontal terminada y comercialmente verosímil de novela romántica, con una pareja ficticia original contemplando la pintoresca costa de Amalfi en una tarde dorada, en un estilo ilustrado refinado y pictórico, título exacto «ONE SUMMER IN ITALY»."
+        },
         "he": {
           "name": "כריכה לרומן רומנטי",
           "description": "כריכת ספר עם שם הספר"
@@ -3097,6 +3393,10 @@
         "flowNodeId": "uc-075-creative"
       },
       "copy": {
+        "es": {
+          "name": "Póster de película de ciencia ficción",
+          "description": "Póster cinematográfico terminado con un astronauta ante una enorme estación anular abandonada sobre un planeta helado, monumentales efectos visuales fotográficos y tipografía segura con el título exacto de la película «ORBIT ZERO»."
+        },
         "he": {
           "name": "פוסטר סרט מדע בדיוני",
           "description": "פוסטר עם שם הסרט"
@@ -3138,6 +3438,10 @@
         "flowNodeId": "uc-076-creative"
       },
       "copy": {
+        "es": {
+          "name": "Banner de canal de YouTube",
+          "description": "Diseño de banner ultrapanorámico listo para usar para un canal ficticio de YouTube de divulgación científica: foto del presentador a la izquierda, dinámicos anillos planetarios flotantes y partículas microscópicas, y un hermoso título claro y centrado «CURIOUS LAB»."
+        },
         "he": {
           "name": "באנר לערוץ יוטיוב",
           "description": "באנר עם שם הערוץ"
@@ -3179,6 +3483,10 @@
         "flowNodeId": "uc-077-creative"
       },
       "copy": {
+        "es": {
+          "name": "Portada artística de pódcast",
+          "description": "Portada cuadrada y sofisticada para un pódcast original de emprendimiento, con dos presentadores ficticios expresivos con auriculares de estudio en un rico estudio de grabación de luz suave, título enorme, legible y exacto «THE NEXT MOVE»."
+        },
         "he": {
           "name": "עטיפת פודקאסט",
           "description": "עטיפה עם שם הפודקאסט"
@@ -3220,6 +3528,10 @@
         "flowNodeId": "uc-078-creative"
       },
       "copy": {
+        "es": {
+          "name": "Miniatura de video de historia",
+          "description": "Una miniatura de YouTube 16:9 lista para publicar sobre historia antigua, con un primer plano de un historiador ficticio asombrado a la derecha, arquitectura romana monumental y una tormenta dramática a la izquierda, y las palabras enormes y exactas «ROME'S SECRET»."
+        },
         "he": {
           "name": "כיסוי לסרטון היסטוריה",
           "description": "כיסוי יוטיוב עם כותרת"
@@ -3260,6 +3572,10 @@
         "flowNodeId": "uc-079-creative"
       },
       "copy": {
+        "es": {
+          "name": "Icono de app de juego de fantasía",
+          "description": "Un icono cuadrado profesional de juego para teléfono con la cabeza de un zorro mago original, feroz pero encantador, con diminutas runas doradas y una llama mágica ámbar, ilustración 3D artesanal y pulida, legible al tamaño de icono de app, sin tipografía."
+        },
         "he": {
           "name": "אייקון למשחק פנטזיה",
           "description": "אייקון אפליקציה למשחק"
@@ -3301,6 +3617,10 @@
         "flowNodeId": "uc-080-creative"
       },
       "copy": {
+        "es": {
+          "name": "Hoja de concepto de personaje de RPG",
+          "description": "Hoja de referencia clara para el diseño de un personaje de videojuego de fantasía: una heroína original, guardabosques del desierto, con una pose frontal de cuerpo entero, siluetas de perfil y de espalda y un primer plano detallado de los accesorios del atuendo, formas coherentes y fondo de mesa de dibujo pálido."
+        },
         "he": {
           "name": "גיליון קונספט לדמות RPG",
           "description": "דף עיצוב דמות"
@@ -3341,6 +3661,10 @@
         "flowNodeId": "uc-081-creative"
       },
       "copy": {
+        "es": {
+          "name": "Inventario de objetos de fantasía",
+          "description": "Una cuadrícula perfectamente ordenada de 4x3 con doce objetos originales y distintos de inventario de un juego de fantasía (pociones, amuletos, casco, botas, libro de hechizos, linterna), con un arte pictórico de videojuego coherente y premium, cada uno en su propio recuadro y sin texto."
+        },
         "he": {
           "name": "מלאי פריטי פנטזיה",
           "description": "פריטי משחק בגריד"
@@ -3382,6 +3706,10 @@
         "flowNodeId": "uc-082-creative"
       },
       "copy": {
+        "es": {
+          "name": "Arte de entorno para worldbuilding",
+          "description": "Impresionante arte conceptual original del entorno de un juego de fantasía: una enorme ciudad de piedra caliza tallada en un acantilado costero escarpado, con puentes colgantes y pájaros a lo lejos, plano general de worldbuilding atmosférico con una narrativa visual intrincada."
+        },
         "he": {
           "name": "אמנות סביבה לעולם בדיוני",
           "description": "נוף קונספט לעולם"
@@ -3423,6 +3751,10 @@
         "flowNodeId": "uc-083-creative"
       },
       "copy": {
+        "es": {
+          "name": "Historia en cómic de cuatro viñetas",
+          "description": "Una página de cómic amable y completa, de cuatro viñetas, con un gato travieso original que intenta robar un pastel en una cocina soleada, una historia secuencial fácil de leer con un gato coherente y mucho humor, arte vivo de novela gráfica dibujada a mano, sin bocadillos de diálogo."
+        },
         "he": {
           "name": "סיפור קומיקס בארבעה פאנלים",
           "description": "עמוד קומיקס קצר"
@@ -3464,6 +3796,10 @@
         "flowNodeId": "uc-084-creative"
       },
       "copy": {
+        "es": {
+          "name": "Ilustración de cuento infantil",
+          "description": "Encantadora ilustración en acuarela a doble página para un libro infantil: un diminuto erizo aventurero descubre un hongo gigante y luminoso al anochecer, con una atmósfera cálida y suave de cuento de hadas y un margen superior vacío para añadir texto después."
+        },
         "he": {
           "name": "איור לסיפור ילדים",
           "description": "איור לספר ילדים"
@@ -3504,6 +3840,10 @@
         "flowNodeId": "uc-085-creative"
       },
       "copy": {
+        "es": {
+          "name": "Infografía científica educativa",
+          "description": "Infografía visual clara que enseña las cuatro etapas del ciclo de vida de una mariposa: huevo, oruga, crisálida y mariposa adulta, reconocibles científicamente y conectadas por flechas, con una bella ilustración botánica, orden exacto y etiquetas numeradas mínimas."
+        },
         "he": {
           "name": "אינפוגרפיקה מדעית חינוכית",
           "description": "אינפוגרפיקה להוראה"
@@ -3545,6 +3885,10 @@
         "flowNodeId": "uc-086-creative"
       },
       "copy": {
+        "es": {
+          "name": "Diapositiva de presentación ejecutiva",
+          "description": "Una diapositiva corporativa completa sobre la transición a las energías renovables, con un llamativo fondo fotográfico de un parque eólico a la derecha, un título limpio y contundente \"POWERING TOMORROW\" y un gráfico de datos ascendente, simple y estilizado a la izquierda."
+        },
         "he": {
           "name": "שקף מצגת למנהלים",
           "description": "שקף מצגת עסקית"
@@ -3586,6 +3930,10 @@
         "flowNodeId": "uc-087-creative"
       },
       "copy": {
+        "es": {
+          "name": "Póster de investigación científica",
+          "description": "Póster editorial de investigación para un congreso sobre los ecosistemas de coral marinos, con fotografía subacuática profesional, tres diagramas de ilustración científica bien alineados, una jerarquía limpia con el titular \"CORAL IN FOCUS\" y sin resultados de investigación inventados."
+        },
         "he": {
           "name": "פוסטר מחקר מדעי",
           "description": "פוסטר לכנס אקדמי"
@@ -3627,6 +3975,10 @@
         "flowNodeId": "uc-088-creative"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta de receta",
+          "description": "Hermosa tarjeta vertical de receta de cocina para una pasta rústica al limón, con una apetitosa toma cenital de la comida, expresivos dibujos lineales originales de limón, albahaca y pasta, el título \"LEMON PASTA\" y una breve y elegante lista de ingredientes."
+        },
         "he": {
           "name": "כרטיס הוראות למתכון",
           "description": "כרטיס מתכון מעוצב"
@@ -3668,6 +4020,10 @@
         "flowNodeId": "uc-089-creative"
       },
       "copy": {
+        "es": {
+          "name": "Póster de festival de música",
+          "description": "Póster vertical dramático y terminado de un festival independiente de música electrónica, con un público real y eufórico bailando al aire libre bajo el amanecer del desierto y una escultura abstracta, una composición vivencial asombrosa y el título exacto del evento \"DUST & SOUND\"."
+        },
         "he": {
           "name": "פוסטר לפסטיבל מוזיקה",
           "description": "פוסטר עם שם הפסטיבל"
@@ -3709,6 +4065,10 @@
         "flowNodeId": "uc-090-creative"
       },
       "copy": {
+        "es": {
+          "name": "Portada de revista de viajes",
+          "description": "Impresionante portada vertical de guía de viajes con una vista aérea de ensueño del dramático puerto de una isla griega y un mar de azul intenso, un titular claro y contundente \"ISLAND ESCAPES\" y un diseño editorial de viajes pulido y premium."
+        },
         "he": {
           "name": "שער למגזין טיולים",
           "description": "שער מגזין עם כותרת"
@@ -3751,6 +4111,10 @@
         "flowNodeId": "uc-091-home"
       },
       "copy": {
+        "es": {
+          "name": "Rediseño de sala de estar escandinava",
+          "description": "Visualización fotorrealista y amplia de diseño de interiores de una sala de estar compacta típica, reimaginada con suelos de roble claro, sofá marfil, cortinas de lino y lámparas cálidas, luz natural y un estilismo profesional pero habitado."
+        },
         "he": {
           "name": "סלון בסגנון סקנדינבי",
           "description": "מהתמונה שלך: הסלון מעוצב מחדש"
@@ -3793,6 +4157,10 @@
         "flowNodeId": "uc-092-home"
       },
       "copy": {
+        "es": {
+          "name": "Reforma de cocina contemporánea",
+          "description": "Render convincente y premium de la reforma de una cocina familiar, con muebles bajos de nogal cálido, isla de piedra color crema, herrajes de bronce y abundante luz natural, proporciones realistas de obra y una foto atractiva de inmobiliaria."
+        },
         "he": {
           "name": "שיפוץ מטבח מודרני",
           "description": "מהתמונה שלך: המטבח אחרי שיפוץ"
@@ -3835,6 +4203,10 @@
         "flowNodeId": "uc-093-home"
       },
       "copy": {
+        "es": {
+          "name": "Renovación de dormitorio japandi",
+          "description": "Visión de diseño fotorrealista y serena de un dormitorio corriente transformado con una cama plataforma baja de roble, biombos shoji color crema, lino de textura táctil, iluminación indirecta discreta y una decoración orgánica contenida, con una atmósfera natural."
+        },
         "he": {
           "name": "חדר שינה ג'פנדי",
           "description": "מהתמונה שלך: חדר שינה בסגנון ג'פנדי"
@@ -3877,6 +4249,10 @@
         "flowNodeId": "uc-094-home"
       },
       "copy": {
+        "es": {
+          "name": "Baño renovado estilo spa",
+          "description": "Rediseño fotorrealista de un baño pequeño con ducha a ras de suelo de vidrio acanalado, azulejos de travertino en la pared, tocador curvo de roble macizo, iluminación elegantemente integrada y reflejos realistas, con fotografía de arquitectura profesional."
+        },
         "he": {
           "name": "חדר אמבטיה בסגנון ספא",
           "description": "מהתמונה שלך: אמבטיה כמו ספא"
@@ -3919,6 +4295,10 @@
         "flowNodeId": "uc-095-home"
       },
       "copy": {
+        "es": {
+          "name": "Oficina en casa para teletrabajar",
+          "description": "Interior hermoso, funcional y modesto de una oficina en casa, con un escritorio ergonómico de roble, estanterías y plantas, luz natural de una gran ventana lateral, una configuración discreta de monitor y un espacio de trabajo impecable pero útil, como en una foto editorial de interiores."
+        },
         "he": {
           "name": "משרד ביתי",
           "description": "מהתמונה שלך: פינת עבודה מעוצבת"
@@ -3961,6 +4341,10 @@
         "flowNodeId": "uc-096-home"
       },
       "copy": {
+        "es": {
+          "name": "Concepto de habitación de bebé",
+          "description": "Visualización de una suave habitación de bebé con paredes color crema, muebles de arce natural, cuna segura, dulces motivos del bosque hechos a mano, alfombra con textura y una realista luz matinal, en un diseño familiar cálido y acogedor."
+        },
         "he": {
           "name": "קונספט לחדר תינוקות",
           "description": "מהתמונה שלך: חדר תינוקות"
@@ -4003,6 +4387,10 @@
         "flowNodeId": "uc-097-home"
       },
       "copy": {
+        "es": {
+          "name": "Pequeño jardín en el balcón",
+          "description": "Atractiva transformación del balcón de un apartamento, con asientos compactos de teca, jardineras verticales, hierbas aromáticas colgantes y luces decorativas a la hora dorada, dimensiones ajustadas pero creíbles y una acogedora vista de la ciudad."
+        },
         "he": {
           "name": "גינה במרפסת קטנה",
           "description": "מהתמונה שלך: מרפסת ירוקה"
@@ -4045,6 +4433,10 @@
         "flowNodeId": "uc-098-home"
       },
       "copy": {
+        "es": {
+          "name": "Diseño de paisajismo de patio trasero",
+          "description": "Hermoso y amplio rediseño del patio trasero de una vivienda, con una pérgola de comedor al aire libre, plantas autóctonas, piedras de paso y un paisajismo suave, césped realista y luz de tarde, ambicioso pero construible."
+        },
         "he": {
           "name": "עיצוב נוף לחצר",
           "description": "מהתמונה שלך: חצר מתוכננת"
@@ -4087,6 +4479,10 @@
         "flowNodeId": "uc-099-home"
       },
       "copy": {
+        "es": {
+          "name": "Fachada de casa moderna",
+          "description": "Una casa suburbana creíble de los años 80, al estilo del «antes», transformada con una fachada moderna de estuco blanco y madera oscura, un nuevo jardín de entrada y estrechas ventanas contemporáneas, en una fotografía de arquitectura con luz de día."
+        },
         "he": {
           "name": "חזית בית מודרנית",
           "description": "מהתמונה שלך: חזית מחודשת"
@@ -4129,6 +4525,10 @@
         "flowNodeId": "uc-100-home"
       },
       "copy": {
+        "es": {
+          "name": "Opciones de pintura exterior",
+          "description": "Comparación precisa y limpia en tres paneles de la MISMA fachada de una pequeña casa adosada, con la misma cámara y la misma geometría del edificio, pintada en verde salvia pálido, blanco cálido y carbón, con luz natural, como un selector visual de color de materiales."
+        },
         "he": {
           "name": "אפשרויות צבע חיצוני",
           "description": "מהתמונה שלך: צבעי חזית"
@@ -4171,6 +4571,10 @@
         "flowNodeId": "uc-101-home"
       },
       "copy": {
+        "es": {
+          "name": "Coloca un sofá en tu sala",
+          "description": "Visualización fotorrealista de un nuevo sofá modular color arena en una sala de estar de aspecto real, con las ventanas y la alfombra originales conservadas, escala realista y sombras de contacto, sin personas."
+        },
         "he": {
           "name": "להציב ספה בחדר שלך",
           "description": "מהתמונה שלך: הספה בחדר"
@@ -4197,8 +4601,8 @@
       "platforms": [],
       "aspectRatio": "16:9",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Cabinet Repaint Preview\"; preserve essential content when reframing. Repaint the cabinets in the exact uploaded kitchen from existing wood or paint to forest green. Keep original cabinet door profiles, handles except optional brass swap, countertops, appliances, dimensions and camera exactly; show side-by-side original and after. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Repaint the cabinets in the exact uploaded kitchen from existing wood or paint to forest green. Keep original cabinet door profiles, handles except optional brass swap, countertops, appliances, dimensions and camera exactly; show side-by-side original and after. Do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, printed title, headline, slogan or caption",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
@@ -4213,6 +4617,10 @@
         "flowNodeId": "uc-102-home"
       },
       "copy": {
+        "es": {
+          "name": "Vista previa de repintado de armarios",
+          "description": "Comparación dividida de los mismos armarios de cocina estilo shaker de aspecto real, antes en pino naranja antiguo y después en verde bosque apagado con tiradores de latón cepillado, con el encuadre y los electrodomésticos fijos, una demostración de reforma convincente."
+        },
         "he": {
           "name": "תצוגה מקדימה לצביעת ארונות",
           "description": "מהתמונה שלך: ארונות בצבע אחר"
@@ -4255,6 +4663,10 @@
         "flowNodeId": "uc-103-home"
       },
       "copy": {
+        "es": {
+          "name": "Prueba de iluminación para el comedor",
+          "description": "Comparación arquitectónica de un cómodo comedor bajo tres estilos diferentes de lámparas colgantes, con los mismos muebles, una cámara coherente, sombras realistas y un renderizado cálido de los materiales."
+        },
         "he": {
           "name": "תאורה לפינת אוכל",
           "description": "מהתמונה שלך: גוף תאורה חדש"
@@ -4297,6 +4709,10 @@
         "flowNodeId": "uc-104-home"
       },
       "copy": {
+        "es": {
+          "name": "Apartamento pequeño que aprovecha el espacio",
+          "description": "Diseño funcional de un apartamento de 35 metros cuadrados con una ingeniosa cama abatible de pared, una mesa de comedor compacta y un almacenamiento ligero empotrado de roble, en una fotografía de arquitectura limpia y gran angular, con una escala humana honesta."
+        },
         "he": {
           "name": "דירה קטנה חוסכת מקום",
           "description": "מהתמונה שלך: פתרונות אחסון"
@@ -4339,6 +4755,10 @@
         "flowNodeId": "uc-105-home"
       },
       "copy": {
+        "es": {
+          "name": "Diseño de interior de café boutique",
+          "description": "Interior de café pequeño, impresionante pero construible, con un banco corrido de terracota cálido, mostradores originales de roble, hermosas lámparas colgantes y acogedores rincones para sentarse, una visualización de diseño para hostelería y sin letreros."
+        },
         "he": {
           "name": "עיצוב פנים לקפה בוטיק",
           "description": "מהתמונה שלך: בית קפה מעוצב"
@@ -4380,6 +4800,10 @@
         "flowNodeId": "uc-106-family"
       },
       "copy": {
+        "es": {
+          "name": "Invitación de boda elegante",
+          "description": "Sofisticada invitación de boda impresa, con su tarjeta de confirmación de asistencia a juego, sobre papel de algodón color crema con un elegante motivo botánico en relieve, el titular caligráfico \"WE'RE GETTING MARRIED\", discretos detalles dorados y una fotografía de papelería de ensueño."
+        },
         "he": {
           "name": "הזמנה אלגנטית לחתונה",
           "description": "הזמנה ו־RSVP מעוצבים"
@@ -4421,6 +4845,10 @@
         "flowNodeId": "uc-107-family"
       },
       "copy": {
+        "es": {
+          "name": "Invitación de cumpleaños infantil",
+          "description": "Invitación de cumpleaños arcoíris con dinosaurios, divertida y con diseño profesional, con dinosaurios originales y simpáticos con gorros de fiesta, globos y confeti, y una tipografía alegre que dice exactamente \"LET'S PARTY\", en una ilustración pastel animada y limpia."
+        },
         "he": {
           "name": "הזמנה ליום הולדת לילדים",
           "description": "הזמנה צבעונית לילדים"
@@ -4462,6 +4890,10 @@
         "flowNodeId": "uc-108-family"
       },
       "copy": {
+        "es": {
+          "name": "Invitación de Bar Mitzvá",
+          "description": "Maqueta de una invitación premium para un Bar Mitzvá, con elegantes arcos de piedra de Jerusalén ilustrados en un line art moderno, tipografía en azul marino y dorado antiguo, el título exacto \"BAR MITZVAH\" y un espacio libre elegante y apto para dos idiomas."
+        },
         "he": {
           "name": "הזמנה לבר מצווה",
           "description": "הזמנה מעוצבת לבר מצווה"
@@ -4503,6 +4935,10 @@
         "flowNodeId": "uc-109-family"
       },
       "copy": {
+        "es": {
+          "name": "Invitación de baby shower",
+          "description": "Encantadora tarjeta de invitación en acuarela con una luna pintada a mano, diminutas estrellas y nubes en salvia suave, marfil y melocotón desvaído, el texto nítido \"BABY SHOWER\" y una hermosa papelería cálida y artesanal."
+        },
         "he": {
           "name": "הזמנה למסיבת לידה",
           "description": "הזמנה עדינה לבייבי שאוור"
@@ -4544,6 +4980,10 @@
         "flowNodeId": "uc-110-family"
       },
       "copy": {
+        "es": {
+          "name": "Invitación a la celebración de graduación",
+          "description": "Invitación chic a una fiesta de graduación para jóvenes adultos, con un divertido birrete negro, una cinta dorada metálica escultural, un rico fondo verde esmeralda y un titular gigante y exacto \"GRADUATION NIGHT\"."
+        },
         "he": {
           "name": "הזמנה לחגיגת סיום",
           "description": "הזמנה לטקס סיום"
@@ -4585,6 +5025,10 @@
         "flowNodeId": "uc-111-family"
       },
       "copy": {
+        "es": {
+          "name": "Postal para guardar la fecha",
+          "description": "Postal editorial minimalista de «save the date» de una pareja, con una fotografía natural y espontánea de una pareja de novios ficticia en un acantilado costero bajo un cálido atardecer, con la frase exacta \"SAVE THE DATE\" en una elegante tipografía serif y un diseño limpio al estilo de una galería."
+        },
         "he": {
           "name": "גלויית Save the Date",
           "description": "גלויה עם התאריך"
@@ -4627,6 +5071,10 @@
         "flowNodeId": "uc-112-family"
       },
       "copy": {
+        "es": {
+          "name": "Retrato familiar como póster de película",
+          "description": "Una familia original, ficticia, feliz y de tres generaciones, de seis miembros, como protagonistas del póster de una divertida película de aventuras de gran presupuesto, con ruinas de un templo en la selva tropical, una dramática luz cinematográfica y el título exacto \"OUR BIG ADVENTURE\"."
+        },
         "he": {
           "name": "פוסטר סרט משפחתי",
           "description": "מהתמונה שלך: המשפחה כפוסטר סרט"
@@ -4669,6 +5117,10 @@
         "flowNodeId": "uc-113-family"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta de anuncio de nacimiento",
+          "description": "Tierna papelería para anunciar el nacimiento de un bebé, con un primer plano de un bebé ficticio dormido envuelto en una manta color crema, líneas pintadas a mano, el titular simple, claro y exacto \"HELLO LITTLE ONE\" y una fotografía natural e íntima."
+        },
         "he": {
           "name": "כרטיס הודעת לידה",
           "description": "מהתמונה שלך: הודעת לידה"
@@ -4711,6 +5163,10 @@
         "flowNodeId": "uc-114-family"
       },
       "copy": {
+        "es": {
+          "name": "Retrato de cumpleaños de mascota",
+          "description": "Divertida foto premium de fiesta de un adorable bulldog francés sentado con orgullo ante su pequeño pastel de cumpleaños apto para perros, con confeti y serpentinas festivas, una expresión canina encantadora y creíble y una composición lista para tarjeta."
+        },
         "he": {
           "name": "פורטרט יום הולדת לחיית מחמד",
           "description": "מהתמונה שלך: מסיבה לחיה"
@@ -4737,22 +5193,26 @@
       "platforms": [],
       "aspectRatio": "3:4",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Winter Holiday Family Card\"; preserve essential content when reframing. Use the real uploaded family photograph and keep all faces, count and expressions recognizable. Transform the environment into a cozy snowy chalet card with natural warm porch lighting, without inventing new family members. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements. Render the words exactly as given; do not invent extra headlines.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the real uploaded family photograph and keep all faces, count and expressions recognizable, and keep the clothing from the photo. Transform the environment into a cozy snowy chalet card with natural warm porch lighting, without inventing new family members. Add no words: do not print the template name, a headline, a slogan or a caption on the image. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, lettering, greeting text, headline, caption, changed clothing",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "family photo",
-      "who": "Heartwarming original fictional family of four posing candidly under cozy cabin porch string lights, fresh snow outside, tasteful lettering \"WARM WISHES\", welcoming season-neutral winter card design.",
+      "who": "A fictional family of four in their own everyday sweaters, moved onto a cozy snowy chalet porch with warm string lights, no lettering.",
       "render": {
-        "jobId": "cb9f7c5e-f5d0-4610-b4fa-b8b44d6afc39",
-        "url": "https://cdn.nodaro.ai/images/cb9f7c5e-f5d0-4610-b4fa-b8b44d6afc39.png"
+        "jobId": "736fd100-6a71-4996-878c-6e6dbe71b728",
+        "url": "https://cdn.nodaro.ai/images/736fd100-6a71-4996-878c-6e6dbe71b728.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-115-family"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta familiar de fiestas de invierno",
+          "description": "Una conmovedora familia original y ficticia de cuatro personas posando con naturalidad bajo las luces del porche de una acogedora cabaña, con nieve fresca afuera, un elegante lettering \"WARM WISHES\" y un diseño de tarjeta invernal acogedor y neutral en cuanto a la temporada."
+        },
         "he": {
           "name": "כרטיס חג חורפי למשפחה",
           "description": "מהתמונה שלך: כרטיס חג"
@@ -4793,6 +5253,10 @@
         "flowNodeId": "uc-116-family"
       },
       "copy": {
+        "es": {
+          "name": "Felicitación de Rosh Hashaná",
+          "description": "Hermosa felicitación contemporánea de Año Nuevo judío, centrada en manzanas, granada y un cuenco de miel ricamente fotografiados sobre lino fino con ramas de olivo, con una elegante tipografía hebrea original \"שנה טובה\"."
+        },
         "he": {
           "name": "ברכה לראש השנה",
           "description": "כרטיס שנה טובה"
@@ -4833,6 +5297,10 @@
         "flowNodeId": "uc-117-family"
       },
       "copy": {
+        "es": {
+          "name": "Felicitación para celebrar el Ramadán",
+          "description": "Ilustración de felicitación de Ramadán, respetuosa y elegante, con una delicada media luna dorada, intrincados arcos geométricos y faroles de luz suave, un cálido cielo nocturno índigo profundo y un hermoso titular exacto en árabe \"رمضان كريم\"."
+        },
         "he": {
           "name": "ברכה לרמדאן",
           "description": "כרטיס ברכה לרמדאן"
@@ -4874,6 +5342,10 @@
         "flowNodeId": "uc-118-family"
       },
       "copy": {
+        "es": {
+          "name": "Fondo para cabina de fotos de fiesta",
+          "description": "Concepto fotorrealista de decoración de eventos con una espectacular pared de flecos brillantes para cabina de fotos, un arco asimétrico de globos en albaricoque, dorado y crema, un gigante número luminoso \"30\" y una pequeña mesa de accesorios a juego."
+        },
         "he": {
           "name": "רקע לתא צילום במסיבה",
           "description": "רקע מעוצב לצילומים"
@@ -4916,6 +5388,10 @@
         "flowNodeId": "uc-119-family"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta con foto en homenaje",
+          "description": "Tarjeta de homenaje sobria y digna, con un retrato clásico, cálido y sonriente de una persona mayor ficticia, una delicada orla botánica, una paleta tranquila de marfil y azul apagado, sin nombres, fechas ni biografía inventada."
+        },
         "he": {
           "name": "כרטיס הנצחה",
           "description": "מהתמונה שלך: כרטיס זיכרון"
@@ -4942,22 +5418,26 @@
       "platforms": [],
       "aspectRatio": "3:4",
       "model": "gpt-image-2",
-      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result for \"Anniversary Celebration Card\"; preserve essential content when reframing. Use the real uploaded anniversary couple photo. Keep both people’s facial identity, apparent age, clothes and relationship recognizable, placing them into a beautifully lit gentle garden celebration card with elegant gold anniversary numeral. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements. Render the words exactly as given; do not invent extra headlines.",
-      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy",
+      "prompt": "Edit the supplied reference image(s) to produce a FINISHED result; preserve essential content when reframing. Use the real uploaded anniversary couple photo. Keep both people’s facial identity, apparent age, clothes and relationship recognizable, placing them into a beautifully lit gentle garden celebration card. Use only the words the user supplies, in elegant gold lettering. Never invent a number of years. Produce the FINAL usable image, not a product dashboard, tutorial, screenshot of a template, or behind-the-scenes demonstration. Compose professionally, with clear visual hierarchy where typography is present. No watermark or random filler copy. When an uploaded image is supplied, it is the visual source of truth: preserve identifying features, spatial geometry, true wording and original object details relevant to the task. Do not invent real-world claims, ratings, measurements or endorsements. Render the words exactly as given; do not invent extra headlines.",
+      "negativePrompt": "watermark, app UI mockup, random filler text, illegible nonsense copy, invented anniversary number, invented year count",
       "slots": [],
       "sampleText": "",
       "minReferences": 1,
       "referenceRole": "anniversary couple photo",
-      "who": "Elegant fiftieth anniversary celebration card with original fictional elderly couple dancing lovingly in garden at sunset, subtle golden numeral \"50\", beautiful fine-art photo, sophisticated celebratory layout.",
+      "who": "A fictional elderly couple in their own clothes placed into a sunlit garden anniversary card with roses and gold lettering, no invented year count.",
       "render": {
-        "jobId": "9b740e18-2831-46fd-9914-996df26333c2",
-        "url": "https://cdn.nodaro.ai/images/9b740e18-2831-46fd-9914-996df26333c2.png"
+        "jobId": "54e6f843-fd78-4303-b98c-de346f346ce7",
+        "url": "https://cdn.nodaro.ai/images/54e6f843-fd78-4303-b98c-de346f346ce7.png"
       },
       "source": {
         "flowId": "7bdb4f39-3e94-4250-b52c-7a09da77971b",
         "flowNodeId": "uc-120-family"
       },
       "copy": {
+        "es": {
+          "name": "Tarjeta de celebración de aniversario",
+          "description": "Elegante tarjeta para celebrar el cincuenta aniversario, con una pareja ficticia y original de personas mayores bailando con cariño en un jardín al atardecer, un sutil número dorado \"50\", una hermosa foto de arte y un diseño festivo sofisticado."
+        },
         "he": {
           "name": "כרטיס ליום נישואין",
           "description": "מהתמונה שלך: כרטיס לזוג"

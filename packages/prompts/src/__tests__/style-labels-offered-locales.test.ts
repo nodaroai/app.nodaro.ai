@@ -1,9 +1,10 @@
 /**
  * Every art style has a name of its own in each language Nodaro's apps offer
- * in their language menus (Hebrew, Japanese, Korean, Brazilian Portuguese):
+ * in their language menus (Hebrew, Japanese, Korean, Brazilian Portuguese,
+ * Spanish):
  * an explicit `label` in the style sidecar, never the English fallback by
  * omission. Where a language keeps the English loanword ("Anime",
- * "Cyberpunk" in Brazilian Portuguese), the sidecar says so explicitly, so
+ * "Cyberpunk" in Brazilian Portuguese and Spanish), the sidecar says so explicitly, so
  * the choice is deliberate and a new style cannot ship untranslated there.
  * The other locales follow the general sidecar rule (a loanword may be left
  * out) and are not held to this.
@@ -12,7 +13,7 @@ import { describe, it, expect } from "vitest"
 import type { LocaleCatalogMap, LocaleId } from "@nodaro/shared/i18n"
 import { STYLES } from "../index.js"
 
-const OFFERED = ["he", "ja", "ko", "pt-BR"] as const satisfies readonly LocaleId[]
+const OFFERED = ["he", "ja", "ko", "pt-BR", "es"] as const satisfies readonly LocaleId[]
 
 async function sidecar(locale: LocaleId): Promise<LocaleCatalogMap> {
   return ((await import(`../../../shared/src/i18n/style.${locale}.ts`)) as { default: LocaleCatalogMap }).default
@@ -38,6 +39,23 @@ describe("art style names in the languages the apps offer", () => {
     expect(label("ascii-art")).toBe("Arte ASCII")
     expect(label("claymation")).toBe("Animação em massinha")
     expect(label("blueprint")).toBe("Planta técnica")
+  })
+
+  it("Spanish keeps the loanwords Spanish speakers use, and says the rest in Spanish", async () => {
+    const map = await sidecar("es")
+    const label = (id: string) => map[id]?.label
+    for (const [id, name] of [
+      ["anime", "Anime"],
+      ["noir", "Noir"],
+      ["cyberpunk", "Cyberpunk"],
+      ["steampunk", "Steampunk"],
+      ["vaporwave", "Vaporwave"],
+      ["ukiyo-e", "Ukiyo-e"],
+    ] as const) expect(label(id), id).toBe(name)
+    expect(label("ascii-art")).toBe("Arte ASCII")
+    expect(label("claymation")).toBe("Animación con plastilina")
+    expect(label("blueprint")).toBe("Plano técnico")
+    expect(label("ink-wash")).toBe("Aguada de tinta")
   })
 
   it("Korean says ukiyo-e and ASCII art in Hangul", async () => {

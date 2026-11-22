@@ -201,7 +201,7 @@ describe("runConfirmText — titles", () => {
     expect(title.endsWith(tx("renderFinal.lineTotalCredits", { credits: 530 }))).toBe(true)
   })
 
-  it.each(["he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the button's own words and carries the figure", (locale) => {
+  it.each(["es", "he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the button's own words and carries the figure", (locale) => {
     useLocaleStore.setState({ locale })
     const final = runConfirmText(info({}), tx)
     expect(final.title.startsWith(tx("renderFinal.action"))).toBe(true)
@@ -238,7 +238,7 @@ describe("runConfirmText — Run up to here", () => {
     expect(text.body).toBe(tx("editor.runConfirmNodes", { n: 3 }))
   })
 
-  it.each(["he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the action and carries the figure", (locale) => {
+  it.each(["es", "he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the action and carries the figure", (locale) => {
     useLocaleStore.setState({ locale })
     const text = runConfirmText(upTo(), tx)
     expect(text.title.startsWith(text.action)).toBe(true)
@@ -370,7 +370,7 @@ describe("runConfirmText — a continuation", () => {
     expect(runConfirmText(cont({ estimatedCredits: null }), tx).title).toBe("Continue from failed?")
   })
 
-  it.each(["he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the action and carries the figure", (locale) => {
+  it.each(["es", "he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the action and carries the figure", (locale) => {
     useLocaleStore.setState({ locale })
     for (const trigger of ["continue-failed", "finish-review"] as const) {
       const text = runConfirmText(cont({ trigger }), tx)

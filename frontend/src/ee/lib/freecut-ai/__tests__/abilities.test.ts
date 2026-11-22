@@ -1,13 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { en } from "@/lib/i18n/en"
+import { es } from "@/lib/i18n/es"
 import { he } from "@/lib/i18n/he"
 import { ja } from "@/lib/i18n/ja"
 import { ko } from "@/lib/i18n/ko"
 import { ptBR } from "@/lib/i18n/pt-br"
 import { ABILITIES, ABILITY_PHRASE, listensFor, requestClauses, requestSteps, toggleStepInRequest } from "../abilities"
 
-const DICTS = { en, he, ja, ko, "pt-br": ptBR } as const
+const DICTS = { en, es, he, ja, ko, "pt-br": ptBR } as const
 
 describe("the cards' words", () => {
   // A card writes its words into the request, and the request is read back to

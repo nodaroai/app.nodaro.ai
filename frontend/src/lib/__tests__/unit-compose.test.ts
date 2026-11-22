@@ -457,6 +457,10 @@ describe("node labels", () => {
   it("strings.json's pt-br is the app's pt-BR", () => {
     expect(unitNodeLabels([{ "Fixture Echo": { he: "הד", "pt-br": "Eco" } }])).toEqual({ he: { "Fixture Echo": "הד" }, "pt-BR": { "Fixture Echo": "Eco" } })
   })
+
+  it("strings.json's es is the app's es", () => {
+    expect(unitNodeLabels([{ "Fixture Echo": { es: "Eco", he: "הד" } }])).toEqual({ es: { "Fixture Echo": "Eco" }, he: { "Fixture Echo": "הד" } })
+  })
 })
 
 describe("the executor kit", () => {

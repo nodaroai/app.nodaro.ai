@@ -29,14 +29,21 @@ complete, so that picking one gives you the whole app in that language —
 never English menus around translated picker tiles:
 
 - English
-- Hebrew
+- Spanish
+- Portuguese (Brazil)
 - Japanese
+- Korean
+- Hebrew
+
+Spanish is neutral international Spanish, written to read the same in Spain
+and in Latin America. A first visit from a browser set to Spanish from any
+region (Spain, Mexico, the rest of Latin America) opens the app in Spanish.
 
 More languages are on the way. The picker catalogs (Mood, Framing, Lens and
-the rest) are already translated into Arabic, German, Spanish, French, Hindi,
-Korean, Portuguese (Brazil), Russian and Chinese (Simplified); each of those
-languages joins the menu as soon as its interface translation is complete (at
-least 98% of the interface text), with no further action on your side.
+the rest) are already translated into Arabic, German, French, Hindi, Russian
+and Chinese (Simplified); each of those languages joins the menu as soon as its
+interface translation is complete (at least 98% of the interface text), with no
+further action on your side.
 
 ## Translation coverage
 

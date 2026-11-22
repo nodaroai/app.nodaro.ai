@@ -95,6 +95,7 @@ describe("fillerRanges", () => {
     expect(found([w("えーと", 2, 2.5), w("計画", 3, 3.4)], "ja")).toEqual(["えーと"])
     expect(found([w("음", 3, 3.2), w("계획", 4, 4.3)], "ko")).toEqual(["음"])
     expect(found([w("hã,", 3, 3.2), w("plano", 4, 4.3)], "pt")).toEqual(["hã,"])
+    expect(found([w("ehm,", 3, 3.2), w("plan", 4, 4.3)], "es")).toEqual(["ehm,"])
   })
 
   it("never cuts a word that is a filler only in another language", () => {
@@ -110,7 +111,7 @@ describe("fillerRanges", () => {
 
   it("leaves alone a sound that can be a word of its own", () => {
     const words = [w("Ah,", 0, 0.3), w("あの", 1, 1.3), w("그", 2, 2.2), w("er", 3, 3.2)]
-    for (const language of ["en", "he", "ja", "ko", "pt", null]) expect(fillerRanges(words, language)).toEqual([])
+    for (const language of ["en", "es", "he", "ja", "ko", "pt", null]) expect(fillerRanges(words, language)).toEqual([])
   })
 })
 
@@ -119,6 +120,7 @@ describe("transcriptLanguage", () => {
     expect(transcriptLanguage({ language: "eng", words: [] })).toBe("en")
     expect(transcriptLanguage({ language: "por" })).toBe("pt")
     expect(transcriptLanguage({ language: "pt-BR" })).toBe("pt")
+    expect(transcriptLanguage({ language: "spa" })).toBe("es")
     expect(transcriptLanguage({ language: "he" })).toBe("he")
   })
 

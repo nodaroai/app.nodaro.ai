@@ -71,6 +71,6 @@ describe("the emitted key manifest", () => {
 
   it("does not import a dictionary: vite.config.ts would make it a config dependency, and every string edit a dev-server restart", () => {
     const source = readFileSync(resolve(HERE, "..", "ui-strings-manifest-plugin.ts"), "utf8")
-    expect(source).not.toMatch(/from\s+["']\.\/(?:en|he|ja|ko|pt-br|dicts|platform-languages)["']/)
+    expect(source).not.toMatch(/from\s+["']\.\/(?:en|es|he|ja|ko|pt-br|dicts|platform-languages)["']/)
   })
 })

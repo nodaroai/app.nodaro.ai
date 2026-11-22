@@ -121,11 +121,11 @@ export const APP_FIELD_KINDS = ["select", "integer"]
 /** BullMQ queues a worker unit may run on (`videoQueue` in backend/src/lib/queue.ts). */
 export const QUEUES = ["video"]
 
-/** Locales a `strings.json` key must cover: the five complete dicts. */
-export const DICT_LOCALES = ["en", "he", "ja", "ko", "pt-br"]
+/** Locales a `strings.json` key must cover: the six complete dicts. */
+export const DICT_LOCALES = ["en", "es", "he", "ja", "ko", "pt-br"]
 
 /** Locales of the node-label tables (`labels.<locale>.ts`); English is the label itself. */
-export const LABEL_LOCALES = ["he", "ja", "ko", "pt-br"]
+export const LABEL_LOCALES = ["es", "he", "ja", "ko", "pt-br"]
 
 /** Manifest values that are never a unit (out of scope for v1 units). */
 export const NOT_A_UNIT = { "parameter-picker": "parameter pickers have five registries, two of them in packages — not units yet", macro: "canvas macros are not node types (CANVAS_MACROS) — never a unit" }

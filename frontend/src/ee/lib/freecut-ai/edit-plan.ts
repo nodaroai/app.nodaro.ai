@@ -167,13 +167,15 @@ const FILLERS_BY_LANGUAGE: Readonly<Record<string, ReadonlySet<string>>> = {
   ja: new Set(["えー", "えーと", "えっと", "あのー", "うーん"]),
   ko: new Set(["음", "으음"]),
   pt: new Set(["hã", "ãh", "ahn", "hum", "humm"]),
+  // Not "eh" or "este": both are words of their own in Spanish.
+  es: new Set(["ehh", "ehm", "em", "emm", "mmm"]),
 }
 
 /** Sounds that are a word in none of the languages served: cut whatever the language, or when it is not known. */
 const UNIVERSAL_FILLERS: ReadonlySet<string> = new Set(["umm", "uhh", "uhm", "erm", "hmm", "mmm"])
 
 // The transcriber answers ISO 639-3 ("eng"); other engines answer "en" or "pt-BR".
-const LANGUAGE_3_TO_2: Readonly<Record<string, string>> = { eng: "en", heb: "he", jpn: "ja", kor: "ko", por: "pt" }
+const LANGUAGE_3_TO_2: Readonly<Record<string, string>> = { eng: "en", heb: "he", jpn: "ja", kor: "ko", por: "pt", spa: "es" }
 
 /** The language a transcript says it is in, as a two-letter code; null when it does not say. */
 export function transcriptLanguage(json: unknown): string | null {
