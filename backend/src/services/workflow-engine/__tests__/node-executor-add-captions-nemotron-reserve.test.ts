@@ -8,6 +8,9 @@
  *     `add-captions:kinetic:nemotron:<N>m`, at the affordability preflight and
  *     the reservation alike, and the payload carries the hold to settle on;
  *   - an install that relays the transcription reserves the render alone.
+ * A rendered caption takes a video of at most 5 minutes (decided 2026-11-22,
+ * `checkAddCaptionsLength`, after the Nemotron measure as on the route): a
+ * longer one is refused the same way.
  *
  * Harness cloned from node-executor-video-depth-reserve.test.ts.
  */
@@ -73,6 +76,12 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
     const probed = await mockProbeVideoSource(url)
     return { durationSec: probed.durationSeconds, sizeBytes: probed.sizeBytes }
   },
+}))
+// The rendered caption's own length check (lib/add-captions-length.ts) reads through this module.
+const clip = vi.hoisted(() => ({ sec: 270 }))
+vi.mock("@/lib/video-utility-probe.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/video-utility-probe.js")>()),
+  probeClipLengthSec: vi.fn(async () => clip.sec),
 }))
 /** Whether this install relays a Nemotron transcription to the cloud (keyless, connected). */
 const cloud = vi.hoisted(() => ({ relays: false }))
@@ -158,6 +167,7 @@ describe("node-executor — Add Captions on Nemotron measures the video before r
   beforeEach(() => {
     vi.clearAllMocks()
     cloud.relays = false
+    clip.sec = 270
     mockDeleteEq.mockResolvedValue({ error: null })
     mockGetAppSettings.mockResolvedValue({ cost_markup_percent: 0 })
     mockCheckCredits.mockResolvedValue({ allowed: true, balance: 50000, watermark: false })
@@ -176,12 +186,25 @@ describe("node-executor — Add Captions on Nemotron measures the video before r
     }
   })
 
-  it("a 9:30 video reserves the render plus 10 minutes at BOTH gates, and the payload carries the hold", async () => {
-    mockProbeVideoSource.mockResolvedValue({ durationSeconds: 570, sizeBytes: 800 * 1024 * 1024 })
+  it("a 4:30 video reserves the render plus 5 minutes at BOTH gates, and the payload carries the hold", async () => {
+    mockProbeVideoSource.mockResolvedValue({ durationSeconds: 270, sizeBytes: 400 * 1024 * 1024 })
     await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(/reservation-sentinel|Credit reservation failed/)
-    expect((mockCheckCredits.mock.calls[0] as unknown[])[1]).toBe(addCaptionsNemotronMinutesId(10))
-    expect((mockReserveCredits.mock.calls[0] as unknown[])[2]).toBe(addCaptionsNemotronMinutesId(10))
-    expect(built.result.payload).toMatchObject({ duration_seconds: 570, bucketKey: addCaptionsNemotronMinutesId(10) })
+    expect((mockCheckCredits.mock.calls[0] as unknown[])[1]).toBe(addCaptionsNemotronMinutesId(5))
+    expect((mockReserveCredits.mock.calls[0] as unknown[])[2]).toBe(addCaptionsNemotronMinutesId(5))
+    expect(built.result.payload).toMatchObject({ duration_seconds: 270, bucketKey: addCaptionsNemotronMinutesId(5) })
+  })
+
+  it("a 9:30 video is refused by the render's 5-minute limit: the jobs row is deleted and nothing is reserved", async () => {
+    mockProbeVideoSource.mockResolvedValue({ durationSeconds: 570, sizeBytes: 800 * 1024 * 1024 })
+    clip.sec = 570
+    const err = await executeNode(makeNode(), {}, [], [], {}, makeCtx()).then(
+      () => { throw new Error("executeNode should have refused the video") },
+      (e: unknown) => e as Error & { errorCode?: string },
+    )
+    expect(err.errorCode).toBe("video_too_long")
+    expect(mockDeleteEq).toHaveBeenCalledWith("id", "test-job-id")
+    expect(mockCheckCredits).not.toHaveBeenCalled()
+    expect(mockReserveCredits).not.toHaveBeenCalled()
   })
 
   it("a video over 60 minutes is refused with the route's code: the jobs row is deleted and nothing is reserved", async () => {

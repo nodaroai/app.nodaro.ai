@@ -4164,8 +4164,8 @@ body you would pass to `run`: the platform prices it with the run route's own
 code — validation, measuring reference clips or a picture, the credit id and
 the amount — and starts nothing. Typed for `text-to-video`, `generate-video`,
 `video-to-video`, `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
-priced from the draft) and `edit-image`; `ai-avatar`, `cinematic-avatar` and
-`switchx` take their run bodies as-is, and `split-into-layers` is quotable too and
+priced from the draft) and `edit-image`; `ai-avatar`, `cinematic-avatar`,
+`switchx` and `lip-sync` take their run bodies as-is, and `split-into-layers` is quotable too and
 takes the body `client.media.splitIntoLayers` takes. Those are the types the
 platform can quote today (any other rejects with `400 quote_unsupported`). It
 rejects with the run's own `400` / `403` for a body, model or node the run would
@@ -6729,6 +6729,11 @@ delivery at the cost of latency/stability). `useSpeakerBoost` sharpens fidelity
 to the target speaker (small latency cost); `seed` makes the output reproducible
 across runs. `removeBackgroundNoise` off keeps
 the music/SFX bed under the new voice; on yields a clean voice-only result.
+The run is priced per started 10 seconds of the audio it revoices (a video's
+sound when `videoUrl` is sent), read by the server before anything is
+charged; audio longer than 5 minutes, or whose length cannot be read, is
+refused with a 400 (`audio_too_long` / `audio_unreadable`) and nothing is
+charged — see [Voice Changer](./nodes/ai-audio/voice-changer.md#pricing).
 Runs async — poll `client.jobs.get(jobId)`.
 
 ```ts

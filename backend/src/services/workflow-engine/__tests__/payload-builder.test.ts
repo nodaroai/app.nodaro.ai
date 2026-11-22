@@ -1402,6 +1402,8 @@ describe("buildPayload", () => {
       const result = buildPayload(n, jobId, { audioUrl: "https://cdn.example/a.mp3" })
       expect(result.jobName).toBe("voice-changer")
       expect(result.payload.voiceId).toBe("v1")
+      // Reserved on the per-10-second row once the run reads the audio (decided 2026-11-22).
+      expect(result.modelIdentifier).toBe("elevenlabs-voice-changer:per-10s")
     })
 
     it("voice-changer-pro passes ordered voice OBJECTS through whole — per-voice levers survive a workflow run", () => {

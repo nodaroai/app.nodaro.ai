@@ -34,6 +34,7 @@ import { assertNamedVoiceModelAllowed, assertUnnamedVoicesAllowed, assertVoicesA
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
 import { elevenlabsIsolationCostUsd } from "../../lib/pricing/elevenlabs-isolation-cost.js"
+import { elevenlabsVoiceChangerCostUsd } from "../../lib/pricing/elevenlabs-voice-changer-cost.js"
 import { runAudioIsolation } from "../../lib/audio-isolation-run.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
@@ -44,18 +45,17 @@ import { transcribe, type TranscribeProvider } from "../../providers/audio/trans
 import { buildTranscriptFromOutput } from "../../providers/audio/transcript-normalize.js"
 import type { Caption } from "@remotion/captions"
 import { extractYouTubeAudio, extractYouTubeAudioWithMeta } from "../../providers/audio/youtube-extractor.js"
-import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { checkExtractedVoiceChangerAudio, fetchVoiceChangerAudio } from "../../lib/voice-changer-run.js"
 import { extractAudioTrack, NoAudioTrackError } from "../../providers/video/extract-audio-track.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { classifyMediaSource, isVideoMode } from "../../providers/video/media-source.js"
-import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia, DUBBING_MAX_DURATION_SEC } from "../../providers/elevenlabs/dubbing.js"
-import { withinCapGrace } from "../../lib/measured-cap-grace.js"
-import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
+import { startDubbing, waitForDubbing, pollDubbingStatus, downloadDubbedMedia } from "../../providers/elevenlabs/dubbing.js"
 import { deliverDubbedMedia } from "../../lib/dubbing-delivery.js"
 import { startDubbingProjectLanguage } from "../../providers/elevenlabs/dubbing-project.js"
-import { effectiveDubbedSeconds } from "../../lib/dubbing-span.js"
+import { assertServiceSpanWithinHold, prepareDubbingUpload, type DubbingHeldSpan } from "../../lib/dubbing-source-bytes.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
 import { forcedAlignment, forcedAlignmentFromBuffer } from "../../providers/elevenlabs/forced-alignment.js"
@@ -1015,11 +1015,16 @@ const REPLICA_REFUSAL = /consent|replica|replication|voice sample|source audio|r
 const ONE_OFF_CLONE_UNCONSENTED_MESSAGE = "A cloned voice runs only with the consent of the person running it; this run did not carry it."
 
 const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
-  const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed } = job.data as {
+  const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed, voiceChangerUnits } = job.data as {
     jobId: string; audioUrl?: string; videoUrl?: string; voiceId: string; model?: string
     stability?: number; similarityBoost?: number; style?: number; removeBackgroundNoise?: boolean
-    useSpeakerBoost?: boolean; seed?: number
+    useSpeakerBoost?: boolean; seed?: number; voiceChangerUnits?: unknown
   }
+  // The units of the per-10-second row the run holds (the route's or the
+  // workflow run's reading of the audio, decided 2026-11-22). A job queued
+  // before the price followed the length, or the film pipeline's revoice,
+  // holds none: its audio is held to the 5-minute cap alone.
+  const heldUnits = typeof voiceChangerUnits === "number" ? voiceChangerUnits : undefined
   // B4c: the voice lock's backstop, FIRST — the voice the clip is converted
   // INTO, as the job's user, before the media is probed or downloaded (see
   // text-to-speech above). No lock: nothing is read.
@@ -1054,7 +1059,13 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     //    failure when the source clip is silent).
     const { audioPath, workDir } = await extractAudioTrack(sourceUrl)
     let newAudioR2Url: string
+    // The length of the sound sent, which the run's provider cost is recorded from.
+    let sentSec = 0
     try {
+      // Never send audio the price did not see: the extracted track's length,
+      // by the reader that priced the run, within the units it holds and the
+      // 5-minute cap — else the job fails here and its hold is refunded.
+      sentSec = await checkExtractedVoiceChangerAudio(audioPath, heldUnits)
       const sourceAudio = await fs.readFile(audioPath)
       await setJobProgress(job, ctx.jobId, 20)
       const revoiced = await withProgressRamp(
@@ -1080,7 +1091,8 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
       const { ok } = await finalizeJobWithMedia({
         jobId: ctx.jobId,
         jobType: "voice-clone",
-        result: { url: newAudioR2Url, cost: null, providerUsed: "elevenlabs-direct" },
+        // What the run cost is recorded (not metered: the commit is the hold).
+        result: { url: newAudioR2Url, cost: voiceChangerRunCost(sentSec, heldUnits), providerUsed: "elevenlabs-direct" },
         mediaUrl: newAudioR2Url,
         extraOutputData: { sourceHasVideo: source.hasVideo },
       })
@@ -1105,8 +1117,11 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     await setJobProgress(job, ctx.jobId, 100)
 
     if (!await shouldSaveJobResult(ctx.jobId)) return
+    const providerCost = voiceChangerRunCost(sentSec, heldUnits)
     const ok = await markJobCompleted(ctx.jobId, {
       output_data: { videoUrl: videoR2Url, audioUrl: newAudioR2Url, thumbnailUrl: thumbUrl },
+      // What the run cost, recorded beside its charge (the commit is the hold).
+      ...(providerCost !== null ? { provider_cost: providerCost } : {}),
     })
     if (!ok) return
     await commitJobCredits(ctx.usageLogId, ctx.jobId)
@@ -1115,14 +1130,18 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     return
   }
 
-  // --- Audio mode (unchanged): speech-to-speech → audio. ---
+  // --- Audio mode: speech-to-speech → audio. ---
   if (!audioUrl) throw new Error("voice-changer requires audioUrl or videoUrl")
   console.log(`[worker] voice-changer ${ctx.jobId}`)
+  // The audio is fetched ONCE (SSRF-safe), its length read from that copy and
+  // held to the units the run holds and the 5-minute cap, and those exact bytes
+  // are sent — the link is never fetched again.
+  const { bytes: sourceAudio, sentSec } = await fetchVoiceChangerAudio(audioUrl, heldUnits)
   const audioBuffer = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => voiceChangerFromUrl(audioUrl, voiceId, opts),
+    () => directVoiceChanger(sourceAudio, voiceId, opts),
   )
   await setJobProgress(job, ctx.jobId, 50)
   // POST-PROVIDER: the speech-to-speech provider already delivered `audioBuffer`
@@ -1132,11 +1151,24 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "voice-clone",
-    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    // What the run cost is recorded (not metered: the commit is the hold).
+    result: { url: r2Url, cost: voiceChangerRunCost(sentSec, heldUnits), providerUsed: "elevenlabs-direct" },
     mediaUrl: r2Url,
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+/**
+ * What a Voice Changer run cost the platform (`jobs.provider_cost`): the length
+ * sent at the vendor's rate, recorded only for a run priced by its audio's
+ * length (one that holds units). A run charged the flat row (the film
+ * pipeline's revoice, a job queued before the price followed the length)
+ * records none: its charge does not follow the length, and the cost check
+ * would read every long one as a loss.
+ */
+function voiceChangerRunCost(sentSec: number, heldUnits: number | undefined): number | null {
+  return heldUnits !== undefined && sentSec > 0 ? elevenlabsVoiceChangerCostUsd(sentSec) : null
 }
 
 // Poll budget the dubbing worker will spend inline before PARKING the job for
@@ -1147,6 +1179,7 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
 // download + delivery. Never fail+refund a dub ElevenLabs is still rendering
 // and will still bill.
 const DUBBING_WORKER_POLL_BUDGET_MS = 20 * 60 * 1000
+
 
 const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   const d = job.data as {
@@ -1185,11 +1218,25 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   // the AUDIO slot is a request for audio. sourceUrl mode is decided by
   // ElevenLabs' own probe (media_metadata) after start — we never fetch it.
   const uploadedUrl = d.videoUrl || d.audioUrl
+  const slot = d.videoUrl ? "video" : "audio"
+  // What the run was held for: the span measured before the hold, or the 30-minute ceiling.
+  const held: DubbingHeldSpan = { probedDurationSec: d.probedDurationSec, startTime: d.startTime, endTime: d.endTime }
   let videoMode = false
   let sourceMime: string | undefined
   let sourceExt: string | undefined
-  if (uploadedUrl) {
-    const source = await classifyMediaSource(uploadedUrl, d.videoUrl ? "video" : "audio")
+  let sourceBytes: Buffer | undefined
+  if (uploadedUrl && !d.projectTaskId) {
+    // A new dub's file is fetched ONCE, its sound held to the minutes the run
+    // was paid for, and uploaded as those exact bytes (lib/dubbing-source-bytes.ts):
+    // a file that plays past the hold is refused here, before the service is asked.
+    const prepared = await prepareDubbingUpload(uploadedUrl, slot, held)
+    videoMode = prepared.videoMode
+    sourceMime = prepared.mime
+    sourceExt = prepared.ext
+    sourceBytes = prepared.bytes
+  } else if (uploadedUrl) {
+    // A language added to a project dub uploads nothing: the mode is read for delivery only.
+    const source = await classifyMediaSource(uploadedUrl, slot)
     videoMode = isVideoMode(source)
     // Real mime/extension for the upload — the old audio.mp3-for-everything
     // upload is why video-in used to yield audio-out.
@@ -1218,7 +1265,7 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
 
   const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
   const startNewDub = () => startDubbing(
-    uploadedUrl ? { url: uploadedUrl, mime: sourceMime, ext: sourceExt } : { sourceUrl: d.sourceUrl },
+    sourceBytes ? { bytes: sourceBytes, mime: sourceMime, ext: sourceExt } : { sourceUrl: d.sourceUrl },
     d.targetLanguage,
     {
       sourceLang: d.sourceLanguage,
@@ -1240,27 +1287,17 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     : await startNewDub()
   await setJobProgress(job, ctx.jobId, 20)
 
-  // Post-hoc duration + mode check for spans the ROUTE could not probe
-  // (sourceUrl, probe failures): ElevenLabs probed the media, the 30-min
-  // policy still holds — fail fast BEFORE polling long, not after. Their
-  // metadata also settles the mode for sourceUrl dubs.
+  // Post-hoc duration + mode check for spans the worker did not measure itself
+  // (sourceUrl, probe failures): ElevenLabs probed the media — fail fast BEFORE
+  // polling long, not after. Their metadata also settles the mode for
+  // sourceUrl dubs.
   if (!d.probedDurationSec || !uploadedUrl) {
     const status = await pollDubbingStatus(dubbingId)
     const meta = status.media_metadata
     if (!uploadedUrl && meta?.content_type) {
       videoMode = meta.content_type.startsWith("video/")
     }
-    if (typeof meta?.duration === "number" && meta.duration > 0 && !d.probedDurationSec) {
-      // The span as read, unrounded: a hair past the cap (the 0.05 s the hold forgives) is the cap's, as before the
-      // run (`dubbingSpanAtCap`) — the dub has started, so nothing is cut; it is settled to what was dubbed.
-      const effective = effectiveDubbedSeconds(meta.duration, d.startTime, d.endTime) ?? meta.duration
-      if (!withinCapGrace(effective, DUBBING_MAX_DURATION_SEC, CLIP_PRICE_GRACE_SEC)) {
-        throw new Error(
-          `The span to dub is ${Math.ceil(effective / 60)} minutes; the maximum is ${DUBBING_MAX_DURATION_SEC / 60} minutes. ` +
-          `Trim the clip, or set a start/end window to dub part of it.`,
-        )
-      }
-    }
+    if (typeof meta?.duration === "number" && meta.duration > 0) assertServiceSpanWithinHold(meta.duration, held)
   }
 
   // Inline poll budget: expected render time x3 (floor 10 min), capped by the
@@ -1292,6 +1329,12 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   // reconcile lane already re-derives at delivery time; the worker must too.
   if (!uploadedUrl && finalStatus.media_metadata?.content_type) {
     videoMode = finalStatus.media_metadata.content_type.startsWith("video/")
+  }
+  // A measured link the service read longer than its hold is never delivered
+  // (the early poll can race the service's own fetch of the link).
+  const finalSourceSec = finalStatus.media_metadata?.duration
+  if (!uploadedUrl && typeof d.probedDurationSec === "number" && typeof finalSourceSec === "number" && finalSourceSec > 0) {
+    assertServiceSpanWithinHold(finalSourceSec, held)
   }
   await setJobProgress(job, ctx.jobId, 70)
 

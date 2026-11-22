@@ -42,6 +42,11 @@ vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({
 }))
 vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.directDialogue }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.voiceChangerFromUrl, directVoiceChanger: mocks.directVoiceChanger }))
+// The audio a Voice Changer sends, read again before it is sent (lib/voice-changer-run.ts, its own test): within its hold here.
+vi.mock("@/lib/voice-changer-run.js", () => ({
+  fetchVoiceChangerAudio: vi.fn(async () => ({ bytes: Buffer.from("source"), sentSec: 8 })),
+  checkExtractedVoiceChangerAudio: vi.fn(async () => 8),
+}))
 vi.mock("@/providers/video/extract-audio-track.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/extract-audio-track.js")>()),
   extractAudioTrack: mocks.extractAudioTrack,
@@ -62,6 +67,12 @@ vi.mock("@/providers/elevenlabs/dubbing.js", () => ({
   pollDubbingStatus: vi.fn(),
   downloadDubbedMedia: vi.fn(),
   DUBBING_MAX_DURATION_SEC: 30 * 60,
+  DUBBING_MAX_SOURCE_BYTES: 500 * 1024 * 1024,
+}))
+// A new dub's file, fetched once and held to its hold before it is sent (lib/dubbing-source-bytes.ts, its own test).
+vi.mock("@/lib/dubbing-source-bytes.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  prepareDubbingUpload: vi.fn(async () => ({ bytes: Buffer.from("dub-source"), videoMode: false, mime: "audio/mpeg", ext: "mp3" })),
 }))
 vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalize }))
 vi.mock("../../shared.js", async (importOriginal) => ({

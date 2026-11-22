@@ -192,6 +192,50 @@ describe("reconcileElevenLabsJob", () => {
     expect(mocks.refundMock).not.toHaveBeenCalled()
   })
 
+  // A dub parked for its length (or still dubbing when the worker stopped
+  // waiting) is delivered here: the service's own reading is held to the hold
+  // on this lane too, never delivered past it.
+  it("a measured dub the service read as longer than its hold is failed and refunded, never delivered", async () => {
+    mocks.fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          dubbing_id: "dub-1", status: "dubbed", target_languages: ["en"],
+          media_metadata: { content_type: "audio/mpeg", duration: 1800 },
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+
+    await reconcileElevenLabsJob(row({ id: "j-el-long", input_data: { targetLanguage: "en", audioUrl: "https://x/talk.mp3", probedDurationSec: 60 } }))
+
+    expect(mocks.uploadBufferMock).not.toHaveBeenCalled()
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(mocks.markCompletedMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-el-long")
+    expect(lastJobsUpdate().status).toBe("failed")
+    // Final at once: never bumped to be tried again.
+    expect(mocks.jobsUpdateMock.mock.calls.some((c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1)).toBe(false)
+  })
+
+  it("a measured dub the service read within its hold is delivered, and records the larger of the two spans", async () => {
+    mocks.fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          dubbing_id: "dub-1", status: "dubbed", target_languages: ["en"],
+          media_metadata: { content_type: "audio/mpeg", duration: 60.5 },
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+
+    await reconcileElevenLabsJob(row({ input_data: { targetLanguage: "en", audioUrl: "https://x/talk.mp3", probedDurationSec: 59.8 } }))
+
+    // 59.8 s was held as one minute; the service read 60.5 s (within the hold's second of tolerance), and the
+    // cost recorded is of the larger span: two started minutes on the dubbing API.
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ cost: 1 }) }))
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
   it("finalize throws → bumps reconcile_attempts, no refund, no propagation", async () => {
     mockDubbedFetches()
     mocks.finalizeMock.mockRejectedValueOnce(new Error("DB blip"))

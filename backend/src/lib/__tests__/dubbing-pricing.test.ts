@@ -24,6 +24,13 @@ describe("Hebrew (the project lane)", () => {
     expect(payload.probedDurationSec).toBe(61)
     expect(mocks.rate).toHaveBeenCalledWith("elevenlabs-dubbing-v2")
   })
+  it("stamps the length as measured, never rounded up: a re-encoded 60 s cut held for one minute is limited and recorded as one", async () => {
+    mocks.probe.mockResolvedValue(60.011)
+    mocks.rate.mockResolvedValue({ creditCost: 1100 })
+    const payload: Record<string, unknown> = { targetLanguage: "he", videoUrl: "https://r2.example/video.mp4" }
+    expect(await projectDubbingCreditOverride("dubbing", payload)).toBe(1210)
+    expect(payload.probedDurationSec).toBe(60.011)
+  })
   it.each([0, NaN, 1801])("rejects an unpriceable span before reserving: %s", async (duration) => {
     mocks.probe.mockResolvedValue(duration)
     await expect(projectDubbingCreditOverride("dubbing", { targetLanguage: "he", videoUrl: "https://r2.example/video.mp4" })).rejects.toThrow("30 minutes")

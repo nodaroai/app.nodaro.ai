@@ -120,6 +120,9 @@ import { stampVideoDepthInput, videoDepthReserveId } from "../../lib/video-depth
 import { motionTransferReserveId, motionTransferStampedBaseCredits, stampMotionTransferInput } from "../../lib/motion-transfer-input.js"
 import { stampVideoToVideoClipInput, videoToVideoReserveId, videoToVideoStampedBaseCredits } from "../../lib/video-to-video-clip-input.js"
 import { audioIsolationReserveId, audioIsolationStampedBaseCredits, stampAudioIsolationInput } from "../../lib/audio-isolation-input.js"
+import { stampVoiceChangerInput, voiceChangerReserveId, voiceChangerStampedBaseCredits } from "../../lib/voice-changer-input.js"
+import { stampFaceSwapInput } from "../../lib/face-swap-input.js"
+import { checkAddCaptionsLength } from "../../lib/add-captions-length.js"
 import { stampPitchTempoDuration, pitchTempoReserveId } from "../../lib/pitch-tempo-duration.js"
 import { stampNemotronTranscribeInput, nemotronTranscribeReserveId } from "../../lib/nemotron-transcribe-input.js"
 import { stampAddCaptionsNemotronInput, addCaptionsNemotronReserveId } from "../../lib/add-captions-nemotron.js"
@@ -1834,6 +1837,23 @@ export async function computeAudioIsolationCreditOverride(
 }
 
 /**
+ * Voice Changer is priced per started ten seconds of the audio it revoices:
+ * the per-10-second row × the units `stampVoiceChangerInput` read, rounded up
+ * once, marked up once at the row — what the route's guard holds for the same
+ * audio. Undefined for every other job.
+ */
+export async function computeVoiceChangerCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  reserveId: string,
+): Promise<number | undefined> {
+  const base = await voiceChangerStampedBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), reserveId)
+}
+
+/**
  * LTX 2.3 Pro Retake is priced per second of the replaced window. The workflow
  * run reserves what the route's guard charges for the same request — the
  * per-second row times the window the payload sends (lib/ltx-retake-credits.ts)
@@ -2670,6 +2690,29 @@ async function executeWorkerNode(
     err.errorCode = isolationRefusal.code
     throw err
   }
+  // Voice Changer: the same — read the length of the audio it revoices (the
+  // video's when it is given one), refuse audio past 5 minutes or that cannot
+  // be read, and stamp the length and the units it is held and charged —
+  // before input_data is written and before anything is reserved. Every
+  // edition. A refusal leaves no jobs row.
+  const voiceChangerRefusal = await stampVoiceChangerInput(jobName, payload)
+  if (voiceChangerRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(voiceChangerRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = voiceChangerRefusal.code
+    throw err
+  }
+  // Face Swap: the route's own rule — read the target video's length, refuse a
+  // video past 60 seconds or that cannot be read, and stamp the length
+  // (decided 2026-11-22) — before input_data is written and before anything is
+  // reserved. Every edition. A refusal leaves no jobs row.
+  const faceSwapRefusal = await stampFaceSwapInput(jobName, payload)
+  if (faceSwapRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(faceSwapRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = faceSwapRefusal.code
+    throw err
+  }
   // Video Mask: the same — measure the clip by the route's rule and stamp the
   // price row before input_data is written; a clip the route refuses (unreadable,
   // over the cap) leaves no jobs row.
@@ -2881,6 +2924,17 @@ async function executeWorkerNode(
     err.errorCode = captionsNemotronRefusal.code
     throw err
   }
+  // Add Captions drawn by the Remotion render (decided 2026-11-22): a video
+  // past 5 minutes, or one whose length cannot be read, is refused — after the
+  // Nemotron measure, in the route's order (its preHandler, then the guard's
+  // `beforePricing` step). Every edition. A refusal leaves no jobs row.
+  const captionsLengthRefusal = await checkAddCaptionsLength(jobName, payload)
+  if (captionsLengthRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(captionsLengthRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = captionsLengthRefusal.code
+    throw err
+  }
 
   // 2b' (cont.). Video Depth: the same shape. Measure the clip by the route's own
   // rule, refuse one the provider cannot take (over its frame/seconds cap, or
@@ -3060,6 +3114,8 @@ async function executeWorkerNode(
         videoToVideoReserveId(jobName, payload) ??
         // Audio Isolation: its per-10-second row, once `stampAudioIsolationInput` read the audio.
         audioIsolationReserveId(jobName, payload) ??
+        // Voice Changer: its per-10-second row, once `stampVoiceChangerInput` read the audio.
+        voiceChangerReserveId(jobName, payload) ??
         pitchTempoReserveId(jobName, payload) ??
         nemotronTranscribeReserveId(jobName, payload) ??
         addCaptionsNemotronReserveId(jobName, payload) ??
@@ -3092,6 +3148,7 @@ async function executeWorkerNode(
         (await computeMotionTransferRateCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeVideoToVideoClipCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeAudioIsolationCreditOverride(jobName, payload, reserveModelIdentifier)) ??
+        (await computeVoiceChangerCreditOverride(jobName, payload, reserveModelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??

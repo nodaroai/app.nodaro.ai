@@ -628,6 +628,32 @@ describe("lip-sync handler", () => {
     expect(result).not.toHaveProperty("meteredCost")
   })
 
+  it("LatentSync is charged what its run cost, marked up once and never above the bucket it held", async () => {
+    replicateLane.lipSync.mockResolvedValueOnce({ videoUrl: "https://replicate.test/out.mp4", cost: 0.0975 })
+    const job = makeJob("lip-sync", {
+      videoUrl: "https://clip.mp4",
+      audioUrl: "https://speech.mp3",
+      provider: "latentsync",
+      audioDurationSec: 12,
+      lipSyncBilledSeconds: 15,
+    })
+    await handler(job as never, makeCtx())
+
+    const input = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
+    // The count-based settle (`meteredBaseCredits`): what the run cost, in base
+    // credits, clamped at the reservation — never collected above it.
+    expect(input.meteredBaseCredits).toBe(49)
+    expect(input.result.cost).toBe(0.0975)
+    expect(input.result).not.toHaveProperty("meteredCost")
+    expect(input.result).not.toHaveProperty("collectOverHold")
+  })
+
+  it("a LatentSync run that reports no cost settles at its hold", async () => {
+    replicateLane.lipSync.mockResolvedValueOnce({ videoUrl: "https://replicate.test/out.mp4", cost: null as unknown as number })
+    await handler(makeJob("lip-sync", { videoUrl: "https://clip.mp4", audioUrl: "https://speech.mp3", provider: "latentsync", lipSyncBilledSeconds: 15 }) as never, makeCtx())
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0][0]).not.toHaveProperty("meteredBaseCredits")
+  })
+
   // --- fal branch (sync-lipsync-v3) -------------------------------------------
   it("routes sync-lipsync-v3 to the fal branch (falLipSync), NOT the KIE lipSync", async () => {
     const job = makeJob("lip-sync", {

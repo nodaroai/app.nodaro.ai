@@ -32,6 +32,8 @@ import {
   videoToVideoSentResolution,
   AUDIO_ISOLATION_RATE_ID,
   audioIsolationEstimateUnits,
+  VOICE_CHANGER_RATE_ID,
+  voiceChangerEstimateUnits,
   AI_AVATAR_DURATION_BUCKETS,
   type AiAvatarEngine,
   type AiAvatarResolution,
@@ -2389,13 +2391,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "elevenlabs-dialogue:per-100-chars": 4, // one started 100 characters across lines (decided 2026-10-06)
   "elevenlabs-dialogue-v4": 25,  // direct ElevenLabs API; the same flat price as v3 dialogue, per request
   "elevenlabs-dialogue-v4:per-100-chars": 4, // as v3 dialogue: one started 100 characters across lines (decided 2026-10-06)
-  "elevenlabs-voice-changer": 40,  // ElevenLabs speech-to-speech
+  "elevenlabs-voice-changer": 40,  // ElevenLabs speech-to-speech: the voiced-video add-on and the film pipeline's revoice, flat
+  // Voice Changer, per started 10 seconds of the audio it revoices as the server
+  // reads it (decided 2026-11-22): a run is charged this × its units, at least
+  // one, up to 5 minutes (`voiceChangerUnits`). Seeded by migration 681. The
+  // flat row above stays for the add-on and the pipeline, which still charge it.
+  "elevenlabs-voice-changer:per-10s": 10,
   // ElevenLabs dubbing (async) — PER MINUTE of the dubbed span (route
-  // computeCredits: ceil(seconds/60) x this base, min 1 minute; 120s
-  // fallback bucket when un-probeable). Was flat 80; 40/min prices the
-  // typical ~2-min clip identically. The model_pricing row is the same
-  // per-minute base (migration 359).
-  "elevenlabs-dubbing": 40,
+  // computeCredits: the started minutes x this base, min 1 minute; the 30-minute
+  // ceiling when un-probeable). 260 per minute since 2026-11-22 (was 40). The
+  // model_pricing row is the same per-minute base (migration 682).
+  "elevenlabs-dubbing": 260,
   "elevenlabs-dubbing-v2": usdToCredits(2.2),
   "elevenlabs-voice-remix": 40,    // ElevenLabs voice remix/preview
   "elevenlabs-voice-design": 50,   // ElevenLabs voice design (full controls)
@@ -2539,9 +2545,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "text-to-audio": 30,
   "lip-sync": 130,
   // LatentSync (Replicate). The bucket of the audio's length is the run's
-  // HOLD; the charge is what the run used (`isLipSyncChargedAtRunCost`: the
-  // worker commits the provider's cost, releasing the rest or collecting an
-  // overrun). Rows: 40 credits plus 4 per second of the bucket — a run has a
+  // HOLD and the most it is charged (decided 2026-11-22: the price shown); the
+  // charge is what the run used (`isLipSyncChargedAtRunCost`: the worker
+  // commits the provider's cost as base credits, marked up and releasing the
+  // rest of the hold). Rows: 40 credits plus 4 per second of the bucket — a run has a
   // part that does not grow with its length (measured on real runs: clips of
   // 8 to 13 s settled at 56 to 63 base credits).
   // The bare row is the single price from before the buckets, and no run
@@ -2569,7 +2576,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   // defensive lookups when the route's computeCredits hook isn't reached.
   // Real reservation uses `ltx-2.3-pro-retake:per-second × retakeDuration`.
   "video-retake": 1000,
-  "roop-face-swap": 130,           // Replicate ×
+  // Face Swap (Replicate, billed by GPU time): the least a run is charged; a
+  // run whose processing cost more is charged what it cost (`faceSwapSettle`).
+  // 119 since 2026-11-22 (was 130; migration 682): with Face Swap's own pricing
+  // setting in Admin, the price shown stays where it was.
+  "roop-face-swap": 119,
   "generate-mask": 50,             // adirik/grounded-sam (Replicate) — segmentation mask
   // ── Video Mask (SAM 3.1 / SAM 3 on fal, video-mask node) — one row per model
   // and clip length at the 30 fps basis (`videoMaskCreditId` in @nodaro/shared;
@@ -6824,6 +6835,23 @@ function audioIsolationWireSecOf(
 }
 
 /**
+ * The length of the audio a Voice Changer revoices, as `wireSec` reads it (the
+ * walk the server estimate shares): its `video` wire's when one is wired (a
+ * video wins, as the run does), else its `audio` wire's; undefined when the
+ * graph does not know it (the estimate then quotes the 5-minute cap).
+ */
+function voiceChangerWireSecOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): number | undefined {
+  if (node.id === undefined || !edges) return undefined
+  const inputs = edges.filter((e) => e.target === node.id)
+  const wire = inputs.find((e) => e.targetHandle === "video") ?? inputs.find((e) => e.targetHandle === "audio" || e.targetHandle == null)
+  return wire === undefined ? undefined : wireSec(wire.source)
+}
+
+/**
  * The PRICED length a Video Mask is quoted at when a run is estimated: the
  * clip its `video` wire brings (`wireSec`: the measured walk for Video Mask,
  * the editor's reading; a run estimate's wire reading for Video Face Mesh), at
@@ -7515,6 +7543,14 @@ export function graphPricingUnits(
   // editor's rule too). The run reads the real audio before it holds anything.
   if (node.type === "audio-isolation") {
     return audioIsolationEstimateUnits(audioIsolationWireSecOf(node, edges, (sourceId) => measuredSec(sourceId, "audio-isolation")))
+  }
+  // Voice Changer: one per-10-second unit per started ten seconds of the audio
+  // it revoices — its `video` wire's when one is wired, else its `audio`
+  // wire's — as the shared wire-length walk reads it (with its slack), else the
+  // 5-minute cap's 30 (`voiceChangerEstimateUnits`, the editor's rule too). The
+  // run reads the real audio before it holds anything.
+  if (node.type === "voice-changer") {
+    return voiceChangerEstimateUnits(voiceChangerWireSecOf(node, edges, (sourceId) => measuredSec(sourceId, "voice-changer")))
   }
   // Nodaro Video Upscale: its tier's four-second row × the billed seconds ÷ 4,
   // at the length its video wire gives as the measured walk reads it, with
@@ -8345,6 +8381,11 @@ export function getNodeModelIdentifier(
   // estimate multiplies by the units (graphPricingUnits). Above the `!provider`
   // bail: the node names no model.
   if (nodeType === "audio-isolation") return AUDIO_ISOLATION_RATE_ID
+
+  // Voice Changer (decided 2026-11-22): its per-10-second row, which every
+  // estimate multiplies by the units (graphPricingUnits). Above the `!provider`
+  // bail: the node names its speech-to-speech `model`, never a provider.
+  if (nodeType === "voice-changer") return VOICE_CHANGER_RATE_ID
 
   // Motion Transfer (decided 2026-11-18): its per-second rate row, multiplied
   // by the units of its driving video's length as the graph gives it, else of

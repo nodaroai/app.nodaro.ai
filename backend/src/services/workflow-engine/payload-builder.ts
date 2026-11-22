@@ -123,6 +123,7 @@ import {
   buildVideoCreditModelIdentifier,
   motionTransferEstimatePrice,
   AUDIO_ISOLATION_RATE_ID,
+  VOICE_CHANGER_RATE_ID,
   motionTransferResolution,
   isClipPricedV2vProvider,
   videoToVideoClipRateOf,
@@ -6685,7 +6686,12 @@ function buildPayloadOf(
       refuseVoicesTheLockRefuses(voicesToJudge([targetVoice]), buildCtx, "The selected voice is not available on this deployment.")
       // Dual-mode: a wired video input switches the worker to video mode
       // (demux → STS → remux). Video wins over audio when both are present.
-      return simpleResult("voice-changer", "elevenlabs-voice-changer", {
+      // Reserved on the per-10-second row; the run reads the length of the
+      // audio it revoices (the video's when it is given one) before it reserves
+      // (`stampVoiceChangerInput`, node-executor) and the units it is charged
+      // ride the payload from there. The model that runs is
+      // `elevenlabs-voice-changer` (`PAYLOAD_MODEL_OF_JOB`, lib/run-model.ts).
+      return simpleResult("voice-changer", VOICE_CHANGER_RATE_ID, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,

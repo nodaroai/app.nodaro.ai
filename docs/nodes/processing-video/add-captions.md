@@ -26,6 +26,10 @@ The Add Captions node automatically generates captions from video audio (or take
 
 Look, Font, Font weight, Uppercase, Outline colour/width, Vertical position and Max words per line apply to **every** style, `subtitle` included (Max words per line is simply inert on `word-pop`); only **Spoken-word colour** and **Animate** are kinetic-only. Setting any of the every-style levers on a `subtitle` switches its render from the cheap FFmpeg path to Remotion, so that subtitle **bills at the kinetic price** (see [Kinetic style look](#kinetic-style-look)).
 
+### Video length
+
+A caption the Remotion render draws — a kinetic style, a `subtitle` with any styling lever or with timed captions (`captions[]`, a wired transcript), or one made by transcribing the video — takes a video of up to **5 minutes**. Its length is read before anything is charged, on every path (the editor, a workflow or app run, the API, the SDK and MCP): a longer video, or one whose length cannot be read, is refused with `400 video_too_long` or `400 video_unreadable` and nothing is charged. A video up to 0.05 seconds past the limit is accepted. The render reads the file again before it starts and refuses a longer one the same way, refunded in full. Trim a longer video first. A plain `subtitle` `text` burned by FFmpeg is not limited.
+
 ### Caption Styles
 
 - **subtitle** — Standard subtitle appearance. Given `text`, it is one fixed block shown for the whole video, never transcribed over — the cheap FFmpeg burn when plain, the same block drawn by Remotion when it carries a styling lever. Given timed captions, a wired transcript, or no `text` at all (it then auto-transcribes), it shows one held phrase line at a time (Remotion)
@@ -168,16 +172,14 @@ The engines follow what the deployment offers. On a deployment that restricts it
 
 #### Nemotron 3.5 Transcribe
 
-On `nemotron-3-5-transcribe` a render that transcribes is **one charge: the caption render plus the video's started minutes**, up to 60 minutes. The words always come with word timings (Nemotron never translates here). The video is measured before anything is held, and the price of that length is held; when the run is done it is charged for the length the model actually decoded, so a shorter decoded length releases the difference and a longer one takes it from your balance. A video whose length cannot be read up front holds the 60-minute price and is charged the same way. Only the video's audio track is sent for transcription, so Nemotron's own file-size limit does not apply to the video; it must be an https link to a public host and at most 60 minutes long, or the call is a `400` with nothing reserved (`invalid_media_url` for a link that is not https, `media_link_bad_host` for a host that does not exist or a private address — see [media links](../../features/media-links.md) — and `media_duration_exceeds_limit`). The 60 minutes are exact: a video a fraction of a second longer is refused too, with a message that asks for 60 minutes or less. A Nemotron node that brings its own `captions[]`, a wired `transcript` or a `subtitle`'s `text` transcribes nothing and costs the render alone.
+On `nemotron-3-5-transcribe` a render that transcribes is **one charge: the caption render plus the video's started minutes**, for a video of up to 5 minutes, the render's limit ([Video length](#video-length)). The words always come with word timings (Nemotron never translates here). The video is measured before anything is held, and the price of that length is held; when the run is done it is charged for the length the model actually decoded, so a shorter decoded length releases the difference and a longer one takes it from your balance. A video whose length cannot be read up front is refused before anything is held ([Video length](#video-length)). Only the video's audio track is sent for transcription, so Nemotron's own file-size limit does not apply to the video; it must be an https link to a public host, or the call is a `400` with nothing reserved (`invalid_media_url` for a link that is not https, `media_link_bad_host` for a host that does not exist or a private address — see [media links](../../features/media-links.md)). A Nemotron node that brings its own `captions[]`, a wired `transcript` or a `subtitle`'s `text` transcribes nothing and costs the render alone.
 
 | Video length | Credits |
 |--------------|---------|
 | 0:45 | **57**<!-- credits: add-captions:kinetic:nemotron:1m --> |
 | 1:01 | **57**<!-- credits: add-captions:kinetic:nemotron:1m --> |
 | 1:05 | **58**<!-- credits: add-captions:kinetic:nemotron:2m --> |
-| 10:00 | **64**<!-- credits: add-captions:kinetic:nemotron:10m --> |
-| 30:00 | **81**<!-- credits: add-captions:kinetic:nemotron:30m --> |
-| 60:00 | **105**<!-- credits: add-captions:kinetic:nemotron:60m --> |
+| 5:00 | **60**<!-- credits: add-captions:kinetic:nemotron:5m --> |
 
 **Up to a second past a minute is the minute below.** A video up to 1 second past a whole minute is held and charged as that minute: 1:00.8 is held and charged one minute, 57 credits<!-- credits: add-captions:kinetic:nemotron:1m -->. A cut or a join that is re-encoded with its sound often measures a few hundredths of a second past its length (a 60-second cut can measure 60.01 seconds), and the decoded length can differ from the file's own by as much. Past that second, the next minute starts.
 

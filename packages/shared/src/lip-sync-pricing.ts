@@ -179,12 +179,13 @@ export function isPerSecondLipSyncProvider(provider: string): boolean {
 
 /**
  * Bucketed lip-sync models whose bucket row is a HOLD, not the charge (decided
- * 2026-11-18): the run is charged what it used once it ends. Less than the
- * hold releases the rest; more is collected from the payer's balance. The
- * work such a model does grows with its audio's length AND with settings the
- * bucket cannot see (LatentSync's inference steps, the size of its video), so
- * one fixed row per bucket would be wrong for most runs. Every other bucketed
- * model is charged its bucket row as it is.
+ * 2026-11-18): the run is charged what it used once it ends, and the rest of
+ * the hold is released. The hold is the most it is charged (decided
+ * 2026-11-22): it is the price shown before the run, so a run that cost more
+ * is charged the hold. The work such a model does grows with its audio's
+ * length AND with settings the bucket cannot see (LatentSync's inference
+ * steps, the size of its video), so one fixed row per bucket would be wrong
+ * for most runs. Every other bucketed model is charged its bucket row as it is.
  *
  * A member MUST be a bucketed model (`isPerSecondLipSyncProvider`): the hold is
  * its bucket row. `lip-sync-pricing.test.ts` holds that.

@@ -25,6 +25,8 @@ import { createWorkDir, cleanupWorkDir, probeMediaDuration } from "../providers/
 import { DUBBING_FALLBACK_SECONDS } from "../providers/elevenlabs/dubbing.js"
 import { dubbingBaseCreditsFor, effectiveDubbedSeconds } from "./dubbing-span.js"
 import { dubbingModelIdOfRequest } from "./dubbing-model.js"
+import { assertServiceSpanWithinHold } from "./dubbing-source-bytes.js"
+import { elevenlabsDubbingCostUsd } from "./pricing/elevenlabs-dubbing-cost.js"
 import { extractAudioTrack } from "../providers/video/extract-audio-track.js"
 import {
   commitJobCredits,
@@ -68,6 +70,10 @@ interface DubbingSettleContext {
   readonly modelId: string
   readonly startTime?: number
   readonly endTime?: number
+  /** The span measured before the hold, for a run not held at the ceiling. */
+  readonly probedDurationSec?: number
+  /** The dub asked the service for its own watermark (a lower vendor rate). */
+  readonly watermark: boolean
 }
 
 function settleContextOf(request: Readonly<Record<string, unknown>> | undefined): DubbingSettleContext {
@@ -77,6 +83,8 @@ function settleContextOf(request: Readonly<Record<string, unknown>> | undefined)
     modelId: dubbingModelIdOfRequest(input),
     startTime: typeof input.startTime === "number" ? input.startTime : undefined,
     endTime: typeof input.endTime === "number" ? input.endTime : undefined,
+    probedDurationSec: typeof input.probedDurationSec === "number" && input.probedDurationSec > 0 ? input.probedDurationSec : undefined,
+    watermark: input.watermark === true,
   }
 }
 
@@ -96,24 +104,46 @@ async function deliveredSeconds(path: string): Promise<number | undefined> {
 }
 
 /**
- * The BASE credits a ceiling-held run settles at: the dubbed span read from
- * ElevenLabs' metadata, else from the delivered file, else the 2-minute last
- * resort — never the 30-minute hold itself. Undefined when the run was not
- * held at the ceiling: its reservation was the measured span, committed as is.
+ * The span a dub was dubbed for: the span measured before the hold, or — for
+ * a run held at the 30-minute ceiling — the span read from ElevenLabs'
+ * metadata, else from the delivered file, else the 2-minute last resort.
+ * Unrounded: the charge forgives a hair past a minute (`dubbingHeldMinutes`).
+ * Undefined for a measured run that carries no span (a job queued before the
+ * span rode it).
  */
-async function ceilingSettleBase(
+async function dubbedSpanSec(
   ctx: DubbingSettleContext,
   mediaDurationSec: number | undefined,
   readDelivered: () => Promise<number | undefined>,
 ): Promise<number | undefined> {
-  if (!ctx.reservedCeiling) return undefined
-  // Unrounded: the charge forgives a hair past a minute (`dubbingHeldMinutes`, through `dubbingBaseCredits`).
+  if (!ctx.reservedCeiling) {
+    if (ctx.probedDurationSec === undefined) return undefined
+    // The larger of the span held and the span the service read (within the hold's tolerance, or it was refused).
+    const service = typeof mediaDurationSec === "number" && mediaDurationSec > 0
+      ? (effectiveDubbedSeconds(mediaDurationSec, ctx.startTime, ctx.endTime) ?? mediaDurationSec)
+      : undefined
+    return service !== undefined ? Math.max(ctx.probedDurationSec, service) : ctx.probedDurationSec
+  }
   const fromMetadata = typeof mediaDurationSec === "number" && mediaDurationSec > 0 ? mediaDurationSec : undefined
   const sourceSec = fromMetadata ?? (await readDelivered())
-  const span = sourceSec != null
+  return sourceSec != null
     ? (effectiveDubbedSeconds(sourceSec, ctx.startTime, ctx.endTime) ?? sourceSec)
     : DUBBING_FALLBACK_SECONDS
-  return dubbingBaseCreditsFor(ctx.modelId, span)
+}
+
+/**
+ * The BASE credits a ceiling-held run settles at: the span dubbed — never the
+ * 30-minute hold itself. Undefined when the run was not held at the ceiling:
+ * its reservation was the measured span, committed as is.
+ */
+async function ceilingSettleBase(ctx: DubbingSettleContext, spanSec: number | undefined): Promise<number | undefined> {
+  if (!ctx.reservedCeiling || spanSec === undefined) return undefined
+  return dubbingBaseCreditsFor(ctx.modelId, spanSec)
+}
+
+/** What the dub cost the platform (`jobs.provider_cost`), in USD; null when its span is not known. */
+function dubbingProviderCost(ctx: DubbingSettleContext, spanSec: number | undefined): number | null {
+  return spanSec === undefined ? null : elevenlabsDubbingCostUsd(ctx.modelId, spanSec, { watermark: ctx.watermark })
 }
 
 async function loadReservedUsageLogId(jobId: string): Promise<string | null> {
@@ -129,6 +159,13 @@ async function loadReservedUsageLogId(jobId: string): Promise<string | null> {
 export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<{ ok: boolean; url: string | null }> {
   const { jobId, userId, buffer, videoMode } = args
   const settle = settleContextOf(args.request)
+  // A dub the service read as longer than its hold is never delivered, on
+  // either lane — the worker's or the reconcile cron's (a dub parked for its
+  // length, or still dubbing when the worker stopped waiting): the job fails
+  // and is refunded (a DeterministicJobError, before anything is uploaded).
+  if (typeof args.mediaDurationSec === "number" && args.mediaDurationSec > 0) {
+    assertServiceSpanWithinHold(args.mediaDurationSec, settle)
+  }
 
   if (!videoMode) {
     // POST-PROVIDER: ElevenLabs already produced + delivered the dub (we were
@@ -136,7 +173,7 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
     const r2Url = await runPostProcessing(() =>
       uploadBufferToR2(buffer, mediaObjectKey(jobId, "audio", "mp3"), "audio/mpeg", userId),
     )
-    const meteredBaseCredits = await ceilingSettleBase(settle, args.mediaDurationSec, async () => {
+    const spanSec = await dubbedSpanSec(settle, args.mediaDurationSec, async () => {
       const dir = await createWorkDir("dub-audio-length")
       try {
         const path = join(dir, "dubbed.mp3")
@@ -146,11 +183,13 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
         await cleanupWorkDir(dir)
       }
     })
+    const meteredBaseCredits = await ceilingSettleBase(settle, spanSec)
     const { ok } = await finalizeJobWithMedia({
       jobId,
       jobType: "text-to-audio",
       ...(args.claimant ? { claimant: args.claimant } : {}),
-      result: { url: r2Url, cost: null, providerUsed: "elevenlabs-dubbing" },
+      // What the dub cost is recorded (provider_cost); the charge is the hold or the ceiling's settle below.
+      result: { url: r2Url, cost: dubbingProviderCost(settle, spanSec), providerUsed: "elevenlabs-dubbing" },
       mediaUrl: r2Url,
       // A ceiling-held run settles to the span dubbed (count-based, never above the hold).
       ...(meteredBaseCredits !== undefined ? { meteredBaseCredits } : {}),
@@ -200,6 +239,8 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
   const thumbnailUrl = await generateAndUploadThumbnail(videoR2Url, jobId, userId)
 
   if (!(await shouldSaveJobResult(jobId))) return { ok: false, url: videoR2Url }
+  const spanSec = await dubbedSpanSec(settle, args.mediaDurationSec, async () => videoSeconds)
+  const providerCost = dubbingProviderCost(settle, spanSec)
   const ok = await markJobCompleted(jobId, {
     output_data: {
       videoUrl: videoR2Url,
@@ -207,13 +248,15 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
       providerUsed: "elevenlabs-dubbing",
     },
+    // What the dub cost the platform, recorded beside its charge.
+    ...(providerCost !== null ? { provider_cost: providerCost } : {}),
   })
   if (!ok) return { ok: false, url: videoR2Url }
   const usageLogId = args.usageLogId ?? (await loadReservedUsageLogId(jobId))
   // A ceiling-held run settles to the span dubbed: count-based, marked up at
   // the reservation's margin, never above the hold (commitJobCredits' metered
   // branch; the USD argument stays null so nothing reprices from dollars).
-  const meteredBaseCredits = await ceilingSettleBase(settle, args.mediaDurationSec, async () => videoSeconds)
+  const meteredBaseCredits = await ceilingSettleBase(settle, spanSec)
   if (meteredBaseCredits !== undefined) {
     await commitJobCredits(usageLogId, jobId, null, meteredBaseCredits, true)
   } else {

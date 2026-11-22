@@ -1,6 +1,8 @@
 import { replicateOutputCost } from "../../providers/replicate/output-cost.js"
 import { extractCost } from "../../providers/replicate/client.js"
 import { FACE_SWAP_COST_MODEL_KEY } from "../../providers/replicate/face-swap.js"
+import { isLipSyncChargedAtRunCost, usdToCredits } from "@nodaro/shared/credits"
+import { faceSwapSettle } from "../face-swap-input.js"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazBilledUnits } from "../../providers/replicate/topaz-units.js"
 import { unitRateBaseCredits } from "../credit-base-cost.js"
@@ -456,10 +458,18 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
     const outputCost = row.job_type === "lip-sync"
       ? await replicateOutputCost(String(row.input_data?.provider ?? ""), urls[0]!) : null
     // A recovered Face Swap records what Replicate billed for the prediction
-    // (its GPU seconds at the model's rate), as its worker does. Recorded only:
-    // no `meteredCost`, so the reservation is committed.
+    // (its GPU seconds at the model's rate) and settles as its worker does:
+    // within its row the reservation is committed, past it the run's cost is
+    // charged, collected above the hold (`faceSwapSettle`).
     const billedCost = row.job_type === "face-swap"
       ? extractCost(pred.metrics as Record<string, unknown> | undefined, FACE_SWAP_COST_MODEL_KEY) : null
+    const faceSwapSettleFields = row.job_type === "face-swap" ? await faceSwapSettle(billedCost) : {}
+    // A recovered LatentSync run is charged what its prediction cost, as its
+    // worker charges it (marked up once, never above the bucket it held), never
+    // the whole hold.
+    const lipSyncProvider = String(row.input_data?.provider ?? row.input_data?.resolvedModel ?? "")
+    const lipSyncRunCost = row.job_type === "lip-sync" && isLipSyncChargedAtRunCost(lipSyncProvider)
+      ? extractCost(pred.metrics as Record<string, unknown> | undefined, lipSyncProvider) : null
     // A Topaz video upscale is charged the units the prediction reports (the
     // worker's own settlement), never the whole hold it reserved.
     const topazUnits = row.job_type === "video-upscale"
@@ -467,7 +477,9 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
       : undefined
     const meteredBaseCredits = topazUnits !== undefined
       ? await unitRateBaseCredits(TOPAZ_VIDEO_UNIT_CREDIT_ID, topazUnits)
-      : undefined
+      : lipSyncRunCost !== null && lipSyncRunCost > 0
+        ? usdToCredits(lipSyncRunCost)
+        : undefined
     // A recovered inpaint gets the composite its worker runs before finalize
     // (a failure throws into the catch below, never a raw result finalized).
     const composite = await recoveredMaskComposite(row, urls[0]!)
@@ -481,8 +493,9 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
       result: {
         url: composite?.url ?? urls[0]!,
         extraUrls: composite ? [] : urls.slice(1),
-        cost: outputCost ?? billedCost,
+        cost: outputCost ?? billedCost ?? lipSyncRunCost,
         ...(outputCost !== null ? { displayCost: outputCost } : {}),
+        ...faceSwapSettleFields,
         providerUsed: "replicate",
         providerMs,
       },

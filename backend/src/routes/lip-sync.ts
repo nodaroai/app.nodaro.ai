@@ -5,14 +5,15 @@ import { insertJob } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type RoutePricing } from "../middleware/credit-guard.js"
+import { noteWarning } from "../lib/price-notes.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
 import { LIP_SYNC_PROVIDERS, lipSyncLeverClearPatch, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
-import { lipSyncAudioRateOf, referenceAudioLipSyncCreditId } from "@nodaro/shared/credits"
+import { isLipSyncChargedAtRunCost, lipSyncAudioRateOf, referenceAudioLipSyncCreditId } from "@nodaro/shared/credits"
 import { checkLipSyncInputs, lipSyncAudioPricingOf, lipSyncHeldCreditId, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
 import { lipSyncFloorRefusal } from "../lib/lip-sync-floor-check.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -22,7 +23,7 @@ import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 
-const lipSyncBody = z.object({
+export const lipSyncBody = z.object({
   imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for the KIE avatars)
   videoUrl: safeUrlSchema.optional(),     // Video input (required for LatentSync and the dubbing models)
   audioUrl: safeUrlSchema,                // Audio to sync
@@ -132,10 +133,10 @@ async function retiredLipSyncProviderPreHandler(req: FastifyRequest, reply: Fast
  * audio it accepts (`VIDEO_REF_AUDIO_RULES`: Seedance 2.5 Flash, WAV or MP3,
  * 2-30 s) is held to that rule with the same check the video routes and the
  * workflow run use, so a clip the provider would refuse never costs a run.
- * Runs AFTER the credit guard (its model and node doors) and before the
- * handler's reservation, in every edition, and only on a body the handler's
- * own schema accepts (an invalid one is left to the handler's 400). Every
- * other model passes through unprobed.
+ * Runs inside the credit guard (`lipSyncPricingStep`, after its model and node
+ * doors and before anything is priced or held), in every edition, and only on
+ * a body the handler's own schema accepts (an invalid one is left to the
+ * handler's 400). Every other model passes through unprobed.
  */
 async function lipSyncReferenceAudioPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const parsed = lipSyncBody.safeParse(req.body)
@@ -237,6 +238,27 @@ export async function lipSyncInputPreHandler(req: FastifyRequest, reply: Fastify
   // The length the request named is gone from here on: nothing the guard runs
   // can read it, and the handler records the measured one.
   delete body.audioDurationSec
+  // A model charged what its run used holds its bucket row as the most it is
+  // charged: a quote says so (a no-op on a run).
+  if (isLipSyncChargedAtRunCost(model)) noteWarning(req, LIP_SYNC_RUN_COST_WARNING)
+}
+
+/** What a quote of a model charged what its run used says about its `reserve`. */
+const LIP_SYNC_RUN_COST_WARNING = {
+  code: "settles_to_actual",
+  message: "This is the most the run can cost: it is charged what its run used, and the difference is refunded when it finishes.",
+} as const
+
+/**
+ * The credit guard's `beforePricing` step: the audio measured
+ * (`lipSyncInputPreHandler`), then a voice line sent as reference audio held
+ * to its model's rule (`lipSyncReferenceAudioPreHandler`) — each refusal
+ * before anything is priced or held.
+ */
+async function lipSyncPricingStep(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await lipSyncInputPreHandler(req, reply)
+  if (reply.sent) return
+  await lipSyncReferenceAudioPreHandler(req, reply)
 }
 
 /**
@@ -273,6 +295,22 @@ export function lipSyncRateLimitSkips(req: Pick<FastifyRequest, "body">): boolea
   return lipSyncAudioPricingOf(body?.provider ?? LIP_SYNC_DEFAULT_PROVIDER) === undefined
 }
 
+/**
+ * The route's pricing chain, registered as its preHandlers and run by
+ * `POST /v1/quote` (`ee/routes/node-quote.ts`) with the same functions: a
+ * retired model's refusal, then the credit guard, whose `beforePricing` step
+ * measures the audio and checks a reference voice line.
+ */
+export const lipSyncPricing: RoutePricing = {
+  prechecks: [retiredLipSyncProviderPreHandler],
+  modelResolver: (req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req)),
+  opts: {
+    runModel: jobRunModel("lip-sync"),
+    computeCredits: lipSyncComputeCredits,
+    beforePricing: lipSyncPricingStep,
+  },
+}
+
 export async function lipSyncRoutes(app: FastifyInstance) {
   app.post("/v1/lip-sync", {
     // Per user / credential (`rateLimitKeyGenerator`), for the models that
@@ -288,14 +326,9 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       },
     },
     preHandler: [
-      retiredLipSyncProviderPreHandler,
+      ...lipSyncPricing.prechecks,
       // The audio is measured inside the guard (`beforePricing`), after its model and node doors.
-      creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req)), {
-        runModel: jobRunModel("lip-sync"),
-        computeCredits: lipSyncComputeCredits,
-        beforePricing: lipSyncInputPreHandler,
-      }),
-      lipSyncReferenceAudioPreHandler,
+      creditGuard(lipSyncPricing.modelResolver, lipSyncPricing.opts),
     ],
   }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)

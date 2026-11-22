@@ -90,7 +90,7 @@ import {
   videoSfxQuoteCreditId,
 } from "@nodaro/shared/credits"
 import { maskCompositeUnits, videoDepthCreditId, videoMaskCreditId } from "@nodaro/shared/media"
-import { audioIsolationEstimateUnits, checkAudioIsolationLength, checkMotionTransferLength, motionTransferEstimateSeconds, checkVideoToVideoClipLength, videoToVideoEstimateSeconds } from "@nodaro/shared/credits"
+import { audioIsolationEstimateUnits, checkAudioIsolationLength, checkMotionTransferLength, motionTransferEstimateSeconds, checkVideoToVideoClipLength, videoToVideoEstimateSeconds, checkVoiceChangerLength, voiceChangerEstimateUnits } from "@nodaro/shared/credits"
 import { lipSyncAudioPricingOf, lipSyncHeldSecondsOf } from "../lip-sync-inputs.js"
 import { nemotronChargeId } from "../nemotron-transcribe-settle.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityClipReading, videoUtilityUnits, withMeasuredInputLengths } from "../video-utility-credits.js"
@@ -400,6 +400,8 @@ const SWEPT: ReadonlyArray<{ readonly name: string; readonly step: MeasuringStep
   { name: "Video to Video, Wan 2.7 VideoEdit's seconds", step: "video-to-video:wan-videoedit", reading: "container", maxSec: 10, quote: (s) => videoToVideoEstimateSeconds("wan-videoedit", "0", s), charge: (s) => { const r = checkVideoToVideoClipLength("wan-videoedit", s, "0"); return r.ok ? r.billedSeconds : 0 } },
   // Audio Isolation's audio (its 30-minute cap), its started ten seconds.
   { name: "Audio Isolation, its started ten seconds", step: "audio-isolation", reading: "container", maxSec: 1800, quote: (s) => audioIsolationEstimateUnits(s), charge: (s) => { const r = checkAudioIsolationLength(s); return r.ok ? r.units : 0 } },
+  // Voice Changer's audio (a video's sound; its 5-minute cap), its started ten seconds.
+  { name: "Voice Changer, its started ten seconds", step: "voice-changer", reading: "container", maxSec: 300, quote: (s) => voiceChangerEstimateUnits(s), charge: (s) => { const r = checkVoiceChangerLength(s); return r.ok ? r.units : 0 } },
   { name: "Mask Composite", step: "mask-composite", reading: "container", maxSec: 300, quote: (s) => maskCompositeUnits(s), charge: (s) => maskCompositeUnits(s) },
   { name: "Video Overlay", step: "video-overlay", reading: "video-stream", maxSec: 60, quote: (s) => videoOverlayVideoUnits(s), charge: (s) => videoOverlayVideoUnits(s) },
   { name: "Topaz Video Upscale, the stream", step: "video-upscale:topaz", reading: "video-stream", maxSec: 60, quote: (s) => topazVideoHoldUnits({ ...TOPAZ_1080P_30, durationSec: s }), charge: (s) => topazVideoHoldUnits({ ...TOPAZ_1080P_30, durationSec: s }) },

@@ -171,7 +171,7 @@ export const VIDEO_UTILITY_READING: Readonly<Record<VideoUtilityStepType, Measur
 }
 
 /** The steps whose quote reads the measured walk with a slack from {@link MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC}. */
-export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" | "pitch-tempo" | "dubbing" | "video-upscale" | "lip-sync" | "motion-transfer" | "video-to-video" | "audio-isolation"
+export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" | "pitch-tempo" | "dubbing" | "video-upscale" | "lip-sync" | "motion-transfer" | "video-to-video" | "audio-isolation" | "voice-changer"
 
 /**
  * The slack a quote of each of these steps adds to each clip a node makes in
@@ -180,9 +180,9 @@ export type MeasuredInputStepType = "video-sfx" | "video-mask" | "video-depth" |
  * server's estimate and the app listing read:
  * - the CONTAINER (ffprobe's format duration, an audio tail included), the
  *   quote and the charge forgiving the same 0.05 s past a whole second: Video
- *   Mask, Video Depth, Motion Transfer's driving video and Audio Isolation's
- *   audio — Mask Composite's slack, the whole 0.15 s a made
- *   clip's container can run past its planned length;
+ *   Mask, Video Depth, Motion Transfer's driving video, and the audio of Audio
+ *   Isolation and Voice Changer — Mask Composite's slack, the whole 0.15 s a
+ *   made clip's container can run past its planned length;
  * - the CONTAINER, the quote reading the length exactly and the hold and the
  *   charge forgiving 0.05 s: Video SFX (its 8 / 15 / 30 / 60 / 120 / 300 s
  *   rows), Pitch & Tempo and Dubbing (every started minute), and Lip Sync (a
@@ -208,6 +208,8 @@ export const MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC: Readonly<Record<MeasuredInpu
   // Video to Video on HappyHorse Edit / Wan 2.7 VideoEdit: the clip's container, the whole 0.15 s a made clip can run past its plan.
   "video-to-video": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
   "audio-isolation": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
+  // Voice Changer: its audio's container (a video's when it is given one), as Audio Isolation's.
+  "voice-changer": MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC,
 }
 
 /**
@@ -229,6 +231,7 @@ export const MEASURED_INPUT_READING: Readonly<Record<MeasuredInputStepType, Meas
   "motion-transfer": "container",
   "video-to-video": "container",
   "audio-isolation": "container",
+  "voice-changer": "container",
 }
 
 /** The recording node types: the uploads an app exposes and the Video URL (YouTube or any link) node. */

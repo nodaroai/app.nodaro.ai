@@ -25,8 +25,16 @@ vi.mock("@/lib/queue.js", () => ({
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  // A route's `beforePricing` step (Voice Changer's audio length) runs, as the real guard runs it.
+  creditGuard: (_resolve: unknown, opts?: { beforePricing?: (req: unknown, reply: unknown) => Promise<unknown> }) =>
+    async (req: unknown, reply: unknown) => { await opts?.beforePricing?.(req, reply) },
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "u-1", creditsReserved: 1, watermark: false }),
+}))
+
+// Voice Changer reads its audio's length before anything is held (decided 2026-11-22): a readable 8-second file.
+vi.mock("@/lib/voice-changer-input.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/voice-changer-input.js")>()),
+  readVoiceChangerInput: vi.fn(async () => ({ ok: true, audioSec: 8, units: 1 })),
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))

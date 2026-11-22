@@ -27,6 +27,8 @@ import { REFERENCE_BOARD_PROVIDERS } from "@nodaro/shared/entities"
 import {
   AUDIO_ISOLATION_MAX_UNITS,
   AUDIO_ISOLATION_RATE_ID,
+  VOICE_CHANGER_MAX_UNITS,
+  VOICE_CHANGER_RATE_ID,
   isSpeechLengthPriceId,
   MOTION_TRANSFER_FLOOR_IDS,
   MOTION_TRANSFER_MAX_SEC,
@@ -262,7 +264,12 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     span: [1, 30],
     note: "Per started minute of the input, 1–30: a run reserves `pitch-tempo:<N>m`, priced as the `pitch-tempo` rate row × N.",
   },
-  "voice-changer": { ids: familyIds("voice-changer") },
+  // Per started ten seconds of the audio it revoices (decided 2026-11-22): 1 to the 5-minute cap's 30 units.
+  "voice-changer": {
+    ids: [VOICE_CHANGER_RATE_ID],
+    span: [1, VOICE_CHANGER_MAX_UNITS],
+    note: "Per started 10 seconds of the audio (a video's sound), up to 5 minutes: a run reserves the `elevenlabs-voice-changer:per-10s` row × its units.",
+  },
   "suno-voice": { ids: familyIds("suno-voice-create") },
   // ── Text / analysis ──
   "llm-chat": { ids: familyIds("llm-chat") },
@@ -1357,7 +1364,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "voice-changer",
     label: "Voice Changer",
     category: "ai-audio",
-    description: "Replace the voice in an audio recording — or in an entire talking video — with a different voice, preserving the original emotion, cadence, and timing. Audio in → audio out; video in → revoiced video out (plus the new audio track). Video wins when both inputs are wired.",
+    description: "Replace the voice in an audio recording — or in an entire talking video — with a different voice, preserving the original emotion, cadence, and timing. Audio in → audio out; video in → revoiced video out (plus the new audio track). Video wins when both inputs are wired. Audio (or a video's sound) up to 5 minutes, priced per started 10 seconds.",
     outputType: "audio",
     creditCost: creditBandFor("voice-changer"),
     capabilities: ["audio-to-audio", "video-revoice", "dual-output-handles"],

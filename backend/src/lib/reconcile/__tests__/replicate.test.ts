@@ -136,6 +136,9 @@ vi.mock("../entity-recovery.js", async (importOriginal) => {
   return { ...actual, recoverEntityJob: mocks.recoverEntityMock }
 })
 vi.mock("../../config.js", () => ({ config: { REPLICATE_API_TOKEN: "test-token" } }))
+// Face Swap's settle reads its live row (lib/face-swap-input.ts): within it by default.
+const faceSwap = vi.hoisted(() => ({ settle: vi.fn(async (_cost: unknown): Promise<Record<string, unknown>> => ({})) }))
+vi.mock("../../face-swap-input.js", () => ({ faceSwapSettle: faceSwap.settle }))
 vi.mock("../../../workers/shared.js", () => ({
   markJobCompleted: mocks.markCompletedMock,
   commitJobCredits: mocks.commitMock,
@@ -145,6 +148,7 @@ import { reconcileReplicateJob, type ReplicateJobRow } from "../replicate.js"
 import { MASK_NO_REGION_MESSAGE } from "../../../providers/replicate/failure-messages.js"
 import { REPLICATE_MODEL_USD_PER_SEC, extractCost } from "../../../providers/replicate/client.js"
 import { FACE_SWAP_COST_MODEL_KEY } from "../../../providers/replicate/face-swap.js"
+import { usdToCredits } from "@nodaro/shared/credits"
 
 // G-7 harness accessors (did not exist before this task).
 const lastJobsUpdate = (): Record<string, unknown> => mocks.jobsUpdates.at(-1) ?? {}
@@ -257,15 +261,35 @@ describe("reconcileReplicateJob", () => {
     expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({result:expect.objectContaining({cost:29.133333 * 0.08325})}))
   })
 
-  it("a recovered Face Swap records what Replicate billed (its GPU seconds at the model's rate), with nothing metered", async () => {
+  it("a recovered Face Swap within its row records what Replicate billed (its GPU seconds at the model's rate), with nothing metered", async () => {
     setPrediction({ id: "p-fs", status: "succeeded", output: "https://replicate.example/swap.mp4", metrics: { predict_time: 40 } })
     await reconcileReplicateJob({ id: "j-fs", provider_kind: "replicate-prediction", provider_task_id: "p-fs", reconcile_attempts: 0, job_type: "face-swap" })
     const input = mocks.finalizeMock.mock.calls.at(-1)![0] as Record<string, unknown> & { result: Record<string, unknown> }
     expect(input.result.cost).toBeCloseTo(40 * REPLICATE_MODEL_USD_PER_SEC[FACE_SWAP_COST_MODEL_KEY]!, 10)
+    expect(faceSwap.settle).toHaveBeenCalledWith(input.result.cost)
     expect(input.result).not.toHaveProperty("displayCost")
     expect(input.result).not.toHaveProperty("meteredCost")
     expect(input.result).not.toHaveProperty("collectOverHold")
     expect(input).not.toHaveProperty("meteredBaseCredits")
+  })
+
+  it("a recovered Face Swap Replicate billed past its row is settled as its worker settles it: the run's cost, collected above the hold", async () => {
+    faceSwap.settle.mockResolvedValueOnce({ meteredCost: true, collectOverHold: true })
+    setPrediction({ id: "p-fs2", status: "succeeded", output: "https://replicate.example/swap.mp4", metrics: { predict_time: 300 } })
+    await reconcileReplicateJob({ id: "j-fs2", provider_kind: "replicate-prediction", provider_task_id: "p-fs2", reconcile_attempts: 0, job_type: "face-swap" })
+    const input = mocks.finalizeMock.mock.calls.at(-1)![0] as Record<string, unknown> & { result: Record<string, unknown> }
+    expect(input.result).toMatchObject({ meteredCost: true, collectOverHold: true })
+  })
+
+  it("a recovered LatentSync run is charged what its prediction cost, never the whole hold", async () => {
+    setPrediction({ id: "p-ls", status: "succeeded", output: "https://replicate.example/lips.mp4", metrics: { predict_time: 100 } })
+    await reconcileReplicateJob({ id: "j-ls", provider_kind: "replicate-prediction", provider_task_id: "p-ls", reconcile_attempts: 0, job_type: "lip-sync", input_data: { provider: "latentsync" } })
+    const input = mocks.finalizeMock.mock.calls.at(-1)![0] as Record<string, unknown> & { result: Record<string, unknown> }
+    const cost = 100 * REPLICATE_MODEL_USD_PER_SEC.latentsync!
+    expect(input.result.cost).toBeCloseTo(cost, 10)
+    // The count-based settle: marked up once, never above the hold.
+    expect(input.meteredBaseCredits).toBe(usdToCredits(cost))
+    expect(input.result).not.toHaveProperty("collectOverHold")
   })
 
   it("succeeded with output array → uses first URL + extras", async () => {

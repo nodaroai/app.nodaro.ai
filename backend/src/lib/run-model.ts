@@ -33,6 +33,9 @@ export function textField(value: unknown): string | undefined {
 /** The one model Audio Isolation runs (ElevenLabs' own API); the id a model restriction names. */
 export const AUDIO_ISOLATION_MODEL_ID = "elevenlabs-isolation"
 
+/** The one model Voice Changer runs (ElevenLabs speech-to-speech); the id a model restriction names. */
+export const VOICE_CHANGER_MODEL_ID = "elevenlabs-voice-changer"
+
 /** A route that runs one model whatever the request says (no model field). */
 export function fixedRunModel(model: string): RunModelResolver {
   return () => model
@@ -109,7 +112,6 @@ export function llmRunModel(feature: string | ((body: Record<string, unknown>) =
 export const FIXED_MODEL_JOBS: ReadonlySet<string> = new Set([
   "dubbing",
   "forced-alignment",
-  "voice-changer",
   "voice-design",
 ])
 
@@ -124,14 +126,15 @@ export const FIXED_MODEL_JOBS: ReadonlySet<string> = new Set([
  *    model a node that names none runs: Generate Video Pro and Edit Video Pro
  *    on `seedance-2` (payload-builder.ts);
  *  - a job that runs one fixed model but reserves a per-unit row that is not
- *    the model's id: Audio Isolation.
+ *    the model's id: Audio Isolation and Voice Changer.
  * The census (services/workflow-engine/__tests__/default-model-judge-census.test.ts)
  * holds every job a node with a model setting builds to this table or the others.
  */
 export const PAYLOAD_MODEL_OF_JOB: Readonly<Record<string, (payload: Readonly<Record<string, unknown>>) => string | undefined>> = Object.freeze({
   // One model whatever the request says, but no longer reserved under its own
-  // id (it is priced per started ten seconds of its audio): named here.
+  // id (each is priced per started ten seconds of its audio): named here.
   "audio-isolation": () => AUDIO_ISOLATION_MODEL_ID,
+  "voice-changer": () => VOICE_CHANGER_MODEL_ID,
   // Its transcription engine, when the render transcribes: the one its build wrote, else the worker's default.
   "add-captions": (payload) => addCaptionsBuiltEngine(payload),
   // The model the build put the job on: the node's own, else the build's default.

@@ -334,6 +334,25 @@ describe("Audio Isolation advertises its per-10-second band", () => {
 })
 
 /**
+ * Voice Changer is priced per started ten seconds of the audio it revoices
+ * (decided 2026-11-22), so the workflow run reserves its per-10-second row and
+ * the band runs from one unit to the 5-minute cap's 30 — never the node-type
+ * alias row, nor the flat `elevenlabs-voice-changer` row the voiced-video
+ * add-on still charges.
+ */
+describe("Voice Changer advertises its per-10-second band", () => {
+  it("reserves the per-10-second row, and its band is 1 to 30 units of it", () => {
+    const node: SimpleNode = { id: "n", type: "voice-changer", data: { label: "voice-changer", voiceId: "Rachel" } }
+    const built = buildPayload(node, "job-1", { audioUrl: "https://media.test/a.mp3" } as never)
+    expect(built.modelIdentifier).toBe("elevenlabs-voice-changer:per-10s")
+    const unit = STATIC_CREDIT_COSTS["elevenlabs-voice-changer:per-10s"]!
+    expect(unit).toBe(10)
+    expect(CREDIT_BAND_SOURCES["voice-changer"]?.ids).toEqual(["elevenlabs-voice-changer:per-10s"])
+    expect(NODE_REGISTRY.find((d) => d.type === "voice-changer")!.creditCost).toBe(`${unit}-${unit * 30}`)
+  })
+})
+
+/**
  * Add Captions on Nemotron 3.5 Transcribe is one charge, the Remotion render
  * plus the video's started minutes (decided 2026-11-13). Its renderer rows alone
  * advertised a band that topped out at the kinetic row, below every Nemotron

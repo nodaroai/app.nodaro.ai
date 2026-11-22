@@ -103,7 +103,7 @@ vi.mock("sharp", () => {
 // ---------------------------------------------------------------------------
 
 import { KieVideoProvider } from "../video.js"
-import { KIE_CREDIT_USD, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_TO_VIDEO_MODELS } from "../models.js"
+import { KIE_CREDIT_USD, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_MODELS, KIE_VIDEO_TO_VIDEO_MODELS } from "../models.js"
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -913,5 +913,38 @@ describe("Video to Video and Motion Transfer record what KIE billed for the task
   it.each(lanes)("$name: the catalog figure when there is no record at all", async (lane) => {
     finishWith(lane, undefined)
     expect((await lane.run()).cost).toBe(lane.listed())
+  })
+})
+
+// MiniMax Hailuo 3 records what KIE billed for its task on the generic
+// createTask branch (its price follows its length and resolution); every other
+// model there keeps its catalog figure.
+describe("MiniMax Hailuo 3 records what KIE billed for the task", () => {
+  const record = (data: Record<string, unknown>) => ({ code: 200, message: "success", data })
+  const done = (rawRecordInfo?: Record<string, unknown>) => ({ resultJson: { resultUrls: ["https://cdn.kie.ai/out.mp4"] }, ...(rawRecordInfo ? { rawRecordInfo } : {}) })
+
+  it("image to video: the record's creditsConsumed × the KIE credit rate", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce(done(record({ creditsConsumed: 112.5 })))
+    const result = await provider.imageToVideo("https://img.png", "cinematic", "minimax-h3", 5)
+    expect(result.cost).toBeCloseTo(112.5 * KIE_CREDIT_USD, 10)
+    expect(result).not.toHaveProperty("meteredCost")
+  })
+
+  it("text to video: the record's creditsConsumed × the KIE credit rate", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce(done(record({ creditsConsumed: 157.5 })))
+    const result = await provider.textToVideo("cinematic", "minimax-h3", 7)
+    expect(result.cost).toBeCloseTo(157.5 * KIE_CREDIT_USD, 10)
+  })
+
+  it("the catalog figure when the record carries no credits", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce(done(record({ costTime: 30 })))
+    const result = await provider.imageToVideo("https://img.png", "cinematic", "minimax-h3", 5)
+    expect(result.cost).toBe(KIE_VIDEO_MODELS["minimax-h3"]!.cost)
+  })
+
+  it("another model on the branch keeps its catalog figure, whatever the record says", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce(done(record({ creditsConsumed: 999 })))
+    const result = await provider.imageToVideo("https://img.png", "cinematic", "kling", 5)
+    expect(result.cost).toBe(KIE_VIDEO_MODELS.kling!.cost)
   })
 })

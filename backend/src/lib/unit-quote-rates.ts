@@ -22,7 +22,8 @@
  * Motion Transfer's per-second rows (a quarter-unit per billed second of the
  * driving video), Video to Video's clip rows (HappyHorse Edit: an eighth of a
  * unit per started half-second of the clip; Wan 2.7 VideoEdit: a quarter-unit
- * per billed second), Audio Isolation's ten-second row (whole units, 1 to 180), and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
+ * per billed second), Audio Isolation's ten-second row (whole units, 1 to 180),
+ * Voice Changer's ten-second row (whole units, 1 to 30), and the Seedance 2.5 Extend two-second rows (half a unit per second sent and
  * added). A
  * speech request's quote (`<model>:per-100-chars:<N>u`) is priced through its own,
  * stricter reader (`parseSpeechQuoteCreditId`), which bounds N by the model's
@@ -36,6 +37,8 @@
 import {
   AUDIO_ISOLATION_MAX_UNITS,
   AUDIO_ISOLATION_RATE_ID,
+  VOICE_CHANGER_MAX_UNITS,
+  VOICE_CHANGER_RATE_ID,
   LIP_SYNC_AUDIO_RATES,
   MOTION_TRANSFER_MAX_SEC,
   MOTION_TRANSFER_MIN_SEC,
@@ -177,6 +180,9 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   // Audio Isolation: whole started ten-second units of its audio, one to the
   // 30-minute cap's 180.
   [AUDIO_ISOLATION_RATE_ID, { minUnits: 1, maxUnits: AUDIO_ISOLATION_MAX_UNITS, wholeUnits: true }] as const,
+  // Voice Changer: whole started ten-second units of the audio it revoices,
+  // one to the 5-minute cap's 30.
+  [VOICE_CHANGER_RATE_ID, { minUnits: 1, maxUnits: VOICE_CHANGER_MAX_UNITS, wholeUnits: true }] as const,
   // A per-second lip-sync rate: the whole seconds a run of it can be billed.
   ...Object.values(LIP_SYNC_AUDIO_RATES).map(
     (rate) => [rate.rateId, { maxUnits: rate.maxSeconds, minUnits: rate.minSeconds, wholeUnits: true }] as const,

@@ -27,7 +27,7 @@ export type { ProjectTaskId }
 export const usesDubbingProject = (language: string): boolean => dubsAsProject(language)
 
 export function validateProjectDubbing(source: DubbingSource, options?: DubbingOptions): void {
-  if (!source.url) throw new Error(PROJECT_DUBBING_NEEDS_UPLOAD)
+  if (!source.url && !source.bytes) throw new Error(PROJECT_DUBBING_NEEDS_UPLOAD)
   const unsupported = [
     options?.disableVoiceCloning && "disableVoiceCloning",
     options?.dropBackgroundAudio && "dropBackgroundAudio",

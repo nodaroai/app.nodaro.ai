@@ -16,13 +16,15 @@ import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useExactUnitQuote } from "@/hooks/use-unit-quote-credits"
+import { voiceChangerQuote } from "@/lib/video-utility-estimate"
+import { VOICE_CHANGER_RATE_ID } from "@nodaro/shared/credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
-import type { VoiceChangerData } from "@/types/nodes"
+import type { VoiceChangerData, WorkflowNode } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
 const ACCEPTS_VIDEO = (t: string) => isValidVoiceChangerConnection("video", t)
@@ -56,7 +58,20 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  const credits = useModelCredits("elevenlabs-voice-changer", 4)
+  // Priced per started ten seconds of the audio the graph gives — a wired
+  // video's sound when one is wired (the shared wire-length walk) — else the
+  // 5-minute cap, shown as an estimate (≈): the server reads the audio before
+  // it holds anything (decided 2026-11-22).
+  const quoteUnits = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? voiceChangerQuote(node, s.nodes, s.edges).units : undefined
+  })
+  const lengthKnown = useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === id) as WorkflowNode | undefined
+    return node ? voiceChangerQuote(node, s.nodes, s.edges).lengthKnown : false
+  })
+  const credits = useExactUnitQuote(VOICE_CHANGER_RATE_ID, quoteUnits ?? 1)
+  const creditsEstimate = !lengthKnown
 
   useEffect(() => {
     setVideoError(false)
@@ -114,13 +129,14 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
       icon={<AudioWaveform className="h-4 w-4" />}
       category="ai"
       credits={credits}
+      creditsEstimate={creditsEstimate}
       selected={selected}
       isRunning={status === "running"}
       {...(isVideoResult ? videoNodeSizing(mediaAspectRatio) : {})}
       className={hasVideoResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
       hideHeader
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={credits} creditsEstimate={creditsEstimate} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && canBrowseAlternates ? (

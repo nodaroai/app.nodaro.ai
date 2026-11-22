@@ -1033,6 +1033,21 @@ describe("CreditsService", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([{ id: "x", type: "audio-isolation", data: {} }])).toBe(1800) // 180 × 10
     })
 
+    // Decided 2026-11-22: Voice Changer is quoted per started 10 seconds of the
+    // audio it revoices — its video wire's when one is wired (a video wins),
+    // else its audio wire's; with no length known, the 5-minute cap.
+    it("resolves voice-changer per started 10 seconds of the wired audio (a wired video wins), else the 5-minute cap", () => {
+      const audio = (sec: number) => ({ id: "a", type: "upload-audio", data: { url: "https://m.test/voice.mp3", metadata: { durationSeconds: sec } } })
+      const video = (sec: number) => ({ id: "v", type: "upload-video", data: { url: "https://m.test/talk.mp4", videoDurationSec: sec, duration: sec } })
+      const audioWire = { source: "a", target: "x", targetHandle: "audio" }
+      const videoWire = { source: "v", target: "x", targetHandle: "video" }
+      const x = { id: "x", type: "voice-changer", data: { voiceId: "Rachel" } }
+      expect(CreditsService.estimateWorkflowBaseCredits([x, audio(25)], [audioWire])).toBe(30) // 3 × 10
+      expect(CreditsService.estimateWorkflowBaseCredits([x, audio(8)], [audioWire])).toBe(10)
+      expect(CreditsService.estimateWorkflowBaseCredits([x, video(61), audio(8)], [videoWire, audioWire])).toBe(70) // the video's 7 × 10
+      expect(CreditsService.estimateWorkflowBaseCredits([x])).toBe(300) // 30 × 10
+    })
+
     it("resolves motion-transfer kling-3.0 720p per second: no known video quotes the orientation's limit", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "motion-transfer", data: { provider: "kling-3.0", resolution: "720p", videoDuration: 1 } },
