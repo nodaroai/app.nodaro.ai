@@ -12,7 +12,7 @@ const QUOTE: QuoteRecord = {
   expectedCredits: 1500,
   breakdown: {
     base: 40, motion: 1000, motionExpected: 800, motionHd: 600, references: 200,
-    referenceAudio: 30, prompt: 20, privacy: 60, styleRefs: 50,
+    referenceAudio: 30, prompt: 20, privacy: 60, styleRefs: 50, upscale: 120,
   },
   privacyCredits: null,
   referencesRetryCredits: null,
@@ -40,6 +40,8 @@ const TABLE: Case[] = [
   ["cast-swap-child:R:vocals", "audio-separation", 1, step("Vocals split", "vocals"), false, "referenceAudio"],
   ["cast-swap-fq-child:R", "video-upscale", 1, step("1080p render", "render-hd"), false, "motionHd"],
   ["cast-swap-fq-child:R", "generate-video", 1, step("1080p take", "render-hd"), false, "motionHd"],
+  ["cast-swap-topaz:R", "video-upscale", 1, step("Topaz upscale", "upscale"), false, "upscale"],
+  ["cast-swap-fq-topaz:R", "video-upscale", 1, step("Topaz upscale", "upscale"), false, "upscale"],
   ["cast-swap-prep:R:0", "image-to-image", 1, step("Reference sheet", "sheet", 0), false, "references"],
   ["cast-swap-prep:R:1:retry1", "image-to-image", 1, step("Reference sheet", "sheet", 1), false, "references"],
   ["cast-swap-prep:R:0:head", "image-to-image", 1, step("Reference sheet — head close-up", "sheet", 0), false, "references"],
@@ -122,6 +124,8 @@ describe("stepOf and quoteLineOf, per key form", () => {
       "cast-swap-child:R:other",
       "cast-swap-child:R:masked:2",
       "cast-swap-fq-child:R:2",
+      "cast-swap-topaz:R:2",
+      "cast-swap-fq-topaz:R:retry",
       "cast-swap-prep:R",
       "cast-swap-prep:R:x",
       "cast-swap-prep:R:01",
@@ -177,6 +181,12 @@ describe("quoteLineOf, its branches", () => {
     expect(quoteLineOf(take, { quote: PULSE_FQ, depthMapRun: false })).toBe("motion")
     const render = stepOf(row(at("cast-swap-fq-child:R"), "video-upscale"), RUN, true)
     expect(quoteLineOf(render, { quote: PRISM_FQ, depthMapRun: false })).toBe("motionHd")
+  })
+
+  it("a Full Quality's Topaz upscale goes to upscale when its quote carries it, to no line otherwise", () => {
+    const upscale = stepOf(row(at("cast-swap-fq-topaz:R"), "video-upscale"), RUN, true)
+    expect(quoteLineOf(upscale, { quote: { ...PRISM_FQ, breakdown: { ...PRISM_FQ.breakdown, upscale: 220 } }, depthMapRun: false })).toBe("upscale")
+    expect(quoteLineOf(upscale, { quote: PRISM_FQ, depthMapRun: false })).toBeNull()
   })
 
   it("without a recorded quote, no step has a line", () => {

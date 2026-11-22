@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { creditsOf, creditHint, creditLadderHint, estimateHint, lipSyncPriceSuffix, meteredLlmPriceSentence } from "../_credit-hint.js"
+import { creditsOf, creditHint, creditLadderHint, estimateHint, lipSyncPriceSuffix, meteredLlmPriceSentence, voiceChangerPriceHint } from "../_credit-hint.js"
 import { config } from "../../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../../ee/billing/credits.js"
 import { statedPrices } from "../../../../ee/billing/stated-prices.js"
@@ -31,6 +31,14 @@ describe("_credit-hint — derived credit figures", () => {
     expect(lipSyncPriceSuffix("volcengine-lipsync")).toBe(` (${statedPrices().credits("volcengine-lipsync:15s")} cr/15s)`)
     expect(lipSyncPriceSuffix("latentsync")).toBe(` (${statedPrices().credits("latentsync:15s")} cr/15s)`)
     expect(lipSyncPriceSuffix("wav2lip")).toBe(` (${statedPrices().credits("wav2lip")} cr)`)
+  })
+
+  it("prices Voice Changer per started 10 seconds of its audio, at the charged price of one unit of its rate", () => {
+    const unit = statedPrices().credits("elevenlabs-voice-changer:per-10s", 1)!
+    expect(unit).toBeGreaterThan(0)
+    expect(voiceChangerPriceHint()).toBe(`${unit} cr per started 10 s`)
+    // Never the flat row the voiced-video add-on charges.
+    expect(voiceChangerPriceHint()).not.toContain(`${statedPrices().credits("elevenlabs-voice-changer")} cr`)
   })
 
   it("renders a ladder of charged figures, one per id", () => {

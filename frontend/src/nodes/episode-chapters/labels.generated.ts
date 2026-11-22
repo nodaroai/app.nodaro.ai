@@ -2,6 +2,7 @@
 
 export const labels = {
   "Chapters": {
+    "de": "Kapitel",
     "es": "Capítulos",
     "he": "חלוקה לפרקים",
     "ja": "チャプター",

@@ -11,4 +11,4 @@ import type { LocaleId } from "@nodaro/shared/i18n"
  * from the dictionaries); `__tests__/platform-languages.test.ts` fails when the
  * two disagree, which is when this rule is being broken.
  */
-export const PLATFORM_LANGUAGES: readonly LocaleId[] = Object.freeze(["en", "es", "he", "ja", "ko", "pt-BR"] as const)
+export const PLATFORM_LANGUAGES: readonly LocaleId[] = Object.freeze(["en", "de", "es", "he", "ja", "ko", "pt-BR"] as const)

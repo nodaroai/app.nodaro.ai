@@ -77,6 +77,8 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
+  // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
+  routes["GET /v1/admin/video-remake/precise-upscale"] = () => ({ body: { data: { value: UPSCALE_DEFAULTS, stored: null, defaults: UPSCALE_DEFAULTS, updatedAt: null, supported: true } } })
   routes[`PUT ${BASE}/advanced`] = (init) => {
     advancedShown = JSON.parse(String(init?.body)).show
     return { body: { data: { show: advancedShown, updatedAt: "2026-11-06T10:00:00.000Z" } } }
@@ -92,6 +94,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
+const UPSCALE_DEFAULTS = { "480p": "1080p", "720p": "1080p", "1080p": "4k" }
 const panel = async () => (await screen.findByRole("heading", { name: "Stored settings" })).closest("section") as HTMLElement
 const advancedSwitch = () => screen.findByRole("switch", { name: ADVANCED_SWITCH_LABEL })
 const everyPut = () => fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT").map(([url]) => url)

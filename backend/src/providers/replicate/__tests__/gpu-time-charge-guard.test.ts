@@ -26,10 +26,13 @@ import { join, relative } from "node:path"
 import { REPLICATE_MODEL_USD_PER_SEC } from "../client.js"
 import { isLipSyncChargedAtRunCost, isPerSecondLipSyncProvider } from "@nodaro/shared/credits"
 import { retiredLipSyncProviderName } from "@nodaro/shared/models"
+import { FACE_SWAP_CREDIT_ID } from "../../../lib/face-swap-input.js"
 
 type Charge =
-  /** The provider's cost for the run is the charge (a hold, settled up or down). */
+  /** The provider's cost for the run is the charge (a hold, settled down to it, never above the hold). */
   | "run-cost"
+  /** Its row is the least a run is charged; a run the provider billed more for is charged what it cost, collected above the hold. */
+  | "run-cost-above-row"
   /** No longer runs: its route refuses it. */
   | "retired"
   /** One fixed row for work the caller sizes. The burn-down list. */
@@ -43,10 +46,9 @@ const RATE_TABLE_MODELS: Readonly<Record<string, { charge: Charge; why: string }
   "incredibly-fast-whisper": { charge: "fixed-row", why: "Transcribe: one row whatever the recording's length" },
   whisper: { charge: "fixed-row", why: "Transcribe: one row whatever the recording's length" },
   demucs: { charge: "fixed-row", why: "Separate Audio: one row per mode whatever the audio's length" },
-  // Not a new fixed-price model: Face Swap was already "fixed-row" below (its
-  // call site, face-swap.ts). Its model joined the rate table only so its run
-  // records what Replicate billed (jobs.provider_cost); the charge is unchanged.
-  "roop-face-swap": { charge: "fixed-row", why: "Face Swap: one row whatever the target video's length" },
+  // Face Swap (decided 2026-11-22): a video of at most 60 seconds, held at its
+  // row; a run Replicate billed more for is charged what it cost (lib/face-swap-input.ts).
+  "roop-face-swap": { charge: "run-cost-above-row", why: "Face Swap: its row, or the run's cost when higher, for a video capped at 60 s" },
 }
 
 /** How each file that runs a Replicate prediction is charged for the time the prediction takes. */
@@ -58,7 +60,7 @@ const PREDICTION_CALL_SITES: Readonly<Record<string, { charge: "bounded" | "by-l
   "providers/replicate/video-depth.ts": { charge: "by-length", why: "a bucket of the measured clip length, capped" },
   "providers/replicate/topaz.ts": { charge: "by-units", why: "settled on the units the provider reports" },
   "providers/replicate/audio-separation.ts": { charge: "fixed-row", why: "Demucs: one row per mode whatever the audio's length" },
-  "providers/replicate/face-swap.ts": { charge: "fixed-row", why: "one row whatever the target video's length" },
+  "providers/replicate/face-swap.ts": { charge: "per-model", why: "RATE_TABLE_MODELS above: its row, or the run's cost when higher" },
 }
 
 const SRC = join(__dirname, "..", "..", "..")
@@ -81,6 +83,15 @@ describe("a model billed by run time is charged by something that grows with it"
       if (charge !== "run-cost") continue
       expect(isLipSyncChargedAtRunCost(model), model).toBe(true)
       expect(isPerSecondLipSyncProvider(model), model).toBe(true)
+    }
+  })
+
+  it("a model charged its row or its run's cost is Face Swap, settled by faceSwapSettle", () => {
+    const declared = Object.entries(RATE_TABLE_MODELS).filter(([, v]) => v.charge === "run-cost-above-row").map(([k]) => k)
+    expect(declared).toEqual([FACE_SWAP_CREDIT_ID])
+    // Both places a Face Swap run settles read the one rule.
+    for (const file of ["workers/handlers/video-ai.ts", "lib/reconcile/replicate.ts"]) {
+      expect(readFileSync(join(SRC, file), "utf8"), file).toMatch(/faceSwapSettle\(/)
     }
   })
 
@@ -107,8 +118,6 @@ describe("a model billed by run time is charged by something that grows with it"
       "demucs",
       "incredibly-fast-whisper",
       "providers/replicate/audio-separation.ts",
-      "providers/replicate/face-swap.ts",
-      "roop-face-swap",
       "whisper",
     ])
   })

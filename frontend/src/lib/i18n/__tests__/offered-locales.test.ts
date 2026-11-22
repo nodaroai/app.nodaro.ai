@@ -18,8 +18,11 @@ import { registeredChromeLocales } from ".."
  * stub dictionary must never leak into it.
  */
 describe("offered locales — derived from chrome-dictionary coverage", () => {
-  it("English, Spanish, Hebrew, Japanese, Korean and Brazilian Portuguese are offered (their dictionaries are complete)", () => {
+  it("English, German, Spanish, Hebrew, Japanese, Korean and Brazilian Portuguese are offered (their dictionaries are complete)", () => {
     expect(isOfferedLocale("en")).toBe(true)
+    expect(isOfferedLocale("de")).toBe(true)
+    expect(chromeCoverage("de")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
+    expect(languageMenuRows("de")).toEqual(offeredLanguages())
     expect(isOfferedLocale("es")).toBe(true)
     expect(isOfferedLocale("he")).toBe(true)
     expect(isOfferedLocale("ja")).toBe(true)
@@ -33,11 +36,11 @@ describe("offered locales — derived from chrome-dictionary coverage", () => {
     expect(chromeCoverage("pt-BR")).toBeGreaterThanOrEqual(CHROME_COMPLETE_RATIO)
   })
 
-  it("a stub dictionary is NOT offered — German sits at well under 1% coverage", () => {
-    // If this fails because German got translated: good, delete this case.
-    expect(chromeCoverage("de")).toBeLessThan(0.05)
-    expect(isOfferedLocale("de")).toBe(false)
-    expect(offeredLanguages().some((l) => l.id === "de")).toBe(false)
+  it("a stub dictionary is NOT offered — French sits at well under 1% coverage", () => {
+    // If this fails because French got translated: good, delete this case.
+    expect(chromeCoverage("fr")).toBeLessThan(0.05)
+    expect(isOfferedLocale("fr")).toBe(false)
+    expect(offeredLanguages().some((l) => l.id === "fr")).toBe(false)
   })
 
   it("every registered locale is offered exactly when its coverage clears the ratio", () => {
@@ -76,9 +79,9 @@ describe("languageMenuRows — the current locale stays visible even when not of
   })
 
   it("appends a not-offered current locale so a pre-gate saved choice can still be seen and switched away from", () => {
-    const rows = languageMenuRows("de")
+    const rows = languageMenuRows("fr")
     expect(rows.slice(0, -1)).toEqual(offeredLanguages())
-    expect(rows[rows.length - 1]?.id).toBe("de")
+    expect(rows[rows.length - 1]?.id).toBe("fr")
   })
 })
 
@@ -110,7 +113,7 @@ describe("languageMenuRows — a deployment's `locale.offered` narrows every lan
   })
 
   it("narrows only: a language the deployment names that has no complete translation stays out", () => {
-    offer(["de", "en"])
+    offer(["fr", "en"])
     expect(ids(languageMenuRows("en"))).toEqual(["en"])
   })
 

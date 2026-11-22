@@ -2284,7 +2284,7 @@ fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemake
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
 advanced(): Promise<VideoRemakeAdvanced> // GET /v1/video-remake/advanced, public
 describeStyle(params: { imageUrl: string; note?: string }): Promise<VideoRemakeDescribedStyle> // POST /v1/video-remake/describe-style, free
-planRoles(params: VideoRemakePlanRolesParams): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free
+planRoles(params: VideoRemakePlanRolesParams, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free; waits 200 s by default
 artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
 previews(params?: { locale?: string }): Promise<VideoRemakePreview[]> // GET /v1/video-remake/previews, public
 ```
@@ -2333,12 +2333,15 @@ interface VideoRemakeEstimate {
   engine?: VideoRemakeEngine // the engine quoted
   totalCredits: number    // held when the run starts
   expectedCredits?: number // what it is expected to be charged; never above totalCredits
-  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number; referenceAudio?: number } & Record<string, number>
+  breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number; referenceAudio?: number; upscale?: number } & Record<string, number>
                           // the parts, for display only: base (the run itself), references (preparing
                           // the reference pictures; 0 when off), motion (what the video holds), motionExpected
                           // (what it is expected to be charged; Prism), privacy (preparing the clip), prompt
                           // (a prompt written by a language model, when the engine's setting asks for one),
-                          // referenceAudio (preparing the clip's sound, when the engine's setting runs that step) —
+                          // referenceAudio (preparing the clip's sound, when the engine's setting runs that step),
+                          // upscale (a Topaz upscale of the result, scaled back to the run's resolution, when the
+                          // deployment's setting adds it to a Precise Prism run; settles to the units used;
+                          // not charged when Topaz fails or refuses it, charged once Topaz finished) —
                           // motion and motionExpected are alternatives, so read the totals, never the sum
   privacyCredits?: number // charged only if the clip is refused and the run is retried; not in the totals
   settlesLower: boolean   // Auto length (Prism): the final charge is expected to be lower
@@ -2348,9 +2351,10 @@ interface VideoRemakeFullQualityEstimate {
   kind?: "same-take" | "new-take" // VideoRemakeFullQualityKind: "same-take" (absent from an older server
                                   // = "same-take"); "new-take" was Nodaro Pulse's, which has none now
   totalCredits: number // base + the render
-  breakdown: { base?: number; motionHd?: number; motion?: number } & Record<string, number>
+  breakdown: { base?: number; motionHd?: number; motion?: number; upscale?: number } & Record<string, number>
                        // base: the Full Quality job's own steps; motionHd: the draft's 1080p
-                       // render, 0 when an earlier try's render is reused; motion: a new take (Pulse's, before)
+                       // render, 0 when an earlier try's render is reused; motion: a new take (Pulse's, before);
+                       // upscale: a Topaz upscale of the render, when the deployment's setting adds it
   availableUntil: string // ISO time: 7 days after the run completed
 }
 
@@ -2601,6 +2605,11 @@ if (planRoles === true) {
   // …show the roles and the price, then client.videoRemake.run(params)
 }
 ```
+
+A plan, with the checks the server runs on it, can take up to about three
+minutes, so `planRoles()` waits 200 s by default whatever the client's
+`timeoutMs`; pass `{ timeoutMs }` as its second argument to wait another time,
+or `{ signal }` to cancel.
 
 `planRoles({ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? })`
 (`POST /v1/video-remake/plan-roles`): `prompt` is the request, at most 4000
@@ -2872,7 +2881,12 @@ makes no drafts and has no Full Quality: run it again at 1080p instead. The
 quote's `kind` is `"same-take"` (`"new-take"` was Pulse's). It spends credits;
 quote it first with `fullQualityEstimate(jobId)` (free), whose `totalCredits`
 is `breakdown.base` plus `breakdown.motionHd` (0 when an earlier failed try of
-this draft already finished the 1080p render, which is then reused). One Full Quality per draft: a repeat answers the same job with
+this draft already finished the 1080p render, which is then reused), plus
+`breakdown.upscale` when the deployment's setting adds a Topaz upscale to 1080p
+Precise runs (the render is upscaled, then scaled back to 1080p). The same
+`upscale` part on a run's quote: a Topaz step that fails or is refused is not
+charged; one that finished is charged even if the run then delivers without
+it (rare). One Full Quality per draft: a repeat answers the same job with
 `existing: true` and charges nothing; the server keys it by the draft, so no
 idempotency key is taken. The new job keeps the draft's origin; `sessionId`
 files it in a session. Refusals carry a `VideoRemakeFullQualityRefusalCode`:
@@ -4164,8 +4178,8 @@ body you would pass to `run`: the platform prices it with the run route's own
 code — validation, measuring reference clips or a picture, the credit id and
 the amount — and starts nothing. Typed for `text-to-video`, `generate-video`,
 `video-to-video`, `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
-priced from the draft) and `edit-image`; `ai-avatar`, `cinematic-avatar` and
-`switchx` take their run bodies as-is, and `split-into-layers` is quotable too and
+priced from the draft) and `edit-image`; `ai-avatar`, `cinematic-avatar`,
+`switchx` and `lip-sync` take their run bodies as-is, and `split-into-layers` is quotable too and
 takes the body `client.media.splitIntoLayers` takes. Those are the types the
 platform can quote today (any other rejects with `400 quote_unsupported`). It
 rejects with the run's own `400` / `403` for a body, model or node the run would
@@ -6729,6 +6743,11 @@ delivery at the cost of latency/stability). `useSpeakerBoost` sharpens fidelity
 to the target speaker (small latency cost); `seed` makes the output reproducible
 across runs. `removeBackgroundNoise` off keeps
 the music/SFX bed under the new voice; on yields a clean voice-only result.
+The run is priced per started 10 seconds of the audio it revoices (a video's
+sound when `videoUrl` is sent), read by the server before anything is
+charged; audio longer than 5 minutes, or whose length cannot be read, is
+refused with a 400 (`audio_too_long` / `audio_unreadable`) and nothing is
+charged — see [Voice Changer](./nodes/ai-audio/voice-changer.md#pricing).
 Runs async — poll `client.jobs.get(jobId)`.
 
 ```ts

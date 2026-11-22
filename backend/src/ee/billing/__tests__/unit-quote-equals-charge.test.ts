@@ -83,6 +83,7 @@ import { UNIT_QUOTE_MAX_UNITS, UNIT_QUOTE_RATE_IDS, UNIT_QUOTE_RATES, parseRateQ
 import { motionTransferRateBaseCredits } from "../../../lib/motion-transfer-input.js"
 import { videoToVideoClipBaseCredits } from "../../../lib/video-to-video-clip-input.js"
 import { audioIsolationStampedBaseCredits } from "../../../lib/audio-isolation-input.js"
+import { voiceChangerStampedBaseCredits } from "../../../lib/voice-changer-input.js"
 import { lipSyncRateBaseCredits } from "../../../lib/lip-sync-inputs.js"
 import { lipSyncAudioRateOf } from "@nodaro/shared/credits"
 
@@ -169,6 +170,10 @@ async function routeBase(nodeType: string, rateId: string, units: number): Promi
       // routes/audio-isolation.ts computeCredits and the workflow run's computeAudioIsolationCreditOverride
       // (lib/audio-isolation-input.ts): the ten-second row × the started ten seconds of the audio.
       return audioIsolationStampedBaseCredits("audio-isolation", { audioIsolationUnits: units }) as Promise<number>
+    case "voice-changer":
+      // routes/voice-changer.ts computeCredits and the workflow run's computeVoiceChangerCreditOverride
+      // (lib/voice-changer-input.ts): the ten-second row × the started ten seconds of the audio.
+      return voiceChangerStampedBaseCredits("voice-changer", { voiceChangerUnits: units }) as Promise<number>
     default:
       throw new Error(`no route rule for ${nodeType} — add one with its case`)
   }

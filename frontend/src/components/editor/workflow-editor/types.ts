@@ -5,12 +5,12 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes, speakerFramesEstimateBlocks } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, gvpRenderResolution, gvpSegmentAudio, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, renderEstimateCreditId, type ProducerFanOut } from "@nodaro/render-rules";
-import { audioIsolationPricingUnits, dubbingQuotedMinutesOf, lipSyncPricingUnits, maskCompositePricingUnits, motionTransferPricingUnits, motionTransferQuote, videoOverlayPricingUnits, videoToVideoQuote, videoUpscalePricingUnits, videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
+import { audioIsolationPricingUnits, dubbingQuotedMinutesOf, lipSyncPricingUnits, maskCompositePricingUnits, motionTransferPricingUnits, motionTransferQuote, videoOverlayPricingUnits, videoToVideoQuote, videoUpscalePricingUnits, videoUtilityPricingUnits, voiceChangerPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { AUDIO_ISOLATION_RATE_ID, V2V_CLIP_RATE_IDS, WAN_VIDEOEDIT_FLOOR_CREDIT_ID, v2vSeededRowCredits, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
+import { AUDIO_ISOLATION_RATE_ID, VOICE_CHANGER_RATE_ID, V2V_CLIP_RATE_IDS, WAN_VIDEOEDIT_FLOOR_CREDIT_ID, v2vSeededRowCredits, buildVideoAnalysisCreditId, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoCreditModelIdentifier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared/credits"
 import type { SelectorFields } from "@nodaro/shared/workflow"
 import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode } from "@nodaro/shared/social"
 import { resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -114,6 +114,11 @@ export const NODE_CREDIT_COSTS: Record<string, number> = composeRecord("NODE_CRE
   // to STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "elevenlabs-isolation:per-10s": 10,
+  // Voice Changer: the RATE of ten seconds of the audio it revoices; every
+  // estimate multiplies it by the started ten seconds (PRICING_UNIT_ESTIMATORS).
+  // Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
+  "elevenlabs-voice-changer:per-10s": 10,
   "video-depth": 300,
   "extend-video": 400,
   "face-swap": 160,
@@ -680,6 +685,11 @@ export function estimateNodeCredits(
   if (nodeType === "audio-isolation") {
     return getCachedCredits(AUDIO_ISOLATION_RATE_ID) ?? NODE_CREDIT_COSTS[AUDIO_ISOLATION_RATE_ID] ?? 0
   }
+  // Voice Changer (decided 2026-11-22): the price of ONE started ten seconds
+  // of the audio it revoices; every estimate multiplies it by the units (PRICING_UNIT_ESTIMATORS).
+  if (nodeType === "voice-changer") {
+    return getCachedCredits(VOICE_CHANGER_RATE_ID) ?? NODE_CREDIT_COSTS[VOICE_CHANGER_RATE_ID] ?? 0
+  }
   if (nodeType === "web-scrape" && node.data) {
     const rawActor = node.data.actor
     const actor = isScraperActor(rawActor) ? rawActor : "google-search"
@@ -1109,6 +1119,10 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   // the audio the graph gives, else the 30-minute cap's 180, shown as an
   // estimate (the server reads the audio before it holds anything).
   "audio-isolation": audioIsolationPricingUnits,
+  // Voice Changer: one unit of its ten-second row per started ten seconds of
+  // the audio it revoices (a wired video's sound wins), else the 5-minute cap's
+  // 30, shown as an estimate (the server reads the audio before it holds anything).
+  "voice-changer": voiceChangerPricingUnits,
 };
 
 /**

@@ -243,6 +243,16 @@ export function isAudioReadStopped(err: unknown): err is AudioReadStoppedError {
 /** The most a decode may take: decoding at most `capSec` of audio is seconds of work. */
 export const DECODED_AUDIO_MEASURE_TIMEOUT_MS = 60_000
 
+/**
+ * The time limit of a decode of up to `capSec` of audio: the usual
+ * {@link DECODED_AUDIO_MEASURE_TIMEOUT_MS}, or a tenth of the audio's own time
+ * when that is longer (a 30-minute dub's file — up to its byte cap, its picture
+ * demuxed past — is minutes of reading on a busy box, where a clip is seconds).
+ */
+export function decodedAudioTimeoutMs(capSec: number): number {
+  return Math.max(DECODED_AUDIO_MEASURE_TIMEOUT_MS, Math.ceil(capSec * 100))
+}
+
 export type DecodedAudioLength =
   /** The whole track was decoded: `samples` sample frames at {@link DECODED_AUDIO_RATE_HZ}, `seconds` = samples ÷ that rate. */
   | { readonly overCap: false; readonly samples: number; readonly seconds: number }
@@ -320,7 +330,7 @@ export async function decodeAudioToPcm(
   opts: { readonly capSec: number; readonly formats?: readonly string[] },
 ): Promise<DecodedAudioLength | undefined> {
   const formats = opts.formats ?? CALLER_AUDIO_FORMATS
-  const { stderr } = await runFfmpegCapture(decodedAudioArgs(inputPath, pcmPath, opts.capSec, formats), DECODED_AUDIO_MEASURE_TIMEOUT_MS, {
+  const { stderr } = await runFfmpegCapture(decodedAudioArgs(inputPath, pcmPath, opts.capSec, formats), decodedAudioTimeoutMs(opts.capSec), {
     peakMemoryMiB: audioPeakMemoryMiB(),
   })
   const samples = Math.floor((await stat(pcmPath)).size / BYTES_PER_FRAME)

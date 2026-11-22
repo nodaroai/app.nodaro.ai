@@ -6,7 +6,12 @@
   ],
   "cost_markup_percent": 10,
   "service_margin_percent": {
-    "workflow-copilot": 20
+    "workflow-copilot": 20,
+    "latentsync": 25,
+    "elevenlabs-dubbing": 20,
+    "elevenlabs-dubbing-v2": 25,
+    "elevenlabs-voice-changer:per-10s": 25,
+    "roop-face-swap": 25
   },
   "charged": {
     "gpt-image-2": 21,

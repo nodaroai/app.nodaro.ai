@@ -24,6 +24,13 @@ const mocks = vi.hoisted(() => {
   const mockStripAudioTags = vi.fn((text: string) => text)
   const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockStartDubbing = vi.fn().mockResolvedValue({ dubbingId: "dub-id", expectedDurationSec: 30 })
+  // A new dub's file, fetched once and held to its hold (lib/dubbing-source-bytes.ts): the mode from its streams.
+  const mockPrepareDubbingUpload = vi.fn(async (_url: string, slot: "video" | "audio", _held: unknown) => ({
+    bytes: Buffer.from("dub-source"),
+    videoMode: slot === "video",
+    mime: slot === "video" ? "video/mp4" : "audio/mpeg",
+    ext: slot === "video" ? "mp4" : "mp3",
+  }))
   const mockStartDubbingProjectLanguage = vi.fn().mockResolvedValue({ dubbingId: "project:p1:l9", expectedDurationSec: 0 })
   const mockWaitForDubbing = vi.fn().mockResolvedValue({ dubbing_id: "dub-id", status: "dubbed" })
   const mockPollDubbingStatus = vi.fn().mockResolvedValue({ dubbing_id: "dub-id", status: "dubbing", media_metadata: { content_type: "audio/mpeg", duration: 30 } })
@@ -87,6 +94,7 @@ const mocks = vi.hoisted(() => {
     mockStripAudioTags,
     mockVoiceChangerFromUrl,
     mockStartDubbing,
+    mockPrepareDubbingUpload,
     mockStartDubbingProjectLanguage,
     mockWaitForDubbing,
     mockPollDubbingStatus,
@@ -130,6 +138,16 @@ vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mo
 vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.mockDirectElevenLabsDialogue }))
 vi.mock("@/providers/elevenlabs/sound-effects.js", () => ({ generateSoundEffect: mocks.mockGenerateSoundEffect }))
 vi.mock("@/lib/audio-isolation-run.js", () => ({ runAudioIsolation: mocks.mockRunAudioIsolation }))
+// What a Voice Changer run sends, held to what it was priced on (lib/voice-changer-run.ts, its own test):
+// an audio fetched once and handed back as its exact bytes, a video's extracted track read again.
+const vc = vi.hoisted(() => ({
+  fetchVoiceChangerAudio: vi.fn(async (_url: string, _heldUnits?: number) => ({ bytes: Buffer.from("fetched-audio"), sentSec: 8 })),
+  checkExtractedVoiceChangerAudio: vi.fn(async (_path: string, _heldUnits?: number) => 8),
+}))
+vi.mock("@/lib/voice-changer-run.js", () => ({
+  fetchVoiceChangerAudio: vc.fetchVoiceChangerAudio,
+  checkExtractedVoiceChangerAudio: vc.checkExtractedVoiceChangerAudio,
+}))
 vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", async (importOriginal) => ({
@@ -150,6 +168,10 @@ vi.mock("@/providers/elevenlabs/dubbing.js", () => ({
 vi.mock("@/providers/elevenlabs/dubbing-project.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   startDubbingProjectLanguage: mocks.mockStartDubbingProjectLanguage,
+}))
+vi.mock("../../../lib/dubbing-source-bytes.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  prepareDubbingUpload: mocks.mockPrepareDubbingUpload,
 }))
 vi.mock("@/providers/elevenlabs/voice-remix.js", () => ({ remixVoice: mocks.mockRemixVoice }))
 vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mockDesignVoice }))
@@ -226,7 +248,9 @@ import { __resetSurfaceProfileCacheForTests } from "../../../lib/surface-profile
 import { isPostProcessingError } from "../../../lib/post-processing-error.js"
 // Real classifier — the exact predicate video-worker uses to fail a job now
 // (no BullMQ retries) instead of on the final attempt.
-import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
+import { DeterministicJobError, isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
+import { DUBBING_LONGER_THAN_PRICED_MESSAGE } from "../../../lib/dubbing-source-bytes.js"
+import { elevenlabsVoiceChangerCostUsd } from "../../../lib/pricing/elevenlabs-voice-changer-cost.js"
 import { NoAudioTrackError } from "../../../providers/video/extract-audio-track.js"
 import { OWN_MEDIA_URL, withLinkImportsOff } from "@/test/link-imports-off.js"
 
@@ -1195,8 +1219,14 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
   it("audio upload: classified audio mode, real mime, delivered as mp3", async () => {
     const job = makeJob("dubbing", { audioUrl: "https://example.com/in.mp3", targetLanguage: "es", probedDurationSec: 60 })
     await handler(job as never, makeCtx())
+    // The file is fetched once and held to the minutes paid; the service gets those bytes, never the link.
+    expect(mocks.mockPrepareDubbingUpload).toHaveBeenCalledWith(
+      "https://example.com/in.mp3",
+      "audio",
+      { probedDurationSec: 60, startTime: undefined, endTime: undefined },
+    )
     expect(mocks.mockStartDubbing).toHaveBeenCalledWith(
-      { url: "https://example.com/in.mp3", mime: "audio/mpeg", ext: "mp3" },
+      { bytes: Buffer.from("dub-source"), mime: "audio/mpeg", ext: "mp3" },
       "es",
       expect.anything(),
       expect.anything(),
@@ -1205,7 +1235,8 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
     expect(mocks.mockPollDubbingStatus).not.toHaveBeenCalled()
     expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "es", false, "https://example.com/in.mp3")
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
-      expect.objectContaining({ jobType: "text-to-audio", result: expect.objectContaining({ providerUsed: "elevenlabs-dubbing" }) }),
+      // What the dub cost is recorded: one minute on the dubbing API.
+      expect.objectContaining({ jobType: "text-to-audio", result: expect.objectContaining({ providerUsed: "elevenlabs-dubbing", cost: 0.5 }) }),
     )
   })
 
@@ -1219,6 +1250,8 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
     })
     await handler(job as never, makeCtx())
     expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
+    // Nothing is uploaded again, so the file is not fetched.
+    expect(mocks.mockPrepareDubbingUpload).not.toHaveBeenCalled()
     expect(mocks.mockStartDubbingProjectLanguage).toHaveBeenCalledWith(
       "project:p1",
       "es",
@@ -1228,6 +1261,8 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
     // The id handed back names the language: it is the one polled and delivered.
     expect(mocks.mockWaitForDubbing.mock.calls[0]?.[0]).toBe("project:p1:l9")
     expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("project:p1:l9", "es", false, "https://example.com/in.mp3")
+    // A language on the project API costs that API's rate: two started minutes.
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ cost: 4.4 }) }))
   })
 
   it("a language the project holds and no job delivers is delivered, not made again", async () => {
@@ -1247,7 +1282,7 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
     const job = makeJob("dubbing", { videoUrl: "https://example.com/clip.mp4", targetLanguage: "fr", probedDurationSec: 90 })
     await handler(job as never, makeCtx({ shouldWatermark: true }))
     expect(mocks.mockStartDubbing).toHaveBeenCalledWith(
-      { url: "https://example.com/clip.mp4", mime: "video/mp4", ext: "mp4" },
+      { bytes: Buffer.from("dub-source"), mime: "video/mp4", ext: "mp4" },
       "fr",
       expect.anything(),
       expect.anything(),
@@ -1262,6 +1297,8 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
         audioUrl: "https://r2.example.com/audio/job-1.mp3",
         thumbnailUrl: "https://r2.example.com/thumb.png",
       }),
+      // What the dub cost the platform: two started minutes on the dubbing API.
+      provider_cost: 1,
     })
     expect(mocks.mockCommitJobCredits).toHaveBeenCalled()
     expect(mocks.mockCreateAssetFromJob).toHaveBeenCalled()
@@ -1396,8 +1433,54 @@ describe("dubbing handler — modes, parking, post-hoc cap", () => {
       media_metadata: { content_type: "audio/mpeg", duration: 2400 },
     })
     const job = makeJob("dubbing", { sourceUrl: "https://youtube.com/watch?v=long", targetLanguage: "es" })
-    await expect(handler(job as never, makeCtx())).rejects.toThrow(/maximum is 30 minutes/)
+    const err = await handler(job as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect((err as Error).message).toMatch(/maximum is 30 minutes/)
+    // Fails now and is refunded: a retry would start another dub the service bills.
+    expect(isDeterministicJobError(err)).toBe(true)
     expect(mocks.mockWaitForDubbing).not.toHaveBeenCalled()
+  })
+
+  it("an upload whose file plays past its hold is refused before the service is asked", async () => {
+    mocks.mockPrepareDubbingUpload.mockRejectedValueOnce(new DeterministicJobError(DUBBING_LONGER_THAN_PRICED_MESSAGE))
+    const job = makeJob("dubbing", { videoUrl: "https://example.com/clip.mp4", targetLanguage: "fr", probedDurationSec: 60 })
+    const err = await handler(job as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.mockStartDubbing).not.toHaveBeenCalled()
+  })
+
+  it("a measured link the service reads longer than its hold fails before the long wait", async () => {
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbing",
+      media_metadata: { content_type: "video/mp4", duration: 400 },
+    })
+    const job = makeJob("dubbing", { sourceUrl: "https://example.com/talk.mp4", targetLanguage: "de", probedDurationSec: 60 })
+    const err = await handler(job as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe(DUBBING_LONGER_THAN_PRICED_MESSAGE)
+    expect(mocks.mockWaitForDubbing).not.toHaveBeenCalled()
+    expect(mocks.mockDownloadDubbedMedia).not.toHaveBeenCalled()
+  })
+
+  it("…and when the early poll had no length yet, the final status's length is held to it: nothing is delivered", async () => {
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({ dubbing_id: "dub-id", status: "dubbing" })
+    mocks.mockWaitForDubbing.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbed",
+      media_metadata: { content_type: "video/mp4", duration: 400 },
+    })
+    const job = makeJob("dubbing", { sourceUrl: "https://example.com/talk.mp4", targetLanguage: "de", probedDurationSec: 60 })
+    const err = await handler(job as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.mockDownloadDubbedMedia).not.toHaveBeenCalled()
+  })
+
+  it("a measured link the service reads within its hold (a hair past the minute) is delivered", async () => {
+    mocks.mockPollDubbingStatus.mockResolvedValueOnce({
+      dubbing_id: "dub-id", status: "dubbing",
+      media_metadata: { content_type: "video/mp4", duration: 60.5 },
+    })
+    const job = makeJob("dubbing", { sourceUrl: "https://example.com/talk.mp4", targetLanguage: "de", probedDurationSec: 59.9 })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockDownloadDubbedMedia).toHaveBeenCalledWith("dub-id", "de", true, undefined)
   })
 
   it("parks (returns without finalize) when the projected wait exceeds the worker budget", async () => {
@@ -1636,11 +1719,11 @@ describe("revenue-leak: post-provider upload failure → PostProcessingError (re
   })
 
   it("voice-changer audio mode (uploadBufferToR2)", async () => {
-    mocks.mockVoiceChangerFromUrl.mockResolvedValueOnce(Buffer.from("revoiced"))
+    mocks.mockDirectVoiceChanger.mockResolvedValueOnce(Buffer.from("revoiced"))
     mocks.mockUploadBufferToR2.mockRejectedValueOnce(rawUploadError())
     const job = makeJob("voice-changer", { audioUrl: "https://example.com/in.mp3", voiceId: "v-1" })
     const err = await captureThrow(() => audioAIHandlers["voice-changer"](job as never, makeCtx()))
-    expect(mocks.mockVoiceChangerFromUrl).toHaveBeenCalled() // provider delivered
+    expect(mocks.mockDirectVoiceChanger).toHaveBeenCalled() // provider delivered
     expect(isPostProcessingError(err)).toBe(true)
   })
 
@@ -1751,14 +1834,87 @@ describe("voice-changer: the media decides the mode, never the input slot", () =
     }))
   })
 
-  it("audio slot + plain audio → the untouched legacy audio path (voiceChangerFromUrl)", async () => {
+  it("audio slot + plain audio → the audio path: fetched once, its length read, those exact bytes sent", async () => {
     mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: false, hasAudio: true })
-    mocks.mockVoiceChangerFromUrl.mockResolvedValueOnce(Buffer.from("revoiced"))
     const job = makeJob("voice-changer", { audioUrl: "https://example.com/in.mp3", voiceId: "v-1" })
     await audioAIHandlers["voice-changer"](job as never, makeCtx())
-    expect(mocks.mockVoiceChangerFromUrl).toHaveBeenCalled()
+    expect(vc.fetchVoiceChangerAudio).toHaveBeenCalledWith("https://example.com/in.mp3", undefined)
+    expect(mocks.mockDirectVoiceChanger).toHaveBeenCalledWith(Buffer.from("fetched-audio"), "v-1", expect.anything())
+    expect(mocks.mockVoiceChangerFromUrl).not.toHaveBeenCalled()
     expect(mocks.mockExtractAudioTrack).not.toHaveBeenCalled()
     expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// voice-changer: never sends audio the price did not see (decided 2026-11-22).
+// ---------------------------------------------------------------------------
+//
+// The run was priced on the length read at the caller's link before anything
+// was held, and holds `voiceChangerUnits` of the per-10-second row. The worker
+// reads the length again from the very audio it sends — the track a video's
+// demux wrote, or the audio file it fetched once — and refuses audio that would
+// cost more than the hold (or runs past 5 minutes) before the provider is asked.
+
+describe("voice-changer: the audio sent is held to the length it was priced on", () => {
+  it("video mode: the extracted track is checked against the units held before it is read or sent", async () => {
+    const job = makeJob("voice-changer", { videoUrl: "https://example.com/in.mp4", voiceId: "v-1", voiceChangerUnits: 3 })
+    await audioAIHandlers["voice-changer"](job as never, makeCtx())
+    expect(vc.checkExtractedVoiceChangerAudio).toHaveBeenCalledWith("/tmp/vc/audio.mp3", 3)
+    const checked = vc.checkExtractedVoiceChangerAudio.mock.invocationCallOrder[0]!
+    expect(checked).toBeLessThan(mocks.mockFsReadFile.mock.invocationCallOrder[0]!)
+    expect(checked).toBeLessThan(mocks.mockDirectVoiceChanger.mock.invocationCallOrder[0]!)
+    expect(mocks.mockMergeVideoAudio).toHaveBeenCalled()
+  })
+
+  it("video mode: an extracted track longer than the hold is refused, final, the provider never asked, the work dir removed", async () => {
+    vc.checkExtractedVoiceChangerAudio.mockRejectedValueOnce(new DeterministicJobError("The audio is longer than when the run was priced (31 s, priced for up to 30 s)."))
+    const job = makeJob("voice-changer", { videoUrl: "https://example.com/in.mp4", voiceId: "v-1", voiceChangerUnits: 3 })
+    const err = await captureThrow(() => audioAIHandlers["voice-changer"](job as never, makeCtx()))
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.mockDirectVoiceChanger).not.toHaveBeenCalled()
+    expect(mocks.mockMergeVideoAudio).not.toHaveBeenCalled()
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/vc")
+    expect(isPostProcessingError(err)).toBe(false) // → refund HAPPENS
+  })
+
+  it("audio mode: the held units reach the fetch's check; a refusal there asks nothing of the provider", async () => {
+    vc.fetchVoiceChangerAudio.mockRejectedValueOnce(new DeterministicJobError("The audio is 6 min long. Voice Changer takes audio up to 5 minutes: split or trim it to 5 minutes or less first."))
+    const job = makeJob("voice-changer", { audioUrl: "https://example.com/in.mp3", voiceId: "v-1", voiceChangerUnits: 2 })
+    const err = await captureThrow(() => audioAIHandlers["voice-changer"](job as never, makeCtx()))
+    expect(vc.fetchVoiceChangerAudio).toHaveBeenCalledWith("https://example.com/in.mp3", 2)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.mockDirectVoiceChanger).not.toHaveBeenCalled()
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+  })
+
+  it("a job queued before units existed (or the film pipeline's) is checked with no units: held to the 5-minute cap alone", async () => {
+    await audioAIHandlers["voice-changer"](makeJob("voice-changer", { videoUrl: "https://example.com/in.mp4", voiceId: "v-1" }) as never, makeCtx())
+    expect(vc.checkExtractedVoiceChangerAudio).toHaveBeenCalledWith("/tmp/vc/audio.mp3", undefined)
+    await audioAIHandlers["voice-changer"](makeJob("voice-changer", { audioUrl: "https://example.com/in.mp3", voiceId: "v-1", voiceChangerUnits: "3" }) as never, makeCtx())
+    expect(vc.fetchVoiceChangerAudio).toHaveBeenCalledWith("https://example.com/in.mp3", undefined)
+  })
+})
+
+// What a Voice Changer run cost is recorded (`provider_cost`), from the length
+// it sent at the vendor's rate — for a run priced by its audio's length only.
+describe("voice-changer: a run priced by its audio's length records what it cost", () => {
+  it("audio mode: the length sent at the rate, on the finalize", async () => {
+    mocks.mockProbeMediaStreams.mockResolvedValueOnce({ hasVideo: false, hasAudio: true })
+    vc.fetchVoiceChangerAudio.mockResolvedValueOnce({ bytes: Buffer.from("fetched-audio"), sentSec: 30 })
+    await audioAIHandlers["voice-changer"](makeJob("voice-changer", { audioUrl: "https://example.com/in.mp3", voiceId: "v-1", voiceChangerUnits: 3 }) as never, makeCtx())
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ cost: elevenlabsVoiceChangerCostUsd(30) }) }))
+  })
+
+  it("video mode: the extracted track's length at the rate, beside the completed video", async () => {
+    vc.checkExtractedVoiceChangerAudio.mockResolvedValueOnce(20)
+    await audioAIHandlers["voice-changer"](makeJob("voice-changer", { videoUrl: "https://example.com/in.mp4", voiceId: "v-1", voiceChangerUnits: 2 }) as never, makeCtx())
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({ provider_cost: elevenlabsVoiceChangerCostUsd(20) }))
+  })
+
+  it("a run that holds no units (the film pipeline's revoice, charged its flat row) records none", async () => {
+    await audioAIHandlers["voice-changer"](makeJob("voice-changer", { videoUrl: "https://example.com/in.mp4", voiceId: "v-1" }) as never, makeCtx())
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.not.objectContaining({ provider_cost: expect.anything() }))
   })
 })
 

@@ -73,7 +73,8 @@
 // follow its draft. And the shot list's frame rate (ShotListFpsSection.tsx,
 // use-shot-list-fps-section.tsx): how many frames a second the model that
 // writes a run's shot list is shown of the clip
-// (PUT /v1/admin/video-remake/shot-list-fps).
+// (PUT /v1/admin/video-remake/shot-list-fps). Under Prism, its Precise upscale
+// (PreciseUpscaleSection.tsx, use-precise-upscale-section.tsx).
 // Save sends each setting that changed, whole; runs pick them up within a
 // minute.
 //
@@ -151,6 +152,7 @@ import { usePlanRolesSection } from "./use-plan-roles-section"
 import { usePrevizSection } from "./use-previz-section"
 import { useShotLockSection } from "./use-shot-lock-section"
 import { useShotListFpsSection } from "./use-shot-list-fps-section"
+import { usePreciseUpscaleSection } from "./use-precise-upscale-section"
 import { FlashModelTest } from "./components/FlashModelTest"
 import {
   ADVANCED_SPEC,
@@ -277,6 +279,7 @@ export default function AdminNodaroMotionPage() {
   const previz = usePrevizSection(held)
   const shotLock = useShotLockSection(held)
   const shotListFps = useShotListFpsSection(held)
+  const preciseUpscale = usePreciseUpscaleSection(held)
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
   const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
   const wording = useSectionDraft(PROMPT_WORDING_SPEC, wordingQuery.data, (v) => v.promptWording, saveWording.mutateAsync, held)
@@ -311,6 +314,7 @@ export default function AdminNodaroMotionPage() {
     "precise-art-style": preciseArtStyle.binding,
     "no-person": noPerson.binding,
     "precise-style-route": preciseStyleRoute.binding,
+    "precise-upscale": preciseUpscale.binding,
     advanced: advanced.binding,
     "custom-style": customStyle.binding,
     "plan-roles": planRoles.binding,
@@ -407,7 +411,8 @@ export default function AdminNodaroMotionPage() {
     !planRoles.changed &&
     !previz.changed &&
     !shotLock.changed &&
-    !shotListFps.changed
+    !shotListFps.changed &&
+    !preciseUpscale.changed
   const pending =
     save.isPending ||
     saveMotion.isPending ||
@@ -425,7 +430,8 @@ export default function AdminNodaroMotionPage() {
     planRoles.pending ||
     previz.pending ||
     shotLock.pending ||
-    shotListFps.pending
+    shotListFps.pending ||
+    preciseUpscale.pending
 
   if (!hasAdmin()) return null
 
@@ -458,6 +464,7 @@ export default function AdminNodaroMotionPage() {
       if (shotLock.changed) await shotLock.save()
       // Its refusal is also said under its select (ShotListFpsSection).
       if (shotListFps.changed) await shotListFps.save()
+      if (preciseUpscale.changed) await preciseUpscale.save()
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
@@ -491,7 +498,8 @@ export default function AdminNodaroMotionPage() {
               !planRoles.changed &&
               !previz.changed &&
               !shotLock.changed &&
-              !shotListFps.changed) ||
+              !shotListFps.changed &&
+              !preciseUpscale.changed) ||
             issues.length > 0 ||
             preciseStyleRouteHeld ||
             pending ||
@@ -755,6 +763,7 @@ export default function AdminNodaroMotionPage() {
                     )}
                   </div>
                 )}
+                {engine.id === "nodaro-prism" && preciseUpscale.node}
               </section>
             ))}
           </div>

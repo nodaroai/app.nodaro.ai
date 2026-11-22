@@ -2,6 +2,7 @@
 
 export const labels = {
   "Split into Layers": {
+    "de": "In Ebenen teilen",
     "es": "Dividir en capas",
     "he": "פיצול לשכבות",
     "ja": "レイヤーに分割",

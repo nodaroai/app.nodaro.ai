@@ -2,6 +2,7 @@
 
 export const labels = {
   "Fixture Echo": {
+    "de": "Testecho",
     "es": "Eco de prueba",
     "he": "הד בדיקה",
     "ja": "フィクスチャー・エコー",

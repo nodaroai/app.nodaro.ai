@@ -155,9 +155,11 @@ import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style
 import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
 import { engineTakesNoPersonSourceClip, noPersonForPlugin } from "../nodaro-motion-no-person.js"
 import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
+import { PRECISE_UPSCALE_ALL_OFF, effectivePreciseUpscale, engineTakesPreciseUpscale } from "../cast-swap-prism-precise-upscale.js"
+import { topazVideoDisabledHere } from "../topaz-video-availability.js"
 import { customStyleForPlugin, engineTakesCustomStyle } from "../nodaro-motion-custom-style.js"
 import { customStyleOfferedByDefault } from "../nodaro-motion-custom-style-default.js"
-import { engineTakesPlanRoles, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
+import { engineTakesPlanRoles, engineTakesPlanRolesReview, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
 import { planRolesOfferedByDefault } from "../nodaro-motion-plan-roles-default.js"
 import { engineTakesPreviz, previzForPlugin } from "../nodaro-motion-previz.js"
 import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
@@ -1738,6 +1740,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   errorHintPromptSubject: true,
   // tk.settings.nodaroMotionPreciseStyleRoute(): whether a direct Prism Precise run with an art style runs as Flex, and who skips it.
   nodaroMotionPreciseStyleRoute: true,
+  // tk.settings.nodaroMotionPreciseUpscale(): per output resolution, the Topaz target a direct Prism Precise run's take
+  // is upscaled to before it is scaled back and delivered ("off": none).
+  nodaroMotionPreciseUpscale: true,
   // tk.settings.nodaroMotionCustomStyle(): whether this deployment offers Video Remake's custom style (resolved here), and the admin's two LLM steps.
   nodaroMotionCustomStyle: true,
   // tk.settings.nodaroMotionPlanRoles(): whether this deployment offers Video Remake's roles planned from the prompt (resolved here), and the admin's planning step.
@@ -2497,6 +2502,18 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const { faceMeshLayers: _layers, ...rest } = route
         return Object.keys(rest).length > 0 ? rest : null
       },
+      // Same rules: a failed read throws (the engine reads that as off, with an alert). Null only to an engine that
+      // does not declare `castSwap.preciseUpscale` (it never asks). Otherwise ALWAYS the effective value, never saved
+      // included: each resolution's stored choice, else its default (a fresh object the plugin may change). Every
+      // resolution "off" while this deployment does not run Topaz (its model withheld or its credit row switched off,
+      // topaz-video-availability.ts; per-account restrictions are the child's credit guard's, not this answer's).
+      nodaroMotionPreciseUpscale: async () => {
+        const settings = await getAppSettings()
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_upscale: the app settings could not be read")
+        if (!engineTakesPreciseUpscale(getPluginSupports().castSwap)) return null
+        if (topazVideoDisabledHere()) return { ...PRECISE_UPSCALE_ALL_OFF }
+        return effectivePreciseUpscale(settings.nodaro_motion_precise_upscale)
+      },
       // Same rules: a failed read throws (the engine reads that as not offered, with an alert). Null only to an
       // engine that does not declare `castSwap.customStyle` (it never asks). Otherwise ALWAYS an object, never
       // saved included: the engine reads null as not offered, and `enabled` is resolved here (the admin's saved
@@ -2514,8 +2531,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       nodaroMotionPlanRoles: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_plan_roles: the app settings could not be read")
-        if (!engineTakesPlanRoles(getPluginSupports().castSwap)) return null
-        return planRolesForPlugin(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault())
+        const cs = getPluginSupports().castSwap
+        if (!engineTakesPlanRoles(cs)) return null
+        // The step's review mode only to an engine that reads it (`castSwap.planRolesReview`).
+        return planRolesForPlugin(settings.nodaro_motion_plan_roles, planRolesOfferedByDefault(), engineTakesPlanRolesReview(cs))
       },
       // Same rules again: a failed read throws (the engine reads that as not accepted, with an alert). Null only to
       // an engine that does not declare `castSwap.previz` (it never asks). Otherwise ALWAYS an object, never saved

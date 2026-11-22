@@ -118,7 +118,7 @@ export function appFieldProblems(unit, m, reserved = new Map(Object.entries(NOT_
   const seen = new Set()
   const label = (key, at) => {
     if (!isNonEmptyString(key)) errors.push(`${at} must be a message key of the unit's strings.json keys`)
-    else if (!keys.has(key)) errors.push(`${at}: "${key}" is not a key of the unit's strings.json keys (a label reads in every interface language — add it there, in all six dicts)`)
+    else if (!keys.has(key)) errors.push(`${at}: "${key}" is not a key of the unit's strings.json keys (a label reads in every interface language — add it there, in all seven dicts)`)
   }
   fields.forEach((f, i) => {
     const at = `appFields[${i}]`

@@ -27,7 +27,7 @@
 import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
-import { AUDIO_ISOLATION_RATE_ID, LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, motionTransferRateOf, seedanceLipSyncCreditId, videoToVideoClipRateOf, WAN_VIDEOEDIT_FLOOR_CREDIT_ID } from "@nodaro/shared/credits"
+import { AUDIO_ISOLATION_RATE_ID, LIP_SYNC_UNMEASURED_ESTIMATE_SECONDS, VOICE_CHANGER_RATE_ID, isPerSecondLipSyncProvider, isSeedanceLipSyncProvider, lipSyncAudioRateOf, motionTransferRateOf, seedanceLipSyncCreditId, videoToVideoClipRateOf, WAN_VIDEOEDIT_FLOOR_CREDIT_ID } from "@nodaro/shared/credits"
 import { LLM_FEATURE_DEFAULTS, getLlmModel, llmDefaultsFeature, llmPriceKey, type LlmFeature } from "@nodaro/shared/llm-models"
 import type { MeteredLlmFeature } from "../../../ee/billing/llm-typical-usage.js"
 import { amountAbbreviation, amountWord, statedAmount, unitFields } from "../amounts.js"
@@ -154,6 +154,16 @@ export function videoToVideoClipPriceHint(): string {
 export function audioIsolationPriceHint(): string {
   if (!hasCredits()) return OFF_CLOUD
   return `${stated(rateCreditsOf(AUDIO_ISOLATION_RATE_ID, 1), `${AUDIO_ISOLATION_RATE_ID}@1`)} ${amountAbbreviation()} per started 10 s`
+}
+
+/**
+ * Voice Changer's price for a tool description: the charged price of one
+ * started 10 seconds of the audio it revoices (a video's sound). Off-cloud,
+ * the `list_models` pointer.
+ */
+export function voiceChangerPriceHint(): string {
+  if (!hasCredits()) return OFF_CLOUD
+  return `${stated(rateCreditsOf(VOICE_CHANGER_RATE_ID, 1), `${VOICE_CHANGER_RATE_ID}@1`)} ${amountAbbreviation()} per started 10 s`
 }
 
 /** The model a metered LLM feature runs on when the caller names none (borrowed defaults included). */

@@ -1871,7 +1871,7 @@ and the voice app, per language.**
   bad entry never stops the deployment from starting. An entry is dropped when:
   - its key is not one of that product's;
   - its language is not one you offer: `locale.offered`, or, without it, that
-    product's languages (the editor's are `en`, `es`, `he`, `ja`, `ko`, `pt-BR`);
+    product's languages (the editor's are `en`, `de`, `es`, `he`, `ja`, `ko`, `pt-BR`);
   - its text is blank, longer than 1,000 characters, or not plain text. Plain
     text has no HTML (no tag such as `<b>` or `</a>`, no comment, no character
     reference such as `&amp;`: the editor shows text exactly as written), no

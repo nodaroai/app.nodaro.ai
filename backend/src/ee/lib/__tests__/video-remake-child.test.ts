@@ -153,6 +153,7 @@ const PRISM = { provider: "seedance-2-5", prompt: "p", duration: 8, resolution: 
 const PREVIEW = { provider: "seedance-2-5", prompt: "p", draft: true, referenceVideoUrls: ["https://cdn.example.com/clip.mp4"] }
 const PULSE = { provider: "kling-4", prompt: "p", duration: 8, resolution: "1080p", referenceVideoUrls: ["https://cdn.example.com/clip.mp4"] }
 const FINALIZE = { provider: "seedance-2-5-hd", sourceJobId: "22222222-2222-4222-8222-222222222222" }
+const TOPAZ = { provider: "topaz", videoUrl: "https://cdn.example.com/take.mp4", targetResolution: "1080p", targetFps: 24, forcePrivate: true }
 
 const internal = (userId = USER) => ({ "x-internal-orchestrator-secret": SECRET, "x-internal-user-id": userId })
 
@@ -296,6 +297,21 @@ describe("the watermark of a Video Remake run's own jobs", () => {
     ])("still marks %s, the video the run delivers", async (_name, url, body, type) => {
       parent(remakeRun({ job_type: type }))
       expect(markOf(await child(url, body))).toBe(true)
+    })
+
+    it.each([
+      ["a run's Precise upscale", "cast-swap"],
+      ["a Full Quality's Precise upscale", "cast-swap-full-quality"],
+    ])("stores %s (Topaz on the take, already the marked result) unmarked", async (_name, type) => {
+      parent(remakeRun({ job_type: type }))
+      expect(markOf(await child(UPSCALE, TOPAZ))).toBe(false)
+    })
+
+    it("judges a Topaz upscale asked directly, or under a parent that is no Video Remake run, as before", async () => {
+      parent(remakeRun())
+      refusedAsFreeVideo(await direct(UPSCALE, TOPAZ))
+      parent(remakeRun({ job_type: "generate-video", input_data: { type: "generate-video" } }))
+      refusedAsFreeVideo(await child(UPSCALE, TOPAZ))
     })
 
     it("still marks a result route reached with a query string", async () => {

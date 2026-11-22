@@ -16,7 +16,7 @@ import { ugcSeconds } from "../ugc-node-cards"
  * names each in the person's language by its stable id; English keeps the
  * server's own words, and an id it does not know keeps them too.
  */
-const setLocale = (l: "he" | "en" | "de") => act(() => { useLocaleStore.getState().setLocale(l) })
+const setLocale = (l: "he" | "en" | "fr") => act(() => { useLocaleStore.getState().setLocale(l) })
 afterEach(() => setLocale("en"))
 
 /** The English each id comes with from the server (its public copy). */
@@ -48,7 +48,7 @@ describe("a UGC quote line in the person's language", () => {
     expect(ugcQuoteLineLabel({ label: "Something new", key: "somethingNew" })).toBe("Something new")
     expect(ugcQuoteLineLabel({ label: "Captions" })).toBe("Captions")
     expect(ugcQuoteLineLabel({ label: "Clip 1 (12 s)", key: "clip" })).toBe("Clip 1 (12 s)")
-    setLocale("de")
+    setLocale("fr")
     expect(ugcQuoteLineLabel({ label: "Join the clips", key: "join" })).toBe("Join the clips")
   })
 
@@ -117,7 +117,7 @@ describe("a sentence a UGC node fails with, in the person's language", () => {
     for (const other of ["This photo can't be used.", "UGC step failed (500)", `${UGC_SCRIPT_NEEDS_CHANGES} `, UGC_SCRIPT_NEEDS_CHANGES, ""]) {
       expect(ugcNodeMessageText(other), other).toBe(other)
     }
-    setLocale("de")
+    setLocale("fr")
     expect(ugcNodeMessageText(UGC_NODE_MESSAGES.needsGender)).toBe(UGC_NODE_MESSAGES.needsGender)
     expect(ugcNodeMessageText(refused)).toBe(refused)
   })

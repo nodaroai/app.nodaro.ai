@@ -83,7 +83,7 @@ describe("a node's preview refusal", () => {
   })
 
   it("in every language, no review-held text names a node type", () => {
-    for (const locale of ["es", "he", "ja", "ko", "pt-BR"] as const) {
+    for (const locale of ["de", "es", "he", "ja", "ko", "pt-BR"] as const) {
       const tighten = localizeNodeLabel("Tighten Episode", locale)
       const trailer = localizeNodeLabel("Trailer", locale)
       const pack = localizeNodeLabel("Clip Pack", locale)

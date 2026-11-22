@@ -78,7 +78,7 @@ import { isGeminiTtsModel } from "../../providers/kie/gemini-tts-models.js"
  * checked against its handler under workers/handlers/).
  */
 const CORE_HANDLER_PROVIDERS: Readonly<Record<string, string>> = Object.freeze({
-  "voice-changer": "elevenlabs", // directVoiceChanger / voiceChangerFromUrl
+  "voice-changer": "elevenlabs", // directVoiceChanger
   "voice-design": "elevenlabs", // designVoice
   "voice-remix": "elevenlabs", // remixVoice
   "dubbing": "elevenlabs", // startDubbing

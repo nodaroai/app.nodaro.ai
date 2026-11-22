@@ -23,7 +23,7 @@
    "ltx-2.3-pro-retake:per-second": 40,
    "elevenlabs-v4:per-100-chars": 4,
    "elevenlabs-dialogue:per-100-chars": 4,
-   "elevenlabs-dubbing": 40,
+   "elevenlabs-dubbing": 260,
    "speaker-frames": 2,
    "topaz-video:per-unit": 40,
    "omnihuman-2-0:per-second": 35,
@@ -35,7 +35,8 @@
    "wan-animate-replace:720p:per-4s": 125,
    "happyhorse-edit:720p:per-4s": 560,
    "wan-videoedit:1080p:per-4s": 240,
-   "elevenlabs-isolation:per-10s": 10
+   "elevenlabs-isolation:per-10s": 10,
+   "elevenlabs-voice-changer:per-10s": 10
   }
  },
  "cases": [
@@ -1067,9 +1068,9 @@
     "rateId": "elevenlabs-dubbing",
     "units": 5,
     "quoteId": "elevenlabs-dubbing:5u",
-    "servedUnit": 45,
-    "credits": 224,
-    "perUnitQuote": 225
+    "servedUnit": 292,
+    "credits": 1456,
+    "perUnitQuote": 1460
    }
   },
   {
@@ -1092,9 +1093,9 @@
     "rateId": "elevenlabs-dubbing",
     "units": 7,
     "quoteId": "elevenlabs-dubbing:7u",
-    "servedUnit": 45,
-    "credits": 314,
-    "perUnitQuote": 315
+    "servedUnit": 292,
+    "credits": 2039,
+    "perUnitQuote": 2044
    }
   },
   {
@@ -1511,6 +1512,99 @@
     "servedUnit": 12,
     "credits": 35,
     "perUnitQuote": 36
+   }
+  },
+  {
+   "name": "Voice Changer: a 25.3 s audio upload — 3 started ten seconds",
+   "nodes": [
+    {
+     "id": "a",
+     "type": "upload-audio",
+     "data": {
+      "url": "https://m.test/interview.mp3",
+      "metadata": {
+       "durationSeconds": 25.3
+      }
+     }
+    },
+    {
+     "id": "x",
+     "type": "voice-changer",
+     "data": {
+      "voiceId": "Rachel"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "a-x",
+     "source": "a",
+     "target": "x",
+     "targetHandle": "audio"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-voice-changer:per-10s",
+    "units": 3,
+    "quoteId": "elevenlabs-voice-changer:per-10s:3u",
+    "servedUnit": 12,
+    "credits": 35,
+    "perUnitQuote": 36
+   }
+  },
+  {
+   "name": "Voice Changer: a 61.2 s video upload wins over an 8 s audio upload — 7 started ten seconds of the video's sound",
+   "nodes": [
+    {
+     "id": "v",
+     "type": "upload-video",
+     "data": {
+      "url": "https://m.test/talking.mp4",
+      "videoDurationSec": 61.2,
+      "duration": 61.2
+     }
+    },
+    {
+     "id": "a",
+     "type": "upload-audio",
+     "data": {
+      "url": "https://m.test/line.mp3",
+      "metadata": {
+       "durationSeconds": 8
+      }
+     }
+    },
+    {
+     "id": "x",
+     "type": "voice-changer",
+     "data": {
+      "voiceId": "Rachel"
+     }
+    }
+   ],
+   "edges": [
+    {
+     "id": "v-x-video",
+     "source": "v",
+     "target": "x",
+     "targetHandle": "video"
+    },
+    {
+     "id": "a-x-audio",
+     "source": "a",
+     "target": "x",
+     "targetHandle": "audio"
+    }
+   ],
+   "node": "x",
+   "expect": {
+    "rateId": "elevenlabs-voice-changer:per-10s",
+    "units": 7,
+    "quoteId": "elevenlabs-voice-changer:per-10s:7u",
+    "servedUnit": 12,
+    "credits": 81,
+    "perUnitQuote": 84
    }
   }
  ]

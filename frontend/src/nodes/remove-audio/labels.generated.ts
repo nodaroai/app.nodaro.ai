@@ -2,6 +2,7 @@
 
 export const labels = {
   "Remove Audio": {
+    "de": "Audio entfernen",
     "es": "Quitar audio",
     "he": "הסרת אודיו",
     "ja": "オーディオを削除",

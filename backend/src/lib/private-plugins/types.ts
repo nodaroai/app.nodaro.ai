@@ -3865,6 +3865,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionPreciseStyleRoute?: boolean
   /**
+   * `tk.settings.nodaroMotionPreciseUpscale()` exists: per output resolution,
+   * the Topaz target a DIRECT run on Nodaro Prism that is Precise sends its
+   * take to before it is scaled back and delivered. An older host has no such
+   * member: a plugin runs no upscale there.
+   */
+  readonly nodaroMotionPreciseUpscale?: boolean
+  /**
    * `tk.settings.nodaroMotionCustomStyle()` exists: the deployment's
    * custom-style setting for Video Remake (whether a run may take the style in
    * the person's own words, and the admin's instructions and models for its
@@ -4336,6 +4343,17 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionPreciseStyleRoute?(): Promise<PluginNodaroMotionPreciseStyleRoute | null>
   /**
+   * The admin's Precise upscale, EFFECTIVE: each output resolution's choice
+   * ("off", or the Topaz target: 480p and 720p "720p" | "1080p" | "4k", 1080p
+   * "1080p" | "4k"), a resolution never saved at its default (480p and 720p
+   * "1080p", 1080p "4k"); every resolution "off" while this deployment does
+   * not run Topaz (its model withheld or switched off). Null only when this host's engine does not declare
+   * `castSwap.preciseUpscale`. Returns a fresh object. REJECTS when the
+   * settings could not be read. Advertised as
+   * `capabilities.nodaroMotionPreciseUpscale`.
+   */
+  nodaroMotionPreciseUpscale?(): Promise<PluginNodaroMotionPreciseUpscale | null>
+  /**
    * Video Remake's custom style (`direction.customStyle`, the style in the
    * person's own words), for the whole deployment:
    * - `enabled`: whether this deployment offers it, ALREADY RESOLVED by the
@@ -4360,7 +4378,10 @@ export interface PluginSettingsToolkit {
    *   Nodaro's own, off under a white-label surface profile). Only `true`
    *   offers it; a plugin cannot tell the deployments apart itself.
    * - `plan`: the admin's own instructions and model for the one LLM step
-   *   (`{ instructions?, model? }`; absent: the engine's defaults).
+   *   (`{ instructions?, model?, review? }`; absent: the engine's defaults).
+   *   `review` ("targeted" | "full"): how the engine checks a plan after it
+   *   is answered; sent only to an engine that declares
+   *   `castSwap.planRolesReview`.
    * Always an object while this host's engine declares `castSwap.planRoles`
    * (never saved answers `{ enabled }` alone); null to an engine that does not
    * declare it (it never asks). Returns a copy the plugin may change freely.
@@ -4468,7 +4489,8 @@ export type PluginNodaroMotionShotListFps = {
 /** Video Remake's plan-roles setting as a plugin is answered it: `enabled` resolved by the host, the step as an admin set it. */
 export type PluginNodaroMotionPlanRoles = {
   readonly enabled?: boolean
-  readonly plan?: PluginNodaroMotionCustomStyleStep
+  /** The planning step: a custom-style step's fields, and its `review` mode (only to an engine that declares `castSwap.planRolesReview`). */
+  readonly plan?: PluginNodaroMotionCustomStyleStep & { readonly review?: "targeted" | "full" }
 }
 
 /** One LLM step of Video Remake's custom style, as an admin set it; a field left out is the engine's default. */
@@ -4494,6 +4516,13 @@ export type PluginNodaroMotionNoPerson = {
   readonly [publicEngineId: string]: {
     readonly sourceClip?: false
   }
+}
+
+/** Video Remake's Precise upscale, per output resolution: "off" or the Topaz target. Every resolution is present. */
+export type PluginNodaroMotionPreciseUpscale = {
+  readonly "480p": "off" | "720p" | "1080p" | "4k"
+  readonly "720p": "off" | "720p" | "1080p" | "4k"
+  readonly "1080p": "off" | "1080p" | "4k"
 }
 
 /** Video Remake's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
@@ -5035,6 +5064,14 @@ export interface PluginSupports {
    *   the host must not send it and answers that a previz clip's roles are
    *   not planned (lib/nodaro-motion-plan-roles.ts
    *   `engineTakesPlanRolesPreviz`).
+   * - `planRolesReview`: the engine reads the planning step's `review`
+   *   (`tk.settings.nodaroMotionPlanRoles()`'s `plan.review`: "targeted",
+   *   its default — narrow checks after the plan, each only where its
+   *   trigger holds — or "full", one more call that corrects the whole
+   *   plan), and its `POST /v1/cast-swap/plan-roles-setting` answers
+   *   `reviewModes` and `defaults.review`. Additive-optional: absent ⇒ the
+   *   host neither saves nor sends a `review`
+   *   (lib/nodaro-motion-plan-roles.ts `engineTakesPlanRolesReview`).
    * - `previz`: a DIRECT run on Nodaro Prism (and its estimate) takes
    *   `clipKind: "previz"`: its clip is a 3D previz (simple untextured models
    *   moved and filmed as the video to make will be), sent as the engine's
@@ -5199,6 +5236,27 @@ export interface PluginSupports {
    *   the engine no map, and `photographicStyles: "precise"` in its place when
    *   every Filmed style is "precise" in it (lib/nodaro-motion-precise-style-route.ts
    *   `styleRoutesForEngine`); the admin screen names that environment.
+   * - `preciseUpscale` (2026-11-22): a DIRECT Precise run on Nodaro Prism
+   *   (not a draft, not a trend run, not one made the Flex way) sends its take
+   *   to Topaz video upscale (`POST /v1/video-upscale`, provider "topaz", key
+   *   `cast-swap-topaz:<jobId>`; its Full Quality `cast-swap-fq-topaz:<jobId>`)
+   *   at the admin's target for its resolution
+   *   (`tk.settings.nodaroMotionPreciseUpscale`), then scales the result back
+   *   to the take's own frame, and quotes the step as the breakdown line
+   *   `upscale`. It queues the target as `preciseUpscale` and stores it as
+   *   `input_data.__castSwapPreciseUpscale`, and the step's sized wait as
+   *   `preciseUpscaleWaitMs` / `input_data.__castSwapUpscaleWaitMs` (the job
+   *   budget reads each, rounded up to whole minutes and capped at 45 min,
+   *   or the 45 min cap for a named target with no wait,
+   *   providers/video/cast-swap-budget.ts), a 4k target stepped down to 1080p
+   *   as `preciseUpscaleSteppedFrom` / `input_data.__castSwapPreciseUpscaleSteppedFrom`,
+   *   checkpoints the child as `__castSwapUpscaleChildJobId` and
+   *   `__castSwapUpscaleTarget`, hands a Full Quality an earlier child as
+   *   `reuseUpscaleJobId`, and records the outcome on the completion as
+   *   `__castSwapUpscale: { target, applied, childJobId?, reason?, steppedFrom?, reused? }`;
+   *   the platform passes these hidden keys through unchanged. Additive-optional: absent ⇒ the platform answers the engine
+   *   the setting as null and the engine runs no upscale
+   *   (lib/cast-swap-prism-precise-upscale.ts `engineTakesPreciseUpscale`).
    *
    * Absent ⇒ an engine that predates Trends: publishing treats that
    * environment as supporting no trend at all.
@@ -5259,10 +5317,12 @@ export interface PluginSupports {
     readonly preciseStyleRoutePhotographic?: boolean
     readonly preciseStyleRoutePerStyle?: boolean
     readonly preciseStyleRoute?: boolean
+    readonly preciseUpscale?: boolean
     readonly shotListSpeech?: boolean
     readonly customStyle?: boolean
     readonly planRoles?: boolean
     readonly planRolesPreviz?: boolean
+    readonly planRolesReview?: boolean
     readonly previz?: boolean
     readonly shotLock?: boolean
     readonly shotLockRunTypes?: boolean

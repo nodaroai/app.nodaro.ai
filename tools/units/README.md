@@ -76,8 +76,8 @@ npm run gen:units -- --new <type> --category <category> --kind <worker|sync|inli
   1. fill the folders: the node's step (the one that throws "is not written
      yet"), its handles in `unit.json` with the matching `types.ts` fields and
      `node.tsx` pips;
-  2. `strings.json`: the node label in es/he/ja/ko/pt-br (`labels`) and any UI
-     string only the unit uses, in all six dicts (`keys`);
+  2. `strings.json`: the node label in de/es/he/ja/ko/pt-br (`labels`) and any UI
+     string only the unit uses, in all seven dicts (`keys`);
   3. its page under `docs/nodes/`, in the same PR: `docs.page` replaces the
      scaffold's `docs.awaiting` (docs-node-registry-parity needs the page, and
      gen:units writes its `docs/nodes/README.md` row from `docs.page`); until
@@ -595,7 +595,7 @@ legacy nodes' sources:
   in steps of `step` (a slider card).
 - `labelKey` (and an option's, optional — without one the option shows its
   value) is a key of the unit's own `strings.json` `keys`, so it is in all
-  six dicts and reads in the interface language.
+  seven dicts and reads in the interface language.
 - The validator (`app-field-rules.mjs`) holds each field to the node: it is a
   key of `defaultData` whose value is one of its options (or a whole number in
   its range, on its step), never an input's `field` or an output's `from`,

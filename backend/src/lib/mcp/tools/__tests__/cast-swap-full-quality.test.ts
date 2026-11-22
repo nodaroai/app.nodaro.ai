@@ -167,6 +167,15 @@ describe("estimate_full_quality", () => {
     expect(res.content[0]!.text).toMatch(/reuse/i)
   })
 
+  it("says when the quote includes a Topaz upscale, and not otherwise", async () => {
+    const upscaled = { ...QUOTE, breakdown: { ...QUOTE.breakdown, upscale: 220 } }
+    const { fastify } = stubFastify({ [EST_URL]: { statusCode: 200, body: upscaled } })
+    const res = await callTool(serverWith(fastify), "estimate_full_quality", { job_id: "draft-1" })
+    expect(res.content[0]!.text).toMatch(/Topaz upscale/)
+    const plain = stubFastify({ [EST_URL]: { statusCode: 200, body: QUOTE } })
+    expect((await callTool(serverWith(plain.fastify), "estimate_full_quality", { job_id: "draft-1" })).content[0]!.text).not.toMatch(/Topaz/)
+  })
+
   it("refuses a job id that is not an id, sending nothing", async () => {
     const { fastify, calls } = stubFastify({})
     for (const tool of ["estimate_full_quality", "full_quality"]) {

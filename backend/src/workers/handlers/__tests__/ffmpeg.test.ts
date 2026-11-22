@@ -813,18 +813,36 @@ describe("add-captions handler — the render follows the source frame rate", ()
 
   // S6's second fallback: the plan's frame budget is checked at plan validation,
   // which is AFTER credits are reserved (and after any paid transcription), so a
-  // clip long enough to blow it renders at the historical 30 instead.
-  it("falls back to 30 when duration x source fps would exceed the plan's frame cap", async () => {
-    mocks.mockProbeVideoSource.mockResolvedValueOnce({ width: 1080, height: 1920, durationSeconds: 1860, fps: 60 })
-    await handler(kineticJob() as never, makeCtx())
+  // render long enough to blow it renders at the historical 30 instead. A video
+  // is held to 5 minutes (below), so only captions timed past the video's end
+  // can reach it now.
+  it("falls back to 30 when the captions' span x source fps would exceed the plan's frame cap", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValueOnce({ width: 1080, height: 1920, durationSeconds: 60, fps: 60 })
+    const job = makeJob("add-captions", {
+      videoUrl: "https://v.mp4",
+      style: "karaoke",
+      captions: [{ text: "hi", startMs: 0, endMs: 1000 }, { text: "late", startMs: 1_859_000, endMs: 1_860_000 }],
+    })
+    await handler(job as never, makeCtx())
     // 31 min at 60 fps = 111,600 frames, past the cap; at 30 it is 55,800.
     expect(planOf()).toMatchObject({ fps: 30, durationInFrames: 55800 })
   })
 
-  it("keeps 60 for a long clip that still FITS the cap", async () => {
-    mocks.mockProbeVideoSource.mockResolvedValueOnce({ width: 1080, height: 1920, durationSeconds: 1700, fps: 60 })
+  it("keeps 60 for a video within the 5-minute limit", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValueOnce({ width: 1080, height: 1920, durationSeconds: 300, fps: 60 })
     await handler(kineticJob() as never, makeCtx())
-    expect(planOf()).toMatchObject({ fps: 60, durationInFrames: 102000 })
+    expect(planOf()).toMatchObject({ fps: 60, durationInFrames: 18000 })
+  })
+
+  it("refuses a video past 5 minutes before it is transcribed or rendered (the route and the workflow run refuse it before the hold)", async () => {
+    mocks.mockProbeVideoSource.mockResolvedValueOnce({ width: 1080, height: 1920, durationSeconds: 1860, fps: 60 })
+    mocks.mockTranscribe.mockClear()
+    const err = await handler(makeJob("add-captions", { videoUrl: "https://v.mp4", style: "karaoke" }) as never, makeCtx()).then(() => null, (e: unknown) => e)
+    expect((err as Error).name).toBe("DeterministicJobError")
+    expect((err as Error).message).toMatch(/up to 5 minutes/)
+    // Refused on the probe: no transcription is paid for.
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
+    expect(mocks.mockRenderQueueAdd).not.toHaveBeenCalled()
   })
 })
 

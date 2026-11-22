@@ -18,7 +18,9 @@ import {
   CALLER_AUDIO_FORMATS,
   damagePosition,
   decodeAudioToPcm,
+  DECODED_AUDIO_MEASURE_TIMEOUT_MS,
   decodedAudioArgs,
+  decodedAudioTimeoutMs,
   decodedPcmInputArgs,
   gapFillFilter,
   isAudioReadStopped,
@@ -33,6 +35,12 @@ const FORMATS = "mp3,wav,w64,aiff,caf,au,mov,aac,ac3,eac3,amr,ogg,flac,matroska,
 const WHITELIST = ["-protocol_whitelist", "file", "-format_whitelist", FORMATS]
 
 describe("the pieces", () => {
+  it("gives a decode the usual minute, or a tenth of the audio's own time when that is longer (a 30-minute dub's file)", () => {
+    expect(decodedAudioTimeoutMs(15)).toBe(DECODED_AUDIO_MEASURE_TIMEOUT_MS)
+    expect(decodedAudioTimeoutMs(300.05)).toBe(DECODED_AUDIO_MEASURE_TIMEOUT_MS)
+    expect(decodedAudioTimeoutMs(1801)).toBe(180_100)
+  })
+
   it("decodes the first audio track of a local file in a container the lane takes to 44.1 kHz stereo s16le, gaps filled, stopped one sample frame past the cap", () => {
     expect(decodedAudioArgs("in", "in.pcm", 300)).toEqual([
       "-nostdin", "-v", "error", ...WHITELIST, "-i", "in", "-map", "0:a:0", "-vn", "-af", gapFillFilter(300),

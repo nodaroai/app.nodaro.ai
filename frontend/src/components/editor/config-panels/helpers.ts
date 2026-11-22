@@ -10,6 +10,7 @@ import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
   buildVideoCreditModelIdentifier,
   AUDIO_ISOLATION_RATE_ID,
+  VOICE_CHANGER_RATE_ID,
   seedanceVideoEditCreditId,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
@@ -885,6 +886,13 @@ export function getModelIdentifier(
   // estimate multiplies by the started ten seconds of its audio
   // (PRICING_UNIT_ESTIMATORS → audioIsolationPricingUnits).
   if (nodeType === "audio-isolation") return AUDIO_ISOLATION_RATE_ID
+
+  // Voice Changer (decided 2026-11-22): its per-10-second row, which every
+  // estimate multiplies by the started ten seconds of the audio it revoices —
+  // a wired video's sound when one is wired (PRICING_UNIT_ESTIMATORS →
+  // voiceChangerPricingUnits). Above the `!provider` bail: the node names its
+  // speech-to-speech `model`, never a provider.
+  if (nodeType === "voice-changer") return VOICE_CHANGER_RATE_ID
 
   // A node naming no model whose default is priced per input image: as the server estimate.
   // An Extend Video node naming no provider runs on the node's default

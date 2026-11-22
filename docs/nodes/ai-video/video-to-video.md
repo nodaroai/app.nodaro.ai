@@ -164,7 +164,7 @@ avoided into the instruction itself.
 }
 ```
 
-(The zeros stand for the figures of your own clip.) `videoRemake.quote` is what [`POST /v1/video-remake/estimate`](../../api-integration.md#13f-video-remake-cloud-edition) answers for `videoRemake.run.body`, with the engine's name: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged, and `privacyCredits`, when present, is charged only if a refused clip is retried (a run needs the balance for both). Send `videoRemake.run.body` to `POST /v1/video-remake` as it is to run it (SDK: `client.videoRemake.run(result.videoRemake.run.body)`); add roles, references or an art style there for more than an instruction.
+(The zeros stand for the figures of your own clip.) `videoRemake.quote` is what [`POST /v1/video-remake/estimate`](../../api-integration.md#13f-video-remake-cloud-edition) answers for `videoRemake.run.body`, with the engine's name: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged, and `privacyCredits`, when present, is charged only if a refused clip is retried (a run needs the balance for both). Its `breakdown` may name more parts than the example; for one, `upscale` appears when the deployment's setting adds a Topaz upscale to a Precise Nodaro Prism run at its resolution (the result is upscaled, then scaled back to the run's resolution; that part settles to the units Topaz used). Send `videoRemake.run.body` to `POST /v1/video-remake` as it is to run it (SDK: `client.videoRemake.run(result.videoRemake.run.body)`); add roles, references or an art style there for more than an instruction.
 
 What the request may carry:
 

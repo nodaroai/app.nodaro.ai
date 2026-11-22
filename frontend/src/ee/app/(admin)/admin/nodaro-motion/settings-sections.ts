@@ -21,6 +21,8 @@ import type {
   NodaroMotionPlanRoles,
   NodaroMotionPreciseArtStyle,
   NodaroMotionPreciseStyleRoute,
+  NodaroMotionPreciseUpscale,
+  NodaroMotionPreciseUpscaleEffective,
   NodaroMotionPreviz,
   NodaroMotionPromptParts,
   NodaroMotionPromptWording,
@@ -46,6 +48,7 @@ import { planRolesToSaved } from "./components/PlanRolesSection"
 import { previzToSaved } from "./components/PrevizSection"
 import { shotLockToSaved } from "./components/ShotLockSection"
 import { shotListFpsToSaved } from "./components/ShotListFpsSection"
+import { preciseUpscaleEffective } from "./components/PreciseUpscaleSection"
 
 /** Every section a stored set holds, by the server's key. */
 export const MOTION_SETTINGS_KEYS = [
@@ -61,6 +64,7 @@ export const MOTION_SETTINGS_KEYS = [
   "precise-art-style",
   "no-person",
   "precise-style-route",
+  "precise-upscale",
   "advanced",
   "custom-style",
   "plan-roles",
@@ -248,6 +252,14 @@ export const PRECISE_STYLE_ROUTE_SPEC = spec<NodaroMotionPreciseStyleRoute, Prec
   saveArgOf: (body) => body.preciseStyleRoute,
 })
 
+/** The Precise upscale: the draft and the body are the whole effective setting (never saved: every default). */
+export const PRECISE_UPSCALE_SPEC = spec<NodaroMotionPreciseUpscale, NodaroMotionPreciseUpscaleEffective, { preciseUpscale: NodaroMotionPreciseUpscaleEffective }>({
+  draftOf: (stored) => preciseUpscaleEffective(stored),
+  bodyOf: (draft) => ({ preciseUpscale: preciseUpscaleEffective(draft) }),
+  storedOfBody: (body) => body.preciseUpscale,
+  saveArgOf: (body) => body.preciseUpscale,
+})
+
 export const PROMPT_PARTS_SPEC = spec<NodaroMotionPromptParts, NodaroMotionPromptParts, { promptParts: NodaroMotionPromptParts }>({
   draftOf: (stored) => structuredClone(stored ?? {}),
   bodyOf: (draft) => ({ promptParts: promptPartsToSave(draft) }),
@@ -276,6 +288,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   "precise-art-style": PRECISE_ART_STYLE_SPEC,
   "no-person": NO_PERSON_SPEC,
   "precise-style-route": PRECISE_STYLE_ROUTE_SPEC,
+  "precise-upscale": PRECISE_UPSCALE_SPEC,
   advanced: ADVANCED_SPEC,
   "custom-style": CUSTOM_STYLE_SPEC,
   "plan-roles": PLAN_ROLES_SPEC,

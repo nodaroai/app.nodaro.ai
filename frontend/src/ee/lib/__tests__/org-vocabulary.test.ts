@@ -114,6 +114,7 @@ describe("the workspace word's gender", () => {
   const heT: TFunction = (key, vars) => translate("he", key, vars)
   const ptT: TFunction = (key, vars) => translate("pt-BR", key, vars)
   const esT: TFunction = (key, vars) => translate("es", key, vars)
+  const deT: TFunction = (key, vars) => translate("de", key, vars)
 
   it("takes a translated default's gender from the dictionary", () => {
     expect(localizeVocabulary({ workspace: "Class" }, "he").workspace_gender).toBe("f")
@@ -121,6 +122,9 @@ describe("the workspace word's gender", () => {
     // Spanish: "Equipo" is masculine, "Clase" feminine.
     expect(localizeVocabulary({ workspace: "Team" }, "es").workspace_gender).toBe("m")
     expect(localizeVocabulary({ workspace: "Class" }, "es").workspace_gender).toBe("f")
+    // German: the team word and the class word are feminine.
+    expect(localizeVocabulary({ workspace: "Team" }, "de").workspace_gender).toBe("f")
+    expect(localizeVocabulary({ workspace: "Class" }, "de").workspace_gender).toBe("f")
   })
 
   it("takes the organization's own word's gender from its overrides", () => {
@@ -142,6 +146,8 @@ describe("the workspace word's gender", () => {
     expect(workspaceGender({}, ptT)).toBe("f")
     // Spanish's generic word, "espacio de trabajo", is masculine.
     expect(workspaceGender({}, esT)).toBe("m")
+    // German's generic word, "Arbeitsbereich", is masculine.
+    expect(workspaceGender({}, deT)).toBe("m")
   })
 
   it("renders the Portuguese masculine sentences", () => {

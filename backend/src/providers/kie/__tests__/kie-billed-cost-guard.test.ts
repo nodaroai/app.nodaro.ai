@@ -21,8 +21,8 @@ const KIE_DIR = join(__dirname, "..")
 const CATALOG_FIGURE_SITES: Readonly<Record<string, Readonly<Record<string, { count: number; why: string }>>>> = {
   "video.ts": {
     runKling3: { count: 1, why: "Kling 3.0 Video (Image/Text to Video): not a lane of this change" },
-    imageToVideo: { count: 3, why: "Image to Video (VEO, Runway, the generic createTask branch): not a lane of this change" },
-    textToVideo: { count: 3, why: "Text to Video (VEO, Runway, the generic createTask branch): not a lane of this change" },
+    imageToVideo: { count: 2, why: "Image to Video (VEO, Runway): not a lane of this change" },
+    textToVideo: { count: 2, why: "Text to Video (VEO, Runway): not a lane of this change" },
     videoToVideo: { count: 1, why: "Runway Aleph: its record-info poll returns only the video's URL (runway-client.ts pollAlephRecordInfo)" },
     lipSyncVideo: { count: 1, why: "Video Lip Sync: not a lane of this change" },
     speechToVideo: { count: 1, why: "Speech to Video: not a lane of this change" },
@@ -38,7 +38,9 @@ const CATALOG_FIGURE_SITES: Readonly<Record<string, Readonly<Record<string, { co
 const BILLED_COST_SITES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
   // Video to Video: Luma Modify, HappyHorse Edit, Wan VideoEdit, and Wan 2.6 + Wan Flash (one shared branch).
   // Motion Transfer: Kling 3.0, Wan Animate Move/Replace (one shared branch), Kling 2.6.
-  "video.ts": { videoToVideo: 4, motionTransfer: 3 },
+  // The generic createTask branch of Image and Text to Video, through one helper
+  // (MiniMax Hailuo 3 reads the task's bill; every other model there its catalog figure).
+  "video.ts": { recordedGenericVideoCost: 1, videoToVideo: 4, motionTransfer: 3 },
   // Audio Isolation left KIE for ElevenLabs' own API (2026-11-18): no KIE audio lane reads a task's bill now.
   "audio.ts": {},
 }

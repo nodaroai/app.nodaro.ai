@@ -113,7 +113,7 @@ export function workspaceGender(vocabulary: Readonly<Record<string, string>>, t:
  * feminine word and the variant for a masculine one, picked by the word's own
  * gender: each dictionary declares its defaults' (Hebrew and Portuguese are
  * feminine; Spanish "equipo" and "espacio de trabajo" are masculine, "clase"
- * feminine), and an organization's own word takes its override. A language
+ * feminine; German "Arbeitsbereich" is masculine, "Gruppe" and "Klasse" feminine), and an organization's own word takes its override. A language
  * without grammatical gender gives both the same text. `org-workspace-gender.test.ts` makes every sentence with the
  * word either appear here or be declared neutral.
  */

@@ -9,7 +9,7 @@ import { translate } from ".."
  * dictionary key that carries the number.
  */
 describe("localizeHandleLabel — numbered layer pips", () => {
-  it.each(["es", "he", "ja", "ko"] as const)("translates “Layer N” in %s", (locale) => {
+  it.each(["de", "es", "he", "ja", "ko"] as const)("translates “Layer N” in %s", (locale) => {
     const expected = translate(locale, "proccfg.overlay.layerN", { n: 3 })
     expect(expected).not.toBe("Layer 3")
     expect(localizeHandleLabel("Layer 3", locale)).toBe(expected)

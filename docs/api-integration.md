@@ -5322,7 +5322,7 @@ The response is `{ "data": { "credits": …, "min": …, "exact": true } }`. Wit
 
 `POST /v1/quote` returns what a node run will reserve, before you start it. Send the node type and **exactly the body you would send to its run route**: the server prices it with the run route's own code — the same body validation, the same reference-clip measurement, the same credit id and the same arithmetic — so the quote is what the run reserves. Nothing is started and nothing is charged. Cloud only; requires authentication; rate-limited to 30 requests a minute. SDK: `client.nodes.quote(type, params)`.
 
-Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read) and `split-into-layers`. Any other type is a `400 quote_unsupported` that lists them. On `video-to-video`, a Video Remake engine as the `provider` (`nodaro-prism`, `nodaro-pulse`) is quoted as Video Remake quotes it (`reserve` its hold, `expected` its expected charge, a `quote_only_provider` warning: the run route answers that quote too and starts nothing; see [Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api)). A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
+Quotable today: `text-to-video`, `generate-video`, `video-to-video`, `video-upscale` (including a Seedance 2.5 draft's 1080p finalize, priced from the draft and the clips it was made with), `edit-image` (every edit model), `ai-avatar` (the duration bucket of the audio it measures, as the run measures it, or of the script's estimated length in text mode; audio it cannot read is the run's own `400`), `cinematic-avatar` (its exact resolution and duration; Auto at the 15-second ceiling), `switchx` (the frame-block tier of the clip's frames, measured as the run measures them; the 240-frame tier when they cannot be read), `lip-sync` (a model priced by its audio's length is quoted on the audio it measures, as the run measures it; LatentSync's `reserve` is the most the run can cost, marked `settles_to_actual`: it is charged what its run used, never more) and `split-into-layers`. Any other type is a `400 quote_unsupported` that lists them. On `video-to-video`, a Video Remake engine as the `provider` (`nodaro-prism`, `nodaro-pulse`) is quoted as Video Remake quotes it (`reserve` its hold, `expected` its expected charge, a `quote_only_provider` warning: the run route answers that quote too and starts nothing; see [Video Remake's engines as providers](nodes/ai-video/video-to-video.md#video-remakes-engines-as-providers-api)). A Seedance edit on `video-to-video` is priced with every reference clip it is sent (`videoUrl` plus `referenceVideoUrls`); see [Video to Video → Seedance 2.5 Edit](nodes/ai-video/video-to-video.md#seedance-25-edit) for the reference lists and their numbering.
 
 ```json
 {"type":"text-to-video","params":{"prompt":"edit {video:1} as follows:
@@ -6038,6 +6038,13 @@ clip shows). An inferred role has a `confidence`: `"clear"` (exactly one
 subject of its kind fitted) or `"guess"` (the best fit among several, the
 others named in `alternatives`). Show a guess to the person before running.
 
+The plan may be checked again before it is answered, as this deployment's
+admin set it; a check can move an image the request said nothing about, or
+leave it out (`unresolved`), and can make a plan take longer: up to about
+three minutes, so wait at least 200 s for the answer. The answer has
+the same shape either way, and a role the request's own words asked for is
+never changed by a check.
+
 It starts no job, charges nothing and keeps nothing of the clip or the
 images. It needs a signed-in account and is limited per account to 6 calls a
 minute and 60 in 24 hours (both `429 rate_limit_exceeded`, with
@@ -6253,8 +6260,17 @@ expected to be charged, never above `motion`; Prism only) and `privacy`
 (preparing the clip, when the engine's setting does: in both totals when it
 always runs, in neither when it is the retry below), `prompt` (the prompt
 a language model writes for the run, when the engine's setting asks for
-one), and `referenceAudio` (preparing the clip's sound for the video model,
-when the engine's setting runs that step). `motion` and
+one), `referenceAudio` (preparing the clip's sound for the video model,
+when the engine's setting runs that step), and `upscale` (a Topaz video
+upscale of the result: it appears only when the deployment's setting adds
+that step for a Precise run on Nodaro Prism at the run's resolution; Topaz
+upscales the take, which is then scaled back to the run's own resolution; it
+is in both totals and settles to the units Topaz actually used, never above
+the line; a draft run never has it). If the Topaz step fails or is refused,
+the run delivers the take as it would without it, and that part is not
+charged. A Topaz step that finished is charged even if the run then delivers
+without it (rare: when its result cannot be scaled back).
+`motion` and
 `motionExpected` are alternatives, so read the totals, never the sum. When
 the engine's setting retries a refused clip, `privacyCredits` is the extra
 charged only if that retry runs: it is in neither total, and starting the
@@ -6325,7 +6341,13 @@ MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 
 `:jobId` is the draft's job id. The quote
 is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
-plus `breakdown.motionHd` (the 1080p render of the draft's take). `motionHd` is 0 when an earlier
+plus `breakdown.motionHd` (the 1080p render of the draft's take), plus
+`breakdown.upscale` when the deployment's setting adds a Topaz upscale to
+1080p Precise runs (the render is upscaled, then scaled back to 1080p; it
+settles to the units Topaz used; a Topaz step that fails or is refused is not
+charged, one that finished is charged even if the Full Quality then delivers
+without it, which is rare).
+`motionHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only
 the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
 the price depends on the draft. The quote does not look for a Full Quality
@@ -8332,7 +8354,7 @@ A refusal answers the error envelope ([§8](#8-error-envelope)):
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/voice-changer` | Single-voice re-voicing of an audio track or a talking video (`{ voiceId, audioUrl? \| videoUrl?, model?, stability?, similarityBoost?, style?, useSpeakerBoost?, seed?, removeBackgroundNoise? }`) → job. |
+| `POST` | `/v1/voice-changer` | Single-voice re-voicing of an audio track or a talking video (`{ voiceId, audioUrl? \| videoUrl?, model?, stability?, similarityBoost?, style?, useSpeakerBoost?, seed?, removeBackgroundNoise? }`) → job. Priced per started 10 seconds of the audio — a video's sound when `videoUrl` is sent (12.5 credits<!-- credits-rate: elevenlabs-voice-changer:per-10s --> each, the total rounded up to a whole credit, up to 5 min); the length is read first — `400 audio_too_long` / `audio_unreadable` before any charge. See [Voice Changer](./nodes/ai-audio/voice-changer.md#pricing). |
 | `POST` | `/v1/voice-changer-pro` | Multi-speaker recast (**Cloud; self-host runs it through the [nodaro.ai connection](./community-cloud-connect.md)**): `orderedVoices` maps detected speaker N to entry N (string id, per-voice settings object, or `null` keep-slot). `output: "video"` (default) renders the finished result; `output: "stems"` returns dry per-track stems for an interactive mix. Pass a prior `analysis` to skip re-detection. → job. |
 | `POST` | `/v1/voice-changer-pro/analyze` | Detect the speakers WITHOUT recasting (**Cloud only** — the interactive analyze/mix/export flow is not relayed to self-host yet): separates voice from music once and diarizes, returning `speakers` (id, segments, first-appearance, word count, snippet), detected language, and the persisted stem urls. `suggestTitle: true` adds an LLM title. → job. |
 | `POST` | `/v1/voice-changer-pro/export` | Render the final video from a mixed track set (**Cloud only**): `{ videoUrl, tracks: [{ url, gain 0–200, muted, kind?: "voice"\|"background" }] (≤16), voiceFx? }`. The video stream is copied, never re-encoded; at least one track must be un-muted. → job. |

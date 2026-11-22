@@ -27,10 +27,13 @@ export const DUBBING_MAX_DURATION_SEC = DUBBING_MAX_MINUTES * 60
  *  delivered file. Never the price of a run whose length is known. */
 export const DUBBING_FALLBACK_SECONDS = 120
 
-/** What to dub — exactly one of `url` (media we fetch + attach as a file, with
- *  its REAL mime/extension) or `sourceUrl` (a public link — YouTube/TikTok/direct
- *  — handed to ElevenLabs verbatim as `source_url`; they fetch it, not us). */
+/** What to dub — exactly one of `bytes` (a file already fetched and checked —
+ *  `lib/dubbing-source-bytes.ts` — attached as it is), `url` (media we fetch +
+ *  attach as a file, with its REAL mime/extension) or `sourceUrl` (a public
+ *  link — YouTube/TikTok/direct — handed to ElevenLabs verbatim as
+ *  `source_url`; they fetch it, not us). */
 export interface DubbingSource {
+  bytes?: Buffer
   url?: string
   sourceUrl?: string
   /** Real content type of `url` (from classifyMediaSource). Default audio/mpeg. */
@@ -99,8 +102,9 @@ export async function startDubbing(
   const headers = getElevenLabsHeaders()
 
   const formData = new FormData()
-  if (source.url) {
-    const mediaBuffer = await fetchMediaFromUrl(source.url, DUBBING_MAX_SOURCE_BYTES)
+  if (source.bytes || source.url) {
+    // The bytes the worker fetched and checked are sent as they are: the link is not fetched again.
+    const mediaBuffer = source.bytes ?? await fetchMediaFromUrl(source.url!, DUBBING_MAX_SOURCE_BYTES)
     // REAL mime + extension (audio/mpeg + .mp3 only as the legacy default) —
     // the old audio.mp3-for-everything upload made ElevenLabs treat every
     // video as an audio file, which is why video-in used to yield audio-out.

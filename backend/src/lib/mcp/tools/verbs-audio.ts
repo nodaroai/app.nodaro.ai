@@ -4,7 +4,7 @@ import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { resolveSpeechSourceUrl } from "./_speech-source.js"
-import { audioIsolationPriceHint, creditHint } from "./_credit-hint.js"
+import { audioIsolationPriceHint, creditHint, voiceChangerPriceHint } from "./_credit-hint.js"
 import { DUCK_DEFAULT_AMOUNT, DUCK_DEFAULTS } from "../../mix-audio-duck.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import {
@@ -938,14 +938,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "video — while preserving the delivery / cadence (ElevenLabs Voice " +
         "Changer). Provide ONE source: audio_url / audio_asset_id to revoice " +
         "audio→audio, OR video_url / video_asset_id to revoice an entire clip " +
-        "(the new audio track is previewed in the tool card; the revoiced " +
-        "VIDEO lands in your Nodaro library — video output has no card " +
-        "preview). Video wins if both are supplied. Plus a target voice_id.\n\n" +
+        "(the card previews the new audio track; the revoiced VIDEO lands in " +
+        "your Nodaro library). Video wins if both are given. Plus a target " +
+        "voice_id. Up to 5 min of audio (longer: refused, uncharged); " +
+        `${voiceChangerPriceHint()}.\n\n` +
         "remove_background_noise off keeps the music/SFX bed under the new " +
         "voice; on yields a clean voice-only result.\n\n" +
-        "Use the same voice naming as `generate_speech`: pass a premade " +
-        "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for " +
-        "a custom clone. Don't invent UUIDs — passing an unknown one fails.",
+        "Voice naming as `generate_speech`: a premade voice NAME (Rachel, " +
+        "Aria, Roger, ...) or an ElevenLabs UUID for a custom clone. Don't " +
+        "invent UUIDs — an unknown one fails.",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),

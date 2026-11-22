@@ -111,6 +111,8 @@ export const MEASURING_STEP_ALLOWANCES: Readonly<Record<MeasuringStepId, Measuri
   "video-to-video:wan-videoedit": measuredInput("video-to-video", CLIP_PRICE_GRACE_SEC, CLIP_PRICE_GRACE_SEC),
   // Audio Isolation's audio: its started ten seconds (`audioIsolationUnits`) on the quote and the charge alike.
   "audio-isolation": measuredInput("audio-isolation", CLIP_PRICE_GRACE_SEC, CLIP_PRICE_GRACE_SEC),
+  // Voice Changer's audio (a video's when it is given one): its started ten seconds (`voiceChangerUnits`), as Audio Isolation's.
+  "voice-changer": measuredInput("voice-changer", CLIP_PRICE_GRACE_SEC, CLIP_PRICE_GRACE_SEC),
   // Topaz: frames of the video stream on the quote and the hold, none forgiven; a stream with no length, the container's frames less its allowance.
   "video-upscale:topaz": { ...measuredInput("video-upscale", 0, 0), fallback: { reading: "container", chargeGraceSec: TOPAZ_VIDEO_CONTAINER_GRACE_SEC } },
   // Nodaro Video Upscale: the stream's seconds rounded up; a stream with no length, the container's less its allowance.

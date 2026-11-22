@@ -348,6 +348,55 @@ const ES: StatementContent = {
   },
 }
 
+// A legal statement: formal German, the reader addressed as "Sie" (unlike the du of the interface).
+const DE: StatementContent = {
+  lang: "de",
+  pageTitle: "Erklärung zur Barrierefreiheit",
+  backToSite: "Zurück zur Website",
+  title: "Erklärung zur Barrierefreiheit",
+  intro:
+    "Nodaro soll für alle nutzbar sein, auch für Menschen mit Behinderungen. Nodaro ist ein einziges Produkt, das aus {products} besteht. Diese Erklärung gilt für alle diese Bestandteile und beschreibt ihre Barrierefreiheit gemäß den israelischen Equal Rights for Persons with Disabilities (Service Accessibility Adjustments) Regulations, 2013.",
+  levelTitle: "Stand der Barrierefreiheit",
+  level:
+    "Nodaro wurde nach der israelischen Norm SI 5568 (Teil 1, September 2023) barrierefrei angepasst, die auf den Richtlinien WCAG 2.0 in der Konformitätsstufe AA beruht.",
+  doneTitle: "Umgesetzte Maßnahmen",
+  done: [
+    "Bedienung per Tastatur mit einer deutlichen Markierung des Fokus.",
+    "Unterstützung von Screenreadern: Schaltflächen, Felder und Seitenbereiche sind passend benannt.",
+    "Ein Link „Zum Inhalt springen“ und ein eigener Titel für jede Hauptseite.",
+    "Eine Gliederung durch Überschriften und Beschriftungen für Formularfelder.",
+    "Normgerechter Farbkontrast für die Schaltflächen und Texte der Oberfläche sowie Text in gut lesbarer Größe.",
+    "Darstellungen für Desktop und Mobilgeräte sowie Vergrößerung über den Zoom des Browsers.",
+    "Diese Erklärung und das Menü für Barrierefreiheit in allen Sprachen der Oberfläche; die hebräische Oberfläche wird von rechts nach links dargestellt.",
+    "Weniger Animationen und Übergänge, wenn auf dem Gerät „Bewegung reduzieren“ aktiviert ist.",
+    "Im Workflow-Editor von App lassen sich Nodes per Tastatur ansteuern und miteinander verbinden.",
+  ],
+  menuTitle: "Das Menü für Barrierefreiheit",
+  menu:
+    "Eine Schaltfläche in der Ecke des Bildschirms öffnet das Menü für Barrierefreiheit; mit Alt+A lässt es sich auf jeder Seite öffnen. Im Menü können Sie den Text vergrößern, den Kontrast erhöhen, die Farben umkehren, zu starkem Kontrast (Gelb auf Schwarz) wechseln, Links und Überschriften hervorheben, zu einer gut lesbaren Schrift wechseln, die Abstände vergrößern, den Mauszeiger vergrößern und Bewegungen reduzieren. Es kann jeweils nur eine Kontrastoption aktiv sein. Die Schaltfläche lässt sich außerdem für einen Monat, drei Monate oder sechs Monate ausblenden; solange sie ausgeblendet ist, öffnet Alt+A das Menü weiterhin. Im gemeinsamen Menü aller Produkte können Sie die Schaltfläche zudem an eine andere Stelle des Bildschirms verschieben, wo sie dann bleibt. Das Menü ist in allen Produkten gleich. Ihre Einstellungen werden in Ihrem Browser gespeichert, bleiben für Ihren nächsten Besuch erhalten und gelten in allen Produkten.",
+  limitsTitle: "Nicht vollständig barrierefreie Inhalte",
+  limitsIntro: "Trotz unserer Bemühungen sind einige Inhalte möglicherweise nicht vollständig barrierefrei:",
+  limits: [
+    "Bilder, Videos und Audio, die Nutzende erstellen oder hochladen, einschließlich KI-generierter Inhalte.",
+    "Die integrierten Bild-, Audio- und Videoeditoren, die von Drittanbietern stammen.",
+  ],
+  limitsOutro: "Sollten Sie auf Schwierigkeiten stoßen, schreiben Sie uns; wir helfen Ihnen gern.",
+  reportTitle: "Ein Problem mit der Barrierefreiheit gefunden?",
+  reportIntro: "Teilen Sie uns mit, was Sie tun wollten und auf welcher Seite. Jede Meldung erreicht uns direkt. Sie können uns auch eine E-Mail schreiben:",
+  updated: "Diese Erklärung wurde zuletzt am 26. Oktober 2026 aktualisiert.",
+  form: {
+    message: "Worin besteht das Problem? (Pflichtfeld)",
+    messageMissing: "Bitte beschreiben Sie das Problem in wenigen Worten.",
+    page: "Auf welcher Seite? (optional)",
+    contact: "Wie können wir Sie erreichen? E-Mail oder Telefon (optional)",
+    send: "Meldung senden",
+    sending: "Wird gesendet…",
+    sent: "Vielen Dank. Ihre Meldung ist bei uns eingegangen und wird bearbeitet.",
+    failed: "Die Meldung konnte nicht gesendet werden. Sie können uns stattdessen eine E-Mail schreiben.",
+    rateLimited: "Sie haben mehrere Meldungen kurz hintereinander gesendet. Bitte versuchen Sie es in einigen Minuten erneut oder schreiben Sie uns eine E-Mail.",
+  },
+}
+
 export const STATEMENT_CONTENT: Partial<Record<LocaleId, StatementContent>> = {
   he: HE,
   en: EN,
@@ -355,6 +404,7 @@ export const STATEMENT_CONTENT: Partial<Record<LocaleId, StatementContent>> = {
   ko: KO,
   "pt-BR": PT_BR,
   es: ES,
+  de: DE,
 }
 
 /** The copy for the interface language, or the English one. */

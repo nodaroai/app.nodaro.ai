@@ -3,7 +3,7 @@
  * `adminNodaroMotionRoutes`, admin-nodaro-motion.ts, so it shares its edition
  * gate). Admin-only.
  *
- *   GET  /v1/admin/video-remake/plan-roles            { planRoles, enabled, enabledByDefault, updatedAt, supported }
+ *   GET  /v1/admin/video-remake/plan-roles            { planRoles, enabled, enabledByDefault, updatedAt, supported, reviewSupported }
  *                                                     (planRoles null = never saved: the deployment's default, the engine's step)
  *   PUT  /v1/admin/video-remake/plan-roles            { planRoles }: save the whole setting; audit-logged
  *   GET  /v1/admin/video-remake/plan-roles/defaults   the engine's own answer: the step's default instructions and model,
@@ -28,6 +28,16 @@
  * serve), each named at its path. An engine that does not declare
  * `castSwap.planRoles` has no such route: nothing is asked, the switch and the
  * step save as they are, and nothing reads them there (`supported` false).
+ * The step's `review` ("targeted" | "full": how the engine checks a plan
+ * after it is answered) is read only by an engine that declares
+ * `castSwap.planRolesReview`. The row is one, shared by staging and
+ * production (`engine-environments.ts`), and an engine without the flag is
+ * never sent it, so one reader is enough (the shot lock's rule): it may be
+ * saved once AT LEAST ONE environment of `TREND_PUBLISH_ENVIRONMENTS` has a
+ * recorded engine that declares it (`reviewSupported`; `reviewMissingIn`
+ * names the environments whose engine does not read it yet). Until then a PUT
+ * carrying one is refused 400 `validation_error` at `planRoles.plan.review`,
+ * and the check names the same problem.
  * 502 `engine_error` when the engine answered unexpectedly. Each save writes
  * an `admin_actions` row (`update_nodaro_motion_plan_roles`) with the setting
  * before and after.
@@ -39,6 +49,7 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import {
   NODARO_MOTION_PLAN_ROLES_KEY,
   engineTakesPlanRoles,
+  engineTakesPlanRolesReview,
   nodaroMotionPlanRolesSchema,
   planRolesEnabled,
   withoutDefaultPlanRoles,
@@ -47,6 +58,7 @@ import {
 import { planRolesOfferedByDefault } from "../../lib/nodaro-motion-plan-roles-default.js"
 import { readNodaroMotionPlanRoles, saveNodaroMotionPlanRoles } from "../../lib/nodaro-motion-plan-roles-store.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
+import { TREND_PUBLISH_ENVIRONMENTS, listEngineEnvironments, type EngineEnvironment } from "../lib/engine-environments.js"
 import { engineRequest, isRec, parseJson } from "../lib/trends/run-helpers.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { defineNodaroMotionSettingsSection, sendRefusal } from "../lib/nodaro-motion-settings-section.js"
@@ -100,18 +112,37 @@ export interface NodaroMotionPlanRolesView {
   updatedAt: string | null
   /** Whether this environment's Cast Swap engine plans roles from the prompt (`castSwap.planRoles`). */
   supported: boolean
+  /** Whether a review mode may be saved: some environment's engine reads it (`castSwap.planRolesReview`). */
+  reviewSupported: boolean
+  /** The environments (of `TREND_PUBLISH_ENVIRONMENTS`) whose engine does not read a review mode yet: there it is the engine's own default. */
+  reviewMissingIn: string[]
+}
+
+/** The environments (of `TREND_PUBLISH_ENVIRONMENTS`, in that order) whose recorded engine does not read the step's review mode. */
+export function environmentsThatCannotReadPlanRolesReview(environments: readonly EngineEnvironment[]): string[] {
+  return TREND_PUBLISH_ENVIRONMENTS.filter((name) => !engineTakesPlanRolesReview(environments.find((e) => e.env === name)?.supports.castSwap))
 }
 
 async function view(): Promise<NodaroMotionPlanRolesView> {
   const { planRoles, updatedAt } = await readNodaroMotionPlanRoles()
   const enabledByDefault = planRolesOfferedByDefault()
+  const reviewMissingIn = environmentsThatCannotReadPlanRolesReview(await listEngineEnvironments())
   return {
     planRoles,
     enabled: planRolesEnabled(planRoles, enabledByDefault),
     enabledByDefault,
     updatedAt,
     supported: engineTakesPlanRoles(getPluginSupports().castSwap),
+    reviewSupported: reviewMissingIn.length < TREND_PUBLISH_ENVIRONMENTS.length,
+    reviewMissingIn,
   }
+}
+
+/** A step's review mode while no environment's engine reads one: a problem at its path (none once one does, or when none is set). */
+async function reviewProblems(setting: NodaroMotionPlanRoles): Promise<NodaroMotionPlanRolesProblem[]> {
+  if (setting.plan?.review === undefined) return []
+  if (environmentsThatCannotReadPlanRolesReview(await listEngineEnvironments()).length < TREND_PUBLISH_ENVIRONMENTS.length) return []
+  return [{ path: `${SETTING_PATH}.plan.review`, code: "review_not_supported", message: "No Cast Swap engine reads a review mode yet: leave it at the default." }]
 }
 
 function engineError(reply: FastifyReply) {
@@ -184,7 +215,8 @@ export function registerNodaroMotionPlanRolesRoutes(app: FastifyInstance): void 
       if (planRoles.plan !== undefined) {
         const problems = await engineProblems(app, req, planRoles)
         if (problems === null) return engineError(reply)
-        if (problems.length > 0) return settingRefused(reply, problems)
+        const all = [...(await reviewProblems(planRoles)), ...problems]
+        if (all.length > 0) return settingRefused(reply, all)
       }
       const before = (await readNodaroMotionPlanRoles()).planRoles
       await saveNodaroMotionPlanRoles(planRoles, req.userId!)
@@ -216,9 +248,10 @@ export function registerNodaroMotionPlanRolesRoutes(app: FastifyInstance): void 
     const parsed = putBody.safeParse(req.body)
     if (!parsed.success) return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     try {
-      const problems = await engineProblems(app, req, withoutDefaultPlanRoles(parsed.data.planRoles))
+      const setting = withoutDefaultPlanRoles(parsed.data.planRoles)
+      const problems = await engineProblems(app, req, setting)
       if (problems === null) return engineError(reply)
-      return { data: { problems } }
+      return { data: { problems: [...(await reviewProblems(setting)), ...problems] } }
     } catch (e) {
       return sendInternalError(reply, req, e, "Failed to check the Video Remake plan-roles setting")
     }

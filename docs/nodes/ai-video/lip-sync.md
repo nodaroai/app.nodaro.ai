@@ -206,13 +206,14 @@ HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per 
 
 | | 15s | 30s | 1min | 2min | 5min |
 |---|----:|----:|-----:|-----:|-----:|
-| `latentsync` hold | 110<!-- credits: latentsync:15s --> | 176<!-- credits: latentsync:30s --> | 308<!-- credits: latentsync:60s --> | 572<!-- credits: latentsync:120s --> | 1,364<!-- credits: latentsync:300s --> |
+| `latentsync` hold | 125<!-- credits: latentsync:15s --> | 200<!-- credits: latentsync:30s --> | 350<!-- credits: latentsync:60s --> | 650<!-- credits: latentsync:120s --> | 1,550<!-- credits: latentsync:300s --> |
 
 - A run that used **less** than its hold is charged less, and the rest of the hold is released when it ends. At the default settings this is the usual case.
-- A run that used **more** than its hold (more inference steps, a large video) is charged what it used: the difference is taken from your balance when the run ends.
+- A run is **never charged more than its hold**, the price shown before it starts: one that used more (more inference steps, a large video) is charged the hold.
+- A run finished by the platform's recovery after an interruption is charged the same way, for what it used, within its hold.
 - A failed run is refunded in full.
 
-The output is as long as the shorter of the video and the audio: a longer video is cut to the audio, and a video shorter than the audio ends the result where the video ends. The whole video is read either way, so a video much longer than its audio costs more than one cut to length first. Audio past 5 minutes is cut to 5 minutes and held at the 5-minute tier. The price shown before a run (the node's credit chip, the Run button, the workflow estimate, MCP) is the hold, marked `≈` in the editor and read as the other tiered models' prices are (below).
+The output is as long as the shorter of the video and the audio: a longer video is cut to the audio, and a video shorter than the audio ends the result where the video ends. The whole video is read either way, so a video much longer than its audio costs more than one cut to length first. Audio past 5 minutes is cut to 5 minutes and held at the 5-minute tier. The price shown before a run (the node's credit chip, the Run button, the workflow estimate, MCP) is the hold, marked `≈` in the editor and read as the other tiered models' prices are (below). `POST /v1/quote` prices a run on the audio it measures, as the run does: its `reserve` is the hold, with a `settles_to_actual` warning (the most the run can cost).
 
 The node's credit chip and the Run button show an estimate: the tier of the audio's length once the editor knows it, and before then the model's top tier (5 minutes; 60 seconds for `omnihuman-1-5`), the most a run can be charged. The editor knows the length of the audio node the run plays: an uploaded audio at the length recorded for it, or audio a node made earlier. An AAC audio is read as OmniHuman 2.0's is (above): one AAC frame past its record, less the 0.05 seconds a tier's edge forgives, so a 15-second M4A recorded at 16 kHz (a frame of 0.064 seconds) is quoted at the 30s tier its run holds, 660 credits<!-- credits: kling-avatar:30s --> on `kling-avatar`; at 44.1 or 48 kHz it stays in the 15s tier. The sound of an MP4 video, whose rate is not recorded, is read at AAC's longest frame, so one at exactly a tier's length is quoted at the next tier. A length the Lip Sync node itself carries is never used. An app or a component whose user supplies the audio lists the top tier too.
 

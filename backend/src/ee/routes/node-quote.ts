@@ -19,6 +19,7 @@ import { editImageBody, editImagePricing } from "../../routes/edit-image.js"
 import { aiAvatarBody, aiAvatarPricing } from "../../routes/ai-avatar.js"
 import { cinematicAvatarBody, cinematicAvatarPricing } from "../../routes/cinematic-avatar.js"
 import { switchXBody, switchXPricing } from "../../routes/switchx.js"
+import { lipSyncBody, lipSyncPricing } from "../../routes/lip-sync.js"
 
 const ROUTE = "/v1/quote"
 
@@ -49,6 +50,9 @@ export const QUOTABLE_NODE_TYPES: Readonly<Record<string, QuotableNode>> = {
   "cinematic-avatar": { schema: () => cinematicAvatarBody, pricing: cinematicAvatarPricing },
   // Beeble SwitchX: its frame-block tier, the clip's frames measured as the run measures them.
   "switchx": { schema: () => switchXBody, pricing: switchXPricing },
+  // Lip Sync: a model priced by its audio's length on the audio measured as the run measures it;
+  // LatentSync's hold, charged what its run used, is the most it costs (`settles_to_actual`).
+  "lip-sync": { schema: () => lipSyncBody, pricing: lipSyncPricing },
 }
 
 /** What a quote prices `type` with: a hand-written row, else the node unit's quote.ts; undefined when it cannot be quoted. */

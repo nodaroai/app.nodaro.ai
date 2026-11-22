@@ -519,6 +519,18 @@ export function minimaxH3TaskModel(defaultModel: string, input: Record<string, u
   return defaultModel
 }
 
+/**
+ * What the generic createTask branch of Image to Video and Text to Video
+ * records as a run's provider cost (`jobs.provider_cost`). MiniMax Hailuo 3
+ * records what KIE billed for its task (decided 2026-11-22): its price follows
+ * its length and resolution, so its one catalog figure misstated almost every
+ * run, and the cost-shortfall check read that figure as a loss. Every other
+ * model on the branch keeps its catalog figure until it is moved too.
+ */
+function recordedGenericVideoCost(provider: string, rawRecordInfo: Parameters<typeof kieBilledCostUsd>[0], catalogCost: number): number {
+  return isMinimaxH3Provider(provider) ? kieBilledCostUsd(rawRecordInfo, catalogCost) : catalogCost
+}
+
 // Audio-duration cap per lip-sync provider (seconds).
 // Kling AI Avatar 2.0 raised its limit to 5min (May 2026). InfiniTalk still
 // enforces a 15s cap upstream. Subtract a small safety margin so ffprobe /
@@ -2895,7 +2907,7 @@ export class KieVideoProvider
       notes: `i2v-standard ${provider}`,
     })
 
-    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }), ...(providerMs !== undefined && { providerMs }) }
+    return { url: videoUrl, cost: recordedGenericVideoCost(provider, rawRecordInfo, modelConfig.cost), ...(kieTaskId && { kieTaskId }), ...(providerMs !== undefined && { providerMs }) }
   }
 
   async textToVideo(
@@ -3197,7 +3209,7 @@ export class KieVideoProvider
     const t2vTaskModel = isMinimaxH3Provider(provider)
       ? minimaxH3TaskModel(modelConfig.model, input)
       : modelConfig.model
-    const { resultJson, taskId: kieTaskId, providerMs } =
+    const { resultJson, taskId: kieTaskId, providerMs, rawRecordInfo } =
       await runVideoTaskWithSeedanceEditRetry(provider, t2vTaskModel, input, options, reconcileOpts)
 
     const videoUrl =
@@ -3209,11 +3221,12 @@ export class KieVideoProvider
       )
     }
 
+    const t2vCost = recordedGenericVideoCost(provider, rawRecordInfo, modelConfig.cost)
     console.log(
-      `[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${t2vCost.toFixed(4)})`
     )
 
-    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }), ...(providerMs !== undefined && { providerMs }) }
+    return { url: videoUrl, cost: t2vCost, ...(kieTaskId && { kieTaskId }), ...(providerMs !== undefined && { providerMs }) }
   }
 
   async videoToVideo(

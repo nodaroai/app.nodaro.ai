@@ -13,7 +13,7 @@ describe("consentLocaleField", () => {
   })
 
   it("accepts the ids a consent is recorded under", () => {
-    for (const id of ["en", "es", "ja", "pt-BR"]) {
+    for (const id of ["en", "de", "es", "ja", "pt-BR"]) {
       expect(body.parse({ locale: id }).locale).toBe(id)
     }
   })

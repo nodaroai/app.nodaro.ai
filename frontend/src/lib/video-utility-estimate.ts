@@ -30,6 +30,8 @@ import {
   type V2vClipPrice,
   AUDIO_ISOLATION_RATE_ID,
   audioIsolationEstimateUnits,
+  VOICE_CHANGER_RATE_ID,
+  voiceChangerEstimateUnits,
 } from "@nodaro/shared/credits"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
@@ -893,4 +895,47 @@ export function audioIsolationPricingUnits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number {
   return audioIsolationQuote(node, nodes, edges, rerunIds).units
+}
+
+/**
+ * The length, in seconds, of the audio a Voice Changer is QUOTED on, or
+ * `undefined` when the graph does not know it: its `video` wire's when one is
+ * wired (a video wins, as the run does), else its `audio` wire's, as the
+ * shared wire-length walk reads it ({@link measuredInputReader}) — the server's reading.
+ */
+export function voiceChangerQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | undefined {
+  const inputs = edges.filter((e) => e.target === node.id)
+  const wire = inputs.find((e) => e.targetHandle === "video") ?? inputs.find((e) => e.targetHandle === "audio" || e.targetHandle == null)
+  return wire ? measuredInputReader("voice-changer", nodes, edges, rerunIds)(wire.source) : undefined
+}
+
+/**
+ * The price a Voice Changer is QUOTED at (decided 2026-11-22): its
+ * per-10-second row × the started ten seconds of the audio the graph gives,
+ * else the 5-minute cap's 30 units, with `lengthKnown: false` so the caller
+ * shows it as an estimate. The run reads the audio before it holds anything.
+ */
+export function voiceChangerQuote(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): { readonly creditId: string; readonly units: number; readonly lengthKnown: boolean } {
+  const sec = voiceChangerQuotedSec(node, nodes, edges, rerunIds)
+  return { creditId: VOICE_CHANGER_RATE_ID, units: voiceChangerEstimateUnits(sec), lengthKnown: sec !== undefined && sec > 0 }
+}
+
+/** The units a Voice Changer is quoted at ({@link voiceChangerQuote}). */
+export function voiceChangerPricingUnits(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number {
+  return voiceChangerQuote(node, nodes, edges, rerunIds).units
 }

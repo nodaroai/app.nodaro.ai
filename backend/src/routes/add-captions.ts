@@ -49,6 +49,8 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
+import { captionsRenderLimited, readCaptionsVideoLength } from "../lib/add-captions-length.js"
+import { ROUTE_MEASURE_DEADLINE_MS } from "../lib/pre-charge-probe-bounds.js"
 
 /** Parse a stringified Transcript before normalization so this ingress behaves
  *  identically to the DAG payload-builder (which parses the stringified json
@@ -321,6 +323,25 @@ async function measureNemotronCaptionsFirst(req: FastifyRequest, reply: FastifyR
   nemotronHolds.set(req, measured.hold ? { hold: measured.hold } : {})
 }
 
+/**
+ * The credit guard's `beforePricing` step (decided 2026-11-22): a caption the
+ * Remotion render draws takes a video of at most 5 minutes, read before
+ * anything is held (lib/add-captions-length.ts); a longer one, or one whose
+ * length cannot be read, is refused with nothing held. A plain-text subtitle,
+ * and a body the handler's schema refuses, pass through unread.
+ */
+export async function addCaptionsLengthStep(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const { userId: _bodyUserId, ...body } = (req.body ?? {}) as Record<string, unknown>
+  const parsed = addCaptionsBody.safeParse(body)
+  if (!parsed.success || !captionsRenderLimited(parsed.data)) return
+  const read = await readCaptionsVideoLength(parsed.data.videoUrl, (err) => {
+    req.log.warn({ err }, "add-captions: the video's length could not be read; refusing the run")
+  }, { deadlineAt: Date.now() + ROUTE_MEASURE_DEADLINE_MS })
+  if (!read.ok) {
+    return void reply.status(probeRefusalStatus(read.code)).send({ error: { code: read.code, message: read.message } })
+  }
+}
+
 /** The id a request is checked and held on: a Nemotron run's per-minute hold, else the renderer's row. One for the guard and the reservation. */
 function addCaptionsCreditIdOf(req: FastifyRequest, body: unknown): string {
   return nemotronHolds.get(req)?.hold?.creditId ?? buildAddCaptionsCreditId(body)
@@ -331,7 +352,7 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
     preHandler: [
       decideCaptionEngineFirst,
       measureNemotronCaptionsFirst,
-      creditGuard((req) => addCaptionsCreditIdOf(req, req.body), { runModel: resolveAddCaptionsRunModel }),
+      creditGuard((req) => addCaptionsCreditIdOf(req, req.body), { runModel: resolveAddCaptionsRunModel, beforePricing: addCaptionsLengthStep }),
     ],
   }, async (req, reply) => {
     const parsed = addCaptionsBody.safeParse(req.body)

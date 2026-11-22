@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   audits: [] as Record<string, unknown>[],
   admin: true,
   offeredByDefault: true,
+  envs: [] as { env: string; pluginBuildId: string | null; supports: Record<string, unknown>; updatedAt: string }[],
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -59,6 +60,10 @@ vi.mock("@/lib/supabase.js", () => ({
 }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: async () => h.admin }))
 vi.mock("../../../lib/nodaro-motion-plan-roles-default.js", () => ({ planRolesOfferedByDefault: () => h.offeredByDefault }))
+vi.mock("../../lib/engine-environments.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/engine-environments.js")>()),
+  listEngineEnvironments: async () => h.envs,
+}))
 
 const { adminNodaroMotionRoutes, NODARO_MOTION_SETTINGS_SECTIONS } = await import("../admin-nodaro-motion.js")
 const { NODARO_MOTION_PLAN_ROLES_AUDIT_TARGET } = await import("../admin-nodaro-motion-plan-roles.js")
@@ -126,6 +131,7 @@ beforeEach(async () => {
   h.audits = []
   h.admin = true
   h.offeredByDefault = true
+  h.envs = []
   engine.calls = []
   engine.status = 200
   engine.reply = { ...ENGINE_ANSWER, problems: [] }
@@ -163,9 +169,9 @@ describe("admin only", () => {
 
 describe("GET /v1/admin/video-remake/plan-roles", () => {
   it("never saved: the deployment's default — on for Nodaro's own, off under a white-label profile", async () => {
-    expect((await adminGet()).json().data).toEqual({ planRoles: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: true })
+    expect((await adminGet()).json().data).toEqual({ planRoles: null, enabled: true, enabledByDefault: true, updatedAt: null, supported: true, reviewSupported: false, reviewMissingIn: ["staging", "production"] })
     h.offeredByDefault = false
-    expect((await adminGet()).json().data).toEqual({ planRoles: null, enabled: false, enabledByDefault: false, updatedAt: null, supported: true })
+    expect((await adminGet()).json().data).toEqual({ planRoles: null, enabled: false, enabledByDefault: false, updatedAt: null, supported: true, reviewSupported: false, reviewMissingIn: ["staging", "production"] })
   })
 
   it("answers the stored row, the saved choice over the default, and whether this environment's engine takes it", async () => {
@@ -176,6 +182,8 @@ describe("GET /v1/admin/video-remake/plan-roles", () => {
       enabledByDefault: true,
       updatedAt: "2026-11-19T10:00:00.000Z",
       supported: true,
+      reviewSupported: false,
+      reviewMissingIn: ["staging", "production"],
     })
     setPluginSupports({ castSwap: CS })
     expect((await adminGet()).json().data.supported).toBe(false)
@@ -188,7 +196,7 @@ describe("PUT /v1/admin/video-remake/plan-roles", () => {
     expect(await offered()).toBe(true)
     let res = await put({ enabled: false })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data).toEqual({ planRoles: { enabled: false }, enabled: false, enabledByDefault: true, updatedAt: expect.any(String), supported: true })
+    expect(res.json().data).toEqual({ planRoles: { enabled: false }, enabled: false, enabledByDefault: true, updatedAt: expect.any(String), supported: true, reviewSupported: false, reviewMissingIn: ["staging", "production"] })
     expect(h.upserts).toEqual([{ key: KEY, value: { enabled: false }, updated_at: expect.any(String), updated_by: ADMIN }])
     expect(await offered()).toBe(false)
 
@@ -345,5 +353,34 @@ describe("POST /v1/admin/video-remake/plan-roles/check", () => {
     expect((await check({ plan: { model: "m" } })).statusCode).toBe(502)
     setPluginSupports({ castSwap: CS })
     expect((await check({ plan: { model: "m" } })).json().data).toEqual({ problems: [] })
+  })
+})
+
+describe("the step's review mode (planRolesReview)", () => {
+  const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, planRoles: true, ...castSwap } }, updatedAt: "2026-11-22T00:00:00.000Z" })
+
+  it("is refused while no environment's engine reads it, and the check says so", async () => {
+    h.envs = [envRow("staging", {}), envRow("production", {})]
+    const refused = await put({ plan: { review: "full" } })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error).toMatchObject({ code: "validation_error", issues: [expect.objectContaining({ path: "planRoles.plan.review", code: "review_not_supported" })] })
+    expect(h.upserts).toEqual([])
+    const checked = await app.inject({ method: "POST", url: `${URL}/check`, headers: as, payload: { planRoles: { plan: { review: "full" } } } })
+    expect(checked.json().data.problems).toEqual([expect.objectContaining({ path: "planRoles.plan.review", code: "review_not_supported" })])
+    expect((await adminGet()).json().data).toMatchObject({ reviewSupported: false, reviewMissingIn: ["staging", "production"] })
+  })
+
+  it("is saved once one environment's engine reads it, from any environment (one row, shared), and the view names where it is not read yet", async () => {
+    // Staging's engine reads it; THIS environment's engine (the one loaded here) does not.
+    h.envs = [envRow("staging", { planRolesReview: true }), envRow("production", {})]
+    const saved = await put({ plan: { review: "full" } })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json().data).toMatchObject({ planRoles: { plan: { review: "full" } }, reviewSupported: true, reviewMissingIn: ["production"] })
+    expect(h.rows.get(KEY)?.value).toEqual({ plan: { review: "full" } })
+    // A later change of anything else, the stored mode carried along, still saves.
+    expect((await put({ enabled: false, plan: { review: "full", model: "another-model" } })).statusCode).toBe(200)
+    expect(h.rows.get(KEY)?.value).toEqual({ enabled: false, plan: { review: "full", model: "another-model" } })
+    // A value that is no mode is the body's own refusal.
+    expect((await put({ plan: { review: "sometimes" } })).statusCode).toBe(400)
   })
 })

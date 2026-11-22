@@ -739,6 +739,30 @@ describe("roles planned from the prompt", () => {
     expect(JSON.parse(init.body as string)).toEqual({ videoUrl: CLIP, prompt: REQUEST, images: IMAGES })
   })
 
+  it("planRoles waits 200 s, past the client's own timeout (the plan and its checks take up to about three minutes); options.timeoutMs another time", async () => {
+    vi.useFakeTimers()
+    try {
+      let seen: AbortSignal | undefined
+      const hang = vi.fn((_url: string, init: RequestInit) => {
+        seen = init.signal ?? undefined
+        return new Promise<Response>((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))
+      })
+      const client = make(hang)
+      const pending = client.videoRemake.planRoles({ videoUrl: CLIP, images: IMAGES }).catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(199_000)
+      expect(seen?.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(seen?.aborted).toBe(true)
+      await pending
+      const short = client.videoRemake.planRoles({ videoUrl: CLIP, images: IMAGES }, { timeoutMs: 1_000 }).catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(1_500)
+      expect(seen?.aborted).toBe(true)
+      await short
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("sends the engine, the roles and references the caller already has, and the preview, as given", async () => {
     const fetchMock = vi.fn().mockReturnValue(mockOk(PLANNED))
     const client = make(fetchMock)

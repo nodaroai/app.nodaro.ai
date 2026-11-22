@@ -4893,9 +4893,9 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "elevenlabs",
     label: "ElevenLabs Voice Changer",
     series: "ElevenLabs",
-    description: "Speech-to-speech: convert one voice to another while preserving prosody.",
+    description: "Speech-to-speech: convert one voice to another while preserving prosody. Audio up to 5 minutes; priced per started 10 seconds of the audio.",
     useCases: ["voice-conversion", "dubbing"],
-    pricing: [{ identifier: "elevenlabs-voice-changer", credits: 40 }],
+    pricing: [{ identifier: "elevenlabs-voice-changer:per-10s", credits: 10, note: "per started 10 seconds of the audio, up to 5 minutes" }],
   },
   "elevenlabs-stt": {
     id: "elevenlabs-stt",
@@ -4974,7 +4974,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "ElevenLabs",
     description: "Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async.",
     useCases: ["dubbing", "multilingual"],
-    pricing: [{ identifier: "elevenlabs-dubbing", credits: 40, note: "per minute of the dubbed span (min 1)" }],
+    pricing: [{ identifier: "elevenlabs-dubbing", credits: 260, note: "per minute of the dubbed span (min 1)" }],
   },
   "elevenlabs-dubbing-v2": {
     id: "elevenlabs-dubbing-v2",

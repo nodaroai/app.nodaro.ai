@@ -64,6 +64,7 @@ const SAMPLES: Readonly<Record<string, unknown>> = {
   "precise-art-style": { preciseArtStyle: { "nodaro-prism": { opener: "edit" } } },
   "no-person": { noPerson: {} },
   "precise-style-route": { preciseStyleRoute: { routing: "off", bypassEmails: [" Tester@Example.com ", "tester@example.com"] } },
+  "precise-upscale": { preciseUpscale: { "480p": "off", "720p": "4k", "1080p": "1080p" } },
   advanced: { show: true },
   "custom-style": { customStyle: { enabled: false, medium: { instructions: "Read the words.", model: " some-model " }, describe: { instructions: "  " } } },
   "plan-roles": { planRoles: { enabled: false, plan: { instructions: "Place each image.", model: " some-model " } } },

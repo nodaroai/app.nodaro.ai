@@ -87,7 +87,9 @@ export async function projectDubbingCreditOverride(jobName: string, payload: Rec
   validateProjectDubbing({ url }, payload)
   const seconds = await probeMediaDuration(url!)
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 1800) throw new Error("Hebrew dubbing requires a readable source no longer than 30 minutes.")
-  payload.probedDurationSec = Math.ceil(seconds)
+  // The length as measured, never rounded up: the hold below forgives a hair
+  // past a minute, and the worker's limit and the recorded cost read this.
+  payload.probedDurationSec = seconds
   const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
   const { creditCost } = await getModelCreditBaseCost("elevenlabs-dubbing-v2")
   return applyServiceMarkup(creditCost * dubbingHeldMinutes(seconds), await getAppSettings(), "elevenlabs-dubbing-v2")

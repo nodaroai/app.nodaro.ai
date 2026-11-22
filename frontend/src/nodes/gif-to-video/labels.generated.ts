@@ -2,6 +2,7 @@
 
 export const labels = {
   "Gif to Video": {
+    "de": "GIF zu Video",
     "es": "GIF a video",
     "he": "GIF לווידאו",
     "ja": "GIF から動画",

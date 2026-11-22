@@ -159,7 +159,7 @@ import { videoAIHandlers } from "../workers/handlers/video-ai.js"
 import { finalizeJobWithMedia } from "../lib/job-finalize.js"
 import { LIP_SYNC_REQUESTS_BEFORE_CATALOG_ENTRIES } from "./fixtures/lip-sync-requests.js"
 import { retiredLipSyncProviderMessage } from "@nodaro/shared/models"
-import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
+import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution, usdToCredits } from "@nodaro/shared/credits"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const IMAGE = "https://cdn.example.com/face.png"
@@ -466,20 +466,22 @@ describe("Lip Sync's requests are what they were before the LatentSync, HeyGen a
 
 /**
  * A model charged what its run used (LatentSync, decided 2026-11-18): the
- * worker hands the finalize the provider's cost AS THE CHARGE, to be settled
- * above or below the hold. Every other model's settlement is what it was: the
- * hold, committed as it is.
+ * worker hands the finalize the provider's cost as the charge's base credits,
+ * marked up and settled below the hold, never above it (the hold is the price
+ * shown before the run, decided 2026-11-22). Every other model's settlement is
+ * what it was: the hold, committed as it is.
  */
 describe("the settlement the worker asks for", () => {
   const settlementOf = async (provider: string): Promise<Json> => {
     vi.mocked(finalizeJobWithMedia).mockClear()
     await sentBy({ provider, imageUrl: IMAGE, videoUrl: VIDEO, audioUrl: AUDIO, prompt: "make them talk" })
-    const { result } = vi.mocked(finalizeJobWithMedia).mock.calls.at(-1)![0]
-    return { cost: result.cost, meteredCost: result.meteredCost, collectOverHold: result.collectOverHold }
+    const args = vi.mocked(finalizeJobWithMedia).mock.calls.at(-1)![0]
+    const { result } = args
+    return { cost: result.cost, meteredCost: result.meteredCost, collectOverHold: result.collectOverHold, meteredBaseCredits: args.meteredBaseCredits }
   }
 
-  it("LatentSync: charged the provider's cost for this run, collected above the hold when it costs more", async () => {
-    expect(await settlementOf("latentsync")).toEqual({ cost: 0.01, meteredCost: true, collectOverHold: true })
+  it("LatentSync: charged the provider's cost for this run, never more than the hold", async () => {
+    expect(await settlementOf("latentsync")).toEqual({ cost: 0.01, meteredCost: undefined, collectOverHold: undefined, meteredBaseCredits: usdToCredits(0.01) })
   })
 
   it("every other running model: no metered settlement — the hold is the charge", async () => {
@@ -487,7 +489,7 @@ describe("the settlement the worker asks for", () => {
     expect(others.length).toBeGreaterThan(10)
     for (const provider of others) {
       const settled = await settlementOf(provider)
-      expect([settled.meteredCost, settled.collectOverHold], provider).toEqual([undefined, undefined])
+      expect([settled.meteredCost, settled.collectOverHold, settled.meteredBaseCredits], provider).toEqual([undefined, undefined, undefined])
     }
   })
 

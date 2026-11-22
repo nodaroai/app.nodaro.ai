@@ -68,6 +68,8 @@ import {
   type JobContext,
 } from "../shared.js"
 import { captionRoutesToRemotion, resolveCaptionLevers, type SupportedFontName, type CaptionLookId } from "@nodaro/shared/captions"
+import { captionsRenderLengthFits, captionsTooLongMessage } from "../../lib/add-captions-length.js"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { edlDurationMs, normalizeTranscript, remapTranscriptThroughEdl, type Edl, type Transcript } from "@nodaro/shared/edl"
 import { transcribeLaneSupportsWordTimestamps, TRANSCRIBE_PROVIDERS, TRANSCRIBE_PROVIDER_CAPABILITIES } from "@nodaro/shared/models"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
@@ -904,10 +906,16 @@ async function dispatchKineticCaptions(
     return relayTranscription(data.videoUrl, relayProvider)
   }
 
-  const [probeResult, transcribeResult] = await Promise.allSettled([
-    probeVideoSource(data.videoUrl),
-    runTranscription(),
-  ])
+  // The probe first, the transcription after: the 5-minute limit is held on the
+  // file this render reads before a transcription is paid for.
+  const [probeResult] = await Promise.allSettled([probeVideoSource(data.videoUrl)])
+  if (probeResult.status === "fulfilled") {
+    const probedSec = probeResult.value.durationSeconds
+    if (probedSec > 0 && !captionsRenderLengthFits(probedSec)) {
+      throw new DeterministicJobError(captionsTooLongMessage(probedSec))
+    }
+  }
+  const [transcribeResult] = await Promise.allSettled([runTranscription()])
 
   if (probeResult.status === "fulfilled") {
     width = probeResult.value.width

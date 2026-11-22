@@ -108,11 +108,11 @@ const oval = (cx: number, cy: number, rx: number, ry: number): Point[] =>
  */
 export function regionOf(words: string): Point[] {
   const w = words.toLowerCase()
-  if (/\bsky\b|clouds?|שמיים|空|하늘|c[ée]u|cielo|nubes?/u.test(w)) return [{ x: 0.04, y: 0.05 }, { x: 0.96, y: 0.05 }, { x: 0.96, y: 0.36 }, { x: 0.7, y: 0.42 }, { x: 0.3, y: 0.4 }, { x: 0.04, y: 0.36 }, { x: 0.04, y: 0.05 }]
-  if (/hair|\bhat\b|face|glasses|שיער|כובע|פנים|髪|顔|머리|얼굴|cabelo|rosto|cabello|rostro|sombrero|gafas/u.test(w)) return oval(0.5, 0.3, 0.14, 0.2)
-  if (/shirt|jacket|dress|clothes|outfit|חולצ|בגד|ז'קט|שמלה|シャツ|服|옷|셔츠|camisa|roupa|(?<!\p{L})ropa(?!\p{L})|chaqueta|vestido/u.test(w)) return oval(0.5, 0.66, 0.24, 0.26)
-  if (/\bcar\b|vehicle|floor|ground|table|רכב|מכונית|רצפה|שולחן|車|床|자동차|바닥|carro|ch[aã]o|mesa|automóvil|coche|suelo/u.test(w)) return oval(0.5, 0.74, 0.36, 0.2)
-  if (/person|presenter|\bman\b|woman|\bhim\b|\bher\b|מגיש|אדם|איש|אישה|人|사람|pessoa|apresentador|presentador|hombre|mujer/u.test(w)) return oval(0.5, 0.52, 0.2, 0.42)
+  if (/\bsky\b|clouds?|שמיים|空|하늘|c[ée]u|cielo|nubes?|himmel|wolke/u.test(w)) return [{ x: 0.04, y: 0.05 }, { x: 0.96, y: 0.05 }, { x: 0.96, y: 0.36 }, { x: 0.7, y: 0.42 }, { x: 0.3, y: 0.4 }, { x: 0.04, y: 0.36 }, { x: 0.04, y: 0.05 }]
+  if (/hair|\bhat\b|face|glasses|שיער|כובע|פנים|髪|顔|머리|얼굴|cabelo|rosto|cabello|rostro|sombrero|gafas|haar|frisur|(?<!\p{L})hut(?!\p{L})|gesicht|brille/u.test(w)) return oval(0.5, 0.3, 0.14, 0.2)
+  if (/shirt|jacket|dress|clothes|outfit|חולצ|בגד|ז'קט|שמלה|シャツ|服|옷|셔츠|camisa|roupa|(?<!\p{L})ropa(?!\p{L})|chaqueta|vestido|(?<!\p{L})hemd|jacke|kleid/u.test(w)) return oval(0.5, 0.66, 0.24, 0.26)
+  if (/\bcar\b|vehicle|floor|ground|table|רכב|מכונית|רצפה|שולחן|車|床|자동차|바닥|carro|ch[aã]o|mesa|automóvil|coche|suelo|(?<!\p{L})autos?(?!\p{L})|fahrzeug|boden|(?<!\p{L})tisch/u.test(w)) return oval(0.5, 0.74, 0.36, 0.2)
+  if (/person|presenter|\bman\b|woman|\bhim\b|\bher\b|מגיש|אדם|איש|אישה|人|사람|pessoa|apresentador|presentador|hombre|mujer|moderator|(?<!\p{L})mann(?!\p{L})|(?<!\p{L})frau(?!\p{L})/u.test(w)) return oval(0.5, 0.52, 0.2, 0.42)
   // A background, a place, a style: the whole frame, around the edges.
   return [{ x: 0.06, y: 0.07 }, { x: 0.94, y: 0.07 }, { x: 0.94, y: 0.93 }, { x: 0.06, y: 0.93 }, { x: 0.06, y: 0.07 }]
 }

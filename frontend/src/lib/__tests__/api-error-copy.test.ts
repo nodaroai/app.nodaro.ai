@@ -68,7 +68,7 @@ describe("apiErrorMessage", () => {
   it("an Edit Plan mode refusal: the server's words in English, a translated reason elsewhere", () => {
     const serverMessage = "Trailer mode is not available on this server yet. Choose another mode, or try again after the next update. You were not charged."
     expect(apiErrorMessage({ code: "mode_not_available", serverMessage, fallbackKey: "apiErr.startEditPlan" })).toBe(serverMessage)
-    for (const locale of ["es", "he", "ja", "ko", "pt-BR"] as const) {
+    for (const locale of ["de", "es", "he", "ja", "ko", "pt-BR"] as const) {
       useLocaleStore.setState({ locale })
       const reason = translate(locale, "apiErr.reason.editPlanModeUnavailable")
       expect(reason, locale).not.toBe(translate("en", "apiErr.reason.editPlanModeUnavailable"))
@@ -84,7 +84,7 @@ describe("apiErrorMessage", () => {
     const serverMessage = "This run is still running. Stop it or wait for it to finish, then delete it."
     expect(apiErrorMessage({ code: "run_in_progress", serverMessage, fallbackKey: "apiErr.permanentlyDeleteRun" })).toBe(serverMessage)
     expect(translate("en", "apiErr.reason.runInProgress")).toBe(serverMessage)
-    for (const locale of ["es", "he", "ja", "ko", "pt-BR"] as const) {
+    for (const locale of ["de", "es", "he", "ja", "ko", "pt-BR"] as const) {
       useLocaleStore.setState({ locale })
       const reason = translate(locale, "apiErr.reason.runInProgress")
       expect(reason, locale).not.toBe(serverMessage)
@@ -98,7 +98,7 @@ describe("apiErrorMessage", () => {
     const serverMessage = "This app needs a photo of you. Add one, then run it again."
     expect(apiErrorMessage({ code: "ugc_photo_required", serverMessage, fallbackKey: "apiErr.runApp" })).toBe(serverMessage)
     expect(translate("en", "apiErr.reason.ugcPhotoRequired")).toBe(serverMessage)
-    for (const locale of ["es", "he", "ja", "ko", "pt-BR"] as const) {
+    for (const locale of ["de", "es", "he", "ja", "ko", "pt-BR"] as const) {
       useLocaleStore.setState({ locale })
       const reason = translate(locale, "apiErr.reason.ugcPhotoRequired")
       expect(reason, locale).not.toBe(serverMessage)
@@ -137,7 +137,7 @@ describe("apiErrorMessage", () => {
       expect(translate("en", KEYS[code as keyof typeof KEYS]), code).toBe(message)
       expect(apiErrorMessage({ code, serverMessage: message, fallbackKey: "apiErr.runApp" })).toBe(message)
     }
-    for (const locale of ["es", "he", "ja", "ko", "pt-BR"] as const) {
+    for (const locale of ["de", "es", "he", "ja", "ko", "pt-BR"] as const) {
       useLocaleStore.setState({ locale })
       for (const [code, key] of Object.entries(KEYS)) {
         const reason = translate(locale, key)
@@ -204,7 +204,7 @@ describe("plan limits and topic refusals", () => {
 
 describe("a stub locale", () => {
   it("keeps the server's words, like English, while it has no text of its own", () => {
-    useLocaleStore.setState({ locale: "de" })
+    useLocaleStore.setState({ locale: "fr" })
     expect(apiErrorMessage({ code: "not_found", serverMessage: "App not found", fallbackKey: "apiErr.loadApp" })).toBe("App not found")
     expect(refusalMessage("A character named Maya exists", "apiErr.nameTaken")).toBe("A character named Maya exists")
   })

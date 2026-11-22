@@ -175,6 +175,17 @@ export {
 } from "../audio-isolation-pricing.js"
 export type { AudioIsolationLengthCheck } from "../audio-isolation-pricing.js"
 export {
+  VOICE_CHANGER_RATE_ID,
+  VOICE_CHANGER_RATE_SECONDS,
+  VOICE_CHANGER_MAX_SEC,
+  VOICE_CHANGER_MAX_UNITS,
+  voiceChangerUnits,
+  voiceChangerTooLongMessage,
+  checkVoiceChangerLength,
+  voiceChangerEstimateUnits,
+} from "../voice-changer-pricing.js"
+export type { VoiceChangerLengthCheck } from "../voice-changer-pricing.js"
+export {
   SEEDANCE_LIP_SYNC_SECONDS,
   isSeedanceLipSyncProvider,
   seedanceLipSyncResolution,

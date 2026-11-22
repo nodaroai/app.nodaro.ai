@@ -133,9 +133,9 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Hailuo 2.3 Standard | MiniMax | Everyday | 83<!-- credits: hailuo-2.3 --> | i2v | Cheaper Hailuo 2.3 tier — good baseline quality. |
 | VEO 3.1 Lite | Google | Everyday | 83<!-- credits: veo3_lite --> | i2v, t2v | VEO 3.1 Lite — most cost-effective VEO tier for high-volume generation. 4/6/8s with audio, supports first+last frame. |
 | Bytedance Pro Fast I2V | Bytedance | Everyday | 99<!-- credits: bytedance-pro-fast --> | i2v | Faster Bytedance Pro variant. |
-| LatentSync | LatentSync | Everyday | 110<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | Wan 2.2 Turbo | Alibaba | Everyday | 110<!-- credits: wan-turbo --> | i2v, t2v | Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id. |
 | Wan 2.6 Flash | Alibaba | Everyday | 110<!-- credits: wan-flash --> |  | Faster Wan 2.6 video-to-video: a new clip featuring the subject of the input video, in the scene the prompt describes (not an edit or restyle of the clip); optional audio and multi-shot. |
+| LatentSync | LatentSync | Everyday | 125<!-- credits: latentsync:15s --> | lip-sync | Diffusion lip sync on an existing video — strong on singing and expressive vocals. Video input, charged by what the run uses. |
 | PixVerse V6 Extend | PixVerse | Everyday | 132<!-- credits: pixverse-v6-extend:5s:720p:audio --> | extend | Extend ANY video with PixVerse V6: 1–15s continuation at 360p to 1080p, with optional sound, joined onto your original clip. |
 | Kling 2.5 Turbo Pro | Kuaishou | Everyday | 138<!-- credits: kling-turbo --> | i2v, t2v | Faster Kling — good quality at lower cost. Supports end frame. |
 | Hailuo 02 I2V Pro | MiniMax | Everyday | 158<!-- credits: minimax --> | i2v, t2v | Hailuo 02 Pro — strong photoreal motion, fixed 5-second clips. Supports end frame. |
@@ -223,13 +223,14 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 6<!-- credits: elevenlabs-sfx:5s --> | sfx | Generate short sound effects from a text prompt. |
 | Gemini 3.8 Flash TTS | Google | Everyday | 7<!-- credits: gemini-3-8-flash-tts --> | tts, dialogue | Google's Gemini 3.8 speech model — the same 70 voices, tone tags and free-text style direction as Flash-Lite, from the larger model of the generation. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers. |
 | ElevenLabs Voice Isolation | ElevenLabs | Everyday | 11<!-- credits: elevenlabs-isolation:per-10s --> | isolation | Strip background noise / music from a vocal track. Audio up to 30 minutes; priced per started 10 seconds of the audio. |
+| ElevenLabs Voice Changer | ElevenLabs | Everyday | 13<!-- credits: elevenlabs-voice-changer:per-10s --> | voice-changer | Speech-to-speech: convert one voice to another while preserving prosody. Audio up to 5 minutes; priced per started 10 seconds of the audio. |
 | Gemini 3.1 Flash TTS | Google | Everyday | 15<!-- credits: gemini-3-1-flash-tts --> | tts, dialogue | Google's Gemini 3.1 speech model — 30 named voices, [audio tags] written freely, and a speaking style, pace, accent and audio profile for the speaker. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers. |
 | ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 17<!-- credits: elevenlabs-turbo --> | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs v4 Turbo | ElevenLabs | Everyday | 17<!-- credits: elevenlabs-v4-turbo --> | tts | Faster, cheaper ElevenLabs v4 at lower fidelity — [audio tags], stability and similarity control, at Turbo's credit price. Prefer v4 when quality matters. Direct API. |
 | Gemini 2.5 Pro TTS | Google | Everyday | 18<!-- credits: gemini-2-5-pro-tts --> | tts, dialogue | Google's Gemini 2.5 Pro speech model — the same 30 voices, [audio tags] and speaker controls (style, pace, accent, audio profile) as Gemini 3.1 Flash TTS, from the Pro model. The language follows the text; up to 10,000 characters per request. Also voices a dialogue of two speakers. |
 | ElevenLabs STT | ElevenLabs | Everyday | 25<!-- credits: elevenlabs-stt --> | stt | Speech-to-text with WORD-level timestamps (always on), speaker diarization and audio-event tags. The engine to use when the transcript feeds captions. |
-| ElevenLabs Dialogue v3 | ElevenLabs | Everyday | 28<!-- credits: elevenlabs-dialogue --> | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |
-| ElevenLabs Dialogue v4 | ElevenLabs | Everyday | 28<!-- credits: elevenlabs-dialogue-v4 --> | dialogue | Multi-speaker dialogue on ElevenLabs v4 — [audio tags], stability and similarity control. Direct API. |
+| ElevenLabs Dialogue v3 | ElevenLabs | Standard | 28<!-- credits: elevenlabs-dialogue --> | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |
+| ElevenLabs Dialogue v4 | ElevenLabs | Standard | 28<!-- credits: elevenlabs-dialogue-v4 --> | dialogue | Multi-speaker dialogue on ElevenLabs v4 — [audio tags], stability and similarity control. Direct API. |
 | ElevenLabs Forced Alignment | ElevenLabs | Standard | 33<!-- credits: elevenlabs-forced-alignment --> | forced-alignment | Align an existing transcript to audio with word-level timestamps. |
 | ElevenLabs Multilingual v2 | ElevenLabs | Standard | 33<!-- credits: elevenlabs-multilingual --> | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
 | ElevenLabs v3 | ElevenLabs | Standard | 33<!-- credits: elevenlabs-v3 --> | tts | Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
@@ -243,12 +244,11 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | ⭐ Suno V6 | Suno | Standard | 33<!-- credits: suno-v6 --> | music | Suno V6 — greater musical expression with more natural vocals and richer details. The flagship and the default. |
 | Suno V6 Mini | Suno | Standard | 33<!-- credits: suno-v6_mini --> | music | Suno V6 Mini — lightweight and fast, balancing quality and speed for effortless creation. |
 | Suno V6 Wild | Suno | Standard | 33<!-- credits: suno-v6_wild --> | music | Suno V6 Wild — pushes creative boundaries for bolder, more distinctive musical expression; more varied, less predictable results. |
-| ElevenLabs Dubbing | ElevenLabs | Premium | 44<!-- credits: elevenlabs-dubbing --> | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
-| ElevenLabs Voice Changer | ElevenLabs | Premium | 44<!-- credits: elevenlabs-voice-changer --> | voice-changer | Speech-to-speech: convert one voice to another while preserving prosody. |
 | Incredibly Fast Whisper | OpenAI | Premium | 44<!-- credits: incredibly-fast-whisper --> | stt | Fast Whisper speech-to-text. Returns WORD-level timestamps when asked, so its transcript can feed captions. |
 | Whisper | OpenAI | Premium | 44<!-- credits: whisper --> | stt | Whisper speech-to-text — PHRASE-level segments only, NO word timestamps. Fine for a transcript or a static subtitle; not for word-timed (kinetic) captions. |
 | ElevenLabs Voice Design | ElevenLabs | Premium | 55<!-- credits: elevenlabs-voice-design --> | voice-design | Design a synthetic voice from a description (no reference clip needed). |
-| ElevenLabs Dubbing v2 | ElevenLabs | Premium | 1210<!-- credits: elevenlabs-dubbing-v2 --> | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
+| ElevenLabs Dubbing | ElevenLabs | Premium | 312<!-- credits: elevenlabs-dubbing --> | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
+| ElevenLabs Dubbing v2 | ElevenLabs | Premium | 1375<!-- credits: elevenlabs-dubbing-v2 --> | dubbing | Translate + dub audio or a whole video into a new language — video in, dubbed video out. Async. |
 <!-- AUTO-GEN:END model-table-audio -->
 
 ## Text & LLM models

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   generateAndUploadThumbnail: vi.fn(),
   finalizeJobWithMedia: vi.fn(),
   setJobProgress: vi.fn(async () => {}),
+  faceSwapSettle: vi.fn(async (_cost: unknown): Promise<Record<string, unknown>> => ({})),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
@@ -20,6 +21,7 @@ vi.mock("@/providers/index.js", () => ({}))
 vi.mock("../../../providers/replicate/face-swap.js", () => ({ replicateFaceSwap: mocks.replicateFaceSwap }))
 vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalizeJobWithMedia }))
 vi.mock("../face-swap-audio.js", () => ({ uploadSwapWithSourceAudio: mocks.uploadSwapWithSourceAudio }))
+vi.mock("../../../lib/face-swap-input.js", () => ({ faceSwapSettle: mocks.faceSwapSettle }))
 vi.mock("../../../lib/reconcile/persistence.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/reconcile/persistence.js")>()),
   makeOnTaskCreated: vi.fn(() => vi.fn()),
@@ -61,14 +63,30 @@ describe("face-swap handler", () => {
     expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example/videos/job-1.mp4" }))
   })
 
-  it("hands finalize what Replicate billed as the recorded cost, and nothing that changes the commit", async () => {
+  it("a run within its row: finalize records what Replicate billed and commits the reserved tier", async () => {
     await handler(job({ faceImageUrl: FACE, videoUrl: VIDEO }) as never, ctx as never)
 
+    expect(mocks.faceSwapSettle).toHaveBeenCalledWith(0.05)
     const input = mocks.finalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown> & { result: Record<string, unknown> }
     // Exactly these keys: no `meteredCost` / `collectOverHold` on the result and
     // no `meteredBaseCredits` on the input, so finalize commits the reserved tier.
     expect(input.result).toEqual({ url: "https://replicate.example/out.mp4", cost: 0.05, providerUsed: "roop" })
     expect(input).not.toHaveProperty("meteredBaseCredits")
+  })
+
+  it("a run Replicate billed past its row is charged what it cost, collected above the hold", async () => {
+    mocks.replicateFaceSwap.mockResolvedValueOnce({ videoUrl: "https://replicate.example/out.mp4", cost: 0.42 })
+    mocks.faceSwapSettle.mockResolvedValueOnce({ meteredCost: true, collectOverHold: true })
+    await handler(job({ faceImageUrl: FACE, videoUrl: VIDEO }) as never, ctx as never)
+
+    const input = mocks.finalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown> & { result: Record<string, unknown> }
+    expect(input.result).toEqual({
+      url: "https://replicate.example/out.mp4",
+      cost: 0.42,
+      providerUsed: "roop",
+      meteredCost: true,
+      collectOverHold: true,
+    })
   })
 
   it.each([

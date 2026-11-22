@@ -156,6 +156,15 @@ describe("runDetailOf", () => {
     ])
   })
 
+  it("lists the Precise upscale as Topaz upscale, after the other in-hold lines it knows, its step on it", () => {
+    const quote = { ...QUOTE, breakdown: { ...QUOTE.breakdown, upscale: 220 } }
+    const tree = [...TREE, treeRow(9, { route: "video-upscale", step_key: `cast-swap-topaz:${RUN}`, created_at: at(9), held: 220, taken: 180 })]
+    const d = runDetailOf(runRow({ quote }), tree)
+    const known = (d.quote?.lines ?? []).filter((l) => !l.outsideTotal && !["aaa", "faceMesh"].includes(l.line)).map((l) => l.line)
+    expect(known[known.length - 1]).toBe("upscale")
+    expect(d.quote?.lines.find((l) => l.line === "upscale")).toMatchObject({ label: "Topaz upscale", quoted: 220, steps: 1, held: 220, taken: 180 })
+  })
+
   it("an extra's label names it once: being outside the hold is the line's flag, never its words", () => {
     const lines = detail.quote?.lines ?? []
     expect(lines.filter((l) => l.outsideTotal).map((l) => [l.line, l.label])).toEqual([

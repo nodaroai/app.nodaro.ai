@@ -58,7 +58,8 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { SEEDANCE_LIP_SYNC_SECONDS, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution } from "@nodaro/shared/credits"
+import { SEEDANCE_LIP_SYNC_SECONDS, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution, usdToCredits } from "@nodaro/shared/credits"
+import { faceSwapSettle } from "../../lib/face-swap-input.js"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
@@ -1198,19 +1199,22 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
+  // A model charged what its run used (LatentSync, decided 2026-11-18): the
+  // provider's cost for THIS run, marked up once, is the charge, and the bucket
+  // it held is the most it is charged — the price shown before the run (decided
+  // 2026-11-22), the rest of the hold released. Only with a cost in hand: a run
+  // that reports none settles at its hold.
+  const runCostBase = isLipSyncChargedAtRunCost(resolvedProvider) && typeof resultCost === "number" && resultCost > 0
+    ? usdToCredits(resultCost)
+    : undefined
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "lip-sync",
+    ...(runCostBase !== undefined ? { meteredBaseCredits: runCostBase } : {}),
     result: {
       url: resultUrl,
       cost: resultCost,
-      // A model charged what its run used (LatentSync, decided 2026-11-18): the
-      // bucket it held is a hold, and the provider's cost for THIS run is the
-      // charge — the rest released, an overrun collected. Only with a cost in
-      // hand: a run that reports none settles at its hold.
-      ...(isLipSyncChargedAtRunCost(resolvedProvider) && typeof resultCost === "number" && resultCost > 0
-        ? { meteredCost: true, collectOverHold: true }
-        : {}),
       displayCost: resultDisplayCost,
       providerUsed: resultProviderUsed,
       // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
@@ -2474,8 +2478,10 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
     jobId: ctx.jobId,
     jobType: "video-to-video",
     // `cost` is what Replicate billed for the prediction, recorded as
-    // provider_cost. No `meteredCost`: the run commits its reservation.
-    result: { url: outputUrl, cost, providerUsed: "roop" },
+    // provider_cost. Within the row the run commits its reservation (the least
+    // it is charged); past it, what the run cost is charged, collected above
+    // the hold (`faceSwapSettle`, decided 2026-11-22).
+    result: { url: outputUrl, cost, providerUsed: "roop", ...(await faceSwapSettle(cost)) },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })

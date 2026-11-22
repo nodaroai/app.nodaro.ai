@@ -36,7 +36,7 @@ import { carriedEdges } from "./carried-edges"
 import { runLinesUnpriced, type RunUnpriced } from "./run-unpriced"
 import { seedanceRefQuoteKeyFor } from "@/lib/seedance-ref-quote"
 import { seedanceHdQuoteIdFor } from "@/lib/seedance-hd-quote"
-import { audioIsolationQuote, lipSyncQuoteIsEstimate, motionTransferPriceIds, motionTransferQuote, nodaroVideoUpscaleRefusedSec, videoToVideoQuote } from "@/lib/video-utility-estimate"
+import { audioIsolationQuote, lipSyncQuoteIsEstimate, motionTransferPriceIds, motionTransferQuote, nodaroVideoUpscaleRefusedSec, videoToVideoQuote, voiceChangerQuote } from "@/lib/video-utility-estimate"
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { tx } from "@/lib/i18n"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
@@ -183,6 +183,9 @@ function isMeteredEstimate(
   // An Audio Isolation whose audio's length the graph does not know is quoted at the 30-minute
   // cap: an estimate — the run reads the audio before it holds anything.
   if (node.type === "audio-isolation") return !audioIsolationQuote(node, allNodes, edges, rerunIds).lengthKnown
+  // A Voice Changer whose audio's length the graph does not know is quoted at the 5-minute
+  // cap: an estimate — the run reads the audio (a video's sound) before it holds anything.
+  if (node.type === "voice-changer") return !voiceChangerQuote(node, allNodes, edges, rerunIds).lengthKnown
   if (!llmNodePriceIds(node)) return false
   const id = getModelIdentifier(node, edges, allNodes, rerunIds)
   return isModelEstimate(id) && cachedCost(id) !== undefined

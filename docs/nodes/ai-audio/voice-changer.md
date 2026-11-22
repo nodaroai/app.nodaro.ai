@@ -16,7 +16,7 @@ In both cases the target voice's identity is applied while the original pacing, 
 |-------|------|---------|-------------|
 | Voice | `string` | `""` | Target voice to apply. Selectable via VoiceBrowser (premade, custom, or library) |
 | Voice Type | `"premade" \| "custom" \| "library"` | `"premade"` | Source of the selected target voice |
-| Model | `"eleven_english_sts_v2" \| "eleven_multilingual_sts_v2"` | `"eleven_multilingual_sts_v2"` | ElevenLabs speech-to-speech model. **Multilingual v2** covers 29 languages and is ElevenLabs' recommended model — including for English source audio, where it often outperforms the English-only model. **English v2** remains selectable. Credit cost is the same (44 credits<!-- credits: elevenlabs-voice-changer -->) for either model. If the field is left unset, the backend falls back to `eleven_multilingual_sts_v2`. |
+| Model | `"eleven_english_sts_v2" \| "eleven_multilingual_sts_v2"` | `"eleven_multilingual_sts_v2"` | ElevenLabs speech-to-speech model. **Multilingual v2** covers 29 languages and is ElevenLabs' recommended model — including for English source audio, where it often outperforms the English-only model. **English v2** remains selectable. Both models are priced the same (see [Pricing](#pricing)). If the field is left unset, the backend falls back to `eleven_multilingual_sts_v2`. |
 | Stability | `number` (0-1) | `0.5` | Voice consistency. Lower = more expressive, higher = more uniform |
 | Similarity Boost | `number` (0-1) | `0.75` | How closely the output matches the target voice timbre |
 | Style Exaggeration | `number` (0-1) | `0` | Amplifies the source speaker's stylistic delivery in the target voice. Keep at `0` unless you want extra drama — values above 0 add latency and can reduce stability. Only sent to the model when above its default. |
@@ -33,6 +33,26 @@ In both cases the target voice's identity is applied while the original pacing, 
 
 **The media decides the mode, not the input it arrived through.** The node inspects the file's actual streams first: an **audio-only file on the `video` input** (a voice-recorder `.mp4`/`.m4a` with no picture) runs in **audio mode** and returns re-voiced audio on the `audio` output instead of failing; a **video file on the `audio` input** has its audio extracted and is treated as audio. The result reports `sourceHasVideo` so you can tell which way a run went.
 
+## Pricing
+
+The node is priced by the length of the audio it revoices, as the server reads it from the file before anything is charged — the video's sound when a video is wired (a video wins), else the audio's: **12.5 credits<!-- credits-rate: elevenlabs-voice-changer:per-10s --> per started 10 seconds**, at least one, the total rounded up to a whole credit. A length up to 0.05 seconds past a 10-second mark is charged at that mark. Both models cost the same.
+
+| Audio length | Credits |
+|---|---|
+| 8 s | 13 credits<!-- credits: elevenlabs-voice-changer:per-10s@1 --> |
+| 30 s | 38 credits<!-- credits: elevenlabs-voice-changer:per-10s@3 --> |
+| 60 s | 75 credits<!-- credits: elevenlabs-voice-changer:per-10s@6 --> |
+| 2 min | 150 credits<!-- credits: elevenlabs-voice-changer:per-10s@12 --> |
+| 5 min | 375 credits<!-- credits: elevenlabs-voice-changer:per-10s@30 --> |
+
+The credits held when the run starts are the credits charged. The price shown before a run uses the length of the wired audio or video when the editor knows it (an upload, a recording, a node that makes media of a set length); otherwise it shows the 5-minute price, marked as an estimate (≈), and the run is charged for the audio's real length.
+
+### Limits
+
+- **5 minutes.** Audio (or a video's sound) longer than 5 minutes (more than 0.05 seconds past) is refused before anything is charged, with a message that names the limit. Split or trim it first (Trim Audio, Trim Video or Split Media), then revoice the parts.
+- An audio whose length cannot be read is refused before anything is charged; check that the link is a reachable audio or video file in a common format. A file with no sound track is refused the same way.
+- The run reads the length again from the audio it is about to send. If the file behind the link changed after the run was priced and its audio is now longer than the run was priced for, or longer than 5 minutes, the run fails before the voice is changed and the credits held are refunded. Run it again, or upload the file and run it from the upload.
+
 ## Video Mode
 
 Wire any talking video (a generated clip, an uploaded file, a lip-synced shot) into the **video** input and the node will:
@@ -43,7 +63,7 @@ Wire any talking video (a generated clip, an uploaded file, a lip-synced shot) i
 
 This collapses what used to be a four-node chain (generate video → extract audio → voice changer → merge audio+video) into a single node and a single result.
 
-**Requires an audio track.** Most text-to-video / image-to-video models output *silent* video — only models that generate sound (e.g. Veo 3, Kling) produce a usable track. If you feed in a silent clip, the node fails fast with: *"This video has no audio track to revoice."* Use a clip with spoken audio, or feed audio directly.
+**Requires an audio track.** Most text-to-video / image-to-video models output *silent* video — only models that generate sound (e.g. Veo 3, Kling) produce a usable track. If you feed in a silent clip, it is refused before anything is charged: *"This file has no audio track to revoice."* Use a clip with spoken audio, or feed audio directly.
 
 **Audio-only files are fine here too.** The inverse case — a file on the video input that has no *video* stream — does not fail: the node runs in audio mode and returns the re-voiced audio on the `audio` output.
 

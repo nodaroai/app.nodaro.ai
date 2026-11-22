@@ -3,6 +3,7 @@ import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { markJobFailed } from "../job-failure.js"
 import { deliverDubbedMedia } from "../dubbing-delivery.js"
+import { isDeterministicJobError } from "../deterministic-job-error.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
@@ -203,6 +204,13 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: Recon
       request: row.input_data ?? undefined,
     })
   } catch (err) {
+    // A dub the service read as longer than its hold (`assertServiceSpanWithinHold`,
+    // inside the delivery) is never delivered: failed and refunded now, never retried.
+    if (isDeterministicJobError(err)) {
+      await markFailed(row.id, err instanceof Error ? err.message : String(err))
+      await refundReservedCreditsForJob(row.id)
+      return
+    }
     await bumpAttemptsOrExhaust(row.id, err)
   }
 }
