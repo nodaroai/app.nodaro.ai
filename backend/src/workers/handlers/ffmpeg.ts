@@ -36,6 +36,7 @@ import { renderVideoOverlay, type VideoOverlayJobPayload } from "../../providers
 import { stillToVideo } from "../../providers/video/still-to-video.js"
 import { slideshow } from "../../providers/video/slideshow.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
+import { NoAudioToTranscribeError } from "../../providers/audio/transcribable-audio.js"
 import { detectSilence } from "../../providers/audio/silence-detect.js"
 import { audioSync } from "../../providers/audio/audio-sync.js"
 import { ADD_CAPTIONS_DEFAULT_TRANSCRIBE_PROVIDER, transcribeLaneKey } from "../../lib/transcribe-lane-key.js"
@@ -840,7 +841,7 @@ async function dispatchKineticCaptions(
   // what KIE billed, for the render worker's settle; `noAudio` when the video had
   // no audio track to send.
   let nemotronRun: NemotronCaptionTranscription | undefined
-  let nemotronNoAudio = false
+  let noAudioTrack = false
   const runTranscription = async (): Promise<TranscribedCaptionSource | null> => {
     if (!needTranscribe) return null
     // The chosen lane cannot produce word timings, and this render IS word-timed
@@ -873,7 +874,7 @@ async function dispatchKineticCaptions(
         ...(relays ? { relay: (audioUrl: string) => relayTranscription(audioUrl, NEMOTRON_TRANSCRIBE_ID) } : {}),
       })
       if (run === null) {
-        nemotronNoAudio = true
+        noAudioTrack = true
         return null
       }
       nemotronRun = run
@@ -885,9 +886,19 @@ async function dispatchKineticCaptions(
       // better input for a subtitle too, and every capable lane stays
       // byte-identical to before. Only a lane that cannot — reached here solely
       // by a render that does not need them — is asked for phrase segments.
-      return transcribe(data.videoUrl, transcribeProvider, undefined, {
-        wordTimestamps: transcribeLaneSupportsWordTimestamps(transcribeProvider),
-      })
+      try {
+        return await transcribe(data.videoUrl, transcribeProvider, undefined, {
+          wordTimestamps: transcribeLaneSupportsWordTimestamps(transcribeProvider),
+        })
+      } catch (err) {
+        // A lane that reads only audio found no audio track in the video: the
+        // same outcome as Nemotron's above, decided by the caption ladder below.
+        if (err instanceof NoAudioToTranscribeError) {
+          noAudioTrack = true
+          return null
+        }
+        throw err
+      }
     }
     // The RELAY provider is not necessarily the local one. The cloud's
     // /v1/transcribe enum is `TRANSCRIBE_PROVIDERS` (what a caller may name),
@@ -978,7 +989,7 @@ async function dispatchKineticCaptions(
           ? transcribeSegmentsToCaptions(result.segments)
           : []
     if (transcribed.length === 0) {
-      if (!data.text && nemotronNoAudio) {
+      if (!data.text && noAudioTrack) {
         throw new Error("This video has no audio track to transcribe: give the captions as text, captions or a wired transcript instead")
       }
       if (!data.text) {

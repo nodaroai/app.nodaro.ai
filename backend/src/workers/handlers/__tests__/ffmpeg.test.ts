@@ -268,6 +268,7 @@ import { unitDescriptorOf } from "@/lib/unit-descriptors.js"
 import { audioSyncRenderBudgetMs } from "@/providers/audio/audio-sync-budget.js"
 import { isDeterministicJobError } from "@/lib/deterministic-job-error.js"
 import { providerDetailOf } from "@/lib/provider-error-detail.js"
+import { NoAudioToTranscribeError } from "@/providers/audio/transcribable-audio.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -620,6 +621,28 @@ describe("add-captions handler — phrase-level transcription for a subtitle", (
     await expect(handler(subtitleJob() as never, makeCtx())).rejects.toThrow(
       /no speech and no text fallback/,
     )
+  })
+
+  it("a video with no audio track says so, instead of a provider error", async () => {
+    // The audio-only lanes receive the video's audio track; a silent video has
+    // none, and the job ends on the same sentence the Nemotron lane gives.
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+    mocks.mockTranscribe.mockRejectedValueOnce(new NoAudioToTranscribeError())
+
+    await expect(handler(subtitleJob() as never, makeCtx())).rejects.toThrow(/This video has no audio track to transcribe/)
+  })
+
+  it("a video with no audio track still renders from the text fallback", async () => {
+    mocks.mockShouldRunOnCloud.mockResolvedValue(false)
+    mocks.mockTranscribe.mockRejectedValueOnce(new NoAudioToTranscribeError())
+    const job = makeJob("add-captions", {
+      videoUrl: "https://v.mp4",
+      style: "karaoke",
+      transcribe_provider: "incredibly-fast-whisper",
+      text: "hello world",
+    })
+
+    await expect(handler(job as never, makeCtx())).resolves.not.toThrow()
   })
 
   it("a failed transcription keeps the provider's own text on the cause chain, so the job records it as error_detail", async () => {

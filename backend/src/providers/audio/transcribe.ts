@@ -20,6 +20,7 @@ import {
 import { scribeWordsToCaptions } from "./captions-mappers.js"
 import { buildTranscriptFromOutput } from "./transcript-normalize.js"
 import { runNemotronTranscribe } from "../kie/nemotron-transcribe.js"
+import { isAcceptedAudioFile, laneNeedsAudioFile, toTranscribableAudio } from "./transcribable-audio.js"
 
 /**
  * A transcript with its non-speech annotations removed — `[music]`,
@@ -76,6 +77,9 @@ const TRANSCRIBE_MODELS: Record<string, string> = {
   "incredibly-fast-whisper": "vaibhavs10/incredibly-fast-whisper:c6433aab18b7318bbae316495f1a097fc067deef7d59dc2f33e45077ae5956c7",
 }
 
+/** The audio files `transcribe` made from a video and is transcribing right now: never converted again. */
+const CONVERTED_AUDIO_URLS = new Set<string>()
+
 export async function transcribe(
   audioUrl: string,
   provider?: TranscribeProvider,
@@ -126,6 +130,25 @@ export async function transcribe(
       `Transcription provider "${resolvedProvider}" does not return word timestamps. ` +
         `Use ${transcribeProvidersWithWordTimestamps().join(" or ")}.`,
     )
+  }
+
+  // A lane that reads only an audio file gets one: a video (an Add Captions
+  // source, a video wired into Transcribe) or another audio format reaches it as
+  // its audio track, extracted to MP3 and stored for the call. Every caller goes
+  // through here, the cloud's relayed transcriptions included.
+  // The converted file is sent through this same function once, and never
+  // converted again whatever its name looks like (`CONVERTED_AUDIO_URLS`).
+  if (laneNeedsAudioFile(resolvedProvider) && !isAcceptedAudioFile(audioUrl) && !CONVERTED_AUDIO_URLS.has(audioUrl)) {
+    const audio = await toTranscribableAudio(audioUrl)
+    if (audio.url !== audioUrl) {
+      CONVERTED_AUDIO_URLS.add(audio.url)
+      try {
+        return await transcribe(audio.url, resolvedProvider, language, options)
+      } finally {
+        CONVERTED_AUDIO_URLS.delete(audio.url)
+        await audio.discard()
+      }
+    }
   }
 
   console.log(`[transcribe] Provider: ${resolvedProvider}`)
