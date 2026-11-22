@@ -46,6 +46,7 @@ export interface MappedReserveError {
     | "external_wallet_denied"
     | "external_wallet_unavailable"
     | "access_blocked"
+    | "first_remake_in_progress"
   message: string
 }
 
@@ -115,6 +116,13 @@ const RESERVE_PREFIX_MAP: Readonly<Record<string, MappedReserveError>> = {
   // upsert writes the row before route registration — so it is a FAULT, not
   // a business refusal. 500 keeps it out of the "buy more credits" funnel and
   // puts it where an operator will look.
+  // "First Remake on us" (migration 684): while a cover is held for the
+  // account's covered run, its other holds are refused (the narrow fence).
+  FIRST_REMAKE_IN_PROGRESS: {
+    status: 402,
+    code: "first_remake_in_progress",
+    message: "Your first Remake is running on your credits. Try again when it has finished.",
+  },
   ALLOWANCE_UNCONFIGURED: {
     status: 500,
     code: "allowance_unconfigured",

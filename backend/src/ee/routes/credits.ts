@@ -43,6 +43,7 @@ import { externalWalletActive } from "../billing/external-wallet.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import { freeVideoLimitsApply } from "../lib/free-video-limits-for.js"
+import { firstRemakeOfferForBalance } from "../lib/first-remake-offer.js"
 import { clientAddress } from "../../lib/client-address.js"
 
 /**
@@ -318,12 +319,15 @@ export async function creditsRoutes(app: FastifyInstance) {
       // The same decision the server's new-node rule reads (free-video-limits-for.ts).
       const videoLimitsApply = await freeVideoLimitsApply(userId, balance.effectiveTier, req.billingContext)
       const videoLimits = videoLimitsApply ? await getFreeVideoLimits() : null
+      // "First Remake on us": present only while the account may still take it.
+      const firstRemakeOffer = dep ? null : await firstRemakeOfferForBalance(userId, req.billingContext)
       const data: UserBalance = {
         ...balance,
         ...(videoLimits?.enabled ? { freeVideoLimits: videoLimits } : {}),
         ...(grant ? { freeGrantState: grant.state } : {}),
         ...(freeGrantNotice ? { freeGrantNotice } : {}),
         ...(welcomeOffer ? { welcomeOffer } : {}),
+        ...(firstRemakeOffer ? { firstRemakeOffer } : {}),
       }
 
       // The deployment's own figures (an external wallet's amount, or the

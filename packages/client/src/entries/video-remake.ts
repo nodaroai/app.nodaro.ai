@@ -23,6 +23,7 @@ export {
   type VideoRemakeFaceMasking,
   type VideoRemakeParams,
   type VideoRemakeEstimate,
+  type FirstRemakeOfferQuote,
   type VideoRemakeRunOptions,
   type VideoRemakeFullQualityKind,
   type VideoRemakeFullQualityEstimate,

@@ -411,6 +411,7 @@ import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerPlanRolesDailyLimit } from "./lib/plan-roles-daily-limit.js"
 import { registerCastSwapPrevizGate } from "./lib/cast-swap-previz-gate.js"
 import { registerCastSwapRoleFaceGate } from "./lib/cast-swap-role-face.js"
+import { registerFirstRemakeEstimateHook } from "./ee/lib/first-remake-offer.js"
 import { registerTokenWorkflowScopeGuard } from "./middleware/token-workflow-scope.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerRetiredVideoProviderHook } from "./middleware/retired-video-provider.js"
@@ -667,6 +668,8 @@ export async function buildApp() {
   registerCastSwapPrevizGate(app)
   // Likewise a person role asking to keep its own face (`face: "original"`), which an engine from before the Face chip ignores.
   registerCastSwapRoleFaceGate(app)
+  // "First Remake on us": a Video Remake quote says what the offer would cover (Cloud).
+  if (hasCredits()) registerFirstRemakeEstimateHook(app)
   // A personal API key limited to some workflows reaches only the routes that
   // declare which workflow they touch (`config.workflowScope`); everything
   // else refuses it. Before every route's own preHandlers (creditGuard among

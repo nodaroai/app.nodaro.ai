@@ -5750,7 +5750,7 @@ length, with its own cast and new music, and can change the motion itself.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged. |
+| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us)). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
 | `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), and whether a person role may keep its own face (`roleFace`, see The Face chip below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
@@ -6309,11 +6309,87 @@ Refusals, all before anything is charged (bodies are
 | `400` | `prompt_style_not_allowed` | The body sends `promptStyle`: only the Nodaro platform itself may. A run's wording follows its `style`. |
 | `400` | `preview_out_of_range` | A preview runs past the clip's end (`previewStart` + 4 must be at most the clip's length). |
 | `401` | `unauthorized` | No authenticated user. |
-| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. An account that never bought anything is not refused for that: the [free-credit video limits](features/free-credits.md#video-on-free-credits) do not apply to a Video Remake run or its Full Quality. |
+| `402` | `insufficient_credits` | Your credits cannot cover the run (`POST /v1/video-remake` only; with a `privacyCredits` in the quote, the hold plus it). In a workspace the cap that refused it may answer instead: `budget_exceeded`, `member_cap_exceeded` or `user_allowance_exceeded`. An account that never bought anything is not refused for that: the [free-credit video limits](features/free-credits.md#video-on-free-credits) do not apply to a Video Remake run or its Full Quality. An account that may still take its [first Remake on us](#first-remake-on-us) is not refused either when the run is one the offer covers. |
+| `402` | `first_remake_in_progress` | Any run, on any route, while your [first Remake on us](#first-remake-on-us) covers part of a run still going: your credits are held for it. Start the run again once it has finished. |
+| `402` | `first_remake_option_locked` | `POST /v1/video-remake` only: your credits cannot cover the run, your [first Remake on us](#first-remake-on-us) would, but the run is not one it covers (a 4-second preview on Nodaro Prism at 480p or on Nodaro Pulse at 720p). Carries `required` and `balance` like `insufficient_credits`. Add credits, or run a covered preview. |
 | `404` | `not_found` | `sessionId` names a session you may not use (`POST /v1/video-remake` only). |
 | `422` | `job_blocked` | The request was blocked by the job policy (`POST /v1/video-remake` only). |
 | `503` | `host_too_old` | This platform version cannot run Video Remake (both routes). |
 | `503` | `estimate_unavailable` | The price cannot be quoted right now (`/estimate` only); try again shortly. |
+
+### First Remake on us
+
+An account that has never bought anything — no credit pack and no paid
+subscription, now or before (a free trial that ended unpaid is not a
+purchase) — gets its **first** Video Remake run even when its credits cannot
+cover the run's price. The run is priced, held and charged
+exactly as any run; the offer only covers the part of the price the
+account's credits do not, and when the run finishes the balance is 0 (or a
+little above when a step settles lower than its hold). A direct
+run and a [trend run](#13g-trends-cloud-edition) are both Video Remake runs.
+
+- **The runs it covers:** a 4-second preview (`preview: true`) on Nodaro Prism
+  at 480p (`resolution: "480p"`, plain or `draft: true`) or on Nodaro Pulse at
+  720p. Everything else in the run is allowed: its roles, pictures, style,
+  art style and every extra step, whatever they cost.
+- **It is your first run, needed or not.** Your first Video Remake run that
+  finishes uses the offer, also when your credits paid all of it (the offer
+  then covered nothing). A first run your credits can pay is paid with them,
+  as any run.
+- **The offer's credits are held for that run alone.** They are not added to
+  your balance: only the run's own steps draw on them, and only for what your
+  own credits cannot pay (your credits are used first).
+- **While the offer covers part of a running run, your credits serve that run
+  alone.** Any other run you start meanwhile is refused with `402
+  first_remake_in_progress` ("Your first Remake is running on your credits.
+  Try again when it has finished."), so it cannot leave the Remake short. This
+  ends as soon as the run has drawn the whole offer, or finishes. A first run
+  your own credits pay for entirely holds nothing back, and a run paid by a
+  workspace is never refused for it.
+- **What is left goes back.** The run holds its quote and is usually charged
+  less (`settlesLower`). What a step leaves unused goes back to the offer, and
+  once the run's last charge settles the part of the offer it did not need is
+  dropped, so your balance ends at 0 (or a little above), never below.
+- **A run that fails or is cancelled.** Whatever the offer had not spent is
+  dropped; your own credits are never touched. A run whose last step has not
+  settled 24 hours after the run ended is closed then: the offer is used if
+  that step drew on it, and the step, when it settles, gives back only what
+  your own credits paid. If the offer paid nothing yet,
+  the run does not use it and your next run can. If it had already paid for
+  part of the run (a step the run had sent out billed itself), the offer is
+  used. The credits your own balance paid for a step delivered before the run
+  failed (a prepared reference picture, for example) stay charged, as on any
+  run.
+- **Until the offer has ended, the run cannot be moved to the Trash or
+  deleted** — also a cancelled run, while a step it started is still
+  finishing: `DELETE /v1/jobs/:id` answers `409 first_remake_run_active`, and
+  deleting the workflow or project that holds it (`DELETE /v1/workflows/:id`,
+  `DELETE /v1/projects/:id`) answers `409 first_remake_run_held`. Once the run
+  and its steps have finished, both work as usual. Deleting your account is
+  never refused.
+- **In your credit history** the offer is one grant row when the run ends
+  (`first_remake_cover`, under the `grant` kind of `GET /v1/credits/history`):
+  what the offer paid for that run, naming its job. Your balance does not move
+  with it.
+- Only your own credits: a run paid by a workspace or by a deployment's single
+  payer is never covered.
+
+While the offer is yours to take:
+
+- `GET /v1/user/credits` carries `firstRemakeOffer: { status, allowed }` —
+  `status` is `"available"`, or `"in_use"` while a run holds it, and `allowed`
+  lists the runs it covers
+  (`[{ engine: "nodaro-prism", resolution: "480p", preview: true }, { engine: "nodaro-pulse", resolution: "720p", preview: true }]`).
+  It is absent once the offer is used, or after any purchase. The Video Remake
+  page offers only those runs while it is present; the others are shown and
+  disabled until the account has credits.
+- `POST /v1/video-remake/estimate` and `POST /v1/trends/:slug/estimate` carry
+  `firstRemakeOffer: { allowed, coverCredits }`: whether this request's options
+  are a covered run, and the credits the offer would cover of this quote — its
+  `totalCredits` plus `privacyCredits` and `referencesRetryCredits`, less your
+  balance (0 when your balance covers it, or the options are not covered).
+- A run that needs the offer but is not a covered run is refused with `402
+  first_remake_option_locked` (see the refusals above).
 
 ### Full Quality
 
@@ -6419,7 +6495,7 @@ answered as a guest. Every other route below needs a signed-in caller.
 |---|---|---|
 | `GET` | `/v1/trends` | The catalog, in the catalog's own order: `{ data: TrendCard[], next }`. Each card is `{ id, slug, name, description?, tags, badges, cover, original?, examples, needs, durationSec, isFavorite }`: `cover` is the first example, else the original; `original` is the original's display copy `{ videoUrl, posterUrl?, width, height }` (the same address as the page's `original`, absent on a version without one); `examples` is every example's video in order, `{ videoUrl, posterUrl?, width, height }` each, without the pictures its slots used (those are on the page; `[]` on a trend with only its original). Every video (`cover`, `original`, each of `examples`, and the page's `original` and `examples`) may also carry `webUrl` and `webSizeBytes`: a light copy the platform made for playback (H.264 ~2.5 Mbit/s, AAC 160 kbit/s), to play as it is with no CDN transform, and its size in bytes; both are absent until it is made (a version published before it), and `videoUrl` is then the one to play. A trend can hide its original clip: its `original` is then its first example, and `examples` starts from its second example, so the original clip is never sent. Query: `q` (search), `tag`, `favorites=1` (only yours), `locale`, `cursor`, `limit` (1–60, default 30). |
 | `GET` | `/v1/trends/:slug` | A trend's page: `{ data: TrendDetail }` (its original, slots, examples, preview length, `engine` and `resolutions`). `original` is the clip every run starts from, as you may show it: `{ videoUrl, posterUrl?, width, height, durationSec, previewStartSec? }`, a browser-safe (H.264 MP4) copy, with where the 4 s preview starts when the trend has one (`0` included). `examples` may be empty (a trend with only its original); the card's `cover` is then the original. On a trend that hides its original clip, `original` is its first example (that example's video, poster, size and length, with the trend's own `previewStartSec`) and `examples` starts from its second example; the original clip is never sent. `engine` is the engine every run of the trend uses (`"nodaro-prism"` or `"nodaro-pulse"`, with its name in `engineName`: "Nodaro Prism" or "Nodaro Pulse"; the trend chooses it, never the person running it), and `resolutions` the resolutions a run may ask for, its default first: `["480p", "720p", "1080p"]` on Nodaro Prism (480p is plain; a run makes a draft only with `draft: true`), `["720p", "1080p"]` on Nodaro Pulse (no draft). Each slot is `{ key, label, kind, required, hint?, hintImageUrl?, defaultImages?, emptyFill?, chips, defaults? }` (`hintImageUrl`: a picture of who or what the slot is in the original; `defaultImages`: an optional slot's original look, 1–3 https pictures of that role as it is in the original, the ones a run sends for it when you leave it empty; on a trend that hides its original, the pictures of the example shown as its `original` for that slot (the slot's own are never shown there); absent on a required slot; `emptyFill`, on an optional slot only: what a run takes when you leave it empty, `"default"` its original look, `"example"` the chosen example's pictures for it (none when that example has none: then it stays as in the original), or `"original"` no pictures, the role as in the original): `chips` lists the chips you may set on it, in the kind's order (`[]` = none, so show no chips row), and `defaults` the starting value of those. Query: `locale`. |
-| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits? } }`: `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"nodaro-prism"` or `"nodaro-pulse"`, as on its page), with its name in `engineName` ("Nodaro Prism" or "Nodaro Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
+| `POST` | `/v1/trends/:slug/estimate` | Quote a run before starting it. Free. Returns `{ data: { expectedCredits, holdCredits, engine, engineName, breakdown, privacyCredits?, firstRemakeOffer? } }` (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us)): `holdCredits` is reserved when the run starts, `expectedCredits` is what it is expected to be charged. `engine` is the engine the run was priced on, the trend's own (`"nodaro-prism"` or `"nodaro-pulse"`, as on its page), with its name in `engineName` ("Nodaro Prism" or "Nodaro Pulse"). `breakdown` names the quote's parts for display only (some sit outside the totals: read the totals, never the sum). `privacyCredits`, on a trend that retries a clip the video model refuses, is what is charged on top if that retry runs; it is not in `expectedCredits` or `holdCredits`, and is 0 when the trend's clip was prepared ahead of time. |
 | `POST` | `/v1/trends/:slug/runs` | Start a run. Returns `202 { data: { jobId } }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key`: a repeat with the same key answers with the first run's job and starts nothing new. |
 | `GET` | `/v1/trends/runs` | Your trend runs, newest first: `{ data: TrendRun[], next }`. Query: `trend` (a slug), `cursor`, `limit` (1–60, default 30). A run stays readable after its trend moves on to a new version, is unpublished or is archived. |
 | `GET` | `/v1/trends/runs/:jobId` | One of your trend runs, in the same shape: `{ data: TrendRun }`. `404` for a job that is not your own trend run (another user's, a step inside another job, any other kind of job). |
@@ -6556,6 +6632,7 @@ with their OWN codes and fixed messages; the engine's message and any
 | `400` | `unsafe_url` | A picture is not a public http(s) address. |
 | `400` | `raw_reference_token` | `details` contains `{image:`, `{video:` or `{audio:`. |
 | `402` | `insufficient_credits` | Your credits (or a workspace cap: `budget_exceeded`, `member_cap_exceeded`, `user_allowance_exceeded`) cannot cover the run. Passed on as the engine gave it. |
+| `402` | `first_remake_option_locked` | Your credits cannot cover the run and your [first Remake on us](#first-remake-on-us) would, but the run is not a 4-second preview it covers (Nodaro Prism at 480p, Nodaro Pulse at 720p). Passed on as the engine gave it. |
 | `413` | `storage_limit_exceeded` | Your storage is full. |
 | `422` | `job_blocked` | The job policy blocked the run. |
 | `429` | `rate_limited` | Too many requests; try again shortly. |

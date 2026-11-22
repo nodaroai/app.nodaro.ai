@@ -34,7 +34,8 @@ export type HistoryKind = (typeof HISTORY_KINDS)[number]
 export const SOURCES_OF_KIND: Readonly<Record<Exclude<HistoryKind, "adjustment">, readonly string[]>> = {
   usage: ["usage"],
   purchase: ["one_time_purchase", "subscription_created", "subscription_renewal", "purchase", "subscription", "renewal", "topup"],
-  grant: ["signup_grant"],
+  /** The signup grant, and "First Remake on us": what its offer paid for a run. */
+  grant: ["signup_grant", "first_remake_cover"],
   refund: ["refund", "stripe_refund", "paddle_refund"],
   /** Credits earned from, or paid for, a published app. */
   app: ["app_earnings", "app_markup"],

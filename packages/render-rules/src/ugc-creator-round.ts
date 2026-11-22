@@ -60,6 +60,8 @@ export const UGC_SPEND_REFUSAL_CODES: ReadonlySet<string> = new Set([
   "member_cap_exceeded",
   // A shared wallet that refused the charge.
   "external_wallet_denied",
+  // The account's first Remake is running on its credits (the narrow fence).
+  "first_remake_in_progress",
   // A connected instance's monthly spend cap.
   "instance_cap_reached",
   // Credits that cannot be spent on this surface.

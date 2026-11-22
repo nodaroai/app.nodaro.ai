@@ -94,6 +94,35 @@ and MCP (see [pay-as-you-go accounts](../api-integration.md#8b-pay-as-you-go-acc
 unless the credits bought are all refunded. Details of what each tier
 includes are on the [pricing page](https://app.nodaro.ai/pricing).
 
+## Your first Remake on us
+
+Until an account buys anything (a free trial that ended unpaid does not
+count), its first Video Remake run is on us when its credits cannot cover
+it: a 4-second preview on Nodaro Prism at 480p or on
+Nodaro Pulse at 720p, with any roles, pictures, style or extra steps. The run
+shows its real price, with "Your first Remake: we cover what your credits
+don't (this once)" beside it. It runs, it is charged as any run, and the
+offer covers what your credits could not, so your balance ends at 0.
+
+- The offer is your first Video Remake run: once it finishes, the offer is
+  used, also when your credits paid for all of it.
+- The offer's credits are held for that run alone: they are not added to
+  your balance, and only that run's steps draw on them, after your own credits.
+- While the offer covers part of that run, another run you start is refused
+  until it finishes, so it cannot leave the Remake short. A running first
+  Remake can't be moved to the Trash (nor its workflow or project deleted)
+  until it has finished.
+- A run that fails or is cancelled before the offer paid for anything does not
+  use it, and your next run can. Your own credits are never taken back.
+- While the offer is yours, the Video Remake page and the trend run page offer
+  only those previews; full-length runs and the higher resolutions are shown,
+  and unlock with credits.
+- A credit pack or a subscription, at any time, ends the offer.
+
+The API side (the fields an app reads, and the refusal for a run the offer
+does not cover) is in
+[API integration § First Remake on us](../api-integration.md#first-remake-on-us).
+
 ## Video on free credits
 
 Until an account buys anything, its video runs within these limits:

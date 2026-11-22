@@ -153,6 +153,7 @@ import { applyOrgEntitlements, effectiveTierOf, payerProfileId, spendGates } fro
 import { modelAvailabilityRefusal } from "./model-availability.js"
 import { freeVideoModelRefusal, freeVideoRefusal, isVideoModelId, type FreeVideoLimits, type FreeVideoRequest } from "./free-video-limits.js"
 import { hasPurchaseOnRecord } from "./purchase-on-record.js"
+import type { FirstRemakeOfferBalanceField } from "../lib/first-remake-offer.js"
 import { getFreeVideoLimits } from "../lib/free-video-config.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { hasCredits, llmMeteredPricing } from "../../lib/config.js"
@@ -518,6 +519,13 @@ export interface CreditCheckSurface {
    * restriction, the balance, the day's spend.
    */
   freeVideoLimitsLifted?: boolean
+  /**
+   * "First Remake on us" (migration 684): the cover a step of the account's
+   * covered Video Remake run may draw on (`firstRemakeCoverAvailable`). It is
+   * never in the pools, so the balance check counts it beside them for that
+   * run's own steps only — as reserve_credits will let them draw on it.
+   */
+  firstRemakeCover?: number
 }
 
 export interface CreditCheckResult {
@@ -587,6 +595,10 @@ export interface UserBalance {
    * the claim route answers with), so no client has to hard-code it.
    */
   welcomeOffer?: { popupDue: boolean; popupSeen: boolean; consentPending: boolean; credits: number }
+  /** "First Remake on us" (ee/lib/first-remake-offer.ts): present only while
+   *  the account never paid and has not used the offer — the Video Remake
+   *  page offers only the runs it covers (`allowed`) while it is present. */
+  firstRemakeOffer?: FirstRemakeOfferBalanceField
   /** Per-user deployment allowance in RAW credits; null when no allowance applies
    *  (no payer, or the caller IS the payer — which holds the real credits, not
    *  an allocation — or the figure was unavailable). NOT null merely because
@@ -4182,7 +4194,7 @@ export class CreditsService {
      *  budget, never the personal pools. The personal-history views filter
      *  these out; the org reporting joins on them (P15). */
     creditType: "subscription" | "topup" | "org"
-    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry" | "signup_grant"
+    source: "subscription_created" | "subscription_renewal" | "one_time_purchase" | "admin_adjustment" | "usage" | "org_usage" | "refund" | "stripe_refund" | "expiry" | "signup_grant" | "first_remake_cover"
     description?: string
     jobId?: string
     stripeTransactionId?: string
@@ -4416,7 +4428,10 @@ export class CreditsService {
 
     // Calculate total balance. In web-free mode the topup pool is excluded —
     // it never spends on a consumer surface.
-    const { subscriptionCredits, topupCredits, totalBalance } = spendableBalance(profile, webFree)
+    const pools = spendableBalance(profile, webFree)
+    const { subscriptionCredits, topupCredits } = pools
+    // A covered first Remake run's own step may also draw on its cover (684).
+    const totalBalance = pools.totalBalance + Math.max(0, surface?.firstRemakeCover ?? 0)
 
     // Check if user has enough credits. BYPASSED for a workspace payer: the
     // personal pools are not what pays, and headroom is the reserve RPC's
@@ -5121,6 +5136,13 @@ export class CreditsService {
     // billing account. Left `reserved`, ONE later `commit_credits(id)` still
     // heals money and allowance together: a recoverable strand, which is the
     // trade billing-04/H22 already made above.
+    // "First Remake on us" (684): a hold that drew on the cover is settled by
+    // the RPC alone (it gives the unused part back to the cover and counts
+    // what the cover paid); left reserved here, the RPC retry heals it.
+    if (Number((payerRow?.metadata as Record<string, unknown> | null)?.from_cover ?? 0) > 0) {
+      console.error(`[credits] commit fallback REFUSED for a first-Remake covered usage log ${usageLogId} — row left reserved for RPC retry`)
+      return
+    }
     if (holdsEnforcedAllowance(payerRow)) {
       console.error(
         `[credits] commit fallback REFUSED for allowance-enforced usage log ${usageLogId} — row left reserved for RPC retry`,
@@ -5199,6 +5221,13 @@ export class CreditsService {
       console.error(
         `[credits] refund fallback REFUSED for workspace-paid usage log ${usageLogId} — row left reserved for RPC retry`,
       )
+      return
+    }
+    // "First Remake on us" (684): the cover's share of a hold must go back to
+    // the cover, never to the pools — and its zero pool split would send the
+    // whole hold to the top-up pool here. Only the RPC refunds such a row.
+    if (Number((usageLog.metadata as Record<string, unknown> | null)?.from_cover ?? 0) > 0) {
+      console.error(`[credits] refund fallback REFUSED for a first-Remake covered usage log ${usageLogId} — row left reserved for RPC retry`)
       return
     }
 

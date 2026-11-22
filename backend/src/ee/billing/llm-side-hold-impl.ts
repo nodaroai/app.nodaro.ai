@@ -25,6 +25,7 @@ import { LlmUnpricedModelError, llmChargeId } from "./llm-metered.js"
 import { llmHoldForCalls, settleLlmUsageLogImpl } from "./llm-billing-impl.js"
 import { parseMeteredLlmId } from "./metered-llm-id.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
+import { firstRemakeCoverAvailable } from "../lib/first-remake-offer.js"
 
 export { llmHoldForCalls } from "./llm-billing-impl.js"
 
@@ -103,9 +104,12 @@ export async function reserveLlmSideHoldImpl(args: LlmSideHoldReserveArgs): Prom
   // balance is a clear refusal that names the hold, with nothing reserved.
   let check: Awaited<ReturnType<typeof CreditsService.checkCredits>>
   try {
+    // A side hold of a covered first Remake run may draw on its cover (684).
+    const runCover = await firstRemakeCoverAvailable(args.userId, args.jobId, payer.ctx)
     check = await CreditsService.checkCredits(args.userId, chargeId, isAppRun, holdCredits, {
       billingContext: payer.ctx,
       webFreeMode,
+      ...(runCover > 0 ? { firstRemakeCover: runCover } : {}),
     })
   } catch (err) {
     if (err instanceof PriceNotConfiguredError) return refusal("llm_model_unpriced", `${chargeId} has no price`)
