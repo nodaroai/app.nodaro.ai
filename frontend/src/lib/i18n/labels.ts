@@ -23,9 +23,12 @@ import { LABELS_KO } from "./labels.ko"
 import { PRESET_CONTENT_KO } from "./preset-content.ko"
 import { LABELS_PT_BR } from "./labels.pt-br"
 import { PRESET_CONTENT_PT_BR } from "./preset-content.pt-br"
+import { LABELS_DE } from "./labels.de"
+import { PRESET_CONTENT_DE } from "./preset-content.de"
 import { LABELS_ES } from "./labels.es"
 import { PRESET_CONTENT_ES } from "./preset-content.es"
-// The Create Image tiles' copy, generated from tools/preset-tiles/ledger.json (its build writes these five files).
+// The Create Image tiles' copy, generated from tools/preset-tiles/ledger.json (its build writes these six files).
+import { PRESET_TILES_DE } from "./preset-content-tiles.de.generated"
 import { PRESET_TILES_ES } from "./preset-content-tiles.es.generated"
 import { PRESET_TILES_HE } from "./preset-content-tiles.he.generated"
 import { PRESET_TILES_JA } from "./preset-content-tiles.ja.generated"
@@ -51,6 +54,7 @@ function withUnitLabels(locale: UnitLabelLocaleId, tables: LocaleLabelTables): L
  * Legacy tables ∪ the node units' node labels.
  */
 export const LABEL_TABLES: Readonly<Partial<Record<LocaleId, LocaleLabelTables>>> = {
+  de: withUnitLabels("de", LABELS_DE),
   es: withUnitLabels("es", LABELS_ES),
   he: withUnitLabels("he", LABELS_HE),
   ja: withUnitLabels("ja", LABELS_JA),
@@ -195,6 +199,7 @@ export function useLocalizeOptionLabel(): (label: string) => string {
  * English, so upstream additions never render blank.
  */
 export const PRESET_CONTENT_MAPS: Readonly<Partial<Record<LocaleId, Record<string, PresetCopy>>>> = {
+  de: { ...PRESET_CONTENT_DE, ...PRESET_TILES_DE },
   es: { ...PRESET_CONTENT_ES, ...PRESET_TILES_ES },
   he: { ...PRESET_CONTENT_HE, ...PRESET_TILES_HE },
   ja: { ...PRESET_CONTENT_JA, ...PRESET_TILES_JA },

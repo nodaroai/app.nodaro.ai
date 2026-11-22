@@ -29,8 +29,8 @@ describe("LocalePicker", () => {
   it("with no `locale.offered`, every complete language, as before", () => {
     render(<LocalePicker />)
     fireEvent.click(screen.getByRole("button"))
-    for (const name of ["English", "עברית", "日本語", "한국어"]) expect(screen.getByText(name)).toBeTruthy()
-    expect(screen.queryByText("Deutsch")).toBeNull()
+    for (const name of ["English", "Deutsch", "עברית", "日本語", "한국어"]) expect(screen.getByText(name)).toBeTruthy()
+    expect(screen.queryByText("Français")).toBeNull()
   })
 
   it("lists only the languages the deployment offers", () => {

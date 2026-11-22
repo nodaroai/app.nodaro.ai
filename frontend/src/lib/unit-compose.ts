@@ -668,7 +668,7 @@ export function unitSideBatchPatch(
 
 /** The node-label tables' unit rows, by app locale ("pt-br" in strings.json is "pt-BR"). */
 /** The interface languages a unit's strings.json `labels` carry (its "pt-br" key is the "pt-BR" locale). */
-export type UnitLabelLocaleId = "es" | "he" | "ja" | "ko" | "pt-BR"
+export type UnitLabelLocaleId = "de" | "es" | "he" | "ja" | "ko" | "pt-BR"
 
 export function unitNodeLabels(labels: ReadonlyArray<UnitLabels>): Partial<Record<UnitLabelLocaleId, Record<string, string>>> {
   const out: Partial<Record<UnitLabelLocaleId, Record<string, string>>> = {}

@@ -26,6 +26,10 @@
         "flowNodeId": "uc-001-business"
       },
       "copy": {
+        "de": {
+          "name": "Markenidentität für den Start",
+          "description": "Logo, Visitenkarte, Tüte und Schild in einem Stil"
+        },
         "es": {
           "name": "Identidad de marca inicial",
           "description": "Presentación completa y elegante de la identidad de una nueva panadería, con un emblema original, tarjeta de visita, bolsa de papel para pastelería, pegatina y rótulo de fachada sobre travertino cálido; crema, ciruela y amarillo mantequilla, con tipografía premium."
@@ -71,6 +75,10 @@
         "flowNodeId": "uc-002-business"
       },
       "copy": {
+        "de": {
+          "name": "Kampagne zur Salon-Eröffnung",
+          "description": "Eröffnungsanzeige mit großer Schlagzeile"
+        },
         "es": {
           "name": "Campaña de inauguración de salón",
           "description": "Anuncio real de inauguración de salón, listo para publicar: foto de alta moda de cabello castaño brillante, formas curvas coral elegantes y el titular exacto y enorme «NOW OPEN», con espacio sobrio para la llamada a la acción."
@@ -116,6 +124,10 @@
         "flowNodeId": "uc-003-business"
       },
       "copy": {
+        "de": {
+          "name": "Restaurant-Speisekarte",
+          "description": "Gedruckte Speisekarte mit Food-Foto"
+        },
         "es": {
           "name": "Diseño de carta de restaurante",
           "description": "Fotografía cenital fotorrealista de comida de una cafetería mediterránea, integrada en una sofisticada carta impresa de brunch de dos páginas, con un plato estrella apetecible y títulos de sección legibles; oliva y marfil."
@@ -161,6 +173,10 @@
         "flowNodeId": "uc-004-business"
       },
       "copy": {
+        "de": {
+          "name": "Flash-Sale-Anzeige",
+          "description": "Auffällige Anzeige für ein zeitlich begrenztes Angebot"
+        },
         "es": {
           "name": "Anuncio de oferta relámpago",
           "description": "Anuncio dinámico de comercio electrónico para redes sociales de unas zapatillas negras de correr modernas, con las palabras exactas y enormes «48H FLASH SALE», las zapatillas congeladas en pleno movimiento y una composición gráfica atrevida en amarillo, negro y blanco."
@@ -206,6 +222,10 @@
         "flowNodeId": "uc-005-business"
       },
       "copy": {
+        "de": {
+          "name": "Anzeige für Zahnarztpraxis",
+          "description": "Lokale Anzeige für eine Zahnarztpraxis"
+        },
         "es": {
           "name": "Anuncio de dentista de barrio",
           "description": "Campaña fiable de una clínica dental local con un dentista ficticio cercano en una consulta moderna y luminosa, sonrisa espontánea, el título exacto «LOVE YOUR SMILE» y un diseño aireado y tranquilizador."
@@ -251,6 +271,10 @@
         "flowNodeId": "uc-006-business"
       },
       "copy": {
+        "de": {
+          "name": "Titelbild für Immobilienanzeige",
+          "description": "Titelbild für eine Immobilienanzeige"
+        },
         "es": {
           "name": "Portada de anuncio inmobiliario",
           "description": "Portada promocional inmobiliaria de una espléndida villa moderna bañada por el sol, fotografía de arquitectura editorial, título grande y claro «JUST LISTED», casa despejada y un diseño pulido y sobrio con espacio para los datos de contacto."
@@ -296,6 +320,10 @@
         "flowNodeId": "uc-007-business"
       },
       "copy": {
+        "de": {
+          "name": "Fitnessstudio-Mitgliedschaft",
+          "description": "Anzeige für eine Studio-Mitgliedschaft"
+        },
         "es": {
           "name": "Membresía de estudio de fitness",
           "description": "Anuncio potente de lanzamiento de un gimnasio con una mujer atlética en un estudio de entrenamiento real y de alta gama, un momento de acción poderoso, el texto principal exacto «START STRONG», carbón y amarillo cítrico con tipografía contundente."
@@ -341,6 +369,10 @@
         "flowNodeId": "uc-008-business"
       },
       "copy": {
+        "de": {
+          "name": "Hero-Bild für Produktlaunch",
+          "description": "Aufmacherbild für die Launch-Seite"
+        },
         "es": {
           "name": "Hero de página de lanzamiento de producto",
           "description": "Imagen hero de alta gama para un sitio web con un altavoz inalámbrico blanco sobre un pedestal de piedra escultural, luz suave de la mañana, tipografía editorial impactante con el texto exacto «PURE SOUND» y mucho espacio limpio para texto."
@@ -386,6 +418,10 @@
         "flowNodeId": "uc-009-business"
       },
       "copy": {
+        "de": {
+          "name": "Stellenplakat",
+          "description": "Gestaltete Stellenanzeige"
+        },
         "es": {
           "name": "Cartel de ofertas de empleo",
           "description": "Cartel moderno de contratación para un restaurante, con una brigada de cocina alegre y auténtica preparando platos, un titular elegante y comedido «JOIN OUR TEAM», personalidad acogedora y una maquetación profesional y bien estructurada."
@@ -431,6 +467,10 @@
         "flowNodeId": "uc-010-business"
       },
       "copy": {
+        "de": {
+          "name": "Echte Kundenstimme",
+          "description": "Kundenporträt mit großem Zitat"
+        },
         "es": {
           "name": "Testimonio de cliente verificado",
           "description": "Diseño promocional que genera confianza: retrato de una clienta ficticia y feliz de un taller de cerámica junto a un cuenco de cerámica y una cita grande y exacta «MY FAVORITE PLACE», tono humano y cálido, sin cifras inventadas de valoraciones."
@@ -476,6 +516,10 @@
         "flowNodeId": "uc-011-business"
       },
       "copy": {
+        "de": {
+          "name": "Preisflyer für Dienstleistungen",
+          "description": "Preisliste für Dienstleistungen"
+        },
         "es": {
           "name": "Folleto de tarifas de servicios",
           "description": "Folleto elegante de tarifas de un estudio de masajes, listo para imprimir; fotografía realista y serena de manos y piedras, tipografía sobria con títulos claros y tres niveles de servicio creíbles, en crema y verde salvia."
@@ -521,6 +565,10 @@
         "flowNodeId": "uc-012-business"
       },
       "copy": {
+        "de": {
+          "name": "Spa-Gutschein",
+          "description": "Gestalteter Geschenkgutschein"
+        },
         "es": {
           "name": "Cheque regalo de spa",
           "description": "Diseño de cheque regalo de lujo con detalles dorados en relieve, un bello fondo botánico minimalista, las palabras exactas «GIFT CARD», acabado de lámina y presentación de impresión de alta gama."
@@ -566,6 +614,10 @@
         "flowNodeId": "uc-013-business"
       },
       "copy": {
+        "de": {
+          "name": "Markenfoto für Immobilienmakler",
+          "description": "Professionelles Porträt für Makler"
+        },
         "es": {
           "name": "Foto de marca para agente inmobiliario",
           "description": "Profesional inmobiliario ficticio con una chaqueta beige de corte impecable junto a la ventana luminosa de un apartamento; campaña de marca personal limpia y premium, titular exacto «YOUR NEXT CHAPTER», mirada directa y amable."
@@ -611,6 +663,10 @@
         "flowNodeId": "uc-014-business"
       },
       "copy": {
+        "de": {
+          "name": "Hero-Anzeige für Lieferdienst",
+          "description": "Hero-Anzeige für einen Essenslieferdienst"
+        },
         "es": {
           "name": "Anuncio hero de comida a domicilio",
           "description": "Una apetitosa hamburguesa smash gourmet fotografiada en el aire con pepinillos y salsa flotando sobre un vibrante fondo coral cálido, titular exacto y enorme «DINNER SORTED», anuncio actual de comida a domicilio para redes sociales."
@@ -656,6 +712,10 @@
         "flowNodeId": "uc-015-business"
       },
       "copy": {
+        "de": {
+          "name": "Kampagne für Onlinekurs",
+          "description": "Anzeige für einen digitalen Kurs"
+        },
         "es": {
           "name": "Campaña de curso en línea",
           "description": "Una ilustradora auténtica y experta trabajando, rodeada de papeles de dibujo de colores y una tableta; campaña de curso clara e impactante con el título exacto «LEARN TO DRAW» y una identidad de escuela de arte divertida."
@@ -701,6 +761,10 @@
         "flowNodeId": "uc-016-business"
       },
       "copy": {
+        "de": {
+          "name": "Anmeldebanner für Webinar",
+          "description": "Banner mit Termin und Anmeldung"
+        },
         "es": {
           "name": "Banner de inscripción a un webinar",
           "description": "Banner profesional de un webinar en línea, con el retrato cuidado del presentador a la derecha, un sutil diagrama abstracto de estrategia a la izquierda, el título exacto «GROW SMARTER» y una maquetación editorial premium en blanco, azul marino y ámbar."
@@ -746,6 +810,10 @@
         "flowNodeId": "uc-017-business"
       },
       "copy": {
+        "de": {
+          "name": "Spendenaufruf",
+          "description": "Spendenanzeige für eine gemeinnützige Organisation"
+        },
         "es": {
           "name": "Llamamiento de recaudación benéfica",
           "description": "Fotografía documental cálida y emotiva de voluntarios de la comunidad plantando un huerto compartido, imagen esperanzadora para una campaña de recaudación con el titular simple y exacto «GROW TOGETHER»; evita emblemas benéficos falsos o datos de donaciones."
@@ -791,6 +859,10 @@
         "flowNodeId": "uc-018-business"
       },
       "copy": {
+        "de": {
+          "name": "SaaS-Funktionsankündigung",
+          "description": "Anzeige für eine neue Funktion"
+        },
         "es": {
           "name": "Anuncio de una función de SaaS",
           "description": "Anuncio moderno de lanzamiento de software, con la interfaz realista y cuidada de un producto de analítica en una ventana de navegador en perspectiva, el título preciso y exacto «MEET YOUR NEW WORKSPACE», en blanco y negro con un acento verde lima brillante."
@@ -836,6 +908,10 @@
         "flowNodeId": "uc-019-business"
       },
       "copy": {
+        "de": {
+          "name": "Titelblatt für B2B-Fallstudie",
+          "description": "Titelblatt für eine Fallstudie"
+        },
         "es": {
           "name": "Portada de caso de estudio B2B",
           "description": "Portada de caso de estudio corporativa pero convincente, que muestra una fábrica de embalajes sostenibles en fotografía documental cinematográfica, tipografía comedida con el texto exacto «BETTER BY DESIGN», maquetación elegante orientada a las pruebas, sin estadísticas inventadas."
@@ -881,6 +957,10 @@
         "flowNodeId": "uc-020-business"
       },
       "copy": {
+        "de": {
+          "name": "Messestand-Design",
+          "description": "Messestand mit deiner Marke"
+        },
         "es": {
           "name": "Diseño de stand de feria",
           "description": "Maqueta fotorrealista de un pabellón de exposiciones con un stand modular moderno para la marca ficticia «NOVA», rótulo iluminado, un llamativo mostrador de recepción curvo y banners colgantes, visitantes a escala humana y materiales de marca profesionales."
@@ -926,6 +1006,10 @@
         "flowNodeId": "uc-021-business"
       },
       "copy": {
+        "de": {
+          "name": "Ladenschild-Mockup",
+          "description": "Schild an der Ladenfassade"
+        },
         "es": {
           "name": "Maqueta de rótulo de fachada",
           "description": "Fachada creíble de una cafetería artesanal a pie de calle antes de abrir, con un rótulo metálico de bandera premium que dice «MORNING CLUB», un toldo atractivo, vinilos en el escaparate y fotografía cálida de hora dorada."
@@ -971,6 +1055,10 @@
         "flowNodeId": "uc-022-business"
       },
       "copy": {
+        "de": {
+          "name": "Newsletter-Titelbild",
+          "description": "Aufmacherbild für deinen Newsletter"
+        },
         "es": {
           "name": "Imagen de portada de boletín",
           "description": "Cabecera elegante de boletín empresarial para una consultora creativa, con papel plegado escultural y fotografía editorial minimalista, título simple y exacto «THE WEEKLY EDIT» y una jerarquía impecable."
@@ -1016,6 +1104,10 @@
         "flowNodeId": "uc-023-business"
       },
       "copy": {
+        "de": {
+          "name": "Teaser für Luxusmarke",
+          "description": "Edler, zurückhaltender Teaser"
+        },
         "es": {
           "name": "Teaser de marca de lujo",
           "description": "Imagen de campaña de moda de alta gama para una marca de relojes original: un dramático macro de un reloj mecánico parcialmente cubierto por lino transparente, sombras lujosas y exactamente una línea, «COMING SOON»."
@@ -1061,6 +1153,10 @@
         "flowNodeId": "uc-024-business"
       },
       "copy": {
+        "de": {
+          "name": "Menütafel für Café",
+          "description": "Gestaltete Menütafel"
+        },
         "es": {
           "name": "Pizarra de menú de cafetería",
           "description": "Escena interior centrada en una pizarra de menú de café colgante, grande, legible y muy bien diseñada, con un pequeño mostrador de cafetería con tazas, tipografía cálida rotulada a mano y una identidad de local realista y encantadora."
@@ -1106,6 +1202,10 @@
         "flowNodeId": "uc-025-business"
       },
       "copy": {
+        "de": {
+          "name": "App-Download-Anzeige",
+          "description": "Anzeige mit Smartphone und Vorteil"
+        },
         "es": {
           "name": "Anuncio de descarga de app",
           "description": "Anuncio divertido y pulido de una app ficticia de seguimiento de hábitos para teléfono, con una enorme pantalla de teléfono que muestra una lista de hábitos ilustrada y amigable, una persona alegre a su lado y el titular exacto «MAKE IT A HABIT»."
@@ -1151,6 +1251,10 @@
         "flowNodeId": "uc-026-business"
       },
       "copy": {
+        "de": {
+          "name": "Merch-Set mit Marke",
+          "description": "Markenprodukte in einem Set"
+        },
         "es": {
           "name": "Kit de merchandising de marca",
           "description": "Flat lay cenital profesional de identidad de marca con una bolsa de tela bordada, un pin esmaltado, una botella de agua y un cuaderno que llevan un logo original y coherente de sol geométrico, fondo neutro cálido y una puesta en escena de producto impecable."
@@ -1196,6 +1300,10 @@
         "flowNodeId": "uc-027-business"
       },
       "copy": {
+        "de": {
+          "name": "Erklärgrafik für Dienstleistung",
+          "description": "Visuelle Erklärung deiner Dienstleistung"
+        },
         "es": {
           "name": "Gráfico explicativo de un servicio",
           "description": "Infografía informativa y elegante de tres pasos para una suscripción de cuidado de plantas en casa, con regadera, planta y caja de envío ilustradas en un sofisticado estilo de papel recortado, 3 pasos numerados y texto mínimo y legible."
@@ -1241,6 +1349,10 @@
         "flowNodeId": "uc-028-business"
       },
       "copy": {
+        "de": {
+          "name": "Feiertagskampagne für Shop",
+          "description": "Festtagsanzeige für deinen Laden"
+        },
         "es": {
           "name": "Campaña navideña para tienda",
           "description": "Anuncio festivo y sofisticado de temporada para un pequeño negocio de chocolate, con una caja artesanal de bombones atada con cinta, follaje invernal y una cálida luz de velas, titular exacto «A LITTLE MAGIC», sin logos."
@@ -1286,6 +1398,10 @@
         "flowNodeId": "uc-029-business"
       },
       "copy": {
+        "de": {
+          "name": "Visitenkarte für lokales Geschäft",
+          "description": "Gestaltete Visitenkarte"
+        },
         "es": {
           "name": "Tarjeta de visita de negocio local",
           "description": "Hermosa maqueta de tarjeta de visita a doble cara para una diseñadora floral ficticia, «ELLA BLOOM», con logo serif grabado, símbolo botánico en relieve y papel sin estucar de textura ligera sobre piedra natural."
@@ -1331,6 +1447,10 @@
         "flowNodeId": "uc-030-business"
       },
       "copy": {
+        "de": {
+          "name": "Plakat zur Restauranteröffnung",
+          "description": "Eröffnungsplakat"
+        },
         "es": {
           "name": "Cartel de inauguración de restaurante",
           "description": "Cartel editorial para un nuevo restaurante japonés de ramen, con una extraordinaria fotografía de un cuenco humeante, un marco tipográfico seguro en bermellón y crema, el título principal exacto «RAMEN NIGHT» y un acabado de impresión profesional."
@@ -1377,6 +1497,10 @@
         "flowNodeId": "uc-031-personal"
       },
       "copy": {
+        "de": {
+          "name": "Altes Familienfoto restaurieren",
+          "description": "Aus deinem Foto: restaurieren und ausbessern"
+        },
         "es": {
           "name": "Restauración de una foto familiar antigua",
           "description": "Demostración delicada de antes y después en pantalla dividida: el mismo retrato familiar ficticio de los años 40, a la izquierda con grietas y desvanecido en sepia, a la derecha fielmente restaurado con un color natural sutil y auténtico y los rasgos faciales preservados, sin texto."
@@ -1423,6 +1547,10 @@
         "flowNodeId": "uc-032-personal"
       },
       "copy": {
+        "de": {
+          "name": "Schwarz-Weiß-Foto kolorieren",
+          "description": "Aus deinem Foto: Farbe hinzufügen"
+        },
         "es": {
           "name": "Colorización de blanco y negro",
           "description": "Retrato callejero auténtico de los años 60 de la misma mujer ficticia, en comparación lado a lado: a la izquierda en monocromo, a la derecha una versión colorizada realista y respetuosa con la época, que conserva la expresión, la ropa de época y el entorno original."
@@ -1469,6 +1597,10 @@
         "flowNodeId": "uc-033-personal"
       },
       "copy": {
+        "de": {
+          "name": "Kratzer aus Fotos entfernen",
+          "description": "Aus deinem Foto: Kratzer entfernen"
+        },
         "es": {
           "name": "Reparación de fotos rayadas",
           "description": "Antes y después limpio y convincente de una fotografía ficticia antigua de infancia, rota y muy rayada frente a una restauración digital fiel y casi impecable, rostros alineados, sin personas adicionales inventadas."
@@ -1515,6 +1647,10 @@
         "flowNodeId": "uc-034-personal"
       },
       "copy": {
+        "de": {
+          "name": "Verblasstes Porträt auffrischen",
+          "description": "Aus deinem Foto: Farbe und Schärfe zurück"
+        },
         "es": {
           "name": "Mejora de un retrato desvaído",
           "description": "El mismo retrato antiguo y descolorido en color de una abuela ficticia, mostrado antes y después de una corrección suave de exposición, calidez y detalle facial, que conserva las arrugas naturales y la autenticidad."
@@ -1561,6 +1697,10 @@
         "flowNodeId": "uc-035-personal"
       },
       "copy": {
+        "de": {
+          "name": "Fotohintergrund ändern",
+          "description": "Aus deinem Foto: neuer Hintergrund"
+        },
         "es": {
           "name": "Cambio de fondo de una foto",
           "description": "Muestra de antes y después con la misma persona ficticia y la misma ropa: a la izquierda un patio trasero desordenado y corriente, a la derecha una bella y elegante escena natural junto a un lago, con luz y bordes de cabello creíblemente integrados, sin collage fuera de los dos paneles."
@@ -1607,6 +1747,10 @@
         "flowNodeId": "uc-036-personal"
       },
       "copy": {
+        "de": {
+          "name": "Business-Porträt aufwerten",
+          "description": "Aus deinem Foto: professionelles Porträt"
+        },
         "es": {
           "name": "Mejora de foto de perfil corporativa",
           "description": "Retrato corporativo auténtico y cercano, de cabeza y hombros, de una profesional ficticia, con ropa neutra a medida, favorecedora luz suave de ventana y un entorno de estudio limpio en gris cálido, indistinguible de una fotografía real."
@@ -1653,6 +1797,10 @@
         "flowNodeId": "uc-037-personal"
       },
       "copy": {
+        "de": {
+          "name": "Casting-Porträt",
+          "description": "Aus deinem Foto: Schauspielerfoto"
+        },
         "es": {
           "name": "Foto de casting para actor",
           "description": "Foto de casting teatral, espontánea y expresiva, de un joven actor ficticio con pecas, con una camiseta neutra en tonos tierra, luz natural direccional suave y un fondo de estudio rico pero discreto."
@@ -1699,6 +1847,10 @@
         "flowNodeId": "uc-038-personal"
       },
       "copy": {
+        "de": {
+          "name": "Passbild-Beispiel",
+          "description": "Aus deinem Foto: Passbild"
+        },
         "es": {
           "name": "Ejemplo de foto de carné profesional",
           "description": "Muestra neutra de foto tipo pasaporte de un sujeto ficticio sobre fondo blanco liso, mirando directamente a la cámara, con iluminación pareja sin sombras, encuadre de cabeza y hombros; solo retrato fotográfico, sin documento de identidad."
@@ -1745,6 +1897,10 @@
         "flowNodeId": "uc-039-personal"
       },
       "copy": {
+        "de": {
+          "name": "Neue Frisur testen",
+          "description": "Aus deinem Foto: andere Frisur"
+        },
         "es": {
           "name": "Prueba un corte de pelo nuevo",
           "description": "Retrato de la misma mujer ficticia lado a lado: antes con el pelo largo y liso, después con un corte bob corto y elegante, con la identidad del rostro preservada y la iluminación igualada."
@@ -1791,6 +1947,10 @@
         "flowNodeId": "uc-040-personal"
       },
       "copy": {
+        "de": {
+          "name": "Neue Haarfarbe testen",
+          "description": "Aus deinem Foto: andere Haarfarbe"
+        },
         "es": {
           "name": "Prueba un color de pelo nuevo",
           "description": "El mismo rostro y el mismo peinado rizado de una mujer ficticia en tres variaciones de retrato realistas, limpias y contiguas: castaño, rubio miel y cobrizo rojizo, con identidad y postura coherentes y luz diurna neutra."
@@ -1837,6 +1997,10 @@
         "flowNodeId": "uc-041-personal"
       },
       "copy": {
+        "de": {
+          "name": "Bartstil-Vorschau",
+          "description": "Aus deinem Foto: Bartstil"
+        },
         "es": {
           "name": "Vista previa de estilo de barba",
           "description": "Comparación limpia de tres looks en retrato del mismo hombre adulto ficticio: afeitado, barba de pocos días bien recortada y barba completa esculpida; con la misma iluminación, identidad facial fiel y un estilismo fotográfico sobrio."
@@ -1883,6 +2047,10 @@
         "flowNodeId": "uc-042-personal"
       },
       "copy": {
+        "de": {
+          "name": "Tattoo-Vorschau",
+          "description": "Aus deinem Foto: Tattoo auf der Haut"
+        },
         "es": {
           "name": "Vista previa de diseño de tatuaje",
           "description": "Concepto profesional de estudio de tatuajes que muestra en primer plano un refinado tatuaje botánico de línea fina en el antebrazo, con piel natural y bellos detalles de tinta, además de una pequeña ilustración flash en papel a juego dentro de la composición."
@@ -1929,6 +2097,10 @@
         "flowNodeId": "uc-043-personal"
       },
       "copy": {
+        "de": {
+          "name": "Hochzeitsporträt retuschieren",
+          "description": "Aus deinem Foto: dezente Retusche"
+        },
         "es": {
           "name": "Retoque de un retrato de boda",
           "description": "Retrato de boda de buen gusto de una pareja ficticia al aire libre al atardecer, con tonos de piel naturalmente refinados, detalle recuperado en las zonas claras del vestido, una suave luz dorada realzada y fotografía de boda de arte premium."
@@ -1975,6 +2147,10 @@
         "flowNodeId": "uc-044-personal"
       },
       "copy": {
+        "de": {
+          "name": "Porträt an einem anderen Ort",
+          "description": "Aus deinem Foto: Hintergrund mit Reiseziel"
+        },
         "es": {
           "name": "Retrato de viaje en otro lugar",
           "description": "Una viajera ficticia en solitario con ropa práctica de lino, fotografiada en las icónicas escaleras junto al mar de Positano en un cálido amanecer, editorial de viajes informal y auténtico con perspectiva atmosférica natural y texturas de piel realistas."
@@ -2021,6 +2197,10 @@
         "flowNodeId": "uc-045-personal"
       },
       "copy": {
+        "de": {
+          "name": "Fantasie-Reiseselfie",
+          "description": "Aus deinem Foto: erdachtes Reiseziel"
+        },
         "es": {
           "name": "Selfie de viaje imaginario",
           "description": "Una joven ficticia y sonriente haciéndose un selfie espontáneo a brazo extendido en un bosque de bambú de Kioto después de la lluvia, con profundidad exuberante, perspectiva realista, energía de blog de viajes e imperfecciones naturales y espontáneas."
@@ -2067,6 +2247,10 @@
         "flowNodeId": "uc-046-personal"
       },
       "copy": {
+        "de": {
+          "name": "Kunstvolles Haustierporträt",
+          "description": "Aus deinem Foto: klassisches Gemälde"
+        },
         "es": {
           "name": "Retrato artístico de mascota",
           "description": "Un querido golden retriever posando con porte regio en un retrato al óleo pictórico del siglo XIX, con una silla de terciopelo esmeralda, un rostro de perro realista y expresivo y una magnífica pincelada, calidad de museo."
@@ -2113,6 +2297,10 @@
         "flowNodeId": "uc-047-personal"
       },
       "copy": {
+        "de": {
+          "name": "Cartoon-Avatar aus Porträt",
+          "description": "Aus deinem Foto: gezeichnete Figur"
+        },
         "es": {
           "name": "Avatar de dibujos animados a partir de un retrato",
           "description": "Demostración dividida de la fotografía realista y sonriente de una niña ficticia original junto a un fiel y colorido avatar de personaje animado en 3D que conserva sus gafas, su peinado y sus pecas distintivas, ilustración de estudio pulida."
@@ -2159,6 +2347,10 @@
         "flowNodeId": "uc-048-personal"
       },
       "copy": {
+        "de": {
+          "name": "Fantasy-Cosplay-Selfie",
+          "description": "Aus deinem Foto: Fantasy-Figur"
+        },
         "es": {
           "name": "Selfie de cosplay de fantasía",
           "description": "Una mujer ficticia corriente, joven adulta, reimaginada como una noble aventurera de fantasía con una intrincada armadura de cuero sin marcas, una cascada en un bosque cinematográfico, rostro coherente y reconociblemente humano y un vestuario de cine muy realista."
@@ -2205,6 +2397,10 @@
         "flowNodeId": "uc-049-personal"
       },
       "copy": {
+        "de": {
+          "name": "Elegantes Babybauch-Porträt",
+          "description": "Aus deinem Foto: Babybauch-Porträt"
+        },
         "es": {
           "name": "Retrato elegante de embarazo",
           "description": "Retrato fotográfico de arte de embarazo de una futura madre adulta ficticia, con un vestido crema fluido y recatado frente a un telón de estudio beige cálido y escultural, expresión tierna y serena y una pose elegante y cómoda."
@@ -2251,6 +2447,10 @@
         "flowNodeId": "uc-050-personal"
       },
       "copy": {
+        "de": {
+          "name": "Virtuelle Outfit-Vorschau",
+          "description": "Aus deinem Foto: anderes Outfit"
+        },
         "es": {
           "name": "Vista previa de ropa virtual",
           "description": "El mismo rostro y la misma pose de una profesional ficticia con tres conjuntos de entrevista sofisticados y claramente distintos, en paneles editoriales alineados y limpios sobre un fondo de estudio neutro."
@@ -2297,6 +2497,10 @@
         "flowNodeId": "uc-051-products"
       },
       "copy": {
+        "de": {
+          "name": "Vom Handyfoto zum Produktbild",
+          "description": "Aus deinem Foto: professionelles Produktbild"
+        },
         "es": {
           "name": "De foto de teléfono a producto hero",
           "description": "Antes y después contundente: la misma botella de agua original azul cobalto mate, fotografiada sin cuidado sobre una mesa de cocina y luego transformada en una dramática imagen hero publicitaria premium con gotas de agua y reflejos realistas, con la geometría exacta del objeto."
@@ -2343,6 +2547,10 @@
         "flowNodeId": "uc-052-products"
       },
       "copy": {
+        "de": {
+          "name": "E-Commerce-Packshot auf Weiß",
+          "description": "Aus deinem Foto: sauberer weißer Hintergrund"
+        },
         "es": {
           "name": "Packshot limpio de comercio electrónico en blanco",
           "description": "Imagen de catálogo impecable de un bolso bandolera moderno original de cuero color arena, flotando en un limpio ángulo de tres cuartos sobre un fondo de estudio blanco puro sin costuras, con sombra neutra fiel, textura precisa y realismo comercial."
@@ -2389,6 +2597,10 @@
         "flowNodeId": "uc-053-products"
       },
       "copy": {
+        "de": {
+          "name": "Luxus-Parfümkampagne",
+          "description": "Aus deinem Foto: Parfümkampagne"
+        },
         "es": {
           "name": "Campaña de perfume de lujo",
           "description": "Campaña cinematográfica de fragancia de lujo con un frasco de perfume original de vidrio transparente facetado sobre basalto oscuro pulido y agua reflectante, un haz de luz dorada del amanecer y una delicada niebla; sin logos de marca."
@@ -2435,6 +2647,10 @@
         "flowNodeId": "uc-054-products"
       },
       "copy": {
+        "de": {
+          "name": "Hautpflege mit Wasserspritzer",
+          "description": "Aus deinem Foto: Spritzer und Frische"
+        },
         "es": {
           "name": "Cuidado de la piel con salpicadura de agua",
           "description": "Campaña comercial refrescante para un sérum facial blanco minimalista sin marca, en un frasco de vidrio esmerilado, con una salpicadura de agua azul transparente congelada en el tiempo, reflejos exquisitos y una superficie perfectamente nítida y sin etiqueta."
@@ -2481,6 +2697,10 @@
         "flowNodeId": "uc-055-products"
       },
       "copy": {
+        "de": {
+          "name": "Kosmetik-Makro im Studio",
+          "description": "Aus deinem Foto: Studio-Nahaufnahme"
+        },
         "es": {
           "name": "Macro de cosméticos en estudio",
           "description": "Primer plano editorial excepcional de maquillaje con un pintalabios original rosa coral de pigmento satinado y táctil y una pequeña nube de polvo, fondo rosa monocromo con dirección de arte e iluminación macro de estudio precisa."
@@ -2527,6 +2747,10 @@
         "flowNodeId": "uc-056-products"
       },
       "copy": {
+        "de": {
+          "name": "Editorial für Designerhandtasche",
+          "description": "Aus deinem Foto: Modefoto"
+        },
         "es": {
           "name": "Editorial de bolso de diseñador",
           "description": "Un rico bolso de mujer de cuero color burdeos flotando sobre piedra caliza escultural y tela plegada color arena, fotografía editorial de moda con detalle táctil premium, diseño original sin marca."
@@ -2573,6 +2797,10 @@
         "flowNodeId": "uc-057-products"
       },
       "copy": {
+        "de": {
+          "name": "Sneaker-Lifestyle-Hero",
+          "description": "Aus deinem Foto: Sneaker in Szene"
+        },
         "es": {
           "name": "Hero lifestyle de zapatillas",
           "description": "Imagen promocional dinámica y fotorrealista de unas zapatillas de correr originales en crema y naranja, llevadas por un corredor que esprinta sobre un pavimento oscurecido por la lluvia, con la zapatilla perfectamente nítida, movimiento urbano enérgico de fondo y sin marcas."
@@ -2619,6 +2847,10 @@
         "flowNodeId": "uc-058-products"
       },
       "copy": {
+        "de": {
+          "name": "Schmuck-Makro",
+          "description": "Aus deinem Foto: Nahaufnahme des Schmucks"
+        },
         "es": {
           "name": "Macro de joyería con gemas",
           "description": "Extraordinario bodegón macro de anillos originales de oro rosa con esmeraldas sobre pizarra negra texturizada, con refracciones precisas de las gemas y suaves brillos lujosos, fotografía de catálogo de alta joyería."
@@ -2665,6 +2897,10 @@
         "flowNodeId": "uc-059-products"
       },
       "copy": {
+        "de": {
+          "name": "Details einer Luxusuhr",
+          "description": "Aus deinem Foto: Nahaufnahme der Uhr"
+        },
         "es": {
           "name": "Detalles de reloj de lujo",
           "description": "Fotografía comercial macro arquitectónica y premium de un reloj de pulsera automático de acero inoxidable sin marca, con una elegante esfera esqueleto y eslabones pulidos sobre hormigón en penumbra, sin marcas comerciales."
@@ -2710,6 +2946,10 @@
         "flowNodeId": "uc-060-products"
       },
       "copy": {
+        "de": {
+          "name": "Kaffeeverpackung-Konzept",
+          "description": "Design für eine Kaffeeverpackung"
+        },
         "es": {
           "name": "Concepto de envase de café",
           "description": "Diseño original de envase de café de especialidad de gama alta: bolsa mate terracota con cierre reutilizable y un emblema original sencillo de montaña abstracta, acompañada de granos esparcidos y una taza de espresso sobre piedra cálida, fotografía de producto profesional."
@@ -2756,6 +2996,10 @@
         "flowNodeId": "uc-061-products"
       },
       "copy": {
+        "de": {
+          "name": "Keramik-Präsentation",
+          "description": "Aus deinem Foto: Keramik im Mittelpunkt"
+        },
         "es": {
           "name": "Escaparate de productos de cerámica",
           "description": "Jarrones artesanales hechos a mano de gres color crema, cada uno con una silueta única y orgánicamente asimétrica, dispuestos con ramas secas en una serena galería soleada de inspiración japonesa, foto artesanal para comercio electrónico."
@@ -2802,6 +3046,10 @@
         "flowNodeId": "uc-062-products"
       },
       "copy": {
+        "de": {
+          "name": "Explosionszeichnung Elektronik",
+          "description": "Aus deinem Foto: Explosionsansicht"
+        },
         "es": {
           "name": "Ilustración despiece de electrónica",
           "description": "Visualización de vista despiece de alta calidad, técnica pero hermosa, de unos auriculares inalámbricos compactos separados en carcasa, drivers, batería y estuche de carga, flotando en capas claras y precisas, fondo grafito, sin etiquetas ni logos."
@@ -2848,6 +3096,10 @@
         "flowNodeId": "uc-063-products"
       },
       "copy": {
+        "de": {
+          "name": "Virtuelles Model",
+          "description": "Aus deinem Foto: das Teil an einem Model"
+        },
         "es": {
           "name": "Modelo de moda virtual",
           "description": "Foto profesional de modelo para comercio electrónico de moda: una joven adulta ficticia con una blusa de lino esmeralda original y pantalones crema de talle alto, toma de cuerpo entero en estudio neutro, con caída de tela y confección realistas."
@@ -2894,6 +3146,10 @@
         "flowNodeId": "uc-064-products"
       },
       "copy": {
+        "de": {
+          "name": "Raster mit diversen Models",
+          "description": "Aus deinem Foto: das Teil an mehreren Models"
+        },
         "es": {
           "name": "Cuadrícula de prenda con modelos diversos",
           "description": "Imagen coherente de lookbook de moda con 3 personas: modelos adultos ficticios y diversos, cada uno con la misma chaqueta vaquera azul original sin marca, combinada de forma distinta, un tríptico de estudio limpio y atractivo con costuras de chaqueta coherentes."
@@ -2940,6 +3196,10 @@
         "flowNodeId": "uc-065-products"
       },
       "copy": {
+        "de": {
+          "name": "Lifestyle-Kampagne für Accessoires",
+          "description": "Aus deinem Foto: Accessoire im Einsatz"
+        },
         "es": {
           "name": "Campaña lifestyle de accesorio",
           "description": "Gafas de sol de diseñador de carey llevadas por una mujer ficticia a la moda en un café callejero mediterráneo bañado por el sol, foto editorial sofisticada y espontánea centrada en la montura original y reconocible."
@@ -2985,6 +3245,10 @@
         "flowNodeId": "uc-066-products"
       },
       "copy": {
+        "de": {
+          "name": "Mode-Flatlay",
+          "description": "Outfit ordentlich von oben arrangiert"
+        },
         "es": {
           "name": "Flat lay de conjunto de moda",
           "description": "Flat lay cenital, ordenado y con dirección de arte, de un armario cápsula masculino a la moda con camisa de lino, pantalones de pinzas, mocasines marrones, reloj de cuero y bolsa de tela, fondo neutro cálido sin costuras y luz de día suave."
@@ -3031,6 +3295,10 @@
         "flowNodeId": "uc-067-products"
       },
       "copy": {
+        "de": {
+          "name": "Katalograster mit 4 Produkten",
+          "description": "Aus deinem Foto: 4 Produkte im Raster"
+        },
         "es": {
           "name": "Cuadrícula de catálogo de cuatro productos",
           "description": "Bella cuadrícula premium y limpia de catálogo de comercio electrónico con cuatro celdas, con frascos coordinados de cosmética sostenible sin marca, cada uno con forma y material únicos, iluminación igualada, fondo crema puro, sin precios."
@@ -3077,6 +3345,10 @@
         "flowNodeId": "uc-068-products"
       },
       "copy": {
+        "de": {
+          "name": "Produktansichten im Überblick",
+          "description": "Aus deinem Foto: das Produkt aus mehreren Blickwinkeln"
+        },
         "es": {
           "name": "Hoja de referencia de rotación del producto",
           "description": "Hoja de contactos comercial estilo referencia que muestra la MISMA tetera de cerámica verde pálido, única, de frente, de lado, por detrás y en tres cuartos, con material y proporciones idénticos y un fondo de estudio sencillo."
@@ -3123,6 +3395,10 @@
         "flowNodeId": "uc-069-products"
       },
       "copy": {
+        "de": {
+          "name": "Größenvergleich",
+          "description": "Aus deinem Foto: das Produkt neben einem Größenvergleich"
+        },
         "es": {
           "name": "Comparación de tamaño del producto",
           "description": "Foto comercial explicativa lado a lado de un paraguas de viaje compacto original, plegado junto a una taza de café de cerámica estándar y luego desplegado sobre el mismo entorno de cafetería, con una escala física creíble."
@@ -3168,6 +3444,10 @@
         "flowNodeId": "uc-070-products"
       },
       "copy": {
+        "de": {
+          "name": "Mockup für Lebensmittelverpackung",
+          "description": "Design für eine Lebensmittelverpackung"
+        },
         "es": {
           "name": "Maqueta de envase de alimento premium",
           "description": "Concepto hiperrealista de envase listo para estantería de una tableta de chocolate negro ecológico, con un motivo botánico ilustrado de cacao sobre un envoltorio de papel negro reciclado, la tableta partida a su lado y una sofisticada marca de logo original."
@@ -3213,6 +3493,10 @@
         "flowNodeId": "uc-071-creative"
       },
       "copy": {
+        "de": {
+          "name": "Indie-Albumcover",
+          "description": "Cover mit dem Albumtitel"
+        },
         "es": {
           "name": "Portada de álbum de música indie",
           "description": "Portada cuadrada final de un álbum imaginario de dream-pop atmosférico, con la silueta de una mujer sola en una azotea bajo un asombroso cielo ámbar del crepúsculo, sutil grano de película fotográfica, título mínimo y significativo «AFTER THE RAIN» y ningún otro texto."
@@ -3258,6 +3542,10 @@
         "flowNodeId": "uc-072-creative"
       },
       "copy": {
+        "de": {
+          "name": "Cover für elektronische Musik",
+          "description": "Cover mit dem Albumtitel"
+        },
         "es": {
           "name": "Portada de música electrónica",
           "description": "Portada cuadrada final de un lanzamiento de techno psicodélico: una escultura abstracta, cinética e imposible de anillo cromado sobre un salar volcánico agrietado, geometría láser verde ácido y negro profundo de noche, título «PULSE» con tipografía imponente e inusual."
@@ -3303,6 +3591,10 @@
         "flowNodeId": "uc-073-creative"
       },
       "copy": {
+        "de": {
+          "name": "Thriller-Buchcover",
+          "description": "Buchcover mit dem Titel"
+        },
         "es": {
           "name": "Sobrecubierta de thriller",
           "description": "Una portada vertical completa y absorbente de thriller: una casa remota junto a un lago envuelto en niebla, una diminuta silueta solitaria que se acerca a una estrecha puerta iluminada, realismo fotográfico cinematográfico e inquietante, título grande y exacto de la novela «THE LAST WINDOW»."
@@ -3348,6 +3640,10 @@
         "flowNodeId": "uc-074-creative"
       },
       "copy": {
+        "de": {
+          "name": "Liebesroman-Cover",
+          "description": "Buchcover mit dem Titel"
+        },
         "es": {
           "name": "Portada de novela romántica",
           "description": "Una portada frontal terminada y comercialmente verosímil de novela romántica, con una pareja ficticia original contemplando la pintoresca costa de Amalfi en una tarde dorada, en un estilo ilustrado refinado y pictórico, título exacto «ONE SUMMER IN ITALY»."
@@ -3393,6 +3689,10 @@
         "flowNodeId": "uc-075-creative"
       },
       "copy": {
+        "de": {
+          "name": "Science-Fiction-Filmplakat",
+          "description": "Plakat mit dem Filmtitel"
+        },
         "es": {
           "name": "Póster de película de ciencia ficción",
           "description": "Póster cinematográfico terminado con un astronauta ante una enorme estación anular abandonada sobre un planeta helado, monumentales efectos visuales fotográficos y tipografía segura con el título exacto de la película «ORBIT ZERO»."
@@ -3438,6 +3738,10 @@
         "flowNodeId": "uc-076-creative"
       },
       "copy": {
+        "de": {
+          "name": "YouTube-Kanalbanner",
+          "description": "Banner mit dem Kanalnamen"
+        },
         "es": {
           "name": "Banner de canal de YouTube",
           "description": "Diseño de banner ultrapanorámico listo para usar para un canal ficticio de YouTube de divulgación científica: foto del presentador a la izquierda, dinámicos anillos planetarios flotantes y partículas microscópicas, y un hermoso título claro y centrado «CURIOUS LAB»."
@@ -3483,6 +3787,10 @@
         "flowNodeId": "uc-077-creative"
       },
       "copy": {
+        "de": {
+          "name": "Podcast-Cover",
+          "description": "Cover mit dem Podcastnamen"
+        },
         "es": {
           "name": "Portada artística de pódcast",
           "description": "Portada cuadrada y sofisticada para un pódcast original de emprendimiento, con dos presentadores ficticios expresivos con auriculares de estudio en un rico estudio de grabación de luz suave, título enorme, legible y exacto «THE NEXT MOVE»."
@@ -3528,6 +3836,10 @@
         "flowNodeId": "uc-078-creative"
       },
       "copy": {
+        "de": {
+          "name": "Vorschaubild für Geschichtsvideo",
+          "description": "YouTube-Vorschaubild mit Schlagzeile"
+        },
         "es": {
           "name": "Miniatura de video de historia",
           "description": "Una miniatura de YouTube 16:9 lista para publicar sobre historia antigua, con un primer plano de un historiador ficticio asombrado a la derecha, arquitectura romana monumental y una tormenta dramática a la izquierda, y las palabras enormes y exactas «ROME'S SECRET»."
@@ -3572,6 +3884,10 @@
         "flowNodeId": "uc-079-creative"
       },
       "copy": {
+        "de": {
+          "name": "App-Icon für Fantasy-Spiel",
+          "description": "Icon für eine Spiele-App"
+        },
         "es": {
           "name": "Icono de app de juego de fantasía",
           "description": "Un icono cuadrado profesional de juego para teléfono con la cabeza de un zorro mago original, feroz pero encantador, con diminutas runas doradas y una llama mágica ámbar, ilustración 3D artesanal y pulida, legible al tamaño de icono de app, sin tipografía."
@@ -3617,6 +3933,10 @@
         "flowNodeId": "uc-080-creative"
       },
       "copy": {
+        "de": {
+          "name": "RPG-Figurenkonzeptblatt",
+          "description": "Designblatt für eine RPG-Figur"
+        },
         "es": {
           "name": "Hoja de concepto de personaje de RPG",
           "description": "Hoja de referencia clara para el diseño de un personaje de videojuego de fantasía: una heroína original, guardabosques del desierto, con una pose frontal de cuerpo entero, siluetas de perfil y de espalda y un primer plano detallado de los accesorios del atuendo, formas coherentes y fondo de mesa de dibujo pálido."
@@ -3661,6 +3981,10 @@
         "flowNodeId": "uc-081-creative"
       },
       "copy": {
+        "de": {
+          "name": "Fantasy-Item-Inventar",
+          "description": "Spielgegenstände im Raster"
+        },
         "es": {
           "name": "Inventario de objetos de fantasía",
           "description": "Una cuadrícula perfectamente ordenada de 4x3 con doce objetos originales y distintos de inventario de un juego de fantasía (pociones, amuletos, casco, botas, libro de hechizos, linterna), con un arte pictórico de videojuego coherente y premium, cada uno en su propio recuadro y sin texto."
@@ -3706,6 +4030,10 @@
         "flowNodeId": "uc-082-creative"
       },
       "copy": {
+        "de": {
+          "name": "Umgebungsdesign für Spielwelten",
+          "description": "Konzeptlandschaft einer Fantasywelt"
+        },
         "es": {
           "name": "Arte de entorno para worldbuilding",
           "description": "Impresionante arte conceptual original del entorno de un juego de fantasía: una enorme ciudad de piedra caliza tallada en un acantilado costero escarpado, con puentes colgantes y pájaros a lo lejos, plano general de worldbuilding atmosférico con una narrativa visual intrincada."
@@ -3751,6 +4079,10 @@
         "flowNodeId": "uc-083-creative"
       },
       "copy": {
+        "de": {
+          "name": "Comic in vier Bildern",
+          "description": "Kurze Comicseite"
+        },
         "es": {
           "name": "Historia en cómic de cuatro viñetas",
           "description": "Una página de cómic amable y completa, de cuatro viñetas, con un gato travieso original que intenta robar un pastel en una cocina soleada, una historia secuencial fácil de leer con un gato coherente y mucho humor, arte vivo de novela gráfica dibujada a mano, sin bocadillos de diálogo."
@@ -3796,6 +4128,10 @@
         "flowNodeId": "uc-084-creative"
       },
       "copy": {
+        "de": {
+          "name": "Kinderbuch-Illustration",
+          "description": "Illustration für ein Kinderbuch"
+        },
         "es": {
           "name": "Ilustración de cuento infantil",
           "description": "Encantadora ilustración en acuarela a doble página para un libro infantil: un diminuto erizo aventurero descubre un hongo gigante y luminoso al anochecer, con una atmósfera cálida y suave de cuento de hadas y un margen superior vacío para añadir texto después."
@@ -3840,6 +4176,10 @@
         "flowNodeId": "uc-085-creative"
       },
       "copy": {
+        "de": {
+          "name": "Wissenschafts-Infografik",
+          "description": "Infografik für den Unterricht"
+        },
         "es": {
           "name": "Infografía científica educativa",
           "description": "Infografía visual clara que enseña las cuatro etapas del ciclo de vida de una mariposa: huevo, oruga, crisálida y mariposa adulta, reconocibles científicamente y conectadas por flechas, con una bella ilustración botánica, orden exacto y etiquetas numeradas mínimas."
@@ -3885,6 +4225,10 @@
         "flowNodeId": "uc-086-creative"
       },
       "copy": {
+        "de": {
+          "name": "Präsentationsfolie",
+          "description": "Folie für eine Business-Präsentation"
+        },
         "es": {
           "name": "Diapositiva de presentación ejecutiva",
           "description": "Una diapositiva corporativa completa sobre la transición a las energías renovables, con un llamativo fondo fotográfico de un parque eólico a la derecha, un título limpio y contundente \"POWERING TOMORROW\" y un gráfico de datos ascendente, simple y estilizado a la izquierda."
@@ -3930,6 +4274,10 @@
         "flowNodeId": "uc-087-creative"
       },
       "copy": {
+        "de": {
+          "name": "Wissenschaftliches Poster",
+          "description": "Poster für eine Fachkonferenz"
+        },
         "es": {
           "name": "Póster de investigación científica",
           "description": "Póster editorial de investigación para un congreso sobre los ecosistemas de coral marinos, con fotografía subacuática profesional, tres diagramas de ilustración científica bien alineados, una jerarquía limpia con el titular \"CORAL IN FOCUS\" y sin resultados de investigación inventados."
@@ -3975,6 +4323,10 @@
         "flowNodeId": "uc-088-creative"
       },
       "copy": {
+        "de": {
+          "name": "Rezeptkarte",
+          "description": "Gestaltete Rezeptkarte"
+        },
         "es": {
           "name": "Tarjeta de receta",
           "description": "Hermosa tarjeta vertical de receta de cocina para una pasta rústica al limón, con una apetitosa toma cenital de la comida, expresivos dibujos lineales originales de limón, albahaca y pasta, el título \"LEMON PASTA\" y una breve y elegante lista de ingredientes."
@@ -4020,6 +4372,10 @@
         "flowNodeId": "uc-089-creative"
       },
       "copy": {
+        "de": {
+          "name": "Festivalplakat",
+          "description": "Plakat mit dem Namen des Festivals"
+        },
         "es": {
           "name": "Póster de festival de música",
           "description": "Póster vertical dramático y terminado de un festival independiente de música electrónica, con un público real y eufórico bailando al aire libre bajo el amanecer del desierto y una escultura abstracta, una composición vivencial asombrosa y el título exacto del evento \"DUST & SOUND\"."
@@ -4065,6 +4421,10 @@
         "flowNodeId": "uc-090-creative"
       },
       "copy": {
+        "de": {
+          "name": "Reisemagazin-Cover",
+          "description": "Magazincover mit Schlagzeile"
+        },
         "es": {
           "name": "Portada de revista de viajes",
           "description": "Impresionante portada vertical de guía de viajes con una vista aérea de ensueño del dramático puerto de una isla griega y un mar de azul intenso, un titular claro y contundente \"ISLAND ESCAPES\" y un diseño editorial de viajes pulido y premium."
@@ -4111,6 +4471,10 @@
         "flowNodeId": "uc-091-home"
       },
       "copy": {
+        "de": {
+          "name": "Wohnzimmer im Skandi-Stil",
+          "description": "Aus deinem Foto: das neu gestaltete Wohnzimmer"
+        },
         "es": {
           "name": "Rediseño de sala de estar escandinava",
           "description": "Visualización fotorrealista y amplia de diseño de interiores de una sala de estar compacta típica, reimaginada con suelos de roble claro, sofá marfil, cortinas de lino y lámparas cálidas, luz natural y un estilismo profesional pero habitado."
@@ -4157,6 +4521,10 @@
         "flowNodeId": "uc-092-home"
       },
       "copy": {
+        "de": {
+          "name": "Moderne Küchenrenovierung",
+          "description": "Aus deinem Foto: die renovierte Küche"
+        },
         "es": {
           "name": "Reforma de cocina contemporánea",
           "description": "Render convincente y premium de la reforma de una cocina familiar, con muebles bajos de nogal cálido, isla de piedra color crema, herrajes de bronce y abundante luz natural, proporciones realistas de obra y una foto atractiva de inmobiliaria."
@@ -4203,6 +4571,10 @@
         "flowNodeId": "uc-093-home"
       },
       "copy": {
+        "de": {
+          "name": "Schlafzimmer im Japandi-Stil",
+          "description": "Aus deinem Foto: Schlafzimmer im Japandi-Stil"
+        },
         "es": {
           "name": "Renovación de dormitorio japandi",
           "description": "Visión de diseño fotorrealista y serena de un dormitorio corriente transformado con una cama plataforma baja de roble, biombos shoji color crema, lino de textura táctil, iluminación indirecta discreta y una decoración orgánica contenida, con una atmósfera natural."
@@ -4249,6 +4621,10 @@
         "flowNodeId": "uc-094-home"
       },
       "copy": {
+        "de": {
+          "name": "Bad im Spa-Stil",
+          "description": "Aus deinem Foto: ein Bad wie im Spa"
+        },
         "es": {
           "name": "Baño renovado estilo spa",
           "description": "Rediseño fotorrealista de un baño pequeño con ducha a ras de suelo de vidrio acanalado, azulejos de travertino en la pared, tocador curvo de roble macizo, iluminación elegantemente integrada y reflejos realistas, con fotografía de arquitectura profesional."
@@ -4295,6 +4671,10 @@
         "flowNodeId": "uc-095-home"
       },
       "copy": {
+        "de": {
+          "name": "Homeoffice",
+          "description": "Aus deinem Foto: deine Arbeitsecke"
+        },
         "es": {
           "name": "Oficina en casa para teletrabajar",
           "description": "Interior hermoso, funcional y modesto de una oficina en casa, con un escritorio ergonómico de roble, estanterías y plantas, luz natural de una gran ventana lateral, una configuración discreta de monitor y un espacio de trabajo impecable pero útil, como en una foto editorial de interiores."
@@ -4341,6 +4721,10 @@
         "flowNodeId": "uc-096-home"
       },
       "copy": {
+        "de": {
+          "name": "Babyzimmer-Konzept",
+          "description": "Aus deinem Foto: das Babyzimmer"
+        },
         "es": {
           "name": "Concepto de habitación de bebé",
           "description": "Visualización de una suave habitación de bebé con paredes color crema, muebles de arce natural, cuna segura, dulces motivos del bosque hechos a mano, alfombra con textura y una realista luz matinal, en un diseño familiar cálido y acogedor."
@@ -4387,6 +4771,10 @@
         "flowNodeId": "uc-097-home"
       },
       "copy": {
+        "de": {
+          "name": "Balkongarten",
+          "description": "Aus deinem Foto: ein grüner Balkon"
+        },
         "es": {
           "name": "Pequeño jardín en el balcón",
           "description": "Atractiva transformación del balcón de un apartamento, con asientos compactos de teca, jardineras verticales, hierbas aromáticas colgantes y luces decorativas a la hora dorada, dimensiones ajustadas pero creíbles y una acogedora vista de la ciudad."
@@ -4433,6 +4821,10 @@
         "flowNodeId": "uc-098-home"
       },
       "copy": {
+        "de": {
+          "name": "Gartengestaltung",
+          "description": "Aus deinem Foto: der neu geplante Garten"
+        },
         "es": {
           "name": "Diseño de paisajismo de patio trasero",
           "description": "Hermoso y amplio rediseño del patio trasero de una vivienda, con una pérgola de comedor al aire libre, plantas autóctonas, piedras de paso y un paisajismo suave, césped realista y luz de tarde, ambicioso pero construible."
@@ -4479,6 +4871,10 @@
         "flowNodeId": "uc-099-home"
       },
       "copy": {
+        "de": {
+          "name": "Moderne Hausfassade",
+          "description": "Aus deinem Foto: die renovierte Fassade"
+        },
         "es": {
           "name": "Fachada de casa moderna",
           "description": "Una casa suburbana creíble de los años 80, al estilo del «antes», transformada con una fachada moderna de estuco blanco y madera oscura, un nuevo jardín de entrada y estrechas ventanas contemporáneas, en una fotografía de arquitectura con luz de día."
@@ -4525,6 +4921,10 @@
         "flowNodeId": "uc-100-home"
       },
       "copy": {
+        "de": {
+          "name": "Fassadenfarben",
+          "description": "Aus deinem Foto: Farben für die Fassade"
+        },
         "es": {
           "name": "Opciones de pintura exterior",
           "description": "Comparación precisa y limpia en tres paneles de la MISMA fachada de una pequeña casa adosada, con la misma cámara y la misma geometría del edificio, pintada en verde salvia pálido, blanco cálido y carbón, con luz natural, como un selector visual de color de materiales."
@@ -4571,6 +4971,10 @@
         "flowNodeId": "uc-101-home"
       },
       "copy": {
+        "de": {
+          "name": "Sofa in deinem Raum",
+          "description": "Aus deinem Foto: das Sofa im Raum"
+        },
         "es": {
           "name": "Coloca un sofá en tu sala",
           "description": "Visualización fotorrealista de un nuevo sofá modular color arena en una sala de estar de aspecto real, con las ventanas y la alfombra originales conservadas, escala realista y sombras de contacto, sin personas."
@@ -4617,6 +5021,10 @@
         "flowNodeId": "uc-102-home"
       },
       "copy": {
+        "de": {
+          "name": "Schränke neu streichen",
+          "description": "Aus deinem Foto: Schränke in neuer Farbe"
+        },
         "es": {
           "name": "Vista previa de repintado de armarios",
           "description": "Comparación dividida de los mismos armarios de cocina estilo shaker de aspecto real, antes en pino naranja antiguo y después en verde bosque apagado con tiradores de latón cepillado, con el encuadre y los electrodomésticos fijos, una demostración de reforma convincente."
@@ -4663,6 +5071,10 @@
         "flowNodeId": "uc-103-home"
       },
       "copy": {
+        "de": {
+          "name": "Esszimmerleuchten testen",
+          "description": "Aus deinem Foto: eine neue Leuchte"
+        },
         "es": {
           "name": "Prueba de iluminación para el comedor",
           "description": "Comparación arquitectónica de un cómodo comedor bajo tres estilos diferentes de lámparas colgantes, con los mismos muebles, una cámara coherente, sombras realistas y un renderizado cálido de los materiales."
@@ -4709,6 +5121,10 @@
         "flowNodeId": "uc-104-home"
       },
       "copy": {
+        "de": {
+          "name": "Kleine Wohnung, viel Platz",
+          "description": "Aus deinem Foto: platzsparende Lösungen"
+        },
         "es": {
           "name": "Apartamento pequeño que aprovecha el espacio",
           "description": "Diseño funcional de un apartamento de 35 metros cuadrados con una ingeniosa cama abatible de pared, una mesa de comedor compacta y un almacenamiento ligero empotrado de roble, en una fotografía de arquitectura limpia y gran angular, con una escala humana honesta."
@@ -4755,6 +5171,10 @@
         "flowNodeId": "uc-105-home"
       },
       "copy": {
+        "de": {
+          "name": "Café-Interieur",
+          "description": "Aus deinem Foto: ein gestaltetes Café"
+        },
         "es": {
           "name": "Diseño de interior de café boutique",
           "description": "Interior de café pequeño, impresionante pero construible, con un banco corrido de terracota cálido, mostradores originales de roble, hermosas lámparas colgantes y acogedores rincones para sentarse, una visualización de diseño para hostelería y sin letreros."
@@ -4800,6 +5220,10 @@
         "flowNodeId": "uc-106-family"
       },
       "copy": {
+        "de": {
+          "name": "Elegante Hochzeitseinladung",
+          "description": "Gestaltete Einladung mit Antwortkarte"
+        },
         "es": {
           "name": "Invitación de boda elegante",
           "description": "Sofisticada invitación de boda impresa, con su tarjeta de confirmación de asistencia a juego, sobre papel de algodón color crema con un elegante motivo botánico en relieve, el titular caligráfico \"WE'RE GETTING MARRIED\", discretos detalles dorados y una fotografía de papelería de ensueño."
@@ -4845,6 +5269,10 @@
         "flowNodeId": "uc-107-family"
       },
       "copy": {
+        "de": {
+          "name": "Einladung zum Kindergeburtstag",
+          "description": "Bunte Einladung für Kinder"
+        },
         "es": {
           "name": "Invitación de cumpleaños infantil",
           "description": "Invitación de cumpleaños arcoíris con dinosaurios, divertida y con diseño profesional, con dinosaurios originales y simpáticos con gorros de fiesta, globos y confeti, y una tipografía alegre que dice exactamente \"LET'S PARTY\", en una ilustración pastel animada y limpia."
@@ -4890,6 +5318,10 @@
         "flowNodeId": "uc-108-family"
       },
       "copy": {
+        "de": {
+          "name": "Bar-Mizwa-Einladung",
+          "description": "Gestaltete Einladung"
+        },
         "es": {
           "name": "Invitación de Bar Mitzvá",
           "description": "Maqueta de una invitación premium para un Bar Mitzvá, con elegantes arcos de piedra de Jerusalén ilustrados en un line art moderno, tipografía en azul marino y dorado antiguo, el título exacto \"BAR MITZVAH\" y un espacio libre elegante y apto para dos idiomas."
@@ -4935,6 +5367,10 @@
         "flowNodeId": "uc-109-family"
       },
       "copy": {
+        "de": {
+          "name": "Babyparty-Einladung",
+          "description": "Zarte Einladung"
+        },
         "es": {
           "name": "Invitación de baby shower",
           "description": "Encantadora tarjeta de invitación en acuarela con una luna pintada a mano, diminutas estrellas y nubes en salvia suave, marfil y melocotón desvaído, el texto nítido \"BABY SHOWER\" y una hermosa papelería cálida y artesanal."
@@ -4980,6 +5416,10 @@
         "flowNodeId": "uc-110-family"
       },
       "copy": {
+        "de": {
+          "name": "Einladung zur Abschlussfeier",
+          "description": "Einladung zur Feier"
+        },
         "es": {
           "name": "Invitación a la celebración de graduación",
           "description": "Invitación chic a una fiesta de graduación para jóvenes adultos, con un divertido birrete negro, una cinta dorada metálica escultural, un rico fondo verde esmeralda y un titular gigante y exacto \"GRADUATION NIGHT\"."
@@ -5025,6 +5465,10 @@
         "flowNodeId": "uc-111-family"
       },
       "copy": {
+        "de": {
+          "name": "Save-the-Date-Karte",
+          "description": "Karte mit dem Datum"
+        },
         "es": {
           "name": "Postal para guardar la fecha",
           "description": "Postal editorial minimalista de «save the date» de una pareja, con una fotografía natural y espontánea de una pareja de novios ficticia en un acantilado costero bajo un cálido atardecer, con la frase exacta \"SAVE THE DATE\" en una elegante tipografía serif y un diseño limpio al estilo de una galería."
@@ -5071,6 +5515,10 @@
         "flowNodeId": "uc-112-family"
       },
       "copy": {
+        "de": {
+          "name": "Familien-Filmplakat",
+          "description": "Aus deinem Foto: deine Familie als Filmplakat"
+        },
         "es": {
           "name": "Retrato familiar como póster de película",
           "description": "Una familia original, ficticia, feliz y de tres generaciones, de seis miembros, como protagonistas del póster de una divertida película de aventuras de gran presupuesto, con ruinas de un templo en la selva tropical, una dramática luz cinematográfica y el título exacto \"OUR BIG ADVENTURE\"."
@@ -5117,6 +5565,10 @@
         "flowNodeId": "uc-113-family"
       },
       "copy": {
+        "de": {
+          "name": "Geburtskarte",
+          "description": "Aus deinem Foto: die Geburtsanzeige"
+        },
         "es": {
           "name": "Tarjeta de anuncio de nacimiento",
           "description": "Tierna papelería para anunciar el nacimiento de un bebé, con un primer plano de un bebé ficticio dormido envuelto en una manta color crema, líneas pintadas a mano, el titular simple, claro y exacto \"HELLO LITTLE ONE\" y una fotografía natural e íntima."
@@ -5163,6 +5615,10 @@
         "flowNodeId": "uc-114-family"
       },
       "copy": {
+        "de": {
+          "name": "Geburtstagsporträt fürs Haustier",
+          "description": "Aus deinem Foto: die Party deines Haustiers"
+        },
         "es": {
           "name": "Retrato de cumpleaños de mascota",
           "description": "Divertida foto premium de fiesta de un adorable bulldog francés sentado con orgullo ante su pequeño pastel de cumpleaños apto para perros, con confeti y serpentinas festivas, una expresión canina encantadora y creíble y una composición lista para tarjeta."
@@ -5209,6 +5665,10 @@
         "flowNodeId": "uc-115-family"
       },
       "copy": {
+        "de": {
+          "name": "Familien-Weihnachtskarte",
+          "description": "Aus deinem Foto: eine Festtagskarte"
+        },
         "es": {
           "name": "Tarjeta familiar de fiestas de invierno",
           "description": "Una conmovedora familia original y ficticia de cuatro personas posando con naturalidad bajo las luces del porche de una acogedora cabaña, con nieve fresca afuera, un elegante lettering \"WARM WISHES\" y un diseño de tarjeta invernal acogedor y neutral en cuanto a la temporada."
@@ -5253,6 +5713,10 @@
         "flowNodeId": "uc-116-family"
       },
       "copy": {
+        "de": {
+          "name": "Rosch-ha-Schana-Gruß",
+          "description": "Karte zum jüdischen Neujahr"
+        },
         "es": {
           "name": "Felicitación de Rosh Hashaná",
           "description": "Hermosa felicitación contemporánea de Año Nuevo judío, centrada en manzanas, granada y un cuenco de miel ricamente fotografiados sobre lino fino con ramas de olivo, con una elegante tipografía hebrea original \"שנה טובה\"."
@@ -5297,6 +5761,10 @@
         "flowNodeId": "uc-117-family"
       },
       "copy": {
+        "de": {
+          "name": "Ramadan-Gruß",
+          "description": "Grußkarte zum Ramadan"
+        },
         "es": {
           "name": "Felicitación para celebrar el Ramadán",
           "description": "Ilustración de felicitación de Ramadán, respetuosa y elegante, con una delicada media luna dorada, intrincados arcos geométricos y faroles de luz suave, un cálido cielo nocturno índigo profundo y un hermoso titular exacto en árabe \"رمضان كريم\"."
@@ -5342,6 +5810,10 @@
         "flowNodeId": "uc-118-family"
       },
       "copy": {
+        "de": {
+          "name": "Fotobox-Hintergrund",
+          "description": "Partyhintergrund für Fotos"
+        },
         "es": {
           "name": "Fondo para cabina de fotos de fiesta",
           "description": "Concepto fotorrealista de decoración de eventos con una espectacular pared de flecos brillantes para cabina de fotos, un arco asimétrico de globos en albaricoque, dorado y crema, un gigante número luminoso \"30\" y una pequeña mesa de accesorios a juego."
@@ -5388,6 +5860,10 @@
         "flowNodeId": "uc-119-family"
       },
       "copy": {
+        "de": {
+          "name": "Gedenkkarte",
+          "description": "Aus deinem Foto: eine Karte zum Gedenken"
+        },
         "es": {
           "name": "Tarjeta con foto en homenaje",
           "description": "Tarjeta de homenaje sobria y digna, con un retrato clásico, cálido y sonriente de una persona mayor ficticia, una delicada orla botánica, una paleta tranquila de marfil y azul apagado, sin nombres, fechas ni biografía inventada."
@@ -5434,6 +5910,10 @@
         "flowNodeId": "uc-120-family"
       },
       "copy": {
+        "de": {
+          "name": "Hochzeitstagskarte",
+          "description": "Aus deinem Foto: eine Karte für das Paar"
+        },
         "es": {
           "name": "Tarjeta de celebración de aniversario",
           "description": "Elegante tarjeta para celebrar el cincuenta aniversario, con una pareja ficticia y original de personas mayores bailando con cariño en un jardín al atardecer, un sutil número dorado \"50\", una hermosa foto de arte y un diseño festivo sofisticado."

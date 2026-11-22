@@ -44,7 +44,7 @@ export interface LedgerTemplate {
 }
 
 /** The interface languages besides English, as the app's `preset-content.<locale>.ts` files name them. */
-export const COPY_LOCALES = ["es", "he", "ja", "ko", "pt-BR"] as const
+export const COPY_LOCALES = ["de", "es", "he", "ja", "ko", "pt-BR"] as const
 export type CopyLocale = (typeof COPY_LOCALES)[number]
 
 /** Where the generated preset copy of one language goes (relative to the repo root). */

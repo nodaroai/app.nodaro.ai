@@ -21,6 +21,10 @@
         "url": "https://cdn.nodaro.ai/images/d756361f-82e4-44cf-bcec-b80013877d2f.png"
       },
       "copy": {
+        "de": {
+          "name": "Duell",
+          "description": "Tech-Reviews, Food-Tests, Produktvergleiche. „X vs Y“ jede Woche."
+        },
         "es": {
           "name": "Batalla versus",
           "description": "Reseñadores de tecnología, pruebas de comida, comparativas de productos. 'X vs Y' cada semana."
@@ -61,6 +65,10 @@
         "url": "https://cdn.nodaro.ai/images/fab210bd-e4d4-419f-8d26-ef7ea9bcaaba.png"
       },
       "copy": {
+        "de": {
+          "name": "Produkt im Fokus",
+          "description": "Tech, Gadgets, Küchenhelfer, DIY. Nur das Produkt, ohne Gesicht, groß und sauber."
+        },
         "es": {
           "name": "Objeto protagonista",
           "description": "Tecnología, gadgets, utensilios de cocina, bricolaje. Solo el producto, sin rostro, grande y limpio."
@@ -101,6 +109,10 @@
         "url": "https://cdn.nodaro.ai/images/30641c93-dce0-41b4-9f13-781bd4055d03.png"
       },
       "copy": {
+        "de": {
+          "name": "Unboxing",
+          "description": "Unboxing-Kanäle und Gadget-Reviewer. Hände + Karton + Staunen."
+        },
         "es": {
           "name": "Unboxing",
           "description": "Canales de unboxing y reseñadores de gadgets. Manos + caja + sorpresa."
@@ -141,6 +153,10 @@
         "url": "https://cdn.nodaro.ai/images/5b1346c9-1945-4405-98eb-95ee79f43eee.png"
       },
       "copy": {
+        "de": {
+          "name": "Tech-Glitch",
+          "description": "Cybersecurity, Hacker-Geschichten, Tech-Drama."
+        },
         "es": {
           "name": "Glitch tecnológico",
           "description": "Ciberseguridad, historias de hackers, drama tecnológico."
@@ -181,6 +197,10 @@
         "url": "https://cdn.nodaro.ai/images/5aa420a2-435a-4211-be12-765824593815.png"
       },
       "copy": {
+        "de": {
+          "name": "Minimal-Tech",
+          "description": "Tech-Reviews im Apple-Stil. Ruhig, weiß, ein Produkt, ein Wort."
+        },
         "es": {
           "name": "Tecnología minimalista",
           "description": "Reseñadores de tecnología al estilo Apple. Calma, blanco, un producto, una palabra."
@@ -221,6 +241,10 @@
         "url": "https://cdn.nodaro.ai/images/acc6db9e-aea6-40f4-a10c-569d138adc41.png"
       },
       "copy": {
+        "de": {
+          "name": "Neues KI-Tool",
+          "description": "KI-Influencer. „Diese neue KI kann X“ jeden Tag. Laptop-Leuchten, umgehauenes Gesicht."
+        },
         "es": {
           "name": "Nueva herramienta de IA",
           "description": "Influencers de IA. 'Esta nueva IA hace X' cada día. Brillo de laptop, cara de asombro."
@@ -266,6 +290,10 @@
         "url": "https://cdn.nodaro.ai/images/413eb2dd-1103-495d-8bab-c7e3d35455b7.png"
       },
       "copy": {
+        "de": {
+          "name": "Coding-Tutorial",
+          "description": "Programmier-Kanäle. Code-Editor, Sprach-Badge, „in 10 Minuten“."
+        },
         "es": {
           "name": "Tutorial de programación",
           "description": "Canales de programación. Editor de código, insignia del lenguaje, 'en 10 minutos'."
@@ -314,6 +342,10 @@
         "15 CONCEPTS"
       ],
       "copy": {
+        "de": {
+          "name": "KI-Funktionsraster",
+          "description": "KI-Erklärer: „jede neue Funktion erklärt“. Heute: stundenlang Icon-Karten in Figma bauen."
+        },
         "es": {
           "name": "Cuadrícula de funciones de IA",
           "description": "Educadores de IA: 'cada función nueva explicada'. Hoy: horas en Figma haciendo tarjetas con iconos."
@@ -358,6 +390,10 @@
         "FOR YOUR BUSINESS"
       ],
       "copy": {
+        "de": {
+          "name": "KI-OS-Icons",
+          "description": "KI-Berater, die Systeme an Unternehmen verkaufen. Icon-Reihe + ein Versprechen."
+        },
         "es": {
           "name": "Iconos de AI OS",
           "description": "Consultores de IA que venden sistemas a empresas. Fila de iconos + una promesa."
@@ -402,6 +438,10 @@
         "WE TESTED IT"
       ],
       "copy": {
+        "de": {
+          "name": "Neues Modell",
+          "description": "KI-News-Kanäle: „Modell X ist heute erschienen, wir haben es getestet“. Täglich."
+        },
         "es": {
           "name": "Lanzamiento de modelo",
           "description": "Canales de noticias de IA: 'hoy sale el modelo X, lo probamos'. Cada día."
@@ -445,6 +485,10 @@
         "WHICH IS BETTER?"
       ],
       "copy": {
+        "de": {
+          "name": "Modell vs Modell",
+          "description": "KI-Reviewer vergleichen zwei Bild- oder Videomodelle. „Welches ist besser?“"
+        },
         "es": {
           "name": "Modelo VS modelo",
           "description": "Reseñadores de IA que comparan dos modelos de imagen o video. '¿Cuál es mejor?'"
@@ -490,6 +534,10 @@
       },
       "who": "Automation and AI-agent channels: one person at the hub of a clean workflow diagram.",
       "copy": {
+        "de": {
+          "name": "Node-Diagramm",
+          "description": "Kanäle zu Automatisierung und KI-Agenten: eine Person im Zentrum eines klaren Workflow-Diagramms."
+        },
         "es": {
           "name": "Diagrama de nodos",
           "description": "Canales de automatización y agentes de IA: una persona en el centro de un diagrama de flujo limpio."
@@ -531,6 +579,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Finanzschock",
+          "description": "Kanäle zu Finanzen und Krypto. Verlust- oder Gewinnzahl, Kopf in den Händen."
+        },
         "es": {
           "name": "Impacto financiero",
           "description": "Canales de finanzas personales y cripto. Cifra de pérdida o ganancia, manos en la cabeza."
@@ -576,6 +628,10 @@
       ],
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Einnahmenbeweis",
+          "description": "Creator für Nebenverdienst und Online-Geldverdienen. Screenshot eines Dashboards, stolzes Zeigen."
+        },
         "es": {
           "name": "Prueba de ganancias",
           "description": "Creadores de ingresos extra y de ganar dinero en línea. Captura de un panel, señalando con orgullo."
@@ -617,6 +673,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Wachstumskurve",
+          "description": "Creator für Kanalwachstum und Marketing. Eine steile Kurve, eine große Zahl."
+        },
         "es": {
           "name": "Gráfico de crecimiento",
           "description": "Creadores de crecimiento de canales y marketing. Una línea disparada, una cifra grande."
@@ -658,6 +718,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Krypto-Pump",
+          "description": "Krypto-YouTuber und Telegram-Signalverkäufer. Tägliche Cover, Münze + Rakete + Zahl."
+        },
         "es": {
           "name": "Subida de cripto",
           "description": "YouTubers de cripto / vendedores de señales en Telegram. Miniaturas diarias, moneda + cohete + cifra."
@@ -702,6 +766,10 @@
       ],
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Aktientipp",
+          "description": "Aktien-Kanäle. Kaufen/Verkaufen-Urteil, Chart, ernstes Gesicht."
+        },
         "es": {
           "name": "Recomendación de acciones",
           "description": "Canales de selección de acciones. Veredicto de compra o venta, gráfico, rostro serio."
@@ -746,6 +814,10 @@
         "SUBSCRIBERS"
       ],
       "copy": {
+        "de": {
+          "name": "Creator-Meilenstein",
+          "description": "Jeder Creator, der eine Marke knackt: 100K, 1M, erstes Gehalt."
+        },
         "es": {
           "name": "Hito del creador",
           "description": "Cualquier creador que alcanza una cifra: 100K, 1M, el primer pago."
@@ -788,6 +860,10 @@
       },
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Gründerstory",
+          "description": "Kanäle von Unternehmern und Startups. Büro, Zahl, „wie ich es aufgebaut habe“."
+        },
         "es": {
           "name": "Historia del fundador",
           "description": "Emprendedores y canales de startups. Oficina, cifra, 'cómo lo construí'."
@@ -831,6 +907,10 @@
         "FREE TRAINING"
       ],
       "copy": {
+        "de": {
+          "name": "Kursstart",
+          "description": "Kursanbieter und Coaches. Webinar-Look, Laptop, „kostenloses Training“."
+        },
         "es": {
           "name": "Lanzamiento de curso",
           "description": "Vendedores de cursos y coaches. Aspecto de webinar, laptop, 'formación gratuita'."
@@ -871,6 +951,10 @@
         "url": "https://cdn.nodaro.ai/images/e78c77a6-85d7-4ce9-9b7d-6e830ce29174.png"
       },
       "copy": {
+        "de": {
+          "name": "Motivation",
+          "description": "Kanäle zu Motivation und Mindset. Dunkle Bühne, Spotlight, eine Pointe."
+        },
         "es": {
           "name": "Motivación",
           "description": "Canales de motivación y mentalidad. Escenario oscuro, foco de luz, una frase contundente."
@@ -916,6 +1000,10 @@
         "SAVE YOU"
       ],
       "copy": {
+        "de": {
+          "name": "Bühnenvortrag",
+          "description": "Konferenz-Speaker und SaaS-Gründer, die Vorträge teilen."
+        },
         "es": {
           "name": "Charla en el escenario",
           "description": "Ponentes de conferencias y fundadores de SaaS que republican sus charlas."
@@ -961,6 +1049,10 @@
       },
       "who": "Ads and marketing creators: floating phone screens sweep around a surprised host.",
       "copy": {
+        "de": {
+          "name": "Screen-Portale",
+          "description": "Creator für Werbung und Marketing: schwebende Handy-Screens kreisen um einen überraschten Host."
+        },
         "es": {
           "name": "Portales de pantalla",
           "description": "Creadores de anuncios y marketing: pantallas de teléfono flotantes rodean a un presentador sorprendido."
@@ -1005,6 +1097,10 @@
       },
       "who": "Entrepreneur channels: from anonymous silhouette to confident founder, one big yellow arrow.",
       "copy": {
+        "de": {
+          "name": "Verwandlungspfeil",
+          "description": "Unternehmer-Kanäle: von der anonymen Silhouette zur selbstbewussten Gründerin, ein großer gelber Pfeil."
+        },
         "es": {
           "name": "Flecha de transformación",
           "description": "Canales de emprendimiento: de una silueta anónima a una fundadora segura de sí misma, con una gran flecha amarilla."
@@ -1049,6 +1145,10 @@
         "24 HOURS"
       ],
       "copy": {
+        "de": {
+          "name": "Challenge-Timer",
+          "description": "Challenge-Kanäle: 24 Stunden, 30 Tage, wer zuletzt geht."
+        },
         "es": {
           "name": "Reto con cronómetro",
           "description": "Canales de retos: 24 horas, 30 días, el último en irse."
@@ -1090,6 +1190,10 @@
         "url": "https://cdn.nodaro.ai/images/283feac9-e9f1-4299-b570-452b6559e816.png"
       },
       "copy": {
+        "de": {
+          "name": "Tier-List",
+          "description": "Gaming- und Ranking-Kanäle. Reihen von S bis D, prüfender Blick."
+        },
         "es": {
           "name": "Tier list",
           "description": "Canales de gaming y rankings. Filas de la S a la D, cara de jurado."
@@ -1134,6 +1238,10 @@
         "url": "https://cdn.nodaro.ai/images/4a85032f-e8ce-4c8e-983c-9af4ed7e303b.png"
       },
       "copy": {
+        "de": {
+          "name": "Gaming-Rausch",
+          "description": "Gaming-Kanäle. Headset, Neon, explosiver Moment."
+        },
         "es": {
           "name": "Adrenalina gamer",
           "description": "Canales de gaming. Auriculares, neón, momento explosivo."
@@ -1178,6 +1286,10 @@
         "url": "https://cdn.nodaro.ai/images/44110af3-5806-46a7-ac0c-fcd82de94202.png"
       },
       "copy": {
+        "de": {
+          "name": "Goldenes Item",
+          "description": "Gaming-YouTuber: riesiges Gesicht + leuchtender goldener Loot + Fantasy-Karte. Das Gaming-Format Nr. 1."
+        },
         "es": {
           "name": "Objeto dorado gamer",
           "description": "YouTubers de gaming: rostro enorme + botín dorado brillante + mapa de fantasía. El formato n.º 1 del gaming."
@@ -1218,6 +1330,10 @@
         "url": "https://cdn.nodaro.ai/images/8dd270a9-5d84-4420-89ad-3e056d2350ce.png"
       },
       "copy": {
+        "de": {
+          "name": "Squad-Chaos",
+          "description": "Gaming- und Challenge-Squads: drei Freunde, ein Fahrzeug, Chaos."
+        },
         "es": {
           "name": "Caos del escuadrón",
           "description": "Escuadrones de gaming y retos: tres amigos, un vehículo, caos."
@@ -1262,6 +1378,10 @@
         "AFTER"
       ],
       "copy": {
+        "de": {
+          "name": "Vorher-Nachher",
+          "description": "Renovierung, Beauty, Fitness, Autoaufbereitung. Der Splitscreen ist das Format der ganzen Kategorie."
+        },
         "es": {
           "name": "Antes y después",
           "description": "Reformas del hogar, belleza, fitness, detallado de autos. La pantalla dividida es el formato de toda la categoría."
@@ -1303,6 +1423,10 @@
         "url": "https://cdn.nodaro.ai/images/73ad5615-b287-436d-a170-611214ca517c.png"
       },
       "copy": {
+        "de": {
+          "name": "Fitness-Verwandlung",
+          "description": "Fitness-Coaches und Transformationskanäle. Geteilter Körper + Tageszähler."
+        },
         "es": {
           "name": "Transformación física",
           "description": "Coach de fitness / canal de transformaciones. Cuerpo dividido + cuenta de días."
@@ -1343,6 +1467,10 @@
         "url": "https://cdn.nodaro.ai/images/d081b4eb-7764-405c-8a26-0aaf58f5cc81.png"
       },
       "copy": {
+        "de": {
+          "name": "Beauty-Make-up",
+          "description": "Beauty-Creator. Halbes Gesicht geschminkt, halbes nicht, Produkt in der Hand."
+        },
         "es": {
           "name": "Maquillaje",
           "description": "Creadores de belleza. Medio rostro terminado y medio sin terminar, producto en la mano."
@@ -1388,6 +1516,10 @@
         "url": "https://cdn.nodaro.ai/images/55f1dbd5-b173-4364-96dc-48316aa5cd4a.png"
       },
       "copy": {
+        "de": {
+          "name": "Ernährungsplan",
+          "description": "Ernährungsberater und -coaches. Geteilter Teller, Kalorien, „was ich esse“."
+        },
         "es": {
           "name": "Plan de dieta",
           "description": "Dietistas y coaches de nutrición. Plato dividido, calorías, 'lo que yo como'."
@@ -1428,6 +1560,10 @@
         "url": "https://cdn.nodaro.ai/images/cc28f4a1-9e76-4dc6-9efd-6e6559e4ecc4.png"
       },
       "copy": {
+        "de": {
+          "name": "Arzt erklärt",
+          "description": "Ärzte und Gesundheitskanäle. Weißer Kittel, ein Organ oder Symptom, Warnung."
+        },
         "es": {
           "name": "Médico explica",
           "description": "Médicos y canales de salud. Bata blanca, un órgano o síntoma, advertencia."
@@ -1468,6 +1604,10 @@
         "url": "https://cdn.nodaro.ai/images/bd5c7e23-e834-4be7-816f-6a528306e783.png"
       },
       "copy": {
+        "de": {
+          "name": "Fernweh",
+          "description": "Reise-Vlogger. Epischer Ort, kleine Person, eine Aussage."
+        },
         "es": {
           "name": "Viajes",
           "description": "Vloggers de viajes. Lugar épico, persona pequeña, una afirmación."
@@ -1508,6 +1648,10 @@
         "url": "https://cdn.nodaro.ai/images/27ff42d3-e4f6-47c4-ace1-ef36d7bc7cc3.png"
       },
       "copy": {
+        "de": {
+          "name": "Kartenpin",
+          "description": "Kanäle zu Reisen, Geopolitik und Geschichte. Eine Karte, ein Pin, eine Frage."
+        },
         "es": {
           "name": "Chincheta en el mapa",
           "description": "Canales de viajes, geopolítica e historia. Un mapa, una chincheta, una pregunta."
@@ -1548,6 +1692,10 @@
         "url": "https://cdn.nodaro.ai/images/50f5d66e-ade1-4770-9ccb-1dd95c8e8fdf.png"
       },
       "copy": {
+        "de": {
+          "name": "Festmahl",
+          "description": "Food-Vlogger und Rezeptkanäle. Essen ganz nah, hungriges Gesicht, ein Preis oder eine Aussage."
+        },
         "es": {
           "name": "Banquete",
           "description": "Vloggers de comida y canales de recetas. Comida en primer plano, cara de hambre, un precio o una afirmación."
@@ -1594,6 +1742,10 @@
       },
       "who": "Travel and lifestyle vloggers: a sunny street, a big smile, hand-painted three-line type.",
       "copy": {
+        "de": {
+          "name": "Sonniger Vlog",
+          "description": "Reise- und Lifestyle-Vlogger: sonnige Straße, breites Lächeln, handgemalte Schrift in drei Zeilen."
+        },
         "es": {
           "name": "Vlog luminoso",
           "description": "Vloggers de viajes y estilo de vida: una calle soleada, una gran sonrisa, letras pintadas a mano en tres líneas."
@@ -1634,6 +1786,10 @@
         "url": "https://cdn.nodaro.ai/images/2b440d6b-33df-4f01-8661-11beee1553dd.png"
       },
       "copy": {
+        "de": {
+          "name": "Wissenschaft erklärt",
+          "description": "Wissenschafts- und Bildungskanäle. Ein großes Objekt, eine Wow-Aussage."
+        },
         "es": {
           "name": "Explicación científica",
           "description": "Canales de ciencia y educación. Un objeto grande, una afirmación impactante."
@@ -1679,6 +1835,10 @@
         "url": "https://cdn.nodaro.ai/images/91a68353-f693-4b1b-85be-237d0a58e0a2.png"
       },
       "copy": {
+        "de": {
+          "name": "Immobilienmakler",
+          "description": "Makler und Haustour-Kanäle. Das Haus im Fokus, Preis, „von innen“."
+        },
         "es": {
           "name": "Agente inmobiliario",
           "description": "Agentes y canales de visitas a casas. Casa protagonista, precio, 'por dentro'."
@@ -1722,6 +1882,10 @@
         "IS THIS LEGAL?"
       ],
       "copy": {
+        "de": {
+          "name": "Recht erklärt",
+          "description": "Anwälte auf YouTube. Richterhammer, Urteilswort, souveränes Gesicht."
+        },
         "es": {
           "name": "Abogado explica",
           "description": "Abogados en YouTube. Mazo, palabra de veredicto, rostro de autoridad."
@@ -1765,6 +1929,10 @@
         "FLUENT IN 30 DAYS"
       ],
       "copy": {
+        "de": {
+          "name": "Sprachen lernen",
+          "description": "Sprachlehrer. Flaggen, Sprechblase, „30 Tage“."
+        },
         "es": {
           "name": "Aprender idiomas",
           "description": "Profesores de idiomas. Banderas, bocadillo de diálogo, '30 días'."
@@ -1805,6 +1973,10 @@
         "url": "https://cdn.nodaro.ai/images/c7a00e93-6d7a-43c9-9ef0-519f416267bd.png"
       },
       "copy": {
+        "de": {
+          "name": "Doku-Enthüllung",
+          "description": "Kanäle zu wahren Geschichten und Recherchen. Geschwärzte Augen, Zeitungs-Look."
+        },
         "es": {
           "name": "Reportaje documental",
           "description": "Canales de historias reales e investigación. Ojos tachados, aspecto de periódico."
@@ -1845,6 +2017,10 @@
         "url": "https://cdn.nodaro.ai/images/6f3da770-6270-4f16-96e6-412699fe2b66.png"
       },
       "copy": {
+        "de": {
+          "name": "True-Crime-Pinnwand",
+          "description": "True-Crime-Kanäle. Korkwand, roter Faden, Fotos."
+        },
         "es": {
           "name": "Tablero de crimen real",
           "description": "Canales de crimen real. Tablero de corcho, hilo rojo, fotos."
@@ -1885,6 +2061,10 @@
         "url": "https://cdn.nodaro.ai/images/76cf4f5a-b1c0-498c-8e54-09dc531ecebe.png"
       },
       "copy": {
+        "de": {
+          "name": "Eilmeldung",
+          "description": "Kanäle zu Nachrichtenkommentar und Geopolitik. Rotes Banner, ernstes Gesicht."
+        },
         "es": {
           "name": "Última hora",
           "description": "Canales de comentario de noticias y geopolítica. Banner rojo, rostro serio."
@@ -1925,6 +2105,10 @@
         "url": "https://cdn.nodaro.ai/images/e0bdaab9-07ce-4269-a1b9-e31f4241f681.png"
       },
       "copy": {
+        "de": {
+          "name": "Interview zu zweit",
+          "description": "Podcast- und Interviewkanäle. Host + Gast, Zitat in der Mitte."
+        },
         "es": {
           "name": "Entrevista a dos",
           "description": "Canales de pódcast y entrevistas. Presentador + invitado, cita en el centro."
@@ -1969,6 +2153,10 @@
         "url": "https://cdn.nodaro.ai/images/87074d33-441e-4762-b107-aff46930c2a7.png"
       },
       "copy": {
+        "de": {
+          "name": "Live-Show",
+          "description": "Musiker, DJs, Veranstalter. Bühnenlicht, Publikum, Titel im Datums-Stil."
+        },
         "es": {
           "name": "Show en vivo",
           "description": "Músicos, DJs y promotores de eventos. Luces de escenario, público, título con fecha."
@@ -2014,6 +2202,10 @@
         "(do this now!)"
       ],
       "copy": {
+        "de": {
+          "name": "Zitat im Fokus",
+          "description": "Podcast-Clips und Interviewkanäle. Zwei Gesichter, ein Zitat, ein Wort hervorgehoben."
+        },
         "es": {
           "name": "Cita destacada",
           "description": "Clips de pódcast y canales de entrevistas. Dos rostros, una cita, una palabra resaltada."
@@ -2054,6 +2246,10 @@
         "url": "https://cdn.nodaro.ai/images/22248a82-156c-4489-b35a-fb9525221d94.png"
       },
       "copy": {
+        "de": {
+          "name": "Brennende Frage",
+          "description": "Erklär- und Kommentar-YouTuber. Heute: ein Designer pro Video oder eine Stunde Kampf mit Canva."
+        },
         "es": {
           "name": "Pregunta candente",
           "description": "YouTubers de explicación y comentario. Hoy: contratan a un diseñador por video o pasan una hora peleándose con Canva."
@@ -2098,6 +2294,10 @@
         "url": "https://cdn.nodaro.ai/images/f8964278-199b-404a-9d2d-d4efa3089e7f.png"
       },
       "copy": {
+        "de": {
+          "name": "Schockreaktion",
+          "description": "Reaktions- und Unterhaltungskanäle. Das klassische „NIEMALS“-Cover, bei jedem Upload."
+        },
         "es": {
           "name": "Reacción de shock",
           "description": "Canal de reacciones y entretenimiento. La clásica miniatura de «NO PUEDE SER», en cada video."
@@ -2142,6 +2342,10 @@
         "url": "https://cdn.nodaro.ai/images/55954d93-e648-413c-9e1f-421f84733384.png"
       },
       "copy": {
+        "de": {
+          "name": "Mystery-Unschärfe",
+          "description": "Unboxing-, Reveal- und Leak-Kanäle. Die Neugier ist der ganze Klick."
+        },
         "es": {
           "name": "Misterio borroso",
           "description": "Canales de unboxing, revelaciones y filtraciones. La curiosidad es todo el clic."
@@ -2186,6 +2390,10 @@
         "MISTAKES"
       ],
       "copy": {
+        "de": {
+          "name": "Große Zahl",
+          "description": "Top-10- und Tipp-Kanäle. Die riesige Zahl ist der Hook."
+        },
         "es": {
           "name": "Número gigante",
           "description": "Canales de top 10 y consejos. El número gigante es el gancho."
@@ -2230,6 +2438,10 @@
         "RIGHT"
       ],
       "copy": {
+        "de": {
+          "name": "Richtig und falsch",
+          "description": "Anleitungs- und Ratgeberkanäle: mach das, nicht das."
+        },
         "es": {
           "name": "X roja y check verde",
           "description": "Canales de tutoriales y consejos: haz esto, no aquello."
@@ -2274,6 +2486,10 @@
       },
       "who": "Animation and kids-content creators: a host surrounded by original 3D companions.",
       "copy": {
+        "de": {
+          "name": "Verspielte Truppe",
+          "description": "Creator für Animation und Kinderinhalte: ein Host, umgeben von eigenen 3D-Begleitern."
+        },
         "es": {
           "name": "Elenco divertido",
           "description": "Creadores de animación y contenido infantil: un presentador rodeado de compañeros 3D originales."
@@ -2314,6 +2530,10 @@
         "url": "https://cdn.nodaro.ai/images/c3b9aef9-bf13-4ce9-a6b0-4d6b58ecd35f.png"
       },
       "copy": {
+        "de": {
+          "name": "Haustiere",
+          "description": "Haustier-Kanäle und Geschichten von Tierrettungen."
+        },
         "es": {
           "name": "Mascotas",
           "description": "Canales de mascotas e historias de rescate animal."
@@ -2354,6 +2574,10 @@
         "url": "https://cdn.nodaro.ai/images/8befa92f-a592-4fbd-a27f-2533c1a99ce7.png"
       },
       "copy": {
+        "de": {
+          "name": "Sport-Highlight",
+          "description": "Sportkanäle. Eingefrorene Action, ein Wort."
+        },
         "es": {
           "name": "Jugada destacada",
           "description": "Canales de deportes. Acción congelada, una palabra."
@@ -2394,6 +2618,10 @@
         "url": "https://cdn.nodaro.ai/images/215a2fae-7552-4b31-8012-8bec16518063.png"
       },
       "copy": {
+        "de": {
+          "name": "Elternsein",
+          "description": "Creator zu Familie und Erziehung. Elternteil + Kind, Chaos zum Wiedererkennen."
+        },
         "es": {
           "name": "Crianza",
           "description": "Creadores de familia y crianza. Padre o madre + hijo, caos con el que todos se identifican."
@@ -2439,6 +2667,10 @@
       },
       "who": "Designers, architects and brand channels: a Swiss print collage with a cut-out portrait and giant type.",
       "copy": {
+        "de": {
+          "name": "Swiss-Collage",
+          "description": "Designer, Architekten und Markenkanäle: eine Collage im Swiss Style mit freigestelltem Porträt und riesiger Schrift."
+        },
         "es": {
           "name": "Collage suizo",
           "description": "Diseñadores, arquitectos y canales de marca: un collage de impresión suiza con un retrato recortado y tipografía gigante."
@@ -2483,6 +2715,10 @@
       },
       "who": "Fashion, beauty and culture channels: one face through one monumental word, campaign-poster restraint.",
       "copy": {
+        "de": {
+          "name": "Editorial-Typo",
+          "description": "Kanäle zu Mode, Beauty und Kultur: ein Gesicht durch ein monumentales Wort, zurückhaltend wie ein Kampagnenplakat."
+        },
         "es": {
           "name": "Tipografía editorial",
           "description": "Canales de moda, belleza y cultura: un rostro a través de una palabra monumental, con la sobriedad de un cartel de campaña."
@@ -2528,6 +2764,10 @@
       },
       "who": "Motivation and mindset channels: two monumental words in fog, a tiny figure for scale.",
       "copy": {
+        "de": {
+          "name": "Zwei Worte im Nebel",
+          "description": "Kanäle zu Motivation und Mindset: zwei monumentale Wörter im Nebel, eine winzige Figur als Maßstab."
+        },
         "es": {
           "name": "Portada de reel en negrita",
           "description": "Canales de motivación y mentalidad: dos palabras monumentales entre la niebla, una figura diminuta para dar escala."
@@ -2574,6 +2814,10 @@
         "YOU'RE THE COOK"
       ],
       "copy": {
+        "de": {
+          "name": "POV-Hook",
+          "description": "TikTok-Creator: das POV-Format, der meistkopierte Hook der App. Heute: vertikale Canva-Vorlage + ein Selfie."
+        },
         "es": {
           "name": "Gancho POV",
           "description": "Creadores de TikTok: el formato POV, el gancho más copiado de la app. Hoy: plantilla vertical de Canva + una selfi."
@@ -2616,6 +2860,10 @@
         "url": "https://cdn.nodaro.ai/images/ddfbf640-a13a-473f-a921-27c3e8c970ef.png"
       },
       "copy": {
+        "de": {
+          "name": "Morgenroutine",
+          "description": "Lifestyle- und Produktivitäts-Creator: Day-in-the-Life- und Routine-Videos."
+        },
         "es": {
           "name": "Rutina de la mañana",
           "description": "Creadores de estilo de vida y productividad: videos de un día en la vida y de rutinas."
@@ -2662,6 +2910,10 @@
         "TO FIX THIS"
       ],
       "copy": {
+        "de": {
+          "name": "Drei Schritte",
+          "description": "Creator für Anleitungen und Tipps: nummerierte Schritte, eine zeigende Hand, ein Versprechen."
+        },
         "es": {
           "name": "Tres pasos",
           "description": "Creadores de tutoriales y consejos: pasos numerados, una mano que señala, una promesa."
@@ -2704,6 +2956,10 @@
         "url": "https://cdn.nodaro.ai/images/65ec5166-6e2e-4787-ab7c-e161d3a34b5c.png"
       },
       "copy": {
+        "de": {
+          "name": "Storytime",
+          "description": "Storytime-Creator: Selfie im Auto, große Augen, ein Wort."
+        },
         "es": {
           "name": "Storytime",
           "description": "Creadores de storytime: selfi en el auto, ojos muy abiertos, una palabra."
@@ -2746,6 +3002,10 @@
         "url": "https://cdn.nodaro.ai/images/b56a4d26-8d27-43c1-8e52-91c7cbc50a47.png"
       },
       "copy": {
+        "de": {
+          "name": "Schnelles Rezept",
+          "description": "Food-Creator: Pfanne von oben, eine Gabel, eine Zeitangabe."
+        },
         "es": {
           "name": "Receta rápida",
           "description": "Creadores de comida: sartén vista desde arriba, un tenedor, una promesa de tiempo."
@@ -2788,6 +3048,10 @@
         "url": "https://cdn.nodaro.ai/images/38304905-a9c8-4aac-8211-62e609dec843.png"
       },
       "copy": {
+        "de": {
+          "name": "Tägliches Training",
+          "description": "Fitness-Coaches: eine Übung, ein Kommando."
+        },
         "es": {
           "name": "Ejercicio diario",
           "description": "Coaches de fitness: un ejercicio, una orden."
@@ -2834,6 +3098,10 @@
         "FALL EDITION"
       ],
       "copy": {
+        "de": {
+          "name": "GRWM-Outfit",
+          "description": "Mode-Creator: Get Ready With Me, Spiegel-Selfie, Saison-Label."
+        },
         "es": {
           "name": "Outfit GRWM",
           "description": "Creadores de moda: arréglate conmigo, selfi en el espejo, etiqueta de temporada."
@@ -2881,6 +3149,10 @@
       ],
       "figureHeadline": true,
       "copy": {
+        "de": {
+          "name": "Nebenverdienst",
+          "description": "Finanz-TikTok: eine Zahl, ein Chart, ein zeigender Finger."
+        },
         "es": {
           "name": "Ingresos extra",
           "description": "TikTok de finanzas: una cifra, un gráfico, un dedo que señala."
@@ -2923,6 +3195,10 @@
         "url": "https://cdn.nodaro.ai/images/eeb85837-8d08-4b2f-8117-eb5ac91f6d7a.png"
       },
       "copy": {
+        "de": {
+          "name": "Kostenloses KI-Tool",
+          "description": "KI-Creator auf TikTok und Shorts: „dieses Tool ist kostenlos“, umgehauenes Gesicht, Laptop-Leuchten."
+        },
         "es": {
           "name": "Herramienta de IA gratis",
           "description": "Creadores de IA en TikTok y Shorts: 'esta herramienta es gratis', cara de asombro, brillo de laptop."
@@ -2965,6 +3241,10 @@
         "url": "https://cdn.nodaro.ai/images/06ec57d0-edbe-407c-b4dd-618c6f77ce4d.png"
       },
       "copy": {
+        "de": {
+          "name": "Tanztrend",
+          "description": "Tanz- und Musik-Creator: Trend-Cover, Neon-Zimmer, Bewegung."
+        },
         "es": {
           "name": "Tendencia de baile",
           "description": "Creadores de baile y música: portada de tendencia, habitación de neón, movimiento."
@@ -3012,6 +3292,10 @@
         "WITH AI AGENTS"
       ],
       "copy": {
+        "de": {
+          "name": "Alt vs neu",
+          "description": "Tech-Influencer auf LinkedIn/Facebook: „alte Tools ✗ vs mein neuer Weg ✓“, Gesicht in der Mitte, Text darunter."
+        },
         "es": {
           "name": "Viejo VS nuevo",
           "description": "Influencers de tecnología en LinkedIn/Facebook: 'herramientas antiguas ✗ vs mi nueva forma ✓', rostro en el centro, texto debajo."
@@ -3058,6 +3342,10 @@
         "HAPPENED NEXT"
       ],
       "copy": {
+        "de": {
+          "name": "Großer Text",
+          "description": "Alle mit steiler These: Gesicht + Text in 3 Zeilen. Das häufigste Facebook-Format."
+        },
         "es": {
           "name": "Texto grande",
           "description": "Cualquiera que publique una opinión fuerte: rostro + texto de 3 líneas. El formato más común de Facebook."
@@ -3101,6 +3389,10 @@
         "7 AI TOOLS I USE EVERY DAY"
       ],
       "copy": {
+        "de": {
+          "name": "Karussell-Cover",
+          "description": "LinkedIn-Karussell-Creator. Folie 1 = großes Versprechen + Wisch-Pfeil."
+        },
         "es": {
           "name": "Portada de carrusel",
           "description": "Creadores de carruseles de LinkedIn. Diapositiva 1 = gran promesa + flecha para deslizar."
@@ -3142,6 +3434,10 @@
         "url": "https://cdn.nodaro.ai/images/bc78f978-8cc0-4164-a229-5b7dbce26b28.png"
       },
       "copy": {
+        "de": {
+          "name": "Zitatkarte",
+          "description": "Coaches, Speaker, Marken. Ein Zitat auf strukturiertem Hintergrund."
+        },
         "es": {
           "name": "Tarjeta de cita",
           "description": "Coaches, ponentes, marcas. Una cita sobre un fondo con textura."
@@ -3186,6 +3482,10 @@
         "SENIOR DESIGNER"
       ],
       "copy": {
+        "de": {
+          "name": "Wir stellen ein",
+          "description": "HR und Gründer: der „Wir stellen ein“-Beitrag. Jede Woche in jedem Unternehmen."
+        },
         "es": {
           "name": "Estamos contratando",
           "description": "RR. HH. y fundadores: publicación de «Estamos contratando». Cada semana en todas las empresas."
@@ -3230,6 +3530,10 @@
         "DANA · ENGINEERING"
       ],
       "copy": {
+        "de": {
+          "name": "Mitarbeiter im Fokus",
+          "description": "Employer-Branding-Verantwortliche. Porträt + Namensbanner."
+        },
         "es": {
           "name": "Conoce al equipo",
           "description": "Responsables de marca empleadora. Retrato + banner con el nombre."
@@ -3277,6 +3581,10 @@
         "TEL AVIV"
       ],
       "copy": {
+        "de": {
+          "name": "Event-Ankündigung",
+          "description": "Communities und Unternehmen kündigen ein Meetup oder Webinar an."
+        },
         "es": {
           "name": "Anuncio de evento",
           "description": "Comunidades y empresas que anuncian un meetup o un webinar."
@@ -3321,6 +3629,10 @@
         "NEW FREELANCERS MAKE"
       ],
       "copy": {
+        "de": {
+          "name": "Karussell-Cover",
+          "description": "Instagram-Educators und Coaches: Folie 1 eines Karussells, großes Versprechen, Wisch-Pfeil. Tägliches Format."
+        },
         "es": {
           "name": "Portada de carrusel",
           "description": "Educadores y coaches de Instagram: diapositiva 1 de un carrusel, gran promesa, flecha para deslizar. Formato diario."
@@ -3361,6 +3673,10 @@
         "url": "https://cdn.nodaro.ai/images/797ccb42-9f8b-4966-a8e4-bcb3baace242.png"
       },
       "copy": {
+        "de": {
+          "name": "Flatlay",
+          "description": "Lifestyle-Marken und Creator: das ruhige Flatlay, das den Feed zwischen Launches füllt."
+        },
         "es": {
           "name": "Flat lay",
           "description": "Marcas y creadores de estilo de vida: el flat lay tranquilo que llena un feed entre lanzamientos."
@@ -3401,6 +3717,10 @@
         "url": "https://cdn.nodaro.ai/images/3a81bab7-01f7-45d1-869b-b50e2bef1f93.png"
       },
       "copy": {
+        "de": {
+          "name": "Photo-Dump",
+          "description": "Reise- und Lifestyle-Creator: die Photo-Dump-Collage, vier Momente in einem Beitrag."
+        },
         "es": {
           "name": "Photo dump",
           "description": "Creadores de viajes y estilo de vida: el collage de photo dump, cuatro momentos en una publicación."
@@ -3445,6 +3765,10 @@
         "TAG A FRIEND"
       ],
       "copy": {
+        "de": {
+          "name": "Gewinnspiel",
+          "description": "Marken und Shops: Gewinnspiel-Beitrag, Produkt + Konfetti + „markiere einen Freund“."
+        },
         "es": {
           "name": "Sorteo",
           "description": "Marcas y tiendas: publicación de sorteo, producto + confeti + 'etiqueta a un amigo'."
@@ -3489,6 +3813,10 @@
         "FRIDAY 10AM"
       ],
       "copy": {
+        "de": {
+          "name": "Neuer Drop",
+          "description": "Mode- und Produktmarken: Ankündigung eines neuen Drops, ein Produkt, eine Farbwand."
+        },
         "es": {
           "name": "Nuevo drop",
           "description": "Marcas de moda y de producto: anuncio de nuevo drop, un producto, una pared de color."
@@ -3533,6 +3861,10 @@
         "DANA, STUDIO OWNER"
       ],
       "copy": {
+        "de": {
+          "name": "Kundenstimme",
+          "description": "Dienstleister: ein Kundenzitat mit Sternen und kleinem Foto. Wöchentlicher Social Proof."
+        },
         "es": {
           "name": "Testimonio",
           "description": "Negocios de servicios: una cita de cliente con estrellas y una foto pequeña. Prueba social semanal."
@@ -3573,6 +3905,10 @@
         "url": "https://cdn.nodaro.ai/images/833c47f7-996a-4523-be9f-5e56fbea9c9b.png"
       },
       "copy": {
+        "de": {
+          "name": "Dies oder das",
+          "description": "Shops und Creator: eine Story für den Umfrage-Sticker, zwei Optionen oben und unten."
+        },
         "es": {
           "name": "Esto o aquello",
           "description": "Tiendas y creadores: una historia pensada para el sticker de encuesta, dos opciones arriba y abajo."
@@ -3613,6 +3949,10 @@
         "url": "https://cdn.nodaro.ai/images/c4f711a6-bf26-496b-ac97-4d74ab5302bd.png"
       },
       "copy": {
+        "de": {
+          "name": "Countdown",
+          "description": "Marken vor einem Launch: dunkler Teaser mit Platz für den Countdown-Sticker."
+        },
         "es": {
           "name": "Cuenta atrás",
           "description": "Marcas antes de un lanzamiento: teaser oscuro con espacio para el sticker de cuenta atrás."
@@ -3656,6 +3996,10 @@
         "NEW BLOG POST"
       ],
       "copy": {
+        "de": {
+          "name": "Link oben",
+          "description": "Blogger und Newsletter: „neuer Beitrag“-Story mit dem Link-Sticker."
+        },
         "es": {
           "name": "Enlace arriba",
           "description": "Bloggers y newsletters: historia de «nueva publicación» con el sticker de enlace."
@@ -3700,6 +4044,10 @@
         "20% OFF ALL PASTRIES"
       ],
       "copy": {
+        "de": {
+          "name": "Status-Angebot",
+          "description": "Kleine Läden, Bäckereien, Salons: ein Angebot im WhatsApp-Status. In Israel riesig, täglich."
+        },
         "es": {
           "name": "Oferta en el estado",
           "description": "Tiendas pequeñas, panaderías, salones: una oferta en el estado de WhatsApp. Enorme en Israel, a diario."
@@ -3744,6 +4092,10 @@
         "Someone using it will."
       ],
       "copy": {
+        "de": {
+          "name": "Statement-Karte",
+          "description": "Vordenker auf X: eine steile These in einer Zeile als Bild, damit der Tweet ein Bild bekommt."
+        },
         "es": {
           "name": "Tarjeta de frase",
           "description": "Líderes de opinión en X: una opinión fuerte de una línea como imagen, para que el tuit lleve una imagen."
@@ -3784,6 +4136,10 @@
         "url": "https://cdn.nodaro.ai/images/a71c47bf-7562-4b45-b8c1-3efdcede1947.png"
       },
       "copy": {
+        "de": {
+          "name": "Chart mit Ansage",
+          "description": "Finanz- und Tech-Accounts auf X: eine steigende Linie, ein Wort."
+        },
         "es": {
           "name": "Gráfico con una palabra",
           "description": "Cuentas de finanzas y tecnología en X: una línea ascendente, una palabra."
@@ -3828,6 +4184,10 @@
         "ONE BOWL · 40 MINUTES"
       ],
       "copy": {
+        "de": {
+          "name": "Rezept",
+          "description": "Rezept-Blogger: der hohe Pin mit Foto und Textband, der Traffic auf den Blog bringt."
+        },
         "es": {
           "name": "Receta",
           "description": "Bloggers de recetas: el pin alto con una foto y una banda de texto que atrae tráfico al blog."
@@ -3868,6 +4228,10 @@
         "url": "https://cdn.nodaro.ai/images/ff20b7a6-377e-4057-8331-2f7e2fefac15.png"
       },
       "copy": {
+        "de": {
+          "name": "Wohndeko",
+          "description": "Wohn- und Deko-Blogger: der Listen-Pin über einem Raumfoto."
+        },
         "es": {
           "name": "Decoración del hogar",
           "description": "Bloggers de hogar y decoración: el pin de lista sobre la foto de una habitación."
@@ -3908,6 +4272,10 @@
         "url": "https://cdn.nodaro.ai/images/d0ab7238-7440-46a0-98cf-0800f5c11f59.png"
       },
       "copy": {
+        "de": {
+          "name": "Outfit-Ideen",
+          "description": "Mode-Blogger und Shops: gestapelter Outfit-Collage-Pin."
+        },
         "es": {
           "name": "Ideas de outfits",
           "description": "Bloggers y tiendas de moda: pin con collage de outfits apilados."
@@ -3952,6 +4320,10 @@
         "SUNDAY 7AM · CITY PARK"
       ],
       "copy": {
+        "de": {
+          "name": "Event-Cover",
+          "description": "Communities und Vereine: Facebook-Event-Cover mit Name, Tag und Ort."
+        },
         "es": {
           "name": "Portada de evento",
           "description": "Comunidades y clubes: portada de evento de Facebook con nombre, día y lugar."
@@ -3996,6 +4368,10 @@
         "WALKS · TIPS · MEETUPS"
       ],
       "copy": {
+        "de": {
+          "name": "Gruppen-Cover",
+          "description": "Gruppen-Admins: Facebook-Gruppen-Cover mit dem Gruppennamen und dem Thema."
+        },
         "es": {
           "name": "Portada de grupo",
           "description": "Administradores de grupos: portada de grupo de Facebook con el nombre del grupo y de qué trata."
@@ -4036,6 +4412,10 @@
         "url": "https://cdn.nodaro.ai/images/ddf1f6e6-90d4-4541-a7a9-23b219f8c545.png"
       },
       "copy": {
+        "de": {
+          "name": "Zertifiziert",
+          "description": "Berufstätige: der „freue mich, zu teilen“-Beitrag zum Zertifikat. Jede Woche auf LinkedIn."
+        },
         "es": {
           "name": "Certificado",
           "description": "Profesionales: la publicación de certificación «Me complace compartir». Cada semana en LinkedIn."
@@ -4082,6 +4462,10 @@
         "DELEGATE"
       ],
       "copy": {
+        "de": {
+          "name": "Infografik",
+          "description": "Berater und B2B-Marketer: eine Infografik mit drei Punkten, Icons und Beschriftungen."
+        },
         "es": {
           "name": "Infografía",
           "description": "Consultores y marketers B2B: una infografía de tres puntos, con iconos y etiquetas."
@@ -4126,6 +4510,10 @@
         "ONLY $14"
       ],
       "copy": {
+        "de": {
+          "name": "Tagesgericht",
+          "description": "Restaurantbesitzer: das heutige Special, für Instagram und das Schaufenster. Jede Woche."
+        },
         "es": {
           "name": "Especial del restaurante",
           "description": "Dueños de restaurantes: el especial del día, para Instagram y el escaparate. Cada semana."
@@ -4171,6 +4559,10 @@
         "THIS WEEKEND ONLY"
       ],
       "copy": {
+        "de": {
+          "name": "Ladenverkauf",
+          "description": "Ladenbesitzer: Banner für Black Friday oder Saisonschlussverkauf."
+        },
         "es": {
           "name": "Rebajas de tienda",
           "description": "Dueños de tiendas: banner de Black Friday o de rebajas de fin de temporada."
@@ -4214,6 +4606,10 @@
         "NEW CLIENTS -20%"
       ],
       "copy": {
+        "de": {
+          "name": "Salon-Aktion",
+          "description": "Friseur- und Nagelstudios: Neukundenangebot auf Instagram."
+        },
         "es": {
           "name": "Promoción de salón",
           "description": "Peluquerías y salones de uñas: oferta para clientes nuevos en Instagram."
@@ -4257,6 +4653,10 @@
         "FIRST MONTH FREE"
       ],
       "copy": {
+        "de": {
+          "name": "Fitnessstudio-Angebot",
+          "description": "Fitnessstudios und Trainer: Januar-Angebot, Sommer-Challenge."
+        },
         "es": {
           "name": "Oferta de gimnasio",
           "description": "Gimnasios y entrenadores: oferta de enero, reto de verano."
@@ -4302,6 +4702,10 @@
         "THIS MONTH"
       ],
       "copy": {
+        "de": {
+          "name": "Praxis",
+          "description": "Zahnarzt- und Arztpraxen. Vertrauen + ein Angebot."
+        },
         "es": {
           "name": "Anuncio de clínica",
           "description": "Clínicas dentales y médicas. Confianza + una oferta."
@@ -4346,6 +4750,10 @@
         "SAME-DAY REPAIRS"
       ],
       "copy": {
+        "de": {
+          "name": "Service-Transporter",
+          "description": "Klempner, Elektriker, Umzugsfirmen. Anzeige für lokalen Service."
+        },
         "es": {
           "name": "Servicio con furgoneta",
           "description": "Fontaneros, electricistas, mudanzas. Anuncio de servicio local."
@@ -4391,6 +4799,10 @@
         "$890,000"
       ],
       "copy": {
+        "de": {
+          "name": "Immobilienangebot",
+          "description": "Immobilienmakler: „Neu im Angebot“-Karte für Instagram und Portale."
+        },
         "es": {
           "name": "Anuncio inmobiliario",
           "description": "Agentes inmobiliarios: tarjeta de «Recién publicado» para Instagram y portales."
@@ -4434,6 +4846,10 @@
         "SAVE 2 HOURS A DAY"
       ],
       "copy": {
+        "de": {
+          "name": "Facebook-Lead",
+          "description": "Performance-Marketer: eine Lead-Anzeige mit einem Angebot und einem Button."
+        },
         "es": {
           "name": "Anuncio de leads en Facebook",
           "description": "Marketers de rendimiento: un anuncio de captación de leads con una oferta y un botón."
@@ -4474,6 +4890,10 @@
         "url": "https://cdn.nodaro.ai/images/978a7d66-9968-493d-96d2-904a488c3594.png"
       },
       "copy": {
+        "de": {
+          "name": "App-Store-Screenshot",
+          "description": "App-Entwickler: App-Store-Screenshot mit Handy + Nutzenzeile."
+        },
         "es": {
           "name": "Captura para App Store",
           "description": "Creadores de apps: captura para la App Store con un teléfono + una frase de beneficio."
@@ -4515,6 +4935,10 @@
         "url": "https://cdn.nodaro.ai/images/5255571f-dfc3-40ac-b50b-6d7c426533e2.png"
       },
       "copy": {
+        "de": {
+          "name": "Profilbild",
+          "description": "Freelancer und Gründer: ein sauberes Profilbild für LinkedIn / X."
+        },
         "es": {
           "name": "Foto de perfil",
           "description": "Freelancers y fundadores: una foto de perfil limpia para LinkedIn / X."
@@ -4555,6 +4979,10 @@
         "url": "https://cdn.nodaro.ai/images/9c568838-ef1f-497f-9e00-e8d34367ed79.png"
       },
       "copy": {
+        "de": {
+          "name": "LinkedIn-Banner",
+          "description": "Berufstätige: LinkedIn-Titelbanner mit Slogan."
+        },
         "es": {
           "name": "Banner de LinkedIn",
           "description": "Profesionales: banner de portada de LinkedIn con un eslogan."
@@ -4600,6 +5028,10 @@
         "LIVE EVERY NIGHT · 21:00"
       ],
       "copy": {
+        "de": {
+          "name": "Twitch-Banner",
+          "description": "Streamer: Kanalbanner für Twitch / YouTube."
+        },
         "es": {
           "name": "Banner de Twitch",
           "description": "Streamers: banner de canal de Twitch / YouTube."
@@ -4644,6 +5076,10 @@
         "THE DEEP WORK SHOW"
       ],
       "copy": {
+        "de": {
+          "name": "Podcast-Cover",
+          "description": "Podcaster: quadratisches Cover für Spotify und Apple."
+        },
         "es": {
           "name": "Portada de pódcast",
           "description": "Podcasters: portada cuadrada para Spotify y Apple."
@@ -4687,6 +5123,10 @@
         "MIDNIGHT RUN"
       ],
       "copy": {
+        "de": {
+          "name": "Vertikales Single-Promo-Cover",
+          "description": "Musiker: vertikales Promo-Standbild für Stories oder als Videoposter (ein statisches Bild, keine Spotify-Canvas-Animation)."
+        },
         "es": {
           "name": "Portada vertical de promoción del sencillo",
           "description": "Músicos: imagen promocional vertical para historias o un póster de video (una imagen estática, no una animación de Spotify Canvas)."
@@ -4728,6 +5168,10 @@
         "url": "https://cdn.nodaro.ai/images/ff184f35-340e-4ee7-b76e-0a5dd1e8d00a.png"
       },
       "copy": {
+        "de": {
+          "name": "Amazon-Hauptbild",
+          "description": "Amazon- und Shopify-Händler: Hauptbild des Angebots, weißer Hintergrund, Produkt riesig."
+        },
         "es": {
           "name": "Imagen principal de Amazon",
           "description": "Vendedores de Amazon y Shopify: imagen principal del anuncio, fondo blanco, producto enorme."
@@ -4769,6 +5213,10 @@
         "url": "https://cdn.nodaro.ai/images/8d819a7b-cf8a-44e2-946f-5b52b08683b3.png"
       },
       "copy": {
+        "de": {
+          "name": "Lifestyle-Foto",
+          "description": "Zweitbild für Händler: Produkt im Einsatz, echte Umgebung."
+        },
         "es": {
           "name": "Foto de estilo de vida",
           "description": "Imagen secundaria de vendedores: producto en uso, entorno real."
@@ -4814,6 +5262,10 @@
         "BPA FREE"
       ],
       "copy": {
+        "de": {
+          "name": "Infografik",
+          "description": "Funktionsbild für Händler: Produkt + 3 Hinweise."
+        },
         "es": {
           "name": "Infografía de producto",
           "description": "Imagen de características de vendedores: producto + 3 destacados."
@@ -4854,6 +5306,10 @@
         "url": "https://cdn.nodaro.ai/images/3ed62b63-1891-4500-b898-f109f6ce43c1.png"
       },
       "copy": {
+        "de": {
+          "name": "Etsy-Handarbeit",
+          "description": "Etsy-Macher: handgemachtes Produkt, gemütliches Flatlay."
+        },
         "es": {
           "name": "Artesanal para Etsy",
           "description": "Artesanos de Etsy: producto hecho a mano, flat lay acogedor."
@@ -4894,6 +5350,10 @@
         "url": "https://cdn.nodaro.ai/images/d92148b6-2a02-4e0d-add6-78d878171762.png"
       },
       "copy": {
+        "de": {
+          "name": "Unsichtbare Puppe",
+          "description": "Modehändler: Kleidungsfoto mit unsichtbarer Schaufensterpuppe."
+        },
         "es": {
           "name": "Maniquí fantasma",
           "description": "Vendedores de ropa: foto de prenda con maniquí fantasma."
@@ -4939,6 +5399,10 @@
         "LIMITED TIME"
       ],
       "copy": {
+        "de": {
+          "name": "Rabatt-Badge",
+          "description": "Aktionskachel für Händler: Produkt + großes Rabatt-Badge."
+        },
         "es": {
           "name": "Sello de descuento",
           "description": "Miniatura promocional de vendedores: producto + gran sello de descuento."
@@ -4983,6 +5447,10 @@
         "ANNUAL INSIGHTS REPORT"
       ],
       "copy": {
+        "de": {
+          "name": "Bericht-Cover",
+          "description": "Berater und Analysten: ein Cover für Bericht oder Whitepaper."
+        },
         "es": {
           "name": "Portada de informe",
           "description": "Consultores y analistas: portada de un informe o whitepaper."
@@ -5027,6 +5495,10 @@
         "ISSUE #42"
       ],
       "copy": {
+        "de": {
+          "name": "E-Mail-Header",
+          "description": "Marketer: Header-Bild für Newsletter / E-Mail."
+        },
         "es": {
           "name": "Cabecera de correo",
           "description": "Marketers: imagen de cabecera para newsletter / correo electrónico."
@@ -5070,6 +5542,10 @@
         "PLAN YOUR WEEK IN 5 MINUTES"
       ],
       "copy": {
+        "de": {
+          "name": "Landingpage-Hero",
+          "description": "Gründer: Hero-Bild für die Landingpage mit dem Produkt auf dem Bildschirm."
+        },
         "es": {
           "name": "Hero de landing page",
           "description": "Fundadores: imagen hero de landing page con el producto en pantalla."
@@ -5114,6 +5590,10 @@
         "LESSON 3 · BIOLOGY"
       ],
       "copy": {
+        "de": {
+          "name": "Titelfolie",
+          "description": "Lehrkräfte, Trainer, Berater: eine Titelfolie für die Präsentation."
+        },
         "es": {
           "name": "Diapositiva de título",
           "description": "Profesores, formadores y consultores: la diapositiva de título de una presentación."
@@ -5158,6 +5638,10 @@
         "GRADE 4"
       ],
       "copy": {
+        "de": {
+          "name": "Arbeitsblatt-Kopf",
+          "description": "Lehrkräfte: Kopfzeile für ein Arbeitsblatt oder Handout."
+        },
         "es": {
           "name": "Cabecera de ficha de actividades",
           "description": "Profesores: cabecera de una ficha de actividades o material impreso."
@@ -5203,6 +5687,10 @@
         "/ˈæp.əl/"
       ],
       "copy": {
+        "de": {
+          "name": "Lernkarte",
+          "description": "Lernende und Sprach-Apps: Lernkarte mit Wort + Bild."
+        },
         "es": {
           "name": "Flashcard",
           "description": "Estudiantes y apps de idiomas: tarjeta con palabra + imagen."
@@ -5244,6 +5732,10 @@
         "url": "https://cdn.nodaro.ai/images/b8f55176-2b84-418e-8560-20ba165afe58.png"
       },
       "copy": {
+        "de": {
+          "name": "T-Shirt-Design",
+          "description": "Print-on-Demand-Händler: eine T-Shirt-Grafik als Frontdruck."
+        },
         "es": {
           "name": "Diseño de camiseta",
           "description": "Vendedores de impresión bajo demanda: un gráfico para camiseta, estampado frontal."
@@ -5287,6 +5779,10 @@
         "TAKE THE LONG WAY"
       ],
       "copy": {
+        "de": {
+          "name": "T-Shirt-Druckmotiv solo",
+          "description": "Print-on-Demand-Händler: das flache Frontmotiv allein, ohne Shirt, auf Weiß zum Freistellen."
+        },
         "es": {
           "name": "Arte de estampado de camiseta independiente",
           "description": "Vendedores de impresión bajo demanda: solo el arte plano del frente de la camiseta, sin la camiseta, sobre blanco para enmascarar."
@@ -5334,6 +5830,10 @@
       },
       "who": "Founders, coaches and personal brands: a 9:16 fashion-magazine cover with masthead, kicker and cover story.",
       "copy": {
+        "de": {
+          "name": "Visionäres Magazin-Cover",
+          "description": "Gründer, Coaches und Personal Brands: ein Modemagazin-Cover in 9:16 mit Titelschriftzug, Dachzeile und Titelgeschichte."
+        },
         "es": {
           "name": "Portada de revista visionaria",
           "description": "Fundadores, coaches y marcas personales: una portada de revista de moda 9:16 con cabecera, antetítulo y reportaje de portada."
@@ -5375,6 +5875,10 @@
         "url": "https://cdn.nodaro.ai/images/bfd576b2-c67f-407f-9bb4-393f47dbe034.png"
       },
       "copy": {
+        "de": {
+          "name": "Stickerbogen",
+          "description": "Sticker-Händler und Marken: Bogen mit konturgeschnittenen Stickern."
+        },
         "es": {
           "name": "Hoja de pegatinas",
           "description": "Vendedores de pegatinas y marcas: hoja de pegatinas troqueladas."
@@ -5416,6 +5920,10 @@
         "url": "https://cdn.nodaro.ai/images/b26454f0-c818-4bed-a796-d8b6913a22e4.png"
       },
       "copy": {
+        "de": {
+          "name": "Tasse",
+          "description": "Geschenkläden und POD: Tassen-Mockup mit Spruch."
+        },
         "es": {
           "name": "Taza",
           "description": "Tiendas de regalos e impresión bajo demanda: mockup de taza con una frase."
@@ -5461,6 +5969,10 @@
         "12 · 06 · 2027"
       ],
       "copy": {
+        "de": {
+          "name": "Hochzeitseinladung",
+          "description": "Paare und Planer: Hochzeitseinladung. Riesiger Markt, jeder zahlt einmal."
+        },
         "es": {
           "name": "Invitación de boda",
           "description": "Parejas y organizadores: invitación de boda. Un mercado enorme, todos pagan una vez."
@@ -5506,6 +6018,10 @@
         "SATURDAY · 16:00 · OUR BACKYARD"
       ],
       "copy": {
+        "de": {
+          "name": "Geburtstagseinladung",
+          "description": "Eltern: Einladung zum Kindergeburtstag. Monatlich in jeder Familie mit Kindern."
+        },
         "es": {
           "name": "Invitación de cumpleaños",
           "description": "Padres y madres: invitación de cumpleaños infantil. Cada mes para toda familia con hijos."
@@ -5551,6 +6067,10 @@
         "SAT 28 · DOORS 23:00"
       ],
       "copy": {
+        "de": {
+          "name": "Club-Flyer",
+          "description": "Veranstalter und DJs: Flyer für die Clubnacht. Wöchentlich."
+        },
         "es": {
           "name": "Flyer de discoteca",
           "description": "Promotores y DJs: flyer de una noche de discoteca. Cada semana."
@@ -5598,6 +6118,10 @@
         "BERLIN"
       ],
       "copy": {
+        "de": {
+          "name": "Konferenzbanner",
+          "description": "Eventveranstalter: Hero-Banner der Konferenz für Website und LinkedIn."
+        },
         "es": {
           "name": "Banner de conferencia",
           "description": "Organizadores de eventos: banner hero de conferencia para el sitio web y LinkedIn."
@@ -5643,6 +6167,10 @@
         "FROM OUR TEAM TO YOURS"
       ],
       "copy": {
+        "de": {
+          "name": "Festtagsgruß",
+          "description": "Jedes Unternehmen und jede Familie: Grußkarte zu den Feiertagen. Saisonaler Höhepunkt."
+        },
         "es": {
           "name": "Felicitación navideña",
           "description": "Toda empresa y familia: tarjeta de felicitación de fiestas. Pico estacional."
@@ -5688,6 +6216,10 @@
         "BORN 03 · 04 · 2027 · 3.2 KG"
       ],
       "copy": {
+        "de": {
+          "name": "Babyparty",
+          "description": "Freunde und Familie: Babyparty oder Geburtsanzeige."
+        },
         "es": {
           "name": "Baby shower",
           "description": "Amigos y familia: baby shower / anuncio de recién nacido."
@@ -5729,6 +6261,10 @@
         "url": "https://cdn.nodaro.ai/images/909a6b00-5ec4-4835-a295-bd0bd3be978c.png"
       },
       "copy": {
+        "de": {
+          "name": "Geburtstagskarte",
+          "description": "Für alle: eine Geburtstagskarte für Freunde."
+        },
         "es": {
           "name": "Tarjeta de cumpleaños",
           "description": "Para todos: una tarjeta de cumpleaños para un amigo."
@@ -5769,6 +6305,10 @@
         "url": "https://cdn.nodaro.ai/images/4fd13028-827c-4c0a-91f8-fdabaacd68c3.png"
       },
       "copy": {
+        "de": {
+          "name": "Haustierporträt",
+          "description": "Haustierbesitzer: ein Porträt ihres Tiers im Malstil. Geschenkmarkt."
+        },
         "es": {
           "name": "Retrato de mascota",
           "description": "Dueños de mascotas: un retrato al estilo pintado de su mascota. Mercado de regalos."
@@ -5814,6 +6354,10 @@
         "THE COHEN FAMILY · 2027"
       ],
       "copy": {
+        "de": {
+          "name": "Familien-Festtagskarte",
+          "description": "Familien: Festtagskarte mit Familienfoto und Gruß."
+        },
         "es": {
           "name": "Tarjeta navideña familiar",
           "description": "Familias: tarjeta de fiestas con la foto familiar y un saludo."
@@ -5854,6 +6398,10 @@
         "url": "https://cdn.nodaro.ai/images/34435c4b-1bc3-442a-9f18-af0f7e8653c1.png"
       },
       "copy": {
+        "de": {
+          "name": "Handy-Hintergrund",
+          "description": "Für alle: ein Handy-Hintergrundbild."
+        },
         "es": {
           "name": "Fondo de pantalla del teléfono",
           "description": "Para todo el mundo: un fondo de pantalla para el teléfono. Volumen diario, gancho para el plan gratuito."
@@ -5895,6 +6443,10 @@
         "url": "https://cdn.nodaro.ai/images/aa3116a1-9dd7-41b8-85fd-e1105e146d5b.png"
       },
       "copy": {
+        "de": {
+          "name": "Meme-Vorlage",
+          "description": "Reaktions-Meme mit Text oben."
+        },
         "es": {
           "name": "Plantilla de meme",
           "description": "Para todo el mundo: una plantilla de meme de reacción con texto arriba."
@@ -5935,6 +6487,10 @@
         "url": "https://cdn.nodaro.ai/images/f7f4396f-68bf-4b70-ac8c-6a34f88ca918.png"
       },
       "copy": {
+        "de": {
+          "name": "Dating-Profil",
+          "description": "Singles: ein natürliches, vorteilhaftes Profilfoto."
+        },
         "es": {
           "name": "Perfil de citas",
           "description": "Para solteros: una foto de perfil natural y favorecedora."
@@ -5981,6 +6537,10 @@
         "SAT · 20:00"
       ],
       "copy": {
+        "de": {
+          "name": "Spieltag",
+          "description": "Amateurvereine: Grafik zum Spieltag."
+        },
         "es": {
           "name": "Día de partido",
           "description": "Para clubes y ligas amateur: gráfico del día de partido. Semanal."
@@ -6026,6 +6586,10 @@
         "#23 · GUARD"
       ],
       "copy": {
+        "de": {
+          "name": "Spielerkarte",
+          "description": "Jugendligen: Spielerkarte im Sammelkarten-Stil."
+        },
         "es": {
           "name": "Tarjeta de jugador",
           "description": "Para ligas juveniles y grupos de fantasy: una tarjeta de jugador estilo cromo coleccionable."
@@ -6070,6 +6634,10 @@
         "PLANT 1,000 TREES"
       ],
       "copy": {
+        "de": {
+          "name": "Spendenaktion",
+          "description": "Vereine und Schulen: Plakat für eine Spendenaktion."
+        },
         "es": {
           "name": "Recaudación de fondos",
           "description": "Para ONG y escuelas: cartel de recaudación de fondos."
@@ -6116,6 +6684,10 @@
         "COLD BREW 4.5"
       ],
       "copy": {
+        "de": {
+          "name": "Menütafel",
+          "description": "Cafés und Foodtrucks: Menütafel zum Ausdrucken."
+        },
         "es": {
           "name": "Pizarra de menú",
           "description": "Para cafeterías y food trucks: una pizarra de menú para imprimir."
@@ -6154,6 +6726,9 @@
         "url": "https://cdn.nodaro.ai/images/3446449e-428c-4a59-8b8b-c45e928c3ff2.png"
       },
       "copy": {
+        "de": {
+          "name": "Storyboard mit 6 Bildern"
+        },
         "es": {
           "name": "Storyboard de 6 cuadros"
         },
@@ -6190,6 +6765,9 @@
         "PRODUCTION STORYBOARD"
       ],
       "copy": {
+        "de": {
+          "name": "Produktions-Storyboard"
+        },
         "es": {
           "name": "Storyboard de producción"
         },
@@ -6223,6 +6801,9 @@
         "url": "https://cdn.nodaro.ai/images/069ac0d9-193e-40d6-a235-d239aead0c87.png"
       },
       "copy": {
+        "de": {
+          "name": "Mehrere Einstellungen"
+        },
         "es": {
           "name": "Multitoma"
         },
@@ -6256,6 +6837,9 @@
         "url": "https://cdn.nodaro.ai/images/9a6f8e29-ff37-4183-b28a-90e56ee68047.png"
       },
       "copy": {
+        "de": {
+          "name": "2×2-Raster"
+        },
         "es": {
           "name": "Cuadrícula 2×2"
         },
@@ -6289,6 +6873,9 @@
         "url": "https://cdn.nodaro.ai/images/333b9bb1-b5a0-48a7-b576-f484b0762ab1.png"
       },
       "copy": {
+        "de": {
+          "name": "Blatt ohne Kopf"
+        },
         "es": {
           "name": "Hoja sin cabeza"
         },
@@ -6322,6 +6909,9 @@
         "url": "https://cdn.nodaro.ai/images/3913c215-d14b-4006-b789-156b9f384e7e.png"
       },
       "copy": {
+        "de": {
+          "name": "Sprite-Sheet"
+        },
         "es": {
           "name": "Sprite sheet"
         },
@@ -6355,6 +6945,9 @@
         "url": "https://cdn.nodaro.ai/images/f8f834d2-8ea3-4c9f-b98c-819bf517f6a8.png"
       },
       "copy": {
+        "de": {
+          "name": "Requisitenblatt"
+        },
         "es": {
           "name": "Hoja de utilería"
         },
@@ -6393,6 +6986,9 @@
         "KRAK!"
       ],
       "copy": {
+        "de": {
+          "name": "Comicseite"
+        },
         "es": {
           "name": "Página de cómic"
         },
@@ -6426,6 +7022,9 @@
         "url": "https://cdn.nodaro.ai/images/4fddbc49-6835-4489-b360-6484a05024c0.png"
       },
       "copy": {
+        "de": {
+          "name": "Blockbuster"
+        },
         "es": {
           "name": "Blockbuster"
         },
@@ -6459,6 +7058,9 @@
         "url": "https://cdn.nodaro.ai/images/6eb2fdc0-21d0-4845-a083-63d3d533fde0.png"
       },
       "copy": {
+        "de": {
+          "name": "Horrorplakat"
+        },
         "es": {
           "name": "Póster de terror"
         },
@@ -6492,6 +7094,9 @@
         "url": "https://cdn.nodaro.ai/images/d903f431-7c1c-4d95-b1ce-7a54ca482afc.png"
       },
       "copy": {
+        "de": {
+          "name": "Sci-Fi-Chrom"
+        },
         "es": {
           "name": "Cromo sci-fi"
         },
@@ -6525,6 +7130,9 @@
         "url": "https://cdn.nodaro.ai/images/085bdeb0-9d9f-449c-8407-9273a57be890.png"
       },
       "copy": {
+        "de": {
+          "name": "Western"
+        },
         "es": {
           "name": "Western"
         },
@@ -6558,6 +7166,9 @@
         "url": "https://cdn.nodaro.ai/images/729e79a6-0b15-426f-b897-00801b1d651e.png"
       },
       "copy": {
+        "de": {
+          "name": "Film noir"
+        },
         "es": {
           "name": "Film noir"
         },
@@ -6591,6 +7202,9 @@
         "url": "https://cdn.nodaro.ai/images/be61e8ae-2fc8-4703-9927-955eff94ddd0.png"
       },
       "copy": {
+        "de": {
+          "name": "Anime-Titel"
+        },
         "es": {
           "name": "Título de anime"
         },
@@ -6624,6 +7238,9 @@
         "url": "https://cdn.nodaro.ai/images/039f4e81-1d4f-4347-9bfd-c1440a1e2766.png"
       },
       "copy": {
+        "de": {
+          "name": "Comic-Held"
+        },
         "es": {
           "name": "Héroe de cómic"
         },
@@ -6657,6 +7274,9 @@
         "url": "https://cdn.nodaro.ai/images/f135b7cb-6a85-4893-9007-c2f5836f40a9.png"
       },
       "copy": {
+        "de": {
+          "name": "Retro-Serife 70er"
+        },
         "es": {
           "name": "Serif retro años 70"
         },
@@ -6693,6 +7313,9 @@
         "REWIND"
       ],
       "copy": {
+        "de": {
+          "name": "VHS-Leuchten"
+        },
         "es": {
           "name": "Brillo VHS"
         },
@@ -6726,6 +7349,9 @@
         "url": "https://cdn.nodaro.ai/images/668d940c-2a37-4d8e-9845-7d523498b5ff.png"
       },
       "copy": {
+        "de": {
+          "name": "Chrom Y2K"
+        },
         "es": {
           "name": "Cromo Y2K"
         },
@@ -6759,6 +7385,9 @@
         "url": "https://cdn.nodaro.ai/images/05272bbd-2ee6-4c07-8664-70e53e08c7d6.png"
       },
       "copy": {
+        "de": {
+          "name": "Psychedelisch 60er"
+        },
         "es": {
           "name": "Psicodélico años 60"
         },
@@ -6792,6 +7421,9 @@
         "url": "https://cdn.nodaro.ai/images/721e2752-9e54-444b-9832-cfab375b8330.png"
       },
       "copy": {
+        "de": {
+          "name": "Disco-Funk"
+        },
         "es": {
           "name": "Disco funk"
         },
@@ -6825,6 +7457,9 @@
         "url": "https://cdn.nodaro.ai/images/7a5a774d-e938-4b3b-8953-f9a472c3f435.png"
       },
       "copy": {
+        "de": {
+          "name": "Art déco"
+        },
         "es": {
           "name": "Art déco"
         },
@@ -6858,6 +7493,9 @@
         "url": "https://cdn.nodaro.ai/images/af9ee26d-8fc9-4ff8-a5f8-0fff7233d299.png"
       },
       "copy": {
+        "de": {
+          "name": "80er-Synthwave"
+        },
         "es": {
           "name": "Synthwave años 80"
         },
@@ -6891,6 +7529,9 @@
         "url": "https://cdn.nodaro.ai/images/2d7939bd-b41f-43f5-bd03-eef81aa29908.png"
       },
       "copy": {
+        "de": {
+          "name": "Pixel 8 Bit"
+        },
         "es": {
           "name": "Pixel 8 bits"
         },
@@ -6924,6 +7565,9 @@
         "url": "https://cdn.nodaro.ai/images/f51583dc-91e5-4357-ac27-c7b102fd5c9e.png"
       },
       "copy": {
+        "de": {
+          "name": "Graffiti mit Tropfen"
+        },
         "es": {
           "name": "Grafiti con chorreones"
         },
@@ -6957,6 +7601,9 @@
         "url": "https://cdn.nodaro.ai/images/1f616828-dc97-4e5b-89db-06b4d616b715.png"
       },
       "copy": {
+        "de": {
+          "name": "Grunge-Stempel"
+        },
         "es": {
           "name": "Sello grunge"
         },
@@ -6990,6 +7637,9 @@
         "url": "https://cdn.nodaro.ai/images/d91654bc-045c-4b9f-b561-2d558cae23a2.png"
       },
       "copy": {
+        "de": {
+          "name": "Brutalistisch Acid"
+        },
         "es": {
           "name": "Brutalista ácido"
         },
@@ -7023,6 +7673,9 @@
         "url": "https://cdn.nodaro.ai/images/82b06344-cbd4-48ef-84c0-92ebd2950731.png"
       },
       "copy": {
+        "de": {
+          "name": "Sticker-Pop"
+        },
         "es": {
           "name": "Sticker pop"
         },
@@ -7056,6 +7709,9 @@
         "url": "https://cdn.nodaro.ai/images/9925f9d6-23f7-465f-aefd-290ba1b57d65.png"
       },
       "copy": {
+        "de": {
+          "name": "Erpresserbrief"
+        },
         "es": {
           "name": "Nota de rescate"
         },
@@ -7089,6 +7745,9 @@
         "url": "https://cdn.nodaro.ai/images/a31fad0a-904d-4daa-98cb-fc133fe059e2.png"
       },
       "copy": {
+        "de": {
+          "name": "Glitch"
+        },
         "es": {
           "name": "Glitch"
         },
@@ -7122,6 +7781,9 @@
         "url": "https://cdn.nodaro.ai/images/eaa3e8e9-16f2-475b-a18b-bbbf938e2b24.png"
       },
       "copy": {
+        "de": {
+          "name": "Goldfolie Luxus"
+        },
         "es": {
           "name": "Lámina de oro de lujo"
         },
@@ -7155,6 +7817,9 @@
         "url": "https://cdn.nodaro.ai/images/0e20702e-5af7-4177-a8e6-6e958f0a7a76.png"
       },
       "copy": {
+        "de": {
+          "name": "Geschmolzenes Gold"
+        },
         "es": {
           "name": "Oro fundido"
         },
@@ -7188,6 +7853,9 @@
         "url": "https://cdn.nodaro.ai/images/8d65a7a8-8a1d-4a30-8714-bc1f9d4a4a5a.png"
       },
       "copy": {
+        "de": {
+          "name": "Leuchtreklame"
+        },
         "es": {
           "name": "Letrero de neón"
         },
@@ -7221,6 +7889,9 @@
         "url": "https://cdn.nodaro.ai/images/1edaeb11-8671-43b6-b7c6-ae7e2652c3e7.png"
       },
       "copy": {
+        "de": {
+          "name": "Milchglas"
+        },
         "es": {
           "name": "Vidrio esmerilado"
         },
@@ -7254,6 +7925,9 @@
         "url": "https://cdn.nodaro.ai/images/3d1f56c0-0242-4386-9043-5e8f015f41d4.png"
       },
       "copy": {
+        "de": {
+          "name": "Eis"
+        },
         "es": {
           "name": "Hielo"
         },
@@ -7287,6 +7961,9 @@
         "url": "https://cdn.nodaro.ai/images/3b2088a7-6929-4512-8b3b-f0726c5956cb.png"
       },
       "copy": {
+        "de": {
+          "name": "Flüssiges Wasser"
+        },
         "es": {
           "name": "Agua líquida"
         },
@@ -7320,6 +7997,9 @@
         "url": "https://cdn.nodaro.ai/images/9bb093f5-db50-417a-b5db-4da690e72b78.png"
       },
       "copy": {
+        "de": {
+          "name": "Gemeißelter Marmor"
+        },
         "es": {
           "name": "Mármol tallado"
         },
@@ -7353,6 +8033,9 @@
         "url": "https://cdn.nodaro.ai/images/db9cfb41-4efb-4d5b-a42d-20a51bfeef9d.png"
       },
       "copy": {
+        "de": {
+          "name": "Geschnitztes Holz"
+        },
         "es": {
           "name": "Madera tallada"
         },
@@ -7386,6 +8069,9 @@
         "url": "https://cdn.nodaro.ai/images/e4fd53ae-1be5-48e7-9049-35e4b85954df.png"
       },
       "copy": {
+        "de": {
+          "name": "Rostiges Metall"
+        },
         "es": {
           "name": "Metal oxidado"
         },
@@ -7419,6 +8105,9 @@
         "url": "https://cdn.nodaro.ai/images/aa4f4043-a4b0-4735-a163-5518298c461f.png"
       },
       "copy": {
+        "de": {
+          "name": "Holografisch"
+        },
         "es": {
           "name": "Holográfico"
         },
@@ -7452,6 +8141,9 @@
         "url": "https://cdn.nodaro.ai/images/e1b0429d-9d56-4097-ada9-4aa380334829.png"
       },
       "copy": {
+        "de": {
+          "name": "Feuer und Glut"
+        },
         "es": {
           "name": "Fuego y brasas"
         },
@@ -7485,6 +8177,9 @@
         "url": "https://cdn.nodaro.ai/images/8c14704e-dd9d-449a-9c73-04a5744b0a8b.png"
       },
       "copy": {
+        "de": {
+          "name": "Rauch"
+        },
         "es": {
           "name": "Humo"
         },
@@ -7518,6 +8213,9 @@
         "url": "https://cdn.nodaro.ai/images/03fcb1b5-4154-427b-8f0a-6c253b846929.png"
       },
       "copy": {
+        "de": {
+          "name": "Aufgeblähter Ton"
+        },
         "es": {
           "name": "Arcilla inflada"
         },
@@ -7551,6 +8249,9 @@
         "url": "https://cdn.nodaro.ai/images/60b93d51-e159-4fe3-bc35-81465db12b67.png"
       },
       "copy": {
+        "de": {
+          "name": "Folienballon"
+        },
         "es": {
           "name": "Globo metalizado"
         },
@@ -7584,6 +8285,9 @@
         "url": "https://cdn.nodaro.ai/images/a29d574c-acf4-4123-8b02-2779884e1e4f.png"
       },
       "copy": {
+        "de": {
+          "name": "Kreidetafel"
+        },
         "es": {
           "name": "Pizarra"
         },
@@ -7617,6 +8321,9 @@
         "url": "https://cdn.nodaro.ai/images/0fc9993e-3500-4b61-8cc1-1edba4358420.png"
       },
       "copy": {
+        "de": {
+          "name": "Schreibmaschine"
+        },
         "es": {
           "name": "Máquina de escribir"
         },
@@ -7650,6 +8357,9 @@
         "url": "https://cdn.nodaro.ai/images/d0990520-e2f8-47ae-a1c2-881f557a4623.png"
       },
       "copy": {
+        "de": {
+          "name": "Handgeschriebener Marker"
+        },
         "es": {
           "name": "Rotulador a mano"
         },
@@ -7683,6 +8393,9 @@
         "url": "https://cdn.nodaro.ai/images/b0f66c1c-c083-4b9e-9449-1bfbe9c40dd6.png"
       },
       "copy": {
+        "de": {
+          "name": "Gestickter Aufnäher"
+        },
         "es": {
           "name": "Parche bordado"
         },
@@ -7716,6 +8429,9 @@
         "url": "https://cdn.nodaro.ai/images/3bec9085-ebc0-43a0-bc06-48fef590d2d9.png"
       },
       "copy": {
+        "de": {
+          "name": "Papierschnitt"
+        },
         "es": {
           "name": "Recorte de papel"
         },
@@ -7749,6 +8465,9 @@
         "url": "https://cdn.nodaro.ai/images/8f0b9a21-c7df-495a-8ac1-c62bed2d77bd.png"
       },
       "copy": {
+        "de": {
+          "name": "Botanische Serife"
+        },
         "es": {
           "name": "Serif botánico"
         },
@@ -7782,6 +8501,9 @@
         "url": "https://cdn.nodaro.ai/images/512624e9-1ffd-4b14-8564-3533999d5423.png"
       },
       "copy": {
+        "de": {
+          "name": "Hochzeitsschrift"
+        },
         "es": {
           "name": "Caligrafía de boda"
         },
@@ -7815,6 +8537,9 @@
         "url": "https://cdn.nodaro.ai/images/e7a7cbee-6090-45b8-ae8c-3085e3560959.png"
       },
       "copy": {
+        "de": {
+          "name": "Kindergeburtstag"
+        },
         "es": {
           "name": "Fiesta infantil"
         },
@@ -7848,6 +8573,9 @@
         "url": "https://cdn.nodaro.ai/images/4a99c8d3-bc1f-401d-aa4d-ed0945b4969f.png"
       },
       "copy": {
+        "de": {
+          "name": "College-Sport"
+        },
         "es": {
           "name": "Deporte universitario"
         },
@@ -7881,6 +8609,9 @@
         "url": "https://cdn.nodaro.ai/images/e97521ed-e52b-4a4e-a2ec-e90aa2ca7d76.png"
       },
       "copy": {
+        "de": {
+          "name": "Indie-Titelkarte"
+        },
         "es": {
           "name": "Cartela de título indie"
         },

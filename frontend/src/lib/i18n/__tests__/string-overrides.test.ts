@@ -75,15 +75,15 @@ describe("an override replaces one string in one locale", () => {
 
   it("an English override is the English everyone falls back to, but never replaces a translation", () => {
     setRuntime({ surface: { strings: { flow: { en: { [KEY]: EN_TEXT } } } } })
-    expect(DICTS.de?.[KEY]).toBeUndefined() // a stub locale
-    expect(translate("de", KEY)).toBe(EN_TEXT)
+    expect(DICTS.fr?.[KEY]).toBeUndefined() // a stub locale
+    expect(translate("fr", KEY)).toBe(EN_TEXT)
     expect(translate("he", KEY)).toBe(DICTS.he?.[KEY])
   })
 
   it("counts as the locale's own text wherever that is asked (localeText)", () => {
-    setRuntime({ surface: { strings: { flow: { de: { [KEY]: "Ihr Kontingent ist aufgebraucht." } } } } })
-    expect(localeText("de", KEY)).toBe("Ihr Kontingent ist aufgebraucht.")
-    expect(localeText("de", "common.cancel")).toBe(DICTS.de?.["common.cancel"])
+    setRuntime({ surface: { strings: { flow: { fr: { [KEY]: "Out of quota." } } } } })
+    expect(localeText("fr", KEY)).toBe("Out of quota.")
+    expect(localeText("fr", "common.cancel")).toBe(DICTS.fr?.["common.cancel"])
   })
 
   it("reaches the non-hook tx() in the live locale", () => {

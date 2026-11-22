@@ -50,6 +50,7 @@ describe("another product's pages on the same host", () => {
       "/he/voice-changer/convert/abc",
       "/pt-br/voice-changer",
       "/es/voice-changer",
+      "/de/voice-changer",
       "/image",
       "/video/abc",
       "/music",

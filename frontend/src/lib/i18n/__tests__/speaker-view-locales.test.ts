@@ -1,21 +1,22 @@
 // @vitest-environment node
 /**
- * Speaker View's panel strings ship in the six product locales (English,
- * Spanish, Hebrew, Japanese, Korean, Brazilian Portuguese). The other
+ * Speaker View's panel strings ship in the seven product locales (English,
+ * German, Spanish, Hebrew, Japanese, Korean, Brazilian Portuguese). The other
  * dictionaries are partial by design and fall back to English, and the
  * coverage report is non-failing, so nothing else would notice a missing key:
  * this pins every `speakerView.*` key present, non-empty, and carrying exactly
- * the English value's {placeholders} in the five translated dictionaries.
+ * the English value's {placeholders} in the six translated dictionaries.
  */
 import { describe, it, expect } from "vitest"
 import { en, type ChromeDict, type MessageKey } from "../en"
+import { de } from "../de"
 import { es } from "../es"
 import { he } from "../he"
 import { ja } from "../ja"
 import { ko } from "../ko"
 import { ptBR } from "../pt-br"
 
-const DICTS: Record<string, ChromeDict> = { es, he, ja, ko, "pt-BR": ptBR }
+const DICTS: Record<string, ChromeDict> = { de, es, he, ja, ko, "pt-BR": ptBR }
 const KEYS = (Object.keys(en) as MessageKey[]).filter((k) => k.startsWith("speakerView."))
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
 

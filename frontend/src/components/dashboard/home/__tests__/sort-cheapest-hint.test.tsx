@@ -9,6 +9,7 @@ import { render, screen } from "@testing-library/react"
 import { TYPICAL_EPISODE_MINUTES } from "@nodaro/render-rules"
 import { SegmentedControl } from "../home-section"
 import { en } from "@/lib/i18n/en"
+import { de } from "@/lib/i18n/de"
 import { es } from "@/lib/i18n/es"
 import { he } from "@/lib/i18n/he"
 import { ja } from "@/lib/i18n/ja"
@@ -16,7 +17,7 @@ import { ko } from "@/lib/i18n/ko"
 import { ptBR } from "@/lib/i18n/pt-br"
 
 describe("the cheapest-first tooltip", () => {
-  it.each([["en", en], ["es", es], ["he", he], ["ja", ja], ["ko", ko], ["pt-br", ptBR]] as const)("%s states the episode length", (_locale, dict) => {
+  it.each([["en", en], ["de", de], ["es", es], ["he", he], ["ja", ja], ["ko", ko], ["pt-br", ptBR]] as const)("%s states the episode length", (_locale, dict) => {
     const hint = (dict as Record<string, string | undefined>)["templates.sortCheapestHint"]
     expect(hint).toBeDefined()
     expect(hint).toContain("{n}")

@@ -2,6 +2,7 @@
 
 export const labels = {
   "Suno Speech": {
+    "de": "Suno: Sprache",
     "es": "Voz con Suno",
     "he": "דיבור Suno",
     "ja": "Suno スピーチ",

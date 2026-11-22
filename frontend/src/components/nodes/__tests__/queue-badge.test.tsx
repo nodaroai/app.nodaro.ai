@@ -151,8 +151,9 @@ describe("queue ordinals", () => {
   })
 
   it("a stub locale shows the English words with English rules", () => {
-    // German ordinal rules put every number in "other": "1th" if they picked.
-    expect(queueOrdinal("de", 1)).toBe("1st")
-    expect(queueBadgeText("de", OWN_LINE).line).toBe("Waiting — 3rd in line, your plan runs 4 at once")
+    // French ordinal rules put every number but 1 in "other": "3th" if they picked.
+    expect(queueOrdinal("fr", 3)).toBe("3rd")
+    expect(queueOrdinal("fr", 1)).toBe("1st")
+    expect(queueBadgeText("fr", OWN_LINE).line).toBe("Waiting — 3rd in line, your plan runs 4 at once")
   })
 })

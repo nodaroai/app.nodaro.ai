@@ -189,7 +189,7 @@ describe("EditPlanConfig — self-host wording", () => {
   it("both strings are translated in every offered locale", () => {
     for (const key of ["proccfg.editPlanModeAvailableOnceNodaro", "proccfg.editPlanModeNodaroUnreachable"] as const) {
       expect(translate("en", key)).toBe(key.endsWith("Unreachable") ? UNREACHABLE : AVAILABLE_ONCE)
-      for (const id of ["es", "he", "ja", "ko", "pt-BR"] as const) {
+      for (const id of ["de", "es", "he", "ja", "ko", "pt-BR"] as const) {
         const value = translate(id, key)
         expect(value, `${id} ${key}`).not.toBe(translate("en", key))
         expect(value, `${id} ${key}`).toContain("nodaro.ai")

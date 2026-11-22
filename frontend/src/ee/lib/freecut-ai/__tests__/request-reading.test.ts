@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
+import { de } from "@/lib/i18n/de"
 import { en } from "@/lib/i18n/en"
 import { es } from "@/lib/i18n/es"
 import { he } from "@/lib/i18n/he"
@@ -10,7 +11,7 @@ import { ABILITY_PHRASE, requestSteps, toggleStepInRequest } from "../abilities"
 import { DEFAULT_MUSIC_STYLE, EDIT_STEPS } from "../edit-plan"
 import { cardOnlyPlan, clipCountInWords, lookInWords, parseModelPlan, planFromRequest, stepsInWords, type CardPhrase } from "../request-reading"
 
-const DICTS = { en, es, he, ja, ko, "pt-br": ptBR } as const
+const DICTS = { de, en, es, he, ja, ko, "pt-br": ptBR } as const
 const phrasesOf = (dict: Record<string, string | undefined>): CardPhrase[] => EDIT_STEPS.map((step) => ({ step, text: dict[ABILITY_PHRASE[step]] ?? "" }))
 const ALL_PHRASES = Object.values(DICTS).flatMap((dict) => phrasesOf(dict))
 
@@ -41,11 +42,13 @@ describe("the cards' own words, in every language", () => {
   })
 
   it("the layout card's wide phrase keeps the wide frame, with no model to read it", () => {
-    const wide = [...ALL_PHRASES, ...[en, he, es].map((dict) => ({ step: "layout" as const, text: dict["freecutAi.phrase.layoutWide"]! }))]
+    const wide = [...ALL_PHRASES, ...[en, he, es, de].map((dict) => ({ step: "layout" as const, text: dict["freecutAi.phrase.layoutWide"]! }))]
     expect(cardOnlyPlan(en["freecutAi.phrase.layoutWide"]!, wide)?.params.layout).toBe("side")
     expect(cardOnlyPlan(he["freecutAi.phrase.layoutWide"]!, wide)?.params.layout).toBe("side")
     expect(cardOnlyPlan(es["freecutAi.phrase.layoutWide"]!, wide)?.params.layout).toBe("side")
     expect(cardOnlyPlan(es["freecutAi.phrase.layout"]!, wide)?.params.layout).toBe("stacked")
+    expect(cardOnlyPlan(de["freecutAi.phrase.layoutWide"]!, wide)?.params.layout).toBe("side")
+    expect(cardOnlyPlan(de["freecutAi.phrase.layout"]!, wide)?.params.layout).toBe("stacked")
     expect(cardOnlyPlan(en["freecutAi.phrase.layout"]!, wide)?.params.layout).toBe("stacked")
   })
 
@@ -62,6 +65,7 @@ describe("planFromRequest, the reading when the planner cannot answer", () => {
     expect(planFromRequest("자막과 배경음악을 넣어 주세요").steps).toEqual(["captions", "music"])
     expect(planFromRequest("Corte as pausas e coloque legendas").steps).toEqual(["pauses", "captions"])
     expect(planFromRequest("Corta las pausas y añade subtítulos").steps).toEqual(["pauses", "captions"])
+    expect(planFromRequest("Schneide die Pausen raus und füge Untertitel hinzu").steps).toEqual(["pauses", "captions"])
   })
 
   it("background music is music, never a change of the picture's background, in every language", () => {
@@ -72,6 +76,8 @@ describe("planFromRequest, the reading when the planner cannot answer", () => {
     expect(planFromRequest("coloque um fundo musical").steps).toEqual(["music"])
     expect(planFromRequest("añade música de fondo").steps).toEqual(["music"])
     expect(planFromRequest("añade un fondo musical").steps).toEqual(["music"])
+    expect(planFromRequest("füge Hintergrundmusik hinzu").steps).toEqual(["music"])
+    expect(planFromRequest("leg leise Musik in den Hintergrund").steps).toEqual(["music"])
   })
 
   it("finds a filler word written with an accent, and only as a word", () => {
@@ -88,6 +94,21 @@ describe("planFromRequest, the reading when the planner cannot answer", () => {
     expect(planFromRequest("cambia al presentador por una presentadora").steps).toEqual(["picture"])
     // The Portuguese "apresentador" stays what it was before Spanish was read.
     expect(planFromRequest("troque o apresentador").steps).toEqual([])
+  })
+
+  it("reads German words, with or without umlauts, without changing what another language's words mean", () => {
+    expect(planFromRequest("entferne die Ähs und Füllwörter").steps).toEqual(["fillers"])
+    expect(planFromRequest("entferne die aehs und fuellwoerter").steps).toEqual(["fillers"])
+    // "Untertitel" is captions, never on-screen titles.
+    expect(planFromRequest("füge Untertitel hinzu").steps).toEqual(["captions"])
+    expect(planFromRequest("blende Titel und Schlagwörter ein").steps).toEqual(["titles"])
+    // The Speaker Layout node's own name asks for the speaker layout.
+    expect(planFromRequest("wende das Sprecher-Layout an").steps).toEqual(["layout"])
+    expect(planFromRequest("ersetze den Moderator durch eine Moderatorin").steps).toEqual(["picture"])
+    // "automatisch" is no car.
+    expect(planFromRequest("schneide automatisch").steps).toEqual([])
+    expect(planFromRequest("mach eine Version fürs Handy").steps).toEqual(["phone"])
+    expect(planFromRequest("erstelle Kapitel mit Zeitstempeln").steps).toEqual(["chapters"])
   })
 
   it("names no step, never an edit nobody asked for, when the request names nothing it can do", () => {
@@ -109,6 +130,10 @@ describe("planFromRequest, the reading when the planner cannot answer", () => {
     expect(lookInWords("warm up the color")).toBe("warm")
     expect(lookInWords("déjalo en blanco y negro")).toBe("bw")
     expect(lookInWords("un look más frío")).toBe("cool")
+    expect(lookInWords("mach es schwarz-weiß")).toBe("bw")
+    expect(lookInWords("ein kühlerer Look")).toBe("cool")
+    expect(lookInWords("kräftige, leuchtende Farben")).toBe("vivid")
+    expect(clipCountInWords("erstelle 3 kurze Clips")).toBe(3)
     expect(clipCountInWords("make 3 short clips")).toBe(3)
     expect(clipCountInWords("短いクリップを 4 本作成")).toBe(4)
     expect(clipCountInWords("짧은 클립 5개 만들기")).toBe(5)

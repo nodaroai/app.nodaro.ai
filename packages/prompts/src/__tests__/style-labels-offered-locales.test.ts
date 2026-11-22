@@ -13,7 +13,7 @@ import { describe, it, expect } from "vitest"
 import type { LocaleCatalogMap, LocaleId } from "@nodaro/shared/i18n"
 import { STYLES } from "../index.js"
 
-const OFFERED = ["he", "ja", "ko", "pt-BR", "es"] as const satisfies readonly LocaleId[]
+const OFFERED = ["de", "es", "he", "ja", "ko", "pt-BR"] as const satisfies readonly LocaleId[]
 
 async function sidecar(locale: LocaleId): Promise<LocaleCatalogMap> {
   return ((await import(`../../../shared/src/i18n/style.${locale}.ts`)) as { default: LocaleCatalogMap }).default

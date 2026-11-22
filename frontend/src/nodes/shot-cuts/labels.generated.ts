@@ -2,6 +2,7 @@
 
 export const labels = {
   "Shot Cuts": {
+    "de": "Schnitte erkennen",
     "es": "Cortes de toma",
     "he": "חיתוכי שוטים",
     "ja": "ショットカット",

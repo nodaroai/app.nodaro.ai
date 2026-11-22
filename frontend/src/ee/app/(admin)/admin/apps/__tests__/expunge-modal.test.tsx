@@ -110,7 +110,7 @@ describe("ExpungeModal", () => {
     expect(heading.parentElement!.querySelector("ul")!.textContent).toContain(own)
   })
 
-  it.each(["en", "es", "he", "ja", "ko", "pt-BR"] as LocaleId[])(
+  it.each(["en", "de", "es", "he", "ja", "ko", "pt-BR"] as LocaleId[])(
     "in %s, lists the untagged executions as a note, not as content kept for a legal or audit obligation",
     (locale) => {
       renderIn(locale)
@@ -181,7 +181,7 @@ describe("ExpungeModal", () => {
     )
   })
 
-  it.each(["es", "he", "ja", "ko", "pt-BR"] as LocaleId[])("is fully translated in %s", (locale) => {
+  it.each(["de", "es", "he", "ja", "ko", "pt-BR"] as LocaleId[])("is fully translated in %s", (locale) => {
     renderIn(locale)
     const text = document.body.textContent ?? ""
     for (const key of LIST_KEYS) {

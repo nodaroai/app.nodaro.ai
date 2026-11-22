@@ -518,6 +518,7 @@
   "src/lib/edl-review/__tests__/word-index.test.ts",
   "src/lib/i18n/__tests__/combine-transition-labels.test.ts",
   "src/lib/i18n/__tests__/config-panel-glossary.test.ts",
+  "src/lib/i18n/__tests__/de-dictionary.test.ts",
   "src/lib/i18n/__tests__/es-dictionary.test.ts",
   "src/lib/i18n/__tests__/format.test.ts",
   "src/lib/i18n/__tests__/i18n.test.ts",

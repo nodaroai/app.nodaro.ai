@@ -2,6 +2,7 @@
 
 export const labels = {
   "Clip Pack": {
+    "de": "Clip-Paket",
     "es": "Paquete de clips",
     "he": "חבילת קליפים",
     "ja": "クリップパック",
@@ -9,6 +10,7 @@ export const labels = {
     "pt-br": "Pacote de clipes"
   },
   "Master audio": {
+    "de": "Master-Audio",
     "es": "Audio maestro",
     "he": "אודיו ראשי",
     "ja": "マスターオーディオ",
@@ -16,6 +18,7 @@ export const labels = {
     "pt-br": "Áudio principal"
   },
   "Recordings": {
+    "de": "Aufnahmen",
     "es": "Grabaciones",
     "he": "הקלטות",
     "ja": "録音",

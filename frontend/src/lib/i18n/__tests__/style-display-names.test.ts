@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
 import { en } from "../en"
+import { de } from "../de"
 import { es } from "../es"
 import { he } from "../he"
 import { ja } from "../ja"
 import { ko } from "../ko"
 import { ptBR } from "../pt-br"
+import { PRESET_CONTENT_DE } from "../preset-content.de"
 import { PRESET_CONTENT_ES } from "../preset-content.es"
 import { PRESET_CONTENT_HE } from "../preset-content.he"
 import { PRESET_CONTENT_JA } from "../preset-content.ja"
@@ -15,8 +17,8 @@ import { PRESET_CONTENT_PT_BR } from "../preset-content.pt-br"
 /** The studio's name, in every script a translation has spelled it or could. */
 const STUDIO_NAME = /pixar|皮克斯|ピクサー|픽사|пиксар|بيكسار|פיקסאר|פיקסר|पिक्सर|पिक्सार/i
 
-const DICTS = { en, es, he, ja, ko, ptBR } as const
-const PRESET_CONTENT = { es: PRESET_CONTENT_ES, he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA, ko: PRESET_CONTENT_KO, ptBr: PRESET_CONTENT_PT_BR } as const
+const DICTS = { en, de, es, he, ja, ko, ptBR } as const
+const PRESET_CONTENT = { de: PRESET_CONTENT_DE, es: PRESET_CONTENT_ES, he: PRESET_CONTENT_HE, ja: PRESET_CONTENT_JA, ko: PRESET_CONTENT_KO, ptBr: PRESET_CONTENT_PT_BR } as const
 
 describe("the 3D animated entity style", () => {
   it("is called 3D Animated in English on both surfaces", () => {
