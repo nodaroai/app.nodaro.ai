@@ -52,4 +52,5 @@ export {
   type VideoRemakeRolePrevizSettings,
   type VideoRemakeArtStyle,
   type VideoRemakePreview,
+  type VideoRemakeSideBySide,
 } from "../resources/cast-swap.js"

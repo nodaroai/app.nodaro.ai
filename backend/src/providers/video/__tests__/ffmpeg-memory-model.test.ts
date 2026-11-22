@@ -568,13 +568,14 @@ describe("census: every caller of the memory model states its input count", () =
     // Every production caller today: the re-encode, the yt-dlp recode, the
     // media proxy, the face detector's frame decode, the timeline slice, Mask
     // Composite (three files for the video fill, two for pixelate / blur), Video Mask (its source re-encode, and one estimate at the mask's geometry its chunk split, cut scan and mask encode share), Video Face Mesh (its two lockstep decodes, the clip and the mask),
-    // Split into Chunks' constant-rate re-encode, the extend stitch (two inputs, one encode), and Video Overlay's render
+    // Split into Chunks' constant-rate re-encode, the extend stitch (two inputs, one encode), Video Remake's side by side (two inputs, one encode), and Video Overlay's render
     // when it decodes more than the base (its video layer files and the base).
     expect(sites.map((s) => s.file).sort()).toEqual([
       "providers/video/edl-timeline.ts",
       "providers/video/extend-stitch.ts",
       "providers/video/mask-composite.ts",
       "providers/video/mask-composite.ts",
+      "providers/video/side-by-side.ts",
       "providers/video/split-media.ts",
       "providers/video/video-file-stages.ts",
       "providers/video/video-mask.ts",

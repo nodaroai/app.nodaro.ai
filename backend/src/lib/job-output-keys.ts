@@ -19,7 +19,7 @@
  * deleter's other questions (whose library holds it, did a relay target make
  * it) before they delete.
  */
-import { randomUUID } from "node:crypto"
+import { createHmac, randomUUID } from "node:crypto"
 import { config } from "./config.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 
@@ -112,6 +112,21 @@ export function withUrlsNulled(value: unknown, urls: ReadonlySet<string>): unkno
  */
 export function silentVideoKey(jobId: string): string {
   return `videos/${jobId}-silent.mp4`
+}
+
+/**
+ * The key of a Video Remake run's side by side (its original and its result
+ * in one video, ee/lib/video-remake-side-by-side.ts):
+ * `videos/<jobId>-side-by-side-v<recipe>-<hash>.mp4`, in the job's family.
+ * The hash is keyed by the server's `secret`, so the address cannot be
+ * guessed from the result's (which carries the job id and is shared freely),
+ * and is the same in every process of one deployment. Called by the writer
+ * and by the job-output census.
+ */
+export function sideBySideVideoKey(jobId: string, secret: string, recipe: number): string {
+  const key = createHmac("sha256", secret).update("nodaro:video-remake-side-by-side:v1").digest()
+  const hash = createHmac("sha256", key).update(`${jobId}\n${recipe}`).digest("hex").slice(0, 20)
+  return `videos/${jobId}-side-by-side-v${recipe}-${hash}.mp4`
 }
 
 /**

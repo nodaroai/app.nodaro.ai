@@ -55,6 +55,7 @@ import {
   ownedJobOutputFiles,
   rawExtensionObjectId,
   rawExtensionReferenceObjectId,
+  sideBySideVideoKey,
   silentVideoKey,
 } from "../job-output-keys.js"
 import { applyEdlOutputData } from "../apply-edl-output.js"
@@ -256,6 +257,10 @@ const IN_FAMILY_BUILT_ELSEWHERE: Readonly<Record<string, { key: (jobId: string) 
   "workers/handlers/video-ai.ts :: silentVideoKey(jobId)": {
     key: (j) => silentVideoKey(j),
     why: "Veo's audio-stripped copy, `videos/<jobId>-silent.mp4`: the job's family",
+  },
+  "ee/lib/video-remake-side-by-side-job.ts :: key": {
+    key: (j) => sideBySideVideoKey(j, "s".repeat(32), 1),
+    why: "a Video Remake run's side by side, `videos/<jobId>-side-by-side-v<recipe>-<hash>.mp4` (sideBySideObjectKey → sideBySideVideoKey): the run's family, recorded in its output_data",
   },
   // Decided 2026-10-08: these four were known gaps (random keys) and now key
   // in the job's family. Each entry runs the writer's REAL builder.

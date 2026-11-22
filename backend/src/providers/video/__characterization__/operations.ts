@@ -22,6 +22,7 @@ import { extractFrame } from "../extract-frame.js"
 import { smartLoopCut } from "../smart-loop-cut.js"
 import { applyEdl } from "../apply-edl.js"
 import { stitchExtension } from "../extend-stitch.js"
+import { composeSideBySide } from "../side-by-side.js"
 import { createWorkDir } from "../ffmpeg-utils.js"
 import { fixtureUrl, type FixtureSet } from "./fixtures.js"
 import type { CharacterizedOperation, RenderedOutput, OperationResult } from "./operation-types.js"
@@ -679,6 +680,43 @@ const tier2: CharacterizedOperation[] = [
         style: "karaoke",
       })
       return single(outputPath, "video")
+    },
+  },
+  {
+    // Video Remake's side by side, a wide result: STACKED, the original on
+    // top. The original is the time-coded ramp-a cut by frame number from 1 s
+    // for 2 s (frames 30..89), so a cut one frame off moves the luma
+    // fingerprint; the result is ramp-b with its sound, copied.
+    name: "video-remake-side-by-side-stack",
+    tier: 2,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-side-by-side")
+      const { outputPath } = await composeSideBySide({
+        originalUrl: fixtureUrl(f.rampAMp4),
+        resultUrl: fixtureUrl(f.rampBMp4),
+        startSec: 1,
+        lengthSec: 2,
+        workDir,
+      })
+      return single(outputPath, "video", workDir)
+    },
+  },
+  {
+    // A tall result: SIDE BY SIDE, the original on the left, a wide original
+    // fitted inside the tall pane (black above and below, never stretched),
+    // held on its last frame; the result has no sound, so neither has the file.
+    name: "video-remake-side-by-side-side",
+    tier: 2,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-side-by-side")
+      const { outputPath } = await composeSideBySide({
+        originalUrl: fixtureUrl(f.rampAMp4),
+        resultUrl: fixtureUrl(f.clipPortraitMp4),
+        startSec: 0,
+        lengthSec: 1.5,
+        workDir,
+      })
+      return single(outputPath, "video", workDir)
     },
   },
 ]

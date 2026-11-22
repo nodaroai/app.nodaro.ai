@@ -2287,6 +2287,7 @@ describeStyle(params: { imageUrl: string; note?: string }): Promise<VideoRemakeD
 planRoles(params: VideoRemakePlanRolesParams, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<VideoRemakePlannedRoles> // POST /v1/video-remake/plan-roles, free; waits 200 s by default
 artStyles(params?: { locale?: string }): Promise<VideoRemakeArtStyle[]> // GET /v1/video-remake/art-styles, public
 previews(params?: { locale?: string }): Promise<VideoRemakePreview[]> // GET /v1/video-remake/previews, public
+sideBySide(jobId: string): Promise<VideoRemakeSideBySide> // POST /v1/video-remake/:jobId/side-by-side, free; "making" | "waiting" until "ready" { url, … }
 ```
 
 ```ts
