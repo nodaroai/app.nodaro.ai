@@ -27,6 +27,7 @@ import { markJobFailed } from "../lib/job-failure.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const imageCriticBody = z.object({
   imageUrl: safeUrlSchema,
@@ -269,7 +270,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
               status: "completed",
               ...completedJobColumns(),
               output_data: outputData,
-              provider_cost: response.providerCost ?? null,
+              ...(await jobCostColumns(response.providerCost ?? null)),
             })
             .eq("id", job.id)
 

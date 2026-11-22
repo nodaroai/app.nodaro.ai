@@ -28,7 +28,6 @@ export interface ProviderFinalizeResult {
    *  cost above it is collected from the payer instead of being dropped
    *  (`HeldCommitReplay.collectOverHold`). */
   collectOverHold?: boolean
-  displayCost?: number | null
   providerUsed?: string | null
   kieTaskId?: string
   seed?: number

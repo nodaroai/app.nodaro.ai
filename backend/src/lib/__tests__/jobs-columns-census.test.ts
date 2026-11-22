@@ -63,6 +63,15 @@ const INSERT_FUNNELS: Record<string, number> = { insertJob: 1, insertJobs: 1, in
 /** The failure funnel: its `extra` lands on the row as columns. */
 const FAILURE_FUNNELS = new Set(["markJobFailed", "markJobFailedDetailed"])
 
+/**
+ * Column helpers whose keys cannot be read from one `return { … }`: each with
+ * the keys it may write, pinned against the helper itself below.
+ */
+const DECLARED_COLUMN_HELPERS: Readonly<Record<string, readonly string[]>> = {
+  // lib/job-cost-columns.ts: `provider_cost` and the `display_cost` derived from it.
+  jobCostColumns: ["provider_cost", "display_cost"],
+}
+
 const COLUMN_HELPERS = new Map<string, string[]>()
 function readColumnHelpers(): void {
   if (COLUMN_HELPERS.size > 0) return
@@ -81,9 +90,12 @@ function readColumnHelpers(): void {
 function literalKeys(node: ts.Expression | undefined): string[] | null {
   if (!node) return null
   let e = node
-  while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e)) e = e.expression
+  while (ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isSatisfiesExpression(e) || ts.isAwaitExpression(e)) e = e.expression
   if (ts.isCallExpression(e) && ts.isIdentifier(e.expression) && COLUMN_HELPERS.has(e.expression.text)) {
     return [...COLUMN_HELPERS.get(e.expression.text)!]
+  }
+  if (ts.isCallExpression(e) && ts.isIdentifier(e.expression) && Object.hasOwn(DECLARED_COLUMN_HELPERS, e.expression.text)) {
+    return [...DECLARED_COLUMN_HELPERS[e.expression.text]!]
   }
   if (ts.isArrayLiteralExpression(e)) {
     const all: string[] = []
@@ -228,6 +240,13 @@ describe("the jobs columns census", () => {
     const { bullEntryFields } = await import("../concurrency-lanes/columns.js")
     expect(Object.keys(bullEntryFields("video-generation", "b")).sort()).toEqual([...BULL_ENTRY_FIELDS].sort())
     expect(BULL_ENTRY_FIELDS.filter((c) => !COLUMNS.has(c))).toEqual([])
+  })
+
+  it("the declared column helpers write only the keys they declare, and those are jobs columns", async () => {
+    const { jobCostColumns } = await import("../job-cost-columns.js")
+    // A null cost writes every key the helper has (both columns, as null).
+    expect(Object.keys(await jobCostColumns(null)).sort()).toEqual([...DECLARED_COLUMN_HELPERS.jobCostColumns!].sort())
+    expect(Object.values(DECLARED_COLUMN_HELPERS).flat().filter((c) => !COLUMNS.has(c))).toEqual([])
   })
 
   it("every non-literal jobs write is one of the reviewed funnels", () => {

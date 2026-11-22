@@ -268,6 +268,8 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
       output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 }, answeredBy: "gemini-3.8-flash" },
       provider: "kie",
       provider_cost: 0.0071,
+      // The settings are not readable here, so no display figure is derived.
+      display_cost: null,
     })
   })
 
@@ -572,7 +574,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
     // A failure that reported no usage cost nothing: provider_cost is null, and no lane is named.
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: "The model stopped responding", completed_at: expect.any(String), output_data: { error: "The model stopped responding" }, provider_cost: null })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: "The model stopped responding", completed_at: expect.any(String), output_data: { error: "The model stopped responding" }, provider_cost: null, display_cost: null })
   })
 
   it("a minor: no field carries a value the floor removes, and done carries the floored answer", async () => {
@@ -625,7 +627,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
       mocks.llmStreamStructured.mockRejectedValue(failure)
       const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers })
 
-      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: "got status: 400 Bad Request.", completed_at: expect.any(String), output_data: { error: "got status: 400 Bad Request." }, provider_cost: null })
+      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", error_message: "got status: 400 Bad Request.", completed_at: expect.any(String), output_data: { error: "got status: 400 Bad Request." }, provider_cost: null, display_cost: null })
       const logged = errorSpy.mock.calls.map((c) => c.map(String).join(" ")).filter((l) => l.includes("[describe-to-picker]"))
       expect(logged).toHaveLength(1)
       expect(logged[0]).toContain("job-1")

@@ -1129,6 +1129,21 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
 // =============================================================================
 // VIDEO GENERATION MODELS (Image-to-Video)
 // Verified against docs.kie.ai - 2024
+//
+// The Seedance entries' `cost` (2.0, 2.0 Fast, 2.0 Mini, 2.5, 2.5 Flash, in
+// both maps) is a floor of two seconds at 720p with no reference video, not a
+// run's cost. These models bill per second; the charge is the per-second
+// composite (credits.ts), never this figure. It is only the provider cost an
+// adapter reports when the task record names no credits, and:
+//  - Seedance 2.5 and 2.5 Flash: the worker replaces it with the figure for the
+//    seconds it measured (`withMeasuredRenderCost`, video-ai.ts), and the row's
+//    display cost follows (lib/job-cost-columns.ts). An unmeasured run keeps it.
+//  - Seedance 2.0 / Fast / Mini have no cost helper yet: their runs record it.
+// It stays a floor on purpose. The cost-shortfall check (ee/billing/
+// cost-shortfall.ts) reads `provider_cost` against the charge and pauses a
+// model after repeated losses, so a fallback above what a short or 480p run
+// costs would read those runs as losses. Raising it waits on a per-second cost
+// helper for each model, as 2.5 has.
 // =============================================================================
 export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   // Hailuo/MiniMax - VERIFIED: docs.kie.ai/market/hailuo/02-image-to-video-pro
@@ -1267,7 +1282,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 82,
-    cost: 0.41,  // (8s, 720p, no ref default)
+    cost: 0.41,  // a FLOOR, not 8 s: 2 s @720p with no reference video (41 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     imageParam: "first_frame_url",
     extraParams: {
       resolution: "720p",
@@ -1288,7 +1303,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-fast",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 66,
-    cost: 0.33,  // (8s, 720p, no ref default)
+    cost: 0.33,  // a FLOOR, not 8 s: 2 s @720p with no reference video (33 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     imageParam: "first_frame_url",
     extraParams: {
       resolution: "720p",
@@ -1310,7 +1325,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-mini",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 41,
-    cost: 0.205,  // nominal 8s/720p/no-ref fallback (41 cr × ); composites override
+    cost: 0.205,  // a FLOOR, not 8 s: 2 s @720p with no reference video (20.5 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     imageParam: "first_frame_url",
     extraParams: {
       resolution: "720p",
@@ -1349,7 +1364,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-5",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 126,
-    cost: 0.63,  // nominal 8s/720p/no-ref fallback (63 cr/s × 8); composites override
+    cost: 0.63,  // a FLOOR, not 8 s: 2 s @720p with no reference video (63 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     imageParam: "first_frame_url",
     omitSeed: true,
     extraParams: {
@@ -1381,7 +1396,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-5-flash",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 82,
-    cost: 0.41,  // nominal 8s/720p/no-ref fallback, on the same scale as seedance-2-5's entry; composites override
+    cost: 0.41,  // a FLOOR, not 8 s: 2 s @720p with no reference video (41 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     imageParam: "first_frame_url",
     omitSeed: true,
     extraParams: {
@@ -1855,7 +1870,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 82,
-    cost: 0.41,
+    cost: 0.41,  // a FLOOR, not 8 s: 2 s @720p with no reference video (41 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     extraParams: {
       resolution: "720p",
       aspect_ratio: "adaptive",
@@ -1872,7 +1887,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-fast",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 66,
-    cost: 0.33,
+    cost: 0.33,  // a FLOOR, not 8 s: 2 s @720p with no reference video (33 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     extraParams: {
       resolution: "720p",
       aspect_ratio: "adaptive",
@@ -1889,7 +1904,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-mini",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 41,
-    cost: 0.205,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
+    cost: 0.205,  // a FLOOR, not 8 s: 2 s @720p with no reference video (20.5 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     extraParams: {
       resolution: "720p",
       aspect_ratio: "adaptive",
@@ -1910,7 +1925,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-5",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 126,
-    cost: 0.63,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
+    cost: 0.63,  // a FLOOR, not 8 s: 2 s @720p with no reference video (63 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     omitSeed: true,
     extraParams: {
       resolution: "720p",
@@ -1930,7 +1945,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-5-flash",
     safetyLevers: [NSFW_CHECKER_SENT_FALSE_LEVER],
     credits: 82,
-    cost: 0.41,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
+    cost: 0.41,  // a FLOOR, not 8 s: 2 s @720p with no reference video (41 KIE cr/s × 2). See the Seedance note above KIE_VIDEO_MODELS
     omitSeed: true,
     extraParams: {
       resolution: "720p",

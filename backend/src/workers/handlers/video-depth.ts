@@ -93,7 +93,7 @@ const handleVideoDepth: HandlerFn = async function handleVideoDepth(job, ctx) {
   await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-depth",
-    result: { url: out.videoUrl, cost: out.cost, displayCost: out.cost, providerUsed },
+    result: { url: out.videoUrl, cost: out.cost, providerUsed },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })

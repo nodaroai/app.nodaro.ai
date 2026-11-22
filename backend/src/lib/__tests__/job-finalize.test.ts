@@ -1212,6 +1212,23 @@ describe("finalizeJobWithMedia", () => {
       expect(payload).not.toHaveProperty("display_cost")
     })
 
+    it("hands the completion funnel the cost alone: display_cost is derived there, and the commit is the same with or without a stale display figure", async () => {
+      const run = async (result: Record<string, unknown>) => {
+        vi.clearAllMocks()
+        resetMocksToHappyPath()
+        await finalizeJobWithMedia({ jobId: "j1", jobType: "text-to-video", meteredBaseCredits: 3993, result: result as never })
+        return {
+          payload: sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as Record<string, unknown>,
+          commit: sharedMocks.commitJobCredits.mock.calls[0],
+        }
+      }
+      const plain = await run({ url: "https://kie.example/x.mp4", cost: 7.2, providerUsed: "kie" })
+      const stale = await run({ url: "https://kie.example/x.mp4", cost: 7.2, displayCost: 0.7, providerUsed: "kie" })
+      expect(stale.payload.provider_cost).toBe(7.2)
+      expect(stale.payload).not.toHaveProperty("display_cost")
+      expect(stale.commit).toEqual(plain.commit)
+    })
+
     it("the addon rides the commitReplay so a HELD row can replay the same settlement (F7)", async () => {
       // The worker no longer commits (reserved − addon) itself: doing so before
       // the result gate spoke left the usage log out of `reserved`, and every

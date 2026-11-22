@@ -31,6 +31,7 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { llmRunModel } from "../lib/run-model.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const aiWriterBody = z.object({
   // LLM_TEXT_INPUT_MAX (100K) — same rationale as llm-chat: the input feeds an
@@ -264,7 +265,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
               status: "completed",
               ...completedJobColumns(),
               output_data: { generatedText, model: llmModel, usage: response.usage },
-              provider_cost: response.providerCost ?? null,
+              ...(await jobCostColumns(response.providerCost ?? null)),
             })
             .eq("id", job.id)
 
@@ -487,7 +488,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
                 model: llmModel,
                 usage: finalResponse.usage,
               },
-              provider_cost: finalResponse.providerCost ?? null,
+              ...(await jobCostColumns(finalResponse.providerCost ?? null)),
             })
             .eq("id", job.id)
 
@@ -508,7 +509,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
               model: llmModel,
               usage: finalResponse.usage,
             },
-            provider_cost: finalResponse.providerCost ?? null,
+            ...(await jobCostColumns(finalResponse.providerCost ?? null)),
           })
           .eq("id", job.id)
 

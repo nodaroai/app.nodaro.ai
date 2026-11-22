@@ -42,6 +42,7 @@ import { completedJobColumns } from "../lib/job-status.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { llmRunModel } from "../lib/run-model.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 /** What a row whose answer could not be written records (the call itself answered its caller). */
 const ANSWER_NOT_RECORDED = "The answer was sent but could not be saved. Send the request again with a new key."
@@ -498,7 +499,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
                   status: "completed",
                   ...completedJobColumns(),
                   output_data: { generatedText, model: llmModel, usage: response.usage },
-                  provider_cost: response.providerCost ?? null,
+                  ...(await jobCostColumns(response.providerCost ?? null)),
                 })
                 .eq("id", job.id)
               return !error
@@ -750,7 +751,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
               model: llmModel,
               usage: finalResponse.usage,
             },
-            provider_cost: finalResponse.providerCost ?? null,
+            ...(await jobCostColumns(finalResponse.providerCost ?? null)),
           })
           .eq("id", job.id)
 

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
+import { jobCostColumns } from "../../lib/job-cost-columns.js"
 import type { PluginJobSettlement, PluginJobSettlementResult } from "../../lib/private-plugins/types.js"
 
 const receipt = z.object({
@@ -19,5 +20,23 @@ export async function settleReservedJob(input: PluginJobSettlement): Promise<Plu
     || parsed.data.actualCredits !== input.actualCredits || parsed.data.receiptHash !== input.receiptHash) {
     throw new Error("Job settlement returned a mismatched receipt")
   }
+  await writeDisplayCost(input.jobId, input.providerCostUsd)
   return parsed.data
+}
+
+/**
+ * The RPC records `provider_cost` (migration 392) and knows nothing of the
+ * markup, so the row's `display_cost` is derived from the same cost here
+ * (lib/job-cost-columns.ts). Only when a cost was passed — the RPC keeps the
+ * row's cost otherwise. Never throws: the settlement it follows is confirmed,
+ * and a lost display figure must not make a plugin retry a settled charge.
+ */
+async function writeDisplayCost(jobId: string, providerCostUsd: number | null | undefined): Promise<void> {
+  if (typeof providerCostUsd !== "number") return
+  try {
+    const { error } = await supabase.from("jobs").update(await jobCostColumns(providerCostUsd)).eq("id", jobId)
+    if (error) console.warn(`[job-settlement] could not record the display cost of job ${jobId}: ${error.message}`)
+  } catch (err) {
+    console.warn(`[job-settlement] could not record the display cost of job ${jobId}: ${(err as Error).message}`)
+  }
 }

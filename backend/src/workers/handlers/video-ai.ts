@@ -996,7 +996,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
 
   let resultUrl: string
   let resultCost: number | null = null
-  let resultDisplayCost: number | null = null
   let resultProviderUsed: string = resolvedProvider
   // The full ProviderResult (was `Parameters<typeof buildProviderMeta>[0]`,
   // which is a Pick that drops the relay pair): `buildProviderMeta` accepts it
@@ -1069,7 +1068,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     )
     resultUrl = outUrl
     resultCost = cost
-    resultDisplayCost = cost
     resultProviderUsed = `replicate:${resolvedProvider}`
   } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // The Seedance 2 family and MiniMax Hailuo 3 — multimodal video models
@@ -1114,7 +1112,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     // reference video, at the resolution sent (the adapter reports a nominal
     // figure). The Seedance 2.0 models have no cost helper yet and keep it.
     resultCost = seedanceLipSyncProviderCost(result.cost, resolvedProvider, seedanceLipSyncSentResolution)
-    resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
     resultMeta = result
   } else if (FAL_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
@@ -1134,7 +1131,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     )
     resultUrl = out.videoUrl
     resultCost = out.cost
-    resultDisplayCost = out.cost
     resultProviderUsed = "fal"
   } else if (KIE_LIP_SYNC_MODELS[resolvedProvider]?.inputKind === "video") {
     // KIE video-to-video dubbing (volcengine) — video_url + audio_url + mode +
@@ -1152,7 +1148,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     )
     resultUrl = result.url
     resultCost = result.cost
-    resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
     resultMeta = result
   } else {
@@ -1170,7 +1165,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     )
     resultUrl = result.url
     resultCost = result.cost
-    resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
     resultMeta = result
   }
@@ -1215,7 +1209,6 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     result: {
       url: resultUrl,
       cost: resultCost,
-      displayCost: resultDisplayCost,
       providerUsed: resultProviderUsed,
       // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
       // rebuilt from flattened locals, so the pair the NodaroCloud video

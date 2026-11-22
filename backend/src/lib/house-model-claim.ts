@@ -24,6 +24,7 @@
 import { supabase } from "./supabase.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
 import { HOUSE_MODEL_PROVIDER_KIND } from "./house-models-served.js"
+import { jobCostColumns } from "./job-cost-columns.js"
 
 /** `jobs.provider_task_id` of a job claimed for a house-model run whose reference is not saved yet. Never a reference. */
 export const HOUSE_MODEL_CLAIM_REF = "house-model:claimed"
@@ -109,7 +110,7 @@ export async function saveHouseModelReference(jobId: string, taskRef: string, pl
       .update({
         provider_task_id: taskRef,
         provider_call_started_at: new Date().toISOString(),
-        ...(Number.isFinite(plannedCostUsd) && plannedCostUsd >= 0 ? { provider_cost: plannedCostUsd } : {}),
+        ...(Number.isFinite(plannedCostUsd) && plannedCostUsd >= 0 ? await jobCostColumns(plannedCostUsd) : {}),
       })
       .eq("id", jobId)
       .eq("provider_kind", HOUSE_MODEL_PROVIDER_KIND)

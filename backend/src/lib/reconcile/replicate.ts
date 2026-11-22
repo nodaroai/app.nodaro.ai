@@ -494,7 +494,6 @@ export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: Reconci
         url: composite?.url ?? urls[0]!,
         extraUrls: composite ? [] : urls.slice(1),
         cost: outputCost ?? billedCost ?? lipSyncRunCost,
-        ...(outputCost !== null ? { displayCost: outputCost } : {}),
         ...faceSwapSettleFields,
         providerUsed: "replicate",
         providerMs,

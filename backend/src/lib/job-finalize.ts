@@ -677,7 +677,6 @@ export async function finalizeJobWithMedia(
       output_data: outputData,
       ...(result.providerUsed != null && { provider: result.providerUsed }),
       ...(result.cost != null && { provider_cost: result.cost }),
-      ...(result.displayCost != null && { display_cost: result.displayCost }),
       ...(result.kieTaskId && { provider_task_id: result.kieTaskId }),
       // Relay provenance (spec §8.2 lane 1, migration 383). `{}` for every
       // result no NodaroCloud* provider produced, so a vendor-direct

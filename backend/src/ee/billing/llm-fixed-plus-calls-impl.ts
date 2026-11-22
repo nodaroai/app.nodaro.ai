@@ -21,6 +21,7 @@ import { sendLlmModelUnpriced } from "./llm-unpriced-reply.js"
 import { parseMeteredLlmId } from "./metered-llm-id.js"
 import type { MeteredLlmFeature } from "./llm-typical-usage.js"
 import { applyServiceMarkup } from "./service-margin.js"
+import { jobCostColumns } from "../../lib/job-cost-columns.js"
 
 export async function reserveFixedPlusLlmCallsImpl(
   req: FastifyRequest,
@@ -83,7 +84,7 @@ async function writeJobSettle(jobId: string, chargeId: string, charged: number, 
   try {
     const { error } = await supabase
       .from("jobs")
-      .update({ credits_actual: charged, ...(record ? { provider_cost: record.costUsd } : {}) })
+      .update({ credits_actual: charged, ...(record ? await jobCostColumns(record.costUsd) : {}) })
       .eq("id", jobId)
     if (error) console.warn(`[llm-billing] failed to record the settle on job ${jobId}: ${error.message}`)
   } catch (err) {

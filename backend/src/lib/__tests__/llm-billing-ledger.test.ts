@@ -10,6 +10,13 @@ const h = vi.hoisted(() => ({
   selects: [] as string[],
 }))
 
+// A cost is written with its display figure (lib/job-cost-columns.ts), at a
+// made-up markup.
+vi.mock("@/lib/app-settings.js", async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  getAppSettings: async () => ({ cost_markup_percent: 20 }),
+}))
+
 vi.mock("@/lib/supabase.js", () => ({
   supabase: {
     from: vi.fn(() => {
@@ -60,7 +67,7 @@ describe("the billing ledger helper (jobs.llm_billing)", () => {
 
   it("a write can carry provider_cost in the SAME update (a worker's running spend)", async () => {
     expect(await writeLlmBillingLedger("job-1", LEDGER, { providerCost: 0.048 })).toBe(true)
-    expect(h.updates).toEqual([{ values: { llm_billing: LEDGER, provider_cost: 0.048 }, filters: [["id", "job-1"]] }])
+    expect(h.updates).toEqual([{ values: { llm_billing: LEDGER, provider_cost: 0.048, display_cost: 0.048 * (1 + 20 / 100) }, filters: [["id", "job-1"]] }])
   })
 
   it("every ledger written names its charge id (a type error otherwise)", async () => {

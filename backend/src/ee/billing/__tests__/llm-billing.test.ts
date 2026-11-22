@@ -574,7 +574,7 @@ describe("settleLlmJob", () => {
     await settleLlmJob(JOB, meteredReserve(), spend)
     const jobUpdates = h.ops.filter((o) => o.table === "jobs" && o.op === "update")
     expect(jobUpdates).toEqual([
-      expect.objectContaining({ filters: [["id", JOB]], values: { provider_cost: 0.048, credits_actual: 27 } }),
+      expect.objectContaining({ filters: [["id", JOB]], values: { provider_cost: 0.048, display_cost: null, credits_actual: 27 } }),
       expect.objectContaining({ filters: [["id", JOB]], values: { llm_billing: { costUsd: 0.048, source: "kie-stated", calls: 1, lanes: ["kie"], chargeId: "llm-chat:claude-fable-5" } } }),
     ])
     // The ledger (provider $, lanes) never enters output_data, which the job's owner can read.

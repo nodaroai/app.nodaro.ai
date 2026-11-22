@@ -134,14 +134,12 @@ const PROVIDER_RESULT = {
   url: "https://provider.example.com/image.png",
   providerUsed: "nano-banana",
   cost: 0.02,
-  displayCost: 0.025,
 }
 
 const VIDEO_PROVIDER_RESULT = {
   url: "https://provider.example.com/video.mp4",
   providerUsed: "kling",
   cost: 0.5,
-  displayCost: 0.6,
 }
 
 beforeEach(() => {
@@ -768,7 +766,6 @@ describe("generate-location-motion handler", () => {
       output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
       provider: VIDEO_PROVIDER_RESULT.providerUsed,
       provider_cost: VIDEO_PROVIDER_RESULT.cost,
-      display_cost: VIDEO_PROVIDER_RESULT.displayCost,
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith(
       "usage-1", "job-1", VIDEO_PROVIDER_RESULT.cost,
@@ -1052,7 +1049,6 @@ describe("generate-object-motion handler", () => {
       output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
       provider: VIDEO_PROVIDER_RESULT.providerUsed,
       provider_cost: VIDEO_PROVIDER_RESULT.cost,
-      display_cost: VIDEO_PROVIDER_RESULT.displayCost,
     }))
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith(
       "usage-1", "job-1", VIDEO_PROVIDER_RESULT.cost,

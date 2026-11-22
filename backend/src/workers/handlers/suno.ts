@@ -142,8 +142,11 @@ async function finalizeSunoJob(
   const outputData = runFacts ? { ...tracksOutput, ...runFacts } : tracksOutput
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  const cost = provider === "kie" && providerCostUsd !== undefined ? { provider_cost: providerCostUsd } : {}
-  if (!await markJobCompleted(ctx.jobId, { output_data: outputData, provider, ...cost })) return
+  if (!await markJobCompleted(ctx.jobId, {
+    output_data: outputData,
+    provider,
+    ...(provider === "kie" && providerCostUsd !== undefined ? { provider_cost: providerCostUsd } : {}),
+  })) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${outputData.audioUrl as string} (${outputData.trackCount as number} tracks)`)
 }

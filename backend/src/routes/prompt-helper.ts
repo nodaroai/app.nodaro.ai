@@ -26,6 +26,7 @@ import { completeSettledSyncJob } from "../lib/metered-sync-completion.js"
 import { llmRunModel } from "../lib/run-model.js"
 import { laneGuard } from "../lib/concurrency-lanes/request-scope.js"
 import { llmProviderOfBody } from "../lib/concurrency-lanes/live-routes.js"
+import { jobCostColumns } from "../lib/job-cost-columns.js"
 
 const nodeContextSchema = z.object({
   connectedInputTypes: z.array(z.string()).optional(),
@@ -382,7 +383,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         // Mark job completed and commit credits
         try {
           await Promise.all([
-            supabase.from("jobs").update({ status: "completed", ...completedJobColumns(), output_data: { ...result, usage }, provider_cost: providerCost ?? null }).eq("id", job.id).eq("user_id", userId),
+            supabase.from("jobs").update({ status: "completed", ...completedJobColumns(), output_data: { ...result, usage }, ...(await jobCostColumns(providerCost ?? null)) }).eq("id", job.id).eq("user_id", userId),
             usageLogId ? CreditsService.commitCredits(usageLogId) : undefined,
           ])
         } catch (postErr) {

@@ -250,6 +250,8 @@ describe("POST /v1/llm/structured — the successful call", () => {
       output_data: { output: { title: "Rain in Rome" }, inputTokens: 14000, outputTokens: 9000 },
       provider: "kie",
       provider_cost: 0.0312,
+      // The settings are not readable here, so no display figure is derived.
+      display_cost: null,
     })
   })
 
@@ -273,6 +275,7 @@ describe("POST /v1/llm/structured — the failed call", () => {
       output_data: { error: "llm-structured: validation failed after 3 attempt(s): (root): Invalid input" },
       // A plain Error reports no usage: nothing was shown to be paid for.
       provider_cost: null,
+      display_cost: null,
     })
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
