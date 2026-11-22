@@ -26,6 +26,8 @@
  *                                         whether a direct Precise run with no pictured person sends its source clip, per engine (admin-nodaro-motion-no-person.ts)
  *   GET/PUT /v1/admin/video-remake/precise-style-route
  *                                         whether a direct Prism Precise run with an art style runs as Flex, and the accounts that skip it (admin-nodaro-motion-precise-style-route.ts)
+ *   GET/PUT /v1/admin/video-remake/precise-upscale
+ *                                         per output resolution, the Topaz target of a direct Prism Precise run's take (admin-nodaro-motion-precise-upscale.ts)
  *   GET/PUT /v1/admin/video-remake/advanced
  *                                         whether a Video Remake page shows its Advanced options, one switch for the page (admin-nodaro-motion-advanced.ts)
  *   GET/PUT /v1/admin/video-remake/custom-style, GET …/custom-style/defaults, POST …/custom-style/check
@@ -121,6 +123,7 @@ import { NODARO_MOTION_STYLE_ONLY_SECTION, registerNodaroMotionStyleOnlyRoutes }
 import { NODARO_MOTION_PRECISE_ART_STYLE_SECTION, registerNodaroMotionPreciseArtStyleRoutes } from "./admin-nodaro-motion-precise-art-style.js"
 import { NODARO_MOTION_NO_PERSON_SECTION, registerNodaroMotionNoPersonRoutes } from "./admin-nodaro-motion-no-person.js"
 import { NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION, registerNodaroMotionPreciseStyleRouteRoutes } from "./admin-nodaro-motion-precise-style-route.js"
+import { NODARO_MOTION_PRECISE_UPSCALE_SECTION, registerNodaroMotionPreciseUpscaleRoutes } from "./admin-nodaro-motion-precise-upscale.js"
 import { NODARO_MOTION_ADVANCED_SECTION, registerNodaroMotionAdvancedRoutes } from "./admin-nodaro-motion-advanced.js"
 import { NODARO_MOTION_CUSTOM_STYLE_SECTION, registerNodaroMotionCustomStyleRoutes } from "./admin-nodaro-motion-custom-style.js"
 import { NODARO_MOTION_PLAN_ROLES_SECTION, registerNodaroMotionPlanRolesRoutes } from "./admin-nodaro-motion-plan-roles.js"
@@ -218,6 +221,7 @@ export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSe
   NODARO_MOTION_PRECISE_ART_STYLE_SECTION,
   NODARO_MOTION_NO_PERSON_SECTION,
   NODARO_MOTION_PRECISE_STYLE_ROUTE_SECTION,
+  NODARO_MOTION_PRECISE_UPSCALE_SECTION,
   NODARO_MOTION_ADVANCED_SECTION,
   NODARO_MOTION_CUSTOM_STYLE_SECTION,
   NODARO_MOTION_PLAN_ROLES_SECTION,
@@ -269,6 +273,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionPreciseArtStyleRoutes(app)
   registerNodaroMotionNoPersonRoutes(app)
   registerNodaroMotionPreciseStyleRouteRoutes(app)
+  registerNodaroMotionPreciseUpscaleRoutes(app)
   registerNodaroMotionAdvancedRoutes(app)
   registerNodaroMotionCustomStyleRoutes(app)
   registerNodaroMotionPlanRolesRoutes(app)

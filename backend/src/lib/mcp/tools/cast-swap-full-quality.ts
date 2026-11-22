@@ -61,8 +61,11 @@ interface FullQualityQuote {
   /** Absent from an older engine (then a same take). */
   kind?: FullQualityKind
   totalCredits: number
-  /** `base` (the Full Quality job's own steps), and the engine's other parts by their neutral names (`motionHd`: the 1080p render, 0 when reused). */
-  breakdown: { base: number; motionHd?: number } & Record<string, number>
+  /**
+   * `base` (the Full Quality job's own steps), and the engine's other parts by their neutral names (`motionHd`: the
+   * 1080p render, 0 when reused; `upscale`: a Topaz upscale of it, when the deployment's setting adds one).
+   */
+  breakdown: { base: number; motionHd?: number; upscale?: number } & Record<string, number>
   availableUntil: string
 }
 
@@ -100,7 +103,8 @@ function quoteSentence(q: FullQualityQuote): string {
     )
   }
   const reused = q.breakdown.motionHd === 0 ? " An earlier try's 1080p render is reused, so only the finishing is charged." : ""
-  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${statedAmount(q.totalCredits)} ${amountWord()}.${reused} Available until ${q.availableUntil}.`
+  const upscaled = finite(q.breakdown.upscale) && q.breakdown.upscale > 0 ? " It includes a Topaz upscale of the 1080p render, scaled back to 1080p." : ""
+  return `Finishing this draft at Full Quality (the same take at 1080p) costs about ${statedAmount(q.totalCredits)} ${amountWord()}.${reused}${upscaled} Available until ${q.availableUntil}.`
 }
 
 /** The quote as the agent reads it: every figure in the deployment's unit when it has one (lib/mcp/amounts.ts). */

@@ -14079,6 +14079,47 @@ export async function saveNodaroMotionPreciseStyleRoute(preciseStyleRoute: Nodar
   ).data
 }
 
+// ---- Admin: Video Remake's Precise upscale (/v1/admin/video-remake/precise-upscale, admin-nodaro-motion-precise-upscale.ts) ----
+
+/** Per output resolution, "off" or the Topaz target a direct Prism Precise run's take is upscaled to; a resolution left out takes its default. */
+export interface NodaroMotionPreciseUpscale {
+  "480p"?: "off" | "720p" | "1080p" | "4k"
+  "720p"?: "off" | "720p" | "1080p" | "4k"
+  "1080p"?: "off" | "1080p" | "4k"
+}
+
+export type NodaroMotionPreciseUpscaleEffective = Required<NodaroMotionPreciseUpscale>
+
+export interface NodaroMotionPreciseUpscaleView {
+  /** The effective setting: each resolution's stored choice, else its default. */
+  value: NodaroMotionPreciseUpscaleEffective
+  /** What was saved; null = never saved (every default). */
+  stored: NodaroMotionPreciseUpscale | null
+  /** Each resolution's default. */
+  defaults: NodaroMotionPreciseUpscaleEffective
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine runs the step (`castSwap.preciseUpscale`). */
+  supported: boolean
+  /** Whether this deployment withholds Topaz video upscale: every run is then answered "off", whatever is saved. Absent from an older server: false. */
+  topazDisabled?: boolean
+}
+
+const ADMIN_NODARO_MOTION_PRECISE_UPSCALE = "/v1/admin/video-remake/precise-upscale"
+
+export async function fetchNodaroMotionPreciseUpscale(): Promise<NodaroMotionPreciseUpscaleView> {
+  return (await apiRequest<{ data: NodaroMotionPreciseUpscaleView }>(ADMIN_NODARO_MOTION_PRECISE_UPSCALE, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting, whatever the engines. A choice a resolution does not take is a 400 `validation_error`. */
+export async function saveNodaroMotionPreciseUpscale(preciseUpscale: NodaroMotionPreciseUpscale): Promise<NodaroMotionPreciseUpscaleView> {
+  return (
+    await apiRequest<{ data: NodaroMotionPreciseUpscaleView }>(ADMIN_NODARO_MOTION_PRECISE_UPSCALE, "apiErr.saveNodaroMotion", {
+      method: "PUT",
+      body: { preciseUpscale },
+    })
+  ).data
+}
+
 // ---- Admin: whether the Video Remake page shows its Advanced options (/v1/admin/video-remake/advanced, admin-nodaro-motion-advanced.ts) ----
 
 export interface NodaroMotionAdvancedView {

@@ -171,6 +171,28 @@ describe("getAppSettings", () => {
     expect((await getAppSettings()).nodaro_motion_prism_reference_audio).toBeNull()
   })
 
+  it("reads the Precise upscale from its own row, a resolution it does not take dropped alone, not an object (or no row, or a failed read) as never saved", async () => {
+    for (const value of [{ "480p": "off", "720p": "4k", "1080p": "1080p" }, { "720p": "720p" }, {}]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_precise_upscale", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_precise_upscale).toEqual(value)
+    }
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_precise_upscale", value: { "480p": "off", "1080p": "720p" } }], error: null })
+    expect((await getAppSettings()).nodaro_motion_precise_upscale).toEqual({ "480p": "off" })
+
+    for (const value of ["4k", null, []]) {
+      invalidateSettingsCache()
+      mockSelect.mockResolvedValueOnce({ data: [{ key: "nodaro_motion_precise_upscale", value }], error: null })
+      expect((await getAppSettings()).nodaro_motion_precise_upscale, JSON.stringify(value)).toBeNull()
+    }
+
+    invalidateSettingsCache()
+    mockSelect.mockResolvedValueOnce({ data: null, error: { message: "fail" } })
+    expect((await getAppSettings()).nodaro_motion_precise_upscale).toBeNull()
+  })
+
   it("reads the direct runs' Pulse reference audio from its own row, anything else (or no row, or a failed read) as never saved", async () => {
     for (const value of [{ "720p": { mode: "voice", semitones: 4 }, "1080p": { mode: "none" } }, {}]) {
       invalidateSettingsCache()

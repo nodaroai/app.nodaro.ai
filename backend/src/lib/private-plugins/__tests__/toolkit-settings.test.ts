@@ -38,7 +38,7 @@ import type { NodaroMotionFlashModelForPlugin } from "../../nodaro-motion-flash-
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashModel: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, preciseUpscale: null as unknown, topazDisabled: false, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashModel: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -47,7 +47,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_model: h.flashModel }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_precise_upscale: h.preciseUpscale, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_model: h.flashModel }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -66,6 +66,7 @@ vi.mock("../../admin-check.js", async (importOriginal) => ({
     return h.admins.includes(userId)
   },
 }))
+vi.mock("../../topaz-video-availability.js", () => ({ topazVideoDisabledHere: () => h.topazDisabled }))
 vi.mock("../../nodaro-motion-custom-style-default.js", () => ({ customStyleOfferedByDefault: () => h.offeredByDefault }))
 vi.mock("../../nodaro-motion-plan-roles-default.js", () => ({ planRolesOfferedByDefault: () => h.planRolesByDefault }))
 vi.mock("../../nodaro-motion-previz-default.js", () => ({ previzOfferedByDefault: () => h.previzByDefault }))
@@ -1418,5 +1419,59 @@ describe("tk.settings.nodaroMotionFlashModel", () => {
 
   it("what the host answers is the plugin's PluginNodaroMotionFlashModel", () => {
     expectTypeOf<NodaroMotionFlashModelForPlugin>().toExtend<PluginNodaroMotionFlashModel>()
+  })
+})
+
+/**
+ * `tk.settings.nodaroMotionPreciseUpscale()`: per output resolution, the Topaz target of a direct Prism Precise run's
+ * take. Always the effective value (never saved: every default), null only to an engine without `castSwap.preciseUpscale`.
+ */
+describe("tk.settings.nodaroMotionPreciseUpscale", () => {
+  beforeEach(() => {
+    h.preciseUpscale = null
+    h.topazDisabled = false
+    h.failed = false
+    _resetPluginSupportsForTests()
+  })
+  const upscalingEngine = () => setPluginSupports({ castSwap: { ...CS, preciseUpscale: true } } as never)
+
+  it("advertises nodaroMotionPreciseUpscale and answers null to an engine without castSwap.preciseUpscale", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionPreciseUpscale).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionPreciseUpscale).toBe("function")
+    h.preciseUpscale = { "720p": "4k" }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toBeNull()
+    setPluginSupports({ castSwap: { ...CS, preciseUpscale: false } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toBeNull()
+  })
+
+  it("rejects when the settings could not be read, never answering the defaults", async () => {
+    upscalingEngine()
+    h.failed = true
+    await expect(buildToolkit().settings!.nodaroMotionPreciseUpscale!()).rejects.toThrow(/could not be read/)
+  })
+
+  it("answers the defaults when it was never saved", async () => {
+    upscalingEngine()
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "1080p", "720p": "1080p", "1080p": "4k" })
+  })
+
+  it("answers the stored choices, each resolution left out at its default, a fresh object", async () => {
+    upscalingEngine()
+    h.preciseUpscale = { "480p": "off", "1080p": "1080p" }
+    const got = await buildToolkit().settings!.nodaroMotionPreciseUpscale!()
+    expect(got).toStrictEqual({ "480p": "off", "720p": "1080p", "1080p": "1080p" })
+    ;(got as Record<string, string>)["480p"] = "4k"
+    expect(h.preciseUpscale).toEqual({ "480p": "off", "1080p": "1080p" })
+  })
+
+  it("answers every resolution off while this deployment does not run Topaz, whatever is saved", async () => {
+    upscalingEngine()
+    h.topazDisabled = true
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "off", "720p": "off", "1080p": "off" })
+    h.preciseUpscale = { "720p": "4k" }
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "off", "720p": "off", "1080p": "off" })
+    // Still null to an engine without the flag.
+    setPluginSupports({ castSwap: { ...CS } } as never)
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toBeNull()
   })
 })

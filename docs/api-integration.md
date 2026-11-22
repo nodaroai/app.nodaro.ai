@@ -6253,8 +6253,17 @@ expected to be charged, never above `motion`; Prism only) and `privacy`
 (preparing the clip, when the engine's setting does: in both totals when it
 always runs, in neither when it is the retry below), `prompt` (the prompt
 a language model writes for the run, when the engine's setting asks for
-one), and `referenceAudio` (preparing the clip's sound for the video model,
-when the engine's setting runs that step). `motion` and
+one), `referenceAudio` (preparing the clip's sound for the video model,
+when the engine's setting runs that step), and `upscale` (a Topaz video
+upscale of the result: it appears only when the deployment's setting adds
+that step for a Precise run on Nodaro Prism at the run's resolution; Topaz
+upscales the take, which is then scaled back to the run's own resolution; it
+is in both totals and settles to the units Topaz actually used, never above
+the line; a draft run never has it). If the Topaz step fails or is refused,
+the run delivers the take as it would without it, and that part is not
+charged. A Topaz step that finished is charged even if the run then delivers
+without it (rare: when its result cannot be scaled back).
+`motion` and
 `motionExpected` are alternatives, so read the totals, never the sum. When
 the engine's setting retries a refused clip, `privacyCredits` is the extra
 charged only if that retry runs: it is in neither total, and starting the
@@ -6325,7 +6334,13 @@ MCP: [`estimate_full_quality` / `full_quality`](./mcp/tools.md), CLI:
 
 `:jobId` is the draft's job id. The quote
 is `totalCredits`: `breakdown.base` (the Full Quality job's own steps)
-plus `breakdown.motionHd` (the 1080p render of the draft's take). `motionHd` is 0 when an earlier
+plus `breakdown.motionHd` (the 1080p render of the draft's take), plus
+`breakdown.upscale` when the deployment's setting adds a Topaz upscale to
+1080p Precise runs (the render is upscaled, then scaled back to 1080p; it
+settles to the units Topaz used; a Topaz step that fails or is refused is not
+charged, one that finished is charged even if the Full Quality then delivers
+without it, which is rare).
+`motionHd` is 0 when an earlier
 failed try of this draft already finished that render: it is reused, and only
 the finishing is charged. `availableUntil` is when the 7 days end. Quote first:
 the price depends on the draft. The quote does not look for a Full Quality

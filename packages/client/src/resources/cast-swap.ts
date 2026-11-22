@@ -821,6 +821,13 @@ export interface VideoRemakeEstimate {
    *   Nodaro's setting for the engine does so (absent otherwise).
    * - `referenceAudio`: preparing the clip's sound for the video model, when
    *   Nodaro's setting for the engine runs that step (absent otherwise).
+   * - `upscale`: a Topaz video upscale of the result (it is then scaled back
+   *   to the run's resolution), when the deployment's setting adds that step
+   *   for a Precise run on Nodaro Prism at the run's resolution (absent
+   *   otherwise; never on a draft). In both totals; it settles to the units
+   *   Topaz used. A Topaz step that fails or is refused is not charged; one
+   *   that finished is charged even if the run then delivers without it
+   *   (rare).
    *
    * `motion` and `motionExpected` are alternatives, so the parts sum to more
    * than either total: read `totalCredits` and `expectedCredits`, never the
@@ -836,6 +843,7 @@ export interface VideoRemakeEstimate {
     privacy?: number
     prompt?: number
     referenceAudio?: number
+    upscale?: number
   } & Record<string, number>
   /**
    * The extra credits charged only if the video model refuses the clip and
@@ -894,7 +902,9 @@ export interface VideoRemakeFullQualityEstimate {
    * Quality job's own steps; an older server names it
    * `castSwap` instead: read `base`, else `castSwap`), and `motionHd` (a same
    * take: the 1080p render, 0 when an earlier try of this draft already
-   * finished that render, which is then reused) or `motion` (a new take).
+   * finished that render, which is then reused) or `motion` (a new take),
+   * and `upscale` (a Topaz upscale of the 1080p render, scaled back to 1080p,
+   * when the deployment's setting adds that step to 1080p Precise runs).
    */
   breakdown: {
     base?: number
@@ -902,6 +912,7 @@ export interface VideoRemakeFullQualityEstimate {
     castSwap?: number
     motionHd?: number
     motion?: number
+    upscale?: number
   } & Record<string, number>
   /** ISO time until which the run can be finished at Full Quality (7 days after it completed). */
   availableUntil: string

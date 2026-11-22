@@ -22,7 +22,7 @@ import type { MotionPriceReused } from "./wire.js"
 export const LOCAL_ROUTES: readonly string[] = ["mask-composite", "mask-erase", "mask-outline", "video-face-mesh"]
 
 export type StepKind = "base" | "render" | "render-hd" | "sheet" | "clip-body-picture" | "styled-picture" | "labels"
-  | "engine-prompt" | "clip-body-llm" | "scene" | "vocals" | "masking" | "depth-map" | "other"
+  | "engine-prompt" | "clip-body-llm" | "scene" | "vocals" | "masking" | "depth-map" | "upscale" | "other"
 
 export interface StepIdentity {
   name: string
@@ -115,6 +115,8 @@ function fromKey(key: string, runId: string, route: string): Named | null {
   if (prefix === undefined || owner === undefined || owner.toLowerCase() !== runId.toLowerCase()) return null
   if (prefix === "cast-swap-child") return rest.length <= 1 ? RENDERS.get(rest[0] ?? "") ?? null : null
   if (prefix === "cast-swap-fq-child") return rest.length === 0 ? named(route === "video-upscale" ? "1080p render" : "1080p take", "render-hd") : null
+  // The Precise upscale (Topaz on the take): a run's, and a Full Quality's.
+  if (prefix === "cast-swap-topaz" || prefix === "cast-swap-fq-topaz") return rest.length === 0 ? named("Topaz upscale", "upscale") : null
   if (prefix === "cast-swap-llm") return llmCall(rest)
   const pictureOf = PICTURES.get(prefix)
   if (pictureOf) return picture(rest, pictureOf)
@@ -173,6 +175,7 @@ function tableLines(step: StepIdentity, depthMapRun: boolean): readonly string[]
     // A Full depth's description and shot list are quoted with its depth map; a Precise run's on prompt writing.
     case "scene": return depthMapRun ? ["privacy"] : ["prompt"]
     case "vocals": return ["referenceAudio"]
+    case "upscale": return ["upscale"]
     case "masking":
     case "depth-map":
       return privacyLines(step.round === "retry")

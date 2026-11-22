@@ -57,6 +57,7 @@ const PART_LABELS: Readonly<Record<string, string>> = {
   motionExpected: "video, expected",
   motionHd: "1080p render",
   privacy: "clip preparation",
+  upscale: "Topaz upscale",
 }
 
 /** A breakdown part as people read it; a part not listed here is shown as its own name. */

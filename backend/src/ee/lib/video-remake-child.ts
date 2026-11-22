@@ -78,8 +78,24 @@ const RESULT_ROUTES: ReadonlySet<string> = new Set(["/v1/generate-video", "/v1/v
  */
 export type VideoRemakeStep = "result" | "helper"
 
+/**
+ * A Topaz upscale (`/v1/video-upscale` with provider "topaz") under a Video
+ * Remake parent is the Precise upscale step (2026-11-22): it upscales the take
+ * the run already made, which is then scaled back and delivered. That take is
+ * the result and already follows the account's watermark rule, so the step is
+ * a helper: a second watermark would be stamped on the first. A draft's Full
+ * Quality 1080p render on the same route names its own provider and stays a
+ * result.
+ */
+function isPreciseUpscaleStep(route: string, body: unknown): boolean {
+  if (route !== "/v1/video-upscale") return false
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false
+  return (body as Record<string, unknown>).provider === "topaz"
+}
+
 export async function videoRemakeStepOf(req: FastifyRequest): Promise<VideoRemakeStep | null> {
   if (!(await hasVideoRemakeParent(req))) return null
   const route = req.routeOptions?.url ?? (req.url.split("?")[0] ?? "")
+  if (isPreciseUpscaleStep(route, req.body)) return "helper"
   return RESULT_ROUTES.has(route) ? "result" : "helper"
 }

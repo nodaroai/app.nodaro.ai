@@ -62,6 +62,8 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
+  // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
+  routes["GET /v1/admin/video-remake/precise-upscale"] = () => ({ body: { data: { value: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, stored: null, defaults: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, updatedAt: null, supported: true } } })
   routes["GET /v1/admin/video-remake/prompt-wording"] = () => ({ body: { data: { promptWording: null, updatedAt: null, engines: ENGINES, supported: true } } })
   routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
   routes["POST /v1/admin/video-remake/prompt-parts/preview"] = () => ({ body: { data: { set: "precise", parts: [], assembled: "", length: 0, max: 8000, problems: [] } } })

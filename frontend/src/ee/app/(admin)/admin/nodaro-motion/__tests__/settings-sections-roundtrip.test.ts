@@ -44,6 +44,7 @@ const STORED: Readonly<Record<string, unknown>> = {
       faceMeshWording: "shape",
     },
   },
+  "precise-upscale": { preciseUpscale: { "480p": "off", "720p": "4k", "1080p": "1080p" } },
   advanced: { show: true },
   "custom-style": {
     customStyle: {

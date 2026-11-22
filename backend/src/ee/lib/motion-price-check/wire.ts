@@ -234,7 +234,7 @@ export function listOf(value: unknown, kieApplied: boolean): MotionPriceList {
 }
 
 /** The lines in the order the page lists them; any other line follows, by name. */
-const LINE_ORDER: readonly string[] = ["base", "motion", "motionHd", "references", "referenceAudio", "prompt", "privacy", "styleRefs"]
+const LINE_ORDER: readonly string[] = ["base", "motion", "motionHd", "references", "referenceAudio", "prompt", "privacy", "styleRefs", "upscale"]
 
 /** Names in a breakdown that are never lines of their own: the render's expected settlement, and the two extras' names. */
 const NOT_LINES: ReadonlySet<string> = new Set(["motionExpected", ...QUOTED_EXTRAS])
@@ -248,6 +248,7 @@ const LABELS: ReadonlyMap<string, string> = new Map([
   ["prompt", "Prompt writing"],
   ["privacy", "Privacy"],
   ["styleRefs", "Styled role pictures"],
+  ["upscale", "Topaz upscale"],
   // The two extras: their line's `outsideTotal` says they are beside the hold (the drawer tags it), so their names don't.
   ["privacyCredits", "Privacy retry"],
   ["referencesRetryCredits", "Sheet retry"],
