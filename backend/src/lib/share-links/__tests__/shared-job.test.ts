@@ -123,6 +123,9 @@ describe("toSharedJob", () => {
       width: 1920,
       height: 1080,
       title: "Red car",
+      toolName: "Image Generation",
+      // No cover of the owner's and no provider art on a picture.
+      coverUrl: null,
       createdAt: "2026-11-19T10:00:00.000Z",
       prompt: "a red car",
       displayPrompt: "a red car",
@@ -144,6 +147,21 @@ describe("toSharedJob", () => {
     expect(JSON.stringify(shared)).not.toContain(OWNER)
     expect(JSON.stringify(shared)).not.toContain("hooks.example")
     expect(JSON.stringify(shared)).not.toContain(UUID)
+  })
+
+  it("a song's own title: of the take the link shows, else the job's first take; never a filtered one", () => {
+    const song = (output: Record<string, unknown>) =>
+      toSharedJob(job({ input_data: { type: "suno-mashup", prompt: "blend" }, output_data: output }), { allowCopy: false })
+    const tracks = [
+      { audioUrl: "https://cdn.example/audios/a.mp3", title: "  First  " },
+      { audioUrl: "https://cdn.example/audios/b.mp3", title: "Second" },
+    ]
+    expect(song({ audioUrl: "https://cdn.example/audios/a.mp3", sunoTracks: tracks })).toMatchObject({ songTitle: "First", toolName: "Song Mashup" })
+    expect(song({ audioUrl: "https://cdn.example/audios/a.mp3", sunoTitle: "Only title" })?.songTitle).toBe("Only title")
+    expect(song({ audioUrl: "https://cdn.example/audios/a.mp3" })?.songTitle).toBeUndefined()
+    // A picture never has one; a tool with no public name has no tool name.
+    expect(toSharedJob(job({ output_data: { imageUrl: "https://cdn.example/images/a1.png", sunoTitle: "x" } }), { allowCopy: false })?.songTitle).toBeUndefined()
+    expect(toSharedJob(job({ input_data: { type: "some-plugin-type" } }), { allowCopy: false })?.toolName).toBeNull()
   })
 
   it("reads the prompt as a person does, from the pills' names, and keeps the prompt as sent", () => {

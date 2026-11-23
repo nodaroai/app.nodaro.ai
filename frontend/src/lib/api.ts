@@ -6167,31 +6167,56 @@ export async function sunoStyleBoostApi(params: {
   })
 }
 
-export async function sunoAddInstrumentalApi(params: {
-  taskId: string
-  audioId: string
+/** What Add Instrumental and Add Vocals both take: the song (a link to its
+ *  file, a Suno track's ids, or both) and the direction shared by the two. */
+export interface SunoAddTrackParams {
+  uploadUrl?: string
+  taskId?: string
+  audioId?: string
   model?: string
+  style?: string
+  title?: string
+  negativeTags?: string
+  vocalGender?: "male" | "female"
+  styleWeight?: number
+  weirdnessConstraint?: number
+  audioWeight?: number
   userId?: string
-}): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
-  if (params.model) body.model = params.model
-  if (params.userId) body.userId = params.userId
+}
+
+function sunoAddTrackBody(params: SunoAddTrackParams): Record<string, unknown> {
+  return {
+    ...(params.uploadUrl ? { uploadUrl: params.uploadUrl } : {}),
+    ...(params.taskId && params.audioId ? { taskId: params.taskId, audioId: params.audioId } : {}),
+    ...(params.model ? { model: params.model } : {}),
+    ...(params.style ? { style: params.style } : {}),
+    ...(params.title ? { title: params.title } : {}),
+    ...(params.negativeTags ? { negativeTags: params.negativeTags } : {}),
+    ...(params.vocalGender ? { vocalGender: params.vocalGender } : {}),
+    ...(params.styleWeight != null ? { styleWeight: params.styleWeight } : {}),
+    ...(params.weirdnessConstraint != null ? { weirdnessConstraint: params.weirdnessConstraint } : {}),
+    ...(params.audioWeight != null ? { audioWeight: params.audioWeight } : {}),
+    ...(params.userId ? { userId: params.userId } : {}),
+  }
+}
+
+export async function sunoAddInstrumentalApi(params: SunoAddTrackParams): Promise<{ jobId: string }> {
   return apiJson("/v1/suno/add-instrumental", {
-    body,
+    body: sunoAddTrackBody(params),
     workflowId: true,
     label: "apiErr.startSunoAddInstrumental",
   })
 }
 
-export async function sunoAddVocalsApi(params: {
-  taskId: string
-  audioId: string
-  model?: string
-  userId?: string
+export async function sunoAddVocalsApi(params: SunoAddTrackParams & {
+  /** The lyrics to sing, or the direction for the voice. */
+  prompt?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
-  if (params.model) body.model = params.model
-  if (params.userId) body.userId = params.userId
+  // The typed template travels as `userPrompt` through `setUserPromptTemplate`, like every run's.
+  const body = {
+    ...sunoAddTrackBody(params),
+    ...(params.prompt ? { prompt: params.prompt } : {}),
+  }
   return apiJson("/v1/suno/add-vocals", {
     body,
     workflowId: true,

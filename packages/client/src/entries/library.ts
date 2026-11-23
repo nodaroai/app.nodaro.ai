@@ -11,4 +11,5 @@ export type {
   LibraryAsset,
   ListLibraryParams,
   ListLibraryResult,
+  LibraryFavoriteResult,
 } from "../resources/library.js"

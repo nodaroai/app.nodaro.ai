@@ -21,9 +21,12 @@ import { isPromptBlocked } from "../../config/content-filter.js"
 import { redactPrivateJobOutput } from "../public-job-data.js"
 import { isShareableAddress, publicSettingsOf, referencesOf } from "./settings.js"
 import { displayPromptOf } from "./display-prompt.js"
+import { effectiveJobCover } from "../job-cover/effective-cover.js"
+import { cleanAssetName, songTakeTitle } from "../asset-names.js"
+import { shareToolOf } from "./tool-names.js"
 import type { SharedJob, SharedMediaKind, SharedReference, ShareRefusal } from "./types.js"
 
-/** The job columns a share read selects (and `title` once the column exists, lib/jobs-title-column.ts). */
+/** The job columns a share read selects (and `title` / `cover_url` once each column exists, lib/jobs-optional-column.ts). */
 export const SHARE_JOB_COLUMNS =
   "id, user_id, status, job_type, input_data, output_data, created_at, parent_job_id, restricted_at, force_private, deleted_at"
 
@@ -40,6 +43,7 @@ export interface ShareJobRow {
   readonly force_private?: boolean | null
   readonly deleted_at?: string | null
   readonly title?: string | null
+  readonly cover_url?: string | null
 }
 
 /** The `input_data` texts the content filter reads (beside the job's `title`). */
@@ -145,6 +149,17 @@ function promptOf(input: Record<string, unknown>): { prompt: string | null; from
 }
 
 /**
+ * A song's own title: the title of the take the link shows (`url`), else, when
+ * that take is the job's first, the job's `sunoTitle`. Never one the content
+ * filter would keep out of the gallery.
+ */
+export function songTitleOf(out: Record<string, unknown>, url: string): string | undefined {
+  const firstTake = out.audioUrl === url || (Array.isArray(out.audioUrls) && out.audioUrls[0] === url)
+  const title = songTakeTitle(out, [url]) ?? (firstTake ? cleanAssetName(out.sunoTitle) : undefined)
+  return title && !isPromptBlocked(title) ? title : undefined
+}
+
+/**
  * A shareable job as the link shows it (call `shareRefusalOf` first: null media
  * answers null here). `references` is given only with `allowCopy`, and never
  * for a trend run, whose pictures and clip are the platform's recipe.
@@ -168,15 +183,20 @@ export function toSharedJob(
   const width = positive(out.width)
   const height = positive(out.height)
   const durationSec = positive(out.durationSec) ?? positive(out.duration)
+  const type = str(input.type) ?? str(row.job_type) ?? "unknown"
+  const songTitle = media.kind === "audio" ? songTitleOf(out, media.url) : undefined
   return {
     id: row.id,
-    type: str(input.type) ?? str(row.job_type) ?? "unknown",
+    type,
     mediaKind: media.kind,
     outputUrl: media.url,
     ...(media.urls.length > 1 ? { outputUrls: media.urls } : {}),
     ...(width !== undefined && height !== undefined ? { width, height } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
     title: str(row.title),
+    ...(songTitle ? { songTitle } : {}),
+    toolName: shareToolOf(type)?.name ?? null,
+    coverUrl: effectiveJobCover({ cover_url: row.cover_url, output_data: out }),
     createdAt: row.created_at,
     prompt,
     displayPrompt: displayPromptOf(prompt, input),

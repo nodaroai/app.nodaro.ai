@@ -34,8 +34,9 @@
 | `billing` | `plans()` — plans and credit packs on sale, with prices and Stripe price ids (public, Cloud); `subscription()`; `surface()` / `account()` — how the deployment bills, and the caller's plan and balance in its unit; signed-in session only: `purchases()`, `invoices()`, `paymentMethod()`, `autoRecharge()` / `setAutoRecharge()`, `checkout()`, `loadCredits()`, `portal()`, `changePlan()` |
 | `surface` | `availability()` — what the deployment offers the caller: the node types and models it does not offer, the Web Scrape sources it withdraws, and every world of the shared site header with whether the caller is offered it (`worlds: [{ id, enabled }]`) |
 | `uploads` | Signed upload URLs for image / video / audio |
-| `library` | Generated-media library |
+| `library` | Your media library (uploads + generations): `list` (filter by type, source, search, `favorited`), `favorite` (star a file, an upload too) |
 | `gallery` | The public gallery (`browse`) and your favorites: `toggleFavorite`, `favorites` |
+| `favorites` | Every favorite in one list (`list`: generations, uploads, voices, presets, picker options; newest first, one cursor — page on `nextCursor` until null, a page can be short or empty) and favorite picker options: `listCatalog`, `addCatalog`, `removeCatalog` |
 | `presets` | Node presets: your own (create, update, delete, import, reorder, folders) and the factory catalog; favorites; `needsImage` / `minReferences` (photos a preset works from) and `previewUrl` |
 | `savedPosts` | Inspiration wall: save, list, look up, update, delete saved posts |
 | `collections` | Where a workflow's records live: list, create, update, delete collections; records (newest first, words, since), addRecord (dedupe + idempotency, eviction past the cap), deleteRecord, export CSV / JSON |

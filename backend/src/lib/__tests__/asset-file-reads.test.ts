@@ -52,8 +52,10 @@ describe("every user-facing assets read that answers an address or a count leave
   it("finds the reads it guards (the scan is not vacuous)", () => {
     expect(reads.length).toBeGreaterThan(8)
     const applying = reads.filter(appliesFileRule).map((r) => r.file)
-    // The library's page and count, and browse_uploads' page and count.
-    expect(applying.filter((f) => f === "routes/library.ts")).toHaveLength(2)
+    // The library's page and count — from the table, and through the favorites
+    // function (migration 688) — and browse_uploads' page and count.
+    expect(applying.filter((f) => f === "lib/library-listing.ts")).toHaveLength(4)
+    expect(reads.filter((r) => r.file === "lib/library-listing.ts" && r.chain.includes(".rpc(")).length).toBe(2)
     expect(applying.filter((f) => f === "lib/mcp/tools/gallery.ts")).toHaveLength(2)
     expect(reads.some((r) => r.file === "lib/mcp/asset-resolver.ts")).toBe(true)
   })

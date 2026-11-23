@@ -32,3 +32,15 @@ export async function findShownShare(token: string): Promise<ShareLinkRow | null
   if (!share || (await isUserBlocked(share.owner_id))) return null
   return share
 }
+
+/**
+ * `findShownShare`, with `read` run beside the owner's block check rather than
+ * after it (the card's answer must stay fast): its result is used only when
+ * the owner is not blocked, so a blocked owner's link still says nothing.
+ */
+export async function readShownShare<T>(token: string, read: (share: ShareLinkRow) => Promise<T | null>): Promise<{ share: ShareLinkRow; value: T } | null> {
+  const share = await findLiveShareByToken(token)
+  if (!share) return null
+  const [blocked, value] = await Promise.all([isUserBlocked(share.owner_id), read(share)])
+  return blocked || value === null ? null : { share, value }
+}

@@ -302,6 +302,14 @@ export interface Job {
    */
   title?: string | null
   /**
+   * The job's picture: the owner's cover ({@link JobsResource.update}), else
+   * the art the provider made with the result (a Suno song's cover), else
+   * `null`. Show it in place of any provider art. Returned wherever the job
+   * is: `get()`, `list()`, a session's items, the Trash, the library's rows,
+   * a share. Absent from an older server.
+   */
+  coverUrl?: string | null
+  /**
    * Where the job stands in line while it waits for a free slot: present on
    * `get()` only while `status` is `queued` (never on `list()`). See
    * {@link JobQueueInfo}.
@@ -382,6 +390,27 @@ export interface RateJobResult {
 /** What {@link JobsResource.rename} answers: the job's name now (`null` once cleared). */
 export interface RenameJobResult {
   data: { jobId: string; title: string | null }
+}
+
+/**
+ * A job's cover picture as {@link JobsResource.update} takes it: one of YOUR
+ * images on Nodaro — a library asset by its id, or its address on Nodaro's
+ * storage — or `null` to clear it (the job then shows the provider's art, or
+ * none). Any other address is refused.
+ */
+export type JobCoverInput = { assetId: string } | { url: string } | null
+
+/** {@link JobsResource.update}'s changes; each optional, at least one. */
+export interface UpdateJobParams {
+  /** The name, or `null` (or `""`) to clear it. Trimmed; one line of plain text, 1–120 characters. */
+  title?: string | null
+  /** The cover picture, or `null` to clear it. */
+  cover?: JobCoverInput
+}
+
+/** What {@link JobsResource.update} answers: each field it was sent, as the job now has it. */
+export interface UpdateJobResult {
+  data: { jobId: string; title?: string | null; coverUrl?: string | null }
 }
 
 /**
@@ -516,6 +545,31 @@ export class JobsResource {
     return this.client.request<RenameJobResult>("PATCH", `/v1/jobs/${encodeURIComponent(id)}`, {
       body: { title },
     })
+  }
+
+  /**
+   * Change one of your jobs: its name, its cover picture, or both, in one call
+   * (`PATCH /v1/jobs/:id`). Any kind of result — a song, a speech take, a
+   * sound effect, a video, an image, a dubbing, a Remake run.
+   *
+   * `cover` is one of your images on Nodaro: `{ assetId }` (a library asset,
+   * e.g. from `client.uploads.upload`) or `{ url }` (its address on Nodaro's
+   * storage); `null` clears it. The picture must be PNG, JPEG, WebP or GIF, at
+   * most 10 MB, 64–8192 pixels on each side; anything else, or another user's
+   * file, is a `NodaroError` (`validation_error`). The job keeps its own copy,
+   * so deleting the original later does not break it. The picture reads back
+   * as `Job.coverUrl` wherever the job is returned — your cover, else the
+   * provider's art (a Suno song's), else `null`.
+   *
+   * Only the job's owner changes it: anyone else's job is a `NotFoundError`.
+   * Free. OAuth apps need the `assets:write` scope. `rename` still works.
+   */
+  update(id: string, changes: UpdateJobParams): Promise<UpdateJobResult> {
+    const body = {
+      ...(changes.title !== undefined ? { title: changes.title } : {}),
+      ...(changes.cover !== undefined ? { cover: changes.cover } : {}),
+    }
+    return this.client.request<UpdateJobResult>("PATCH", `/v1/jobs/${encodeURIComponent(id)}`, { body })
   }
 
   /**

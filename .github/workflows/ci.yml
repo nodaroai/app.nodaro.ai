@@ -1490,6 +1490,10 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: node backend/scripts/verify-first-remake-offer-concurrency.mjs
+      - name: Verify favorite picker option cap concurrency
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: node backend/scripts/verify-catalog-favorites-cap-concurrency.mjs
       - name: Allow the disposable database to exercise Auth deletion
         # Supabase's postgres login is not a superuser and cannot SET ROLE to
         # the Auth service by default. This grant is confined to the CI service

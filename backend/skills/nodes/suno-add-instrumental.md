@@ -1,7 +1,7 @@
 ---
 node_type: suno-add-instrumental
-generated_at: 2026-10-14T00:02:32.849Z
-generated_from: b83a9467d
+generated_at: 2026-11-23T07:39:00.721Z
+generated_from: bf29b46fc4
 ---
 
 # Suno Add Instrumental
@@ -19,6 +19,14 @@ generated_from: b83a9467d
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `uploadUrl?: string`
+- `style?: string`
+- `title?: string`
+- `negativeTags?: string`
+- `vocalGender?: "male" | "female"`
+- `styleWeight?: number`
+- `weirdnessConstraint?: number`
+- `audioWeight?: number`
 - `taskId?: string`
 - `audioId?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
@@ -48,7 +56,15 @@ generated_from: b83a9467d
 
 **Input parameters:**
 - `audio_asset_id`
+- `audio_url`
 - `model`
+- `style`
+- `title`
+- `negative_tags`
+- `vocal_gender`
+- `style_weight`
+- `weirdness_constraint`
+- `audio_weight`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

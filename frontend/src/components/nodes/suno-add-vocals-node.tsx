@@ -3,13 +3,14 @@
 import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Mic, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { Mic, Loader2, AlertCircle, Volume2, LayoutGrid, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSunoAddVocalsConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -18,7 +19,9 @@ import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoAddVocalsData } from "@/types/nodes"
 
-const ACCEPTS_AUDIO = (t: string) => isValidSunoAddVocalsConnection("audio", t)
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_AUDIO  = (t: string) => isValidSunoAddVocalsConnection("audio",  t, isVisualPicker)
+const ACCEPTS_PROMPT = (t: string) => isValidSunoAddVocalsConnection("prompt", t, isVisualPicker)
 
 function SunoAddVocalsNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -77,8 +80,9 @@ function SunoAddVocalsNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
-        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "audio",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "audio",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -106,7 +110,8 @@ function SunoAddVocalsNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">{t("node.addVocals")}</span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-add-vocals" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<Mic />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-add-vocals" handleId="audio"  type="target" position={Position.Left}  label="Audio"  color={HANDLE_COLORS.audio} icon={<Mic />}  side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-add-vocals" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR}   icon={<Type />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="suno-add-vocals" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<Mic />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

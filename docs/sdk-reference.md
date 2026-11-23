@@ -47,6 +47,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.uploads`](#clientuploads)
   - [`client.library`](#clientlibrary)
   - [`client.gallery`](#clientgallery)
+  - [`client.favorites`](#clientfavorites)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
   - [`client.collections`](#clientcollections)
@@ -72,7 +73,7 @@ The root `@nodaro/sdk` exports everything on this page. Each resource is also
 published as its own entry point, `@nodaro/sdk/<entry>`, which loads only that
 resource's module and the types it takes and returns:
 
-`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/video-remake`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
+`/apps`, `/audio`, `/billing`, `/catalogs`, `/characters`, `/client`, `/collections`, `/community`, `/competitors`, `/content-rights`, `/copilot`, `/core`, `/creatures`, `/credits`, `/developer-apps`, `/dubbing`, `/edit`, `/errors`, `/executions`, `/favorites`, `/gallery`, `/jobs`, `/library`, `/llm`, `/locations`, `/media`, `/models`, `/moodboards`, `/node-presets`, `/nodes`, `/oauth`, `/objects`, `/organizations`, `/palettes`, `/picker-catalogs`, `/pipelines`, `/projects`, `/prompt-helper`, `/recast`, `/reduce`, `/saved-posts`, `/scene3d`, `/sessions`, `/shots`, `/studio`, `/surface`, `/templates`, `/trash`, `/trend-radar`, `/trends`, `/tutorials`, `/uploads`, `/video-pro`, `/video-remake`, `/voices`, `/webhooks`, `/workflows`, `/workspaces`
 
 `/client` holds `createClient`, `NodaroClient` and the auth providers;
 `/core` holds `NodaroClientCore` (see below) and the same auth providers;
@@ -1384,7 +1385,8 @@ made from. Each item has one link: off makes it answer 404, on again brings
 back the same token. See [API integration § 4h](./api-integration.md#4h-share-links).
 
 ```ts
-const share = await client.shares.set({ kind: "job", targetId: jobId, shared: true })
+// `locale`: the interface language it is shared in; the link's preview card is written in it.
+const share = await client.shares.set({ kind: "job", targetId: jobId, shared: true, locale: "de" })
 // share.token → build your share page's address from it
 
 // Anyone can read it, signed in or not.
@@ -1397,19 +1399,22 @@ if (shown.kind === "session") {
 | Method | Signature | Notes |
 |--------|-----------|-------|
 | `get` | `get(params: GetShareParams): Promise<Share \| null>` | `{ kind, targetId }` of one of your items; `null` when it was never shared. A 404 `NodaroError` when the item is not yours. |
-| `set` | `set(input: SetShareInput): Promise<Share>` | `{ kind, targetId, shared, allowCopy? }`. The first call makes the link; later calls keep its token. `allowCopy` omitted keeps its value (`false` on a new link). Turning on an item that cannot be shared now is a 422 `NodaroError` `share_not_allowed` with a `reason` (`not_completed`, `no_media`, `private_output`, `content_filtered`, `restricted`, `workspace`, `sharing_disabled`); turning off always works, a job in the Trash included. An OAuth app needs `assets:write` and `jobs:read`. |
+| `set` | `set(input: SetShareInput): Promise<Share>` | `{ kind, targetId, shared, allowCopy?, locale? }`. The first call makes the link; later calls keep its token. `allowCopy` omitted keeps its value (`false` on a new link). `locale` (the interface language it is shared in, e.g. `"de"`, `"pt-BR"`, `"he"`) is what the link's preview card on chats and social networks is written in; omitted, the link keeps its language (English on a new link), and an unknown id is ignored. Turning on an item that cannot be shared now is a 422 `NodaroError` `share_not_allowed` with a `reason` (`not_completed`, `no_media`, `private_output`, `content_filtered`, `restricted`, `workspace`, `sharing_disabled`); turning off always works, a job in the Trash included. An OAuth app needs `assets:write` and `jobs:read`. |
 | `getPublic` | `getPublic(token: string): Promise<PublicShare>` | Works signed out. `{ kind, allowCopy, job? \| session? \| project? }`. A 404 `NodaroError` for a link that is unknown, turned off, or whose item is gone or may no longer be shown. |
 | `publicItems` | `publicItems(token: string, params?: PublicShareItemsParams): Promise<PublicShareItemsPage>` | Works signed out. A shared session's results, newest first: `{ data: SharedJob[], nextCursor }`. A shared project needs `sessionId` (one of the sessions `getPublic` lists). `limit` 1–100, `cursor`. A page may hold fewer than `limit`: follow `nextCursor` until it is `null`. |
 
 ```ts
 type ShareKind = "job" | "session" | "project"
 
-interface Share { token: string; kind: ShareKind; targetId: string; shared: boolean; allowCopy: boolean; createdAt: string; updatedAt: string }
+interface Share { token: string; kind: ShareKind; targetId: string; shared: boolean; allowCopy: boolean; createdAt: string; updatedAt: string; locale?: string | null }
 
 interface SharedJob {
   id: string; type: string; mediaKind: "image" | "video" | "audio"
   outputUrl: string; outputUrls?: string[]; width?: number; height?: number; durationSec?: number
   title: string | null; createdAt: string
+  songTitle?: string                 // a song's own title, when it has one
+  toolName?: string | null           // what a person calls the tool: "Song Mashup", "Text to Speech"
+  coverUrl?: string | null
   prompt: string | null              // as written; null for a trend run
   displayPrompt?: string | null      // as a person reads it: @maya:1 → @Maya, {video:1:clip} → @clip
   negativePrompt?: string | null
@@ -1655,12 +1660,50 @@ items, `client.trash.list()` — and as `title` on a gallery card
 ([`client.gallery`](#clientgallery), public beside the prompt) and on a library
 row ([`client.library`](#clientlibrary): the name of the job that made the
 file, not its `filename`). Clearing it brings a client's own made-up name back.
-OAuth apps need the `assets:write` scope. Named `rename`, like `rate`, rather
-than a general `update`: the route takes this one field.
+OAuth apps need the `assets:write` scope. [`update()`](#updateid-changes)
+changes the name and the cover picture together.
 
 ```ts
 await client.jobs.rename(jobId, "Hero shot v2")
 await client.jobs.rename(jobId, null) // back to the made-up name
+```
+
+#### `update(id, changes)`
+
+```ts
+update(id: string, changes: { title?: string | null; cover?: { assetId: string } | { url: string } | null }):
+  Promise<{ data: { jobId: string; title?: string | null; coverUrl?: string | null } }>
+```
+
+Changes one of your results — its name, its cover picture, or both — in one
+call (`PATCH /v1/jobs/:id`), on any kind of result: a song, a speech take, a
+sound effect, a video, an image, a dubbing, a Remake run. Each field is
+optional; send at least one. `title` follows [`rename()`](#renameid-title)'s
+rule. `cover` is one of your own images on Nodaro: `{ assetId }` (a library
+asset, e.g. one you uploaded) or `{ url }` (its address on Nodaro's storage);
+`null` clears it. It must be a file you uploaded or generated here, and a
+PNG, JPEG, WebP or GIF of at most 10 MB, 64–8192 pixels on each side that
+really decodes; any other address, a file you did not make, or a file outside
+the rule throws a `NodaroError` with code `validation_error`. The job keeps
+its own copy, so deleting the original later does not break it. Two changes
+to one job's cover at the same moment: one lands, the other throws a
+`NodaroError` with code `conflict` (status 409) and writes nothing — read the
+job and send again. A call that sends `cover` is limited to 20 a minute per
+account (`rate_limit_exceeded`, status 429).
+
+The picture reads back as `coverUrl` wherever the job is returned — `get()`,
+`list()`, a session's items, `client.trash.list()`, a library row (the job
+that made the file) and a share ([`client.shares`](#clientshares)) — named
+once, for every kind of result: your cover, else the art the provider made
+with the result (a Suno song's), else `null`. Show it in place of any
+provider art. Clearing your cover brings the provider's art back. Only the
+job's owner changes it: anyone else's job is a `NotFoundError`. Free. OAuth
+apps need the `assets:write` scope.
+
+```ts
+const upload = await client.uploads.upload(file) // one of your images
+await client.jobs.update(jobId, { title: "Summer anthem", cover: { assetId: upload.assetId! } })
+await client.jobs.update(jobId, { cover: null }) // back to the provider's art
 ```
 
 #### `fromUpload(params)`
@@ -9094,8 +9137,38 @@ matched as itself (`%`, `_` and `*` are not wildcards). `search` is its
 earlier name and still works, but is deprecated; when both are given, `q` is
 sent.
 
+`favorited: true` lists only the files you favorited, `false` only the rest —
+a file a job made by its job's favorite while that job is out of the Trash (the
+rule `client.favorites.list` follows), an upload or a file whose job is in the
+Trash by its own star — together with `type`, `source`, `q` and the cursor,
+however many favorites you have. A server whose database does not have upload
+favorites yet answers the filter with a 503 `not_available`. Each row carries
+`favorited` (absent when the server could not read it, and from servers before
+this field: never read absent as `false`).
+
 ```ts
 const { data, nextCursor } = await client.library.list({ type: "image", q: "poster" })
+const { data: starred } = await client.library.list({ favorited: true })
+```
+
+#### `favorite(assetId, favorited?)`
+
+```ts
+favorite(assetId: string, favorited?: boolean): Promise<{ favorited: boolean; jobId: string | null }>
+```
+
+`POST /v1/library/:id/favorite` → stars (`true`) or unstars (`false`) a file of
+your library by its asset id — one of your own or a shared library item;
+leave `favorited` out to toggle. Sending the state you want is idempotent: two
+calls for the same state at once both end in it (a toggle cannot promise that).
+A file a job made shares that job's favorite (its `Job.favorited` changes with
+it, `jobId` names the job); an upload, which no job made, has its own
+(`jobId: null`), and so does a file whose job is in the Trash. Another person's file is a
+`NotFoundError`. OAuth apps need `assets:write`. A server whose database does
+not have upload favorites yet answers an upload with a 503 `not_available`.
+
+```ts
+await client.library.favorite(asset.id, true)
 ```
 
 ---
@@ -9164,6 +9237,82 @@ need the `assets:read` or `jobs:read` scope.
 
 ```ts
 const ids = await client.gallery.favorites()
+```
+
+---
+
+### `client.favorites`
+
+Everything you keep, in one list, and your favorite picker options. Each kind
+is starred where it lives — a generation with
+[`client.gallery.toggleFavorite`](#togglefavoritejobid), a library file (an
+upload too) with [`client.library.favorite`](#favoriteassetid-favorited), a
+voice and a preset through their resources, a picker option here — and
+`list` reads them all back. Also importable from `@nodaro/sdk/favorites`.
+
+#### `list(params?)`
+
+```ts
+list(params?: { kinds?: FavoriteKind[]; limit?: number; cursor?: string }): Promise<{ data: FavoriteItem[]; nextCursor: string | null }>
+
+type FavoriteKind = "job" | "asset" | "voice" | "preset" | "catalog"
+```
+
+`GET /v1/favorites` → a page of your favorites, newest first (by when each was
+starred), one cursor across every kind: pass `nextCursor` back as `cursor`. Each
+`FavoriteItem` is `{ kind, id, favoritedAt }` plus the detail its kind names:
+`job` (`{ id, type, status, mediaType, url, thumbnailUrl, createdAt }`),
+`asset` (an upload, or a library file whose job was in the Trash when you
+starred it: `{ id, type, filename, url, thumbnailUrl, createdAt }` — any other
+library file a job made lists as its `job`), `voice` (`{ voiceId, voiceType,
+name, previewUrl }`), `preset` (`{ nodeType, presetId }`) or `catalog`
+(`{ catalog, optionId, label }`). `limit` is 1–100 (default 50). A page may hold
+fewer than `limit` items — even none — while `nextCursor` is set (a job you may
+no longer see, or one in the Trash, is left out): keep paging until `nextCursor`
+is `null`, never on `data.length`. The list is not counted. OAuth apps read the
+kinds their grant reads: `assets:read` (jobs also with `jobs:read`),
+`presets:read` for presets; naming a kind the grant may not read is a
+`ForbiddenError`. 120 reads a minute.
+
+```ts
+const { data, nextCursor } = await client.favorites.list({ kinds: ["job", "asset"] })
+```
+
+#### `listCatalog(catalog?)`
+
+```ts
+listCatalog(catalog?: string): Promise<Array<{ catalog: string; optionId: string; label: string | null; createdAt: string }>>
+```
+
+`GET /v1/favorites/catalog` → your favorite picker options, newest first; one
+catalog's with `catalog`. `label` is `null` for an option its catalog has since
+dropped.
+
+#### `addCatalog(catalog, optionId)` / `removeCatalog(catalog, optionId)`
+
+```ts
+addCatalog(catalog: string, optionId: string): Promise<{ catalog: string; optionId: string; label: string; favorited: true; createdAt: string | null }>
+removeCatalog(catalog: string, optionId: string): Promise<{ catalog: string; optionId: string; favorited: false }>
+```
+
+`PUT` / `DELETE /v1/favorites/catalog/:catalog/:optionId` → star or unstar a
+picker option; both idempotent. `catalog` is a picker catalog's `catalogId`
+([`client.pickerCatalogs`](#clientpickercatalogs): `style`, `color-look`,
+`mood`, `camera-motions`, `person`, `music-genre`, `music-mood`,
+`instrumentation`, `voice-character`, `voice-delivery`, …; its node type is
+accepted too), `shot-shapes` or `style-presets`. `optionId` is the option's id,
+`<field>:<id>` for an option of one field of a multi-field catalog
+(`"genre:jazz"`; a bare id that names exactly one option is accepted). Both are
+checked against the catalogs the server serves: an unknown one is a
+`ValidationError`. The answer gives the stored spelling. At most 1000 favorite
+options, held even for stars sent at once: past that `addCatalog` rejects with
+`409 limit_reached` (re-starring one you have still succeeds). OAuth apps need
+`assets:write` (and `assets:read` to list). A server whose database does not
+have them yet answers the writes with a 503 `not_available`.
+
+```ts
+await client.favorites.addCatalog("music-genre", "genre:jazz")
+const looks = await client.favorites.listCatalog("style")
 ```
 
 ---

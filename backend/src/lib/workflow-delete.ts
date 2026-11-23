@@ -5,6 +5,8 @@ import { isRelayedJob, relayOwnedKeys } from "./asset-delete.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { relayPossible } from "./relay-possible.js"
 import { RetainedImageInUseError } from "./retained-image-errors.js"
+import { readCoversInScope, type CoverScope } from "./job-cover/cover-release.js"
+import { releaseCoversOfJobs } from "./job-cover/cover-store.js"
 
 interface WorkflowDeleteLogger {
   warn(fields: Record<string, unknown>, message: string): void
@@ -84,6 +86,10 @@ async function deleteWithPrivateMedia(args: {
   const scopeJobWasRelayed =
     relayPossible() && relayScopedJobId ? await isRelayedJob(relayScopedJobId) : false
 
+  // A job's cover copy is recorded only on its row (lib/job-cover/cover-release.ts):
+  // read before the RPC deletes the rows, released after. A failed read never blocks the delete.
+  const covers = await readCoversInScope(coverScopeOf(args.scope, args.rpcArgs), { probe: true, logger: args.logger })
+
   const { data, error } = await supabase.rpc(args.rpcName, args.rpcArgs)
   if (error?.message === "This production has active jobs using retained images") {
     throw new RetainedImageInUseError("Wait for the active jobs to finish or cancel them before deleting this production")
@@ -142,7 +148,18 @@ async function deleteWithPrivateMedia(args: {
     )
   }
 
+  // The deleted jobs' cover copies, read before the delete: each released
+  // once nothing names it (never throws).
+  await releaseCoversOfJobs(covers)
   return true
+}
+
+/** The jobs a delete scope takes with it, as the cover read asks for them. */
+function coverScopeOf(scope: DeleteScope, rpcArgs: Record<string, string | boolean | null>): CoverScope {
+  const userId = String(rpcArgs.p_user_id ?? "")
+  if ("jobId" in scope) return { jobIds: [scope.jobId] }
+  if ("workflowId" in scope) return { workflowId: scope.workflowId, userId }
+  return { projectId: scope.projectId, userId }
 }
 
 export function deleteWorkflowWithPrivateMedia(args: {

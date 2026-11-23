@@ -46,8 +46,8 @@ const COMPLETION_FUNNELS = new Set(["markJobCompleted", "markJobCompletedDetaile
  */
 const MIXED_LANE_FILES: ReadonlyMap<string, { readonly queuedInserts: number; readonly why: string }> = new Map([
   ["routes/suno.ts", {
-    queuedInserts: 12,
-    why: "every Suno generation lane is queued; style-boost and the voice validate/create lanes settle in-route and use insertSyncJob",
+    queuedInserts: 10,
+    why: "every Suno generation lane is queued (Add Vocals / Add Instrumental in routes/suno-add-track.ts); style-boost and the voice validate/create lanes settle in-route and use insertSyncJob",
   }],
   ["routes/motion-graphics-ai.ts", {
     queuedInserts: 1,

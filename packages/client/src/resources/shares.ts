@@ -26,6 +26,12 @@ export interface Share {
   allowCopy: boolean
   createdAt: string
   updatedAt: string
+  /**
+   * The interface language the link was shared in (`"en"`, `"de"`, `"pt-BR"`,
+   * `"he"`, …): its preview card is written in it. `null`: English. Absent
+   * from an older server.
+   */
+  locale?: string | null
 }
 
 export interface GetShareParams {
@@ -41,6 +47,13 @@ export interface SetShareInput {
   shared: boolean
   /** Omitted: the link keeps its current value (`false` on a new link). */
   allowCopy?: boolean
+  /**
+   * The interface language the link is shared in (an id like `"en"`, `"de"`,
+   * `"pt-BR"`, `"he"`): the link's preview on chats and social networks is
+   * written in it. Omitted: the link keeps the language it has (English on a
+   * new link). An id the server does not know is ignored.
+   */
+  locale?: string
 }
 
 /** A setting value as a link shows it: never an address or an id. */
@@ -67,6 +80,12 @@ export interface SharedJob {
   durationSec?: number
   /** The owner's name for the result, or `null`. */
   title: string | null
+  /** A song's own title (of the take `outputUrl` names), when it has one. */
+  songTitle?: string
+  /** What a person calls the tool that made it, e.g. `"Song Mashup"`; `null` for a tool with no public name. Absent from an older server. */
+  toolName?: string | null
+  /** The result's picture: the owner's cover, else the provider's art (a Suno song's), else `null`. Absent from an older server. */
+  coverUrl?: string | null
   createdAt: string
   /** The prompt as it was written, exactly as sent (reference tokens included); `null` for a trend run. */
   prompt: string | null

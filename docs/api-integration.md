@@ -1460,14 +1460,21 @@ curl -s "$BASE/v1/public/shares/$TOKEN"
 | Route | What it does |
 |-------|--------------|
 | `GET /v1/shares?kind=&targetId=` | Your link for one of your items: `{ data: Share \| null }` (`null` when it was never shared). `kind`: `job`, `session` or `project`. `404` when the item is not yours. |
-| `PUT /v1/shares` | Body `{ kind, targetId, shared, allowCopy? }`. The first call makes the link; later calls keep its token. `allowCopy` omitted keeps its current value. Answers `{ data: Share }`. Turning a link off always works; turning one on answers `422 share_not_allowed` with a `reason` when the item cannot be shared now (below). `404` when the item is not yours. |
+| `PUT /v1/shares` | Body `{ kind, targetId, shared, allowCopy?, locale? }`. The first call makes the link; later calls keep its token. `allowCopy` omitted keeps its current value. `locale` is the interface language the link is shared in (`en`, `de`, `es`, `he`, `ja`, `ko`, `pt-BR`, …; `he-IL` reads as `he`): the link's preview card is written in it. Omitted, the link keeps the language it has (English on a new link); an id the server does not know is ignored, never a `400`. Answers `{ data: Share }`. Turning a link off always works; turning one on answers `422 share_not_allowed` with a `reason` when the item cannot be shared now (below). `404` when the item is not yours. |
 | `GET /v1/public/shares/:token` | **No credential.** What the link shows: `{ data: { kind, allowCopy, job? \| session? \| project? } }`. |
 | `GET /v1/public/shares/:token/items` | **No credential.** A shared session's results, newest first: `{ data: SharedJob[], nextCursor }`. For a shared project, `sessionId` (one of the sessions the link lists) is required (`400` otherwise). `limit` 1–100 (default 50), `cursor`. A page may hold fewer than `limit`: follow `nextCursor` until it is `null`. |
 
-`Share` is `{ token, kind, targetId, shared, allowCopy, createdAt, updatedAt }`.
+`Share` is `{ token, kind, targetId, shared, allowCopy, createdAt, updatedAt,
+locale }` (`locale` is `null` for English, and on a server before the language
+was kept).
 A shared **job** is `{ id, type, mediaKind, outputUrl, outputUrls?, width?,
-height?, durationSec?, title, createdAt, prompt, displayPrompt, negativePrompt?,
-model, settings, references?, trend? }`:
+height?, durationSec?, title, songTitle?, toolName, coverUrl, createdAt, prompt,
+displayPrompt, negativePrompt?, model, settings, references?, trend? }`:
+
+- `toolName` is what a person calls the tool that made it (`"Song Mashup"`,
+  `"Text to Speech"`, `"Image to Video"`), never a model's or a vendor's name;
+  `null` for a tool with no public name. `songTitle` is a song's own title (of
+  the take `outputUrl` names), when it has one.
 
 - `prompt` is the prompt as it was written (`userPrompt` when your app sent
   one), exactly as sent. `displayPrompt` is the same prompt as a person reads
@@ -1544,25 +1551,49 @@ That site forwards it, for every client, to the platform's own
 **`/s/<token>`**, which answers the link's **card**: `200 text/html`, a small
 page with:
 
-- `og:type` (`video.other` for a video, else `website`), `og:site_name`
-  (`Nodaro`), `og:title`, `og:description`, `og:url` and
-  `<link rel="canonical">` (both `${SHARE_SITE_ORIGIN}/s/<token>`), `og:image`
-  (+ `og:image:width` / `height` when known);
+- in the first bytes of its `<head>`, right after the charset and the
+  `<title>`: `og:title`, `og:description`, `og:image` with
+  `og:image:secure_url`, `og:image:type`, `og:image:width` / `height` (when
+  known) and `og:image:alt`, `og:type` (`video.other` for a video, else
+  `website`), `og:site_name` (`Nodaro`), `og:locale`, `og:url` and
+  `<link rel="canonical">` (both `${SHARE_SITE_ORIGIN}/s/<token>`);
 - `twitter:card` `summary_large_image`, `twitter:title`,
-  `twitter:description`, `twitter:image`;
-- for a video, `og:video`, `og:video:secure_url`, `og:video:type` and its width
-  and height when known, pointing at the result's https file.
+  `twitter:description`, `twitter:image`, `twitter:image:alt`;
+- for a video, `og:video` (+ `secure_url`, `type`, and its width and height
+  when known); for a sound, `og:audio` (+ `secure_url`, `type`) — only when the
+  file is on the platform's own storage.
 
-The title is the result's name, else the start of its prompt (about 70
-characters); the description is the prompt, trimmed to about 200 characters.
-Both read the prompt as a person does (`displayPrompt`: `@Maya`, never
-`@maya:1`).
-A trend run is named by its trend, never a prompt. The picture is the result
-itself for an image, the poster for a video, and for a sound the track's cover
-when it has one, else the platform's own logo (`/logo-512.png`, 512 × 512). A
-shared session or project is named by its title or name, with its first shown
-result's picture. A card never hands out the reference files, whatever the
-link allows.
+**The title** is the result's own name, then the tool that made it:
+`Lady's on the Loose · Song Mashup`. The name is the one its owner gave it,
+else its trend's name, else the song's own title (`songTitle`), else the start
+of its prompt as a person reads it (`displayPrompt`: `@Maya`, never `@maya:1`);
+the tool is `toolName`. A trend run is named by its trend, never a prompt. A
+shared session or project is named by its title or name. **The description**
+is one line saying what it is and that it was made with Nodaro ("A song made
+with Nodaro", "A video made with Nodaro", "A voice recording made with
+Nodaro", "3 results made with Nodaro", "Made with the Office Dance trend on
+Nodaro"), in the language the link was shared in (`locale`: English, German,
+Spanish, Hebrew, Japanese, Korean or Portuguese; any other, English). The
+page's `lang` (and `dir="rtl"` for Hebrew) and `og:locale` follow it.
+
+**The picture** is always on the platform's own storage, never a provider's
+address: a 1200 × 630 JPEG (under 300 KB) made for the link —
+
+- a picture: the picture whole, over a blurred, darkened fill of itself;
+- a video: its poster (else its first frame) with a play badge;
+- a song or a voice: its art (the result's cover; else the platform's tile)
+  with a play badge and its own name drawn beside it — only when the server's
+  fonts can draw every character of it (Latin, Greek, Cyrillic and Hebrew,
+  which reads right to left); otherwise the picture has no text;
+- a session or a project: a grid of its first results' pictures (up to four).
+
+It is made once when the link is turned on, and again only when what it shows
+changes (a renamed result, a new cover): each version has its own address. A
+card read before its picture is ready names the result's own picture when it
+is on the platform's storage, else the platform's card (`/share-card.jpg`,
+1200 × 630), and may then be cached for one minute only
+(`Cache-Control: public, max-age=60`). A card never hands out the reference
+files, whatever the link allows.
 
 People are sent on at once to the page that shows the link,
 `${SHARE_SITE_ORIGIN}/shared/<token>`: by a `<meta http-equiv="refresh">`, a
@@ -4567,18 +4598,35 @@ you own (uploads and generations, saved or not). Query:
 | `q` | Search: only the files whose filename or name contains every word of `q` (up to 5), ignoring case — the [`q` rule](#search-q) of the entity lists. A file's name is the one it is shown by when the job that made it gave it one (`metadata.name`): a song made with Suno is found by its title. Each word may match either. Every character of a word is matched as itself (`%`, `_` and `*` are not wildcards); a blank `q` is no search; up to 200 characters. `search` is the earlier name of this parameter and still works. A `q` that is not blank wins over `search`; a blank `q` counts as no `q`, so `?q=&search=poster` searches for `poster`. |
 | `owned=true` | Every file you own instead of the library view. |
 | `source` | Only media from one surface: `internal`, `mcp`, `app`, `cli`, `sdk`, `extension`, `web` or `api`. Files from before origin tracking have none, so they appear only when this is left out. |
+| `favorited` | `true`: only the files you favorited; `false`: only the ones you did not. A file a job made counts by its job's favorite (`POST /v1/gallery/favorite`) while that job is out of the Trash — the same rule as `GET /v1/favorites`, so the two lists agree; an upload, or a file whose job is in the Trash, counts by its own star (`POST /v1/library/:id/favorite`). Combines with every other parameter and the cursor, however many favorites you have. On a server whose database does not have upload favorites yet it is `503 not_available`. |
 | `limit` | Page size, 1–100 (default 40). |
 | `cursor` | The `nextCursor` of the previous page. |
 
 The answer is `{ data, nextCursor, totalCount }`: each item carries `id`,
 `type`, `filename`, `mimeType`, `sizeBytes`, `url`, `thumbnailUrl`,
 `metadata` (with `name`, the name a file is shown by, when its job gave it one: a song's title), `isLibraryItem`, `uploadSource`, `source`, `sourceDetail`,
-`jobId` (the job that made the file; `null` for an upload) and `createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
+`jobId` (the job that made the file; `null` for an upload), `favorited` (whether you favorited the file, by the rule of the
+`favorited` parameter; left out when it could not be read — treat a missing field as unknown, never as `false`) and `createdAt`; `nextCursor` is `null` on the last page; `totalCount`, the number
 of matching files, comes with the first page only. A library row whose file is
 missing (its stored copy is gone) is not listed and not counted, so every item
 has a `url`. SDK:
 `client.library.list(params)`. The MCP tool `browse_uploads` reads the
 `owned=true` view, with the same search as its `search` argument.
+
+`POST /v1/library/:id/favorite` stars a file of your library by its asset id —
+one of your own, or a shared library item (anyone else's is `404 not_found`).
+Body `{ favorited: true | false }` sets it — idempotent: two calls asking for
+the same state at once both end in it; an empty body toggles it, like
+`POST /v1/gallery/favorite` (send the state you want when you know it). A file
+a job made shares that job's favorite (the job's `favorited` changes with it);
+an upload, which no job made, has its own, and so does a file whose job is in
+the Trash (its job's favorite counts again once the job is restored).
+Unstarring clears both. Returns `{ favorited, jobId }` (`jobId` `null` for an
+upload). OAuth apps need `assets:write`; 60 writes a minute. On a server whose
+database does not have upload favorites yet, starring an upload answers
+`503 not_available` (a generation still stars on its job), the library reads
+every upload as not favorited, and the `favorited` filter answers
+`503 not_available`. SDK: `client.library.favorite(assetId, favorited?)`.
 
 Saving a file to your library (`POST /v1/library/save-generated`, body
 `{ url, type }`) takes a file on Nodaro storage only when it is yours: one of
@@ -5091,7 +5139,7 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&source=&favorited=&rating=&batchId=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `source` is one or more of the surfaces that created the job (`mcp`, `cli`, `sdk`, `web`, `extension`, `app`, `api`, `internal` — the job's `source` field), comma-separated or repeated; `source=mcp` lists what your MCP clients made, and an unknown value is `400 validation_error`. `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). `batchId` matches `input_data.batchId` — the jobs of one generate-image batch ([§ 4g](#4g-several-images-in-one-call-count-models)). Every filter is exact-match and they combine with AND. Every job carries `favorited`, `rating` and `title` (the owner's own name for it, `null` until named — `PATCH /v1/jobs/:id`). A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
+| `GET` | `/v1/jobs?limit=&cursor=&status=&type=&origin=&source=&favorited=&rating=&batchId=&attachToCharacterId=` | Your jobs, newest first, cursor-paginated: `{ data: Job[], next }` (`limit` ≤ 100; pass `next` back as `cursor`). `status` is one or more job statuses (`pending`, `queued`, `processing`, `pending_review`, `completed`, `failed`, `cancelled`); an unknown one is `400 validation_error`. `type` is one or more `input_data.type` values — the route that created the job (`llm-structured`, `video-analysis`, …), up to 20. Both take a comma-separated list (`status=failed,cancelled`) or a repeated parameter (`type=a&type=b`). `origin` matches `input_data.origin` — the client app that sent it (`studio`, …). `source` is one or more of the surfaces that created the job (`mcp`, `cli`, `sdk`, `web`, `extension`, `app`, `api`, `internal` — the job's `source` field), comma-separated or repeated; `source=mcp` lists what your MCP clients made, and an unknown value is `400 validation_error`. `favorited=true` keeps the jobs you favorited (`false`: the ones you did not), and `rating` is `good`, `bad`, `rated` (any rating) or `unrated` — see [§13a](#13a-favorites-and-ratings). `batchId` matches `input_data.batchId` — the jobs of one generate-image batch ([§ 4g](#4g-several-images-in-one-call-count-models)). Every filter is exact-match and they combine with AND. Every job carries `favorited`, `rating`, `title` (the owner's own name for it, `null` until named — `PATCH /v1/jobs/:id`) and `coverUrl` (its picture: the owner's cover, else the provider's art, else `null`). A page may hold fewer than `limit` rows — even none — and still carry a `next`; page on `next`, never on `data.length`. `attachToCharacterId` is the per-character archive described under characters. |
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status, queue? }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint, queue? }[] }` (no `credit_status` on this route). |
 
@@ -5411,7 +5459,7 @@ filters on them with `favorited=true|false` and `rating=good|bad|rated|unrated`
 | Method | Path | Query / Body | Purpose |
 |---|---|---|---|
 | `PUT` | `/v1/jobs/:id/rating` | body `{ rating: "good" \| "bad" \| null }` | Rate one of your jobs, or clear its rating with `null` (`rating` is required, so clearing is explicit). One rating per job, its owner's: anyone else's job — an admin's request included — is `404 not_found`. A rating other than `good`, `bad` or `null` is `400 validation_error`. Returns `{ data: { jobId, rating } }`. |
-| `PATCH` | `/v1/jobs/:id` | body `{ title: string \| null }` | Name one of your jobs — "Wedding toast, final" on a picture, a clip, a track or a speech take — or clear its name with `null` (or `""`). Trimmed; one line of plain text, 1–120 characters, any language (`400 validation_error` otherwise). The owner only: anyone else's job — an admin's request included — is `404 not_found`. Free; any job type and status, the Trash included; nothing else about the job changes (no reordering of results). The name reads back as `title` wherever the job is returned: `GET /v1/jobs/:id`, `GET /v1/jobs`, a session's items, `GET /v1/trash`, the gallery's cards (public, beside the prompt) and the library's rows (`title` = the name of the job that made the file; not its `filename`). Returns `{ data: { jobId, title } }`. OAuth apps need `assets:write`. |
+| `PATCH` | `/v1/jobs/:id` | body `{ title?: string \| null, cover?: { assetId } \| { url } \| null }` (at least one) | Name one of your jobs — "Wedding toast, final" on a picture, a clip, a track or a speech take — or clear its name with `null` (or `""`); and/or set its cover picture, or clear it with `null`. The name: trimmed; one line of plain text, 1–120 characters, any language. The cover: one of your own images on this platform, a file you uploaded or generated — `{ "assetId": … }` (a library asset) or `{ "url": … }` (its address on this platform's storage, at most 2048 characters); any other address, or a file you did not make, is refused; a PNG, JPEG, WebP or GIF of at most 10 MB, 64–8192 pixels on each side, whose pixels decode. The job keeps its own copy; it is deleted with the job, and a cover whose original falls under a content restriction is no longer shown. `400 validation_error` for anything outside these rules. Two changes to one job's cover at the same moment: one lands, the other is `409 conflict` and writes nothing (read the job and send again). A request that sends `cover` is limited to 20 a minute per account (`429 rate_limit_exceeded` with a `Retry-After` header), beside the route's own limit; MCP `update_job` counts against the same limit. The owner only: anyone else's job — an admin's request included — is `404 not_found`. Free; any job type and status, the Trash included; nothing else about the job changes (no reordering of results). The name reads back as `title` wherever the job is returned: `GET /v1/jobs/:id`, `GET /v1/jobs`, a session's items, `GET /v1/trash`, the gallery's cards (public, beside the prompt) and the library's rows (`title` = the name of the job that made the file; not its `filename`). The picture reads back as `coverUrl` on the same job reads, a session's items, the Trash, the library's rows and a share: your cover, else the art the provider made with the result (a Suno song's), else `null` — one name for every kind of result; clearing your cover brings the provider's art back. Returns `{ data: { jobId, title?, coverUrl? } }`, each field it was sent. OAuth apps need `assets:write`. |
 | `POST` | `/v1/gallery/favorite` | body `{ jobId }` | Favorite a job, or un-favorite it when it already is. Returns `{ favorited: boolean }` — the job's state after the toggle. Another person's private job is `404 not_found` (nothing is stored); removing a favorite always works. |
 | `GET` | `/v1/gallery/favorites` | none | Your favorited job ids, newest first: `{ data: string[] }`. |
 | `GET` | `/v1/gallery` | `type` (`image` \| `video` \| `audio`), `userId`, `favoritesOnly=true`, `limit` (1–50, default 20), `cursor` | The public gallery, newest completed first: `{ data: GalleryItem[], nextCursor, totalCount? }` (`totalCount` on the first page only; pass `nextCursor` back as `cursor`). No token needed. With `userId`, only that person's work — your own id lists your private items too, anyone else's their public ones. `favoritesOnly=true` narrows **your own** items (your `userId`, with your token) to the ones you favorited; asked for anyone else's favorites it is refused — `401` without a token, `403` with another person's `userId` or none. Each item is `{ id, type, jobName, outputUrl, thumbnailUrl, createdAt, prompt, model, title?, preview? }` (`id` is the job id; `title` is the owner's own name for it — `PATCH /v1/jobs/:id` — `null` until named, public beside the prompt and judged by the same word lists) — never whose it is. |
@@ -5442,6 +5490,78 @@ curl -s -X POST "https://app.nodaro.ai/v1/gallery/favorite" \
   -d "{\"jobId\": \"$JOB\"}" | jq .
 curl -s "https://app.nodaro.ai/v1/jobs?rating=good&favorited=true&status=completed" \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {id, favorited, rating}'
+```
+
+### Favorites for everything you keep
+
+Each kind of favorite is starred where it lives — a generation with
+`POST /v1/gallery/favorite`, a library file (an upload too) with
+`POST /v1/library/:id/favorite`, a voice with `PUT /v1/voices/favorites/:voiceId`,
+a node preset with `POST /v1/node-presets/favorites`, a picker option with the
+routes below — and one read lists them all.
+
+| Method | Path | Query | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/favorites` | `kinds` (comma-separated: `job`, `asset`, `voice`, `preset`, `catalog`; default all), `limit` (1–100, default 50), `cursor` | Every favorite you keep, newest first (by when it was starred), with one cursor: `{ data: FavoriteItem[], nextCursor }` — pass `nextCursor` back as `cursor`. |
+| `GET` | `/v1/favorites/catalog` | `catalog` (optional) | Your favorite picker options, newest first: `{ data: [{ catalog, optionId, label, createdAt }] }`. |
+| `PUT` | `/v1/favorites/catalog/:catalog/:optionId` | none | Star a picker option. Idempotent. Returns `{ data: { catalog, optionId, label, favorited: true, createdAt } }` with the stored spelling. |
+| `DELETE` | `/v1/favorites/catalog/:catalog/:optionId` | none | Unstar it. Idempotent: removing one that is not starred succeeds. Returns `{ data: { catalog, optionId, favorited: false } }`. |
+
+A `FavoriteItem` is `{ kind, id, favoritedAt }` plus the one detail its kind
+names, enough to show it with no second call:
+
+| `kind` | `id` | Detail |
+|---|---|---|
+| `job` | the job id | `job: { id, type, status, mediaType, url, thumbnailUrl, createdAt }` — a generation: yours, or a public one. One in the Trash, or one you may no longer see, is left out. |
+| `asset` | the asset id | `asset: { id, type, filename, url, thumbnailUrl, createdAt }` — an upload, or a library file whose job was in the Trash when you starred it. Any other library file a job made lists as its `job`. |
+| `voice` | the voice id | `voice: { voiceId, voiceType, name, previewUrl }`, as it was starred. |
+| `preset` | the preset id | `preset: { nodeType, presetId }` — a factory preset or one of yours. |
+| `catalog` | `<catalog>/<optionId>` | `catalog: { catalog, optionId, label }` — `label` is `null` when the catalog no longer has the option. |
+
+A page may hold fewer than `limit` items — even none — while `nextCursor` is
+set (an item left out above); keep paging until it is `null`, never on
+`data.length`. The combined list is not counted (there is no `totalCount`).
+
+**Picker options.** `catalog` is a catalog's own id: every picker catalog
+`GET /v1/picker-catalogs` serves, by its `catalogId` — `style`, `color-look`,
+`mood`, `camera-motions`, `lens`, `framing`, `person`, `music-genre`,
+`music-mood`, `instrumentation`, `voice-character`, `voice-delivery` and the
+rest (a catalog's node type is accepted too, `camera-motion` →
+`camera-motions`, and stored as the `catalogId`) — plus two catalogs served
+elsewhere: `shot-shapes` (the shot-sequence blueprints) and `style-presets`
+(the Style Gallery looks). `optionId` is the option's `id`; an option of one
+field of a multi-field catalog (every option of Person, Framing, the music
+pickers; a transition's duration) is `<field>:<id>`, e.g. `genre:jazz` — a bare
+id that names exactly one option is accepted and answered in that form. Both
+are checked against the catalogs this server serves (its catalog packs
+included): an unknown catalog or option is `400 validation_error`. At most
+1000 favorite options, held even for stars sent at the same moment; past that
+a star is `409 limit_reached` (starring one you already have still succeeds).
+
+Owner-only: every read and write is yours, `401` without a token. The two
+reads allow 120 requests a minute, the writes 60. OAuth apps:
+the writes need `assets:write`; `GET /v1/favorites/catalog` needs
+`assets:read`; `GET /v1/favorites` reads the kinds the app's grant reads
+through each kind's own route — `assets:read` for jobs, uploads, voices and
+picker options (jobs also with `jobs:read`), `presets:read` for presets.
+Without `kinds` an app gets the kinds it may read; naming one it may not is
+`403 insufficient_scope`. On a server whose database does not have upload and
+picker-option favorites yet, `GET /v1/favorites` lists the other kinds, the
+catalog list is empty, and the catalog writes answer `503 not_available`.
+
+SDK: `client.favorites.list({ kinds, limit, cursor })`,
+`client.favorites.listCatalog(catalog?)`, `client.favorites.addCatalog(catalog, optionId)`,
+`client.favorites.removeCatalog(catalog, optionId)`. MCP: `list_favorites` with
+`kinds`, `favorite_asset` (a `job_id` or an `asset_id`), `favorite_catalog_option`.
+
+```bash
+# Star a music genre and a camera move, then list every favorite option and media favorite
+curl -s -X PUT "https://app.nodaro.ai/v1/favorites/catalog/music-genre/genre:jazz" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq .
+curl -s -X PUT "https://app.nodaro.ai/v1/favorites/catalog/camera-motions/$MOVE_ID" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq .
+curl -s "https://app.nodaro.ai/v1/favorites?kinds=job,asset,catalog" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {kind, id}'
 ```
 
 ### Recording an image edited in the browser

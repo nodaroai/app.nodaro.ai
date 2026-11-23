@@ -130,14 +130,14 @@ describe("runJobOnCloud", () => {
 })
 
 describe("the route map matches the routes the cloud actually serves", () => {
-  it("every mapped path exists in routes/suno.ts", async () => {
+  it("every mapped path exists in the Suno route files", async () => {
     const { readFileSync } = await import("node:fs")
     const { fileURLToPath } = await import("node:url")
     const { dirname, resolve } = await import("node:path")
-    const routes = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "../../../routes/suno.ts"),
-      "utf8",
-    )
+    // Add Vocals / Add Instrumental live beside the rest (routes/suno-add-track.ts, registered by sunoRoutes).
+    const routes = ["../../../routes/suno.ts", "../../../routes/suno-add-track.ts"]
+      .map((rel) => readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), rel), "utf8"))
+      .join("\n")
     // A typo'd path would only surface as a 404 mid-generation on a user's
     // machine — cheap to catch here instead, since the cloud runs this file.
     // Only the operations a handler actually routes. lyrics / separate /

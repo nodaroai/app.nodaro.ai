@@ -45,6 +45,20 @@ export interface LibraryAsset {
    * (an upload). Not the file's `filename`. Absent from an older server.
    */
   readonly title?: string | null
+  /**
+   * The picture of the job that made the file: its owner's cover
+   * (`client.jobs.update`), else the provider's art (a Suno song's), else
+   * `null` (an upload). Absent from an older server.
+   */
+  readonly coverUrl?: string | null
+  /**
+   * Whether you favorited the file: a file a job made by its job's favorite
+   * (`Job.favorited`) while that job is out of the Trash, an upload (or a file
+   * whose job is in the Trash) by its own star ({@link LibraryResource.favorite}).
+   * Absent when the server could not read it, and from an older server — never
+   * read absent as `false`.
+   */
+  readonly favorited?: boolean
   readonly createdAt: string
 }
 
@@ -82,6 +96,21 @@ export interface ListLibraryParams {
    * source and match no value, so they appear only when this is omitted.
    */
   readonly source?: "internal" | "mcp" | "app" | "cli" | "sdk" | "extension" | "web" | "api"
+  /**
+   * `true` → only the files you favorited (uploads and generations alike);
+   * `false` → only the ones you did not. Combines with every other filter and
+   * the cursor, however many favorites you have. A server whose database does
+   * not have upload favorites yet answers 503 `not_available`.
+   */
+  readonly favorited?: boolean
+}
+
+/** What {@link LibraryResource.favorite} answers. */
+export interface LibraryFavoriteResult {
+  /** Whether the file is a favorite now. */
+  readonly favorited: boolean
+  /** The job that made the file, whose favorite it shares; `null` for an upload, which has its own. */
+  readonly jobId: string | null
 }
 
 export interface ListLibraryResult {
@@ -96,10 +125,11 @@ export interface ListLibraryResult {
  * Library — the caller's media assets (uploaded files + saved generations).
  *
  * Read surface over `GET /v1/library`: a cursor-paginated, type-filterable,
- * name-searchable list (the filename, or a song's title). This is the "bring from your media" source for
- * pickers that also offer upload + in-production stills. Writes (saving a
- * generation, promoting/removing) stay on their dedicated routes — not exposed
- * here until a consumer needs them.
+ * name-searchable list (the filename, or a song's title), filterable by
+ * favorite. This is the "bring from your media" source for
+ * pickers that also offer upload + in-production stills. `favorite` stars a
+ * file. Other writes (saving a generation, promoting/removing) stay on their
+ * dedicated routes — not exposed here until a consumer needs them.
  */
 export class LibraryResource {
   constructor(private client: NodaroClientCore) {}
@@ -122,7 +152,25 @@ export class LibraryResource {
     if (params.cursor) qs.set("cursor", params.cursor)
     if (params.owned !== undefined) qs.set("owned", String(params.owned))
     if (params.source) qs.set("source", params.source)
+    if (params.favorited !== undefined) qs.set("favorited", String(params.favorited))
     const query = qs.toString()
     return this.client.request("GET", `/v1/library${query ? `?${query}` : ""}`)
+  }
+
+  /**
+   * `POST /v1/library/:id/favorite` → star (`true`) or unstar (`false`) a file
+   * in your library by its asset id — one of yours or a shared item; omit
+   * `favorited` to toggle. Sending the state you want is idempotent (two calls
+   * at once both end in it); a toggle is not. A file a job made shares that
+   * job's favorite; an upload, or a file whose job is in the Trash, has its
+   * own, so uploads and generations are one favorites list
+   * (`list({ favorited: true })`, `client.favorites.list()`). OAuth apps need
+   * `assets:write`. A server without upload favorites yet answers 503
+   * `not_available` for an upload.
+   */
+  favorite(assetId: string, favorited?: boolean): Promise<LibraryFavoriteResult> {
+    return this.client.request<LibraryFavoriteResult>("POST", `/v1/library/${encodeURIComponent(assetId)}/favorite`, {
+      body: favorited === undefined ? {} : { favorited },
+    })
   }
 }

@@ -16,7 +16,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_use_case`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `estimate_full_quality`†, `estimate_trend`†, `estimate_use_case`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `full_quality`†, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_text`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `make_chapters`, `make_clip_pack`, `make_podcast_pack`, `make_trailer`, `mask_composite`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `pitch_tempo`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `replace_audio`†, `resolve_recast_gate`†, `resolve_shot_sequence`, `retry_app_run`, `run_app`, `run_component`, `run_trend`†, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `shot_cuts`, `silence_detect`, `slideshow`, `social_search`†, `speaker_layout`, `speaker_map`, `speaker_view`†, `speech_to_video`, `split_into_layers`, `split_media`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_speech`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `tighten_episode`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_depth`, `video_mask`, `video_remake`†, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `get_trend`†, `list_jobs`, `list_sessions`, `list_trash`, `list_trends`†, `read_session`, `wait_for_job` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_dubbing`, `get_dubbing_captions`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_moodboards`, `list_objects`, `list_palettes`, `list_saved_posts`†, `list_voice_favorites`, `read_collection` |
-| `assets:write` | `add_collection_record`, `add_competitor`†, `add_dubbing_language`, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_node_preset`, `favorite_voice`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `restore_job`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `add_dubbing_language`, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `create_session`, `delete_node_preset`, `favorite_asset`, `favorite_catalog_option`, `favorite_node_preset`, `favorite_voice`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `rate_job`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `restore_job`, `save_moodboard`, `save_node_preset`, `save_palette`, `save_post`†, `update_character`, `update_job`, `update_location`, `update_session`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -1771,7 +1771,7 @@ Your own gallery (`scope: "mine"`) also lists your Apply EDL renders: a video re
 Browse assets you've uploaded (source files — distinct from generated
 outputs). Use to retrieve existing upload URLs to feed into generation
 tools. An item that is an Apply EDL preview (a render at `proxy` quality)
-carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it. A file whose stored copy is gone is not listed and not counted.
+carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it. A file whose stored copy is gone is not listed and not counted. Each item carries `favorited` (the rule of `GET /v1/library`), left out when it could not be read — unknown, never `false`.
 
 **Input:** `kind`, `limit`, `cursor`, `search` — up to 5 words that must all appear in the filename or the name a file is shown by (a song's title), ignoring case, each matched as written (the `q` of `GET /v1/library`).
 
@@ -1783,7 +1783,19 @@ carries `preview: true`, and its text line says `(preview)`. A render stored bef
 
 List your favorited gallery items, most recent first. A favorited Apply EDL render of yours is listed too (`preview: true` on a Preview); another person's is not.
 
-**Input:** `limit`, `cursor`
+With `kinds`, it lists every kind of favorite in one list instead, newest first
+(`GET /v1/favorites`): generations (`job`), uploads (`asset` — and a library
+file whose job was in the Trash when it was starred; any other file a job made
+lists as its `job`), voices (`voice`), node presets (`preset`) and picker
+options (`catalog` — styles, moods, camera moves, music genres, Person
+settings, shot shapes, …). Each item says what it points at (`id`) and carries
+enough to show it; page with the returned `next_cursor` until it is null. A
+page can hold fewer items than `limit`, even none, while `next_cursor` is set
+(a favorite the user can no longer see is left out of its page), and no total
+count is given. A kind the connection may not read (presets need
+`presets:read`) is refused.
+
+**Input:** `limit`, `cursor`, optional `kinds` (any of `job`, `asset`, `voice`, `preset`, `catalog`)
 
 ---
 
@@ -1885,7 +1897,14 @@ Mark or unmark a gallery asset as a favorite: one of your own jobs, or a public
 one (your own only, on a deployment that does not allow public work). Unmarking
 always works. `list_jobs` with `favorited: true` lists your favorited jobs.
 
-**Input:** `{ job_id: string, favorited: boolean }`
+A file in your library is starred by its asset id (`asset_id`, or the id a
+`browse_uploads` tile carries as `job_id`): a file a job made shares that job's
+favorite, and an upload — which no job made — has its own (so does a file whose
+job is in the Trash), so uploads and generations are one favorites list
+(`list_favorites` with `kinds`). Both directions are idempotent: two calls for
+the same state at once both end in it.
+
+**Input:** `{ job_id?: string, asset_id?: string, favorited: boolean }` — one of `job_id` / `asset_id`
 
 ---
 
@@ -1920,6 +1939,28 @@ id that is not a job, answers "not found". The rating shows on `list_jobs`,
 which filters by it, and on `GET /v1/jobs`. Returns `{ data: { jobId, rating } }`.
 
 **Input:** `{ job_id: uuid, rating: "good" | "bad" | null }` (`rating` is required: `null` clears)
+
+---
+
+### `update_job`
+
+**Scope:** `assets:write`
+
+Rename one of your results and/or set its cover picture — any kind of result:
+a song, a speech take, a sound effect, a video, an image, a dubbing, a Remake
+run. Free; only its owner changes it (another person's job, or an id that is
+not a job, answers "not found"). The cover is one of your own images here — a
+file you uploaded or generated: an upload's asset id (`cover_asset_id`) or its
+address on this platform's storage (`cover_url`, at most 2048 characters); a
+PNG, JPEG, WebP or GIF of at most 10 MB, 64–8192 pixels on each side. The job
+keeps its own copy. When another change to the same job's cover lands first,
+nothing is written and the tool says so: read the job and try again. Cover
+changes are limited to 20 a minute per account, counted with the API's. `clear_cover: true` removes your cover
+and brings the provider's art back (a Suno song's), else none. The picture
+reads back as `coverUrl` wherever the job is returned. Returns
+`{ data: { jobId, title?, coverUrl? } }`, each field it was sent.
+
+**Input:** `{ job_id: uuid, title?: string | null, cover_asset_id?: uuid, cover_url?: string, clear_cover?: boolean }` (at least one; one cover field at most)
 
 ---
 
@@ -2649,6 +2690,23 @@ the star is refused with `limit_reached`.
 — what the voice is, as `generate_speech` takes it) and `name`, both required
 then and neither needed to unstar; optional `preview_url` (https; `""` clears a
 stored preview), `favorite` (default `true`).
+
+### `favorite_catalog_option`
+
+**Scope:** `assets:write`
+
+Star a picker option for the user — an art style or look, a mood, a camera
+move, a lens, a music genre / mood / instrument, a voice character or delivery,
+a Person setting, a shot shape, a Style Gallery look — or unstar it with
+`favorite: false`. `catalog` is the catalog's id as `get_picker_catalog` names
+it (its `catalogId`; its node type is accepted too), `shot-shapes`
+(`list_shot_shapes`) or `style-presets`; `option_id` is the option's id, written
+`<field>:<id>` for an option of one field of a multi-field catalog
+(`genre:jazz`). Both are checked against the catalogs the server serves; an
+unknown one is refused. Idempotent. `list_favorites` with `kinds: ["catalog"]`
+lists them.
+
+**Input:** `catalog`, `option_id`, optional `favorite` (default `true`).
 
 ### `get_dubbing`
 

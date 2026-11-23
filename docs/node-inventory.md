@@ -115,7 +115,7 @@ One row per node **type**. Generative model wrappers are not rows — a type tha
 | `remove-background` | Remove Background | ai | Remove the background from an image and output a transparent PNG (Recraft) | `image`:image | `out`:image | NO |
 | `speech-to-video` | Speech to Video | ai | Generate video driven by speech audio input using Wan 2.2 | `image`:image, `audio`:audio, `prompt`:text, `cinematography`:look | `video`:video | NO |
 | `suno-add-instrumental` | Suno Add Instrumental | ai | Add an AI-generated instrumental backing track to an existing vocal track | `audio`:audio | `audio`:audio | NO |
-| `suno-add-vocals` | Suno Add Vocals | ai | Add AI-generated vocals to an existing instrumental track | `audio`:audio | `audio`:audio | NO |
+| `suno-add-vocals` | Suno Add Vocals | ai | Add AI-generated vocals to an existing instrumental track, with optional lyrics or vocal direction | `audio`:audio, `prompt`:text | `audio`:audio | NO |
 | `suno-convert-wav` | Suno Convert WAV | ai | Convert a Suno-generated MP3 audio track to lossless WAV format | `audio`:audio | `audio`:audio | NO |
 | `suno-cover` | Suno Cover | ai | Create a cover version of an existing audio track using Suno AI | `audio`:audio, `prompt`:text, `voice`:identity | `audio`:audio | NO |
 | `suno-extend` | Suno Extend | ai | Extend an existing Suno-generated track by continuing from a specified timestamp | `audio`:audio, `prompt`:text, `voice`:identity | `audio`:audio | NO |

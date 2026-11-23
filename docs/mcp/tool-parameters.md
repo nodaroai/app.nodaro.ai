@@ -876,8 +876,19 @@ Needs `assets:write`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | At least 1 character. |
+| `job_id` | string |  | The generation's job id (an asset id from browse_uploads works too). At least 1 character. |
+| `asset_id` | string |  | A library file's asset id: an upload, or a saved generation. At least 1 character. |
 | `favorited` | boolean | yes |  |
+
+## `favorite_catalog_option`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `catalog` | string | yes | The catalog's id, e.g. style, color-look, camera-motions, music-genre, person, shot-shapes. From 1 to 64 characters. |
+| `option_id` | string | yes | The option's id; `<field>:<id>` for a per-field option (a bare id that names one option is accepted). From 1 to 200 characters. |
+| `favorite` | boolean |  | false removes the star (default true). |
 
 ## `favorite_node_preset`
 
@@ -1950,6 +1961,7 @@ Needs `assets:read`.
 |---|---|---|---|
 | `limit` | integer |  | From 1 to 100. |
 | `cursor` | string |  |  |
+| `kinds` | string[] |  | Which kinds to list, in one list (e.g. ["job", "asset"] for every media favorite). Omit for the favorite generations' job_ids. From 1 to 5 items. |
 
 ## `list_jobs`
 
@@ -3204,8 +3216,16 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno track. At least 1 character. |
-| `model` | string |  | Suno model for the new layer. Options: V6, V6_WILD, V6_MINI, V4_5PLUS, V5, V5_5. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `audio_asset_id` | string |  | Audio job id of the song: a Suno track made here, or any audio. At least 1 character. |
+| `audio_url` | string (URL) |  | Direct link to the song's audio file, instead of audio_asset_id. |
+| `model` | string |  | Suno model. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `style` | string |  | Style of the new layer. Unset: your original Suno song's style; required for any other audio. At most 1000 characters. |
+| `title` | string |  | Result title. Unset: the original's. At most 80 characters. |
+| `negative_tags` | string |  | Styles to avoid, comma separated. At most 200 characters. |
+| `vocal_gender` | string |  | Preferred voice; not guaranteed. One of `male`, `female`. |
+| `style_weight` | number |  | How closely to follow the style, 0-1. From 0 to 1. |
+| `weirdness_constraint` | number |  | How far to stray creatively, 0-1. From 0 to 1. |
+| `audio_weight` | number |  | How much the original audio weighs, 0-1. From 0 to 1. |
 
 ## `suno_add_vocals`
 
@@ -3213,8 +3233,17 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno track. At least 1 character. |
-| `model` | string |  | Suno model for the vocals. Options: V6, V6_WILD, V6_MINI, V4_5PLUS, V5, V5_5. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `audio_asset_id` | string |  | Audio job id of the song: a Suno track made here, or any audio. At least 1 character. |
+| `audio_url` | string (URL) |  | Direct link to the song's audio file, instead of audio_asset_id. |
+| `model` | string |  | Suno model. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `style` | string |  | Style of the new layer. Unset: your original Suno song's style; required for any other audio. At most 1000 characters. |
+| `title` | string |  | Result title. Unset: the original's. At most 80 characters. |
+| `negative_tags` | string |  | Styles to avoid, comma separated. At most 200 characters. |
+| `vocal_gender` | string |  | Preferred voice; not guaranteed. One of `male`, `female`. |
+| `style_weight` | number |  | How closely to follow the style, 0-1. From 0 to 1. |
+| `weirdness_constraint` | number |  | How far to stray creatively, 0-1. From 0 to 1. |
+| `audio_weight` | number |  | How much the original audio weighs, 0-1. From 0 to 1. |
+| `prompt` | string |  | The lyrics, or a direction for the voice. Unset: Suno writes them. At most 5000 characters. |
 
 ## `suno_convert_wav`
 
@@ -3536,6 +3565,18 @@ Needs `assets:write`.
 | `seed_prompt` | string |  | At most 4000 characters. |
 | `identity_lock` | string |  | One of `off`, `soft`, `strict`. |
 | `expected_updated_at` | string |  | Optimistic concurrency token (the `updatedAt` from get_character). When provided and stale, the call returns a conflict error. |
+
+## `update_job`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | At least 1 character. |
+| `title` | string or null |  | The name, or null to clear it. At most 120 characters. |
+| `cover_asset_id` | string |  | Your image to use as the cover: its asset id. |
+| `cover_url` | string (URL) |  | Your image to use as the cover: its address on this platform's storage. At most 2048 characters. |
+| `clear_cover` | boolean |  | true: remove your cover. |
 
 ## `update_location`
 

@@ -18,6 +18,8 @@ export interface ShareLinkRow {
   readonly created_at: string
   readonly updated_at: string
   readonly revoked_at: string | null
+  /** The interface language it was shared in (migration 689); absent before the column exists. */
+  readonly locale?: string | null
 }
 
 /** The owner's view of one item's link. */
@@ -31,6 +33,8 @@ export interface Share {
   readonly allowCopy: boolean
   readonly createdAt: string
   readonly updatedAt: string
+  /** The interface language it was shared in (its preview card is written in it), or null (English). */
+  readonly locale: string | null
 }
 
 export type SharedMediaKind = "image" | "video" | "audio"
@@ -57,6 +61,12 @@ export interface SharedJob {
   readonly durationSec?: number
   /** The owner's name for the result, or null. */
   readonly title: string | null
+  /** A song's own title (of the take `outputUrl` names), when it has one. Absent otherwise. */
+  readonly songTitle?: string
+  /** What a person calls the tool that made it, e.g. "Song Mashup"; null for a tool with no public name. */
+  readonly toolName: string | null
+  /** The result's picture: the owner's cover, else the provider's art (a Suno song's), else null. */
+  readonly coverUrl: string | null
   readonly createdAt: string
   /** The prompt as the person wrote it, exactly as sent; null for a trend run. */
   readonly prompt: string | null

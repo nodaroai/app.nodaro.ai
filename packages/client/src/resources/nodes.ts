@@ -2,6 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
 import type { VideoToVideoParams, VideoToVideoRemakeParams, VideoToVideoRemakeQuote, NodeQuote } from "./nodes-video-params.js"
 import type { LlmChatParams } from "./nodes-llm-params.js"
+import type { SunoAddVocalsParams, SunoAddInstrumentalParams } from "./nodes-suno-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
@@ -1009,6 +1010,8 @@ export class NodesResource {
   /** Synchronous: answers `{ jobId, generatedText }`. */
   run(type: "llm-chat", params: LlmChatParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-upscale", params: VideoUpscaleParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "suno-add-vocals", params: SunoAddVocalsParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "suno-add-instrumental", params: SunoAddInstrumentalParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>

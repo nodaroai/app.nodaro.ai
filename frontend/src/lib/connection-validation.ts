@@ -927,7 +927,7 @@ const AUDIO_TEXT_VALIDATORS: Record<string, AudioTextValidator> = {
   "suno-replace-section":  isValidSunoReplaceSectionConnection,
   "suno-style-boost":      isValidSunoStyleBoostConnection,
   "suno-add-instrumental": (h, s) => isValidSunoAddInstrumentalConnection(h, s),
-  "suno-add-vocals":       (h, s) => isValidSunoAddVocalsConnection(h, s),
+  "suno-add-vocals":       isValidSunoAddVocalsConnection,
   "suno-convert-wav":      (h, s) => isValidSunoConvertWavConnection(h, s),
   "suno-upload-extend":    isValidSunoUploadExtendConnection,
   // Batch 3: AI > Script & Text

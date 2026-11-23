@@ -111,6 +111,8 @@ vi.mock("@/lib/storage.js", () => ({
 }))
 vi.mock("@/lib/key-ownership.js", () => ({ keysHeldByOtherLibraryRows: h.keysHeldByOtherLibraryRows }))
 vi.mock("@/lib/asset-delete.js", () => ({ deletableKeys: h.deletableKeys }))
+const covers = vi.hoisted(() => ({ named: new Set<string>() }))
+vi.mock("@/lib/job-cover/cover-job-refs.js", () => ({ coverKeysNamedByJobs: async (keys: string[]) => new Set(keys.filter((k) => covers.named.has(k))) }))
 vi.mock("@/lib/job-output-references.js", () => ({
   blankUrlsInEveryJobOutput: h.blankUrlsInEveryJobOutput,
   urlsLinkedByJobsSince: h.urlsLinkedByJobsSince,
@@ -508,6 +510,19 @@ describe("retryFailedStorageDeletes", () => {
     expect(h.blankUrlsInEveryJobOutput).toHaveBeenCalledWith([`https://cdn.example.com/${OTHER_KEY}`])
     expect(h.state.deletes.flat().sort()).toEqual([KEY, OTHER_KEY].sort())
     expect(result.released).toBe(1)
+  })
+
+  it("a job's cover copy a job shows again is kept, and its record released", async () => {
+    const COVER = `job-covers/00000000-0000-4000-8000-000000000001/cover-${"a".repeat(32)}-${"b".repeat(32)}.png`
+    covers.named = new Set([COVER])
+    try {
+      h.state.selectAnswers = [{ data: [row(0, COVER, `https://cdn.example.com/${COVER}`, null)], error: null }]
+      const result = await retryFailedStorageDeletes()
+      expect(h.batchDeleteFromR2).not.toHaveBeenCalled()
+      expect(result.released).toBe(1)
+    } finally {
+      covers.named = new Set()
+    }
   })
 
   it("any library row naming the key holds it — the retry counts none as the file's own", async () => {

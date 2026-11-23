@@ -48,6 +48,9 @@ const AUDIO_JOBS = new Set([
   //           extract-youtube-audio, audio-isolation (processing)
 ])
 
+/** Every queue name the gallery lists (lib/share-links/tool-names.ts names each). */
+export const GALLERY_LISTED_JOB_TYPES: readonly string[] = [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
+
 /** Apply EDL renders list in the OWNER's own view only (decided 2026-10-06; see
  *  lib/render-listing.ts): a Preview is private, and a public final would be
  *  exposure the public gallery has never had. Their medium is read per row. */
@@ -126,8 +129,12 @@ export interface GalleryPageQuery {
   readonly cursor?: string
   /** Only this creator's work. */
   readonly userId?: string
-  /** Only these jobs (a person's favorites). */
-  readonly favoriteJobIds?: readonly string[] | null
+  /**
+   * Only the jobs this person favorited — joined in the query
+   * (`gallery_favorites`, an inner embed filtered on the person), so the
+   * request names the person and never their favorites.
+   */
+  readonly favoritesOf?: string | null
   /** The owner's own view: private work too. */
   readonly includePrivate: boolean
   readonly moderation: GalleryModeration
@@ -140,9 +147,17 @@ const MAX_ROUNDS = 5
 /** …and while it has found nothing yet: a page is never empty while unread rows remain nearby. */
 const MAX_ROUNDS_WHILE_EMPTY = 10
 
+/**
+ * The favorites join: each job with the person's favorite of it, inner — a job
+ * they did not favorite is no row. Filtered on the person by `narrowGallery`.
+ */
+const FAVORITES_EMBED = ", gallery_favorites!gallery_favorites_job_id_fkey!inner(user_id)"
+
 function mediaJobNames(type: string | undefined): string[] {
   return type && ["image", "video", "audio"].includes(type) ? jobNamesForType(type) : [...IMAGE_JOBS, ...VIDEO_JOBS, ...AUDIO_JOBS]
 }
+
+type JobTypeFilter = { readonly in: string[]; readonly or?: undefined } | { readonly or: string; readonly in?: undefined }
 
 /**
  * The job-type filter of one read, as the database applies it: `or` when set,
@@ -151,11 +166,7 @@ function mediaJobNames(type: string | undefined): string[] {
  * (an `or`, so the count and the page agree about an audio mix on the video tab).
  * Every other read keeps the plain allowlist.
  */
-function jobTypeFilter(
-  names: string[],
-  type: string | undefined,
-  ownerView: boolean,
-): { readonly in: string[]; readonly or?: undefined } | { readonly or: string; readonly in?: undefined } {
+function jobTypeFilter(names: string[], type: string | undefined, ownerView: boolean): JobTypeFilter {
   if (!ownerView || type === "image") return { in: names }
   if (type === "video" || type === "audio") {
     const url = type === "video" ? "videoUrl" : "audioUrl"
@@ -165,11 +176,49 @@ function jobTypeFilter(
   return { in: [...names, ...OWNER_ONLY_JOBS] }
 }
 
-/**
- * One page of the gallery: completed media outputs, newest first, through the
- * gallery's moderation (lib/gallery-moderation.ts). Throws when the database
- * cannot be read.
- */
+/** What every read of one gallery page applies, the count and each round alike. */
+interface GalleryScope {
+  readonly q: GalleryPageQuery
+  readonly typeFilter: JobTypeFilter
+  readonly excludedUsers: string | null
+}
+
+/** The filter methods `narrowGallery` uses. */
+interface GalleryNarrowable<Q> {
+  is(column: string, value: null): Q
+  eq(column: string, value: unknown): Q
+  not(column: string, operator: string, value: unknown): Q
+  filter(column: string, operator: string, value: unknown): Q
+  in(column: string, values: readonly unknown[]): Q
+  or(filters: string): Q
+}
+
+/** The gallery's filters, one set for the count and the page so the two cannot drift. */
+function narrowGallery<Q extends GalleryNarrowable<Q>>(query: Q, scope: GalleryScope): Q {
+  const { q, typeFilter, excludedUsers } = scope
+  // The Trash is left out on each chain itself (`.is(TRASHED_JOB_COLUMN, null)`), where the read guard looks.
+  let out = query
+    .eq("status", "completed")
+    .not("output_data", "is", null)
+    // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
+    .is(CHILD_JOB_COLUMN, null)
+  if (!q.includePrivate) out = out.eq("is_public", true)
+  if (q.userId) out = out.eq("user_id", q.userId)
+  if (excludedUsers) out = out.filter("user_id", "not.in", excludedUsers)
+  if (q.favoritesOf) out = out.eq("gallery_favorites.user_id", q.favoritesOf)
+  return typeFilter.or !== undefined ? out.or(typeFilter.or) : out.in("job_type", typeFilter.in)
+}
+
+/** The exact count of the gallery the page walks (first page only). */
+async function countGallery(scope: GalleryScope): Promise<number | null> {
+  const query = supabase
+    .from("jobs")
+    .select("id" + (scope.q.favoritesOf ? FAVORITES_EMBED : ""), { count: "exact", head: true })
+    .is(TRASHED_JOB_COLUMN, null)
+  const { count } = await narrowGallery(query, scope)
+  return count
+}
+
 /** A row of the page query below: the columns it selects (`title` only once the database has it). */
 interface GalleryJobRow {
   readonly id: string
@@ -182,37 +231,76 @@ interface GalleryJobRow {
   readonly title?: string | null
 }
 
+/** One round's rows: the newest `fetchCount` completed before `before`. */
+async function readGalleryRound(scope: GalleryScope, fetchCount: number, before: string | null): Promise<GalleryJobRow[]> {
+  let query = narrowGallery(
+    supabase
+      .from("jobs")
+      // `title` (the owner's name for the job, migration 609) once this database has the column.
+      .select("id, job_type, input_data, output_data, completed_at, user_id, provider" + titleSelect() + (scope.q.favoritesOf ? FAVORITES_EMBED : ""))
+      .is(TRASHED_JOB_COLUMN, null)
+      .order("completed_at", { ascending: false })
+      .limit(fetchCount),
+    scope,
+  )
+  if (before) query = query.lt("completed_at", before)
+  const { data, error } = await query
+  if (error) throw new Error(`Gallery query failed: ${error.message}`)
+  // The select is built from parts (the title column joins it only once the
+  // database has it), so supabase-js cannot infer the row: name it here.
+  return (data as unknown as GalleryJobRow[] | null) ?? []
+}
+
+/** A read row as a card, or null when the gallery does not show it to this view. */
+function toGalleryRow(job: GalleryJobRow, q: GalleryPageQuery, ownerView: boolean): GalleryRow | null {
+  const outputData = (job.output_data ?? {}) as Record<string, unknown>
+  const inputData = (job.input_data ?? {}) as Record<string, unknown>
+  // An owner-only job never leaves the owner's view, whatever the row says.
+  if (OWNER_ONLY_JOBS.has(job.job_type) && !(ownerView && job.user_id === q.userId)) return null
+  const type = getOutputType(job.job_type, inputData, outputData)
+  const outputUrl = getOutputUrl(job.job_type, outputData, inputData)
+  if (!type || !outputUrl) return null
+  // The type asked for is the type listed (a render's medium is per row).
+  if (OWNER_ONLY_JOBS.has(job.job_type) && (q.type === "video" || q.type === "audio" || q.type === "image") && q.type !== type) return null
+  const title = job.title || null
+  // The owner's title is shown beside the prompt, so it is judged with it.
+  if (galleryHides(q.moderation, { userId: job.user_id, inputData, outputData, title })) return null
+  return {
+    userId: job.user_id ?? null,
+    item: {
+      id: job.id,
+      type,
+      jobName: job.job_type,
+      outputUrl,
+      thumbnailUrl: (outputData.thumbnailUrl as string) ?? null,
+      createdAt: job.completed_at,
+      prompt: (inputData.prompt as string) ?? (inputData.text as string) ?? null,
+      model: (inputData.provider as string) ?? job.provider ?? null,
+      title,
+      ...(isPreviewListing(job) ? { preview: true as const } : {}),
+    },
+  }
+}
+
+/**
+ * One page of the gallery: completed media outputs, newest first, through the
+ * gallery's moderation (lib/gallery-moderation.ts). Throws when the database
+ * cannot be read.
+ */
 export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage> {
-  const { limit, cursor, moderation } = q
-  const excludedUsers = bannedGalleryUsersFilter(moderation)
-  const jobNames = mediaJobNames(q.type)
+  const { limit, cursor } = q
   // The owner's own view: a read of one person's work by that person. Neither
   // flag alone is enough (the admin grid sets `includePrivate` with no owner).
   const ownerView = q.includePrivate && !!q.userId
-  const typeFilter = jobTypeFilter(jobNames, q.type, ownerView)
-
-  // Count query (only on first page — when no cursor)
-  let totalCount: number | null = null
-  if (!cursor) {
-    let countQuery = supabase
-      .from("jobs")
-      .select("id", { count: "exact", head: true })
-      .is(TRASHED_JOB_COLUMN, null)
-      .eq("status", "completed")
-      .not("output_data", "is", null)
-      // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
-      .is(CHILD_JOB_COLUMN, null)
-    if (!q.includePrivate) countQuery = countQuery.eq("is_public", true)
-    if (q.userId) countQuery = countQuery.eq("user_id", q.userId)
-    if (excludedUsers) countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
-    if (q.favoriteJobIds) countQuery = countQuery.in("id", [...q.favoriteJobIds])
-    countQuery = typeFilter.or !== undefined ? countQuery.or(typeFilter.or) : countQuery.in("job_type", typeFilter.in)
-    const { count } = await countQuery
-    totalCount = count
+  const scope: GalleryScope = {
+    q,
+    typeFilter: jobTypeFilter(mediaJobNames(q.type), q.type, ownerView),
+    excludedUsers: bannedGalleryUsersFilter(q.moderation),
   }
+  const totalCount = cursor ? null : await countGallery(scope)
 
-  // We need `limit` valid items after JS-side filtering (moderation, missing
-  // output URLs). Fetch in batches, over-fetching to compensate.
+  // We need `limit` valid items after the filters above (moderation, missing
+  // output URLs). Read in rounds, over-fetching to compensate.
   const rows: GalleryRow[] = []
   let pageCursor = cursor ?? null
   let hasMore = true
@@ -221,70 +309,18 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
 
   for (let round = 0; rows.length < limit && hasMore && round < (rows.length === 0 ? MAX_ROUNDS_WHILE_EMPTY : MAX_ROUNDS); round++) {
     const fetchCount = (limit - rows.length) * FETCH_MULTIPLIER + 1 // +1 for hasMore detection
-
-    let dbQuery = supabase
-      .from("jobs")
-      // `title` (the owner's name for the job, migration 609) once this database has the column.
-      .select("id, job_type, input_data, output_data, completed_at, user_id, provider" + titleSelect())
-      .is(TRASHED_JOB_COLUMN, null)
-      .eq("status", "completed")
-      .not("output_data", "is", null)
-      // Never a child job: it is shown only through its parent (CHILD_JOB_COLUMN).
-      .is(CHILD_JOB_COLUMN, null)
-      .order("completed_at", { ascending: false })
-      .limit(fetchCount)
-    if (!q.includePrivate) dbQuery = dbQuery.eq("is_public", true)
-    if (q.userId) dbQuery = dbQuery.eq("user_id", q.userId)
-    if (excludedUsers) dbQuery = dbQuery.filter("user_id", "not.in", excludedUsers)
-    if (q.favoriteJobIds) dbQuery = dbQuery.in("id", [...q.favoriteJobIds])
-    if (pageCursor) dbQuery = dbQuery.lt("completed_at", pageCursor)
-    dbQuery = typeFilter.or !== undefined ? dbQuery.or(typeFilter.or) : dbQuery.in("job_type", typeFilter.in)
-
-    const { data, error } = await dbQuery
-    if (error) throw new Error(`Gallery query failed: ${error.message}`)
-    // The select is built from parts (the title column joins it only once the
-    // database has it), so supabase-js cannot infer the row: name it here.
-    const jobs = data as unknown as GalleryJobRow[] | null
-    if (!jobs || jobs.length === 0) {
-      hasMore = false
-      break
-    }
+    const jobs = await readGalleryRound(scope, fetchCount, pageCursor)
     if (jobs.length < fetchCount) hasMore = false
+    if (jobs.length === 0) break
     const lastJob = jobs[jobs.length - 1]
     if (lastJob?.completed_at) pageCursor = lastJob.completed_at
-
     for (const job of jobs) {
       if (rows.length >= limit) {
         unreadRows = true
         break
       }
-      const outputData = (job.output_data ?? {}) as Record<string, unknown>
-      const inputData = (job.input_data ?? {}) as Record<string, unknown>
-      // An owner-only job never leaves the owner's view, whatever the row says.
-      if (OWNER_ONLY_JOBS.has(job.job_type) && !(ownerView && job.user_id === q.userId)) continue
-      const type = getOutputType(job.job_type, inputData, outputData)
-      const outputUrl = getOutputUrl(job.job_type, outputData, inputData)
-      if (!type || !outputUrl) continue
-      // The type asked for is the type listed (a render's medium is per row).
-      if (OWNER_ONLY_JOBS.has(job.job_type) && (q.type === "video" || q.type === "audio" || q.type === "image") && q.type !== type) continue
-      const title = ((job as { title?: string | null }).title ?? null) || null
-      // The owner's title is shown beside the prompt, so it is judged with it.
-      if (galleryHides(moderation, { userId: job.user_id, inputData, outputData, title })) continue
-      rows.push({
-        userId: (job.user_id as string | null) ?? null,
-        item: {
-          id: job.id,
-          type,
-          jobName: job.job_type,
-          outputUrl,
-          thumbnailUrl: (outputData.thumbnailUrl as string) ?? null,
-          createdAt: job.completed_at,
-          prompt: (inputData.prompt as string) ?? (inputData.text as string) ?? null,
-          model: (inputData.provider as string) ?? (job.provider as string) ?? null,
-          title,
-          ...(isPreviewListing(job) ? { preview: true as const } : {}),
-        },
-      })
+      const row = toGalleryRow(job, q, ownerView)
+      if (row) rows.push(row)
     }
   }
 

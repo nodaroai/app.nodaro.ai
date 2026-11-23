@@ -32,6 +32,7 @@ import { SurfaceResource } from "./resources/surface.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { GalleryResource } from "./resources/gallery.js"
+import { FavoritesResource } from "./resources/favorites.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { SavedPostsResource } from "./resources/saved-posts.js"
 import { CollectionsResource } from "./resources/collections.js"
@@ -109,6 +110,8 @@ export class NodaroClient extends NodaroClientCore {
   readonly library: LibraryResource
   /** The public gallery and your favorites. */
   readonly gallery: GalleryResource
+  /** Every favorite in one list, and favorite picker options. */
+  readonly favorites: FavoritesResource
   readonly presets: PresetsResource
   readonly savedPosts: SavedPostsResource
   readonly collections: CollectionsResource
@@ -178,6 +181,7 @@ export class NodaroClient extends NodaroClientCore {
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
     this.gallery = new GalleryResource(this)
+    this.favorites = new FavoritesResource(this)
     this.presets = new PresetsResource(this)
     this.savedPosts = new SavedPostsResource(this)
     this.collections = new CollectionsResource(this)

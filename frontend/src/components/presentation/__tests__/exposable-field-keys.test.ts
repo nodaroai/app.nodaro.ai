@@ -27,6 +27,10 @@ const OPTIONAL_DATA_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   "speaker-view": { targetAspect: "SpeakerViewData", layout: "SpeakerViewData" },
   // UGC Script's language stays unset on a fresh node: unset is English.
   "ugc-script": { language: "UgcScriptData" },
+  // Suno Add Vocals / Add Instrumental: every direction field is optional and unset on a fresh node (an
+  // empty style takes the original song's).
+  "suno-add-vocals": { prompt: "SunoAddVocalsData", style: "SunoAddVocalsData", title: "SunoAddVocalsData" },
+  "suno-add-instrumental": { style: "SunoAddInstrumentalData", title: "SunoAddInstrumentalData" },
 }
 
 /**

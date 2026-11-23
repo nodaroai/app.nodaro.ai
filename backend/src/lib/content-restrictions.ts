@@ -31,6 +31,7 @@ import { extractJobOutputs, isOwnedObjectKey } from "./job-policy-outputs.js"
 import { restrictedKeyOfAddress } from "./content-restriction-address.js"
 import { invalidateRestrictedSet, restrictedKeys } from "./content-restriction-set.js"
 import { isEvidenceKey } from "./evidence-keys.js"
+import { isRestrictedCoverAddress } from "./job-cover/cover-restriction.js"
 import { keysUserMayDelete } from "./key-ownership.js"
 import { relocateRestrictedBytes, restoreRestrictedBytes, type RestrictionBytes } from "./content-restriction-bytes.js"
 
@@ -352,7 +353,8 @@ export async function isRestrictedAddress(url: string): Promise<boolean> {
   // The evidence copy of a restricted file (migration 583): refused here whatever the set says.
   if (isEvidenceKey(key)) return true
   try {
-    return (await restrictedKeys()).has(key)
+    // A job's cover copy whose source is restricted counts too (lib/job-cover/cover-restriction.ts).
+    return isRestrictedCoverAddress(url, await restrictedKeys())
   } catch (e) {
     console.warn("[content-restrictions] restricted set unavailable; serving as unrestricted:", e instanceof Error ? e.message : e)
     return false

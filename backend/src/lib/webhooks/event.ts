@@ -26,6 +26,7 @@ import { supabase } from "../supabase.js"
 import { PUBLIC_JOB_KEYS, sanitizeJobForPublic, type JobRecord } from "../../routes/jobs.js"
 import { fillJobRenderQuality } from "../render-label-fill.js"
 import { titleColumnPresent } from "../jobs-title-column.js"
+import { coverColumnPresent } from "../jobs-cover-column.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import { publicCreditFieldsOf, runCreditsFor } from "../job-credit-status.js"
 import { runIdOf, webhookBodyProviderWords } from "../provider-words.js"
@@ -46,7 +47,8 @@ export const TEXT_FIELD_MAX_BYTES = 2048
  */
 export function jobEventColumns(): string {
   const keys = PUBLIC_JOB_KEYS.filter((key) => key !== "title" || titleColumnPresent())
-  return [...keys, "reconcile_attempts", "usage_log_id"].join(", ")
+  // The owner's cover (migration 686) is read for the derived `coverUrl`, once the column exists.
+  return [...keys, ...(coverColumnPresent() ? ["cover_url"] : []), "reconcile_attempts", "usage_log_id"].join(", ")
 }
 
 /** A delivery as `claim_webhook_deliveries` hands it out. */

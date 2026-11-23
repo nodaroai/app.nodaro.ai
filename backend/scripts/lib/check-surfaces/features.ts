@@ -69,6 +69,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "uploads", cli: [], routePrefixes: ["/v1/upload", "/v1/upload-json", "/v1/upload-page", "/v1/upload-proxy"], mcpFiles: ["upload.ts"] },
   { id: "library", cli: [], routePrefixes: ["/v1/library"], mcpFiles: ["gallery.ts"] },
   { id: "gallery", cli: ["gallery"], routePrefixes: ["/v1/gallery"], mcpFiles: ["gallery.ts"] },
+  // Every favorite in one list, and favorite picker options (migration 688). No CLI command yet.
+  { id: "favorites", cli: [], routePrefixes: ["/v1/favorites"], mcpFiles: ["favorites.ts", "gallery.ts"] },
   { id: "presets", cli: ["presets"], routePrefixes: ["/v1/node-presets", "/v1/node-preset-groups"], mcpFiles: ["node-presets.ts"] },
   { id: "savedPosts", cli: ["saved-posts"], routePrefixes: ["/v1/saved-posts"], mcpFiles: ["saved-posts.ts"] },
   { id: "collections", cli: ["collections"], routePrefixes: ["/v1/collections"], mcpFiles: ["collections.ts"] },
@@ -259,8 +261,10 @@ export const MCP_DIRECT_TOOL_ROUTES: Readonly<Record<string, readonly string[]>>
   browse_uploads: ["GET /v1/library"],
   // The gallery and its favorites.
   browse_gallery: ["GET /v1/gallery"],
-  list_favorites: ["GET /v1/gallery/favorites"],
-  favorite_asset: ["POST /v1/gallery/favorite"],
+  list_favorites: ["GET /v1/gallery/favorites", "GET /v1/favorites"],
+  favorite_asset: ["POST /v1/gallery/favorite", "POST /v1/library/:p/favorite"],
+  // Picker options: star / unstar one.
+  favorite_catalog_option: ["PUT /v1/favorites/catalog/:p/:p", "DELETE /v1/favorites/catalog/:p/:p"],
   // Story-to-video pipelines.
   start_pipeline: ["POST /v1/pipelines"],
   branch_pipeline: ["POST /v1/pipelines/:p/branch"],

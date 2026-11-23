@@ -10,6 +10,7 @@ import { onlyAssetFiles } from "../../asset-file-column.js"
 import { type GalleryItem } from "../widgets/gallery.js"
 import { JOB_AUTO_TEXT_OUTPUT_KEYS } from "../widgets/job-auto.js"
 import { isUuid } from "./_id-guard.js"
+import { errorResult } from "./_verb-helpers.js"
 import { resumeFailedRunHint } from "./_resume-hint.js"
 import { failureGuidance } from "./_job-error.js"
 import { CHILD_JOB_COLUMN, maskTrendRunError, redactPrivateJobData, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
@@ -22,6 +23,7 @@ import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from ".
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 import { favoritableJobFilter } from "../../gallery-favorites.js"
 import { readableJobsFilter } from "../../public-job-read.js"
+import { registerFavoriteAsset, registerListFavorites, uploadsFavoriteState } from "./favorites.js"
 import { surfaceAllowsPublicOutputs } from "../../surface-profile.js"
 import { countEmptyInputSkips, executionOutcome } from "@nodaro/shared/workflow"
 import { isRenderNodeType } from "@nodaro/shared/nodes"
@@ -611,6 +613,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // job that made it (one batched lookup per page, none when no file needs
         // one) — the same read-time fill /v1/library applies (decided 2026-10-05).
         const pageRows = await fillAssetRenderQuality(storedRows)
+        // Whether each file is a favorite (lib/asset-favorites.ts); null when it
+        // could not be read — the flag is then left OUT, as GET /v1/library
+        // does, never `false` for a starred file.
+        const starred = await uploadsFavoriteState(session.userId, pageRows)
 
         // Total count on first page only (matches /v1/library's behaviour).
         let totalCount: number | null = null
@@ -643,7 +649,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               (a.r2_url as string),
             assetUrl: a.r2_url as string,
             createdAt: a.created_at as string,
-            favorited: false,
+            ...(starred ? { favorited: starred.get(a.id as string) ?? false } : {}),
             // A render made at proxy quality is a private 720p Preview (F1):
             // labelled from the asset's own record, as My Library labels it.
             ...(meta.quality === "proxy" ? { preview: true } : {}),
@@ -673,89 +679,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
       },
     )
 
-    server.registerTool(
-      "list_favorites",
-      {
-        title: "List Favorites",
-        description:
-          "List the authenticated user's favorited gallery items (most-recent first). Returns the favorite job_ids.",
-        inputSchema: {
-          limit: z.number().int().min(1).max(100).optional(),
-          cursor: z.string().optional(),
-        },
-        outputSchema: {
-          items: z.array(z.object({}).passthrough()).optional(),
-          nextCursor: z.string().nullable().optional(),
-          totalCount: z.number().optional(),
-        },
-        annotations: { readOnlyHint: true },
-      _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/gallery",
-        ui: {
-          resourceUri: "ui://nodaro/widget/v5/gallery",
-          visibility: ["model", "app"],
-        },
-      },
-      },
-      async (args) => {
-        const limit = args.limit ?? 50
-        let query = supabase
-          .from("gallery_favorites")
-          .select("job_id, created_at")
-          .eq("user_id", session.userId)
-          .order("created_at", { ascending: false })
-          .limit(limit)
-        if (args.cursor) query = query.lt("created_at", args.cursor)
-        const { data, error } = await query
-        if (error) {
-          return {
-            content: [{ type: "text", text: `Error: ${error.message}` }],
-            isError: true,
-          }
-        }
-        const rows = data ?? []
-        const last = rows[rows.length - 1]
-        const nextCursor =
-          rows.length === limit && last?.created_at ? (last.created_at as string) : null
-        const text = JSON.stringify(
-          { data: rows.map((r) => r.job_id), next_cursor: nextCursor },
-          null,
-          2,
-        )
-
-        // Hydrate the favorited job_ids into full gallery items so the widget
-        // can render them. Skips silently if any single fetch fails.
-        const jobIds = rows.map((r) => r.job_id as string)
-        let items: GalleryItem[] = []
-        if (jobIds.length > 0) {
-          const { data: jobsData } = await supabase
-            .from("jobs")
-            .select("id, user_id, job_type, input_data, output_data, completed_at, provider")
-            .is(TRASHED_JOB_COLUMN, null)
-            .in("id", jobIds)
-            // Tenant scope: only hydrate jobs the caller may see (own, or
-            // public+completed) — same predicate as get_asset/display_asset.
-            // Without this, favoriting another user's job UUID would leak its
-            // output_data URLs + input_data prompt.
-            .or(readableJobsFilter(session.userId))
-            // Never a child job (CHILD_JOB_COLUMN), favorited by its id or not.
-            .is(CHILD_JOB_COLUMN, null)
-          items = ((jobsData ?? []) as GalleryRow[])
-            .map((row) => rowToGalleryItem(row, session.userId))
-            .filter((item): item is GalleryItem => item !== null)
-            .map((item) => ({ ...item, favorited: true }))
-        }
-
-        return {
-          content: [{ type: "text" as const, text }],
-          structuredContent: {
-            items: items as unknown as Record<string, unknown>[],
-            nextCursor,
-            totalCount: items.length,
-          },
-        }
-      },
-    )
+    // The favorites tools live in tools/favorites.ts; registered here, in the gallery tools' order.
+    registerListFavorites({ server, session, fastify, toGalleryItem: (row) => rowToGalleryItem(row as unknown as GalleryRow, session.userId) })
 
     server.registerTool(
       "get_asset",
@@ -1343,86 +1268,6 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
   }
 
   if (passesGate(session, writeGate)) {
-    server.registerTool(
-      "favorite_asset",
-      {
-        title: "Favorite Asset",
-        description:
-          "Mark or unmark a gallery asset as a favorite. Set `favorited` to true to add, false to remove.",
-        inputSchema: {
-          job_id: z.string().min(1),
-          favorited: z.boolean(),
-        },
-        annotations: {
-          readOnlyHint: false,
-          destructiveHint: false,
-        },
-      },
-      async (args) => {
-        // Guard the uuid PK before any query — a non-UUID id would leak the
-        // raw `invalid input syntax for type uuid` Postgres error.
-        if (!isUuid(args.job_id)) {
-          return {
-            content: [
-              { type: "text", text: `Asset ${args.job_id} not found (expected a job UUID)` },
-            ],
-            isError: true,
-          }
-        }
-        if (args.favorited) {
-          // Ownership gate: only allow favoriting a job the caller may see
-          // (own, or public+completed). Prevents storing favorites for another
-          // tenant's private job (defense-in-depth alongside the scoped
-          // hydration in list_favorites). The same predicate as the REST
-          // toggle (POST /v1/gallery/favorite), from one place.
-          const { data: visible } = await supabase
-            .from("jobs")
-            .select("id")
-            .is(TRASHED_JOB_COLUMN, null)
-            .eq("id", args.job_id)
-            .or(favoritableJobFilter(session.userId))
-            // Never a child job (CHILD_JOB_COLUMN): it reads as not found.
-            .is(CHILD_JOB_COLUMN, null)
-            .maybeSingle()
-          if (!visible) {
-            return {
-              content: [{ type: "text", text: "Error: asset not found" }],
-              isError: true,
-            }
-          }
-          // Insert; ignore unique-violation duplicates so the call is idempotent.
-          const { error } = await supabase
-            .from("gallery_favorites")
-            .insert({ user_id: session.userId, job_id: args.job_id })
-          if (error && !/duplicate|unique/i.test(error.message)) {
-            return {
-              content: [{ type: "text", text: `Error: ${error.message}` }],
-              isError: true,
-            }
-          }
-          return {
-            content: [
-              { type: "text", text: `Favorited asset ${args.job_id}` },
-            ],
-          }
-        }
-        const { error } = await supabase
-          .from("gallery_favorites")
-          .delete()
-          .eq("user_id", session.userId)
-          .eq("job_id", args.job_id)
-        if (error) {
-          return {
-            content: [{ type: "text", text: `Error: ${error.message}` }],
-            isError: true,
-          }
-        }
-        return {
-          content: [
-            { type: "text", text: `Unfavorited asset ${args.job_id}` },
-          ],
-        }
-      },
-    )
+    registerFavoriteAsset({ server, session, fastify })
   }
 }

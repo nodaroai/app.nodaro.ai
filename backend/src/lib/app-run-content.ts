@@ -1,4 +1,5 @@
 import { inputOverridesCleared } from "./execution-input-overrides.js"
+import { coverColumnPresent } from "./jobs-cover-column.js"
 import { videoLinkFilesCleared } from "./execution-video-link-files.js"
 import { inlineGraphCleared } from "./execution-inline-graph.js"
 
@@ -96,6 +97,9 @@ export function executionContentRedaction(): { node_states: Record<string, never
  *   reconcile attempt, unredacted — the same provider/system text as
  *   `error_detail` (decided 2026-10-06).
  * - `title` (609): the name the owner gave the job — their own words.
+ * - `cover_url` (686): the picture the owner chose for the job — once this
+ *   database has the column (lib/jobs-cover-column.ts), so an expunge on a
+ *   database before 686 still runs.
  *
  * The runner's own library uploads are kept: their `assets` rows belong to the
  * runner, not the app, and are never touched here.
@@ -110,6 +114,7 @@ export function jobContentRedaction(): {
   input_fingerprint: null
   reconcile_last_error: null
   title: null
+  cover_url?: null
 } {
   return {
     input_data: {},
@@ -121,6 +126,7 @@ export function jobContentRedaction(): {
     input_fingerprint: null,
     reconcile_last_error: null,
     title: null,
+    ...(coverColumnPresent() ? { cover_url: null } : {}),
   }
 }
 

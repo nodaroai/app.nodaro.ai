@@ -120,6 +120,11 @@
       "import": "./dist/entries/executions.js",
       "require": "./dist/entries/executions.cjs"
     },
+    "./favorites": {
+      "types": "./dist/entries/favorites.d.ts",
+      "import": "./dist/entries/favorites.js",
+      "require": "./dist/entries/favorites.cjs"
+    },
     "./gallery": {
       "types": "./dist/entries/gallery.d.ts",
       "import": "./dist/entries/gallery.js",

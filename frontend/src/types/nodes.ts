@@ -3586,6 +3586,22 @@ export type SunoAddInstrumentalData = {
   [key: string]: unknown
   label: string
   model: SunoAddTrackModel
+  /** A direct link to the song's audio file — used when no audio is wired in (Suno track ids, when set, go beside it). */
+  uploadUrl?: string
+  /** The style of the new layer; empty takes the original song's style (only for a Suno song made here). */
+  style?: string
+  /** The new song's title; empty keeps the original song's title when it has one. */
+  title?: string
+  /** Styles the new layer avoids. */
+  negativeTags?: string
+  /** The voice to sing (Add Vocals) or the singer the backing suits; unset lets Suno decide. */
+  vocalGender?: "male" | "female"
+  /** 0–1; unset lets Suno decide. */
+  styleWeight?: number
+  /** 0–1; unset lets Suno decide. */
+  weirdnessConstraint?: number
+  /** 0–1; unset lets Suno decide. */
+  audioWeight?: number
   /** Manual Suno task ID (auto-filled from a connected Suno node when wired) */
   taskId?: string
   /** Manual Suno audio/track ID (auto-filled from a connected Suno node when wired) */
@@ -3604,6 +3620,24 @@ export type SunoAddVocalsData = {
   [key: string]: unknown
   label: string
   model: SunoAddTrackModel
+  /** The lyrics to sing, or the direction for the voice (a wired prompt wins). */
+  prompt?: string
+  /** A direct link to the song's audio file — used when no audio is wired in (Suno track ids, when set, go beside it). */
+  uploadUrl?: string
+  /** The style of the new layer; empty takes the original song's style (only for a Suno song made here). */
+  style?: string
+  /** The new song's title; empty keeps the original song's title when it has one. */
+  title?: string
+  /** Styles the new layer avoids. */
+  negativeTags?: string
+  /** The voice to sing (Add Vocals) or the singer the backing suits; unset lets Suno decide. */
+  vocalGender?: "male" | "female"
+  /** 0–1; unset lets Suno decide. */
+  styleWeight?: number
+  /** 0–1; unset lets Suno decide. */
+  weirdnessConstraint?: number
+  /** 0–1; unset lets Suno decide. */
+  audioWeight?: number
   /** Manual Suno task ID (auto-filled from a connected Suno node when wired) */
   taskId?: string
   /** Manual Suno audio/track ID (auto-filled from a connected Suno node when wired) */
@@ -9278,14 +9312,23 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["audio"],
     outputs: ["audio"],
     defaultData: { label: "Suno Add Instrumental", model: "V6", fieldMappings: {} } as SunoAddInstrumentalData,
+    exposableFields: [
+      { key: "style", label: "Style", type: "text" as const },
+      { key: "title", label: "Title", type: "text" as const },
+    ],
   },
   {
     type: "suno-add-vocals",
     label: "Suno Add Vocals",
     category: "ai",
-    inputs: ["audio"],
+    inputs: ["audio", "prompt"],
     outputs: ["audio"],
     defaultData: { label: "Suno Add Vocals", model: "V6", fieldMappings: {} } as SunoAddVocalsData,
+    exposableFields: [
+      { key: "prompt", label: "Prompt", type: "text" as const },
+      { key: "style", label: "Style", type: "text" as const },
+      { key: "title", label: "Title", type: "text" as const },
+    ],
   },
   {
     type: "suno-convert-wav",

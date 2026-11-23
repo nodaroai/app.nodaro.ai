@@ -14,7 +14,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, dialogueProblem, SUNO_SEPARATE_TYPES, SUNO_SEPARATE_RESULT_FIELDS, sunoSeparateHandleIds, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider, GEMINI_3_1_TTS_ACCENTS, GEMINI_3_1_TTS_PACES, GEMINI_3_1_TTS_STYLES, TTS_DIRECTION_MAX_CHARS, REPLICA_CONSENT_SENTENCE, REPLICA_CONSENT_ATTESTATION } from "@nodaro/shared/models"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, TTS_OUTPUT_FORMATS, DEFAULT_TTS_PROVIDER, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, dialogueProblem, SUNO_SEPARATE_TYPES, SUNO_SEPARATE_RESULT_FIELDS, sunoSeparateHandleIds, TRANSCRIBE_PROVIDERS, TRANSCRIBE_TARGET_LANGUAGES, type TranscribeProvider, GEMINI_3_1_TTS_ACCENTS, GEMINI_3_1_TTS_PACES, GEMINI_3_1_TTS_STYLES, TTS_DIRECTION_MAX_CHARS, REPLICA_CONSENT_SENTENCE, REPLICA_CONSENT_ATTESTATION } from "@nodaro/shared/models"
 import { MCP_TRANSCRIBE_PROVIDER } from "./_transcribe-provider.js"
 import { AUDIO_FX_PRESETS } from "@nodaro/shared/media"
 import { PITCH_TEMPO_LIMITS } from "@nodaro/shared/credits"
@@ -56,6 +56,7 @@ import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
 import { TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { jobReadableBy } from "../../public-job-read.js"
 import { registerSunoSpeechVerb } from "./verbs-suno-speech.js"
+import { registerSunoAddTrackVerbs } from "./verbs-suno-add-track.js"
 import { isSunoSpeechOutput } from "../../suno-id-source.js"
 
 /**
@@ -2902,57 +2903,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
-  // ── suno_add_instrumental ──
-  server.registerTool(
-    "suno_add_instrumental",
-    {
-      title: "Suno Add Instrumental",
-      description:
-        "Add an AI-generated instrumental layer to a Suno track. " +
-        "Pass the Nodaro audio_asset_id of a Suno generation.",
-      inputSchema: {
-        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
-        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the new layer. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default ${DEFAULT_SUNO_MODEL}.`),
-      },
-      outputSchema: JOB_OUTPUT_SCHEMA,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-      _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
-      },
-    },
-    async (args) => {
-      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
-      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      return dispatchJob(fastify, session, { url: "/v1/suno/add-instrumental", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? DEFAULT_SUNO_MODEL, mcp_client: session.clientName, userId: session.userId }, label: "Suno add instrumental", widgetKind: "audio", widgetData: { prompt: "(add instrumental)", model: args.model ?? DEFAULT_SUNO_MODEL } })
-    },
-  )
-
-  // ── suno_add_vocals ──
-  server.registerTool(
-    "suno_add_vocals",
-    {
-      title: "Suno Add Vocals",
-      description:
-        "Add AI-generated vocals to an existing Suno instrumental track. " +
-        "Pass the Nodaro audio_asset_id of a Suno generation.",
-      inputSchema: {
-        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
-        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the vocals. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default ${DEFAULT_SUNO_MODEL}.`),
-      },
-      outputSchema: JOB_OUTPUT_SCHEMA,
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-      _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v5/job-audio",
-        ui: { resourceUri: "ui://nodaro/widget/v5/job-audio", visibility: ["model", "app"] },
-      },
-    },
-    async (args) => {
-      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
-      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      return dispatchJob(fastify, session, { url: "/v1/suno/add-vocals", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? DEFAULT_SUNO_MODEL, mcp_client: session.clientName, userId: session.userId }, label: "Suno add vocals", widgetKind: "audio", widgetData: { prompt: "(add vocals)", model: args.model ?? DEFAULT_SUNO_MODEL } })
-    },
-  )
+  // ── suno_add_instrumental / suno_add_vocals (verbs-suno-add-track.ts) ──
+  registerSunoAddTrackVerbs({ server, session, fastify, resolveSunoIds })
 
   // ── suno_convert_wav ──
   server.registerTool(

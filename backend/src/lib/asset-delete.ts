@@ -456,7 +456,7 @@ export async function permanentlyDeleteAsset(opts: {
       if (!deleteObject) {
         console.log(
           `[asset-delete] Keeping R2 object ${asset.r2_key}: ` +
-            (verdict.owned ? "another user still holds it" : "not provably this user's") +
+            (verdict.owned ? "another user, or a job's cover, still holds it" : "not provably this user's") +
             " — row only",
         )
       }

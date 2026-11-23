@@ -20,6 +20,7 @@ export const EXPOSABLE_FIELD_LABEL_KEYS: Readonly<Record<string, MessageKey>> = 
   "Negative Prompt": "field.negativePrompt",
   "Style": "field.style",
   "Prompt": "present.prompt",
+  "Title": "present.title",
   "Duration (seconds)": "field.durationSeconds",
   "Duration (s)": "scriptcfg.durationS",
   "Resolution": "field.resolution",

@@ -1,11 +1,11 @@
-import { DEFAULT_SUNO_MODEL } from "@nodaro/shared/models"
+import { DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX } from "@nodaro/shared/models"
 import { variantJobId } from "@nodaro/shared/workflow"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import {
   sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoMusicVideo,
-  sunoMashup, sunoReplaceSection, sunoAddInstrumental, sunoAddVocals, sunoConvertWav, sunoUploadExtend,
+  sunoMashup, sunoReplaceSection, sunoConvertWav, sunoUploadExtend,
   sunoCreditType,
   type SunoModel, type SunoAddTrackModel, type SunoTaskResult,
   type SunoLyricsResult, type SunoMusicVideoResult, type SunoConvertWavResult,
@@ -30,7 +30,9 @@ import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForSuno, providerKindForSunoMarket } from "../../lib/reconcile/provider-kind.js"
 import { cloudTaskId, maybeSunoCloudOutput, shouldRunSunoOnCloud, type SunoProviderUsed } from "./suno-cloud.js"
 import { handleSunoSeparate } from "./suno-separate.js"
-import { SunoCoverByIdRefusedError, sunoConvertWavStem, sunoCoverById } from "../../providers/kie/suno-market.js"
+import { SunoCoverByIdRefusedError, sunoAddInstrumental, sunoAddVocals, sunoConvertWavStem, sunoCoverById } from "../../providers/kie/suno-market.js"
+import { sunoAddTrackTextProblem, type SunoAddTrackDirection, type SunoAddTrackRun } from "../../providers/kie/suno-add-track.js"
+import { resolveSunoAddTrackSource, sunoAddTrackLinkProblem, type SunoAddTrackJobType } from "../../lib/suno-add-track-source.js"
 import { sunoCoverByIdInput } from "../../providers/kie/suno-cover-by-id.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 
@@ -168,9 +170,11 @@ async function maybeRunSunoOnCloud(
   jobType: string,
   emptyTracksLabel: string,
   relay?: boolean,
+  /** The route body to replay, when it differs from `job.data` (resolved fields). */
+  payload?: Record<string, unknown>,
 ): Promise<boolean> {
   if (!(relay ?? (await shouldRunSunoOnCloud()))) return false
-  const result = await runSunoOnCloud(jobType, job.data as Record<string, unknown>, (p) =>
+  const result = await runSunoOnCloud(jobType, payload ?? (job.data as Record<string, unknown>), (p) =>
     setJobProgress(job, ctx.jobId, Math.min(45, Math.round(p * 0.45))),
   )
   await finalizeSunoJob(job, ctx, result, emptyTracksLabel, "nodaro")
@@ -462,38 +466,103 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
   await finalizeSunoJob(job, ctx, result, "Suno replace-section returned no tracks", "kie")
 }
 
-const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrumental(job, ctx) {
-  const { taskId: sunoTaskId, audioId, model } = job.data as {
-    jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
-  }
-  console.log(`[worker] suno-add-instrumental ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, audioId: ${audioId})`)
-  if (await maybeRunSunoOnCloud(job, ctx, "suno-add-instrumental", "Suno add-instrumental returned no tracks")) return
+/** What an Add Vocals / Add Instrumental job carries (the route resolves the file and the style; a workflow run may not). */
+interface SunoAddTrackJobData extends SunoAddTrackDirection {
+  jobId: string
+  uploadUrl?: string
+  taskId?: string
+  audioId?: string
+  model?: SunoAddTrackModel
+}
 
-  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }, { onTaskCreated, modelKey: "suno-add-instrumental" }),
-  )
-  await finalizeSunoJob(job, ctx, result, "Suno add-instrumental returned no tracks", "kie")
+/**
+ * Add Vocals / Add Instrumental (decided 2026-11-23): the song's file and the
+ * person's direction to KIE's market lane. A job queued by the route carries
+ * the file and the style already; a workflow run's job may carry only the
+ * track's ids, so they are resolved here by the same rule, and a run with no
+ * file or no style to take fails (refunded) with the route's message.
+ */
+async function runSunoAddTrack(
+  job: Job,
+  ctx: JobContext,
+  jobType: SunoAddTrackJobType,
+  /** The handler's own relay to a connected cloud (each names its job type), with the resolved body. */
+  relay: (payload: Record<string, unknown>) => Promise<boolean>,
+): Promise<void> {
+  const data = job.data as SunoAddTrackJobData
+  const label = jobType === "suno-add-vocals" ? "add-vocals" : "add-instrumental"
+  const emptyMessage = `Suno ${label} returned no tracks`
+  console.log(`[worker] ${jobType} ${ctx.jobId} (model: ${data.model ?? DEFAULT_SUNO_MODEL}${data.audioId ? `, audioId: ${data.audioId}` : ""})`)
+  const source = await addTrackSourceOf(data, ctx, jobType)
+  // Relayed with what was resolved here: the cloud holds none of this
+  // instance's job rows, so it gets the file, the style and the title (cut to
+  // the route's limit: it may be the source song's own), never the ids.
+  const { taskId: _taskId, audioId: _audioId, ...direction } = data
+  const title = source.title ? Array.from(source.title).slice(0, SUNO_TITLE_MAX).join("") : undefined
+  if (await relay({ ...direction, uploadUrl: source.uploadUrl, style: source.style, ...(title ? { title } : {}) })) return
+
+  const run = policedAddTrackRun(data, source, jobType)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSunoMarket())
+  const send = jobType === "suno-add-vocals" ? sunoAddVocals : sunoAddInstrumental
+  const result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () => send(run, { onTaskCreated, modelKey: jobType }))
+  await finalizeSunoJob(job, ctx, result, emptyMessage, "kie")
+}
+
+/**
+ * The song's file and the style, by the route's rule. A workflow run reaches
+ * here without the route, so its link is judged here too (the deployment's
+ * switch, an unusable link, a social page); a refusal fails the job, refunded.
+ */
+async function addTrackSourceOf(data: SunoAddTrackJobData, ctx: JobContext, jobType: SunoAddTrackJobType) {
+  if (data.uploadUrl) {
+    assertLinkImportAllowed(data.uploadUrl)
+    const problem = sunoAddTrackLinkProblem(data.uploadUrl)
+    if (problem) throw new DeterministicJobError(problem)
+  }
+  const source = await resolveSunoAddTrackSource({
+    jobType, userId: ctx.jobUserId, uploadUrl: data.uploadUrl, taskId: data.taskId, audioId: data.audioId, style: data.style, title: data.title,
+  })
+  if (!source.ok) throw new DeterministicJobError(source.message)
+  return source
+}
+
+/**
+ * The run as the provider receives it, after the audio PromptPolicy (as on
+ * every Suno run that carries the person's words). The texts are sent as they
+ * are: one over the provider's limit after the policy is refused (refunded),
+ * never cut — a cut would drop what the policy added at the end.
+ */
+function policedAddTrackRun(
+  data: SunoAddTrackJobData,
+  source: { readonly uploadUrl: string; readonly style: string; readonly title?: string },
+  jobType: SunoAddTrackJobType,
+): SunoAddTrackRun {
+  const policed = applyPromptPolicies({ prompt: data.prompt ?? "", negativePrompt: data.negativeTags ?? "", kind: "audio", vocalGender: data.vocalGender })
+  const run: SunoAddTrackRun = {
+    uploadUrl: source.uploadUrl,
+    style: source.style,
+    title: source.title ?? "",
+    model: data.model,
+    prompt: jobType === "suno-add-vocals" ? policed.prompt || undefined : undefined,
+    negativeTags: policed.negativePrompt || undefined,
+    vocalGender: policed.vocalGender,
+    styleWeight: data.styleWeight,
+    weirdnessConstraint: data.weirdnessConstraint,
+    audioWeight: data.audioWeight,
+  }
+  const problem = sunoAddTrackTextProblem(run)
+  if (problem) throw new DeterministicJobError(problem)
+  return run
+}
+
+const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrumental(job, ctx) {
+  await runSunoAddTrack(job, ctx, "suno-add-instrumental", (payload) =>
+    maybeRunSunoOnCloud(job, ctx, "suno-add-instrumental", "Suno add-instrumental returned no tracks", undefined, payload))
 }
 
 const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, ctx) {
-  const { taskId: sunoTaskId, audioId, model } = job.data as {
-    jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
-  }
-  console.log(`[worker] suno-add-vocals ${ctx.jobId} (model: ${model ?? DEFAULT_SUNO_MODEL}, audioId: ${audioId})`)
-  if (await maybeRunSunoOnCloud(job, ctx, "suno-add-vocals", "Suno add-vocals returned no tracks")) return
-
-  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
-  const result = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }, { onTaskCreated, modelKey: "suno-add-vocals" }),
-  )
-  await finalizeSunoJob(job, ctx, result, "Suno add-vocals returned no tracks", "kie")
+  await runSunoAddTrack(job, ctx, "suno-add-vocals", (payload) =>
+    maybeRunSunoOnCloud(job, ctx, "suno-add-vocals", "Suno add-vocals returned no tracks", undefined, payload))
 }
 
 /** Shared tail for suno-convert-wav: upload the wav to this instance's R2, persist. */

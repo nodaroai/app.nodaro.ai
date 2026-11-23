@@ -15,6 +15,12 @@
  * charged under and the price charged for it (the server's own price rule at
  * the hosted deployment's settings), and what the Suno client is asked to send.
  *
+ * Add Vocals and Add Instrumental moved to KIE's market lane on 2026-11-23
+ * (they had never run: KIE asked for the song's file): their cases send the
+ * song, a style and a title, and what each queues, records and asks the
+ * client for is the new body (`ADD_TRACK_REQUEST_FIELDS`); their status,
+ * credit ids and prices are held to the fixture like every other operation.
+ *
  * What may differ is pinned below: on generate, cover and extend, a V4_5PLUS,
  * V4_5ALL or V4_5 run is checked, charged and egressed under its version's
  * row instead of the operation's, at the same price; on every operation a job
@@ -73,6 +79,14 @@ vi.mock("@/providers/kie/suno-client.js", async (importOriginal) => {
     sunoUploadExtend: call("sunoUploadExtend"),
   }
 })
+vi.mock("@/providers/kie/suno-market.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../providers/kie/suno-market.js")>()
+  const call = (fn: string) => async (params: Record<string, unknown>, opts?: { modelKey?: string }) => {
+    h.client.push({ fn, params: JSON.parse(JSON.stringify(params)), egressId: opts?.modelKey })
+    throw new Error("suno-parity: stop after the client call")
+  }
+  return { ...orig, sunoAddInstrumental: call("sunoAddInstrumental"), sunoAddVocals: call("sunoAddVocals") }
+})
 vi.mock("@/workers/handlers/suno-cloud.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../workers/handlers/suno-cloud.js")>()),
   shouldRunSunoOnCloud: vi.fn(async () => false),
@@ -96,6 +110,7 @@ import { SUNO_REQUESTS_BEFORE_VERSION_ROWS } from "./fixtures/suno-requests.js"
 const USER = "00000000-0000-4000-8000-000000000001"
 const AUDIO = "https://cdn.example.com/track.mp3"
 const AUDIO_2 = "https://cdn.example.com/track-2.mp3"
+const ADD_TRACK_SONG = { taskId: "task-1", audioId: "track-1", uploadUrl: AUDIO, style: "soul", title: "Song" }
 
 type Json = Record<string, unknown>
 
@@ -112,9 +127,23 @@ const SUNO_CASE_INPUTS: Readonly<Record<string, { route: Json; node: Json; input
   "suno-extend": { route: { audioId: "track-1", prompt: "keep going", continueAt: 30 }, node: { audioId: "track-1", prompt: "keep going", continueAt: 30 } },
   "suno-mashup": { route: { uploadUrlList: [AUDIO, AUDIO_2] }, node: {}, inputs: { audioUrl: AUDIO, audioUrl2: AUDIO_2 } },
   "suno-upload-extend": { route: { uploadUrl: AUDIO, continueAt: 30 }, node: { uploadUrl: AUDIO, continueAt: 30 } },
-  "suno-add-instrumental": { route: { taskId: "task-1", audioId: "track-1" }, node: { taskId: "task-1", audioId: "track-1" } },
-  "suno-add-vocals": { route: { taskId: "task-1", audioId: "track-1" }, node: { taskId: "task-1", audioId: "track-1" } },
+  "suno-add-instrumental": { route: { ...ADD_TRACK_SONG }, node: { ...ADD_TRACK_SONG } },
+  "suno-add-vocals": { route: { ...ADD_TRACK_SONG }, node: { ...ADD_TRACK_SONG } },
 }
+
+/**
+ * Add Vocals / Add Instrumental (decided 2026-11-23): the song, a style and a
+ * title, so neither lane needs a job-row lookup; their request fields are new
+ * and are compared apart from the fixture.
+ */
+const ADD_TRACK_OPS: readonly string[] = ["suno-add-instrumental", "suno-add-vocals"]
+const ADD_TRACK_REQUEST_FIELDS = (r: Json): Json => ({
+  ...r,
+  queued: undefined,
+  inputData: undefined,
+  payload: undefined,
+  client: r.client === undefined ? undefined : { ...(r.client as Json), params: undefined },
+})
 
 const caseName = (op: string, version: string | undefined) => `${op} @ ${version ?? "(no version)"}`
 const CASES = Object.keys(SUNO_CASE_INPUTS).flatMap((op) => VERSIONS.map((version) => ({ name: caseName(op, version), op, version })))
@@ -220,8 +249,21 @@ describe("Suno's requests are what they were before V4_5PLUS, V4_5ALL and V4_5 h
   it("every case on a version that keeps its row is byte for byte what it was, on both lanes", () => {
     for (const c of CASES) {
       if (c.version && Object.hasOwn(NEW_ROWS, c.version)) continue
-      expect(now.route[c.name], `route: ${c.name}`).toEqual(before.route[c.name])
-      expect(now.workflow[c.name], `workflow: ${c.name}`).toEqual(before.workflow[c.name])
+      const view = ADD_TRACK_OPS.includes(c.op) ? ADD_TRACK_REQUEST_FIELDS : (r: Json) => r
+      expect(view(now.route[c.name]!), `route: ${c.name}`).toEqual(view(before.route[c.name]!))
+      expect(view(now.workflow[c.name]!), `workflow: ${c.name}`).toEqual(view(before.workflow[c.name]!))
+    }
+  })
+
+  it("Add Vocals / Add Instrumental ask the market-lane client for the song, the style and the title, on both lanes", () => {
+    for (const c of CASES.filter((k) => ADD_TRACK_OPS.includes(k.op))) {
+      for (const lane of [now.route[c.name]!, now.workflow[c.name]!]) {
+        // A version these tools do not take is refused at the route: nothing is asked of the client.
+        if (lane.client === undefined) continue
+        const client = lane.client as Json
+        expect(client.fn, c.name).toBe(c.op === "suno-add-vocals" ? "sunoAddVocals" : "sunoAddInstrumental")
+        expect(client.params, c.name).toMatchObject({ uploadUrl: AUDIO, style: "soul", title: "Song", ...(c.version ? { model: c.version } : {}) })
+      }
     }
   })
 
@@ -268,8 +310,9 @@ describe("Suno's requests are what they were before V4_5PLUS, V4_5ALL and V4_5 h
         const name = caseName(op, version)
         const was = { route: before.route[name]!, workflow: before.workflow[name]! }
         const run = { route: now.route[name]!, workflow: now.workflow[name]! }
-        expect(withoutIds(run.route), `route: ${name}`).toEqual(withoutIds(was.route))
-        expect(withoutIds(run.workflow), `workflow: ${name}`).toEqual(withoutIds(was.workflow))
+        const view = ADD_TRACK_OPS.includes(op) ? (r: Json) => withoutIds(ADD_TRACK_REQUEST_FIELDS(r)) : withoutIds
+        expect(view(run.route), `route: ${name}`).toEqual(view(was.route))
+        expect(view(run.workflow), `workflow: ${name}`).toEqual(view(was.workflow))
         // The model the route judges, and the one its job records, is the version's catalog entry.
         expect(was.route.runModel, name).toBe(version)
         expect(run.route.runModel, name).toBe(catalogId)

@@ -426,7 +426,7 @@ const NAME_FILES: Readonly<Record<string, { count: number; how: string; funnel?:
   "tools/trends.ts": { count: 2, how: `${REFUSALS}; the engine's name through statedName`, funnel: true },
   "tools/ugc.ts": { count: 3, how: LIST_AND_REFUSALS },
   "tools/upload.ts": { count: 2, how: LIST },
-  "tools/verbs-audio.ts": { count: 29, how: LIST_AND_REFUSALS },
+  "tools/verbs-audio.ts": { count: 25, how: LIST_AND_REFUSALS },
   "tools/verbs-generate-text.ts": { count: 4, how: LIST },
   "tools/verbs-image.ts": { count: 14, how: LIST },
   "tools/verbs-scene3d.ts": { count: 1, how: LIST },

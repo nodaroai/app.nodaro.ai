@@ -2076,6 +2076,57 @@ describe("Suno consumer id precedence (#819 review)", () => {
   })
 })
 
+describe("Suno Add Vocals / Add Instrumental: the song and the direction (decided 2026-11-23)", () => {
+  const DIRECTION = {
+    style: "soulful pop", title: "Fresh Step", negativeTags: "rap", vocalGender: "female",
+    styleWeight: 0.6, weirdnessConstraint: 0.2, audioWeight: 0.8, model: "V6_WILD",
+  }
+
+  it("Add Vocals: the wired audio's file and Suno ids, the node's direction, the lyrics from the node", () => {
+    const n = node("v", "suno-add-vocals", { ...DIRECTION, prompt: "[Verse] la la" })
+    const p = buildPayload(n, "job-v", { audioUrl: "https://cdn/song.wav", sunoTaskId: "t-1", sunoTrackId: "a-1" }).payload
+    expect(p).toMatchObject({ ...DIRECTION, prompt: "[Verse] la la", uploadUrl: "https://cdn/song.wav", taskId: "t-1", audioId: "a-1", jobId: "job-v" })
+  })
+
+  it("Add Vocals: a wired prompt is the lyrics, before the node's own", () => {
+    const n = node("v", "suno-add-vocals", { prompt: "node lyrics" })
+    expect(buildPayload(n, "job-v", { audioUrl: "https://cdn/song.wav", prompt: "wired lyrics" }).payload.prompt).toBe("wired lyrics")
+  })
+
+  it("Add Instrumental: the direction without a prompt; an old node (model only) still builds from the wired song", () => {
+    const withPrompt = node("i", "suno-add-instrumental", { ...DIRECTION, prompt: "ignored" })
+    const p = buildPayload(withPrompt, "job-i", { audioUrl: "https://cdn/vocal.wav" }).payload
+    expect(p).toMatchObject({ ...DIRECTION, uploadUrl: "https://cdn/vocal.wav" })
+    expect(p).not.toHaveProperty("prompt")
+    const old = buildPayload(node("i", "suno-add-instrumental", { model: "V6" }), "job-i", { sunoTaskId: "t", sunoTrackId: "a" }).payload
+    expect(old).toEqual({ jobId: "job-i", taskId: "t", audioId: "a", model: "V6", usageLogId: undefined })
+  })
+
+  it("a node with no song is refused before anything is held", () => {
+    expect(() => buildPayload(node("v", "suno-add-vocals", { style: "pop" }), "job-v", {})).toThrow(/audio_required/)
+  })
+
+  it("text over the provider's limit is refused before anything is held, never cut", () => {
+    expect(() => buildPayload(node("v", "suno-add-vocals", { prompt: "p".repeat(5001) }), "job-v", { audioUrl: "https://cdn/song.wav" })).toThrow(/at most 5000/)
+    expect(() => buildPayload(node("v", "suno-add-vocals", {}), "job-v", { audioUrl: "https://cdn/song.wav", prompt: "w".repeat(5001) })).toThrow(/at most 5000/)
+    expect(() => buildPayload(node("i", "suno-add-instrumental", { style: "s".repeat(1001) }), "job-i", { audioUrl: "https://cdn/v.wav" })).toThrow(/at most 1000/)
+  })
+
+  it("a value that is no Suno version (empty, or written by an API client) is left to the default; a Suno version passes on to be judged", () => {
+    expect(buildPayload(node("v", "suno-add-vocals", { model: "" }), "job-v", { audioUrl: "https://cdn/song.wav" }).payload).not.toHaveProperty("model")
+    expect(buildPayload(node("v", "suno-add-vocals", { model: "not-a-version" }), "job-v", { audioUrl: "https://cdn/song.wav" }).payload).not.toHaveProperty("model")
+    expect(buildPayload(node("v", "suno-add-vocals", { model: "V4_5ALL" }), "job-v", { audioUrl: "https://cdn/song.wav" }).payload.model).toBe("V4_5ALL")
+    expect(buildPayload(node("v", "suno-add-vocals", { model: "V6_MINI" }), "job-v", { audioUrl: "https://cdn/song.wav" }).payload.model).toBe("V6_MINI")
+  })
+
+  it("unknown voice values and non-numeric weights are not passed on", () => {
+    const n = node("v", "suno-add-vocals", { vocalGender: "robot", styleWeight: "0.5" })
+    const p = buildPayload(n, "job-v", { audioUrl: "https://cdn/song.wav" }).payload
+    expect(p).not.toHaveProperty("vocalGender")
+    expect(p).not.toHaveProperty("styleWeight")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // transcribe — the INFERRED wordTimestamps flag is capability-gated
 //

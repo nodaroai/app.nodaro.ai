@@ -22,6 +22,10 @@ import {
   jobContentRedaction,
 } from "../app-run-content.js"
 import { migrationColumnsOf, migrationNotNullColumnsOf } from "../../test/migration-columns.js"
+import { setCoverColumnPresentForTests } from "../jobs-cover-column.js"
+
+// The patch names `cover_url` (686) once the database has it; the classification below reads that patch.
+setCoverColumnPresentForTests(true)
 
 /** `workflow_executions` columns expunge keeps: the run's record, not its content. */
 const KEPT_EXECUTION_COLUMNS = [
@@ -278,7 +282,18 @@ describe("what expunge erases", () => {
       reconcile_last_error: null,
       // The owner's own name for the job (609): their words, erased with the rest.
       title: null,
+      // The owner's cover picture for the job (686), once the database has the column.
+      cover_url: null,
     })
+  })
+
+  it("leaves the cover out of the patch until the database has the column (686)", () => {
+    setCoverColumnPresentForTests(false)
+    try {
+      expect(jobContentRedaction()).not.toHaveProperty("cover_url")
+    } finally {
+      setCoverColumnPresentForTests(true)
+    }
   })
 
   // Decided 2026-10-07: the reports filed for the erased jobs and executions

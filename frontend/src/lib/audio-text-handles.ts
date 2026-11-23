@@ -446,14 +446,17 @@ export function isValidSunoAddInstrumentalConnection(
   }
 }
 
-/** suno-add-vocals: audio (audio producers — Suno track with instrumental only). */
+/** suno-add-vocals: audio (the song to sing over) + prompt (the lyrics or the vocal direction). */
 export function isValidSunoAddVocalsConnection(
   targetHandleId: string,
   sourceType: string,
+  isVisualPicker: (t: string) => boolean,
 ): boolean {
   switch (targetHandleId) {
     case "audio":
       return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker)
     default:
       return false
   }
@@ -672,7 +675,7 @@ export const AUDIO_TEXT_HANDLE_LABELS: Record<string, Record<string, string>> = 
   "suno-replace-section":   { audio: "Audio", prompt: "Prompt" },
   "suno-style-boost":       { prompt: "Prompt" },
   "suno-add-instrumental":  { audio: "Audio" },
-  "suno-add-vocals":        { audio: "Audio" },
+  "suno-add-vocals":        { audio: "Audio", prompt: "Prompt" },
   "suno-convert-wav":       { audio: "Audio" },
   "suno-upload-extend":     { audio: "Audio", prompt: "Prompt" },
   // Batch 3: AI > Script & Text

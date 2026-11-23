@@ -2,6 +2,7 @@ import { config } from "./config.js"
 import { supabase } from "./supabase.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
 import { relayPossible } from "./relay-possible.js"
+import { coverKeysNamedByJobs } from "./job-cover/cover-job-refs.js"
 
 /** The client the lookups read with: the backend's service role, or a test's stand-in. */
 type LookupClient = Pick<typeof supabase, "from">
@@ -51,7 +52,8 @@ type LookupClient = Pick<typeof supabase, "from">
  *     records an object of ours only when the caller provably owns it;
  *   - a deleter (`keysUserMayDelete`, `ownKeysOnly`, `judgeAssetRowDelete`)
  *     deletes an object only when the user provably owns it AND nobody else
- *     claims it. Anything else stays in storage and only the user's row goes:
+ *     claims it — and a job's cover copy (`job-covers/…`) only once no job
+ *     shows it any more (lib/job-cover/cover-job-refs.ts, decided 2026-11-23). Anything else stays in storage and only the user's row goes:
  *     an object no record ties to the user — an operator file, a plugin cache,
  *     a row-less output, an output whose job and size are both gone — is never
  *     deleted on their behalf. Keeping can be revisited; an R2 delete cannot.
@@ -69,10 +71,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * MCP upload tools' (`uploads/<kind>/<userId>/…` and `uploads/handoff/…`,
  * lib/mcp/tools/upload.ts), the community library's clones
  * (`user-clones/<userId>/…`, ee/services/community/clone.ts) and timeline
- * exports (`exports/<userId>/…`, ee/pipelines/_freecut-timeline.ts).
+ * exports (`exports/<userId>/…`, ee/pipelines/_freecut-timeline.ts) and job
+ * covers (`job-covers/<userId>/…`, lib/job-cover/cover-key.ts).
  */
 const USER_NAMESPACE_RE =
-  /^(?:uploads\/(?:handoff\/)?[^/]+|user-clones|exports)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
+  /^(?:uploads\/(?:handoff\/)?[^/]+|user-clones|exports|job-covers)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
 
 const LOOKUP_CHUNK = 100
 
@@ -343,7 +346,11 @@ interface Evidence {
   /** The near-end user of the relayed job whose far-end id is the key's stem. */
   readonly relayMakers: Map<string, string | null>
   readonly rows: Map<string, ProvenanceRow[]>
+  /** Job-cover keys (`job-covers/…`) a job still names as its cover (lib/job-cover/cover-job-refs.ts). */
+  readonly namedCovers: ReadonlySet<string>
 }
+
+const NO_EVIDENCE = (): Evidence => ({ makers: new Map(), relayMakers: new Map(), rows: new Map(), namedCovers: new Set() })
 
 /** One chunk's rows with their flag — or, before 528, without it. Throws on error. */
 async function provenanceChunk(chunk: readonly string[], client: LookupClient): Promise<Array<Record<string, unknown>>> {
@@ -403,12 +410,15 @@ async function relayFamilyOwners(keys: readonly string[], client: LookupClient):
 /** One read per table for every key (none for a key that is not canonical). */
 async function loadEvidence(keys: readonly string[], client: LookupClient): Promise<Evidence> {
   const canonical = [...new Set(keys)].filter(isCanonicalObjectKey)
-  if (canonical.length === 0) return { makers: new Map(), relayMakers: new Map(), rows: new Map() }
+  if (canonical.length === 0) return NO_EVIDENCE()
   const makers = await familyJobOwners(canonical, client)
   const rows = await provenanceRows(canonical, client)
   // Only an instance that relays can hold an object its relay target made.
   const relayMakers = relayPossible() ? await relayFamilyOwners(canonical, client) : new Map<string, string | null>()
-  return { makers, relayMakers, rows }
+  // A job's cover copy is kept while a job shows it, whoever else's row names
+  // it (asked only for cover keys: any other batch issues no extra read).
+  const namedCovers = await coverKeysNamedByJobs(canonical, client)
+  return { makers, relayMakers, rows, namedCovers }
 }
 
 /** One user's standing on one object. */
@@ -417,6 +427,8 @@ export interface KeyJudgment {
   readonly owned: boolean
   /** Another user made it, it sits in their namespace, or their library holds it. */
   readonly claimedByOthers: boolean
+  /** A job still shows it as its cover (a `job-covers/` key only): no deleter may remove it. */
+  readonly namedAsJobCover?: boolean
 }
 
 const NOTHING_PROVEN: KeyJudgment = { owned: false, claimedByOthers: false }
@@ -439,12 +451,16 @@ function judge(owner: string, key: string, evidence: Evidence): KeyJudgment {
       makerUser === self ||
       relayUser === self ||
       rows.some((row) => row.user === self && !isRecordedReference(row)))
-  return { owned, claimedByOthers: madeByAnother || rows.some((row) => row.user !== self) }
+  return {
+    owned,
+    claimedByOthers: madeByAnother || rows.some((row) => row.user !== self),
+    ...(evidence.namedCovers.has(key) ? { namedAsJobCover: true } : {}),
+  }
 }
 
 /** May a deleter acting for the judged user remove the object? */
 export function mayDeleteObject(judgment: KeyJudgment): boolean {
-  return judgment.owned && !judgment.claimedByOthers
+  return judgment.owned && !judgment.claimedByOthers && judgment.namedAsJobCover !== true
 }
 
 /**
@@ -579,7 +595,7 @@ export async function judgeAssetRows(
 ): Promise<Map<string, AssetReapJudgment>> {
   const keys = rows.flatMap((r) => (r.r2_key ? [r.r2_key] : []))
   const evidence =
-    keys.length > 0 ? await loadEvidence(keys, client) : { makers: new Map(), relayMakers: new Map(), rows: new Map() }
+    keys.length > 0 ? await loadEvidence(keys, client) : NO_EVIDENCE()
   return new Map(rows.map((row) => [String(row.id), judgeRow(row.user_id, row, evidence)]))
 }
 

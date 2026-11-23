@@ -1084,6 +1084,18 @@ describe("reconcileKieJob", () => {
     expect(mocks.finalizeMock.mock.calls.at(-1)![0].extraOutputData).not.toHaveProperty("coverLane")
   })
 
+  it("Add Vocals / Add Instrumental on the market lane are recovered as songs: no cover lane, no speech mark (2026-11-23)", async () => {
+    for (const jobType of ["suno-add-vocals", "suno-add-instrumental"]) {
+      mocks.pollSunoMarketTracksMock.mockResolvedValueOnce({ taskId: "t-add", tracks: [{ id: "a1", audioUrl: "https://suno.example/a.mp3" }] })
+      mocks.uploadToR2Mock.mockResolvedValueOnce("https://r2.example/audio/j-add.mp3")
+      await reconcileKieJob({ id: `j-${jobType}`, provider_kind: "kie-suno-market", provider_task_id: "t-add", reconcile_attempts: 0, job_type: jobType, input_data: { uploadUrl: "https://example.com/song.mp3", style: "soul" } })
+      const extra = mocks.finalizeMock.mock.calls.at(-1)![0].extraOutputData as Record<string, unknown>
+      expect(extra, jobType).not.toHaveProperty("coverLane")
+      expect(extra, jobType).not.toHaveProperty("sunoTrackKind")
+      expect(extra, jobType).toMatchObject({ sunoTaskId: "t-add" })
+    }
+  })
+
   it("kie-suno music: track upload throws → bumps reconcile_attempts, no finalize, no refund", async () => {
     mocks.pollSunoTaskMock.mockResolvedValueOnce({
       taskId: "t-suno-up",

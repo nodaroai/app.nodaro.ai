@@ -12,6 +12,7 @@ const Share = z.object({
   allowCopy: z.boolean().describe("The viewer also gets the reference files the result was made from."),
   createdAt: z.string(),
   updatedAt: z.string(),
+  locale: z.string().nullable().describe("The interface language the link was shared in (its preview is written in it), or null (English)."),
 })
 
 const SharedJob = z.object({
@@ -24,6 +25,9 @@ const SharedJob = z.object({
   height: z.number().optional(),
   durationSec: z.number().optional(),
   title: z.string().nullable().describe("The owner's name for the result."),
+  songTitle: z.string().optional().describe("A song's own title (of the take `outputUrl` names), when it has one."),
+  toolName: z.string().nullable().describe("What a person calls the tool that made it, e.g. `Song Mashup`; null for a tool with no public name."),
+  coverUrl: z.string().nullable().optional().describe("The result's picture: the owner's cover, else the provider's art, else null."),
   createdAt: z.string(),
   prompt: z.string().nullable().describe("The prompt as it was written, exactly as sent; null for a trend run."),
   displayPrompt: z
@@ -76,7 +80,7 @@ openApiRegistry.registerPath({
   method: "put",
   path: "/v1/shares",
   description:
-    "Turn the link of one of your items on or off. The first call makes the link; turning it on again later brings back the same token. `allowCopy` omitted keeps its current value.",
+    "Turn the link of one of your items on or off. The first call makes the link; turning it on again later brings back the same token. `allowCopy` omitted keeps its current value. `locale` (optional) is the interface language it is shared in: the link's preview card on chats and social networks is written in it.",
   security,
   request: { body: { content: { "application/json": { schema: setShareBody } } } },
   responses: {

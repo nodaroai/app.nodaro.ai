@@ -41,6 +41,7 @@ const NON_LITERAL_WRITES: Record<string, { count: number; why: string }> = {
   "workers/shared.ts": { count: 1, why: "markJobCompleted — its callers' completion literals" },
   "middleware/credit-guard.ts": { count: 1, why: "writes back fields read from the same row" },
   "routes/component-execute.ts": { count: 1, why: "spreads a literal built in the same function" },
+  "lib/job-update.ts": { count: 1, why: "the owner's changes: `title` and `cover_url` only, each spread in when sent" },
   // The pickup claims spread `bullEntryFields(...)` (concurrency-lanes/columns.ts):
   // `lane_bull_queue` + `lane_bull_job_id`, or nothing — pinned below.
   "workers/video-worker.ts": { count: 1, why: "the pickup claim — its literal plus the BullMQ-entry fields" },

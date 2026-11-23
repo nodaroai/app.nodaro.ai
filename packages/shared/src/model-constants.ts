@@ -2289,6 +2289,19 @@ export function sunoModelHonoursDuration(model: string | undefined): boolean {
 export const SUNO_ADD_TRACK_MODELS = [...SUNO_ACTIVE_MODELS, "V4_5PLUS", "V5", "V5_5"] as const
 export type SunoAddTrackModel = typeof SUNO_ADD_TRACK_MODELS[number]
 
+/**
+ * The person's direction on Add Vocals / Add Instrumental, at the limits KIE's
+ * schema states for both (docs.kie.ai/suno-api/add-vocals, read 2026-11-23):
+ * `prompt` (the lyrics or the vocal direction, Add Vocals only) up to 5000
+ * characters, `style` up to 1000 (sent as `tags` on Add Instrumental),
+ * `negative_tags` up to 200, `vocal_gender` m / f, and three weights from 0 to
+ * 1 in steps of 0.01. The title is held to {@link SUNO_TITLE_MAX}, as every
+ * Suno title is (the add-track schema states no limit of its own).
+ */
+export const SUNO_ADD_TRACK_PROMPT_MAX = 5000
+export const SUNO_ADD_TRACK_STYLE_MAX = 1000
+export const SUNO_ADD_TRACK_NEGATIVE_MAX = 200
+
 /** Voice design models */
 export const VOICE_DESIGN_MODELS = [
   "eleven_ttv_v3",

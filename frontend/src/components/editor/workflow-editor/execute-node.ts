@@ -636,6 +636,35 @@ function resolveSunoIds(
   return { taskId, audioId };
 }
 
+/** The song a Suno Add Vocals / Add Instrumental run works on: a link to its
+ *  file and/or a Suno track's ids (a pair), or null when there is neither. */
+function sunoAddTrackSong(
+  inputs: FrontendResolvedInputs,
+  data: Record<string, unknown>,
+): { uploadUrl?: string; taskId?: string; audioId?: string } | null {
+  const text = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const uploadUrl = text(inputs.audioUrl) ?? text(inputs.uploadUrl) ?? text(data.uploadUrl);
+  const taskId = text(inputs.sunoTaskId) ?? text(data.taskId);
+  const audioId = text(inputs.sunoTrackId) ?? text(data.audioId);
+  const ids = taskId && audioId ? { taskId, audioId } : undefined;
+  if (!uploadUrl && !ids) return null;
+  return { ...(uploadUrl ? { uploadUrl } : {}), ...(ids ?? {}) };
+}
+
+/** The direction both add-track nodes share; an empty text or an unset weight is left out. */
+function sunoAddTrackDirection(d: SunoAddInstrumentalData | SunoAddVocalsData) {
+  const weight = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+  return {
+    style: d.style?.trim() || undefined,
+    title: d.title?.trim() || undefined,
+    negativeTags: d.negativeTags?.trim() || undefined,
+    vocalGender: d.vocalGender === "male" || d.vocalGender === "female" ? d.vocalGender : undefined,
+    styleWeight: weight(d.styleWeight),
+    weirdnessConstraint: weight(d.weirdnessConstraint),
+    audioWeight: weight(d.audioWeight),
+  };
+}
+
 /** Resolve persona fields for a Suno music API call. Upstream wiring wins over
  *  manual fields. Returns `{}` when no persona is set so spreading is a no-op. */
 function resolvePersona(
@@ -5365,53 +5394,55 @@ function executeNodeCore(
       });
   }
 
-  if (node.type === "suno-add-instrumental") {
-    const d = node.data as SunoAddInstrumentalData;
-    const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
-    if (!ids) {
-      toast.error(
-        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect2"),
-      );
-      return Promise.reject(new Error("Missing taskId/audioId"));
+  if (node.type === "suno-add-instrumental" || node.type === "suno-add-vocals") {
+    const isVocals = node.type === "suno-add-vocals";
+    const d = node.data as SunoAddInstrumentalData | SunoAddVocalsData;
+    const nodeName = isVocals ? "Suno Add Vocals" : "Suno Add Instrumental";
+    // The song, as the server's payload reads it (payload-suno-add-track.ts):
+    // a wired audio's file first, then a typed link; a wired Suno track's ids
+    // (or the ids typed into the node) go beside it, as a pair only.
+    const song = sunoAddTrackSong(inputs, d as Record<string, unknown>);
+    if (!song) {
+      toast.error(nodeRunError(d.label, "nodeRun.noSongForAddTrack"));
+      return Promise.reject(new Error("No song"));
     }
-    setUserPromptTemplate(undefined);
-    return runProcessingNode(
-      node.id,
-      () =>
-        sunoAddInstrumentalApi({
-          taskId: ids.taskId,
-          audioId: ids.audioId,
-          model: d.model || undefined,
-          userId: ctx.userId,
-        }),
-      "generatedAudioUrl",
-      "Suno Add Instrumental",
-      ctx,
-      extractSunoOutputFields,
-    );
-  }
-
-  if (node.type === "suno-add-vocals") {
-    const d = node.data as SunoAddVocalsData;
-    const ids = resolveSunoIds(inputs, d as Record<string, unknown>);
-    if (!ids) {
-      toast.error(
-        nodeRunError(d.label, "nodeRun.missingTaskIdOrAudioIdConnect2"),
-      );
-      return Promise.reject(new Error("Missing taskId/audioId"));
+    if (song.uploadUrl && isSoundPageLink(song.uploadUrl)) {
+      toast.error(tx("run.soundPageLink", { label: d.label }));
+      return Promise.reject(new Error("A link to where a video is goes in through a Video URL node"));
     }
-    setUserPromptTemplate(undefined);
+    const direction = sunoAddTrackDirection(d);
+    if (!isVocals) {
+      setUserPromptTemplate(undefined);
+      return runProcessingNode(
+        node.id,
+        () => sunoAddInstrumentalApi({ ...song, ...direction, model: d.model || undefined, userId: ctx.userId }),
+        "generatedAudioUrl",
+        nodeName,
+        ctx,
+        extractSunoOutputFields,
+      );
+    }
+    // Add Vocals: the lyrics or the direction for the voice — a list item or a
+    // wired prompt first, else the typed text with its {Label} references resolved (the
+    // server reads `resolvedInputs.prompt || resolveRefs(data.prompt)`).
+    const typedPrompt = (d as SunoAddVocalsData).prompt?.trim() || undefined;
+    const wiredPrompt = overridePrompt ?? inputs.prompt;
+    const vocalsPrompt =
+      (typeof wiredPrompt === "string" && wiredPrompt.trim() ? wiredPrompt : undefined) ??
+      (resolveTextRefs(typedPrompt, refMap)?.trim() || undefined);
+    setUserPromptTemplate(typedPrompt);
     return runProcessingNode(
       node.id,
       () =>
         sunoAddVocalsApi({
-          taskId: ids.taskId,
-          audioId: ids.audioId,
+          ...song,
+          ...direction,
           model: d.model || undefined,
+          prompt: vocalsPrompt,
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
-      "Suno Add Vocals",
+      nodeName,
       ctx,
       extractSunoOutputFields,
     );

@@ -12,6 +12,8 @@ import "../../routes/oauth-plugin-connect.js"
 import "../../routes/generate-image.js"
 import "../../routes/generate-video.js"
 import "../../routes/dubbing-read.js"
+import "../../routes/favorites.js"
+import "../../routes/library-favorite.js"
 import { creditsRoutes } from "../../ee/routes/credits.js"
 import { generateOpenApiDoc } from "../openapi-registry.js"
 import { isAnonymousRoute } from "../../middleware/auth.js"
@@ -42,6 +44,11 @@ describe("OpenAPI document", () => {
     "/v1/dubbing/{jobId}/captions",
     "/v1/oauth/token",
     "/v1/oauth/app-info",
+    "/v1/library",
+    "/v1/library/{id}/favorite",
+    "/v1/favorites",
+    "/v1/favorites/catalog",
+    "/v1/favorites/catalog/{catalog}/{optionId}",
   ])("includes %s", (p) => {
     expect(doc.paths[p]).toBeDefined()
   })
