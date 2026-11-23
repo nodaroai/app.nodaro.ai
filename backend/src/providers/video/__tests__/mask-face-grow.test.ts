@@ -189,19 +189,67 @@ describe("fitSkinModel", () => {
 })
 
 describe("the per-column top, the lower half, the hand, two faces, time and size", () => {
-  it("a tilted face: nothing is added above the face in its own column, nor beside it above the edge column's top", () => {
+  it("a tilted face: the band reaches up to the face's top row and no higher; past the band, never above a column's own top", () => {
     // A face whose top slopes: its left half starts at row 30, its right half at row 40 (a head tilted to one side).
     const rgb = scene(GREEN)
-    paint(rgb, { x0: 0, y0: 0, x1: W, y1: H }, SKIN) // skin everywhere: only the top rule can hold the grow back
+    paint(rgb, { x0: 0, y0: 0, x1: W, y1: H }, SKIN) // skin everywhere: only the top rules can hold the grow back
     const f = new Uint8Array(W * H)
     for (let y = 30; y < 60; y++) f.fill(255, y * W + 36, y * W + 48)
     for (let y = 40; y < 60; y++) f.fill(255, y * W + 48, y * W + 60)
+    const { band } = faceGrowRadii(30, 20)
     const g = covered(growFaceMaskFrame(grayFrameToRle(f), rgb, W, H, 20).rle)
-    // The right half's columns, and beyond its right edge: nothing above row 40.
-    for (let x = 48; x < W; x++) for (let y = 0; y < 40; y++) expect(on(g, x, y), `${x},${y}`).toBe(false)
-    // Beyond the left edge: nothing above row 30.
-    for (let x = 0; x < 36; x++) for (let y = 0; y < 30; y++) expect(on(g, x, y)).toBe(false)
+    // Nothing anywhere above the face's top row.
+    for (let x = 0; x < W; x++) for (let y = 0; y < 30; y++) expect(on(g, x, y), `${x},${y}`).toBe(false)
+    // Above the lower side's top (rows 30..39, columns 48+): exactly the band — within it of the face, covered (beside
+    // the higher half's edge, and over the lower half's own top edge); past it, never, though it is all skin.
+    const inside = new Uint8Array(W * H)
+    for (let i = 0; i < W * H; i++) inside[i] = f[i] ? 1 : 0
+    const d2 = squaredDistanceToRegion(inside, W, H)
+    for (let y = 30; y < 40; y++) {
+      for (let x = 48; x < W; x++) expect(on(g, x, y), `${x},${y}`).toBe(d2[y * W + x]! <= band * band)
+    }
+    for (let d = 1; d <= band; d++) expect(on(g, 47 + d, 31)).toBe(true)
+    // Beyond the left edge: the band all the way up to row 30, never above it.
+    for (let d = 1; d <= band; d++) expect(on(g, 36 - d, 30)).toBe(true)
     expect(Array.from(columnTops([{ row: 30, x0: 36, x1: 48 }, { row: 40, x0: 48, x1: 60 }], 30, 36, { top: 30, bottom: 59, left: 36, right: 60 })).slice(0, 8)).toEqual([30, 30, 30, 30, 30, 30, 30, 30])
+  })
+
+  it("an oval face: the band rings the whole oval up to its top row (the temples and the forehead's sides too), never onto the hair past it", () => {
+    // An oval face (rows 27..63, 37 rows tall) with red hair all round it, the way a face mask that reaches the hairline sits.
+    const rgb = scene(GREEN)
+    paint(rgb, { x0: 20, y0: 8, x1: 76, y1: 80 }, RED_HAIR)
+    const f = new Uint8Array(W * H)
+    const inOval = (x: number, y: number) => ((x - 48) / 12.5) ** 2 + ((y - 45) / 18.5) ** 2 <= 1
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (!inOval(x, y)) continue
+        f[y * W + x] = 255
+        paint(rgb, { x0: x, y0: y, x1: x + 1, y1: y + 1 }, SKIN)
+      }
+    }
+    let top = H, bottom = 0
+    for (let i = 0; i < W * H; i++) if (f[i]) { top = Math.min(top, Math.floor(i / W)); bottom = Math.max(bottom, Math.floor(i / W)) }
+    const { radius, band } = faceGrowRadii(bottom - top + 1, 20)
+    const inside = new Uint8Array(W * H)
+    for (let i = 0; i < W * H; i++) inside[i] = f[i] ? 1 : 0
+    const d2 = squaredDistanceToRegion(inside, W, H)
+    const g = covered(growFaceMaskFrame(grayFrameToRle(f), rgb, W, H, 20).rle)
+    let temples = 0
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x
+        if (inside[i]) continue
+        if (y < top) { expect(on(g, x, y), `${x},${y} above the top`).toBe(false); continue }
+        if (d2[i]! <= band * band) {
+          expect(on(g, x, y), `${x},${y} in the band`).toBe(true)
+          // Beside the oval's upper half, above the face's own pixels in that column: the temples.
+          if (y < 40) temples++
+        } else if (d2[i]! <= radius * radius && y < 72) {
+          expect(on(g, x, y), `${x},${y} hair past the band`).toBe(false)
+        }
+      }
+    }
+    expect(temples).toBeGreaterThan(20)
   })
 
   it("beyond the band, skin is taken only beside or below the face's lower half: a hand at eye level gets the band alone", () => {
@@ -213,6 +261,20 @@ describe("the per-column top, the lower half, the hand, two faces, time and size
       expect(on(g, FACE.x1 - 1 + band, y)).toBe(true)
       expect(on(g, FACE.x1 + band + 1, y)).toBe(false)
     }
+  })
+
+  it("a hand at the temple of an oval face (above that column's top) gets the band alone", () => {
+    const rgb = scene(GREEN)
+    const f = new Uint8Array(W * H)
+    const inOval = (x: number, y: number) => ((x - 48) / 12.5) ** 2 + ((y - 45) / 18.5) ** 2 <= 1
+    paint(rgb, { x0: 52, y0: 24, x1: 76, y1: 40 }, SKIN) // a hand over the oval's upper right, skin like the face's
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (inOval(x, y)) { f[y * W + x] = 255; paint(rgb, { x0: x, y0: y, x1: x + 1, y1: y + 1 }, SKIN) }
+    const inside = new Uint8Array(W * H)
+    for (let i = 0; i < W * H; i++) inside[i] = f[i] ? 1 : 0
+    const d2 = squaredDistanceToRegion(inside, W, H)
+    const { band } = faceGrowRadii(37, 30)
+    const g = covered(growFaceMaskFrame(grayFrameToRle(f), rgb, W, H, 30).rle)
+    for (let y = 27; y < 40; y++) for (let x = 52; x < 76; x++) if (!inside[y * W + x]) expect(on(g, x, y), `${x},${y}`).toBe(d2[y * W + x]! <= band * band)
   })
 
   it("two faces side by side: each grows by its own height and is clamped by its own top", () => {

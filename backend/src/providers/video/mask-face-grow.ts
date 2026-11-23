@@ -14,11 +14,19 @@
  *      edge `CAST_SWAP_FACE_GROW_BOUNDS.nearBandPct` % (never wider than the
  *      grow), both measured as exact Euclidean distance from the region
  *      (`squaredDistanceToRegion`);
- *   2. nothing is ever added above the face in its own column
- *      (`columnTops`; left and right of the face, the edge column's top), so
- *      the grow never climbs to the hair at the temples or on a tilted head;
- *   3. the band at the edge is always added; further out — and only beside
- *      or below the face's lower half (the jaw, the neck) — only a pixel the
+ *   2. nothing is ever added above the face's own top row; beyond the band,
+ *      nothing above the face in each column either (`columnTops`; left and
+ *      right of the face, the edge column's top), so the grow past the band
+ *      never climbs to the hair at the temples or on a tilted head;
+ *   3. the band at the edge is always added, all round the face up to its top
+ *      row — the temples and the forehead's sides included (decided
+ *      2026-11-23: held under each column's top, the band left the upper half
+ *      of an oval face bare, and a face mask that reaches the hairline grew
+ *      by its jaw alone, the same at every %). On a tilted head the band at
+ *      the lower side's temple may sit above that side's columns' tops (never
+ *      above the face's top row, never wider than the band). Further out —
+ *      and only beside or below the face's lower half (the jaw, the neck) —
+ *      only a pixel the
  *      face's own skin model accepts (`fitSkinModel`: the mean and covariance
  *      of the face's own colours in Y Cb Cr, refined once without its
  *      outliers — eyes, brows, lips — luma and chroma alike, so hair of any
@@ -278,7 +286,7 @@ export interface FaceGrowFrameParts {
   readonly orig: Uint8Array
   /** The pixels this frame's grow adds (never the mask's own). */
   readonly added: Uint8Array
-  /** Where an added pixel may be on this frame: within the radius, under each column's top (the smoothing's bound). */
+  /** Where an added pixel may be on this frame: within the radius, under the face's top row and, beyond the band, under each column's top (the smoothing's bound). */
   readonly reach: Uint8Array
   /** The mask's covered pixels. */
   readonly before: number
@@ -315,13 +323,18 @@ function growRegion(parts: FaceGrowFrameParts, rgb: Uint8Array, width: number, h
   const skin = new Float64Array(gw * gh)
   const candidate = new Uint8Array(gw * gh)
   const reachG = new Uint8Array(gw * gh)
+  /** The grid cells within the band: they are held to the face's top row alone, not to their column's top. */
+  const bandG = new Uint8Array(gw * gh)
   for (let gy = 0; gy < gh; gy++) {
     for (let gx = 0; gx < gw; gx++) {
       const i = gy * gw + gx
       if (inside[i]) { candidate[i] = 1; continue }
       const d2 = dist[i]! * k2
       const x = sx(gx), y = sy(gy) + wy0
-      if (d2 > r2 || y < tops[x]!) continue
+      // The band reaches up to the face's top row (the window's top); beyond it, each column's own top holds.
+      if (d2 > r2) continue
+      if (d2 > b2 && y < tops[x]!) continue
+      if (d2 <= b2) bandG[i] = 1
       reachG[i] = 1
       const p = 3 * (y * width + x + wx0)
       skin[i] = skinDistance2(model, rgb[p]!, rgb[p + 1]!, rgb[p + 2]!)
@@ -354,12 +367,13 @@ function growRegion(parts: FaceGrowFrameParts, rgb: Uint8Array, width: number, h
     if (!reached[i] && d2 > b2 && (sy(Math.floor(i / gw)) + wy0 < lowerHalf || skin[i]! > FACE_GROW_NOT_SKIN_D2)) continue
     sel[i] = 1
   }
-  // Back to full size: each pixel takes its grid cell, held under its own column's top.
+  // Back to full size: each pixel takes its grid cell, held under its own column's top unless the cell is the band's
+  // (the window's top is the face's top row, so nothing is ever added above it).
   for (let y = wy0; y < wy1; y++) {
     const gy = Math.min(gh - 1, Math.floor((y - wy0) / k))
     for (let x = wx0; x < wx1; x++) {
-      if (y < tops[x - wx0]!) continue
       const g = gy * gw + Math.min(gw - 1, Math.floor((x - wx0) / k))
+      if (y < tops[x - wx0]! && !bandG[g]) continue
       const p = y * width + x
       if (reachG[g] || inside[g]) parts.reach[p] = 1
       if (sel[g] && !parts.orig[p]) parts.added[p] = 1
