@@ -1610,6 +1610,100 @@ On a deployment's own server the card is the bundled proxy's `/s/*`, handed to
 the API's `GET /og/s/:token`; `SHARE_SITE_ORIGIN` is set in
 [deployment.md](./deployment.md).
 
+## 4i. A workflow's view link
+
+A workflow's creator can open a **read-only view of its canvas** to anyone
+holding a link: every node with the results it has made (pictures, videos,
+3D scenes), its prompts, its notes and the wires between them. The viewer
+needs no account, can pan, zoom and play the videos, and changes nothing. The
+same canvas can be embedded in any web page with an iframe. This link is
+separate from the presentation link (`/present/<token>`), which lets a viewer
+run the workflow and never shows the canvas; turning one on or off never
+touches the other.
+
+```bash
+# Turn the link on (idempotent: the same link comes back)
+TOKEN=$(curl -s -X POST "$BASE/v1/workflows/$WORKFLOW_ID/view-link" \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"locale":"en"}' | jq -r .token)
+echo "$APP_ORIGIN/view/$TOKEN"
+```
+
+The page is `<app origin>/view/<token>`; the embed, without the page's top
+bar, is `<app origin>/embed/view/<token>`:
+
+```html
+<iframe src="https://app.nodaro.ai/embed/view/<token>" width="100%" height="600"
+  style="border:0" loading="lazy" allowfullscreen title="My workflow"></iframe>
+```
+
+| Route | What it does |
+|---|---|
+| `GET /v1/workflows/:id/view-link` | The link's state: `{ enabled: false }`, or `{ enabled: true, token, indexable, export, createdAt }`. |
+| `POST /v1/workflows/:id/view-link` | Body `{ locale? }`. Turns the link on; calling it again returns the same link. `locale` is the interface language: the link's preview card is written in it. |
+| `PATCH /v1/workflows/:id/view-link` | Body `{ indexable }`: whether search engines may index the view (on by default). |
+| `POST /v1/workflows/:id/view-link/export` | Body `{ includeAssets }`. Saves a copy of the workflow that viewers can download and import into their own account (`POST /v1/workflows/import`). The copy is **frozen**: viewers get it, not later edits, until it is saved again. With `includeAssets: true` it carries the characters, locations, objects and creatures the workflow uses and keeps the canvas's results; without, it is a clean template. `413 export_too_large` above 8 MB. |
+| `DELETE /v1/workflows/:id/view-link/export` | Stops offering the copy. |
+| `DELETE /v1/workflows/:id/view-link` | Turns the link off: the page, the embed, the download and the preview stop answering at once. Turning it on again makes a new link. |
+| `GET /v1/workflow-views/:token` | **No credential.** What the link shows: `{ name, nodes, edges, indexable, export }`. |
+| `GET /v1/workflow-views/:token/export` | **No credential.** The saved copy, as a file in the export format; `404` when none is offered. |
+
+The owner's routes are for the workflow's **creator** only (anyone else gets
+`404`), like the presentation link: turning a public link on is a decision
+about who sees the work, not an edit. A workflow in a workspace answers
+`422 share_not_allowed` with `reason: "workspace"`, and a deployment that does
+not allow public work answers `reason: "sharing_disabled"`; on such a
+deployment every public read is `404`. A link answers `404` once it is turned
+off, once its workflow has changed hands, and while its owner's account is
+blocked. A server that does not have view links yet answers
+`503 not_available`.
+
+**What a view never shows.** The canvas, its preview and the saved copy are
+all built from one public projection of the workflow, the same for every
+reader (the owner included):
+
+- a hidden node, and the wires that touch it;
+- the destinations and accounts of every node that sends or fetches
+  (webhooks, social publishers, scrapers): such a node shows its name only;
+- a Webhook Trigger's address and token;
+- any value under a key that names a secret (an API key, a password, an
+  access token, a credential);
+- any file the platform has restricted, and any result a share link would
+  refuse to show (a Preview render, work kept private, a prompt the content
+  filter stops);
+- a cloned voice's recordings and the consent signed for them, and a Suno
+  voice's recordings;
+- a Telegram trigger's connection and chat filter;
+- run-time state (a job in flight) and the assistant request a node was made
+  from;
+- the workflow's settings: the saved copy carries only what the canvas's nodes
+  read (character definitions, prompt templates, the viewport), through the
+  same scrub;
+- the inputs and renders of a UGC video, a take's voice record and a
+  provider's error text, as on a presentation link.
+
+A view link of a workflow that later moves into a workspace (its project
+does) stops answering.
+
+The public reads are never cached (`Cache-Control: no-store`) and are limited
+per network: 60 a minute for the canvas, 20 for the download.
+
+**Scopes (OAuth apps):** reading the link's state needs `workflows:read`;
+turning it on or off, the switch and the saved copy need `workflows:write`.
+A personal API key limited to some workflows cannot reach the owner routes.
+
+### The view link's preview and search engines
+
+Link-preview readers (chats, social networks) and search engines asking for
+`/view/<token>` are served a small page with the link's Open Graph and
+Twitter tags (`GET /og/view/:token`): the title is the workflow's name and the
+word "Workflow" in the link's language, the description says how many steps
+it has, and the picture is a 1200 × 630 JPEG of the canvas's first results,
+rendered once on the platform's storage (until it is ready, the brand's card).
+The page also carries the canvas's names, notes and prompts as text. Its
+robots rule follows the owner's switch: `index, follow` while `indexable` is
+on, `noindex` when it is off. People get the canvas page itself.
+
 ## 5. Sync vs async execution
 
 By default, `POST /v1/api/run` is **async**: it returns `202 Accepted`
@@ -1958,6 +2052,8 @@ All errors share the same shape:
 | 422 | `media_too_long` | — | The file is longer than 30 minutes, the most media imported into the editor may be (`POST /v1/uploads/large/complete`, and `POST /v1/download-video` for a direct file whose header says so). A stored copy was removed and nothing was counted against storage. A direct file that turns out too long once downloaded fails the same way, on its progress stream. |
 | 422 | `media_too_large` | — | The file is over 10 GiB, the most a file imported into the editor may be (`POST /v1/uploads/large/start`, `POST /v1/download-video`). |
 | 422 | `share_not_allowed` | — | `PUT /v1/shares` turned on the link of an item that cannot be shared now; `reason` says why (`not_completed`, `no_media`, `private_output`, `content_filtered`, `restricted`, `workspace`, `sharing_disabled`). No link was made or turned on. See [§ 4h](#4h-share-links). |
+| 422 | `share_not_allowed` | — | `POST /v1/workflows/:id/view-link` (or its `/export`) on a workflow in a workspace (`reason: "workspace"`) or on a deployment that does not allow public work (`reason: "sharing_disabled"`). No link was made. See [§ 4i](#4i-a-workflows-view-link). |
+| 413 | `export_too_large` | — | `POST /v1/workflows/:id/view-link/export`: the workflow's copy would be over 8 MB. Nothing was saved. See [§ 4i](#4i-a-workflows-view-link). |
 | 422 | `media_bitrate_implausible` | — | The file is far larger than its stated length allows (over 2,500 Mbit/s on average for video, 50 Mbit/s for audio, the first 16 MiB not counted). See [Large uploads straight to storage](#large-uploads-straight-to-storage). |
 | 429 | `too_many_open_uploads` | — | `POST /v1/uploads/large/start` while 3 of your large uploads are still open. Complete or abort one; an abandoned one frees itself when its token expires. |
 | 422 | `upload_blocked` | — | An upload policy registered by this deployment refused the upload before it was stored (every byte-carrying ingestion lane: `POST /v1/upload*`, the proxy PUT and the handoff POST). `message` is the deployment's own reason — show it as-is. Nothing was written. Only occurs on deployments that register an upload policy. |

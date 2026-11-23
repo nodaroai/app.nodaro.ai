@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { hashKey, useQueries } from "@tanstack/react-query"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 import { getCachedModelCredits, prefetchModelCreditCosts } from "@/hooks/use-model-credit-cost"
 import { runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
 import type { RunUnpriced } from "@/components/editor/workflow-editor/run-unpriced"
@@ -119,9 +120,11 @@ export function useRunSetPrice(
   edges: WorkflowEdge[],
 ): RunSetPrice {
   const [pricesLoaded, setPricesLoaded] = useState(0)
+  // Nothing runs on a view-only canvas, so it asks no price.
+  const readOnly = useReadOnlyCanvas()
 
   useEffect(() => {
-    if (!hasCredits() || executable.length === 0) return
+    if (readOnly || !hasCredits() || executable.length === 0) return
     // Every id the run is priced at: each of several providers' own too.
     const ids = runModelIds(executable, nodes, edges)
     const missing = ids.filter((id) => getCachedModelCredits(id) === undefined)
@@ -133,7 +136,7 @@ export function useRunSetPrice(
     return () => {
       cancelled = true
     }
-  }, [executable, nodes, edges])
+  }, [executable, nodes, edges, readOnly])
 
   const answers = useUgcRunAnswers(executable, nodes, edges)
 

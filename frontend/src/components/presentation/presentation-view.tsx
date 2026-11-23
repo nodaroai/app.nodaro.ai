@@ -1897,6 +1897,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <>
               <ShareDialog
                 workflowId={workflowId}
+                workflowName={workflowName}
                 presentationSettings={settings}
                 updatePresentationSettings={updatePresentationSettings}
                 nodes={allPresentationNodes}

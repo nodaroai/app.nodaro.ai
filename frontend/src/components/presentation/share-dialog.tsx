@@ -23,6 +23,7 @@ import { useT, tx } from "@/lib/i18n"
 import { getWorkflowAccess, isNotFoundError, shareWorkflow, unshareWorkflow, CredentialUnboundError, type UnboundCredentialUse } from "@/lib/api"
 import { CredentialLockDialog } from "./credential-lock-dialog"
 import { CollaboratorsPanel } from "./collaborators-panel"
+import { ViewLinkSection } from "./view-link/view-link-section"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -34,9 +35,11 @@ interface ShareDialogProps {
   presentationSettings?: PresentationSettings
   updatePresentationSettings?: (patch: Partial<PresentationSettings>) => void
   nodes?: WorkflowNode[]
+  /** The title the view link's embed code carries. */
+  workflowName?: string
 }
 
-export function ShareDialog({ workflowId, presentationSettings, updatePresentationSettings, nodes }: ShareDialogProps) {
+export function ShareDialog({ workflowId, presentationSettings, updatePresentationSettings, nodes, workflowName }: ShareDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [unboundUses, setUnboundUses] = useState<ReadonlyArray<UnboundCredentialUse> | null>(null)
@@ -164,7 +167,7 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
           {t("common.share")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("common.share")}</DialogTitle>
         </DialogHeader>
@@ -330,6 +333,16 @@ export function ShareDialog({ workflowId, presentationSettings, updatePresentati
               {t("present.generateShareLink")}
             </Button>
           )}
+
+          {/* The canvas itself, read-only: a separate link from the
+              presentation above — anyone with it sees every node and result,
+              runs nothing, and needs no account. */}
+          <div className="border-t" />
+          <ViewLinkSection
+            workflowId={workflowId}
+            workflowName={workflowName || t("common.untitled")}
+            active={open}
+          />
         </div>
       </DialogContent>
     </Dialog>

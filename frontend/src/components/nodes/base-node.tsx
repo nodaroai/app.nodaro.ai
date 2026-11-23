@@ -10,6 +10,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
 import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
+import { useCanvasMode } from "./read-only-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { useNodeTextDir } from "./node-text-dir"
 import { NodeRunStripShell } from "./node-run-strip-shell"
@@ -206,6 +207,13 @@ function BaseNodeComponent({
   // Direction for the card's TEXT only. The card's geometry stays LTR with the
   // canvas (see node-text-dir.ts) — this lands on text leaves, never on a row.
   const textDir = useNodeTextDir()
+  // A canvas that only shows the workflow (view link, embed, sub-workflow
+  // viewer): no hover chrome, run strip, resize corners, settings or prices.
+  // `view-detached`: the workflow store is someone else's (the editor's), so
+  // this node never writes its box into it.
+  const canvasMode = useCanvasMode()
+  const readOnly = canvasMode !== "editor"
+  const detachedFromStore = canvasMode === "view-detached"
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
   const rightCount = handles.filter((h) => h.position === Position.Right).length
@@ -235,6 +243,8 @@ function BaseNodeComponent({
   // future overlay node in one place, with no per-node opt-in. Falls back to the
   // parent (or BaseNode's own element) when no RF wrapper is present (unit tests).
   useEffect(() => {
+    // Nothing on a view-only canvas appears on hover.
+    if (readOnly) return
     const host =
       outerRef.current?.closest(".react-flow__node") ??
       outerRef.current?.parentElement ??
@@ -253,7 +263,7 @@ function BaseNodeComponent({
       host.removeEventListener("mouseenter", onEnter)
       host.removeEventListener("mouseleave", onLeave)
     }
-  }, [])
+  }, [readOnly])
 
   // Inner zoom wrapper bookkeeping + per-node flags + stored height. Combine
   // into ONE selector with shallow compare so we do a single `nodes.find(...)`
@@ -345,7 +355,7 @@ function BaseNodeComponent({
   // Flow applies `node.height` to the node wrapper, and the body clips behind
   // it. `visualH` re-fires this whenever something writes a height back.
   useLayoutEffect(() => {
-    if (!fitContent || !id) return
+    if (!fitContent || !id || detachedFromStore) return
     const state = useWorkflowStore.getState()
     const node = state.nodes.find((n) => n.id === id)
     if (!node || typeof node.height !== "number") return
@@ -366,6 +376,7 @@ function BaseNodeComponent({
   useLayoutEffect(() => {
     if (prevShowInlineRef.current === showInline) return
     prevShowInlineRef.current = showInline
+    if (detachedFromStore) return
     useWorkflowStore.setState((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
     }))
@@ -413,7 +424,7 @@ function BaseNodeComponent({
   // visibly flickered every keystroke. Running pre-paint makes the height catch
   // up before the squeezed frame is ever shown.
   useLayoutEffect(() => {
-    if (!id) return
+    if (!id || detachedFromStore) return
     // Skip while inline chrome is expected but not yet measured (post-remount
     // transient): re-fitting with chromeHeight===0 against a chrome-inclusive
     // stored height inflates the width permanently. The chrome ResizeObserver
@@ -703,6 +714,7 @@ function BaseNodeComponent({
           preset pill stays on the node), OR while the node is selected (so its "?" docs link is
           there). offset scales with the node zoom so the gap above the card tracks the floating
           title (EditableNodeLabel, `-top-6`) instead of a constant 4px. */}
+      {!readOnly && (
       <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen || hasActivePreset || !!selected} position={Position.Top} offset={Math.round(8 * zoom)}>
         {/* Toolbar content (preset dropdown + "?" + 3-dots) scales by canvasZoom × nodeZoom so it
             tracks the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. The
@@ -726,6 +738,7 @@ function BaseNodeComponent({
           onPresetOpenChange={setPresetMenuOpen}
         />
       </NodeToolbar>
+      )}
       {/* Content above card (e.g. thumbnail gallery) — floats 4px higher than
           the card's top edge gap (-translate-y-6 = 24px vs the prior 20px) so
           the results strip clears the node with a touch more breathing room. */}
@@ -755,7 +768,7 @@ function BaseNodeComponent({
           isEditing && category === "creature" && "dark:shadow-[0_0_20px_rgba(167,139,250,0.4)]",
           isEditing && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isEditing && category === "component" && "dark:shadow-[0_0_20px_rgba(168,85,247,0.4)]",
-          (isRunning || isPending) && "node-running",
+          !readOnly && (isRunning || isPending) && "node-running",
           isNew && !isRunning && !isPending && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
           className,
@@ -789,8 +802,11 @@ function BaseNodeComponent({
         >
           <button
             type="button"
-            onClick={handleIconClick}
+            onClick={readOnly ? undefined : handleIconClick}
+            tabIndex={readOnly ? -1 : undefined}
+            data-view-keep={readOnly ? "" : undefined}
             className={cn(
+              readOnly && "pointer-events-none",
               // `[&>svg]:size-4` keeps the header icon in lockstep with the
               // floating-label icon (EditableNodeLabel) — same 16px glyph in a
               // 24px box across every node, regardless of the per-node size.
@@ -836,7 +852,7 @@ function BaseNodeComponent({
           {!hasCredits() && <NodaroHeaderChipForNode nodeId={id} />}
           {/* Credit chip only where credits exist as a concept — on
               community/business the numbers would be fiction. */}
-          {hasCredits() && credits !== undefined && credits > 0 && (
+          {!readOnly && hasCredits() && credits !== undefined && credits > 0 && (
             <span className={cn(
               "font-mono text-[11px]",
               (category === "ai" || category === "scene" || category === "script" || category === "i2v")
@@ -846,7 +862,7 @@ function BaseNodeComponent({
           )}
           {/* A ranged price (speech priced by length, text arriving at run
               time): from the floor up to the ceiling the run reserves. */}
-          {hasCredits() && credits === undefined && creditsRange && (
+          {!readOnly && hasCredits() && credits === undefined && creditsRange && (
             <span
               data-testid="node-credits-range"
               title={t(creditsRangeBasis === "length" ? "node.creditsRangeTitleLength" : "node.creditsRangeTitle", { min: creditsRange.min, max: creditsRange.max })}
@@ -940,7 +956,7 @@ function BaseNodeComponent({
           through the floating button; deleting it without giving them a strip
           would have removed their only way in. They get one holding the settings
           toggle alone. */}
-      {(
+      {!readOnly && (
         chromeHeight > 0 ? (
           // Inline mode: glue the run strip to the card's DOM bottom so it
           // tracks `node.height` (exactly like the card) instead of
@@ -1039,7 +1055,7 @@ function BaseNodeComponent({
           one corner + a single resize dot on the other (Alt-swappable). All
           other categories get plain resize dots on both corners — no
           per-node zoom. */}
-      {!isMobile && (isHovered || !!selected) && (
+      {!readOnly && !isMobile && (isHovered || !!selected) && (
         (category === "parameter" || enableZoomHandle) ? (
           <>
             {/* Hold Alt to swap: resize moves to bottom-left, zoom to bottom-right. */}

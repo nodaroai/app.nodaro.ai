@@ -50,6 +50,7 @@ const RESOLVES: ReadonlyMap<string, string> = new Map([
 /** (file, table) reads that hand no saved result to a client or an engine, or
  *  hand out an immutable snapshot resolved when it was taken. */
 const EXEMPT: ReadonlyMap<string, string> = new Map([
+  ["lib/workflow-view/store.ts::workflows", "a view link's reads of its workflow (the public one, and the owner routes' creator check); every consumer reads it through projectWorkflowView (lib/workflow-view/project.ts), which resolves the canvas result ids"],
   ["ee/copilot/abandoned-sweep.ts::workflows", "only asks whether an abandoned copilot graph is empty"],
   ["lib/mcp/flows/conversation-store.ts::workflows", "counts a conversation's steps (the 50-step cap) and checks a race loser is still empty; it hands no saved result to a client or an engine"],
   ["lib/mcp/flows/history.ts::workflows", "reads only which jobs the conversations already hold (mcpProvenance.jobId), so the one-off history filing never files one twice"],

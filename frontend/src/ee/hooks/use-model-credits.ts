@@ -7,6 +7,7 @@ import { queryKeys } from "@/lib/query-keys"
 import type { GenerateVideoProNodeData } from "@/types/nodes"
 import { useModelCreditCost } from "./queries/use-credits-queries"
 import { seedanceHdDraftQuery } from "@/hooks/use-model-credit-cost"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 
 export { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "./queries/use-credits-queries"
 export { useModelCreditCost } from "./queries/use-credits-queries"
@@ -30,7 +31,9 @@ function videoProEstimateInput(data:GenerateVideoProNodeData):VideoProEstimateIn
 }
 const videoProEstimateKey=(data:GenerateVideoProNodeData)=>["credits","video-pro",videoProEstimateInput(data)] as const
 export function useVideoProCredits(data:GenerateVideoProNodeData) {
-  return useQuery({queryKey:videoProEstimateKey(data),queryFn:()=>estimateVideoProCredits(videoProEstimateInput(data)),enabled:hasCredits()&&data.segmentMode!==undefined,staleTime:30_000})
+  // Nothing runs on a view-only canvas, so it asks no price.
+  const readOnly=useReadOnlyCanvas()
+  return useQuery({queryKey:videoProEstimateKey(data),queryFn:()=>estimateVideoProCredits(videoProEstimateInput(data)),enabled:!readOnly&&hasCredits()&&data.segmentMode!==undefined,staleTime:30_000})
 }
 export function getCachedVideoProCredits(data:GenerateVideoProNodeData):number|undefined {
   return queryClient.getQueryData<{credits:number}>(videoProEstimateKey(data))?.credits
@@ -44,10 +47,11 @@ export function getCachedVideoProCredits(data:GenerateVideoProNodeData):number|u
  * refused (not a draft, not finished, …), or with no draft wired.
  */
 export function useSeedanceHdDraftCredits(draftTaskId: string | undefined, enabled: boolean): number | undefined {
+  const readOnly = useReadOnlyCanvas()
   // The query a run estimate that only finalizes this draft reads too (`seedanceHdDraftQuery`).
   const { data } = useQuery({
     ...seedanceHdDraftQuery(draftTaskId ?? ""),
-    enabled: enabled && hasCredits() && !!draftTaskId,
+    enabled: !readOnly && enabled && hasCredits() && !!draftTaskId,
     gcTime: 30 * 60_000,
   })
   return data?.credits
@@ -59,10 +63,11 @@ export function useSeedanceHdDraftCredits(draftTaskId: string | undefined, enabl
  * rows and the markup, which only the server knows.
  */
 export function useSeedanceHdMinimumCredits(enabled: boolean = true): number | undefined {
+  const readOnly = useReadOnlyCanvas()
   const { data } = useQuery({
     queryKey: queryKeys.credits.seedanceHdMinimum(),
     queryFn: () => estimateSeedanceHdCredits(),
-    enabled: enabled && hasCredits(),
+    enabled: !readOnly && enabled && hasCredits(),
     staleTime: Infinity,
     gcTime: 30 * 60_000,
   })

@@ -1,30 +1,14 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
-import {
-  ReactFlow,
-  ReactFlowProvider,
-  MiniMap,
-  Background,
-  BackgroundVariant,
-  Controls,
-} from "@xyflow/react"
+import { ReactFlowProvider } from "@xyflow/react"
 import { X, Loader2 } from "lucide-react"
-import "@xyflow/react/dist/style.css"
 
-import { nodeTypes } from "@/components/nodes"
-import { AnimatedFlowEdge } from "./animated-flow-edge"
-import { orderNodesParentFirst } from "./workflow-editor/group-coords"
+import { ReadOnlyCanvas } from "@/components/workflow-view/read-only-canvas"
 import { readWorkflowContent } from "@/lib/workflow-content"
 import { useT, tx } from "@/lib/i18n"
-import { ZOOM_MIN, ZOOM_MAX } from "@/lib/zoom"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-
-const edgeTypes = {
-  default: AnimatedFlowEdge as any,
-  animatedFlow: AnimatedFlowEdge as any,
-}
 
 interface WorkflowViewerModalProps {
   readonly workflowId: string
@@ -88,14 +72,6 @@ function WorkflowViewerCanvas({
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [handleKeyDown])
 
-  // Filter out hidden nodes (e.g. from sub-workflow execution leftovers).
-  // Order parent-first: this modal reads raw DB nodes (no editor heal), so a
-  // group saved after its children would otherwise teleport in the viewer.
-  const visibleNodes = useMemo(
-    () => orderNodesParentFirst(nodes.filter((n) => !n.hidden)),
-    [nodes],
-  )
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -112,31 +88,9 @@ function WorkflowViewerCanvas({
     )
   }
 
+  // The editor's own workflow is in the store: this canvas never writes to it.
   return (
-    <ReactFlow
-      nodes={visibleNodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      nodesDraggable={false}
-      nodesConnectable={false}
-      elementsSelectable={false}
-      edgesFocusable={false}
-      fitView
-      fitViewOptions={{ padding: 0.2 }}
-      minZoom={ZOOM_MIN}
-      maxZoom={ZOOM_MAX}
-      proOptions={{ hideAttribution: true }}
-      className="canvas-ambient"
-    >
-      <Background variant={BackgroundVariant.Dots} gap={32} size={2} color="var(--canvas-dot)" className="!bg-transparent" />
-      <MiniMap
-        pannable
-        zoomable
-        style={{ width: 120, height: 80 }}
-        maskColor="rgba(0, 0, 0, 0.6)"
-      />
-      <Controls showInteractive={false} />
+    <ReadOnlyCanvas nodes={nodes} edges={edges} mode="view-detached">
       {/* Header bar */}
       <div className="absolute top-0 start-0 end-0 z-10 flex items-center justify-between px-4 py-3 bg-background/90 backdrop-blur-sm border-b border-border dark:bg-[#121212]/90 dark:border-[#2D2D2D]">
         <h2 className="text-sm font-medium text-white truncate">
@@ -151,7 +105,7 @@ function WorkflowViewerCanvas({
           <X className="w-5 h-5" />
         </button>
       </div>
-    </ReactFlow>
+    </ReadOnlyCanvas>
   )
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest"
-import { embedPageUrl, presentationShareUrl, publicLinkOrigin, publishedAppUrl } from "../public-links"
+import { embedPageUrl, presentationShareUrl, publicLinkOrigin, publishedAppUrl, workflowEmbedUrl, workflowViewUrl } from "../public-links"
 
 const FLOW = "https://flow.example.test"
 const APP = "https://app.example.test"
@@ -15,6 +15,8 @@ describe("public links", () => {
     expect(publishedAppUrl("my-app")).toBe(`${window.location.origin}/app/my-app`)
     expect(embedPageUrl("my-app")).toBe(`${window.location.origin}/embed/my-app`)
     expect(presentationShareUrl("t1")).toBe(`${window.location.origin}/present/t1`)
+    expect(workflowViewUrl("v1")).toBe(`${window.location.origin}/view/v1`)
+    expect(workflowEmbedUrl("v1")).toBe(`${window.location.origin}/embed/view/v1`)
   })
 
   it("name the deployment's public host, never the Flow host, when the app's pages have moved", () => {
@@ -24,6 +26,8 @@ describe("public links", () => {
     expect(publishedAppUrl("my-app", FLOW)).toBe("https://app.example.test/app/my-app")
     expect(embedPageUrl("my-app", FLOW)).toBe("https://app.example.test/embed/my-app")
     expect(presentationShareUrl("t1", FLOW)).toBe("https://app.example.test/present/t1")
+    expect(workflowViewUrl("v1", FLOW)).toBe("https://app.example.test/view/v1")
+    expect(workflowEmbedUrl("v1", FLOW)).toBe("https://app.example.test/embed/view/v1")
   })
 
   it("on a host the deployment does not name (another name the service answers on), name that page's own origin, as before", () => {

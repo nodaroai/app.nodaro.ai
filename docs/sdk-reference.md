@@ -1265,6 +1265,43 @@ need not already have an account), at `role` `"viewer"` or `"editor"`. `remove`
 also lets a collaborator remove themselves. Listing never returns email
 addresses.
 
+#### `viewLink`
+
+A workflow's read-only view link, reached as `client.workflows.viewLink`: a
+page of its canvas (nodes, results, prompts, notes) that anyone holding the
+link opens without signing in, at `<app origin>/view/<token>`, and an embed of
+the same canvas for an iframe, at `<app origin>/embed/view/<token>`. Separate
+from the presentation link, which lets a viewer run the workflow. See
+[API integration § 4i](./api-integration.md#4i-a-workflows-view-link).
+
+```ts
+viewLink.get(workflowId): Promise<WorkflowViewLink>
+viewLink.enable(workflowId, { locale? }): Promise<WorkflowViewLink>
+viewLink.update(workflowId, { indexable }): Promise<WorkflowViewLink>
+viewLink.saveExport(workflowId, { includeAssets }): Promise<WorkflowViewLink>
+viewLink.removeExport(workflowId): Promise<WorkflowViewLink>
+viewLink.disable(workflowId): Promise<{ enabled: false }>
+viewLink.read(token): Promise<PublicWorkflowView>       // no credential
+viewLink.readExport(token): Promise<WorkflowExport>     // no credential
+```
+
+`WorkflowViewLink` is `{ enabled: false }` or `{ enabled: true, token,
+indexable, export, createdAt }`; `export` is `{ exportedAt, includesAssets }`
+or `null`. The owner's methods are for the workflow's creator
+(`NotFoundError` for anyone else). `enable` and `saveExport` answer
+`422 share_not_allowed` for a workflow in a workspace or on a deployment that
+does not allow public work. `indexable` (on by default) says whether search
+engines may index the view. `saveExport` freezes a copy viewers download and
+import (pass it to `client.workflows.import`), until you save again.
+
+```ts
+const link = await client.workflows.viewLink.enable(workflowId, { locale: "en" })
+if (link.enabled) {
+  await client.workflows.viewLink.saveExport(workflowId, { includeAssets: false })
+  console.log(`https://app.nodaro.ai/view/${link.token}`)
+}
+```
+
 ---
 
 ### `client.projects`

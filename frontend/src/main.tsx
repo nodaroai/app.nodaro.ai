@@ -40,7 +40,7 @@ window.addEventListener("vite:preloadError", () => {
 // link, often by someone with no account, and rewriting the entry underneath
 // them makes the address bar disagree with what is on screen — so a refresh or
 // a copied link lands on /projects instead of the thing they were sent.
-const STANDALONE_ROUTES = ["/present/", "/app/", "/embed/", "/tutorials/"]
+const STANDALONE_ROUTES = ["/present/", "/view/", "/app/", "/embed/", "/tutorials/"]
 // Read all three parts BEFORE the replace below: once the entry is rewritten to
 // /projects, window.location no longer carries the query or the hash, and the
 // re-pushed entry silently lost them — a pasted /templates?category=… link

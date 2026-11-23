@@ -1067,6 +1067,24 @@ html, body {
   background-repeat: no-repeat;
 }
 
+/* A canvas that only shows a workflow (the view link, its embed, the
+   sub-workflow viewer — ReadOnlyCanvas). Every control a node card draws is
+   editing chrome there (remove, edit, refine, upload, settings, save, …), and
+   those controls are hand-written per node: one rule here covers every node,
+   the ones added later included. A port (React Flow handle, role="button")
+   stays drawn — the edges are measured from it — but opens nothing. Fields stay visible (a prompt is content)
+   but take no input; ports open no picker. `data-view-keep` exempts a control
+   that is content (BaseNode's header icon). Writes are refused underneath
+   anyway — the workflow store is read-only on these canvases. */
+.workflow-view-canvas .react-flow__node :is(button, [role="button"], input[type="file"]):not([data-view-keep], .react-flow__handle, .react-flow__handle *) {
+  display: none !important;
+}
+.workflow-view-canvas .react-flow__node :is(input, textarea, select, [contenteditable]),
+.workflow-view-canvas .react-flow__handle,
+.workflow-view-canvas .react-flow__edge {
+  pointer-events: none !important;
+}
+
 /* The same wash under the dashboard pages (projects, tutorials, gallery, …):
    painted on the scrolling <main>, so it holds still while the page scrolls.
    Pulled up and to the right so it sits behind the hero cards, not the grid. */

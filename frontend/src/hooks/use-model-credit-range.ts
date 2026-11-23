@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { getBatchModelCreditCosts } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 import { creditRangesFrom, isVariablePricedModel, VARIABLE_PRICED_MODELS, type CreditRange } from "@/lib/model-credit-range"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -35,10 +36,12 @@ async function fetchChargedCreditRanges(): Promise<Record<string, CreditRange>> 
  * without a credit system.
  */
 export function useModelCreditRange(modelId: string): CreditRange | undefined {
+  // Nothing runs on a view-only canvas, so it quotes no price.
+  const readOnly = useReadOnlyCanvas()
   const { data } = useQuery({
     queryKey: queryKeys.credits.modelRanges(),
     queryFn: fetchChargedCreditRanges,
-    enabled: hasCredits() && isVariablePricedModel(modelId),
+    enabled: !readOnly && hasCredits() && isVariablePricedModel(modelId),
     staleTime: Infinity,
     gcTime: 30 * 60_000,
   })

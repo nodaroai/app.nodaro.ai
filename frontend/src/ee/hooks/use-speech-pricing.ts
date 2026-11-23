@@ -22,6 +22,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { getCachedModelCredits, isModelUnpriced, rememberUnpricedModels, useModelCredits } from "@/hooks/use-model-credit-cost"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { speechFlatId, speechQuote, speechQuoteIds, upstreamSpeechText, type SpeechQuote } from "@/lib/speech-estimate"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 
 export interface SpeechPricing {
   /** What the Run button quotes: the flat row, or the length price (its ceiling for an unknown text). */
@@ -45,6 +46,8 @@ export function useSpeechPricing(
   const ctx = useWorkflowStore(useShallow((s) => upstreamSpeechText({ id: nodeId, type: nodeType, data }, s.nodes, s.edges, {})))
   const ids = speechQuoteIds(nodeType, data, ctx)
   const toAsk = ids.filter((id) => getCachedModelCredits(id) === undefined && !isModelUnpriced(id))
+  // Nothing runs on a view-only canvas, so it asks no price.
+  const readOnly = useReadOnlyCanvas()
   const priceQuery = useQuery({
     queryKey: ["credits", "speech-quote", ...ids],
     queryFn: async () => {
@@ -54,7 +57,7 @@ export function useSpeechPricing(
       rememberUnpricedModels(missing)
       return prices
     },
-    enabled: hasCredits() && toAsk.length > 0,
+    enabled: !readOnly && hasCredits() && toAsk.length > 0,
     staleTime: Infinity,
     gcTime: 30 * 60_000,
   })

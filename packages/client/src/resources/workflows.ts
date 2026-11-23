@@ -1,4 +1,5 @@
 import type { NodaroClientCore } from "../core.js"
+import { WorkflowViewLinkResource } from "./workflow-view-link.js"
 import type {
   GenericNode,
   GenericEdge,
@@ -360,9 +361,12 @@ export interface McpConversationList {
 export class WorkflowsResource {
   /** The people this workflow is shared with. See {@link WorkflowCollaboratorsResource}. */
   readonly collaborators: WorkflowCollaboratorsResource
+  /** The workflow's read-only view link and its embed. See {@link WorkflowViewLinkResource}. */
+  readonly viewLink: WorkflowViewLinkResource
 
   constructor(private client: NodaroClientCore) {
     this.collaborators = new WorkflowCollaboratorsResource(client)
+    this.viewLink = new WorkflowViewLinkResource(client)
   }
 
   /** List workflows for a project. Returns metadata only — `nodes`/`edges` are not included. */

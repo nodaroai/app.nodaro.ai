@@ -2,6 +2,7 @@ import { useCallback } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
 import { listHttpCredentials, type HttpCredentialSummary } from "@/lib/api"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 
 const NONE: ReadonlyArray<HttpCredentialSummary> = []
 
@@ -13,13 +14,15 @@ const NONE: ReadonlyArray<HttpCredentialSummary> = []
  */
 export function useHttpCredentials(enabled = true) {
   const qc = useQueryClient()
+  // A view-only canvas may be open to someone signed out; the credentials are the owner's.
+  const readOnly = useReadOnlyCanvas()
   const query = useQuery({
     queryKey: queryKeys.httpCredentials.list(),
     queryFn: async () => {
       const res = await listHttpCredentials()
       return res.data
     },
-    enabled,
+    enabled: enabled && !readOnly,
     staleTime: 30_000,
   })
   const refresh = useCallback(

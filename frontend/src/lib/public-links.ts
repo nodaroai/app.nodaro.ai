@@ -23,3 +23,13 @@ export function embedPageUrl(slug: string, currentOrigin?: string): string {
 export function presentationShareUrl(shareToken: string, currentOrigin?: string): string {
   return `${publicLinkOrigin(currentOrigin)}/present/${shareToken}`
 }
+
+/** The read-only canvas a workflow's view link opens. */
+export function workflowViewUrl(token: string, currentOrigin?: string): string {
+  return `${publicLinkOrigin(currentOrigin)}/view/${encodeURIComponent(token)}`
+}
+
+/** The same canvas without the page's bar, for an `<iframe>` on another site. */
+export function workflowEmbedUrl(token: string, currentOrigin?: string): string {
+  return `${publicLinkOrigin(currentOrigin)}/embed/view/${encodeURIComponent(token)}`
+}

@@ -41,6 +41,7 @@ import { watchTitleColumn } from "./lib/jobs-title-column.js"
 import { watchCoverColumn } from "./lib/jobs-cover-column.js"
 import { watchShareLocaleColumn } from "./lib/share-links/locale-column.js"
 import { watchFavoritesTables } from "./lib/favorites-tables.js"
+import { watchViewLinksTable } from "./lib/workflow-view/table.js"
 import { ensureStorageBucket } from "./lib/storage.js"
 import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 import { archiveThisBuild } from "./lib/site-asset-archive.js"
@@ -196,6 +197,8 @@ async function main() {
   // The same for the upload and catalog favorites tables (migration 688): every
   // read names them only once a probe has seen them (lib/favorites-tables.ts).
   watchFavoritesTables()
+  // And a workflow's view links (migration 691, lib/workflow-view/table.ts).
+  watchViewLinksTable()
 
   // The shared Voice Library (≈21,700 voices over ≈220 pages, what the facet
   // counts read): adopt the Redis snapshot, or start the one walk per
