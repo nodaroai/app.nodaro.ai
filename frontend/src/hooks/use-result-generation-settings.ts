@@ -3,6 +3,7 @@ import { getJobStatus, type Job } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { nonEmptyString } from "@/lib/utils"
 import { isValidUuid } from "@/lib/uuid"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 import { listedSeedanceTaskType, supportsReferenceTaskType, type SeedanceReferenceTaskType } from "@nodaro/shared/models"
 
 /**
@@ -101,6 +102,9 @@ export function useResultGenerationSettings(
   jobId: string | undefined,
   opts: { readonly enabled?: boolean } = {},
 ) {
+  // A view-only canvas may be open to someone signed out: a job belongs to
+  // its owner, so it is never asked about there.
+  const readOnly = useReadOnlyCanvas()
   return useQuery({
     queryKey: queryKeys.jobs.detail(jobId ?? ""),
     // Only real backend jobs (UUIDs) have settings to fetch. Synthetic result
@@ -109,7 +113,7 @@ export function useResultGenerationSettings(
     // spam on every load of such a result. See lib/uuid.ts. A caller that
     // only reads a field some results can carry passes `enabled: false` for
     // the rest, so they never pay the lookup.
-    enabled: (opts.enabled ?? true) && !!jobId && isValidUuid(jobId),
+    enabled: !readOnly && (opts.enabled ?? true) && !!jobId && isValidUuid(jobId),
     staleTime: Infinity,
     gcTime: 30 * 60_000,
     retry: 1,

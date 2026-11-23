@@ -231,12 +231,30 @@ export function projectCardContent(
   return gridContent(clip(name, TITLE_MAX) || description, description, locale, coverUrls, sources)
 }
 
+/**
+ * A workflow view link's card (lib/workflow-view/card.ts): "<name> · Workflow",
+ * how many steps its canvas shows, and a grid of its first results.
+ */
+export function workflowCardContent(
+  name: string,
+  stepCount: number,
+  previewUrls: readonly string[],
+  sources: CardSources,
+  locale: ShareCardLocale = "en",
+): ShareCardContent {
+  const words = CARD_WORDS[locale]
+  const description = words.workflowSteps(stepCount)
+  const title = titleOf(name.trim() || null, words.workflow) ?? description
+  const content = gridContent(title, description, locale, previewUrls, sources)
+  return content.picture?.kind === "grid" && content.picture.sources.length === 0 ? { ...content, picture: null } : content
+}
+
 /** The content with the picture the card names. */
 export function withCardImage(content: ShareCardContent, image: CardImage | null): ShareCardContent {
   return { ...content, image }
 }
 
-const meta = (attr: "property" | "name", key: string, value: string): string =>
+export const meta = (attr: "property" | "name", key: string, value: string): string =>
   `<meta ${attr}="${key}" content="${escapeHtml(value)}">`
 
 /** The one inline script (it sends people on), and its hash for the page's CSP. */
@@ -261,8 +279,12 @@ function mediaTags(prefix: "og:video" | "og:audio", media: CardMedia): string[] 
   ]
 }
 
-/** The card page. */
-export function shareCardHtml(content: ShareCardContent, place: ShareCardPlace): RenderedCard {
+/**
+ * The card's Open Graph and Twitter tags, in the order readers expect. Shared
+ * with a workflow view link's page (lib/workflow-view/card.ts), whose page
+ * around the tags differs.
+ */
+export function shareCardMetaTags(content: ShareCardContent, place: Pick<ShareCardPlace, "cardUrl" | "defaultImage">): string[] {
   const image = (content.image !== undefined ? content.image : content.fallbackImage) ?? place.defaultImage
   const imageUrl = image ? httpsUrl(image.url) : undefined
   const alt = content.title
@@ -289,6 +311,12 @@ export function shareCardHtml(content: ShareCardContent, place: ShareCardPlace):
     meta("name", "twitter:description", content.description),
     ...(imageUrl ? [meta("name", "twitter:image", imageUrl), meta("name", "twitter:image:alt", alt)] : []),
   ]
+  return tags
+}
+
+/** The card page. */
+export function shareCardHtml(content: ShareCardContent, place: ShareCardPlace): RenderedCard {
+  const tags = shareCardMetaTags(content, place)
   const page = escapeHtml(place.pageUrl)
   const script = redirectScript(place.pageUrl)
   const dir = RTL_LOCALES.has(content.locale) ? ' dir="rtl"' : ""

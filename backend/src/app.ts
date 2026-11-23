@@ -359,6 +359,8 @@ import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
 import { httpCredentialRoutes } from "./routes/http-credentials.js"
 import { presentationRoutes } from "./routes/presentation.js"
+import { workflowViewLinkRoutes } from "./routes/workflow-view-links.js"
+import { workflowViewRoutes } from "./routes/workflow-views.js"
 import { apiTokenRoutes } from "./routes/api-tokens.js"
 import { metaCallbackRoutes } from "./routes/meta-callbacks.js"
 import { socialAuthRoutes } from "./routes/social-auth.js"
@@ -1049,6 +1051,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // browser-session only inside the route.
   await app.register(httpCredentialRoutes)
   await app.register(presentationRoutes)
+  await app.register(workflowViewLinkRoutes)
+  await app.register(workflowViewRoutes)
   await app.register(apiTokenRoutes)
   await app.register(socialAuthRoutes)
   // Community cloud-connect, instance side (Phase 4a): self-hosted editions

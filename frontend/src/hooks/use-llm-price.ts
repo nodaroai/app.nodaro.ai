@@ -11,6 +11,7 @@
 import { useEffect, useMemo } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { hasCredits } from "@/lib/edition"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 import { availableReasoningEfforts, supportsAdvancedMode, type LlmReasoningEffort } from "@nodaro/shared/llm-models"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { queryKeys } from "@/lib/query-keys"
@@ -57,11 +58,13 @@ export function llmPriceOf(ids: LlmPriceIds, keyCredits: number | undefined, tie
 export function useLlmPrices(idsList: readonly LlmPriceIds[]): LlmPrice[] {
   const flat = useMemo(() => [...new Set(idsList.flatMap((ids) => [ids.key, ids.tierId]))], [idsList])
   const flatKey = flat.join("\u0001")
+  // Nothing runs on a view-only canvas, so it asks no price.
+  const readOnly = useReadOnlyCanvas()
   useEffect(() => {
-    if (!hasCredits() || flat.length === 0) return
+    if (readOnly || !hasCredits() || flat.length === 0) return
     void prefetchModelCreditCosts(flat)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flatKey])
+  }, [flatKey, readOnly])
   const results = useQueries({ queries: flat.map(cachedPriceQuery) }, queryClient)
   const byId = new Map<string, number | undefined>()
   flat.forEach((id, i) => {

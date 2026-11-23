@@ -171,6 +171,28 @@
 		}
 	}
 
+	# A workflow's view link (/view/<token>): link-preview readers AND search
+	# engines get its card (GET /og/view/:token, backend/src/routes/workflow-views.ts):
+	# the link's Open Graph tags, the canvas's words, and the robots rule its
+	# owner chose. People get the canvas page (the SPA, always noindex: the
+	# owner's choice is the card's to say). The card sets its own headers, so
+	# @spa_noindex leaves this answer out.
+	# One address, two answers (the card or the page) by who asks: a cache keeps them apart.
+	@view_any path /view/*
+	header @view_any +Vary "User-Agent"
+	@view_bot {
+		path /view/*
+		header_regexp User-Agent (?i)(telegrambot|whatsapp|twitterbot|facebookexternalhit|linkedinbot|slackbot|discordbot|pinterestbot|applebot|googlebot|bingbot|duckduckbot|yandexbot|baiduspider)
+	}
+	handle @view_bot {
+		request_header -X-Internal-Orchestrator
+		request_header -X-Internal-Orchestrator-Secret
+		rewrite * /og{uri}
+		reverse_proxy 127.0.0.1:9000 {
+			import client_ip_header
+		}
+	}
+
 	# A share link's card (/s/<token>): a small HTML page the backend writes
 	# (GET /og/s/:token, backend/src/routes/share-card.ts) with the link's Open
 	# Graph and Twitter tags, which social networks and chats read without
@@ -228,7 +250,7 @@
 	@flow_host_public_page {
 		expression `{nodaro_flow_origin} != "" && {nodaro_kept_origin} != "" && {nodaro_kept_origin} != {nodaro_flow_origin} && {env.LEGACY_UI_HOSTS}.lowerAscii().replace(",", " ").split(" ").exists(h, h != "" && "https://" + h != {nodaro_flow_origin}) && "https://" + {http.request.host}.lowerAscii() == {nodaro_flow_origin} && !({http.request.header.Sec-Fetch-Dest} in ["iframe", "frame", "embed", "object"])`
 		method GET HEAD
-		path /app/* /embed/* /present/*
+		path /app/* /embed/* /present/* /view/*
 	}
 	handle @flow_host_public_page {
 		header @legacy_ui_permanent Cache-Control "private, max-age=3600"
@@ -480,6 +502,11 @@
 		not path /v1/trends /v1/trends/*
 		# A share card sets its own (a few minutes, so a preview can be cached).
 		not path /s/*
+		# So does a view link's card (@view_bot).
+		not {
+			path /view/*
+			header_regexp User-Agent (?i)(telegrambot|whatsapp|twitterbot|facebookexternalhit|linkedinbot|slackbot|discordbot|pinterestbot|applebot|googlebot|bingbot|duckduckbot|yandexbot|baiduspider)
+		}
 	}
 	header @html Cache-Control "no-cache"
 	@trendReads path /v1/trends /v1/trends/*
@@ -495,6 +522,11 @@
 	@spa_document {
 		path_regexp spa_doc ^([^.]*|/.*\.html)$
 		not path /assets/* /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/* /mcp* /s/*
+		# A view link's card (@view_bot) is not the app's document.
+		not {
+			path /view/*
+			header_regexp User-Agent (?i)(telegrambot|whatsapp|twitterbot|facebookexternalhit|linkedinbot|slackbot|discordbot|pinterestbot|applebot|googlebot|bingbot|duckduckbot|yandexbot|baiduspider)
+		}
 	}
 	header @spa_document Supports-Loading-Mode "credentialed-prerender"
 
@@ -522,6 +554,11 @@
 		path_regexp spa_route ^([^.]*|/.*\.html)$
 		not path / /login /signup /gallery /app/* /tutorials/*
 		not path /v1/* /health /health/* /health;* /.well-known/* /storage/* /supabase/* /og/* /s/*
+		# A view link's card (@view_bot above) says its own robots rule.
+		not {
+			path /view/*
+			header_regexp User-Agent (?i)(telegrambot|whatsapp|twitterbot|facebookexternalhit|linkedinbot|slackbot|discordbot|pinterestbot|applebot|googlebot|bingbot|duckduckbot|yandexbot|baiduspider)
+		}
 	}
 	header @spa_noindex X-Robots-Tag "noindex"
 }

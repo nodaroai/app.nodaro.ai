@@ -119,6 +119,11 @@ const PUBLIC_ROUTE_READS: Readonly<Record<string, Read>> = {
     "routes/shares.ts",
   ),
   "* /og/s/*": asks("a share link's card for link previews: every card is the 404 page that says nothing about any content", "routes/share-card.ts"),
+  "GET /v1/workflow-views/*": asks(
+    "a workflow's view link (the read-only canvas and its downloadable copy): every link answers 404 Link not found",
+    "routes/workflow-views.ts",
+  ),
+  "* /og/view/*": asks("a workflow view link's card for link previews and search engines: every card is the 404 page that says nothing about any workflow", "routes/workflow-views.ts"),
   "* /v1/download*": none(
     "streams a file of this deployment's storage by an address the caller already holds (isOurCdnUrl), which the storage serves without this route; the prefix also covers the download-video routes, which act for the signed-in caller",
     "routes/download.ts",

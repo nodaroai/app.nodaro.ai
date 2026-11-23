@@ -51,6 +51,8 @@ const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 const CheckoutCompletePage = lazy(() => import("@/app/checkout-complete/page"))
 const PresentPage = lazy(() => import("@/routes/present-page"))
+const WorkflowViewPage = lazy(() => import("@/routes/workflow-view-page"))
+const WorkflowViewEmbedPage = lazy(() => import("@/routes/workflow-view-embed-page"))
 const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
 const TutorialPage = lazy(() => import("@/routes/tutorial-page"))
 const EmbedPage = lazy(() => import("@/routes/embed-page"))
@@ -327,6 +329,20 @@ export const router = createBrowserRouter([
   {
     path: "/present/:shareToken",
     element: <SuspenseWrapper><PresentPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  // A workflow's canvas, read-only, for anyone with its view link (no sign-in),
+  // and the same canvas without the page bar for an <iframe> elsewhere. Two
+  // segments under /embed/, so the embed never shadows a published app's
+  // /embed/:slug.
+  {
+    path: "/view/:token",
+    element: <SuspenseWrapper><WorkflowViewPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/embed/view/:token",
+    element: <SuspenseWrapper><WorkflowViewEmbedPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {

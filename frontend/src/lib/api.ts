@@ -20,7 +20,7 @@ import { ugcFailure } from "@nodaro/shared/ugc"
 import { CONTINUATION_SETTLING, CONTINUATION_SUPERSEDED, RENDER_FINAL_ALREADY_RENDERED } from "@nodaro/shared/nodes"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
 import { nodaroClient } from "@/lib/nodaro-client"
-import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
+import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint, WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { VIDEO_UTIL_PRICING } from "@nodaro/shared/credits"
 import type { ExpandedVideoOverlayRequest, FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
@@ -9346,6 +9346,103 @@ export async function getSharedExecutionStatus(
     `/v1/present/${encodeURIComponent(token)}/status/${encodeURIComponent(execId)}`,
     "apiErr.getExecutionStatus",
   )
+}
+
+// ---------------------------------------------------------------------------
+// Workflow view link (a read-only canvas anyone with the link can open)
+// ---------------------------------------------------------------------------
+
+/** The frozen copy of the workflow a view link offers for download. */
+export interface WorkflowViewExport {
+  readonly exportedAt: string
+  readonly includesAssets: boolean
+}
+
+/** What `/view/:token` and `/embed/view/:token` render (`GET /v1/workflow-views/:token`). */
+export interface WorkflowView {
+  readonly name: string
+  readonly nodes: WorkflowNode[]
+  readonly edges: WorkflowEdge[]
+  readonly indexable: boolean
+  readonly export: WorkflowViewExport | null
+}
+
+/** The owner's view of the link (`/v1/workflows/:id/view-link`). */
+export type WorkflowViewLinkState =
+  | { readonly enabled: false }
+  | {
+      readonly enabled: true
+      readonly token: string
+      readonly indexable: boolean
+      readonly export: WorkflowViewExport | null
+      readonly createdAt: string
+    }
+
+/**
+ * 503 `not_available` — the server knows the view link but its database does
+ * not yet. Also accepts the older `not_ready` spelling of the same answer.
+ */
+export function isNotAvailableError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  const code = (err as { code?: unknown }).code
+  return code === "not_available" || code === "not_ready"
+}
+
+/** Read a published view. Public: sent without the session, so a signed-out visitor and a signed-in one get the same answer. */
+export function getWorkflowView(token: string, signal?: AbortSignal): Promise<WorkflowView> {
+  return apiRequest<WorkflowView>(
+    `/v1/workflow-views/${encodeURIComponent(token)}`,
+    "apiErr.loadWorkflowView",
+    { skipAuth: true, ...(signal ? { signal } : {}) },
+  )
+}
+
+/** Where a view's saved workflow file downloads from (a plain link, no session). */
+export function workflowViewExportPath(token: string): string {
+  return `${API_BASE_URL}/v1/workflow-views/${encodeURIComponent(token)}/export`
+}
+
+function viewLinkPath(workflowId: string, suffix = ""): string {
+  return `/v1/workflows/${encodeURIComponent(workflowId)}/view-link${suffix}`
+}
+
+/** The owner's current view-link state. */
+export function getWorkflowViewLink(workflowId: string): Promise<WorkflowViewLinkState> {
+  return apiRequest(viewLinkPath(workflowId), "apiErr.workflowViewLink")
+}
+
+/** Turn the view link on (idempotent). `locale` is the owner's UI language. */
+export function enableWorkflowViewLink(workflowId: string, locale?: string): Promise<WorkflowViewLinkState> {
+  return apiRequest(viewLinkPath(workflowId), "apiErr.workflowViewLink", {
+    method: "POST",
+    body: locale ? { locale } : {},
+  })
+}
+
+/** Let search engines index the view page, or not. */
+export function setWorkflowViewIndexable(workflowId: string, indexable: boolean): Promise<WorkflowViewLinkState> {
+  return apiRequest(viewLinkPath(workflowId), "apiErr.workflowViewLink", {
+    method: "PATCH",
+    body: { indexable },
+  })
+}
+
+/** Save (or replace) the downloadable copy of the workflow as it is now. */
+export function exportWorkflowViewFile(workflowId: string, includeAssets: boolean): Promise<WorkflowViewLinkState> {
+  return apiRequest(viewLinkPath(workflowId, "/export"), "apiErr.workflowViewLink", {
+    method: "POST",
+    body: { includeAssets },
+  })
+}
+
+/** Remove the downloadable copy. */
+export function removeWorkflowViewFile(workflowId: string): Promise<WorkflowViewLinkState> {
+  return apiRequest(viewLinkPath(workflowId, "/export"), "apiErr.workflowViewLink", { method: "DELETE" })
+}
+
+/** Turn the view link off: the link and every embed stop working. */
+export function revokeWorkflowViewLink(workflowId: string): Promise<WorkflowViewLinkState> {
+  return apiRequest(viewLinkPath(workflowId), "apiErr.workflowViewLink", { method: "DELETE" })
 }
 
 // ---------------------------------------------------------------------------

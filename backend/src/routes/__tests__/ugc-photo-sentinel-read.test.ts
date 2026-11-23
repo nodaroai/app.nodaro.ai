@@ -1,7 +1,8 @@
 /**
  * The photo influence set's guard (lib/__tests__/ugc-photo-sentinel-cases.ts) on every read of a
  * workflow by anyone but its author: a share link's view (signed out, or a signed-in viewer), a
- * shared workflow's public read, and the source of an editable copy. For every case, (a) no `KILL`
+ * shared workflow's public read, a workflow view link's canvas and its downloadable copy, and the
+ * source of an editable copy. For every case, (a) no `KILL`
  * reaches what is read; (c) every `KEEP` does.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
@@ -33,6 +34,8 @@ vi.mock("@/lib/workflow-access.js", async (importOriginal) => ({
 import { presentationRoutes } from "../presentation.js"
 import { workflowRoutes } from "../workflows.js"
 import { loadStudioEditableCopySource } from "../../lib/workflow-route-access.js"
+import { projectWorkflowView } from "../../lib/workflow-view/project.js"
+import { buildViewExport } from "../../lib/workflow-view/export-snapshot.js"
 import { supabase } from "../../lib/supabase.js"
 import { CONTROL_CASES, KEEP, KILL, SENTINEL_CASES, marked } from "../../lib/__tests__/ugc-photo-sentinel-cases.js"
 
@@ -107,6 +110,28 @@ const SURFACES = [
     read: async () => (await app.inject({ method: "GET", url: `/v1/public/workflows/${WORKFLOW_ID}`, headers: { "x-user-id": READER } })).body,
   },
   {
+    // A workflow's view link: the canvas it shows and the copy it offers (lib/workflow-view/), signed out.
+    surface: "a view link's canvas",
+    // A view link shows a sending node's name only (lib/workflow-view/project.ts): its post, its account and its address go too.
+    dropsKeeps: ["KEEP caption", "KEEP-connection", "https://hooks.example/KEEP-hook"],
+    read: async () => {
+      const c = h.current!
+      return JSON.stringify(await projectWorkflowView({ nodes: c.graph.nodes, edges: c.graph.edges, settings: c.settings, ownerId: AUTHOR }))
+    },
+  },
+  {
+    surface: "a view link's downloadable copy",
+    // A copy without its entities is a clean template (results gone) and carries only the settings the canvas
+    // reads: only (a) is asked of it.
+    dropsKeeps: "all",
+    read: async () => {
+      const c = h.current!
+      const built = await buildViewExport({ id: WORKFLOW_ID, name: "Shared", nodes: c.graph.nodes, edges: c.graph.edges, settings: c.settings, user_id: AUTHOR }, false)
+      if (!built.ok) throw new Error("the copy was not built")
+      return JSON.stringify(built.snapshot)
+    },
+  },
+  {
     surface: "an editable copy's source",
     read: async () => {
       const loaded = await loadStudioEditableCopySource({} as never, reply() as never, READER, WORKFLOW_ID, "view", "id, user_id, workspace_id, visibility, settings, nodes, edges", "Failed", { resolveResultIds: false })
@@ -122,6 +147,8 @@ describe.each(SURFACES.map((s) => [s.surface, s] as const))("%s", (_surface, s) 
     serve()
     const body = await s.read()
     expect(body).not.toContain(KILL)
-    for (const keep of marked(c, KEEP)) expect(body, keep).toContain(keep)
+    const drops: "all" | readonly string[] = "dropsKeeps" in s ? s.dropsKeeps : []
+    if (drops === "all") return
+    for (const keep of marked(c, KEEP)) if (!drops.includes(keep)) expect(body, keep).toContain(keep)
   })
 })

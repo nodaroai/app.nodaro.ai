@@ -9,6 +9,7 @@ import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { useNodeTextDir } from "./node-text-dir"
+import { useReadOnlyCanvas } from "./read-only-canvas-context"
 
 interface EditableNodeLabelProps {
   label: string
@@ -48,6 +49,9 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
     else if (nodeId) openFullscreenSettings(nodeId)
   }
 
+  // On a view-only canvas the title is just a title: no rename, no settings.
+  const readOnly = useReadOnlyCanvas()
+
   useEffect(() => { setValue(label) }, [label])
   useEffect(() => { if (editing) inputRef.current?.select() }, [editing])
 
@@ -55,6 +59,18 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
     setEditing(false)
     if (value.trim() && value !== label) onSave(value.trim())
     else setValue(label)
+  }
+
+  if (readOnly) {
+    return (
+      <div
+        className={`node-title-label absolute -top-6 left-1 flex items-center gap-2 text-[11px] ${NODE_TITLE_TYPOGRAPHY} text-[var(--node-label)] select-none`}
+        style={{ transform: `scale(${compensateScale})`, transformOrigin: "0 100%" }}
+      >
+        <span className="inline-flex items-center justify-center [&>svg]:size-4">{icon}</span>
+        <span dir={textDir} className="truncate">{localizeNode(label)}</span>
+      </div>
+    )
   }
 
   return (

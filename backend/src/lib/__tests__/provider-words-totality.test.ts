@@ -107,6 +107,7 @@ const WORDS: Readonly<Record<string, Lane<WordsKind>>> = {
   "lib/mcp/tools/_job-view.ts": lane("serves", "the MCP job envelope maps errorDetail through jobRowProviderWords as a non-admin reader, over rows its callers (get_job, wait_for_job) already judged by their run"),
   "lib/mcp/tools/jobs.ts": lane("serves", "list_jobs / get_job / wait_for_job select the column and pass every row through runJobsProviderWords and maskTrendRunError(s); the public scope also judges each row by its owner (jobRowProviderWordsFor)"),
   "lib/mcp/tools/gallery.ts": lane("serves", "get_asset selects the column and passes the row through maskTrendRunError, jobRowProviderWordsFor (it can read another user's public job) and runJobsProviderWords"),
+  "lib/workflow-view/project.ts": lane("serves", "a workflow view link's canvas, card and copy: the saved nodes pass savedNodesProviderWords as a reader who may not read the words, and the scrub then drops every errorDetail key it finds at any depth"),
   "lib/mcp/tools/diagnose.ts": lane("serves", "diagnose_run's providerReason (the job's words, else the node state's) goes through maskTrendRunError; on a run through providerWordsShownTo with the reader's relation to the run's workflow, on a job through runJobsProviderWords"),
   "ee/routes/admin-jobs.ts": lane("admin", "the admin one-job and child-jobs reads, behind requireAdmin: admins keep the words"),
   "lib/job-failure.ts": lane("writes", "markJobFailed writes the column a failure's caller hands it"),

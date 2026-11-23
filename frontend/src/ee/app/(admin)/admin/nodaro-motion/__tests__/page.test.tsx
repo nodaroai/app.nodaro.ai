@@ -105,7 +105,18 @@ const section = async (name: RegExp) =>
 /** An engine's Precise column (the Motion column beside it always shows Full depth's own face mesh and depth controls). */
 const preciseOf = async (name: RegExp) => within(await section(name)).getByRole("group", { name: new RegExp(`${name.source} Precise$`) })
 
-describe("Admin → Video Remake", () => {
+/**
+ * The describes that render the whole page get the folder's 20 s limit, not Vitest's default 5 s.
+ *
+ * Each of their tests renders the full page (about 870 elements, 23 requests) and then clicks through it. A
+ * profile of this file shows no waiting: the time is all rendering and role queries, and less than 5 % of it is
+ * idle. A test takes 0.2-0.7 s on a developer machine and 1.2-4.4 s on a CI runner. Under a loaded runner, the
+ * ones with the most clicks went over 5 s. The page grows with every setting, so these times grow with it. The
+ * describes of pure functions keep the default limit.
+ */
+const PAGE = { timeout: 20_000 }
+
+describe("Admin → Video Remake", PAGE, () => {
   it("shows both engines by name, with the model each runs on, Off until saved", async () => {
     renderWith(<AdminNodaroMotionPage />)
     expect(await screen.findByRole("heading", { name: "Nodaro Prism (Seedance 2.5)" })).toBeInTheDocument()
@@ -339,7 +350,7 @@ describe("Admin → Video Remake", () => {
   })
 })
 
-describe("Admin → Video Remake → Pulse audio", () => {
+describe("Admin → Video Remake → Pulse audio", PAGE, () => {
   it("shows the select in the Pulse section only, Original audio until it is saved", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const pulse = await section(/Pulse/)
@@ -378,7 +389,7 @@ describe("Admin → Video Remake → Pulse audio", () => {
   })
 })
 
-describe("Admin → Video Remake → Pulse reference audio", () => {
+describe("Admin → Video Remake → Pulse reference audio", PAGE, () => {
   const audioGroup = async () => within(await section(/Pulse/)).findByRole("group", { name: "Pulse reference audio" })
   const pitchAt = (group: HTMLElement, r: string) => within(within(group).getByRole("group", { name: r })).getByRole("spinbutton", { name: "Pitch shift (semitones)" })
   /** An environment whose engine declares `castSwap.pulseReferenceAudio` (or not), and whose platform claims it (or not). */
@@ -513,7 +524,7 @@ describe("Admin → Video Remake → Pulse reference audio", () => {
   })
 })
 
-describe("Admin → Video Remake → Prism reference audio", () => {
+describe("Admin → Video Remake → Prism reference audio", PAGE, () => {
   const HINT = "What the engine hears in the reference video, per output resolution. The original audio always goes back on the result."
   const RESOLUTIONS = ["480p", "720p", "1080p"]
   const audioGroup = async (prism: HTMLElement) => within(prism).findByRole("group", { name: "Prism reference audio" })
@@ -772,7 +783,7 @@ describe("toSaved", () => {
   })
 })
 
-describe("Admin → Video Remake → Motion column", () => {
+describe("Admin → Video Remake → Motion column", PAGE, () => {
   const motionOf = async (name: RegExp) => within(await section(name)).findByRole("group", { name: new RegExp(`${name.source} Motion$`) })
 
   it("reads Full depth, the scene from a description, Flexible prompt until it is set, with no masking choice", async () => {

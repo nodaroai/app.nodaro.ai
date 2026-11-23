@@ -55,6 +55,8 @@ function AudioPlayerControlsComponent({
       {config.playPause && (
         <button
           type="button"
+          // Kept on a view-only canvas (globals.css `.workflow-view-canvas`): listening is viewing.
+          data-view-keep=""
           aria-label={isPlaying ? t("common.pause") : t("common.play")}
           onClick={(e) => { e.stopPropagation(); onPlayPause() }}
           className={`${BTN} w-7 h-7 rounded-full bg-cta text-white hover:bg-cta-hover`}
@@ -66,6 +68,8 @@ function AudioPlayerControlsComponent({
       {config.stop && (
         <button
           type="button"
+          // Kept on a view-only canvas (globals.css `.workflow-view-canvas`): listening is viewing.
+          data-view-keep=""
           aria-label={t("common.stop")}
           onClick={(e) => { e.stopPropagation(); onStop() }}
           className={`${BTN} w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-foreground/80 hover:text-foreground hover:bg-black/20 dark:hover:bg-white/20`}

@@ -99,6 +99,8 @@ function VideoResultOverlayComponent({
       <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
         <button
           type="button"
+          // Kept on a view-only canvas (globals.css `.workflow-view-canvas`): looking, not editing.
+          data-view-keep=""
           aria-label={t("node.expandPreview")}
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => { e.stopPropagation(); onExpand() }}
@@ -107,6 +109,8 @@ function VideoResultOverlayComponent({
         </button>
         <button
           type="button"
+          // Kept on a view-only canvas (globals.css `.workflow-view-canvas`): looking, not editing.
+          data-view-keep=""
           aria-label={t("common.download")}
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
@@ -121,6 +125,8 @@ function VideoResultOverlayComponent({
         </button>
         <button
           type="button"
+          // Kept on a view-only canvas (globals.css `.workflow-view-canvas`): looking, not editing.
+          data-view-keep=""
           aria-label={t("cfgshared.copyUrl")}
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {

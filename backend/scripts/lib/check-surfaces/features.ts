@@ -29,6 +29,8 @@ export const FEATURE_ALIASES: readonly FeatureAlias[] = [
   { id: "client", cli: [], routePrefixes: ["/v1/me"], mcpFiles: [] },
   { id: "workflows", cli: ["workflows"], routePrefixes: ["/v1/workflows", "/v1/projects/:p/workflows", "/v1/public"], mcpFiles: ["workflows.ts", "render-final.ts", "diagnose.ts"] },
   { id: "workflows.collaborators", cli: [], routePrefixes: ["/v1/workflows/:p/collaborators"], mcpFiles: [] },
+  // A workflow's read-only view link and its embed (routes/workflow-view-links.ts, routes/workflow-views.ts). No MCP tool: turning a public link on is the owner's decision in the app.
+  { id: "workflows.viewLink", cli: [], routePrefixes: ["/v1/workflows/:p/view-link", "/v1/workflow-views"], mcpFiles: [] },
   { id: "projects", cli: ["projects"], routePrefixes: ["/v1/projects"], mcpFiles: ["projects.ts"] },
   // Generation sessions (migration 518). MCP has no delete on purpose.
   { id: "sessions", cli: ["sessions"], routePrefixes: ["/v1/sessions"], mcpFiles: ["sessions.ts"] },

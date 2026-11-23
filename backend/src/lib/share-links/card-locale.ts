@@ -88,6 +88,10 @@ interface CardWords {
   readonly results: (n: number) => string
   /** A project: how many sessions it shows. */
   readonly sessions: (n: number) => string
+  /** A workflow's view link (lib/workflow-view/): the word after its name in the title. */
+  readonly workflow: string
+  /** A workflow's view link: how many steps its canvas shows. */
+  readonly workflowSteps: (n: number) => string
 }
 
 const n1 = (n: number, one: string, many: string): string => (n === 1 ? one : many.replace("{n}", String(n)))
@@ -105,6 +109,8 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "Made with the {trend} trend on Nodaro",
     results: (n) => n1(n, "1 result made with Nodaro", "{n} results made with Nodaro"),
     sessions: (n) => n1(n, "1 session made with Nodaro", "{n} sessions made with Nodaro"),
+    workflow: "Workflow",
+    workflowSteps: (n) => n1(n, "A 1-step workflow made with Nodaro", "A {n}-step workflow made with Nodaro"),
   },
   de: {
     made: {
@@ -118,6 +124,8 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "Mit dem Trend „{trend}“ auf Nodaro erstellt",
     results: (n) => n1(n, "1 Ergebnis, erstellt mit Nodaro", "{n} Ergebnisse, erstellt mit Nodaro"),
     sessions: (n) => n1(n, "1 Sitzung, erstellt mit Nodaro", "{n} Sitzungen, erstellt mit Nodaro"),
+    workflow: "Workflow",
+    workflowSteps: (n) => n1(n, "Ein Workflow mit 1 Schritt, erstellt mit Nodaro", "Ein Workflow mit {n} Schritten, erstellt mit Nodaro"),
   },
   es: {
     made: {
@@ -131,6 +139,8 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "Creado con la tendencia {trend} en Nodaro",
     results: (n) => n1(n, "1 resultado creado con Nodaro", "{n} resultados creados con Nodaro"),
     sessions: (n) => n1(n, "1 sesión creada con Nodaro", "{n} sesiones creadas con Nodaro"),
+    workflow: "Flujo de trabajo",
+    workflowSteps: (n) => n1(n, "Un flujo de trabajo de 1 paso creado con Nodaro", "Un flujo de trabajo de {n} pasos creado con Nodaro"),
   },
   he: {
     made: {
@@ -144,6 +154,8 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "נוצר עם הטרנד {trend} ב-Nodaro",
     results: (n) => n1(n, "תוצאה אחת שנוצרה עם Nodaro", "{n} תוצאות שנוצרו עם Nodaro"),
     sessions: (n) => n1(n, "סשן אחד שנוצר עם Nodaro", "{n} סשנים שנוצרו עם Nodaro"),
+    workflow: "זרימת עבודה",
+    workflowSteps: (n) => n1(n, "זרימת עבודה בשלב אחד שנוצרה עם Nodaro", "זרימת עבודה ב-{n} שלבים שנוצרה עם Nodaro"),
   },
   ja: {
     made: {
@@ -157,6 +169,8 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "Nodaroの「{trend}」トレンドで作成",
     results: (n) => `Nodaroで作成した${n}件の作品`,
     sessions: (n) => `Nodaroで作成した${n}件のセッション`,
+    workflow: "ワークフロー",
+    workflowSteps: (n) => `Nodaroで作成した${n}ステップのワークフロー`,
   },
   ko: {
     made: {
@@ -170,6 +184,8 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "Nodaro의 {trend} 트렌드로 만든 작품",
     results: (n) => `Nodaro로 만든 결과물 ${n}개`,
     sessions: (n) => `Nodaro로 만든 세션 ${n}개`,
+    workflow: "워크플로",
+    workflowSteps: (n) => `Nodaro로 만든 ${n}단계 워크플로`,
   },
   "pt-BR": {
     made: {
@@ -183,5 +199,7 @@ export const CARD_WORDS: Readonly<Record<ShareCardLocale, CardWords>> = {
     trend: "Criado com a trend {trend} no Nodaro",
     results: (n) => n1(n, "1 resultado criado com o Nodaro", "{n} resultados criados com o Nodaro"),
     sessions: (n) => n1(n, "1 sessão criada com o Nodaro", "{n} sessões criadas com o Nodaro"),
+    workflow: "Fluxo de trabalho",
+    workflowSteps: (n) => n1(n, "Um fluxo de trabalho de 1 etapa criado com o Nodaro", "Um fluxo de trabalho de {n} etapas criado com o Nodaro"),
   },
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render, screen } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
@@ -102,6 +102,21 @@ async function page(flag: string, surface: unknown) {
   }
   return { ...result, view }
 }
+
+// `page()` resets the module registry and imports the layout again, so that
+// each build reads its own flags. That re-import evaluates modules that are
+// already transformed and takes a few milliseconds. The first import, though,
+// has to transform the layout's whole module graph: about 2 s on a developer
+// machine and more than 5 s on a CI runner. Done inside the first test, that
+// cost counted against the test's 5 s limit, and the test timed out. It is
+// done once here, before any test starts. The hook gets a limit of its own
+// because a slow runner can take longer than the default 10 s to transform
+// the graph. The tests keep their default limit.
+beforeAll(async () => {
+  await import("../dashboard-layout")
+  await import("@/lib/accessibility-preferences")
+  await import("@/lib/locale-store")
+}, 60_000)
 
 afterEach(() => {
   cleanup()

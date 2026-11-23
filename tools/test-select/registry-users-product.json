@@ -133,7 +133,6 @@
  "frontend/src/components/editor/workflow-editor/run-confirm-breakdown.tsx",
  "frontend/src/components/editor/workflow-editor/scene-story-handlers.ts",
  "frontend/src/components/editor/workflow-editor/video-link-run-gate.ts",
- "frontend/src/components/editor/workflow-viewer-modal.tsx",
  "frontend/src/components/edl-review/clip-pack/clip-footer.tsx",
  "frontend/src/components/edl-review/review-header.tsx",
  "frontend/src/components/nodes/audio-sync-node.tsx",

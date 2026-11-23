@@ -3,6 +3,7 @@ import { getModelCreditCost, fetchBatchModelCreditCosts, estimateSeedanceHdCredi
 import { isSeedanceRefQuoteKey, parseSeedanceRefQuoteKey } from "@/lib/seedance-ref-quote-key"
 import { isSeedanceHdDraftKey, isSeedanceHdQuoteKey, parseSeedanceHdDraftKey, parseSeedanceHdQuoteKey } from "@/lib/seedance-hd-quote-key"
 import { hasCredits } from "@/lib/edition"
+import { useReadOnlyCanvas } from "@/components/nodes/read-only-canvas-context"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { forgetLlmPricingMode, notePricingAnswer } from "./use-llm-pricing-mode"
@@ -188,11 +189,13 @@ const HD_DRAFT_LASTING_REFUSALS: ReadonlySet<string> = new Set([
  * the run can reserve and `min` the least.
  */
 export function useSeedanceRefQuote(quoteKey: string | undefined): SeedanceRefQuote | undefined {
+  // Nothing runs on a view-only canvas, so it asks no price.
+  const readOnly = useReadOnlyCanvas()
   // The app's one client, named explicitly: the run estimate reads this cache
   // through `getCachedModelCredits`, which has no React context either.
   const { data } = useQuery({
     ...seedanceRefQuoteQuery(quoteKey ?? ""),
-    enabled: !!quoteKey && hasCredits(),
+    enabled: !readOnly && !!quoteKey && hasCredits(),
     gcTime: 30 * 60_000,
   }, queryClient)
   return data
@@ -200,10 +203,12 @@ export function useSeedanceRefQuote(quoteKey: string | undefined): SeedanceRefQu
 
 /** Public model-cost metadata; community builds never request billing data. */
 export function useModelCreditCost(model: string | undefined) {
+  // Nothing runs on a view-only canvas, so it quotes no price.
+  const readOnly = useReadOnlyCanvas()
   return useQuery({
     ...modelCreditCostQuery(model ?? ""),
     // A quote key is not a model id: `useSeedanceRefQuote`, or the run estimate's prefetch.
-    enabled: !!model && hasCredits() && !isQuoteKey(model),
+    enabled: !readOnly && !!model && hasCredits() && !isQuoteKey(model),
     gcTime: 30 * 60_000,
   })
 }

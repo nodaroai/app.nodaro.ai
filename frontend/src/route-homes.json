@@ -5,6 +5,7 @@
     "/embed/*",
     "/embed.js",
     "/present/*",
+    "/view/*",
     "/login",
     "/signup",
     "/auth/callback",
@@ -16,7 +17,8 @@
   "keptOnly": [
     "/app/*",
     "/embed/*",
-    "/present/*"
+    "/present/*",
+    "/view/*"
   ],
   "moved": [
     "/",

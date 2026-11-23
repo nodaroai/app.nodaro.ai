@@ -59,6 +59,7 @@ export const NOT_MEDIA_NAMES: Readonly<Record<string, string>> = Object.freeze({
   locale: "an interface language id (`en`, `pt-BR`): a short code, never fetched",
   madeFrom: "the page a trend credits, shown as a link: never fetched",
   sourceSegmentId: "a segment's id in a dub's source transcript",
+  token: "a link's own capability (43 base64url characters, a workflow view link's), returned to its owner: an opaque id, never an address and never fetched",
 })
 
 const COLLECTION_RECORD =

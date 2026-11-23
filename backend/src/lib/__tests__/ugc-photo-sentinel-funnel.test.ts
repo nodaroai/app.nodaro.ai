@@ -155,6 +155,7 @@ const GUARDED_SURFACES: Readonly<Record<string, string>> = {
   "routes/presentation.ts": "ugc-photo-sentinel-read (a share link's view), ugc-photo-sentinel-refusal (a viewer's run)",
   "routes/published-apps.ts": "ugc-photo-sentinel-publish (an app, a component, a next version)",
   "routes/workflow-templates.ts": "ugc-photo-sentinel-publish (a template, a re-publish)",
+  "lib/workflow-view/project.ts": "ugc-photo-sentinel-read (a view link's canvas and its downloadable copy)",
   "routes/workflows.ts": "ugc-photo-sentinel-read (a public read)",
   "workers/orchestrator-worker.ts": "ugc-photo-sentinel-run (a viewer's run, an app's run)",
 }

@@ -45,6 +45,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
 
   // Public share/embed surfaces — reached by a link someone was handed.
   "/present/:shareToken",
+  // A workflow's read-only canvas (its view link) and that canvas's embed.
+  "/view/:token",
+  "/embed/view/:token",
   "/app/:slug",
   "/embed/:slug",
   // Stateless Scene3D preview frame. Reached only by a host application that

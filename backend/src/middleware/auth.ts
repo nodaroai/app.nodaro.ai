@@ -305,6 +305,13 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; pattern?
   // method, so a preview reader's HEAD is answered like its GET; the route is
   // GET (and Fastify's HEAD) only, and answers what the JSON read answers.
   { path: "/og/s/", prefix: true },
+  // A workflow's view link (routes/workflow-views.ts, migration 691): the
+  // read-only canvas, its downloadable copy and its preview card. The
+  // 43-character token is the capability; an unknown or turned-off link is a
+  // 404. GET only — turning a link on or off (`/v1/workflows/:id/view-link`)
+  // stays behind a credential. The card answers any method, like `/og/s/`.
+  { method: "GET", path: "/v1/workflow-views/", prefix: true },
+  { path: "/og/view/", prefix: true },
   { path: "/v1/download", prefix: true },
   { path: "/v1/billing/stripe-webhook" },
   // B2: deployment-level billing surface — no per-user data, must answer tokenless

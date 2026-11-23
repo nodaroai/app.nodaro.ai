@@ -27,6 +27,12 @@ vi.mock("@/lib/edition", () => ({
   hasCredits: () => mockHasCredits(),
 }))
 
+// The hooks are called bare here (useQuery is mocked); the editor's canvas,
+// not a view-only one, is the case under test.
+vi.mock("@/components/nodes/read-only-canvas-context", () => ({
+  useReadOnlyCanvas: () => false,
+}))
+
 vi.mock("@/lib/query-client", () => ({
   queryClient: {
     getQueryData: (...args: unknown[]) => mockGetQueryData(...args),
