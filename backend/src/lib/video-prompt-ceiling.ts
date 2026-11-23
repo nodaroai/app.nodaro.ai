@@ -3,6 +3,7 @@ import {
   getMaxVideoPromptChars,
   videoNegativeSuffix,
 } from "@nodaro/shared/models"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 
 /**
  * The number of characters of BASE prompt a provider will actually keep.
@@ -40,6 +41,9 @@ export function effectiveVideoPromptCeiling(
   const promptMax = getMaxVideoPromptChars(provider)
   const neg = negativePrompt?.trim()
   if (!neg || NATIVE_NEGATIVE_VIDEO_PROVIDERS.has(provider)) return promptMax
+  // A model that takes no negative prompt has it dropped, not folded (catalog
+  // `noNegativePrompt`): the base keeps the whole cap.
+  if (MODEL_CATALOG[provider]?.noNegativePrompt === true) return promptMax
   // Mirrors `applyVideoNegativePrompt`'s non-native branch, through its own
   // suffix helper so the two cannot disagree about the shape.
   return Math.max(0, promptMax - videoNegativeSuffix(neg).length)

@@ -181,6 +181,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
     resolution: runData.resolution as string | undefined,
     draft: runData.draft === true,
     hasVideoRef,
+    fps: runData.fps,
   })
   const rowCredits = useModelCredits(creditIdentifier, 25)
   // A Seedance run with reference video(s) is priced by the server from the

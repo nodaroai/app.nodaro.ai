@@ -142,6 +142,9 @@ export const VIDEO_I2V_MODELS = [
   // short-circuit like LTX's), so every run failed at the router. Re-enable only
   // after wiring a worker short-circuit AND verifying a live generation. The
   // backend enum + cost entry stay so legacy saved workflows still validate.
+  // LTX 2.5 — a different model from LTX 2.3, listed directly above it (decided 2026-11-22).
+  { value: "ltx-2.5-fast", label: "LTX 2.5 Fast", desc: "Lightricks LTX 2.5 Fast — picture and sound in one pass, 6–20s, 720p/1080p/1440p, 24–50 fps" },
+  { value: "ltx-2.5-pro", label: "LTX 2.5 Pro", desc: "Lightricks LTX 2.5 Pro — finer detail, picture and sound in one pass, 6–10s, 720p/1080p" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
@@ -180,6 +183,9 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
   { value: "wan-2.7-t2v", label: "Wan 2.7",    desc: "Wan 2.7 T2V, 2–15s, 720p/1080p" },
   { value: "happyhorse",   label: "HappyHorse 1.1", desc: "3–15s, 720p/1080p, 9 aspect ratios, per-second pricing" },
+  // LTX 2.5 — a different model from LTX 2.3, listed directly above it (decided 2026-11-22).
+  { value: "ltx-2.5-fast", label: "LTX 2.5 Fast", desc: "Lightricks LTX 2.5 Fast — picture and sound in one pass, 6–20s, 720p/1080p/1440p, 24–50 fps" },
+  { value: "ltx-2.5-pro", label: "LTX 2.5 Pro", desc: "Lightricks LTX 2.5 Pro — finer detail, picture and sound in one pass, 6–10s, 720p/1080p" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },

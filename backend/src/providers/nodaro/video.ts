@@ -70,6 +70,9 @@ function sharedVideoBody(options?: ProviderOptions): Record<string, unknown> {
     ...(options.klingElements?.length ? { elements: toRouteElements(options.klingElements) } : {}),
     ...(options.seed !== undefined ? { seed: options.seed } : {}),
     ...(options.resolution !== undefined ? { resolution: options.resolution } : {}),
+    // The frame rate a model with a frame-rate setting is sent (LTX 2.5); both
+    // cloud routes take it. Absent = no key, today's body.
+    ...(options.fps !== undefined ? { fps: options.fps } : {}),
     ...(options.generateAudio !== undefined ? { generateAudio: options.generateAudio } : {}),
     ...(options.referenceImageUrls?.length ? { referenceImageUrls: options.referenceImageUrls } : {}),
     ...(options.referenceVideoUrls?.length ? { referenceVideoUrls: options.referenceVideoUrls } : {}),

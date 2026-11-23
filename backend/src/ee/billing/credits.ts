@@ -1838,6 +1838,24 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "pixverse-v6-max:1s:1080p:audio": 60, "pixverse-v6-max:2s:1080p:audio": 120, "pixverse-v6-max:3s:1080p:audio": 170, "pixverse-v6-max:4s:1080p:audio": 230, "pixverse-v6-max:5s:1080p:audio": 280,
   "pixverse-v6-max:6s:1080p:audio": 340, "pixverse-v6-max:7s:1080p:audio": 400, "pixverse-v6-max:8s:1080p:audio": 450, "pixverse-v6-max:9s:1080p:audio": 510, "pixverse-v6-max:10s:1080p:audio": 560,
   "pixverse-v6-max:11s:1080p:audio": 620, "pixverse-v6-max:12s:1080p:audio": 680, "pixverse-v6-max:13s:1080p:audio": 730, "pixverse-v6-max:14s:1080p:audio": 790, "pixverse-v6-max:15s:1080p:audio": 840,
+  // ── LTX 2.5 Fast / Pro (KIE ltx/2-5-{fast,pro}-text-to-video + -image-to-video) ──
+  //    ONE id per tier over both endpoints (a start frame picks image-to-video),
+  //    one row per length each tier renders at each resolution: credits = KIE
+  //    cr/s × seconds × 2.5, rounded UP to the next 10 (the per-second ladder
+  //    rule). KIE cr/s, both endpoints and every frame rate: Fast 10.8 / 15.6 /
+  //    22.8 at 720p / 1080p / 1440p (1440p: 6-10s only), Pro 14.4 / 20.4 at
+  //    720p / 1080p. The bare id is the DEFAULT render (10s @ 1080p, the
+  //    schemas' own). Machine-generated with its seed migration
+  //    (`*_ltx_2_5_pricing.sql`) — never edit one value by hand.
+  "ltx-2.5-fast": 390,   // (10s 1080p, the default render)
+  "ltx-2.5-pro": 510,    // (10s 1080p, the default render)
+  "ltx-2.5-fast:6s:720p": 170, "ltx-2.5-fast:8s:720p": 220, "ltx-2.5-fast:10s:720p": 270, "ltx-2.5-fast:12s:720p": 330, "ltx-2.5-fast:14s:720p": 380,
+  "ltx-2.5-fast:16s:720p": 440, "ltx-2.5-fast:18s:720p": 490, "ltx-2.5-fast:20s:720p": 540,
+  "ltx-2.5-fast:6s:1080p": 240, "ltx-2.5-fast:8s:1080p": 320, "ltx-2.5-fast:10s:1080p": 390, "ltx-2.5-fast:12s:1080p": 470, "ltx-2.5-fast:14s:1080p": 550,
+  "ltx-2.5-fast:16s:1080p": 630, "ltx-2.5-fast:18s:1080p": 710, "ltx-2.5-fast:20s:1080p": 780,
+  "ltx-2.5-fast:6s:1440p": 350, "ltx-2.5-fast:8s:1440p": 460, "ltx-2.5-fast:10s:1440p": 570,
+  "ltx-2.5-pro:6s:720p": 220, "ltx-2.5-pro:8s:720p": 290, "ltx-2.5-pro:10s:720p": 360,
+  "ltx-2.5-pro:6s:1080p": 310, "ltx-2.5-pro:8s:1080p": 410, "ltx-2.5-pro:10s:1080p": 510,
   "wan-i2v": 175,                 // (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   "wan-i2v:5s": 180,
@@ -8528,6 +8546,7 @@ export function getNodeModelIdentifier(
       resolution: data.resolution as string | undefined,
       draft: data.draft === true,
       hasVideoRef: graph.videoRefWired === true,
+      fps: data.fps,
     })
   }
 
@@ -8547,6 +8566,7 @@ export function getNodeModelIdentifier(
       resolution: data.resolution as string | undefined,
       draft: data.draft === true,
       hasVideoRef: graph.videoRefWired === true,
+      fps: data.fps,
     })
   }
 

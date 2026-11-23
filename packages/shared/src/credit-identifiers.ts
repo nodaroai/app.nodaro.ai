@@ -34,6 +34,9 @@ import {
   normalizeGrokVideo15Resolution,
   isPixverseV6MaxProvider,
   normalizePixverseV6MaxQuality,
+  isLtx25Provider,
+  normalizeLtx25Resolution,
+  videoDurationCappedAt,
   VIDEO_REF_RATE_PROVIDERS,
   normalizeMinimaxH3Resolution,
   normalizeWan3Resolution,
@@ -542,6 +545,7 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   if (isKling4FlashProvider(provider)) return KLING_4_FLASH_RESOLUTION
   if (isGrokVideo15Provider(provider)) return normalizeGrokVideo15Resolution(resolution)
   if (isPixverseV6MaxProvider(provider)) return normalizePixverseV6MaxQuality(resolution)
+  if (isLtx25Provider(provider)) return normalizeLtx25Resolution(provider, resolution)
   return resolution
 }
 
@@ -630,7 +634,15 @@ export function buildVideoCreditModelIdentifier(
   // for providers whose per-second tiers wouldn't snap 5 up to it
   // (minimax-h3, seedance-2-5). One helper, shared with the dynamic
   // reference-video reservations, so the tier and the scaled reserve agree.
-  const durationSec = pricedOutputDurationSec(effectiveProvider, duration)
+  // A model whose long clips render only at some settings (catalog
+  // `longClipLimit`, LTX 2.5 Fast: 10 s at most at 1440p) is priced at the
+  // length it renders at the resolution sent, so no row past that limit is
+  // ever named (none is seeded). The frame rate's half of the limit is applied
+  // before the identifier, where the request's frame rate is known
+  // (`pricedVideoSelection`).
+  const durationSec = videoDurationCappedAt(effectiveProvider, pricedOutputDurationSec(effectiveProvider, duration), {
+    resolution: wireNormalizedResolution(effectiveProvider, resolution),
+  })
   const tiers = VIDEO_DURATION_TIERS[effectiveProvider]
   if (!tiers) return effectiveProvider
 
@@ -756,14 +768,23 @@ export function videoGenerationCreditId(args: {
   resolution?: string
   draft?: boolean
   hasVideoRef?: boolean
+  /** The node's frame rate, unvalidated: read only for a model whose long clips
+   *  render only at some frame rates (catalog `longClipLimit`, LTX 2.5 Fast). */
+  fps?: unknown
 }): string {
   const { resolution } = normalizeVideoRequestParams(args.provider, {
     resolution: args.resolution ?? uiResolutionFill(args.provider),
     draft: args.draft === true,
   })
+  // The length the run sends at this resolution AND frame rate — the run's own
+  // rule (`pricedVideoSelection`), read only for a model with a long-clip limit
+  // so every other model's quote is the identifier it always was.
+  const duration = MODEL_CATALOG[args.provider]?.longClipLimit
+    ? pricedVideoSelection({ provider: args.provider, resolution, duration: args.duration, fps: args.fps }).duration ?? args.duration
+    : args.duration
   return buildVideoCreditModelIdentifier(
     args.provider,
-    args.duration,
+    duration,
     { sound: args.sound, generateAudio: args.generateAudio },
     args.nodeType ?? "image-to-video",
     args.mode,
@@ -1170,6 +1191,10 @@ export function pricedVideoSelection(opts: {
   provider: string
   resolution?: string
   duration?: number | string
+  /** The request's frame rate, unvalidated: read only for a model whose long
+   *  clips render only at some frame rates (catalog `longClipLimit`, LTX 2.5
+   *  Fast), through `videoFrameRateFor`. */
+  fps?: unknown
 }): PricedVideoSelection {
   const adjustments: ModelInputAdjustment[] = []
   const ltx = ltxPricedTier(opts.provider, opts.resolution, opts.duration)
@@ -1188,15 +1213,26 @@ export function pricedVideoSelection(opts: {
   const lengthPriced = !!ltx || DURATION_PRICED_PROVIDERS.has(opts.provider) || isGeminiOmniProvider(opts.provider)
   if (!lengthPriced || (!ltx && asked && requested! <= 0)) return { resolution, adjustments }
 
-  const duration = ltx ? ltx.duration : pricedOutputDurationSec(opts.provider, opts.duration)
-  if (asked && requested !== duration) {
+  const offered = ltx ? ltx.duration : pricedOutputDurationSec(opts.provider, opts.duration)
+  // The length the model renders at this resolution and frame rate (catalog
+  // `longClipLimit`; every other model keeps `offered`). The identifier reads
+  // the same cap at the resolution, so the two agree.
+  const duration = ltx ? offered : videoDurationCappedAt(opts.provider, offered, {
+    resolution: wireNormalizedResolution(opts.provider, resolution),
+    fps: opts.fps,
+  })
+  const capped = duration !== offered
+  if ((asked && requested !== duration) || capped) {
+    const limit = MODEL_CATALOG[opts.provider]?.longClipLimit
     adjustments.push({
       field: "duration",
-      from: requested!,
+      from: asked ? requested! : offered,
       to: duration,
       reason: ltx
         ? `LTX renders ${ltx.band} in ${ltx.duration}s steps — using ${ltx.duration}s instead of ${requested}s.`
-        : `${opts.provider} renders ${duration}s clips at the nearest length it offers — using ${duration}s instead of ${requested}s.`,
+        : capped && limit
+          ? `${MODEL_CATALOG[opts.provider]?.label ?? opts.provider} renders at most ${limit.maxSeconds}s at ${[...(limit.resolutions ?? []), ...(limit.frameRates ?? []).map((f) => `${f} fps`)].join(" or ")} — using ${duration}s instead of ${asked ? requested : offered}s.`
+          : `${opts.provider} renders ${duration}s clips at the nearest length it offers — using ${duration}s instead of ${requested}s.`,
     })
   }
   return { resolution, duration, adjustments }

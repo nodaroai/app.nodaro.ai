@@ -31,7 +31,7 @@ const FLUX_3_KLEIN = ["flux-3-klein", "flux-3-klein-i2i"]
 describe("the declared default size", () => {
   it("is declared by MiniMax H3 Image's, Seedream 5.5's and FLUX 3 Klein's two ids each and by video models only", () => {
     const declaring = Object.values(MODEL_CATALOG).filter((m) => m.defaultResolution).map((m) => m.id).sort()
-    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
+    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "ltx-2.5-fast", "ltx-2.5-pro", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
     for (const id of FLUX_3_KLEIN) {
       expect(MODEL_CATALOG[id]!.defaultResolution, id).toBe("1K")
       expect(MODEL_CATALOG[id]!.resolutions?.[0], id).toBe("1K")
@@ -49,6 +49,12 @@ describe("the declared default size", () => {
       expect(MODEL_CATALOG[id]!.kind, id).toBe("video")
       expect(MODEL_CATALOG[id]!.resolutions?.[0], id).toBe("360p")
       expect(defaultResolutionFor(id), id).toBe("720p")
+    }
+    // LTX 2.5 Fast and Pro: 1080p, the schemas' own default, over a 720p first tier.
+    for (const id of ["ltx-2.5-fast", "ltx-2.5-pro"]) {
+      expect(MODEL_CATALOG[id]!.kind, id).toBe("video")
+      expect(MODEL_CATALOG[id]!.resolutions?.[0], id).toBe("720p")
+      expect(defaultResolutionFor(id), id).toBe("1080p")
     }
     // Nodaro Video Upscale's 1080p, its first tier: what a value it does not
     // take is coerced to (normalizeVideoUpscaleResolution).

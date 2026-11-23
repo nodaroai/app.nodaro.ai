@@ -948,6 +948,7 @@
         "backend/src/providers/kie/kling4-cost.ts",
         "backend/src/providers/kie/kling4.ts",
         "backend/src/providers/kie/lip-sync-audio.ts",
+        "backend/src/providers/kie/ltx-2-5.ts",
         "backend/src/providers/kie/luma-client.ts",
         "backend/src/providers/kie/models.ts",
         "backend/src/providers/kie/omni-character.ts",

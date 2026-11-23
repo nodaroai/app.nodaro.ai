@@ -748,6 +748,7 @@ export function getModelIdentifier(
       mode: (data.videoSize ?? data.mode) as string | undefined,
       resolution: data.resolution as string | undefined,
       draft: data.draft === true,
+      fps: data.fps,
       hasVideoRef: sendsPricedReferenceVideo(node, nodes ?? [], edges ?? [], sel.provider, typeof data.audioSoundtrack === "boolean" ? data.audioSoundtrack : undefined, reruns),
     })
   }

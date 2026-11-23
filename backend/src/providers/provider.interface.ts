@@ -121,7 +121,10 @@ export interface ProviderOptions {
   klingElements?: Array<{ name: string; description: string; element_input_urls?: string[]; element_input_video_urls?: string[] }>
   // Per-model video params
   resolution?: string      // Video resolution (e.g. "480p", "720p", "1080p", "768P", "1080P")
-  grokMode?: string        // Grok I2V mode: "fun" | "normal" | "spicy"
+  // Frame rate, read only by a model whose catalog entry lists `frameRates`
+  // (LTX 2.5), through `videoFrameRateFor`. Every other model ignores it.
+  fps?: number
+  grokMode?: string       // Grok I2V mode: "fun" | "normal" | "spicy"
   seed?: number            // Seed for deterministic generation (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed / fixed_lens (Bytedance, Seedance)
   generateAudio?: boolean  // Generate audio track (Seedance)

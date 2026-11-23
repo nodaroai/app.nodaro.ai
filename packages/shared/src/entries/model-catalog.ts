@@ -119,6 +119,8 @@ export {
   buildModelMenu,
   normalizeModelInput,
   normalizeVideoRequestParams,
+  videoFrameRateFor,
+  videoDurationsAt,
   fitAspectRatioToModel,
   defaultResolutionFor,
   nearestCatalogAspectRatio,

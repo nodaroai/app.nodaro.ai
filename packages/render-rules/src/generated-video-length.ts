@@ -66,7 +66,9 @@ export const CONFIGURED_DURATION_VIDEO_TYPES: ReadonlySet<string> = new Set(["ge
 export function videoProviderRenderedSec(provider: string, data: Readonly<Record<string, unknown>>): number {
   const duration = data.duration as number | string | undefined
   const norm = normalizeVideoRequestParams(provider, { resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider) })
-  const priced = pricedVideoSelection({ provider, resolution: norm.resolution, duration })
+  // The frame rate too: a model whose long clips render only at some frame
+  // rates (LTX 2.5 Fast at 48 / 50 fps) renders the shorter clip its run sends.
+  const priced = pricedVideoSelection({ provider, resolution: norm.resolution, duration, fps: data.fps })
   return pricedOutputDurationSec(provider, priced.duration ?? duration)
 }
 

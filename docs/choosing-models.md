@@ -151,9 +151,9 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | LTX 2.3 Fast | Lightricks | Everyday | 198<!-- credits: ltx-2.3-fast --> | i2v, t2v | Lightricks LTX 2.3 Fast — text/image→video up to 20s at 1080p (6/8/10s at 2K and 4K). No audio input, no extend. |
 | Wan 2.7 I2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-i2v --> | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
 | Wan 2.7 T2V | Alibaba | Everyday | 207<!-- credits: wan-2.7-t2v --> | t2v | Wan 2.7 text-to-video — 2–15s at 720p/1080p. |
-| Seedance 2 Mini | Bytedance | Standard | 209<!-- credits: seedance-2-mini --> | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
-| VEO Extend | Google | Standard | 209<!-- credits: veo-extend --> | extend | Extend an existing VEO 3.1 clip by another segment. |
-| Vidu Q4 | Vidu | Standard | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
+| Seedance 2 Mini | Bytedance | Everyday | 209<!-- credits: seedance-2-mini --> | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
+| VEO Extend | Google | Everyday | 209<!-- credits: veo-extend --> | extend | Extend an existing VEO 3.1 clip by another segment. |
+| Vidu Q4 | Vidu | Everyday | 209<!-- credits: vidu-q4 --> | i2v | Vidu Q4 — start-frame or reference-driven video (up to 15 reference images + 3 MP3 voice/sound clips), native audio, 3-16s at 540p to 4K. |
 | Hailuo 2.3 Pro | MiniMax | Standard | 220<!-- credits: hailuo-2.3-pro --> | i2v | Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions. |
 | Wan 3.0 | Alibaba | Standard | 220<!-- credits: wan-3 --> | i2v, t2v | Wan 3.0 — multimodal: first/last frame or image/video/audio references, native audio, 2-30s at 480p/720p/1080p. |
 | Kling 4.0 Flash | Kuaishou | Standard | 242<!-- credits: kling-4-flash --> | i2v, t2v | Kling 4.0 Flash — the faster, lower-cost Kling 4.0 at 720p, up to 20s with native audio; a start frame, reference images, videos and characters (each can carry a voice clip), or plain text. |
@@ -180,11 +180,13 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Seedance 2 | Bytedance | Standard | 418<!-- credits: seedance-2 --> | i2v, t2v | Seedance 2 — premium tier with native audio. Per-second pricing by resolution. |
 | VEO 4K Upscale | Google | Standard | 418<!-- credits: veo-4k --> | video-upscale | Upscale VEO output to 4K. |
 | Gemini Omni Flash 1.2 Extend | Google | Standard | 429<!-- credits: gemini-omni-flash-1-2-extend:720p:sent-10s:added-8s --> | extend | Extend ANY 16:9 or 9:16 video with Gemini Omni Flash 1.2: a 3–10s continuation with sound, from 360p to 4K, of the source's last 10 seconds, joined onto it. Charged per second of video sent and added; the figure is the default run, 8s added at 720p to a source of 10s or more. |
+| LTX 2.5 Fast | Lightricks | Standard | 429<!-- credits: ltx-2.5-fast --> | i2v, t2v | Lightricks LTX 2.5 Fast — picture and sound (dialogue, effects, ambience) in one pass, from text or a start frame; 6–20s at 720p or 1080p, 6–10s at 1440p or 48/50 fps. Quoted text is spoken; several shots can be written in one prompt. |
 | Kling 2.1 Master | Kuaishou | Premium | 440<!-- credits: kling-master --> | i2v | Master tier I2V — strong cinematic quality. |
 | Wan Animate Move | Alibaba | Premium | 451<!-- credits: wan-animate-move:720p --> | motion-transfer | Wan 2.2 Animate: moves the subject of a still image with the motion of a driving video. |
 | InfiniTalk | InfiniTalk | Premium | 462<!-- credits: infinitalk --> | lip-sync | Audio-driven talking-head from a still image. 480p / 720p. |
 | Kling 4 Extend | Kuaishou | Premium | 468<!-- credits: kling-4-extend:5s:720p --> | extend | Extend ANY video with Kling 4: 3–30s continuation (audio included), stitched into one seamless clip. |
 | ⭐ Kling 3.0 | Kuaishou | Premium | 550<!-- credits: kling-3.0 --> | i2v, t2v | Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P. |
+| LTX 2.5 Pro | Lightricks | Premium | 561<!-- credits: ltx-2.5-pro --> | i2v, t2v | Lightricks LTX 2.5 Pro — picture and sound in one pass with finer faces, textures and on-screen text than LTX 2.5 Fast, from text or a start frame; 6/8/10s at 720p or 1080p, 24–50 fps. Quoted text is spoken. |
 | minimax-h3 | MiniMax | Premium | 605<!-- credits: minimax-h3 --> | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 616<!-- credits: kling-avatar-pro --> | lip-sync | Premium lip-sync — better mouth shape and timing. |
 | Seedance 2.0 Extend | Bytedance | Premium | 688<!-- credits: seedance-2-0-extend:8s:720p --> | extend | Extend ANY video with Seedance 2.0: 4–15s continuation (audio included), stitched into one seamless clip. |
@@ -210,6 +212,8 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Lipsync 2 Pro | Sync | Premium | 13739<!-- credits: lipsync-2-pro --> | lip-sync | Studio-grade lip sync on existing footage, re-synced to a new audio track. Video input, billed per second. |
 | Sync Lipsync v3 | Sync | Premium | 22000<!-- credits: sync-lipsync-v3 --> | lip-sync | Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second. |
 <!-- AUTO-GEN:END model-table-video -->
+
+**LTX: 2.5 Fast, 2.5 Pro or 2.3.** LTX 2.5 makes the sound with the picture on every run — speech in quotes, effects and ambience you describe in the prompt — so it suits a scene that should arrive with its audio already in place. Pick **LTX 2.5 Fast** for longer clips (up to 20 s at 720p or 1080p) or for 1440p (up to 10 s), and when you are trying several takes; pick **LTX 2.5 Pro** for short hero shots (6–10 s) where faces, textures and on-screen text need the most detail. **LTX 2.3** is a different, older model that stays available: use it when you need its 2K or 4K output, an end frame to land on, an audio clip to drive the picture (2.3 Pro), or LTX 2.3 Pro's Extend and Video Retake, which LTX 2.5 does not offer.
 
 ## Audio, voice & music models
 

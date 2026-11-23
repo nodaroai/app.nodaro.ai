@@ -758,6 +758,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Light, fast, end frame support": "軽量・高速、終了フレームに対応",
   "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s": "Lightricks LTX 2.3 Fast：テキスト／画像→動画、最大 20 秒",
   "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K": "Lightricks LTX 2.3 Pro：テキスト／画像／オーディオ→動画、最大 4K",
+  "Lightricks LTX 2.5 Fast — picture and sound in one pass, 6–20s, 720p/1080p/1440p, 24–50 fps": "Lightricks LTX 2.5 Fast — 映像と音声を一度に生成、6～20秒、720p/1080p/1440p、24～50 fps",
+  "Lightricks LTX 2.5 Pro — finer detail, picture and sound in one pass, 6–10s, 720p/1080p": "Lightricks LTX 2.5 Pro — より細かなディテール、映像と音声を一度に生成、6～10秒、720p/1080p",
   "Edit the clip by instruction — keeps its length and ratio; add image references": "指示でクリップを編集。長さと比率を維持し、画像リファレンスも追加可能",
   "Faster, lower-cost edit by instruction — keeps its length and ratio; 480p/720p; add image references": "より速く低コストな指示による編集。長さと比率を維持、480p/720p、画像リファレンスも追加可能",
   "Luma video modification": "Luma による動画の変更",

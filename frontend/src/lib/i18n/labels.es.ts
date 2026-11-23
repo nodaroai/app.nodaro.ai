@@ -755,6 +755,8 @@ const MODEL_DESCRIPTIONS_ES: Record<string, string> = {
   "Light, fast, end frame support": "Ligero, rápido, compatible con fotograma final",
   "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s": "Lightricks LTX 2.3 Fast: texto/imagen→video, duraciones de hasta 20 s",
   "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K": "Lightricks LTX 2.3 Pro: texto/imagen/audio→video, hasta 4K",
+  "Lightricks LTX 2.5 Fast — picture and sound in one pass, 6–20s, 720p/1080p/1440p, 24–50 fps": "Lightricks LTX 2.5 Fast — imagen y sonido en una sola pasada, 6–20 s, 720p/1080p/1440p, 24–50 fps",
+  "Lightricks LTX 2.5 Pro — finer detail, picture and sound in one pass, 6–10s, 720p/1080p": "Lightricks LTX 2.5 Pro — más detalle, imagen y sonido en una sola pasada, 6–10 s, 720p/1080p",
   "Edit the clip by instruction — keeps its length and ratio; add image references": "Edita el clip con instrucciones: conserva su duración y relación de aspecto; añade imágenes de referencia",
   "Faster, lower-cost edit by instruction — keeps its length and ratio; 480p/720p; add image references": "Edición por instrucciones más rápida y económica: conserva la duración y la relación de aspecto; 480p/720p; añade imágenes de referencia",
   "Luma video modification": "Modificación de video con Luma",

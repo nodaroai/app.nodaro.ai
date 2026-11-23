@@ -94,6 +94,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Kling 4.0 | `kling-4` (Kling 4.0), `kling-4-keyframes` (Kling 4.0 Keyframes) | `kling-4`: T2V, reference (images, videos, characters, voices); `kling-4-keyframes`: T2V, start / in-between / end frames | **3–30s, any whole second** (default 5); **720p (default) / 1080p** — any other value renders and bills 720p; aspect **auto** (default; follows the materials, 16:9 with none) / 16:9 / 9:16 / 1:1 / 21:9; native audio always on (no toggle); no seed; prompt up to 8,000 characters. `kling-4` takes up to **10 image + 5 video refs, 7 characters and 3 voice clips — 15 materials in all**; `kling-4-keyframes` takes a start frame, up to **8 in-between frames** and an end frame, capped by duration. See [Kling 4.0](#kling-40-references-characters-and-keyframes) |
 | Kling 4.0 Flash | `kling-4-flash` | T2V, I2V (start frame), reference (images, videos, characters, each character's voice) | **3–20s, any whole second** (default 5); **720p only** — any other value renders and bills 720p; aspect **auto** (default) / 16:9 / 9:16 / 1:1 / 21:9; native audio always on (no toggle); no seed; no end frame; prompt up to 8,000 characters. One id over two provider endpoints, picked by what is wired: a **start frame alone** is the exact opening frame; anything else runs in reference mode with up to **10 image + 5 video refs and 7 characters — 15 materials in all**, reference videos **2–20s together**, and Audio Refs clip N becomes **character N's voice** (a character needs 2–4 images to carry one). See [Kling 4.0 Flash](#kling-40-flash) |
 | PixVerse V6 Max | `pixverse-v6-max` | T2V, I2V (start frame) | **1–15s, any whole second** (default 5); **360p / 540p / 720p / 1080p** (default **720p**) — any other value renders and bills 720p; a text-to-video run takes one of eight aspect ratios — 16:9, 4:3, 1:1, 3:4, 9:16, 2:3, 3:2 or 21:9 — and an image-to-video run takes its start frame's shape; native audio **on by default**, and the price depends on it — `sound: false` turns it off; a seed; no end frame, no reference images, videos or audio; prompt up to 5,000 characters; also offered by [Generate Video Pro](./generate-video-pro.md). See [PixVerse V6 Max](#pixverse-v6-max). |
+| LTX 2.5 | `ltx-2.5-fast` (LTX 2.5 Fast), `ltx-2.5-pro` (LTX 2.5 Pro) | T2V, I2V (start frame) | Picture and sound in one pass on every run (no audio switch). **Fast: 6–20s in 2s steps at 720p / 1080p (default 1080p), 6 / 8 / 10s at 1440p**; **Pro: 6 / 8 / 10s at 720p / 1080p (default 1080p)**; default length 10s; **frame rate 24 (default) / 25 / 48 / 50** — on Fast, 48 and 50 fps also allow 6 / 8 / 10s only; a text-to-video run takes 16:9, 9:16, 1:1, 3:2 or 2:3 and an image-to-video run takes its start frame's shape; a seed; no end frame, no negative prompt, no camera setting, no references; prompt up to 5,000 characters. A different model from LTX 2.3. See [LTX 2.5](#ltx-25--fast-and-pro). |
 | LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
 
 > **Seedance 1.5 (`seedance`) was retired on 2026-10-25** — the provider stopped serving it. A saved node, an app input or an API call that still names `seedance` runs, and is charged, as **`seedance-2-mini`**: same duration (4 / 8 / 12s are all within Mini's 4–15s), and 1080p runs, and is charged, as 720p, Mini's highest resolution (it renders 480p / 720p). A node that never set a resolution runs at Mini's default, 480p. The run confirmation quotes that Mini price.
@@ -257,6 +258,24 @@ It is one model id over two provider endpoints, and the platform picks the endpo
 **Native audio.** The model can generate sound with the clip. It is **on unless you turn it off** — the **Generate Audio** box in the settings panel, or `sound: false` through the API (`generateAudio: false` does the same when `sound` is not sent; `sound` wins when both are) — and it changes the price: each length and quality has a silent rate and a higher with-audio rate (see [Credit pricing](#credit-pricing)), read from the same fields the model's switch is. The sound is ambient audio and effects; scripted dialogue is not guaranteed, so a voiced character still goes through text-to-speech and lip-sync.
 
 There is no end frame and no reference image, video or audio input: the editor offers none, and one that arrives through the API is not sent to the model.
+
+### LTX 2.5 — Fast and Pro
+
+LTX 2.5 (`ltx-2.5-fast`, `ltx-2.5-pro`) makes the picture and its sound — dialogue, sound effects and ambience — in one pass. It is a different model from LTX 2.3 (below), which stays available as it was. Sound is generated on **every** run: there is no audio switch, so the node shows none, and the prompt is where you direct it (a closing "Sound: …" line works well). Text inside quotation marks is spoken as dialogue, in the language it is written in, and "Shot 1: … Shot 2: …" writes several shots into one clip. Prompts take up to 5,000 characters.
+
+- **LTX 2.5 Fast** runs **6 to 20 seconds** in 2-second steps at **720p or 1080p**, and **6, 8 or 10 seconds at 1440p**.
+- **LTX 2.5 Pro** runs **6, 8 or 10 seconds at 720p or 1080p**, with finer faces, textures and on-screen text.
+- **Frame rate**: 24 (the default), 25, 48 or 50 fps; it does not change the price. On Fast, **48 and 50 fps also allow 6, 8 or 10 seconds only**. The node offers only the lengths its resolution and frame rate allow, and moves a longer stored length down to 10 s when you change either; a request or workflow that asks for more (a 16 s clip at 1440p, a 20 s clip at 50 fps) is priced and sent as 10 s, and the API reports the move in `adjustments`. Another frame rate (30, say) runs at 24 fps and is reported the same way.
+- The defaults are **1080p, 10 seconds, 24 fps**, the model's own. Any other resolution (a `2k`, a `4k`, Pro's missing `1440p`) runs, and is charged, at 1080p.
+
+It is one model id per tier over two provider endpoints, and the platform picks the endpoint from what is wired:
+
+- **A start frame** runs image-to-video. The image is the first frame and the clip keeps its aspect ratio (a ratio wider than 3:1 is capped at 3:1), so the aspect ratio control hides while a frame is wired and a stored ratio is cleared. The image is prepared like every start frame — converted to PNG, JPEG or WebP when it is another format, and scaled to at most 2048 px on its long side and 10 MB — which is within what the model accepts.
+- **No image** runs text-to-video at 16:9 (the default), 9:16, 1:1, 3:2 or 2:3; another ratio is moved to the nearest of them.
+
+There is no end frame, no negative prompt and no camera-motion setting: the editor hides them, a negative prompt is not sent (nor folded into the prompt), an end frame that reaches the model through the API is not sent, and a lone end frame follows the platform's general rule (a workflow run uses it as the start frame; the editor's Run asks for a start frame). Reference images, videos and audio are not sent either. A `seed` is a whole number from 0 to 2147483647; anything else, `-1` included, is left out.
+
+LTX 2.5 runs on paid credits only: its shortest clip is 6 seconds, longer than the free-credit limit.
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 
@@ -570,6 +589,8 @@ reserves its output seconds at that same length.
 | `grok-i2v` | 6s | `grok-i2v:6s` | 55<!-- credits: grok-i2v:6s --> |
 | `hailuo-2.3-pro` | 6s | `hailuo-2.3-pro:6s` | 143<!-- credits: hailuo-2.3-pro:6s --> |
 | `kling` | 5s | `kling:5s` | 152<!-- credits: kling:5s --> |
+| `ltx-2.5-fast` | 10s | `ltx-2.5-fast:10s:1080p` | 429<!-- credits: ltx-2.5-fast:10s:1080p --> |
+| `ltx-2.5-pro` | 10s | `ltx-2.5-pro:10s:1080p` | 561<!-- credits: ltx-2.5-pro:10s:1080p --> |
 | `ltx-2.3-pro` | 6s | `ltx-2.3-pro:1080p:6s` | 264<!-- credits: ltx-2.3-pro:1080p:6s --> |
 
 (The Seedance rows are shown at 720p; an omitted resolution is a separate lever,
@@ -658,6 +679,13 @@ nearest length it does:
 | `pixverse-v6-max` | 5s | 720p | any | sound off | 121<!-- credits: pixverse-v6-max:5s:720p --> |
 | `pixverse-v6-max` | 1s | 360p | any | sound off | 22<!-- credits: pixverse-v6-max:1s:360p --> |
 | `pixverse-v6-max` | 15s | 1080p | any | audio on | 924<!-- credits: pixverse-v6-max:15s:1080p:audio --> |
+| `ltx-2.5-fast` | 6s | 720p | any | sound included | 187<!-- credits: ltx-2.5-fast:6s:720p --> |
+| `ltx-2.5-fast` | 10s (default) | 1080p (default) | any | sound included | 429<!-- credits: ltx-2.5-fast:10s:1080p --> |
+| `ltx-2.5-fast` | 16s asked → 10s | 1440p | any | 1440p runs 10s at most | 627<!-- credits: ltx-2.5-fast:10s:1440p --> |
+| `ltx-2.5-fast` | 20s asked → 10s | 720p at 50 fps | any | 48 / 50 fps run 10s at most | 297<!-- credits: ltx-2.5-fast:10s:720p --> |
+| `ltx-2.5-fast` | 20s | 1080p at 24 fps | any | sound included | 858<!-- credits: ltx-2.5-fast:20s:1080p --> |
+| `ltx-2.5-pro` | 6s | 720p | any | sound included | 242<!-- credits: ltx-2.5-pro:6s:720p --> |
+| `ltx-2.5-pro` | 10s (default) | 1080p (default) | any | sound included | 561<!-- credits: ltx-2.5-pro:10s:1080p --> |
 | `gemini-omni-flash` | 8s | 720p | any | no ref | 297<!-- credits: gemini-omni-flash:8 --> |
 | `gemini-omni-flash` | 10s | 4K | any | no ref | 583<!-- credits: gemini-omni-flash:4k:10 --> |
 | `gemini-omni-flash` | — | 720p | video-edit | 1 source video | 462<!-- credits: gemini-omni-flash:vref --> |
@@ -755,6 +783,21 @@ Examples — 5s: 540p = 99<!-- credits: vidu-q4:5s:540p -->, 720p = 209<!-- cred
 
 The longest clip, 15 s at 1080p with audio, is **924**<!-- credits: pixverse-v6-max:15s:1080p:audio -->. **A request that does not set `sound` renders and bills audio on**; a `resolution` outside the four renders and bills 720p, and an omitted `duration` renders and bills 5 s — so the bare identifier `pixverse-v6-max` (165<!-- credits: pixverse-v6-max -->) is the 5 s 720p default with audio. On free credits it runs like any other video model: at 360p, for 1 to 4 seconds, with or without audio.
 
+**LTX 2.5** (`ltx-2.5-fast`, `ltx-2.5-pro`) is priced per length and resolution via `ltx-2.5-fast:<N>s:<resolution>` and `ltx-2.5-pro:<N>s:<resolution>` — the same on both endpoints and at every frame rate, with the sound included:
+
+| Length | Fast 720p | Fast 1080p | Fast 1440p | Pro 720p | Pro 1080p |
+|---|---|---|---|---|---|
+| 6s | 187<!-- credits: ltx-2.5-fast:6s:720p --> | 264<!-- credits: ltx-2.5-fast:6s:1080p --> | 385<!-- credits: ltx-2.5-fast:6s:1440p --> | 242<!-- credits: ltx-2.5-pro:6s:720p --> | 341<!-- credits: ltx-2.5-pro:6s:1080p --> |
+| 8s | 242<!-- credits: ltx-2.5-fast:8s:720p --> | 352<!-- credits: ltx-2.5-fast:8s:1080p --> | 506<!-- credits: ltx-2.5-fast:8s:1440p --> | 319<!-- credits: ltx-2.5-pro:8s:720p --> | 451<!-- credits: ltx-2.5-pro:8s:1080p --> |
+| 10s | 297<!-- credits: ltx-2.5-fast:10s:720p --> | 429<!-- credits: ltx-2.5-fast:10s:1080p --> | 627<!-- credits: ltx-2.5-fast:10s:1440p --> | 396<!-- credits: ltx-2.5-pro:10s:720p --> | 561<!-- credits: ltx-2.5-pro:10s:1080p --> |
+| 12s | 363<!-- credits: ltx-2.5-fast:12s:720p --> | 517<!-- credits: ltx-2.5-fast:12s:1080p --> | — | — | — |
+| 14s | 418<!-- credits: ltx-2.5-fast:14s:720p --> | 605<!-- credits: ltx-2.5-fast:14s:1080p --> | — | — | — |
+| 16s | 484<!-- credits: ltx-2.5-fast:16s:720p --> | 693<!-- credits: ltx-2.5-fast:16s:1080p --> | — | — | — |
+| 18s | 539<!-- credits: ltx-2.5-fast:18s:720p --> | 781<!-- credits: ltx-2.5-fast:18s:1080p --> | — | — | — |
+| 20s | 594<!-- credits: ltx-2.5-fast:20s:720p --> | 858<!-- credits: ltx-2.5-fast:20s:1080p --> | — | — | — |
+
+A length the tier does not offer moves to the nearest one it does (a 7 s request runs and is charged as 6 s), and on Fast a length past 10 s at 1440p or at 48 / 50 fps runs and is charged as 10 s — the run is always charged the clip it is sent. An omitted `resolution` or `duration` runs and bills the 1080p, 10 s default, so the bare identifiers `ltx-2.5-fast` (429<!-- credits: ltx-2.5-fast -->) and `ltx-2.5-pro` (561<!-- credits: ltx-2.5-pro -->) are that default.
+
 Every figure above is what a run is charged on Nodaro Cloud; `GET /v1/credits/model-cost?model=<composite>` returns the live price of any composite.
 
 ### Loop trim add-on
@@ -815,7 +858,7 @@ The clip and its add-on are priced as one run, so the add-on adds exactly the am
 
 ### Fallback behavior
 
-- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash, PixVerse V6 Max, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
+- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, Gemini Omni, Wan 3.0, Vidu Q4, Kling 4.0, Kling 4.0 Flash, PixVerse V6 Max, LTX 2.5, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
 - **No voice resolves** (dialogue / voices empty or unparseable): the clip generates silently and the reserved audio add-on is refunded automatically (committed at the video provider cost only).
 - **A chain step fails** (TTS / revoice / generation): the whole job fails and credits are fully refunded.
 
@@ -881,7 +924,7 @@ value actually sent to the provider.**
   nearest one — a 7s LTX request renders and bills 6s.
 - **A few models ignore an unsupported resolution** and render a fixed default
   rather than the nearest band: `minimax-h3` renders 2K for anything that is not
-  `768P`, and the `wan-3` family, `vidu-q4`, the Kling 4.0 ids (Flash included) and `pixverse-v6-max` render 720p. For those the correction targets
+  `768P`, the `wan-3` family, `vidu-q4`, the Kling 4.0 ids (Flash included) and `pixverse-v6-max` render 720p, and `ltx-2.5-fast` / `ltx-2.5-pro` render 1080p. For those the correction targets
   the band the provider will actually produce, so the price still matches the
   render.
 

@@ -1176,7 +1176,7 @@ Three video-specific rules:
 
 A few models **ignore** an unsupported resolution and render a fixed default
 instead of the nearest band — `minimax-h3` renders 2K for anything that is not
-`768P`, the `wan-3` family, `vidu-q4`, `kling-4` / `kling-4-keyframes` / `kling-4-flash` and `pixverse-v6-max` render 720p, and `grok-imagine-video-1.5` renders 480p (all described under
+`768P`, the `wan-3` family, `vidu-q4`, `kling-4` / `kling-4-keyframes` / `kling-4-flash` and `pixverse-v6-max` render 720p, `ltx-2.5-fast` / `ltx-2.5-pro` render 1080p, and `grok-imagine-video-1.5` renders 480p (all described under
 [Seedance 2 video capabilities](#seedance-2-video-capabilities)).
 For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
@@ -3309,6 +3309,27 @@ so a value the model doesn't support is ignored, never a 400:
   `:audio` row, read from the same fields as the model's switch. No end frame and no
   `referenceImageUrls` / `referenceVideoUrls` / `referenceAudioUrls`: they are
   not sent to the model. Runs on free credits at 360p for 1–4 s.
+- **`ltx-2.5-fast`** and **`ltx-2.5-pro`** (LTX 2.5 Fast / Pro) are one id per
+  tier over two provider endpoints: `POST /v1/generate-video` with an
+  `imageUrl` runs image-to-video (the image is the first frame and the clip
+  keeps its shape; `aspectRatio` is not sent), and `POST /v1/text-to-video`
+  runs text-to-video at `aspectRatio` `16:9` (default), `9:16`, `1:1`, `3:2` or
+  `2:3` — another ratio is moved to the nearest of them. The picture and its
+  sound are made in one pass on every run: there is no audio field, and
+  `sound` / `generateAudio` are not read. `duration`: Fast 6–20 in 2 s steps,
+  Pro 6 / 8 / 10 (default 10 on both); `resolution`: Fast `720p` / `1080p`
+  (default) / `1440p`, Pro `720p` / `1080p` (default), and anything else
+  renders and bills 1080p; **`fps`** `24` (default) / `25` / `48` / `50` — the
+  price is the same at each, another value runs at 24 and is reported in
+  `adjustments`. **On Fast, a clip at `1440p` or at 48 / 50 fps is at most
+  10 s**: a longer `duration` is priced, reserved and sent as 10 s and reported
+  in `adjustments`. `seed` a whole number 0–2147483647 (anything else, `-1`
+  included, is left out); `prompt` up to 5,000 characters, quoted text spoken
+  as dialogue. A `negativePrompt` is dropped, not folded into the prompt; no
+  end frame and no `referenceImageUrls` / `referenceVideoUrls` /
+  `referenceAudioUrls` are sent. Paid credits only (the shortest clip is 6 s).
+  The `fps` field is read only by a model with a frame-rate setting; every
+  other model ignores it, and it is not recorded on their jobs.
 - **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is
   the exact first frame. An `endFrameUrl` is the exact last frame, and the
   **same URL as both** makes a seamless loop. Up to **4** in-between frames go

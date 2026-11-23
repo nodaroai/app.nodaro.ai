@@ -3632,6 +3632,17 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > with no `sound`, `generateAudio: false`), and it changes the price. No end
 > frame, no references. See
 > [PixVerse V6 Max](nodes/ai-video/generate-video.md#pixverse-v6-max).
+> **LTX 2.5** (`ltx-2.5-fast`, `ltx-2.5-pro`) runs `run("generate-video")` with
+> an `imageUrl` as the first frame (no `aspectRatio` is sent), and
+> `run("text-to-video")` with `aspectRatio` `16:9` / `9:16` / `1:1` / `3:2` /
+> `2:3`, 16:9 when unset. Sound is always generated (no audio field).
+> `duration` Fast 6–20 (2 s steps), Pro 6 / 8 / 10, default 10; `resolution`
+> Fast `720p` / `1080p` / `1440p`, Pro `720p` / `1080p`, default 1080p
+> (anything else → 1080p); `fps` 24 (default) / 25 / 48 / 50, the same price at
+> each. On Fast, 1440p or 48 / 50 fps allow at most 10 s: a longer `duration`
+> runs and is charged as 10 s, reported in `adjustments`. No end frame, no
+> negative prompt, no references. See
+> [LTX 2.5](nodes/ai-video/generate-video.md#ltx-25--fast-and-pro).
 > **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
 > first frame); `endFrameUrl` is the exact last frame, the same URL as both
 > makes a seamless loop, and up to 4 in-between frames go in

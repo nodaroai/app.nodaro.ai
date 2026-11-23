@@ -1,5 +1,6 @@
 import {
   normalizeVideoRequestParams,
+  videoFrameRateFor,
   type ModelInputAdjustment,
 } from "@nodaro/shared/model-catalog"
 import {
@@ -30,6 +31,11 @@ export interface VideoRequestNorm {
    *  or the length a declared reference task type runs at. `undefined` means
    *  "send the requested duration". */
   duration?: number
+  /** The frame rate to send, for a model with a frame-rate setting (catalog
+   *  `frameRates`, LTX 2.5): the request's when the model lists it, else the
+   *  model's default (`videoFrameRateFor`). `undefined` for every other model —
+   *  nothing is sent for it, whatever the request carried. */
+  fps?: number
   /** Levers the caller asked for and did not get, for disclosure. */
   adjustments: ModelInputAdjustment[]
   /** The reference task type this request declares, resolved
@@ -130,6 +136,10 @@ export function resolveVideoRequestNorm(input: {
   referenceTaskType?: unknown
   /** Omitted = no reference media: a declaration is dropped (today's request). */
   referenceMedia?: VideoRequestReferenceMedia
+  /** The request's frame rate, unvalidated. Read only for a model with a
+   *  frame-rate setting (`videoFrameRateFor`); its long-clip limit can move
+   *  the priced and sent length (LTX 2.5 Fast: 10 s at most at 48 / 50 fps). */
+  fps?: unknown
 }): VideoRequestNorm {
   const media = input.referenceMedia
   const task = resolveSeedanceTaskType({
@@ -151,17 +161,25 @@ export function resolveVideoRequestNorm(input: {
     resolution: input.resolution,
     draft: input.draft,
   })
+  const fps = videoFrameRateFor(input.provider, input.fps)
+  // A frame rate the model does not render, named on a model that has the
+  // setting, is disclosed like any other moved lever.
+  const fpsAdjustments: ModelInputAdjustment[] = fps !== undefined && input.fps !== undefined && input.fps !== null && input.fps !== "" && Number(input.fps) !== fps
+    ? [{ field: "fps", from: String(input.fps), to: fps, reason: `${input.provider} renders ${fps} fps for a frame rate it does not offer — using ${fps} instead of ${String(input.fps)}.` }]
+    : []
   const priced = pricedVideoSelection({
     provider: input.provider,
     resolution: norm.resolution,
     duration: shape ? shape.duration : input.duration,
+    fps,
   })
   return {
     aspectRatio: norm.aspectRatio,
     resolution: norm.resolution ?? priced.resolution,
     // An Auto length is left alone by step 2, so the forced one is carried here.
     duration: priced.duration ?? shape?.duration,
-    adjustments: [...task.adjustments, ...norm.adjustments, ...priced.adjustments],
+    ...(fps !== undefined ? { fps } : {}),
+    adjustments: [...task.adjustments, ...norm.adjustments, ...fpsAdjustments, ...priced.adjustments],
     ...(task.taskType ? { referenceTaskType: task.taskType } : {}),
     ...(shape ? { referenceTaskShape: shape } : {}),
   }

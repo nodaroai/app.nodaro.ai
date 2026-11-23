@@ -107,6 +107,13 @@ const generateVideoPublicFields = z.object({
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
   resolution: z.string().optional(),
+  // The frame rate, for a model with a frame-rate setting (catalog
+  // `frameRates`, LTX 2.5: 24, 25, 48 or 50). Lenient on purpose, as the
+  // workflow run is: a number or a numeric string, read once by
+  // `resolveVideoRequestNorm` (`videoFrameRateFor`). Any value the model does
+  // not offer runs at its default (24) and is disclosed in `adjustments`; every
+  // other model ignores the field, as before, and it is not recorded or queued.
+  fps: z.union([z.number(), z.string().max(32)]).optional(),
   // Seedance Draft (draft-capable models only, `isSeedanceDraftCapable`): a
   // 480p draft whose same take a `seedance-2-5-hd` Video Upscale finalizes at
   // 1080p. Forces 480p before pricing; any other model ignores it.
@@ -941,6 +948,7 @@ export const generateVideoPricing: RoutePricing = {
       draft: body?.draft === true,
       referenceTaskType: body?.referenceTaskType,
       referenceMedia: videoRequestReferenceMedia(body ?? {}, req.refVideoDurationsSec),
+      fps: body?.fps,
     })
     req.videoNorm = norm
     req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
@@ -1180,7 +1188,11 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       provider, aspectRatio, resolution, duration, draft: rawDraft,
       referenceTaskType: requestedTaskType,
       referenceMedia: videoRequestReferenceMedia(parsed.data, req.refVideoDurationsSec),
+      fps: parsed.data.fps,
     })
+    // The frame rate leaves `parsed.data`: the job records and queues the
+    // RESOLVED one by name below, and nothing for a model without the setting.
+    delete parsed.data.fps
     const referenceTaskType = normalized.referenceTaskType
     // Recorded only where it means something: the finalize gate reads
     // `input_data.draft === true` off this job.
@@ -1606,6 +1618,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               resolution: normResolution,
               duration: normDuration,
               draft,
+              ...(normalized.fps !== undefined ? { fps: normalized.fps } : {}),
               // Only when declared, so `auto` records exactly what no field does.
               ...(referenceTaskType ? { referenceTaskType } : {}),
               // The pre-check's ffprobe of the reference clips: the settlement
@@ -1674,6 +1687,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       shots,
       elements,
       resolution: normResolution,
+      ...(normalized.fps !== undefined ? { fps: normalized.fps } : {}),
       draft,
       ...(referenceTaskType ? { referenceTaskType } : {}),
       grokMode,

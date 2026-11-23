@@ -404,8 +404,11 @@ async function chainVeoBaseTo4k(
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   // A retired model in a queued job (any producer: a pipeline shot, an older
   // job) runs as the model it became — the one its credit id was priced on.
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType } = withRunningVideoProvider({ data: job.data }).data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
+    /** The frame rate, carried only for a model with a frame-rate setting
+     *  (LTX 2.5, resolved by `resolveVideoRequestNorm`); absent otherwise. */
+    fps?: number
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
     outputFormat?: "mov"
@@ -511,7 +514,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -746,7 +749,9 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
   // A retired model in a queued job runs as the model it became.
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType } = withRunningVideoProvider({ data: job.data }).data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps } = withRunningVideoProvider({ data: job.data }).data as {
+    /** The frame rate, carried only for a model with a frame-rate setting (LTX 2.5); absent otherwise. */
+    fps?: number
     jobId: string
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
@@ -823,7 +828,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
   // job): the mp4 options stay key-for-key what they were.
   const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)

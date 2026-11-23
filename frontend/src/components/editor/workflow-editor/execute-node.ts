@@ -3298,6 +3298,10 @@ function executeNodeCore(
           : {}),
         keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
         audioSoundtrack: (i2vData as Record<string, unknown>).audioSoundtrack as boolean | undefined,
+        // The frame rate as stored, as the orchestrator sends it (payload-builder);
+        // the server reads it once through `videoFrameRateFor` (a numeric string
+        // included), so a mapped "50" runs as the node's price shows it.
+        ...(typeof (i2vData as Record<string, unknown>).fps === "number" || typeof (i2vData as Record<string, unknown>).fps === "string" ? { fps: (i2vData as Record<string, unknown>).fps as number | string } : {}),
         videoTrimStart: i2vData.videoTrimStart,
         videoTrimEnd: i2vData.videoTrimEnd,
         // Identity injection — populated by node-input-resolver when an upstream
@@ -3688,6 +3692,9 @@ function executeNodeCore(
           }>
         | undefined,
       seed: t2vRaw.seed as number | undefined,
+      // The frame rate as stored, as the orchestrator sends it; the server reads
+      // it through `videoFrameRateFor` (a numeric string included).
+      ...(typeof t2vRaw.fps === "number" || typeof t2vRaw.fps === "string" ? { fps: t2vRaw.fps } : {}),
       enableTranslation: t2vData.enableTranslation,
       // Seedance Draft renders at 480p only (the server coerces too).
       ...(t2vRaw.draft === true && isSeedanceDraftCapable(t2vProvider)

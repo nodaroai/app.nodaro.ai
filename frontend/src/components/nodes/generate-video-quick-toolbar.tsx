@@ -188,6 +188,7 @@ export function GenerateVideoQuickToolbar({
     currentResolution,
     resolutionShort,
     draftControl,
+    fpsControl,
     repeatCount,
     onModelChange: handleModelChange,
     onAspectChange: handleAspectChange,
@@ -210,6 +211,20 @@ export function GenerateVideoQuickToolbar({
       wiredFrom={wiredFrom.get("draft")}
     />
   ) : null
+  // The frame-rate lever (LTX 2.5), the registry's own control: its choice also
+  // moves a length the new rate does not render.
+  const fpsSelect = fpsControl ? (
+    <QuickConfigSelect
+      nodeId={nodeId}
+      control={fpsControl}
+      value={readQuickConfigValue(fpsControl, stripData as Record<string, unknown>)}
+      data={stripData as Record<string, unknown>}
+      disabled={isRunning}
+      onOpenChange={handleOpenChange}
+      wiredFrom={wiredFrom.get("fps")}
+    />
+  ) : null
+  const afterResolution = draftSelect || fpsSelect ? <>{fpsSelect}{draftSelect}</> : null
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
@@ -338,6 +353,11 @@ export function GenerateVideoQuickToolbar({
                 </Select>
               </ToolbarSetting>
             )}
+            {fpsSelect && (
+              <ToolbarSetting label={t("field.fps")} icon={<Gauge className="w-3 h-3" />}>
+                {fpsSelect}
+              </ToolbarSetting>
+            )}
             {draftSelect && (
               <ToolbarSetting label={t("vidcfg.seedanceDraft")} icon={<Gauge className="w-3 h-3" />}>
                 {draftSelect}
@@ -407,7 +427,7 @@ export function GenerateVideoQuickToolbar({
         currentResolution={currentResolution}
         resolutionShort={resolutionShort}
         onResolutionChange={handleResolutionChange}
-        afterResolution={draftSelect}
+        afterResolution={afterResolution}
         repeatCount={repeatCount}
         onRepeatChange={handleRepeatChange}
         ghostTriggerClass={ghostTriggerClass}

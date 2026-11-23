@@ -2132,6 +2132,10 @@ export type ImageToVideoData = PromptAffixFields & {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto"
+  /** Frame rate, for a model with a frame-rate setting (catalog `frameRates`,
+   *  LTX 2.5: 24, 25, 48 or 50; unset = its default, 24). Ignored by every
+   *  other model. */
+  fps?: number
   multiShot?: boolean
   /** Seedance Draft (`isSeedanceDraftCapable` models only): render a 480p
    *  draft whose same take Video Upscale → "Seedance 2.5 HD (from draft)"
@@ -2329,6 +2333,10 @@ export type TextToVideoData = PromptAffixFields & {
   provider: TextToVideoProvider
   duration: number
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive"
+  /** Frame rate, for a model with a frame-rate setting (catalog `frameRates`,
+   *  LTX 2.5: 24, 25, 48 or 50; unset = its default, 24). Ignored by every
+   *  other model. */
+  fps?: number
   negativePrompt: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

@@ -234,6 +234,10 @@ export {
   isPixverseV6MaxProvider,
   PIXVERSE_V6_MAX_DEFAULT_QUALITY,
   normalizePixverseV6MaxQuality,
+  LTX_2_5_PROVIDERS,
+  isLtx25Provider,
+  LTX_2_5_DEFAULT_RESOLUTION,
+  normalizeLtx25Resolution,
   videoKeyframesMiddleCap,
   VIDEO_REF_RATE_PROVIDERS,
   billsReferenceVideoSeconds,
@@ -280,6 +284,7 @@ export {
   PRICING_DEFAULT_DURATION_SEC,
   pricedOutputDurationSec,
   snapToNearestDuration,
+  videoDurationCappedAt,
   videoDefaultDurationSec,
   supportsAutoVideoDuration,
   supportsReferenceTaskType,
@@ -292,6 +297,7 @@ export {
 export type { VideoStartFrameOnlyProblem } from "../model-constants.js"
 export type { ImageRunKind } from "../model-constants.js"
 export type { VideoReferenceCounts } from "../model-constants.js"
+export type { Ltx25Provider } from "../model-constants.js"
 export {
   CAST_SWAP_POST_PROMPT_MAX,
   TREND_PROMPT_LIMITS,

@@ -4317,6 +4317,10 @@ function buildPayloadOf(
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
         duration: data.duration as number | string | undefined,
         draft: data.draft === true,
+        // The frame rate (LTX 2.5; nothing for a model without the setting):
+        // the same reading the routes and the KIE runner take, so the length
+        // its cap allows is the one priced and sent.
+        fps: data.fps,
       })
       if (i2vNorm.adjustments.length > 0) {
         console.warn(
@@ -4369,6 +4373,7 @@ function buildPayloadOf(
           // resolution fallback stays undefined by construction.)
           aspectRatio: i2vNorm.aspectRatio,
           resolution: i2vNorm.resolution,
+          ...(i2vNorm.fps !== undefined ? { fps: i2vNorm.fps } : {}),
           ...seedanceDraftField(provider, data.draft),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
@@ -4484,6 +4489,10 @@ function buildPayloadOf(
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
         duration: data.duration as number | string | undefined,
         draft: data.draft === true,
+        // The frame rate (LTX 2.5; nothing for a model without the setting):
+        // the same reading the routes and the KIE runner take, so the length
+        // its cap allows is the one priced and sent.
+        fps: data.fps,
       })
       if (t2vNorm.adjustments.length > 0) {
         console.warn(
@@ -4522,6 +4531,7 @@ function buildPayloadOf(
           removeWatermark: data.removeWatermark,
           seed: data.seed,
           resolution: t2vNorm.resolution,
+          ...(t2vNorm.fps !== undefined ? { fps: t2vNorm.fps } : {}),
           ...seedanceDraftField(provider, data.draft),
           generateAudio: data.generateAudio,
           referenceImageUrls: t2vReferenceImageUrls,
@@ -4867,6 +4877,10 @@ function buildPayloadOf(
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(resolvedProvider),
         duration: data.duration as number | string | undefined,
         draft: data.draft === true,
+        // The frame rate (LTX 2.5; nothing for a model without the setting):
+        // the same reading the routes and the KIE runner take, so the length
+        // its cap allows is the one priced and sent.
+        fps: data.fps,
       })
       if (gvNorm.adjustments.length > 0) {
         console.warn(
@@ -4948,6 +4962,7 @@ function buildPayloadOf(
           // them in here so the worker request matches the visible UI state.
           aspectRatio: gvNorm.aspectRatio,
           resolution: gvNorm.resolution,
+          ...(gvNorm.fps !== undefined ? { fps: gvNorm.fps } : {}),
           ...seedanceDraftField(resolvedProvider, data.draft),
           seed: data.seed,
           cameraFixed: data.cameraFixed,

@@ -3291,6 +3291,10 @@ export interface GenerateVideoOptions {
   shots?: Array<{ prompt: string; duration: number }>     // Kling 3.0 shot list
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>  // Kling 3.0 elements
   resolution?: string      // Video resolution (various providers)
+  /** Frame rate, for a model with a frame-rate setting (LTX 2.5: 24, 25, 48,
+   *  50), as the node stores it (a number or a numeric string); the server
+   *  reads it once and ignores it for every other model. */
+  fps?: number | string
   /** Seedance Draft (draft-capable models only): a 480p draft the
    *  `seedance-2-5-hd` Video Upscale can finalize as the same take at 1080p. */
   draft?: boolean
@@ -3387,6 +3391,7 @@ export async function generateVideo(
       shots: opts.shots,
       elements: opts.elements,
       resolution: opts.resolution,
+      ...(opts.fps !== undefined ? { fps: opts.fps } : {}),
       draft: opts.draft || undefined,
       ...(opts.referenceTaskType ? { referenceTaskType: opts.referenceTaskType } : {}),
       grokMode: opts.grokMode,
@@ -3646,6 +3651,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   seed?: number
   // Seedance 2.0 options
   resolution?: string
+  /** Frame rate — see GenerateVideoOptions.fps. */
+  fps?: number | string
   /** Seedance Draft — see GenerateVideoOptions.draft. */
   draft?: boolean
   /** Seedance 2.5 — see GenerateVideoOptions.referenceTaskType. */

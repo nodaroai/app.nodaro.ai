@@ -160,6 +160,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (bespoke `runKling4`; swaps to `kling-4.0/flash-keyframe-to-video` — `KLING_4_FLASH_KEYFRAME_MODEL` — for a start frame alone, see `kling4FlashEndpoint`) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) / [flash keyframe](https://docs.kie.ai/market/kling/v4-flash-keyframe-to-video.md) |
 | `pixverse-v6-max` | `pixverse-v6-max/image-to-video` (bespoke `runPixverseV6Max`, body from `pixverse-v6-max.ts`; a run with no start frame takes the t2v config's `pixverse-v6-max/text-to-video`) | [pixverse v6 max i2v](https://docs.kie.ai/market/pixverse/v6-max-image-to-video.md) |
+| `ltx-2.5-fast` | `ltx/2-5-fast-image-to-video` (bespoke `runLtx25`, body from `ltx-2-5.ts`; a run with no start frame takes the t2v config's `ltx/2-5-fast-text-to-video`) | [ltx 2.5 fast i2v](https://docs.kie.ai/market/ltx/2-5-fast-image-to-video.md) |
+| `ltx-2.5-pro` | `ltx/2-5-pro-image-to-video` (bespoke `runLtx25`; no start frame → `ltx/2-5-pro-text-to-video`) | [ltx 2.5 pro i2v](https://docs.kie.ai/market/ltx/2-5-pro-image-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (bespoke `runGeminiOmni12`, body from `gemini-omni-12.ts`) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -193,6 +195,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (text-only runs; the keyframe endpoint needs a start frame) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) |
 | `pixverse-v6-max` | `pixverse-v6-max/text-to-video` (bespoke `runPixverseV6Max`; the i2v config carries the image endpoint) | [pixverse v6 max t2v](https://docs.kie.ai/market/pixverse/v6-max-text-to-video.md) |
+| `ltx-2.5-fast` | `ltx/2-5-fast-text-to-video` (bespoke `runLtx25`; the i2v config carries the image endpoint) | [ltx 2.5 fast t2v](https://docs.kie.ai/market/ltx/2-5-fast-text-to-video.md) |
+| `ltx-2.5-pro` | `ltx/2-5-pro-text-to-video` (bespoke `runLtx25`; the i2v config carries the image endpoint) | [ltx 2.5 pro t2v](https://docs.kie.ai/market/ltx/2-5-pro-text-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (ONE KIE id serves every mode) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -721,6 +725,28 @@ generic frame normalization in `imageToVideo` for the same reason.
   `grok-imagine-video-1.5:<N>s:<res>` rows, the bare id = 8 s @480p. The runner
   reports `GROK_VIDEO_15_RATE_USD_PER_SEC` × seconds as the provider cost and
   writes a credit-audit row.
+
+### LTX 2.5 wire notes (`ltx-2.5-fast` / `ltx-2.5-pro`, bespoke `runLtx25`)
+
+ONE Nodaro id per tier over two KIE ids, registered in BOTH model maps under
+that id (`ltx/2-5-{fast,pro}-image-to-video` / `-text-to-video`). A different
+model from LTX 2.3 (Replicate, `ltx-2.3-*`): every LTX 2.3 branch keys on the
+exact 2.3 ids, never a prefix. The pure `buildLtx25Request` (`ltx-2-5.ts`)
+builds both bodies from an allow-list — `prompt`, `image_url` (i2v) or
+`aspect_ratio` (t2v, one of 16:9 / 9:16 / 1:1 / 3:2 / 2:3), `resolution`
+(`normalizeLtx25Resolution`: off-list → 1080p), `fps` (`videoFrameRateFor`:
+24 / 25 / 48 / 50, else 24), an INTEGER `duration` and an in-range `seed`. The
+duration is capped by the catalog's `longClipLimit` (Fast: 10 s at most at
+1440p or 48 / 50 fps, `videoDurationCappedAt`) — the same cap the price reads
+(`pricedVideoSelection`), so a route or workflow never sends more than it
+priced. No schema has an audio field (sound is always generated), an end
+frame, a negative prompt or a camera setting; none is sent. The i2v dispatch
+sits AFTER the shared frame normalization (2048 px / 10 MB / JPEG-PNG-WebP,
+inside KIE's 10 MB / JPG-PNG-WEBP). The runner reports
+`LTX_2_5_RATE_USD_PER_SEC` × seconds sent (KIE: Fast 10.8 / 15.6 / 22.8 cr/s
+at 720p / 1080p / 1440p, Pro 14.4 / 20.4, the same at every frame rate) as the
+provider cost and writes a credit-audit row. Schemas read 2026-11-22: no
+`additionalProperties`, no content-filter parameter (so no `safetyLevers`).
 
 ### PixVerse V6 Max wire notes (`pixverse-v6-max`, bespoke `runPixverseV6Max`)
 

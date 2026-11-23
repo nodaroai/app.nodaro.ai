@@ -9,6 +9,7 @@ import { hasStaleSeedanceDraft } from "@/components/editor/config-panels/seedanc
 import { hasStaleSeedanceTaskType } from "@/lib/seedance-task-type"
 import { openVideoDuration, openVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
 import {
+  getModel,
   isAutoVideoDuration,
 } from "@nodaro/shared/model-catalog"
 import {
@@ -18,6 +19,8 @@ import {
   isViduQ4Provider,
   isKling4RunnerProvider,
   isPixverseV6MaxProvider,
+  isLtx25Provider,
+  videoDurationCappedAt,
   supportsAutoVideoDuration,
   videoSourceTrimMaxSec,
 } from "@nodaro/shared/models"
@@ -121,7 +124,7 @@ export function generateVideoProviderSnap(
     // path fills for an untouched node.
     if (data.aspectRatio == null) updates.aspectRatio = "adaptive"
   }
-  if (isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isGeminiOmniPerSecondProvider(provider) || isPixverseV6MaxProvider(provider)) {
+  if (isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isGeminiOmniPerSecondProvider(provider) || isPixverseV6MaxProvider(provider) || isLtx25Provider(provider)) {
     // Same rule as Wan 3.0 (Vidu Q4, Kling 4.0 and its Flash tier, Omni Flash 1.2, PixVerse V6 Max): the bare credit identifier is a declared
     // duration @ 720p tier while the catalog ladders start lower (1s / 3s / 360p, 540p), so persist the declared
     // defaults rather than `opts[0]`. No aspect fill — a frame run takes the
@@ -132,6 +135,24 @@ export function generateVideoProviderSnap(
     if (data.duration == null || ("duration" in updates && updates.duration === undefined)) {
       updates.duration = openVideoDuration(limits, provider, [uiDurationFill(provider) ?? 5, ...(VIDEO_DURATION_OPTIONS[provider]?.map((o) => o.value) ?? [])])
     }
+  }
+  // A model whose long clips render only at some resolutions and frame rates
+  // (catalog `longClipLimit`, LTX 2.5 Fast: 10 s at most at 1440p or 48 / 50
+  // fps): the length the node lands on is one it renders at its resolution and
+  // frame rate — the server's own move (`videoDurationCappedAt`).
+  if (getModel(provider)?.longClipLimit) {
+    const landed = "duration" in updates ? updates.duration : data.duration
+    const atResolution = ("resolution" in updates ? updates.resolution : data.resolution) ?? uiResolutionFill(provider)
+    const atFps = "fps" in updates ? updates.fps : data.fps
+    if (typeof landed === "number" && landed > 0) {
+      const capped = videoDurationCappedAt(provider, landed, { resolution: atResolution as string | undefined, fps: atFps })
+      if (capped !== landed) updates.duration = capped
+    }
+  }
+  // A model that takes no negative prompt (catalog `noNegativePrompt`, LTX
+  // 2.5): the field is hidden, and a stored one is cleared.
+  if (getModel(provider)?.noNegativePrompt === true && typeof data.negativePrompt === "string" && data.negativePrompt !== "") {
+    updates.negativePrompt = undefined
   }
   // A source-clip trim set on a model that allows a wider window.
   if (isGeminiOmniProvider(provider) && typeof data.videoTrimEnd === "number") {
