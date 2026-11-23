@@ -846,6 +846,41 @@ describe("video_remake", () => {
     })
   }
 
+  describe("the Flash choices (nodaro-prism-flash, nodaro-pulse-flash)", () => {
+    beforeEach(() => setPluginSupports({ castSwap: { engines: ["nodaro-prism", "nodaro-pulse", "nodaro-prism-flash", "nodaro-pulse-flash"], engineAliases: true, flashChoices: true } as never }))
+    afterEach(() => _resetPluginSupportsForTests())
+
+    it("sends a Flash choice to the route as it is (quote and run), and names the quote by the choice", async () => {
+      const flash = { engine: "nodaro-pulse-flash", totalCredits: 300, expectedCredits: 300, breakdown: { base: 40, references: 0, motion: 260 }, settlesLower: false }
+      const { fastify, calls } = stubFastify({
+        "/v1/video-remake/estimate": { statusCode: 200, body: flash },
+        "/v1/video-remake": { statusCode: 202, body: { jobId: "job-f" } },
+      })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse-flash" })
+      expect(res.structuredContent).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Pulse Flash", totalCredits: 300, confirmed: false })
+      expect(res.content[0]!.text).toContain("This Pulse Flash run costs about 300 credits.")
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse-flash", confirm: true })
+      expect(calls.map((c) => (c.payload as { engine?: unknown }).engine)).toEqual(["nodaro-pulse-flash", "nodaro-pulse-flash"])
+    })
+
+    it("a refusal the route answers (not offered) is the tool's answer", async () => {
+      const { fastify } = stubFastify({
+        "/v1/video-remake/estimate": { statusCode: 409, body: { error: { code: "flash_not_offered", message: "Prism Flash isn't available right now. Choose Nodaro Prism." } } },
+      })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-prism-flash" })
+      expect(res.isError).toBe(true)
+      expect(res.content[0]!.text).toContain("flash_not_offered")
+    })
+
+    it("every rule of the tool reads a Flash choice as its engine: an art style on Pulse Flash is Pulse's refusal", async () => {
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+      const pulse = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse", art_style: "pop-art" })
+      const flash = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse-flash", art_style: "pop-art" })
+      expect(flash.isError).toBe(pulse.isError)
+      expect(calls.length === 0 || (calls.at(-1)!.payload as { engine?: unknown }).engine === "nodaro-pulse-flash").toBe(true)
+    })
+  })
+
   it("names the credits of a retry that Nodaro's setting charges only if the clip is refused, never naming masking", async () => {
     const auto = { totalCredits: 12, breakdown: { castSwap: 5, seedance: 7, references: 0, masking: 4 }, maskingCredits: 4, settlesLower: false }
     const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: auto } })

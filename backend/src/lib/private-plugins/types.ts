@@ -3954,13 +3954,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionShotListFps?: boolean
   /**
-   * `tk.settings.nodaroMotionFlashModel(userId)` exists: the flash-model
-   * test an admin set per Video Remake engine ("off" or "on"), answered only
-   * for a run started by an admin account (the host verifies the role). An
-   * older host has no such member: every run is made on its engine's own
-   * model.
+   * `tk.settings.nodaroMotionFlashOffer()` exists: the admin's Offer Flash
+   * per Video Remake engine ("off" or "on"), whether every user may pick
+   * that engine's Flash choice. An older host has no such member: an engine
+   * refuses every Flash choice there. (The retired admin-only
+   * `nodaroMotionFlashModel` test is no longer advertised.)
    */
-  readonly nodaroMotionFlashModel?: boolean
+  readonly nodaroMotionFlashOffer?: boolean
   /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
@@ -4445,7 +4445,8 @@ export interface PluginSettingsToolkit {
    * ("off", or the Topaz target: 480p and 720p "720p" | "1080p" | "4k", 1080p
    * "1080p" | "4k"), a resolution never saved at its default (480p and 720p
    * "1080p", 1080p "4k"); every resolution "off" while this deployment does
-   * not run Topaz (its model withheld or switched off). Null only when this host's engine does not declare
+   * not run Topaz (its model withheld or switched off), and `flash`, Prism Flash's 480p and 720p rows (each "1080p"
+   * by default). Null only when this host's engine does not declare
    * `castSwap.preciseUpscale`. Returns a fresh object. REJECTS when the
    * settings could not be read. Advertised as
    * `capabilities.nodaroMotionPreciseUpscale`.
@@ -4528,29 +4529,21 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionShotListFps?(): Promise<PluginNodaroMotionShotListFps | null>
   /**
-   * The admin's flash-model test per Video Remake engine, for ONE run: it
-   * applies only to a run started by an admin account. `userId` is the
-   * account the run's request was authenticated as; the host reads its role
-   * itself and answers the engines that are on (each under its current AND
-   * its earlier keys) only when that account is an admin. Null otherwise:
-   * no `userId`, an account that is no admin, never saved or every engine
-   * off, and to an engine that does not declare `castSwap.flashModel` (it
-   * never asks). There is no deployment default: off until an admin turns
-   * it on. Returns a copy the plugin may change freely. REJECTS when the
-   * settings or the account's role could not be read (the engine then makes
-   * the run on its own model).
-   * Advertised as `capabilities.nodaroMotionFlashModel`.
+   * The admin's Offer Flash per Video Remake engine: each engine whose Flash
+   * choice every user may pick ("on"), by its public id. Null when it was
+   * never saved or every engine is off, and to an engine that does not
+   * declare `castSwap.flashChoices` (it never asks). There is no deployment
+   * default: off until an admin turns it on. Returns a copy the plugin may
+   * change freely. REJECTS when the settings could not be read (the engine
+   * then refuses the Flash choice). Advertised as
+   * `capabilities.nodaroMotionFlashOffer`.
    */
-  nodaroMotionFlashModel?(userId?: string): Promise<PluginNodaroMotionFlashModel | null>
+  nodaroMotionFlashOffer?(): Promise<PluginNodaroMotionFlashOffer | null>
 }
 
-/**
- * Video Remake's flash-model test per engine, keyed by the PUBLIC engine ids
- * (current and earlier): an engine listed is on; one left out is off
- * (`"off"` is never answered).
- */
-export type PluginNodaroMotionFlashModel = {
-  readonly [publicEngineId: string]: "off" | "on"
+/** Video Remake's Offer Flash per engine, keyed by the PUBLIC engine ids: an engine listed is offered; one left out is not. */
+export type PluginNodaroMotionFlashOffer = {
+  readonly [publicEngineId: string]: "on"
 }
 
 /** Video Remake's 3D previz setting as a plugin is answered it: `enabled` resolved by the host. */
@@ -4621,6 +4614,11 @@ export type PluginNodaroMotionPreciseUpscale = {
   readonly "480p": "off" | "720p" | "1080p" | "4k"
   readonly "720p": "off" | "720p" | "1080p" | "4k"
   readonly "1080p": "off" | "1080p" | "4k"
+  /** Prism Flash's rows (decided 2026-11-22; no 1080p), each "1080p" by default: a Prism Flash Precise run takes these. */
+  readonly flash: {
+    readonly "480p": "off" | "720p" | "1080p" | "4k"
+    readonly "720p": "off" | "720p" | "1080p" | "4k"
+  }
 }
 
 /** Video Remake's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
@@ -5204,13 +5202,16 @@ export interface PluginSupports {
    *   checks the written list once against the clip's measured cuts.
    *   Additive-optional: absent ⇒ the engine never reads the setting
    *   (lib/nodaro-motion-shot-list-fps.ts `engineTakesShotListFps`).
-   * - `flashModel`: while the admin's per-engine flash-model test says "on"
-   *   (`tk.settings.nodaroMotionFlashModel(userId)`), the engine makes a new
-   *   run of that engine STARTED BY AN ADMIN ACCOUNT on the faster model of
-   *   the same family (every other account's run is unchanged), and
-   *   refuses a run that model cannot take. Additive-optional: absent ⇒ the
-   *   engine never reads the setting
-   *   (lib/nodaro-motion-flash-model.ts `engineTakesFlashModel`).
+   * - `flashChoices` (2026-11-22): the engine takes the Flash choices
+   *   (`engine: "nodaro-prism-flash"` / `"nodaro-pulse-flash"`, listed in
+   *   `engines`), each its engine's run on the faster model of the same
+   *   family at that model's price, admitted only while the admin's Offer
+   *   Flash says "on" (`tk.settings.nodaroMotionFlashOffer()`), refused 409
+   *   `flash_not_offered` otherwise. Additive-optional: absent ⇒ the engine
+   *   refuses a Flash id, never reads the setting, and `style-choice`
+   *   answers `flash` false (lib/nodaro-motion-flash-offer.ts
+   *   `engineTakesFlashChoices`). An engine that still declares the retired
+   *   `flashModel` is never told the old test's setting.
    * - `roleFace` (Cast Swap engine ≥ 0.495.0, decided 2026-11-20): a person
    *   role (a direct run's, its estimate's and a trend run's) takes
    *   `face: "new" | "original"` beside `body` / `outfit` / `hair`. Absent
@@ -5375,7 +5376,7 @@ export interface PluginSupports {
     readonly trendRun: boolean
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
-    readonly engines?: readonly ("nodaro-prism" | "nodaro-pulse" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
+    readonly engines?: readonly ("nodaro-prism" | "nodaro-pulse" | "nodaro-prism-flash" | "nodaro-pulse-flash" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
     readonly engineAliases?: boolean
     readonly videoRemakeRoutes?: boolean
     readonly storedFaceMask?: boolean
@@ -5432,7 +5433,9 @@ export interface PluginSupports {
     readonly previz?: boolean
     readonly shotLock?: boolean
     readonly shotLockRunTypes?: boolean
+    /** The retired admin-only flash-model test (engines ≤ 0.503.0): read by nothing. */
     readonly flashModel?: boolean
+    readonly flashChoices?: boolean
     readonly shotListFps?: boolean
     readonly roleFace?: boolean
     readonly roleFaceStoredMask?: boolean

@@ -183,3 +183,39 @@ describe("Cast Swap limits", () => {
     expect(nodaroMotionEngineFrom("nodaro-pulse")).toBe("nodaro-pulse")
   })
 })
+
+describe("Video Remake's Flash choices", () => {
+  it("two ids, their names and engines; never read as an engine by castSwapEngineFrom", async () => {
+    const m = await import("../cast-swap-limits.js")
+    expect(m.VIDEO_REMAKE_FLASH_ENGINES).toEqual(["nodaro-prism-flash", "nodaro-pulse-flash"])
+    expect(m.VIDEO_REMAKE_FLASH_ENGINE_NAMES).toEqual({ "nodaro-prism-flash": "Prism Flash", "nodaro-pulse-flash": "Pulse Flash" })
+    expect(m.NODARO_MOTION_ENGINE_OF_FLASH).toEqual({ "nodaro-prism-flash": "nodaro-prism", "nodaro-pulse-flash": "nodaro-pulse" })
+    for (const engine of m.NODARO_MOTION_ENGINES) expect(m.nodaroMotionEngineOfFlash(m.videoRemakeFlashEngineOf(engine))).toBe(engine)
+    for (const id of m.VIDEO_REMAKE_FLASH_ENGINES) {
+      expect(m.videoRemakeFlashEngineFrom(id)).toBe(id)
+      // A reader that knows only the two engines must never run Flash as the engine.
+      expect(m.castSwapEngineFrom(id)).toBeUndefined()
+      expect(m.nodaroMotionEngineFrom(id)).toBeUndefined()
+      expect(m.CAST_SWAP_ENGINE_IDS_ACCEPTED as readonly string[]).not.toContain(id)
+      expect(m.NODARO_MOTION_ENGINES as readonly string[]).not.toContain(id)
+    }
+    for (const other of ["nodaro-prism", "seedance-2-5-flash", "kling-4-flash", undefined, 3]) expect(m.videoRemakeFlashEngineFrom(other)).toBeUndefined()
+  })
+
+  it("what each renders: Prism Flash 480p or 720p, Pulse Flash 720p; 10 images and 20 seconds at the most", async () => {
+    const m = await import("../cast-swap-limits.js")
+    expect(m.VIDEO_REMAKE_FLASH_RESOLUTIONS).toEqual({ "nodaro-prism-flash": ["480p", "720p"], "nodaro-pulse-flash": ["720p"] })
+    expect(m.VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES).toBe(10)
+    expect(m.VIDEO_REMAKE_FLASH_PULSE_MAX_SEC).toBe(20)
+  })
+})
+
+
+describe("castSwapEngineOfRun: the engine whose settings a run takes", () => {
+  it("a Flash choice is its engine's run; every other id as castSwapEngineFrom reads it", async () => {
+    const m = await import("../cast-swap-limits.js")
+    expect(m.castSwapEngineOfRun("nodaro-prism-flash")).toBe("seedance-2-5")
+    expect(m.castSwapEngineOfRun("nodaro-pulse-flash")).toBe("kling-4")
+    for (const id of [...m.CAST_SWAP_ENGINE_IDS_ACCEPTED, "veo-3", undefined]) expect(m.castSwapEngineOfRun(id)).toBe(m.castSwapEngineFrom(id))
+  })
+})

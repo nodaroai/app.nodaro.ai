@@ -170,7 +170,7 @@ import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
 import { engineTakesShotLock, shotLockForPlugin } from "../nodaro-motion-shot-lock.js"
 import { engineTakesShotListFps, shotListFpsForPlugin } from "../nodaro-motion-shot-list-fps.js"
 import { geminiKeySet } from "../llm/anthropic-availability.js"
-import { engineTakesFlashModel, flashModelForPlugin } from "../nodaro-motion-flash-model.js"
+import { engineTakesFlashChoices, flashOfferForPlugin } from "../nodaro-motion-flash-offer.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1781,8 +1781,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // tk.settings.nodaroMotionShotListFps(): the admin's frame rate for the clip a Video Remake shot list is written from;
   // the chat route carries that rate (`referenceVideoFps`, with `referenceVideoUrls` and `advancedMode`, on a Gemini model).
   nodaroMotionShotListFps: true,
-  // tk.settings.nodaroMotionFlashModel(): the admin's flash-model test per Video Remake engine.
-  nodaroMotionFlashModel: true,
+  // tk.settings.nodaroMotionFlashOffer(): the admin's Offer Flash per Video Remake engine (whether every user may pick
+  // its Flash choice). The retired admin-only flash-model test is no longer advertised, so no engine reads it.
+  nodaroMotionFlashOffer: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -2568,7 +2569,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_upscale: the app settings could not be read")
         if (!engineTakesPreciseUpscale(getPluginSupports().castSwap)) return null
-        if (topazVideoDisabledHere()) return { ...PRECISE_UPSCALE_ALL_OFF }
+        if (topazVideoDisabledHere()) return structuredClone(PRECISE_UPSCALE_ALL_OFF) as typeof PRECISE_UPSCALE_ALL_OFF
         return effectivePreciseUpscale(settings.nodaro_motion_precise_upscale)
       },
       // Same rules: a failed read throws (the engine reads that as not offered, with an alert). Null only to an
@@ -2623,21 +2624,14 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (!engineTakesShotListFps(getPluginSupports().castSwap)) return null
         return shotListFpsForPlugin(settings.nodaro_motion_shot_list_fps, geminiKeySet())
       },
-      // The flash-model test, for ONE run: answered only for a run started by an admin account. `userId` is the
-      // account the request was authenticated as (never a body field or a header), and its role is read here, by the
-      // host (`checkIsAdmin`, the admin routes' own check). Null when no user is named, when the user is no admin,
-      // when it was never saved or every engine is off, AND to an engine that does not declare `castSwap.flashModel`
-      // (it never asks); else each engine that is on under its current AND its earlier keys. A failed settings read
-      // or a failed role read throws: the engine reads that as off, with an alert, so a run whose admin status
-      // cannot be verified is made on its engine's own model.
-      nodaroMotionFlashModel: async (userId?: string) => {
+      // Offer Flash: each engine whose Flash choice every user may pick ("on"), by its public id. Null when it was
+      // never saved or every engine is off, AND to an engine that does not declare `castSwap.flashChoices` (it never
+      // asks). A failed settings read throws: the engine then refuses the Flash choice (never a silent base run).
+      nodaroMotionFlashOffer: async () => {
         const settings = await getAppSettings()
-        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_flash_model: the app settings could not be read")
-        if (!engineTakesFlashModel(getPluginSupports().castSwap)) return null
-        const on = flashModelForPlugin(settings.nodaro_motion_flash_model)
-        if (on === null) return null
-        if (typeof userId !== "string" || userId === "") return null
-        return (await checkIsAdmin(userId)) ? on : null
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_flash_offer: the app settings could not be read")
+        if (!engineTakesFlashChoices(getPluginSupports().castSwap)) return null
+        return flashOfferForPlugin(settings.nodaro_motion_flash_offer)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

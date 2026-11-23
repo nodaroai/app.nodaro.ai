@@ -57,7 +57,8 @@ const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const as = { "x-user": ADMIN }
 const URL = "/v1/admin/video-remake/precise-upscale"
 const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true }
-const DEFAULTS = { "480p": "1080p", "720p": "1080p", "1080p": "4k" }
+const FLASH_DEFAULTS = { "480p": "1080p", "720p": "1080p" }
+const DEFAULTS = { "480p": "1080p", "720p": "1080p", "1080p": "4k", flash: FLASH_DEFAULTS }
 
 let app: FastifyInstance
 
@@ -96,7 +97,7 @@ describe("GET /v1/admin/video-remake/precise-upscale", () => {
   it("answers the saved row, each resolution left out at its default", async () => {
     h.row = { value: { "720p": "off" }, updated_at: "2026-11-22T12:00:00.000Z" }
     expect((await get()).json().data).toEqual({
-      value: { "480p": "1080p", "720p": "off", "1080p": "4k" },
+      value: { "480p": "1080p", "720p": "off", "1080p": "4k", flash: FLASH_DEFAULTS },
       stored: { "720p": "off" },
       defaults: DEFAULTS,
       updatedAt: "2026-11-22T12:00:00.000Z",
@@ -119,7 +120,7 @@ describe("PUT /v1/admin/video-remake/precise-upscale", () => {
   })
 
   it("saves the setting, the row of its own, and audits it under its own id", async () => {
-    const value = { "480p": "720p", "720p": "4k", "1080p": "off" }
+    const value = { "480p": "720p", "720p": "4k", "1080p": "off", flash: { "480p": "off", "720p": "4k" } }
     const res = await put(value)
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toMatchObject({ value, stored: value })
@@ -139,7 +140,7 @@ describe("PUT /v1/admin/video-remake/precise-upscale", () => {
   it("saves each resolution a PUT leaves out at its default, so what is stored is what runs", async () => {
     const res = await put({ "720p": "off" })
     expect(res.statusCode).toBe(200)
-    const after = { "480p": "1080p", "720p": "off", "1080p": "4k" }
+    const after = { "480p": "1080p", "720p": "off", "1080p": "4k", flash: FLASH_DEFAULTS }
     expect(h.upserts[0]!.value).toEqual(after)
     expect(res.json().data).toMatchObject({ value: after, stored: after })
   })

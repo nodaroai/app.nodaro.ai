@@ -31,7 +31,6 @@ import { formatZodError } from "../../lib/zod-error.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import {
   NODARO_MOTION_PRECISE_UPSCALE_KEY,
-  PRECISE_UPSCALE_DEFAULTS,
   effectivePreciseUpscale,
   engineTakesPreciseUpscale,
   nodaroMotionPreciseUpscaleSchema,
@@ -86,7 +85,7 @@ async function view(): Promise<NodaroMotionPreciseUpscaleView> {
   return {
     value: effectivePreciseUpscale(preciseUpscale),
     stored: preciseUpscale,
-    defaults: { ...PRECISE_UPSCALE_DEFAULTS },
+    defaults: effectivePreciseUpscale(null),
     updatedAt,
     supported: engineTakesPreciseUpscale(getPluginSupports().castSwap),
     topazDisabled: topazVideoDisabledHere(),

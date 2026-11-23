@@ -38,7 +38,7 @@
  * key exactly as the run does.
  */
 import { z } from "zod"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom } from "@nodaro/shared/models"
+import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineOfRun } from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 import {
   CAST_SWAP_PRISM_REFERENCE_AUDIO_MODES,
@@ -202,7 +202,7 @@ export function engineTakesPulseReferenceAudio(): boolean {
 
 /** Whether a run naming `engine` (any vocabulary) is a Pulse run. A run that names none is a Prism run. */
 export function isPulseRun(engine: unknown): boolean {
-  return castSwapEngineFrom(engine) === "kling-4"
+  return castSwapEngineOfRun(engine) === "kling-4"
 }
 
 /**

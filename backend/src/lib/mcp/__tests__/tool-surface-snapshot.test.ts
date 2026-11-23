@@ -1915,8 +1915,16 @@ const FAVORITES_PAGE_NOTE_BYTES = 234
 // together leave the list 2 B over (560_606 B against 560_604 B), so this raise is 408 B.
 const LTX_2_5_BYTES = 408
 
+// RAISED by Video Remake's Flash choices (decided 2026-11-22): `video_remake`'s `engine` takes "nodaro-prism-flash" and
+// "nodaro-pulse-flash" where the deployment offers them, and its description says what each renders. No tool was
+// added, so the membership fixtures do NOT move (the recorded tool list, tool-list-wire.json, does). Measured by this
+// suite on the same tree before and after: `video_remake` 11_001 B, then 11_243 B, 242 B more; the list 243 B more (measured on top of the LLM ids above).
+// Neither budget had headroom, so each is raised by exactly that.
+const FLASH_CHOICES_BYTES = 243
+const FLASH_CHOICES_PER_TOOL_BYTES = 242
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
     SUNO_ADD_TRACK_DIRECTION_BYTES +
@@ -2154,7 +2162,8 @@ export const TOOL_WIRE_BUDGET = {
     KIE_LLMS_NEON_GPT_6_2_ID_BYTES +
     FAVORITES_EVERYTHING_BYTES +
     FAVORITES_PAGE_NOTE_BYTES +
-    LTX_2_5_BYTES,
+    LTX_2_5_BYTES +
+    FLASH_CHOICES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

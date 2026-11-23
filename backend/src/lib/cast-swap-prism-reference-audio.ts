@@ -60,7 +60,7 @@
  * in them, so the estimate must carry the key exactly as the run does.
  */
 import { z } from "zod"
-import { CAST_SWAP_ENGINE_WHEN_OMITTED, CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom } from "@nodaro/shared/models"
+import { CAST_SWAP_ENGINE_WHEN_OMITTED, CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineOfRun } from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 /** What a resolution's reference carries. */
@@ -398,7 +398,7 @@ export function engineTakesPrismReferenceAudio(): boolean {
  * vocabulary knows is not.
  */
 export function isPrismRun(engine: unknown): boolean {
-  const resolved = engine === undefined ? CAST_SWAP_ENGINE_WHEN_OMITTED : castSwapEngineFrom(engine)
+  const resolved = engine === undefined ? CAST_SWAP_ENGINE_WHEN_OMITTED : castSwapEngineOfRun(engine)
   return resolved === "seedance-2-5"
 }
 

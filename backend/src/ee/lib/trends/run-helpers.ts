@@ -49,6 +49,7 @@ import { publicExampleOf } from "./public-examples.js"
 import { engineTakesPromptStyle, engineTakesScene } from "./prompt-style.js"
 import { privacyOutcomeOf } from "../../../lib/nodaro-motion-quote.js"
 import { castSwapEnginesOf, withWireLengthKey } from "../../../lib/cast-swap-engines.js"
+import { engineRunsFlashChoice } from "../../../lib/video-remake-flash.js"
 import { engineTakesRoleFace, engineTakesRoleFaceStoredMask } from "../../../lib/cast-swap-role-face.js"
 import { engineTakesPulseAudio } from "../../../lib/cast-swap-pulse-audio.js"
 import {
@@ -61,10 +62,14 @@ import { prismReferenceAudioByResolutionOf, prismReferenceAudioWire, prismRunRes
 import type { ComposedTrendRun, TrendRunDisplay, TrendRunDisplaySlot } from "./compose.js"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
-  castSwapEngineFrom,
+  VIDEO_REMAKE_FLASH_ENGINE_NAMES,
+  castSwapEngineOfRun,
   nodaroMotionEngineName,
   nodaroMotionEngineOf,
+  videoRemakeFlashEngineFrom,
+  videoRemakeFlashEngineOf,
   type NodaroMotionEngine,
+  type VideoRemakeFlashEngine,
 } from "@nodaro/shared/models"
 import type { CastSwapEngine, Choice, TrendSlotKind } from "./types.js"
 
@@ -96,9 +101,9 @@ export interface TrendRun {
    * The engine the run was made on, by its public id: `"nodaro-prism"` (every
    * run before the choice) or `"nodaro-pulse"`. A job stores any vocabulary
    * (an engine that knows the public ids records those, the earlier ones up to
-   * 0.397.0), each read as the current public id.
+   * 0.397.0), each read as the current public id. A Flash run: its choice's id.
    */
-  engine: NodaroMotionEngine
+  engine: NodaroMotionEngine | VideoRemakeFlashEngine
   /** Its name: "Nodaro Prism" or "Nodaro Pulse". */
   engineName: string
   videoUrl: string | null
@@ -141,7 +146,8 @@ const FULL_QUALITY_WINDOW_MS = CAST_SWAP_FULL_QUALITY_WINDOW_MS
  * when it names none (every run before the choice) or names no engine.
  */
 export function runEngineOf(input: Rec): CastSwapEngine {
-  return castSwapEngineFrom(input.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
+  // A Flash run (Prism Flash, Pulse Flash) is its engine's run.
+  return castSwapEngineOfRun(input.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
 }
 
 /**
@@ -313,8 +319,9 @@ export function toTrendRun(
     preview: input.preview === true,
     resolution: str(input.resolution) ?? "480p",
     draft,
-    engine: nodaroMotionEngineOf(runEngineOf(input)),
-    engineName: nodaroMotionEngineName(runEngineOf(input)),
+    // A Flash run is named by its choice (its stored `engine`).
+    engine: videoRemakeFlashEngineFrom(input.engine) ?? nodaroMotionEngineOf(runEngineOf(input)),
+    engineName: videoRemakeFlashEngineFrom(input.engine) ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[input.engine as VideoRemakeFlashEngine] : nodaroMotionEngineName(runEngineOf(input)),
     videoUrl: row.status === "completed" ? videoUrl : null,
     posterUrl: row.status === "completed" ? posterUrl : null,
     // The run's charge: its own, and every step it ran (the reference
@@ -459,6 +466,8 @@ export function engineSupports(composed: ComposedTrendRun): boolean {
   const cs = getPluginSupports().castSwap
   if (!cs || cs.trendRun !== true) return false
   if (!castSwapEnginesOf(cs).includes(composed.needs.engine)) return false
+  // A Flash trend: the engine must run its Flash choice (whether it is offered is the engine hook's to say: 409 flash_not_offered).
+  if (composed.needs.flash && !engineRunsFlashChoice(cs, videoRemakeFlashEngineOf(nodaroMotionEngineOf(composed.needs.engine)))) return false
   for (const kind of composed.needs.roleKinds) if (!cs.roleKinds.includes(kind)) return false
   if (composed.needs.fixedReferences && cs.fixedReferences !== true) return false
   if (composed.needs.faceMasking && cs.faceMasking !== true) return false

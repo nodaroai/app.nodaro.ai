@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
-import { castSwapEngineFrom } from "@nodaro/shared/models"
+import { castSwapEngineOfRun } from "@nodaro/shared/models"
 import { getAppSettings, settingsReadFailed } from "../lib/app-settings.js"
 import { engineTakesPulseAudio, pulseAudioSent } from "../lib/cast-swap-pulse-audio.js"
 import { internalSecretMatches } from "../lib/internal-caller.js"
@@ -40,7 +40,7 @@ export function registerNodaroMotionPulseAudioHook(app: FastifyInstance): void {
     const { pulseAudio: _sent, ...rest } = rec
     let added: { pulseAudio?: "generated" } = {}
     // The setting is read only for a Pulse run on an engine that takes it (a Prism run never needs it).
-    if (castSwapEngineFrom(rest.engine) === "kling-4" && engineTakesPulseAudio()) {
+    if (castSwapEngineOfRun(rest.engine) === "kling-4" && engineTakesPulseAudio()) {
       const settings = await getAppSettings()
       added = pulseAudioSent(rest.engine, settingsReadFailed(settings) ? null : settings.nodaro_motion_pulse_audio)
     }

@@ -2392,7 +2392,7 @@ interface VideoRemakeParams {
   postPrompt?: string              // your own words; mention a role as {role:N}, N 1-based over roles
   preview?: boolean                // true = run on 4 s of the clip
   previewStart?: number            // seconds, default 0
-  engine?: VideoRemakeEngine          // "nodaro-prism" (default) | "nodaro-pulse" (see below)
+  engine?: VideoRemakeEngineChoice    // "nodaro-prism" (default) | "nodaro-pulse", or where offered "nodaro-prism-flash" | "nodaro-pulse-flash" (see below)
   style?: VideoRemakeStyle            // "precise" (default) | "motion" (see below)
   direction?: { style: string }    // an art style, a `style` picker id, nodaro-prism only: Flex (see Style only), or Precise where styleChoice() says so
            | { customStyle: string } // or the style in your own words, ≤ 600 characters, where styleChoice() answers customStyle (see A custom style)
@@ -2409,11 +2409,13 @@ interface VideoRemakeParams {
 }
 
 type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse" // Nodaro Prism / Pulse: what the trend routes and estimate() answer
+type VideoRemakeFlashEngine = "nodaro-prism-flash" | "nodaro-pulse-flash" // Prism Flash / Pulse Flash, where offered (see Flash choices)
+type VideoRemakeEngineChoice = VideoRemakeEngine | VideoRemakeFlashEngine
 type VideoRemakeStyle = "precise" | "motion"            // how the run follows the clip (see below)
 type VideoRemakeEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
 
 interface VideoRemakeEstimate {
-  engine?: VideoRemakeEngine // the engine quoted
+  engine?: VideoRemakeEngineChoice // the engine quoted, or the Flash choice asked for
   totalCredits: number    // held when the run starts
   expectedCredits?: number // what it is expected to be charged; never above totalCredits
   breakdown: { base?: number; references: number; motion?: number; motionExpected?: number; privacy?: number; prompt?: number; referenceAudio?: number; upscale?: number } & Record<string, number>
@@ -2502,10 +2504,26 @@ While the way Nodaro prepares Motion runs for the engine limits the clip, a
 full Motion run of a clip over 27.9 s is refused as `400
 clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 
+**Flash choices** (`VideoRemakeFlashEngine`). Where Nodaro offers it, each
+engine has a Flash choice beside it: `"nodaro-prism-flash"` (Prism Flash) and
+`"nodaro-pulse-flash"` (Pulse Flash). Each is its engine's run on the faster,
+lower-cost model of the same family, at that model's own price: `estimate()`
+with the same body shows it. `styleChoice()` answers `flash` per engine (absent from an older
+server: `false`). Offer a Flash choice only where it is `true`; a `run()` or
+`estimate()` naming one anywhere else is refused `409 flash_not_offered`.
+Every other answer of `styleChoice()` is read for a Flash choice under its
+engine. Prism Flash renders 480p (the default, plain) or 720p and takes at most
+10 images per run. Pulse Flash renders 720p, at most 20 seconds of output and
+20 seconds of reference video in all. Neither has a draft or Full Quality.
+What a Flash choice cannot take is refused `400 flash_model_unsupported`, and
+nothing is held. A trend may be made on a Flash choice (its `engine` then names
+it); its runs are refused `409 flash_not_offered` while it is not offered. The job records the choice in `input_data.engine`, and the completed
+job's output in its `engine`.
+
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean } }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every

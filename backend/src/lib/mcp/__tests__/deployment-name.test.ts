@@ -104,7 +104,7 @@ const GRANTS: ReadonlyArray<readonly Scope[]> = [
  * matches is removed.
  */
 const PINNED: ReadonlyArray<{ id: string; token: RegExp; why: string; followedBy?: RegExp }> = [
-  { id: "engine id", token: /^nodaro-(?:prism|pulse)$/, why: "a Video Remake engine's public id, which a client sends as `engine` and reads back" },
+  { id: "engine id", token: /^nodaro-(?:prism|pulse)(?:-flash)?$/, why: "a Video Remake engine's public id (or its Flash choice's), which a client sends as `engine` and reads back" },
   { id: "engine name", token: /^(?:Nodaro|NODARO)$/, followedBy: /^\s+(?:Prism|Pulse|PRISM|PULSE)\b/, why: "a Video Remake engine's name (Nodaro Prism, Nodaro Pulse), the same on every deployment" },
   { id: "widget resource URI", token: /^ui:\/\/nodaro\/widget\/(?:v[2345]\/)?[a-z-]+$/, why: "the resource a tool's `_meta.ui.resourceUri` names: an id the host stores with the tool list and asks for by name" },
   { id: "house model id", token: /^nodaro-(?:image|video)-upscale$/, why: "a model id a client passes as `model` (its label is the deployment's: \"Acme Studio Image Upscale\")" },

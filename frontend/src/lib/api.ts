@@ -12359,6 +12359,8 @@ export interface AdminTrendData {
   sourceCrop?: { aspect: AdminTrendCropAspect; position: number; fromUrl: string; startedAt: string; by: string; error?: { code: string; message: string; at: string } }
   /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
   engine?: AdminTrendEngine
+  /** The trend runs on its engine's Flash choice (Prism Flash, Pulse Flash). Absent = the engine itself. */
+  flash?: true
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
   klingLength?: AdminTrendKlingLength
   /** Kling 4 only: what sound a run delivers (hidden). Absent = `"original"`. */
@@ -13948,37 +13950,38 @@ export async function saveNodaroMotionShotLock(shotLock: NodaroMotionShotLock): 
   ).data
 }
 
-// ---- Admin: Video Remake's flash-model test (/v1/admin/video-remake/flash-model, admin-nodaro-motion-flash-model.ts) ----
+// ---- Admin: Video Remake's Offer Flash (/v1/admin/video-remake/flash-offer, admin-nodaro-motion-flash-offer.ts) ----
 
-/** One engine's flash-model test: whether an admin account's new runs of it are made on the faster model of the same family. */
-export type NodaroMotionFlashModelValue = "off" | "on"
+/** One engine's Offer Flash: whether every user may pick its Flash choice (Prism Flash, Pulse Flash). */
+export type NodaroMotionFlashOfferValue = "off" | "on"
 
-/** The flash-model test per engine, keyed by public id; an engine left out (or "off") runs on its own model. */
-export type NodaroMotionFlashModel = Partial<Record<NodaroMotionEngine, NodaroMotionFlashModelValue>>
+/** Offer Flash per engine, keyed by public id; an engine left out (or "off") offers no Flash choice. */
+export type NodaroMotionFlashOffer = Partial<Record<NodaroMotionEngine, NodaroMotionFlashOfferValue>>
 
-export interface NodaroMotionFlashModelView {
+export interface NodaroMotionFlashOfferView {
   /** null = never saved: off for every engine. Only the engines that are on are listed. */
-  flashModel: NodaroMotionFlashModel | null
+  flashOffer: NodaroMotionFlashOffer | null
   updatedAt: string | null
-  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine }>
-  /** Whether this environment's Cast Swap engine runs the test. */
+  /** Each engine, with the name of its Flash choice ("Prism Flash", "Pulse Flash"). */
+  engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine; flashName: string }>
+  /** Whether this environment's Cast Swap engine runs the Flash choices. */
   supported: boolean
-  /** Every environment whose engine reads the setting: where "on" changes new runs. */
+  /** Every environment whose engine reads the setting: where "on" offers Flash to every user. */
   environments: string[]
 }
 
-const ADMIN_NODARO_MOTION_FLASH_MODEL = "/v1/admin/video-remake/flash-model"
+const ADMIN_NODARO_MOTION_FLASH_OFFER = "/v1/admin/video-remake/flash-offer"
 
-export async function fetchNodaroMotionFlashModel(): Promise<NodaroMotionFlashModelView> {
-  return (await apiRequest<{ data: NodaroMotionFlashModelView }>(ADMIN_NODARO_MOTION_FLASH_MODEL, "apiErr.loadNodaroMotion")).data
+export async function fetchNodaroMotionFlashOffer(): Promise<NodaroMotionFlashOfferView> {
+  return (await apiRequest<{ data: NodaroMotionFlashOfferView }>(ADMIN_NODARO_MOTION_FLASH_OFFER, "apiErr.loadNodaroMotion")).data
 }
 
-/** Saves every engine's flash-model test; "on" is refused (409 `engine_unsupported`) while no environment's engine runs it. */
-export async function saveNodaroMotionFlashModel(flashModel: NodaroMotionFlashModel): Promise<NodaroMotionFlashModelView> {
+/** Saves every engine's Offer Flash; "on" is refused (409 `engine_unsupported`) while no environment's engine runs the Flash choices. */
+export async function saveNodaroMotionFlashOffer(flashOffer: NodaroMotionFlashOffer): Promise<NodaroMotionFlashOfferView> {
   return (
-    await apiRequest<{ data: NodaroMotionFlashModelView }>(ADMIN_NODARO_MOTION_FLASH_MODEL, "apiErr.saveNodaroMotion", {
+    await apiRequest<{ data: NodaroMotionFlashOfferView }>(ADMIN_NODARO_MOTION_FLASH_OFFER, "apiErr.saveNodaroMotion", {
       method: "PUT",
-      body: { flashModel },
+      body: { flashOffer },
     })
   ).data
 }
@@ -14260,9 +14263,13 @@ export interface NodaroMotionPreciseUpscale {
   "480p"?: "off" | "720p" | "1080p" | "4k"
   "720p"?: "off" | "720p" | "1080p" | "4k"
   "1080p"?: "off" | "1080p" | "4k"
+  /** Prism Flash's rows (no 1080p): what a Prism Flash Precise run takes; a row left out takes its default. */
+  flash?: { "480p"?: "off" | "720p" | "1080p" | "4k"; "720p"?: "off" | "720p" | "1080p" | "4k" }
 }
 
-export type NodaroMotionPreciseUpscaleEffective = Required<NodaroMotionPreciseUpscale>
+export type NodaroMotionPreciseUpscaleEffective = Required<Omit<NodaroMotionPreciseUpscale, "flash">> & {
+  flash: Required<NonNullable<NodaroMotionPreciseUpscale["flash"]>>
+}
 
 export interface NodaroMotionPreciseUpscaleView {
   /** The effective setting: each resolution's stored choice, else its default. */

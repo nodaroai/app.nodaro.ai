@@ -13,6 +13,8 @@ import {
   type VideoRemakeArtStyle,
   type VideoRemakePreview,
   type VideoRemakeEngine,
+  type VideoRemakeEngineChoice,
+  type VideoRemakeFlashEngine,
   type VideoRemakeEstimate,
   type VideoRemakeFullQualityEstimate,
   type VideoRemakeFullQualityKind,
@@ -221,6 +223,24 @@ describe("videoRemake resource", () => {
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ totalCredits: 2, breakdown: {}, settlesLower: false }))
     expect(await make(fetchMock).videoRemake.estimate(params)).not.toHaveProperty("engine")
+  })
+
+  it("a Flash choice is posted and answered as it is, never read as its engine; the style answer types its flash map", async () => {
+    for (const engine of ["nodaro-prism-flash", "nodaro-pulse-flash"] as const) {
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-f" }, 202)).mockReturnValueOnce(mockOk({ engine, totalCredits: 3, breakdown: {}, settlesLower: false }))
+      const client = make(fetchMock)
+      const flash: VideoRemakeParams = { ...params, engine }
+      await client.videoRemake.run(flash)
+      const quote = await client.videoRemake.estimate(flash)
+      expect(quote.engine).toBe(engine)
+      for (const call of fetchMock.mock.calls) expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ engine })
+    }
+    const choice: VideoRemakeEngineChoice = "nodaro-pulse-flash"
+    const flashOnly: VideoRemakeFlashEngine = "nodaro-prism-flash"
+    // @ts-expect-error — no such Flash choice
+    const bad: VideoRemakeFlashEngine = "nodaro-pulse"
+    const offered: VideoRemakeStyleChoice["flash"] = { "nodaro-prism": true, "nodaro-pulse": false }
+    expect([choice, flashOnly, bad, offered]).toHaveLength(4)
   })
 
   it("leaves engine out of the body when it is not given (the route runs Nodaro Prism)", async () => {

@@ -99,6 +99,8 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
+  // Offer Flash (flash-offer.test.tsx): never saved, on an engine that runs the Flash choices.
+  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" }], supported: true, environments: [] } } })
   // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
   routes["GET /v1/admin/video-remake/precise-upscale"] = () => ({ body: { data: { value: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, stored: null, defaults: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, updatedAt: null, supported: true } } })
   routes[`GET ${URL_}`] = () => view()

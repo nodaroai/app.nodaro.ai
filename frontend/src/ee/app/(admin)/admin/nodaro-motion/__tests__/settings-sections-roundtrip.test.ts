@@ -45,7 +45,7 @@ const STORED: Readonly<Record<string, unknown>> = {
       faceMeshWording: "shape",
     },
   },
-  "precise-upscale": { preciseUpscale: { "480p": "off", "720p": "4k", "1080p": "1080p" } },
+  "precise-upscale": { preciseUpscale: { "480p": "off", "720p": "4k", "1080p": "1080p", flash: { "480p": "off", "720p": "4k" } } },
   advanced: { show: true },
   "custom-style": {
     customStyle: {
@@ -63,6 +63,7 @@ const STORED: Readonly<Record<string, unknown>> = {
   previz: { previz: { enabled: false } },
   "shot-lock": { shotLock: { "nodaro-prism": { ordinary: "on", styleAlone: "on", styles: { cinematic: "off", custom: "on" } }, "nodaro-pulse": "on" } },
   "shot-list-fps": { shotListFps: { fps: 4 } },
+  "flash-offer": { flashOffer: { "nodaro-pulse": "on" } },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces." }, motion: { avoid: "-" }, previz: { referenceOnly: "Only the camera of {video}." } } } },
 }
 

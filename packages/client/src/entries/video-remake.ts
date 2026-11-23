@@ -9,6 +9,8 @@ export {
   VideoRemakeResource,
   type VideoRemakeEngine,
   type VideoRemakeEngineLegacyId,
+  type VideoRemakeFlashEngine,
+  type VideoRemakeEngineChoice,
   type VideoRemakeStyle,
   type VideoRemakeMotionLength,
   type VideoRemakeTraitSource,
