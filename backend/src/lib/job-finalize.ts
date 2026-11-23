@@ -10,12 +10,11 @@ import {
   uploadVideoMaybeWatermark,
   buildImageOutputData,
   markJobCompletedDetailed,
-  commitJobCredits,
-  refundLoopTrimAddon,
   createAssetFromJob,
 } from "../workers/shared.js"
 import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
-import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
+import type { HeldCommitReplay } from "./job-policy.js"
+import { deferredCompletionFields, isDeferredSettlementJob, releaseIfScheduled, settleFinalizedJobCredits } from "./deferred-child-settlement.js"
 import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
 import { recordedLengthBoundSec, recordedVideoLengthSec } from "./generated-video-recorded-length.js"
 import { grokSourceOutputFields, type JobTaskRow } from "./grok-source-record.js"
@@ -60,6 +59,9 @@ interface JobRow extends JobTaskRow {
    *  auto-attach intent fields (`attachToCharacterId` +
    *  `attachReferenceVideoVariant`). */
   input_data: Record<string, unknown> | null
+  /** Set on a child job (a step a plugin's handler ran for its parent); read
+   *  with `input_data` to tell a deferred settlement (deferred-child-settlement.ts). */
+  parent_job_id?: string | null
 }
 
 /**
@@ -491,7 +493,7 @@ export async function finalizeJobWithMedia(
   // 1. Load job row (the shape we need for upload / asset / reopen).
   const { data: jobRow } = await supabase
     .from("jobs")
-    .select("id, user_id, should_watermark, is_public, job_type, workflow_execution_id, status, input_data, provider_task_id, provider_kind, relay_job_id")
+    .select("id, user_id, should_watermark, is_public, job_type, workflow_execution_id, status, input_data, provider_task_id, provider_kind, relay_job_id, parent_job_id")
     .eq("id", jobId)
     .single()
   const job = jobRow as JobRow | null
@@ -671,6 +673,14 @@ export async function finalizeJobWithMedia(
     // A handler's own measure wins; a GPT Image 2.6 Auto run settles on KIE's bill.
     meteredBaseCredits: meteredBaseCredits ?? await gptImage26AutoSettledBase(result.autoQualityKieCredits),
   }
+  // A plugin's engine child that asked to stay HELD after it completes
+  // (deferred-child-settlement.ts): the replay and the figure it will cost are
+  // written in the completion CAS below, and step 5 commits nothing — the
+  // plugin settles or releases it, or the sweep does.
+  const deferred = usageLogId !== null && isDeferredSettlementJob(job)
+  const deferredFields = deferred && usageLogId !== null
+    ? await deferredCompletionFields({ usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id })
+    : {}
   const outcome = await markJobCompletedDetailed(
     jobId,
     {
@@ -686,6 +696,7 @@ export async function finalizeJobWithMedia(
       // they are ordinary `jobs` columns, NOT settlement inputs, so they must
       // never appear in HELD_COMMIT_REPLAY_KEYS or the commitReplay below.
       ...relayFieldsFrom(result),
+      ...deferredFields,
     },
     // THE hold-eligible funnel: this is the only completion whose tail
     // (runCompletionTail) a review APPROVE can replay, which is what makes a
@@ -746,11 +757,13 @@ export async function finalizeJobWithMedia(
   //    A metered charge (`meteredBaseCredits`) takes the plain commit instead:
   //    it already prices exactly what was delivered, add-on included only when
   //    it was — and `heldCommitArgs` is the one mapping approve replays too.
-  const loopTrimRefund = input.loopTrimAddonRefundCredits ?? 0
-  if (commitReplay.meteredBaseCredits == null && loopTrimRefund > 0 && !job.workflow_execution_id) {
-    await refundLoopTrimAddon(jobId, usageLogId, loopTrimRefund)
+  //    A deferred child commits nothing here: its log stays `reserved`.
+  if (!deferred) {
+    await settleFinalizedJobCredits({ jobId, usageLogId, workflowExecutionId: job.workflow_execution_id, commit: commitReplay, providerCost: result.cost })
   } else {
-    await commitJobCredits(usageLogId, jobId, ...heldCommitArgs(commitReplay, result.cost))
+    // A release the plugin asked for while this take was still running (its
+    // run failed or timed out) is carried out now: the take is never charged.
+    await releaseIfScheduled(jobId)
   }
 
   // 6-8. The shared completion tail.

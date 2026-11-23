@@ -61,7 +61,7 @@ const { adminNodaroMotionRoutes, NODARO_MOTION_SETTINGS_SECTIONS } = await impor
 const { NODARO_MOTION_SHOT_LIST_FPS_AUDIT_TARGET } = await import("../admin-nodaro-motion-shot-list-fps.js")
 const { NODARO_MOTION_PREVIZ_AUDIT_TARGET } = await import("../admin-nodaro-motion-previz.js")
 const { NODARO_MOTION_SHOT_LOCK_AUDIT_TARGET } = await import("../admin-nodaro-motion-shot-lock.js")
-const { NODARO_MOTION_FLASH_MODEL_AUDIT_TARGET } = await import("../admin-nodaro-motion-flash-model.js")
+const { NODARO_MOTION_FLASH_OFFER_AUDIT_TARGET } = await import("../admin-nodaro-motion-flash-offer.js")
 const { getAppSettings, invalidateSettingsCache } = await import("../../../lib/app-settings.js")
 const { _resetPluginSupportsForTests, setPluginSupports } = await import("../../../lib/private-plugins/supports-registry.js")
 
@@ -179,7 +179,7 @@ describe("PUT /v1/admin/video-remake/shot-list-fps", () => {
     expect(section).toMatchObject({ path: URL, label: "Shot list frame rate" })
     expect(section!.prepare({ shotListFps: { fps: 4 } })).toEqual({ value: { shotListFps: { fps: 4 } } })
     expect(
-      new Set([NODARO_MOTION_SHOT_LIST_FPS_AUDIT_TARGET, NODARO_MOTION_PREVIZ_AUDIT_TARGET, NODARO_MOTION_SHOT_LOCK_AUDIT_TARGET, NODARO_MOTION_FLASH_MODEL_AUDIT_TARGET]).size,
+      new Set([NODARO_MOTION_SHOT_LIST_FPS_AUDIT_TARGET, NODARO_MOTION_PREVIZ_AUDIT_TARGET, NODARO_MOTION_SHOT_LOCK_AUDIT_TARGET, NODARO_MOTION_FLASH_OFFER_AUDIT_TARGET]).size,
     ).toBe(4)
   })
 })

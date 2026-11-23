@@ -327,8 +327,18 @@ export {
   CAST_SWAP_KLING_LENGTHS,
   CAST_SWAP_KLING_LENGTH_WHEN_OMITTED,
   CAST_SWAP_KLING_MAX_IMAGES,
+  VIDEO_REMAKE_FLASH_ENGINES,
+  VIDEO_REMAKE_FLASH_ENGINE_NAMES,
+  NODARO_MOTION_ENGINE_OF_FLASH,
+  VIDEO_REMAKE_FLASH_RESOLUTIONS,
+  VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES,
+  VIDEO_REMAKE_FLASH_PULSE_MAX_SEC,
+  videoRemakeFlashEngineOf,
+  videoRemakeFlashEngineFrom,
+  nodaroMotionEngineOfFlash,
+  castSwapEngineOfRun,
 } from "../cast-swap-limits.js"
-export type { CastSwapEngine, CastSwapFaceMaskTarget, CastSwapKlingLength, CastSwapStyle, NodaroMotionEngine, NodaroMotionLegacyEngine } from "../cast-swap-limits.js"
+export type { CastSwapEngine, CastSwapFaceMaskTarget, CastSwapKlingLength, CastSwapStyle, NodaroMotionEngine, NodaroMotionLegacyEngine, VideoRemakeFlashEngine } from "../cast-swap-limits.js"
 export type {
   ImageAspectRatio,
   ImageResolution,

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { hasAdmin } from "@/lib/edition"
+import { RemakeFaultChips } from "@/ee/components/admin/remake-fault-chips"
 import {
   fetchJobCastSwapSteps,
   SKIP_REASONS,
@@ -299,8 +300,12 @@ function StyleOnlyLine({ path, grayscale }: { path: NodaroMotionStyleOnlyPath; g
  * pictures; the skipped steps.
  */
 export function CastSwapStepsBody({ data, showSkipped }: { data: JobCastSwapSteps; showSkipped: boolean }) {
-  const { stepOutputs: out, sceneText, skippedSteps, styleOnly, preciseStyleRouted, preciseStyleSentGray } = data
+  const { stepOutputs: out, sceneText, skippedSteps, styleOnly, preciseStyleRouted, preciseStyleSentGray, faults } = data
   return <div className="flex min-w-0 flex-col gap-3 text-sm">
+    {faults && faults.length > 0 && <div className="flex flex-col gap-1" data-testid="remake-faults">
+      <h3 className="text-sm font-semibold">Faults</h3>
+      <RemakeFaultChips faults={faults} />
+    </div>}
     {showSkipped && <JobSkippedSteps output={{ skippedSteps }} />}
     {preciseStyleRouted && <p className="text-xs text-muted-foreground" data-testid="precise-style-routed">{PRECISE_STYLE_ROUTED_LINE}</p>}
     {preciseStyleSentGray && <p className="text-xs text-muted-foreground" data-testid="precise-style-sent-gray">{PRECISE_STYLE_SENT_GRAY_LINE}</p>}

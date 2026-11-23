@@ -120,7 +120,9 @@ import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
-import { getJobId, throwIfJobCancelled } from "../job-cancellation.js"
+import { getJobId, getJobUserId, throwIfJobCancelled } from "../job-cancellation.js"
+import { assertOwnDeferredChild, resolveDeferredChild } from "../deferred-child-settlement.js"
+import { isOurCdnUrl } from "../cdn-host.js"
 import { jobFileObjectId } from "../job-output-keys.js"
 import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
@@ -168,7 +170,7 @@ import { previzOfferedByDefault } from "../nodaro-motion-previz-default.js"
 import { engineTakesShotLock, shotLockForPlugin } from "../nodaro-motion-shot-lock.js"
 import { engineTakesShotListFps, shotListFpsForPlugin } from "../nodaro-motion-shot-list-fps.js"
 import { geminiKeySet } from "../llm/anthropic-availability.js"
-import { engineTakesFlashModel, flashModelForPlugin } from "../nodaro-motion-flash-model.js"
+import { engineTakesFlashChoices, flashOfferForPlugin } from "../nodaro-motion-flash-offer.js"
 import { styleRoutesForEngine } from "../nodaro-motion-precise-style-route-engine.js"
 import { anyStepsSet, stepsForLoadedEngine, withEarlierStepsKeys } from "../nodaro-motion-steps.js"
 import { loadedEngineTakesSteps } from "../cast-swap-steps.js"
@@ -1692,6 +1694,29 @@ function workerRequestVia(workerApp: () => Promise<FastifyInstance>) {
   }
 }
 
+/** The most images one `completeStructured` call carries (`llmStructuredImages`). */
+const MAX_STRUCTURED_IMAGES = 5
+
+/**
+ * A `completeStructured` request's `imageUrls`, checked: at most 5 links, each
+ * an https link on this deployment's own media host (`isOurCdnUrl`: the
+ * R2_PUBLIC_URL origin or the exact R2_PUBLIC_FALLBACK_DOMAIN host). The call
+ * is unmetered and the link is handed to a model lane that fetches it, so it
+ * can never name an arbitrary host. A bad list is refused, never trimmed.
+ */
+export function structuredImageUrls(imageUrls: unknown): string[] {
+  if (imageUrls === undefined) return []
+  if (!Array.isArray(imageUrls) || imageUrls.length > MAX_STRUCTURED_IMAGES) {
+    throw new Error(`tk.llm.completeStructured: imageUrls must be a list of at most ${MAX_STRUCTURED_IMAGES} links`)
+  }
+  return imageUrls.map((url) => {
+    if (typeof url !== "string" || !isOurCdnUrl(url, config.R2_PUBLIC_URL ?? "", config.R2_PUBLIC_FALLBACK_DOMAIN ?? "")) {
+      throw new Error("tk.llm.completeStructured: every imageUrls entry must be an https link on this deployment's own media host")
+    }
+    return url
+  })
+}
+
 function assertNotLeaseKey(key: string): void {
   if (key.startsWith(LEASE_KEY_PREFIX)) throw new Error(`keys under "${LEASE_KEY_PREFIX}" belong to tk.redis.lease`)
 }
@@ -1756,8 +1781,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // tk.settings.nodaroMotionShotListFps(): the admin's frame rate for the clip a Video Remake shot list is written from;
   // the chat route carries that rate (`referenceVideoFps`, with `referenceVideoUrls` and `advancedMode`, on a Gemini model).
   nodaroMotionShotListFps: true,
-  // tk.settings.nodaroMotionFlashModel(): the admin's flash-model test per Video Remake engine.
-  nodaroMotionFlashModel: true,
+  // tk.settings.nodaroMotionFlashOffer(): the admin's Offer Flash per Video Remake engine (whether every user may pick
+  // its Flash choice). The retired admin-only flash-model test is no longer advertised, so no engine reads it.
+  nodaroMotionFlashOffer: true,
   jobLanes: true,
   // tk.jobs.waitForJob leaves the time the awaited job waits for a slot
   // (`queued`) out of the plugin's timeout (`queueAware` below).
@@ -1796,6 +1822,12 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // Video Remake: the /v1/video-remake prefix beside /v1/cast-swap in every route-keyed gate, guard and hook
   // (lib/video-remake-paths.ts): a plugin registers its /v1/video-remake routes only where this is set.
   videoRemake: true,
+  // /v1/generate-video takes `deferSettlement` from a plugin's own child (answered `settlementDeferred: true`): its
+  // reservation stays held after it completes until tk.jobs.settleDeferredChild / releaseDeferredChild, or the
+  // host's sweep, resolves it (lib/deferred-child-settlement.ts).
+  deferredChildSettlement: true,
+  // tk.llm.completeStructured takes `imageUrls` (at most 5 https links), sent as image parts on the direct lane.
+  llmStructuredImages: true,
 })
 
 export interface BuildToolkitOptions {
@@ -2074,6 +2106,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       markJobFailedWithOutput: pluginMarkJobFailedWithOutput,
       refundJobCredits: pluginRefundJobCredits,
       hasWaivingRecastRun,
+      // The running job (`getJobId()`, the handler's own) may settle or release only its own children.
+      settleDeferredChild: async (childJobId) => {
+        await assertOwnDeferredChild(getJobId(), childJobId, getJobUserId())
+        return resolveDeferredChild(childJobId, "settled", { by: "plugin" })
+      },
+      releaseDeferredChild: async (childJobId, reason) => {
+        await assertOwnDeferredChild(getJobId(), childJobId, getJobUserId())
+        return resolveDeferredChild(childJobId, "released", { reason: typeof reason === "string" ? reason : "", by: "plugin" })
+      },
     },
     http: {
       // Dynamic import keeps the core/ee boundary (see computeGenerateVideoProPricing below).
@@ -2230,11 +2271,18 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         schema: unknown,
         opts?: { schemaName?: string; maxRetries?: number },
       ): Promise<T> => {
+        const images = structuredImageUrls(req.imageUrls)
         const result = await llmCompleteStructured(
           {
             modelId: req.model,
             system: req.system ?? "",
-            messages: [{ role: "user", content: req.prompt }],
+            // With images (`llmStructuredImages`): the prompt, then each image as its own part.
+            messages: [{
+              role: "user",
+              content: images.length > 0
+                ? [{ type: "text", text: req.prompt }, ...images.map((url) => ({ type: "image" as const, url }))]
+                : req.prompt,
+            }],
             maxTokens: req.maxTokens,
             // Forward pinned sampling (video-analysis grader pins temperature 0 for
             // a deterministic judge). deriveParams gates on `!== undefined`, so 0
@@ -2247,8 +2295,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
             reasoningEffort: req.reasoningEffort as LlmReasoningEffort | undefined,
             // Unset by default — this text-only path serves gvp/evp planners
             // and film-studio doctrine, which keep the registry's cost-aware
-            // routing. Only a caller that must not touch KIE pins a lane.
-            requireLane: req.requireLane,
+            // routing. Only a caller that must not touch KIE pins a lane. A
+            // call with images is pinned direct: the proxied lane can lose an
+            // image silently and answer about nothing.
+            requireLane: req.requireLane ?? (images.length > 0 ? "direct" : undefined),
             // ON unless the caller opts out: a failure that reported no usage cost nothing,
             // so re-dialling it once is free. Independent of `opts.maxRetries`, which counts
             // re-asking a provider that already answered — and billed.
@@ -2519,7 +2569,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_upscale: the app settings could not be read")
         if (!engineTakesPreciseUpscale(getPluginSupports().castSwap)) return null
-        if (topazVideoDisabledHere()) return { ...PRECISE_UPSCALE_ALL_OFF }
+        if (topazVideoDisabledHere()) return structuredClone(PRECISE_UPSCALE_ALL_OFF) as typeof PRECISE_UPSCALE_ALL_OFF
         return effectivePreciseUpscale(settings.nodaro_motion_precise_upscale)
       },
       // Same rules: a failed read throws (the engine reads that as not offered, with an alert). Null only to an
@@ -2574,21 +2624,14 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (!engineTakesShotListFps(getPluginSupports().castSwap)) return null
         return shotListFpsForPlugin(settings.nodaro_motion_shot_list_fps, geminiKeySet())
       },
-      // The flash-model test, for ONE run: answered only for a run started by an admin account. `userId` is the
-      // account the request was authenticated as (never a body field or a header), and its role is read here, by the
-      // host (`checkIsAdmin`, the admin routes' own check). Null when no user is named, when the user is no admin,
-      // when it was never saved or every engine is off, AND to an engine that does not declare `castSwap.flashModel`
-      // (it never asks); else each engine that is on under its current AND its earlier keys. A failed settings read
-      // or a failed role read throws: the engine reads that as off, with an alert, so a run whose admin status
-      // cannot be verified is made on its engine's own model.
-      nodaroMotionFlashModel: async (userId?: string) => {
+      // Offer Flash: each engine whose Flash choice every user may pick ("on"), by its public id. Null when it was
+      // never saved or every engine is off, AND to an engine that does not declare `castSwap.flashChoices` (it never
+      // asks). A failed settings read throws: the engine then refuses the Flash choice (never a silent base run).
+      nodaroMotionFlashOffer: async () => {
         const settings = await getAppSettings()
-        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_flash_model: the app settings could not be read")
-        if (!engineTakesFlashModel(getPluginSupports().castSwap)) return null
-        const on = flashModelForPlugin(settings.nodaro_motion_flash_model)
-        if (on === null) return null
-        if (typeof userId !== "string" || userId === "") return null
-        return (await checkIsAdmin(userId)) ? on : null
+        if (settingsReadFailed(settings)) throw new Error("nodaro_motion_flash_offer: the app settings could not be read")
+        if (!engineTakesFlashChoices(getPluginSupports().castSwap)) return null
+        return flashOfferForPlugin(settings.nodaro_motion_flash_offer)
       },
     },
     deployment: { publicUrl: appBaseUrl() },

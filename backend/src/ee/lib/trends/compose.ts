@@ -155,6 +155,7 @@ import {
   CAST_SWAP_POST_PROMPT_MAX,
   CAST_SWAP_RESOLUTIONS_BY_ENGINE,
   castSwapEngineHasDraft,
+  type VideoRemakeFlashEngine,
 } from "@nodaro/shared/models"
 import { castSwapImagesSent } from "@nodaro/render-rules"
 import {
@@ -169,7 +170,7 @@ import {
   type FaceMaskingSource,
   type FaceMaskingTarget,
 } from "../../../lib/cast-swap-face-masking.js"
-import { CHIPS_BY_KIND, OPT_IN_CHIPS, engineOf, hiddenChip, misplacedChip, shownChips, type ChipKey } from "./schemas.js"
+import { CHIPS_BY_KIND, OPT_IN_CHIPS, engineOf, hiddenChip, misplacedChip, shownChips, trendChoiceId, trendIsFlash, trendResolutions, type ChipKey } from "./schemas.js"
 import { keepsAnyFace, mixesFaces, roleFaceRemakeFor, type RoleFaceRemake } from "./role-face.js"
 import { pickText } from "./localize.js"
 import { faceMaskHasErasedMarks, faceMaskStoredRequired, storedFaceMaskFor } from "./face-mask.js"
@@ -323,8 +324,8 @@ export interface TrendRunBody {
     erase?: RoleFaceRemake["erase"]
     roleBoxes?: RoleFaceRemake["roleBoxes"]
   }
-  /** Only for an engine other than Seedance 2.5 (which a body without it runs on). */
-  engine?: CastSwapEngine
+  /** Only for an engine other than Seedance 2.5 (which a body without it runs on), or a Flash trend's choice. */
+  engine?: CastSwapEngine | VideoRemakeFlashEngine
   /** Only on Kling 4, and only when the trend sets it (absent = "cut-end"). */
   klingLength?: CastSwapKlingLength
   /**
@@ -449,6 +450,8 @@ export interface ComposedTrendRun {
     trendPrePrompt: boolean
     /** The trend's video engine (Seedance 2.5 when it names none). */
     engine: CastSwapEngine
+    /** The trend runs on that engine's Flash choice: the loaded engine must run it. */
+    flash?: true
     /**
      * A person role keeps its own face (`face: "original"`, the Face chip): an
      * engine that does not declare `castSwap.roleFace` would ignore it and hide
@@ -711,8 +714,10 @@ export function composeTrendRun(
   const clip = req.preview === true && !variantSent ? currentPreviewClip(data) : undefined
   const preparedPreview = clip && (!storedFaceMask || clip.faceMask) ? { clip } : undefined
   const engine = engineOf(data)
-  const offered: readonly TrendResolution[] = CAST_SWAP_RESOLUTIONS_BY_ENGINE[engine]
-  if (req.draft === true && !castSwapEngineHasDraft(engine)) {
+  // A Flash trend (decided 2026-11-22): its engine's run on the Flash model, with the Flash choice's resolutions and no draft.
+  const flash = trendIsFlash(data)
+  const offered: readonly TrendResolution[] = trendResolutions(data)
+  if (req.draft === true && (flash || !castSwapEngineHasDraft(engine))) {
     throw new TrendRunError("draft_unsupported", "This trend has no draft: run it at 720p or 1080p.")
   }
   if (req.draft === true && req.resolution !== undefined && req.resolution !== "480p") {
@@ -772,7 +777,8 @@ export function composeTrendRun(
     // A trend with erased marks, or a person variant: the run must use it — the engine fails rather
     // than masks per run.
     ...(storedFaceMaskSent ? { storedFaceMask: storedFaceMaskSent } : {}),
-    ...(engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
+    // A Flash trend always names its choice (the engine admits it only where offered: 409 flash_not_offered).
+    ...(flash ? { engine: trendChoiceId(data) as VideoRemakeFlashEngine } : engine !== CAST_SWAP_ENGINE_WHEN_OMITTED ? { engine } : {}),
     // Kling 4's length fit, as the trend sets it (Seedance never gets it).
     ...(engine === "kling-4" && data.klingLength ? { klingLength: data.klingLength } : {}),
     // Kling 4's own audio, when the trend asks for it (the original audio sends no key).
@@ -817,6 +823,7 @@ export function composeTrendRun(
       storedFaceMask: storedFaceMask !== undefined && "required" in storedFaceMask,
       trendPrePrompt: !!texts.prePrompt,
       engine,
+      ...(flash ? { flash: true as const } : {}),
       // Only when a role keeps its own face: every other run's needs are as before.
       ...(keepsAnyFace(slots) ? { roleFace: true as const } : {}),
     },

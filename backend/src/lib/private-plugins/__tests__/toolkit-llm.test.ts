@@ -210,3 +210,58 @@ describe("toolkit.llm.isKnownModel — the host's live registry, not the plugin'
     expect(tk.llm.isKnownModel?.("not-a-model")).toBe(false)
   })
 })
+
+describe("toolkit.llm.completeStructured — images (capabilities.llmStructuredImages)", () => {
+  beforeEach(async () => {
+    mockStructured.mockClear()
+    // This deployment's own media host (the R2 public URL); every image must be on it.
+    const { config } = await import("../../config.js")
+    Object.assign(config, { R2_PUBLIC_URL: "https://cdn.nodaro.ai", R2_PUBLIC_FALLBACK_DOMAIN: "media.nodaro.test" })
+  })
+
+  it("is declared", () => {
+    expect(buildToolkit().capabilities?.llmStructuredImages).toBe(true)
+  })
+
+  it("sends the prompt then each image as its own part, pinned to the direct lane", async () => {
+    await buildToolkit().llm.completeStructured(
+      { model: "gemini-3.6-flash", prompt: "Is any face blurred?", imageUrls: ["https://cdn.nodaro.ai/a.jpg", "https://cdn.nodaro.ai/b.jpg"] },
+      {},
+    )
+    const sent = mockStructured.mock.calls[0]![0] as { messages: unknown; requireLane?: string }
+    expect(sent.messages).toEqual([{
+      role: "user",
+      content: [
+        { type: "text", text: "Is any face blurred?" },
+        { type: "image", url: "https://cdn.nodaro.ai/a.jpg" },
+        { type: "image", url: "https://cdn.nodaro.ai/b.jpg" },
+      ],
+    }])
+    expect(sent.requireLane).toBe("direct")
+  })
+
+  it("an explicit lane still wins", async () => {
+    await buildToolkit().llm.completeStructured({ model: "m", prompt: "p", imageUrls: ["https://media.nodaro.test/a.jpg"], requireLane: "kie" }, {})
+    expect((mockStructured.mock.calls[0]![0] as { requireLane?: string }).requireLane).toBe("kie")
+  })
+
+  it("without images the request is exactly as before (a string prompt, no lane)", async () => {
+    await buildToolkit().llm.completeStructured({ model: "m", prompt: "p" }, {})
+    const sent = mockStructured.mock.calls[0]![0] as { messages: unknown; requireLane?: string }
+    expect(sent.messages).toEqual([{ role: "user", content: "p" }])
+    expect(sent.requireLane).toBeUndefined()
+  })
+
+  it.each([
+    ["more than 5", Array.from({ length: 6 }, (_, i) => `https://cdn.nodaro.ai/${i}.jpg`)],
+    ["a non-https link on our host", ["http://cdn.nodaro.ai/a.jpg"]],
+    ["not a link", ["a.jpg"]],
+    ["another host", ["https://example.com/a.jpg"]],
+    ["a look-alike host", ["https://cdn.nodaro.ai.evil.test/a.jpg"]],
+    ["our host as userinfo", ["https://cdn.nodaro.ai@evil.test/a.jpg"]],
+    ["an internal address", ["https://169.254.169.254/latest/meta-data"]],
+  ])("refuses %s before any call", async (_label, imageUrls) => {
+    await expect(buildToolkit().llm.completeStructured({ model: "m", prompt: "p", imageUrls }, {})).rejects.toThrow("imageUrls")
+    expect(mockStructured).not.toHaveBeenCalled()
+  })
+})

@@ -16,7 +16,7 @@
  * `__tests__/share-links-sql-parity.test.ts` holds the two together.
  */
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
-import { CAST_SWAP_ENGINE_WHEN_OMITTED, NODARO_MOTION_ENGINE_NAMES, nodaroMotionEngineFrom } from "@nodaro/shared/models"
+import { CAST_SWAP_ENGINE_WHEN_OMITTED, NODARO_MOTION_ENGINE_NAMES, VIDEO_REMAKE_FLASH_ENGINE_NAMES, nodaroMotionEngineFrom, videoRemakeFlashEngineFrom } from "@nodaro/shared/models"
 import { isPromptBlocked } from "../../config/content-filter.js"
 import { redactPrivateJobOutput } from "../public-job-data.js"
 import { isShareableAddress, publicSettingsOf, referencesOf } from "./settings.js"
@@ -125,6 +125,9 @@ export function isTrendRunInput(inputData: unknown): boolean {
 export function sharedModelOf(inputData: unknown): { id: string; name: string } | null {
   const input = record(inputData)
   if (input.type === "cast-swap") {
+    // A Flash choice's run is named as the choice (Prism Flash, Pulse Flash).
+    const flash = videoRemakeFlashEngineFrom(input.engine)
+    if (flash) return { id: flash, name: VIDEO_REMAKE_FLASH_ENGINE_NAMES[flash] }
     const engine = nodaroMotionEngineFrom(input.engine ?? CAST_SWAP_ENGINE_WHEN_OMITTED)
     return engine ? { id: engine, name: NODARO_MOTION_ENGINE_NAMES[engine] } : null
   }

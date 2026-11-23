@@ -544,6 +544,8 @@ export default function AdminTrendEditorPage() {
               pulseAudio={form.pulseAudio}
               prismReferenceAudio={form.prismReferenceAudio}
               pulseReferenceAudio={form.pulseReferenceAudio}
+              flash={form.flash === true}
+              onFlashChange={(on) => set({ flash: on ? true : undefined })}
               onChange={(engine) => set({ engine })}
               onKlingLengthChange={(klingLength) => set({ klingLength })}
               onPulseAudioChange={(pulseAudio) => set({ pulseAudio })}

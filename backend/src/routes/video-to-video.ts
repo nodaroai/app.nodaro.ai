@@ -27,12 +27,14 @@ import { hasCredits } from "../lib/config.js"
 import { deniedModelRejectionMessage, isModelDenied } from "../lib/surface-deny.js"
 import { loadedEngineRuns } from "../lib/cast-swap-engines.js"
 import { CAST_SWAP_PREFIX } from "../lib/video-remake-paths.js"
-import { castSwapEngineFrom, nodaroMotionEngineName } from "@nodaro/shared/models"
+import { castSwapEngineFrom } from "@nodaro/shared/models"
+import { FLASH_NOT_OFFERED, flashChoiceOffered, flashNotOfferedMessage } from "../lib/video-remake-flash.js"
 import {
   VIDEO_REMAKE_ESTIMATE_ROUTE,
   VIDEO_REMAKE_RUN_ROUTE,
   requestVideoRemakeEstimate,
-  videoRemakeEngineOf,
+  videoRemakeChoiceName,
+  videoRemakeChoiceOf,
   videoRemakeEngineQuoteOf,
   videoRemakeNodeQuote,
   videoRemakeQuoteAnswer,
@@ -129,12 +131,14 @@ export async function quoteVideoRemakeEngine(req: FastifyRequest, reply: Fastify
   const body = req.body
   if (body === null || typeof body !== "object" || Array.isArray(body)) return undefined
   const record = body as Record<string, unknown>
-  const engine = videoRemakeEngineOf(record.provider)
-  if (!engine) return undefined
+  // An engine, or (decided 2026-11-22) its Flash choice beside it, offered only where its engine's Offer Flash is on.
+  const choice = videoRemakeChoiceOf(record.provider)
+  if (!choice) return undefined
   if (!req.userId) return refuse(reply, 401, "unauthorized", "Authentication required")
 
+  const { engine, flash } = choice
   const internal = castSwapEngineFrom(engine)!
-  const engineName = nodaroMotionEngineName(internal)
+  const engineName = videoRemakeChoiceName(choice)
   // A canvas node's own run (the editor sends its node and workflow ids): a node runs the node's models only,
   // and its run expects a job. Refused as the workflow run refuses it.
   if (extractNodeId(record) !== null || extractWorkflowId(record) !== null) {
@@ -148,7 +152,7 @@ export async function quoteVideoRemakeEngine(req: FastifyRequest, reply: Fastify
     return refuse(reply, 404, "not_available", "Video Remake is a Nodaro Cloud feature and is not served on this deployment.")
   }
   // The model door: the engine by its public id, and the video model it runs on.
-  const deniedModels = [engine, internal].filter((id) => isModelDenied(id))
+  const deniedModels = [...(flash ? [flash] : []), engine, internal].filter((id) => isModelDenied(id))
   if (deniedModels.length > 0) return refuse(reply, 403, "model_not_available", deniedModelRejectionMessage([deniedModels[0]!]))
   // The node doors: this route's node, then Video Remake's.
   const nodeRefusal =
@@ -172,7 +176,12 @@ export async function quoteVideoRemakeEngine(req: FastifyRequest, reply: Fastify
     return refuse(reply, 503, "engine_unavailable", `${engineName} is not available on this deployment yet.`)
   }
 
-  const run = videoRemakeRunOf(engine, parsed.data)
+  // A Flash choice not offered here: refused with the run route's own code, before anything is asked.
+  if (flash && !(await flashChoiceOffered(flash))) {
+    return refuse(reply, 409, FLASH_NOT_OFFERED, flashNotOfferedMessage(flash))
+  }
+
+  const run = videoRemakeRunOf(flash ?? engine, parsed.data)
   const res = await requestVideoRemakeEstimate(req, run, { webFreeMode: await resolveWebSurfaceFlag(req) })
   let answer: unknown
   try {
@@ -186,7 +195,7 @@ export async function quoteVideoRemakeEngine(req: FastifyRequest, reply: Fastify
     if (error !== null && typeof error === "object") return reply.status(res.statusCode).send({ error })
     return refuse(reply, 502, "engine_error", "Video Remake answered unexpectedly.")
   }
-  const quote = videoRemakeEngineQuoteOf(answer, engine)
+  const quote = videoRemakeEngineQuoteOf(answer, flash ?? engine)
   if (!quote) return refuse(reply, 502, "engine_error", "Video Remake answered unexpectedly.")
   return reply.status(200).send(req.quoteOnly === true ? { data: videoRemakeNodeQuote(quote) } : videoRemakeQuoteAnswer(quote, run))
 }

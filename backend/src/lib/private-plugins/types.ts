@@ -1999,6 +1999,22 @@ export interface PluginJobsToolkit {
    */
   refundJobCredits?(usageLogId: string, jobId: string, reason: string): Promise<void>
   /**
+   * Commit a DEFERRED child's held reservation exactly as its worker would have
+   * at completion (`capabilities.deferredChildSettlement`). Only a child of the
+   * running job (the job whose handler calls it); another job's child, or a
+   * call outside a job's handler, is refused with a throw. Answers what
+   * happened ({@link PluginDeferredSettleOutcome}); it never undoes a release.
+   */
+  settleDeferredChild?(childJobId: string): Promise<PluginDeferredSettleOutcome>
+  /**
+   * Refund a DEFERRED child's held reservation (the atomic, payer-aware
+   * refund), record it as released with `reason` (server-only, at most 500
+   * characters kept) and set its `credits_actual` to 0. Same ownership rule
+   * as `settleDeferredChild`, and the same answers; it never refunds a
+   * committed charge.
+   */
+  releaseDeferredChild?(childJobId: string, reason: string): Promise<PluginDeferredSettleOutcome>
+  /**
    * The recast direction gate's re-take waiver predicate, as ONE dedicated
    * query (six filters + an OR — the generic select mirror cannot express
    * it, and `maybeSingle()` errors on ≥2 rows). True iff a completed recast
@@ -2814,10 +2830,39 @@ export interface PluginInjectedResponse {
 
 /** Narrow mirror of `lib/llm-client.ts` llmCompleteStructured, shaped to the
  * pro planner's single call site (minimal structural interface rule). */
+/**
+ * What `tk.jobs.settleDeferredChild` / `releaseDeferredChild` did:
+ *  - `"settled"` / `"released"`: the child ends so — now, or it already had
+ *    (a repeated call answers the same);
+ *  - `"scheduled"` (release only): the child has not completed yet; the
+ *    release is recorded and carried out when it completes, so that take is
+ *    never charged (a child that fails instead is refunded by its failure
+ *    path, once). A repeated release answers `"scheduled"` again;
+ *  - `"not_deferred"`: the child was not deferred; or, for a settle, it has
+ *    not completed (settle a child only after it completed); or it failed or
+ *    was cancelled (refunded by its failure path); nothing was done;
+ *  - `"already_decided"`: the OTHER decision was taken first (by this plugin,
+ *    the host's sweep or a delete) — a settle after a scheduled release
+ *    included; nothing more was charged;
+ *  - `"pending"`: the decision is recorded but the commit or refund did not
+ *    land; the host's sweep finishes it (a later call with the same decision
+ *    retries it at once).
+ */
+export type PluginDeferredSettleOutcome = "settled" | "released" | "scheduled" | "not_deferred" | "already_decided" | "pending"
+
 export interface PluginLlmRequest {
   model: string
   system?: string
   prompt: string
+  /**
+   * Image links (at most 5) sent beside `prompt` as image parts
+   * (`capabilities.llmStructuredImages`). Each must be an https link on this
+   * deployment's own media host (its R2 public URL or fallback domain, as
+   * `tk.storage.r2Url` and the upload helpers answer them); any other link
+   * is refused with a throw before any call. With any image the call is pinned to
+   * the direct lane (an explicit `requireLane` still wins). Additive-optional.
+   */
+  imageUrls?: string[]
   maxTokens?: number
   /** Sampling temperature — pinned deliberately by callers that must not ride the
    *  vendor default (the video-analysis grader pins 0 for a deterministic judge).
@@ -3909,13 +3954,13 @@ export interface PluginCapabilities {
    */
   readonly nodaroMotionShotListFps?: boolean
   /**
-   * `tk.settings.nodaroMotionFlashModel(userId)` exists: the flash-model
-   * test an admin set per Video Remake engine ("off" or "on"), answered only
-   * for a run started by an admin account (the host verifies the role). An
-   * older host has no such member: every run is made on its engine's own
-   * model.
+   * `tk.settings.nodaroMotionFlashOffer()` exists: the admin's Offer Flash
+   * per Video Remake engine ("off" or "on"), whether every user may pick
+   * that engine's Flash choice. An older host has no such member: an engine
+   * refuses every Flash choice there. (The retired admin-only
+   * `nodaroMotionFlashModel` test is no longer advertised.)
    */
-  readonly nodaroMotionFlashModel?: boolean
+  readonly nodaroMotionFlashOffer?: boolean
   /**
    * The host reads `NodaroPrivatePlugin.jobLanes()`: the concurrency lane each
    * of a plugin's job types runs in (see `PluginJobLaneClass`). An older host
@@ -4058,6 +4103,39 @@ export interface PluginCapabilities {
    * `castSwap.videoRemakeRoutes`.
    */
   readonly videoRemake?: boolean
+  /**
+   * A plugin's engine child can stay HELD after it completes. A child it makes
+   * with `tk.http.workerRequest({ method: "POST", url: "/v1/generate-video",
+   * parentJobId, payload: { ..., deferSettlement: true } })` completes as usual
+   * (status, output, `credits_actual` showing what it will cost) but its credit
+   * reservation is neither committed nor refunded: the answer then carries
+   * `settlementDeferred: true` (absent → not deferred, settled as before; a
+   * replay of the same idempotency key answers the stored job's). The
+   * plugin then calls `tk.jobs.settleDeferredChild(childJobId)` (charged exactly
+   * as its worker would have charged it) or `tk.jobs.releaseDeferredChild(
+   * childJobId, reason)` (refunded, recorded as released, `credits_actual` 0).
+   * Both answer a `PluginDeferredSettleOutcome`, are idempotent, act only on
+   * the running job's own children, and never undo the other; a release asked
+   * before the child completed answers `"scheduled"` and is carried out at its
+   * completion. A child left held is resolved by the host some minutes after
+   * its parent ends — a completed run keeps ONE take charged: if one is
+   * settled every other held take is released, else the latest is settled and
+   * the rest released; a failed or cancelled run's are released — and released
+   * when its parent runs implausibly long (12 h) or is deleted. A failed deferred child
+   * is refunded as before. Not honoured for a voiced video or outside Cloud.
+   * False (or absent): an older host, whose route ignores the field and
+   * settles the child when it completes.
+   */
+  readonly deferredChildSettlement?: boolean
+  /**
+   * `tk.llm.completeStructured` takes `imageUrls` (at most 5 https links on
+   * this deployment's own media host): each is sent to the model as an image
+   * beside the prompt, on the
+   * direct lane (never the proxied one, which can lose an image silently).
+   * Unmetered like the rest of that call. False (or absent): an older host,
+   * which sends the prompt alone.
+   */
+  readonly llmStructuredImages?: boolean
 }
 
 /**
@@ -4367,7 +4445,8 @@ export interface PluginSettingsToolkit {
    * ("off", or the Topaz target: 480p and 720p "720p" | "1080p" | "4k", 1080p
    * "1080p" | "4k"), a resolution never saved at its default (480p and 720p
    * "1080p", 1080p "4k"); every resolution "off" while this deployment does
-   * not run Topaz (its model withheld or switched off). Null only when this host's engine does not declare
+   * not run Topaz (its model withheld or switched off), and `flash`, Prism Flash's 480p and 720p rows (each "1080p"
+   * by default). Null only when this host's engine does not declare
    * `castSwap.preciseUpscale`. Returns a fresh object. REJECTS when the
    * settings could not be read. Advertised as
    * `capabilities.nodaroMotionPreciseUpscale`.
@@ -4450,29 +4529,21 @@ export interface PluginSettingsToolkit {
    */
   nodaroMotionShotListFps?(): Promise<PluginNodaroMotionShotListFps | null>
   /**
-   * The admin's flash-model test per Video Remake engine, for ONE run: it
-   * applies only to a run started by an admin account. `userId` is the
-   * account the run's request was authenticated as; the host reads its role
-   * itself and answers the engines that are on (each under its current AND
-   * its earlier keys) only when that account is an admin. Null otherwise:
-   * no `userId`, an account that is no admin, never saved or every engine
-   * off, and to an engine that does not declare `castSwap.flashModel` (it
-   * never asks). There is no deployment default: off until an admin turns
-   * it on. Returns a copy the plugin may change freely. REJECTS when the
-   * settings or the account's role could not be read (the engine then makes
-   * the run on its own model).
-   * Advertised as `capabilities.nodaroMotionFlashModel`.
+   * The admin's Offer Flash per Video Remake engine: each engine whose Flash
+   * choice every user may pick ("on"), by its public id. Null when it was
+   * never saved or every engine is off, and to an engine that does not
+   * declare `castSwap.flashChoices` (it never asks). There is no deployment
+   * default: off until an admin turns it on. Returns a copy the plugin may
+   * change freely. REJECTS when the settings could not be read (the engine
+   * then refuses the Flash choice). Advertised as
+   * `capabilities.nodaroMotionFlashOffer`.
    */
-  nodaroMotionFlashModel?(userId?: string): Promise<PluginNodaroMotionFlashModel | null>
+  nodaroMotionFlashOffer?(): Promise<PluginNodaroMotionFlashOffer | null>
 }
 
-/**
- * Video Remake's flash-model test per engine, keyed by the PUBLIC engine ids
- * (current and earlier): an engine listed is on; one left out is off
- * (`"off"` is never answered).
- */
-export type PluginNodaroMotionFlashModel = {
-  readonly [publicEngineId: string]: "off" | "on"
+/** Video Remake's Offer Flash per engine, keyed by the PUBLIC engine ids: an engine listed is offered; one left out is not. */
+export type PluginNodaroMotionFlashOffer = {
+  readonly [publicEngineId: string]: "on"
 }
 
 /** Video Remake's 3D previz setting as a plugin is answered it: `enabled` resolved by the host. */
@@ -4543,6 +4614,11 @@ export type PluginNodaroMotionPreciseUpscale = {
   readonly "480p": "off" | "720p" | "1080p" | "4k"
   readonly "720p": "off" | "720p" | "1080p" | "4k"
   readonly "1080p": "off" | "1080p" | "4k"
+  /** Prism Flash's rows (decided 2026-11-22; no 1080p), each "1080p" by default: a Prism Flash Precise run takes these. */
+  readonly flash: {
+    readonly "480p": "off" | "720p" | "1080p" | "4k"
+    readonly "720p": "off" | "720p" | "1080p" | "4k"
+  }
 }
 
 /** Video Remake's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
@@ -5126,13 +5202,16 @@ export interface PluginSupports {
    *   checks the written list once against the clip's measured cuts.
    *   Additive-optional: absent ⇒ the engine never reads the setting
    *   (lib/nodaro-motion-shot-list-fps.ts `engineTakesShotListFps`).
-   * - `flashModel`: while the admin's per-engine flash-model test says "on"
-   *   (`tk.settings.nodaroMotionFlashModel(userId)`), the engine makes a new
-   *   run of that engine STARTED BY AN ADMIN ACCOUNT on the faster model of
-   *   the same family (every other account's run is unchanged), and
-   *   refuses a run that model cannot take. Additive-optional: absent ⇒ the
-   *   engine never reads the setting
-   *   (lib/nodaro-motion-flash-model.ts `engineTakesFlashModel`).
+   * - `flashChoices` (2026-11-22): the engine takes the Flash choices
+   *   (`engine: "nodaro-prism-flash"` / `"nodaro-pulse-flash"`, listed in
+   *   `engines`), each its engine's run on the faster model of the same
+   *   family at that model's price, admitted only while the admin's Offer
+   *   Flash says "on" (`tk.settings.nodaroMotionFlashOffer()`), refused 409
+   *   `flash_not_offered` otherwise. Additive-optional: absent ⇒ the engine
+   *   refuses a Flash id, never reads the setting, and `style-choice`
+   *   answers `flash` false (lib/nodaro-motion-flash-offer.ts
+   *   `engineTakesFlashChoices`). An engine that still declares the retired
+   *   `flashModel` is never told the old test's setting.
    * - `roleFace` (Cast Swap engine ≥ 0.495.0, decided 2026-11-20): a person
    *   role (a direct run's, its estimate's and a trend run's) takes
    *   `face: "new" | "original"` beside `body` / `outfit` / `hair`. Absent
@@ -5297,7 +5376,7 @@ export interface PluginSupports {
     readonly trendRun: boolean
     readonly faceMasking?: boolean
     readonly trendPrePrompt?: boolean
-    readonly engines?: readonly ("nodaro-prism" | "nodaro-pulse" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
+    readonly engines?: readonly ("nodaro-prism" | "nodaro-pulse" | "nodaro-prism-flash" | "nodaro-pulse-flash" | "motion-prism" | "motion-pulse" | "motion-pro" | "motion-lite" | "seedance-2-5" | "kling-4")[]
     readonly engineAliases?: boolean
     readonly videoRemakeRoutes?: boolean
     readonly storedFaceMask?: boolean
@@ -5354,7 +5433,9 @@ export interface PluginSupports {
     readonly previz?: boolean
     readonly shotLock?: boolean
     readonly shotLockRunTypes?: boolean
+    /** The retired admin-only flash-model test (engines ≤ 0.503.0): read by nothing. */
     readonly flashModel?: boolean
+    readonly flashChoices?: boolean
     readonly shotListFps?: boolean
     readonly roleFace?: boolean
     readonly roleFaceStoredMask?: boolean

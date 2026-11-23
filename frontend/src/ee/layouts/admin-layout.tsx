@@ -50,6 +50,7 @@ import {
   Radar,
   Gavel,
   Receipt,
+  OctagonAlert,
 } from "lucide-react"
 import { useAdminComplaintCount } from "@/ee/hooks/queries/use-admin-complaints-queries"
 import { Button } from "@/components/ui/button"
@@ -108,6 +109,7 @@ const ADMIN_NAV = [
   ...(hasCredits() ? [{ href: "/admin/trend-radar", label: "Trend Radar", icon: Radar }] : []),
   ...(hasCredits() ? [{ href: "/admin/video-remake", label: "Video Remake", icon: Clapperboard }] : []),
   ...(hasCredits() ? [{ href: "/admin/motion-price-check", label: "Video Remake price check", icon: Receipt }] : []),
+  ...(hasCredits() ? [{ href: "/admin/remake-faults", label: "Video Remake faults", icon: OctagonAlert }] : []),
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },

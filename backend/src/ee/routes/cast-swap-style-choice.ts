@@ -12,7 +12,8 @@
  *                                      planRoles: boolean,
  *                                      planRolesPreviz: boolean,
  *                                      previz: boolean,
- *                                      roleFace: boolean }
+ *                                      roleFace: boolean,
+ *                                      flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean } }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -113,6 +114,17 @@
  * follows the engine alone and is in every answer, the failed-read one
  * included. A client reading a server from before it finds none and treats it
  * as false.
+ *
+ * `flash` says, per engine, whether its Flash choice is offered here — Prism
+ * Flash (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Pulse Flash
+ * (`"nodaro-pulse-flash"`) beside Nodaro Pulse (decided 2026-11-22): true only
+ * while this environment's engine declares `castSwap.flashChoices` AND the
+ * admin's Offer Flash is on for the engine (`flashOfferedEngines`,
+ * lib/video-remake-flash.ts, the same rule the engine hook refuses by). It
+ * reads the settings, so a failed read answers false for both, as does an
+ * engine without it. Keyed by the ENGINES (a Flash choice reads every other map
+ * here under its engine). A client reading a server from before it finds none
+ * and offers no Flash choice.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -128,6 +140,8 @@ import { engineTakesPreviz, previzEnabled } from "../../lib/nodaro-motion-previz
 import { previzOfferedByDefault } from "../../lib/nodaro-motion-previz-default.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { engineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
+import { flashOfferedEngines } from "../../lib/video-remake-flash.js"
+import { engineTakesFlashChoices } from "../../lib/nodaro-motion-flash-offer.js"
 
 /** How long a client (or a CDN) may keep the answer: about the settings cache's own life. */
 export const STYLE_CHOICE_MAX_AGE_SECONDS = 60
@@ -170,6 +184,8 @@ function answer(
   roleFace: boolean,
   /** The engine plans a previz clip's roles (`castSwap.planRolesPreviz`); answered only with `planRoles` and `previz`. */
   takesPlanRolesPreviz: boolean,
+  /** Per engine, whether its Flash choice is offered (`flashOfferedEngines`). */
+  flash: Record<NodaroMotionEngine, boolean>,
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -181,6 +197,7 @@ function answer(
     planRolesPreviz: takesPlanRolesPreviz && planRoles && previz,
     previz,
     roleFace,
+    flash: withPreviousEngineIds(flash),
   }
 }
 
@@ -201,9 +218,10 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const takesPreviz = engineTakesPreviz(castSwap)
   const roleFace = engineTakesRoleFace(castSwap)
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
-  const withoutSettings = () => answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false)
-  // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles and takes no 3D previz clip.
-  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz) {
+  const withoutSettings = () =>
+    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap))
+  // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles, takes no 3D previz clip and no Flash choice.
+  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz && !engineTakesFlashChoices(castSwap)) {
     return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
   }
   let settings: Awaited<ReturnType<typeof getAppSettings>> | null = null
@@ -228,6 +246,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
       takesPreviz && previzEnabled(settings.nodaro_motion_previz, previzOfferedByDefault()),
       roleFace,
       engineTakesPlanRolesPreviz(castSwap),
+      flashOfferedEngines(settings, castSwap),
     ),
   )
 }

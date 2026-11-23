@@ -1,4 +1,4 @@
-import { nodaroMotionEngineFrom } from "@nodaro/shared/models"
+import { nodaroMotionEngineFrom, videoRemakeFlashEngineFrom } from "@nodaro/shared/models"
 import type { NodaroClientCore } from "../core.js"
 
 /**
@@ -56,7 +56,10 @@ import type { NodaroClientCore } from "../core.js"
  * it sends no images; Nodaro Pulse's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
  * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
- * only).
+ * only).  A Flash choice ({@link VideoRemakeFlashEngine}) adds 409
+ * `flash_not_offered` (not offered here) and 400
+ * `flash_model_unsupported` (what it cannot take: 1080p, a draft, Prism
+ * Flash's 10 images, Pulse Flash's 20 seconds).
  */
 
 /**
@@ -71,6 +74,29 @@ import type { NodaroClientCore } from "../core.js"
  *   run it again at 1080p instead. A preview is still 4 s from `previewStart`.
  */
 export type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse"
+
+/**
+ * A Flash choice: an engine's run on the faster, lower-cost model of the same
+ * family, at that model's own price (the estimate shows it). Offered only
+ * where {@link VideoRemakeResource.styleChoice} answers `flash` true for the
+ * engine; anywhere else a run or estimate naming one is refused 409
+ * `flash_not_offered`. A trend may be made on one too.
+ *
+ * - `"nodaro-prism-flash"` (Prism Flash, a Nodaro Prism run): 480p (the
+ *   default, plain) or 720p; no draft and no Full Quality; at most 10 images
+ *   per run.
+ * - `"nodaro-pulse-flash"` (Pulse Flash, a Nodaro Pulse run): 720p; no draft
+ *   and no Full Quality; at most 20 seconds of output, and 20 seconds of
+ *   reference video in all.
+ *
+ * What a Flash choice cannot take is refused 400 `flash_model_unsupported`,
+ * before anything is held. The job records the choice in `input_data.engine`,
+ * and a completed job's output in its `engine`.
+ */
+export type VideoRemakeFlashEngine = "nodaro-prism-flash" | "nodaro-pulse-flash"
+
+/** What a run may name as its `engine`: an engine, or (where offered) its Flash choice. */
+export type VideoRemakeEngineChoice = VideoRemakeEngine | VideoRemakeFlashEngine
 
 /**
  * The engine ids an older client sent: the earlier public ids
@@ -310,12 +336,13 @@ export interface VideoRemakeParams {
   /** Where the preview starts, in seconds. Default 0. */
   previewStart?: number
   /**
-   * The engine (see {@link VideoRemakeEngine}). Default `"nodaro-prism"`. The job
-   * records it in `input_data.engine`, and a completed job's output in its
-   * `engine`. The ids an older client sent ({@link VideoRemakeEngineLegacyId})
-   * are still accepted.
+   * The engine (see {@link VideoRemakeEngine}), or where it is offered its
+   * Flash choice (see {@link VideoRemakeFlashEngine}). Default
+   * `"nodaro-prism"`. The job records it in `input_data.engine`, and a
+   * completed job's output in its `engine`. The ids an older client sent
+   * ({@link VideoRemakeEngineLegacyId}) are still accepted.
    */
-  engine?: VideoRemakeEngine | VideoRemakeEngineLegacyId
+  engine?: VideoRemakeEngineChoice | VideoRemakeEngineLegacyId
   /**
    * How the run follows the clip (see {@link VideoRemakeStyle}). Default
    * `"precise"`; the job records it in `input_data.style`.
@@ -789,10 +816,10 @@ export type VideoRemakePlanRolesRefusalCode =
 export interface VideoRemakeEstimate {
   /**
    * The engine the run would use, by its public id (absent from an older
-   * server = `"nodaro-prism"`). An id an older server answers is read as the
-   * public id it names.
+   * server = `"nodaro-prism"`), or the Flash choice it was asked for. An id an
+   * older server answers is read as the public id it names.
    */
-  engine?: VideoRemakeEngine
+  engine?: VideoRemakeEngineChoice
   /**
    * What is held when the run starts. The run is charged what it actually
    * costs, which is expected to be `expectedCredits`.
@@ -1090,6 +1117,17 @@ export interface VideoRemakeStyleChoice {
    * sent `face: "original"` anyway is refused 409 `engine_unsupported`).
    */
   roleFace?: boolean
+  /**
+   * Per engine, whether its Flash choice is offered here: Prism Flash
+   * (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Pulse Flash
+   * (`"nodaro-pulse-flash"`) beside Nodaro Pulse (see
+   * {@link VideoRemakeFlashEngine}). `true` only where the engine runs it and
+   * Nodaro offers it on this deployment; a run naming one anywhere else is
+   * refused 409 `flash_not_offered`. Every other map here is read for a Flash
+   * choice under its engine. Absent from an older server, and an engine
+   * missing from it: `false` (offer the two engines alone).
+   */
+  flash?: Partial<Record<VideoRemakeEngine, boolean>>
 }
 
 /**
@@ -1339,6 +1377,8 @@ export class VideoRemakeResource {
   /** Quote a run before starting it (`POST /v1/video-remake/estimate`); spends nothing. */
   async estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> {
     const quote = await this.client.request<VideoRemakeEstimate>("POST", "/v1/video-remake/estimate", { body: params })
+    // A Flash choice is answered as it is (never read as its engine).
+    if (videoRemakeFlashEngineFrom(quote?.engine)) return quote
     // An older server names the engine by an earlier id: answered as the public id it names.
     const engine = nodaroMotionEngineFrom(quote?.engine)
     return engine && engine !== quote.engine ? { ...quote, engine } : quote

@@ -227,6 +227,79 @@ export const CAST_SWAP_ENGINE_IDS_ACCEPTED = [
 ] as const satisfies readonly (NodaroMotionEngine | NodaroMotionLegacyEngine | CastSwapEngine)[]
 
 /**
+ * Video Remake's FLASH CHOICES (2026-11-22): each engine's faster, lower-cost
+ * model offered as a choice of its own beside the engine, picked per run and
+ * priced at that model's own rate — `"nodaro-prism-flash"` (Prism Flash, a
+ * Nodaro Prism run) and `"nodaro-pulse-flash"` (Pulse Flash, a Nodaro Pulse
+ * run). A deployment offers each only while its admin's "Offer Flash" is on
+ * for the engine (`GET /v1/video-remake/style-choice` answers `flash`); a
+ * request naming one anywhere else is refused 409 `flash_not_offered`.
+ *
+ * A choice, NOT an engine: never a key of a per-engine map (those stay keyed
+ * by `NODARO_MOTION_ENGINES`), and `castSwapEngineFrom` does not read it (a
+ * reader that only knows the two engines must not silently run Flash as the
+ * engine). Read with `videoRemakeFlashEngineFrom` / `nodaroMotionEngineOfFlash`.
+ */
+export const VIDEO_REMAKE_FLASH_ENGINES = ["nodaro-prism-flash", "nodaro-pulse-flash"] as const
+
+export type VideoRemakeFlashEngine = (typeof VIDEO_REMAKE_FLASH_ENGINES)[number]
+
+/** The name people read for each Flash choice (exactly these). */
+export const VIDEO_REMAKE_FLASH_ENGINE_NAMES = {
+  "nodaro-prism-flash": "Prism Flash",
+  "nodaro-pulse-flash": "Pulse Flash",
+} as const satisfies Record<VideoRemakeFlashEngine, string>
+
+/** The engine each Flash choice is a run of. */
+export const NODARO_MOTION_ENGINE_OF_FLASH = {
+  "nodaro-prism-flash": "nodaro-prism",
+  "nodaro-pulse-flash": "nodaro-pulse",
+} as const satisfies Record<VideoRemakeFlashEngine, NodaroMotionEngine>
+
+/** Each engine's Flash choice. */
+export function videoRemakeFlashEngineOf(engine: NodaroMotionEngine): VideoRemakeFlashEngine {
+  return engine === "nodaro-pulse" ? "nodaro-pulse-flash" : "nodaro-prism-flash"
+}
+
+/** The Flash choice a value names; undefined for anything else (an engine id included). */
+export function videoRemakeFlashEngineFrom(value: unknown): VideoRemakeFlashEngine | undefined {
+  return (VIDEO_REMAKE_FLASH_ENGINES as readonly unknown[]).includes(value) ? (value as VideoRemakeFlashEngine) : undefined
+}
+
+/**
+ * The internal engine whose RUN a value names: a Flash choice's engine (a Prism
+ * Flash run is a Nodaro Prism run in every setting), else `castSwapEngineFrom`.
+ * For the readers that apply an engine's settings to a run (its audio, its
+ * reference audio): never for one that must refuse a Flash choice it cannot run.
+ */
+export function castSwapEngineOfRun(value: unknown): CastSwapEngine | undefined {
+  const flash = videoRemakeFlashEngineFrom(value)
+  return flash ? CAST_SWAP_ENGINE_OF_NODARO_MOTION[NODARO_MOTION_ENGINE_OF_FLASH[flash]] : castSwapEngineFrom(value)
+}
+
+/** The engine a Flash choice is a run of. */
+export function nodaroMotionEngineOfFlash(choice: VideoRemakeFlashEngine): NodaroMotionEngine {
+  return NODARO_MOTION_ENGINE_OF_FLASH[choice]
+}
+
+/**
+ * What each Flash choice renders, the default first: Prism Flash 480p (plain)
+ * or 720p, Pulse Flash 720p. Neither has a draft, 1080p or Full Quality;
+ * Prism Flash takes at most `VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES` pictures,
+ * Pulse Flash at most `VIDEO_REMAKE_FLASH_PULSE_MAX_SEC` seconds of output.
+ */
+export const VIDEO_REMAKE_FLASH_RESOLUTIONS = {
+  "nodaro-prism-flash": ["480p", "720p"],
+  "nodaro-pulse-flash": ["720p"],
+} as const satisfies Record<VideoRemakeFlashEngine, readonly ("480p" | "720p" | "1080p")[]>
+
+/** The most images one Prism Flash run sends (Nodaro Prism: 30). */
+export const VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES = 10
+
+/** The longest output one Pulse Flash run renders, whole seconds (Nodaro Pulse: 30). */
+export const VIDEO_REMAKE_FLASH_PULSE_MAX_SEC = 20
+
+/**
  * The resolutions each engine renders, the default first. Seedance 2.5's 480p
  * is plain unless a run asks for a draft (`draft` is 480p only); Kling 4 has
  * no draft and no 480p.

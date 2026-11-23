@@ -20,7 +20,7 @@
  * sent before (`pulseAudioSent`).
  */
 import { z } from "zod"
-import { castSwapEngineFrom } from "@nodaro/shared/models"
+import { castSwapEngineOfRun } from "@nodaro/shared/models"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
 
 export const CAST_SWAP_PULSE_AUDIO = ["original", "generated"] as const
@@ -56,6 +56,6 @@ export function engineTakesPulseAudio(): boolean {
  */
 export function pulseAudioSent(engine: unknown, choice: CastSwapPulseAudio | null | undefined): { pulseAudio?: "generated" } {
   if (choice !== "generated") return {}
-  if (castSwapEngineFrom(engine) !== "kling-4") return {}
+  if (castSwapEngineOfRun(engine) !== "kling-4") return {}
   return engineTakesPulseAudio() ? { pulseAudio: "generated" } : {}
 }

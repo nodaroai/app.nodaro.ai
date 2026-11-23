@@ -103,3 +103,9 @@ a9cc2b67ce2c71ad05a6c28810ed46f5268c74d2:backend/src/providers/kie/__tests__/nem
 # credential (PR #3130). The live line no longer names them (the fixtures are
 # picked by prefix); this entry neutralises only the pushed commit that did.
 708e5f595688a82ba621d802c0b6fbdfbd5c3db3:backend/src/lib/__tests__/pdf-pages.test.ts:generic-api-key:91
+
+# backend/src/routes/__tests__/generate-video-defer-settlement.test.ts: a test request's
+# idempotency key (`k-0123456789abcdef`), not a credential (PR #3461). The live line is now
+# a low-entropy key marked `gitleaks:allow` (content-keyed, survives the squash); this pins
+# the branch commit that first carried it.
+6c6b67db91d5799703b7df94df0eb4a15a74f6cb:backend/src/routes/__tests__/generate-video-defer-settlement.test.ts:generic-api-key:191

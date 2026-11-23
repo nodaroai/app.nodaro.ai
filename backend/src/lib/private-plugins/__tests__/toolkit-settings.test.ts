@@ -14,7 +14,7 @@ import type {
   PluginNodaroMotionPreviz,
   PluginNodaroMotionShotLock,
   PluginNodaroMotionShotListFps,
-  PluginNodaroMotionFlashModel,
+  PluginNodaroMotionFlashOffer,
   PluginPromptPartId,
   PluginSupports,
 } from "../types.js"
@@ -30,7 +30,7 @@ import type { ByEngineForPlugin } from "../../nodaro-motion-engine-keys.js"
 import type { NodaroMotionPrevizForPlugin } from "../../nodaro-motion-previz.js"
 import type { NodaroMotionShotLockForPlugin } from "../../nodaro-motion-shot-lock.js"
 import type { NodaroMotionShotListFpsForPlugin } from "../../nodaro-motion-shot-list-fps.js"
-import type { NodaroMotionFlashModelForPlugin } from "../../nodaro-motion-flash-model.js"
+import type { NodaroMotionFlashOfferForPlugin } from "../../nodaro-motion-flash-offer.js"
 
 /**
  * `tk.settings.nodaroMotionMasking()` — the admin's face masking per Video
@@ -38,7 +38,7 @@ import type { NodaroMotionFlashModelForPlugin } from "../../nodaro-motion-flash-
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, preciseUpscale: null as unknown, topazDisabled: false, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashModel: null as unknown, faceGrow: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, preciseUpscale: null as unknown, topazDisabled: false, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashOffer: null as unknown, faceGrow: null as unknown, flashModel: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -47,7 +47,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_precise_upscale: h.preciseUpscale, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_model: h.flashModel, nodaro_motion_face_grow: h.faceGrow }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_precise_upscale: h.preciseUpscale, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_offer: h.flashOffer, nodaro_motion_flash_model: h.flashModel, nodaro_motion_face_grow: h.faceGrow }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -1368,88 +1368,77 @@ describe("tk.settings.nodaroMotionShotListFps", () => {
 })
 
 /**
- * `tk.settings.nodaroMotionFlashModel(userId)`: the admin's flash-model test per Video Remake engine, answered for ONE
- * run and only when the account that started it is an admin (the host reads the role itself): null when never saved,
- * every engine is off, this host's engine does not declare `castSwap.flashModel`, no account is named, or the account
- * is no admin; else only the engines that are on.
+ * `tk.settings.nodaroMotionFlashOffer()`: the admin's Offer Flash per Video Remake engine (whether every user may pick
+ * its Flash choice): null when never saved, every engine is off, or this host's engine does not declare
+ * `castSwap.flashChoices`; else the engines that are on. The retired admin-only flash-model test is neither advertised
+ * nor served, whatever its stored row says.
  */
-describe("tk.settings.nodaroMotionFlashModel", () => {
+describe("tk.settings.nodaroMotionFlashOffer", () => {
   const ADMIN = "00000000-0000-4000-8000-0000000000ad"
-  const MEMBER = "00000000-0000-4000-8000-0000000000aa"
   beforeEach(() => {
+    h.flashOffer = null
     h.flashModel = null
     h.admins = [ADMIN]
-    h.adminCheckFails = false
     h.adminChecks = 0
     h.reads = 0
     h.failed = false
     _resetPluginSupportsForTests()
   })
-  const flashModelEngine = () => setPluginSupports({ castSwap: { ...CS, flashModel: true } } as never)
-  const read = (userId: string | undefined = ADMIN) => buildToolkit().settings!.nodaroMotionFlashModel!(userId)
+  const flashEngine = () => setPluginSupports({ castSwap: { ...CS, flashChoices: true } } as never)
+  const read = () => buildToolkit().settings!.nodaroMotionFlashOffer!()
 
-  it("advertises nodaroMotionFlashModel and answers null to an engine without castSwap.flashModel, whatever is saved", async () => {
-    expect(buildToolkit().capabilities?.nodaroMotionFlashModel).toBe(true)
-    expect(typeof buildToolkit().settings?.nodaroMotionFlashModel).toBe("function")
-    h.flashModel = { "nodaro-prism": "on", "nodaro-pulse": "on" }
+  it("advertises nodaroMotionFlashOffer and answers null to an engine without castSwap.flashChoices, whatever is saved", async () => {
+    expect(buildToolkit().capabilities?.nodaroMotionFlashOffer).toBe(true)
+    expect(typeof buildToolkit().settings?.nodaroMotionFlashOffer).toBe("function")
+    h.flashOffer = { "nodaro-prism": "on", "nodaro-pulse": "on" }
     expect(await read()).toBeNull()
-    for (const castSwap of [CS, { ...CS, flashModel: false }, { ...CS, shotLock: true }]) {
+    for (const castSwap of [CS, { ...CS, flashChoices: false }, { ...CS, flashModel: true }, { ...CS, shotLock: true }]) {
       setPluginSupports({ castSwap } as never)
       expect(await read(), JSON.stringify(castSwap)).toBeNull()
     }
+  })
+
+  it("the retired admin-only test is neither advertised nor served, even with its row on: no engine can move a run to Flash", async () => {
+    h.flashModel = { "nodaro-prism": "on", "nodaro-pulse": "on" }
+    setPluginSupports({ castSwap: { ...CS, flashModel: true, flashChoices: true } } as never)
+    const tk = buildToolkit()
+    expect((tk.capabilities as Record<string, unknown> | undefined)?.nodaroMotionFlashModel).toBeUndefined()
+    expect((tk.settings as Record<string, unknown> | undefined)?.nodaroMotionFlashModel).toBeUndefined()
+    // Nor does the old row offer a Flash choice.
+    expect(await read()).toBeNull()
     expect(h.adminChecks).toBe(0)
   })
 
-  it("rejects when the settings could not be read, never answering null (off)", async () => {
-    flashModelEngine()
+  it("rejects when the settings could not be read, never answering null (the engine then refuses the choice)", async () => {
+    flashEngine()
     h.failed = true
     await expect(read()).rejects.toThrow(/could not be read/)
     _resetPluginSupportsForTests()
     await expect(read()).rejects.toThrow(/could not be read/)
   })
 
-  it("answers null when it was never saved, or every engine is off, without reading anyone's role", async () => {
-    flashModelEngine()
+  it("answers null when it was never saved, or every engine is off", async () => {
+    flashEngine()
     expect(await read()).toBeNull()
-    h.flashModel = {}
+    h.flashOffer = {}
     expect(await read()).toBeNull()
-    h.flashModel = { "nodaro-prism": "off" }
+    h.flashOffer = { "nodaro-prism": "off" }
     expect(await read()).toBeNull()
     expect(h.reads).toBe(3)
+  })
+
+  it("each engine that is on, by its public id, a copy the plugin may change; the same for every account (no role read)", async () => {
+    flashEngine()
+    h.flashOffer = { "nodaro-pulse": "on" }
+    const got = await read()
+    expect(got).toEqual({ "nodaro-pulse": "on" })
+    ;(got as Record<string, string>)["nodaro-pulse"] = "off"
+    expect(h.flashOffer).toEqual({ "nodaro-pulse": "on" })
     expect(h.adminChecks).toBe(0)
   })
 
-  it("an admin account's run: each engine that is on under the current and the earlier keys, a copy the plugin may change", async () => {
-    flashModelEngine()
-    h.flashModel = { "nodaro-pulse": "on" }
-    const got = await read(ADMIN)
-    expect(got).toEqual({ "nodaro-pulse": "on", "motion-pulse": "on", "motion-lite": "on" })
-    ;(got as Record<string, string>)["nodaro-pulse"] = "off"
-    expect(h.flashModel).toEqual({ "nodaro-pulse": "on" })
-    expect(h.adminChecks).toBe(1)
-  })
-
-  it("any other account's run, and a call that names no account: null, as if the switch were off", async () => {
-    flashModelEngine()
-    h.flashModel = { "nodaro-prism": "on", "nodaro-pulse": "on" }
-    expect(await read(MEMBER)).toBeNull()
-    expect(h.adminChecks).toBe(1)
-    // An engine build that asks without an account (or with nothing usable) is never answered "on".
-    expect(await buildToolkit().settings!.nodaroMotionFlashModel!()).toBeNull()
-    expect(await read("")).toBeNull()
-    expect(await (buildToolkit().settings!.nodaroMotionFlashModel as (u: unknown) => Promise<unknown>)({ id: ADMIN })).toBeNull()
-    expect(h.adminChecks).toBe(1)
-  })
-
-  it("an account whose role cannot be read: rejects, never answered as an admin", async () => {
-    flashModelEngine()
-    h.flashModel = { "nodaro-prism": "on" }
-    h.adminCheckFails = true
-    await expect(read(ADMIN)).rejects.toThrow(/Admin check failed/)
-  })
-
-  it("what the host answers is the plugin's PluginNodaroMotionFlashModel", () => {
-    expectTypeOf<NodaroMotionFlashModelForPlugin>().toExtend<PluginNodaroMotionFlashModel>()
+  it("what the host answers is the plugin's PluginNodaroMotionFlashOffer", () => {
+    expectTypeOf<NodaroMotionFlashOfferForPlugin>().toExtend<PluginNodaroMotionFlashOffer>()
   })
 })
 
@@ -1483,24 +1472,25 @@ describe("tk.settings.nodaroMotionPreciseUpscale", () => {
 
   it("answers the defaults when it was never saved", async () => {
     upscalingEngine()
-    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "1080p", "720p": "1080p", "1080p": "4k" })
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "1080p", "720p": "1080p", "1080p": "4k", flash: { "480p": "1080p", "720p": "1080p" } })
   })
 
   it("answers the stored choices, each resolution left out at its default, a fresh object", async () => {
     upscalingEngine()
-    h.preciseUpscale = { "480p": "off", "1080p": "1080p" }
+    h.preciseUpscale = { "480p": "off", "1080p": "1080p", flash: { "720p": "off" } }
     const got = await buildToolkit().settings!.nodaroMotionPreciseUpscale!()
-    expect(got).toStrictEqual({ "480p": "off", "720p": "1080p", "1080p": "1080p" })
-    ;(got as Record<string, string>)["480p"] = "4k"
-    expect(h.preciseUpscale).toEqual({ "480p": "off", "1080p": "1080p" })
+    // Prism Flash's rows are its own (a row left out at its default), never Nodaro Prism's 480p.
+    expect(got).toStrictEqual({ "480p": "off", "720p": "1080p", "1080p": "1080p", flash: { "480p": "1080p", "720p": "off" } })
+    ;(got as unknown as Record<string, string>)["480p"] = "4k"
+    expect(h.preciseUpscale).toEqual({ "480p": "off", "1080p": "1080p", flash: { "720p": "off" } })
   })
 
   it("answers every resolution off while this deployment does not run Topaz, whatever is saved", async () => {
     upscalingEngine()
     h.topazDisabled = true
-    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "off", "720p": "off", "1080p": "off" })
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "off", "720p": "off", "1080p": "off", flash: { "480p": "off", "720p": "off" } })
     h.preciseUpscale = { "720p": "4k" }
-    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "off", "720p": "off", "1080p": "off" })
+    expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toStrictEqual({ "480p": "off", "720p": "off", "1080p": "off", flash: { "480p": "off", "720p": "off" } })
     // Still null to an engine without the flag.
     setPluginSupports({ castSwap: { ...CS } } as never)
     expect(await buildToolkit().settings!.nodaroMotionPreciseUpscale!()).toBeNull()

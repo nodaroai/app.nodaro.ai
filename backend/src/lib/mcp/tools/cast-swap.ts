@@ -112,7 +112,12 @@ import {
   castSwapEngineFrom,
   nodaroMotionEngineName,
   nodaroMotionEngineOf,
+  nodaroMotionEngineOfFlash,
+  videoRemakeFlashEngineFrom,
+  VIDEO_REMAKE_FLASH_ENGINES,
+  VIDEO_REMAKE_FLASH_ENGINE_NAMES,
   type NodaroMotionEngine,
+  type VideoRemakeFlashEngine,
 } from "@nodaro/shared/models"
 import type { McpSession } from "../session.js"
 import { mcpInject } from "../internal-request.js"
@@ -233,10 +238,12 @@ interface CastSwapQuote {
  */
 export const castSwapEngineArg = z.preprocess(
   (v) => {
+    // A Flash choice as it is (never read as its engine); every other id as the public id it names.
+    if (videoRemakeFlashEngineFrom(v)) return v
     const engine = castSwapEngineFrom(v)
     return engine ? nodaroMotionEngineOf(engine) : v
   },
-  z.enum(NODARO_MOTION_ENGINES),
+  z.enum([...NODARO_MOTION_ENGINES, ...VIDEO_REMAKE_FLASH_ENGINES]),
 )
 
 /** The longest custom style a run takes, in characters (the engine's own limit; the route refuses past it). */
@@ -561,7 +568,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         preview_start: z.number().min(0).optional().describe("Seconds, default 0; preview_start + 4 must fit the clip."),
         engine: castSwapEngineArg
           .optional()
-          .describe('Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality.'),
+          .describe(
+            'Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality. Where offered, at a lower price (else flash_not_offered): "nodaro-prism-flash" (480p or 720p, at most 10 images) and "nodaro-pulse-flash" (720p, at most 20 s); neither has a draft or Full Quality.',
+          ),
         style: z
           .enum(CAST_SWAP_STYLES)
           .optional()
@@ -603,8 +612,11 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
+      // A Flash choice: sent as it is (the route admits it only where offered: flash_not_offered otherwise); every
+      // rule here reads its engine.
+      const flash = videoRemakeFlashEngineFrom(args.engine)
       // The internal id: what every Cast Swap engine takes on the wire (an older one knows no other).
-      const engine = args.engine !== undefined ? castSwapEngineFrom(args.engine) : undefined
+      const engine = flash !== undefined ? castSwapEngineFrom(nodaroMotionEngineOfFlash(flash)) : args.engine !== undefined ? castSwapEngineFrom(args.engine) : undefined
       // An engine that predates the choice drops an `engine` it does not know and runs Prism:
       // never send it a body that names another engine (quote or run).
       if (engine !== undefined && !loadedEngineRuns(engine)) {
@@ -727,7 +739,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         ...(args.post_prompt !== undefined ? { postPrompt: args.post_prompt } : {}),
         ...(args.preview !== undefined ? { preview: args.preview } : {}),
         ...(args.preview_start !== undefined ? { previewStart: args.preview_start } : {}),
-        ...(engine !== undefined ? { engine } : {}),
+        ...(flash !== undefined ? { engine: flash } : engine !== undefined ? { engine } : {}),
         ...(args.style !== undefined ? { style: args.style } : {}),
         // The art style's id alone, never another `direction` key; when one applies is the route's to say.
         ...(args.art_style !== undefined ? { direction: { style: args.art_style } } : {}),
@@ -868,11 +880,12 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           privacyCredits !== undefined && privacyCredits > 0
             ? ` If the video model refuses the clip, the run is retried once, for ${statedAmount(privacyCredits)} more ${amountWord()} charged only then.`
             : ""
-        // The quote's engine: absent from an older engine, which runs Nodaro Prism.
+        // The quote's engine: absent from an older engine, which runs Nodaro Prism; a Flash choice as it is.
+        const quotedFlash = videoRemakeFlashEngineFrom(quote.engine)
         const quotedEngine = castSwapEngineFrom(quote.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
-        const publicEngine: NodaroMotionEngine = nodaroMotionEngineOf(quotedEngine)
+        const publicEngine: NodaroMotionEngine | VideoRemakeFlashEngine = quotedFlash ?? nodaroMotionEngineOf(quotedEngine)
         // The engine's name, the same on every deployment (deployment-name.ts keeps it).
-        const engineName = statedName(nodaroMotionEngineName(quotedEngine))
+        const engineName = statedName(quotedFlash ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[quotedFlash] : nodaroMotionEngineName(quotedEngine))
         // The expected charge first, with the hold beside it (as estimate_trend words it);
         // an older engine answers only the hold, which settles lower.
         const expected = typeof quote.expectedCredits === "number" ? quote.expectedCredits : null

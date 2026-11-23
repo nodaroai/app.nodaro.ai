@@ -1,4 +1,5 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
+import { storedDeferSettlement } from "../lib/deferred-child-request.js"
 import { hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import {
@@ -523,7 +524,8 @@ export function creditGuard(
         const existing = await findRecentMatchingJob(req.userId, headerKey)
         if (existing) {
           reply.header("X-Dedup-Hit", "1")
-          return reply.code(200).send({ jobId: existing.id, deduped: true })
+          // A replay of a deferred child says so, from the stored job (lib/deferred-child-request.ts).
+          return reply.code(200).send({ jobId: existing.id, deduped: true, ...(storedDeferSettlement(existing.input_data) ? { settlementDeferred: true } : {}) })
         }
         req.idempotencyKey = headerKey
       }

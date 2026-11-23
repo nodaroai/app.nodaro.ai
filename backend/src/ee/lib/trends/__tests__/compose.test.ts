@@ -1092,3 +1092,23 @@ describe("composeTrendRun — a trend with no person that sends its source clip 
     expect(sent.sourceClip).toBe(true)
   })
 })
+
+describe("a trend made on a Flash choice (decided 2026-11-22)", () => {
+  it("names its choice to the engine, needs it, and offers the choice's resolutions with no draft", () => {
+    const prismFlash = trend(version({ flash: true }))
+    const { body, needs } = composeTrendRun(prismFlash, req({ resolution: "720p" }))
+    expect(body).toMatchObject({ engine: "nodaro-prism-flash", resolution: "720p", draft: false })
+    expect(needs).toMatchObject({ engine: "seedance-2-5", flash: true })
+    expect(codeOf(() => composeTrendRun(prismFlash, req({ resolution: "1080p" }))).code).toBe("resolution_unsupported")
+    expect(codeOf(() => composeTrendRun(prismFlash, req({ resolution: "480p", draft: true }))).code).toBe("draft_unsupported")
+    const pulseFlash = composeTrendRun(trend(version({ engine: "kling-4", flash: true })), req({ resolution: "720p" }))
+    expect(pulseFlash.body).toMatchObject({ engine: "nodaro-pulse-flash" })
+    // A trend of the engine itself is as before.
+    expect(composeTrendRun(trend(version()), req()).needs).not.toHaveProperty("flash")
+  })
+
+  it("the version stores the choice as `flash: true` beside its engine", () => {
+    expect(trendVersionDataSchema.safeParse({ ...version(), flash: true }).success).toBe(true)
+    expect(trendVersionDataSchema.safeParse({ ...version(), flash: "yes" }).success).toBe(false)
+  })
+})

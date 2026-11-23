@@ -485,6 +485,12 @@ export interface TrendVersionData {
    */
   engine?: CastSwapEngine
   /**
+   * The trend runs on its engine's Flash choice (Prism Flash, Pulse Flash; decided 2026-11-22): the engine's run on
+   * the faster, lower-cost model of the same family, at that model's own price. Absent = the engine itself. A run is
+   * refused (409 `flash_not_offered`) while the deployment does not offer that Flash choice. Set by the trend's author.
+   */
+  flash?: true
+  /**
    * HIDDEN. How a Kling 4 run fits the clip's length (`"cut-end"`, the default
    * when absent, or `"cut-start"`). Read only on a Kling 4 trend.
    */

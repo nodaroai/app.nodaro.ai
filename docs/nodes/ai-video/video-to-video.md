@@ -138,7 +138,7 @@ avoided into the instruction itself.
 
 ## Video Remake's engines as providers (API)
 
-`POST /v1/video-to-video` (SDK: `client.nodes.run("video-to-video", …)`) also takes Video Remake's two engines as named providers: `"nodaro-prism"` (Nodaro Prism) and `"nodaro-pulse"` (Nodaro Pulse). They are additions: a request that names no provider still runs Seedance 2.5 Edit, and every other provider runs as before.
+`POST /v1/video-to-video` (SDK: `client.nodes.run("video-to-video", …)`) also takes Video Remake's two engines as named providers: `"nodaro-prism"` (Nodaro Prism) and `"nodaro-pulse"` (Nodaro Pulse). They are additions: a request that names no provider still runs Seedance 2.5 Edit, and every other provider runs as before. Where Nodaro offers them, Video Remake's Flash choices are named providers too: `"nodaro-prism-flash"` (Prism Flash) and `"nodaro-pulse-flash"` (Pulse Flash), each its engine's run on the faster, lower-cost model, answered the same way (the quote and the request that runs it, naming the choice). Where a Flash choice is not offered the request is refused `409 flash_not_offered`. A workflow node runs none of these providers (see [Video Remake](../../api-integration.md#13f-video-remake-cloud-edition)).
 
 **For these two providers the route starts nothing.** It answers `200` with Video Remake's price quote for the clip and the prompt, and the request to send to `POST /v1/video-remake` to run it. No job is created and no credits are held; there is no `jobId` in the answer, and `quoteOnly` is `true`:
 

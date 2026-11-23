@@ -57,6 +57,7 @@ import { CONTENT_RESTRICTED_MESSAGE, restrictedInputKey } from "../lib/content-r
 import { jobBlockedBody } from "../lib/job-policy.js"
 import { videoRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { DEFER_SETTLEMENT_INPUT_KEY, deferSettlementHonoured, storedDeferSettlement } from "../lib/deferred-child-request.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
@@ -1215,6 +1216,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const outputFormat = seedance25OutputFormatFor(req, provider, parsed.data.outputFormat)
     delete parsed.data.outputFormat
     delete parsed.data.contentPolicyRewrite
+    // Asked for by a plugin's engine child only; honoured below for a trusted
+    // plugin child of the caller's own plugin job, ignored for anyone else.
+    const deferSettlementRequested = parsed.data.deferSettlement === true
+    delete parsed.data.deferSettlement
     // The requested reference task type leaves `parsed.data` too: the job
     // records and queues the RESOLVED one by name below, and nothing when none
     // is declared.
@@ -1626,6 +1631,9 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       }
     }
 
+    // A voiced run commits its audio add-on through its own lane, so it is
+    // never deferred (the settle replays finalize's commit only).
+    const deferSettlement = deferSettlementRequested && !dispatchesVoicedVideo(parsed.data) && await deferSettlementHonoured(req)
     const mcpClient = extractMcpClient(req.body)
     // job_type is required for the reconcile cron to finalise the job
     // correctly — `lib/reconcile/replicate.ts` reads job_type to dispatch
@@ -1638,9 +1646,9 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // concurrent caller already inserted with the same (user_id,
     // idempotency_key), the DB UNIQUE constraint catches it and we get
     // back the winner's row with `created: false`.
-    let insertResult: { row: { id: string }; created: boolean }
+    let insertResult: { row: { id: string; input_data?: unknown }; created: boolean }
     try {
-      insertResult = await insertJobIdempotent<{ id: string }>(
+      insertResult = await insertJobIdempotent<{ id: string; input_data?: unknown }>(
         req,
         {
           workflow_id: extractWorkflowId(req.body),
@@ -1652,7 +1660,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           // R26: the normalized values are passed in rather than written back
           // onto `parsed.data` — the handler destructured above, so a mutation
           // would be invisible to every reader AND against the no-mutation rule.
-          input_data: buildJobInputData(
+          input_data: {
+            ...buildJobInputData(
             {
               ...parsed.data,
               // The RESOLVED provider, not the raw (optional) one: the reconcile
@@ -1678,10 +1687,16 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               ...(outputFormat ? { outputFormat } : {}),
             },
             "image-to-video",
-          ),
+            ),
+            // Server-only (a top-level `__` key no job read returns): finalize
+            // reads it to keep this child's reservation held after it completes.
+            ...(deferSettlement ? { [DEFER_SETTLEMENT_INPUT_KEY]: true } : {}),
+          },
           ...(mcpClient ? { mcp_client: mcpClient } : {}),
         },
         req.idempotencyKey,
+        // `input_data` rides back so a replay answers the STORED job's deferral.
+        "id, input_data",
       )
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to create video generation job")
@@ -1690,7 +1705,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
 
     if (!insertResult.created) {
       reply.header("X-Dedup-Hit", "1")
-      return reply.code(200).send({ jobId: job.id, deduped: true })
+      // The stored job decides, never this request: a replay of a deferred child says so.
+      return reply.code(200).send({ jobId: job.id, deduped: true, ...(storedDeferSettlement(job.input_data) ? { settlementDeferred: true } : {}) })
     }
 
     // Reserve credits
@@ -1786,10 +1802,14 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           ...adjustmentWarnings,
         ],
         ...(structuredAdjustments.length > 0 ? { adjustments: structuredAdjustments } : {}),
+        ...(deferSettlement ? { settlementDeferred: true as const } : {}),
       }
     }
+    // `settlementDeferred`: told to the plugin child that asked, so a deferral
+    // that was not honoured is never silent (absent on every other answer).
+    const deferredField = deferSettlement ? { settlementDeferred: true as const } : {}
     return structuredAdjustments.length > 0
-      ? { jobId: job.id, warnings: adjustmentWarnings, adjustments: structuredAdjustments }
-      : { jobId: job.id }
+      ? { jobId: job.id, warnings: adjustmentWarnings, adjustments: structuredAdjustments, ...deferredField }
+      : { jobId: job.id, ...deferredField }
   })
 }

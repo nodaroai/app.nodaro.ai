@@ -23,7 +23,12 @@ import { WORKSPACE_HEADER_LOWER } from "@nodaro/shared/organizations"
 import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
   NODARO_MOTION_ENGINES,
+  VIDEO_REMAKE_FLASH_ENGINE_NAMES,
   castSwapEngineFrom,
+  castSwapEngineOfRun,
+  nodaroMotionEngineOfFlash,
+  videoRemakeFlashEngineFrom,
+  type VideoRemakeFlashEngine,
   nodaroMotionEngineName,
   nodaroMotionEngineOf,
   type CastSwapEngine,
@@ -49,6 +54,30 @@ export function videoRemakeEngineOf(provider: unknown): NodaroMotionEngine | und
   return NODARO_MOTION_ENGINES.find((engine) => engine === provider)
 }
 
+/** A Video Remake choice `provider` names: an engine, or (decided 2026-11-22) a Flash choice beside its engine. */
+export interface VideoRemakeProviderChoice {
+  /** The engine whose run it is. */
+  readonly engine: NodaroMotionEngine
+  /** The Flash choice named, when one is (`"nodaro-prism-flash"`, `"nodaro-pulse-flash"`). */
+  readonly flash?: VideoRemakeFlashEngine
+}
+
+/**
+ * The Video Remake choice `provider` names, by its current public id: an engine (`videoRemakeEngineOf`), or a Flash
+ * choice (offered only where its engine's Offer Flash is on: the route refuses it otherwise, 409 `flash_not_offered`).
+ */
+export function videoRemakeChoiceOf(provider: unknown): VideoRemakeProviderChoice | undefined {
+  const flash = videoRemakeFlashEngineFrom(provider)
+  if (flash) return { engine: nodaroMotionEngineOfFlash(flash), flash }
+  const engine = videoRemakeEngineOf(provider)
+  return engine ? { engine } : undefined
+}
+
+/** The name people read for a choice: the Flash choice's, else the engine's. */
+export function videoRemakeChoiceName(choice: VideoRemakeProviderChoice): string {
+  return choice.flash ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[choice.flash] : nodaroMotionEngineName(castSwapEngineFrom(choice.engine)!)
+}
+
 /** The fields of a Video to Video request Video Remake reads: the clip, the instruction and its own two levers. */
 export interface VideoRemakeInstruction {
   readonly videoUrl: string
@@ -62,7 +91,8 @@ export interface VideoRemakeInstructionRun {
   videoUrl: string
   roles: []
   postPrompt: string
-  engine: NodaroMotionEngine
+  /** The engine, or the Flash choice named. */
+  engine: NodaroMotionEngine | VideoRemakeFlashEngine
   resolution?: "480p" | "720p" | "1080p"
   draft?: boolean
 }
@@ -72,7 +102,7 @@ export interface VideoRemakeInstructionRun {
  * prompt as its `postPrompt`, no role, the engine, and `resolution` / `draft`
  * when named. Built field by field: nothing else of the request reaches it.
  */
-export function videoRemakeRunOf(engine: NodaroMotionEngine, input: VideoRemakeInstruction): VideoRemakeInstructionRun {
+export function videoRemakeRunOf(engine: NodaroMotionEngine | VideoRemakeFlashEngine, input: VideoRemakeInstruction): VideoRemakeInstructionRun {
   return {
     videoUrl: input.videoUrl,
     roles: [],
@@ -85,7 +115,8 @@ export function videoRemakeRunOf(engine: NodaroMotionEngine, input: VideoRemakeI
 
 /** Video Remake's quote, as people read it: the neutral key names, the engine by its public id and its name. */
 export interface VideoRemakeEngineQuote {
-  engine: NodaroMotionEngine
+  /** The engine quoted, or the Flash choice. */
+  engine: NodaroMotionEngine | VideoRemakeFlashEngine
   engineName: string
   /** What the run holds when it starts. */
   totalCredits: number
@@ -98,16 +129,18 @@ export interface VideoRemakeEngineQuote {
 }
 
 /** The engine's estimate answer (bare, or under `data`) as a quote; undefined when it is not one. */
-export function videoRemakeEngineQuoteOf(answer: unknown, asked: NodaroMotionEngine): VideoRemakeEngineQuote | undefined {
+export function videoRemakeEngineQuoteOf(answer: unknown, asked: NodaroMotionEngine | VideoRemakeFlashEngine): VideoRemakeEngineQuote | undefined {
   const outer = isRec(answer) ? answer : undefined
   const quote = outer && isRec(outer.data) ? outer.data : outer
   if (!quote || typeof quote.totalCredits !== "number" || !Number.isFinite(quote.totalCredits)) return undefined
+  // A Flash choice: as the engine answers it, else as it was asked for.
+  const flash = videoRemakeFlashEngineFrom(quote.engine) ?? videoRemakeFlashEngineFrom(asked)
   // The engine it priced: its own answer when it names one, else the one asked for.
-  const priced: CastSwapEngine = castSwapEngineFrom(quote.engine) ?? castSwapEngineFrom(asked) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
+  const priced: CastSwapEngine = castSwapEngineOfRun(quote.engine) ?? castSwapEngineOfRun(asked) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
   const privacyCredits = privacyCreditsOf(quote)
   return {
-    engine: nodaroMotionEngineOf(priced),
-    engineName: nodaroMotionEngineName(priced),
+    engine: flash ?? nodaroMotionEngineOf(priced),
+    engineName: flash ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[flash] : nodaroMotionEngineName(priced),
     totalCredits: quote.totalCredits,
     ...(typeof quote.expectedCredits === "number" && Number.isFinite(quote.expectedCredits) ? { expectedCredits: quote.expectedCredits } : {}),
     breakdown: neutralBreakdown(quote.breakdown),
@@ -181,7 +214,8 @@ export function requestVideoRemakeEstimate(
 ): Promise<{ statusCode: number; body: string }> {
   const userId = req.userId!
   const grant = callerGrantOf(req)
-  const payload = { ...run, engine: castSwapEngineFrom(run.engine) }
+  // A Flash choice as it is (the engine hook admits it only where offered); an engine by its internal id.
+  const payload = { ...run, engine: videoRemakeFlashEngineFrom(run.engine) ?? castSwapEngineFrom(run.engine) }
   return withJobSubmissionContext(
     { userId, method: "POST", url: VIDEO_REMAKE_ESTIMATE_ROUTE, ...(grant !== undefined ? { grant } : {}) },
     () =>
@@ -206,10 +240,11 @@ export function requestVideoRemakeEstimate(
  * `provider_not_supported` before anything is built for the node.
  */
 export function assertNoVideoRemakeEngineOnNode(provider: unknown, nodeLabel: string): void {
-  const engine = videoRemakeEngineOf(provider)
-  if (!engine) return
+  // A Flash choice too (Prism Flash, Pulse Flash): a node runs none of Video Remake's choices.
+  const choice = videoRemakeChoiceOf(provider)
+  if (!choice) return
   const err = new Error(
-    `provider_not_supported: node "${nodeLabel}" cannot run on ${engine}. ${nodaroMotionEngineName(castSwapEngineFrom(engine)!)} is a Video Remake engine, run through POST ${VIDEO_REMAKE_RUN_ROUTE}; a Video to Video node takes its own models only.`,
+    `provider_not_supported: node "${nodeLabel}" cannot run on ${choice.flash ?? choice.engine}. ${videoRemakeChoiceName(choice)} is a Video Remake engine, run through POST ${VIDEO_REMAKE_RUN_ROUTE}; a Video to Video node takes its own models only.`,
   ) as Error & { code?: string }
   err.code = "provider_not_supported"
   throw err

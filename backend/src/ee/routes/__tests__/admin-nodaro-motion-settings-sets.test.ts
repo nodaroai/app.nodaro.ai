@@ -214,6 +214,23 @@ describe("storing a set", () => {
     expect(h.sets).toHaveLength(1)
   })
 
+  it("holds Offer Flash: stored as its route stores it, and turning Flash on before any engine runs it is a warning", async () => {
+    const res = await send("POST", BASE, { name: "Flash on", settings: { "flash-offer": { flashOffer: { "nodaro-prism": "on", "nodaro-pulse": "off" } } } })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.set.settings).toEqual({ "flash-offer": { flashOffer: { "nodaro-prism": "on" } } })
+    expect(res.json().data.warnings).toEqual([expect.objectContaining({ section: "flash-offer", label: "Offer Flash" })])
+    // A value the route refuses is refused here too.
+    expect((await send("POST", BASE, { name: "Bad", settings: { "flash-offer": { flashOffer: { "nodaro-prism": "yes" } } } })).statusCode).toBe(400)
+  })
+
+  it("holds the Precise upscale's Prism Flash rows: stored whole, a row left out at its default", async () => {
+    const res = await send("POST", BASE, { name: "Flash upscale", settings: { "precise-upscale": { preciseUpscale: { flash: { "720p": "off" } } } } })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.set.settings["precise-upscale"]).toEqual({
+      preciseUpscale: { "480p": "1080p", "720p": "1080p", "1080p": "4k", flash: { "480p": "1080p", "720p": "off" } },
+    })
+  })
+
   it("stores the face grow as its own section, and reads it back unchanged (while the environments cannot, as a warning)", async () => {
     const faceGrow = { faceGrow: { "nodaro-prism": 18 } }
     const res = await send("POST", BASE, { name: "Grown", settings: { "face-grow": faceGrow } })

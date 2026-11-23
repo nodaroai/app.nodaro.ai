@@ -3,6 +3,7 @@
 // video worker's heartbeat reads this through the registry (`lib/job-budget.ts`).
 import { describe, it, expect } from "vitest"
 import {
+  CAST_SWAP_FACE_CHECK_LADDER_MS,
   CAST_SWAP_FULL_BUDGET_MS,
   CAST_SWAP_MASK_ALWAYS_BUDGET_MS,
   CAST_SWAP_MASK_AUTO_BUDGET_MS,
@@ -15,9 +16,11 @@ import { declaredJobBudgetMs } from "../../../lib/job-budget.js"
 import { NODE_TIMEOUT_MS } from "../../../services/workflow-engine/types.js"
 
 const MINUTE = 60_000
-/** The masked bounds (the plugin's `maskedHeartbeatMaxMs`) plus the Precise upscale's 15 minutes (2026-11-22). */
-const ALWAYS = 165 * MINUTE
-const AUTO = 255 * MINUTE
+/** The masked bounds (the plugin's `maskedHeartbeatMaxMs`) plus the Precise upscale's 15 minutes (2026-11-22)
+ *  plus the face check's ladder of two more 90-minute engine runs (2026-11-23). */
+const LADDER = 180 * MINUTE
+const ALWAYS = 165 * MINUTE + LADDER
+const AUTO = 255 * MINUTE + LADDER
 
 describe("cast-swap job budget", () => {
   it("budget is 120 min, 30 min for a preview", () => {
@@ -43,7 +46,7 @@ describe("cast-swap job budget", () => {
     expect(castSwapJobBudgetMs({ preview: true })).toBe(30 * MINUTE)
   })
 
-  it("face masking \"always\" is 165 min, \"auto\" 255 min (each with the Precise upscale's 15)", () => {
+  it("face masking \"always\" is 345 min, \"auto\" 435 min (each with the Precise upscale's 15 and the face check's ladder of 180)", () => {
     expect(CAST_SWAP_MASK_ALWAYS_BUDGET_MS).toBe(ALWAYS)
     expect(CAST_SWAP_MASK_AUTO_BUDGET_MS).toBe(AUTO)
     expect(castSwapJobBudgetMs({ faceMasking: { mode: "always" } })).toBe(ALWAYS)
@@ -120,8 +123,9 @@ describe("cast-swap job budget", () => {
   it("a full clip's bound covers the default heartbeat plus the Precise upscale's wait", () => {
     expect(CAST_SWAP_PRECISE_UPSCALE_WAIT_MS).toBe(15 * MINUTE)
     expect(CAST_SWAP_FULL_BUDGET_MS).toBeGreaterThanOrEqual(NODE_TIMEOUT_MS + CAST_SWAP_PRECISE_UPSCALE_WAIT_MS)
-    expect(CAST_SWAP_MASK_ALWAYS_BUDGET_MS).toBe(150 * MINUTE + CAST_SWAP_PRECISE_UPSCALE_WAIT_MS)
-    expect(CAST_SWAP_MASK_AUTO_BUDGET_MS).toBe(240 * MINUTE + CAST_SWAP_PRECISE_UPSCALE_WAIT_MS)
+    expect(CAST_SWAP_FACE_CHECK_LADDER_MS).toBe(LADDER)
+    expect(CAST_SWAP_MASK_ALWAYS_BUDGET_MS).toBe(150 * MINUTE + LADDER + CAST_SWAP_PRECISE_UPSCALE_WAIT_MS)
+    expect(CAST_SWAP_MASK_AUTO_BUDGET_MS).toBe(240 * MINUTE + LADDER + CAST_SWAP_PRECISE_UPSCALE_WAIT_MS)
   })
 
   it("a run naming a target but recording no wait adds the engine's 45-minute cap to the preview and full-clip bounds and the masked ones", () => {
@@ -130,8 +134,8 @@ describe("cast-swap job budget", () => {
       expect(castSwapJobBudgetMs({ preciseUpscale: t })).toBe(165 * MINUTE)
       expect(castSwapJobBudgetMs({ preview: true, __castSwapPreciseUpscale: t })).toBe(75 * MINUTE)
       expect(declaredJobBudgetMs("cast-swap-full-quality", { __castSwapPreciseUpscale: t })).toBe(165 * MINUTE)
-      expect(castSwapJobBudgetMs({ preciseUpscale: t, faceMasking: { mode: "always" } })).toBe(195 * MINUTE)
-      expect(castSwapJobBudgetMs({ preciseUpscale: t, faceMasking: { mode: "auto" } })).toBe(285 * MINUTE)
+      expect(castSwapJobBudgetMs({ preciseUpscale: t, faceMasking: { mode: "always" } })).toBe(195 * MINUTE + LADDER)
+      expect(castSwapJobBudgetMs({ preciseUpscale: t, faceMasking: { mode: "auto" } })).toBe(285 * MINUTE + LADDER)
     }
   })
 
@@ -142,16 +146,16 @@ describe("cast-swap job budget", () => {
     for (const rec of [{ preciseUpscaleWaitMs: wait }, { __castSwapUpscaleWaitMs: wait }]) {
       expect(castSwapJobBudgetMs({ preview: true, preciseUpscale: "4k", ...rec })).toBe(30 * MINUTE + rounded)
       expect(castSwapJobBudgetMs({ ...rec })).toBe(120 * MINUTE + rounded)
-      expect(castSwapJobBudgetMs({ faceMasking: { mode: "always" }, ...rec })).toBe(150 * MINUTE + rounded)
-      expect(castSwapJobBudgetMs({ faceMasking: { mode: "auto" }, ...rec })).toBe(240 * MINUTE + rounded)
-      expect(castSwapJobBudgetMs({ style: "motion", ...rec })).toBe(240 * MINUTE + rounded)
+      expect(castSwapJobBudgetMs({ faceMasking: { mode: "always" }, ...rec })).toBe(150 * MINUTE + LADDER + rounded)
+      expect(castSwapJobBudgetMs({ faceMasking: { mode: "auto" }, ...rec })).toBe(240 * MINUTE + LADDER + rounded)
+      expect(castSwapJobBudgetMs({ style: "motion", ...rec })).toBe(240 * MINUTE + LADDER + rounded)
       expect(declaredJobBudgetMs("cast-swap-full-quality", { __castSwapPreciseUpscale: "4k", ...rec })).toBe(120 * MINUTE + rounded)
     }
     // A whole-minute wait is kept as it is; the queued wait wins over the stored one; past the cap it counts 45 min.
     expect(castSwapJobBudgetMs({ preciseUpscaleWaitMs: 10 * MINUTE, __castSwapUpscaleWaitMs: 30 * MINUTE })).toBe(130 * MINUTE)
     expect(castSwapJobBudgetMs({ preciseUpscaleWaitMs: 90 * MINUTE })).toBe(120 * MINUTE + CAST_SWAP_PRECISE_UPSCALE_MAX_WAIT_MS)
     expect(CAST_SWAP_PRECISE_UPSCALE_MAX_WAIT_MS).toBe(45 * MINUTE)
-    expect(castSwapJobBudgetMs({ faceMasking: { mode: "auto" }, __castSwapUpscaleWaitMs: 2 * 60 * MINUTE })).toBe(285 * MINUTE)
+    expect(castSwapJobBudgetMs({ faceMasking: { mode: "auto" }, __castSwapUpscaleWaitMs: 2 * 60 * MINUTE })).toBe(285 * MINUTE + LADDER)
   })
 
   it("a wait that is not a positive number is no recorded wait", () => {

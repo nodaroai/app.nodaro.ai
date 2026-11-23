@@ -15,6 +15,7 @@ import type {
   CastSwapPulseAudioId,
   CastSwapPulseReferenceAudioByResolution,
   NodaroMotionCustomStyle,
+  NodaroMotionFlashOffer,
   NodaroMotionFaceGrow,
   NodaroMotionMasking,
   NodaroMotionMotion,
@@ -49,6 +50,7 @@ import { planRolesToSaved } from "./components/PlanRolesSection"
 import { previzToSaved } from "./components/PrevizSection"
 import { shotLockToSaved } from "./components/ShotLockSection"
 import { shotListFpsToSaved } from "./components/ShotListFpsSection"
+import { flashOfferToSaved } from "./components/FlashOfferSection"
 import { preciseUpscaleEffective } from "./components/PreciseUpscaleSection"
 
 /** Every section a stored set holds, by the server's key. */
@@ -72,6 +74,7 @@ export const MOTION_SETTINGS_KEYS = [
   "previz",
   "shot-lock",
   "shot-list-fps",
+  "flash-offer",
   "face-grow",
   "prompt-parts",
 ] as const
@@ -215,6 +218,14 @@ export const SHOT_LOCK_SPEC = spec<NodaroMotionShotLock, NodaroMotionShotLock, {
   saveArgOf: (body) => body.shotLock,
 })
 
+/** Offer Flash per engine: only the engines that are on (never saved: off everywhere). */
+export const FLASH_OFFER_SPEC = spec<NodaroMotionFlashOffer, NodaroMotionFlashOffer, { flashOffer: NodaroMotionFlashOffer }>({
+  draftOf: (stored) => flashOfferToSaved(stored),
+  bodyOf: (draft) => ({ flashOffer: flashOfferToSaved(draft) }),
+  storedOfBody: (body) => body.flashOffer,
+  saveArgOf: (body) => body.flashOffer,
+})
+
 /**
  * The shot list's frame rate: the draft is kept in its saved form, `fps` left out while the engine's own default
  * decides (the page shows that default as recommended; ShotListFpsSection.tsx).
@@ -314,6 +325,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   previz: PREVIZ_SPEC,
   "shot-lock": SHOT_LOCK_SPEC,
   "shot-list-fps": SHOT_LIST_FPS_SPEC,
+  "flash-offer": FLASH_OFFER_SPEC,
   "face-grow": FACE_GROW_SPEC,
   "prompt-parts": PROMPT_PARTS_SPEC,
 }

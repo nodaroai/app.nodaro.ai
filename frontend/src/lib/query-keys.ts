@@ -519,9 +519,9 @@ export const queryKeys = {
     nodaroMotionShotLock: () => ["admin", "nodaro-motion", "shot-lock"] as const,
     /** Admin → Video Remake: how many frames a second the model that writes a shot list is shown. */
     nodaroMotionShotListFps: () => ["admin", "nodaro-motion", "shot-list-fps"] as const,
+    /** Admin → Video Remake: Offer Flash per engine (whether every user may pick its Flash choice). */
+    nodaroMotionFlashOffer: () => ["admin", "nodaro-motion", "flash-offer"] as const,
     nodaroMotionFaceGrow: () => ["admin", "nodaro-motion", "face-grow"] as const,
-    /** Admin → Video Remake: the flash-model test per engine (a test switch, read only once its block is opened). */
-    nodaroMotionFlashModel: () => ["admin", "nodaro-motion", "flash-model"] as const,
     nodaroMotionPlanRolesDefaults: () => ["admin", "nodaro-motion", "plan-roles", "defaults"] as const,
     nodaroMotionPlanRolesCheck: (steps: string) => ["admin", "nodaro-motion", "plan-roles", "check", steps] as const,
     nodaroMotionStyleOnly: () => ["admin", "nodaro-motion", "style-only"] as const,
@@ -542,6 +542,8 @@ export const queryKeys = {
       ["admin", "motion-price-check", "runs", params, kieStamp] as const,
     motionPriceRun: (jobId: string | null, kieStamp: string | null) =>
       ["admin", "motion-price-check", "run", jobId, kieStamp] as const,
+    /** Admin → Remake faults: a page of the range's faulted Video Remake runs. */
+    remakeFaults: (params: object | null) => ["admin", "remake-faults", params] as const,
   },
 
   nodeDefaults: {

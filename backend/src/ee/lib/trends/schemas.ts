@@ -13,8 +13,17 @@ import {
   CAST_SWAP_ENGINE_WHEN_OMITTED,
   castSwapEngineFrom,
   CAST_SWAP_KLING_LENGTHS,
+  CAST_SWAP_RESOLUTIONS_BY_ENGINE,
   TREND_PROMPT_LIMITS,
+  VIDEO_REMAKE_FLASH_ENGINE_NAMES,
+  VIDEO_REMAKE_FLASH_RESOLUTIONS,
+  nodaroMotionEngineName,
+  nodaroMotionEngineOf,
+  videoRemakeFlashEngineFrom,
+  videoRemakeFlashEngineOf,
   type CastSwapEngine,
+  type NodaroMotionEngine,
+  type VideoRemakeFlashEngine,
 } from "@nodaro/shared/models"
 import {
   CAST_SWAP_FACE_MASK_MARK_LIMITS,
@@ -317,6 +326,26 @@ export function engineOf(data: Pick<TrendVersionData, "engine">): CastSwapEngine
   return data.engine ?? CAST_SWAP_ENGINE_WHEN_OMITTED
 }
 
+/** Whether a trend version runs on its engine's Flash choice (`flash: true`). */
+export const trendIsFlash = (data: Pick<TrendVersionData, "flash">): boolean => data.flash === true
+
+/** A trend's choice by its public id, as runs, quotes and the trend page name it: its Flash choice's id, else its engine's. */
+export function trendChoiceId(data: Pick<TrendVersionData, "engine" | "flash">): NodaroMotionEngine | VideoRemakeFlashEngine {
+  const engine = nodaroMotionEngineOf(engineOf(data))
+  return trendIsFlash(data) ? videoRemakeFlashEngineOf(engine) : engine
+}
+
+/** A trend's choice by its name ("Prism Flash", else the engine's). */
+export function trendChoiceName(data: Pick<TrendVersionData, "engine" | "flash">): string {
+  const id = trendChoiceId(data)
+  return videoRemakeFlashEngineFrom(id) ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[id as VideoRemakeFlashEngine] : nodaroMotionEngineName(engineOf(data))
+}
+
+/** The resolutions a run of the trend may ask for, its default first: its Flash choice's, else its engine's. */
+export function trendResolutions(data: Pick<TrendVersionData, "engine" | "flash">): readonly ("480p" | "720p" | "1080p")[] {
+  return trendIsFlash(data) ? VIDEO_REMAKE_FLASH_RESOLUTIONS[trendChoiceId(data) as VideoRemakeFlashEngine] : CAST_SWAP_RESOLUTIONS_BY_ENGINE[engineOf(data)]
+}
+
 /**
  * A draft with its Pulse reference audio as it is stored (decided 2026-11-18):
  * only on Kling 4, and only the resolutions off the default of the draft's own
@@ -417,6 +446,8 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
       .enum(CAST_SWAP_ENGINE_IDS_ACCEPTED)
       .transform((id): CastSwapEngine => castSwapEngineFrom(id)!)
       .optional(),
+    // The trend runs on its engine's Flash choice (Prism Flash, Pulse Flash); absent = the engine itself.
+    flash: z.literal(true).optional(),
     // Absent = "cut-end". Read only on a Kling 4 trend.
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),
     // Absent = "original" (the original audio back on the result). Read only on a Kling 4 trend.

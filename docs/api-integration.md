@@ -6002,7 +6002,7 @@ length, with its own cast and new music, and can change the motion itself.
 |---|---|---|
 | `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us)). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), and whether a person role may keep its own face (`roleFace`, see The Face chip below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), and whether each engine's Flash choice is offered (`flash`, see Flash choices below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
@@ -6070,6 +6070,35 @@ route's quote, may still name it by the id it had before the rename (the
 SDK's `estimate()` answers the current id). Each
 engine's own limits apply (Pulse takes fewer images per run than the 30 Prism
 allows), and the route refuses what it cannot run.
+
+**Flash choices.** Where Nodaro offers it, each engine also has a Flash
+choice beside it: `"nodaro-prism-flash"` (Prism Flash) and
+`"nodaro-pulse-flash"` (Pulse Flash). Each one runs its engine on the faster,
+lower-cost model of the same family, at that model's own price: the estimate
+(sent with the same body) shows it. The engine's settings (its style, art styles and
+preparation) apply unchanged.
+`GET /v1/video-remake/style-choice` answers
+`flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean }`. Offer a Flash
+choice only where it is `true`. A run or estimate naming one anywhere else is
+refused `409 flash_not_offered` ("Prism Flash isn't available right now.
+Choose Nodaro Prism."), and a server from before it leaves `flash` out (read
+it as `false`).
+
+- Prism Flash renders 480p (the default, plain) or 720p and takes at most 10
+  images per run.
+- Pulse Flash renders 720p, at most 20 seconds of output and 20 seconds of
+  reference video in all.
+
+Neither has a draft or Full Quality. What a Flash choice cannot take (1080p, a
+draft, too many images, too long) is refused `400 flash_model_unsupported`,
+naming the engine that takes it, and nothing is held for any refusal. A trend
+may be made on a Flash choice: its page then names the choice (`engine`,
+`engineName`) and its resolutions, and its runs and quotes are refused
+`409 flash_not_offered` while Nodaro does not offer that choice.
+`POST /v1/video-to-video` also takes the two ids as named providers, quoted the
+same way as the engines (see the Video to Video node page). The job
+records the choice in `input_data.engine`, and a completed job's output in its
+`engine`.
 
 **Style.** `style` says how the run follows the clip: `"precise"` (the
 default when `style` is left out) follows the clip exactly; `"motion"` follows
@@ -6479,6 +6508,14 @@ be up to five minutes old.
 for one, whether faces are hidden first, and whether a clip the model refuses
 is retried once — is set by Nodaro for each engine. A run cannot change it:
 a `faceMasking` field sent by an older client is accepted and ignored.
+
+**Face check.** Where Nodaro has turned the face check on for an engine
+(it is being rolled out, and is not on everywhere yet), a run whose faces are
+hidden has each result checked before it is delivered. If a face in it was
+not redrawn, that result is discarded and the video engine runs again; you
+are charged for one engine run only, however many times it ran. If the engine
+still cannot redraw the faces, the run fails with "The video engine rejected
+some faces in this clip. Try a different clip." and no engine run is charged.
 
 **Fixed references.** `references` (at most 5) are things the video should
 show that no role replaces, each `{ images, line }`: 1–3 images of ONE thing

@@ -32,8 +32,15 @@ export function seedance25OutputFormatFor(
  * - `contentPolicyRewrite`: accepted so a child's body is not refused, and a
  *   no-op — this route never rewords a refused prompt (the reword-once retry
  *   is /v1/text-to-video's alone). Dropped before the job is recorded.
+ * - `deferSettlement`: the child's usage log stays `reserved` after it
+ *   completes, until its plugin settles or releases it
+ *   (lib/deferred-child-settlement.ts). Honoured only through
+ *   `deferSettlementHonoured` (a trusted plugin child of the caller's own
+ *   plugin job); any other request has it ignored. Dropped from the body; the
+ *   job records it as the server-only `input_data.__deferSettlement`.
  */
 export const generateVideoChildFields = {
   outputFormat: z.enum(["mp4", "mov"]).optional(),
   contentPolicyRewrite: z.boolean().optional(),
+  deferSettlement: z.boolean().optional(),
 }

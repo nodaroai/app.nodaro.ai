@@ -77,6 +77,8 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
+  // Offer Flash (flash-offer.test.tsx): never saved, on an engine that runs the Flash choices.
+  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" }], supported: true, environments: [] } } })
   // The face grow (its own row): never saved.
   routes["GET /v1/admin/video-remake/face-grow"] = () => ({ body: { data: { faceGrow: null, updatedAt: null, supported: false } } })
   // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
@@ -162,6 +164,22 @@ describe("Admin → Video Remake → Stored settings", () => {
     expect(everyPut().sort()).toEqual([`${BASE}/advanced`, `${BASE}/pulse-audio`])
     await waitFor(() => expect(screen.queryByRole("region", { name: "Draft" })).toBeNull())
     expect(toast.success).toHaveBeenCalledWith("Saved 2 sections. Runs pick them up within a minute.")
+  })
+
+  it("loads a set that offers Flash as a draft, and Save all saves it through its own route (refused while no engine runs it)", async () => {
+    const user = userEvent.setup()
+    routes[`PUT ${BASE}/flash-offer`] = () => ({ status: 409, body: { error: { code: "engine_unsupported", message: "No Cast Swap engine runs the Flash choices yet." } } })
+    sets = [set({ settings: { "flash-offer": { flashOffer: { "nodaro-pulse": "on" } } } })]
+    renderWith(<AdminNodaroMotionPage />)
+    await user.click(await within(await panel()).findByRole("button", { name: "Load as draft" }))
+    const banner = await screen.findByRole("region", { name: "Draft" })
+    expect(banner).toHaveTextContent("1 section differs from live: Label of flash-offer.")
+    expect(await screen.findByRole("switch", { name: "Offer Pulse Flash (beside Nodaro Pulse)" })).toBeChecked()
+    expect(everyPut()).toEqual([])
+    await user.click(within(banner).getByRole("button", { name: "Save all" }))
+    await waitFor(() => expect(sentTo(`PUT ${BASE}/flash-offer`)).toEqual([{ flashOffer: { "nodaro-pulse": "on" } }]))
+    const results = await within(banner).findByRole("list", { name: "Save results" })
+    expect(results).toHaveTextContent("Label of flash-offer: No Cast Swap engine runs the Flash choices yet.")
   })
 
   it("reports a section its route refuses, and keeps the draft", async () => {

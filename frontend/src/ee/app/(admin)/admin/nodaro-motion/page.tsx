@@ -152,9 +152,9 @@ import { usePlanRolesSection } from "./use-plan-roles-section"
 import { usePrevizSection } from "./use-previz-section"
 import { useShotLockSection } from "./use-shot-lock-section"
 import { useShotListFpsSection } from "./use-shot-list-fps-section"
+import { useFlashOfferSection } from "./use-flash-offer-section"
 import { useFaceGrowSection } from "./use-face-grow-section"
 import { usePreciseUpscaleSection } from "./use-precise-upscale-section"
-import { FlashModelTest } from "./components/FlashModelTest"
 import {
   ADVANCED_SPEC,
   MASKING_SPEC,
@@ -280,6 +280,7 @@ export default function AdminNodaroMotionPage() {
   const previz = usePrevizSection(held)
   const shotLock = useShotLockSection(held)
   const shotListFps = useShotListFpsSection(held)
+  const flashOffer = useFlashOfferSection(held)
   const faceGrow = useFaceGrowSection(held)
   const preciseUpscale = usePreciseUpscaleSection(held)
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
@@ -323,6 +324,7 @@ export default function AdminNodaroMotionPage() {
     previz: previz.binding,
     "shot-lock": shotLock.binding,
     "shot-list-fps": shotListFps.binding,
+    "flash-offer": flashOffer.binding,
     "face-grow": faceGrow.binding,
     "prompt-parts": promptParts.binding,
   }
@@ -415,6 +417,7 @@ export default function AdminNodaroMotionPage() {
     !previz.changed &&
     !shotLock.changed &&
     !shotListFps.changed &&
+    !flashOffer.changed &&
     !faceGrow.changed &&
     !preciseUpscale.changed
   const pending =
@@ -435,6 +438,7 @@ export default function AdminNodaroMotionPage() {
     previz.pending ||
     shotLock.pending ||
     shotListFps.pending ||
+    flashOffer.pending ||
     faceGrow.pending ||
     preciseUpscale.pending
 
@@ -469,6 +473,8 @@ export default function AdminNodaroMotionPage() {
       if (shotLock.changed) await shotLock.save()
       // Its refusal is also said under its select (ShotListFpsSection).
       if (shotListFps.changed) await shotListFps.save()
+      // Its refusal (no engine runs the Flash choices yet) is also said under its switches (FlashOfferSection).
+      if (flashOffer.changed) await flashOffer.save()
       if (faceGrow.changed) await faceGrow.save() // its refusal is also said in each Precise column
       if (preciseUpscale.changed) await preciseUpscale.save()
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
@@ -505,6 +511,7 @@ export default function AdminNodaroMotionPage() {
               !previz.changed &&
               !shotLock.changed &&
               !shotListFps.changed &&
+              !flashOffer.changed &&
               !faceGrow.changed &&
               !preciseUpscale.changed) ||
             issues.length > 0 ||
@@ -534,6 +541,7 @@ export default function AdminNodaroMotionPage() {
       {previz.node}
       {shotLock.node}
       {shotListFps.node}
+      {flashOffer.node}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -794,7 +802,6 @@ export default function AdminNodaroMotionPage() {
         shotLockUnsaved={shotLock.unsaved}
         held={held}
       />
-      <FlashModelTest />
     </div>
   )
 }

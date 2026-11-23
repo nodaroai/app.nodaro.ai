@@ -36,8 +36,8 @@
  * `source` as its mode: unchanged.
  *
  * The masked bounds must match the cast-swap plugin's `maskedHeartbeatMaxMs`
- * (handler.ts: 90 + 60 min for "always", + 90 more for "auto"), plus the
- * Precise upscale's wait.
+ * (handler.ts: 90 + 60 min for "always", + 90 more for "auto", + 180 for the
+ * face check's ladder of two more engine runs), plus the Precise upscale's wait.
  *
  * 2026-11-22, the Precise upscale: a Precise run (masked or not) may send its
  * take to Topaz video upscale after the edit (`castSwap.preciseUpscale`). The
@@ -71,11 +71,20 @@ export const CAST_SWAP_PRECISE_UPSCALE_WAIT_MS = 15 * MINUTE_MS
 /** The most a Precise upscale wait counts for (the engine's `UPSCALE_WAIT_MAX_MS`), and the wait of a run that names a target but records none. */
 export const CAST_SWAP_PRECISE_UPSCALE_MAX_WAIT_MS = 45 * MINUTE_MS
 
-/** A run with face masking "always": the edit plus the mask jobs (before the Precise upscale's wait). */
-const MASK_ALWAYS_BASE_MS = 150 * MINUTE_MS
+/**
+ * The face check's ladder on a masked run (2026-11-23): a take in which a face
+ * is still the hidden placeholder is discarded and the engine runs again, up to
+ * two more engine children of at most 90 minutes each. Only a masked run takes
+ * the ladder, so only the masked bounds carry it; the plugin's
+ * `maskedHeartbeatMaxMs` grows by the same.
+ */
+export const CAST_SWAP_FACE_CHECK_LADDER_MS = 2 * 90 * MINUTE_MS
 
-/** A run with face masking "auto": the mask jobs and a possible second edit (before the Precise upscale's wait). */
-const MASK_AUTO_BASE_MS = 240 * MINUTE_MS
+/** A run with face masking "always": the edit plus the mask jobs, and the face check's ladder (before the Precise upscale's wait). */
+const MASK_ALWAYS_BASE_MS = 150 * MINUTE_MS + CAST_SWAP_FACE_CHECK_LADDER_MS
+
+/** A run with face masking "auto": the mask jobs and a possible second edit, and the face check's ladder (before the Precise upscale's wait). */
+const MASK_AUTO_BASE_MS = 240 * MINUTE_MS + CAST_SWAP_FACE_CHECK_LADDER_MS
 
 /** A run with face masking "always", with the Precise upscale's default wait (no recorded one). */
 export const CAST_SWAP_MASK_ALWAYS_BUDGET_MS = MASK_ALWAYS_BASE_MS + CAST_SWAP_PRECISE_UPSCALE_WAIT_MS

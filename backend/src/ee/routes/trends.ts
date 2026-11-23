@@ -55,7 +55,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
-import { CAST_SWAP_RESOLUTIONS_BY_ENGINE, castSwapEngineFrom, nodaroMotionEngineName, nodaroMotionEngineOf, type NodaroMotionEngine } from "@nodaro/shared/models"
+import {
+  CAST_SWAP_RESOLUTIONS_BY_ENGINE,
+  VIDEO_REMAKE_FLASH_ENGINE_NAMES,
+  castSwapEngineFrom,
+  nodaroMotionEngineName,
+  nodaroMotionEngineOf,
+  videoRemakeFlashEngineFrom,
+  videoRemakeFlashEngineOf,
+  type NodaroMotionEngine,
+  type VideoRemakeFlashEngine,
+} from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { requireScope } from "../../lib/scopes.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -74,7 +84,7 @@ import {
   listPublished,
   setFavorite,
 } from "../lib/trends/store.js"
-import { engineOf, shownChips, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
+import { engineOf, shownChips, trendChoiceId, trendChoiceName, trendResolutions, trendRunRequestSchema, type ChipKey } from "../lib/trends/schemas.js"
 import { loadedEngineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
 import { pickText } from "../lib/trends/localize.js"
 import { emptyFillLookOf, emptyFillOf, type TrendEmptyFill } from "../lib/trends/empty-fill.js"
@@ -186,8 +196,8 @@ export interface TrendDetail extends TrendCard {
    * The engine every run of this trend uses, by its public id (the person
    * never chooses it): `"nodaro-prism"` or `"nodaro-pulse"`.
    */
-  engine: NodaroMotionEngine
-  /** Its name: "Nodaro Prism" or "Nodaro Pulse". */
+  engine: NodaroMotionEngine | VideoRemakeFlashEngine
+  /** Its name: "Nodaro Prism" or "Nodaro Pulse" ("Prism Flash" / "Pulse Flash" for a trend made on a Flash choice). */
   engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:
@@ -438,9 +448,10 @@ function toDetail(row: TrendRow, version: number, data: TrendVersionData, locale
     version,
     previewSec: data.previewStart === null ? null : PREVIEW_SEC,
     ...(original ? { original } : {}),
-    engine: nodaroMotionEngineOf(engineOf(data)),
-    engineName: nodaroMotionEngineName(engineOf(data)),
-    resolutions: [...CAST_SWAP_RESOLUTIONS_BY_ENGINE[engineOf(data)]],
+    // A trend made on a Flash choice is named by it, with that choice's resolutions.
+    engine: trendChoiceId(data),
+    engineName: trendChoiceName(data),
+    resolutions: [...trendResolutions(data)],
     slots: data.slots.map((s) => detailSlotOf(data, s, locale)),
     examples: listedExamples(data).map((ex) => {
       const slots: Record<string, string[]> = {}
@@ -741,12 +752,14 @@ export async function trendRoutes(app: FastifyInstance) {
         const privacyCredits = privacyCreditsOf(quote)
         // The engine it priced: the engine's own answer when it names one, else the trend's (what the body sent).
         const priced = castSwapEngineFrom(quote.engine) ?? prepared.composed.needs.engine
+        // A Flash trend's quote names its choice (the engine answers it; the trend's own when it does not).
+        const flash = videoRemakeFlashEngineFrom(quote.engine) ?? (prepared.composed.needs.flash ? videoRemakeFlashEngineOf(nodaroMotionEngineOf(prepared.composed.needs.engine)) : undefined)
         return {
           data: {
             expectedCredits: expected,
             holdCredits: quote.totalCredits,
-            engine: nodaroMotionEngineOf(priced),
-            engineName: nodaroMotionEngineName(priced),
+            engine: flash ?? nodaroMotionEngineOf(priced),
+            engineName: flash ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[flash] : nodaroMotionEngineName(priced),
             breakdown: neutralBreakdown(quote.breakdown),
             // A retry of a refused clip: charged only if it runs (not in the hold).
             ...(privacyCredits !== undefined ? { privacyCredits } : {}),

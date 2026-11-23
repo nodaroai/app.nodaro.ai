@@ -402,4 +402,32 @@ describe("GET /v1/admin/jobs/:jobId/cast-swap-steps", () => {
     expect(await read({ __preciseStyleSentGray: true })).not.toHaveProperty("preciseStyleRouted")
     expect(await read({ __preciseStyleRouted: true })).not.toHaveProperty("preciseStyleSentGray")
   })
+
+  it("reads the run's recorded faults worst first, a failed run's too; malformed entries skipped; absent when none", async () => {
+    const read = async (output: Record<string, unknown>, over: Record<string, unknown> = {}) => {
+      mockFrom.mockReturnValue(jobChain({ data: castSwapRow(output, over), error: null }))
+      return (await get()).json().data
+    }
+    const faults = [
+      { kind: "face_check_unsure", severity: "warning", at: "2026-11-20T10:00:02Z" },
+      "not-an-object",
+      { severity: "blocked" },
+      { kind: "   ", severity: "blocked" },
+      { kind: "intent_override", severity: "recovered", at: "2026-11-20T10:00:01Z", detail: { code: "no_person" } },
+      { kind: "unblurred_refused", severity: "blocked", at: "2026-11-20T10:00:03Z" },
+      { kind: "new_kind", severity: "catastrophic" },
+    ]
+    const data = await read({ error: "refused", __castSwapFaults: faults }, { input_data: { type: "cast-swap" } })
+    expect(data.faults).toEqual([
+      { kind: "unblurred_refused", severity: "blocked", at: "2026-11-20T10:00:03Z" },
+      { kind: "intent_override", severity: "recovered", at: "2026-11-20T10:00:01Z", detail: { code: "no_person" } },
+      { kind: "face_check_unsure", severity: "warning", at: "2026-11-20T10:00:02Z" },
+      // An unknown severity reads as a warning; with no time, after the timed ones.
+      { kind: "new_kind", severity: "warning" },
+    ])
+    expect((await read({ __castSwapFaults: faults }, { job_type: "cast-swap-full-quality" })).faults).toHaveLength(4)
+    expect(await read({ videoUrl: "https://cdn.x/v.mp4" })).not.toHaveProperty("faults")
+    expect(await read({ __castSwapFaults: "garbage" })).not.toHaveProperty("faults")
+    expect(await read({ __castSwapFaults: [1, null, {}] })).not.toHaveProperty("faults")
+  })
 })

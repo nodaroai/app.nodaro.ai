@@ -209,6 +209,8 @@ export interface TrendForm {
   faceMasking: AdminTrendFaceMasking | undefined
   /** As stored: undefined = the draft names none (Seedance 2.5), so loading an old draft is no change. */
   engine: AdminTrendEngine | undefined
+  /** As stored: the trend runs on its engine's Flash choice (Prism Flash, Pulse Flash); undefined = the engine itself. */
+  flash?: true
   /** As stored: undefined = none set ("cut-end"). Saved only while the engine is Kling 4. */
   klingLength: AdminTrendKlingLength | undefined
   /** As stored: undefined = none set ("original"). Saved only while the engine is Kling 4. */
@@ -265,6 +267,7 @@ export function toForm(draft: AdminTrendData): TrendForm {
     previewPrePrompt: draft.previewPrePrompt ?? "",
     faceMasking: draft.faceMasking ? structuredClone(draft.faceMasking) : undefined,
     engine: draft.engine,
+    ...(draft.flash === true ? { flash: true as const } : {}),
     klingLength: draft.klingLength,
     pulseAudio: draft.pulseAudio,
     prismReferenceAudio: prismReferenceAudioByResolutionOf(draft.prismReferenceAudio),
@@ -450,6 +453,7 @@ export function fromForm(form: TrendForm): TrendDraftBody {
     ...(form.previewPrePrompt.trim() ? { previewPrePrompt: form.previewPrePrompt } : {}),
     ...(form.faceMasking ? { faceMasking: cleanMasking(form.faceMasking) } : {}),
     ...(form.engine ? { engine: form.engine } : {}),
+    ...(form.flash === true ? { flash: true as const } : {}),
     // Read only on Kling 4: kept out of a Seedance draft.
     ...(form.engine === "kling-4" && form.klingLength ? { klingLength: form.klingLength } : {}),
     ...(form.engine === "kling-4" && form.pulseAudio ? { pulseAudio: form.pulseAudio } : {}),

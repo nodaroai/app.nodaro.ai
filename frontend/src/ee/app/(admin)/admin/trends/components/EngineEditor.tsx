@@ -13,6 +13,11 @@
 // video model carries, per output resolution (the full audio, the default; the
 // voice only; or none). Shown, and saved, only while the model is Prism.
 //
+// Either engine may run as its Flash choice (decided 2026-11-22): Prism Flash or
+// Pulse Flash, the engine's run on the faster, lower-cost model of the same
+// family (no 1080p, no draft, no Full Quality). A run of such a trend is refused
+// while Admin, Video Remake does not offer that Flash choice.
+//
 // Pulse has its reference audio too, beside its Pulse audio: what the clip sent
 // to the video model carries, per output resolution, a resolution left as it
 // is following the Pulse audio chosen here. Shown, and saved, only while the
@@ -71,6 +76,9 @@ interface Props {
   /** Per output resolution, only those off the default of `pulseAudio`; undefined = none (each follows the Pulse audio). */
   readonly pulseReferenceAudio: CastSwapPulseReferenceAudioByResolution | undefined
   readonly onChange: (next: AdminTrendEngine) => void
+  /** Whether the trend runs on its engine's Flash choice (absent: not offered here, no control). */
+  readonly flash?: boolean
+  readonly onFlashChange?: (on: boolean) => void
   readonly onKlingLengthChange: (next: AdminTrendKlingLength) => void
   readonly onPulseAudioChange: (next: CastSwapPulseAudioId) => void
   readonly onPrismReferenceAudioChange: (next: CastSwapPrismReferenceAudioByResolution) => void
@@ -88,6 +96,8 @@ export function EngineEditor({
   prismReferenceAudio,
   pulseReferenceAudio,
   onChange,
+  flash,
+  onFlashChange,
   onKlingLengthChange,
   onPulseAudioChange,
   onPrismReferenceAudioChange,
@@ -101,6 +111,7 @@ export function EngineEditor({
   const selectId = `${id}-engine`
   const hintId = `${id}-hint`
   const lengthId = `${id}-length`
+  const flashId = `${id}-flash`
 
   return (
     <div className="flex flex-col gap-2">
@@ -122,6 +133,14 @@ export function EngineEditor({
             </SelectContent>
           </Select>
         </div>
+        {onFlashChange && (
+          <div className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input id={flashId} type="checkbox" className="h-4 w-4" checked={flash === true} onChange={(e) => onFlashChange(e.target.checked)} />
+            <label htmlFor={flashId}>
+              Run on {engine === "kling-4" ? "Pulse Flash" : "Prism Flash"} (the faster, lower-cost model; no 1080p, draft or Full Quality; refused while Admin, Video Remake does not offer it)
+            </label>
+          </div>
+        )}
         {engine === "kling-4" && (
           <div className="flex flex-col gap-1 text-sm">
             <label htmlFor={lengthId} className="font-medium">

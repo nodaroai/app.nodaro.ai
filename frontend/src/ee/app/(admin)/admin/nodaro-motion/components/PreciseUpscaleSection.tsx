@@ -9,6 +9,10 @@
 // Topaz 1080p; 1080p: Topaz 4k), marked "(default)". The draft is always the
 // whole effective setting, and Save sends it whole.
 //
+// Prism Flash (decided 2026-11-22) has its own two rows (480p, 720p: it
+// renders no 1080p), default Topaz 1080p each, in a "Prism Flash" block: a
+// Prism Flash Precise run takes those, any other run the rows above.
+//
 // Where this environment's engine runs no upscale (`supported` false), the
 // setting still saves, and the block says that nothing reads it here.
 
@@ -27,7 +31,14 @@ export const PRECISE_UPSCALE_TOPAZ_DISABLED = "Topaz is disabled on this deploym
 /** Said where this environment's engine runs no upscale. */
 export const PRECISE_UPSCALE_UNSUPPORTED = "This environment's engine runs no upscale yet: its Precise runs are delivered as the edit made them until it does."
 
-export type PreciseUpscaleResolution = keyof NodaroMotionPreciseUpscaleEffective
+export type PreciseUpscaleResolution = Exclude<keyof NodaroMotionPreciseUpscaleEffective, "flash">
+
+/** Prism Flash's rows (no 1080p). */
+export type PreciseUpscaleFlashResolution = keyof NodaroMotionPreciseUpscaleEffective["flash"]
+export const PRECISE_UPSCALE_FLASH_RESOLUTIONS: readonly PreciseUpscaleFlashResolution[] = ["480p", "720p"]
+
+/** The Prism Flash block's heading. */
+export const PRECISE_UPSCALE_FLASH_HEADING = "Prism Flash"
 
 export const PRECISE_UPSCALE_RESOLUTIONS: readonly PreciseUpscaleResolution[] = ["480p", "720p", "1080p"]
 
@@ -39,14 +50,19 @@ export const PRECISE_UPSCALE_CHOICES: { readonly [R in PreciseUpscaleResolution]
 }
 
 /** Each resolution's choice while it was never saved (the server's own). */
-export const PRECISE_UPSCALE_DEFAULTS: NodaroMotionPreciseUpscaleEffective = { "480p": "1080p", "720p": "1080p", "1080p": "4k" }
+export const PRECISE_UPSCALE_DEFAULTS: NodaroMotionPreciseUpscaleEffective = { "480p": "1080p", "720p": "1080p", "1080p": "4k", flash: { "480p": "1080p", "720p": "1080p" } }
 
 /** The whole effective setting of a stored one: each resolution it leaves out (or a choice it does not take) at its default. A new object. */
 export function preciseUpscaleEffective(stored: NodaroMotionPreciseUpscale | null | undefined): NodaroMotionPreciseUpscaleEffective {
-  const out = { ...PRECISE_UPSCALE_DEFAULTS }
+  const out = { ...PRECISE_UPSCALE_DEFAULTS, flash: { ...PRECISE_UPSCALE_DEFAULTS.flash } }
   for (const r of PRECISE_UPSCALE_RESOLUTIONS) {
     const v = stored?.[r]
-    if (v !== undefined && (PRECISE_UPSCALE_CHOICES[r] as readonly string[]).includes(v)) (out as Record<string, string>)[r] = v
+    if (v !== undefined && (PRECISE_UPSCALE_CHOICES[r] as readonly string[]).includes(v)) (out as unknown as Record<string, string>)[r] = v
+  }
+  // Prism Flash's rows (a setting stored before them has none: their defaults).
+  for (const r of PRECISE_UPSCALE_FLASH_RESOLUTIONS) {
+    const v = stored?.flash?.[r]
+    if (v !== undefined && (PRECISE_UPSCALE_CHOICES[r] as readonly string[]).includes(v)) (out.flash as Record<string, string>)[r] = v
   }
   return out
 }
@@ -101,6 +117,33 @@ export function PreciseUpscaleSection({ value, onChange, defaults, supported, to
           </div>
         )
       })}
+      <div role="group" aria-label={PRECISE_UPSCALE_FLASH_HEADING} className="flex min-w-0 flex-col gap-3 border-t pt-3">
+        <h3 id={`${id}-flash-heading`} className="text-sm font-semibold">
+          {PRECISE_UPSCALE_FLASH_HEADING}
+        </h3>
+        {PRECISE_UPSCALE_FLASH_RESOLUTIONS.map((r) => {
+          const labelId = `${id}-flash-${r}-label`
+          return (
+            <div key={r} className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              <Label id={labelId} htmlFor={`${id}-flash-${r}`} className="font-medium">
+                {r}
+              </Label>
+              <Select value={value.flash[r]} onValueChange={(v) => onChange({ ...value, flash: { ...value.flash, [r]: v } })}>
+                <SelectTrigger id={`${id}-flash-${r}`} className="h-9 w-full sm:w-56" aria-labelledby={`${id}-flash-heading ${labelId}`} aria-describedby={noteId}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRECISE_UPSCALE_CHOICES[r].map((choice) => (
+                    <SelectItem key={choice} value={choice}>
+                      {preciseUpscaleOptionLabel(choice, defaults.flash?.[r] ?? PRECISE_UPSCALE_DEFAULTS.flash[r])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )
+        })}
+      </div>
       {topazDisabled && (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
           {PRECISE_UPSCALE_TOPAZ_DISABLED}
