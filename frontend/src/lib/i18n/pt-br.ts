@@ -5619,6 +5619,7 @@ export const ptBR: ChromeDict = {
   "vidcfg.subtle": "Sutil",
   "vidcfg.choose": "Escolher",
   "vidcfg.durationAutoFromClip": "A duração é definida automaticamente pelo clipe de origem.",
+  "vidcfg.drivingAudioLength": "O clipe tem a duração do seu áudio: {min}–{max} s (no máximo {short} s em 1440p ou a 48 / 50 fps). Sem quadro inicial, ele é 16:9.",
   "vidcfg.durationAuto": "Automática",
   "vidcfg.durationAutoHint": "Automática: o modelo escolhe a duração (a do clipe de origem ao editar um vídeo de referência). Os créditos são reservados para o clipe mais longo (ao editar um vídeo de referência: a duração do vídeo de referência mais longo arredondada para cima, mais um segundo), e o excedente é reembolsado de acordo com a duração entregue.",
   "vidcfg.wan3Note": "O preço depende da duração e da resolução; o botão Executar mostra o preço da duração escolhida. O áudio ambiente é gerado com o clipe. “Adaptativo” segue a entrada conectada; texto para vídeo puro é renderizado em 16:9, a menos que uma proporção específica seja escolhida.",

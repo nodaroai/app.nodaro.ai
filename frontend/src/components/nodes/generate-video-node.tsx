@@ -46,6 +46,7 @@ import { SettingsChips } from "./settings-chips"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { buildVideoCreditModelIdentifier, videoGenerationCreditId } from "@nodaro/shared/credits"
+import { drivingAudioQuotedCreditId } from "@/lib/video-utility-estimate"
 import { applyDefaultVideoSelection } from "@nodaro/shared/models"
 import { audioReferencesLabel, sendsReferenceVideo } from "@/lib/audio-reference-handles"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
@@ -170,7 +171,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // legacy i2v node's behavior. The shared builder applies the resolution fill
   // and Seedance Draft the run applies — the same id the run estimate quotes,
   // and the one Video to Video's Seedance edit lane quotes for the same call.
-  const creditIdentifier = videoGenerationCreditId({
+  // Audio-to-video (LTX 2.5 Fast with an audio clip wired): the row of the clip's length, as the Run quotes it.
+  const drivingAudioId = useWorkflowStore((s) => drivingAudioQuotedCreditId({ id, data: runData as Record<string, unknown> }, s.nodes as WorkflowNode[], s.edges))
+  const creditIdentifier = drivingAudioId ?? videoGenerationCreditId({
     provider,
     duration: runDuration,
     // The audio fields the run reserves from (payload-builder: `sound ?? kling3Sound`, then `generateAudio`).

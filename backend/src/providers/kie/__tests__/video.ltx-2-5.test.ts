@@ -202,3 +202,58 @@ describe("LTX 2.5 — provider cost", () => {
     expect(ltx25CostUsd("ltx-2.5-pro", "720p", 6)).toBeCloseTo(0.072 * 6, 6)
   })
 })
+
+describe("LTX 2.5 Fast — audio to video (decided 2026-11-23)", () => {
+  const AUDIO = "https://x/voice.mp3"
+
+  it("a run marked audio-to-video takes the audio endpoint with the measured length as sent, on either lane", async () => {
+    await provider.textToVideo("she sings the chorus", "ltx-2.5-fast", 7.2, "9:16", {
+      audioToVideo: true,
+      referenceAudioUrls: [AUDIO],
+      resolution: "720p",
+      fps: 25,
+      seed: 7,
+      aspectRatio: "9:16",
+    })
+    expect(capturedModel()).toBe("ltx/2-5-fast-audio-to-video")
+    const input = captured()
+    expect(Object.keys(input).sort()).toEqual(["audio_url", "duration", "fps", "prompt", "resolution", "seed"])
+    expect(input).toMatchObject({ audio_url: AUDIO, duration: 7.2, resolution: "720p", fps: 25, seed: 7 })
+    expect(input.aspect_ratio).toBeUndefined()
+  })
+
+  it("with a start frame it sends the frame too; the recorded cost is the rate on the seconds sent", async () => {
+    const res = await provider.imageToVideo(START, "he speaks", "ltx-2.5-fast", 5.5, undefined, {
+      audioToVideo: true,
+      referenceAudioUrls: [AUDIO],
+      resolution: "1080p",
+    })
+    expect(capturedModel()).toBe("ltx/2-5-fast-audio-to-video")
+    expect(captured()).toMatchObject({ audio_url: AUDIO, duration: 5.5, resolution: "1080p", fps: 24 })
+    expect(typeof captured().image_url).toBe("string")
+    expect(res.cost).toBeCloseTo(ltx25CostUsd("ltx-2.5-fast", "1080p", 5.5), 10)
+  })
+
+  it("on the image lane without a start frame (Generate Video with only a clip wired) it reaches the audio endpoint", async () => {
+    await provider.imageToVideo(undefined, "a song", "ltx-2.5-fast", 4.4, undefined, {
+      audioToVideo: true,
+      referenceAudioUrls: [AUDIO],
+      resolution: "720p",
+    })
+    expect(capturedModel()).toBe("ltx/2-5-fast-audio-to-video")
+    expect(Object.keys(captured()).sort()).toEqual(["audio_url", "duration", "fps", "prompt", "resolution"])
+    expect(captured().duration).toBe(4.4)
+  })
+
+  it("an audio clip on a run not marked audio-to-video is not sent (the text endpoint, as before)", async () => {
+    await provider.textToVideo("a quiet street", "ltx-2.5-fast", 8, "16:9", { referenceAudioUrls: [AUDIO], resolution: "720p" })
+    expect(capturedModel()).toBe("ltx/2-5-fast-text-to-video")
+    expect(captured().audio_url).toBeUndefined()
+  })
+
+  it("a run marked audio-to-video on Pro, or without its clip, fails before any task is created", async () => {
+    await expect(provider.textToVideo("x", "ltx-2.5-pro", 6, "16:9", { audioToVideo: true, referenceAudioUrls: [AUDIO] })).rejects.toThrow()
+    await expect(provider.textToVideo("x", "ltx-2.5-fast", 6, "16:9", { audioToVideo: true })).rejects.toThrow()
+    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+  })
+})

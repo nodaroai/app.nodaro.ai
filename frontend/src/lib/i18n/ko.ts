@@ -5619,6 +5619,7 @@ export const ko: ChromeDict = {
   "vidcfg.subtle": "은은함",
   "vidcfg.choose": "선택",
   "vidcfg.durationAutoFromClip": "길이는 원본 클립에 맞춰 자동으로 설정됩니다.",
+  "vidcfg.drivingAudioLength": "클립 길이는 오디오 길이와 같습니다: {min}–{max}초 (1440p 또는 48 / 50fps에서는 최대 {short}초). 시작 프레임이 없으면 16:9입니다.",
   "vidcfg.durationAuto": "자동",
   "vidcfg.durationAutoHint": "자동: 모델이 길이를 정합니다(레퍼런스 동영상을 편집할 때는 원본 클립의 길이). 크레딧은 가장 긴 클립 기준으로 예약되며(레퍼런스 동영상을 편집할 때는 가장 긴 레퍼런스 동영상의 길이를 올림한 값에 1초를 더한 기준), 실제 출력된 길이에 맞춰 차액이 환불됩니다.",
   "vidcfg.wan3Note": "요금은 길이와 해상도에 따라 정해지며, 실행 버튼에 선택한 길이의 요금이 표시됩니다. 클립과 함께 주변음이 생성됩니다. “적응형”은 연결된 입력에 맞춰지며, 텍스트만으로 동영상을 만들 때는 특정 비율을 선택하지 않으면 16:9로 렌더링됩니다.",

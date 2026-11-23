@@ -3684,7 +3684,10 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > (anything else → 1080p); `fps` 24 (default) / 25 / 48 / 50, the same price at
 > each. On Fast, 1440p or 48 / 50 fps allow at most 10 s: a longer `duration`
 > runs and is charged as 10 s, reported in `adjustments`. No end frame, no
-> negative prompt, no references. See
+> negative prompt, no reference images or videos. **On Fast, one
+> `referenceAudioUrls` clip (2.05–20 s) runs audio-to-video** on either route: the
+> clip is as long as the audio, charged at its measured length rounded up to a
+> whole second (`duration` is not read). See
 > [LTX 2.5](nodes/ai-video/generate-video.md#ltx-25--fast-and-pro).
 > **Grok Imagine 1.5** (`grok-imagine-video-1.5`) needs `imageUrl` (the exact
 > first frame); `endFrameUrl` is the exact last frame, the same URL as both

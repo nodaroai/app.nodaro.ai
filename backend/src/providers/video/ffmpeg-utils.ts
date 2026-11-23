@@ -1789,14 +1789,14 @@ export interface MediaStreams {
  * Throws (never guesses) when ffprobe's output is not parseable — callers
  * that want a fail-open decision catch and fall back on the slot's word.
  */
-export async function probeMediaStreams(srcUrlOrPath: string): Promise<MediaStreams> {
+export async function probeMediaStreams(srcUrlOrPath: string, opts: { readonly userFile?: boolean } = {}): Promise<MediaStreams> {
   const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
     ...probe.inputArgs,
     "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
     "-of", "json",
     input,
-  ]))
+  ]), opts.userFile ? { userFile: true } : {})
   let parsed: { streams?: unknown }
   try {
     parsed = JSON.parse(output) as { streams?: unknown }

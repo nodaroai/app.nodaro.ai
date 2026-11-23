@@ -5619,6 +5619,7 @@ export const es: ChromeDict = {
   "vidcfg.subtle": "Sutil",
   "vidcfg.choose": "Elegir",
   "vidcfg.durationAutoFromClip": "La duración se establece automáticamente a partir del clip de origen.",
+  "vidcfg.drivingAudioLength": "El clip dura lo mismo que su audio: {min}–{max} s (como máximo {short} s a 1440p o a 48 / 50 fps). Sin fotograma inicial es 16:9.",
   "vidcfg.durationAuto": "Auto",
   "vidcfg.durationAutoHint": "Automática: el modelo elige la duración (la del clip de origen al editar un video de referencia). Los créditos se reservan para el clip más largo (al editar un video de referencia: la duración del video de referencia más largo redondeada hacia arriba, más un segundo) y se reembolsa la diferencia hasta la duración entregada.",
   "vidcfg.wan3Note": "El precio depende de la duración y la resolución; el botón Ejecutar muestra el precio de la duración que elijas. El audio ambiente se genera con el clip. «Adaptativo» sigue la entrada conectada; el texto a video puro se renderiza en 16:9 salvo que elijas una relación concreta.",

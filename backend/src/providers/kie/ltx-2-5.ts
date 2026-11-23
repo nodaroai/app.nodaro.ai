@@ -29,12 +29,22 @@
  *   - `seed` (only a whole number 0-2147483647; a route's `-1` "random" and
  *     anything else is left out, so KIE picks one).
  * Sound is always generated: no schema has an audio field, so none is sent.
+ *
+ * Audio-to-video (Fast only — decided 2026-11-23): a run the platform measured
+ * and priced as one (`audioToVideo`) takes `ltx/2-5-fast-audio-to-video`
+ * (docs.kie.ai/market/ltx/2-5-fast-audio-to-video): `audio_url` (the clip),
+ * `prompt`, an optional `image_url` (the first frame; without one the clip is
+ * 16:9 — the schema has no `aspect_ratio`), `resolution`, `fps`, `seed`, and
+ * `duration` — the MEASURED audio length as sent by the platform (a number,
+ * decimals allowed, never longer than the audio: the schema refuses a
+ * duration past the audio's end), within 2-20 s or 10 s at 1440p / 48 / 50 fps.
  */
 import { isLtx25Provider, normalizeLtx25Resolution, videoDurationCappedAt, type Ltx25Provider } from "@nodaro/shared/models"
 import { getModel, videoFrameRateFor } from "@nodaro/shared/model-catalog"
 import { snapAspectRatioToken } from "../video/aspect-ratio.js"
 import { neutralizeImageMentions } from "./image-mentions.js"
 import {
+  LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL,
   LTX_2_5_FAST_IMAGE_TO_VIDEO_MODEL,
   LTX_2_5_FAST_TEXT_TO_VIDEO_MODEL,
   LTX_2_5_PRO_IMAGE_TO_VIDEO_MODEL,
@@ -54,12 +64,14 @@ export const LTX_2_5_SEED_RANGE = { min: 0, max: 2147483647 } as const
 /** The keys each body may carry — the allow-list the tests hold the builder to. */
 export const LTX_2_5_IMAGE_TO_VIDEO_FIELDS = ["prompt", "image_url", "resolution", "fps", "duration", "seed"] as const
 export const LTX_2_5_TEXT_TO_VIDEO_FIELDS = ["prompt", "resolution", "fps", "duration", "aspect_ratio", "seed"] as const
+export const LTX_2_5_AUDIO_TO_VIDEO_FIELDS = ["prompt", "audio_url", "image_url", "resolution", "fps", "duration", "seed"] as const
 
 type Ltx25Endpoint =
   | typeof LTX_2_5_FAST_IMAGE_TO_VIDEO_MODEL
   | typeof LTX_2_5_FAST_TEXT_TO_VIDEO_MODEL
   | typeof LTX_2_5_PRO_IMAGE_TO_VIDEO_MODEL
   | typeof LTX_2_5_PRO_TEXT_TO_VIDEO_MODEL
+  | typeof LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL
 
 const ENDPOINTS: Record<Ltx25Provider, { readonly i2v: Ltx25Endpoint; readonly t2v: Ltx25Endpoint }> = {
   "ltx-2.5-fast": { i2v: LTX_2_5_FAST_IMAGE_TO_VIDEO_MODEL, t2v: LTX_2_5_FAST_TEXT_TO_VIDEO_MODEL },
@@ -136,4 +148,36 @@ export function buildLtx25Request(args: Ltx25RequestArgs): Ltx25Request {
   const seed = ltx25Seed(args.seed)
   if (seed !== undefined) input.seed = seed
   return { model: ltx25Endpoint(args.provider, !!start), input }
+}
+
+export interface Ltx25AudioRequestArgs {
+  provider: Ltx25Provider
+  prompt: string
+  /** The driving clip. */
+  audioUrl: string
+  /** The length the platform measured and priced (seconds, decimals allowed; never past the audio's end). */
+  durationSec: number
+  resolution?: string
+  fps?: unknown
+  /** The first frame, when one is wired; the clip then takes its shape. */
+  startFrameUrl?: string
+  seed?: number
+}
+
+/** The audio-to-video body (Fast only). Throws for Pro: it has no such endpoint. */
+export function buildLtx25AudioRequest(args: Ltx25AudioRequestArgs): Ltx25Request {
+  if (args.provider !== "ltx-2.5-fast") throw new Error(`${String(args.provider)} has no audio-to-video endpoint`)
+  const audio = args.audioUrl.trim()
+  if (!audio) throw new Error("LTX 2.5 Fast audio-to-video needs an audio clip")
+  const start = args.startFrameUrl?.trim() || undefined
+  const prompt = neutralizeImageMentions(args.prompt)
+  const input: Record<string, unknown> = { prompt: prompt.trim() ? prompt : LTX_2_5_DEFAULT_PROMPT, audio_url: audio }
+  if (start) input.image_url = start
+  input.resolution = normalizeLtx25Resolution(args.provider, args.resolution)
+  input.fps = videoFrameRateFor(args.provider, args.fps)!
+  // The measured length, to the hundredth (the platform priced its whole seconds and never sends past the audio).
+  input.duration = Math.round(args.durationSec * 100) / 100
+  const seed = ltx25Seed(args.seed)
+  if (seed !== undefined) input.seed = seed
+  return { model: LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL, input }
 }

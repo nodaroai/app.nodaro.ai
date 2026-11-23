@@ -17,6 +17,8 @@ import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia 
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { pricedRefVideoInput, probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
+import { adjustmentsForRun, drivingAudioFreeVideoRequest, measureDrivingAudio } from "../lib/driving-audio-measure.js"
+import { isDrivingAudioRun } from "@nodaro/shared/credits"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
 import { seatCharacterVideosPreHandler } from "../lib/character-video-seat.js"
@@ -884,6 +886,34 @@ export async function pricedRefVideoDurations(
     : probeRefVideoDurations({ provider, referenceVideoUrls: (priced.referenceVideoUrls as unknown[] | undefined) ?? [] })
 }
 
+/**
+ * Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast — decided 2026-11-23):
+ * a run of such a model with a reference audio clip is made to that clip, and
+ * is priced on its length as the SERVER measures it (`measureDrivingAudio`: the
+ * decoded length, the formats and size the endpoint takes, 2-20 s, 10 s at most
+ * at 1440p or 48 / 50 fps). Runs BEFORE creditGuard, in every edition, and
+ * stashes the measured, priced run on the request: the identifier, the
+ * reservation, the queued length and `input_data` all read it. One clip only.
+ * Shared by /v1/generate-video and /v1/text-to-video, and run as-is by
+ * `POST /v1/quote`.
+ */
+export async function drivingAudioPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const provider = applyDefaultVideoSelection({ provider: body.provider as string | undefined, duration: body.duration as number | string | undefined }).provider
+  const audio = Array.isArray(body.referenceAudioUrls) ? body.referenceAudioUrls : []
+  if (!isDrivingAudioRun(provider, audio.length)) return
+  if (audio.length > 1) {
+    return reply.status(400).send({
+      error: { code: "validation_error", message: `${provider} makes a video from one audio clip; this request sends ${audio.length}. Send one. Nothing was charged.` },
+    })
+  }
+  const measured = await measureDrivingAudio({ provider, audioUrl: audio[0], resolution: body.resolution, fps: body.fps, userId: req.userId })
+  if (!measured.ok) {
+    return reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+  }
+  req.drivingAudio = measured
+}
+
 export async function validateRefVideoDurationPreHandler(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -928,7 +958,7 @@ export async function validateRefVideoDurationPreHandler(
  * is what the run reserves).
  */
 export const generateVideoPricing: RoutePricing = {
-  prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler, drivingAudioPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
@@ -952,6 +982,11 @@ export const generateVideoPricing: RoutePricing = {
     })
     req.videoNorm = norm
     req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
+    // Audio-to-video: the row of the measured clip (drivingAudioPreHandler), judged on free credits as such.
+    if (req.drivingAudio) {
+      req.freeVideoRequest = drivingAudioFreeVideoRequest(sel.provider, req.drivingAudio)
+      return req.drivingAudio.creditId
+    }
     return buildVideoCreditModelIdentifier(
       sel.provider,
       norm.duration ?? sel.duration,
@@ -984,6 +1019,11 @@ export const generateVideoPricing: RoutePricing = {
       // reference videos like any other run (#1396) — reserves the same
       // worst case as an unvoiced one plus its audio step.
       let dynamicBase: number | undefined
+      // Audio-to-video: the row of the measured clip, as the identifier names it; the add-ons below ride on it.
+      if (req.drivingAudio) {
+        const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+        dynamicBase = (await getModelCreditBaseCost(req.drivingAudio.creditId)).creditCost
+      }
       // Seedance 2 reference-video runs are billed unit×(input+output). The
       // seeded `-ref` composite only encodes the per-8s OUTPUT rate, so we
       // ffprobe the connected reference videos and reserve the FULL scaled
@@ -1133,7 +1173,8 @@ export const generateVideoPricing: RoutePricing = {
       // Sized on the seconds the model renders (Auto: its ceiling, unset:
       // its own default) — the worker's settlement and the reconcile read
       // the same helper, so what is held here is what is refunded.
-      const addon = loopTrimAddonCreditsFor(loopTrim, bSel.provider, b.duration as number | string | undefined)
+      // An audio-to-video run is sized on the length it sends (the worker's settlement reads the same).
+      const addon = loopTrimAddonCreditsFor(loopTrim, bSel.provider, req.drivingAudio ? req.drivingAudio.sentSec : b.duration as number | string | undefined)
       const audioAddon = await voicedAudioAddonCredits(b)
       if (dynamicBase === undefined && isSeedance2Provider(bSel.provider) && isAutoVideoDuration(req.videoNorm?.duration ?? bSel.duration)) {
         noteAutoDurationSettles(req)
@@ -1198,14 +1239,18 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // `input_data.draft === true` off this job.
     const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
     const normAspectRatio = normalized.aspectRatio
-    const normResolution = normalized.resolution
-    const normDuration = normalized.duration ?? duration
-    const adjustmentWarnings = normalized.adjustments.map((a) => ({
+    // Audio-to-video: the measured clip's run (drivingAudioPreHandler) — its resolution, its length sent.
+    const drivingAudio = req.drivingAudio
+    const normResolution = drivingAudio ? drivingAudio.resolution : normalized.resolution
+    const normDuration = drivingAudio ? drivingAudio.sentSec : normalized.duration ?? duration
+    // An audio-to-video run reads neither the body's length nor its ratio, so a move of either is not reported.
+    const reportedAdjustments = adjustmentsForRun(normalized.adjustments, drivingAudio)
+    const adjustmentWarnings = reportedAdjustments.map((a) => ({
       code: "params_adjusted" as const,
       message: a.reason,
     }))
-    if (normalized.adjustments.length > 0) {
-      req.log.warn({ provider, adjustments: normalized.adjustments }, "[generate-video] snapped catalog-governed params")
+    if (reportedAdjustments.length > 0) {
+      req.log.warn({ provider, adjustments: reportedAdjustments }, "[generate-video] snapped catalog-governed params")
     }
     let prompt = rawPrompt
 
@@ -1462,6 +1507,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       ((refCaps?.images ?? 0) > 0 && (refsReplaceStartFrame || foldsLoneEndFrame)) ||
       ((refCaps?.videos ?? 0) > 0 && (referenceVideoUrls?.length ?? 0) > 0) ||
       ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0) ||
+      // Audio-to-video (LTX 2.5 Fast): the measured clip drives the picture, a start frame optional.
+      req.drivingAudio !== undefined ||
       // Validated above: reaching here with characters means the provider takes them.
       (characterReferences?.length ?? 0) > 0
 
@@ -1550,7 +1597,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
-    const modelIdentifier = buildVideoCreditModelIdentifier(
+    const modelIdentifier = drivingAudio ? drivingAudio.creditId : buildVideoCreditModelIdentifier(
       provider,
       normDuration,
       { sound, generateAudio },
@@ -1619,6 +1666,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               duration: normDuration,
               draft,
               ...(normalized.fps !== undefined ? { fps: normalized.fps } : {}),
+              // Audio-to-video: the clip's measured length and the seconds it is priced on.
+              ...(drivingAudio ? { audioToVideo: true, drivingAudioSec: drivingAudio.audioSec, drivingAudioBilledSec: drivingAudio.billedSec } : {}),
               // Only when declared, so `auto` records exactly what no field does.
               ...(referenceTaskType ? { referenceTaskType } : {}),
               // The pre-check's ffprobe of the reference clips: the settlement
@@ -1688,6 +1737,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       elements,
       resolution: normResolution,
       ...(normalized.fps !== undefined ? { fps: normalized.fps } : {}),
+      // Audio-to-video: the runner takes the audio endpoint, sending `duration` (the measured length).
+      ...(drivingAudio ? { audioToVideo: true } : {}),
       draft,
       ...(referenceTaskType ? { referenceTaskType } : {}),
       grokMode,
@@ -1723,7 +1774,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // the structured {field, from, to, reason} shape /v1/text-to-video returns
     // and the API docs define — the message string alone drops `field`/`from`/
     // `to`, so a client cannot tell WHICH lever moved without re-parsing prose.
-    const structuredAdjustments = normalized.adjustments
+    const structuredAdjustments = reportedAdjustments
     if (wantsVoice && !canVoice) {
       return {
         jobId: job.id,

@@ -112,6 +112,7 @@ import {
   CONTENT_IDEAS_BRAND_MAX,
   CONTENT_IDEAS_LANGUAGE_MAX,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
+  isDrivingAudioRun,
   ltxExtendDurationSec,
   LTX_RETAKE_PER_SECOND_CREDIT_ID,
   ltxRetakeDurationSec,
@@ -4392,6 +4393,9 @@ function buildPayloadOf(
           referenceImageUrls: i2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          // Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): the run is made to its first audio clip and
+          // priced on that clip's measured length — node-executor measures it and re-prices the run before the hold.
+          ...(isDrivingAudioRun(provider, resolvedInputs.referenceAudioUrls?.length ?? 0) ? { drivingAudioPending: true } : {}),
           audioSoundtrack: data.audioSoundtrack,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
@@ -4538,6 +4542,9 @@ function buildPayloadOf(
           referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          // Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): the run is made to its first audio clip and
+          // priced on that clip's measured length — node-executor measures it and re-prices the run before the hold.
+          ...(isDrivingAudioRun(provider, resolvedInputs.referenceAudioUrls?.length ?? 0) ? { drivingAudioPending: true } : {}),
           audioSoundtrack: data.audioSoundtrack,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
@@ -4951,6 +4958,9 @@ function buildPayloadOf(
           videoTrimStart: data.videoTrimStart,
           videoTrimEnd: data.videoTrimEnd,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          // Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): the run is made to its first audio clip and
+          // priced on that clip's measured length — node-executor measures it and re-prices the run before the hold.
+          ...(isDrivingAudioRun(resolvedProvider, resolvedInputs.referenceAudioUrls?.length ?? 0) ? { drivingAudioPending: true } : {}),
           audioUrl: resolvedInputs.audioUrl,
           ...scene3DWarningsField({ references: gvScene3D, node, buildCtx, data, provider: resolvedProvider }),
           duration: gvNorm.duration ?? data.duration,

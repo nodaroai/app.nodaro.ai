@@ -1,9 +1,9 @@
 // @test-units-by-name looks up only the ltx-2.5 credit rows it names
-// @test-watches supabase/migrations/687_ltx_2_5_pricing.sql
+// @test-watches supabase/migrations/687_ltx_2_5_pricing.sql supabase/migrations/690_ltx_2_5_audio_to_video_pricing.sql
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, it, expect } from "vitest"
-import { buildVideoCreditModelIdentifier, pricedVideoSelection, videoGenerationCreditId } from "@nodaro/shared/credits"
+import { buildVideoCreditModelIdentifier, drivingAudioQuoteId, drivingAudioRun, pricedVideoSelection, videoGenerationCreditId } from "@nodaro/shared/credits"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { PRICING_DEFAULT_RESOLUTION, pricedOutputDurationSec } from "@nodaro/shared/models"
 import { STATIC_CREDIT_COSTS, getNodeModelIdentifier } from "../credits.js"
@@ -59,10 +59,10 @@ describe("ltx-2.5 static credits", () => {
     }
   })
 
-  it("carries exactly the bare ids plus 19 Fast and 6 Pro rows — no 1440p row past 10 s, no 1440p on Pro", () => {
+  it("carries exactly the bare ids plus 47 Fast rows (every whole second 2-20 s, 1440p to 10 s) and 6 Pro rows", () => {
     const fast = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k === "ltx-2.5-fast" || k.startsWith("ltx-2.5-fast:"))
     const pro = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k === "ltx-2.5-pro" || k.startsWith("ltx-2.5-pro:"))
-    expect(fast).toHaveLength(1 + 19)
+    expect(fast).toHaveLength(1 + 19 + 9 + 9 + 1 + 9)
     expect(pro).toHaveLength(1 + 6)
     expect(fast.some((k) => /:(1[2-9]|20)s:1440p$/.test(k))).toBe(false)
     expect(pro.some((k) => k.endsWith(":1440p"))).toBe(false)
@@ -108,7 +108,9 @@ describe("ltx-2.5 static credits", () => {
   })
 
   it("the seed migration seeds exactly these rows at these prices", () => {
-    const sql = readFileSync(resolve(__dirname, "../../../../../supabase/migrations/687_ltx_2_5_pricing.sql"), "utf8")
+    const sql = ["687_ltx_2_5_pricing.sql", "690_ltx_2_5_audio_to_video_pricing.sql"]
+      .map((f) => readFileSync(resolve(__dirname, "../../../../../supabase/migrations", f), "utf8"))
+      .join("\n")
     const seeded = Object.fromEntries([...sql.matchAll(/\('(ltx-2\.5-[^']+)', (\d+), true, 'video'\)/g)].map((m) => [m[1]!, Number(m[2])]))
     const statics = Object.fromEntries(Object.entries(STATIC_CREDIT_COSTS).filter(([k]) => k.startsWith("ltx-2.5-")))
     expect(seeded).toEqual(statics)
@@ -210,6 +212,83 @@ describe("ltx-2.5: reservation = quote = DAG = editor estimate", () => {
   it("a model without a frame-rate setting is sent none, whatever the request carries (LTX 2.3 included)", () => {
     for (const provider of ["ltx-2.3-pro", "ltx-2.3-fast", "seedance-2-fast", "pixverse-v6-max"]) {
       expect(resolveVideoRequestNorm({ provider, duration: 8, fps: 50 }).fps, provider).toBeUndefined()
+    }
+  })
+})
+
+/**
+ * Audio-to-video on LTX 2.5 Fast (decided 2026-11-23): a run is priced on its
+ * clip's length rounded up to a whole second, one row per whole second, by the
+ * same per-second rule as the rows above, which it reproduces exactly.
+ */
+describe("ltx-2.5 Fast audio-to-video rows", () => {
+  const lengths = (res: string) => Array.from({ length: (res === "1440p" ? 10 : 20) - 1 }, (_, i) => i + 2)
+
+  it("prices every whole second 2-20 s (1440p: 2-10 s) by the rule, the existing even rows unchanged", () => {
+    for (const res of ["720p", "1080p", "1440p"]) {
+      for (const sec of lengths(res)) {
+        expect(STATIC_CREDIT_COSTS[rowId("ltx-2.5-fast", sec, res)], rowId("ltx-2.5-fast", sec, res)).toBe(ladder("ltx-2.5-fast", res, sec))
+      }
+      // The even rows the earlier table approved are reproduced exactly.
+      LENGTHS["ltx-2.5-fast"]![res]!.forEach((sec, i) => {
+        expect(ladder("ltx-2.5-fast", res, sec)).toBe(APPROVED["ltx-2.5-fast"]![res]![i])
+      })
+    }
+    expect(STATIC_CREDIT_COSTS[rowId("ltx-2.5-fast", 11, "1440p")]).toBeUndefined()
+  })
+
+  it("every row an audio-driven run or its estimate can name is priced, at every measured length", () => {
+    for (const res of ["720p", "1080p", "1440p"]) {
+      for (const fps of [24, 25, 48, 50]) {
+        for (let tenths = 15; tenths <= 215; tenths++) {
+          const audioSec = tenths / 10
+          const run = drivingAudioRun({ provider: "ltx-2.5-fast", resolution: res, fps, audioSec })
+          if (run.ok) {
+            expect(STATIC_CREDIT_COSTS[run.creditId], run.creditId).toBeGreaterThan(0)
+            expect(run.sentSec).toBeLessThanOrEqual(run.billedSec)
+            expect(run.sentSec).toBeLessThanOrEqual(audioSec)
+          }
+          const quoted = drivingAudioQuoteId({ provider: "ltx-2.5-fast", resolution: res, fps, audioSec })
+          expect(STATIC_CREDIT_COSTS[quoted], quoted).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it("the estimate quotes the wired clip's row, and the longest clip when its length is not known", () => {
+    const node = { id: "v", type: "generate-video", data: { provider: "ltx-2.5-fast", resolution: "720p", duration: 6 } }
+    expect(getNodeModelIdentifier(node, { drivingAudioWired: true, drivingAudioSec: 7.2 })).toBe("ltx-2.5-fast:8s:720p")
+    expect(getNodeModelIdentifier(node, { drivingAudioWired: true, drivingAudioSec: 7.03 })).toBe("ltx-2.5-fast:7s:720p")
+    expect(getNodeModelIdentifier(node, { drivingAudioWired: true })).toBe("ltx-2.5-fast:20s:720p")
+    expect(getNodeModelIdentifier({ ...node, data: { ...node.data, resolution: "1440p" } }, { drivingAudioWired: true })).toBe("ltx-2.5-fast:10s:1440p")
+    // No audio wired: the node's own length, as before.
+    expect(getNodeModelIdentifier(node, { drivingAudioWired: false })).toBe("ltx-2.5-fast:6s:720p")
+    // Pro has no audio-to-video: an audio wire moves nothing.
+    const pro = { ...node, data: { ...node.data, provider: "ltx-2.5-pro" } }
+    expect(getNodeModelIdentifier(pro, { drivingAudioWired: true, drivingAudioSec: 7.2 })).toBe("ltx-2.5-pro:6s:720p")
+  })
+})
+
+describe("ltx-2.5 Fast audio-to-video in the workflow run", () => {
+  const vnode = (provider: string, data: Record<string, unknown> = {}): SimpleNode =>
+    ({ id: "v", type: "generate-video", data: { provider, duration: 6, resolution: "720p", ...data } }) as unknown as SimpleNode
+  const AUDIO = "https://cdn.example/voice.mp3"
+
+  it("marks a Fast run with an audio clip, on both lanes, for the executor to measure before the hold", () => {
+    for (const inputs of [{ startFrameUrl: "https://cdn.example/s.png", referenceAudioUrls: [AUDIO] }, { referenceAudioUrls: [AUDIO] }]) {
+      const n = vnode("ltx-2.5-fast")
+      const built = buildPayload(n, "job-1", inputs, undefined, { nodes: [n], edges: [], nodeStates: {} })
+      expect(built.payload.drivingAudioPending).toBe(true)
+      expect(built.payload.referenceAudioUrls).toEqual([AUDIO])
+    }
+  })
+
+  it("leaves Pro, LTX 2.3 and a Fast run without audio unmarked", () => {
+    const cases: Array<[string, { referenceAudioUrls?: string[] }]> = [["ltx-2.5-pro", { referenceAudioUrls: [AUDIO] }], ["ltx-2.3-pro", { referenceAudioUrls: [AUDIO] }], ["ltx-2.5-fast", {}]]
+    for (const [provider, inputs] of cases) {
+      const n = vnode(provider)
+      const built = buildPayload(n, "job-1", inputs, undefined, { nodes: [n], edges: [], nodeStates: {} })
+      expect(built.payload.drivingAudioPending, provider).toBeUndefined()
     }
   })
 })

@@ -272,10 +272,21 @@ It is one model id per tier over two provider endpoints, and the platform picks 
 
 - **A start frame** runs image-to-video. The image is the first frame and the clip keeps its aspect ratio (a ratio wider than 3:1 is capped at 3:1), so the aspect ratio control hides while a frame is wired and a stored ratio is cleared. The image is prepared like every start frame — converted to PNG, JPEG or WebP when it is another format, and scaled to at most 2048 px on its long side and 10 MB — which is within what the model accepts.
 - **No image** runs text-to-video at 16:9 (the default), 9:16, 1:1, 3:2 or 2:3; another ratio is moved to the nearest of them.
+- **An audio clip** on **LTX 2.5 Fast** runs audio-to-video (decided 2026-11-23): the picture is made to the clip (a voice line, a song, a sound), and the clip is as long as the audio. Wire one clip into Audio Refs (the API's first `referenceAudioUrls` entry); a start frame is optional — with one the clip takes its shape, without one it is 16:9. While a clip is wired the node hides the length and aspect ratio controls (their stored values come back when you unwire it). See **Audio-to-video** below.
 
-There is no end frame, no negative prompt and no camera-motion setting: the editor hides them, a negative prompt is not sent (nor folded into the prompt), an end frame that reaches the model through the API is not sent, and a lone end frame follows the platform's general rule (a workflow run uses it as the start frame; the editor's Run asks for a start frame). Reference images, videos and audio are not sent either. A `seed` is a whole number from 0 to 2147483647; anything else, `-1` included, is left out.
+There is no end frame, no negative prompt and no camera-motion setting: the editor hides them, a negative prompt is not sent (nor folded into the prompt), an end frame that reaches the model through the API is not sent, and a lone end frame follows the platform's general rule (a workflow run uses it as the start frame; the editor's Run asks for a start frame). Reference images and videos are not sent either, nor reference audio — except the one clip an audio-to-video run on Fast is made to. A `seed` is a whole number from 0 to 2147483647; anything else, `-1` included, is left out.
 
-LTX 2.5 runs on paid credits only: its shortest clip is 6 seconds, longer than the free-credit limit.
+#### Audio-to-video (LTX 2.5 Fast)
+
+- **The audio**: an MP3, WAV, M4A, AAC, OGG or FLAC file of up to 50 MB, **2.05 to 20 seconds** long — **10 seconds at most at 1440p or at 48 / 50 fps**. One clip only.
+- **The length** is the audio's, as the platform measures it before anything is held (the file's decoded length; a length the request states is not read). The run is sent that length less a twentieth of a second, so the model never reads the audio as shorter than asked — which is why the shortest clip is 2.05 s.
+- **The price** is the clip's length **rounded up to a whole second**, at the resolution sent, from the per-second table under Pricing below; a few hundredths of a second past a whole second are forgiven (a 7.03 s clip is charged as 7 s, a 7.2 s clip as 8 s).
+- **Refused before anything is charged**: a clip shorter than 2.05 s, one longer than the run takes at its resolution and frame rate (the message names the setting to change), two clips, a video file wired as audio, or a file whose length cannot be read.
+- **Sound**: the clip is made to its audio. A render that comes back without a soundtrack gets the audio laid on, fitted to the clip.
+- **LTX 2.5 Pro has no audio-to-video.** An audio clip wired into a Pro node is not sent and does not switch the model: the run is an ordinary Pro run of the node's own length.
+- **Estimates** quote the wired clip's length when the editor knows it, else the longest clip the run can hold at its resolution (20 s, or 10 s at 1440p or 48 / 50 fps); the run itself is charged the measured length.
+
+LTX 2.5's text and image runs are paid credits only: their shortest clip is 6 seconds, longer than the free-credit limit. **An audio-to-video run on Fast is open on free credits at 720p for audio up to 4 seconds**, like any other video model's shortest clips; a longer clip or a higher resolution needs paid credits.
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 
@@ -797,6 +808,32 @@ The longest clip, 15 s at 1080p with audio, is **924**<!-- credits: pixverse-v6-
 | 20s | 594<!-- credits: ltx-2.5-fast:20s:720p --> | 858<!-- credits: ltx-2.5-fast:20s:1080p --> | — | — | — |
 
 A length the tier does not offer moves to the nearest one it does (a 7 s request runs and is charged as 6 s), and on Fast a length past 10 s at 1440p or at 48 / 50 fps runs and is charged as 10 s — the run is always charged the clip it is sent. An omitted `resolution` or `duration` runs and bills the 1080p, 10 s default, so the bare identifiers `ltx-2.5-fast` (429<!-- credits: ltx-2.5-fast -->) and `ltx-2.5-pro` (561<!-- credits: ltx-2.5-pro -->) are that default.
+
+**LTX 2.5 Fast audio-to-video** is priced on the clip's length rounded up to a whole second, via `ltx-2.5-fast:<N>s:<resolution>` — the same rows as above at the even lengths, plus every whole second between:
+
+| Clip (rounded up) | 720p | 1080p | 1440p |
+|---|---|---|---|
+| 2s | 66<!-- credits: ltx-2.5-fast:2s:720p --> | 88<!-- credits: ltx-2.5-fast:2s:1080p --> | 132<!-- credits: ltx-2.5-fast:2s:1440p --> |
+| 3s | 99<!-- credits: ltx-2.5-fast:3s:720p --> | 132<!-- credits: ltx-2.5-fast:3s:1080p --> | 198<!-- credits: ltx-2.5-fast:3s:1440p --> |
+| 4s | 121<!-- credits: ltx-2.5-fast:4s:720p --> | 176<!-- credits: ltx-2.5-fast:4s:1080p --> | 253<!-- credits: ltx-2.5-fast:4s:1440p --> |
+| 5s | 154<!-- credits: ltx-2.5-fast:5s:720p --> | 220<!-- credits: ltx-2.5-fast:5s:1080p --> | 319<!-- credits: ltx-2.5-fast:5s:1440p --> |
+| 6s | 187<!-- credits: ltx-2.5-fast:6s:720p --> | 264<!-- credits: ltx-2.5-fast:6s:1080p --> | 385<!-- credits: ltx-2.5-fast:6s:1440p --> |
+| 7s | 209<!-- credits: ltx-2.5-fast:7s:720p --> | 308<!-- credits: ltx-2.5-fast:7s:1080p --> | 440<!-- credits: ltx-2.5-fast:7s:1440p --> |
+| 8s | 242<!-- credits: ltx-2.5-fast:8s:720p --> | 352<!-- credits: ltx-2.5-fast:8s:1080p --> | 506<!-- credits: ltx-2.5-fast:8s:1440p --> |
+| 9s | 275<!-- credits: ltx-2.5-fast:9s:720p --> | 396<!-- credits: ltx-2.5-fast:9s:1080p --> | 572<!-- credits: ltx-2.5-fast:9s:1440p --> |
+| 10s | 297<!-- credits: ltx-2.5-fast:10s:720p --> | 429<!-- credits: ltx-2.5-fast:10s:1080p --> | 627<!-- credits: ltx-2.5-fast:10s:1440p --> |
+| 11s | 330<!-- credits: ltx-2.5-fast:11s:720p --> | 473<!-- credits: ltx-2.5-fast:11s:1080p --> | — |
+| 12s | 363<!-- credits: ltx-2.5-fast:12s:720p --> | 517<!-- credits: ltx-2.5-fast:12s:1080p --> | — |
+| 13s | 396<!-- credits: ltx-2.5-fast:13s:720p --> | 561<!-- credits: ltx-2.5-fast:13s:1080p --> | — |
+| 14s | 418<!-- credits: ltx-2.5-fast:14s:720p --> | 605<!-- credits: ltx-2.5-fast:14s:1080p --> | — |
+| 15s | 451<!-- credits: ltx-2.5-fast:15s:720p --> | 649<!-- credits: ltx-2.5-fast:15s:1080p --> | — |
+| 16s | 484<!-- credits: ltx-2.5-fast:16s:720p --> | 693<!-- credits: ltx-2.5-fast:16s:1080p --> | — |
+| 17s | 506<!-- credits: ltx-2.5-fast:17s:720p --> | 737<!-- credits: ltx-2.5-fast:17s:1080p --> | — |
+| 18s | 539<!-- credits: ltx-2.5-fast:18s:720p --> | 781<!-- credits: ltx-2.5-fast:18s:1080p --> | — |
+| 19s | 572<!-- credits: ltx-2.5-fast:19s:720p --> | 825<!-- credits: ltx-2.5-fast:19s:1080p --> | — |
+| 20s | 594<!-- credits: ltx-2.5-fast:20s:720p --> | 858<!-- credits: ltx-2.5-fast:20s:1080p --> | — |
+
+A 7.2 s clip at 720p is charged as 8 s: 242<!-- credits: ltx-2.5-fast:8s:720p --> credits; a 3.5 s clip at 720p as 4 s: 121<!-- credits: ltx-2.5-fast:4s:720p --> credits.
 
 Every figure above is what a run is charged on Nodaro Cloud; `GET /v1/credits/model-cost?model=<composite>` returns the live price of any composite.
 

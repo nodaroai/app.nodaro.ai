@@ -1,4 +1,5 @@
 // @registry-enumerates lists every quotable node unit (unitQuotableTypes) in the 400 for an unknown type and in the route's OpenAPI description
+import { adjustmentsForRun } from "../../lib/driving-audio-measure.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { nodeRunRoute } from "@nodaro/shared/nodes"
@@ -185,7 +186,7 @@ export function registerNodeQuote(app: FastifyInstance): void {
     try {
       const identifier = entry.pricing.modelResolver(req)
       const reserve = await reservedCreditsFor(req, identifier, entry.pricing.opts)
-      return { data: await quoteFrom(identifier, reserve, req.priceNotes ?? EMPTY_PRICE_NOTES, req.videoNorm?.adjustments ?? []) }
+      return { data: await quoteFrom(identifier, reserve, req.priceNotes ?? EMPTY_PRICE_NOTES, adjustmentsForRun(req.videoNorm?.adjustments ?? [], req.drivingAudio)) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       throw err

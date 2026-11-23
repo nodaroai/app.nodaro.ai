@@ -115,6 +115,11 @@ export const LTX_2_5_FAST_TEXT_TO_VIDEO_MODEL = "ltx/2-5-fast-text-to-video"
 export const LTX_2_5_FAST_IMAGE_TO_VIDEO_MODEL = "ltx/2-5-fast-image-to-video"
 export const LTX_2_5_PRO_TEXT_TO_VIDEO_MODEL = "ltx/2-5-pro-text-to-video"
 export const LTX_2_5_PRO_IMAGE_TO_VIDEO_MODEL = "ltx/2-5-pro-image-to-video"
+/** LTX 2.5 Fast's audio-to-video endpoint (docs.kie.ai/market/ltx/2-5-fast-audio-to-video, read
+ *  2026-11-23): a run of `ltx-2.5-fast` with an audio clip takes it (ltx-2-5.ts); Pro has none.
+ *  No routing config of its own — the request builder names it — and the admin credit audit maps it
+ *  back to `ltx-2.5-fast` by an alias. */
+export const LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL = "ltx/2-5-fast-audio-to-video"
 
 /** PixVerse V6's extend endpoint: any clip by `video_url`, returned whole with
  *  the new seconds joined on. No routing config of its own — pixverse-extend.ts

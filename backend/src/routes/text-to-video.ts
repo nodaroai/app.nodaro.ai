@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { adjustmentsForRun, drivingAudioFreeVideoRequest } from "../lib/driving-audio-measure.js"
 import { z } from "zod"
 import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -32,7 +33,7 @@ import { userDirectionNotSupported } from "../lib/user-direction.js"
 import { characterReferencesSchema } from "../lib/character-reference-schema.js"
 import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
-import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, refuseVideoReferencesOverLimitPreHandler, applyAudioSoundtrackPreHandler, pricedReferenceVideoCount, pricedRefVideoDurations } from "./generate-video.js"
+import { assembleVideoConnectedReferences, hasVideoReferenceChannels, REFERENCE_TOKEN_PROBE, validateRefVideoDurationPreHandler, validateSeedance2AudioPreHandler, refuseVideoReferencesOverLimitPreHandler, applyAudioSoundtrackPreHandler, drivingAudioPreHandler, pricedReferenceVideoCount, pricedRefVideoDurations } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { videoRunModel } from "../lib/run-model.js"
 import { seedance25OutputFormatFor } from "../lib/seedance25-output-format.js"
@@ -143,7 +144,7 @@ export const textToVideoBody = z.object({
 export const textToVideoPricing: RoutePricing = {
   // Reference audio the provider would refuse (format, length) is refused here,
   // before the reservation — the same check /v1/generate-video runs.
-  prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler],
+  prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler, drivingAudioPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
@@ -167,6 +168,11 @@ export const textToVideoPricing: RoutePricing = {
     })
     req.videoNorm = norm
     req.freeVideoRequest = { provider: sel.provider, duration: norm.duration ?? sel.duration, resolution: norm.resolution ?? null, videoSize: (body?.videoSize as string | undefined) ?? null }
+    // Audio-to-video: the row of the measured clip (drivingAudioPreHandler), judged on free credits as such.
+    if (req.drivingAudio) {
+      req.freeVideoRequest = drivingAudioFreeVideoRequest(sel.provider, req.drivingAudio)
+      return req.drivingAudio.creditId
+    }
     return buildVideoCreditModelIdentifier(
       sel.provider,
       norm.duration ?? sel.duration,
@@ -185,6 +191,11 @@ export const textToVideoPricing: RoutePricing = {
       // and length replace the requested ones (the same object otherwise), so
       // every read below prices the run that is sent.
       const b = videoRequestAsRun(rawBody as Record<string, unknown>, req.videoNorm)
+      // Audio-to-video: the row of the measured clip, as the identifier names it.
+      if (req.drivingAudio) {
+        const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+        return (await getModelCreditBaseCost(req.drivingAudio.creditId)).creditCost
+      }
       const hasVideoRef = pricedReferenceVideoCount(b?.provider as string | undefined, b ?? {}) > 0
       // R14: read the resolution the CHECK identifier was built from, never
       // the raw body — normalizing in the preHandler but not here would make
@@ -376,10 +387,14 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // `input_data.draft === true` off this job.
   const draft = rawDraft === true && isSeedanceDraftCapable(provider) ? true : undefined
   const normAspectRatio = normalized.aspectRatio
-  const normResolution = normalized.resolution
-  const normDuration = normalized.duration ?? duration
-  if (normalized.adjustments.length > 0) {
-    req.log.warn({ provider, adjustments: normalized.adjustments }, "[text-to-video] snapped catalog-governed params")
+  // Audio-to-video: the measured clip's run (drivingAudioPreHandler) — its resolution, its length sent.
+  const drivingAudio = req.drivingAudio
+  const normResolution = drivingAudio ? drivingAudio.resolution : normalized.resolution
+  const normDuration = drivingAudio ? drivingAudio.sentSec : normalized.duration ?? duration
+  // An audio-to-video run reads neither the body's length nor its ratio, so a move of either is not reported.
+  const reportedAdjustments = adjustmentsForRun(normalized.adjustments, drivingAudio)
+  if (reportedAdjustments.length > 0) {
+    req.log.warn({ provider, adjustments: reportedAdjustments }, "[text-to-video] snapped catalog-governed params")
   }
   // `prompt` + `referenceImageUrls` are reassigned by the connectedReferences
   // assembly below (when present), so they're `let`, not part of the const destructure.
@@ -552,7 +567,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   parsed.data.prompt = prompt
 
   // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
-  const modelIdentifier = buildVideoCreditModelIdentifier(
+  const modelIdentifier = drivingAudio ? drivingAudio.creditId : buildVideoCreditModelIdentifier(
     provider ?? "minimax",
     normDuration,
     { sound, generateAudio },
@@ -597,6 +612,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
             duration: normDuration,
             draft,
             ...(normalized.fps !== undefined ? { fps: normalized.fps } : {}),
+            // Audio-to-video: the clip's measured length and the seconds it is priced on.
+            ...(drivingAudio ? { audioToVideo: true, drivingAudioSec: drivingAudio.audioSec, drivingAudioBilledSec: drivingAudio.billedSec } : {}),
             // Only when declared, so `auto` records exactly what no field does.
             ...(referenceTaskType ? { referenceTaskType } : {}),
             // The pre-check's ffprobe of the reference clips — the
@@ -642,6 +659,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     seed,
     resolution: normResolution,
     ...(normalized.fps !== undefined ? { fps: normalized.fps } : {}),
+    // Audio-to-video: the runner takes the audio endpoint, sending `duration` (the measured length).
+    ...(drivingAudio ? { audioToVideo: true } : {}),
     draft,
     ...(referenceTaskType ? { referenceTaskType } : {}),
     generateAudio,
@@ -663,7 +682,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
   // Disclose any lever the caller asked for and did not get. The route has no
   // pre-existing `warnings` vocabulary (unlike generate-video), so the
   // structured adjustments are the disclosure.
-  return normalized.adjustments.length > 0
-    ? { jobId: job.id, adjustments: normalized.adjustments }
+  return reportedAdjustments.length > 0
+    ? { jobId: job.id, adjustments: reportedAdjustments }
     : { jobId: job.id }
 }

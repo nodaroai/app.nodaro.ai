@@ -8,6 +8,8 @@ import {
   withoutDeniedModels,
 } from "@/components/editor/config-panels/model-options"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
+import { isDrivingAudioRun } from "@nodaro/shared/credits"
+import { countRefModalityEdges } from "@nodaro/shared/workflow"
 import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
 import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
 import { getModel, isSeedanceDraftCapable, normalizeModelInput, videoDurationsAt } from "@nodaro/shared/model-catalog"
@@ -70,23 +72,32 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     return lbl.length > 12 ? lbl.slice(0, 11).trimEnd() + "…" : lbl
   }, [modelEntry?.label, currentProvider])
 
-  const aspectOptions = useMemo(() => getAspectRatiosForVideoModel(currentProvider), [currentProvider])
+  // Audio clips wired (a primitive): an audio-to-video model (catalog `drivingAudio`, LTX 2.5 Fast) with
+  // one makes the clip as long as its audio, 16:9 without a start frame — no length or shape to pick (the
+  // stored values are kept), and its free-credit lock is judged by its shortest audio-driven clip.
+  const audioRefCount = useWorkflowStore((s) => countRefModalityEdges(s.edges ?? [], nodeId, "audio"))
+  const drivingAudio = isDrivingAudioRun(currentProvider, audioRefCount)
+  const aspectOptions = useMemo(() => (drivingAudio ? [] : getAspectRatiosForVideoModel(currentProvider)), [currentProvider, drivingAudio])
   const modelOptions = useMemo(
-    () => withoutDeniedModels(VIDEO_GEN_MODELS, { nodeType: "generate-video" }).map((o) => ({ ...o, locked: lockedVideoModel(freeVideoLimits, o.value) })),
+    () => withoutDeniedModels(VIDEO_GEN_MODELS, { nodeType: "generate-video" }).map((o) => ({
+      ...o,
+      locked: lockedVideoModel(freeVideoLimits, o.value, isDrivingAudioRun(o.value, audioRefCount) ? { audioDriven: true } : undefined),
+    })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `availability` is the version the filter reads through
-    [freeVideoLimits, availability],
+    [freeVideoLimits, availability, audioRefCount],
   )
   // A model whose long clips render only at some resolutions and frame rates
   // (catalog `longClipLimit`, LTX 2.5 Fast) offers only the lengths its
   // resolution and frame rate allow — the rule the run is priced and sent by.
   const durationOptions = useMemo(() => {
+    if (drivingAudio) return []
     const offered = getModel(currentProvider)?.longClipLimit
       ? videoDurationsAt(currentProvider, { resolution: (typeof data.resolution === "string" ? data.resolution : undefined) ?? uiResolutionFill(currentProvider), fps: data.fps })
       : undefined
     return getDurationsForVideoModel(currentProvider)
       .filter((o) => !offered || offered.includes(o.value))
       .map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) }))
-  }, [currentProvider, freeVideoLimits, data.resolution, data.fps])
+  }, [currentProvider, freeVideoLimits, data.resolution, data.fps, drivingAudio])
   // What is wired beside the start frame (primitives, so the strip re-renders
   // only when they change): a tier that takes a start frame only (Grok Imagine
   // Video 1.5 at 1080p) is offered only while nothing else would be sent.
@@ -169,7 +180,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   }
 
   const handleModelChange = (value: string) => {
-    if (lockedVideoModel(freeVideoLimits, value)) return
+    if (lockedVideoModel(freeVideoLimits, value, isDrivingAudioRun(value, audioRefCount) ? { audioDriven: true } : undefined)) return
     updateNodeData(nodeId, generateVideoModelSwitchPatch(data as Record<string, unknown>, value, freeVideoLimits))
   }
   const handleAspectChange = (value: string) => {

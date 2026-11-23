@@ -43,7 +43,7 @@ import { kling3Generate } from "./kling3-client.js"
 import { buildKling4Request } from "./kling4.js"
 import { buildGrokVideo15Request } from "./grok-video-15.js"
 import { buildPixverseV6MaxRequest } from "./pixverse-v6-max.js"
-import { buildLtx25Request } from "./ltx-2-5.js"
+import { buildLtx25AudioRequest, buildLtx25Request } from "./ltx-2-5.js"
 import { kling4CostUsd } from "./kling4-cost.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -2374,28 +2374,49 @@ async function runLtx25(
   reconcileOpts: ReconcileOpts | undefined,
   logLabel: string,
 ): Promise<ProviderResult> {
-  const requested = duration !== undefined && duration > 0 ? duration : pricedOutputDurationSec(modelKey, undefined)
-  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
-  if (duration !== undefined && duration > 0 && snapped !== duration) {
-    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  // Audio-to-video (Fast, a run the platform measured and priced as one): the audio endpoint, the
+  // measured length sent as it is (never snapped up — the schema refuses a length past the audio).
+  const drivingAudioUrl = options?.audioToVideo === true ? options.referenceAudioUrls?.[0] : undefined
+  if (options?.audioToVideo === true && (!drivingAudioUrl || modelKey !== "ltx-2.5-fast" || !(duration !== undefined && duration > 0))) {
+    throw createSanitizedError(`${logLabel}: an audio-to-video run needs LTX 2.5 Fast, its audio clip and its measured length`, "Video generation")
   }
-  const { model, input } = buildLtx25Request({
-    provider: modelKey,
-    prompt,
-    durationSec: snapped,
-    resolution: options?.resolution,
-    fps: options?.fps,
-    aspectRatio: aspectRatioValue,
-    startFrameUrl,
-    seed: options?.seed,
-  })
-  if (input.duration !== snapped) {
-    console.log(`[KIE.ai] ${logLabel}: ${snapped}s is not rendered at ${String(input.resolution)} / ${String(input.fps)} fps, sent ${String(input.duration)}s`)
+  let model: string
+  let input: Record<string, unknown>
+  if (drivingAudioUrl) {
+    ;({ model, input } = buildLtx25AudioRequest({
+      provider: modelKey,
+      prompt,
+      audioUrl: drivingAudioUrl,
+      durationSec: duration!,
+      resolution: options?.resolution,
+      fps: options?.fps,
+      startFrameUrl,
+      seed: options?.seed,
+    }))
+  } else {
+    const requested = duration !== undefined && duration > 0 ? duration : pricedOutputDurationSec(modelKey, undefined)
+    const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+    if (duration !== undefined && duration > 0 && snapped !== duration) {
+      console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+    }
+    ;({ model, input } = buildLtx25Request({
+      provider: modelKey,
+      prompt,
+      durationSec: snapped,
+      resolution: options?.resolution,
+      fps: options?.fps,
+      aspectRatio: aspectRatioValue,
+      startFrameUrl,
+      seed: options?.seed,
+    }))
+    if (input.duration !== snapped) {
+      console.log(`[KIE.ai] ${logLabel}: ${snapped}s is not rendered at ${String(input.resolution)} / ${String(input.fps)} fps, sent ${String(input.duration)}s`)
+    }
   }
   const ignored = [
     (options?.referenceImageUrls?.length ?? 0) > 0 ? "reference images" : undefined,
     (options?.referenceVideoUrls?.length ?? 0) > 0 ? "reference videos" : undefined,
-    (options?.referenceAudioUrls?.length ?? 0) > 0 ? "reference audio" : undefined,
+    !drivingAudioUrl && (options?.referenceAudioUrls?.length ?? 0) > 0 ? "reference audio" : undefined,
     (options?.characterReferences?.length ?? 0) > 0 ? "character references" : undefined,
   ].filter(Boolean)
   if (ignored.length > 0) console.log(`[KIE.ai] ${logLabel}: ignored ${ignored.join(", ")} — this model takes none`)
@@ -2423,7 +2444,7 @@ async function runLtx25(
     modelConfig: { duration: seconds, resolution, provider: modelKey },
     rawResponseSample: rawRecordInfo,
     actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
-    notes: `${startFrameUrl ? "i2v" : "t2v"} ${modelKey} ${resolution} ${String(input.fps)}fps`,
+    notes: `${drivingAudioUrl ? "a2v" : startFrameUrl ? "i2v" : "t2v"} ${modelKey} ${resolution} ${String(input.fps)}fps`,
   })
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }

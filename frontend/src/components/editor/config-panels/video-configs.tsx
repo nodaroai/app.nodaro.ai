@@ -71,11 +71,11 @@ import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { videoToVideoProviderOf, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
-import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
+import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality, drivingAudioMaxSec, drivingAudioMinSec, drivingAudioOf, isDrivingAudioRun } from "@nodaro/shared/credits"
 import { characterMentionSlug, characterMentionableAssetArrays, entityImageUrl, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared/entities"
 import { sourceCharacterNames, sourceOriginId } from "./source-character-names"
 import { DEFAULT_LABEL_BY_SOURCE, type ReferenceSource, type ConnectedReference } from "@nodaro/shared/types"
-import { FRAME_TARGET_HANDLES } from "@nodaro/shared/workflow"
+import { FRAME_TARGET_HANDLES, referenceModalityForHandle } from "@nodaro/shared/workflow"
 import { VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, VIDEO_ANALYSIS_TIERS, VIDEO_ANALYSIS_LEGACY_MODELS, DEFAULT_VIDEO_ANALYSIS_TIER, isVideoAnalysisTier, pickableLlmModels } from "@nodaro/shared/llm-models"
 import { clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT } from "@nodaro/shared/edl"
 import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
@@ -417,6 +417,29 @@ export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry
     defaultUsageMode: ref.defaultUsageMode,
     loraTrainingStatus: ref.loraTrainingStatus,
   }))
+}
+
+/**
+ * Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): with an audio clip wired the clip is as long as its
+ * audio, so the panel shows this in place of the length (whose stored value is kept). Every video panel
+ * shows it for the same wiring the price reads (`isDrivingAudioRun` over the node's audio wires).
+ */
+function DrivingAudioLengthNote({ provider }: { provider: string }) {
+  const t = useT()
+  return (
+    <p className="text-[11px] leading-snug text-muted-foreground px-1">
+      {t("vidcfg.drivingAudioLength", {
+        min: drivingAudioMinSec(provider),
+        max: drivingAudioOf(provider)?.maxSec ?? 0,
+        short: drivingAudioMaxSec(provider, { resolution: "1440p" }),
+      })}
+    </p>
+  )
+}
+
+/** The audio clips wired into a video node, on any audio reference handle (`audioReferences`, `reference-audio`). */
+function wiredAudioCount(sources: ReadonlyArray<{ readonly targetHandle?: string | null }>): number {
+  return sources.filter((s) => referenceModalityForHandle(s.targetHandle) === "audio").length
 }
 
 /**
@@ -913,6 +936,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           </div>
         </>
       )}
+      {isDrivingAudioRun(currentI2VProvider, wiredAudioCount(sources)) ? (
+        <DrivingAudioLengthNote provider={currentI2VProvider} />
+      ) : (
       <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
@@ -936,6 +962,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           />
         )}
       </MappableField>
+      )}
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {t("vidcfg.providerProducesNSecondVideos", { provider: data.provider || t("vidcfg.thisProvider"), n: allowedDurations[0] })}
@@ -2718,6 +2745,9 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       />
       <SeedanceReferenceTip provider={data.provider} />
 
+      {isDrivingAudioRun(currentProvider, wiredAudioCount(sources)) ? (
+        <DrivingAudioLengthNote provider={currentProvider} />
+      ) : (
       <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
@@ -2741,6 +2771,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           />
         )}
       </MappableField>
+      )}
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {t("vidcfg.providerProducesNSecondVideos", { provider: data.provider || t("vidcfg.thisProvider"), n: allowedDurations[0] })}
@@ -3289,6 +3320,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     () => sources.filter((s) => s.targetHandle === "audioReferences"),
     [sources],
   )
+  // Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): with an audio clip wired the clip is as long
+  // as its audio, so the length (and, without a start frame, the shape: 16:9) is not a setting. The stored
+  // values are kept, not cleared — unwiring the clip brings them back.
+  const drivingAudioRun = isDrivingAudioRun(currentProvider, wiredAudioCount(sources))
   // Seedance 2.5 "Use the reference video as": the controls the RUN's
   // declaration decides are locked, read from the wired clips' lengths through
   // the same answer the node's price reads (`seedanceTaskTypeAsRun`); one line
@@ -3390,7 +3425,8 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
           options={withoutDeniedModels(VIDEO_GEN_MODELS, { nodeType: "generate-video" })}
           getTooltip={getVideoModelCapabilitiesTooltip}
-          lockFor={(v) => lockedVideoModel(freeVideoLimits, v)}
+          // An audio-to-video model with a clip wired is judged by its shortest audio-driven clip.
+          lockFor={(v) => lockedVideoModel(freeVideoLimits, v, isDrivingAudioRun(v, wiredAudioCount(sources)) ? { audioDriven: true } : undefined)}
           ariaLabel={t("field.provider")}
         />
       </MappableField>
@@ -3756,6 +3792,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           </div>
         </>
       )}
+      {drivingAudioRun ? (
+        <DrivingAudioLengthNote provider={currentProvider} />
+      ) : (
       <MappableField field="duration" label={t("field.durationSeconds")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
@@ -3781,6 +3820,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           />
         )}
       </MappableField>
+      )}
       {isGeminiOmni && connectedRefVideos.length > 0 && (
         <p className="text-[11px] text-muted-foreground">{t("vidcfg.durationAutoFromClip")}</p>
       )}
@@ -3789,7 +3829,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       ) : isAutoVideoDuration(data.duration) && allowedDurations?.includes(data.duration as number) && (
         <p className="text-[11px] text-muted-foreground">{t("vidcfg.durationAutoHint")}</p>
       )}
-      {allowedDurations && allowedDurations.length === 1 && (
+      {!drivingAudioRun && allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {t("vidcfg.providerProducesNSecondVideos", { provider: currentProvider || t("vidcfg.thisProvider"), n: allowedDurations[0] })}
         </p>
@@ -4274,7 +4314,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           provider={currentProvider}
           data={data as unknown as Ltx25FieldData}
           onUpdate={(u) => onUpdate(u as Partial<DataView>)}
-          showAspectRatio={connectedImages.length === 0}
+          showAspectRatio={connectedImages.length === 0 && !drivingAudioRun}
           frameSetsShape={connectedImages.length > 0}
           idPrefix="gv"
           freeResLock={freeResLock}

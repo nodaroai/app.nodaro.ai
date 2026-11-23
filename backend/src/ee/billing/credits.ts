@@ -4,6 +4,8 @@ import {
   isPerSecondLipSyncProvider,
   referenceAudioLipSyncCreditId,
   lipSyncAudioRateOf,
+  takesDrivingAudio,
+  drivingAudioQuoteId,
   lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
   textToAudioCreditId,
@@ -1854,6 +1856,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "ltx-2.5-fast:6s:1080p": 240, "ltx-2.5-fast:8s:1080p": 320, "ltx-2.5-fast:10s:1080p": 390, "ltx-2.5-fast:12s:1080p": 470, "ltx-2.5-fast:14s:1080p": 550,
   "ltx-2.5-fast:16s:1080p": 630, "ltx-2.5-fast:18s:1080p": 710, "ltx-2.5-fast:20s:1080p": 780,
   "ltx-2.5-fast:6s:1440p": 350, "ltx-2.5-fast:8s:1440p": 460, "ltx-2.5-fast:10s:1440p": 570,
+  // LTX 2.5 Fast audio-to-video: the clip is as long as its audio, priced on the
+  //    measured length rounded up to a whole second — one row per whole second the
+  //    even rows above do not cover (2-20 s at 720p / 1080p, 2-10 s at 1440p), by
+  //    the same rule. Machine-generated with its seed migration.
+  "ltx-2.5-fast:2s:720p": 60, "ltx-2.5-fast:3s:720p": 90, "ltx-2.5-fast:4s:720p": 110, "ltx-2.5-fast:5s:720p": 140, "ltx-2.5-fast:7s:720p": 190, "ltx-2.5-fast:9s:720p": 250,
+  "ltx-2.5-fast:11s:720p": 300, "ltx-2.5-fast:13s:720p": 360, "ltx-2.5-fast:15s:720p": 410, "ltx-2.5-fast:17s:720p": 460, "ltx-2.5-fast:19s:720p": 520,
+  "ltx-2.5-fast:2s:1080p": 80, "ltx-2.5-fast:3s:1080p": 120, "ltx-2.5-fast:4s:1080p": 160, "ltx-2.5-fast:5s:1080p": 200, "ltx-2.5-fast:7s:1080p": 280, "ltx-2.5-fast:9s:1080p": 360,
+  "ltx-2.5-fast:11s:1080p": 430, "ltx-2.5-fast:13s:1080p": 510, "ltx-2.5-fast:15s:1080p": 590, "ltx-2.5-fast:17s:1080p": 670, "ltx-2.5-fast:19s:1080p": 750,
+  "ltx-2.5-fast:2s:1440p": 120, "ltx-2.5-fast:3s:1440p": 180, "ltx-2.5-fast:4s:1440p": 230, "ltx-2.5-fast:5s:1440p": 290, "ltx-2.5-fast:7s:1440p": 400, "ltx-2.5-fast:9s:1440p": 520,
   "ltx-2.5-pro:6s:720p": 220, "ltx-2.5-pro:8s:720p": 290, "ltx-2.5-pro:10s:720p": 360,
   "ltx-2.5-pro:6s:1080p": 310, "ltx-2.5-pro:8s:1080p": 410, "ltx-2.5-pro:10s:1080p": 510,
   "wan-i2v": 175,                 // (5s 720p fallback)
@@ -6562,6 +6573,8 @@ function estimateNodeCredits(
     // measured walk: it is not one of the steps moved onto it), priced as Video Mask's (the 30 fps basis).
     videoFaceMeshSec: node.type === "video-face-mesh" ? videoMaskClipSecOf(node, edges, wireSec, wireFps) : undefined,
     videoRefWired: videoRefWired(node, edges, nodes),
+    // Audio-to-video (LTX 2.5 Fast): its first audio wire, read as Lip Sync's audio wire is read.
+    ...drivingAudioWireOf(node, edges, (sourceId) => wires.measuredSec(sourceId, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
@@ -8027,6 +8040,25 @@ function audioSyncWiredSourceCount(node: EstimateNode, edges?: ReadonlyArray<Est
  * `-ref` ladder, so UNKNOWN (no edges, a node without an id) answers false:
  * the estimate may over-quote, it must never under-quote.
  */
+/**
+ * Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): whether an audio clip is wired into a video
+ * generation node of such a model, and the length a run estimate knows for the first one (the clip
+ * the run measures). Not such a node, or no edges: nothing (the node's own data decides).
+ */
+function drivingAudioWireOf(
+  node: EstimateNode,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  wireSec: WireSecOf,
+): { drivingAudioWired?: boolean; drivingAudioSec?: number } {
+  if (!edges || !node.id) return {}
+  if (node.type !== "generate-video" && node.type !== "image-to-video" && node.type !== "text-to-video") return {}
+  const provider = applyDefaultVideoSelection({ provider: node.data?.provider as string | undefined, duration: node.data?.duration as number | string | undefined }).provider
+  if (!takesDrivingAudio(provider)) return {}
+  const first = edges.find((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "audio")
+  if (!first) return { drivingAudioWired: false }
+  return { drivingAudioWired: true, drivingAudioSec: wireSec(first.source) }
+}
+
 function videoRefWired(node: EstimateNode, edges?: ReadonlyArray<EstimateEdge>, nodes: ReadonlyArray<EstimateNode> = []): boolean {
   if (!edges || !node.id) return false
   // A wired clip that is also a Kling 4.0 or Flash character's clip goes as the
@@ -8083,6 +8115,10 @@ export function getNodeModelIdentifier(
     videoFaceMeshSec?: number
     /** A video generation node with a reference video wired (a GRAPH fact; undefined = unknown → the plain ladder). */
     videoRefWired?: boolean
+    /** Audio-to-video (LTX 2.5 Fast): an audio clip is wired (a GRAPH fact; undefined = unknown → the node's own length). */
+    drivingAudioWired?: boolean
+    /** …and the length a run estimate knows for it (undefined = not known: the longest clip the run can hold). */
+    drivingAudioSec?: number
     /** Reference images wired into an image node (a GRAPH fact; undefined = unknown → the node's own list). */
     imageRefsWired?: number
     /** The size of the photo wired into an image node, as its source node records it (a GRAPH fact). */
@@ -8535,6 +8571,11 @@ export function getNodeModelIdentifier(
   // one). The reference-video flag is a GRAPH fact — a wired reference-video
   // edge, counted by the caller; unknown (no edges) quotes the plain ladder,
   // the dearer row, so the estimate never under-quotes.
+  // Audio-to-video (LTX 2.5 Fast with an audio clip wired): the row of the clip's length, by the run's
+  // own rule (`drivingAudioRun`), or the longest the run can hold when the length is not known.
+  if ((nodeType === "image-to-video" || nodeType === "text-to-video" || nodeType === "generate-video") && graph.drivingAudioWired === true && takesDrivingAudio(provider)) {
+    return drivingAudioQuoteId({ provider, resolution: data.resolution, fps: data.fps, audioSec: graph.drivingAudioSec })
+  }
   if (nodeType === "image-to-video" || nodeType === "text-to-video") {
     return videoGenerationCreditId({
       provider,
