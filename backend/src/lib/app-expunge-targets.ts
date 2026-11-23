@@ -20,6 +20,8 @@ import { executionBudgetExcessMs } from "./execution-budget.js"
 import { executionQueuedMs } from "./concurrency-lanes/execution-wait.js"
 import { USE_CASE_WRAPPER_PROVIDER, isWrapperJobProvider } from "./wrapper-providers.js"
 import { jobIdsOf } from "./node-state-job-ids.js"
+import { readCoversInScope } from "./job-cover/cover-release.js"
+import { releaseCoversOfJobs } from "./job-cover/cover-store.js"
 
 /**
  * The rows an admin app expunge erases (decided 2026-10-06), grouped by the
@@ -578,8 +580,13 @@ export async function redactAppExpungeTargets(targets: {
       if (error) throw new Error(`redactAppExpungeTargets failed at workflow_executions: ${error.message}`)
     }
     for (const chunk of chunks(level.jobIds)) {
+      // The covers the clear orphans (lib/job-cover/cover-release.ts): read
+      // first — probing the column, so a process that has not seen it yet
+      // still clears it — and released once the clear has landed.
+      const covers = await readCoversInScope({ jobIds: chunk }, { probe: true })
       const { error } = await supabase.from("jobs").update(jobContentRedaction()).in("id", chunk)
       if (error) throw new Error(`redactAppExpungeTargets failed at jobs: ${error.message}`)
+      await releaseCoversOfJobs(covers)
     }
     const appRunIds = level.appRunIds ?? []
     for (const chunk of chunks(appRunIds)) {

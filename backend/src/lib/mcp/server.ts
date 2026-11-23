@@ -38,6 +38,7 @@ import { registerPromptHelper } from "./tools/prompt-helper.js"
 import { registerPickerCatalogs } from "./tools/picker-catalogs.js"
 import { registerPresets } from "./tools/node-presets.js"
 import { registerVoiceFavorites } from "./tools/voice-favorites.js"
+import { registerFavoriteTools } from "./tools/favorites.js"
 import { registerDubbingTools } from "./tools/dubbing.js"
 import { registerCollectionTools } from "./tools/collections.js"
 import { registerSessionTools } from "./tools/sessions.js"
@@ -321,6 +322,10 @@ export function registerMcpTools(server: McpServer, session: McpSession, opts: M
   // `/v1/voices/favorites` routes are core; gated by assets:read / assets:write
   // like the gallery's favorites.
   registerVoiceFavorites({ server, session, fastify: opts.fastify })
+  // Favorite picker options (favorite_catalog_option): every edition — the
+  // `/v1/favorites/catalog*` routes are core; gated by assets:write like the
+  // other favorites. list_favorites (gallery tools) reads them with `kinds`.
+  registerFavoriteTools({ server, session, fastify: opts.fastify })
   // A dub after it is made (its structure, its captions): every edition, since
   // the `/v1/dubbing/:jobId` reads are core; gated by assets:read.
   registerDubbingTools({ server, session, fastify: opts.fastify })

@@ -34,6 +34,8 @@ describe("payload-builder-media-required.test.ts", () => {
   const NODARO_VIDEO_UPSCALE_MEDIA_REFUSALS = 1
   /** +1 suno-convert-wav: a wired stem with no Suno ids (its sentence names the stem's audio; PARITY_EXEMPT entry suno-convert-wav). */
   const SUNO_WAV_STEM_ID_REFUSALS = 1
+  /** +1 suno-add-vocals / suno-add-instrumental: no song connected (one shared guard; PARITY_EXEMPT entries, the case throws its own audio_required). */
+  const SUNO_ADD_TRACK_SONG_REFUSALS = 1
 
   const JOB = "job-media-required"
   const ctx = (n: SimpleNode) => ({ nodes: [n], edges: [], nodeStates: {} })
@@ -348,6 +350,8 @@ describe("payload-builder-media-required.test.ts", () => {
         "suno-cover",              // :3819 no source audio URL found
         "suno-mashup",             // :4081 connect two audio sources for mashup
         "suno-upload-extend",      // :4252 no audio input found
+        "suno-add-vocals",         // no song connected (shared with Add Instrumental)
+        "suno-add-instrumental",   // no song connected
         "transcribe",              // :4284 no audio/video input found
         "image-to-text",           // :4482 no image input found
         "describe-to-picker",      // :4539 no image input found
@@ -425,6 +429,10 @@ describe("payload-builder-media-required.test.ts", () => {
           "the case already throws its own node-specific audio_required over uploadUrl/audioUrl (pinned by payload-builder.test.ts)",
         "suno-upload-extend":
           "the case already throws its own node-specific audio_required (pinned by payload-builder.test.ts)",
+        "suno-add-vocals":
+          "the case already throws its own node-specific audio_required when neither a song nor a Suno track is wired (pinned by payload-builder.test.ts)",
+        "suno-add-instrumental":
+          "the case already throws its own node-specific audio_required when neither a song nor a Suno track is wired (pinned by payload-builder.test.ts)",
         "transcribe":
           "an upstream youtube-video node's downloadedAudioUrl satisfies it through a graph lookup inside the case, so an absent audioUrl/videoUrl is legal",
         "ai-avatar":
@@ -510,7 +518,7 @@ describe("payload-builder-media-required.test.ts", () => {
       expect(
         count,
         "a new frontend media guard appeared — add a REQUIRED_MEDIA_INPUTS row or a PARITY_EXEMPT entry",
-      ).toBe(FRONTEND_MEDIA_REFUSAL_COUNT + NODARO_VIDEO_UPSCALE_MEDIA_REFUSALS + SUNO_WAV_STEM_ID_REFUSALS)
+      ).toBe(FRONTEND_MEDIA_REFUSAL_COUNT + NODARO_VIDEO_UPSCALE_MEDIA_REFUSALS + SUNO_WAV_STEM_ID_REFUSALS + SUNO_ADD_TRACK_SONG_REFUSALS)
     })
   })
 })

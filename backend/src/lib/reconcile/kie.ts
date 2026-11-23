@@ -290,7 +290,7 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
   // a cover by id's), whatever job made it; on the old lane only the music
   // jobs do.
   const market = row.provider_kind === "kie-suno-market"
-  // On the market lane a music job is a cover that ran by id; any other job's tracks are Suno Speech's spoken takes.
+  // On the market lane a music job is a cover that ran by id, or Add Vocals / Add Instrumental; any other job's tracks are Suno Speech's spoken takes.
   const speech = market && !SUNO_MUSIC_JOB_TYPES.has(row.job_type ?? "")
   if (!market && (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type))) {
     // Suno variant we don't recover (lyrics, separate, music-video, wav).
@@ -381,7 +381,11 @@ async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promis
         // The run facts the worker saves beside a market task's tracks: a
         // music job on this lane is a cover that ran by id; any other job's
         // tracks are spoken takes, which no Suno tool takes by their ids.
-        ...(market ? (speech ? { [SUNO_TRACK_KIND_FIELD]: SUNO_TRACK_KIND_SPEECH } : { coverLane: "id" }) : {}),
+        // On the market lane: Suno Speech's takes are marked as speech, and a
+        // cover says it ran by id. Add Vocals / Add Instrumental (also on this
+        // lane) carry neither, as the worker's own finish writes them.
+        ...(market && speech ? { [SUNO_TRACK_KIND_FIELD]: SUNO_TRACK_KIND_SPEECH } : {}),
+        ...(market && !speech && row.job_type === "suno-cover" ? { coverLane: "id" } : {}),
       },
     })
   } catch (err) {

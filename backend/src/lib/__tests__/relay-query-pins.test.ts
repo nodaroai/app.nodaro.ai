@@ -36,7 +36,7 @@
  * `jobOutputReferrerPaths()`, so a future change that armed the rule from
  * somewhere else would slip past a flag-shaped pin.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const { relayGate, tables } = vi.hoisted(() => ({
   relayGate: { on: false },
@@ -67,6 +67,7 @@ import { permanentlyDeleteAsset, deletableKeys } from "../asset-delete.js"
 import { deleteOwnedMediaByUrls } from "../media-delete.js"
 import { deleteJobWithPrivateMedia, deleteWorkflowWithPrivateMedia } from "../workflow-delete.js"
 import { supabase } from "../supabase.js"
+import { setCoverColumnPresentForTests } from "../jobs-cover-column.js"
 
 // ---------------------------------------------------------------------------
 // A chain stub that records ONE label per query, in issue order: the table plus
@@ -104,6 +105,9 @@ function chain(table: string, resultFor: (filters: string[], asked: Asked) => Re
         }
         return (...args: unknown[]) => {
           if (method === "select" && typeof args[0] === "string") asked.select = args[0]
+          // A job's cover read (lib/job-cover/cover-release.ts): labelled, so the pin
+          // says it is the one read a delete adds besides the relay rule's.
+          if (method === "select" && typeof args[0] === "string" && args[0].includes("cover_url")) filters.push("COVER")
           if (method === "in" && Array.isArray(args[1])) asked.inValues = args[1]
           if (method === "eq" && String(args[0]).startsWith("output_data")) {
             filters.push(String(args[0]))
@@ -247,17 +251,22 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
   })
 })
 
+// Every delete reads its jobs' covers before the RPC (lib/job-cover/cover-release.ts,
+// decided 2026-11-23): that one read, `jobs[COVER]`, is the cover's, not the relay
+// rule's — the pins below hold that the relay rule adds nothing beside it.
 describe("mainline query profile — workflow-delete", () => {
   beforeEach(() => {
+    setCoverColumnPresentForTests(true)
     vi.mocked(supabase.from).mockImplementation(
       (table: string) => chain(table, () => ({ data: [], error: null })) as never,
     )
   })
+  afterEach(() => setCoverColumnPresentForTests(false))
 
   it("issues NOTHING but the RPC for a job delete with no private media", async () => {
     vi.mocked(supabase.rpc).mockResolvedValue({ data: { deleted: true, baseUrls: [] }, error: null } as never)
     await deleteJobWithPrivateMedia({ jobId: NEAR_JOB, actorUserId: USER, isAdmin: false })
-    expect(tables).toEqual([])
+    expect(tables).toEqual(["jobs[COVER]"])
   })
 
   it("issues NOTHING but the RPC for a job delete WITH a private base", async () => {
@@ -266,7 +275,7 @@ describe("mainline query profile — workflow-delete", () => {
       error: null,
     } as never)
     await deleteJobWithPrivateMedia({ jobId: NEAR_JOB, actorUserId: USER, isAdmin: false })
-    expect(tables).toEqual([])
+    expect(tables).toEqual(["jobs[COVER]"])
   })
 
   it("issues NOTHING but the RPC for a workflow delete WITH a private base", async () => {
@@ -275,7 +284,7 @@ describe("mainline query profile — workflow-delete", () => {
       error: null,
     } as never)
     await deleteWorkflowWithPrivateMedia({ workflowId: "wf-1", userId: USER })
-    expect(tables).toEqual([])
+    expect(tables).toEqual(["jobs[COVER]"])
   })
 })
 
@@ -344,8 +353,10 @@ describe("armed, the same paths take the relay reads", () => {
   })
 
   it("the job scope of workflow-delete takes its pre-RPC job row read", async () => {
+    setCoverColumnPresentForTests(true)
     vi.mocked(supabase.rpc).mockResolvedValue({ data: { deleted: true, baseUrls: [] }, error: null } as never)
     await deleteJobWithPrivateMedia({ jobId: NEAR_JOB, actorUserId: USER, isAdmin: false })
-    expect(tables).toEqual(["jobs"])
+    setCoverColumnPresentForTests(false)
+    expect(tables).toEqual(["jobs", "jobs[COVER]"])
   })
 })

@@ -592,6 +592,43 @@ setting" — subject → action → scene → camera → style, within the 1800-
 Source: KIE Runway contract (docs.kie.ai/runway-api/generate-ai-video). Captured 2026-08-09.`,
 }
 
+const LTX_2_5_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["ltx-2.5-fast", "ltx-2.5-pro"],
+  heading: "LTX 2.5 — Fast / Pro (ltx-2.5-fast, ltx-2.5-pro)",
+  tips: [
+    "Sound is generated with the picture on every run — describe it in the prompt (a \"Sound:\" line: voices, effects, ambience); there is no audio switch.",
+    "Text inside quotes is spoken as dialogue, in the language it is written in. Say who speaks and how (\"says in a warm, calm voice, ...\").",
+    "Several shots in one clip: write \"Shot 1: ... Shot 2: ...\". Describe scene, action, camera and sound; up to 5000 characters, any language.",
+    "No negative prompt and no camera setting — state camera moves and exclusions in the prompt. A start frame is the first frame and sets the shape.",
+  ],
+  doctrine: `Prompt structure: describe the scene, the action, the camera and the sound, in that order of importance, in plain sentences. Prompts take 1-5000 characters in any language.
+
+**Sound (always generated)**
+- Every LTX 2.5 run makes picture and sound in one pass: dialogue, sound effects and ambience. There is no audio on/off setting, so the prompt is the only place to direct the sound.
+- Write the sound out, for example a closing "Sound: the fire crackling, two hollow knocks on the crust, her clear voice." line. Name each sound you want heard; anything not described is left to the model.
+
+**Dialogue**
+- Text inside quotation marks is spoken as dialogue, in the language it is written in. Put each line in quotes and say who says it and how ("smiles at the camera and says in a warm, calm voice, \"Hear that?\"").
+- Keep lines short enough to fit the clip; a 6-second clip holds one or two short sentences.
+
+**Several shots**
+- Write "Shot 1: ... Shot 2: ..." to cut between shots inside one clip. Give each shot its own framing and action.
+
+**Camera and constraints**
+- There is no camera-motion setting and no negative prompt: state the camera ("static medium shot", "slow push-in") and anything to avoid in the prompt itself.
+
+**Frames and shape**
+- With a start frame, the image is the first frame and the clip keeps its aspect ratio (ratios wider than 3:1 are capped at 3:1); describe the motion and the sound, not the still. There is no end frame.
+- Text-only runs take 16:9, 9:16, 1:1, 3:2 or 2:3.
+
+**Fast or Pro**
+- LTX 2.5 Fast: 6-20 seconds at 720p or 1080p, 6-10 seconds at 1440p or at 48/50 fps.
+- LTX 2.5 Pro: 6, 8 or 10 seconds at 720p or 1080p, with finer faces, textures and on-screen text.
+
+Source: KIE LTX 2.5 contracts (docs.kie.ai/market/ltx/2-5-fast-text-to-video, …/2-5-fast-image-to-video,
+…/2-5-pro-text-to-video, …/2-5-pro-image-to-video). Captured 2026-11-22.`,
+}
+
 export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   SEEDANCE_2_DOCTRINE,
   KLING_AUDIO_DOCTRINE,
@@ -607,6 +644,7 @@ export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
   KLING_4_FLASH_DOCTRINE,
   HAPPYHORSE_DOCTRINE,
   RUNWAY_KIE_DOCTRINE,
+  LTX_2_5_DOCTRINE,
 ]
 
 const DOCTRINE_BY_PROVIDER: ReadonlyMap<string, ProviderPromptDoctrine> = new Map(

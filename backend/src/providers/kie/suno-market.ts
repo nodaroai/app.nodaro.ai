@@ -1,14 +1,18 @@
 /**
  * Suno on KIE's market lane (`POST /api/v1/jobs/createTask` +
- * `GET /api/v1/jobs/recordInfo`), for the three abilities only that lane
- * documents (decided 2026-11-17):
+ * `GET /api/v1/jobs/recordInfo`), for the abilities only that lane
+ * documents (decided 2026-11-17; Add Vocals and Add Instrumental 2026-11-23):
  *
  *   - Suno Speech        — `ai-music-api/speech`;
  *   - Cover by id        — `ai-music-api/upload-and-cover-audio` with
  *                          `task_id` + `audio_id` (a track made here) in place
  *                          of the uploaded file;
  *   - a stem to WAV      — `ai-music-api/convert-to-wav-format` with a
- *                          separation's `task_id` and the stem's id.
+ *                          separation's `task_id` and the stem's id;
+ *   - Add Vocals         — `ai-music-api/add-vocals` with the song's file
+ *                          (`upload_url`) and the person's direction;
+ *   - Add Instrumental   — `ai-music-api/add-instrumental`, likewise
+ *                          (bodies: `suno-add-track.ts`).
  *
  * Every other Suno call keeps its own endpoint and body in `suno-client.ts`,
  * byte for byte: a cover of an uploaded file, a WAV of a generated track.
@@ -27,6 +31,13 @@ import type { ReconcileOpts } from "../provider.interface.js"
 import { KieError, createKieTask, createSanitizedError, createUpstreamFailureError, pollKieTask, retryOnProviderTaskTimeout } from "./client.js"
 import { KIE_CREDIT_USD } from "./models.js"
 import { sunoCoverByIdInput, type SunoCoverByIdParams } from "./suno-cover-by-id.js"
+import {
+  SUNO_ADD_INSTRUMENTAL_MARKET_MODEL,
+  SUNO_ADD_VOCALS_MARKET_MODEL,
+  sunoAddInstrumentalInput,
+  sunoAddVocalsInput,
+  type SunoAddTrackRun,
+} from "./suno-add-track.js"
 import {
   SUNO_MAX_POLL_ATTEMPTS,
   pollSunoEndpoint,
@@ -247,4 +258,35 @@ export async function sunoConvertWavStem(
     if (!audioUrl) throw createSanitizedError("Suno WAV conversion returned no file", "WAV conversion")
     return { taskId, audioUrl }
   })
+}
+
+// =============================================================================
+// ADD VOCALS / ADD INSTRUMENTAL
+// =============================================================================
+
+/** One add-track task: create it, save its id, poll it to its tracks. */
+async function runSunoAddTrack(
+  label: string,
+  marketModel: string,
+  input: Record<string, unknown>,
+  reconcileOpts: ReconcileOpts | undefined,
+): Promise<SunoTaskResult> {
+  return retryOnProviderTaskTimeout(`Suno ${label.toLowerCase()}`, async () => {
+    const { taskId } = await createKieTask(marketModel, input, {
+      modelKey: reconcileOpts?.modelKey ?? null,
+      dimensions: reconcileOpts?.dimensions,
+    })
+    await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+    return pollSunoMarketTracks(taskId, label)
+  })
+}
+
+/** Sing over a song: the song's file, the style, and the lyrics or direction when given. */
+export async function sunoAddVocals(run: SunoAddTrackRun, reconcileOpts?: ReconcileOpts): Promise<SunoTaskResult> {
+  return runSunoAddTrack("Add vocals", SUNO_ADD_VOCALS_MARKET_MODEL, sunoAddVocalsInput(run), reconcileOpts)
+}
+
+/** Play under a vocal: the song's file and the style (sent as `tags`). */
+export async function sunoAddInstrumental(run: SunoAddTrackRun, reconcileOpts?: ReconcileOpts): Promise<SunoTaskResult> {
+  return runSunoAddTrack("Add instrumental", SUNO_ADD_INSTRUMENTAL_MARKET_MODEL, sunoAddInstrumentalInput(run), reconcileOpts)
 }

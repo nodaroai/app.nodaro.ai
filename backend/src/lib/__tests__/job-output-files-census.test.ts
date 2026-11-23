@@ -106,6 +106,8 @@ const NOT_A_JOB = "not written for a job: the key carries no job id and the obje
  * `<file> :: <key argument>`. Each says why that is right.
  */
 const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
+  "lib/share-links/card-image/service.ts :: key":
+    `${NOT_A_JOB} (a share link's preview picture, \`share-cards/<hash of the token>/<hash of what it shows>.jpg\`: the platform's, made for the link, never a job's output and counted against no quota)`,
   "ee/pipelines/_freecut-timeline.ts :: r2Key": `${UPLOAD} (a pipeline export filed as an asset)`,
   "ee/pipelines/services/pipeline-extract-beat-grid.ts :: r2Key": `${UPLOAD} (the trimmed pipeline music asset)`,
   "ee/lib/trends/media.ts :: trendMediaKey(trendId, sniffed.ext) → url":

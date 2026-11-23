@@ -34,6 +34,8 @@ const db = vi.hoisted(() => ({
   items: [] as Row[],
   rpc: vi.fn(async (_fn: string, _args: unknown) => ({ data: [] as unknown, error: null as unknown })),
   shareTableMissing: false,
+  /** The database has no `locale` column yet, whatever this process believes. */
+  localeColumnMissing: false,
 }))
 
 /** The value a query filters `col` on with `.eq` (or `.is`). */
@@ -54,6 +56,7 @@ function matches(q: RecordedQuery, row: Row): boolean {
 function respond(q: RecordedQuery): QueryResult {
   if (q.table === "share_links") {
     if (db.shareTableMissing) return { data: null, error: { code: "PGRST205", message: "no table" } }
+    if (db.localeColumnMissing && JSON.stringify(q.ops).includes("locale")) return { data: null, error: { code: "42703", message: "column share_links.locale does not exist" } }
     const insert = argOf(q, "insert")
     if (insert) {
       const row = { id: `share-${db.shares.length + 1}`, ...(insert[0] as Row) }
@@ -110,7 +113,15 @@ vi.mock("../../lib/content-restriction-address.js", () => ({
   restrictedKeyOfAddress: (url: string) => (url.startsWith("https://cdn.example/") ? url.slice("https://cdn.example/".length) : null),
 }))
 
+const warmed = vi.hoisted(() => [] as Array<{ token: string; revoked_at: unknown }>)
+vi.mock("../../lib/share-links/card-warm.js", () => ({
+  warmShareCard: async (row: { token: string; revoked_at: unknown }) => {
+    warmed.push({ token: row.token, revoked_at: row.revoked_at })
+  },
+}))
+
 import { shareRoutes } from "../shares.js"
+import { setShareLocaleColumnPresentForTests } from "../../lib/share-links/locale-column.js"
 import { __isPublicRouteForTest, isAnonymousRoute } from "../../middleware/auth.js"
 
 function jobRow(over: Row = {}): Row {
@@ -153,11 +164,14 @@ beforeEach(async () => {
   db.projects.length = 0
   db.items.length = 0
   db.shareTableMissing = false
+  db.localeColumnMissing = false
   db.rpc.mockReset()
   db.rpc.mockResolvedValue({ data: [], error: null })
   gates.publicOutputs = true
   gates.blocked.clear()
   gates.restricted.clear()
+  warmed.length = 0
+  setShareLocaleColumnPresentForTests(false)
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const user = req.headers["x-user-id"]
@@ -324,6 +338,52 @@ describe("PUT /v1/shares — the owner turns a link on and off", () => {
     const res = await put({ kind: "job", targetId: JOB, shared: true })
     expect(res.statusCode).toBe(503)
     expect(res.json().error.code).toBe("not_available")
+  })
+})
+
+describe("PUT /v1/shares — the language and the preview picture", () => {
+  beforeEach(() => {
+    db.jobs.push(jobRow())
+  })
+
+  it("keeps the language the link is shared in, normalized; omitted keeps it; unknown is ignored, never a 400", async () => {
+    setShareLocaleColumnPresentForTests(true)
+    const first = await put({ kind: "job", targetId: JOB, shared: true, locale: "he-IL" })
+    expect(first.statusCode).toBe(200)
+    expect(first.json().data.locale).toBe("he")
+    expect(db.shares[0]!.locale).toBe("he")
+    expect((await put({ kind: "job", targetId: JOB, shared: true })).json().data.locale).toBe("he")
+    expect((await put({ kind: "job", targetId: JOB, shared: true, locale: "pt_br" })).json().data.locale).toBe("pt-BR")
+    const unknown = await put({ kind: "job", targetId: JOB, shared: true, locale: "xx-nope" })
+    expect(unknown.statusCode).toBe(200)
+    expect(unknown.json().data.locale).toBe("pt-BR")
+    expect((await put({ kind: "job", targetId: JOB, shared: true, locale: "x".repeat(500) })).statusCode).toBe(200)
+    // Not a string at all is a malformed body.
+    expect((await put({ kind: "job", targetId: JOB, shared: true, locale: 42 })).statusCode).toBe(400)
+  })
+
+  it("before the column reaches this database: the link works, no language is written or read", async () => {
+    const res = await put({ kind: "job", targetId: JOB, shared: true, locale: "de" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.locale).toBeNull()
+    expect(db.shares[0]!.locale).toBeUndefined()
+    for (const q of db.log.filter((l) => l.table === "share_links")) expect(JSON.stringify(q.ops)).not.toContain("locale")
+  })
+
+  it("a process that believed the column was there forgets it and runs the statement again without it", async () => {
+    setShareLocaleColumnPresentForTests(true)
+    db.localeColumnMissing = true
+    const res = await put({ kind: "job", targetId: JOB, shared: true, locale: "de" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ shared: true, locale: null })
+    expect(db.shares).toHaveLength(1)
+  })
+
+  it("turning a link on starts its preview picture; turning it off does not", async () => {
+    const token = await shareJob()
+    expect(warmed).toEqual([{ token, revoked_at: null }])
+    await put({ kind: "job", targetId: JOB, shared: false })
+    expect(warmed).toHaveLength(1)
   })
 })
 

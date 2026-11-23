@@ -1,6 +1,7 @@
 /** Request schemas of the share links — shared by the routes and their OpenAPI entries. */
 import { z } from "zod"
 import { SHARE_KINDS } from "./types.js"
+import { shareLocaleField } from "./card-locale.js"
 
 const kind = z.enum(SHARE_KINDS).describe("What is shared: one result (`job`), a generation session, or a project.")
 const targetId = z.string().uuid().describe("The id of your job, session or project.")
@@ -15,6 +16,7 @@ export const setShareBody = z.object({
     .boolean()
     .optional()
     .describe("Also give the viewer the reference files the result was made from. Omitted: the link keeps its current value (`false` on a new link)."),
+  locale: shareLocaleField,
 })
 
 export const publicShareParams = z.object({

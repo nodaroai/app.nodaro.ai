@@ -225,6 +225,8 @@ describe("browse_uploads tool", () => {
       const jobSelects: string[] = []
       ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
         if (table === "jobs") return makeChainable(jobs, jobSelects)
+        // No favorites here: a favorite's own job lookup (whether that job is in the Trash) is not the label's.
+        if (table === "gallery_favorites" || table === "asset_favorites") return makeChainable([])
         return makeChainable(assets)
       })
       return jobSelects

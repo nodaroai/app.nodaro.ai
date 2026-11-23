@@ -2,6 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
 import type { VideoToVideoParams, VideoToVideoRemakeParams, VideoToVideoRemakeQuote, NodeQuote } from "./nodes-video-params.js"
 import type { LlmChatParams } from "./nodes-llm-params.js"
+import type { SunoAddVocalsParams, SunoAddInstrumentalParams } from "./nodes-suno-params.js"
 import type { NodaroClientCore } from "../core.js"
 import type { JobStatusResult, JobsResource } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError, NodaroError, NotFoundError } from "../errors.js"
@@ -558,6 +559,13 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    * reported.
    */
   referenceTaskType?: "auto" | "reference" | "edit" | "extend"
+  /** Frame rate, on a model with a frame-rate setting (`ltx-2.5-fast`,
+   *  `ltx-2.5-pro`: 24, 25, 48 or 50; default 24; the price is the same at
+   *  each). LTX 2.5 Fast renders at most 10 s at 48 or 50 fps (and at 1440p): a
+   *  longer `duration` is priced and sent as 10 s and reported in
+   *  `adjustments`. Another value runs at 24 fps, also reported. Ignored by
+   *  every other model. */
+  fps?: number
   [k: string]: unknown
 }
 
@@ -582,6 +590,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   negativePrompt?: string
   aspectRatio?: string
   resolution?: string
+  /** Frame rate on a model with a frame-rate setting (LTX 2.5) — see {@link GenerateVideoParams.fps}. */
+  fps?: number
   seed?: number
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
@@ -1000,6 +1010,8 @@ export class NodesResource {
   /** Synchronous: answers `{ jobId, generatedText }`. */
   run(type: "llm-chat", params: LlmChatParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-upscale", params: VideoUpscaleParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "suno-add-vocals", params: SunoAddVocalsParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  run(type: "suno-add-instrumental", params: SunoAddInstrumentalParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>

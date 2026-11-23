@@ -594,6 +594,42 @@ export interface ModelCatalogEntryFields {
    */
   autoDuration?: boolean
   /**
+   * The frame rates (fps) this video model renders, the first being what a
+   * run that names none renders. A run sends one of them
+   * ({@link videoFrameRateFor}, which every price and wire path reads), and the
+   * editor offers them. Absent: the model has no frame-rate setting, and none
+   * is forwarded. Declared from the provider's schema (LTX 2.5: 24, 25, 48 and
+   * 50, the price the same at each).
+   */
+  frameRates?: readonly number[]
+  /**
+   * Clips longer than `maxSeconds` render only at the other resolutions and
+   * frame rates: at a resolution in `resolutions` or a frame rate in
+   * `frameRates`, a length past `maxSeconds` is not offered (LTX 2.5 Fast: at
+   * most 10 s at 1440p or at 48 / 50 fps, read from the provider's schema).
+   * {@link videoDurationsAt} reads it; the price and the wire both move a
+   * longer request down onto it (`pricedVideoSelection`, the KIE runner), and
+   * the editor offers only the lengths it allows.
+   */
+  longClipLimit?: { readonly maxSeconds: number; readonly resolutions?: readonly string[]; readonly frameRates?: readonly number[] }
+  /**
+   * The model takes no negative prompt, and the platform does not fold one
+   * into the prompt as an `Avoid:` line either: a negative prompt a request or
+   * a node carries is dropped before the provider is called
+   * (`applyVideoNegativePrompt`), and the editor hides the field (decided
+   * 2026-11-22 for LTX 2.5, whose prompt also describes the sound).
+   */
+  noNegativePrompt?: true
+  /**
+   * `aspectRatios` apply to text-only runs: with a start frame the provider
+   * keeps the frame's own shape and takes no ratio (LTX 2.5's image endpoints,
+   * read from the schemas). The frame fit then ignores a ratio the request or
+   * the node still carries, so a stored ratio never crops the start frame
+   * (decided 2026-11-22: the editor also hides and clears it while a frame is
+   * wired).
+   */
+  aspectRatiosTextOnly?: true
+  /**
    * The reference task types this model accepts as a declaration (see
    * `SEEDANCE_REFERENCE_TASK_TYPES`): what the request's reference media is for
    * — a `reference`, an `edit` of the reference video, or an `extend` of it.
@@ -884,6 +920,11 @@ const VIDEO_RATIOS_KLING_4 = ["auto", "16:9", "9:16", "1:1", "21:9"] as const
 // endpoint takes NO aspect ratio: its output follows the start frame, so these
 // apply to text-only runs.
 const VIDEO_RATIOS_PIXVERSE_V6_MAX = ["16:9", "4:3", "1:1", "3:4", "9:16", "2:3", "3:2", "21:9"] as const
+// LTX 2.5 — the text-to-video enum, in KIE's own order (docs.kie.ai/market/ltx/
+// 2-5-fast-text-to-video and 2-5-pro-text-to-video). The image-to-video
+// endpoints take NO aspect ratio: the output follows the start frame, so these
+// apply to text-only runs.
+const VIDEO_RATIOS_LTX_2_5 = ["16:9", "9:16", "1:1", "3:2", "2:3"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -3317,6 +3358,73 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "wan-2.7-t2v", credits: 188, note: "5s 720p default" },
     ],
   },
+  // Lightricks LTX 2.5 (KIE) — a different model from LTX 2.3 below, offered
+  // beside it (decided 2026-11-22). ONE id per tier over KIE's text-to-video and
+  // image-to-video endpoints, picked by whether a start frame is wired (no
+  // VIDEO_MODE_ALIASES row): docs.kie.ai/market/ltx/2-5-fast-text-to-video,
+  // 2-5-fast-image-to-video, 2-5-pro-text-to-video, 2-5-pro-image-to-video.
+  // Picture and sound in one pass, always: there is no audio switch. No end
+  // frame, no camera setting, no negative prompt; a seed 0-2147483647; a 1-5000
+  // character prompt. Priced per second at each resolution (frame rate does not
+  // change the price). Defaults are the schemas' own: 1080p, 10 s, 24 fps.
+  "ltx-2.5-fast": {
+    id: "ltx-2.5-fast",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Lightricks",
+    maker: "lightricks",
+    label: "LTX 2.5 Fast",
+    series: "LTX",
+    description: "Lightricks LTX 2.5 Fast — picture and sound (dialogue, effects, ambience) in one pass, from text or a start frame; 6–20s at 720p or 1080p, 6–10s at 1440p or 48/50 fps. Quoted text is spoken; several shots can be written in one prompt.",
+    useCases: ["long-form", "fast", "narrative", "dialogue"],
+    features: ["audio"],
+    aspectRatios: VIDEO_RATIOS_LTX_2_5,
+    resolutions: ["720p", "1080p", "1440p"] as const,
+    defaultResolution: "1080p",
+    // normalizeLtx25Resolution sends 1080p for anything off the list.
+    unlistedResolutionRendersAs: "1080p",
+    durations: [6, 8, 10, 12, 14, 16, 18, 20],
+    defaultDuration: 10,
+    frameRates: [24, 25, 48, 50],
+    longClipLimit: { maxSeconds: 10, resolutions: ["1440p"], frameRates: [48, 50] },
+    noNegativePrompt: true,
+    aspectRatiosTextOnly: true,
+    pricing: [
+      { identifier: "ltx-2.5-fast", credits: 390, note: "default 10s 1080p — see :Ns:res variants for exact" },
+      { identifier: "ltx-2.5-fast:10s:1080p", credits: 390, note: "10s 1080p (the default tier)" },
+      { identifier: "ltx-2.5-fast:6s:720p", credits: 170, note: "6s 720p (min)" },
+      { identifier: "ltx-2.5-fast:20s:720p", credits: 540, note: "20s 720p" },
+      { identifier: "ltx-2.5-fast:20s:1080p", credits: 780, note: "20s 1080p" },
+      { identifier: "ltx-2.5-fast:10s:1440p", credits: 570, note: "10s 1440p (1440p max)" },
+    ],
+  },
+  "ltx-2.5-pro": {
+    id: "ltx-2.5-pro",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Lightricks",
+    maker: "lightricks",
+    label: "LTX 2.5 Pro",
+    series: "LTX",
+    description: "Lightricks LTX 2.5 Pro — picture and sound in one pass with finer faces, textures and on-screen text than LTX 2.5 Fast, from text or a start frame; 6/8/10s at 720p or 1080p, 24–50 fps. Quoted text is spoken.",
+    useCases: ["premium", "narrative", "dialogue", "typography"],
+    features: ["audio"],
+    aspectRatios: VIDEO_RATIOS_LTX_2_5,
+    resolutions: ["720p", "1080p"] as const,
+    defaultResolution: "1080p",
+    unlistedResolutionRendersAs: "1080p",
+    durations: [6, 8, 10],
+    defaultDuration: 10,
+    frameRates: [24, 25, 48, 50],
+    noNegativePrompt: true,
+    aspectRatiosTextOnly: true,
+    pricing: [
+      { identifier: "ltx-2.5-pro", credits: 510, note: "default 10s 1080p — see :Ns:res variants for exact" },
+      { identifier: "ltx-2.5-pro:10s:1080p", credits: 510, note: "10s 1080p (the default tier)" },
+      { identifier: "ltx-2.5-pro:6s:720p", credits: 220, note: "6s 720p (min)" },
+      { identifier: "ltx-2.5-pro:10s:720p", credits: 360, note: "10s 720p" },
+    ],
+  },
   // Lightricks LTX 2.3 (Replicate, not KIE). Both variants run one endpoint per
   // variant and switch behaviour with a `task` discriminator, so t2v and i2v are
   // the SAME id — no VIDEO_MODE_ALIASES row. `extend` / `retake` are separate
@@ -5374,6 +5482,8 @@ function sameOptionValue(a: string | number, b: string | number): boolean {
 export const MODEL_INPUT_ADJUSTMENT_FIELDS = [
   "aspectRatio", "resolution", "quality", "duration", "background",
   "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
+  // A video model's frame rate (catalog `frameRates`, LTX 2.5).
+  "fps",
 ] as const
 export type ModelInputAdjustmentField = (typeof MODEL_INPUT_ADJUSTMENT_FIELDS)[number]
 
@@ -6204,6 +6314,44 @@ export function normalizeVideoRequestParams(
   }
 
   return out
+}
+
+/**
+ * The frame rate a run of `modelId` sends and renders: `fps` when the model
+ * lists it (`frameRates`; a numeric string is read as its number), else the
+ * model's default (the first listed). Undefined for a model with no frame-rate
+ * setting, whatever `fps` says, so nothing is forwarded for it. THE one reading
+ * of a request's frame rate: the routes, the workflow run, the KIE runner and
+ * the length cap ({@link videoDurationsAt}) all read it.
+ */
+export function videoFrameRateFor(modelId: string | undefined, fps: unknown): number | undefined {
+  const rates = modelId ? MODEL_CATALOG[modelId]?.frameRates : undefined
+  if (!rates?.length) return undefined
+  const n = typeof fps === "number" ? fps : typeof fps === "string" && fps.trim() !== "" ? Number(fps.trim()) : Number.NaN
+  return rates.includes(n) ? n : rates[0]
+}
+
+/**
+ * The lengths `modelId` renders at a resolution and a frame rate: its
+ * `durations`, less those past `longClipLimit.maxSeconds` when the resolution
+ * (any case) or the frame rate ({@link videoFrameRateFor}) is one the limit
+ * names. A model without a limit answers its `durations` unchanged (undefined
+ * when it lists none). Pass the resolution the run is sent at.
+ */
+export function videoDurationsAt(
+  modelId: string,
+  at: { resolution?: string; fps?: unknown },
+): readonly number[] | undefined {
+  const m = MODEL_CATALOG[modelId]
+  const all = m?.durations
+  const limit = m?.longClipLimit
+  if (!all || !limit) return all
+  const res = typeof at.resolution === "string" ? at.resolution.trim().toLowerCase() : undefined
+  const fps = videoFrameRateFor(modelId, at.fps)
+  const limited =
+    (res !== undefined && (limit.resolutions ?? []).some((r) => r.toLowerCase() === res)) ||
+    (fps !== undefined && (limit.frameRates ?? []).includes(fps))
+  return limited ? all.filter((d) => d <= limit.maxSeconds) : all
 }
 
 // =============================================================================

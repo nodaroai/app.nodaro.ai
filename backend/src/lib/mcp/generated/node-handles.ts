@@ -162,7 +162,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "sub-workflow-input": { inputs: [], outputs: ["out"] },
   "sub-workflow-output": { inputs: ["in"], outputs: ["out"] },
   "suno-add-instrumental": { inputs: ["audio"], outputs: ["audio"] },
-  "suno-add-vocals": { inputs: ["audio"], outputs: ["audio"] },
+  "suno-add-vocals": { inputs: ["audio", "prompt"], outputs: ["audio"] },
   "suno-convert-wav": { inputs: ["audio"], outputs: ["audio"] },
   "suno-cover": { inputs: ["audio", "prompt", "voice"], outputs: ["audio"] },
   "suno-extend": { inputs: ["audio", "prompt", "voice"], outputs: ["audio"] },

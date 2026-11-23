@@ -94,6 +94,7 @@ import { dialogueTextBeforeCap } from "@nodaro/prompts/prompt-fields"
 import { MappableField } from "./mappable-field"
 import { CompareModelsLink } from "@/components/editor/node-docs/compare-models-link"
 import { SunoField, isSunoFieldWired } from "./suno-field"
+import { SunoAddTrackFields } from "./suno-add-track-fields"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -1491,7 +1492,7 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
   )
 }
 
-export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddInstrumentalData> & { nodeId?: string }) {
+export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoAddInstrumentalData> & { nodeId?: string }) {
   const t = useT()
   const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, { nodeType: "suno-add-instrumental", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
@@ -1513,11 +1514,12 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
         </Select>
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
+      <SunoAddTrackFields data={data} onUpdate={onUpdate} withPrompt={false} nodeRefs={nodeRefs} refMap={refMap} variableDisplayMode={variableDisplayMode} />
     </div>
   )
 }
 
-export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoAddVocalsData> & { nodeId?: string }) {
+export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoAddVocalsData> & { nodeId?: string }) {
   const t = useT()
   const offeredSunoModels = useOfferedModels(SUNO_ADD_TRACK_MODEL_OPTIONS, { nodeType: "suno-add-vocals", field: "model" }, data.model || DEFAULT_SUNO_MODEL)
   // The ids a connected Suno node will hand this node at run time — shown so a
@@ -1539,6 +1541,7 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
         </Select>
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
+      <SunoAddTrackFields data={data} onUpdate={onUpdate} withPrompt={true} nodeRefs={nodeRefs} refMap={refMap} variableDisplayMode={variableDisplayMode} />
     </div>
   )
 }

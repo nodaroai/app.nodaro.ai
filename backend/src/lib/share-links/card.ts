@@ -10,29 +10,62 @@
  * shared address.
  *
  * What the tags say is what the link shows (`public-reads.ts`), never more:
- * the result's name (else the start of its prompt), the prompt as its
- * description, the result itself as the picture (a video's poster and the
- * video; a sound's cover, else the default picture). A trend run is named by
- * its trend, never a prompt. Every value is escaped, and only https addresses
- * are written.
+ *  - the title: the result's own name (the owner's, else its trend's, else its
+ *    song's, else the start of its prompt) and the tool that made it,
+ *    "Lady's on the Loose · Song Mashup"; a session or project: its title;
+ *  - the description: one line, what it is and that it was made with Nodaro,
+ *    in the language the link was shared in (card-locale.ts);
+ *  - the picture: the card's own 1200 × 630 picture on our storage
+ *    (card-image/), else the best picture of the result already ours, else the
+ *    brand's card; never a provider's address;
+ *  - a video's or a sound's file, when it is ours.
+ * A trend run is named by its trend, never a prompt. Every value is escaped,
+ * and only https addresses are written. The tags come first in `<head>`,
+ * right after the charset and the title: some readers stop early.
  *
- * Pure: the route hands in the addresses (card, page, default picture).
+ * Pure: the caller hands in the addresses and what is ours.
  */
 import { createHash } from "node:crypto"
 import { isShareableAddress } from "./settings.js"
+import { shareToolOf, shareWorkOf } from "./tool-names.js"
+import { CARD_WORDS, HTML_LANGS, OG_LOCALES, RTL_LOCALES, type ShareCardLocale } from "./card-locale.js"
+import { GRID_MAX, type CardPicture } from "./card-image/plan.js"
 import type { SharedJob } from "./types.js"
 
 export interface CardImage {
   readonly url: string
   readonly width?: number
   readonly height?: number
+  readonly type?: string
+}
+
+export interface CardMedia {
+  readonly url: string
+  readonly type: string
+  readonly width?: number
+  readonly height?: number
 }
 
 export interface ShareCardContent {
   readonly title: string
-  readonly description: string | null
-  readonly image: CardImage | null
-  readonly video?: { readonly url: string; readonly type: string; readonly width?: number; readonly height?: number }
+  readonly description: string
+  readonly locale: ShareCardLocale
+  /** What the card's own picture shows (card-image/), or null when there is nothing to draw it from. */
+  readonly picture: CardPicture | null
+  /** The best picture of the item already on our storage: the card's picture until its own is rendered. */
+  readonly fallbackImage: CardImage | null
+  /** The picture the card names: set by the caller (`withCardImage`); else the fallback, else the brand's. */
+  readonly image?: CardImage | null
+  readonly video?: CardMedia
+  readonly audio?: CardMedia
+}
+
+/** How the caller judges an address. */
+export interface CardSources {
+  /** An address of our own storage. */
+  readonly isOurs: (url: string) => boolean
+  /** An address the caller found restricted: never named, never drawn. */
+  readonly refuse?: (url: string) => boolean
 }
 
 /** The page's addresses, handed in by the route. */
@@ -41,13 +74,14 @@ export interface ShareCardPlace {
   readonly cardUrl: string
   /** Where people are sent: the share page (never the card's own address). */
   readonly pageUrl: string
-  /** The picture of a card with none of its own (the brand's). */
+  /** The picture of a card with none of its own (the brand's card). */
   readonly defaultImage: CardImage | null
 }
 
 const SITE_NAME = "Nodaro"
-const TITLE_MAX = 70
-const DESCRIPTION_MAX = 200
+const TITLE_MAX = 90
+const NAME_MAX = 60
+const SEPARATOR = " · "
 
 export function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -71,71 +105,135 @@ function httpsUrl(value: unknown, refuse?: (url: string) => boolean): string | u
   return refuse?.(value) ? undefined : value
 }
 
-const VIDEO_TYPES: ReadonlyArray<readonly [RegExp, string]> = [
+const MEDIA_TYPES: ReadonlyArray<readonly [RegExp, string]> = [
   [/\.webm(?:[?#]|$)/i, "video/webm"],
   [/\.(mov|qt)(?:[?#]|$)/i, "video/quicktime"],
+  [/\.mp4(?:[?#]|$)/i, "video/mp4"],
+  [/\.mp3(?:[?#]|$)/i, "audio/mpeg"],
+  [/\.wav(?:[?#]|$)/i, "audio/wav"],
+  [/\.(m4a|aac)(?:[?#]|$)/i, "audio/mp4"],
+  [/\.ogg(?:[?#]|$)/i, "audio/ogg"],
+  [/\.flac(?:[?#]|$)/i, "audio/flac"],
+  [/\.jpe?g(?:[?#]|$)/i, "image/jpeg"],
+  [/\.png(?:[?#]|$)/i, "image/png"],
+  [/\.webp(?:[?#]|$)/i, "image/webp"],
+  [/\.gif(?:[?#]|$)/i, "image/gif"],
 ]
 
-function videoTypeOf(url: string): string {
-  return VIDEO_TYPES.find(([re]) => re.test(url))?.[1] ?? "video/mp4"
+/** A file's type by its address's extension, or undefined. */
+export function mediaTypeOf(url: string): string | undefined {
+  return MEDIA_TYPES.find(([re]) => re.test(url))?.[1]
+}
+
+/** A picture already on our storage, with what is known of it. */
+function ownImage(url: string | undefined, sources: CardSources, size: { width?: number; height?: number } = {}): CardImage | null {
+  if (!url || !sources.isOurs(url)) return null
+  const type = mediaTypeOf(url)
+  return { url, ...(size.width && size.height ? { width: size.width, height: size.height } : {}), ...(type?.startsWith("image/") ? { type } : {}) }
+}
+
+/** "<name> · <tool>", the name cut to fit; just one of them when only one is known or they say the same. */
+function titleOf(name: string | null, tool: string | null): string | null {
+  const shortName = name ? clip(name, NAME_MAX) : null
+  if (shortName && tool && shortName.toLowerCase() !== tool.toLowerCase()) return clip(`${shortName}${SEPARATOR}${tool}`, TITLE_MAX)
+  return shortName ?? tool
 }
 
 /**
  * A shared result's card. `output` is the job's own `output_data` (already
- * redacted), read for the poster and the cover a link's projection does not
- * carry; `refuse` drops an address the caller found restricted.
+ * redacted), read for the poster and the art a link's projection does not carry.
  */
-export function jobCardContent(job: SharedJob, output: unknown, refuse?: (url: string) => boolean): ShareCardContent {
+export function jobCardContent(job: SharedJob, output: unknown, sources: CardSources, locale: ShareCardLocale = "en"): ShareCardContent {
+  const { refuse } = sources
   const out = record(output)
-  // What a person reads: the pills' names in place of the reference tokens.
+  const words = CARD_WORDS[locale]
+  const work = shareWorkOf(job.type, job.mediaKind)
+  // What a person reads: the pills' names in place of the reference tokens. A trend run never shows a prompt.
   const prompt = job.trend ? null : (job.displayPrompt ?? job.prompt)
-  const title = job.title ?? (job.trend ? job.trend.name : prompt ? clip(prompt, TITLE_MAX) : "A result shared on Nodaro")
-  const description = job.trend
-    ? `Made with the ${job.trend.name} trend on Nodaro.`
-    : prompt
-      ? clip(prompt, DESCRIPTION_MAX)
-      : null
+  const ownName = job.title ?? job.trend?.name ?? job.songTitle ?? null
+  const name = ownName ?? (prompt ? clip(prompt, NAME_MAX) : null)
+  const tool = job.toolName ?? shareToolOf(job.type)?.name ?? null
+  const description = job.trend ? words.trend.replace("{trend}", job.trend.name) : words.made[work]
+  const title = titleOf(name, tool) ?? description
+  const base = { title, description, locale }
   const size = job.width !== undefined && job.height !== undefined ? { width: job.width, height: job.height } : {}
+  const outputUrl = httpsUrl(job.outputUrl, refuse)
+  const ownOutput = outputUrl && sources.isOurs(outputUrl) ? outputUrl : undefined
+
   if (job.mediaKind === "image") {
-    const url = httpsUrl(job.outputUrl, refuse)
-    return { title, description, image: url ? { url, ...size } : null }
-  }
-  if (job.mediaKind === "video") {
-    const poster = httpsUrl(out.thumbnailUrl, refuse) ?? httpsUrl(out.posterUrl, refuse)
-    const url = httpsUrl(job.outputUrl, refuse)
     return {
-      title,
-      description,
-      image: poster ? { url: poster } : null,
-      ...(url ? { video: { url, type: videoTypeOf(url), ...size } } : {}),
+      ...base,
+      picture: outputUrl ? { kind: "picture", source: outputUrl } : null,
+      fallbackImage: ownImage(outputUrl, sources, size),
     }
   }
-  // A sound: its cover (a Suno track carries one), else the default picture.
-  const cover =
-    httpsUrl(out.coverUrl, refuse) ?? httpsUrl(out.imageUrl, refuse) ?? httpsUrl(out.sunoImageUrl, refuse) ?? httpsUrl(out.thumbnailUrl, refuse)
-  return { title, description, image: cover ? { url: cover } : null }
-}
-
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
-
-/** A shared session's card: its title and its first shown result's picture. */
-export function sessionCardContent(title: string | null, itemCount: number, coverUrl: string | null): ShareCardContent {
-  const cover = httpsUrl(coverUrl)
+  if (job.mediaKind === "video") {
+    // The owner's cover first (job.coverUrl), then the frame the video was given.
+    const poster = httpsUrl(job.coverUrl, refuse) ?? httpsUrl(out.thumbnailUrl, refuse) ?? httpsUrl(out.posterUrl, refuse) ?? null
+    return {
+      ...base,
+      picture: { kind: "video", poster, video: ownOutput ?? null },
+      fallbackImage: ownImage(poster ?? undefined, sources),
+      ...(ownOutput ? { video: { url: ownOutput, type: mediaTypeOf(ownOutput) ?? "video/mp4", ...size } } : {}),
+    }
+  }
+  // A sound: the owner's cover or the provider's art (job.coverUrl), else art its output carries.
+  const art =
+    httpsUrl(job.coverUrl, refuse) ??
+    httpsUrl(out.coverUrl, refuse) ??
+    httpsUrl(out.imageUrl, refuse) ??
+    httpsUrl(out.sunoImageUrl, refuse) ??
+    httpsUrl(out.thumbnailUrl, refuse) ??
+    null
+  const audioType = ownOutput ? mediaTypeOf(ownOutput) : undefined
   return {
-    title: title ? clip(title, TITLE_MAX) : "A session shared on Nodaro",
-    description: `${plural(itemCount, "result", "results")} on Nodaro.`,
-    image: cover ? { url: cover } : null,
+    ...base,
+    picture: { kind: "sound", art, title: ownName, work },
+    fallbackImage: ownImage(art ?? undefined, sources),
+    ...(ownOutput ? { audio: { url: ownOutput, type: audioType?.startsWith("audio/") ? audioType : "audio/mpeg" } } : {}),
   }
 }
 
-/** A shared project's card: its name and its first session's picture. */
-export function projectCardContent(name: string, sessionCount: number, coverUrl: string | null): ShareCardContent {
-  const cover = httpsUrl(coverUrl)
+function gridContent(title: string, description: string, locale: ShareCardLocale, previews: readonly (string | null)[], sources: CardSources): ShareCardContent {
+  const shown = [...new Set(previews.map((u) => httpsUrl(u, sources.refuse)).filter((u): u is string => !!u))].slice(0, GRID_MAX)
   return {
-    title: clip(name, TITLE_MAX) || "A project shared on Nodaro",
-    description: `${plural(sessionCount, "session", "sessions")} on Nodaro.`,
-    image: cover ? { url: cover } : null,
+    title,
+    description,
+    locale,
+    picture: { kind: "grid", sources: shown },
+    fallbackImage: shown.map((u) => ownImage(u, sources)).find((i) => i !== null) ?? null,
   }
+}
+
+/** A shared session's card: its title and a grid of its first shown results. */
+export function sessionCardContent(
+  title: string | null,
+  itemCount: number,
+  previewUrls: readonly string[],
+  sources: CardSources,
+  locale: ShareCardLocale = "en",
+): ShareCardContent {
+  const words = CARD_WORDS[locale]
+  const description = words.results(itemCount)
+  return gridContent(title ? clip(title, TITLE_MAX) : description, description, locale, previewUrls, sources)
+}
+
+/** A shared project's card: its name and a grid of its first sessions' pictures. */
+export function projectCardContent(
+  name: string,
+  sessionCount: number,
+  coverUrls: readonly (string | null)[],
+  sources: CardSources,
+  locale: ShareCardLocale = "en",
+): ShareCardContent {
+  const words = CARD_WORDS[locale]
+  const description = words.sessions(sessionCount)
+  return gridContent(clip(name, TITLE_MAX) || description, description, locale, coverUrls, sources)
+}
+
+/** The content with the picture the card names. */
+export function withCardImage(content: ShareCardContent, image: CardImage | null): ShareCardContent {
+  return { ...content, image }
 }
 
 const meta = (attr: "property" | "name", key: string, value: string): string =>
@@ -154,47 +252,54 @@ export interface RenderedCard {
   readonly csp: string
 }
 
+function mediaTags(prefix: "og:video" | "og:audio", media: CardMedia): string[] {
+  return [
+    meta("property", prefix, media.url),
+    meta("property", `${prefix}:secure_url`, media.url),
+    meta("property", `${prefix}:type`, media.type),
+    ...(media.width && media.height ? [meta("property", `${prefix}:width`, String(media.width)), meta("property", `${prefix}:height`, String(media.height))] : []),
+  ]
+}
+
 /** The card page. */
 export function shareCardHtml(content: ShareCardContent, place: ShareCardPlace): RenderedCard {
-  const image = content.image ?? place.defaultImage
+  const image = (content.image !== undefined ? content.image : content.fallbackImage) ?? place.defaultImage
   const imageUrl = image ? httpsUrl(image.url) : undefined
+  const alt = content.title
   const tags: string[] = [
-    meta("property", "og:type", content.video ? "video.other" : "website"),
-    meta("property", "og:site_name", SITE_NAME),
     meta("property", "og:title", content.title),
-    ...(content.description ? [meta("property", "og:description", content.description)] : []),
-    ...(httpsUrl(place.cardUrl) ? [meta("property", "og:url", place.cardUrl)] : []),
+    meta("property", "og:description", content.description),
     ...(imageUrl && image
       ? [
           meta("property", "og:image", imageUrl),
           meta("property", "og:image:secure_url", imageUrl),
+          ...(image.type ? [meta("property", "og:image:type", image.type)] : []),
           ...(image.width && image.height ? [meta("property", "og:image:width", String(image.width)), meta("property", "og:image:height", String(image.height))] : []),
+          meta("property", "og:image:alt", alt),
         ]
       : []),
-    ...(content.video
-      ? [
-          meta("property", "og:video", content.video.url),
-          meta("property", "og:video:secure_url", content.video.url),
-          meta("property", "og:video:type", content.video.type),
-          ...(content.video.width && content.video.height
-            ? [meta("property", "og:video:width", String(content.video.width)), meta("property", "og:video:height", String(content.video.height))]
-            : []),
-        ]
-      : []),
+    meta("property", "og:type", content.video ? "video.other" : "website"),
+    meta("property", "og:site_name", SITE_NAME),
+    meta("property", "og:locale", OG_LOCALES[content.locale]),
+    ...(httpsUrl(place.cardUrl) ? [meta("property", "og:url", place.cardUrl)] : []),
+    ...(content.video ? mediaTags("og:video", content.video) : []),
+    ...(content.audio ? mediaTags("og:audio", content.audio) : []),
     meta("name", "twitter:card", "summary_large_image"),
     meta("name", "twitter:title", content.title),
-    ...(content.description ? [meta("name", "twitter:description", content.description)] : []),
-    ...(imageUrl ? [meta("name", "twitter:image", imageUrl)] : []),
+    meta("name", "twitter:description", content.description),
+    ...(imageUrl ? [meta("name", "twitter:image", imageUrl), meta("name", "twitter:image:alt", alt)] : []),
   ]
   const page = escapeHtml(place.pageUrl)
   const script = redirectScript(place.pageUrl)
+  const dir = RTL_LOCALES.has(content.locale) ? ' dir="rtl"' : ""
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="${HTML_LANGS[content.locale]}"${dir}>
 <head>
 <meta charset="utf-8">
 <title>${escapeHtml(content.title)} — ${SITE_NAME}</title>
+${tags.join("\n")}
+${meta("name", "description", content.description)}
 <meta name="robots" content="noindex">
-${content.description ? `${meta("name", "description", content.description)}\n` : ""}${tags.join("\n")}
 <meta http-equiv="refresh" content="0; url=${page}">
 ${httpsUrl(place.cardUrl) ? `<link rel="canonical" href="${escapeHtml(place.cardUrl)}">
 ` : ""}<script>${script.body}</script>

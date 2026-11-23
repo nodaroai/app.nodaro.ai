@@ -73,7 +73,9 @@ export function parseAspectToken(token: string | undefined): number | undefined 
 /**
  * The aspect the fit should target.
  *
- * An explicit ratio is used as-is. `adaptive` / `Auto` (and an absent value,
+ * A model whose ratios are for text-only runs (`aspectRatiosTextOnly`) gives
+ * `undefined` — its frame keeps its shape. Otherwise an explicit ratio is used
+ * as-is. `adaptive` / `Auto` (and an absent value,
  * which the seedance family sends as adaptive whenever a frame is present) has
  * no shape of its own: the provider will follow the IMAGE, so we snap the
  * image's own ratio to the nearest one the model lists and target that. A model
@@ -85,6 +87,10 @@ export function resolveFrameFitAspect(args: {
   sourceWidth: number
   sourceHeight: number
 }): string | undefined {
+  // A model whose ratios are for text-only runs keeps the frame's own shape
+  // (catalog `aspectRatiosTextOnly`, LTX 2.5): no ratio is a crop target for
+  // its frame — neither one the request still carries nor the nearest listed.
+  if (args.provider && getModel(args.provider)?.aspectRatiosTextOnly === true) return undefined
   const requested = args.requestedAspect?.trim()
   if (requested && !OPEN_ASPECT_TOKENS.has(requested.toLowerCase())) return requested
   const ratios = args.provider ? getModel(args.provider)?.aspectRatios : undefined

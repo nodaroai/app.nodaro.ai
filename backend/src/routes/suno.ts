@@ -14,7 +14,7 @@ import { linkImportRefusal } from "../lib/link-imports.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import {
-  SUNO_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars,
+  SUNO_MODELS, DEFAULT_SUNO_MODEL, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars,
   SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, sunoSeparateCreditId,
 } from "@nodaro/shared/models"
 import {
@@ -45,6 +45,7 @@ import { syncRouteLane } from "../lib/concurrency-lanes/sync-route-lanes.js"
 import { jobRunModel } from "../lib/run-model.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { resolveSunoCoverSource, resolveSunoWavSource, sunoSpeechTakeRefusal } from "../lib/suno-id-source.js"
+import { sunoAddTrackRoutes } from "./suno-add-track.js"
 
 const SUNO_VOICE_CREATE_CREDIT_ID = "suno-voice-create"
 const SUNO_VOICE_VALIDATE_TAG = "suno-voice-validate"
@@ -73,7 +74,6 @@ async function userOwnsVoiceTask(
 // SUNO_MODELS = the V6 family first, then every earlier version (all offered,
 // all accepted — see @nodaro/shared). The default is KIE's own (V6).
 const sunoModelEnum = z.enum(SUNO_MODELS).optional().default(DEFAULT_SUNO_MODEL)
-const sunoAddTrackModelEnum = z.enum(SUNO_ADD_TRACK_MODELS).optional().default(DEFAULT_SUNO_MODEL)
 
 /**
  * The credit key the guard RESERVES under must be the key the worker later
@@ -245,20 +245,6 @@ const sunoReplaceSectionBody = z.object({
 const sunoStyleBoostBody = z.object({
   content: z.string().min(1).max(SUNO_HARD_CEILING),
   userPrompt: z.string().max(SUNO_HARD_CEILING).optional(),
-  userId: z.string().uuid().optional(),
-})
-
-const sunoAddInstrumentalBody = z.object({
-  taskId: z.string().min(1),
-  audioId: z.string().min(1),
-  model: sunoAddTrackModelEnum,
-  userId: z.string().uuid().optional(),
-})
-
-const sunoAddVocalsBody = z.object({
-  taskId: z.string().min(1),
-  audioId: z.string().min(1),
-  model: sunoAddTrackModelEnum,
   userId: z.string().uuid().optional(),
 })
 
@@ -1064,117 +1050,8 @@ export async function sunoRoutes(app: FastifyInstance) {
     }
   )
 
-  // ── Add Instrumental ──
-  app.post(
-    "/v1/suno/add-instrumental",
-    {
-      preHandler: creditGuard(() => "suno-add-instrumental", { runModel: jobRunModel("suno-add-instrumental") }),
-    },
-    async (req, reply) => {
-      const parsed = sunoAddInstrumentalBody.safeParse(req.body)
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: "validation_error", ...formatZodError(parsed.error) },
-        })
-      }
-
-      const { taskId, audioId, model } = parsed.data
-      const userId = req.userId
-
-      if (!userId) {
-        return reply.status(401).send({
-          error: { code: "unauthorized", message: "Authentication required" },
-        })
-      }
-
-      const mcpClient = extractMcpClient(req.body)
-
-      const { data: job, error } = await insertJob(req, {
-          workflow_id: extractWorkflowId(req.body),
-          node_id: extractNodeId(req.body),
-          force_private: extractForcePrivate(req.body) || undefined,
-          user_id: userId,
-          status: "pending",
-          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-add-instrumental"), "suno-add-instrumental"),
-          ...(mcpClient ? { mcp_client: mcpClient } : {}),
-        })
-
-      if (error) {
-        return sendInternalError(reply, req, error, "Failed to create job")
-      }
-
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-add-instrumental")
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
-
-      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-add-instrumental", {
-        jobId: job.id,
-        taskId,
-        audioId,
-        model,
-        usageLogId,
-      }))
-      if (reply.sent) return
-
-      return { jobId: job.id }
-    }
-  )
-
-  // ── Add Vocals ──
-  app.post(
-    "/v1/suno/add-vocals",
-    {
-      preHandler: creditGuard(() => "suno-add-vocals", { runModel: jobRunModel("suno-add-vocals") }),
-    },
-    async (req, reply) => {
-      const parsed = sunoAddVocalsBody.safeParse(req.body)
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: "validation_error", ...formatZodError(parsed.error) },
-        })
-      }
-
-      const { taskId, audioId, model } = parsed.data
-      const userId = req.userId
-
-      if (!userId) {
-        return reply.status(401).send({
-          error: { code: "unauthorized", message: "Authentication required" },
-        })
-      }
-
-      const mcpClient = extractMcpClient(req.body)
-
-      const { data: job, error } = await insertJob(req, {
-          workflow_id: extractWorkflowId(req.body),
-          node_id: extractNodeId(req.body),
-          force_private: extractForcePrivate(req.body) || undefined,
-          user_id: userId,
-          status: "pending",
-          input_data: withResolvedModel(buildJobInputData(parsed.data, "suno-add-vocals"), "suno-add-vocals"),
-          ...(mcpClient ? { mcp_client: mcpClient } : {}),
-        })
-
-      if (error) {
-        return sendInternalError(reply, req, error, "Failed to create job")
-      }
-
-      const reservation = await reserveCreditsForJob(req, reply, job.id, "suno-add-vocals")
-      if (reply.sent) return
-      const usageLogId = reservation?.usageLogId
-
-      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("suno-add-vocals", {
-        jobId: job.id,
-        taskId,
-        audioId,
-        model,
-        usageLogId,
-      }))
-      if (reply.sent) return
-
-      return { jobId: job.id }
-    }
-  )
+  // ── Add Instrumental / Add Vocals (routes/suno-add-track.ts) ──
+  await sunoAddTrackRoutes(app)
 
   // ── Convert WAV ──
   app.post(

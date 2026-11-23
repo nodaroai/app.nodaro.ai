@@ -11,7 +11,7 @@ Full LLM reference: https://docs.kie.ai/llms.txt
 **VEO models** — `POST /api/v1/veo/generate` + poll `GET /api/v1/veo/record-info?taskId=`
 **Kling 3.0** — `POST /api/v1/jobs/createTask` + poll `GET /api/v1/jobs/recordInfo?taskId=` (separate client: `kling3-client.ts`)
 **Suno music** — `POST /api/v1/generate`, `/api/v1/lyrics`, `/api/v1/vocal-removal/*`, `/api/v1/mp4/*` (separate client: `suno-client.ts`)
-**Suno on the market lane** — `createTask` + `recordInfo` (`suno-market.ts`), for the abilities only that lane documents (decided 2026-11-17): Suno Speech (`ai-music-api/speech`), cover by id (`ai-music-api/upload-and-cover-audio` with `task_id` + `audio_id`), a stem to WAV (`ai-music-api/convert-to-wav-format`); separation's market lane is `suno-separate-market.ts`. Every other Suno call keeps its old endpoint and body. See "Suno market lane wire notes" below.
+**Suno on the market lane** — `createTask` + `recordInfo` (`suno-market.ts`), for the abilities only that lane documents (decided 2026-11-17): Suno Speech (`ai-music-api/speech`), cover by id (`ai-music-api/upload-and-cover-audio` with `task_id` + `audio_id`), a stem to WAV (`ai-music-api/convert-to-wav-format`), Add Vocals (`ai-music-api/add-vocals`) and Add Instrumental (`ai-music-api/add-instrumental`) (2026-11-23); separation's market lane is `suno-separate-market.ts`. Every other Suno call keeps its old endpoint and body. See "Suno market lane wire notes" below.
 **Flux Kontext** — `POST /api/v1/flux/kontext/generate` + poll (special endpoint, NOT createTask)
 **4o Image** — `POST /api/v1/gpt4o-image/generate` + poll (special endpoint, NOT createTask)
 
@@ -160,6 +160,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (bespoke `runKling4`) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (bespoke `runKling4`; swaps to `kling-4.0/flash-keyframe-to-video` — `KLING_4_FLASH_KEYFRAME_MODEL` — for a start frame alone, see `kling4FlashEndpoint`) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) / [flash keyframe](https://docs.kie.ai/market/kling/v4-flash-keyframe-to-video.md) |
 | `pixverse-v6-max` | `pixverse-v6-max/image-to-video` (bespoke `runPixverseV6Max`, body from `pixverse-v6-max.ts`; a run with no start frame takes the t2v config's `pixverse-v6-max/text-to-video`) | [pixverse v6 max i2v](https://docs.kie.ai/market/pixverse/v6-max-image-to-video.md) |
+| `ltx-2.5-fast` | `ltx/2-5-fast-image-to-video` (bespoke `runLtx25`, body from `ltx-2-5.ts`; a run with no start frame takes the t2v config's `ltx/2-5-fast-text-to-video`) | [ltx 2.5 fast i2v](https://docs.kie.ai/market/ltx/2-5-fast-image-to-video.md) |
+| `ltx-2.5-pro` | `ltx/2-5-pro-image-to-video` (bespoke `runLtx25`; no start frame → `ltx/2-5-pro-text-to-video`) | [ltx 2.5 pro i2v](https://docs.kie.ai/market/ltx/2-5-pro-image-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (bespoke `runGeminiOmni12`, body from `gemini-omni-12.ts`) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -193,6 +195,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `kling-4-keyframes` | `kling-4.0/keyframe-to-video` (ONE KIE id serves both modes) | [kling 4.0 keyframe](https://docs.kie.ai/market/kling/v4-keyframe-to-video.md) |
 | `kling-4-flash` | `kling-4.0/flash-reference-to-video` (text-only runs; the keyframe endpoint needs a start frame) | [flash reference](https://docs.kie.ai/market/kling/v4-flash-reference-to-video.md) |
 | `pixverse-v6-max` | `pixverse-v6-max/text-to-video` (bespoke `runPixverseV6Max`; the i2v config carries the image endpoint) | [pixverse v6 max t2v](https://docs.kie.ai/market/pixverse/v6-max-text-to-video.md) |
+| `ltx-2.5-fast` | `ltx/2-5-fast-text-to-video` (bespoke `runLtx25`; the i2v config carries the image endpoint) | [ltx 2.5 fast t2v](https://docs.kie.ai/market/ltx/2-5-fast-text-to-video.md) |
+| `ltx-2.5-pro` | `ltx/2-5-pro-text-to-video` (bespoke `runLtx25`; the i2v config carries the image endpoint) | [ltx 2.5 pro t2v](https://docs.kie.ai/market/ltx/2-5-pro-text-to-video.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
 | `gemini-omni-flash-1-2` | `google/gemini-omni-flash-1-2` (ONE KIE id serves every mode) | [gemini omni flash 1.2](https://docs.kie.ai/market/google/gemini-omni-flash-1-2.md) |
 | `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
@@ -234,6 +238,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 
 - **Suno Speech** (`suno-speech`, a node unit): `{ model: "ai-music-api/speech", input }`. Brief: exactly `customMode: false` + `prompt` (1–3,000 after trim). Script: `customMode: true` + `script` (1–5,000), and only when set `tone` (≤1,000), `variety` (integer 0–4), `vocalGender` (`f` / `m` — never `female` / `male`), `backgroundMusic`. The two sets are mutually exclusive; the allow-list is `sunoSpeechProviderInput` (`@nodaro/render-rules`). Two takes per run. KIE bills 12 credits a request (`SUNO_SPEECH_PROVIDER_COST_USD` → `jobs.provider_cost`). Its task is saved under `kie-suno-market`, so a job whose worker died is finished from the task by the reconcile (polled, never created again). Its output carries `sunoTrackKind: "speech"`: the takes have Suno ids and are not songs, so every tool that takes a track by its ids refuses them (`isSunoSpeechOutput`). Never relayed to a connected cloud.
 - **Cover by id**: the upload lane (`/api/v1/generate/upload-cover`, camelCase `uploadUrl`) is unchanged, and is what EVERY request with a file runs on while `SUNO_COVER_BY_ID_WHEN_FILE_PRESENT` (`lib/suno-id-source.ts`) is false — the gate, to lift after a real run proves the market lane. By id (ids alone: the API / MCP `taskId` + `audioId` form) sends `task_id` + `audio_id` (never `upload_url`), `model`, `instrumental`, and when set `lyrics`, `style`, `title`, `negative_tags`, `vocal_gender` (`m` / `f`), `persona_id` / `persona_model`. The market schema has no custom/simple switch and no description field, so the body (`sunoCoverByIdInput`, the pure leaf `suno-cover-by-id.ts`) exists only when it says everything the upload body would: `lyrics` only in custom mode with vocals and ONE text to sing (the prompt with no lyrics field, or the lyrics field with no prompt — both together have no by-id body); a prompt that is not sung goes as `style` when no style is set and it fits the style limit; a prompt beside a style, or over the limit, has NO by-id body — nothing is cut. By id only for the caller's own finished song whose saved tracks hold the audio id (`resolveSunoCoverSource`); with the gate lifted, ids beside a file must name that file's own track, a song older than 13 days goes by its file, and a create KIE DEFINITELY refuses (`isDefiniteCreateRefusal`: HTTP 4xx or an error code in the body — never a 5xx, a non-JSON answer, a missing task id or a lost connection, after which a task may exist) falls back to the upload lane in the same job. The task is saved under `kie-suno-market`, which is what the reconcile reads to poll it. `output_data.coverLane` says which lane ran.
+- **Add Vocals / Add Instrumental** (decided 2026-11-23): the old `/api/v1/generate/add-*` calls sent the track's ids alone and were refused on every run (422: "upload_url cannot be null" / "Please enter uploadUrl"); KIE documents both only on the market lane, and neither takes a task or track id. Body (`suno-add-track.ts`, allow-listed): `upload_url`, `model` (KIE default V6), and the schema's required `title`, `negative_tags` (sent as `""` when nothing is excluded — unprobed), and the style — `style` on Add Vocals, `tags` on Add Instrumental (≤1000). Optional, only when set: `prompt` (Add Vocals only, ≤5000: the lyrics or the vocal direction; Add Instrumental has no prompt), `vocal_gender` `m` / `f`, `style_weight` / `weirdness_constraint` / `audio_weight` (0–1, steps of 0.01). `lyrics` and `variety` are not offered. The file and the style are resolved before the hold (`lib/suno-add-track-source.ts`): the request's link, else the Suno track's saved audio (any account's track, as before); the request's style, else the caller's OWN original song's (`input_data.style` / `tags`; on Add Vocals without an "instrumental" tag), else refused (`suno_add_track_style`). The task is saved under `kie-suno-market`, so the reconcile polls it like any market Suno music task. **Not measured yet:** a real run of either (the record shape, whether an empty `negative_tags` passes, KIE's price per request).
 - **A stem to WAV**: `{ task_id: <separation task>, audio_id: <stem id> }`; the file is `resultJson.resultUrls[0]`. A track's WAV keeps `/api/v1/wav/generate`. Stem ids: `origin_data[].id` (one-instrument: `extract.id` / `remove.id`), kept as `sunoStemIds` on the separation's output.
 - **Tracks of a finished task**: documented at recordInfo `data.response.data[]` (`audio_url`, `stream_audio_url`, `image_url`, `id`, `duration`); `pollSunoMarketTracks` also reads `resultJson` (`resultObject.data`, `data`, `sunoData`), since no real run has been recorded yet. `stream_audio_url` is never stored.
 - **Not measured yet** (staging): the real record shape of a speech and a by-id cover task; whether the old-lane separation task id is accepted by the market WAV model; KIE's 422 "already converted" answer on a stem converted twice.
@@ -721,6 +726,28 @@ generic frame normalization in `imageToVideo` for the same reason.
   `grok-imagine-video-1.5:<N>s:<res>` rows, the bare id = 8 s @480p. The runner
   reports `GROK_VIDEO_15_RATE_USD_PER_SEC` × seconds as the provider cost and
   writes a credit-audit row.
+
+### LTX 2.5 wire notes (`ltx-2.5-fast` / `ltx-2.5-pro`, bespoke `runLtx25`)
+
+ONE Nodaro id per tier over two KIE ids, registered in BOTH model maps under
+that id (`ltx/2-5-{fast,pro}-image-to-video` / `-text-to-video`). A different
+model from LTX 2.3 (Replicate, `ltx-2.3-*`): every LTX 2.3 branch keys on the
+exact 2.3 ids, never a prefix. The pure `buildLtx25Request` (`ltx-2-5.ts`)
+builds both bodies from an allow-list — `prompt`, `image_url` (i2v) or
+`aspect_ratio` (t2v, one of 16:9 / 9:16 / 1:1 / 3:2 / 2:3), `resolution`
+(`normalizeLtx25Resolution`: off-list → 1080p), `fps` (`videoFrameRateFor`:
+24 / 25 / 48 / 50, else 24), an INTEGER `duration` and an in-range `seed`. The
+duration is capped by the catalog's `longClipLimit` (Fast: 10 s at most at
+1440p or 48 / 50 fps, `videoDurationCappedAt`) — the same cap the price reads
+(`pricedVideoSelection`), so a route or workflow never sends more than it
+priced. No schema has an audio field (sound is always generated), an end
+frame, a negative prompt or a camera setting; none is sent. The i2v dispatch
+sits AFTER the shared frame normalization (2048 px / 10 MB / JPEG-PNG-WebP,
+inside KIE's 10 MB / JPG-PNG-WEBP). The runner reports
+`LTX_2_5_RATE_USD_PER_SEC` × seconds sent (KIE: Fast 10.8 / 15.6 / 22.8 cr/s
+at 720p / 1080p / 1440p, Pro 14.4 / 20.4, the same at every frame rate) as the
+provider cost and writes a credit-audit row. Schemas read 2026-11-22: no
+`additionalProperties`, no content-filter parameter (so no `safetyLevers`).
 
 ### PixVerse V6 Max wire notes (`pixverse-v6-max`, bespoke `runPixverseV6Max`)
 

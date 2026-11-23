@@ -375,6 +375,7 @@ import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { captionsNeedWordTimings, dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
 import { withoutServerOnlyKeys } from "../../lib/server-only-keys.js"
+import { sunoAddTrackPayload, sunoAddTrackPayloadProblem } from "./payload-suno-add-track.js"
 
 /**
  * Throw when the prompt an entity or Scene job sends is shorter than its model
@@ -4317,6 +4318,10 @@ function buildPayloadOf(
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
         duration: data.duration as number | string | undefined,
         draft: data.draft === true,
+        // The frame rate (LTX 2.5; nothing for a model without the setting):
+        // the same reading the routes and the KIE runner take, so the length
+        // its cap allows is the one priced and sent.
+        fps: data.fps,
       })
       if (i2vNorm.adjustments.length > 0) {
         console.warn(
@@ -4369,6 +4374,7 @@ function buildPayloadOf(
           // resolution fallback stays undefined by construction.)
           aspectRatio: i2vNorm.aspectRatio,
           resolution: i2vNorm.resolution,
+          ...(i2vNorm.fps !== undefined ? { fps: i2vNorm.fps } : {}),
           ...seedanceDraftField(provider, data.draft),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
@@ -4484,6 +4490,10 @@ function buildPayloadOf(
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider),
         duration: data.duration as number | string | undefined,
         draft: data.draft === true,
+        // The frame rate (LTX 2.5; nothing for a model without the setting):
+        // the same reading the routes and the KIE runner take, so the length
+        // its cap allows is the one priced and sent.
+        fps: data.fps,
       })
       if (t2vNorm.adjustments.length > 0) {
         console.warn(
@@ -4522,6 +4532,7 @@ function buildPayloadOf(
           removeWatermark: data.removeWatermark,
           seed: data.seed,
           resolution: t2vNorm.resolution,
+          ...(t2vNorm.fps !== undefined ? { fps: t2vNorm.fps } : {}),
           ...seedanceDraftField(provider, data.draft),
           generateAudio: data.generateAudio,
           referenceImageUrls: t2vReferenceImageUrls,
@@ -4867,6 +4878,10 @@ function buildPayloadOf(
         resolution: (data.resolution as string | undefined) ?? uiResolutionFill(resolvedProvider),
         duration: data.duration as number | string | undefined,
         draft: data.draft === true,
+        // The frame rate (LTX 2.5; nothing for a model without the setting):
+        // the same reading the routes and the KIE runner take, so the length
+        // its cap allows is the one priced and sent.
+        fps: data.fps,
       })
       if (gvNorm.adjustments.length > 0) {
         console.warn(
@@ -4948,6 +4963,7 @@ function buildPayloadOf(
           // them in here so the worker request matches the visible UI state.
           aspectRatio: gvNorm.aspectRatio,
           resolution: gvNorm.resolution,
+          ...(gvNorm.fps !== undefined ? { fps: gvNorm.fps } : {}),
           ...seedanceDraftField(resolvedProvider, data.draft),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
@@ -7179,23 +7195,24 @@ function buildPayloadOf(
         usageLogId,
       })
 
-    case "suno-add-instrumental":
-      return simpleResult("suno-add-instrumental", "suno-add-instrumental", {
-        jobId,
-        taskId: resolvedInputs.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.audioId,
-        model: data.model,
-        usageLogId,
-      })
+    case "suno-add-instrumental": {
+      // Add Instrumental has no prompt: it is directed by its style.
+      const tooLong = sunoAddTrackPayloadProblem({ data })
+      if (tooLong) throw new Error(`Suno Add Instrumental: ${tooLong}`)
+      const addTrack = sunoAddTrackPayload({ jobId, data, resolvedInputs, usageLogId })
+      if (!addTrack) throw codedMediaRefusal("audio_required", "connect a song to the Suno Add Instrumental node")
+      return simpleResult("suno-add-instrumental", "suno-add-instrumental", addTrack)
+    }
 
-    case "suno-add-vocals":
-      return simpleResult("suno-add-vocals", "suno-add-vocals", {
-        jobId,
-        taskId: resolvedInputs.sunoTaskId || data.taskId,
-        audioId: resolvedInputs.sunoTrackId || data.audioId,
-        model: data.model,
-        usageLogId,
-      })
+    case "suno-add-vocals": {
+      // The lyrics or the direction, a wired prompt first.
+      const lyrics = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+      const tooLong = sunoAddTrackPayloadProblem({ data, prompt: lyrics })
+      if (tooLong) throw new Error(`Suno Add Vocals: ${tooLong}`)
+      const addTrack = sunoAddTrackPayload({ jobId, data, resolvedInputs, prompt: lyrics, usageLogId })
+      if (!addTrack) throw codedMediaRefusal("audio_required", "connect a song to the Suno Add Vocals node")
+      return simpleResult("suno-add-vocals", "suno-add-vocals", addTrack)
+    }
 
     case "suno-convert-wav": {
       // A wired Suno Separate stem with no Suno ids (Demucs made the

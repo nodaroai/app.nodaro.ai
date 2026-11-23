@@ -60,11 +60,13 @@ import {
   gvpVideoResolutionOptions,
   GVP_RETAINED_RESOLUTION_OPTIONS,
   VIDEO_RESOLUTION_OPTIONS,
+  VIDEO_FPS_OPTIONS,
   isMenuRowWithheld,
 } from "@/components/editor/config-panels/model-options"
 import { availableReasoningEfforts, defaultReasoningEffort, DESCRIBE_TO_PICKER_MODELS, LLM_FEATURE_DEFAULTS, LLM_MODELS, type LlmFeature, type LlmModelDef, orderedLlmModels, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER } from "@nodaro/shared/llm-models"
 import {
   isSeedanceVideoEditProvider,
+  videoDurationCappedAt,
   videoToVideoProviderOf,
   DEFAULT_VIDEO_TO_VIDEO_PROVIDER,
   DEFAULT_TTS_PROVIDER,
@@ -89,7 +91,10 @@ import {
   SEEDANCE_DRAFT_RESOLUTION,
   IMAGE_MODEL_ROLE_DEFAULTS,
   videoUpscaleResolutionsFor,
+  getModel,
+  videoDurationsAt,
 } from "@nodaro/shared/model-catalog"
+import { uiResolutionFill } from "@nodaro/shared/video"
 import { SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin } from "@nodaro/shared/entities"
 import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 import { VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared/video"
@@ -1072,10 +1077,26 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       numeric: true,
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        // A model whose long clips render only at some resolutions and frame
+        // rates (catalog `longClipLimit`, LTX 2.5 Fast) offers only the lengths
+        // its resolution and frame rate allow; a stored one past them clears.
+        const offered = getModel(provider)?.longClipLimit
+          ? videoDurationsAt(provider, { resolution: (typeof data.resolution === "string" ? data.resolution : undefined) ?? uiResolutionFill(provider), fps: data.fps })
+          : undefined
         return withFreeVideoLocks(
-          getDurationsForVideoModel(provider).map((o) => ({ value: String(o.value), label: o.label })),
+          getDurationsForVideoModel(provider)
+            .filter((o) => !offered || offered.includes(o.value))
+            .map((o) => ({ value: String(o.value), label: o.label })),
           (v, limits) => lockedVideoDuration(limits, provider, Number(v)),
         )
+      },
+      // On such a model a stored length past the limit moves to the NEAREST one
+      // it renders there (16 s at 1440p → 10 s), the server's own move; every
+      // other model keeps the strip's default (the first option).
+      snap: (v, data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        if (!getModel(provider)?.longClipLimit) return ""
+        return String(videoDurationCappedAt(provider, Number(v), { resolution: (typeof data.resolution === "string" ? data.resolution : undefined) ?? uiResolutionFill(provider), fps: data.fps }))
       },
     },
     {
@@ -1088,6 +1109,31 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
           draftLockedResolutions(provider, data.draft, VIDEO_RESOLUTION_OPTIONS[provider] ?? []),
           (v, limits) => lockedVideoResolution(limits, provider, v),
         )
+      },
+    },
+    {
+      // The frame rate, on a model whose catalog entry lists them (LTX 2.5);
+      // [] for every other model, so the strip hides it and clears a stale one.
+      field: "fps",
+      ariaLabel: tx("field.fps"),
+      icon: Gauge,
+      numeric: true,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        return (getModel(provider)?.frameRates ?? []).map((n) => ({ value: String(n), label: `${n} fps` }))
+      },
+      // LTX 2.3 keeps the frame rate a node carries (its catalog lists none,
+      // and its workflow run sends what is stored): the strip only hides it.
+      preserveOnHide: (data) => typeof data.provider === "string" && VIDEO_FPS_OPTIONS[data.provider] !== undefined,
+      // A user's choice also moves a length the new frame rate does not render
+      // (LTX 2.5 Fast at 48 / 50 fps: 10 s at most), the server's own move.
+      write: (value, data) => {
+        const fps = Number(value)
+        const provider = typeof data?.provider === "string" ? data.provider : undefined
+        const duration = typeof data?.duration === "number" ? data.duration : undefined
+        if (!data || !provider || duration === undefined || !getModel(provider)?.longClipLimit) return { fps }
+        const capped = videoDurationCappedAt(provider, duration, { resolution: (typeof data.resolution === "string" ? data.resolution : undefined) ?? uiResolutionFill(provider), fps })
+        return capped !== duration ? { fps, duration: capped } : { fps }
       },
     },
     seedanceDraftControl("resolution", "seedance-2-fast"),

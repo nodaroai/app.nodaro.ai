@@ -26,6 +26,8 @@ import { ShareLinksUnavailableError, findOwnShare, setShare, toShare } from "../
 import { findShownShare, publicReadLimit } from "../lib/share-links/public-gate.js"
 import { findOwnTarget, targetShareRefusal } from "../lib/share-links/owner-targets.js"
 import { readPublicItems, readPublicShare } from "../lib/share-links/public-reads.js"
+import { normalizeShareLocale } from "../lib/share-links/card-locale.js"
+import { warmShareCard } from "../lib/share-links/card-warm.js"
 import type { ShareLinkRow, ShareRefusal } from "../lib/share-links/types.js"
 import { reader, unauthorized } from "./generation-sessions-http.js"
 import "./shares-docs.js"
@@ -98,6 +100,7 @@ export async function shareRoutes(app: FastifyInstance) {
     const parsed = setShareBody.safeParse(req.body)
     if (!parsed.success) return badRequest(reply, parsed.error)
     const { kind, targetId, shared, allowCopy } = parsed.data
+    const locale = normalizeShareLocale(parsed.data.locale) ?? undefined
     try {
       // Off reaches a job in the Trash too (else its link would come back with the job); on never does.
       const target = await findOwnTarget(req.userId, kind, targetId, { withTrashed: !shared })
@@ -107,7 +110,16 @@ export async function shareRoutes(app: FastifyInstance) {
       if (refusal) {
         return reply.status(422).send({ error: { code: "share_not_allowed", reason: refusal, message: REFUSAL_MESSAGES[refusal] } })
       }
-      const row = await setShare({ ownerId: req.userId, kind, targetId, shared, ...(allowCopy !== undefined ? { allowCopy } : {}) })
+      const row = await setShare({
+        ownerId: req.userId,
+        kind,
+        targetId,
+        shared,
+        ...(allowCopy !== undefined ? { allowCopy } : {}),
+        ...(locale !== undefined ? { locale } : {}),
+      })
+      // The link's preview picture is rendered now, in the background (lib/share-links/card-warm.ts).
+      if (shared) void warmShareCard(row)
       return reply.send({ data: toShare(row) })
     } catch (err) {
       if (err instanceof ShareLinksUnavailableError) {

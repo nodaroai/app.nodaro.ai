@@ -144,11 +144,12 @@ Needs `workflows:execute`.
 | `prompt` | string |  | At most 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, pixverse-v6-max, runway-kie, seedance-2, seedance-2-5, seedance-2-5-flash, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, bytedance-pro-fast, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok-i2v, grok-imagine-video-1.5, hailuo-2.3, hailuo-2.3-pro, hailuo-standard, happyhorse-i2v, happyhorse-ref2v, kling, kling-3-omni, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-master, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, ltx-2.5-fast, ltx-2.5-pro, minimax, minimax-h3, pixverse-v6-max, runway-kie, seedance-2, seedance-2-5, seedance-2-5-flash, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, vidu-q4, wan-2.7-i2v, wan-3, wan-3-prime, wan-i2v, wan-turbo. Unknown values silently fall back. Call list_models { kind: "video", mode: "i2v" } for capabilities + recommendations. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations / unsupported fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. Unknown values fall back to the model's default. |
 | `sound` | boolean |  |  |
+| `fps` | number or string |  | Frame rate, ltx-2.5-*: 24 (default), 25, 48, 50; Fast at 48/50 runs 10s at most. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
 | `end_frame_url` | string (URL) |  |  |
 | `end_frame_asset_id` | string |  | Nodaro job id or upload asset id whose image is used as the END frame. Use this instead of end_frame_url when you have a Nodaro asset — never construct /jobs/.../output URLs manually, those don't exist. |
@@ -875,8 +876,19 @@ Needs `assets:write`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `job_id` | string | yes | At least 1 character. |
+| `job_id` | string |  | The generation's job id (an asset id from browse_uploads works too). At least 1 character. |
+| `asset_id` | string |  | A library file's asset id: an upload, or a saved generation. At least 1 character. |
 | `favorited` | boolean | yes |  |
+
+## `favorite_catalog_option`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `catalog` | string | yes | The catalog's id, e.g. style, color-look, camera-motions, music-genre, person, shot-shapes. From 1 to 64 characters. |
+| `option_id` | string | yes | The option's id; `<field>:<id>` for a per-field option (a bare id that names one option is accepted). From 1 to 200 characters. |
+| `favorite` | boolean |  | false removes the star (default true). |
 
 ## `favorite_node_preset`
 
@@ -1376,11 +1388,12 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | From 1 to 8000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, minimax, minimax-h3, pixverse-v6-max, runway-kie, seedance-2, seedance-2-5, seedance-2-5-flash, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
+| `model` | string |  | Video model. Default seedance-2-fast. Recommended: bytedance-lite, bytedance-pro, gemini-omni-flash, gemini-omni-flash-1-2, gemini-omni-video, grok, hailuo-standard, happyhorse, kling, kling-3.0, kling-4, kling-4-flash, kling-4-keyframes, kling-turbo, ltx-2.3-fast, ltx-2.3-pro, ltx-2.5-fast, ltx-2.5-pro, minimax, minimax-h3, pixverse-v6-max, runway-kie, seedance-2, seedance-2-5, seedance-2-5-flash, seedance-2-fast, seedance-2-mini, veo3, veo3.1, veo3_lite, wan, wan-2.7-t2v, wan-3, wan-3-prime, wan-turbo. Unknown values silently fall back to the default. Call list_models { kind: "video", mode: "t2v" } for capability details. |
 | `duration` | number |  | Duration (seconds). Snaps to nearest supported value. -1 = Auto (Seedance 2): the model picks the length. |
 | `aspect_ratio` | string |  | Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back. |
 | `resolution` | string |  | Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. |
 | `sound` | boolean |  |  |
+| `fps` | number or string |  | Frame rate, ltx-2.5-*: 24 (default), 25, 48, 50; Fast at 48/50 runs 10s at most. |
 | `negative_prompt` | string |  | At most 8000 characters. |
 | `seed` | integer |  | From 0 to 2147483647. |
 | `draft` | boolean |  | seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd. |
@@ -1948,6 +1961,7 @@ Needs `assets:read`.
 |---|---|---|---|
 | `limit` | integer |  | From 1 to 100. |
 | `cursor` | string |  |  |
+| `kinds` | string[] |  | Which kinds to list, in one list (e.g. ["job", "asset"] for every media favorite). Omit for the favorite generations' job_ids. From 1 to 5 items. |
 
 ## `list_jobs`
 
@@ -3202,8 +3216,16 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno track. At least 1 character. |
-| `model` | string |  | Suno model for the new layer. Options: V6, V6_WILD, V6_MINI, V4_5PLUS, V5, V5_5. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `audio_asset_id` | string |  | Audio job id of the song: a Suno track made here, or any audio. At least 1 character. |
+| `audio_url` | string (URL) |  | Direct link to the song's audio file, instead of audio_asset_id. |
+| `model` | string |  | Suno model. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `style` | string |  | Style of the new layer. Unset: your original Suno song's style; required for any other audio. At most 1000 characters. |
+| `title` | string |  | Result title. Unset: the original's. At most 80 characters. |
+| `negative_tags` | string |  | Styles to avoid, comma separated. At most 200 characters. |
+| `vocal_gender` | string |  | Preferred voice; not guaranteed. One of `male`, `female`. |
+| `style_weight` | number |  | How closely to follow the style, 0-1. From 0 to 1. |
+| `weirdness_constraint` | number |  | How far to stray creatively, 0-1. From 0 to 1. |
+| `audio_weight` | number |  | How much the original audio weighs, 0-1. From 0 to 1. |
 
 ## `suno_add_vocals`
 
@@ -3211,8 +3233,17 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_asset_id` | string | yes | Nodaro audio job id of a Suno track. At least 1 character. |
-| `model` | string |  | Suno model for the vocals. Options: V6, V6_WILD, V6_MINI, V4_5PLUS, V5, V5_5. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `audio_asset_id` | string |  | Audio job id of the song: a Suno track made here, or any audio. At least 1 character. |
+| `audio_url` | string (URL) |  | Direct link to the song's audio file, instead of audio_asset_id. |
+| `model` | string |  | Suno model. Default V6. One of `V6`, `V6_WILD`, `V6_MINI`, `V4_5PLUS`, `V5`, `V5_5`. |
+| `style` | string |  | Style of the new layer. Unset: your original Suno song's style; required for any other audio. At most 1000 characters. |
+| `title` | string |  | Result title. Unset: the original's. At most 80 characters. |
+| `negative_tags` | string |  | Styles to avoid, comma separated. At most 200 characters. |
+| `vocal_gender` | string |  | Preferred voice; not guaranteed. One of `male`, `female`. |
+| `style_weight` | number |  | How closely to follow the style, 0-1. From 0 to 1. |
+| `weirdness_constraint` | number |  | How far to stray creatively, 0-1. From 0 to 1. |
+| `audio_weight` | number |  | How much the original audio weighs, 0-1. From 0 to 1. |
+| `prompt` | string |  | The lyrics, or a direction for the voice. Unset: Suno writes them. At most 5000 characters. |
 
 ## `suno_convert_wav`
 
@@ -3534,6 +3565,18 @@ Needs `assets:write`.
 | `seed_prompt` | string |  | At most 4000 characters. |
 | `identity_lock` | string |  | One of `off`, `soft`, `strict`. |
 | `expected_updated_at` | string |  | Optimistic concurrency token (the `updatedAt` from get_character). When provided and stale, the call returns a conflict error. |
+
+## `update_job`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | string | yes | At least 1 character. |
+| `title` | string or null |  | The name, or null to clear it. At most 120 characters. |
+| `cover_asset_id` | string |  | Your image to use as the cover: its asset id. |
+| `cover_url` | string (URL) |  | Your image to use as the cover: its address on this platform's storage. At most 2048 characters. |
+| `clear_cover` | boolean |  | true: remove your cover. |
 
 ## `update_location`
 

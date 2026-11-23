@@ -5,6 +5,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { isUuid } from "./_id-guard.js"
+import { registerUpdateJob } from "./job-update-tool.js"
 import { failureGuidance } from "./_job-error.js"
 import { CHILD_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTrendRunError, maskTrendRunErrors, redactPrivateJobData, trendRunErrorText, TRASHED_JOB_COLUMN } from "../../public-job-data.js"
 import { jobRowProviderWordsFor } from "../../provider-words.js"
@@ -112,7 +113,10 @@ export interface RegisterJobsOpts {
  *     `mcpInject()` (no body to carry `userId`).
  */
 export function registerJobs({ server, session, fastify }: RegisterJobsOpts): void {
-  if (passesGate(session, jobsRateGate)) registerRateJob(server, session)
+  if (passesGate(session, jobsRateGate)) {
+    registerRateJob(server, session)
+    registerUpdateJob(server, session, fastify.log)
+  }
   if (!passesGate(session, jobsReadGate)) return
 
   server.registerTool(

@@ -242,7 +242,7 @@ const STORED_ONLY = none("recorded as given; nothing fetches it here")
 const NOT_MEDIA = none("not media: a page, a redirect or an account configuration, never fetched as an import")
 
 /** Routes whose URL field lives in a shared schema module, so the URL-field scan cannot see them. They are counted by name. */
-const SHARED_SCHEMA_LINK_ROUTES = ["routes/web-scrape.ts", "routes/site-capture.ts", "routes/meta-ads-scrape.ts", "routes/instagram-scrape.ts"]
+const SHARED_SCHEMA_LINK_ROUTES = ["routes/web-scrape.ts", "routes/site-capture.ts", "routes/meta-ads-scrape.ts", "routes/instagram-scrape.ts", "routes/job-title.ts"]
 
 /**
  * Routes that take a link the URL-field scan cannot see: their fields are
@@ -282,7 +282,10 @@ const LANES: Readonly<Record<string, Lane>> = {
   "routes/media-url-import.ts": GATE,
   "routes/media-process.ts": SWITCH,
   "routes/save-to-storage.ts": SWITCH,
-  "routes/suno.ts": asks("cover and upload-extend ask the switch for any link and the gate for a social one; mashup, add-vocals and voice-sample audio are the processing-input question", {
+  "routes/suno-add-track.ts": asks("add-vocals and add-instrumental refuse a link to outside content here directly (lib/link-imports.ts), and a social page outright: the song goes to the provider as a file link", {
+    readsElsewhere: "the provider fetches the link, from the job this route queues only after the ask has refused nothing (the suno-add-vocals / suno-add-instrumental jobs)",
+  }),
+  "routes/suno.ts": asks("cover and upload-extend ask the switch for any link and the gate for a social one; mashup and voice-sample audio are the processing-input question", {
     readsElsewhere: "the link is fetched by the worker, from the job this route queues only after the ask has refused nothing (the suno-* jobs)",
   }),
   "routes/transcribe.ts": asks("a link to outside content is refused here directly (lib/link-imports.ts)", {
@@ -297,6 +300,7 @@ const LANES: Readonly<Record<string, Lane>> = {
   // Only ever serves or fetches this deployment's own storage.
   "routes/download.ts": own("only files of this deployment's storage (isOurCdnUrl): 403 for anything else"),
   "routes/media-discard.ts": own("discards this deployment's own uploaded files, by their URL"),
+  "routes/job-title.ts": own("a job's cover: only the caller's own image on this deployment's storage (lib/job-cover/cover-source.ts), copied storage to storage; any other address is refused. Its URL field is the shared lib/job-cover/cover-request.ts schema (the MCP update_job tool takes the same one)"),
 
   // Not a media fetch at all.
   "ee/routes/admin-hosted-deployments.ts": none("the URL an administrator registers for a hosted deployment: configuration, not media"),

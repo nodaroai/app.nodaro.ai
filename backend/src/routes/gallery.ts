@@ -99,22 +99,13 @@ export async function galleryRoutes(app: FastifyInstance) {
     // blocked creators and banned words as well (lib/gallery-moderation.ts).
     const moderation = isOwnerView ? OWNER_VIEW_MODERATION : await loadGalleryModeration()
 
-    // The owner's favorites, read once, newest first.
-    let favoriteJobIds: string[] | null = null
-    if (favoritesOnly && userIdFilter) {
-      try {
-        favoriteJobIds = await listFavoriteJobIds(userIdFilter)
-      } catch (error) {
-        return sendInternalError(reply, req, error, "Failed to fetch gallery")
-      }
-      if (favoriteJobIds.length === 0) {
-        return withCacheHeaders().send({ data: [], nextCursor: null, totalCount: 0 })
-      }
-    }
+    // The owner's favorites are joined in the query (lib/gallery-listing.ts):
+    // the request names the owner, never their favorites, however many.
+    const favoritesOf = favoritesOnly ? userIdFilter : null
 
     let page: GalleryPage
     try {
-      page = await readGalleryPage({ limit, type: typeFilter, cursor, userId: userIdFilter, favoriteJobIds, includePrivate: isOwnerView, moderation })
+      page = await readGalleryPage({ limit, type: typeFilter, cursor, userId: userIdFilter, favoritesOf, includePrivate: isOwnerView, moderation })
     } catch (error) {
       return sendInternalError(reply, req, error, "Failed to fetch gallery")
     }

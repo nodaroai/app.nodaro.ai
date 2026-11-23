@@ -361,6 +361,8 @@ export function runVideoGeneration(
     keepOriginalSound?: boolean;
     /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
     audioSoundtrack?: boolean;
+    /** Frame rate (LTX 2.5), as stored — a number or a numeric string; the route ignores it for a model without the setting. */
+    fps?: number | string;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,
@@ -385,6 +387,7 @@ export function runVideoGeneration(
         shots,
         elements,
         resolution,
+        ...(extras?.fps !== undefined ? { fps: extras.fps } : {}),
         draft: extras?.draft,
         ...(extras?.referenceTaskType ? { referenceTaskType: extras.referenceTaskType } : {}),
         grokMode,
@@ -524,6 +527,8 @@ export function runTextToVideoGeneration(
     keepOriginalSound?: boolean;
     /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
     audioSoundtrack?: boolean;
+    /** Frame rate (LTX 2.5), as stored — a number or a numeric string; the route ignores it for a model without the setting. */
+    fps?: number | string;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,

@@ -880,34 +880,45 @@ describe("POST /v1/suno/style-boost", () => {
 // ==========================================================================
 
 describe("POST /v1/suno/add-instrumental", () => {
+  /** A Suno song of mine: its saved tracks, its style and title. */
+  const MY_SONG = {
+    user_id: TEST_USER_ID, job_type: "suno-generate", status: "completed",
+    input_data: { style: "uk garage, 2-step, instrumental", title: "Fresh Step" },
+    output_data: { sunoTrackId: "audio-1", sunoTracks: [{ id: "audio-1", audioUrl: "https://cdn.nodaro.ai/audios/a.wav", title: "Fresh Step" }] },
+  }
+
   it("returns 400 for missing fields", async () => {
     const res = await authedPost("/v1/suno/add-instrumental", {})
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns jobId on success", async () => {
-    const res = await authedPost("/v1/suno/add-instrumental", {
-      taskId: "task-1",
-      audioId: "audio-1",
-    })
+  it("the old body (ids alone) still runs: the track's saved audio is the file, the original style and title are reused", async () => {
+    taskRows.rows = [MY_SONG]
+    const res = await authedPost("/v1/suno/add-instrumental", { taskId: "task-1", audioId: "audio-1" })
     expect(res.statusCode).toBe(200)
     expect(res.json().jobId).toBe(TEST_JOB_ID)
-    expect(mockVideoQueueAdd).toHaveBeenCalledWith(
-      "suno-add-instrumental",
-      expect.objectContaining({
-        taskId: "task-1",
-        audioId: "audio-1",
-        model: "V6",
-      }),
-    )
+    // On Add Instrumental the "instrumental" tag is kept: it describes the new layer.
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-add-instrumental", expect.objectContaining({
+      taskId: "task-1", audioId: "audio-1", uploadUrl: "https://cdn.nodaro.ai/audios/a.wav",
+      style: "uk garage, 2-step, instrumental", title: "Fresh Step", model: "V6",
+    }))
+  })
+
+  it("the direction is accepted and recorded on the job; there is no prompt on Add Instrumental", async () => {
+    const res = await authedPost("/v1/suno/add-instrumental", {
+      uploadUrl: "https://cdn.example.com/vocal.mp3", style: "warm acoustic guitar", title: "Unplugged",
+      negativeTags: "drums", vocalGender: "male", styleWeight: 0.5, weirdnessConstraint: 0.2, audioWeight: 0.9, prompt: "not taken",
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = mockVideoQueueAdd.mock.calls.at(-1)![1]
+    expect(queued).toMatchObject({ uploadUrl: "https://cdn.example.com/vocal.mp3", style: "warm acoustic guitar", title: "Unplugged", negativeTags: "drums", vocalGender: "male", styleWeight: 0.5, weirdnessConstraint: 0.2, audioWeight: 0.9 })
+    expect(queued).not.toHaveProperty("prompt")
+    const inputData = mockJobInsert.mock.calls.at(-1)![0].input_data
+    expect(inputData).toMatchObject({ uploadUrl: "https://cdn.example.com/vocal.mp3", style: "warm acoustic guitar", negativeTags: "drums", vocalGender: "male", audioWeight: 0.9, type: "suno-add-instrumental" })
   })
 
   it("validates model is one of SUNO_ADD_TRACK_MODELS (V4 rejected)", async () => {
-    const res = await authedPost("/v1/suno/add-instrumental", {
-      taskId: "task-1",
-      audioId: "audio-1",
-      model: "V4",
-    })
+    const res = await authedPost("/v1/suno/add-instrumental", { taskId: "task-1", audioId: "audio-1", model: "V4" })
     expect(res.statusCode).toBe(400)
   })
 })
@@ -917,18 +928,90 @@ describe("POST /v1/suno/add-instrumental", () => {
 // ==========================================================================
 
 describe("POST /v1/suno/add-vocals", () => {
+  const MY_INSTRUMENTAL = {
+    user_id: TEST_USER_ID, job_type: "suno-generate", status: "completed",
+    input_data: { style: "uk garage, 2-step, instrumental", title: "Fresh Step" },
+    output_data: { sunoTrackId: "audio-1", sunoTracks: [{ id: "audio-1", audioUrl: "https://cdn.nodaro.ai/audios/a.wav", title: "Fresh Step" }] },
+  }
+
   it("returns 400 for missing fields", async () => {
     const res = await authedPost("/v1/suno/add-vocals", {})
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns jobId on success", async () => {
-    const res = await authedPost("/v1/suno/add-vocals", {
-      taskId: "task-1",
-      audioId: "audio-1",
-    })
+  it("the old body still runs; the original style is reused without its instrumental tag", async () => {
+    taskRows.rows = [MY_INSTRUMENTAL]
+    const res = await authedPost("/v1/suno/add-vocals", { taskId: "task-1", audioId: "audio-1" })
     expect(res.statusCode).toBe(200)
     expect(res.json().jobId).toBe(TEST_JOB_ID)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-add-vocals", expect.objectContaining({
+      uploadUrl: "https://cdn.nodaro.ai/audios/a.wav", style: "uk garage, 2-step", title: "Fresh Step",
+    }))
+  })
+
+  it("takes the singer's direction: lyrics, style, voice, title, styles to avoid, the weights", async () => {
+    taskRows.rows = [MY_INSTRUMENTAL]
+    const res = await authedPost("/v1/suno/add-vocals", {
+      taskId: "task-1", audioId: "audio-1", prompt: "[Chorus] fresh step", userPrompt: "[Chorus] fresh step",
+      style: "soulful female pop vocal", title: "Fresh Step (Vocal)", negativeTags: "rap", vocalGender: "female",
+      styleWeight: 0.7, weirdnessConstraint: 0.1, audioWeight: 0.8,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({
+      prompt: "[Chorus] fresh step", style: "soulful female pop vocal", title: "Fresh Step (Vocal)", negativeTags: "rap",
+      vocalGender: "female", styleWeight: 0.7, weirdnessConstraint: 0.1, audioWeight: 0.8, uploadUrl: "https://cdn.nodaro.ai/audios/a.wav",
+    })
+    expect(mockJobInsert.mock.calls.at(-1)![0].input_data).toMatchObject({ prompt: "[Chorus] fresh step", userPrompt: "[Chorus] fresh step", style: "soulful female pop vocal", vocalGender: "female" })
+  })
+
+  it("enforces the limits: style 1000, title SUNO_TITLE_MAX, styles to avoid 200, voice male / female, weights 0 to 1", async () => {
+    const base = { uploadUrl: "https://cdn.example.com/beat.mp3", style: "pop" }
+    for (const extra of [
+      { style: "s".repeat(1001) }, { title: "t".repeat(81) }, { negativeTags: "n".repeat(201) },
+      { vocalGender: "m" }, { styleWeight: 1.5 }, { audioWeight: -0.1 }, { prompt: "p".repeat(5001) },
+    ]) {
+      const res = await authedPost("/v1/suno/add-vocals", { ...base, ...extra })
+      expect(res.statusCode, JSON.stringify(Object.keys(extra))).toBe(400)
+    }
+    expect((await authedPost("/v1/suno/add-vocals", { ...base, style: "s".repeat(1000), negativeTags: "n".repeat(200), prompt: "p".repeat(5000) })).statusCode).toBe(200)
+  })
+
+  it("a song with no style to take is refused before any job or hold, with a message to write one", async () => {
+    const res = await authedPost("/v1/suno/add-vocals", { uploadUrl: "https://cdn.example.com/beat.mp3" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("suno_add_track_style")
+    expect(mockJobInsert).not.toHaveBeenCalled()
+    expect(mockReserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a song named by its ids: the job records the ids, never the saved file's address (it may be another account's)", async () => {
+    taskRows.rows = [{ ...MY_INSTRUMENTAL, user_id: "someone-else" }]
+    const res = await authedPost("/v1/suno/add-vocals", { taskId: "task-1", audioId: "audio-1", style: "gospel" })
+    expect(res.statusCode).toBe(200)
+    const inputData = mockJobInsert.mock.calls.at(-1)![0].input_data
+    expect(inputData).toMatchObject({ taskId: "task-1", audioId: "audio-1", style: "gospel" })
+    expect(inputData).not.toHaveProperty("uploadUrl")
+    // The worker still gets the file to send.
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({ uploadUrl: "https://cdn.nodaro.ai/audios/a.wav" })
+  })
+
+  it("another account's Suno song: its audio is used, its style is not", async () => {
+    taskRows.rows = [{ ...MY_INSTRUMENTAL, user_id: "someone-else" }]
+    const refused = await authedPost("/v1/suno/add-vocals", { taskId: "task-1", audioId: "audio-1" })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error.code).toBe("suno_add_track_style")
+    const ok = await authedPost("/v1/suno/add-vocals", { taskId: "task-1", audioId: "audio-1", style: "gospel choir" })
+    expect(ok.statusCode).toBe(200)
+    expect(mockVideoQueueAdd.mock.calls.at(-1)![1]).toMatchObject({ uploadUrl: "https://cdn.nodaro.ai/audios/a.wav", style: "gospel choir" })
+  })
+
+  it("a track with no saved audio, ids not together, and a social page are refused", async () => {
+    const noFile = await authedPost("/v1/suno/add-vocals", { taskId: "task-1", audioId: "audio-1", style: "pop" })
+    expect(noFile.statusCode).toBe(400)
+    expect(noFile.json().error.code).toBe("suno_add_track_source")
+    expect((await authedPost("/v1/suno/add-vocals", { taskId: "task-1", style: "pop" })).statusCode).toBe(400)
+    const social = await authedPost("/v1/suno/add-vocals", { uploadUrl: "https://www.youtube.com/watch?v=abc", style: "pop" })
+    expect(social.statusCode).toBe(400)
   })
 })
 

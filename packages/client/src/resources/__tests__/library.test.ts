@@ -86,3 +86,45 @@ describe("LibraryAsset.jobId", () => {
     expect(res.data[1].jobId).toBeNull()
   })
 })
+
+describe("library favorites", () => {
+  it("list({ favorited }) sends the filter beside the others, and each row may carry favorited", async () => {
+    expectTypeOf<LibraryAsset["favorited"]>().toEqualTypeOf<boolean | undefined>()
+    const row: LibraryAsset = { ...PAGE.data[0], favorited: true }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [row], nextCursor: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const res = await c.library.list({ favorited: true, type: "image", source: "sdk", cursor: "c1" })
+    const url = new URL(fetchMock.mock.calls[0][0] as string)
+    expect(url.pathname).toBe("/v1/library")
+    expect(url.searchParams.get("favorited")).toBe("true")
+    expect(url.searchParams.get("type")).toBe("image")
+    expect(url.searchParams.get("source")).toBe("sdk")
+    expect(url.searchParams.get("cursor")).toBe("c1")
+    expect(res.data[0].favorited).toBe(true)
+  })
+
+  it("list({ favorited: false }) sends false (not omitted)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: [], nextCursor: null }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.library.list({ favorited: false })
+    expect(new URL(fetchMock.mock.calls[0][0] as string).searchParams.get("favorited")).toBe("false")
+  })
+
+  it("favorite() POSTs /v1/library/:id/favorite with the wanted state, or an empty body to toggle", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ favorited: true, jobId: null }))
+      .mockReturnValueOnce(mockOk({ favorited: false, jobId: "j1" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const starred = await c.library.favorite("a1", true)
+    expect(starred).toEqual({ favorited: true, jobId: null })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/library/a1/favorite")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ favorited: true })
+
+    const toggled = await c.library.favorite("a1")
+    expect(toggled.favorited).toBe(false)
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body)).toEqual({})
+  })
+})

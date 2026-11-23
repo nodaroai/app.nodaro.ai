@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/execution-budget.js", () => ({ executionBudgetExcessMs: vi.fn().mockResolvedValue(0) }))
+vi.mock("@/lib/job-cover/cover-store.js", () => ({ releaseCoversOfJobs: vi.fn().mockResolvedValue(undefined) }))
 
 import { supabase } from "../supabase.js"
 import { collectAppExpungeTargets, redactAppExpungeTargets, targetExecutionIds, targetJobIds } from "../app-expunge-targets.js"
@@ -26,6 +27,8 @@ import { migrationColumnsOf } from "../../test/migration-columns.js"
 import { resetInputOverridesColumnForTests } from "../execution-input-overrides.js"
 import { resetVideoLinkFilesColumnForTests } from "../execution-video-link-files.js"
 import { resetInlineGraphColumnForTests } from "../execution-inline-graph.js"
+import { setCoverColumnPresentForTests } from "../jobs-cover-column.js"
+import { releaseCoversOfJobs } from "../job-cover/cover-store.js"
 
 const APP_ID = "00000000-0000-4000-8000-000000000099"
 const WORKFLOW = "00000000-0000-4000-8000-0000000000f1"
@@ -114,6 +117,11 @@ function fakeSupabase(opts: {
         filters.push((r) => values.includes(valueAt(r, col)))
         return query
       },
+      not(col: string, op: string, value: unknown) {
+        note(col, "not")
+        if (op === "is" && value === null) filters.push((r) => r[col] !== null && r[col] !== undefined)
+        return query
+      },
       gt(col: string, value: unknown) {
         note(col, "gt")
         filters.push((r) => String(r[col]) > String(value))
@@ -181,6 +189,9 @@ const sorted = (ids: readonly string[]) => [...ids].sort()
 beforeEach(() => {
   vi.mocked(supabase.from).mockReset()
   vi.mocked(executionBudgetExcessMs).mockReset().mockResolvedValue(0)
+  vi.mocked(releaseCoversOfJobs).mockClear()
+  // Not yet seen by this process: the expunge probes it (the boot window).
+  setCoverColumnPresentForTests(false)
 })
 
 describe("collectAppExpungeTargets — ownership", () => {
@@ -734,6 +745,9 @@ const JOB_PATCH = {
   input_fingerprint: null,
   reconcile_last_error: null,
   title: null,
+  // The expunge probes the cover column (migration 686) before it writes, so a
+  // process that has not seen it yet still clears it.
+  cover_url: null,
 }
 
 describe("redactAppExpungeTargets", () => {
@@ -770,6 +784,29 @@ describe("redactAppExpungeTargets", () => {
     expect(Math.max(...inCalls.map((c) => c.size))).toBeLessThanOrEqual(100)
     expect(inCalls.filter((c) => c.table !== "app_reports").every((c) => c.column === "id")).toBe(true)
     expect(unknownColumns(touched)).toEqual([])
+  })
+
+  it("a cleared job's cover copy is read before the clear and released after, even before the column was first probed", async () => {
+    const COVER = `https://cdn.test/job-covers/${RUNNER}/cover-a.png`
+    const t = {
+      workflow_executions: [],
+      jobs: [
+        { id: jobIds[0], user_id: RUNNER, cover_url: COVER },
+        { id: jobIds[1], user_id: RUNNER, cover_url: null },
+        { id: uuid(0x4ffff), user_id: OTHER_USER, cover_url: `https://cdn.test/job-covers/${OTHER_USER}/cover-b.png` },
+      ],
+    }
+    const updates: Update[] = []
+    vi.mocked(supabase.from).mockImplementation(fakeSupabase({ tables: t, updates }))
+    let releasedAfterClear = false
+    vi.mocked(releaseCoversOfJobs).mockImplementation(async () => {
+      releasedAfterClear = updates.some((u) => u.table === "jobs" && "cover_url" in u.patch)
+    })
+
+    await redactAppExpungeTargets({ levels: [{ executionIds: [], jobIds }] })
+
+    expect(releaseCoversOfJobs).toHaveBeenCalledWith([{ userId: RUNNER, coverUrl: COVER }])
+    expect(releasedAfterClear).toBe(true)
   })
 
   // A wrapper job names its inner run: cleared first, a failure part-way

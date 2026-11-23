@@ -68,7 +68,7 @@ import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { videoToVideoProviderOf, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality } from "@nodaro/shared/credits"
@@ -136,6 +136,7 @@ import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
 import { EXTEND_VIDEO_ROW_LOCK, lockedVideoDuration, lockedVideoModel, lockedVideoResolution, openVideoDuration, openVideoResolution } from "@/lib/free-video-locks"
 import { LockableSelectItem } from "./lockable-select-item"
 import { PixverseV6MaxFields, type PixverseV6MaxFieldData } from "./pixverse-v6-max-fields"
+import { Ltx25Fields, ltx25LengthSnap, ltx25OfferedDurations, type Ltx25FieldData } from "./ltx-2-5-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { NsfwFilterCheckbox } from "./nsfw-filter-checkbox"
 
@@ -531,11 +532,28 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     }
   }, [currentI2VProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // LTX 2.5: the Generate Video rule (`generateVideoProviderSnap` — its 1080p /
+  // 10 s defaults, its frame rate, no negative prompt), then the length its
+  // resolution and frame rate allow, moved in view as the server moves it.
+  const isLtx25I2v = isLtx25Provider(currentI2VProvider)
+  useEffect(() => {
+    if (!isLtx25I2v) return
+    const updates = generateVideoProviderSnap(data as Record<string, unknown>, currentI2VProvider, freeVideoLimits)
+    if (Object.keys(updates).length > 0) onUpdate(updates as Partial<ImageToVideoData>)
+  }, [currentI2VProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isLtx25I2v) return
+    const snap = ltx25LengthSnap(currentI2VProvider, data as unknown as Ltx25FieldData)
+    if (Object.keys(snap).length > 0) onUpdate(snap as Partial<ImageToVideoData>)
+  }, [currentI2VProvider, data.resolution, data.fps, data.duration]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const baseDurations = KIE_VIDEO_DURATIONS[data.provider || "seedance-2-fast"] || null
   // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
-  const allowedDurations = baseDurations && (data.provider === "hailuo-2.3-pro" || data.provider === "hailuo-2.3") && data.resolution === "1080P"
-    ? baseDurations.filter((d) => d <= 6)
-    : baseDurations
+  const allowedDurations = isLtx25I2v
+    ? [...ltx25OfferedDurations(currentI2VProvider, data as unknown as Ltx25FieldData)]
+    : baseDurations && (data.provider === "hailuo-2.3-pro" || data.provider === "hailuo-2.3") && data.resolution === "1080P"
+      ? baseDurations.filter((d) => d <= 6)
+      : baseDurations
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "seedance-2-fast")
   const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(data.provider || "seedance-2-fast")
   const isVeo = data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite"
@@ -744,9 +762,11 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         )}
       </MappableField>
 
-      {/* Negative Prompt — always visible. Kling family providers send it
-          natively as `negative_prompt`; non-native providers get it
-          appended to the prompt as "Avoid: …" by the backend helper. */}
+      {/* Negative Prompt — visible for every model that takes one (a model
+          with catalog `noNegativePrompt`, LTX 2.5, hides it). Kling family
+          providers send it natively as `negative_prompt`; non-native providers
+          get it appended to the prompt as "Avoid: …" by the backend helper. */}
+      {MODEL_CATALOG[currentI2VProvider]?.noNegativePrompt !== true && (
       <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={(data as Record<string, unknown>).negativePrompt as string || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
@@ -771,6 +791,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           </>
         )}
       </MappableField>
+      )}
 
       {/* Unified injected-references list — shows wired upstreams, character
           canonicals, @-mention variants AND canonical fallbacks in the final
@@ -1309,6 +1330,23 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           data={data as unknown as PixverseV6MaxFieldData}
           onUpdate={(u) => onUpdate(u as Partial<ImageToVideoData>)}
           showAspectRatio={false}
+          idPrefix="i2v"
+          freeResLock={freeResLock}
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
+      )}
+
+      {/* LTX 2.5 — resolution, frame rate and seed. No aspect ratio: the
+          start frame sets the shape. */}
+      {isLtx25I2v && (
+        <Ltx25Fields
+          provider={currentI2VProvider}
+          data={data as unknown as Ltx25FieldData}
+          onUpdate={(u) => onUpdate(u as Partial<ImageToVideoData>)}
+          showAspectRatio={false}
+          frameSetsShape={true}
           idPrefix="i2v"
           freeResLock={freeResLock}
           sources={sources}
@@ -2504,7 +2542,24 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   })
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "seedance-2-fast"
-  const allowedDurations = KIE_T2V_DURATIONS[currentProvider] || null
+  const isLtx25T2v = isLtx25Provider(currentProvider)
+  // LTX 2.5: the lengths its resolution and frame rate allow (`ltx25OfferedDurations`).
+  const allowedDurations = isLtx25T2v
+    ? [...ltx25OfferedDurations(currentProvider, data as unknown as Ltx25FieldData)]
+    : KIE_T2V_DURATIONS[currentProvider] || null
+  // LTX 2.5: the Generate Video rule on a switch (its 1080p / 10 s defaults,
+  // its frame rate, no negative prompt), then the length its resolution and
+  // frame rate allow, moved in view as the server moves it.
+  useEffect(() => {
+    if (!isLtx25T2v) return
+    const updates = generateVideoProviderSnap(data as Record<string, unknown>, currentProvider, freeVideoLimits)
+    if (Object.keys(updates).length > 0) onUpdate(updates as Partial<TextToVideoData>)
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isLtx25T2v) return
+    const snap = ltx25LengthSnap(currentProvider, data as unknown as Ltx25FieldData)
+    if (Object.keys(snap).length > 0) onUpdate(snap as Partial<TextToVideoData>)
+  }, [currentProvider, data.resolution, data.fps, data.duration]) // eslint-disable-line react-hooks/exhaustive-deps
   const isSeedance2 = isSeedance2Provider(currentProvider)
   const isMinimaxH3 = isMinimaxH3Provider(currentProvider)
 
@@ -2876,6 +2931,23 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         />
       )}
 
+      {/* LTX 2.5 — resolution, frame rate and seed; its five aspect ratios
+          render in the panel's own selector below. */}
+      {isLtx25T2v && (
+        <Ltx25Fields
+          provider={currentProvider}
+          data={data as unknown as Ltx25FieldData}
+          onUpdate={(u) => onUpdate(u as Partial<TextToVideoData>)}
+          showAspectRatio={false}
+          frameSetsShape={false}
+          idPrefix="t2v"
+          freeResLock={freeResLock}
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
+      )}
+
       {isMinimaxH3 && (
         <>
           {/* Two-rate resolution lever (2K default / 768P cheaper) — catalog-
@@ -2956,11 +3028,12 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           no adaptive member — the KIE layer coerces adaptive → 16:9 there.) */}
       <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
-          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
-          value={data.aspectRatio || (isSeedance2 || isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) ? defaultVideoAspectRatio(currentProvider) : undefined)}
+          options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) || isLtx25T2v ? getAspectRatiosForVideoModel(currentProvider) : VIDEO_RATIOS}
+          value={data.aspectRatio || (isSeedance2 || isMinimaxH3 || isPixverseV6MaxProvider(currentProvider) || isLtx25T2v ? defaultVideoAspectRatio(currentProvider) : undefined)}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
       </MappableField>
+      {MODEL_CATALOG[currentProvider]?.noNegativePrompt !== true && (
       <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
@@ -2990,6 +3063,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           </>
         )}
       </MappableField>
+      )}
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
@@ -3142,13 +3216,29 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     }
   }, [currentProvider, currentDuration]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // LTX 2.5: the lengths its resolution and frame rate allow (catalog
+  // `longClipLimit` — Fast shows only 6 / 8 / 10 s at 1440p or 48 / 50 fps);
+  // a stored length past them moves to the nearest one, in view, as the server
+  // moves it (`ltx25LengthSnap`). Runs on the provider, resolution AND frame
+  // rate, since the limit depends on all three.
+  const isLtx25 = isLtx25Provider(currentProvider)
+  useEffect(() => {
+    if (!isLtx25) return
+    const snap = ltx25LengthSnap(currentProvider, data as unknown as Ltx25FieldData)
+    if (Object.keys(snap).length > 0) onUpdate(snap as Partial<DataView>)
+  }, [currentProvider, data.resolution, data.fps, data.duration]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
   // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
-  const allowedDurations = baseDurations && (currentProvider === "hailuo-2.3-pro" || currentProvider === "hailuo-2.3") && data.resolution === "1080P"
-    ? baseDurations.filter((d) => d <= 6)
-    : baseDurations
+  const allowedDurations = isLtx25
+    ? [...ltx25OfferedDurations(currentProvider, data as unknown as Ltx25FieldData)]
+    : baseDurations && (currentProvider === "hailuo-2.3-pro" || currentProvider === "hailuo-2.3") && data.resolution === "1080P"
+      ? baseDurations.filter((d) => d <= 6)
+      : baseDurations
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(currentProvider)
   const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(currentProvider)
+  // A model that takes no negative prompt (catalog `noNegativePrompt`, LTX 2.5): the field is hidden (and cleared on a switch, generateVideoProviderSnap).
+  const takesNegativePrompt = MODEL_CATALOG[currentProvider]?.noNegativePrompt !== true
   const isVeo = currentProvider === "veo3" || currentProvider === "veo3.1" || currentProvider === "veo3_lite"
   const isVeoRefMode = isVeo && data.veoMode === "reference"
   const isSeedance2 = isSeedance2Provider(currentProvider)
@@ -3269,6 +3359,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     : currentProvider === "kling-3-omni" ? 7
     : keyframesMiddleCap !== undefined ? keyframesMiddleCap
     : (refCaps?.images ?? 3)
+
+  // LTX 2.5: a wired frame sets the clip's shape (the image endpoints take no
+  // ratio), so the ratio control hides and a stored ratio is cleared.
+  const ltx25FrameWired = isLtx25 && connectedImages.length > 0
+  useEffect(() => {
+    if (ltx25FrameWired && data.aspectRatio !== undefined) onUpdate({ aspectRatio: undefined })
+  }, [ltx25FrameWired]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (currentProvider === "kling-3.0") {
     return <Suspense fallback={null}><Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate as (u: Partial<ImageToVideoData>) => void} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} /></Suspense>
@@ -3512,9 +3609,11 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         )}
       </MappableField>
 
-      {/* Negative Prompt — always visible. Kling family providers send it
+      {/* Negative Prompt — visible for every model that takes one. Kling family providers send it
           natively as `negative_prompt`; non-native providers get it
-          appended to the prompt as "Avoid: …" by the backend helper. */}
+          appended to the prompt as "Avoid: …" by the backend helper. A
+          model that takes none (catalog `noNegativePrompt`, LTX 2.5) hides it. */}
+      {takesNegativePrompt && (
       <MappableField field="negativePrompt" label={t("field.negativePrompt")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={(data as Record<string, unknown>).negativePrompt as string || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
@@ -3539,6 +3638,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           </>
         )}
       </MappableField>
+      )}
 
       {/* Unified injected-references list */}
       <InjectedReferenceList
@@ -4157,6 +4257,25 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           data={data as unknown as PixverseV6MaxFieldData}
           onUpdate={(u) => onUpdate(u as Partial<DataView>)}
           showAspectRatio={true}
+          idPrefix="gv"
+          freeResLock={freeResLock}
+          sources={sources}
+          fieldMappings={fieldMappings}
+          onMapField={onMapField}
+        />
+      )}
+
+      {/* LTX 2.5 — resolution, frame rate (the lengths offered follow both),
+          the aspect ratio (text-only runs: hidden while a start frame is wired,
+          which sets the shape) and the seed. No audio switch: sound is always
+          generated. */}
+      {isLtx25 && (
+        <Ltx25Fields
+          provider={currentProvider}
+          data={data as unknown as Ltx25FieldData}
+          onUpdate={(u) => onUpdate(u as Partial<DataView>)}
+          showAspectRatio={connectedImages.length === 0}
+          frameSetsShape={connectedImages.length > 0}
           idPrefix="gv"
           freeResLock={freeResLock}
           sources={sources}

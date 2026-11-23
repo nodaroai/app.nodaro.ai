@@ -229,6 +229,8 @@ import { adminUsersLinkageRoutes } from "./ee/routes/admin-users-linkage.js"
 import { adminAccessRoutes } from "./ee/routes/admin-access.js"
 import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
+import { libraryFavoriteRoutes } from "./routes/library-favorite.js"
+import { favoritesRoutes } from "./routes/favorites.js"
 import { storageStatusRoutes } from "./routes/storage-status.js"
 import { profileAttributionRoutes } from "./routes/profile-attribution.js"
 import { mediaDeleteRoutes } from "./routes/media-delete.js"
@@ -895,6 +897,10 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminSsoRoutes)
   if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)
+  // Favorites on library files, and the combined favorites list + picker-option
+  // favorites (migration 688; every edition — lib/favorites-tables.ts).
+  await app.register(libraryFavoriteRoutes)
+  await app.register(favoritesRoutes)
   await app.register(storageStatusRoutes)
   await app.register(profileAttributionRoutes)
   await app.register(mediaDeleteRoutes)

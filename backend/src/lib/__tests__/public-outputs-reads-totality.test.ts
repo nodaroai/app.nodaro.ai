@@ -244,7 +244,9 @@ const FLAG_READ_FILES: Readonly<Record<string, Read>> = {
   "lib/workflow-route-access.ts": asks("the editable copy of a shared workflow"),
   "lib/studio-audience.ts": none("decides who may WRITE the share flag; reads no one's work"),
   "ee/lib/keepers-store.ts": published("the Keepers shelf: rows an administrator put on it from their own library"),
-  "routes/library.ts": published("the shared library beside the caller's own: assets only an administrator promotes into it"),
+  "lib/library-listing.ts": published("GET /v1/library's queries: the shared library beside the caller's own, assets only an administrator promotes into it"),
+  "lib/asset-favorites.ts": published("starring a file of the shared library beside the caller's own: assets only an administrator promotes into it"),
+  "lib/favorites-feed.ts": asks("the combined favorites list: a favorite of another person's public job, and a shared library file"),
   "ee/copilot/studio-preamble.ts": none("tells the owner's own Copilot that their production is shared; their own work"),
 }
 

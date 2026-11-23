@@ -7,7 +7,7 @@
  *     `is` and `not(…, "is", null)` are how NULL is asked for;
  *   - `not` supports "is" and "in" only, and throws on anything else rather
  *     than letting every row through;
- *   - `or` runs a PostgREST logic tree of eq, neq, lt, lte, gt, gte and is
+ *   - `or` runs a PostgREST logic tree of eq, neq, lt, lte, gt, gte, is, in and not.in
  *     terms, nested `and(…)` / `or(…)` included, and throws on any other
  *     operator;
  *   - `overlaps` takes a Postgres array literal ("{\"a,b\",c}"), or an array,
@@ -133,6 +133,16 @@ function logicTree(text: string, any: boolean): Filter {
         if (value === "null") return (row) => isNull(row[column])
         if (value === "true" || value === "false") return (row) => row[column] === (value === "true")
         throw new Error(`memory-tables: is.${value} is not supported`)
+      case "in": {
+        const list = listValue(value)
+        return (row) => !isNull(row[column]) && list.includes(String(row[column]))
+      }
+      case "not": {
+        // `column.not.in.(a,b)`: NULL is in no list and out of none — it matches neither.
+        if (!value.startsWith("in.")) throw new Error(`memory-tables: not.${value} in or() is not supported`)
+        const list = listValue(value.slice(3))
+        return (row) => !isNull(row[column]) && !list.includes(String(row[column]))
+      }
       default:
         throw new Error(`memory-tables: ${op} in or() is not supported`)
     }
@@ -282,6 +292,11 @@ function chain(db: MemoryDb, name: string) {
         filters.push((r) => !isNull(r[c]) && !list.includes(String(r[c])))
       } else throw new Error(`memory-tables: not.${op} is not supported`)
       return q
+    },
+    // `filter(column, "not.in", "(a,b)")`, the one raw operator the code under test sends; anything else throws.
+    filter: (c: string, op: string, v: unknown) => {
+      if (op !== "not.in") throw new Error(`memory-tables: filter ${op} is not supported`)
+      return (q.not as (c: string, op: string, v: unknown) => unknown)(c, "in", v)
     },
     in: (c: string, vs: readonly unknown[]) => (filters.push((r) => !isNull(r[c]) && vs.includes(r[c])), q),
     or: (text: string) => (filters.push(logicTree(text, true)), q),

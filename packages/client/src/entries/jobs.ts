@@ -35,4 +35,7 @@ export type {
   JobRatingFilter,
   RateJobResult,
   RenameJobResult,
+  JobCoverInput,
+  UpdateJobParams,
+  UpdateJobResult,
 } from "../resources/jobs.js"

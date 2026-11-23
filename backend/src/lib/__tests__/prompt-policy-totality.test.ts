@@ -90,6 +90,7 @@ const EXCLUDED_ROUTES: Readonly<Record<string, string>> = {
   "generate-face.ts": "polices at the entity image chokepoint (workers/handlers/entity.ts makeEntityImageHandler)",
   "generate-music.ts": "polices at the music assembly point (workers/handlers/suno.ts)",
   "suno.ts": "voice-persona routes; every music prompt assembles + polices in workers/handlers/suno.ts",
+  "suno-add-track.ts": "Add Vocals / Add Instrumental: the lyrics or direction polices in workers/handlers/suno.ts (runSunoAddTrack)",
   "pipelines.ts": "film-studio pipeline — assembly lives in the Cloud plugin lane, which polices through tk.prompts.applyPolicies (half (d))",
   "after-effects-ai.ts": "LLM plan lane — structured output, not a media-generation prompt",
   "generate-script.ts": "LLM lane — script text, not a media-generation prompt",

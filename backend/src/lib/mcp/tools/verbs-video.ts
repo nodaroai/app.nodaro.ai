@@ -261,6 +261,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe("Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k."),
         sound: z.boolean().optional(),
+        fps: z.union([z.number(), z.string()]).optional().describe("Frame rate, ltx-2.5-*: 24 (default), 25, 48, 50; Fast at 48/50 runs 10s at most."),
         negative_prompt: z.string().max(8000).optional(),
         seed: z.number().int().min(0).max(2147483647).optional(),
         draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
@@ -514,6 +515,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         generateAudio: effective.sound as boolean | undefined,
         negativePrompt: effective.negative_prompt as string | undefined,
         seed: effective.seed as number | undefined,
+        // Forwarded as asked: the route resolves it for a model with the setting (videoFrameRateFor).
+        ...(args.fps !== undefined ? { fps: args.fps } : {}),
         ...(args.draft === true && isSeedanceDraftCapable(provider) ? { draft: true } : {}),
         // Forwarded as asked: the route resolves it (and drops what does not fit).
         ...(args.reference_task_type !== undefined ? { referenceTaskType: args.reference_task_type } : {}),
@@ -604,6 +607,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Unknown values fall back to the model's default.",
           ),
         sound: z.boolean().optional(),
+        fps: z.union([z.number(), z.string()]).optional().describe("Frame rate, ltx-2.5-*: 24 (default), 25, 48, 50; Fast at 48/50 runs 10s at most."),
         draft: z.boolean().optional().describe("seedance-2-5: 480p draft (480p price); finalize with video_upscale seedance-2-5-hd."),
         // End-frame face source. Pass ONE of:
         //   - end_frame_url: a public HTTPS URL to an image
@@ -802,6 +806,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         duration,
         aspectRatio,
         resolution: callResolution,
+        ...(args.fps !== undefined ? { fps: args.fps } : {}),
         ...(args.draft === true && isSeedanceDraftCapable(model) ? { draft: true } : {}),
         // Map the single `sound` toggle onto BOTH route levers — Kling reads
         // `sound`, Seedance (default) + VEO read `generateAudio` (default ON);

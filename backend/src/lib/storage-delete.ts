@@ -62,6 +62,7 @@ export type DeleteSource =
   | "template-kept"
   | "cast-swap-depth-clip"
   | "preset-preview"
+  | "job-cover"
 
 export interface FailedDelete {
   readonly key: string

@@ -38,6 +38,9 @@ import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
 import { warmVoiceLibraryCatalog } from "./providers/elevenlabs/voice-library-catalog.js"
 import { watchTitleColumn } from "./lib/jobs-title-column.js"
+import { watchCoverColumn } from "./lib/jobs-cover-column.js"
+import { watchShareLocaleColumn } from "./lib/share-links/locale-column.js"
+import { watchFavoritesTables } from "./lib/favorites-tables.js"
 import { ensureStorageBucket } from "./lib/storage.js"
 import { logStorageDeletesAtBoot } from "./lib/storage-deletes-setting.js"
 import { archiveThisBuild } from "./lib/site-asset-archive.js"
@@ -186,6 +189,13 @@ async function main() {
   // against the shared database before the promotion applies it, so every
   // read names the column only once a probe has seen it (lib/jobs-title-column.ts).
   watchTitleColumn()
+  // And `jobs.cover_url` (migration 686), the owner's cover: the same rule (lib/jobs-cover-column.ts).
+  watchCoverColumn()
+  watchShareLocaleColumn()
+
+  // The same for the upload and catalog favorites tables (migration 688): every
+  // read names them only once a probe has seen them (lib/favorites-tables.ts).
+  watchFavoritesTables()
 
   // The shared Voice Library (≈21,700 voices over ≈220 pages, what the facet
   // counts read): adopt the Redis snapshot, or start the one walk per

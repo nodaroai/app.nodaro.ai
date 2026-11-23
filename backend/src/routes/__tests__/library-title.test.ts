@@ -21,7 +21,7 @@ vi.mock("@/lib/supabase.js", () => {
         return (resolve: (v: unknown) => void) => {
           // The listing's own query (the one that embeds the job) answers the rows; every other read is empty.
           const last = db.selects[db.selects.length - 1] ?? ""
-          const rows = db.table === "assets" && last.includes("job:jobs!job_id(title)") ? db.rows : []
+          const rows = db.table === "assets" && (last.includes("job:jobs!job_id(") || last.endsWith("created_at, job_id")) ? db.rows : []
           resolve({ data: rows, error: null, count: rows.length })
         }
       }
@@ -105,7 +105,7 @@ describe("GET /v1/library — the job's name on each file", () => {
     ])
     // The download name is untouched by the job's name.
     expect(data[0].filename).toBe("a1.png")
-    expect(db.selects.some((s) => s.includes("job:jobs!job_id(title)"))).toBe(true)
+    expect(db.selects.some((s) => s.includes("job:jobs!job_id(title, "))).toBe(true)
   })
 
   it("before the column reaches this database, the listing names no job and every row's title is null — the list still answers", async () => {

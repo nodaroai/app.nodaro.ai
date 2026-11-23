@@ -7,6 +7,7 @@ import type { FastifyRequest } from "fastify"
 import { supabase } from "./supabase.js"
 import { TRASHED_JOB_COLUMN, redactPrivateJobData } from "./public-job-data.js"
 import { titleSelect } from "./jobs-title-column.js"
+import { coverSelect } from "./jobs-cover-column.js"
 
 export const SESSION_COLS =
   "id, user_id, project_id, workspace_id, title, tool, created_at, updated_at, archived_at, cover_job_id"
@@ -19,9 +20,9 @@ export const SESSION_COLS =
 export const SESSION_FEED_JOB_COLS =
   "id, status, progress, input_data, output_data, error_message, error_hint, created_at, started_at, completed_at, user_id, credits, job_type, source, source_detail, session_id, parent_job_id"
 
-/** `SESSION_FEED_JOB_COLS` plus the job's owner-given name (`title`, migration 609) once this database has the column (lib/jobs-title-column.ts). */
+/** `SESSION_FEED_JOB_COLS` plus the job's owner-given name (`title`, migration 609) and cover (`cover_url`, migration 686), each once this database has its column (lib/jobs-optional-column.ts). */
 export function sessionFeedJobCols(): string {
-  return SESSION_FEED_JOB_COLS + titleSelect()
+  return SESSION_FEED_JOB_COLS + titleSelect() + coverSelect()
 }
 
 /** The feed's embedded job (`job:jobs!job_id!inner(...)`) must be live. */

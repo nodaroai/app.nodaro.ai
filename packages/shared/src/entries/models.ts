@@ -150,6 +150,9 @@ export {
   isLegacySunoModel,
   sunoModelHonoursDuration,
   SUNO_ADD_TRACK_MODELS,
+  SUNO_ADD_TRACK_PROMPT_MAX,
+  SUNO_ADD_TRACK_STYLE_MAX,
+  SUNO_ADD_TRACK_NEGATIVE_MAX,
   VOICE_DESIGN_MODELS,
   DEFAULT_VOICE_DESIGN_MODEL,
   MODIFY_IMAGE_PROVIDERS,
@@ -234,6 +237,10 @@ export {
   isPixverseV6MaxProvider,
   PIXVERSE_V6_MAX_DEFAULT_QUALITY,
   normalizePixverseV6MaxQuality,
+  LTX_2_5_PROVIDERS,
+  isLtx25Provider,
+  LTX_2_5_DEFAULT_RESOLUTION,
+  normalizeLtx25Resolution,
   videoKeyframesMiddleCap,
   VIDEO_REF_RATE_PROVIDERS,
   billsReferenceVideoSeconds,
@@ -280,6 +287,7 @@ export {
   PRICING_DEFAULT_DURATION_SEC,
   pricedOutputDurationSec,
   snapToNearestDuration,
+  videoDurationCappedAt,
   videoDefaultDurationSec,
   supportsAutoVideoDuration,
   supportsReferenceTaskType,
@@ -292,6 +300,7 @@ export {
 export type { VideoStartFrameOnlyProblem } from "../model-constants.js"
 export type { ImageRunKind } from "../model-constants.js"
 export type { VideoReferenceCounts } from "../model-constants.js"
+export type { Ltx25Provider } from "../model-constants.js"
 export {
   CAST_SWAP_POST_PROMPT_MAX,
   TREND_PROMPT_LIMITS,

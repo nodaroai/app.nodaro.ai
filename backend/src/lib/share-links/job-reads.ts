@@ -5,27 +5,27 @@
  */
 import { supabase } from "../supabase.js"
 import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN } from "../public-job-data.js"
-import { noteTitleColumnError, titleSelect } from "../jobs-title-column.js"
-import { restrictedKeyOfAddress } from "../content-restriction-address.js"
-import { restrictedKeysNow } from "../content-restriction-set.js"
-import { isEvidenceKey } from "../evidence-keys.js"
+import { titleSelect } from "../jobs-title-column.js"
+import { coverSelect } from "../jobs-cover-column.js"
+import { noteMissingJobsColumns, optionalJobsColumnCount } from "../jobs-optional-column.js"
+import { isRestrictedCoverAddress } from "../job-cover/cover-restriction.js"
 import { SHARE_JOB_COLUMNS, mediaOf, shareRefusalOf, type ShareJobRow } from "./shared-job.js"
 import type { ShareRefusal } from "./types.js"
 
 /** The owner's live, top-level job, or null. */
 export async function findOwnerJob(ownerId: string, jobId: string): Promise<ShareJobRow | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt <= optionalJobsColumnCount(); attempt++) {
     const { data, error } = await supabase
       .from("jobs")
-      .select(`${SHARE_JOB_COLUMNS}${titleSelect()}`)
+      .select(`${SHARE_JOB_COLUMNS}${titleSelect()}${coverSelect()}`)
       .eq("id", jobId)
       .eq("user_id", ownerId)
       .is(CHILD_JOB_COLUMN, null)
       .is(TRASHED_JOB_COLUMN, null)
       .maybeSingle()
     if (!error) return (data as unknown as ShareJobRow | null) ?? null
-    // The name column left this database's schema: read again without it.
-    if (attempt === 0 && noteTitleColumnError(error)) continue
+    // The name or cover column left this database's schema: read again without it.
+    if (attempt < optionalJobsColumnCount() && noteMissingJobsColumns(error).length > 0) continue
     throw new Error(`share job read failed: ${error.message}`)
   }
   return null
@@ -37,18 +37,18 @@ export async function findOwnerJob(ownerId: string, jobId: string): Promise<Shar
  * turned off, or it would come back with the job). Never shown to anyone.
  */
 export async function findOwnerJobAnyState(ownerId: string, jobId: string): Promise<ShareJobRow | null> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt <= optionalJobsColumnCount(); attempt++) {
     const { data, error } = await supabase
       .from("jobs")
       // trash-read: the owner's own job, to read or turn off its share link; a trashed job is never shown or shared (findOwnerJob).
-      .select(`${SHARE_JOB_COLUMNS}${titleSelect()}`)
+      .select(`${SHARE_JOB_COLUMNS}${titleSelect()}${coverSelect()}`)
       .eq("id", jobId)
       .eq("user_id", ownerId)
       .is(CHILD_JOB_COLUMN, null)
       .maybeSingle()
     if (!error) return (data as unknown as ShareJobRow | null) ?? null
-    // The name column left this database's schema: read again without it.
-    if (attempt === 0 && noteTitleColumnError(error)) continue
+    // The name or cover column left this database's schema: read again without it.
+    if (attempt < optionalJobsColumnCount() && noteMissingJobsColumns(error).length > 0) continue
     throw new Error(`share job read failed: ${error.message}`)
   }
   return null
@@ -58,12 +58,12 @@ export async function findOwnerJobAnyState(ownerId: string, jobId: string): Prom
  * Whether a file address names restricted bytes: one of ours under an active
  * content restriction, or under the evidence prefix (migration 583). Asked as
  * this server knows the restrictions now, never waited on (as the job gate
- * asks); the job row's own `restricted_at` is the authoritative mark.
+ * asks); the job row's own `restricted_at` is the authoritative mark. The
+ * same check every `coverUrl` passes (lib/job-cover/cover-restriction.ts), so
+ * a job's cover copy whose SOURCE is restricted is restricted here too.
  */
 export function isRestrictedAddress(url: string): boolean {
-  const key = restrictedKeyOfAddress(url)
-  if (!key) return false
-  return isEvidenceKey(key) || restrictedKeysNow().has(key)
+  return isRestrictedCoverAddress(url)
 }
 
 /** `shareRefusalOf`, plus the bytes: a job whose output names restricted bytes is restricted too. */

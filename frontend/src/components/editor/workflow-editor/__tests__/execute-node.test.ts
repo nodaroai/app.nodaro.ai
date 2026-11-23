@@ -5248,14 +5248,14 @@ describe("suno-style-boost", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-add-instrumental", () => {
-  it("rejects when no taskId/audioId", async () => {
+  it("rejects with no song: no wired audio, no link and no full Suno id pair", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
-      makeNode("suno-add-instrumental", {}),
+      makeNode("suno-add-instrumental", { taskId: "only-the-task" }),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("Missing taskId/audioId")
+    await expect(promise).rejects.toThrow("No song")
     expect(mockToastError).toHaveBeenCalled()
   })
 
@@ -5283,6 +5283,29 @@ describe("suno-add-instrumental", () => {
       userId: "u1",
     })
   })
+
+  it("sends a wired audio's file and the direction, leaving empty text and unset weights out", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "https://cdn.example.com/vocals.mp3" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-add-instrumental", { model: "V6", style: " lo-fi piano ", title: "", negativeTags: "metal", vocalGender: "female", styleWeight: 0, audioWeight: 0.7 }),
+      makeCtx(),
+    )
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    const sent = mockSunoAddInstrumentalApi.mock.calls[0][0]
+    expect(sent).toMatchObject({
+      uploadUrl: "https://cdn.example.com/vocals.mp3",
+      model: "V6",
+      style: "lo-fi piano",
+      negativeTags: "metal",
+      vocalGender: "female",
+      styleWeight: 0,
+      audioWeight: 0.7,
+    })
+    expect(sent.title).toBeUndefined()
+    expect(sent.weirdnessConstraint).toBeUndefined()
+    expect(sent.taskId).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -5290,14 +5313,14 @@ describe("suno-add-instrumental", () => {
 // ---------------------------------------------------------------------------
 
 describe("suno-add-vocals", () => {
-  it("rejects when no taskId/audioId", async () => {
+  it("rejects with no song: no wired audio, no link and no full Suno id pair", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
-      makeNode("suno-add-vocals", {}),
+      makeNode("suno-add-vocals", { taskId: "only-the-task" }),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("Missing taskId/audioId")
+    await expect(promise).rejects.toThrow("No song")
     expect(mockToastError).toHaveBeenCalled()
   })
 
@@ -5323,6 +5346,37 @@ describe("suno-add-vocals", () => {
       audioId: "audio-456",
       model: "chirp-v4",
       userId: "u1",
+    })
+  })
+
+  it("sends the typed link and the typed lyrics when nothing is wired", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-add-vocals", { model: "V6", uploadUrl: "https://cdn.example.com/beat.mp3", prompt: "  la la la  ", style: "soul" }),
+      makeCtx(),
+    )
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockSunoAddVocalsApi.mock.calls[0][0]).toMatchObject({
+      uploadUrl: "https://cdn.example.com/beat.mp3",
+      prompt: "la la la",
+      style: "soul",
+    })
+  })
+
+  it("a wired prompt wins over the typed one, and a wired Suno track sends its file and ids", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "wired lyrics", audioUrl: "https://cdn.example.com/track.mp3", sunoTaskId: "t1", sunoTrackId: "a1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("suno-add-vocals", { model: "V6", prompt: "typed lyrics" }),
+      makeCtx(),
+    )
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockSunoAddVocalsApi.mock.calls[0][0]).toMatchObject({
+      uploadUrl: "https://cdn.example.com/track.mp3",
+      taskId: "t1",
+      audioId: "a1",
+      prompt: "wired lyrics",
     })
   })
 })

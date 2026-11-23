@@ -10,7 +10,8 @@ import {
 import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { uiResolutionFill, uiDurationFill } from "@nodaro/shared/video"
 import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
-import { isSeedanceDraftCapable, normalizeModelInput } from "@nodaro/shared/model-catalog"
+import { getModel, isSeedanceDraftCapable, normalizeModelInput, videoDurationsAt } from "@nodaro/shared/model-catalog"
+import { ltx25LengthSnap } from "@/components/editor/config-panels/ltx-2-5-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useFreeVideoLimits } from "@/hooks/use-free-video-limits"
 import { lockedVideoDuration, lockedVideoModel, lockedVideoResolution, type FreeVideoLimits } from "@/lib/free-video-locks"
@@ -75,10 +76,17 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `availability` is the version the filter reads through
     [freeVideoLimits, availability],
   )
-  const durationOptions = useMemo(
-    () => getDurationsForVideoModel(currentProvider).map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) })),
-    [currentProvider, freeVideoLimits],
-  )
+  // A model whose long clips render only at some resolutions and frame rates
+  // (catalog `longClipLimit`, LTX 2.5 Fast) offers only the lengths its
+  // resolution and frame rate allow — the rule the run is priced and sent by.
+  const durationOptions = useMemo(() => {
+    const offered = getModel(currentProvider)?.longClipLimit
+      ? videoDurationsAt(currentProvider, { resolution: (typeof data.resolution === "string" ? data.resolution : undefined) ?? uiResolutionFill(currentProvider), fps: data.fps })
+      : undefined
+    return getDurationsForVideoModel(currentProvider)
+      .filter((o) => !offered || offered.includes(o.value))
+      .map((o) => ({ ...o, locked: lockedVideoDuration(freeVideoLimits, currentProvider, o.value) }))
+  }, [currentProvider, freeVideoLimits, data.resolution, data.fps])
   // What is wired beside the start frame (primitives, so the strip re-renders
   // only when they change): a tier that takes a start frame only (Grok Imagine
   // Video 1.5 at 1080p) is offered only while nothing else would be sent.
@@ -102,6 +110,11 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   // model cannot draft.
   const draftControl = useMemo(
     () => (isSeedanceDraftCapable(currentProvider) ? getQuickConfigs("generate-video").find((c) => c.field === "draft") ?? null : null),
+    [currentProvider],
+  )
+  // The registry's frame-rate lever (LTX 2.5); null for a model that lists no frame rates.
+  const fpsControl = useMemo(
+    () => ((getModel(currentProvider)?.frameRates?.length ?? 0) > 0 ? getQuickConfigs("generate-video").find((c) => c.field === "fps") ?? null : null),
     [currentProvider],
   )
   // The unified GenerateVideoNodeData picks up a `[key: string]: unknown`
@@ -172,7 +185,9 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
   const handleResolutionChange = (value: string) => {
     if (lockedVideoResolution(freeVideoLimits, currentProvider, value)) return
     if (resolutionOptions && !resolutionOptions.some((o) => o.value === value)) return
-    updateNodeData(nodeId, { resolution: value })
+    // The length moves with it where the resolution caps it (LTX 2.5 Fast at 1440p).
+    const lengthSnap = getModel(currentProvider)?.longClipLimit ? ltx25LengthSnap(currentProvider, { ...(data as Record<string, unknown>), resolution: value }) : {}
+    updateNodeData(nodeId, { resolution: value, ...lengthSnap })
   }
 
   return {
@@ -191,6 +206,7 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     currentResolution,
     resolutionShort,
     draftControl,
+    fpsControl,
     repeatCount,
     onModelChange: handleModelChange,
     onAspectChange: handleAspectChange,

@@ -1877,11 +1877,50 @@ const ROLE_FACE_PER_TOOL_BYTES = 151
 // list, tool-list-wire.json, does). Measured by this suite with them: 560_198 B against the budget of
 // 559_970 B, so the budget is raised by the 228 B over it and is left with none.
 const KIE_LLMS_NEON_GPT_6_2_ID_BYTES = 228
+// Suno Add Vocals / Add Instrumental take the caller's direction (2026-11-23): both tools gain
+// audio_url, style, title, negative_tags, vocal_gender and the three weights, and Add Vocals its
+// prompt, with one-line descriptions (the rest lives in the node skills). Measured by this suite:
+// 562_037 B against the budget of 560_198 B, so the budget is raised by the 1_839 B over it.
+const SUNO_ADD_TRACK_DIRECTION_BYTES = 1_839
+// update_job (2026-11-23): rename a result and/or set its cover picture, the MCP face of
+// PATCH /v1/jobs/:id. Measured by this suite: 563_234 B against the budget of 562_037 B,
+// so the budget is raised by the 1_197 B the new tool adds. Its review round (2026-11-23) holds
+// cover_url to the route's rule (at most 2048 characters, a web address) and names the files it
+// takes ("one you uploaded or generated"): 565_723 B against 565_682 B, raised by those 41 B.
+const UPDATE_JOB_TOOL_BYTES = 1_197 + 41
+
+// RAISED by favorites for everything a person keeps (migration 688): one tool is ADDED —
+// `favorite_catalog_option` (star or unstar a picker option by catalog and option id) — and two grow:
+// `list_favorites` takes `kinds` (every kind of favorite in one list) and `favorite_asset` takes
+// `asset_id` (a library file, an upload too). The membership fixtures move by that one tool. Measured
+// by this suite on the same tree before and after: 560_198 B, then 562_646 B, 2_448 B more; the list
+// had no headroom, so the budget is raised by exactly that. No tool moves near the per-tool budget.
+const FAVORITES_EVERYTHING_BYTES = 2_448
+
+// RAISED by the favorites review: `list_favorites` now says, in its description, that a page with
+// `kinds` can be short — even empty — while its cursor is set, and that no total is given (its
+// `totalCount` used to report the page's length). Measured by this suite on the same tree before
+// and after: 565_682 B, then 565_916 B, 234 B more; the list had no headroom, so the budget is
+// raised by exactly that. No tool moves near the per-tool budget.
+const FAVORITES_PAGE_NOTE_BYTES = 234
+
+// RAISED by LTX 2.5 (decided 2026-11-22): its two ids join the catalog-derived model lists of
+// `generate_video` and `animate_image` (and the other video tools that list them), and both tools take
+// an `fps` argument (the frame rate a model with a frame-rate setting renders). No tool was added, so
+// the membership fixtures do NOT move (the recorded tool list, tool-list-wire.json, does). Measured by
+// this suite on the same tree: the ids alone took the list from within its budget of 559_970 B to
+// 560_022 B, and the argument to 560_376 B. Neither tool is near the per-tool budget (`generate_video`
+// is 10_276 B). The list had no headroom, so its budget is raised by exactly the 406 B over it.
+// Re-measured after merging dev's three LLM ids (raised above on their own tree): the two raises
+// together leave the list 2 B over (560_606 B against 560_604 B), so this raise is 408 B.
+const LTX_2_5_BYTES = 408
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES,
   totalBytes:
     337_638 +
+    SUNO_ADD_TRACK_DIRECTION_BYTES +
+    UPDATE_JOB_TOOL_BYTES +
     IMAGE_OVERLAY_TOOL_BYTES +
     STUDIO_PREVIEW_ARGS_BYTES +
     SUGGEST_PLACEMENT_TOOL_BYTES +
@@ -2112,7 +2151,10 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_REMAKE_PREVIZ_BYTES +
     LIBRARY_SONG_NAME_SEARCH_BYTES +
     ROLE_FACE_BYTES +
-    KIE_LLMS_NEON_GPT_6_2_ID_BYTES,
+    KIE_LLMS_NEON_GPT_6_2_ID_BYTES +
+    FAVORITES_EVERYTHING_BYTES +
+    FAVORITES_PAGE_NOTE_BYTES +
+    LTX_2_5_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

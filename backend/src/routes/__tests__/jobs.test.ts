@@ -93,7 +93,8 @@ describe("sanitizeJobForPublic", () => {
   it("returns the full job unchanged for admin users", () => {
     const result = sanitizeJobForPublic(sampleJob, true)
 
-    expect(result).toEqual({ ...sampleJob })
+    // The job's picture is derived for every caller (lib/job-cover/effective-cover.ts): none here.
+    expect(result).toEqual({ ...sampleJob, coverUrl: null })
     expect("provider" in result).toBe(true)
     expect("provider_cost" in result).toBe(true)
     expect("credits_actual" in result).toBe(true)
@@ -183,6 +184,8 @@ describe("sanitizeJobForPublic", () => {
       [
         "id", "status", "progress", "input_data", "output_data", "error_message", "error_detail",
         "created_at", "started_at", "completed_at", "user_id", "credits", "job_type",
+        // Derived: the owner's cover, else the provider's art, else null.
+        "coverUrl",
       ].sort(),
     )
   })

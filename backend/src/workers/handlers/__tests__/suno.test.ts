@@ -54,9 +54,17 @@ vi.mock("@/lib/nodaro-connect.js", () => ({ isNodaroConnected: mocks.mockIsNodar
 vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ runJobOnCloud: mocks.mockRunJobOnCloud }))
 const market = vi.hoisted(() => ({ coverById: vi.fn() }))
 vi.mock("@/providers/kie/suno-market.js", async (importOriginal) => ({
-  // The real refusal class and the rest; only the by-id call is stubbed.
+  // The real refusal class and the rest; the by-id cover and the two add-track runs are stubbed.
   ...(await importOriginal<typeof import("@/providers/kie/suno-market.js")>()),
   sunoCoverById: market.coverById,
+  sunoAddInstrumental: mocks.mockSunoAddInstrumental,
+  sunoAddVocals: mocks.mockSunoAddVocals,
+}))
+/** The add-track source rule (lib/suno-add-track-source.ts, tested on its own): the file and the style a run resolves to. */
+const addTrackSource = vi.hoisted(() => ({ resolve: vi.fn() }))
+vi.mock("@/lib/suno-add-track-source.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/suno-add-track-source.js")>()),
+  resolveSunoAddTrackSource: addTrackSource.resolve,
 }))
 vi.mock("@/providers/kie/suno-client.js", () => ({
   sunoGenerate: mocks.mockSunoGenerate,
@@ -116,6 +124,9 @@ beforeEach(() => {
   mocks.mockSunoReplaceSection.mockResolvedValue(SUNO_RESULT)
   mocks.mockSunoAddInstrumental.mockResolvedValue(SUNO_RESULT)
   mocks.mockSunoAddVocals.mockResolvedValue(SUNO_RESULT)
+  addTrackSource.resolve.mockImplementation(async (r: { uploadUrl?: string; style?: string; title?: string }) => ({
+    ok: true, uploadUrl: r.uploadUrl ?? "https://cdn.nodaro.ai/audios/original.wav", style: r.style ?? "original style", title: r.title ?? "Original",
+  }))
   mocks.mockSunoConvertWav.mockResolvedValue({ taskId: "suno-task-1", audioUrl: "https://suno.example.com/track.wav" })
   mocks.mockSunoUploadExtend.mockResolvedValue(SUNO_RESULT)
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
@@ -440,16 +451,28 @@ describe("suno-replace-section handler", () => {
 describe("suno-add-instrumental handler", () => {
   const handler = sunoHandlers["suno-add-instrumental"]
 
-  it("happy path: adds instrumental, uploads, saves metadata", async () => {
+  it("happy path: a workflow job with ids alone resolves the file and the style, adds instrumental, uploads, saves metadata", async () => {
     const job = makeJob("suno-add-instrumental", { taskId: "suno-task-1", audioId: "audio-1" })
     await handler(job as never, makeCtx())
 
+    expect(addTrackSource.resolve).toHaveBeenCalledWith(expect.objectContaining({ jobType: "suno-add-instrumental", userId: "user-1", taskId: "suno-task-1", audioId: "audio-1" }))
     expect(mocks.mockSunoAddInstrumental).toHaveBeenCalledWith(
-      expect.objectContaining({ taskId: "suno-task-1", audioId: "audio-1" }),
+      expect.objectContaining({ uploadUrl: "https://cdn.nodaro.ai/audios/original.wav", style: "original style", title: "Original" }),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://suno.example.com/track.mp3", "job-1", "audio", "user-1")
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("the direction reaches the provider call; a prompt is never sent on Add Instrumental", async () => {
+    const job = makeJob("suno-add-instrumental", {
+      uploadUrl: "https://cdn.example.com/vocal.mp3", style: "acoustic", title: "T", prompt: "x", negativeTags: "drums",
+      vocalGender: "male", styleWeight: 0.4, weirdnessConstraint: 0.3, audioWeight: 0.9, model: "V6_MINI",
+    })
+    await handler(job as never, makeCtx())
+    const run = mocks.mockSunoAddInstrumental.mock.calls[0][0]
+    expect(run).toMatchObject({ uploadUrl: "https://cdn.example.com/vocal.mp3", style: "acoustic", title: "T", negativeTags: "drums", vocalGender: "male", styleWeight: 0.4, weirdnessConstraint: 0.3, audioWeight: 0.9, model: "V6_MINI" })
+    expect(run.prompt).toBeUndefined()
   })
 
   it("throws when no tracks returned", async () => {
@@ -467,11 +490,42 @@ describe("suno-add-vocals handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockSunoAddVocals).toHaveBeenCalledWith(
-      expect.objectContaining({ taskId: "suno-task-1", audioId: "audio-1" }),
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      expect.objectContaining({ uploadUrl: "https://cdn.nodaro.ai/audios/original.wav", style: "original style" }),
+      expect.objectContaining({ onTaskCreated: expect.any(Function), modelKey: "suno-add-vocals" }),
     )
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://suno.example.com/track.mp3", "job-1", "audio", "user-1")
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+  })
+
+  it("the lyrics, the voice and the rest of the direction reach the provider call", async () => {
+    const job = makeJob("suno-add-vocals", {
+      uploadUrl: "https://cdn.example.com/beat.mp3", prompt: "[Chorus] la la", style: "soul", negativeTags: "rap",
+      vocalGender: "female", styleWeight: 0.7, weirdnessConstraint: 0.1, audioWeight: 0.8,
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockSunoAddVocals.mock.calls[0][0]).toMatchObject({
+      uploadUrl: "https://cdn.example.com/beat.mp3", prompt: "[Chorus] la la", style: "soul", negativeTags: "rap",
+      vocalGender: "female", styleWeight: 0.7, weirdnessConstraint: 0.1, audioWeight: 0.8,
+    })
+  })
+
+  it("lyrics over the provider's limit are refused (refunded), never cut — a cut would drop what the prompt policy added", async () => {
+    const job = makeJob("suno-add-vocals", { uploadUrl: "https://cdn.example.com/beat.mp3", style: "soul", prompt: "p".repeat(5001) })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(/at most 5000/)
+    expect(mocks.mockSunoAddVocals).not.toHaveBeenCalled()
+  })
+
+  it("a workflow run's link to a social page is refused before the provider is called", async () => {
+    const job = makeJob("suno-add-vocals", { uploadUrl: "https://www.youtube.com/watch?v=abc", style: "soul" })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(/direct link/)
+    expect(mocks.mockSunoAddVocals).not.toHaveBeenCalled()
+  })
+
+  it("a run with no style to take fails before the provider is called (refunded), with the route's message", async () => {
+    addTrackSource.resolve.mockResolvedValueOnce({ ok: false, status: 400, code: "suno_add_track_style", message: "Write a style for the new layer" })
+    const job = makeJob("suno-add-vocals", { uploadUrl: "https://cdn.example.com/beat.mp3" })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow("Write a style for the new layer")
+    expect(mocks.mockSunoAddVocals).not.toHaveBeenCalled()
   })
 
   it("throws when no tracks returned", async () => {
@@ -577,6 +631,17 @@ describe("bespoke operations replay on the connected cloud when this install has
       provider_cost: 0.06,
       output_data: expect.objectContaining({ sunoTrackKind: "speech" }),
     }))
+  })
+
+  it("suno-add-vocals is relayed with the file, the style and the title resolved here, never the ids the cloud could not look up", async () => {
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({ sunoTracks: [{ id: "c1", audioUrl: "https://cloud.example/out.mp3" }], sunoTaskId: "cloud-task" })
+    await sunoHandlers["suno-add-vocals"]!(makeJob("suno-add-vocals", { taskId: "t-1", audioId: "a-1", prompt: "la la", vocalGender: "female", usageLogId: "usage-1" }) as never, makeCtx() as never)
+    const [jobType, payload] = mocks.mockRunJobOnCloud.mock.calls[0]
+    expect(jobType).toBe("suno-add-vocals")
+    expect(payload).toMatchObject({ uploadUrl: "https://cdn.nodaro.ai/audios/original.wav", style: "original style", title: "Original", prompt: "la la", vocalGender: "female" })
+    expect(payload).not.toHaveProperty("taskId")
+    expect(payload).not.toHaveProperty("audioId")
+    expect(mocks.mockSunoAddVocals).not.toHaveBeenCalled()
   })
 
   it("suno-lyrics: cloud text passes straight through — no media, no R2", async () => {

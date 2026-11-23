@@ -13,7 +13,9 @@ import { GALLERY_BLOCKED_WORDS } from "../../config/content-filter.js"
 import { supabase } from "../supabase.js"
 import { CHILD_JOB_COLUMN } from "../public-job-data.js"
 import { RESTRICTED_JOB_COLUMN } from "../content-restrictions-column.js"
-import { noteTitleColumnError, titleSelect } from "../jobs-title-column.js"
+import { titleSelect } from "../jobs-title-column.js"
+import { coverSelect } from "../jobs-cover-column.js"
+import { noteMissingJobsColumns, optionalJobsColumnCount } from "../jobs-optional-column.js"
 import { FEED_LIVE_JOB_FILTER, afterKeyset, decodeCursor, encodeCursor, previewUrlOf, type Keyset } from "../generation-sessions.js"
 import { findOwnerJob, isRestrictedAddress, jobShareRefusal } from "./job-reads.js"
 import { SHARE_JOB_COLUMNS, toSharedJob, type ShareJobRow } from "./shared-job.js"
@@ -63,14 +65,21 @@ interface SummaryRow {
   readonly recent: Array<{ job_id: string; output_data: unknown }> | null
 }
 
+export interface SessionSummary {
+  readonly itemCount: number
+  readonly coverUrl: string | null
+  /** The pictures of its first shown results (the cover first), at most five: a share card's grid. */
+  readonly previewUrls: readonly string[]
+}
+
 /**
  * How many results each session's link shows, and its cover: the cover the
  * owner picked when it is shown, else its newest shown image. One call for a
  * page of sessions (`share_link_session_summaries`, which applies the same
  * rule as a single job, the content filter's words passed in).
  */
-export async function sessionSummaries(ids: readonly string[]): Promise<Map<string, { itemCount: number; coverUrl: string | null }>> {
-  const map = new Map<string, { itemCount: number; coverUrl: string | null }>()
+export async function sessionSummaries(ids: readonly string[]): Promise<Map<string, SessionSummary>> {
+  const map = new Map<string, SessionSummary>()
   if (ids.length === 0) return map
   const { data, error } = await supabase.rpc("share_link_session_summaries", {
     p_session_ids: [...ids],
@@ -78,11 +87,14 @@ export async function sessionSummaries(ids: readonly string[]): Promise<Map<stri
   })
   if (error) throw new Error(`share session summaries failed: ${error.message}`)
   for (const row of (data ?? []) as SummaryRow[]) {
-    const coverUrl =
-      (row.recent ?? [])
-        .map((r) => previewUrlOf(r.output_data))
-        .find((url): url is string => !!url && isShareableAddress(url) && !isRestrictedAddress(url)) ?? null
-    map.set(row.session_id, { itemCount: Number(row.item_count) || 0, coverUrl })
+    const previewUrls = [
+      ...new Set(
+        (row.recent ?? [])
+          .map((r) => previewUrlOf(r.output_data))
+          .filter((url): url is string => !!url && isShareableAddress(url) && !isRestrictedAddress(url)),
+      ),
+    ]
+    map.set(row.session_id, { itemCount: Number(row.item_count) || 0, coverUrl: previewUrls[0] ?? null, previewUrls })
   }
   return map
 }
@@ -165,12 +177,12 @@ interface ItemRow {
 }
 
 async function itemRows(ownerId: string, sessionId: string, batch: number, after: Keyset | null): Promise<ItemRow[]> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt <= optionalJobsColumnCount(); attempt++) {
     let query = supabase
       .from("session_items")
       // `!inner` + the job filters: an item whose job is in the Trash, unfinished,
       // a child step, restricted or kept private is no row at all.
-      .select(`job_id, added_at, job:jobs!job_id!inner(${SHARE_JOB_COLUMNS}${titleSelect()})`)
+      .select(`job_id, added_at, job:jobs!job_id!inner(${SHARE_JOB_COLUMNS}${titleSelect()}${coverSelect()})`)
       .eq("session_id", sessionId)
       .eq("user_id", ownerId)
       .is("removed_at", null)
@@ -183,7 +195,7 @@ async function itemRows(ownerId: string, sessionId: string, batch: number, after
     if (after) query = query.or(afterKeyset("added_at", "job_id", after))
     const { data, error } = await query.order("added_at", { ascending: false }).order("job_id", { ascending: false }).limit(batch)
     if (!error) return (data ?? []) as unknown as ItemRow[]
-    if (attempt === 0 && noteTitleColumnError(error)) continue
+    if (attempt < optionalJobsColumnCount() && noteMissingJobsColumns(error).length > 0) continue
     throw new Error(`share items read failed: ${error.message}`)
   }
   return []

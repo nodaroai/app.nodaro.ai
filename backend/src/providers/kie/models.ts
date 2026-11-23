@@ -105,6 +105,17 @@ export const KLING_4_FLASH_KEYFRAME_MODEL = "kling-4.0/flash-keyframe-to-video"
 export const PIXVERSE_V6_MAX_IMAGE_TO_VIDEO_MODEL = "pixverse-v6-max/image-to-video"
 export const PIXVERSE_V6_MAX_TEXT_TO_VIDEO_MODEL = "pixverse-v6-max/text-to-video"
 
+/** LTX 2.5's KIE endpoints, two per Nodaro id (`ltx-2.5-fast`, `ltx-2.5-pro`):
+ *  each image-to-video config carries the first, each text-to-video config the
+ *  second, and the request builder (ltx-2-5.ts) names the one a run uses.
+ *  Exported so every reverse map of KIE ids (the admin credit audit) resolves
+ *  them back to their Nodaro id. Docs: docs.kie.ai/market/ltx/2-5-fast-text-to-video,
+ *  2-5-fast-image-to-video, 2-5-pro-text-to-video, 2-5-pro-image-to-video (read 2026-11-22). */
+export const LTX_2_5_FAST_TEXT_TO_VIDEO_MODEL = "ltx/2-5-fast-text-to-video"
+export const LTX_2_5_FAST_IMAGE_TO_VIDEO_MODEL = "ltx/2-5-fast-image-to-video"
+export const LTX_2_5_PRO_TEXT_TO_VIDEO_MODEL = "ltx/2-5-pro-text-to-video"
+export const LTX_2_5_PRO_IMAGE_TO_VIDEO_MODEL = "ltx/2-5-pro-image-to-video"
+
 /** PixVerse V6's extend endpoint: any clip by `video_url`, returned whole with
  *  the new seconds joined on. No routing config of its own — pixverse-extend.ts
  *  sends it directly — so no generation menu offers it (its KIE_SPECIAL_MODELS
@@ -1743,6 +1754,36 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
+  // LTX 2.5 Fast / Pro — ONE Nodaro id per tier over two KIE endpoints,
+  // registered in BOTH maps under that id: these image-to-video configs serve a
+  // run with a start frame, the KIE_TEXT_TO_VIDEO_MODELS ones a run without.
+  // Dispatched through the bespoke `runLtx25` in video.ts (bodies built by
+  // ltx-2-5.ts): an explicit allow-list with an INTEGER duration and `fps`, so
+  // the generic builder never runs. Sound is always generated (no switch in any
+  // schema). No end frame, no aspect ratio on the image endpoints (the frame
+  // sets it), seed 0-2147483647. KIE per second, both endpoints and every
+  // frame rate: Fast 10.8 / 15.6 / 22.8 cr/s at 720p / 1080p / 1440p, Pro
+  // 14.4 / 20.4 cr/s at 720p / 1080p. `credits`/`cost` are the default tier
+  // (10s @1080p) for audit logging only; the runner reports each tier's cost.
+  "ltx-2.5-fast": {
+    model: LTX_2_5_FAST_IMAGE_TO_VIDEO_MODEL,
+    credits: 156,             // KIE: 15.6 cr/s × 10 (10s @1080p)
+    cost: 0.78,
+    imageParam: "image_url",
+    acceptsResolution: true,  // the lever exists (sent by the bespoke builder)
+    supportsEndFrame: false,
+    allowedDurations: [6, 8, 10, 12, 14, 16, 18, 20],
+  },
+  "ltx-2.5-pro": {
+    model: LTX_2_5_PRO_IMAGE_TO_VIDEO_MODEL,
+    credits: 204,             // KIE: 20.4 cr/s × 10 (10s @1080p)
+    cost: 1.02,
+    imageParam: "image_url",
+    acceptsResolution: true,
+    supportsEndFrame: false,
+    allowedDurations: [6, 8, 10],
+  },
+
   // Wan 3.0 Prime — KIE's HIGH-SPEED Wan 3.0 tier (faster turnaround at a higher
   // per-second rate, NOT a higher-quality tier). Identical request surface to
   // wan-3; same bespoke runWan3 dispatch and the same declarative-only
@@ -2119,6 +2160,24 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     acceptsResolution: true,  // the lever exists (KIE `quality`, sent by the bespoke builder)
     extraParams: { generate_audio_switch: true },
     allowedDurations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // LTX 2.5 Fast / Pro — the t2v twins of the i2v entries (same ids, same
+  // bespoke runLtx25), on KIE's text-to-video endpoints: `aspect_ratio` is sent
+  // here and never on the image endpoints. Same rates on both.
+  "ltx-2.5-fast": {
+    model: LTX_2_5_FAST_TEXT_TO_VIDEO_MODEL,
+    credits: 156,             // KIE: 15.6 cr/s × 10 (10s @1080p)
+    cost: 0.78,
+    acceptsResolution: true,
+    allowedDurations: [6, 8, 10, 12, 14, 16, 18, 20],
+  },
+  "ltx-2.5-pro": {
+    model: LTX_2_5_PRO_TEXT_TO_VIDEO_MODEL,
+    credits: 204,             // KIE: 20.4 cr/s × 10 (10s @1080p)
+    cost: 1.02,
+    acceptsResolution: true,
+    allowedDurations: [6, 8, 10],
   },
 
   // Wan 3.0 Prime T2V — the high-speed tier (faster, higher per-second rate).

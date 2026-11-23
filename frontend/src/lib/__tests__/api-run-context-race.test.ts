@@ -24,6 +24,7 @@ import {
   setCurrentWorkflowId,
   setForcePrivate,
   setUserPromptTemplate,
+  startPro3DRender,
   textToVideo,
   ugcScriptApi,
 } from "../api"
@@ -175,5 +176,52 @@ describe("two nodes whose requests start together each send their own run settin
     const sent = sentBy(fetchMock, "userInput")
     expectSettings(sent["input a"], A)
     expectSettings(sent["input b"], B)
+  })
+})
+
+describe("a quote-then-run request sends the run the request its quote priced", () => {
+  const source = { kind: "prompt" as const, prompt: "a scene" }
+
+  it("the run carries the settings the quote took, and nothing else differs", async () => {
+    const fetchMock = fetchAnswering({ quoteId: "q-1", maxCredits: 5, jobId: "j" })
+    vi.stubGlobal("fetch", fetchMock)
+
+    startRun(A)
+    await startPro3DRender({ source }, "key-12345678")
+
+    const [quote, run] = fetchMock.mock.calls.map(([url, init]) => ({
+      url: String(url),
+      body: JSON.parse((init as RequestInit).body as string) as Record<string, unknown>,
+    }))
+    expect(quote?.url).toMatch(/\/v1\/pro-3d-render\/quote$/)
+    expect(run?.url).toMatch(/\/v1\/pro-3d-render$/)
+    expectSettings(quote?.body, A)
+    expect(quote?.body).not.toHaveProperty("quoteId")
+    expect(run?.body).toEqual({ ...quote?.body, quoteId: "q-1" })
+  })
+
+  it("another node starting while the quote is out does not change the run", async () => {
+    const fetchMock = fetchAnswering({ quoteId: "q-1", maxCredits: 5, jobId: "j" })
+    vi.stubGlobal("fetch", fetchMock)
+
+    startRun(A)
+    // The other node's run starts once the quote has answered, before the run is sent.
+    const started = startPro3DRender({ source }, "key-12345678", () => startRun(B))
+    await started
+
+    const run = JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string) as Record<string, unknown>
+    expectSettings(run, A)
+  })
+
+  it("hands the quote over before the run is sent", async () => {
+    const fetchMock = fetchAnswering({ quoteId: "q-1", maxCredits: 5, jobId: "j" })
+    vi.stubGlobal("fetch", fetchMock)
+    const seen: number[] = []
+
+    await startPro3DRender({ source }, "key-12345678", (quote) => {
+      seen.push(quote.maxCredits, fetchMock.mock.calls.length)
+    })
+
+    expect(seen).toEqual([5, 1])
   })
 })

@@ -38,7 +38,10 @@ describe("every job read that returns output_data fills the Preview label", () =
 describe("every library list fills the label an old render lacks", () => {
   it("My Library / the editor library (GET /v1/library) and MCP browse_uploads", () => {
     expect(code("routes/library.ts")).toMatch(/await fillAssetRenderQuality\(/)
-    expect(code("routes/library.ts")).toMatch(/created_at, job_id"/)
+    // Its queries are built in lib/library-listing.ts: the table's select names the job,
+    // the favorites function's selects every column (`*`), which carries it too.
+    expect(code("lib/library-listing.ts")).toMatch(/created_at, job_id"/)
+    expect(code("lib/library-listing.ts")).toMatch(/\.select\("\*" \+ libraryJobEmbedSelect\(\)\)/)
     expect(code("lib/mcp/tools/gallery.ts")).toMatch(/await fillAssetRenderQuality\(storedRows\)/)
     expect(code("lib/mcp/tools/gallery.ts")).toMatch(/created_at, job_id"/)
   })

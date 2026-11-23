@@ -3,7 +3,7 @@
  * Single source of truth for model capability sets and variable pricing rules.
  */
 import { z } from "zod"
-import { MODEL_CATALOG, isVideoAutoAspectToken, videoAutoAspectRunsAt, type ModelInputAdjustment } from "./model-catalog.js"
+import { MODEL_CATALOG, isVideoAutoAspectToken, videoAutoAspectRunsAt, videoDurationsAt, type ModelInputAdjustment } from "./model-catalog.js"
 import { isAutoVideoDuration, VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { SEEDANCE_EDIT_REF_VIDEO_SEC, type DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 
@@ -380,6 +380,9 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // PixVerse V6 Max — 1-5000 chars on both endpoints
   // (docs.kie.ai/market/pixverse/v6-max-text-to-video and /v6-max-image-to-video).
   "pixverse-v6-max": 5000,
+  // LTX 2.5 — 1-5000 chars on every endpoint (docs.kie.ai/market/ltx/2-5-*).
+  "ltx-2.5-fast": 5000,
+  "ltx-2.5-pro": 5000,
   // PixVerse V6 Extend — 3-5000 chars (docs.kie.ai/market/pixverse/extend);
   // its prompt is sent as written, so the whole cap is the user's.
   "pixverse-v6-extend": 5000,
@@ -611,6 +614,9 @@ export function applyVideoNegativePrompt(
 
   const neg = negativePrompt?.trim()
   if (!neg) return { prompt: clamp(prompt), nativeNegativePrompt: undefined }
+  // A model that takes no negative prompt, folded or not (catalog
+  // `noNegativePrompt`, LTX 2.5): the negative is dropped, never sent.
+  if (MODEL_CATALOG[provider]?.noNegativePrompt === true) return { prompt: clamp(prompt), nativeNegativePrompt: undefined }
   if (NATIVE_NEGATIVE_VIDEO_PROVIDERS.has(provider)) {
     // Native negative rides its own param → clamp each independently.
     return { prompt: clamp(prompt), nativeNegativePrompt: neg.slice(0, getMaxNegativePromptChars(provider)) }
@@ -1222,6 +1228,12 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   // endpoints (picked by whether a start frame is wired), so it is listed in
   // this array AND in TEXT_TO_VIDEO_PROVIDERS's main section.
   "pixverse-v6-max",
+  // LTX 2.5 — one id per tier over KIE's image-to-video and text-to-video
+  // endpoints (picked by whether a start frame is wired), so each is listed in
+  // this array AND in TEXT_TO_VIDEO_PROVIDERS's main section. A different
+  // model from the LTX 2.3 pair below (Replicate).
+  "ltx-2.5-fast",
+  "ltx-2.5-pro",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // xAI Grok Imagine Video 1.5 — KIE i2v (a start image required). Also listed in
@@ -1274,6 +1286,9 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "kling-4-flash",
   // PixVerse V6 Max — a real text-to-video endpoint runs an image-less request.
   "pixverse-v6-max",
+  // LTX 2.5 — a real text-to-video endpoint per tier.
+  "ltx-2.5-fast",
+  "ltx-2.5-pro",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // ── i2v-only providers (image required) ──────────────────────────────────
@@ -2274,6 +2289,19 @@ export function sunoModelHonoursDuration(model: string | undefined): boolean {
 export const SUNO_ADD_TRACK_MODELS = [...SUNO_ACTIVE_MODELS, "V4_5PLUS", "V5", "V5_5"] as const
 export type SunoAddTrackModel = typeof SUNO_ADD_TRACK_MODELS[number]
 
+/**
+ * The person's direction on Add Vocals / Add Instrumental, at the limits KIE's
+ * schema states for both (docs.kie.ai/suno-api/add-vocals, read 2026-11-23):
+ * `prompt` (the lyrics or the vocal direction, Add Vocals only) up to 5000
+ * characters, `style` up to 1000 (sent as `tags` on Add Instrumental),
+ * `negative_tags` up to 200, `vocal_gender` m / f, and three weights from 0 to
+ * 1 in steps of 0.01. The title is held to {@link SUNO_TITLE_MAX}, as every
+ * Suno title is (the add-track schema states no limit of its own).
+ */
+export const SUNO_ADD_TRACK_PROMPT_MAX = 5000
+export const SUNO_ADD_TRACK_STYLE_MAX = 1000
+export const SUNO_ADD_TRACK_NEGATIVE_MAX = 200
+
 /** Voice design models */
 export const VOICE_DESIGN_MODELS = [
   "eleven_ttv_v3",
@@ -2424,6 +2452,10 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   // Kling 4.0 Flash — per-second billing at 720p, the same rate on both
   // endpoints, plus a reference-video rate (VIDEO_REF_RATE_PROVIDERS).
   "kling-4-flash",
+  // LTX 2.5 — per-second billing at each resolution, the same rate on both
+  // endpoints and at every frame rate.
+  "ltx-2.5-fast",
+  "ltx-2.5-pro",
   // Gemini Omni Flash 1.2 — per-second billing at four resolution rates. The
   // only Omni SKU here: the per-clip SKUs price in their own branch of
   // buildVideoCreditModelIdentifier.
@@ -2744,6 +2776,39 @@ export const PIXVERSE_V6_MAX_DEFAULT_QUALITY = "720p"
 export function normalizePixverseV6MaxQuality(resolution: string | undefined): "360p" | "540p" | "720p" | "1080p" {
   const r = resolution?.trim().toLowerCase()
   return r === "360p" || r === "540p" || r === "1080p" ? r : PIXVERSE_V6_MAX_DEFAULT_QUALITY
+}
+
+/**
+ * LTX 2.5 (Fast and Pro) — ONE Nodaro id per tier over KIE's text-to-video
+ * and image-to-video endpoints (picked by whether a start frame is wired),
+ * built by the backend's bespoke runner (`kie/ltx-2-5.ts`). A different model
+ * from LTX 2.3 (`ltx-2.3-pro` / `ltx-2.3-fast`, Replicate): exact ids, never a
+ * prefix, so no LTX 2.3 branch ever reads these.
+ */
+export const LTX_2_5_PROVIDERS = ["ltx-2.5-fast", "ltx-2.5-pro"] as const
+export type Ltx25Provider = typeof LTX_2_5_PROVIDERS[number]
+
+export function isLtx25Provider(provider: string | undefined): provider is Ltx25Provider {
+  return provider === "ltx-2.5-fast" || provider === "ltx-2.5-pro"
+}
+
+/** The LTX 2.5 resolution rendered when none is named or the one named is not
+ *  the tier's own — the schemas' default, and the tier the bare credit
+ *  identifier prices. */
+export const LTX_2_5_DEFAULT_RESOLUTION = "1080p"
+
+/**
+ * SINGLE normalization for the LTX 2.5 resolution (KIE `resolution`, lowercase
+ * `720p` | `1080p` | `1440p` on Fast, no `1440p` on Pro — the catalog's own
+ * list). Folds case; anything else (a `2k`, a `4k`, Pro's missing `1440p`)
+ * collapses to {@link LTX_2_5_DEFAULT_RESOLUTION}, as the catalog's
+ * `unlistedResolutionRendersAs` declares. The runner sends what this returns
+ * and the credit identifier bills what this returns.
+ */
+export function normalizeLtx25Resolution(provider: string, resolution: string | undefined): string {
+  const r = resolution?.trim().toLowerCase()
+  const listed = MODEL_CATALOG[provider]?.resolutions ?? []
+  return r && listed.includes(r) ? r : LTX_2_5_DEFAULT_RESOLUTION
 }
 
 /**
@@ -3851,6 +3916,12 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // 720p at the wire. The audio state is its own `:audio` suffix
   // (AUDIO_ADDON_PROVIDERS), after the resolution.
   "pixverse-v6-max": ["360p", "540p", "720p", "1080p"],
+  // LTX 2.5 — per-second billing at each resolution on both endpoints.
+  // Ascending; the billed default (1080p, the schemas' own) is declared in
+  // PRICING_DEFAULT_RESOLUTION, and normalizeLtx25Resolution pins the same
+  // 1080p at the wire. Fast has no 1440p row past 10 s (`longClipLimit`).
+  "ltx-2.5-fast": ["720p", "1080p", "1440p"],
+  "ltx-2.5-pro": ["720p", "1080p"],
 }
 
 /**
@@ -4289,6 +4360,13 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // the `generateAudio` field turns it too (after `sound`), and the price
   // follows the same resolved intent (videoAudioIntent).
   "pixverse-v6-max": { mode: "ambient", field: "generateAudioSwitch", affectsCost: true, defaultOn: true, readsGenerateAudio: true },
+  // LTX 2.5 — picture and sound in one pass on every endpoint, with no audio
+  // input in the schemas: always on, nothing to send or price. "ambient" on the
+  // Wan 3.0 / PixVerse rule: the schemas speak quoted text, but no live probe
+  // has verified scripted speech, and `native_speech` would reroute the
+  // Story→Video dialogue pipeline past its lip-sync pass.
+  "ltx-2.5-fast": { mode: "ambient", alwaysOn: true, defaultOn: true },
+  "ltx-2.5-pro": { mode: "ambient", alwaysOn: true, defaultOn: true },
   // Gemini Omni Flash 1.2 — native audio with no on/off input in its schema.
   "gemini-omni-flash-1-2": { mode: "ambient", alwaysOn: true },
   // Gemini Omni (both SKUs — the pro `gemini-omni-video` and the faster
@@ -4500,6 +4578,9 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   // PixVerse V6 Max — per-second at four quality rates, each with and without
   // native audio.
   "pixverse-v6-max": "duration+resolution+audio",
+  // LTX 2.5 — per-second at each resolution (frame rate does not change it).
+  "ltx-2.5-fast": "duration+resolution",
+  "ltx-2.5-pro": "duration+resolution",
 }
 
 /**
@@ -4571,6 +4652,28 @@ export function pricedOutputDurationSec(provider: string, requested: number | st
       : fallback
   }
   return snapToNearestDuration(parsed, MODEL_CATALOG[provider]?.durations)
+}
+
+/**
+ * `durationSec` (a length the model offers) as the model renders it at a
+ * resolution and frame rate: unchanged unless the model's `longClipLimit`
+ * leaves it out there, then the nearest length it does render there (LTX 2.5
+ * Fast at 1440p or 48 / 50 fps: 16 s → 10 s). Every model without the limit
+ * answers `durationSec` unchanged. The credit identifier reads it with the
+ * resolution alone, so it never names a row that is not seeded;
+ * `pricedVideoSelection` and the KIE runner read it with the frame rate too,
+ * so what is priced is what is sent.
+ */
+export function videoDurationCappedAt(
+  provider: string,
+  durationSec: number,
+  at: { resolution?: string; fps?: unknown },
+): number {
+  // A model without the limit gets its length back as given: snapping onto its
+  // `durations` is `pricedOutputDurationSec`'s job, never this one's.
+  if (!MODEL_CATALOG[provider]?.longClipLimit) return durationSec
+  const allowed = videoDurationsAt(provider, at)
+  return allowed && allowed.length > 0 && !allowed.includes(durationSec) ? snapToNearestDuration(durationSec, allowed) : durationSec
 }
 
 /** Models that accept `VIDEO_DURATION_AUTO` — a catalog capability (docs.kie.ai:
@@ -4793,6 +4896,10 @@ export const PRICING_DEFAULT_RESOLUTION: Record<string, string> = {
   // sends 720p for an omitted or unknown one (normalizePixverseV6MaxQuality),
   // never the 360p preview tier.
   "pixverse-v6-max": "720p",
+  // LTX 2.5 — the schemas' own default (1080p); the runner sends it for an
+  // omitted or unknown one (normalizeLtx25Resolution), never the cheaper 720p.
+  "ltx-2.5-fast": LTX_2_5_DEFAULT_RESOLUTION,
+  "ltx-2.5-pro": LTX_2_5_DEFAULT_RESOLUTION,
 }
 
 /** Gemini Omni Flash 1.2 per-second tiers — one per allowed duration (3–15s). */
@@ -4865,6 +4972,12 @@ const PIXVERSE_V6_MAX_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string
   { length: 15 },
   (_, i) => ({ maxSeconds: i + 1, suffix: `${i + 1}s` }),
 )
+
+/** LTX 2.5 per-second tiers — one per length each tier renders (Fast 6-20 s
+ *  and Pro 6-10 s, in 2 s steps); a request is snapped onto the catalog's
+ *  `durations` (and Fast's `longClipLimit`) before it reaches them. */
+const LTX_2_5_FAST_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = [6, 8, 10, 12, 14, 16, 18, 20].map((s) => ({ maxSeconds: s, suffix: `${s}s` }))
+const LTX_2_5_PRO_DURATION_TIERS: Array<{ maxSeconds: number; suffix: string }> = [6, 8, 10].map((s) => ({ maxSeconds: s, suffix: `${s}s` }))
 
 /**
  * Duration tier breakpoints for variable-priced video models.
@@ -4955,6 +5068,8 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
   "kling-4-keyframes": KLING_4_DURATION_TIERS,
   "kling-4-flash": KLING_4_FLASH_DURATION_TIERS,
   "pixverse-v6-max": PIXVERSE_V6_MAX_DURATION_TIERS,
+  "ltx-2.5-fast": LTX_2_5_FAST_DURATION_TIERS,
+  "ltx-2.5-pro": LTX_2_5_PRO_DURATION_TIERS,
   "gemini-omni-flash-1-2": GEMINI_OMNI_12_DURATION_TIERS,
   // MiniMax Hailuo 3 — true per-second billing (KIE 36.5 cr/s @2K, 22.5 cr/s
   // @768P). One tier per allowed second (4-15s) so the composite identifier

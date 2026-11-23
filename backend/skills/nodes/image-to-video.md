@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-11-19T07:28:22.309Z
-generated_from: 18485e3c9e
+generated_at: 2026-11-22T18:00:57.026Z
+generated_from: 249066c36b
 ---
 
 # image-to-video
@@ -34,6 +34,7 @@ generated_from: 18485e3c9e
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
 - `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto"`
+- `fps?: number`
 - `multiShot?: boolean`
 - `draft?: boolean`
 - `referenceTaskType?: "reference" | "edit" | "extend"`
@@ -102,6 +103,7 @@ generated_from: 18485e3c9e
 - `aspect_ratio`
 - `resolution`
 - `sound`
+- `fps`
 - `draft`
 - `end_frame_url`
 - `end_frame_asset_id`
@@ -575,6 +577,35 @@ setting" — subject → action → scene → camera → style, within the 1800-
 - Keep one continuous camera idea per clip; front-load the subject and action.
 
 Source: KIE Runway contract (docs.kie.ai/runway-api/generate-ai-video). Captured 2026-08-09.
+
+### LTX 2.5 — Fast / Pro (ltx-2.5-fast, ltx-2.5-pro)
+
+Prompt structure: describe the scene, the action, the camera and the sound, in that order of importance, in plain sentences. Prompts take 1-5000 characters in any language.
+
+**Sound (always generated)**
+- Every LTX 2.5 run makes picture and sound in one pass: dialogue, sound effects and ambience. There is no audio on/off setting, so the prompt is the only place to direct the sound.
+- Write the sound out, for example a closing "Sound: the fire crackling, two hollow knocks on the crust, her clear voice." line. Name each sound you want heard; anything not described is left to the model.
+
+**Dialogue**
+- Text inside quotation marks is spoken as dialogue, in the language it is written in. Put each line in quotes and say who says it and how ("smiles at the camera and says in a warm, calm voice, "Hear that?"").
+- Keep lines short enough to fit the clip; a 6-second clip holds one or two short sentences.
+
+**Several shots**
+- Write "Shot 1: ... Shot 2: ..." to cut between shots inside one clip. Give each shot its own framing and action.
+
+**Camera and constraints**
+- There is no camera-motion setting and no negative prompt: state the camera ("static medium shot", "slow push-in") and anything to avoid in the prompt itself.
+
+**Frames and shape**
+- With a start frame, the image is the first frame and the clip keeps its aspect ratio (ratios wider than 3:1 are capped at 3:1); describe the motion and the sound, not the still. There is no end frame.
+- Text-only runs take 16:9, 9:16, 1:1, 3:2 or 2:3.
+
+**Fast or Pro**
+- LTX 2.5 Fast: 6-20 seconds at 720p or 1080p, 6-10 seconds at 1440p or at 48/50 fps.
+- LTX 2.5 Pro: 6, 8 or 10 seconds at 720p or 1080p, with finer faces, textures and on-screen text.
+
+Source: KIE LTX 2.5 contracts (docs.kie.ai/market/ltx/2-5-fast-text-to-video, …/2-5-fast-image-to-video,
+…/2-5-pro-text-to-video, …/2-5-pro-image-to-video). Captured 2026-11-22.
 
 _Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/prompts` — edit there, then `npm run gen:skills`._
 <!-- AUTO-GEN:END provider-prompting -->

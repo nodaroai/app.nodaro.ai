@@ -2,7 +2,7 @@ import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel, formatCreditUnits } from "@/lib/credit-units"
 import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
-import { VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, outputFormatOptionsByKind, svgLevelOptionsByKind, normalizeModelInput, TRANSPARENT_OUTPUT_FORMATS, getModel, durationsByMode, modelsWithFeature, isFlux2Model, resolutionsAtAspectRatio, type LabeledOption } from "@nodaro/shared/model-catalog"
+import { MODEL_CATALOG, VIDEO_DURATION_AUTO, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, backgroundOptionsByKind, outputFormatOptionsByKind, svgLevelOptionsByKind, normalizeModelInput, TRANSPARENT_OUTPUT_FORMATS, getModel, durationsByMode, modelsWithFeature, isFlux2Model, resolutionsAtAspectRatio, type LabeledOption } from "@nodaro/shared/model-catalog"
 import {
   supportsAutoVideoDuration,
   GVP_SUPPORTED_PROVIDERS,
@@ -409,14 +409,20 @@ const _VIDEO_ASPECT_BY_PROVIDER: Record<string, readonly LabeledOption[]> = { ..
 export const VIDEO_ASPECT_RATIOS: Record<string, readonly LabeledOption[]> = _VIDEO_ASPECT_BY_PROVIDER
 
 /**
- * Per-provider VIDEO_FPS_OPTIONS — most providers in MODEL_CATALOG don't yet
- * expose an fps lever (the catalog doesn't track it), so this map currently
- * only contains LTX 2.3 entries. Add other providers here as fps becomes a
- * user-facing setting on their config panels. The "Fast >10s implies
- * 24-25fps only" constraint is enforced by the config panel's snap-stale
- * useEffect, not by this list.
+ * Per-provider VIDEO_FPS_OPTIONS — the frame rates a video model's run takes.
+ * A model whose catalog entry declares `frameRates` (LTX 2.5) is listed from
+ * it, the first being its default; the LTX 2.3 pair keeps its own row (its
+ * catalog entries declare none, and only the workflow run sends it). The
+ * lengths a frame rate allows are the catalog's `longClipLimit`
+ * (`videoDurationsAt`) on LTX 2.5, and the LTX 2.3 Fast >10s snap in the
+ * config panel on LTX 2.3 — not this list.
  */
 export const VIDEO_FPS_OPTIONS: Record<string, ReadonlyArray<{ value: number; label: string }>> = {
+  ...Object.fromEntries(
+    Object.values(MODEL_CATALOG)
+      .filter((m) => m.kind === "video" && (m.frameRates?.length ?? 0) > 0)
+      .map((m) => [m.id, m.frameRates!.map((n) => ({ value: n, label: `${n} fps` }))]),
+  ),
   "ltx-2.3-pro": [24, 25, 48, 50].map((n) => ({ value: n, label: `${n} fps` })),
   "ltx-2.3-fast": [24, 25, 48, 50].map((n) => ({ value: n, label: `${n} fps` })),
 }

@@ -10,8 +10,6 @@
  *   - sunoExtend       /api/v1/generate/extend
  *   - sunoMashup       /api/v1/generate/mashup
  *   - sunoReplaceSection /api/v1/generate/replace-section
- *   - sunoAddInstrumental /api/v1/generate/add-instrumental
- *   - sunoAddVocals    /api/v1/generate/add-vocals
  *   - sunoUploadExtend /api/v1/generate/upload-extend
  *   (all poll via /api/v1/generate/record-info)
  *
@@ -54,7 +52,7 @@ vi.mock("@/lib/config.js", () => ({
 import {
   sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate,
   sunoMusicVideo, sunoMashup, sunoReplaceSection, sunoStyleBoost,
-  sunoAddInstrumental, sunoAddVocals, sunoConvertWav, sunoUploadExtend,
+  sunoConvertWav, sunoUploadExtend,
 } from "../suno-client.js"
 import { KIE_API_BASE, KieError } from "../client.js"
 import { DeterministicJobError, isDeterministicJobError } from "@/lib/deterministic-job-error.js"
@@ -1314,53 +1312,7 @@ describe("sunoStyleBoost", () => {
   })
 })
 
-// ===========================================================================
-// 10) sunoAddInstrumental + sunoAddVocals
-// ===========================================================================
-
-describe("sunoAddInstrumental", () => {
-  it("posts to /api/v1/generate/add-instrumental with default model V6", async () => {
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
-      .mockResolvedValueOnce(recordInfoSuccess())
-
-    await withTimers(() =>
-      sunoAddInstrumental({ taskId: "src", audioId: "a" }),
-    )
-
-    expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/add-instrumental`)
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.taskId).toBe("src")
-    expect(body.model).toBe("V6")
-  })
-
-  it("respects V4_5PLUS model override", async () => {
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
-      .mockResolvedValueOnce(recordInfoSuccess())
-
-    await withTimers(() =>
-      sunoAddInstrumental({ taskId: "src", audioId: "a", model: "V4_5PLUS" }),
-    )
-
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.model).toBe("V4_5PLUS")
-  })
-})
-
-describe("sunoAddVocals", () => {
-  it("posts to /api/v1/generate/add-vocals with default model V5", async () => {
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
-      .mockResolvedValueOnce(recordInfoSuccess())
-
-    await withTimers(() =>
-      sunoAddVocals({ taskId: "src", audioId: "a" }),
-    )
-
-    expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/add-vocals`)
-  })
-})
+// 10) Add Instrumental / Add Vocals run on the market lane: suno-market.test.ts.
 
 // ===========================================================================
 // 11) sunoConvertWav — separate poll endpoint
@@ -1560,8 +1512,6 @@ describe("create-task error parity (all generation functions)", () => {
     ["sunoMusicVideo",     () => sunoMusicVideo({ taskId: "t", audioId: "a" })],
     ["sunoMashup",         () => sunoMashup({ uploadUrlList: ["a", "b"] })],
     ["sunoReplaceSection", () => sunoReplaceSection({ taskId: "t", audioId: "a", infillStartS: 1, infillEndS: 6, prompt: "p", tags: "t" })],
-    ["sunoAddInstrumental",() => sunoAddInstrumental({ taskId: "t", audioId: "a" })],
-    ["sunoAddVocals",      () => sunoAddVocals({ taskId: "t", audioId: "a" })],
     ["sunoConvertWav",     () => sunoConvertWav({ taskId: "t", audioId: "a" })],
     ["sunoUploadExtend",   () => sunoUploadExtend({ uploadUrl: "u", continueAt: 0 })],
   ]

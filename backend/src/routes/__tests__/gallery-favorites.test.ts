@@ -144,24 +144,21 @@ describe("GET /v1/gallery?favoritesOnly=true — your own favorites, and nobody 
   const browse = (qs: string) => app.inject({ method: "GET", url: `/v1/gallery?${qs}` })
 
   it("lists your own favorited items: your userId, with your token — a private answer, never cached for others", async () => {
-    vi.mocked(listFavoriteJobIds).mockResolvedValueOnce(["j2", "j1"])
-
     const res = await browse(`userId=${USER}&favoritesOnly=true&__userId=${USER}`)
 
     expect(res.statusCode).toBe(200)
-    expect(listFavoriteJobIds).toHaveBeenCalledWith(USER)
+    // The favorites are joined in the gallery's own query (lib/gallery-listing.ts):
+    // the route never reads the favorite ids, so the request stays bounded however many there are.
+    expect(listFavoriteJobIds).not.toHaveBeenCalled()
     expect(readGalleryPage).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER, favoriteJobIds: ["j2", "j1"], includePrivate: true }),
+      expect.objectContaining({ userId: USER, favoritesOf: USER, includePrivate: true }),
     )
     expect(res.headers["cache-control"]).toBe("private, no-store")
   })
 
-  it("answers an empty page without reading the gallery when you have no favorites", async () => {
-    vi.mocked(listFavoriteJobIds).mockResolvedValueOnce([])
-    const res = await browse(`userId=${USER}&favoritesOnly=true&__userId=${USER}`)
-    expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: [], nextCursor: null, totalCount: 0 })
-    expect(readGalleryPage).not.toHaveBeenCalled()
+  it("without favoritesOnly, the gallery is not narrowed to favorites", async () => {
+    await browse(`userId=${USER}&__userId=${USER}`)
+    expect(readGalleryPage).toHaveBeenCalledWith(expect.objectContaining({ favoritesOf: null }))
   })
 
   it("refuses an anonymous request for someone's favorites (401) — and reads nothing", async () => {
@@ -182,7 +179,7 @@ describe("GET /v1/gallery?favoritesOnly=true — your own favorites, and nobody 
   })
 
   it("a failed favorites read is a sanitized 500", async () => {
-    vi.mocked(listFavoriteJobIds).mockRejectedValueOnce(new Error("gallery_favorites timeout"))
+    vi.mocked(readGalleryPage).mockRejectedValueOnce(new Error("Gallery query failed: gallery_favorites timeout"))
     const res = await browse(`userId=${USER}&favoritesOnly=true&__userId=${USER}`)
     expect(res.statusCode).toBe(500)
     expect(res.json()).toEqual({ error: { code: "internal_error", message: "Failed to fetch gallery" } })

@@ -9,15 +9,25 @@
  * file). Both scan the same reads, found here, so they cannot disagree on
  * which reads there are.
  *
- * A read is a `.from("assets")` chain with a `.select(` and no write, or a
- * chain on another table whose select embeds `assets` (`assets!…`,
- * `:assets(`), in a file outside the internal directories below. Those are
- * exempt as a whole, each for its stated reason: they run jobs, delete bytes,
- * sweep storage or show an administrator everything, and never list a user's
- * files to them.
+ * A read is a `.from("assets")` chain with a `.select(` and no write, a call
+ * of a database function that returns `assets` rows (ASSET_ROW_FUNCTIONS —
+ * a read of the table by another door, held to the same rules), or a chain
+ * on another table whose select embeds `assets` (`assets!…`, `:assets(`), in
+ * a file outside the internal directories below. Those are exempt as a whole,
+ * each for its stated reason: they run jobs, delete bytes, sweep storage or
+ * show an administrator everything, and never list a user's files to them.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative, sep } from "node:path"
+
+/**
+ * Database functions that return `SETOF public.assets`, called with
+ * `.rpc("<name>", …)`. A new one joins this list (its migration says so).
+ */
+export const ASSET_ROW_FUNCTIONS: readonly string[] = [
+  // migration 688: the library's favorites filter (lib/library-listing.ts).
+  "library_assets_by_favorite",
+]
 
 const SRC = join(__dirname, "..", "..")
 
@@ -96,6 +106,14 @@ export function userFacingAssetReads(): AssetRead[] {
     if (INTERNAL_ASSET_READERS.some(([re]) => re.test(file))) continue
     const lines = readFileSync(abs, "utf8").replace(/\r\n/g, "\n").split("\n")
     lines.forEach((line, i) => {
+      const rpc = line.match(/\.rpc\(\s*["']([a-z_]+)["']/)
+      if (rpc && ASSET_ROW_FUNCTIONS.includes(rpc[1]!)) {
+        // A function returning assets rows: a read of the table whatever it selects (a count names no select).
+        const chain = chainAt(lines, i)
+        const above = lines.slice(Math.max(0, i - 3), i).join("\n")
+        reads.push({ file, line: i + 1, chain, above, lead: `${above}\n${line.slice(0, rpc.index)}`, fromAssets: true })
+        return
+      }
       const from = line.match(/\.from\(["']([a-z_]+)["']\)/)
       if (!from) return
       const chain = chainAt(lines, i)

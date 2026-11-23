@@ -414,6 +414,21 @@ describe("useFinalPromptSegments — video-aware negative routing (videoProvider
     expect(result.current.copyText).toBe("a knight riding\nAvoid: blurry, low quality")
   })
 
+  it("a model that takes no negative prompt (LTX 2.5): no routing, no Avoid tail, no negative segment", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight riding",
+        negativePrompt: "blurry, low quality",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        videoProvider: "ltx-2.5-fast",
+      }),
+    )
+    expect(result.current.negativeRouting).toBeNull()
+    expect(result.current.promptText).toBe("a knight riding")
+    expect(result.current.promptSegments.some((s) => s.origin === "negative")).toBe(false)
+  })
+
   it("no negative → routing null even with a videoProvider set", () => {
     const { result } = renderHook(() =>
       useFinalPromptSegments({

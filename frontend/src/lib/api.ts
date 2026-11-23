@@ -3291,6 +3291,10 @@ export interface GenerateVideoOptions {
   shots?: Array<{ prompt: string; duration: number }>     // Kling 3.0 shot list
   elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>  // Kling 3.0 elements
   resolution?: string      // Video resolution (various providers)
+  /** Frame rate, for a model with a frame-rate setting (LTX 2.5: 24, 25, 48,
+   *  50), as the node stores it (a number or a numeric string); the server
+   *  reads it once and ignores it for every other model. */
+  fps?: number | string
   /** Seedance Draft (draft-capable models only): a 480p draft the
    *  `seedance-2-5-hd` Video Upscale can finalize as the same take at 1080p. */
   draft?: boolean
@@ -3387,6 +3391,7 @@ export async function generateVideo(
       shots: opts.shots,
       elements: opts.elements,
       resolution: opts.resolution,
+      ...(opts.fps !== undefined ? { fps: opts.fps } : {}),
       draft: opts.draft || undefined,
       ...(opts.referenceTaskType ? { referenceTaskType: opts.referenceTaskType } : {}),
       grokMode: opts.grokMode,
@@ -3646,6 +3651,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   seed?: number
   // Seedance 2.0 options
   resolution?: string
+  /** Frame rate — see GenerateVideoOptions.fps. */
+  fps?: number | string
   /** Seedance Draft — see GenerateVideoOptions.draft. */
   draft?: boolean
   /** Seedance 2.5 — see GenerateVideoOptions.referenceTaskType. */
@@ -6160,31 +6167,56 @@ export async function sunoStyleBoostApi(params: {
   })
 }
 
-export async function sunoAddInstrumentalApi(params: {
-  taskId: string
-  audioId: string
+/** What Add Instrumental and Add Vocals both take: the song (a link to its
+ *  file, a Suno track's ids, or both) and the direction shared by the two. */
+export interface SunoAddTrackParams {
+  uploadUrl?: string
+  taskId?: string
+  audioId?: string
   model?: string
+  style?: string
+  title?: string
+  negativeTags?: string
+  vocalGender?: "male" | "female"
+  styleWeight?: number
+  weirdnessConstraint?: number
+  audioWeight?: number
   userId?: string
-}): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
-  if (params.model) body.model = params.model
-  if (params.userId) body.userId = params.userId
+}
+
+function sunoAddTrackBody(params: SunoAddTrackParams): Record<string, unknown> {
+  return {
+    ...(params.uploadUrl ? { uploadUrl: params.uploadUrl } : {}),
+    ...(params.taskId && params.audioId ? { taskId: params.taskId, audioId: params.audioId } : {}),
+    ...(params.model ? { model: params.model } : {}),
+    ...(params.style ? { style: params.style } : {}),
+    ...(params.title ? { title: params.title } : {}),
+    ...(params.negativeTags ? { negativeTags: params.negativeTags } : {}),
+    ...(params.vocalGender ? { vocalGender: params.vocalGender } : {}),
+    ...(params.styleWeight != null ? { styleWeight: params.styleWeight } : {}),
+    ...(params.weirdnessConstraint != null ? { weirdnessConstraint: params.weirdnessConstraint } : {}),
+    ...(params.audioWeight != null ? { audioWeight: params.audioWeight } : {}),
+    ...(params.userId ? { userId: params.userId } : {}),
+  }
+}
+
+export async function sunoAddInstrumentalApi(params: SunoAddTrackParams): Promise<{ jobId: string }> {
   return apiJson("/v1/suno/add-instrumental", {
-    body,
+    body: sunoAddTrackBody(params),
     workflowId: true,
     label: "apiErr.startSunoAddInstrumental",
   })
 }
 
-export async function sunoAddVocalsApi(params: {
-  taskId: string
-  audioId: string
-  model?: string
-  userId?: string
+export async function sunoAddVocalsApi(params: SunoAddTrackParams & {
+  /** The lyrics to sing, or the direction for the voice. */
+  prompt?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
-  if (params.model) body.model = params.model
-  if (params.userId) body.userId = params.userId
+  // The typed template travels as `userPrompt` through `setUserPromptTemplate`, like every run's.
+  const body = {
+    ...sunoAddTrackBody(params),
+    ...(params.prompt ? { prompt: params.prompt } : {}),
+  }
   return apiJson("/v1/suno/add-vocals", {
     body,
     workflowId: true,
@@ -7294,43 +7326,40 @@ export interface Pro3DRenderRequest {
 }
 
 /**
- * `POST /v1/pro-3d-render/quote` — price a run WITHOUT starting it.
+ * Quote a 3D Render Pro run, then start it: `POST /v1/pro-3d-render/quote`,
+ * then `POST /v1/pro-3d-render` with the `quoteId` it answered.
  *
- * Same body the run takes, minus the `quoteId`. Answers a ceiling to show the
- * user and the hash admission re-checks. It reserves nothing and spends
- * nothing, which is what makes it safe to call as the panel's controls change.
+ * The run is admitted only when it is the request its quote priced, so both
+ * requests send ONE body. The run settings (workflow, node, private, prompt
+ * template) are taken once, here, before anything is awaited: taken per
+ * request, the quote would use up the one-shot ones and the run would go out
+ * without them — a different request, which the server refuses as a stale
+ * quote (and which would otherwise have started a private run as a public one).
+ *
+ * `onQuote` gets the ceiling before the run is sent, so the node can show what
+ * the run may cost. Quoting reserves nothing; the run answers with a job id
+ * only, and its completed job's `output_data` carries both `scenePlan` and
+ * `videoUrl`. The idempotency key is required: a retried submit of this
+ * operation must not become a second paid run.
  */
-export async function quotePro3DRender(
+export function startPro3DRender(
   params: Pro3DRenderRequest,
-): Promise<Pro3DRenderQuote> {
-  return apiJson("/v1/pro-3d-render/quote", {
-    body: params as unknown as Record<string, unknown>,
-    workflowId: true,
-    label: "apiErr.3dRenderProQuoteFailed",
-  })
-}
-
-/**
- * `POST /v1/pro-3d-render` — ONE durable operation.
- *
- * Answers with a job id only; the completed job's `output_data` carries BOTH
- * `scenePlan` (the exact composition) and `videoUrl` (the exported MP4), plus
- * the revision, poster, validation and renderer metadata.
- *
- * Requires the `quoteId` from `quotePro3DRender` — no run starts at a price
- * nobody showed — and an idempotency key, because a retried submit of the most
- * expensive operation on the platform must not become a second paid run.
- */
-export async function proRender3D(
-  params: Pro3DRenderRequest & { quoteId: string },
   idempotencyKey: string,
+  onQuote?: (quote: Pro3DRenderQuote) => void,
 ): Promise<{ jobId: string }> {
-  return apiJson("/v1/pro-3d-render", {
-    body: params as unknown as Record<string, unknown>,
-    workflowId: true,
-    idempotencyKey,
-    label: "apiErr.3dRenderProFailed",
-  })
+  const body = withWorkflowId(params as unknown as Record<string, unknown>)
+  return (async () => {
+    const quote = await apiJson<Pro3DRenderQuote>("/v1/pro-3d-render/quote", {
+      body,
+      label: "apiErr.3dRenderProQuoteFailed",
+    })
+    onQuote?.(quote)
+    return apiJson<{ jobId: string }>("/v1/pro-3d-render", {
+      body: { ...body, quoteId: quote.quoteId },
+      idempotencyKey,
+      label: "apiErr.3dRenderProFailed",
+    })
+  })()
 }
 
 // --- Motion Graphics ---

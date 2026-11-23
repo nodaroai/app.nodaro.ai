@@ -581,7 +581,8 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-add-instrumental"].audio, accepts: (s) => isValidSunoAddInstrumentalConnection("audio", s) },
   ],
   "suno-add-vocals": [
-    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-add-vocals"].audio, accepts: (s) => isValidSunoAddVocalsConnection("audio", s) },
+    { handleId: "audio",  label: AUDIO_TEXT_HANDLE_LABELS["suno-add-vocals"].audio,  accepts: (s) => isValidSunoAddVocalsConnection("audio",  s, isVisualPickerType) },
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-add-vocals"].prompt, accepts: (s) => isValidSunoAddVocalsConnection("prompt", s, isVisualPickerType) },
   ],
   "suno-convert-wav": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-convert-wav"].audio, accepts: (s) => isValidSunoConvertWavConnection("audio", s) },

@@ -281,6 +281,9 @@ describe("an install with no row lacking a file answers as before", () => {
           sourceDetail: null,
           jobId: null,
           title: null,
+          coverUrl: null,
+          // Added with the favorites (migration 688): nothing is starred here.
+          favorited: false,
           createdAt: at(59),
         },
         {
@@ -298,6 +301,8 @@ describe("an install with no row lacking a file answers as before", () => {
           sourceDetail: "Claude",
           jobId: id(9002),
           title: null,
+          coverUrl: null,
+          favorited: false,
           createdAt: at(58),
         },
       ],

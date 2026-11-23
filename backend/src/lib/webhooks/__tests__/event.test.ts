@@ -117,7 +117,8 @@ describe("eventBodyFor — a job event", () => {
     expect(Object.keys(event).sort()).toEqual(["createdAt", "data", "id", "type"])
     const job = event.data.job
     // Exactly the public keys plus the credit figures — what GET /v1/jobs/:id answers.
-    expect(Object.keys(job).sort()).toEqual([...PUBLIC_JOB_KEYS, "credit_status", "credits_charged", "credits_held", "credits_released"].sort())
+    // `coverUrl` is derived from the row (the owner's cover, else the provider's art), as on GET /v1/jobs/:id.
+    expect(Object.keys(job).sort()).toEqual([...PUBLIC_JOB_KEYS, "coverUrl", "credit_status", "credits_charged", "credits_held", "credits_released"].sort())
     expect(Object.keys(job)).toEqual(expect.arrayContaining(["session_id", "source", "output_data"]))
     expect(job.input_data).toEqual({ type: "generate-image", prompt: "a lighthouse" })
     expect(job).toMatchObject({ credit_status: "committed", credits_charged: 38, credits: 40, credits_held: 40, credits_released: 2 })

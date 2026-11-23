@@ -758,6 +758,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Light, fast, end frame support": "가볍고 빠름, 종료 프레임 지원",
   "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s": "Lightricks LTX 2.3 Fast — 텍스트/이미지→동영상, 최대 20초",
   "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K": "Lightricks LTX 2.3 Pro — 텍스트/이미지/오디오→동영상, 최대 4K",
+  "Lightricks LTX 2.5 Fast — picture and sound in one pass, 6–20s, 720p/1080p/1440p, 24–50 fps": "Lightricks LTX 2.5 Fast — 영상과 소리를 한 번에, 6–20초, 720p/1080p/1440p, 24–50 fps",
+  "Lightricks LTX 2.5 Pro — finer detail, picture and sound in one pass, 6–10s, 720p/1080p": "Lightricks LTX 2.5 Pro — 더 섬세한 디테일, 영상과 소리를 한 번에, 6–10초, 720p/1080p",
   "Edit the clip by instruction — keeps its length and ratio; add image references": "지시문으로 클립 편집 — 길이와 비율 유지, 이미지 레퍼런스 추가 가능",
   "Faster, lower-cost edit by instruction — keeps its length and ratio; 480p/720p; add image references": "더 빠르고 저렴한 지시문 편집 — 길이와 비율 유지, 480p/720p, 이미지 레퍼런스 추가 가능",
   "Luma video modification": "Luma 동영상 수정",

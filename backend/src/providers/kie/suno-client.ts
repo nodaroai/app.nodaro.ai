@@ -258,24 +258,6 @@ export interface SunoStyleBoostResult {
   text: string
 }
 
-export interface SunoAddInstrumentalParams {
-  /** Suno task ID of the original track */
-  taskId: string
-  /** Suno audio ID of the track */
-  audioId: string
-  /** Model version — SUNO_ADD_TRACK_MODELS (V6 family; legacy V4_5PLUS / V5 / V5_5 still accepted) */
-  model?: SunoAddTrackModel
-}
-
-export interface SunoAddVocalsParams {
-  /** Suno task ID of the original track */
-  taskId: string
-  /** Suno audio ID of the track */
-  audioId: string
-  /** Model version — SUNO_ADD_TRACK_MODELS (V6 family; legacy V4_5PLUS / V5 / V5_5 still accepted) */
-  model?: SunoAddTrackModel
-}
-
 export interface SunoConvertWavParams {
   /** Suno task ID of the original track */
   taskId: string
@@ -1405,81 +1387,7 @@ export async function sunoStyleBoost(
   return { text }
 }
 
-// =============================================================================
-// ADD INSTRUMENTAL
-// =============================================================================
-
-/**
- * Add instrumental track to a Suno song.
- * Endpoint: POST /api/v1/generate/add-instrumental
- */
-export async function sunoAddInstrumental(
-  params: SunoAddInstrumentalParams,
-  reconcileOpts?: ReconcileOpts,
-): Promise<SunoTaskResult> {
-  const model = params.model ?? DEFAULT_SUNO_MODEL
-
-  const body: Record<string, unknown> = {
-    taskId: params.taskId,
-    audioId: params.audioId,
-    model,
-    callBackUrl: "https://callback.placeholder",
-  }
-
-  if (DEBUG) console.log(`[Suno] Adding instrumental to task ${params.taskId}`)
-  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
-
-  return retryOnProviderTaskTimeout("Suno add instrumental", async () => {
-    const taskId = await createSunoTask({
-      path: "/api/v1/generate/add-instrumental",
-      body,
-      opName: "add instrumental",
-      label: "Add instrumental",
-      reconcileOpts,
-      debugLabel: "Add instrumental",
-    })
-
-    return pollSunoTask(taskId)
-  })
-}
-
-// =============================================================================
-// ADD VOCALS
-// =============================================================================
-
-/**
- * Add vocals to a Suno song.
- * Endpoint: POST /api/v1/generate/add-vocals
- */
-export async function sunoAddVocals(
-  params: SunoAddVocalsParams,
-  reconcileOpts?: ReconcileOpts,
-): Promise<SunoTaskResult> {
-  const model = params.model ?? DEFAULT_SUNO_MODEL
-
-  const body: Record<string, unknown> = {
-    taskId: params.taskId,
-    audioId: params.audioId,
-    model,
-    callBackUrl: "https://callback.placeholder",
-  }
-
-  if (DEBUG) console.log(`[Suno] Adding vocals to task ${params.taskId}`)
-  if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
-
-  return retryOnProviderTaskTimeout("Suno add vocals", async () => {
-    const taskId = await createSunoTask({
-      path: "/api/v1/generate/add-vocals",
-      body,
-      opName: "add vocals",
-      label: "Add vocals",
-      reconcileOpts,
-      debugLabel: "Add vocals",
-    })
-
-    return pollSunoTask(taskId)
-  })
-}
+// Add Instrumental and Add Vocals run on the market lane: suno-market.ts.
 
 // =============================================================================
 // CONVERT WAV

@@ -8,6 +8,8 @@ import { CHILD_JOB_COLUMN, TRASHED_JOB_COLUMN, TREND_RUN_MARKER_SELECT, maskTren
 import { registerJobTrashRoutes } from "./job-trash.js"
 import { registerJobTitleRoute } from "./job-title.js"
 import { titleSelect } from "../lib/jobs-title-column.js"
+import { coverSelect } from "../lib/jobs-cover-column.js"
+import { effectiveJobCover } from "../lib/job-cover/effective-cover.js"
 // OpenAPI entries (module side effect, like every route file's registerPath).
 import "./jobs-docs.js"
 import { liveSessionsOfJobs } from "../lib/job-sessions.js"
@@ -72,12 +74,15 @@ export interface JobRecord {
   /** The owner's own name for the job (migration 609, `PATCH /v1/jobs/:id`), or
    *  null until named. The owner's text — owner-visible like `source`. */
   title?: string | null
+  /** The owner's cover picture (migration 686, `PATCH /v1/jobs/:id { cover }`), or null. Never returned as is: it is read into `coverUrl`. */
+  cover_url?: string | null
 }
 
 /** Every key a NON-admin caller may see. An ALLOWLIST (W0, 2026-09-01):
  *  `jobs` gains columns over time (error_detail, cost columns, reconcile
  *  counters) and a denylist made each one owner-visible by default. Adding a
- *  column now requires adding it here on purpose. `recovering` is derived. */
+ *  column now requires adding it here on purpose. `recovering` and `coverUrl`
+ *  are derived (`coverUrl` from `cover_url` and the output's provider art). */
 export const PUBLIC_JOB_KEYS = [
   "id", "status", "progress", "input_data", "output_data", "error_message",
   "error_hint", "error_detail", "created_at", "started_at", "completed_at", "user_id", "credits",
@@ -90,7 +95,7 @@ export const ADMIN_ONLY_JOB_KEYS = [
   "provider", "provider_cost", "display_cost", "credits_actual", "reconcile_attempts",
 ] as const
 
-export type PublicJob = Pick<JobRecord, Extract<(typeof PUBLIC_JOB_KEYS)[number], keyof JobRecord>> & { recovering?: true }
+export type PublicJob = Pick<JobRecord, Extract<(typeof PUBLIC_JOB_KEYS)[number], keyof JobRecord>> & { recovering?: true; coverUrl?: string | null }
 
 /** A row of `GET /v1/jobs`'s list query: the job, plus what the route reads before sanitizing it. */
 type ListedJobRow = JobRecord & {
@@ -125,6 +130,11 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
   // touched is self-healing, not just slow — expose a boolean, never the counter.
   const attempts = (redacted.reconcile_attempts as number | null | undefined) ?? 0
   if (!isAdmin && redacted.status === "processing" && attempts > 0) picked.recovering = true
+
+  // The job's picture, named once (lib/job-cover/effective-cover.ts): the
+  // owner's cover, else the provider's art, else null. Derived, for every
+  // caller; the stored column itself is never returned.
+  picked.coverUrl = effectiveJobCover(redacted)
 
   // Strip internal fields from input_data (the orchestrator stores the full
   // payload) and the model fields. NON-ADMIN ONLY — parity with the
@@ -275,7 +285,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const { data: read, error } = await readWithLaneStamp("job", (stamp) => {
       let query = supabase
         .from("jobs")
-        .select(`id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id, workflow_execution_id${titleSelect()}${stamp}`)
+        .select(`id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, reconcile_attempts, source, source_detail, session_id, usage_log_id, workflow_execution_id${titleSelect()}${coverSelect()}${stamp}`)
         .eq("id", id)
         // A job in the Trash answers, for every caller, as one that does not exist.
         .is(TRASHED_JOB_COLUMN, null)
@@ -482,7 +492,7 @@ export async function jobRoutes(app: FastifyInstance) {
     let query = supabase
       // trash-read: applyJobListFilters below leaves the Trash out.
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id" + titleSelect() + ", usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
+      .select("id, status, progress, input_data, output_data, error_message, error_detail, error_hint, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, job_type, source, source_detail, session_id" + titleSelect() + coverSelect() + ", usage_log_id, workflow_execution_id, workflow_executions!workflow_execution_id(is_component_execution, trigger_type)" + jobListFilterSelect(filters))
       .order("created_at", { ascending: false })
       .limit(limitNum)
 

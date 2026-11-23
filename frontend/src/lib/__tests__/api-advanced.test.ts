@@ -15,6 +15,8 @@ import {
   sunoGenerateApi,
   sunoCoverApi,
   sunoExtendApi,
+  sunoAddVocalsApi,
+  sunoAddInstrumentalApi,
   sunoLyricsApi,
   sunoSeparateApi,
   lipSyncApi,
@@ -198,6 +200,41 @@ describe("sunoCoverApi", () => {
     await expect(
       sunoCoverApi({ prompt: "x", uploadUrl: "y" })
     ).rejects.toThrow()
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/*  sunoAddVocalsApi / sunoAddInstrumentalApi                          */
+/* ------------------------------------------------------------------ */
+describe("sunoAddVocalsApi / sunoAddInstrumentalApi", () => {
+  it("sends the link, a weight of 0 and the prompt; leaves out a lone id and empty fields", async () => {
+    sessionWith("tok-add")
+    const fetch = mockFetchJson({ jobId: "j-add-1" })
+    vi.stubGlobal("fetch", fetch)
+
+    await sunoAddVocalsApi({ uploadUrl: "https://cdn.example.com/beat.mp3", taskId: "t-only", style: "", styleWeight: 0, prompt: "la la" })
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(body.uploadUrl).toBe("https://cdn.example.com/beat.mp3")
+    expect(body.styleWeight).toBe(0)
+    expect(body.prompt).toBe("la la")
+    expect(body).not.toHaveProperty("taskId")
+    expect(body).not.toHaveProperty("style")
+    expect(body).not.toHaveProperty("audioWeight")
+    expect(fetch.mock.calls[0][0]).toContain("/v1/suno/add-vocals")
+  })
+
+  it("Add Instrumental sends a Suno track's ids as a pair", async () => {
+    sessionWith("tok-add")
+    const fetch = mockFetchJson({ jobId: "j-add-2" })
+    vi.stubGlobal("fetch", fetch)
+
+    await sunoAddInstrumentalApi({ taskId: "t1", audioId: "a1", vocalGender: "male" })
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(body).toMatchObject({ taskId: "t1", audioId: "a1", vocalGender: "male" })
+    expect(body).not.toHaveProperty("prompt")
+    expect(fetch.mock.calls[0][0]).toContain("/v1/suno/add-instrumental")
   })
 })
 

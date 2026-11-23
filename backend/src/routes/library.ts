@@ -1,9 +1,7 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
-import { RESTRICTED_ASSET_COLUMN } from "../lib/content-restrictions-column.js"
-import { onlyAssetFiles } from "../lib/asset-file-column.js"
 import { isCloud } from "../lib/config.js"
 import { permanentlyDeleteAsset } from "../lib/asset-delete.js"
 import { judgeUrlForRecording } from "../lib/key-ownership.js"
@@ -12,9 +10,12 @@ import { assetSourceColumns, JOB_SOURCES } from "../lib/job-source.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
-import { titleEmbedSelect } from "../lib/jobs-title-column.js"
+import { embeddedJobCover } from "../lib/job-cover/library-embed.js"
 import { ASSET_SEARCH_COLUMNS, searchTextParam, textSearchFilters } from "../lib/text-search.js"
 import { cleanAssetName, savedSongName } from "../lib/asset-names.js"
+import { favoriteStateOfFiles, isMissingFavoritesSchema } from "../lib/asset-favorites.js"
+import { favoritesTablesPresent } from "../lib/favorites-tables.js"
+import { libraryCountQuery, libraryPageQuery, type LibraryCursor, type LibraryListing } from "../lib/library-listing.js"
 
 // ============================================================
 // Schemas
@@ -38,6 +39,11 @@ const listLibraryQuery = z.object({
   // reachable only by omitting the filter, which is the honest behaviour for
   // "unknown origin".
   source: z.enum(JOB_SOURCES).optional(),
+  // Only the files the caller favorited (`true`) or did not (`false`): a file
+  // a job made by its job's favorite while that job is out of the Trash, an
+  // upload (or a file whose job is in the Trash) by its own star
+  // (lib/asset-favorites.ts). Works with every other filter and the cursor.
+  favorited: z.enum(["true", "false"]).optional(),
 })
 
 const assetIdParams = z.object({
@@ -52,7 +58,7 @@ const saveGeneratedBody = z.object({
   isLibraryItem: z.boolean().optional().default(false),
 })
 
-/** A row of the listing's query: the columns it selects (`job` only once the database has `jobs.title`). */
+/** A row of the listing's query: the columns it selects (`job`: the embedded job, lib/job-cover/library-embed.ts). */
 interface LibraryAssetRow {
   readonly id: string
   readonly user_id: string
@@ -76,6 +82,99 @@ interface LibraryAssetRow {
 export function embeddedJobTitle(embed: unknown): string | null {
   const job = (Array.isArray(embed) ? embed[0] : embed) as { title?: unknown } | null | undefined
   return typeof job?.title === "string" && job.title !== "" ? job.title : null
+}
+
+/** A listed file as the route answers it; `favorited` absent when it could not be read. */
+function toLibraryItem(a: LibraryAssetRow, favorited: boolean | undefined) {
+  return {
+    id: a.id,
+    type: a.type,
+    filename: a.filename,
+    mimeType: a.mime_type,
+    sizeBytes: a.size_bytes,
+    url: a.r2_url,
+    thumbnailUrl: (a.metadata as Record<string, unknown>)?.thumbnail_url ?? null,
+    metadata: a.metadata ?? {},
+    isLibraryItem: a.is_library_item ?? false,
+    uploadSource: a.upload_source ?? "manual_upload",
+    // Origin of the media (migration 285). `null` = created before the
+    // column existed; render as "unknown" rather than guessing.
+    source: a.source ?? null,
+    sourceDetail: a.source_detail ?? null,
+    // The job that made the file; `null` for an upload, or once that job's
+    // history is deleted (`assets.job_id` is ON DELETE SET NULL).
+    jobId: a.job_id ?? null,
+    // The name that job's owner gave it (`PATCH /v1/jobs/:id`); null when the
+    // job is unnamed, or when there is no job. A to-one embed arrives as an
+    // object, but a one-element array is accepted too (the list route's lesson).
+    title: embeddedJobTitle(a.job),
+    // The job's picture: its owner's cover, else the provider's art; null for an upload.
+    coverUrl: embeddedJobCover(a.job),
+    // Whether the caller favorited the file (lib/asset-favorites.ts); absent
+    // when that could not be read.
+    ...(favorited !== undefined ? { favorited } : {}),
+    createdAt: a.created_at,
+  }
+}
+
+/**
+ * Where the page after `cursor` starts, or null when the id names no row (the
+ * listing then starts at the top, as it always has). Any row's timestamp, a
+ * row without a file included: a page served before the files-only rule could
+ * end on one, and its cursor still resolves to the rows after it.
+ */
+async function readLibraryCursor(cursor: string): Promise<LibraryCursor | null> {
+  // restricted-read: the cursor's own timestamp, never answered
+  const { data: cursorRow } = await supabase
+    .from("assets")
+    .select("created_at")
+    .eq("id", cursor)
+    .single()
+  return cursorRow ? { id: cursor, createdAt: cursorRow.created_at as string } : null
+}
+
+/**
+ * Each listed file's favorite flag. A list filtered by it answers the filter's
+ * value — the rows came through the same predicate. Otherwise one read for
+ * the page; when it fails the flag is left OUT (null) — never `false` for a
+ * file that is starred, which a client's next star toggle would then remove.
+ */
+async function favoritedFlags(
+  req: FastifyRequest,
+  userId: string,
+  rows: readonly LibraryAssetRow[],
+  favorited: boolean | undefined,
+): Promise<((row: LibraryAssetRow) => boolean) | null> {
+  if (favorited !== undefined) return () => favorited
+  try {
+    const state = await favoriteStateOfFiles(userId, rows)
+    return (row) => state.get(row.id) ?? false
+  } catch (err) {
+    req.log.warn({ err }, "library favorites unavailable: favorited omitted")
+    return null
+  }
+}
+
+/** The `favorited` filter before migration 688 reaches this database. */
+function favoritesFilterNotAvailable(reply: FastifyReply) {
+  return reply.status(503).send({
+    error: { code: "not_available", message: "Filtering the library by favorites is not available on this server yet." },
+  })
+}
+
+type LibraryQuery = z.infer<typeof listLibraryQuery>
+
+/** What the parsed query asks the listing for. */
+function toListing(userId: string, query: LibraryQuery): LibraryListing {
+  return {
+    userId,
+    owned: query.owned,
+    type: query.type,
+    // One `or=` per word, ANDed with each other, the library rule and the cursor's.
+    searchFilters: textSearchFilters(ASSET_SEARCH_COLUMNS, query.q ?? query.search),
+    source: query.source,
+    favorited: query.favorited === undefined ? undefined : query.favorited === "true",
+  }
 }
 
 // ============================================================
@@ -102,139 +201,27 @@ export async function libraryRoutes(app: FastifyInstance) {
       })
     }
 
-    const { type, q, search, limit, cursor, owned, source } = parsed.data
-    // One set of filters for the page AND its count, so `totalCount` describes
-    // the same list. One `or=` per word, ANDed with each other, the library
-    // rule and the cursor's. Both keep only the rows that are files
-    // (`onlyAssetFiles`, decided 2026-11-12): a row a retention reaper left
-    // without an address is neither listed nor counted.
-    const searchFilters = textSearchFilters(ASSET_SEARCH_COLUMNS, q ?? search)
+    const { limit, cursor } = parsed.data
+    // One set of filters for the page AND its count (lib/library-listing.ts),
+    // so `totalCount` describes the same list. Both keep only the rows that
+    // are files (decided 2026-11-12).
+    const listing = toListing(userId, parsed.data)
+    // The favorites filter reads migration 688's function: until it is here,
+    // say so rather than answer a list that is not the one asked for.
+    if (listing.favorited !== undefined && !favoritesTablesPresent()) return favoritesFilterNotAvailable(reply)
 
-    // Count query (only on first page — when no cursor). Built here but NOT
-    // awaited yet so it can run concurrently with the page fetch below
-    // (Promise.all) instead of serializing two round-trips. Exact count drives
-    // preview-nav bounds, so it must stay `count: "exact"`.
-    let countPromise: PromiseLike<{ count: number | null }> | null = null
-    if (!cursor) {
-      let cq = onlyAssetFiles(
-        supabase
-          .from("assets")
-          .select("id", { count: "exact", head: true })
-          .is(RESTRICTED_ASSET_COLUMN, null),
-      )
-
-      if (owned) {
-        cq = cq.eq("user_id", userId)
-      } else {
-        cq = cq.or(`and(user_id.eq.${userId},in_library.eq.true),is_library_item.eq.true`)
-      }
-
-      if (type !== "all") {
-        cq = cq.eq("type", type)
-      }
-
-      for (const filter of searchFilters) {
-        cq = cq.or(filter)
-      }
-
-      if (source) {
-        cq = cq.eq("source", source)
-      }
-
-      countPromise = cq
-    }
-
-    let query = onlyAssetFiles(
-      supabase
-        .from("assets")
-        // `job`: the file's job, for the name its owner gave it (`title`, migration
-        // 609) — a to-one embed on `assets.job_id`, once this database has the
-        // column (lib/jobs-title-column.ts); null for an upload, or once that
-        // job's history is deleted.
-        // trash-read: a file kept in the library outlives its deleted job by design
-        // (like its render label), and so does the name its owner gave that job.
-        .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail" + titleEmbedSelect() + ", created_at, job_id")
-        .is(RESTRICTED_ASSET_COLUMN, null),
-    )
-
-    if (owned) {
-      // Storage page: show ALL user assets (regardless of in_library flag)
-      query = query.eq("user_id", userId)
-    } else {
-      // Workflow modal: only show assets explicitly saved to library + shared items
-      query = query.or(`and(user_id.eq.${userId},in_library.eq.true),is_library_item.eq.true`)
-    }
-
-    query = query
-      .order("created_at", { ascending: false })
-      // The tie-break that makes the ordering TOTAL. `created_at` defaults to
-      // `NOW()`, which is the TRANSACTION timestamp — every asset written by
-      // one multi-file upload shares a value to the microsecond. Without `id`
-      // the page boundary has no defined place among the tied rows, and the
-      // cursor below cannot land between two specific ones.
-      .order("id", { ascending: false })
-      .limit(limit + 1) // Fetch one extra to determine nextCursor
-
-    if (type !== "all") {
-      query = query.eq("type", type)
-    }
-
-    for (const filter of searchFilters) {
-      query = query.or(filter)
-    }
-
-    if (source) {
-      query = query.eq("source", source)
-    }
-
-    if (cursor) {
-      // Everything strictly AFTER the cursor row under
-      // `ORDER BY created_at DESC, id DESC`.
-      //
-      // A bare `created_at.lt.<ts>` — which this was — SKIPS every row tied
-      // with the cursor row's timestamp. `created_at` defaults to `NOW()`,
-      // the transaction timestamp, so one multi-file upload writes a whole
-      // group sharing a value: land a page boundary inside that group and the
-      // rest of it silently disappears from the listing. The same reasoning,
-      // and the same predicate, as `lib/keyset-cursor.ts`.
-      //
-      // Both interpolated values are trusted: `cursor` is `z.string().uuid()`
-      // at the schema, and `createdAt` is read back OUT of the database rather
-      // than taken from the request.
-      //
-      // Any row's timestamp, a row without a file included: a page served
-      // before the files-only rule could end on one, and its cursor still
-      // resolves to the rows after it.
-      // restricted-read: the cursor's own timestamp, never answered
-      const { data: cursorRow } = await supabase
-        .from("assets")
-        .select("created_at")
-        .eq("id", cursor)
-        .single()
-
-      if (cursorRow) {
-        const createdAt = cursorRow.created_at as string
-        query = query.or(
-          `created_at.lt.${createdAt},and(created_at.eq.${createdAt},id.lt.${cursor})`,
-        )
-      }
-    }
-
-    // Run the page fetch and the (optional) exact-count query concurrently so
-    // the count round-trip doesn't add latency on top of the page fetch.
-    const [{ data, error }, countResult] = await Promise.all([
-      query,
-      countPromise ?? Promise.resolve(null),
-    ])
-
-    const totalCount: number | null = countResult?.count ?? null
-
+    const after = cursor ? await readLibraryCursor(cursor) : null
+    // The exact count (first page only) runs beside the page: it drives the
+    // preview navigation's bounds, so it stays `count: "exact"`.
+    const countQuery = cursor ? null : libraryCountQuery(listing)
+    const [{ data, error }, countResult] = await Promise.all([libraryPageQuery(listing, limit, after), countQuery ?? Promise.resolve(null)])
     if (error) {
+      if (listing.favorited !== undefined && isMissingFavoritesSchema(error)) return favoritesFilterNotAvailable(reply)
       return sendInternalError(reply, req, error, "Failed to load library")
     }
+    const totalCount: number | null = countResult?.count ?? null
 
-    // The select is built from parts (the job embed joins it only once the
-    // database has `jobs.title`), so supabase-js cannot infer the row: name it here.
+    // The select is built from parts, so supabase-js cannot infer the row: name it here.
     const rows = (data ?? []) as unknown as LibraryAssetRow[]
     const hasMore = rows.length > limit
     const pageRows = hasMore ? rows.slice(0, limit) : rows
@@ -244,32 +231,8 @@ export async function libraryRoutes(app: FastifyInstance) {
     // file: take it from the job that made it — one batched lookup for the page,
     // none when no file needs one (decided 2026-10-05; read-time, never written).
     const items = await fillAssetRenderQuality(pageRows)
-
-    // Transform snake_case to camelCase
-    const assets = items.map((a) => ({
-      id: a.id,
-      type: a.type,
-      filename: a.filename,
-      mimeType: a.mime_type,
-      sizeBytes: a.size_bytes,
-      url: a.r2_url,
-      thumbnailUrl: (a.metadata as Record<string, unknown>)?.thumbnail_url ?? null,
-      metadata: a.metadata ?? {},
-      isLibraryItem: a.is_library_item ?? false,
-      uploadSource: a.upload_source ?? "manual_upload",
-      // Origin of the media (migration 285). `null` = created before the
-      // column existed; render as "unknown" rather than guessing.
-      source: a.source ?? null,
-      sourceDetail: a.source_detail ?? null,
-      // The job that made the file; `null` for an upload, or once that job's
-      // history is deleted (`assets.job_id` is ON DELETE SET NULL).
-      jobId: a.job_id ?? null,
-      // The name that job's owner gave it (`PATCH /v1/jobs/:id`); null when the
-      // job is unnamed, or when there is no job. A to-one embed arrives as an
-      // object, but a one-element array is accepted too (the list route's lesson).
-      title: embeddedJobTitle((a as { job?: unknown }).job),
-      createdAt: a.created_at,
-    }))
+    const favoritedOf = await favoritedFlags(req, userId, pageRows, listing.favorited)
+    const assets = items.map((a) => toLibraryItem(a, favoritedOf ? favoritedOf(a) : undefined))
 
     return { data: assets, nextCursor, ...(totalCount !== null && { totalCount }) }
   })

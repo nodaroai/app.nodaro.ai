@@ -80,6 +80,7 @@ import { supabase } from "./supabase.js"
 import { batchDeleteFromR2, headR2Object, isStorageConfigured } from "./storage.js"
 import { deletableKeys } from "./asset-delete.js"
 import { keysHeldByOtherLibraryRows } from "./key-ownership.js"
+import { coverKeysNamedByJobs } from "./job-cover/cover-job-refs.js"
 import { blankUrlsInEveryJobOutput, urlsLinkedByJobsSince } from "./job-output-references.js"
 import { isMissingColumnError, isMissingTableError } from "./postgrest-errors.js"
 import { isRetryableDeleteKey, STORAGE_DELETE_RETRIES_TABLE as TABLE, type DeleteSource } from "./storage-delete.js"
@@ -213,6 +214,8 @@ export async function retryFailedStorageDeletes(): Promise<RetryResult> {
       // A key storage refuses outright is never retried (released below).
       const retryable = keys.filter(isRetryableDeleteKey)
       const held = await keysHeldByOtherLibraryRows(retryable, () => false)
+      // A job's cover copy a job shows again (lib/job-cover/cover-job-refs.ts) is kept too.
+      for (const key of await coverKeysNamedByJobs(retryable)) held.add(key)
       ours = new Set(await deletableKeys(retryable.filter((k) => !held.has(k))))
       // A failed delete that checked job links (asset, media): a job made
       // since the failure that links the file keeps it. "retention" and the

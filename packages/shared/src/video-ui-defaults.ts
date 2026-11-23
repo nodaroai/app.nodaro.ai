@@ -38,6 +38,7 @@ import {
   isGeminiOmniProvider,
   isGeminiOmniPerSecondProvider,
   isPixverseV6MaxProvider,
+  isLtx25Provider,
 } from "./model-constants.js"
 import { MODEL_CATALOG } from "./model-catalog.js"
 
@@ -55,7 +56,7 @@ export function uiAspectRatioFill(provider: string): string | undefined {
 /** See the file docstring — per-family on purpose; never a generic
  *  PRICING_DEFAULT_RESOLUTION read (that would reprice seedance-2-5). */
 export function uiResolutionFill(provider: string): string | undefined {
-  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isGeminiOmniPerSecondProvider(provider) || isPixverseV6MaxProvider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
+  if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isGeminiOmniPerSecondProvider(provider) || isPixverseV6MaxProvider(provider) || isLtx25Provider(provider)) return PRICING_DEFAULT_RESOLUTION[provider]
   if (isSeedance2Provider(provider)) return MODEL_CATALOG[provider]?.resolutions?.[0]
   return undefined
 }
@@ -65,12 +66,14 @@ export function uiResolutionFill(provider: string): string | undefined {
  * families whose credit identifier declares a duration fallback that is NOT
  * `durations[0]`. Wan 3.0's bare identifier is the 5s tier while its ladder
  * starts at 2s; Vidu Q4's is the 5s tier while its ladder starts at 3s;
- * PixVerse V6 Max's is the 5s tier while its ladder starts at 1s; the
+ * PixVerse V6 Max's is the 5s tier while its ladder starts at 1s; LTX 2.5's
+ * is the 10s tier (the schemas' default) while its ladder starts at 6s; the
  * Gemini Omni family's is the 8s tier while its ladder starts at 4s. Everyone else falls back to the first listed duration, so this returns
  * undefined and the caller keeps `durations[0]`.
  */
 export function uiDurationFill(provider: string): number | undefined {
   if (isWan3Provider(provider) || isViduQ4Provider(provider) || isKling4RunnerProvider(provider) || isPixverseV6MaxProvider(provider)) return 5
   if (isGeminiOmniProvider(provider)) return 8
+  if (isLtx25Provider(provider)) return MODEL_CATALOG[provider]?.defaultDuration
   return undefined
 }

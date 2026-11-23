@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
@@ -792,7 +793,9 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     // backend's `preBuildPrompt`, so the assembled string is byte-identical to
     // what the provider sees. Negative always lands last → faithful regardless.
     let negativeRouting: NegativeRouting = null
-    if (videoProvider && resolvedNeg) {
+    // A model that takes no negative prompt (catalog `noNegativePrompt`, LTX
+    // 2.5) drops it: nothing is appended, so the view shows no negative tail.
+    if (videoProvider && resolvedNeg && MODEL_CATALOG[videoProvider]?.noNegativePrompt !== true) {
       const videoResult = applyVideoNegativePrompt(promptText, resolvedNeg, videoProvider)
       negativeRouting = videoResult.nativeNegativePrompt ? "native" : "appended"
       // `appended` → the helper returned `<promptText>\nAvoid: <neg>` (or just

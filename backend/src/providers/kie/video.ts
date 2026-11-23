@@ -26,7 +26,7 @@ import { VIDEO_DURATION_AUTO, isAutoVideoDuration, getModel, isSeedanceDraftCapa
 import { getLipSyncMaxAudioSeconds, motionTransferResolution } from "@nodaro/shared/credits"
 import { videoCharacterClipsBilledAsReferenceVideo, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared/video"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs, placeFramesAfterReferences } from "@nodaro/prompts/assembly"
-import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider, QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER } from "@nodaro/shared/models"
+import { isGeminiOmniPerSecondProvider, isPixverseV6MaxProvider, isLtx25Provider, pricedOutputDurationSec, type Ltx25Provider, QUEUED_VIDEO_TO_VIDEO_JOB_PROVIDER } from "@nodaro/shared/models"
 import { GEMINI_OMNI_12_RATE_USD_PER_SEC, buildGeminiOmni12Request, geminiOmni12FrameAspect, geminiOmni12SendsRealFrames, prepareGeminiOmni12Source } from "./gemini-omni-12.js"
 import {
   createSanitizedError,
@@ -43,6 +43,7 @@ import { kling3Generate } from "./kling3-client.js"
 import { buildKling4Request } from "./kling4.js"
 import { buildGrokVideo15Request } from "./grok-video-15.js"
 import { buildPixverseV6MaxRequest } from "./pixverse-v6-max.js"
+import { buildLtx25Request } from "./ltx-2-5.js"
 import { kling4CostUsd } from "./kling4-cost.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -2336,6 +2337,97 @@ async function runPixverseV6Max(
   return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
+/**
+ * LTX 2.5's provider rate (USD/s) by tier and WIRE resolution, the same on both
+ * endpoints and at every frame rate: Fast 10.8 / 15.6 / 22.8 KIE cr/s at 720p /
+ * 1080p / 1440p, Pro 14.4 / 20.4 cr/s at 720p / 1080p (KIE's price list, read
+ * 2026-11-22; $0.005 per KIE credit). Audit / provider_cost only — the USER
+ * charge is the seeded per-second composite.
+ */
+export const LTX_2_5_RATE_USD_PER_SEC: Readonly<Record<Ltx25Provider, Readonly<Record<string, number>>>> = {
+  "ltx-2.5-fast": { "720p": 0.054, "1080p": 0.078, "1440p": 0.114 },
+  "ltx-2.5-pro": { "720p": 0.072, "1080p": 0.102 },
+}
+
+/** The provider cost (USD) of one LTX 2.5 run as sent: its tier's rate at the wire resolution × the seconds sent. */
+export function ltx25CostUsd(provider: Ltx25Provider, resolution: string, seconds: number): number {
+  const rate = LTX_2_5_RATE_USD_PER_SEC[provider][resolution] ?? LTX_2_5_RATE_USD_PER_SEC[provider]["1080p"]!
+  return rate * seconds
+}
+
+/**
+ * LTX 2.5 (`ltx-2.5-fast`, `ltx-2.5-pro`) on both lanes. The body is built by
+ * the pure `buildLtx25Request` (ltx-2-5.ts), which picks the endpoint:
+ * image-to-video when a start frame is passed (already normalized by
+ * imageToVideo's shared frame step — 10 MB, 2048 px, JPEG/PNG/WebP, inside
+ * KIE's 10 MB / JPG-PNG-WEBP limits), text-to-video otherwise.
+ */
+async function runLtx25(
+  modelConfig: KieModelConfig,
+  /** OUR Nodaro key (NOT modelConfig.model, the KIE id) for the egress seam. */
+  modelKey: Ltx25Provider,
+  prompt: string,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  startFrameUrl: string | undefined,
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const requested = duration !== undefined && duration > 0 ? duration : pricedOutputDurationSec(modelKey, undefined)
+  const snapped = snapToAllowedDuration(requested, modelConfig.allowedDurations ?? [])
+  if (duration !== undefined && duration > 0 && snapped !== duration) {
+    console.log(`[KIE.ai] ${logLabel}: duration ${duration}s not allowed, snapped to ${snapped}s`)
+  }
+  const { model, input } = buildLtx25Request({
+    provider: modelKey,
+    prompt,
+    durationSec: snapped,
+    resolution: options?.resolution,
+    fps: options?.fps,
+    aspectRatio: aspectRatioValue,
+    startFrameUrl,
+    seed: options?.seed,
+  })
+  if (input.duration !== snapped) {
+    console.log(`[KIE.ai] ${logLabel}: ${snapped}s is not rendered at ${String(input.resolution)} / ${String(input.fps)} fps, sent ${String(input.duration)}s`)
+  }
+  const ignored = [
+    (options?.referenceImageUrls?.length ?? 0) > 0 ? "reference images" : undefined,
+    (options?.referenceVideoUrls?.length ?? 0) > 0 ? "reference videos" : undefined,
+    (options?.referenceAudioUrls?.length ?? 0) > 0 ? "reference audio" : undefined,
+    (options?.characterReferences?.length ?? 0) > 0 ? "character references" : undefined,
+  ].filter(Boolean)
+  if (ignored.length > 0) console.log(`[KIE.ai] ${logLabel}: ignored ${ignored.join(", ")} — this model takes none`)
+
+  const resolution = input.resolution as string
+  const seconds = input.duration as number
+  const tierCostUsd = ltx25CostUsd(modelKey, resolution, seconds)
+
+  console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
+  const dimensions = { ...deriveKieEgressDimensions(input), resolution }
+  const { resultJson, taskId, providerMs, rawRecordInfo } = await runKieTask(
+    model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...dimensions } },
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  // What KIE should bill (the tier cost in KIE credits) beside what it reports,
+  // so a staging run measures the rate this model is priced from.
+  logCreditAudit({
+    modelKey,
+    expectedKieCredits: Math.round((tierCostUsd / KIE_CREDIT_USD) * 10) / 10,
+    modelConfig: { duration: seconds, resolution, provider: modelKey },
+    rawResponseSample: rawRecordInfo,
+    actualKieCredits: extractCreditFields(rawRecordInfo)?.credits as number | undefined,
+    notes: `${startFrameUrl ? "i2v" : "t2v"} ${modelKey} ${resolution} ${String(input.fps)}fps`,
+  })
+  return { url: videoUrl, cost: tierCostUsd, ...(taskId && { kieTaskId: taskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -2784,6 +2876,29 @@ export class KieVideoProvider
       )
     }
 
+    // LTX 2.5 — bespoke builder (ltx-2-5.ts): an allow-listed body with an
+    // integer duration, the resolution and the frame rate. MUST stay above the
+    // generic createTask path. The start frame is the one normalized above;
+    // neither endpoint takes an end frame (the catalog declares none, so the
+    // editor offers none), so it is not forwarded. With no start frame the run
+    // takes the text-to-video endpoint under the t2v config.
+    if (isLtx25Provider(provider)) {
+      if (effectiveEndFrameUrl) {
+        console.log(`[KIE.ai] LTX 2.5: end frame ignored — neither endpoint accepts one`)
+      }
+      return runLtx25(
+        effectiveImageUrl ? modelConfig : (KIE_TEXT_TO_VIDEO_MODELS[provider] ?? modelConfig),
+        provider,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio,
+        effectiveImageUrl,
+        options,
+        reconcileOpts,
+        `LTX 2.5 (${provider})`,
+      )
+    }
+
     // Standard createTask endpoint for other providers
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
@@ -3207,6 +3322,23 @@ export class KieVideoProvider
         options,
         reconcileOpts,
         `Wan 3 t2v (${provider})`,
+      )
+    }
+
+    // LTX 2.5 — the same bespoke builder as its image lane, on the
+    // text-to-video endpoint (no start frame). MUST stay above the generic
+    // createTask path.
+    if (isLtx25Provider(provider)) {
+      return runLtx25(
+        modelConfig,
+        provider,
+        effectivePrompt,
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        undefined,
+        options,
+        reconcileOpts,
+        `LTX 2.5 t2v (${provider})`,
       )
     }
 

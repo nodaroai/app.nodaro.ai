@@ -56,6 +56,7 @@ export const ADDRESS_NAMES: Readonly<Record<string, string>> = Object.freeze({
 export const NOT_MEDIA_NAMES: Readonly<Record<string, string>> = Object.freeze({
   allowedOrigins: "the web origins allowed to embed an app or use a developer app: configuration, never fetched",
   initiateUrlByHost: "the sign-in page an SSO provider starts at, per host: configuration",
+  locale: "an interface language id (`en`, `pt-BR`): a short code, never fetched",
   madeFrom: "the page a trend credits, shown as a link: never fetched",
   sourceSegmentId: "a segment's id in a dub's source transcript",
 })

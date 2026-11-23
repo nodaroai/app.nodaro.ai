@@ -57,7 +57,7 @@ const BASELINE_MAX_ENTRIES = 26
 // a composite primary key names the column identifying the row's owning object
 // instead. Without this the rule silently never fires for such a table — it
 // reads like coverage and provides none.
-const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"], ["job_ratings", "job_id"], ["voice_favorites", "voice_id"]])
+const ROW_KEY_BY_TABLE = new Map([["workflow_collaborators", "workflow_id"], ["session_items", "session_id"], ["job_ratings", "job_id"], ["voice_favorites", "voice_id"], ["asset_favorites", "asset_id"], ["catalog_favorites", "option_id"]])
 
 function rowKeyMatcher(table) {
   return new RegExp(`\\.eq\\s*\\(\\s*["']${ROW_KEY_BY_TABLE.get(table) ?? "id"}["']`)
@@ -85,6 +85,9 @@ const TENANT_TABLES = new Set([
   "faces",
   "voice_clones",
   "voice_favorites",
+  // Upload and picker-option favorites (migration 688): read and written for the caller only.
+  "asset_favorites",
+  "catalog_favorites",
   "workflows",
   "projects",
   "jobs",

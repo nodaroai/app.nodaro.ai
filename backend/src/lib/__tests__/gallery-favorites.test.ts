@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 vi.mock("../supabase.js", () => ({ supabase: { from: vi.fn() } }))
 
 const { supabase } = await import("../supabase.js")
-const { favoritableJobFilter, listFavoriteJobIds, toggleGalleryFavorite } = await import("../gallery-favorites.js")
+const { addGalleryFavorite, favoritableJobFilter, listFavoriteJobIds, removeGalleryFavorite, toggleGalleryFavorite } = await import("../gallery-favorites.js")
 
 const USER = "00000000-0000-4000-8000-0000000000aa"
 const JOB = "00000000-0000-4000-8000-0000000000b1"
@@ -138,5 +138,49 @@ describe("listFavoriteJobIds", () => {
   it("throws when the read fails", async () => {
     seed({ gallery_favorites: [{ data: null, error: { code: "57014", message: "timeout" } }] })
     await expect(listFavoriteJobIds(USER)).rejects.toMatchObject({ code: "57014" })
+  })
+})
+
+describe("addGalleryFavorite / removeGalleryFavorite (a wanted state, never a toggle)", () => {
+  it("add checks the job is one the caller may star, then inserts — without reading whether it is favorited", async () => {
+    const ops = seed({ jobs: [{ data: { id: JOB }, error: null }], gallery_favorites: [{ data: null, error: null }] })
+    expect(await addGalleryFavorite(USER, JOB)).toEqual({ kind: "added" })
+    expect(ops.map((o) => `${o.table}:${o.verb}`)).toEqual(["jobs:select", "gallery_favorites:insert"])
+    expect(ops[0]!.calls).toContainEqual(["or", favoritableJobFilter(USER)])
+    expect(ops[0]!.calls).toContainEqual(["is", "deleted_at", null])
+    expect(ops[0]!.calls).toContainEqual(["is", "parent_job_id", null])
+  })
+
+  it("add is idempotent: a favorite already there (an earlier or concurrent call) is success, never a removal", async () => {
+    const ops = seed({ jobs: [{ data: { id: JOB }, error: null }], gallery_favorites: [{ data: null, error: { code: "23505", message: "duplicate key" } }] })
+    expect(await addGalleryFavorite(USER, JOB)).toEqual({ kind: "added" })
+    expect(ops.some((o) => o.verb === "delete")).toBe(false)
+  })
+
+  it("add answers not_found for a job the caller may not star (another's private job, the Trash), and for one deleted mid-write", async () => {
+    seed({ jobs: [{ data: null, error: null }] })
+    expect(await addGalleryFavorite(USER, JOB)).toEqual({ kind: "not_found" })
+    seed({ jobs: [{ data: { id: JOB }, error: null }], gallery_favorites: [{ data: null, error: { code: "23503", message: "fk" } }] })
+    expect(await addGalleryFavorite(USER, JOB)).toEqual({ kind: "not_found" })
+  })
+
+  it("an admin may add a child job's favorite", async () => {
+    const ops = seed({ jobs: [{ data: { id: JOB }, error: null }], gallery_favorites: [{ data: null, error: null }] })
+    await addGalleryFavorite(USER, JOB, { isAdmin: true })
+    expect(ops[0]!.calls).not.toContainEqual(["is", "parent_job_id", null])
+  })
+
+  it("remove deletes the caller's favorite of the job and nothing else; none there is success", async () => {
+    const ops = seed({ gallery_favorites: [{ data: null, error: null }] })
+    await expect(removeGalleryFavorite(USER, JOB)).resolves.toBeUndefined()
+    expect(ops.map((o) => `${o.table}:${o.verb}`)).toEqual(["gallery_favorites:delete"])
+    expect(ops[0]!.calls).toEqual([["eq", "user_id", USER], ["eq", "job_id", JOB]])
+  })
+
+  it("both throw on a database failure", async () => {
+    seed({ jobs: [{ data: null, error: { code: "57014", message: "timeout" } }] })
+    await expect(addGalleryFavorite(USER, JOB)).rejects.toMatchObject({ code: "57014" })
+    seed({ gallery_favorites: [{ data: null, error: { code: "57014", message: "timeout" } }] })
+    await expect(removeGalleryFavorite(USER, JOB)).rejects.toMatchObject({ code: "57014" })
   })
 })
