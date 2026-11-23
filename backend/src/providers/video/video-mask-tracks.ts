@@ -7,7 +7,11 @@
  * overlap at all, the nearest open track of about its size it can have moved
  * from. A track stays open over a gap of at most `gapLimit` frames and never
  * across a shot cut. Two regions that join the same track on one frame (a
- * subject the mask split in two) are both that track's.
+ * subject the mask split in two) are both that track's, while they stay side
+ * by side. One that comes away from the rest of its track (`MASK_TRACK_APART_SIDES`,
+ * on `MASK_TRACK_APART_FRAMES` frames) was a second subject the mask drew as
+ * one with the first for a moment (one head coming out from behind another):
+ * it is a track of its own, from the frame it is a region of its own.
  *
  * Video Mask reports the tracks of the mask it drew (`tracks: true`); Mask
  * Erase follows the same rule over the mask it decodes and drops the tracks
@@ -34,6 +38,16 @@ export const MASK_TRACK_VIEW_MAX_SHARE = 0.4
  */
 export const MASK_TRACK_VIEW_EDGE_SHARE = 0.01
 
+/**
+ * A region of a track is apart from another when the gap between their boxes
+ * is more than this many of the smaller one's longer side: farther than the
+ * two halves of one subject the mask split are from each other.
+ */
+export const MASK_TRACK_APART_SIDES = 0.75
+
+/** A region apart from every other region of its track on this many frames is a subject of its own. */
+export const MASK_TRACK_APART_FRAMES = 2
+
 /** One subject of a mask: the frames it is on (0-based, inclusive) and where it is best looked at. */
 export interface MaskTrackInfo {
   readonly id: number
@@ -46,11 +60,18 @@ export interface MaskTrackInfo {
    * `MASK_TRACK_VIEW_MAX_SHARE` of the frame each way and clear of the
    * frame's edges (`MASK_TRACK_VIEW_EDGE_SHARE`); with none clear of the
    * edges, its largest within the share; when every one is larger, its
-   * smallest.
+   * smallest. Chosen among the frames it is one region on, when it has any,
+   * and never the frame it was last one region with a subject that then came
+   * away as a track of its own, when it has another.
    */
   readonly viewFrame: number
   /** Its bounding box on `viewFrame`, % of the frame (two decimals). */
   readonly viewBox: { readonly leftPct: number; readonly topPct: number; readonly rightPct: number; readonly bottomPct: number }
+  /**
+   * The frames it is two regions or more on; absent when on none. A track in
+   * two on most of its frames may be two subjects that never came apart.
+   */
+  readonly splitFrames?: number
 }
 
 export interface MaskTracking {
@@ -65,27 +86,37 @@ export function maskRegionBoxKey(box: MaskRegionBox): string {
   return `${box.top},${box.left},${box.bottom},${box.right}`
 }
 
+/** One region followed from frame to frame inside a track: at most one region a frame. */
+interface Strand {
+  /** The order it started in, among every strand of the mask. */
+  readonly index: number
+  track: OpenTrack
+  /** Its box on `lastFrame`. */
+  box: MaskRegionBox
+  lastFrame: number
+  /** The frames it is on, and its box on each. */
+  readonly frames: number[]
+  readonly boxes: MaskRegionBox[]
+  /** Started as a further region of a track already seen: that track's frame before. Undefined: nothing before it. */
+  readonly bornAfter: number | undefined
+  /** The frames it was apart from every other region of its track. */
+  apart: number
+}
+
 interface OpenTrack {
-  readonly id: number
-  readonly fromFrame: number
+  /** Its strands; the first is the one it started with, and never leaves it. */
+  strands: Strand[]
   /** The union of its regions' boxes on `lastFrame`. */
   box: MaskRegionBox
   /** `box` as it was before `lastFrame`'s regions: what a second region of the same frame is compared with. */
   before: MaskRegionBox
   lastFrame: number
-  frames: number
-  /** The largest box within the view share and clear of the edges so far (area 0: none yet). */
-  clearFrame: number
-  clearBox: MaskRegionBox
-  clearArea: number
-  /** The largest box within the view share so far (area 0: none yet). */
-  viewFrame: number
-  viewBox: MaskRegionBox
-  viewArea: number
-  /** The smallest box so far: the view when none is within the share. */
-  smallFrame: number
-  smallBox: MaskRegionBox
-  smallArea: number
+  /** The frame it was seen on before `lastFrame`. */
+  beforeFrame: number | undefined
+  /** The frames it was last one region with a subject that then came away. */
+  readonly fused: Set<number>
+  /** Its place among the mask's tracks, once every frame is read. */
+  id: number
 }
 
 const areaOf = (b: MaskRegionBox): number => (b.bottom - b.top + 1) * (b.right - b.left)
@@ -147,7 +178,129 @@ function continues(box: MaskRegionBox, open: readonly OpenTrack[], frame: number
   return nearest
 }
 
+const longerSide = (b: MaskRegionBox): number => Math.max(b.right - b.left, b.bottom - b.top + 1)
+
+/** Whether two regions' boxes are farther apart than the halves of one split subject are (`MASK_TRACK_APART_SIDES`). */
+function apart(a: MaskRegionBox, b: MaskRegionBox): boolean {
+  const dx = Math.max(0, a.left - b.right, b.left - a.right)
+  const dy = Math.max(0, a.top - (b.bottom + 1), b.top - (a.bottom + 1))
+  return Math.hypot(dx, dy) > MASK_TRACK_APART_SIDES * Math.min(longerSide(a), longerSide(b))
+}
+
+/**
+ * The strand of `track` that `box` continues on `frame`: the one not yet seen
+ * on this frame it overlaps the most. With none: for the track's first region
+ * of the frame, its nearest strand; for a further region, undefined (a strand
+ * of its own).
+ */
+function strandOf(box: MaskRegionBox, track: OpenTrack, frame: number, gapLimit: number): Strand | undefined {
+  const free = track.strands.filter((s) => s.lastFrame !== frame && frame - s.lastFrame <= gapLimit + 1)
+  let best: Strand | undefined
+  let bestOverlap = 0
+  for (const s of free) {
+    const o = overlapArea(box, s.box)
+    if (o > bestOverlap) {
+      best = s
+      bestOverlap = o
+    }
+  }
+  if (best || track.lastFrame === frame) return best
+  const c = centreOf(box)
+  let nearestDistance = Infinity
+  for (const s of free) {
+    const sc = centreOf(s.box)
+    const distance = Math.hypot(c.x - sc.x, c.y - sc.y)
+    if (distance < nearestDistance) {
+      best = s
+      nearestDistance = distance
+    }
+  }
+  return best
+}
+
+/**
+ * After a frame's regions: a strand apart from every other strand of its track
+ * seen on this frame, for the `MASK_TRACK_APART_FRAMES`th time, leaves the
+ * track as a track of its own, with every frame it was on. Never a track's
+ * first strand, and never the only one left on the frame.
+ */
+function partSubjects(open: OpenTrack[], all: OpenTrack[], frame: number): void {
+  for (const t of [...open]) {
+    if (t.lastFrame !== frame || t.strands.length < 2) continue
+    const seen = t.strands.filter((s) => s.lastFrame === frame)
+    if (seen.length < 2) continue
+    for (const s of seen) {
+      if (s === t.strands[0]) continue
+      const others = seen.filter((o) => o !== s && o.track === t)
+      if (others.length === 0 || !others.every((o) => apart(s.box, o.box))) continue
+      s.apart += 1
+      if (s.apart < MASK_TRACK_APART_FRAMES) continue
+      t.strands = t.strands.filter((x) => x !== s)
+      if (s.bornAfter !== undefined) t.fused.add(s.bornAfter)
+      t.box = others.map((o) => o.box).reduce(unionBox)
+      const own: OpenTrack = { strands: [s], box: s.box, before: s.box, lastFrame: frame, beforeFrame: undefined, fused: new Set(), id: -1 }
+      s.track = own
+      all.push(own)
+      open.push(own)
+    }
+  }
+}
+
 const pct = (value: number, of: number): number => Number(((100 * value) / of).toFixed(2))
+
+/** One track's frames, first to last: its regions' union box on each, and how many regions it has there. */
+function framesOf(track: OpenTrack): Array<{ readonly frame: number; readonly box: MaskRegionBox; readonly regions: number }> {
+  const byFrame = new Map<number, { box: MaskRegionBox; regions: number }>()
+  for (const s of track.strands) {
+    for (let i = 0; i < s.frames.length; i++) {
+      const at = byFrame.get(s.frames[i]!)
+      if (at) {
+        at.box = unionBox(at.box, s.boxes[i]!)
+        at.regions += 1
+      } else {
+        byFrame.set(s.frames[i]!, { box: s.boxes[i]!, regions: 1 })
+      }
+    }
+  }
+  return [...byFrame.entries()].sort((a, b) => a[0] - b[0]).map(([frame, at]) => ({ frame, box: at.box, regions: at.regions }))
+}
+
+/** The frame to look at a track on among `frames` (`MaskTrackInfo.viewFrame`'s order; the first of equals). */
+function viewOf(frames: ReadonlyArray<{ readonly frame: number; readonly box: MaskRegionBox }>, width: number, height: number): { readonly frame: number; readonly box: MaskRegionBox } {
+  const edgeX = MASK_TRACK_VIEW_EDGE_SHARE * width
+  const edgeY = MASK_TRACK_VIEW_EDGE_SHARE * height
+  let clear: { frame: number; box: MaskRegionBox } | undefined
+  let clearArea = 0
+  let view: { frame: number; box: MaskRegionBox } | undefined
+  let viewArea = 0
+  let small = frames[0]!
+  let smallArea = Infinity
+  for (const at of frames) {
+    const { box } = at
+    const area = areaOf(box)
+    const inView = box.right - box.left <= MASK_TRACK_VIEW_MAX_SHARE * width && box.bottom - box.top + 1 <= MASK_TRACK_VIEW_MAX_SHARE * height
+    const isClear = box.left >= edgeX && box.right <= width - edgeX && box.top >= edgeY && box.bottom + 1 <= height - edgeY
+    if (inView && isClear && area > clearArea) {
+      clearArea = area
+      clear = at
+    }
+    if (inView && area > viewArea) {
+      viewArea = area
+      view = at
+    }
+    if (area < smallArea) {
+      smallArea = area
+      small = at
+    }
+  }
+  return clear ?? view ?? small
+}
+
+/** `list` without the items `drop` names, unless that leaves none. */
+function without<T>(list: readonly T[], drop: (item: T) => boolean): readonly T[] {
+  const kept = list.filter((item) => !drop(item))
+  return kept.length > 0 ? kept : list
+}
 
 /**
  * The tracks of a mask's per-frame RLE. `cutFrames`: the frames a new shot
@@ -163,73 +316,79 @@ export async function trackMaskRegions(
 ): Promise<MaskTracking> {
   const cuts = new Set(cutFrames)
   const all: OpenTrack[] = []
+  const strands: Strand[] = []
   let open: OpenTrack[] = []
-  const regionTrack: Array<Map<string, number>> = []
+  /** Per frame: each region's strand, by the region's box. */
+  const regionStrand: Array<Map<string, number>> = []
   let sliceStart = performance.now()
   for (let f = 0; f < rle.length; f++) {
     const assigned = new Map<string, number>()
-    regionTrack.push(assigned)
+    regionStrand.push(assigned)
     if (cuts.has(f)) open = []
     if (rle[f] !== "") {
       open = open.filter((t) => f - t.lastFrame <= gapLimit + 1)
       const boxes = [...maskRegionsOf(rle[f]!, width, height).boxes].sort((a, b) => areaOf(b) - areaOf(a))
       for (const box of boxes) {
         let track = continues(box, open, f)
+        let strand: Strand | undefined
         if (!track) {
-          track = { id: all.length, fromFrame: f, box, before: box, lastFrame: f, frames: 1, clearFrame: f, clearBox: box, clearArea: 0, viewFrame: f, viewBox: box, viewArea: 0, smallFrame: f, smallBox: box, smallArea: Infinity }
+          track = { strands: [], box, before: box, lastFrame: f, beforeFrame: undefined, fused: new Set(), id: -1 }
           all.push(track)
           open.push(track)
-        } else if (track.lastFrame === f) {
-          track.box = unionBox(track.box, box)
         } else {
-          track.before = track.box
-          track.box = box
-          track.lastFrame = f
-          track.frames += 1
+          strand = strandOf(box, track, f, gapLimit)
+          if (track.lastFrame === f) {
+            track.box = unionBox(track.box, box)
+          } else {
+            track.before = track.box
+            track.beforeFrame = track.lastFrame
+            track.box = box
+            track.lastFrame = f
+          }
         }
-        assigned.set(maskRegionBoxKey(box), track.id)
+        if (strand) {
+          strand.box = box
+          strand.lastFrame = f
+          strand.frames.push(f)
+          strand.boxes.push(box)
+        } else {
+          strand = { index: strands.length, track, box, lastFrame: f, frames: [f], boxes: [box], bornAfter: track.strands.length > 0 ? track.beforeFrame : undefined, apart: 0 }
+          strands.push(strand)
+          track.strands.push(strand)
+        }
+        assigned.set(maskRegionBoxKey(box), strand.index)
       }
-      for (const t of open) {
-        if (t.lastFrame !== f) continue
-        const area = areaOf(t.box)
-        const inView = t.box.right - t.box.left <= MASK_TRACK_VIEW_MAX_SHARE * width && t.box.bottom - t.box.top + 1 <= MASK_TRACK_VIEW_MAX_SHARE * height
-        const edgeX = MASK_TRACK_VIEW_EDGE_SHARE * width
-        const edgeY = MASK_TRACK_VIEW_EDGE_SHARE * height
-        const clear = t.box.left >= edgeX && t.box.right <= width - edgeX && t.box.top >= edgeY && t.box.bottom + 1 <= height - edgeY
-        if (inView && clear && area > t.clearArea) {
-          t.clearArea = area
-          t.clearFrame = f
-          t.clearBox = t.box
-        }
-        if (inView && area > t.viewArea) {
-          t.viewArea = area
-          t.viewFrame = f
-          t.viewBox = t.box
-        }
-        if (area < t.smallArea) {
-          t.smallArea = area
-          t.smallFrame = f
-          t.smallBox = t.box
-        }
-      }
+      partSubjects(open, all, f)
     }
     sliceStart = await yieldIfDue(sliceStart)
   }
-  const tracks = all.map((t): MaskTrackInfo => {
-    const [viewFrame, box] = t.clearArea > 0 ? [t.clearFrame, t.clearBox] : t.viewArea > 0 ? [t.viewFrame, t.viewBox] : [t.smallFrame, t.smallBox]
+  // In the order each starts: a subject that came away from a track starts on the frame it was first a region of its own.
+  all.sort((a, b) => a.strands[0]!.index - b.strands[0]!.index)
+  const tracks = all.map((t, id): MaskTrackInfo => {
+    t.id = id
+    const frames = framesOf(t)
+    const whole = without(without(frames, (at) => t.fused.has(at.frame)), (at) => at.regions > 1)
+    const view = viewOf(whole, width, height)
+    const splitFrames = frames.filter((at) => at.regions > 1).length
     return {
-      id: t.id,
-      fromFrame: t.fromFrame,
-      toFrame: t.lastFrame,
-      frames: t.frames,
-      viewFrame,
+      id,
+      fromFrame: frames[0]!.frame,
+      toFrame: frames[frames.length - 1]!.frame,
+      frames: frames.length,
+      viewFrame: view.frame,
       viewBox: {
-        leftPct: pct(box.left, width),
-        topPct: pct(box.top, height),
-        rightPct: pct(box.right, width),
-        bottomPct: pct(box.bottom + 1, height),
+        leftPct: pct(view.box.left, width),
+        topPct: pct(view.box.top, height),
+        rightPct: pct(view.box.right, width),
+        bottomPct: pct(view.box.bottom + 1, height),
       },
+      ...(splitFrames > 0 ? { splitFrames } : {}),
     }
+  })
+  const regionTrack = regionStrand.map((assigned) => {
+    const byTrack = new Map<string, number>()
+    for (const [key, strand] of assigned) byTrack.set(key, strands[strand]!.track.id)
+    return byTrack
   })
   return { tracks, regionTrack }
 }

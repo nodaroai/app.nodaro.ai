@@ -4012,7 +4012,8 @@ export interface PluginCapabilities {
   /**
    * `POST /v1/video-mask` takes `tracks: true` and answers the mask's subjects
    * as `output_data.tracks` (each one's `id`, `fromFrame`, `toFrame`, `frames`
-   * and the `viewFrame` / `viewBox` to look at it on), with `tracksOmitted`
+   * and the `viewFrame` / `viewBox` to look at it on, and `splitFrames`, the
+   * frames it is two regions or more on, when it has any), with `tracksOmitted`
    * and the `cutFrames` they were followed between; and `POST /v1/mask-erase`
    * takes `eraseTracks` (points on single frames, each naming the subject
    * whose region it lies in, dropped on every frame it is on) with those

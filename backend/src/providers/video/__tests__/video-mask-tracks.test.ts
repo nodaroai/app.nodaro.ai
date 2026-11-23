@@ -79,6 +79,109 @@ describe("trackMaskRegions", () => {
   })
 })
 
+/**
+ * Two heads of a real clip (854 × 480, its frames 5 to 13): a man's head comes
+ * out from behind a woman's. On the fifth frame here the mask drew the two as
+ * one region; from the sixth they are two, moving apart. Boxes in % of the
+ * frame: [left, right, top, bottom].
+ */
+const HEADS_W = 854
+const HEADS_H = 480
+const WOMAN: Array<[number, number, number, number]> = [
+  [30.3, 45.7, 22.1, 55.4], [31.5, 46.7, 23.5, 56.9], [32.4, 47.7, 25.6, 58.8], [31.3, 48.5, 27.3, 59.8],
+  [28.6, 49.1, 27.5, 59.4], // the two heads as one region
+  [34.8, 49.5, 27.3, 58.3], [35.2, 49.8, 26.7, 57.3], [35.8, 50.1, 26.0, 56.5], [38.4, 52.7, 25.4, 55.0],
+]
+const MAN: Array<[number, number, number, number] | null> = [
+  null, null, null, null, null,
+  [26.2, 32.8, 36.9, 48.5], [23.7, 30.1, 37.3, 48.5], [21.3, 28.0, 37.5, 49.0], [19.7, 26.1, 36.9, 47.9],
+]
+
+function headsRle(): string[] {
+  return WOMAN.map((woman, f) => {
+    const frame = new Uint8Array(HEADS_W * HEADS_H)
+    for (const box of [woman, MAN[f]]) {
+      if (!box) continue
+      const [l, r, t, b] = box.map((v, i) => Math.round(((i < 2 ? HEADS_W : HEADS_H) * v) / 100)) as [number, number, number, number]
+      for (let y = t; y < b; y++) frame.fill(255, y * HEADS_W + l, y * HEADS_W + r)
+    }
+    return grayFrameToRle(frame)
+  })
+}
+
+describe("trackMaskRegions: two subjects the mask drew as one for a moment", () => {
+  it("gives the one that comes away its own track, from the frame it is a region of its own", async () => {
+    const { tracks } = await trackMaskRegions(headsRle(), HEADS_W, HEADS_H, [], 2)
+    expect(tracks.map((t) => [t.id, t.fromFrame, t.toFrame, t.frames])).toEqual([[0, 0, 8, 9], [1, 5, 8, 4]])
+  })
+
+  it("looks at each on a frame that shows it alone", async () => {
+    const { tracks } = await trackMaskRegions(headsRle(), HEADS_W, HEADS_H, [], 2)
+    const [woman, man] = tracks
+    // Never the frame the two were one region (frame 4), though the box is largest there.
+    expect(woman!.viewFrame).not.toBe(4)
+    expect(woman!.viewBox.leftPct).toBeGreaterThan(30)
+    expect(man!.viewBox.rightPct).toBeLessThan(33)
+    // Each is one region on every frame of its own track: the frame the two were one is the woman's, as one region.
+    expect(woman!.splitFrames).toBeUndefined()
+    expect(man!.splitFrames).toBeUndefined()
+  })
+
+  it("lets Mask Erase drop one of the two and keep the other", async () => {
+    const rle = headsRle()
+    const kept = headsRle()
+    const { tracks } = await trackMaskRegions(rle, HEADS_W, HEADS_H, [], 2)
+    const woman = tracks[0]!
+    const seed = { frame: woman.viewFrame, xPct: (woman.viewBox.leftPct + woman.viewBox.rightPct) / 2, yPct: (woman.viewBox.topPct + woman.viewBox.bottomPct) / 2 }
+    const out = await eraseMaskTracks(rle, { width: HEADS_W, height: HEADS_H, frameRate: "24/1" }, [seed])
+    expect(out).toEqual({ droppedRegions: 9, erasedTracks: 1, unmatchedSeeds: 0 })
+    // The man's head is all that is left, exactly as drawn, on the frames it is a region of its own.
+    const manOnly = MAN.map((box, f) => {
+      if (!box) return ""
+      const frame = new Uint8Array(HEADS_W * HEADS_H)
+      const [l, r, t, b] = box.map((v, i) => Math.round(((i < 2 ? HEADS_W : HEADS_H) * v) / 100)) as [number, number, number, number]
+      for (let y = t; y < b; y++) frame.fill(255, y * HEADS_W + l, y * HEADS_W + r)
+      return grayFrameToRle(frame)
+    })
+    expect(rle).toEqual(manOnly)
+    expect(kept).not.toEqual(rle)
+  })
+
+  it("keeps two halves that stay side by side as one track", async () => {
+    const whole = rleOf([[10, 4, 8]])
+    const split = rleOf([[10, 4, 3], [15, 4, 3]])
+    const { tracks } = await track([whole, split, split, split, split])
+    expect(tracks).toHaveLength(1)
+  })
+
+  it("keeps a second region that is apart on one frame only", async () => {
+    const whole = rleOf([[10, 4, 8]])
+    const { tracks } = await track([whole, rleOf([[10, 4, 3], [15, 4, 3]]), rleOf([[10, 4, 2], [16, 4, 3]]), whole])
+    expect(tracks).toHaveLength(1)
+  })
+})
+
+describe("trackMaskRegions: a track in two regions", () => {
+  it("is looked at on a frame it is one region on, though its box is larger where it is two", async () => {
+    const whole = rleOf([[10, 4, 5]])
+    const split = rleOf([[10, 4, 2], [13, 4, 5]])
+    const { tracks } = await track([whole, split])
+    expect(tracks).toHaveLength(1)
+    expect(tracks[0]!.viewFrame).toBe(0)
+    expect(tracks[0]!.viewBox).toEqual({ leftPct: 25, topPct: 20, rightPct: 37.5, bottomPct: 45 })
+  })
+
+  it("says on how many frames it is two regions or more, and nothing when on none", async () => {
+    const whole = rleOf([[10, 4, 8]])
+    const split = rleOf([[10, 4, 3], [15, 4, 3]])
+    const { tracks } = await track([whole, split, split, split])
+    expect(tracks.map((t) => [t.frames, t.splitFrames])).toEqual([[4, 3]])
+    const one = await track([whole, whole])
+    expect(one.tracks[0]!.splitFrames).toBeUndefined()
+    expect("splitFrames" in one.tracks[0]!).toBe(false)
+  })
+})
+
 describe("reportedMaskTracks", () => {
   const t = (id: number, frames: number): MaskTrackInfo => ({ id, fromFrame: id, toFrame: id + frames - 1, frames, viewFrame: id, viewBox: { leftPct: 0, topPct: 0, rightPct: 1, bottomPct: 1 } })
 
