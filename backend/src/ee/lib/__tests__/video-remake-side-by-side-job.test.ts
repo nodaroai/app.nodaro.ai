@@ -5,7 +5,8 @@ vi.mock("../../../lib/supabase.js", () => ({ supabase: {} }))
 vi.mock("../../../lib/storage.js", () => ({ uploadLocalFileToR2Key: vi.fn(), r2KeyFromOurUrl: vi.fn() }))
 vi.mock("../../../lib/storage-delete.js", () => ({ deleteKeyRecordingFailure: vi.fn() }))
 
-const { createSideBySideJob, sideBySideMarkerKey, sideBySideOwnerKey } = await import("../video-remake-side-by-side-job.js")
+const { createSideBySideJob, sideBySideMarkerKey, sideBySideOwnerKey, KEPT_OFF_RUN_READY_SECONDS, READY_SECONDS } = await import("../video-remake-side-by-side-job.js")
+const { JOB_SCRATCH_MAX_AGE_MS } = await import("../../../lib/job-scratch-sweep.js")
 type Store = import("../video-remake-side-by-side-job.js").SideBySideStore
 type Work = import("../video-remake-side-by-side-job.js").SideBySideWork
 const { SIDE_BY_SIDE_RECIPE } = await import("../video-remake-side-by-side.js")
@@ -27,11 +28,12 @@ function memoryStore(): Store & { data: Map<string, string> } {
   }
 }
 
-const work = (jobId: string, ownerId = "owner-1"): Work => ({
+const work = (jobId: string, ownerId = "owner-1", keepOffRun = false): Work => ({
   jobId,
   ownerId,
   resultUrl: `https://cdn.nodaro.ai/videos/${jobId}.mp4`,
   source: { originalUrl: "https://cdn.nodaro.ai/uploads/videos/clip.mp4", startSec: 0, lengthSec: 4 },
+  keepOffRun,
 })
 
 const record = { v: SIDE_BY_SIDE_RECIPE, url: "https://cdn.nodaro.ai/videos/run-a-side-by-side.mp4", width: 1440, height: 1280, layout: "side" as const }
@@ -58,6 +60,22 @@ describe("createSideBySideJob", () => {
     await settle()
     expect(await job.start(work("run-a"))).toEqual({ status: "ready", record })
     expect(render).toHaveBeenCalledTimes(1)
+  })
+
+  it("holds the file of a run kept off its row in the marker (its only record) for less than the scratch sweep keeps the file", async () => {
+    const store = memoryStore()
+    const set = vi.spyOn(store, "set")
+    const job = createSideBySideJob({ render: vi.fn(async () => record), store, heartbeatMs: 60_000 })
+    await job.start(work("run-t", "owner-1", true))
+    await settle()
+    expect(set).toHaveBeenCalledWith(sideBySideMarkerKey("run-t"), JSON.stringify({ status: "ready", record }), KEPT_OFF_RUN_READY_SECONDS)
+    expect(KEPT_OFF_RUN_READY_SECONDS).toBeGreaterThan(READY_SECONDS)
+    expect(KEPT_OFF_RUN_READY_SECONDS * 1000).toBeLessThan(JOB_SCRATCH_MAX_AGE_MS)
+    // Asked again (an administrator): the kept file, never a second render.
+    expect(await job.start(work("run-t", "owner-1", true))).toEqual({ status: "ready", record })
+    await job.start(work("run-o"))
+    await settle()
+    expect(set).toHaveBeenLastCalledWith(sideBySideMarkerKey("run-o"), expect.any(String), READY_SECONDS)
   })
 
   it("renders one run at a time per account: another run waits, then starts once the first is done", async () => {
@@ -104,5 +122,20 @@ describe("createSideBySideJob", () => {
     expect(await job.start(work("run-a"))).toEqual({ status: "making" })
     await settle()
     expect(render).toHaveBeenCalledTimes(1)
+  })
+
+  it("never renders a run kept off its row when the store cannot be reached: the store is its only record", async () => {
+    const render = vi.fn(async () => record)
+    const down: Store = {
+      get: async () => { throw new Error("down") },
+      setNx: async () => { throw new Error("down") },
+      set: async () => { throw new Error("down") },
+      expire: async () => { throw new Error("down") },
+      del: async () => { throw new Error("down") },
+    }
+    const job = createSideBySideJob({ render, store: down, heartbeatMs: 60_000 })
+    expect(await job.start(work("run-t", "owner-1", true))).toEqual({ status: "failed" })
+    await settle()
+    expect(render).not.toHaveBeenCalled()
   })
 })

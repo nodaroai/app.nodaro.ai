@@ -14,7 +14,15 @@
  * account's runs is being rendered, this one starts after it (one at a time
  * per account). Free: no credits, no job row.
  *
- * Who: the run's owner, or an administrator for any run (the admin job page).
+ * Who: the run's owner, or an administrator for any run (the admin job page;
+ * a developer app's token never carries an administrator's reach). A
+ * developer app needs `jobs:read` (the file shows the run) and a `:write` or
+ * `:execute` scope (it makes a file on the account's behalf, the line the
+ * run itself is held to): 403 `insufficient_scope` otherwise. First-party
+ * sessions and personal API tokens are not scoped.
+ * A trend run's side by side (an administrator's) is kept off the run's row,
+ * which its runner can read (`keepOffRun`): it is never recorded there, nor
+ * answered from there.
  * A run in the Trash, or restricted, reads as absent (404). Refusals (409
  * `side_by_side_unavailable`, `reason`): `not_video_remake`, `not_finished`
  * (running, failed, no video), `trend_run` (a trend run, for its runner: its
@@ -26,6 +34,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { checkIsAdmin } from "../../lib/admin-check.js"
+import { requireAppScope, requireAppWriteScope } from "../../lib/scope-prehandler.js"
 import { TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
 import { RESTRICTED_JOB_COLUMN } from "../../lib/content-restrictions-column.js"
 import {
@@ -98,7 +107,8 @@ export function sideBySideHandler(job: SideBySideJob) {
     if (!params.success) return reply.status(400).send({ error: { code: "validation_error", message: "jobId must be a UUID" } })
     const { jobId } = params.data
 
-    const admin = await checkIsAdmin(userId)
+    // An app acts for its user with the reach the user granted it, never an administrator's.
+    const admin = !req.appAuthorization && (await checkIsAdmin(userId))
     const run = await readRun(jobId, userId, admin)
     if (!run) return reply.status(404).send({ error: { code: "not_found", message: "Run not found" } })
 
@@ -110,10 +120,11 @@ export function sideBySideHandler(job: SideBySideJob) {
       return reply.status(409).send({ error: { code: "side_by_side_unavailable", reason: plan.refusal, message: REFUSAL_MESSAGES[plan.refusal] } })
     }
 
-    const recorded = recordedSideBySide(run.output_data)
+    // A run kept off its row is never answered from it (a record left there is not this file's): the job's marker holds it.
+    const recorded = plan.keepOffRun ? null : recordedSideBySide(run.output_data)
     if (recorded) return ready(reply, jobId, recorded)
 
-    const state = await job.start({ jobId, ownerId: run.user_id, resultUrl: plan.resultUrl, source: plan.source })
+    const state = await job.start({ jobId, ownerId: run.user_id, resultUrl: plan.resultUrl, source: plan.source, keepOffRun: plan.keepOffRun })
     if (state.status === "ready") return ready(reply, jobId, state.record)
     if (state.status === "failed") {
       return reply.status(500).send({ error: { code: "side_by_side_failed", message: "Couldn't make the side by side. Try again in a moment." } })
@@ -125,9 +136,12 @@ export function sideBySideHandler(job: SideBySideJob) {
 /** Polled every few seconds while a render runs: room for that, and for a few runs at once. */
 const RATE_LIMIT = { rateLimit: { max: 60, timeWindow: "1 minute" } }
 
+/** A developer app: `jobs:read` to see the run, and a `:write` / `:execute` scope to have a file made for it. */
+const APP_SCOPES = [requireAppScope("jobs:read"), requireAppWriteScope()]
+
 export async function videoRemakeSideBySideRoutes(app: FastifyInstance, opts: { job?: SideBySideJob } = {}) {
   const handler = sideBySideHandler(opts.job ?? createSideBySideJob(defaultSideBySideJobDeps()))
   // Both prefixes, each written out so the route scans read them (lib/video-remake-paths.ts).
-  app.post("/v1/video-remake/:jobId/side-by-side", { config: RATE_LIMIT }, handler)
-  app.post("/v1/cast-swap/:jobId/side-by-side", { config: RATE_LIMIT }, handler)
+  app.post("/v1/video-remake/:jobId/side-by-side", { config: RATE_LIMIT, preHandler: APP_SCOPES }, handler)
+  app.post("/v1/cast-swap/:jobId/side-by-side", { config: RATE_LIMIT, preHandler: APP_SCOPES }, handler)
 }

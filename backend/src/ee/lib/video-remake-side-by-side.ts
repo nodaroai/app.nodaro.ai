@@ -18,9 +18,14 @@
  * its draft made again over the same stretch, so the stretch and the clip are
  * the draft's (input and output). A trend run's clip is the trend's hidden
  * source (`__videoUrl`), which its runner never sees (the tools feed shows a
- * trend run's result alone): only an administrator gets its side by side.
+ * trend run's result alone): only an administrator gets its side by side, and
+ * it is KEPT OFF THE RUN (`keepOffRun`): the run's `output_data` is readable by
+ * its owner straight from the database and arrives on their live updates
+ * (migration 347), so its record is never written there nor read from there.
+ * It lives in the job's server-side marker and its file in the run's scratch
+ * folder, which the daily age sweep empties (ee/lib/video-remake-side-by-side-job.ts).
  *
- * THE FILE is one per run and recipe, in the run's own key family
+ * THE FILE (of a run not kept off it) is one per run and recipe, in the run's own key family
  * (`videos/<jobId>-side-by-side-…`, `isOwnedObjectKey`), so the run's
  * reapers and a content restriction reach it once its address is recorded in
  * the run's `output_data` (`SIDE_BY_SIDE_FIELD`, server-only). Its name ends in
@@ -80,7 +85,13 @@ export type SideBySideRefusal =
   | "no_clip"
 
 export type SideBySidePlan =
-  | { readonly ok: true; readonly resultUrl: string; readonly source: SideBySideSource }
+  | {
+      readonly ok: true
+      readonly resultUrl: string
+      readonly source: SideBySideSource
+      /** The original is one the run's owner never sees (a trend's source): the file is never recorded on the run, nor read off it. */
+      readonly keepOffRun: boolean
+    }
   | { readonly ok: false; readonly refusal: SideBySideRefusal }
 
 /** Whether the job is a Video Remake run: its queue name, else (an older insert path) its input's type. */
@@ -134,10 +145,13 @@ export function sideBySidePlan(run: SideBySideRun, draft: SideBySideRun | null, 
   const fromOutput = isRec(from.output_data) ? from.output_data : {}
   const trend = isRec(input.trend)
   if (trend && !opts.admin) return { ok: false, refusal: "trend_run" }
-  const originalUrl = text(input.videoUrl) ?? (opts.admin ? text(input.__videoUrl) : null)
+  const ownClip = text(input.videoUrl)
+  const originalUrl = ownClip ?? (opts.admin ? text(input.__videoUrl) : null)
   if (originalUrl === null) return { ok: false, refusal: "no_clip" }
   const fallbackSec = positive(output.durationSec) ?? positive(fromOutput.durationSec) ?? PREVIEW_SECONDS
-  return { ok: true, resultUrl, source: { originalUrl, ...sideBySideStretch(input, fromOutput, fallbackSec) } }
+  // A trend run, or any clip read from the server-only source: never on the row its owner reads.
+  const keepOffRun = trend || ownClip === null
+  return { ok: true, resultUrl, source: { originalUrl, ...sideBySideStretch(input, fromOutput, fallbackSec) }, keepOffRun }
 }
 
 /** The file's record in the run's `output_data` (`SIDE_BY_SIDE_FIELD`). */

@@ -124,9 +124,18 @@ export function silentVideoKey(jobId: string): string {
  * and by the job-output census.
  */
 export function sideBySideVideoKey(jobId: string, secret: string, recipe: number): string {
+  return `videos/${jobId}-side-by-side-v${recipe}-${sideBySideKeyHash(jobId, secret, recipe)}.mp4`
+}
+
+/**
+ * The keyed hash in a side by side's name (`sideBySideVideoKey`), 20 hex:
+ * also the name of one kept off its run (a trend run's, made for an
+ * administrator, in the run's scratch folder), so neither address can be
+ * guessed from the run's id.
+ */
+export function sideBySideKeyHash(jobId: string, secret: string, recipe: number): string {
   const key = createHmac("sha256", secret).update("nodaro:video-remake-side-by-side:v1").digest()
-  const hash = createHmac("sha256", key).update(`${jobId}\n${recipe}`).digest("hex").slice(0, 20)
-  return `videos/${jobId}-side-by-side-v${recipe}-${hash}.mp4`
+  return createHmac("sha256", key).update(`${jobId}\n${recipe}`).digest("hex").slice(0, 20)
 }
 
 /**

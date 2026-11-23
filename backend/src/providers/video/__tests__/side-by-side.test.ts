@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest"
 import {
   SIDE_BY_SIDE_LABELS,
+  SIDE_BY_SIDE_MAX_PANE_PIXELS,
   canvasOf,
   labelFilter,
   originalFrameSpan,
+  paneIsScaled,
   paneOf,
   sideBySideArgs,
+  sideBySideBitRate,
   sideBySideEncodesAtBitRate,
   sideBySideLayout,
   type SideBySideEncode,
 } from "../side-by-side.js"
 import type { MatchedProbe } from "../matched-encode.js"
+import { MEASURED_CAMERA } from "../ffmpeg-memory-model.js"
 
 /**
  * The side by side's picture (pure): which layout a shape gets, the cut of
@@ -142,5 +146,53 @@ describe("sideBySideArgs", () => {
     const result = { ...tall, videoBitRate: undefined }
     expect(sideBySideEncodesAtBitRate(result)).toBe(false)
     expect(sideBySideArgs(encode({ result }))).toContain("-crf")
+  })
+})
+
+describe("the size bound (a result larger than the picture the memory model was measured on)", () => {
+  const uhd: MatchedProbe = { ...wide, width: 3840, height: 2160, videoBitRate: 40_000_000 }
+
+  it("is the measured 1080p picture's pixels, a pane of either shape", () => {
+    expect(SIDE_BY_SIDE_MAX_PANE_PIXELS).toBe(MEASURED_CAMERA.width * MEASURED_CAMERA.height)
+    expect(paneOf({ width: 1920, height: 1080 })).toEqual({ width: 1920, height: 1080 })
+    expect(paneOf({ width: 1080, height: 1920 })).toEqual({ width: 1080, height: 1920 })
+  })
+
+  it("leaves a pane at the bound as it is, and scales one a pixel over it", () => {
+    expect(paneIsScaled({ width: 1920, height: 1080 })).toBe(false)
+    expect(paneIsScaled({ width: 1920, height: 1081 })).toBe(true)
+    const over = paneOf({ width: 1920, height: 1081 })
+    expect(over.width * over.height).toBeLessThanOrEqual(SIDE_BY_SIDE_MAX_PANE_PIXELS)
+    expect(over.width % 2 + over.height % 2).toBe(0)
+  })
+
+  it("scales a 4K result's pane to 1080p, its shape kept, so the canvas is two 1080p pictures", () => {
+    expect(paneOf(uhd)).toEqual({ width: 1920, height: 1080 })
+    expect(paneOf({ width: 2160, height: 3840 })).toEqual({ width: 1080, height: 1920 })
+    const pane = paneOf({ width: 2560, height: 1440 })
+    expect(pane.width * pane.height).toBeLessThanOrEqual(SIDE_BY_SIDE_MAX_PANE_PIXELS)
+    expect(pane.width / pane.height).toBeCloseTo(16 / 9, 2)
+    expect(canvasOf(paneOf(uhd), sideBySideLayout(paneOf(uhd)))).toEqual({ width: 1920, height: 2160 })
+  })
+
+  it("draws a larger result scaled down to its pane, and the original fitted inside that pane", () => {
+    const graph = graphOf(sideBySideArgs(encode({ result: uhd })))
+    expect(graph).toContain("[1:v:0]setpts=PTS-STARTPTS,scale=1920:1080:flags=lanczos,setsar=1,")
+    expect(graph).not.toContain("crop=")
+    expect(graph).toContain("scale=1920:1080:force_original_aspect_ratio=decrease")
+    expect(graph).toContain("[o][r]vstack=inputs=2:shortest=1[v]")
+  })
+
+  it("encodes a scaled pane at its share of the doubled bitrate, by area", () => {
+    expect(sideBySideBitRate(uhd)).toBe(20_000_000)
+    const pass1 = sideBySideArgs(encode({ result: uhd, pass: { n: 1, log: "/w/p" } }))
+    expect(pass1[pass1.indexOf("-b:v") + 1]).toBe("20000000")
+  })
+
+  it("leaves a result within the bound exactly as before: cropped to even, at twice its bitrate", () => {
+    expect(sideBySideBitRate(tall)).toBe(5_910_549 * 2)
+    expect(graphOf(sideBySideArgs(encode()))).toContain("[1:v:0]setpts=PTS-STARTPTS,crop=720:1280:0:0,setsar=1,")
+    const odd = { ...tall, width: 1079, height: 1919 }
+    expect(graphOf(sideBySideArgs(encode({ result: odd })))).toContain("crop=1078:1918:0:0")
   })
 })

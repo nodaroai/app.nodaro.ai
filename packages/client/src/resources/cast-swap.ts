@@ -1378,10 +1378,13 @@ export class VideoRemakeResource {
    * /v1/video-remake/:jobId/side-by-side`): the exact stretch of the clip the
    * run was made from beside the result, the result's sound, small
    * "Original" / "Remake" labels; stacked for a wide run, side by side for a
-   * square or tall one. Free. The first call starts the render and answers
+   * square or tall one. Each half is the result's size, up to a 1080p
+   * picture's pixels (a larger result, such as a 4K one, is scaled down to
+   * that, its shape kept; `width` / `height` are the file's). Free. The first call starts the render and answers
    * `making` (or `waiting`); call again every few seconds until it answers
    * `ready` with the file's address. A run whose file is made answers `ready`
-   * at once. Your own runs only. Refusals: 409 `side_by_side_unavailable`
+   * at once. Your own runs only; a developer app's token needs `jobs:read`
+   * and a `:write` or `:execute` scope (403 `insufficient_scope`). Refusals: 409 `side_by_side_unavailable`
    * (`reason`: `not_video_remake`, `not_finished`, `trend_run`, `no_clip`);
    * 500 `side_by_side_failed` (ask again later).
    */

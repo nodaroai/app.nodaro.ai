@@ -16,7 +16,13 @@
  *   - a failure is held for a few seconds so the ask can read it; it is never
  *     kept, so a later ask tries again;
  *   - a finished file whose record could not be written is held in the marker
- *     for a few minutes, so asking again never renders it twice.
+ *     for a few minutes, so asking again never renders it twice;
+ *   - a run KEPT OFF its row (`keepOffRun`: a trend run, made for an
+ *     administrator) is never recorded on the run: its file goes to the run's
+ *     scratch folder (`tmp/provider-input/<jobId>/`, which the daily sweep
+ *     empties of files older than `JOB_SCRATCH_MAX_AGE_MS`, and no job read
+ *     lists), its record only in the marker, held for a day less than that so
+ *     the marker never outlives the file.
  *
  * The render runs in this process, detached from the request that started it.
  */
@@ -24,6 +30,9 @@ import { promises as fs } from "node:fs"
 import { config } from "../../lib/config.js"
 import { supabase } from "../../lib/supabase.js"
 import { uploadLocalFileToR2Key } from "../../lib/storage.js"
+import { uploadJobScratchFile } from "../../lib/job-scratch.js"
+import { JOB_SCRATCH_MAX_AGE_MS } from "../../lib/job-scratch-sweep.js"
+import { sideBySideKeyHash } from "../../lib/job-output-keys.js"
 import { deleteKeyRecordingFailure } from "../../lib/storage-delete.js"
 import { TRASHED_JOB_COLUMN } from "../../lib/public-job-data.js"
 import { RESTRICTED_JOB_COLUMN } from "../../lib/content-restrictions-column.js"
@@ -63,6 +72,8 @@ export interface SideBySideWork {
   readonly ownerId: string
   readonly resultUrl: string
   readonly source: SideBySideSource
+  /** Never record the file on the run (`SideBySidePlan.keepOffRun`): the marker alone holds it. */
+  readonly keepOffRun: boolean
 }
 
 export interface SideBySideJobDeps {
@@ -78,7 +89,12 @@ export const LEASE_SECONDS = 180
 /** How long a failure stays readable. */
 const FAILED_SECONDS = 30
 /** How long a finished file whose record could not be written is held by the marker itself. */
-const READY_SECONDS = 300
+export const READY_SECONDS = 300
+/** How long the marker holds the file of a run kept off its row (its only record): a day less than the scratch sweep's age. */
+export const KEPT_OFF_RUN_READY_SECONDS = Math.floor(JOB_SCRATCH_MAX_AGE_MS / 1000) - 24 * 60 * 60
+
+/** The whole render's deadline: its downloads, and its wait for the box's ffmpeg admission. */
+export const SIDE_BY_SIDE_DEADLINE_MS = 15 * 60 * 1000
 
 export const sideBySideMarkerKey = (jobId: string): string => `video-remake:side-by-side:job:v${SIDE_BY_SIDE_RECIPE}:${jobId}`
 export const sideBySideOwnerKey = (ownerId: string): string => `video-remake:side-by-side:owner:${ownerId}`
@@ -133,8 +149,10 @@ export function createSideBySideJob(deps: SideBySideJobDeps): SideBySideJob {
     try {
       const record = await deps.render(work)
       // The record is on the run now; the marker holds it a few minutes too, for an ask that read the run before it landed.
+      // A run kept off its row: the marker is the only record.
       const held: Marker = { status: "ready", record }
-      await deps.store.set(key, JSON.stringify(held), READY_SECONDS).catch(() => deps.store.del(key).catch(() => undefined))
+      const ttl = work.keepOffRun ? KEPT_OFF_RUN_READY_SECONDS : READY_SECONDS
+      await deps.store.set(key, JSON.stringify(held), ttl).catch(() => deps.store.del(key).catch(() => undefined))
     } catch (err) {
       console.warn(`[video-remake-side-by-side] render failed for ${work.jobId}: ${err instanceof Error ? err.message : String(err)}`)
       await deps.store.set(key, JSON.stringify({ status: "failed" }), FAILED_SECONDS).catch(() => undefined)
@@ -157,7 +175,9 @@ export function createSideBySideJob(deps: SideBySideJobDeps): SideBySideJob {
     try {
       ownerWon = await deps.store.setNx(sideBySideOwnerKey(work.ownerId), ownerToken, LEASE_SECONDS)
     } catch {
-      // No store to coordinate through: render here anyway.
+      // No store to coordinate through: render here anyway — unless the run is kept off its row, whose only
+      // record is the store's (every ask would start another render, none ever answered).
+      if (work.keepOffRun) return { status: "failed" }
       ownerWon = true
     }
     if (!ownerWon) return { status: "waiting" }
@@ -165,6 +185,10 @@ export function createSideBySideJob(deps: SideBySideJobDeps): SideBySideJob {
     try {
       won = await deps.store.setNx(sideBySideMarkerKey(work.jobId), JSON.stringify({ status: "running" }), LEASE_SECONDS)
     } catch {
+      if (work.keepOffRun) {
+        await deps.store.del(sideBySideOwnerKey(work.ownerId)).catch(() => undefined)
+        return { status: "failed" }
+      }
       won = true
     }
     if (!won) {
@@ -210,7 +234,12 @@ async function recordOnRun(jobId: string, ownerId: string, record: SideBySideRec
   return stale
 }
 
-/** The production render: compose in a work dir of its own, store under the run's key, record it on the run. */
+/**
+ * The production render: compose in a work dir of its own, store under the
+ * run's key, record it on the run. A run kept off its row: stored in the run's
+ * scratch folder under its keyed hash and recorded nowhere (the job's marker
+ * holds it).
+ */
 export async function renderSideBySide(work: SideBySideWork): Promise<SideBySideRecord> {
   const workDir = await createWorkDir("video-remake-side-by-side")
   try {
@@ -220,9 +249,15 @@ export async function renderSideBySide(work: SideBySideWork): Promise<SideBySide
       startSec: work.source.startSec,
       lengthSec: work.source.lengthSec,
       workDir,
+      signal: AbortSignal.timeout(SIDE_BY_SIDE_DEADLINE_MS),
     })
     const stat = await fs.stat(made.outputPath)
     if (stat.size <= 0) throw new Error("The side by side came out empty")
+    if (work.keepOffRun) {
+      const name = `side-by-side-${sideBySideKeyHash(work.jobId, config.INTERNAL_ORCHESTRATOR_SECRET, SIDE_BY_SIDE_RECIPE)}`
+      const url = await uploadJobScratchFile(made.outputPath, name, "mp4", "video/mp4", work.jobId)
+      return { v: SIDE_BY_SIDE_RECIPE, url, width: made.width, height: made.height, layout: made.layout }
+    }
     // Derived from the run's own files: not the person's upload, so it is not counted against their storage.
     const key = sideBySideObjectKey(work.jobId, config.INTERNAL_ORCHESTRATOR_SECRET)
     const url = await uploadLocalFileToR2Key(made.outputPath, key, "video/mp4")

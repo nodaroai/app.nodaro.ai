@@ -12,7 +12,11 @@ import Fastify, { type FastifyInstance } from "fastify"
  *    stretch and its OWNER (an administrator's ask counts against the run's
  *    owner, whose row records the file);
  *  - a run with no side by side is refused (409 with its reason), a failed
- *    render is 500.
+ *    render is 500;
+ *  - a trend run's (an administrator's) is kept off the run's row, which its
+ *    runner reads: never answered from it, started with `keepOffRun`;
+ *  - a developer app needs `jobs:read` and a `:write` / `:execute` scope, and
+ *    never carries an administrator's reach.
  */
 const db = vi.hoisted(() => ({
   rows: new Map<string, Record<string, unknown>>(),
@@ -64,6 +68,7 @@ const runRow = (over: Record<string, unknown> = {}) => ({
 
 let app: FastifyInstance
 let caller = OWNER
+let appScopes: readonly string[] | null = null
 const start = vi.fn<Job["start"]>()
 
 beforeEach(async () => {
@@ -71,11 +76,13 @@ beforeEach(async () => {
   db.admin = false
   db.filters = []
   caller = OWNER
+  appScopes = null
   start.mockReset()
   start.mockResolvedValue({ status: "making" })
   app = Fastify()
   app.addHook("onRequest", async (req) => {
     req.userId = caller
+    if (appScopes) req.appAuthorization = { appId: "app-1", authorizationId: "auth-1", scopes: appScopes }
   })
   await app.register(videoRemakeSideBySideRoutes, { job: { start, poll: vi.fn() } })
 })
@@ -97,6 +104,7 @@ describe("POST /v1/video-remake/:jobId/side-by-side", () => {
       ownerId: OWNER,
       resultUrl: `https://cdn.nodaro.ai/videos/${RUN}.mp4`,
       source: { originalUrl: CLIP, startSec: 2, lengthSec: 4 },
+      keepOffRun: false,
     })
   })
 
@@ -123,11 +131,62 @@ describe("POST /v1/video-remake/:jobId/side-by-side", () => {
   it("never answers a recorded file to a runner the run is refused to (an administrator's render of a trend run)", async () => {
     const record = { v: SIDE_BY_SIDE_RECIPE, url: "https://cdn.nodaro.ai/videos/t.mp4", width: 1440, height: 1280, layout: "side" }
     db.rows.set(RUN, runRow({ input_data: { type: "cast-swap", trend: { slug: "t" }, __videoUrl: CLIP, preview: true }, output_data: { videoUrl: "https://cdn.nodaro.ai/videos/r.mp4", [SIDE_BY_SIDE_FIELD]: record } }))
+    // The job has the file (an administrator's): the runner is still refused, and the job is never asked.
+    start.mockResolvedValue({ status: "ready", record: { ...record, url: "https://cdn.nodaro.ai/tmp/provider-input/x/side-by-side.mp4" } as never })
     const res = await ask()
     expect(res.statusCode).toBe(409)
     expect(res.json().error.reason).toBe("trend_run")
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it("keeps a trend run's side by side off its row: an administrator's ask never reads the row's record, and starts it kept off", async () => {
+    const onRow = { v: SIDE_BY_SIDE_RECIPE, url: "https://cdn.nodaro.ai/videos/t.mp4", width: 1440, height: 1280, layout: "side" }
+    const kept = { v: SIDE_BY_SIDE_RECIPE, url: `https://cdn.nodaro.ai/tmp/provider-input/${RUN}/side-by-side-abc.mp4`, width: 1440, height: 1280, layout: "side" as const }
+    db.rows.set(RUN, runRow({ input_data: { type: "cast-swap", trend: { slug: "t" }, __videoUrl: CLIP, preview: true }, output_data: { videoUrl: "https://cdn.nodaro.ai/videos/r.mp4", [SIDE_BY_SIDE_FIELD]: onRow } }))
+    caller = OTHER
     db.admin = true
-    expect((await ask()).statusCode).toBe(200)
+    const first = await ask()
+    expect(first.statusCode).toBe(202)
+    expect(start).toHaveBeenCalledTimes(1)
+    expect(start.mock.calls[0]![0]).toMatchObject({ jobId: RUN, ownerId: OWNER, keepOffRun: true, source: { originalUrl: CLIP } })
+    // Asked again once made: the job's file, never the row's.
+    start.mockResolvedValue({ status: "ready", record: kept })
+    const again = await ask()
+    expect(again.statusCode).toBe(200)
+    expect(again.json().data.url).toBe(kept.url)
+  })
+
+  it("an app token without the scopes is refused before anything is read or started", async () => {
+    db.rows.set(RUN, runRow())
+    for (const scopes of [[], ["workflows:read"], ["assets:write"], ["jobs:read"]]) {
+      appScopes = scopes
+      const res = await ask()
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("insufficient_scope")
+      expect((await ask(RUN, "/v1/cast-swap")).statusCode).toBe(403)
+    }
+    expect(start).not.toHaveBeenCalled()
+    expect(db.filters).toEqual([])
+  })
+
+  it("an app token with jobs:read and a write scope passes; a session or personal token is not scoped", async () => {
+    db.rows.set(RUN, runRow())
+    appScopes = ["jobs:read", "workflows:execute"]
+    expect((await ask()).statusCode).toBe(202)
+    appScopes = null
+    expect((await ask()).statusCode).toBe(202)
+    expect(start).toHaveBeenCalledTimes(2)
+  })
+
+  it("an app token never carries an administrator's reach", async () => {
+    db.rows.set(RUN, runRow())
+    caller = OTHER
+    db.admin = true
+    appScopes = ["jobs:read", "assets:write"]
+    expect((await ask()).statusCode).toBe(404)
+    db.rows.set(RUN, runRow({ user_id: OTHER, input_data: { type: "cast-swap", trend: { slug: "t" }, __videoUrl: CLIP, preview: true } }))
+    expect((await ask()).json().error.reason).toBe("trend_run")
+    expect(start).not.toHaveBeenCalled()
   })
 
   it("answers 200 when the job has the file", async () => {

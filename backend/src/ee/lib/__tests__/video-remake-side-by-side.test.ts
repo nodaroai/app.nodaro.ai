@@ -31,7 +31,7 @@ const run = (input: Record<string, unknown>, output: Record<string, unknown> = {
 describe("sideBySidePlan", () => {
   it("a preview: its start and its recorded length", () => {
     const plan = sideBySidePlan(run({ preview: true, previewStart: 2, sourceDurationSec: 11.96 }, { __castSwapClipSec: 4 }), null, { admin: false })
-    expect(plan).toEqual({ ok: true, resultUrl: RESULT, source: { originalUrl: CLIP, startSec: 2, lengthSec: 4 } })
+    expect(plan).toEqual({ ok: true, resultUrl: RESULT, source: { originalUrl: CLIP, startSec: 2, lengthSec: 4 }, keepOffRun: false })
   })
 
   it("a preview that recorded no length: the preview's 4 s", () => {
@@ -56,7 +56,7 @@ describe("sideBySidePlan", () => {
   it("a Full Quality version: its draft's clip and stretch", () => {
     const fq = run({ fullQualityOf: "draft-1", preview: false, previewStart: 0, videoUrl: undefined }, {}, { job_type: "cast-swap-full-quality" })
     const draft = run({ preview: true, previewStart: 3 }, { __castSwapClipSec: 4 }, { id: "draft-1" })
-    expect(sideBySidePlan(fq, draft, { admin: false })).toEqual({ ok: true, resultUrl: RESULT, source: { originalUrl: CLIP, startSec: 3, lengthSec: 4 } })
+    expect(sideBySidePlan(fq, draft, { admin: false })).toEqual({ ok: true, resultUrl: RESULT, source: { originalUrl: CLIP, startSec: 3, lengthSec: 4 }, keepOffRun: false })
     expect(sideBySidePlan(fq, null, { admin: false })).toEqual({ ok: false, refusal: "no_clip" })
   })
 
@@ -64,6 +64,20 @@ describe("sideBySidePlan", () => {
     const trend = run({ trend: { slug: "happy-dancer" }, videoUrl: undefined, __videoUrl: "https://cdn.nodaro.ai/trends/t/src.mp4", preview: true, previewStart: 0, preparedPreview: true }, { __castSwapClipSec: 4 })
     expect(sideBySidePlan(trend, null, { admin: false })).toEqual({ ok: false, refusal: "trend_run" })
     expect(sideBySidePlan(trend, null, { admin: true })).toMatchObject({ ok: true, source: { originalUrl: "https://cdn.nodaro.ai/trends/t/src.mp4", startSec: 0, lengthSec: 4 } })
+  })
+
+  it("keeps an administrator's side by side of a trend run off the run's row, which its runner reads", () => {
+    const hidden = "https://cdn.nodaro.ai/trends/t/src.mp4"
+    const trend = run({ trend: { slug: "happy-dancer" }, videoUrl: undefined, __videoUrl: hidden, preview: true, previewStart: 0 }, { __castSwapClipSec: 4 })
+    expect(sideBySidePlan(trend, null, { admin: true })).toMatchObject({ ok: true, keepOffRun: true })
+    // A Full Quality version of a trend draft: the draft decides.
+    const fq = run({ fullQualityOf: "draft-1", preview: false, videoUrl: undefined }, {}, { job_type: "cast-swap-full-quality" })
+    expect(sideBySidePlan(fq, { ...trend, id: "draft-1" }, { admin: true })).toMatchObject({ ok: true, keepOffRun: true })
+    expect(sideBySidePlan(fq, { ...trend, id: "draft-1" }, { admin: false })).toEqual({ ok: false, refusal: "trend_run" })
+    // Any clip read from the server-only source, trend or not.
+    expect(sideBySidePlan(run({ videoUrl: undefined, __videoUrl: hidden }), null, { admin: true })).toMatchObject({ ok: true, keepOffRun: true })
+    // The person's own clip: on the run.
+    expect(sideBySidePlan(run({ preview: true }), null, { admin: true })).toMatchObject({ ok: true, keepOffRun: false })
   })
 
   it("never for a run not finished, with no video, with no clip, or of another kind", () => {

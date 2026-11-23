@@ -10,7 +10,12 @@
  *   original on top; a square or taller one sits SIDE BY SIDE, the original
  *   on the left (in every language: the panes are a picture, not a reading
  *   order).
- * - Each pane is the result's own size. The result is drawn as it is. The
+ * - Each pane is the result's own size, up to the picture the ffmpeg memory
+ *   model was measured on (`MEASURED_CAMERA`, 1080p, in pixels: a portrait
+ *   1080 x 1920 is as many): a larger result (a 4K Precise upscale) gives
+ *   panes scaled down to that many pixels, its shape kept, so the render this
+ *   API process launches stays on a canvas of two 1080p pictures whatever the
+ *   result. The result is drawn as it is (scaled to the pane when larger). The
  *   original is the stretch of the clip the result was made from (`startSec`,
  *   `lengthSec`), cut by frame number at the clip's own rate as the run cut it
  *   (from frame round(start × rate), round(length × rate) frames), put on the
@@ -26,16 +31,20 @@
  * - The sound is the result's first track, copied as it is when it is AAC,
  *   else encoded AAC; none when the result has none.
  * - The picture is encoded once at the result's quality (`matched-encode.ts`):
- *   H.264 at twice the result's picture bitrate (two panes of its size), in
+ *   H.264 at twice the result's picture bitrate (two panes of its size; a
+ *   scaled pane's share of it by area), in
  *   two passes, its pixel format and colour tags; the visually lossless
  *   constant quality when the result's bitrate cannot be read.
+ * - The inputs are downloaded under a byte cap (`SIDE_BY_SIDE_MAX_INPUT_BYTES`)
+ *   and the caller's deadline (`signal`), which also bounds the wait for the
+ *   box's ffmpeg admission.
  */
 import { join } from "node:path"
 import { downloadFile, probeVideoFrameCount, runFfmpeg } from "./ffmpeg-utils.js"
 import { matchedHasBitRate, matchedPictureArgs, probeMatchedOrThrow, type MatchedProbe } from "./matched-encode.js"
 import { deliveredPictureFilter } from "./extend-stitch-args.js"
 import { parseFrameRate } from "./frame-rate.js"
-import { canvasPeakMemoryMiB, cameraMegapixelsOf } from "./ffmpeg-memory-model.js"
+import { canvasPeakMemoryMiB, cameraMegapixelsOf, MEASURED_CAMERA } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 
 /** How the two panes are set: stacked (the original on top) or side by side (the original on the left). */
@@ -87,9 +96,28 @@ export interface SideBySideEncode {
   readonly pass?: { readonly n: 1 | 2; readonly log: string }
 }
 
-/** The pane: the result's size, rounded down to even. */
+/** The most pixels one pane holds: the picture the memory model was measured on (`MEASURED_CAMERA`). */
+export const SIDE_BY_SIDE_MAX_PANE_PIXELS = MEASURED_CAMERA.width * MEASURED_CAMERA.height
+
+/** The most bytes either input may download: far past any run's clip or result, short of filling the box's disk. */
+export const SIDE_BY_SIDE_MAX_INPUT_BYTES = 4 * 1024 * 1024 * 1024
+
+/** Whether the result has more pixels than a pane holds, so its pane is scaled down. */
+export function paneIsScaled(result: MatchedProbe): boolean {
+  return (result.width ?? 0) * (result.height ?? 0) > SIDE_BY_SIDE_MAX_PANE_PIXELS
+}
+
+/**
+ * The pane: the result's size, rounded down to even; a result with more
+ * pixels than `SIDE_BY_SIDE_MAX_PANE_PIXELS` scaled down to that many, its
+ * shape kept (3840 x 2160 → 1920 x 1080, 2160 x 3840 → 1080 x 1920).
+ */
 export function paneOf(result: MatchedProbe): { width: number; height: number } {
-  return { width: even(result.width ?? 0), height: even(result.height ?? 0) }
+  const width = result.width ?? 0
+  const height = result.height ?? 0
+  if (!paneIsScaled(result)) return { width: even(width), height: even(height) }
+  const scale = Math.sqrt(SIDE_BY_SIDE_MAX_PANE_PIXELS / (width * height))
+  return { width: even(width * scale), height: even(height * scale) }
 }
 
 /** The output's size for a pane and a layout. */
@@ -97,12 +125,20 @@ export function canvasOf(pane: { readonly width: number; readonly height: number
   return layout === "stack" ? { width: pane.width, height: pane.height * 2 } : { width: pane.width * 2, height: pane.height }
 }
 
-/** The result's picture bitrate twice over (two panes of its size); undefined when it is unread. */
-const doubledBitRate = (result: MatchedProbe): number | undefined => (result.videoBitRate ? result.videoBitRate * 2 : undefined)
+/**
+ * The result's picture bitrate twice over (two panes of its size), a scaled
+ * pane's share of it by area; undefined when it is unread.
+ */
+export function sideBySideBitRate(result: MatchedProbe): number | undefined {
+  if (!result.videoBitRate) return undefined
+  if (!paneIsScaled(result)) return result.videoBitRate * 2
+  const pane = paneOf(result)
+  return Math.round((result.videoBitRate * 2 * pane.width * pane.height) / ((result.width ?? 1) * (result.height ?? 1)))
+}
 
 /** Whether the encode runs at a bitrate (two passes) rather than at the constant quality (one). */
 export function sideBySideEncodesAtBitRate(result: MatchedProbe): boolean {
-  return matchedHasBitRate(result, { targetBitRate: doubledBitRate(result) })
+  return matchedHasBitRate(result, { targetBitRate: sideBySideBitRate(result) })
 }
 
 /**
@@ -136,7 +172,8 @@ export function sideBySideArgs(p: SideBySideEncode): string[] {
   ].join(",")
   const resultChain = [
     "setpts=PTS-STARTPTS",
-    `crop=${pane.width}:${pane.height}:0:0`,
+    // Drawn as it is (an odd side's last line cut); a result larger than a pane, scaled down to it.
+    paneIsScaled(p.result) ? `scale=${pane.width}:${pane.height}:flags=lanczos` : `crop=${pane.width}:${pane.height}:0:0`,
     "setsar=1",
     labelFilter(SIDE_BY_SIDE_LABELS.result, pane),
   ].join(",")
@@ -149,7 +186,7 @@ export function sideBySideArgs(p: SideBySideEncode): string[] {
     "-i", p.originalPath,
     "-i", p.resultPath,
   ]
-  const encode = matchedPictureArgs(p.result, { targetBitRate: doubledBitRate(p.result), ...(p.pass ? { pass: p.pass } : {}) })
+  const encode = matchedPictureArgs(p.result, { targetBitRate: sideBySideBitRate(p.result), ...(p.pass ? { pass: p.pass } : {}) })
   const frames = ["-frames:v", String(p.resultFrames)]
   if (p.pass?.n === 1) return [...inputs, "-filter_complex", graph, "-map", "[v]", "-an", ...frames, ...encode, "-f", "null", "-"]
   const sound = p.result.audioCodec ? ["-map", "1:a:0", ...(p.result.audioCodec === "aac" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "192k"])] : ["-an"]
@@ -179,7 +216,9 @@ export interface SideBySideOutput {
 /**
  * Download the original and the result into `workDir` and render the side by
  * side there (`sideBySideArgs`). The caller owns `workDir` and removes it.
- * Throws when either file cannot be read as a video.
+ * Throws when either file cannot be read as a video, is larger than
+ * `maxBytes`, or `signal` aborts first (a download, or the wait for the
+ * launch's admission; a launch already running keeps its own kill budget).
  */
 export async function composeSideBySide(opts: {
   readonly originalUrl: string
@@ -187,10 +226,15 @@ export async function composeSideBySide(opts: {
   readonly startSec: number
   readonly lengthSec: number
   readonly workDir: string
+  /** The most bytes either download may write (default `SIDE_BY_SIDE_MAX_INPUT_BYTES`). */
+  readonly maxBytes?: number
+  /** The caller's deadline. */
+  readonly signal?: AbortSignal
 }): Promise<SideBySideOutput> {
   const originalPath = join(opts.workDir, "original")
   const resultPath = join(opts.workDir, "result")
-  await Promise.all([downloadFile(opts.originalUrl, originalPath), downloadFile(opts.resultUrl, resultPath)])
+  const fetchOpts = { maxBytes: opts.maxBytes ?? SIDE_BY_SIDE_MAX_INPUT_BYTES, ...(opts.signal ? { signal: opts.signal } : {}) }
+  await Promise.all([downloadFile(opts.originalUrl, originalPath, fetchOpts), downloadFile(opts.resultUrl, resultPath, fetchOpts)])
   const [original, result] = await Promise.all([probeMatchedOrThrow(originalPath), probeMatchedOrThrow(resultPath)])
   if (!original.width || !original.height) throw new Error("The original clip has no picture")
   if (!result.width || !result.height) throw new Error("The result has no picture")
@@ -212,9 +256,11 @@ export async function composeSideBySide(opts: {
   const launch = {
     peakMemoryMiB: canvasPeakMemoryMiB(canvas, 2, ffmpegEffectiveThreads(), {
       inputs: 2,
-      cameraMegapixels: Math.max(cameraMegapixelsOf({ width: original.width, height: original.height }), cameraMegapixelsOf(pane)),
+      // The decoders hold frames of each file's own size, whatever the pane it is drawn in.
+      cameraMegapixels: Math.max(cameraMegapixelsOf({ width: original.width, height: original.height }), cameraMegapixelsOf({ width: result.width, height: result.height })),
       toneMap: deliveredPictureFilter(original)?.includes("tonemap") ?? false,
     }),
+    ...(opts.signal ? { signal: opts.signal } : {}),
   }
   if (sideBySideEncodesAtBitRate(result)) {
     const log = join(opts.workDir, "side-by-side-pass")

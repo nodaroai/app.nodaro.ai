@@ -2290,6 +2290,8 @@ previews(params?: { locale?: string }): Promise<VideoRemakePreview[]> // GET /v1
 sideBySide(jobId: string): Promise<VideoRemakeSideBySide> // POST /v1/video-remake/:jobId/side-by-side, free; "making" | "waiting" until "ready" { url, … }
 ```
 
+`sideBySide`: each half is the result's size up to a 1080p picture's pixels (1920 × 1080, or 1080 × 1920 for a tall run); a larger result, such as a 4K one, is scaled down to that, its shape kept, and `width` / `height` are the file's. A developer app's token needs `jobs:read` and a `:write` or `:execute` scope (403 `insufficient_scope`); a signed-in session or personal API token is not scoped. A trend run has none for its runner (409 `side_by_side_unavailable`, `reason: "trend_run"`).
+
 ```ts
 interface VideoRemakeParams {
   videoUrl: string                 // the source clip, 4–30 s
