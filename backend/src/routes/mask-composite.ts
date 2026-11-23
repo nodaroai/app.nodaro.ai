@@ -16,6 +16,12 @@
  * foreground, the result always carries the background's sound (`audioSource` is ignored)
  * (`maskCompositeEffectiveAudioSource`, applied by the worker) — not a 400, so
  * the defaults keep working.
+ *
+ * `faceGrowPct` (1–40, decided 2026-11-23) is the Cast Swap engine's alone: a
+ * child job's lever, the plugin toolkit's alone (`faceGrowChildOnly`), refused 403 to every other caller.
+ * The face mask is widened by that % of each face's height before the render,
+ * its colours read from the leading video (providers/video/mask-face-grow.ts),
+ * and the job's `output_data.faceGrow` says what was grown. Same price.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -41,6 +47,8 @@ import { maskCompositeBaseCredits, maskCompositeLeadOf, measureMaskCompositeLeng
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../lib/request-measure.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
+import { trustedPluginParentJobId } from "../lib/job-submission-context.js"
+import { CAST_SWAP_FACE_GROW_BOUNDS } from "@nodaro/render-rules"
 
 const b = MASK_COMPOSITE_BOUNDS
 const d = MASK_COMPOSITE_DEFAULTS
@@ -61,7 +69,26 @@ export const maskCompositeBody = z.object({
   blurStrengthPct: z.number().min(b.BLUR_STRENGTH_PCT_MIN).max(b.BLUR_STRENGTH_PCT_MAX).optional().default(d.blurStrengthPct),
   backgroundFit: z.enum(MASK_COMPOSITE_BACKGROUND_FITS).optional().default(d.backgroundFit),
   audioSource: z.enum(MASK_COMPOSITE_AUDIO_SOURCES).optional().default(d.audioSource),
+  // The face grow: an internal child's lever only (`faceGrowChildOnly`), never a node's or a client's.
+  faceGrowPct: z.int().min(1).max(CAST_SWAP_FACE_GROW_BOUNDS.max).optional(),
 })
+
+const FACE_GROW_INTERNAL_ONLY = {
+  error: { code: "forbidden", message: "faceGrowPct is an internal lever of the platform's own jobs." },
+}
+
+/**
+ * The face grow's door: a body naming `faceGrowPct` is refused 403 unless it
+ * is the plugin toolkit's own worker-side child request — internal auth AND,
+ * on this very request, the toolkit's trusted scope naming a parent job
+ * (`trustedPluginParentJobId`; any other internal hop naming a parent is
+ * refused) — before anything is probed or reserved. Every other body is
+ * untouched.
+ */
+async function faceGrowChildOnly(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  if (body.faceGrowPct !== undefined && trustedPluginParentJobId(req) === undefined) return void reply.code(403).send(FACE_GROW_INTERNAL_ONLY)
+}
 
 /**
  * Measures the leading video before the credit guard prices it — the
@@ -99,6 +126,7 @@ const stashedUnits = (req: FastifyRequest): number => {
 export async function maskCompositeRoutes(app: FastifyInstance) {
   app.post("/v1/mask-composite", {
     preHandler: [
+      faceGrowChildOnly,
       measureLeadPreHandler,
       // BASE credits = the one-unit row × the measured units; creditGuard applies the markup.
       creditGuard(() => "mask-composite", { computeCredits: async (_body, req) => maskCompositeBaseCredits(stashedUnits(req)) }),

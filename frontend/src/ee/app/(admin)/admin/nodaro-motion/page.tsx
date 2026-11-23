@@ -152,6 +152,7 @@ import { usePlanRolesSection } from "./use-plan-roles-section"
 import { usePrevizSection } from "./use-previz-section"
 import { useShotLockSection } from "./use-shot-lock-section"
 import { useShotListFpsSection } from "./use-shot-list-fps-section"
+import { useFaceGrowSection } from "./use-face-grow-section"
 import { usePreciseUpscaleSection } from "./use-precise-upscale-section"
 import { FlashModelTest } from "./components/FlashModelTest"
 import {
@@ -279,6 +280,7 @@ export default function AdminNodaroMotionPage() {
   const previz = usePrevizSection(held)
   const shotLock = useShotLockSection(held)
   const shotListFps = useShotListFpsSection(held)
+  const faceGrow = useFaceGrowSection(held)
   const preciseUpscale = usePreciseUpscaleSection(held)
   const preciseStyleRoute = useSectionDraft(PRECISE_STYLE_ROUTE_SPEC, preciseStyleRouteQuery.data, (v) => v.preciseStyleRoute, savePreciseStyleRoute.mutateAsync, held)
   const promptParts = useSectionDraft(PROMPT_PARTS_SPEC, promptPartsQuery.data, (v) => v.promptParts, savePromptParts.mutateAsync, held)
@@ -321,6 +323,7 @@ export default function AdminNodaroMotionPage() {
     previz: previz.binding,
     "shot-lock": shotLock.binding,
     "shot-list-fps": shotListFps.binding,
+    "face-grow": faceGrow.binding,
     "prompt-parts": promptParts.binding,
   }
   const [draft, setDraft] = [masking.draft, masking.setDraft]
@@ -412,6 +415,7 @@ export default function AdminNodaroMotionPage() {
     !previz.changed &&
     !shotLock.changed &&
     !shotListFps.changed &&
+    !faceGrow.changed &&
     !preciseUpscale.changed
   const pending =
     save.isPending ||
@@ -431,6 +435,7 @@ export default function AdminNodaroMotionPage() {
     previz.pending ||
     shotLock.pending ||
     shotListFps.pending ||
+    faceGrow.pending ||
     preciseUpscale.pending
 
   if (!hasAdmin()) return null
@@ -464,6 +469,7 @@ export default function AdminNodaroMotionPage() {
       if (shotLock.changed) await shotLock.save()
       // Its refusal is also said under its select (ShotListFpsSection).
       if (shotListFps.changed) await shotListFps.save()
+      if (faceGrow.changed) await faceGrow.save() // its refusal is also said in each Precise column
       if (preciseUpscale.changed) await preciseUpscale.save()
       toast.success(onlyAdvancedChanged ? SAVED_PAGE_ONLY_TOAST : SAVED_TOAST)
     } catch (err) {
@@ -499,6 +505,7 @@ export default function AdminNodaroMotionPage() {
               !previz.changed &&
               !shotLock.changed &&
               !shotListFps.changed &&
+              !faceGrow.changed &&
               !preciseUpscale.changed) ||
             issues.length > 0 ||
             preciseStyleRouteHeld ||
@@ -585,6 +592,8 @@ export default function AdminNodaroMotionPage() {
                         })
                       }
                     />
+                    {/* The face grow: its own setting (its own row), beside the masking it applies to. */}
+                    {faceGrow.fieldFor(engine.id, draft[engine.id], envs.data)}
                     {engine.id === "nodaro-prism" && (
                       <div className="mt-2 border-t pt-3">
                         {preciseStyleRouteQuery.data ? (

@@ -18,6 +18,11 @@
  * graph is unit-tested without ffmpeg; `maskComposite` downloads, probes and
  * runs it. Between the probe and ffmpeg it checks that the run was charged
  * for the leading video it downloaded (`maskCompositeRefusalForCharge`).
+ *
+ * `faceGrowPct` (an internal child's lever, never a node's): before the
+ * render the face mask is widened by that % of each face's height, onto the
+ * face's own skin only (mask-face-grow.ts), and the render reads the grown
+ * mask in its place. Without it every argv is the one before it existed.
  */
 
 import { join } from "node:path"
@@ -42,6 +47,7 @@ import { canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { maskCompositeRefusalForCharge } from "../../lib/mask-composite-refusal.js"
+import { growFaceMaskVideo, type FaceGrowStats } from "./mask-face-grow-video.js"
 
 /** What the graph needs to know about the inputs (probed by `maskComposite`). */
 export interface MaskCompositeProbe {
@@ -297,6 +303,13 @@ export interface MaskCompositeParams {
    * run without them (`maskCompositeRefusalForCharge`).
    */
   readonly billedUnits?: unknown
+  /**
+   * The face grow (an internal child's lever, routes/mask-composite.ts): the
+   * mask widened by this % of each face's height before the render, its
+   * colours read from the leading video (mask-face-grow.ts). Absent: the
+   * render exactly as before.
+   */
+  readonly faceGrowPct?: number
 }
 
 export interface MaskCompositeResult {
@@ -305,6 +318,18 @@ export interface MaskCompositeResult {
   readonly width: number
   readonly height: number
   readonly durationSec: number
+  /** What the face grow did (only when `faceGrowPct` was given). */
+  readonly faceGrow?: FaceGrowStats
+}
+
+/**
+ * The mask the render reads: the downloaded one, or (with `faceGrowPct`) the
+ * face grow of it, its colours from the leading video (`leadPath`).
+ */
+async function maskForRender(params: MaskCompositeParams, maskPath: string, leadPath: string, workDir: string): Promise<{ maskPath: string; faceGrow?: FaceGrowStats }> {
+  if (!(typeof params.faceGrowPct === "number" && params.faceGrowPct > 0)) return { maskPath }
+  const grown = await growFaceMaskVideo({ maskPath, clipPath: leadPath, workDir, growPct: params.faceGrowPct })
+  return { maskPath: grown.outputPath, faceGrow: grown.stats }
 }
 
 /** Kill budget: the default plus 4 s per second of output (a 4K, 5-minute composite stays inside it). */
@@ -352,7 +377,8 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
       foregroundHasAudio,
       backgroundHasAudio,
     }
-    const argv = buildMaskCompositeArgs({ foregroundPath, backgroundPath, maskPath, outputPath, settings: params.settings, probe })
+    const mask = await maskForRender(params, maskPath, foregroundPath, workDir)
+    const argv = buildMaskCompositeArgs({ foregroundPath, backgroundPath, maskPath: mask.maskPath, outputPath, settings: params.settings, probe })
     // Three decoded pictures at the foreground's size feed one encode.
     const canvas = { width: even(fg.width * (fg.sar > 0 ? fg.sar : 1)), height: even(fg.height) }
     await runFfmpeg(argv, maskCompositeTimeoutMs(fg.streamDurationSec), {
@@ -360,7 +386,7 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
       // camera is left unknown (charged as 4K — conservative).
       peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 3, cameraMegapixels: undefined }),
     })
-    return { outputPath, width: canvas.width, height: canvas.height, durationSec: fg.streamDurationSec }
+    return { outputPath, width: canvas.width, height: canvas.height, durationSec: fg.streamDurationSec, ...(mask.faceGrow ? { faceGrow: mask.faceGrow } : {}) }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err
@@ -395,13 +421,14 @@ async function maskCompositeFill(params: MaskCompositeParams): Promise<MaskCompo
       foregroundHasAudio: false,
       backgroundHasAudio,
     }
-    const argv = buildMaskCompositeFillArgs({ backgroundPath, maskPath, outputPath, settings: params.settings, probe })
+    const mask = await maskForRender(params, maskPath, backgroundPath, workDir)
+    const argv = buildMaskCompositeFillArgs({ backgroundPath, maskPath: mask.maskPath, outputPath, settings: params.settings, probe })
     const canvas = { width: even(bg.width * (bg.sar > 0 ? bg.sar : 1)), height: even(bg.height) }
     await runFfmpeg(argv, maskCompositeTimeoutMs(bg.streamDurationSec), {
       // Two input files, three pictures at the background's size (the frame, its filtered copy, the mask).
       peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 2, cameraMegapixels: undefined }),
     })
-    return { outputPath, width: canvas.width, height: canvas.height, durationSec: bg.streamDurationSec }
+    return { outputPath, width: canvas.width, height: canvas.height, durationSec: bg.streamDurationSec, ...(mask.faceGrow ? { faceGrow: mask.faceGrow } : {}) }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err

@@ -38,7 +38,7 @@ import type { NodaroMotionFlashModelForPlugin } from "../../nodaro-motion-flash-
  * the settings cache's own read (`getAppSettings`, ~60 s, cleared on an admin
  * write), handed out as a copy, and null when never saved.
  */
-const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, preciseUpscale: null as unknown, topazDisabled: false, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashModel: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
+const h = vi.hoisted(() => ({ masking: null as unknown, promptParts: null as unknown, motion: null as unknown, steps: null as unknown, style: null as unknown, wording: null as unknown, styleOnly: null as unknown, preciseArtStyle: null as unknown, noPerson: null as unknown, preciseStyleRoute: null as unknown, preciseUpscale: null as unknown, topazDisabled: false, customStyle: null as unknown, planRoles: null as unknown, planRolesByDefault: true, previz: null as unknown, previzByDefault: true, shotLock: null as unknown, shotListFps: null as unknown, geminiKey: true, flashModel: null as unknown, faceGrow: null as unknown, admins: [] as string[], adminCheckFails: false, adminChecks: 0, offeredByDefault: true, reads: 0, failed: false }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("../../app-settings.js", async (importOriginal) => {
@@ -47,7 +47,7 @@ vi.mock("../../app-settings.js", async (importOriginal) => {
     ...orig,
     getAppSettings: async () => {
       h.reads++
-      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_precise_upscale: h.preciseUpscale, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_model: h.flashModel }
+      return { nodaro_motion_masking: h.masking, nodaro_motion_prompt_parts: h.promptParts, nodaro_motion_motion: h.motion, nodaro_motion_steps: h.steps, nodaro_motion_style: h.style, nodaro_motion_prompt_wording: h.wording, nodaro_motion_style_only: h.styleOnly, nodaro_motion_precise_art_style: h.preciseArtStyle, nodaro_motion_no_person: h.noPerson, nodaro_motion_precise_style_route: h.preciseStyleRoute, nodaro_motion_precise_upscale: h.preciseUpscale, nodaro_motion_custom_style: h.customStyle, nodaro_motion_plan_roles: h.planRoles, nodaro_motion_previz: h.previz, nodaro_motion_shot_lock: h.shotLock, nodaro_motion_shot_list_fps: h.shotListFps, nodaro_motion_flash_model: h.flashModel, nodaro_motion_face_grow: h.faceGrow }
     },
     settingsReadFailed: () => h.failed,
   }
@@ -108,6 +108,29 @@ describe("tk.settings.nodaroMotionMasking", () => {
     got!["nodaro-prism"]!.zone!.leftPct = 40
     expect(got!["motion-pro"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
     expect(saved["nodaro-prism"]).toEqual({ mode: "auto", zone: { leftPct: 5 } })
+  })
+
+  it("merges the face grow (its own row) into each engine's masking, answered only where it grows and only to an engine that declares castSwap.faceGrow", async () => {
+    h.masking = { "nodaro-prism": { mode: "always", target: "face" }, "nodaro-pulse": { mode: "always", target: "head" } }
+    h.faceGrow = { "nodaro-prism": 18, "nodaro-pulse": 18 }
+    try {
+      setPluginSupports({ castSwap: { ...CS, faceGrow: true } } as never)
+      const got = await buildToolkit().settings!.nodaroMotionMasking!()
+      expect(got!["nodaro-prism"]).toEqual({ mode: "always", target: "face", growPct: 18 })
+      // The head target is covered whole: the grow changes nothing there, so it is never sent.
+      expect(got!["nodaro-pulse"]).toEqual({ mode: "always", target: "head" })
+      // An engine from before it: no key at all, the setting exactly as before the key existed.
+      setPluginSupports({ castSwap: { ...CS } } as never)
+      const older = await buildToolkit().settings!.nodaroMotionMasking!()
+      expect(older!["nodaro-prism"]).toEqual({ mode: "always", target: "face" })
+      // No grow saved: the masking exactly as stored.
+      h.faceGrow = null
+      setPluginSupports({ castSwap: { ...CS, faceGrow: true } } as never)
+      expect((await buildToolkit().settings!.nodaroMotionMasking!())!["nodaro-prism"]).toEqual({ mode: "always", target: "face" })
+    } finally {
+      h.faceGrow = null
+      _resetPluginSupportsForTests()
+    }
   })
 
   it("answers only the engines that were saved, under both keys", async () => {

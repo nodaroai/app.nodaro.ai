@@ -519,6 +519,7 @@ export const queryKeys = {
     nodaroMotionShotLock: () => ["admin", "nodaro-motion", "shot-lock"] as const,
     /** Admin → Video Remake: how many frames a second the model that writes a shot list is shown. */
     nodaroMotionShotListFps: () => ["admin", "nodaro-motion", "shot-list-fps"] as const,
+    nodaroMotionFaceGrow: () => ["admin", "nodaro-motion", "face-grow"] as const,
     /** Admin → Video Remake: the flash-model test per engine (a test switch, read only once its block is opened). */
     nodaroMotionFlashModel: () => ["admin", "nodaro-motion", "flash-model"] as const,
     nodaroMotionPlanRolesDefaults: () => ["admin", "nodaro-motion", "plan-roles", "defaults"] as const,

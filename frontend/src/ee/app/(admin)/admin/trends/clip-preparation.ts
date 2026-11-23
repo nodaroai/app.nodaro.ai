@@ -539,6 +539,32 @@ export function environmentsThatCannotDrawFaceMeshLayers(
   }
 }
 
+/**
+ * Whether an engine's face grow (its own setting, `nodaro_motion_face_grow`)
+ * changes anything with this Precise masking (the server's `faceGrowSent`
+ * rules): on, Faces hidden, target "face", a blur or depth fill.
+ */
+export function faceGrowApplies(m: AdminTrendFaceMasking | undefined): boolean {
+  return !!m && m.mode !== "off" && clipPreparationOf(m) === "faces" && m.target === "face" && m.fill !== "none"
+}
+
+/**
+ * Admin → Video Remake's Precise column: the environments (of
+ * `SHARED_SETTING_ENVIRONMENTS`) that cannot take the face grow yet, by their
+ * engine (`castSwap.faceGrow`) and by their platform (the app itself, whose
+ * strict schema refuses the key otherwise). Unknown while the environments
+ * are (undefined). The server refuses a save otherwise (409
+ * `engine_unsupported`, 422 `platform_unsupported`).
+ */
+export function faceGrowMissing(envs: readonly TrendEngineEnvironment[] | undefined): { engine: string[]; platform: string[] } | undefined {
+  if (!envs) return undefined
+  const of = (name: string) => envs.find((e) => e.env === name)
+  return {
+    engine: SHARED_SETTING_ENVIRONMENTS.filter((name) => of(name)?.supports.castSwap?.faceGrow !== true),
+    platform: SHARED_SETTING_ENVIRONMENTS.filter((name) => of(name)?.supports.platform?.faceGrow !== true),
+  }
+}
+
 /** A trend's editor: whether some environment's engine draws the face mesh (unknown while the environments are: false). */
 export function someEngineDrawsFaceMesh(envs: readonly TrendEngineEnvironment[] | undefined): boolean {
   return (envs ?? []).some((e) => e.supports.castSwap?.faceMesh === true)

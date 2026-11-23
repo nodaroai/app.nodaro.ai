@@ -15,6 +15,7 @@ import type {
   CastSwapPulseAudioId,
   CastSwapPulseReferenceAudioByResolution,
   NodaroMotionCustomStyle,
+  NodaroMotionFaceGrow,
   NodaroMotionMasking,
   NodaroMotionMotion,
   NodaroMotionNoPerson,
@@ -71,6 +72,7 @@ export const MOTION_SETTINGS_KEYS = [
   "previz",
   "shot-lock",
   "shot-list-fps",
+  "face-grow",
   "prompt-parts",
 ] as const
 
@@ -224,6 +226,23 @@ export const SHOT_LIST_FPS_SPEC = spec<NodaroMotionShotListFps, NodaroMotionShot
   saveArgOf: (body) => body.shotListFps,
 })
 
+/** The face grow per engine, as it is saved: only an engine whose grow is a whole number above 0 (0 is no key). */
+export function faceGrowToSaved(v: NodaroMotionFaceGrow | null | undefined): NodaroMotionFaceGrow {
+  const out: NodaroMotionFaceGrow = {}
+  for (const [engine, g] of Object.entries(v ?? {}) as Array<[keyof NodaroMotionFaceGrow, number | undefined]>) {
+    if (typeof g === "number" && Number.isFinite(g) && g > 0) out[engine] = g
+  }
+  return out
+}
+
+/** The face grow (its own row, apart from the Precise masking): the draft is kept in its saved form. */
+export const FACE_GROW_SPEC = spec<NodaroMotionFaceGrow, NodaroMotionFaceGrow, { faceGrow: NodaroMotionFaceGrow }>({
+  draftOf: (stored) => faceGrowToSaved(stored),
+  bodyOf: (draft) => ({ faceGrow: faceGrowToSaved(draft) }),
+  storedOfBody: (body) => body.faceGrow,
+  saveArgOf: (body) => body.faceGrow,
+})
+
 export const STYLE_ONLY_SPEC = spec<NodaroMotionStyleOnly, NodaroMotionStyleOnly, { styleOnly: NodaroMotionStyleOnly }>({
   draftOf: (stored) => structuredClone(stored ?? {}),
   bodyOf: (draft) => ({ styleOnly: styleOnlyToSaved(draft) }),
@@ -295,6 +314,7 @@ export const MOTION_SETTINGS_SPECS: Readonly<Record<MotionSettingsKey, MotionSet
   previz: PREVIZ_SPEC,
   "shot-lock": SHOT_LOCK_SPEC,
   "shot-list-fps": SHOT_LIST_FPS_SPEC,
+  "face-grow": FACE_GROW_SPEC,
   "prompt-parts": PROMPT_PARTS_SPEC,
 }
 

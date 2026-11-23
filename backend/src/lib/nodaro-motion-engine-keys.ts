@@ -6,6 +6,10 @@
  * 2026-11-17 rename names the earlier ones (`"motion-prism"`,
  * `"motion-pulse"`), and one written before the 2026-10-26 rename the ones
  * before them (`"motion-pro"`, `"motion-lite"`).
+ *
+ * A new key may never narrow an existing key's meaning: an older or a newer
+ * build reads past a key it does not know (`parseWithoutUnknownKeys`), so a
+ * row must still mean what it said without the new key.
  */
 import { z } from "zod"
 import {
@@ -81,7 +85,7 @@ export function parseByEngine<T>(
       continue
     }
     if (keyAge(engine, k) !== newest.get(engine)) continue
-    const parsed = entry.safeParse(raw)
+    const parsed = parseWithoutUnknownKeys(entry, raw, (keys) => warn(`[${key}] unknown keys of "${k}" ignored: ${keys.join(", ")}`))
     if (!parsed.success) {
       warn(`[${key}] invalid setting for "${k}" dropped: ${parsed.error.issues[0]?.message ?? "invalid"}`)
       continue
@@ -89,6 +93,43 @@ export function parseByEngine<T>(
     out[engine] = parsed.data
   }
   return out
+}
+
+/**
+ * A strict entry's parse that reads past keys it does not know (decided
+ * 2026-11-23): a row written by a NEWER build may carry a key this build's
+ * strict schema refuses; dropping the whole entry would stop that engine's
+ * setting here altogether. So keys an issue names as unrecognized are taken
+ * out (where they sit, nested too) and the entry is parsed again, each pass
+ * reported through `onStripped`; any other issue still drops the entry. The
+ * stored value is never changed (a copy is parsed). Pure.
+ */
+export function parseWithoutUnknownKeys<T>(
+  schema: z.ZodType<T>,
+  raw: unknown,
+  onStripped: (keys: string[]) => void,
+): ReturnType<z.ZodType<T>["safeParse"]> {
+  let value = raw
+  let parsed = schema.safeParse(value)
+  for (let pass = 0; pass < 4 && !parsed.success; pass++) {
+    const unknown = parsed.error.issues.filter((i) => i.code === "unrecognized_keys")
+    if (unknown.length === 0 || unknown.length !== parsed.error.issues.length) break
+    value = structuredClone(value)
+    const stripped: string[] = []
+    for (const issue of unknown) {
+      let at: unknown = value
+      for (const step of issue.path) at = at && typeof at === "object" ? (at as Record<PropertyKey, unknown>)[step as PropertyKey] : undefined
+      if (!at || typeof at !== "object") continue
+      for (const k of (issue as { keys?: string[] }).keys ?? []) {
+        delete (at as Record<string, unknown>)[k]
+        stripped.push([...issue.path.map(String), k].join("."))
+      }
+    }
+    if (stripped.length === 0) break
+    onStripped(stripped)
+    parsed = schema.safeParse(value)
+  }
+  return parsed
 }
 
 /** The current engine a setting's key names (a current or an earlier public id), or undefined. */

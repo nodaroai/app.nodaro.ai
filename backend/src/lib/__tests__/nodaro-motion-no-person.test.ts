@@ -98,7 +98,8 @@ describe("nodaro_motion_no_person", () => {
     expect(parseNodaroMotionNoPerson({ "nodaro-prism": { sourceClip: true }, "nodaro-pulse": { sourceClip: false } }, warn)).toStrictEqual({ "nodaro-pulse": { sourceClip: false } })
     expect(warn).toHaveBeenCalledOnce()
     warn.mockClear()
-    expect(parseNodaroMotionNoPerson({ "nodaro-prism": { sourceClip: false, extra: 1 } }, warn)).toStrictEqual({})
+    // A key it does not know (a newer build's) is read past, with a warning: the entry is kept.
+    expect(parseNodaroMotionNoPerson({ "nodaro-prism": { sourceClip: false, extra: 1 } }, warn)).toStrictEqual({ "nodaro-prism": { sourceClip: false } })
     expect(warn).toHaveBeenCalledOnce()
   })
 

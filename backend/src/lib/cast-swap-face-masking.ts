@@ -253,6 +253,27 @@ export interface FaceMasking {
    * trend's make is refused there.
    */
   faceMeshMinFaceHeightPct?: number
+  /**
+   * The face grow (decided 2026-11-23; the Precise setting's alone). NEVER
+   * stored in a masking setting — no schema here takes the key, so every
+   * build reads the masking row — but in its own row
+   * (`nodaro_motion_face_grow`, nodaro-motion-face-grow-setting.ts), merged
+   * in as this key only where the setting is answered to an engine. With target
+   * `"face"` and a covering fill (blur or depth), the face mask is widened by
+   * this % of each face's height before it is filled — never above the face's
+   * top, never onto hair, beyond a thin band at the face's edge only onto the
+   * face's own skin colours (Mask Composite's `faceGrowPct`,
+   * providers/video/mask-face-grow.ts) — so a face-only swap that keeps the
+   * filmed hair leans less on the filmed face's outline. The face mesh is drawn
+   * on the grown fill exactly as before. Whole steps within
+   * `CAST_SWAP_FACE_GROW_BOUNDS` (0–40). Absent or 0 = off; read through
+   * `faceGrowSent` (on, faces hidden, target "face", a blur or depth fill,
+   * above 0), so a value where it changes nothing (the "head" or "body"
+   * target, the fill "none") is stored as given and never sent. An engine
+   * grows only when it declares `castSwap.faceGrow` (`engineGrowsFaceMask`):
+   * the key is stripped for one that does not.
+   */
+  growPct?: number
 }
 
 /**
@@ -456,6 +477,7 @@ function faceMeshLayersRules(m: FaceMasking, ctx: z.RefinementCtx): void {
  * it draws).
  */
 export const faceMaskingSchema: z.ZodType<FaceMasking> = z
+  // Never `growPct`: the face grow is its own row (nodaro-motion-face-grow-setting.ts), merged in only where an engine is answered.
   .strictObject({ ...faceMaskingShape, ...nodaroMotionShape })
   .refine(faceHeightsInOrder, faceHeightsMessage)
   .superRefine(sourceModeRules)
@@ -1048,6 +1070,39 @@ export function withFaceMeshMinFaceHeightFor<T extends FaceMasking>(
 ): T {
   const value = faceMeshMinFaceHeightSent(m)
   return withFaceMeshMinFaceHeightNormalised(m, value !== undefined && engineDrawsFaceMeshMinFaceHeight(cs) ? value : undefined)
+}
+
+/**
+ * THE normaliser of `growPct`: the face grow where it changes what is sent —
+ * on (not "off"), faces hidden, target `"face"` (a head or a whole person is
+ * covered whole already), a covering fill (blur, the default, or depth: the
+ * fill `"none"` covers nothing to grow) and above 0. Undefined otherwise (no
+ * grow: never sent), so a setting without it, or with 0, is sent exactly as
+ * before the key existed.
+ */
+export function faceGrowSent(m: Pick<FaceMasking, "mode" | "source" | "target" | "fill" | "growPct"> | undefined): number | undefined {
+  if (!m || m.mode === "off" || faceMaskingSourceOf(m) !== "faces" || m.target !== "face" || m.fill === "none") return undefined
+  return typeof m.growPct === "number" && m.growPct > 0 ? m.growPct : undefined
+}
+
+/**
+ * Whether a (loaded or recorded) Cast Swap engine grows a face mask
+ * (`castSwap.faceGrow`). Absent ⇒ an engine from before it, which would cover
+ * the face mask as found: it is never sent the key.
+ */
+export function engineGrowsFaceMask(cs: { readonly faceGrow?: boolean } | undefined): boolean {
+  return cs?.faceGrow === true
+}
+
+/**
+ * The setting as an engine is sent it, face-grow-wise: `growPct` only where it
+ * grows (`faceGrowSent`) AND the engine declares it (`engineGrowsFaceMask`);
+ * else no key at all, exactly the setting before the key existed. A new object.
+ */
+export function withFaceGrowFor<T extends FaceMasking>(m: T, cs: { readonly faceGrow?: boolean } | undefined): T {
+  const { growPct: _grow, ...rest } = m
+  const grow = faceGrowSent(m)
+  return (grow !== undefined && engineGrowsFaceMask(cs) ? { ...rest, growPct: grow } : rest) as T
 }
 
 /** Whether this process's Cast Swap engine masks `target` under `source` (`engineMasksTarget` its declaration). */

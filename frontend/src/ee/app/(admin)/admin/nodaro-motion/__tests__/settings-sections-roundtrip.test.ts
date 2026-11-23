@@ -16,6 +16,7 @@ import { MOTION_SETTINGS_KEYS, MOTION_SETTINGS_SPECS } from "../settings-section
 const STORED: Readonly<Record<string, unknown>> = {
   "prompt-wording": { promptWording: { "nodaro-prism": "new" } },
   masking: { masking: { "nodaro-prism": { mode: "auto" }, "nodaro-pulse": { mode: "always", fill: "none", faceMesh: true } } },
+  "face-grow": { faceGrow: { "nodaro-prism": 18 } },
   motion: {
     motion: {
       // Face mesh layers no parts value names, as the server saves them (only the layers on).

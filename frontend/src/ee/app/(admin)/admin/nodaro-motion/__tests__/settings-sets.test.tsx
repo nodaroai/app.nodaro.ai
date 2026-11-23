@@ -77,6 +77,8 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
+  // The face grow (its own row): never saved.
+  routes["GET /v1/admin/video-remake/face-grow"] = () => ({ body: { data: { faceGrow: null, updatedAt: null, supported: false } } })
   // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
   routes["GET /v1/admin/video-remake/precise-upscale"] = () => ({ body: { data: { value: UPSCALE_DEFAULTS, stored: null, defaults: UPSCALE_DEFAULTS, updatedAt: null, supported: true } } })
   routes[`PUT ${BASE}/advanced`] = (init) => {

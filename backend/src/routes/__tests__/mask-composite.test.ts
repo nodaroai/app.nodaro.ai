@@ -53,6 +53,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { maskCompositeRoutes } from "../mask-composite.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { withJobSubmissionContext } from "../../lib/job-submission-context.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
 const URLS = { foregroundUrl: "https://example.com/fg.mp4", backgroundUrl: "https://example.com/bg.mp4", maskUrl: "https://example.com/mask.mp4" }
@@ -235,5 +236,61 @@ describe("POST /v1/mask-composite", () => {
 
   it("returns 401 without a user", async () => {
     expect((await post(URLS)).statusCode).toBe(401)
+  })
+})
+
+describe("POST /v1/mask-composite — faceGrowPct, a child job's lever only", () => {
+  const BLUR = { backgroundUrl: URLS.backgroundUrl, maskUrl: URLS.maskUrl, fill: "blur" }
+  /** As the plugin's `tk.http.workerRequest` reaches it: internal, with a parent job in the server-only scope. */
+  const asChild = (payload: Record<string, unknown>) =>
+    withJobSubmissionContext(
+      { userId: USER, method: "POST", url: "/v1/mask-composite", parentJobId: "00000000-0000-4000-8000-0000000000aa", trustedPluginCaller: true },
+      () => app.inject({ method: "POST", url: "/v1/mask-composite", payload, headers: { "x-test-internal": "1" } }),
+    )
+
+  beforeEach(async () => {
+    await app.close()
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (body?.userId && typeof body.userId === "string") req.userId = body.userId
+      if (req.headers["x-test-internal"]) {
+        req.userId = USER
+        req.authKind = "internal" as never
+      }
+    })
+    await app.register(async (i) => { await maskCompositeRoutes(i) })
+    await app.ready()
+  })
+
+  it("refuses an internal hop that names a parent outside the plugin toolkit's trusted scope (403)", async () => {
+    const res = await withJobSubmissionContext(
+      { userId: USER, method: "POST", url: "/v1/mask-composite", parentJobId: "00000000-0000-4000-8000-0000000000aa" },
+      () => app.inject({ method: "POST", url: "/v1/mask-composite", payload: { ...BLUR, faceGrowPct: 18 }, headers: { "x-test-internal": "1" } }),
+    )
+    expect(res.statusCode).toBe(403)
+    expect(probe).not.toHaveBeenCalled()
+  })
+
+  it("refuses it 403 to any caller but a child job, before probing or pricing anything", async () => {
+    const res = await post({ ...BLUR, userId: USER, faceGrowPct: 18 })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("forbidden")
+    expect(probe).not.toHaveBeenCalled()
+    expect(guardedCredits).toBeUndefined()
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("takes it from a child job at the same price, and it rides the queue payload", async () => {
+    const res = await asChild({ ...BLUR, faceGrowPct: 18 })
+    expect(res.statusCode).toBe(200)
+    expect(guardedCredits).toBe(30)
+    expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).toMatchObject({ faceGrowPct: 18, fill: "blur", billedUnits: 3 })
+  })
+
+  it("refuses a value out of range from a child (400), and a body without it is enqueued without the key, as before", async () => {
+    for (const faceGrowPct of [0, 41, 2.5]) expect((await asChild({ ...BLUR, faceGrowPct })).statusCode, String(faceGrowPct)).toBe(400)
+    expect((await asChild(BLUR)).statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("faceGrowPct")
   })
 })

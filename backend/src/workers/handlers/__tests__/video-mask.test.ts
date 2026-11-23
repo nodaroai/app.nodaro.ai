@@ -1297,4 +1297,15 @@ describe("mask-composite handler", () => {
     await expect(videoMaskHandlers["mask-composite"]!(job({ maskUrl: "https://x/m.mp4", fill: "blur" }), ctx)).rejects.toThrow(/needs a background video and a mask video/)
     expect(mocks.maskComposite).not.toHaveBeenCalled()
   })
+
+  it("faceGrowPct reaches the render, and what it grew is answered in output_data.faceGrow; without it, neither", async () => {
+    const faceGrow = { growPct: 18, frames: 49, grownFrames: 40, areaRatio: 1.31 }
+    mocks.maskComposite.mockResolvedValueOnce({ outputPath: "/tmp/mc/output.mp4", width: 640, height: 360, durationSec: 3, faceGrow } as never)
+    await videoMaskHandlers["mask-composite"]!(job({ backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "blur", faceGrowPct: 18 }), ctx)
+    expect(mocks.maskComposite).toHaveBeenLastCalledWith(expect.objectContaining({ faceGrowPct: 18 }))
+    expect(mocks.completeFfmpegVideoJob).toHaveBeenLastCalledWith("/tmp/mc/output.mp4", ctx, { width: 640, height: 360, durationSec: 3, faceGrow })
+    await videoMaskHandlers["mask-composite"]!(job({ backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "blur" }), ctx)
+    expect((mocks.maskComposite.mock.lastCall as unknown[] | undefined)?.[0]).not.toHaveProperty("faceGrowPct")
+    expect(mocks.completeFfmpegVideoJob).toHaveBeenLastCalledWith("/tmp/mc/output.mp4", ctx, { width: 640, height: 360, durationSec: 3 })
+  })
 })

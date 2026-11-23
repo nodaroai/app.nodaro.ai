@@ -71,6 +71,7 @@ const SAMPLES: Readonly<Record<string, unknown>> = {
   previz: { previz: { enabled: false } },
   "shot-lock": { shotLock: { "nodaro-prism": "on", "nodaro-pulse": "off" } },
   "shot-list-fps": { shotListFps: { fps: 4 } },
+  "face-grow": { faceGrow: { "nodaro-prism": 18 } },
   "prompt-parts": { promptParts: { "nodaro-prism": { precise: { face: "Keep the faces.", avoid: "" } } } },
 }
 

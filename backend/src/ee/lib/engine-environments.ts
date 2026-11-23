@@ -123,6 +123,15 @@ export interface PlatformSupports {
    * key in its strict slot schema, and with it the whole trend version.
    */
   readonly roleFace?: boolean
+  /**
+   * The Precise setting's face grow (`faceMasking.growPct`, decided
+   * 2026-11-23, lib/cast-swap-face-masking.ts): its Precise schema takes the
+   * key, it is sent to an engine that declares `castSwap.faceGrow`, and its
+   * Mask Composite route takes the child's `faceGrowPct`. A build from before
+   * refuses the key, and with it the engine's whole Precise entry, when it
+   * reads the row.
+   */
+  readonly faceGrow?: boolean
 }
 
 /** This build's `PlatformSupports`, claimed by the heartbeat (frozen: a fact about this build). */
@@ -137,6 +146,7 @@ export const PLATFORM_SUPPORTS: PlatformSupports = Object.freeze({
   shotListSpeech: true,
   previzPromptParts: true,
   roleFace: true,
+  faceGrow: true,
 })
 
 /**
