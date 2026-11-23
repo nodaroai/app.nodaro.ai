@@ -31,7 +31,7 @@ import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_L
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
-import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, geminiOmniExtendQuoteCreditId, motionTransferResolution } from "@nodaro/shared/credits"
+import { VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, buildVideoAnalysisCreditId, buildVideoAuditCreditId, geminiOmniExtendQuoteCreditId, motionTransferResolution, takesDrivingAudio } from "@nodaro/shared/credits"
 import { VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_CHARACTER_REFS_WIRE_MAX, VIDEO_CHARACTER_EXTRA_IMAGES_MAX, videoCharacterRefProviders, uiResolutionFill } from "@nodaro/shared/video"
 import { readPromptAffixes } from "@nodaro/shared/nodes"
 import { VIDEO_DEPTH_PROVIDERS, VIDEO_DEPTH_MODEL_SIZES, VIDEO_DEPTH_COLORMAPS, VIDEO_DEPTH_RESOLUTIONS } from "@nodaro/shared/media"
@@ -192,7 +192,12 @@ const extendModelArg = z.preprocess((v) => canonicalVideoProvider(v), z.enum(EXT
  * limit) so the route refuses them with the limit named.
  */
 function mcpVideoRefCaps(provider: string): { images?: number; videos?: number; audio?: number } {
-  const row = VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}
+  // An audio-to-video model (catalog `drivingAudio`, LTX 2.5 Fast): its audio list goes to the route uncut
+  // (up to the route's own body limit), which measures and prices the one clip and refuses a second with
+  // the reason — as the API and SDK do — rather than this tool dropping it.
+  const row = takesDrivingAudio(provider)
+    ? { ...(VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {}), audio: SEEDANCE_2_5_REF_LIMITS.audio }
+    : (VIDEO_REF_LIMITS_BY_PROVIDER[provider] ?? {})
   if (!row.requestRefusesOverLimit) return row
   return { images: SEEDANCE_2_5_REF_LIMITS.images, videos: SEEDANCE_2_5_REF_LIMITS.videos, audio: SEEDANCE_2_5_REF_LIMITS.audio }
 }

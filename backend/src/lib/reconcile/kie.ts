@@ -53,6 +53,7 @@ import { isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../seedance-draft-finalize.js"
 import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResult } from "../seedance-draft-audio-apply.js"
+import { drivingAudioUrlOf, layDrivingAudioIfSilent } from "../driving-audio-lay.js"
 import { addVoiceLineIfSilent, lipSyncSendsVoiceAsReference, voicedUrlOf, voiceLineOutputData, type VoiceLineOutcome } from "../lip-sync-voice-line.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -160,6 +161,24 @@ async function recoveredLipSyncVoiceLine(
     userId: job.user_id ?? undefined,
     watermark: job.should_watermark ?? false,
   })
+}
+
+/**
+ * A recovered audio-to-video run (stamped `audioToVideo` by the server) gets
+ * the step its worker runs before finalize: a silent render has its driving
+ * clip laid on and is stored once (watermarked when the job is), and that url
+ * is the job's media. Undefined for every other row, and for a render that
+ * has its sound (finalize stores it as usual). A job row that cannot be read
+ * throws (its owner and watermark flag are needed): the next tick retries.
+ */
+async function recoveredDrivingAudioMedia(row: KieJobRow, input: Record<string, unknown>, resultUrl: string): Promise<string | undefined> {
+  const audioUrl = drivingAudioUrlOf(input)
+  if (!audioUrl) return undefined
+  const { data, error } = await supabase.from("jobs").select("user_id, should_watermark").eq("id", row.id).single()
+  if (error || !data) throw new Error(`audio-to-video job row could not be read: ${error?.message ?? "no row"}`)
+  const job = data as { user_id?: string | null; should_watermark?: boolean | null }
+  const laid = await layDrivingAudioIfSilent({ videoUrl: resultUrl, audioUrl, jobId: row.id, userId: job.user_id ?? undefined, watermark: job.should_watermark ?? false })
+  return laid.kind === "stored" ? laid.url : undefined
 }
 
 /**
@@ -727,14 +746,18 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // before finalize (REFUND-CRITICAL there too: a failure throws into the
     // catch below, never a redraw finalized as the result).
     const composite = await recoveredMaskComposite(row, result.url)
+    // A recovered audio-to-video run that came back silent gets its driving clip laid on by the worker's
+    // own step, which stores it once (watermarked when the job is): that stored file is the job's media.
+    const drivingAudioMedia = await recoveredDrivingAudioMedia(row, input, result.url)
 
     // The measured clip is the one stored, unless a draft finalize re-muxed it.
-    const deliveredVideoSec = mediaUrl === undefined ? settle?.deliveredSec : undefined
+    const deliveredVideoSec = mediaUrl === undefined && drivingAudioMedia === undefined ? settle?.deliveredSec : undefined
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: row.job_type,
       claimant: opts?.claimant ?? "cron",
       ...(mediaUrl !== undefined && { mediaUrl }),
+      ...(drivingAudioMedia !== undefined && { mediaUrl: drivingAudioMedia }),
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       ...(meteredBaseCredits !== undefined && { meteredBaseCredits }),
       ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),

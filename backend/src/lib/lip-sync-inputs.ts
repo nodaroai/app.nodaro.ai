@@ -57,7 +57,7 @@ import {
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { join } from "node:path"
 import { stat } from "node:fs/promises"
-import { cleanupWorkDir, createWorkDir, downloadFile, type DownloadLimits } from "../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir, createWorkDir, downloadFile, probeMediaStreams, type DownloadLimits } from "../providers/video/ffmpeg-utils.js"
 import { isAudioReadStopped, isStoppedLaunch, measureDecodedAudio, type DecodedAudioLength } from "../providers/video/decoded-audio-length.js"
 import { planImageSize } from "./image-min-size.js"
 import { probeImageSource } from "./image-source-probe.js"
@@ -300,7 +300,7 @@ export type LipSyncRefusalCode =
 const MB = 1_000_000
 const mb = (bytes: number) => `${Math.round((bytes / MB) * 10) / 10} MB`
 
-type AudioReading =
+export type AudioReading =
   | { readonly kind: "measured"; readonly length: DecodedAudioLength }
   | { readonly kind: "busy" }
   /** The decode (or its probe of the file's stated length) was stopped by its own time limit: not the file's fault. */
@@ -308,6 +308,8 @@ type AudioReading =
   | { readonly kind: "too_large" }
   /** `cut_short`: the decoder stopped part-way through the file (`AudioReadStoppedError`). */
   | { readonly kind: "unreadable"; readonly why: "download" | "slow" | "decode" | "cut_short" }
+  /** Asked for an audio-only file (`opts.audioOnly`), and the file carries a picture (cover art aside). */
+  | { readonly kind: "has_video" }
 
 /**
  * The audio's decoded length: the file is downloaded under its limits
@@ -317,7 +319,15 @@ type AudioReading =
  * this process's slots (`lipSyncMeasureSlots`: per user and in all); none free
  * after `slotWaitMs` reads as `busy`. The slot is released on every way out.
  */
-async function measureAudio(audioUrl: string, capSec: number, rule: LipSyncAudioSourceRule, userId: string | undefined, slotWaitMs: number): Promise<AudioReading> {
+export async function measureAudio(
+  audioUrl: string,
+  capSec: number,
+  rule: LipSyncAudioSourceRule,
+  userId: string | undefined,
+  slotWaitMs: number,
+  formats?: readonly string[],
+  opts?: { readonly audioOnly?: boolean },
+): Promise<AudioReading> {
   if (!(await lipSyncMeasureSlots.acquire(userId, { waitMs: slotWaitMs }))) return { kind: "busy" }
   let workDir: string | undefined
   try {
@@ -328,9 +338,18 @@ async function measureAudio(audioUrl: string, capSec: number, rule: LipSyncAudio
     } catch (err) {
       return { kind: "unreadable", why: isDownloadTimeout(err) ? "slow" : "download" }
     }
+    // An audio-only container that can also hold a picture (MP4 / M4A, read by `mov`): a video file is refused.
+    // A local copy of the user's file, read with the container rule a link gets (`userFile`); cover art is no picture.
+    if (opts?.audioOnly) {
+      try {
+        if ((await probeMediaStreams(path, { userFile: true })).hasVideo) return { kind: "has_video" }
+      } catch {
+        return { kind: "unreadable", why: "decode" }
+      }
+    }
     let length: DecodedAudioLength | undefined
     try {
-      length = await measureDecodedAudio(path, { capSec })
+      length = await measureDecodedAudio(path, { capSec, ...(formats ? { formats } : {}) })
     } catch (err) {
       if (isStoppedLaunch(err)) return { kind: "stopped" }
       return { kind: "unreadable", why: isAudioReadStopped(err) ? "cut_short" : "decode" }
@@ -422,6 +441,9 @@ function audioRefusal(
       }
     case "too_large":
       return { ok: false, code: "audio_too_large", message: `${label} takes an audio file under ${mb(rule.audio.maxSourceBytes)}; this one is larger.` }
+    // Lip Sync never asks for an audio-only file; a reader that did is answered all the same.
+    case "has_video":
+      return { ok: false, code: "audio_unreadable", message: `${label} takes an audio file; this one is a video. Use its audio instead.` }
     case "unreadable":
       return {
         ok: false,

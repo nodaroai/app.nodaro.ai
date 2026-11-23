@@ -64,6 +64,7 @@ import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
 import type { VideoCharacterReference, FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
+import { drivingAudioUrlOf, layDrivingAudioIfSilent } from "../../lib/driving-audio-lay.js"
 import { extendTailPicture, extensionPictureSeconds, pictureSecondsOf, SQUARE_PIXEL_PICTURE_FILTER, stitchExtension, type ExtendStitchResult } from "../../providers/video/extend-stitch.js"
 import { cutNativeExtension, nativeExtensionCutStartSec, pictureStartOffsetSec } from "../../providers/video/native-extension-cut.js"
 import { runPixverseExtend } from "../../providers/kie/pixverse-extend.js"
@@ -401,14 +402,31 @@ async function chainVeoBaseTo4k(
   return url
 }
 
+/**
+ * An audio-to-video job's laid-on render, stored once (the job's media), or
+ * undefined: not such a job, or the render has its sound (store it as usual).
+ * POST-PROVIDER: the render is paid for; an R2 failure skips the refund.
+ */
+async function layDrivingAudioForJob(
+  renderUrl: string,
+  data: { audioToVideo?: boolean; referenceAudioUrls?: string[] },
+  ctx: Parameters<HandlerFn>[1],
+): Promise<string | undefined> {
+  const audioUrl = drivingAudioUrlOf(data)
+  if (!audioUrl) return undefined
+  const laid = await runPostProcessing(() => layDrivingAudioIfSilent({ videoUrl: renderUrl, audioUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark }))
+  return laid.kind === "stored" ? laid.url : undefined
+}
+
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   // A retired model in a queued job (any producer: a pipeline shot, an older
   // job) runs as the model it became — the one its credit id was priced on.
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps } = withRunningVideoProvider({ data: job.data }).data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps, audioToVideo } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
     /** The frame rate, carried only for a model with a frame-rate setting
      *  (LTX 2.5, resolved by `resolveVideoRequestNorm`); absent otherwise. */
     fps?: number
+    audioToVideo?: boolean
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
     outputFormat?: "mov"
@@ -514,7 +532,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -627,7 +645,12 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // its parent re-encodes it, and the browser-safe transcode would undo the
   // very container it asked for. A watermarked run, or one with an audio merge
   // to follow, takes the mp4 path as before.
-  let finalVideoUrl = audioUrl
+  // Audio-to-video: a render that came back silent gets its driving clip laid on and is stored once,
+  // watermarked when the job is (lib/driving-audio-lay.ts) — that stored file is the job's media.
+  const drivingAudioLaid = await layDrivingAudioForJob(providerOutputUrl, { audioToVideo, referenceAudioUrls }, ctx)
+  let finalVideoUrl = drivingAudioLaid
+    ? drivingAudioLaid
+    : audioUrl
     ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId))
     : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
       ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId, { ext: "mov" }))
@@ -749,9 +772,10 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
   // A retired model in a queued job runs as the model it became.
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps } = withRunningVideoProvider({ data: job.data }).data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps, audioToVideo } = withRunningVideoProvider({ data: job.data }).data as {
     /** The frame rate, carried only for a model with a frame-rate setting (LTX 2.5); absent otherwise. */
     fps?: number
+    audioToVideo?: boolean
     jobId: string
     /** Seedance 2.5 container, set by the route only for a child job
      *  (`seedance25OutputFormatFor`); absent = mp4. */
@@ -828,7 +852,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
   // job): the mp4 options stay key-for-key what they were.
   const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -906,7 +930,11 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `.mov` / `video/quicktime` — its parent re-encodes it, and the browser-
   // safe transcode would undo the very container it asked for. A watermarked
   // run re-encodes in the watermark step, which writes an honest mp4.
-  const r2Url = wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
+  // Audio-to-video: a silent render's laid-on file, stored once (lib/driving-audio-lay.ts), is the job's media.
+  const drivingAudioLaid = await layDrivingAudioForJob(providerOutputUrl, { audioToVideo, referenceAudioUrls }, ctx)
+  const r2Url = drivingAudioLaid
+    ? drivingAudioLaid
+    : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
     ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId, { ext: "mov" }))
     : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)

@@ -5774,6 +5774,7 @@ export const en = {
   "vidcfg.choose": "Choose",
   // Inline descriptions
   "vidcfg.durationAutoFromClip": "Duration is set automatically from the source clip.",
+  "vidcfg.drivingAudioLength": "The clip is as long as its audio: {min}–{max} s (at most {short} s at 1440p or 48 / 50 fps). Without a start frame it is 16:9.",
   "vidcfg.durationAuto": "Auto",
   "vidcfg.durationAutoHint": "Auto: the model picks the length (the source clip's length when editing a reference video). Credits are reserved for the longest clip (when editing a reference video: the longest reference video's length rounded up, plus a second) and refunded down to the delivered length.",
   "vidcfg.wan3Note": "Priced by length and resolution; the Run button shows the price of the length you pick. Ambient audio is generated with the clip. “Adaptive” matches the wired input; pure text-to-video renders 16:9 unless a concrete ratio is picked.",

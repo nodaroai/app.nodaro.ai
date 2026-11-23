@@ -630,6 +630,16 @@ export interface ModelCatalogEntryFields {
    */
   aspectRatiosTextOnly?: true
   /**
+   * The model runs audio-to-video: with one audio clip wired (or sent as its
+   * first reference audio), its own endpoint makes the picture to that audio,
+   * and the clip is as long as the audio. `minSec` / `maxSec` are the audio
+   * lengths the endpoint takes; `longClipLimit` still caps the length. Such a
+   * run is priced on the audio's own length, rounded up to a whole second
+   * (`drivingAudioRun`, decided 2026-11-23 for LTX 2.5 Fast), and the length
+   * sent is the measured one, never more than the seconds priced.
+   */
+  drivingAudio?: { readonly minSec: number; readonly maxSec: number }
+  /**
    * The reference task types this model accepts as a declaration (see
    * `SEEDANCE_REFERENCE_TASK_TYPES`): what the request's reference media is for
    * — a `reference`, an `edit` of the reference video, or an `extend` of it.
@@ -3375,9 +3385,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "lightricks",
     label: "LTX 2.5 Fast",
     series: "LTX",
-    description: "Lightricks LTX 2.5 Fast — picture and sound (dialogue, effects, ambience) in one pass, from text or a start frame; 6–20s at 720p or 1080p, 6–10s at 1440p or 48/50 fps. Quoted text is spoken; several shots can be written in one prompt.",
-    useCases: ["long-form", "fast", "narrative", "dialogue"],
-    features: ["audio"],
+    description: "Lightricks LTX 2.5 Fast — picture and sound (dialogue, effects, ambience) in one pass, from text or a start frame, or to an audio clip (2–20s, the clip as long as the audio); 6–20s at 720p or 1080p, 6–10s at 1440p or 48/50 fps. Quoted text is spoken; several shots can be written in one prompt.",
+    useCases: ["long-form", "fast", "narrative", "dialogue", "audio-driven"],
+    // `audio-to-video`: one audio clip drives the picture (docs.kie.ai/market/ltx/2-5-fast-audio-to-video).
+    features: ["audio", "audio-to-video"],
     aspectRatios: VIDEO_RATIOS_LTX_2_5,
     resolutions: ["720p", "1080p", "1440p"] as const,
     defaultResolution: "1080p",
@@ -3389,6 +3400,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     longClipLimit: { maxSeconds: 10, resolutions: ["1440p"], frameRates: [48, 50] },
     noNegativePrompt: true,
     aspectRatiosTextOnly: true,
+    // The audio-to-video endpoint takes 2-20 s of audio (decided 2026-11-23).
+    drivingAudio: { minSec: 2, maxSec: 20 },
     pricing: [
       { identifier: "ltx-2.5-fast", credits: 390, note: "default 10s 1080p — see :Ns:res variants for exact" },
       { identifier: "ltx-2.5-fast:10s:1080p", credits: 390, note: "10s 1080p (the default tier)" },
@@ -3396,6 +3409,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "ltx-2.5-fast:20s:720p", credits: 540, note: "20s 720p" },
       { identifier: "ltx-2.5-fast:20s:1080p", credits: 780, note: "20s 1080p" },
       { identifier: "ltx-2.5-fast:10s:1440p", credits: 570, note: "10s 1440p (1440p max)" },
+      { identifier: "ltx-2.5-fast:2s:720p", credits: 60, note: "2s 720p — the shortest audio-to-video clip (priced on the audio's length, rounded up)" },
     ],
   },
   "ltx-2.5-pro": {

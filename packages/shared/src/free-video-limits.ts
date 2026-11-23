@@ -44,6 +44,14 @@ export interface FreeVideoRequest {
    * generation model's id, which the catalog cannot mark — the request marks it.
    */
   extend?: boolean
+  /**
+   * The run is audio-to-video (a model with catalog `drivingAudio`, an audio
+   * clip wired or sent): its length is the audio's, so the model is judged by
+   * its shortest AUDIO-DRIVEN clip, not by its `durations` (LTX 2.5 Fast: 2 s,
+   * where its text and image runs start at 6 s). `duration` is then the
+   * seconds the run is priced on.
+   */
+  audioDriven?: boolean
 }
 
 /** The deployment's free-credit video limits: whether they are on, and the longest clip they allow. */
@@ -148,6 +156,8 @@ function isGeneration(entry: ModelCatalogEntry): boolean {
 export interface FreeVideoModelLockOptions {
   /** It is asked to extend a video (an Extend Video run). */
   readonly extend?: boolean
+  /** It is asked to run audio-to-video (catalog `drivingAudio`): judged by its shortest audio-driven clip. */
+  readonly audioDriven?: boolean
 }
 
 /**
@@ -165,7 +175,8 @@ export function freeVideoModelLock(provider: string, limits: FreeVideoLimits, op
   if (opts?.extend || entry.modes.includes("extend")) return { kind: "extend", label: entry.label }
   if (isBlockedModel(entry)) return { kind: "model", label: entry.label }
   if (!isGeneration(entry)) return null
-  const durations = entry.durations ?? []
+  // An audio-driven run's shortest clip is the shortest audio it takes (catalog `drivingAudio`).
+  const durations = opts?.audioDriven && entry.drivingAudio ? [entry.drivingAudio.minSec] : (entry.durations ?? [])
   if (durations.length > 0) {
     const shortest = Math.min(...durations)
     if (shortest > limits.maxSeconds) return { kind: "shortest", label: entry.label, max: limits.maxSeconds, shortest }
@@ -217,7 +228,7 @@ export function freeVideoResolutionLock(provider: string, resolution: string | n
 
 /** Why this whole request cannot run on free credits, or null when it can (or is not video at all). */
 export function freeVideoLock(req: FreeVideoRequest, limits: FreeVideoLimits): FreeVideoLock | null {
-  const model = freeVideoModelLock(req.provider, limits, req.extend ? { extend: true } : undefined)
+  const model = freeVideoModelLock(req.provider, limits, req.extend ? { extend: true } : req.audioDriven ? { audioDriven: true } : undefined)
   if (model) return model
   const duration = freeVideoDurationLock(req.provider, req.duration, limits)
   if (duration) return duration

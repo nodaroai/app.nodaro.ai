@@ -152,6 +152,7 @@ import { payloadReplicas, readReplica, ReplicaRecordingError, withoutReplicaLink
 import { stampSeedanceReferenceTaskTypeForRun } from "../../lib/seedance-task-type-stamp.js"
 import { applyAudioSoundtrack } from "../../lib/audio-soundtrack.js"
 import { probeAndCheckRefAudio, sentReferenceAudioUrls } from "../../lib/ref-audio-probe.js"
+import { drivingAudioFreeVideoRequest, stampDrivingAudioRun } from "../../lib/driving-audio-measure.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import type {
@@ -2616,6 +2617,23 @@ async function executeWorkerNode(
   payload = taskTypeRun.payload
   modelIdentifier = taskTypeRun.modelIdentifier
 
+  // 2b+'. Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast — decided 2026-11-23): the payload
+  // builder marks a run of such a model with an audio clip; measure the clip by the routes' own rule
+  // (`measureDrivingAudio`) and stamp the run it prices — the length sent, the resolution, the row —
+  // BEFORE input_data, the free-credit check and the reservation below, which all read this payload
+  // and this id. A clip the route would refuse leaves no jobs row, like the gates above.
+  const drivingAudioRun = await stampDrivingAudioRun(payload, modelIdentifier, ctx.userId)
+  if (!drivingAudioRun.ok) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(drivingAudioRun.message) as Error & { errorCode?: string }
+    err.errorCode = drivingAudioRun.code
+    throw err
+  }
+  payload = drivingAudioRun.payload
+  modelIdentifier = drivingAudioRun.modelIdentifier
+  // The free-credit check judges an audio-to-video run from this measurement only, never from the payload.
+  const drivingAudioMeasured = drivingAudioRun.measured
+
   // 2b'. Video SFX: measure the clip by the route's own rule and stamp the
   // length (what the model scores) and its price row on the payload, BEFORE
   // input_data is written below — the worker reads the row, not the queue
@@ -3168,7 +3186,9 @@ async function executeWorkerNode(
         // the SAME context, so they can never disagree about entitlements.
         billingContext: ctx.billingContext,
         // The free-credit video limits judge what this node will generate.
-        video: freeVideoRequestForJob(jobName, reserveModelIdentifier, payload as Record<string, unknown>),
+        video: drivingAudioMeasured
+          ? drivingAudioFreeVideoRequest(String(payload.provider), drivingAudioMeasured)
+          : freeVideoRequestForJob(jobName, reserveModelIdentifier, payload as Record<string, unknown>),
         // A step a pack paid for (lib/covered-step.ts): only what refuses the model is asked.
         ...(ctx.coveredBy ? { covered: true } : {}),
       })

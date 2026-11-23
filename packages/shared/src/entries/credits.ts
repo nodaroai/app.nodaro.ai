@@ -238,3 +238,16 @@ export {
 export * from "../video-analysis-pricing.js"
 // --- Content Recipe / Content Ideas pricing (credit ids + the per-five-ideas rule) ---
 export * from "../content-recipe-ideas.js"
+export {
+  drivingAudioOf,
+  takesDrivingAudio,
+  isDrivingAudioRun,
+  drivingAudioMaxSec,
+  drivingAudioCreditId,
+  drivingAudioRun,
+  drivingAudioQuoteId,
+  drivingAudioTooLongMessage,
+  drivingAudioMinSec,
+  DRIVING_AUDIO_SEND_MARGIN_SEC,
+} from "../driving-audio.js"
+export type { DrivingAudioRun, DrivingAudioRefusalCode } from "../driving-audio.js"

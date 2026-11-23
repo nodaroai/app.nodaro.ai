@@ -212,6 +212,15 @@ vi.mock("../../lip-sync-voice-line.js", async (importOriginal) => ({
   addVoiceLineIfSilent: voiceLine.add,
 }))
 
+// A recovered audio-to-video run's lay-on (the worker's own step, stubbed; which rows reach it is the real rule).
+const drivingLay = vi.hoisted(() => ({
+  lay: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "stored"; url: string } | { kind: "as-rendered" }> => ({ kind: "as-rendered" })),
+}))
+vi.mock("../../driving-audio-lay.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../driving-audio-lay.js")>()),
+  layDrivingAudioIfSilent: drivingLay.lay,
+}))
+
 vi.mock("../entity-recovery.js", async (importOriginal) => {
   // Keep the REAL `isEntityMediaJobType` (the narrowing under test) and stub
   // only the recovery itself — its own behavior is covered end-to-end in
@@ -532,6 +541,38 @@ describe("reconcileKieJob", () => {
       await reconcileKieJob({ ...lipSyncRow("seedance-2-5-flash"), job_type: "image-to-video" })
       expect(voiceLine.add).not.toHaveBeenCalled()
       expect(mocks.finalizeMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe("a recovered LTX 2.5 Fast audio-to-video run (decided 2026-11-23)", () => {
+    const a2vRow = (input: Record<string, unknown>): KieJobRow => ({
+      id: "j-a2v", provider_kind: "kie-standard", provider_task_id: "t-a2v", reconcile_attempts: 0, job_type: "image-to-video",
+      input_data: { provider: "ltx-2.5-fast", referenceAudioUrls: ["https://a/song.mp3"], duration: 7.15, ...input },
+    })
+    const polled = () => mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/a2v.mp4"] }, providerMs: 1, taskId: "t-a2v" })
+
+    it("goes through the worker's lay-on step; its one stored (watermarked) file is the job's media, never uploaded again", async () => {
+      polled()
+      mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
+      drivingLay.lay.mockResolvedValueOnce({ kind: "stored", url: "https://r2/videos/j-a2v.mp4" })
+      await reconcileKieJob(a2vRow({ audioToVideo: true }))
+      expect(drivingLay.lay).toHaveBeenCalledWith({ videoUrl: "https://kie.example/a2v.mp4", audioUrl: "https://a/song.mp3", jobId: "j-a2v", userId: "u1", watermark: true })
+      expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({ mediaUrl: "https://r2/videos/j-a2v.mp4" })
+    })
+
+    it("a render with its sound is finalized as it came", async () => {
+      polled()
+      mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: false, reconcile_attempts: 0 }, error: null })
+      await reconcileKieJob(a2vRow({ audioToVideo: true }))
+      expect(drivingLay.lay).toHaveBeenCalledTimes(1)
+      expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("mediaUrl")
+    })
+
+    it("a run the server did not stamp audio-to-video never reaches the step", async () => {
+      polled()
+      await reconcileKieJob(a2vRow({}))
+      expect(drivingLay.lay).not.toHaveBeenCalled()
+      expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("mediaUrl")
     })
   })
 

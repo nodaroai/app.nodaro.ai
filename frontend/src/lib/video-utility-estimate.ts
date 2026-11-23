@@ -37,7 +37,9 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { maskCompositeUnits } from "@nodaro/shared/media"
 import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
-import { NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
+import { applyDefaultVideoSelection, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
+import { drivingAudioQuoteId, takesDrivingAudio } from "@nodaro/shared/credits"
+import { referenceModalityForHandle } from "@nodaro/shared/workflow"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
@@ -938,4 +940,28 @@ export function voiceChangerPricingUnits(
   rerunIds: ReadonlySet<string> = new Set(),
 ): number {
   return voiceChangerQuote(node, nodes, edges, rerunIds).units
+}
+
+/**
+ * Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast — decided 2026-11-23):
+ * the price row a video generation node is QUOTED on when its model takes a
+ * driving clip and an audio clip is wired, or `undefined` when it is not such
+ * a run (the node's own length decides). The first audio wire — the clip the
+ * run sends — as Lip Sync's audio wire is read, the server's estimate reading
+ * the same; an unknown length quotes the longest clip the run can hold
+ * (`drivingAudioQuoteId`). The run measures the real audio before it holds.
+ */
+export function drivingAudioQuotedCreditId(
+  node: Pick<WorkflowNode, "id" | "data">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): string | undefined {
+  const data = (node.data ?? {}) as Record<string, unknown>
+  const provider = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined }).provider
+  if (!takesDrivingAudio(provider)) return undefined
+  const first = edges.find((e) => e.target === node.id && referenceModalityForHandle(e.targetHandle) === "audio")
+  if (!first) return undefined
+  const audioSec = measuredInputReader("lip-sync", nodes, edges, rerunIds, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)(first.source)
+  return drivingAudioQuoteId({ provider, resolution: data.resolution, fps: data.fps, audioSec })
 }

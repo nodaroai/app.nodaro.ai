@@ -45,7 +45,7 @@ declare module "fastify" {
      *  their body's own `provider`/`duration`/`resolution`. `extend`: the run
      *  extends a video (Extend Video), refused as an extension whatever model
      *  its provider names. */
-    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null; extend?: boolean }
+    freeVideoRequest?: { provider: string; duration?: number | string | null; resolution?: string | null; videoSize?: string | null; extend?: boolean; audioDriven?: boolean }
     /** RAW per-reference-video ffprobe durations (seconds), in request order,
      *  set by the video routes' `validateRefVideoDurationPreHandler` BEFORE
      *  creditGuard runs. A FAILED probe is carried as `NaN`, never dropped:
@@ -55,6 +55,11 @@ declare module "fastify" {
      *  reservation. Present only for providers in
      *  VIDEO_REF_VIDEO_DURATION_LIMITS that sent reference videos. */
     refVideoDurationsSec?: number[]
+    /** An audio-to-video run's measured and priced driving clip (catalog
+     *  `drivingAudio`, LTX 2.5 Fast), set by the video routes'
+     *  `drivingAudioPreHandler` BEFORE creditGuard: the identifier, the
+     *  reservation and the queued length all read it, never a length the body states. */
+    drivingAudio?: import("../lib/driving-audio-measure.js").DrivingAudioMeasure & { readonly ok: true }
     /** The validated Seedance draft a `seedance-2-5-hd` finalize names, set by
      *  `/v1/video-upscale`'s preHandler BEFORE creditGuard, so the credit id and
      *  the reserved amount are priced from the SOURCE job, never the body. */

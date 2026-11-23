@@ -48,7 +48,8 @@ describe("LTX 2.5 — catalog entries", () => {
       expect(m.defaultDuration).toBe(10)
       expect(m.noNegativePrompt).toBe(true)
       expect(m.noSeed).toBeUndefined()
-      expect([...(m.features ?? [])]).toEqual(["audio"])
+      // Fast also makes a video from an audio clip (decided 2026-11-23); Pro has no such endpoint.
+      expect([...(m.features ?? [])]).toEqual(id === "ltx-2.5-fast" ? ["audio", "audio-to-video"] : ["audio"])
       expect(getMaxVideoPromptChars(id)).toBe(5000)
     }
     expect(MODEL_CATALOG["ltx-2.5-fast"]!.label).toBe("LTX 2.5 Fast")

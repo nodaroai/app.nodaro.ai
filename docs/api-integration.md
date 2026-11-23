@@ -3357,8 +3357,21 @@ so a value the model doesn't support is ignored, never a 400:
   in `adjustments`. `seed` a whole number 0–2147483647 (anything else, `-1`
   included, is left out); `prompt` up to 5,000 characters, quoted text spoken
   as dialogue. A `negativePrompt` is dropped, not folded into the prompt; no
-  end frame and no `referenceImageUrls` / `referenceVideoUrls` /
-  `referenceAudioUrls` are sent. Paid credits only (the shortest clip is 6 s).
+  end frame and no `referenceImageUrls` / `referenceVideoUrls` are sent, and on
+  Pro no `referenceAudioUrls`. Text and image runs are paid credits only (the
+  shortest clip is 6 s).
+  **Audio-to-video (Fast only, decided 2026-11-23):** one `referenceAudioUrls`
+  entry (MP3, WAV, M4A, AAC, OGG or FLAC, up to 50 MB) on either route makes the
+  picture to that clip, with or without an `imageUrl` (without one it is 16:9).
+  The server measures the clip before anything is held: it must be 2.05–20 s (at
+  most 10 s at `1440p` or 48 / 50 fps), the run is sent the measured length, and
+  it is charged the length rounded up to a whole second
+  (`ltx-2.5-fast:<N>s:<resolution>`, every whole second from 2 s; `duration`
+  is not read). A shorter or longer clip, a second clip, or a file whose length
+  cannot be read is a 400 before the hold (`audio_too_short`, `audio_too_long`,
+  `audio_unreadable`, `audio_has_video` for a video file, `validation_error`). On free credits it runs at 720p for
+  audio up to 4 s. An audio clip sent with `ltx-2.5-pro` is not sent and does
+  not change the model.
   The `fps` field is read only by a model with a frame-rate setting; every
   other model ignores it, and it is not recorded on their jobs.
 - **`grok-imagine-video-1.5`** (Grok Imagine 1.5) needs an `imageUrl`: it is

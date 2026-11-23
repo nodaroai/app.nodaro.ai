@@ -124,6 +124,10 @@ export interface ProviderOptions {
   // Frame rate, read only by a model whose catalog entry lists `frameRates`
   // (LTX 2.5), through `videoFrameRateFor`. Every other model ignores it.
   fps?: number
+  // Audio-to-video (catalog `drivingAudio`, LTX 2.5 Fast): the platform measured the first reference
+  // audio clip and priced the run on it; the runner takes the model's audio endpoint, sending `duration`
+  // as the length measured. Set only by the routes / workflow run after measuring. Others ignore it.
+  audioToVideo?: boolean
   grokMode?: string       // Grok I2V mode: "fun" | "normal" | "spicy"
   seed?: number            // Seed for deterministic generation (Wan Turbo, Bytedance)
   cameraFixed?: boolean    // Camera fixed / fixed_lens (Bytedance, Seedance)

@@ -64,7 +64,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -737,6 +737,9 @@ export function getModelIdentifier(
     // one id for one KIE call. The length is the one the run is priced at once
     // a Seedance reference task type is resolved (the node's pill reads the
     // same helper).
+    // Audio-to-video (LTX 2.5 Fast with an audio clip wired): the row of the clip's length.
+    const drivingAudioId = drivingAudioQuotedCreditId(node, nodes ?? [], edges ?? [], reruns)
+    if (drivingAudioId) return drivingAudioId
     return videoGenerationCreditId({
       provider: sel.provider,
       duration: seedanceTaskTypeRunDuration({

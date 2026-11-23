@@ -16,7 +16,7 @@ import {
   KIE_VIDEO_TO_VIDEO_MODELS, KIE_MOTION_TRANSFER_MODELS, KIE_VIDEO_UPSCALE_MODELS,
   KIE_LIP_SYNC_MODELS, KIE_MUSIC_MODELS, KIE_TTS_MODELS,
   KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS,
-  KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS,
+  KIE_SPEECH_TO_VIDEO_MODELS, KIE_SPECIAL_MODELS, LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL,
   VIDU_Q4_REFERENCE_MODEL,
   KLING_4_FLASH_KEYFRAME_MODEL,
 } from "../../providers/kie/models.js"
@@ -177,6 +177,9 @@ export function buildModelMap(): Map<string, ModelMapping[]> {
     })
     map.set(alias, existing)
   }
+
+  // LTX 2.5 Fast's audio-to-video endpoint runs under `ltx-2.5-fast` (no routing config of its own).
+  addAlias(LTX_2_5_FAST_AUDIO_TO_VIDEO_MODEL, "ltx-2.5-fast", "i2v")
 
   // Suno chirp-* → our model keys
   addAlias("chirp-v4", "suno", "music")

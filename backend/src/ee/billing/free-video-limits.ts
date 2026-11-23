@@ -113,6 +113,8 @@ export function freeVideoRequestOf(raw: Record<string, unknown> | null | undefin
 }
 
 function videoParamsOf(provider: string, raw: Record<string, unknown> | null | undefined): FreeVideoRequest {
+  // Never audio-driven: a body or payload cannot claim an audio-to-video run. That request is built only
+  // from the server's own measurement (`drivingAudioFreeVideoRequest`, lib/driving-audio-measure.ts).
   return {
     provider,
     duration: raw?.duration as FreeVideoRequest["duration"],
