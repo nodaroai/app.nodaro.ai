@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase", () => ({
   createClient: () => ({ auth: { getSession: mockGetSession } }),
 }))
 
-import { proRender3D, quotePro3DRender, edit3DScene, generate3DScene } from "../api"
+import { startPro3DRender, edit3DScene, generate3DScene } from "../api"
 
 /**
  * The browser's half of quote-then-run.
@@ -55,54 +55,62 @@ describe("Advanced authoring transport", () => {
   })
 })
 
-describe("quotePro3DRender", () => {
-  it("prices the request at the quote route without a quoteId", async () => {
-    const fetchMock = mockFetchJson({ quoteId: "quote-1", maxCredits: 900 })
-    vi.stubGlobal("fetch", fetchMock)
-
-    const quote = await quotePro3DRender({
-      source: { kind: "prompt", prompt: "A red suitcase rolls behind a pillar" },
-      durationSeconds: 30, aspectRatio: "21:9", maxRepairPasses: 1,
-    })
-
-    const call = lastCall(fetchMock)
-    expect(call.url).toContain("/v1/pro-3d-render/quote")
-    expect(call.body).toMatchObject({
-      source: { kind: "prompt", prompt: "A red suitcase rolls behind a pillar" },
-      durationSeconds: 30, aspectRatio: "21:9", maxRepairPasses: 1,
-    })
-    expect(call.body.quoteId).toBeUndefined()
-    expect(quote.maxCredits).toBe(900)
+/** The two requests of one quote-then-run, in the order sent. */
+function quoteAndRun(f: ReturnType<typeof mockFetchJson>) {
+  const at = (index: number) => ({
+    url: f.mock.calls[index][0] as string,
+    init: f.mock.calls[index][1] as RequestInit,
+    body: JSON.parse((f.mock.calls[index][1] as RequestInit).body as string) as Record<string, unknown>,
   })
-})
+  return { quote: at(0), run: at(1) }
+}
 
-describe("proRender3D", () => {
-  it("submits the quoted body with an Idempotency-Key", async () => {
-    const fetchMock = mockFetchJson({ jobId: "pro-job" })
+describe("startPro3DRender", () => {
+  it("prices the request at the quote route without a quoteId, and hands the quote over", async () => {
+    const fetchMock = mockFetchJson({ quoteId: "quote-1", maxCredits: 900, jobId: "pro-job" })
+    vi.stubGlobal("fetch", fetchMock)
+    const quotes: number[] = []
+
+    await startPro3DRender({
+      source: { kind: "prompt", prompt: "A red suitcase rolls behind a pillar" },
+      durationSeconds: 30, aspectRatio: "21:9", maxRepairPasses: 1,
+    }, "pro3d-retry-token-1", (quote) => quotes.push(quote.maxCredits))
+
+    const { quote } = quoteAndRun(fetchMock)
+    expect(quote.url).toContain("/v1/pro-3d-render/quote")
+    expect(quote.body).toMatchObject({
+      source: { kind: "prompt", prompt: "A red suitcase rolls behind a pillar" },
+      durationSeconds: 30, aspectRatio: "21:9", maxRepairPasses: 1,
+    })
+    expect(quote.body.quoteId).toBeUndefined()
+    expect(quotes).toEqual([900])
+  })
+
+  it("submits the quoted body with its quoteId and an Idempotency-Key", async () => {
+    const fetchMock = mockFetchJson({ quoteId: "quote-1", maxCredits: 900, jobId: "pro-job" })
     vi.stubGlobal("fetch", fetchMock)
 
-    await proRender3D(
-      { source: { kind: "prompt", prompt: "x" }, quoteId: "quote-1" },
-      "pro3d-retry-token-1",
-    )
+    const started = await startPro3DRender({ source: { kind: "prompt", prompt: "x" } }, "pro3d-retry-token-1")
 
-    const call = lastCall(fetchMock)
-    expect(call.url).toContain("/v1/pro-3d-render")
-    expect(call.url).not.toContain("/quote")
-    expect(call.body.quoteId).toBe("quote-1")
-    expect((call.init.headers as Record<string, string>)["Idempotency-Key"]).toBe("pro3d-retry-token-1")
+    const { quote, run } = quoteAndRun(fetchMock)
+    expect(run.url).toContain("/v1/pro-3d-render")
+    expect(run.url).not.toContain("/quote")
+    expect(run.body).toEqual({ ...quote.body, quoteId: "quote-1" })
+    expect((run.init.headers as Record<string, string>)["Idempotency-Key"]).toBe("pro3d-retry-token-1")
+    expect((quote.init.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined()
+    expect(started.jobId).toBe("pro-job")
   })
 
   it("keeps a render-only scene source render-only on the wire", async () => {
-    const fetchMock = mockFetchJson({ jobId: "pro-job" })
+    const fetchMock = mockFetchJson({ quoteId: "quote-1", maxCredits: 900, jobId: "pro-job" })
     vi.stubGlobal("fetch", fetchMock)
 
-    await proRender3D(
-      { source: { kind: "scene", revisionId: "rev-1", sourceJobId: "job-1" }, quoteId: "quote-1" },
+    await startPro3DRender(
+      { source: { kind: "scene", revisionId: "rev-1", sourceJobId: "job-1" } },
       "pro3d-retry-token-1",
     )
 
-    const source = lastCall(fetchMock).body.source as Record<string, unknown>
+    const source = quoteAndRun(fetchMock).run.body.source as Record<string, unknown>
     expect(source).toEqual({ kind: "scene", revisionId: "rev-1", sourceJobId: "job-1" })
     // Absence IS the request. Serializing an empty string here would buy the
     // user a paid authoring pass they did not ask for.

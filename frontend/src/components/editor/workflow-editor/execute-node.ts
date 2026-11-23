@@ -183,8 +183,7 @@ import {
   generateLottieOverlay,
   generate3DTitle,
   generate3DScene,
-  proRender3D,
-  quotePro3DRender,
+  startPro3DRender,
   edit3DScene,
   generateMotionGraphics,
   mergeVideoAudioApi,
@@ -9924,11 +9923,10 @@ function executeNodeCore(
       // Quote, then submit the SAME body. Two requests, still ONE paid job:
       // quoting reserves nothing, and the ceiling it returns is stored on the
       // node so the user can see what a run may cost before it starts.
-      start: async () => {
-        const quote = await quotePro3DRender(proRequest);
-        useWorkflowStore.getState().updateNodeData(node.id, { lastQuoteMaxCredits: quote.maxCredits });
-        return proRender3D({ ...proRequest, quoteId: quote.quoteId }, newPro3DIdempotencyKey());
-      },
+      start: () =>
+        startPro3DRender(proRequest, newPro3DIdempotencyKey(), (quote) => {
+          useWorkflowStore.getState().updateNodeData(node.id, { lastQuoteMaxCredits: quote.maxCredits });
+        }),
     });
   }
 

@@ -7326,43 +7326,40 @@ export interface Pro3DRenderRequest {
 }
 
 /**
- * `POST /v1/pro-3d-render/quote` — price a run WITHOUT starting it.
+ * Quote a 3D Render Pro run, then start it: `POST /v1/pro-3d-render/quote`,
+ * then `POST /v1/pro-3d-render` with the `quoteId` it answered.
  *
- * Same body the run takes, minus the `quoteId`. Answers a ceiling to show the
- * user and the hash admission re-checks. It reserves nothing and spends
- * nothing, which is what makes it safe to call as the panel's controls change.
+ * The run is admitted only when it is the request its quote priced, so both
+ * requests send ONE body. The run settings (workflow, node, private, prompt
+ * template) are taken once, here, before anything is awaited: taken per
+ * request, the quote would use up the one-shot ones and the run would go out
+ * without them — a different request, which the server refuses as a stale
+ * quote (and which would otherwise have started a private run as a public one).
+ *
+ * `onQuote` gets the ceiling before the run is sent, so the node can show what
+ * the run may cost. Quoting reserves nothing; the run answers with a job id
+ * only, and its completed job's `output_data` carries both `scenePlan` and
+ * `videoUrl`. The idempotency key is required: a retried submit of this
+ * operation must not become a second paid run.
  */
-export async function quotePro3DRender(
+export function startPro3DRender(
   params: Pro3DRenderRequest,
-): Promise<Pro3DRenderQuote> {
-  return apiJson("/v1/pro-3d-render/quote", {
-    body: params as unknown as Record<string, unknown>,
-    workflowId: true,
-    label: "apiErr.3dRenderProQuoteFailed",
-  })
-}
-
-/**
- * `POST /v1/pro-3d-render` — ONE durable operation.
- *
- * Answers with a job id only; the completed job's `output_data` carries BOTH
- * `scenePlan` (the exact composition) and `videoUrl` (the exported MP4), plus
- * the revision, poster, validation and renderer metadata.
- *
- * Requires the `quoteId` from `quotePro3DRender` — no run starts at a price
- * nobody showed — and an idempotency key, because a retried submit of the most
- * expensive operation on the platform must not become a second paid run.
- */
-export async function proRender3D(
-  params: Pro3DRenderRequest & { quoteId: string },
   idempotencyKey: string,
+  onQuote?: (quote: Pro3DRenderQuote) => void,
 ): Promise<{ jobId: string }> {
-  return apiJson("/v1/pro-3d-render", {
-    body: params as unknown as Record<string, unknown>,
-    workflowId: true,
-    idempotencyKey,
-    label: "apiErr.3dRenderProFailed",
-  })
+  const body = withWorkflowId(params as unknown as Record<string, unknown>)
+  return (async () => {
+    const quote = await apiJson<Pro3DRenderQuote>("/v1/pro-3d-render/quote", {
+      body,
+      label: "apiErr.3dRenderProQuoteFailed",
+    })
+    onQuote?.(quote)
+    return apiJson<{ jobId: string }>("/v1/pro-3d-render", {
+      body: { ...body, quoteId: quote.quoteId },
+      idempotencyKey,
+      label: "apiErr.3dRenderProFailed",
+    })
+  })()
 }
 
 // --- Motion Graphics ---
