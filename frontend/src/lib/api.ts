@@ -13079,6 +13079,24 @@ export interface JobCastSwapSteps {
   preciseStyleRouted?: true
   /** The Precise art-style route kept it Precise and sent its clip in black and white; absent otherwise. */
   preciseStyleSentGray?: true
+  /** What the run recorded going wrong (or nearly), worst first; absent when it recorded none. */
+  faults?: CastSwapFault[]
+}
+
+/** How bad a Video Remake fault was: stopped the run, worked around, or only noted. */
+export type CastSwapFaultSeverity = "blocked" | "recovered" | "warning"
+
+/**
+ * One fault a Video Remake run recorded (admin only). `kind` is an open
+ * vocabulary (`blur_left`, `unblurred_refused`, `face_check_unsure`,
+ * `face_check_error`, `intent_override` — whose `detail.code` names the intent).
+ */
+export interface CastSwapFault {
+  kind: string
+  severity: CastSwapFaultSeverity
+  /** When it was recorded (ISO). */
+  at?: string
+  detail?: Record<string, unknown>
 }
 
 const ADMIN_NODARO_MOTION_STEPS = "/v1/admin/video-remake/steps"

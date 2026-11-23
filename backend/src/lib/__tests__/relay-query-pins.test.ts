@@ -51,6 +51,9 @@ vi.mock("../supabase.js", () => ({
 
 vi.mock("../config.js", () => ({
   config: { R2_PUBLIC_URL: "https://cdn.test", R2_SHARED_WITH_RELAY_TARGET: false },
+  // The mainline profile is a deployment without credits: no held engine step
+  // to release before a delete (lib/deferred-child-delete.ts), so no read for it.
+  hasCredits: () => false,
 }))
 
 vi.mock("../storage.js", () => ({

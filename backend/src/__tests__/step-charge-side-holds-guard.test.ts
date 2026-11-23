@@ -43,6 +43,7 @@ const STEP_CHARGE_READERS: Record<string, string> = {
 
 /** Sources that select `credits_actual` but are not a reader of a step's charge — each with why. */
 const NOT_STEP_CHARGE_READERS: Record<string, string> = {
+  "lib/deferred-child-settlement.ts": "the deferred settlement reads a held engine step's OWN credits_actual only to tell whether its release already zeroed it (settlement bookkeeping, never a step's charge in a run)",
   "ee/billing/cost-shortfall-store.ts": "selects credit_anomalies.credits_actual (the charge the cost-shortfall sweep recorded itself), never jobs.credits_actual; the charge it compares with the job's OWN provider cost is the job's own settled usage log plus its settled side holds (sideHoldChargesFor) — each step (child job) has its own provider cost and is judged on its own",
   "ee/billing/llm-billing-impl.ts":"the metered settle and sweep: read and write the job's OWN charge (a side hold has its own sink)",
   "ee/copilot/turn-runner.ts": "a Copilot turn's own job, which makes no side calls",

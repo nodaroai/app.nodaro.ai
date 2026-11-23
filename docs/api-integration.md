@@ -6480,6 +6480,14 @@ for one, whether faces are hidden first, and whether a clip the model refuses
 is retried once — is set by Nodaro for each engine. A run cannot change it:
 a `faceMasking` field sent by an older client is accepted and ignored.
 
+**Face check.** Where Nodaro has turned the face check on for an engine
+(it is being rolled out, and is not on everywhere yet), a run whose faces are
+hidden has each result checked before it is delivered. If a face in it was
+not redrawn, that result is discarded and the video engine runs again; you
+are charged for one engine run only, however many times it ran. If the engine
+still cannot redraw the faces, the run fails with "The video engine rejected
+some faces in this clip. Try a different clip." and no engine run is charged.
+
 **Fixed references.** `references` (at most 5) are things the video should
 show that no role replaces, each `{ images, line }`: 1–3 images of ONE thing
 and the line that says what it is (1–500 characters, e.g.

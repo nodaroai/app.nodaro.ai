@@ -7,6 +7,8 @@ import { relayPossible } from "./relay-possible.js"
 import { RetainedImageInUseError } from "./retained-image-errors.js"
 import { readCoversInScope, type CoverScope } from "./job-cover/cover-release.js"
 import { releaseCoversOfJobs } from "./job-cover/cover-store.js"
+import { hasCredits } from "./config.js"
+import type { DeleteScopeForRelease } from "./deferred-child-delete.js"
 
 interface WorkflowDeleteLogger {
   warn(fields: Record<string, unknown>, message: string): void
@@ -90,6 +92,14 @@ async function deleteWithPrivateMedia(args: {
   // read before the RPC deletes the rows, released after. A failed read never blocks the delete.
   const covers = await readCoversInScope(coverScopeOf(args.scope, args.rpcArgs), { probe: true, logger: args.logger })
 
+  // A held engine step (lib/deferred-child-delete.ts) is released before the
+  // RPC cascades it away: its usage log would otherwise lose its job, still
+  // reserved. Cloud only, loaded on use; never throws, never blocks the delete.
+  if (hasCredits()) {
+    const { releaseHeldChildrenBeforeDelete } = await import("./deferred-child-delete.js")
+    await releaseHeldChildrenBeforeDelete(releaseScopeOf(args.scope, args.rpcArgs))
+  }
+
   const { data, error } = await supabase.rpc(args.rpcName, args.rpcArgs)
   if (error?.message === "This production has active jobs using retained images") {
     throw new RetainedImageInUseError("Wait for the active jobs to finish or cancel them before deleting this production")
@@ -152,6 +162,14 @@ async function deleteWithPrivateMedia(args: {
   // once nothing names it (never throws).
   await releaseCoversOfJobs(covers)
   return true
+}
+
+/** The jobs a delete scope takes with it, as the held-step release asks for them. */
+function releaseScopeOf(scope: DeleteScope, rpcArgs: Record<string, string | boolean | null>): DeleteScopeForRelease {
+  const userId = String(rpcArgs.p_user_id ?? "")
+  if ("jobId" in scope) return { jobId: scope.jobId }
+  if ("workflowId" in scope) return { workflowId: scope.workflowId, userId }
+  return { projectId: scope.projectId, userId }
 }
 
 /** The jobs a delete scope takes with it, as the cover read asks for them. */

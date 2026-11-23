@@ -130,6 +130,22 @@ it("CastSwapStepsBody says a style-only run's path above its engine prompt, and 
   }} />)
   expect(screen.getByTestId("style-only-path").textContent).toBe("Style only: like other styles")
 })
+it("CastSwapStepsBody shows the run's recorded faults as chips, in the order sent, and nothing when it recorded none", () => {
+  const { rerender } = render(<CastSwapStepsBody showSkipped={false} data={{
+    stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null,
+    faults: [
+      { kind: "unblurred_refused", severity: "blocked", at: "2026-11-20T10:00:03Z" },
+      { kind: "intent_override", severity: "recovered", detail: { code: "no_person" } },
+      { kind: "face_check_unsure", severity: "warning" },
+    ],
+  }} />)
+  const box = screen.getByTestId("remake-faults")
+  const chips = within(box).getAllByRole("listitem")
+  expect(chips.map((c) => c.getAttribute("data-fault-severity"))).toEqual(["blocked", "recovered", "warning"])
+  expect(chips.map((c) => c.textContent)).toEqual(["Blockedunblurred_refused", "Recoveredintent_override: no_person", "Warningface_check_unsure"])
+  rerender(<CastSwapStepsBody showSkipped={false} data={{ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: null }} />)
+  expect(screen.queryByTestId("remake-faults")).toBeNull()
+})
 it("CastSwapStepsBody says a Full Quality version's style-only path though it recorded no steps", () => {
   render(<CastSwapStepsBody showSkipped={false} data={{ stepOutputs: null, sceneText: null, skippedSteps: [], styleOnly: "original" }} />)
   expect(screen.getByTestId("style-only-path").textContent).toBe("Style only: original clip")

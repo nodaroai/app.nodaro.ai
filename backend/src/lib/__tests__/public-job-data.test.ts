@@ -83,6 +83,14 @@ describe("redactPrivateJobData — server-only input_data keys", () => {
     const row = { input_data: { type: "cast-swap", trend: { id: "t" }, __videoUrl: "https://x/s.mp4", __roles: [] }, output_data: { videoUrl: "v", __castSwapChildJobId: "c" } }
     expect(redactPrivateJobData(row)).toEqual({ input_data: { type: "cast-swap", trend: { id: "t" } }, output_data: { videoUrl: "v" } })
   })
+  it("drops a Video Remake run's recorded faults (__castSwapFaults) from an owner's read, a failed run's included", () => {
+    const faults = [{ kind: "unblurred_refused", severity: "blocked", at: "2026-11-20T10:00:00Z", detail: { code: "x" } }]
+    const row = { status: "failed", input_data: { type: "cast-swap" }, output_data: { error: "refused", __castSwapFaults: faults } }
+    const out = redactPrivateJobData(row)
+    expect(out).toEqual({ status: "failed", input_data: { type: "cast-swap" }, output_data: { error: "refused" } })
+    expect(JSON.stringify(out)).not.toContain("castSwapFaults")
+    expect(JSON.stringify(redactPrivateJobData({ data: [{ job: row }] }))).not.toContain("castSwapFaults")
+  })
   it("drops input_data __ keys inside lists and envelopes", () => {
     const env = { data: [{ job: { input_data: { __postPrompt: "p", slots: [] } } }] }
     expect(redactPrivateJobData(env)).toEqual({ data: [{ job: { input_data: { slots: [] } } }] })

@@ -1999,6 +1999,22 @@ export interface PluginJobsToolkit {
    */
   refundJobCredits?(usageLogId: string, jobId: string, reason: string): Promise<void>
   /**
+   * Commit a DEFERRED child's held reservation exactly as its worker would have
+   * at completion (`capabilities.deferredChildSettlement`). Only a child of the
+   * running job (the job whose handler calls it); another job's child, or a
+   * call outside a job's handler, is refused with a throw. Answers what
+   * happened ({@link PluginDeferredSettleOutcome}); it never undoes a release.
+   */
+  settleDeferredChild?(childJobId: string): Promise<PluginDeferredSettleOutcome>
+  /**
+   * Refund a DEFERRED child's held reservation (the atomic, payer-aware
+   * refund), record it as released with `reason` (server-only, at most 500
+   * characters kept) and set its `credits_actual` to 0. Same ownership rule
+   * as `settleDeferredChild`, and the same answers; it never refunds a
+   * committed charge.
+   */
+  releaseDeferredChild?(childJobId: string, reason: string): Promise<PluginDeferredSettleOutcome>
+  /**
    * The recast direction gate's re-take waiver predicate, as ONE dedicated
    * query (six filters + an OR — the generic select mirror cannot express
    * it, and `maybeSingle()` errors on ≥2 rows). True iff a completed recast
@@ -2814,10 +2830,39 @@ export interface PluginInjectedResponse {
 
 /** Narrow mirror of `lib/llm-client.ts` llmCompleteStructured, shaped to the
  * pro planner's single call site (minimal structural interface rule). */
+/**
+ * What `tk.jobs.settleDeferredChild` / `releaseDeferredChild` did:
+ *  - `"settled"` / `"released"`: the child ends so — now, or it already had
+ *    (a repeated call answers the same);
+ *  - `"scheduled"` (release only): the child has not completed yet; the
+ *    release is recorded and carried out when it completes, so that take is
+ *    never charged (a child that fails instead is refunded by its failure
+ *    path, once). A repeated release answers `"scheduled"` again;
+ *  - `"not_deferred"`: the child was not deferred; or, for a settle, it has
+ *    not completed (settle a child only after it completed); or it failed or
+ *    was cancelled (refunded by its failure path); nothing was done;
+ *  - `"already_decided"`: the OTHER decision was taken first (by this plugin,
+ *    the host's sweep or a delete) — a settle after a scheduled release
+ *    included; nothing more was charged;
+ *  - `"pending"`: the decision is recorded but the commit or refund did not
+ *    land; the host's sweep finishes it (a later call with the same decision
+ *    retries it at once).
+ */
+export type PluginDeferredSettleOutcome = "settled" | "released" | "scheduled" | "not_deferred" | "already_decided" | "pending"
+
 export interface PluginLlmRequest {
   model: string
   system?: string
   prompt: string
+  /**
+   * Image links (at most 5) sent beside `prompt` as image parts
+   * (`capabilities.llmStructuredImages`). Each must be an https link on this
+   * deployment's own media host (its R2 public URL or fallback domain, as
+   * `tk.storage.r2Url` and the upload helpers answer them); any other link
+   * is refused with a throw before any call. With any image the call is pinned to
+   * the direct lane (an explicit `requireLane` still wins). Additive-optional.
+   */
+  imageUrls?: string[]
   maxTokens?: number
   /** Sampling temperature — pinned deliberately by callers that must not ride the
    *  vendor default (the video-analysis grader pins 0 for a deterministic judge).
@@ -4058,6 +4103,39 @@ export interface PluginCapabilities {
    * `castSwap.videoRemakeRoutes`.
    */
   readonly videoRemake?: boolean
+  /**
+   * A plugin's engine child can stay HELD after it completes. A child it makes
+   * with `tk.http.workerRequest({ method: "POST", url: "/v1/generate-video",
+   * parentJobId, payload: { ..., deferSettlement: true } })` completes as usual
+   * (status, output, `credits_actual` showing what it will cost) but its credit
+   * reservation is neither committed nor refunded: the answer then carries
+   * `settlementDeferred: true` (absent → not deferred, settled as before; a
+   * replay of the same idempotency key answers the stored job's). The
+   * plugin then calls `tk.jobs.settleDeferredChild(childJobId)` (charged exactly
+   * as its worker would have charged it) or `tk.jobs.releaseDeferredChild(
+   * childJobId, reason)` (refunded, recorded as released, `credits_actual` 0).
+   * Both answer a `PluginDeferredSettleOutcome`, are idempotent, act only on
+   * the running job's own children, and never undo the other; a release asked
+   * before the child completed answers `"scheduled"` and is carried out at its
+   * completion. A child left held is resolved by the host some minutes after
+   * its parent ends — a completed run keeps ONE take charged: if one is
+   * settled every other held take is released, else the latest is settled and
+   * the rest released; a failed or cancelled run's are released — and released
+   * when its parent runs implausibly long (12 h) or is deleted. A failed deferred child
+   * is refunded as before. Not honoured for a voiced video or outside Cloud.
+   * False (or absent): an older host, whose route ignores the field and
+   * settles the child when it completes.
+   */
+  readonly deferredChildSettlement?: boolean
+  /**
+   * `tk.llm.completeStructured` takes `imageUrls` (at most 5 https links on
+   * this deployment's own media host): each is sent to the model as an image
+   * beside the prompt, on the
+   * direct lane (never the proxied one, which can lose an image silently).
+   * Unmetered like the rest of that call. False (or absent): an older host,
+   * which sends the prompt alone.
+   */
+  readonly llmStructuredImages?: boolean
 }
 
 /**

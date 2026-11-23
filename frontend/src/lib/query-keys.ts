@@ -542,6 +542,8 @@ export const queryKeys = {
       ["admin", "motion-price-check", "runs", params, kieStamp] as const,
     motionPriceRun: (jobId: string | null, kieStamp: string | null) =>
       ["admin", "motion-price-check", "run", jobId, kieStamp] as const,
+    /** Admin → Remake faults: a page of the range's faulted Video Remake runs. */
+    remakeFaults: (params: object | null) => ["admin", "remake-faults", params] as const,
   },
 
   nodeDefaults: {

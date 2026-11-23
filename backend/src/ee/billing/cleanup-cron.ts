@@ -24,6 +24,7 @@ import { getNotifyConfig } from "../notifications/notify-config.js"
 import { runCostShortfallSweep } from "./cost-shortfall-store.js"
 import { COST_SHORTFALL_SWEEP } from "./cost-shortfall.js"
 import { sweepFirstRemakeOffers } from "../lib/first-remake-offer.js"
+import { DEFERRED_CHILD_SWEEP, sweepDeferredChildSettlements } from "../../lib/deferred-child-settlement-sweep.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -56,6 +57,20 @@ export function startCleanupCron(): void {
   // finalizes an offer still in use whose run ended without its trigger
   // finalizing it, and alerts on a cover that could not all be taken back.
   cron.schedule("*/5 * * * *", () => { void sweepFirstRemakeOffers() })
+  // Deferred child settlements (lib/deferred-child-settlement-sweep.ts) --
+  // every 5 minutes: a plugin's engine child still held after its run ended is
+  // settled (run completed) or released (run failed, cancelled, gone, or
+  // running implausibly long). Idempotent per child; never throws.
+  cron.schedule(`*/${DEFERRED_CHILD_SWEEP.everyMinutes} * * * *`, async () => {
+    try {
+      const result = await sweepDeferredChildSettlements()
+      if (result.settled > 0 || result.released > 0 || result.healed > 0 || result.errors > 0) {
+        console.log(`[cron] deferred child settlements: scanned=${result.scanned} settled=${result.settled} released=${result.released} healed=${result.healed} errors=${result.errors}`)
+      }
+    } catch (err) {
+      console.error("[cron] deferred child settlement sweep failed:", err)
+    }
+  })
   // Expire subscriptions -- every hour
   cron.schedule("* * * * *", () => { void reconcileExternalWallet() })
   // Stale dynamic-client registrations (MCP clients + community instances

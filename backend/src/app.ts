@@ -241,6 +241,7 @@ import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
 import { adminJobsRoutes } from "./ee/routes/admin-jobs.js"
 import { adminCastSwapStepsRoutes } from "./ee/routes/admin-cast-swap-steps.js"
 import { adminMotionPriceCheckRoutes } from "./ee/routes/admin-motion-price-check.js"
+import { adminRemakeFaultsRoutes } from "./ee/routes/admin-remake-faults.js"
 import { adminSsoRoutes } from "./ee/routes/admin-sso.js"
 import { adminLocationRoutes } from "./ee/routes/admin-locations.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
@@ -896,6 +897,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   if (hasAdmin()) await app.register(adminCastSwapStepsRoutes)
   // The Motion price check: every Video Remake run's holds, charges and step costs (credits: the hold ledger).
   if (hasAdmin() && hasCredits()) await app.register(adminMotionPriceCheckRoutes)
+  // The Remake faults list: every Video Remake run that recorded a fault (Video Remake exists only where credits do).
+  if (hasAdmin() && hasCredits()) await app.register(adminRemakeFaultsRoutes)
   if (hasAdmin()) await app.register(adminSsoRoutes)
   if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)

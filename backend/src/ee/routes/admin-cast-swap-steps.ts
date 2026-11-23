@@ -25,6 +25,9 @@
  * - `preciseStyleSentGray`: true when the Precise art-style route kept it Precise
  *   and sent its clip in black and white (its art style's route "precise-gray"; its
  *   input's `__preciseStyleSentGray`, a Full Quality version's included); absent otherwise.
+ * - `faults`: what the run recorded going wrong (or nearly), worst first, from the
+ *   server-only `output_data.__castSwapFaults` (`lib/remake-faults.ts`'s reading, the
+ *   Remake faults list's); absent when it recorded none.
  *
  * The `__` keys are server-only: every normal job read strips them
  * (`withoutServerOnlyKeys`, lib/job-output-visibility.ts), so this route reads
@@ -55,6 +58,7 @@ import {
   type StyleOnlyPath,
   type StyleRefsOutput,
 } from "../../lib/cast-swap-steps.js"
+import { REMAKE_FAULTS_KEY, readRemakeFaults, type RemakeFault } from "../lib/remake-faults.js"
 
 /** What the admin reads of one Cast Swap run's steps. */
 export interface JobCastSwapSteps {
@@ -67,6 +71,8 @@ export interface JobCastSwapSteps {
   preciseStyleRouted?: true
   /** The Precise art-style route kept it Precise and sent its clip in black and white (`__preciseStyleSentGray`). Absent otherwise. */
   preciseStyleSentGray?: true
+  /** What the run recorded going wrong, worst first (`__castSwapFaults`). Absent when it recorded none. */
+  faults?: RemakeFault[]
 }
 
 /** The job types a Cast Swap run carries: a run, and a Full Quality version (its own queue name). */
@@ -228,6 +234,7 @@ export async function adminCastSwapStepsRoutes(app: FastifyInstance): Promise<vo
     const output = isRec(row.output_data) ? row.output_data : {}
     const input = isRec(row.input_data) ? row.input_data : {}
     const stepOutputs = readStepOutputs(output.__castSwapStepOutputs)
+    const faults = readRemakeFaults(output[REMAKE_FAULTS_KEY])
     const out: JobCastSwapSteps = {
       stepOutputs,
       sceneText: typeof output.__castSwapSceneText === "string" ? output.__castSwapSceneText : null,
@@ -235,6 +242,7 @@ export async function adminCastSwapStepsRoutes(app: FastifyInstance): Promise<vo
       styleOnly: stepOutputs?.styleOnly?.path ?? (oneOf(STYLE_ONLY_PATHS, input.__styleOnly) ? input.__styleOnly : null),
       ...(input.__preciseStyleRouted === true ? { preciseStyleRouted: true as const } : {}),
       ...(input.__preciseStyleSentGray === true ? { preciseStyleSentGray: true as const } : {}),
+      ...(faults.length > 0 ? { faults } : {}),
     }
     return reply.send({ data: out })
   })

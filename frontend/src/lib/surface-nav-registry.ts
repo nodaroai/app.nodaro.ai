@@ -183,6 +183,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "nodaro-motion",
   // Motion price check — admin-only, where credits exist.
   "motion-price-check",
+  // Video Remake faults — admin-only, where credits exist: the runs that recorded a fault.
+  "remake-faults",
   // Trend Radar — admin-only (and only where credits exist): the queue, its settings and one candidate.
   "trend-radar",
   "trend-radar/settings",

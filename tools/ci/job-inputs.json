@@ -446,6 +446,8 @@
         "backend/src/lib/credit-base-cost.ts",
         "backend/src/lib/credits-job-lifecycle.ts",
         "backend/src/lib/dedup-fingerprint.ts",
+        "backend/src/lib/deferred-child-request.ts",
+        "backend/src/lib/deferred-child-settlement.ts",
         "backend/src/lib/deployment-payer.ts",
         "backend/src/lib/deployment-urls.ts",
         "backend/src/lib/describe-to-picker-request.ts",

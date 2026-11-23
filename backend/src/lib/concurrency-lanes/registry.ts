@@ -145,6 +145,11 @@ export function notePluginJobTypes(types: Iterable<string>): void {
   for (const t of types) pluginJobTypes.add(t)
 }
 
+/** Whether a loaded private plugin handles jobs of this type (its `handlers()` keys). */
+export function isPluginJobType(jobType: string): boolean {
+  return pluginJobTypes.has(jobType)
+}
+
 /** Whether a plugin load failed in this process (set by the loader; never cleared). */
 let pluginLoadFailedFlag = false
 

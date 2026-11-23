@@ -144,6 +144,7 @@ const AdminTrendEditor = lazy(() => import("@/ee/app/(admin)/admin/trends/detail
 const AdminNodaroMotion = lazy(() => import("@/ee/app/(admin)/admin/nodaro-motion/page"))
 const AdminProviderSafety = lazy(() => import("@/ee/app/(admin)/admin/provider-safety/page"))
 const AdminMotionPriceCheck = lazy(() => import("@/ee/app/(admin)/admin/motion-price-check/page"))
+const AdminRemakeFaults = lazy(() => import("@/ee/app/(admin)/admin/remake-faults/page"))
 const AdminTrendRadar = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/page"))
 const AdminTrendRadarSettings = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/settings-page"))
 const AdminTrendRadarCandidate = lazy(() => import("@/ee/app/(admin)/admin/trend-radar/candidate-page"))
@@ -222,6 +223,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
             // Its former address.
             { path: "nodaro-motion", element: <Navigate to="/admin/video-remake" replace /> },
             { path: "motion-price-check", element: <SuspenseWrapper><AdminMotionPriceCheck /></SuspenseWrapper> },
+            { path: "remake-faults", element: <SuspenseWrapper><AdminRemakeFaults /></SuspenseWrapper> },
             // The radar's queue, its settings and one candidate: Cloud only, like the trends it feeds.
             { path: "trend-radar", element: <SuspenseWrapper><AdminTrendRadar /></SuspenseWrapper> },
             { path: "trend-radar/settings", element: <SuspenseWrapper><AdminTrendRadarSettings /></SuspenseWrapper> },

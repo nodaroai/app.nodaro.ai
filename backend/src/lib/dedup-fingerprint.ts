@@ -53,19 +53,20 @@ export function computeFingerprint(routeKey: string, body: unknown): string {
 export async function findRecentMatchingJob(
   userId: string,
   key: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; input_data?: unknown } | null> {
   try {
     const since = new Date(Date.now() - DEDUP_TTL_MS).toISOString()
     const { data } = await supabase
       .from("jobs")
-      .select("id")
+      // `input_data` so a replay answers what the STORED job was granted (a deferred settlement).
+      .select("id, input_data")
       .eq("user_id", userId)
       .eq("idempotency_key", key)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-    return (data as { id: string } | null) ?? null
+    return (data as { id: string; input_data?: unknown } | null) ?? null
   } catch {
     return null
   }

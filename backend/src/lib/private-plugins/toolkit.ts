@@ -120,7 +120,9 @@ import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
-import { getJobId, throwIfJobCancelled } from "../job-cancellation.js"
+import { getJobId, getJobUserId, throwIfJobCancelled } from "../job-cancellation.js"
+import { assertOwnDeferredChild, resolveDeferredChild } from "../deferred-child-settlement.js"
+import { isOurCdnUrl } from "../cdn-host.js"
 import { jobFileObjectId } from "../job-output-keys.js"
 import { hasCredits, hasOrganizations, llmMeteredPricing } from "../config.js"
 import { LlmSpend, reserveLlmCall, settleLlmJob, type LlmReserveResult } from "../llm-billing.js"
@@ -1692,6 +1694,29 @@ function workerRequestVia(workerApp: () => Promise<FastifyInstance>) {
   }
 }
 
+/** The most images one `completeStructured` call carries (`llmStructuredImages`). */
+const MAX_STRUCTURED_IMAGES = 5
+
+/**
+ * A `completeStructured` request's `imageUrls`, checked: at most 5 links, each
+ * an https link on this deployment's own media host (`isOurCdnUrl`: the
+ * R2_PUBLIC_URL origin or the exact R2_PUBLIC_FALLBACK_DOMAIN host). The call
+ * is unmetered and the link is handed to a model lane that fetches it, so it
+ * can never name an arbitrary host. A bad list is refused, never trimmed.
+ */
+export function structuredImageUrls(imageUrls: unknown): string[] {
+  if (imageUrls === undefined) return []
+  if (!Array.isArray(imageUrls) || imageUrls.length > MAX_STRUCTURED_IMAGES) {
+    throw new Error(`tk.llm.completeStructured: imageUrls must be a list of at most ${MAX_STRUCTURED_IMAGES} links`)
+  }
+  return imageUrls.map((url) => {
+    if (typeof url !== "string" || !isOurCdnUrl(url, config.R2_PUBLIC_URL ?? "", config.R2_PUBLIC_FALLBACK_DOMAIN ?? "")) {
+      throw new Error("tk.llm.completeStructured: every imageUrls entry must be an https link on this deployment's own media host")
+    }
+    return url
+  })
+}
+
 function assertNotLeaseKey(key: string): void {
   if (key.startsWith(LEASE_KEY_PREFIX)) throw new Error(`keys under "${LEASE_KEY_PREFIX}" belong to tk.redis.lease`)
 }
@@ -1796,6 +1821,12 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // Video Remake: the /v1/video-remake prefix beside /v1/cast-swap in every route-keyed gate, guard and hook
   // (lib/video-remake-paths.ts): a plugin registers its /v1/video-remake routes only where this is set.
   videoRemake: true,
+  // /v1/generate-video takes `deferSettlement` from a plugin's own child (answered `settlementDeferred: true`): its
+  // reservation stays held after it completes until tk.jobs.settleDeferredChild / releaseDeferredChild, or the
+  // host's sweep, resolves it (lib/deferred-child-settlement.ts).
+  deferredChildSettlement: true,
+  // tk.llm.completeStructured takes `imageUrls` (at most 5 https links), sent as image parts on the direct lane.
+  llmStructuredImages: true,
 })
 
 export interface BuildToolkitOptions {
@@ -2074,6 +2105,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       markJobFailedWithOutput: pluginMarkJobFailedWithOutput,
       refundJobCredits: pluginRefundJobCredits,
       hasWaivingRecastRun,
+      // The running job (`getJobId()`, the handler's own) may settle or release only its own children.
+      settleDeferredChild: async (childJobId) => {
+        await assertOwnDeferredChild(getJobId(), childJobId, getJobUserId())
+        return resolveDeferredChild(childJobId, "settled", { by: "plugin" })
+      },
+      releaseDeferredChild: async (childJobId, reason) => {
+        await assertOwnDeferredChild(getJobId(), childJobId, getJobUserId())
+        return resolveDeferredChild(childJobId, "released", { reason: typeof reason === "string" ? reason : "", by: "plugin" })
+      },
     },
     http: {
       // Dynamic import keeps the core/ee boundary (see computeGenerateVideoProPricing below).
@@ -2230,11 +2270,18 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         schema: unknown,
         opts?: { schemaName?: string; maxRetries?: number },
       ): Promise<T> => {
+        const images = structuredImageUrls(req.imageUrls)
         const result = await llmCompleteStructured(
           {
             modelId: req.model,
             system: req.system ?? "",
-            messages: [{ role: "user", content: req.prompt }],
+            // With images (`llmStructuredImages`): the prompt, then each image as its own part.
+            messages: [{
+              role: "user",
+              content: images.length > 0
+                ? [{ type: "text", text: req.prompt }, ...images.map((url) => ({ type: "image" as const, url }))]
+                : req.prompt,
+            }],
             maxTokens: req.maxTokens,
             // Forward pinned sampling (video-analysis grader pins temperature 0 for
             // a deterministic judge). deriveParams gates on `!== undefined`, so 0
@@ -2247,8 +2294,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
             reasoningEffort: req.reasoningEffort as LlmReasoningEffort | undefined,
             // Unset by default — this text-only path serves gvp/evp planners
             // and film-studio doctrine, which keep the registry's cost-aware
-            // routing. Only a caller that must not touch KIE pins a lane.
-            requireLane: req.requireLane,
+            // routing. Only a caller that must not touch KIE pins a lane. A
+            // call with images is pinned direct: the proxied lane can lose an
+            // image silently and answer about nothing.
+            requireLane: req.requireLane ?? (images.length > 0 ? "direct" : undefined),
             // ON unless the caller opts out: a failure that reported no usage cost nothing,
             // so re-dialling it once is free. Independent of `opts.maxRetries`, which counts
             // re-asking a provider that already answered — and billed.

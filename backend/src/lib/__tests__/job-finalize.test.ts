@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.hoisted() so the mock setters survive vi.clearAllMocks().
@@ -46,7 +46,9 @@ const mocks = vi.hoisted(() => {
   // SELECT path: .from("usage_logs").select("id").eq("job_id", id).eq("status", "reserved").limit(1)
   const usageLimitMock = vi.fn().mockResolvedValue({ data: [{ id: "u-log-1" }], error: null })
   const usageEqStatusMock = vi.fn(() => ({ limit: usageLimitMock }))
-  const usageEqJobMock = vi.fn(() => ({ eq: usageEqStatusMock }))
+  // The deferred settlement's planned charge: .from("usage_logs").select(...).eq("id", id).maybeSingle()
+  const usageMaybeSingleMock = vi.fn().mockResolvedValue({ data: { credits_used: 40, action: "seedance-2-5", metadata: {} }, error: null })
+  const usageEqJobMock = vi.fn(() => ({ eq: usageEqStatusMock, maybeSingle: usageMaybeSingleMock }))
   const usageSelectMock = vi.fn(() => ({ eq: usageEqJobMock }))
 
   // -------------------------- workflow_executions table chain --------------------------
@@ -89,6 +91,7 @@ const mocks = vi.hoisted(() => {
     jobsFenceSelectMock,
     updateReply,
     usageLimitMock,
+    usageMaybeSingleMock,
     usageSelectMock,
     wfSingleMock,
     wfSelectMock,
@@ -101,6 +104,14 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.fromMock, rpc: mocks.rpcMock } }))
+
+// Credits on or off (default off: every suite above runs as it always did). On
+// only for the deferred-settlement cases at the bottom.
+const credits = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/config.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  hasCredits: () => credits.on,
+}))
 
 // Mock workers/shared.js: every helper finalizeJobWithMedia calls is a
 // vi.fn() so we can assert calls / count / arguments per test.
@@ -2027,5 +2038,97 @@ describe("the discard fence's statuses", () => {
   it("after a throw or a lost completion alike: cancelled or failed only — never live, completed or held", () => {
     expect([...DISCARD_STATUSES].sort()).toEqual(["cancelled", "failed"])
     expect(DISCARD_AFTER_MISSED_BLOCK).toEqual(["cancelled"])
+  })
+})
+
+// ===========================================================================
+// A plugin's engine child that asked to stay HELD after it completes
+// (lib/deferred-child-settlement.ts): completed as usual, nothing committed.
+// ===========================================================================
+describe("finalizeJobWithMedia — a deferred child settlement", () => {
+  const DEFERRED_ROW = {
+    id: "j1",
+    user_id: "u1",
+    should_watermark: false,
+    is_public: false,
+    job_type: "image-to-video",
+    workflow_execution_id: null,
+    status: "processing",
+    parent_job_id: "p1",
+    input_data: { type: "image-to-video", __deferSettlement: true },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetMocksToHappyPath()
+    credits.on = true
+    mocks.usageMaybeSingleMock.mockResolvedValue({ data: { credits_used: 40, action: "seedance-2-5", metadata: {} }, error: null })
+  })
+  afterEach(() => {
+    credits.on = false
+  })
+
+  it("completes the job with its replay and what it will cost, and commits nothing", async () => {
+    mocks.jobsSingleMock.mockResolvedValue({ data: DEFERRED_ROW, error: null })
+    const result = await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/v.mp4", cost: 0.5, providerUsed: "seedance-2-5" },
+    })
+    expect(result.ok).toBe(true)
+    const [, fields] = sharedMocks.markJobCompletedDetailed.mock.calls[0]!
+    const held = (fields.held_completion_fields as Record<string, unknown>).deferredSettlement as Record<string, unknown>
+    expect(held).toMatchObject({ version: 1, state: "held", providerCost: 0.5 })
+    expect(held.commit).toEqual(sharedMocks.markJobCompletedDetailed.mock.calls[0]![3])
+    expect(fields.credits_actual).toBe(40)
+    expect(fields.output_data).toEqual({ videoUrl: "https://r2.example/vid-j1.mp4" })
+    expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+    expect(sharedMocks.refundLoopTrimAddon).not.toHaveBeenCalled()
+    // The completion tail still runs.
+    expect(sharedMocks.createAssetFromJob).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ["no deferral asked", { ...DEFERRED_ROW, input_data: { type: "image-to-video" } }],
+    ["a job with no parent", { ...DEFERRED_ROW, parent_job_id: null }],
+    ["a deferral asked as a string", { ...DEFERRED_ROW, input_data: { type: "image-to-video", __deferSettlement: "true" } }],
+  ] as const)("%s: settles exactly as before", async (_label, row) => {
+    mocks.jobsSingleMock.mockResolvedValue({ data: row, error: null })
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/v.mp4", cost: 0.5, providerUsed: "seedance-2-5" },
+    })
+    const [, fields] = sharedMocks.markJobCompletedDetailed.mock.calls[0]!
+    expect(fields).not.toHaveProperty("held_completion_fields")
+    expect(fields).not.toHaveProperty("credits_actual")
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", 0.5, undefined, undefined)
+  })
+
+  it("without credits (Community) a deferral asked is ignored", async () => {
+    credits.on = false
+    mocks.jobsSingleMock.mockResolvedValue({ data: DEFERRED_ROW, error: null })
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/v.mp4", cost: 0.5, providerUsed: "seedance-2-5" },
+    })
+    const [, fields] = sharedMocks.markJobCompletedDetailed.mock.calls[0]!
+    expect(fields).not.toHaveProperty("held_completion_fields")
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("a deferred child with no open reservation completes and commits nothing to defer", async () => {
+    mocks.jobsSingleMock.mockResolvedValue({ data: DEFERRED_ROW, error: null })
+    mocks.usageLimitMock.mockResolvedValue({ data: [], error: null })
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/v.mp4", cost: 0.5, providerUsed: "seedance-2-5" },
+    })
+    const [, fields] = sharedMocks.markJobCompletedDetailed.mock.calls[0]!
+    expect(fields).not.toHaveProperty("held_completion_fields")
+    // The usual commit with no log: a graceful no-op, exactly as before.
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith(null, "j1", 0.5, undefined, undefined)
   })
 })
