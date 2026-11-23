@@ -55,6 +55,7 @@ import {
   ownedJobOutputFiles,
   rawExtensionObjectId,
   rawExtensionReferenceObjectId,
+  sideBySideVideoKey,
   silentVideoKey,
 } from "../job-output-keys.js"
 import { applyEdlOutputData } from "../apply-edl-output.js"
@@ -217,6 +218,7 @@ const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
   "workers/handlers/video-mask.ts :: rleCacheName(value.chunk.index)": "Video Mask's kept chunk segmentation, so a retry after the model answered never pays it again: `jobId` is the handler's `ctx.jobId`",
   "workers/download-audio.ts :: \"cover-src\"": "Suno's re-hosted source audio: `opts.scratchJobId` is the Suno handler's `ctx.jobId` (without one the flat `audios/` key is listed above)",
   "lib/llm-file-link.ts :: `llm-file-${randomUUID()}`": "a PDF too large to send inline, stored so the aggregator can read it by a link ending in `.pdf` (a model whose chat-completions lane reads a document by link; decided 2026-11-17) — the bytes the route read and counted, never the caller's link, under a full random name: `jobId` is the LLM Chat job's own id (`storeLlmFileLinks`, called once the job row exists and its hold is taken), and the route deletes each copy in its `finally` when the call ends (`discardLlmFileLinks`); the job's folder is otherwise left to the daily age sweep",
+  "ee/lib/video-remake-side-by-side-job.ts :: name": "a Video Remake trend run's side by side, made for an administrator and kept off the run's row (its runner reads `output_data`): `work.jobId` is the run's id, passed explicitly; the name is `side-by-side-<keyed hash>` (`sideBySideKeyHash`), so the address cannot be guessed from the run's id. The run has ended long before, so no job end empties the folder: the daily age sweep does, and the job's marker holding the record runs out a day earlier (`KEPT_OFF_RUN_READY_SECONDS`)",
   "lib/outside-input-copy.ts :: `outside-input-${randomUUID()}`": "a copy of an input that was not on our storage, made before a model behind the platform sees it (a full random name: copies are served immutable, so two never share a key): `opts.jobId` (a workflow run's orchestrator passes the job's id), else the running job's id inside a video-worker job; a lane with no job yet (a route's guard, before the job row exists) gets the flat key, which only the 7-day age sweep deletes",
 }
 
@@ -256,6 +258,10 @@ const IN_FAMILY_BUILT_ELSEWHERE: Readonly<Record<string, { key: (jobId: string) 
   "workers/handlers/video-ai.ts :: silentVideoKey(jobId)": {
     key: (j) => silentVideoKey(j),
     why: "Veo's audio-stripped copy, `videos/<jobId>-silent.mp4`: the job's family",
+  },
+  "ee/lib/video-remake-side-by-side-job.ts :: key": {
+    key: (j) => sideBySideVideoKey(j, "s".repeat(32), 1),
+    why: "a Video Remake run's side by side, `videos/<jobId>-side-by-side-v<recipe>-<hash>.mp4` (sideBySideObjectKey → sideBySideVideoKey): the run's family, recorded in its output_data",
   },
   // Decided 2026-10-08: these four were known gaps (random keys) and now key
   // in the job's family. Each entry runs the writer's REAL builder.

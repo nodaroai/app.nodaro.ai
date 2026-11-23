@@ -134,6 +134,7 @@ import { deniedNodeRejectionMessage, nodeNotAvailableError } from "../surface-de
 import { judgeVoice, VoiceNotAvailableError, voiceNotAvailableBody } from "../voice-gender.js"
 import { getAppSettings, settingsReadFailed } from "../app-settings.js"
 import { withEarlierMaskingKeys } from "../nodaro-motion-masking.js"
+import { withFaceGrowMerged } from "../nodaro-motion-face-grow-setting.js"
 import {
   loadedEngineDrawsFaceMesh,
   withDepthBlurFor,
@@ -142,6 +143,7 @@ import {
   withFaceMeshFor,
   withFaceMeshMinFaceHeightFor,
   withFaceMeshPartsFor,
+  withFaceGrowFor,
   withFillNoneFor,
   type FaceMasking,
 } from "../cast-swap-face-masking.js"
@@ -1698,8 +1700,8 @@ function assertNotLeaseKey(key: string): void {
  * A Video Remake masking setting as this process's Cast Swap engine is
  * answered it (`tk.settings`): the face mesh only for an engine that draws it
  * (`withFaceMeshFor`), and the depth colormap, the depth model size, the
- * depth blur, the face mesh's parts (or its layers) and Full depth's smallest face with mesh
- * lines only where they change what is drawn AND the engine declares them —
+ * depth blur, the face mesh's parts (or its layers), Full depth's smallest face with mesh
+ * lines and the face grow only where they change what is drawn AND the engine declares them —
  * else no key, exactly the setting before each existed. The fill `"none"`
  * first (`withFillNoneFor`): to an engine that cannot draw it (or the face
  * mesh) the whole entry is `{ mode: "off" }`, never a blur. A new object.
@@ -1707,7 +1709,7 @@ function assertNotLeaseKey(key: string): void {
 function forLoadedEngine<T extends FaceMasking>(m: T, drawsFaceMesh: boolean, cs: ReturnType<typeof getPluginSupports>["castSwap"]): T {
   const fill = withFillNoneFor(m, cs, drawsFaceMesh)
   const parts = withFaceMeshPartsFor(withDepthBlurFor(withDepthModelSizeFor(withDepthColormapFor(withFaceMeshFor(fill, drawsFaceMesh), cs), cs), cs), cs)
-  return withFaceMeshMinFaceHeightFor(withFaceMeshLayersFor(parts, cs), cs)
+  return withFaceGrowFor(withFaceMeshMinFaceHeightFor(withFaceMeshLayersFor(parts, cs), cs), cs)
 }
 
 /**
@@ -1777,6 +1779,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // POST /v1/video-face-mesh also takes `layers` (any set of the wireframe, eyes, lips, contours, irises and bold
   // lines) in place of `parts`, and answers them as `output_data.layers`.
   videoFaceMeshLayers: true,
+  // POST /v1/mask-composite takes `faceGrowPct` from a child (the face mask widened onto the face's own skin before
+  // the render) and answers `output_data.faceGrow` (routes/mask-composite.ts, providers/video/mask-face-grow.ts).
+  maskCompositeFaceGrow: true,
   // POST /v1/video-mask takes `tracks` (one track per subject, in its output) and POST /v1/mask-erase takes
   // `eraseTracks` (whole subjects dropped by a point on one frame): providers/video/video-mask-tracks.ts.
   videoMaskTracks: true,
@@ -2394,8 +2399,11 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         if (!masking) return null
         const draws = loadedEngineDrawsFaceMesh()
         const cs = getPluginSupports().castSwap
+        // The face grow lives in its own row (an older build must still read the masking row): merged in here,
+        // then sent only where it grows and the engine declares it (`withFaceGrowFor`, in `forLoadedEngine`).
+        const grown = withFaceGrowMerged(masking, settings.nodaro_motion_face_grow)
         return Object.fromEntries(
-          Object.entries(withEarlierMaskingKeys(masking)).map(([engine, m]) => [engine, m && forLoadedEngine(m, draws, cs)]),
+          Object.entries(withEarlierMaskingKeys(grown)).map(([engine, m]) => [engine, m && forLoadedEngine(m, draws, cs)]),
         ) as ReturnType<typeof withEarlierMaskingKeys>
       },
       // Same rules: a failed read throws (null would put every direct run back on the defaults).

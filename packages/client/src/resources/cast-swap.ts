@@ -1121,6 +1121,26 @@ export interface VideoRemakeArtStyle {
 }
 
 /**
+ * A finished run's side by side ({@link VideoRemakeResource.sideBySide}):
+ * `ready` with the file's address, or `making` / `waiting` while it is
+ * rendered (ask again in a few seconds). `waiting`: another of the account's
+ * runs is being rendered first.
+ */
+export type VideoRemakeSideBySide =
+  | {
+      status: "ready"
+      /** The MP4: the original clip and the remake together, the remake's sound. */
+      url: string
+      /** A file name to save it under. */
+      fileName: string
+      width: number
+      height: number
+      /** `"stack"`: the original above the remake (a wide run); `"side"`: the original on the left (a square or tall one). */
+      layout: "stack" | "side"
+    }
+  | { status: "making" | "waiting" }
+
+/**
  * One preview of {@link VideoRemakeResource.previews}: a before-and-after of
  * what Video Remake does, as Nodaro's pages show it. Every address is an
  * absolute https address; every clip is silent and 16:9.
@@ -1351,6 +1371,26 @@ export class VideoRemakeResource {
   fullQuality(jobId: string, params: VideoRemakeFullQualityParams = {}): Promise<VideoRemakeFullQualityResult> {
     const body = params.sessionId !== undefined ? { sessionId: params.sessionId } : {}
     return this.client.request("POST", `/v1/video-remake/${encodeURIComponent(jobId)}/full-quality`, { body })
+  }
+
+  /**
+   * A finished run's original clip and its result in one video (`POST
+   * /v1/video-remake/:jobId/side-by-side`): the exact stretch of the clip the
+   * run was made from beside the result, the result's sound, small
+   * "Original" / "Remake" labels; stacked for a wide run, side by side for a
+   * square or tall one. Each half is the result's size, up to a 1080p
+   * picture's pixels (a larger result, such as a 4K one, is scaled down to
+   * that, its shape kept; `width` / `height` are the file's). Free. The first call starts the render and answers
+   * `making` (or `waiting`); call again every few seconds until it answers
+   * `ready` with the file's address. A run whose file is made answers `ready`
+   * at once. Your own runs only; a developer app's token needs `jobs:read`
+   * and a `:write` or `:execute` scope (403 `insufficient_scope`). Refusals: 409 `side_by_side_unavailable`
+   * (`reason`: `not_video_remake`, `not_finished`, `trend_run`, `no_clip`);
+   * 500 `side_by_side_failed` (ask again later).
+   */
+  async sideBySide(jobId: string): Promise<VideoRemakeSideBySide> {
+    const res = await this.client.request<{ data: VideoRemakeSideBySide }>("POST", `/v1/video-remake/${encodeURIComponent(jobId)}/side-by-side`, { body: {} })
+    return res.data
   }
 }
 

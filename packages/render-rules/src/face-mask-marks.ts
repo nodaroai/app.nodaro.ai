@@ -114,3 +114,14 @@ export type CastSwapSourceMode = (typeof CAST_SWAP_SOURCE_MODES)[number]
  * from `min` (0: off, the setting's default) to `max`.
  */
 export const CAST_SWAP_DEPTH_BLUR_BOUNDS = { min: 0, max: 40, step: 1 } as const
+
+/**
+ * The face mask's grow (`faceMasking.growPct`, decided 2026-11-23; the Video
+ * Remake Precise setting's alone): with target "face", the mask is widened
+ * outwards by this % of each face's height before it is filled, only onto
+ * the face's own skin colours, never above the face's top and never onto
+ * hair. Whole steps from `min` (0: off, the setting's default) to `max`.
+ * `nearBandPct`: the band at the face's edge that is always kept (a % of the
+ * face's height, never more than the grow itself).
+ */
+export const CAST_SWAP_FACE_GROW_BOUNDS = { min: 0, max: 40, step: 1, nearBandPct: 6 } as const

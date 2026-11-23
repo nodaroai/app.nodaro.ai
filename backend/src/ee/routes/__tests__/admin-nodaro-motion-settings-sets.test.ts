@@ -214,6 +214,21 @@ describe("storing a set", () => {
     expect(h.sets).toHaveLength(1)
   })
 
+  it("stores the face grow as its own section, and reads it back unchanged (while the environments cannot, as a warning)", async () => {
+    const faceGrow = { faceGrow: { "nodaro-prism": 18 } }
+    const res = await send("POST", BASE, { name: "Grown", settings: { "face-grow": faceGrow } })
+    expect(res.statusCode).toBe(201)
+    const set = res.json().data.set
+    expect(set.settings).toEqual({ "face-grow": faceGrow })
+    // No environment takes it yet: the set is kept, and says which section cannot be saved live.
+    expect(res.json().data.warnings).toEqual([expect.objectContaining({ section: "face-grow" })])
+    const listed = (await send("GET", BASE)).json().data.sets.find((s: { id: string }) => s.id === set.id)
+    expect(listed.settings).toEqual({ "face-grow": faceGrow })
+    // Out of range is the route's own refusal; the masking section never takes the key.
+    expect((await send("POST", BASE, { name: "Too far", settings: { "face-grow": { faceGrow: { "nodaro-prism": 41 } } } })).statusCode).toBe(400)
+    expect((await send("POST", BASE, { name: "In masking", settings: { masking: { masking: { "nodaro-prism": { mode: "always", target: "face", growPct: 18 } } } } })).statusCode).toBe(400)
+  })
+
   it("keeps names unique, case aside", async () => {
     expect((await send("POST", BASE, { name: "Look", settings: {} })).statusCode).toBe(201)
     const res = await send("POST", BASE, { name: "look", settings: {} })

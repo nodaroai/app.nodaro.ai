@@ -3999,6 +3999,17 @@ export interface PluginCapabilities {
    */
   readonly videoFaceMeshLayers?: boolean
   /**
+   * `POST /v1/mask-composite` (through `tk.http.workerRequest`, a child of the
+   * calling job; refused to any other caller) takes `faceGrowPct` (1–40): the
+   * face mask widened by that % of each face's height before the render —
+   * never above the face's top, beyond a thin band at its edge only onto the
+   * face's own skin colours — its colours read from the leading video, and
+   * answers `output_data.faceGrow` (`growPct`, `frames`, `grownFrames`,
+   * `areaRatio`). Same price. False (or absent): an older host, whose route
+   * drops the key and covers the mask as found.
+   */
+  readonly maskCompositeFaceGrow?: boolean
+  /**
    * `POST /v1/video-mask` takes `tracks: true` and answers the mask's subjects
    * as `output_data.tracks` (each one's `id`, `fromFrame`, `toFrame`, `frames`
    * and the `viewFrame` / `viewBox` to look at it on), with `tracksOmitted`
@@ -4144,6 +4155,14 @@ export interface PluginFaceMasking {
    * `supports.castSwap.faceMeshMinFaceHeightPct`.
    */
   faceMeshMinFaceHeightPct?: number
+  /**
+   * The face grow (the Video Remake Precise setting's alone): with target
+   * `"face"` and a blur or depth fill, the face mask widened by this % of each
+   * face's height (1–40) before it is filled (`capabilities.maskCompositeFaceGrow`).
+   * Answered by `tk.settings` only where it grows, and only to an engine that
+   * declares `supports.castSwap.faceGrow`.
+   */
+  growPct?: number
 }
 
 /**
@@ -5168,6 +5187,14 @@ export interface PluginSupports {
    *   refuses a trend's make that sets it, and refuses to save a shared
    *   Video Remake setting with it while any environment lacks it
    *   (lib/cast-swap-face-masking.ts `engineDrawsFaceMeshMinFaceHeight`).
+   * - `faceGrow`: the Precise masking setting may name `growPct` (0–40; target
+   *   `"face"` with a blur or depth fill): the engine sends it to the fill's
+   *   `/v1/mask-composite` child as `faceGrowPct` where the host takes it
+   *   (`capabilities.maskCompositeFaceGrow`) and records what was grown. No
+   *   new child, no price, no prompt word. Additive-optional: absent ⇒
+   *   `false` — the platform answers the settings without the key and refuses
+   *   to save a shared Video Remake setting with it while any environment
+   *   lacks it (lib/cast-swap-face-masking.ts `engineGrowsFaceMask`).
    * - `promptWordings`: how the engine may word a FLEXIBLE prompt —
    *   `"current"` (today's) and `"new"` (a movement lock, the picture roles,
    *   a closing restatement and the avoid part as a failure list; the parts
@@ -5330,6 +5357,7 @@ export interface PluginSupports {
     readonly shotListFps?: boolean
     readonly roleFace?: boolean
     readonly roleFaceStoredMask?: boolean
+    readonly faceGrow?: boolean
   }
 }
 

@@ -279,8 +279,14 @@ const INPUT_BASE_THREADS = 2
  *  count the model was measured on (three cameras and the master's sound). */
 export const UNKNOWN_INPUTS = 4
 
-/** The cameras the per-input term was measured on: 1080p (1920 x 1080). */
-const CAMERA_REFERENCE_MEGAPIXELS = (1920 * 1080) / 1e6
+/** The picture the per-input term was measured on, and the 1080p rows of the
+ *  canvas fit: 1920 x 1080. A launch that keeps each picture it draws within
+ *  it stays inside what was measured (the side by side's panes,
+ *  `side-by-side.ts`). */
+export const MEASURED_CAMERA = { width: 1920, height: 1080 } as const
+
+/** The cameras the per-input term was measured on: 1080p (`MEASURED_CAMERA`). */
+const CAMERA_REFERENCE_MEGAPIXELS = (MEASURED_CAMERA.width * MEASURED_CAMERA.height) / 1e6
 
 /** A camera's picture size in megapixels - what `extras.cameraMegapixels` takes. */
 export const cameraMegapixelsOf = (size: { readonly width: number; readonly height: number }): number =>

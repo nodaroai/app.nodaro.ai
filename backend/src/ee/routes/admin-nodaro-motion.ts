@@ -39,6 +39,8 @@
  *                                         per engine, whether a direct run's prompt carries the line that keeps the shot order and adds no shot (admin-nodaro-motion-shot-lock.ts)
  *   GET/PUT /v1/admin/video-remake/shot-list-fps
  *                                         how many frames a second the model that writes a run's shot list is shown of the clip (admin-nodaro-motion-shot-list-fps.ts)
+ *   GET/PUT /v1/admin/video-remake/face-grow
+ *                                         per engine, how far a direct Precise run's face mask is widened onto the face's own skin (admin-nodaro-motion-face-grow.ts)
  *   GET/PUT /v1/admin/video-remake/flash-model
  *                                         per engine, a test switch that makes an admin account's new runs on the faster model of the engine's family; never part of a stored settings set (admin-nodaro-motion-flash-model.ts)
  *   GET/POST /v1/admin/video-remake/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
@@ -109,6 +111,7 @@ import { cannotDrawColormapsMessage, depthColormapOfSetting, environmentsThatCan
 import { cannotBlurDepthFillMessage, depthFillBlurOfSetting, environmentsThatCannotBlurDepthFill } from "../lib/nodaro-motion-depth-blur.js"
 import { cannotFillNoneMessage, environmentsThatCannotFillNone, fillsNone } from "../lib/nodaro-motion-fill-none.js"
 import { cannotDrawModelSizesMessage, depthModelSizeOfSetting, environmentsThatCannotDrawModelSizes } from "../lib/nodaro-motion-depth-model-size.js"
+import { NODARO_MOTION_FACE_GROW_SECTION, registerNodaroMotionFaceGrowRoutes } from "./admin-nodaro-motion-face-grow.js"
 import { audit } from "./admin-trends-lifecycle.js"
 import { defineNodaroMotionSettingsSection, sendRefusal, type AnyNodaroMotionSettingsSection } from "../lib/nodaro-motion-settings-section.js"
 import { NODARO_MOTION_PROMPT_PARTS_SECTION, registerNodaroMotionPromptPartRoutes } from "./admin-nodaro-motion-prompt-parts.js"
@@ -211,6 +214,7 @@ export const NODARO_MOTION_MASKING_SECTION = defineNodaroMotionSettingsSection({
 export const NODARO_MOTION_SETTINGS_SECTIONS: readonly AnyNodaroMotionSettingsSection[] = [
   NODARO_MOTION_PROMPT_WORDING_SECTION,
   NODARO_MOTION_MASKING_SECTION,
+  NODARO_MOTION_FACE_GROW_SECTION,
   NODARO_MOTION_MOTION_SECTION,
   NODARO_MOTION_STEPS_SECTION,
   NODARO_MOTION_STYLE_SECTION,
@@ -281,6 +285,7 @@ export async function adminNodaroMotionRoutes(app: FastifyInstance) {
   registerNodaroMotionShotLockRoutes(app)
   registerNodaroMotionShotListFpsRoutes(app)
   registerNodaroMotionFlashModelRoutes(app)
+  registerNodaroMotionFaceGrowRoutes(app)
   registerNodaroMotionSettingsSetsRoutes(app, NODARO_MOTION_SETTINGS_SECTIONS)
   app.get("/v1/admin/video-remake/masking", { preHandler: requireAdmin }, async (req, reply) => {
     try {

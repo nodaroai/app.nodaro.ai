@@ -21,6 +21,7 @@ import {
   JobPageLink,
   statusVariant,
 } from "../jobs/job-detail-view"
+import { hasSideBySide, SideBySideButton } from "./side-by-side-button"
 
 /**
  * One job on a page of its own (`/admin/job/:id`): everything the Jobs page's
@@ -71,6 +72,11 @@ export default function AdminJobPage() {
               <Badge variant={statusVariant(page.data.job.status)}>{page.data.job.status}</Badge>
             </h1>
             {rowJobType(page.data.job) && <p className="text-sm text-muted-foreground">{rowJobType(page.data.job)}</p>}
+            {hasSideBySide(page.data.job) && (
+              <div>
+                <SideBySideButton jobId={page.data.job.id} />
+              </div>
+            )}
             {page.data.job.parent_job_id && (
               <p className="text-sm text-muted-foreground">
                 A step of{" "}

@@ -47,11 +47,14 @@ describe("the stored row's read", () => {
       .toEqual({ "nodaro-prism": { precise: { face: "new" } } })
   })
 
-  it("drops an unknown engine and an invalid entry alone, with a warning, and reads a non-object as never saved", () => {
+  it("drops an unknown engine, reads past a part id it does not know (a newer build's), each with a warning, and reads a non-object as never saved", () => {
     const warns: string[] = []
     const got = parseNodaroMotionPromptParts({ "nodaro-prism": { precise: { faces: "x" } }, "nodaro-pulse": { motion: { face: "ok" } }, other: {} }, (m) => warns.push(m))
-    expect(got).toEqual({ "nodaro-pulse": { motion: { face: "ok" } } })
+    expect(got).toEqual({ "nodaro-prism": { precise: {} }, "nodaro-pulse": { motion: { face: "ok" } } })
     expect(warns).toHaveLength(2)
+    expect(warns.join(" ")).toMatch(/precise\.faces/)
+    // Any other invalid value still drops that entry alone.
+    expect(parseNodaroMotionPromptParts({ "nodaro-prism": { precise: { face: 3 } } }, () => {})).toEqual({})
     expect(parseNodaroMotionPromptParts(null)).toBeNull()
     expect(parseNodaroMotionPromptParts("x", () => {})).toBeNull()
   })

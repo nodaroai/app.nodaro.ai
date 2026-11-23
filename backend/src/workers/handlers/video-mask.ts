@@ -536,10 +536,18 @@ const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, c
     // The units the route or the workflow run charged: the render refuses (and
     // refunds) a leading video that needs more, and a job that carries none.
     billedUnits: data.billedUnits,
+    // The face grow (an internal child's lever, routes/mask-composite.ts): absent, the render exactly as before.
+    ...(typeof data.faceGrowPct === "number" && data.faceGrowPct > 0 ? { faceGrowPct: data.faceGrowPct } : {}),
   })
   try {
     await setJobProgress(job, ctx.jobId, 80)
-    await completeFfmpegVideoJob(result.outputPath, ctx, { width: result.width, height: result.height, durationSec: result.durationSec })
+    await completeFfmpegVideoJob(result.outputPath, ctx, {
+      width: result.width,
+      height: result.height,
+      durationSec: result.durationSec,
+      // Said only when the mask was grown: a worker from before never says it, so the caller can tell.
+      ...(result.faceGrow ? { faceGrow: result.faceGrow } : {}),
+    })
   } finally {
     await cleanupWorkDir(dirname(result.outputPath))
   }

@@ -541,6 +541,18 @@ describe("videoRemake resource", () => {
     expect(urls).toEqual(["https://api.example.com/v1/video-remake/previews", "https://api.example.com/v1/video-remake/previews"])
   })
 
+  it("sideBySide POSTs /v1/video-remake/:jobId/side-by-side and answers its state", async () => {
+    const ready = { status: "ready", url: "https://cdn.example.com/v.mp4", fileName: "nodaro-remake-side-by-side-61c80648.mp4", width: 1440, height: 1280, layout: "side" }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { status: "making" } })).mockReturnValueOnce(mockOk({ data: ready }))
+    const client = make(fetchMock)
+
+    expect(await client.videoRemake.sideBySide("job 1")).toEqual({ status: "making" })
+    expect(await client.videoRemake.sideBySide("job 1")).toEqual(ready)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/job%201/side-by-side")
+    expect(init.method).toBe("POST")
+  })
+
   it("styleChoice GETs /v1/video-remake/style-choice and answers every engine's choice", async () => {
     const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "flex", "nodaro-pulse": "user" } }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(answer))

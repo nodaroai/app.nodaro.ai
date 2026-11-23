@@ -385,6 +385,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
     "lists a switched-off template's own templates/<id>/kept/ prefix, which only the template publish writes (its copies of a kept run); no key comes from a row",
   "backend/src/lib/job-scratch-sweep.ts":
     "lists the server-written scratch root by age (decided 2026-10-09, round 3); no key comes from a row",
+  "backend/src/ee/lib/video-remake-side-by-side-job.ts":
+    "deletes only the run's side-by-side file under the key it builds itself (sideBySideVideoKey: its own upload when the record cannot be written, an older recipe's when replaced); no key comes from a row",
   "backend/src/lib/cast-swap-depth-clips-sweep.ts":
     "lists the plugin-written cast-swap/depth-clips/ prefix by age; no key comes from a row (the job a key names is read only to keep a make's or an unfinished run's)",
 }

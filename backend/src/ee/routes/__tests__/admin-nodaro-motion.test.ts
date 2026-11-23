@@ -374,3 +374,11 @@ describe("PUT /v1/admin/video-remake/masking", () => {
     expect(h.audits).toEqual([])
   })
 })
+
+describe("PUT /v1/admin/video-remake/masking — never the face grow (its own row)", () => {
+  it("refuses growPct in the masking (400): the face grow is saved through /v1/admin/video-remake/face-grow", async () => {
+    const res = await app.inject({ method: "PUT", url: "/v1/admin/video-remake/masking", headers: as, payload: { masking: { "nodaro-prism": { mode: "always", target: "face", growPct: 18 } } } })
+    expect(res.statusCode).toBe(400)
+    expect(h.upserts).toEqual([])
+  })
+})

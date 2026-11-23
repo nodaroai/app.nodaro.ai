@@ -5758,6 +5758,7 @@ length, with its own cast and new music, and can change the motion itself.
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/previews` | Before-and-after previews of what Video Remake does, each with its clips, stills, title and caption (see below). Public: no sign-in needed. |
+| `POST` | `/v1/video-remake/:jobId/side-by-side` | A finished run's original clip and its result in one video, to download (see [Side by side](#side-by-side) below). Free. Signed in; your own runs. A developer app needs `jobs:read` and a `:write` or `:execute` scope. |
 
 Both take the same body: `videoUrl` (the source clip), `roles` (at most 15 in
 all, in any mix of
@@ -6453,6 +6454,49 @@ Refusals, all before anything is charged (bodies are
 | `503` | `job_read_failed` | The draft could not be read just now (`retryable: true`); try again. |
 | `503` | `estimate_unavailable` | The 1080p render cannot be quoted right now; try again shortly. |
 | `503` | `host_too_old` | This platform version cannot run Full Quality. |
+
+### Side by side
+
+`POST /v1/video-remake/:jobId/side-by-side` makes one
+MP4 of a finished run's original clip and its result together, for showing the
+change:
+
+- **The original** is the exact stretch of the clip the run was made from (a
+  preview's 4 seconds from its start, a Nodaro Pulse run's cut, else the whole
+  clip; a Full Quality version's is its draft's), at the result's size and frame
+  rate. A clip of another shape is fitted inside its half (black around it),
+  never stretched or cropped.
+- **The size**: each half is the result's own size, up to the pixels of a
+  1080p picture (1920 × 1080, or 1080 × 1920 for a tall run). A larger result
+  (a 4K Precise run) is scaled down to that, its shape kept, so a 3840 × 2160
+  run gives a 1920 × 2160 file. `width` and `height` in the answer are the
+  file's.
+- **The layout** follows the result's shape: a run wider than square is
+  stacked, the original on top; a square or tall run sits side by side, the
+  original on the left.
+- **The length and sound** are the result's: every frame of it, with its own
+  sound track. Each half carries a small label, "Original" and "Remake" (in
+  English, whatever the language of the page).
+- **The quality** matches the result's: H.264 at twice the result's picture
+  bitrate (two halves of its size; a half scaled down gets its share of that by
+  area), 4:2:0.
+
+It is free. The file is rendered in the background: the first call answers
+`202 { data: { status: "making" } }` (or `"waiting"` while another of your runs
+is rendered first, one at a time per account); call again every few seconds
+until it answers `200 { data: { status: "ready", url, fileName, width, height,
+layout } }`. Once made, the file is kept with the run, so a later call answers
+`200` at once. Calls are limited to 60 a minute
+per account.
+
+| Status | `code` | When |
+|---|---|---|
+| 403 | `insufficient_scope` | A developer app's token without `jobs:read`, or with no `:write` / `:execute` scope. Signed-in sessions and personal API tokens are not scoped. |
+| 404 | `not_found` | No such run of yours (or it is in the Trash). |
+| 409 | `side_by_side_unavailable` | `reason`: `not_video_remake` (another kind of job), `not_finished` (not finished, or no video), `trend_run` (a trend run: its original is the trend's), `no_clip` (the original clip is not available). |
+| 500 | `side_by_side_failed` | The render failed. Ask again in a moment. |
+
+SDK: `client.videoRemake.sideBySide(jobId)`.
 
 ## 13g. Trends (Cloud edition)
 

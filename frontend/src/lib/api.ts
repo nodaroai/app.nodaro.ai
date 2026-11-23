@@ -12660,6 +12660,8 @@ export interface TrendEngineEnvironment {
       roleFace?: boolean
       /** A trend run on a stored face mask may mix kept and new faces (the engine remakes the mask for it); absent = it cannot. */
       roleFaceStoredMask?: boolean
+      /** The engine grows a face mask onto the face's own skin (`faceMasking.growPct`); absent = it cannot. */
+      faceGrow?: boolean
     }
     /**
      * What that environment's platform (the app itself, apart from its engine)
@@ -12685,6 +12687,8 @@ export interface TrendEngineEnvironment {
       shotListSpeech?: boolean
       /** The Face chip on a trend's person slot (`defaults.face`, `chips` with "face"): its trend schemas take the key. */
       roleFace?: boolean
+      /** The Precise setting's face grow (`faceMasking.growPct`): its Precise schema takes the key. */
+      faceGrow?: boolean
     }
   } & Record<string, unknown>
   updatedAt: string
@@ -13867,6 +13871,32 @@ export async function saveNodaroMotionPreviz(previz: NodaroMotionPreviz): Promis
       method: "PUT",
       body: { previz },
     })
+  ).data
+}
+
+// ---- Admin: Video Remake's face grow (/v1/admin/video-remake/face-grow, admin-nodaro-motion-face-grow.ts) ----
+
+/** The saved setting: per engine, the face grow (whole % of each face's height, 1–40); an engine left out does not grow. */
+export type NodaroMotionFaceGrow = Partial<Record<NodaroMotionEngine, number>>
+
+export interface NodaroMotionFaceGrowView {
+  /** null = never saved: no engine grows. */
+  faceGrow: NodaroMotionFaceGrow | null
+  updatedAt: string | null
+  /** Whether this environment's Cast Swap engine grows a face mask. */
+  supported: boolean
+}
+
+const ADMIN_NODARO_MOTION_FACE_GROW = "/v1/admin/video-remake/face-grow"
+
+export async function fetchNodaroMotionFaceGrow(): Promise<NodaroMotionFaceGrowView> {
+  return (await apiRequest<{ data: NodaroMotionFaceGrowView }>(ADMIN_NODARO_MOTION_FACE_GROW, "apiErr.loadNodaroMotion")).data
+}
+
+/** Saves the whole setting; a grow is refused while an environment's engine or platform cannot apply it. */
+export async function saveNodaroMotionFaceGrow(faceGrow: NodaroMotionFaceGrow): Promise<NodaroMotionFaceGrowView> {
+  return (
+    await apiRequest<{ data: NodaroMotionFaceGrowView }>(ADMIN_NODARO_MOTION_FACE_GROW, "apiErr.saveNodaroMotion", { method: "PUT", body: { faceGrow } })
   ).data
 }
 

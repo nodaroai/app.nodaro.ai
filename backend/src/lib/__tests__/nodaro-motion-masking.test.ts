@@ -73,9 +73,10 @@ describe("parseNodaroMotionMasking", () => {
     expect(warnings).toEqual([])
   })
 
-  it("refuses a misspelt key inside a setting, as every faceMasking does (strict)", () => {
-    const { warn } = collect()
-    expect(parseNodaroMotionMasking({ "nodaro-prism": { mode: "auto", tresh: 0.4 } }, warn)).toEqual({})
+  it("reads past a key it does not know (a newer build's, or a misspelling), with a warning: the engine's entry is kept", () => {
+    const { warn, warnings } = collect()
+    expect(parseNodaroMotionMasking({ "nodaro-prism": { mode: "auto", tresh: 0.4 } }, warn)).toEqual({ "nodaro-prism": { mode: "auto" } })
+    expect(warnings.join(" ")).toMatch(/tresh/)
   })
 })
 
