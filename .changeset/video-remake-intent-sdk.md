@@ -1,0 +1,5 @@
+---
+"@nodaro/sdk": minor
+---
+
+Video Remake checks a request's words before a run: `videoRemake.intent(params)` (`POST /v1/video-remake/intent`, free, signed in, 12 calls a minute per account) takes the same body as `estimate()` and `run()` and answers `{ checked, fits, code? }` (`VideoRemakeIntentCheck`): whether the typed words (`prePrompt`, `postPrompt`, a custom style) ask for something Video Remake does, and when they do not, a `code` saying what they ask for instead. It never refuses a run: `checked: false`, an error, a timeout (10 s by default, `options.timeoutMs` for another) and an unknown code all mean "go ahead", and the check answers `checked: false` wherever the deployment has it switched off. A run that went ahead after a `fits: false` answer may say so with the new optional `intent: { code, action: "continued" | "unserved" }` on `run()`. New types, also from `@nodaro/sdk/video-remake`: `VideoRemakeIntentCheck`, `VideoRemakeIntentCode`, `VideoRemakeIntentPopupCode`, `VideoRemakeIntentReportedCode`, `VideoRemakeIntentAction` and `VideoRemakeRunIntent`.

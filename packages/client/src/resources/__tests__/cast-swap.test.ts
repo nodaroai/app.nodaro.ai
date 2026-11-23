@@ -21,6 +21,9 @@ import {
   type VideoRemakeFullQualityRefusalCode,
   type VideoRemakeFullQualityResult,
   type VideoRemakeFaceMasking,
+  type VideoRemakeIntentCheck,
+  type VideoRemakeIntentCode,
+  type VideoRemakeRunIntent,
   type VideoRemakeParams,
   type VideoRemakePlanRolesDecision,
   type VideoRemakePlanRolesParams,
@@ -1048,5 +1051,70 @@ describe("the resource's former names (deprecated)", () => {
     const engine: CastSwapEngine = "nodaro-prism"
     const current: VideoRemakeEngine = engine
     expect([same, current]).toHaveLength(2)
+  })
+})
+
+describe("the intent check: whether the typed words ask for something Video Remake does", () => {
+  it("intent POSTs /v1/video-remake/intent with the run's own body, and answers the check as it is", async () => {
+    const answer: VideoRemakeIntentCheck = { checked: true, fits: false, code: "wants-extend" }
+    const fetchMock = vi.fn().mockReturnValue(mockOk(answer))
+    const client = make(fetchMock)
+    expect(await client.videoRemake.intent(params)).toEqual(answer)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake/intent")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual(params)
+    // The castSwap alias is the same method.
+    await client.castSwap.intent(params)
+    expect((fetchMock.mock.calls[1] as [string])[0]).toBe("https://api.example.com/v1/video-remake/intent")
+  })
+
+  it("a check that was not made, and a code this SDK does not know, come back as sent (both mean: go ahead)", async () => {
+    const client = make(vi.fn().mockReturnValueOnce(mockOk({ checked: false, fits: true })).mockReturnValueOnce(mockOk({ checked: true, fits: false, code: "wants-something-new" })))
+    expect(await client.videoRemake.intent(params)).toEqual({ checked: false, fits: true })
+    const newer = await client.videoRemake.intent(params)
+    const known: readonly VideoRemakeIntentCode[] = ["wants-extend", "wants-voice-change", "wants-dub", "wants-recast", "wants-new-video", "wants-join", "wants-reframe", "wants-shorter", "wants-lipsync", "wants-upscale", "wants-captions", "wants-sound", "wants-speed", "wants-watermark-removal"]
+    expect(known.includes(newer.code as VideoRemakeIntentCode)).toBe(false)
+  })
+
+  it("waits 10 s by default, past which the check is no answer; options.timeoutMs another time", async () => {
+    vi.useFakeTimers()
+    try {
+      let seen: AbortSignal | undefined
+      const hang = vi.fn((_url: string, init: RequestInit) => {
+        seen = init.signal ?? undefined
+        return new Promise<Response>((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))
+      })
+      const client = make(hang)
+      const pending = client.videoRemake.intent(params).catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(9_000)
+      expect(seen?.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(seen?.aborted).toBe(true)
+      await pending
+      const short = client.videoRemake.intent(params, { timeoutMs: 1_000 }).catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(1_500)
+      expect(seen?.aborted).toBe(true)
+      await short
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("the limit's 429 is thrown as a NodaroError (a caller goes ahead unchecked)", async () => {
+    const client = make(vi.fn().mockReturnValue(mockErr(429, { error: { code: "rate_limit_exceeded", message: "Too many requests." } })))
+    const err = await client.videoRemake.intent(params).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NodaroError)
+    expect((err as NodaroError).status).toBe(429)
+  })
+
+  it("a run sends what the person did about the check as `intent`", async () => {
+    const fetchMock = vi.fn().mockReturnValue(mockOk({ jobId: "job-1" }, 202))
+    const client = make(fetchMock)
+    const intent: VideoRemakeRunIntent = { code: "wants-extend", action: "continued" }
+    await client.videoRemake.run({ ...params, intent })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("https://api.example.com/v1/video-remake")
+    expect(JSON.parse(init.body as string).intent).toEqual(intent)
   })
 })

@@ -2359,6 +2359,7 @@ recreates a whole video from zero instead.
 ```ts
 run(params: VideoRemakeParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/video-remake → 202 (200 + deduped on a keyed repeat)
 estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> // POST /v1/video-remake/estimate, free
+intent(params: VideoRemakeParams, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<VideoRemakeIntentCheck> // POST /v1/video-remake/intent, free; never refuses a run; waits 10 s by default
 fullQualityEstimate(jobId: string): Promise<VideoRemakeFullQualityEstimate> // POST /v1/video-remake/:jobId/full-quality/estimate, free
 fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemakeFullQualityResult> // POST /v1/video-remake/:jobId/full-quality → 202 (200 + existing)
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
@@ -2802,6 +2803,70 @@ Refused as a run refuses such a clip (the codes are in
 `name`) and `400 previz_not_for_trends`. Where `planRolesPreviz` is not `true`
 leave `clipKind` out of `planRoles()`: a server that does not plan such a clip
 refuses the field with `400 validation_error`.
+
+**Checking the request first** (`intent()`, `VideoRemakeIntentCheck`): a
+quick, free check of whether the words a person typed (`prePrompt`,
+`postPrompt`, a custom style) ask for something Video Remake does, before the
+run. It takes the same body as `estimate()` and `run()`, starts no job,
+charges nothing and keeps nothing, and it never refuses a run: it only tells
+you when the words ask for something else, so you can point the person to the
+tool that does it.
+
+```ts
+const check = await client.videoRemake.intent(params).catch(() => null) // an error is "not checked"
+if (check?.checked && !check.fits && check.code === "wants-extend") {
+  // Show the person that the clip can be extended elsewhere; if they go on anyway:
+  await client.videoRemake.run({ ...params, intent: { code: check.code, action: "continued" } })
+}
+```
+
+It answers `{ checked, fits, code? }`:
+
+- `{ checked: false, fits: true }`: not checked (switched off on this
+  deployment, took too long, or there were no words to read). Go ahead.
+- `{ checked: true, fits: true }`: the words fit what Video Remake does.
+- `{ checked: true, fits: false, code }`: the words ask for something else.
+
+Treat `checked: false`, a thrown error (a refusal, a `429`, a timeout) and a
+`code` this SDK does not know as "go ahead". The check exists only where the
+deployment has it switched on; elsewhere it answers `checked: false`. It needs
+a signed-in account and is limited to 12 calls a minute per account
+(`429 rate_limit_exceeded`, with `Retry-After`). It waits 10 s by default; pass
+`{ timeoutMs }` as its second argument to wait another time, or `{ signal }` to
+cancel.
+
+The codes (`VideoRemakeIntentCode`). These have a better place to go, and
+Nodaro's own apps say so before the run (`VideoRemakeIntentPopupCode`):
+
+| `code` | The words ask for |
+|---|---|
+| `wants-extend` | The clip continued past its end. |
+| `wants-voice-change` | Other voices for the people in it. |
+| `wants-dub` | The speech in another language. |
+| `wants-recast` | A different story, or people moving differently than they do in the clip. |
+| `wants-new-video` | A new video that is not an edit of this clip. |
+| `wants-join` | Several clips joined or reordered. |
+| `wants-reframe` | Another shape or aspect ratio. |
+| `wants-shorter` | The clip trimmed or cut. |
+
+These are reported only: Nodaro's own apps show nothing and let the run go
+ahead (`VideoRemakeIntentReportedCode`):
+
+| `code` | The words ask for |
+|---|---|
+| `wants-lipsync` | Someone saying or singing other words. |
+| `wants-upscale` | Only a sharper or larger video, nothing else changed. |
+| `wants-captions` | Subtitles or captions. |
+| `wants-sound` | Other music, sound effects or sound. |
+| `wants-speed` | Faster, slower, reversed or looped. |
+| `wants-watermark-removal` | A watermark or logo taken off. |
+
+A run that went ahead after a `fits: false` answer may say so with `intent`
+(`VideoRemakeRunIntent`, optional, read by `run()` only):
+`{ code, action: "continued" }` when the person was shown the answer and went
+on anyway, `{ code, action: "unserved" }` when the app shows nothing for that
+code. `code` is the check's code as answered (kebab-case, at most 40
+characters). An `intent` of any other shape is dropped, never refused.
 
 **A 3D previz clip** (`clipKind`, `previz`, a role's `subject`): where
 `styleChoice()` answers `previz` `true`, `run()` and `estimate()` take

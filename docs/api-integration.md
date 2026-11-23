@@ -6006,6 +6006,7 @@ length, with its own cast and new music, and can change the motion itself.
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
+| `POST` | `/v1/video-remake/intent` | Check, before a run, whether the request's typed words ask for something Video Remake does (see Checking the request first below). Same body as the estimate and the run; returns `{ checked, fits, code? }`. Free: no job, nothing charged; never refuses a run. Signed in; 12 calls a minute per account. Only where the deployment has it switched on (elsewhere `checked: false`). |
 | `GET` | `/v1/video-remake/art-styles` | The art styles the Video Remake page offers, each with its name and preview clip (see below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/previews` | Before-and-after previews of what Video Remake does, each with its clips, stills, title and caption (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/:jobId/side-by-side` | A finished run's original clip and its result in one video, to download (see [Side by side](#side-by-side) below). Free. Signed in; your own runs. A developer app needs `jobs:read` and a `:write` or `:execute` scope. |
@@ -6042,7 +6043,8 @@ style from the catalog, or a custom style in your own words, see below), `resolu
 `"1080p"`), `draft` (off by default, so a 480p run is plain; `true` makes a
 480p draft whose same take [Full Quality](#full-quality) can finish at 1080p;
 `true` above 480p is refused, and Nodaro Pulse has no draft), `prepareReferences` (default
-`true`, see below), `sessionId` and `origin`.
+`true`, see below), `sessionId`, `origin` and, on the run only, `intent`
+(see Checking the request first below).
 `quality: "draft"` is still accepted and means 480p draft; it is deprecated:
 use `resolution` + `draft`. The field-by-field shape is in the
 [SDK reference](./sdk-reference.md#clientvideoremake).
@@ -6383,6 +6385,64 @@ and `400 previz_not_for_trends`. Where `planRolesPreviz` is not `true`, send no
 `clipKind` to the plan: a server that does not plan such a clip refuses the
 field with `400 validation_error`. `clipKind: "footage"` (or the field left
 out) is an ordinary clip, the plan as before.
+
+**Checking the request first.** `POST /v1/video-remake/intent` is a quick,
+free check of whether the words a person typed (`prePrompt`, `postPrompt`, a
+custom style in `direction`) ask for something Video Remake does, made before
+the run so you can point the person to the tool that does what they asked.
+It takes exactly the body of `POST /v1/video-remake/estimate`, starts no job,
+charges nothing and keeps nothing. **It never blocks a run**: whatever it
+answers, the run's own route decides.
+
+It answers `200 { checked, fits, code? }`:
+
+- `{ "checked": false, "fits": true }`: not checked — switched off on this
+  deployment, it took too long, or there were no words to read. Go ahead.
+- `{ "checked": true, "fits": true }`: the words fit what Video Remake does.
+- `{ "checked": true, "fits": false, "code": "wants-extend" }`: the words ask
+  for something else, and `code` says what.
+
+Treat `checked: false`, a timeout, any answer that is not a `200` and a `code`
+you do not know (a newer server may add some) as "go ahead". The check exists
+only where the deployment has it switched on; elsewhere it answers
+`checked: false`. It needs a signed-in account (`401` without one) and is
+limited to 12 calls a minute per account (`429 rate_limit_exceeded`, with
+`Retry-After`); a deployment that does not offer Video Remake answers it with
+`403 node_not_available` (or `403 model_not_available`), as its other routes.
+
+The codes that have a better place to go (Nodaro's own apps say so before the
+run):
+
+| `code` | The words ask for |
+|---|---|
+| `wants-extend` | The clip continued past its end. |
+| `wants-voice-change` | Other voices for the people in it. |
+| `wants-dub` | The speech in another language. |
+| `wants-recast` | A different story, or people moving differently than they do in the clip (see [Recast](#13c-recast-cloud-edition)). |
+| `wants-new-video` | A new video that is not an edit of this clip. |
+| `wants-join` | Several clips joined or reordered. |
+| `wants-reframe` | Another shape or aspect ratio. |
+| `wants-shorter` | The clip trimmed or cut. |
+
+The codes that are reported only (Nodaro's own apps show nothing and let the
+run go ahead):
+
+| `code` | The words ask for |
+|---|---|
+| `wants-lipsync` | Someone saying or singing other words. |
+| `wants-upscale` | Only a sharper or larger video, nothing else changed. |
+| `wants-captions` | Subtitles or captions. |
+| `wants-sound` | Other music, sound effects or sound. |
+| `wants-speed` | Faster, slower, reversed or looped. |
+| `wants-watermark-removal` | A watermark or logo taken off. |
+
+A run that went ahead after a `fits: false` answer may say so: the run's body
+(`POST /v1/video-remake`) takes the optional
+`intent: { code, action }`, where `code` is the check's code as answered
+(kebab-case, at most 40 characters) and `action` is `"continued"` (the person
+was shown the answer and went on anyway) or `"unserved"` (the app shows
+nothing for that code and the run went ahead). It changes nothing about the
+run, and an `intent` of any other shape is dropped, never refused.
 
 **The Face chip.** A person role also takes `face`: from the picture
 (`"new"`, the default, also when `face` is left out) or from the video

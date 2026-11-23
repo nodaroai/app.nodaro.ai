@@ -351,7 +351,7 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   // ── Video Remake (cast-swap) and trends ────────────────────────────────
   // The run, the step that puts an image's style into words for it (a custom style from an image), and the
   // step that plans its roles from the prompt and loose reference images.
-  video_remake: runs("/v1/video-remake", "/v1/video-remake/describe-style", "/v1/video-remake/plan-roles"),
+  video_remake: runs("/v1/video-remake", "/v1/video-remake/describe-style", "/v1/video-remake/plan-roles", "/v1/video-remake/intent"),
   estimate_full_quality: runs("/v1/video-remake/:jobId/full-quality"),
   full_quality: runs("/v1/video-remake/:jobId/full-quality"),
   list_trends: TREND,

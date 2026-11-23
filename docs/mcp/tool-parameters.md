@@ -3796,6 +3796,10 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |
 | `session_id` | string |  | A generation session to file the result in. At least 1 character. |
 | `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `check_intent` | boolean |  | Quote only: also check (free) if the prompt asks for something Video Remake does not do; a mismatch comes back as intent { code, meaning }. |
+| `intent` | object |  | Confirm only, after an intent mismatch the user went on with: { code, action: "continued" }. |
+| `intent.code` | string | yes | At most 40 characters. |
+| `intent.action` | string | yes | One of `continued`, `unserved`. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `video_upscale`
