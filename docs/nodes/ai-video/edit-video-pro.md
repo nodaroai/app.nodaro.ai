@@ -102,6 +102,12 @@ The two 10-second spans on the same 20-second source land on different totals de
 - For a fix shorter than 4 seconds, or one that only needs to touch audio or video (not both), use [Video Retake](./video-retake.md) instead — it supports windows as short as 2 seconds and can replace audio-only, video-only, or both, on a different provider (LTX 2.3 Pro).
 - For a full-clip regeneration rather than a partial replace, use [Generate Video Pro](./generate-video-pro.md) (long-form) or [Generate Video](./generate-video.md) (single-shot).
 
+## API
+
+`POST /v1/edit-video-pro` runs the node; with the SDK, `client.nodes.run("edit-video-pro", params)` (typed as `EditVideoProParams`). Body: `videoUrl`, `spanStart`, `spanEnd` (seconds), `prompt`, `provider`, `referenceImageUrls` (up to 9), `generateAudio`. `POST /v1/quote` with `{ "type": "edit-video-pro", "params": … }` (`client.nodes.quote("edit-video-pro", params)`) answers the most that exact edit can cost as `reserve`, with a `settles_to_actual` warning, and starts nothing.
+
+A span the node cannot take is refused before any credits are reserved, by the run and the quote alike: `400 validation_error` for a span under 4 seconds or over the maximum, and `400 span_exceeds_source` when the span ends past the end of the video. Each carries a sentence that says which.
+
 ## See also
 
 - [Generate Video Pro](./generate-video-pro.md) — long-form, whole-clip generation on the same Seedance 2 family; shares the segmentation/stitch mechanism Edit Video Pro uses for its bridge.

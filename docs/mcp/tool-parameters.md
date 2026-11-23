@@ -2670,6 +2670,7 @@ Needs `workflows:execute`.
 | `alpha_keyframe_index` | integer |  | select mode — 0-based reference frame. At least 0. |
 | `max_resolution` | string |  | Default 1080. One of `720`, `1080`. |
 | `seed` | integer |  | Reproducibility seed (0–4294967295). From 0 to 4294967295. |
+| `estimate_only` | boolean |  | Price only: nothing is created or charged. |
 
 ## `render_3d_scene`
 
@@ -2715,6 +2716,22 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `speech_volume` | number |  | The speech's volume, percent (0–200, default 100). From 0 to 200. |
 | `duck_amount` | number |  | How far the music dips under the speech (0–100, default 70). From 0 to 100. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
+## `replace_video_span`
+
+Needs `workflows:execute` · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `video_url` | string (URL) |  |  |
+| `video_asset_id` | string |  |  |
+| `span_start` | number | yes | Seconds from the start of the video. At least 0. |
+| `span_end` | number | yes | Seconds; 4-120 after span_start. Above 0. |
+| `prompt` | string | yes | What happens in the span. At least 1 character. |
+| `model` | string |  | One of seedance-2, seedance-2-fast, seedance-2-mini, seedance-2-5. Omit for the default. |
+| `reference_image_urls` | string (URL)[] |  | Pictures the new content may draw on. At most 9 items. |
+| `generate_audio` | boolean |  | Generate the span's sound too. Default true. |
+| `estimate_only` | boolean |  | Price only: nothing is created or charged. |
 
 ## `request_audio_upload`
 

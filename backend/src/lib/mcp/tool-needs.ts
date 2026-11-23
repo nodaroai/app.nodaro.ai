@@ -256,6 +256,7 @@ export const TOOL_NEEDS: Readonly<Record<string, ToolNeed>> = Object.freeze({
   extract_frame: runs("/v1/extract-frame"),
   lip_sync: runs("/v1/lip-sync"),
   relight_video: runs("/v1/switchx"),
+  replace_video_span: runs("/v1/edit-video-pro"),
   trim_video: runs("/v1/trim-video"),
   loop_video: runs("/v1/loop-video"),
   merge_video_audio: runs("/v1/merge-video-audio"),

@@ -176,6 +176,7 @@
   "render_final",
   "render_shot_sequence",
   "replace_audio",
+  "replace_video_span",
   "request_audio_upload",
   "request_image_upload",
   "request_video_upload",

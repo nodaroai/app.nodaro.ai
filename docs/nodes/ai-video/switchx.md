@@ -86,3 +86,17 @@ A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 
 - Output URLs are re-hosted to your library automatically — there's no 72-hour expiry to worry about.
 - Start from a **preset** (Relight Subject, Swap Background, Restyle Scene, …) for a tuned starting point — the preset's instruction lives in the node's **Pre & post text** (settings panel), so the prompt field stays free for your own additions. Adjust those and the reference to taste.
 - Set a **Seed** to make a result repeatable across runs with the same inputs; leave it empty for a fresh variation each time.
+
+## API
+
+`POST /v1/switchx` runs the node; with the SDK, `client.nodes.run("switchx", params)` (typed as `RelightSwitchParams`). Body: `videoUrl`, `alphaMode` (`auto`, `fill`, `select`, `custom`), `maskUrl` (a mask image for `select`, a mask video for `custom`), `alphaKeyframeIndex` (`select`: the mask's frame, from 0), `referenceImageUrl` and/or `prompt`, `maxResolution` (`720` or `1080`), `seed`. `POST /v1/quote` with `{ "type": "switchx", "params": … }` (`client.nodes.quote("switchx", params)`) answers the price of that exact body without starting anything.
+
+The clip is measured before any credits are reserved. Each refusal is a `400` with a code and a sentence:
+
+| Code | When |
+|---|---|
+| `VIDEO_TOO_MANY_FRAMES` | More than 240 frames. A clip up to 270 frames is cut to its first 240 instead. |
+| `SOURCE_TOO_LARGE` | A frame over 2.77 megapixels. |
+| `MISSING_STYLE_INPUT` | Neither a prompt nor a reference image. |
+| `MISSING_ALPHA` | `select` or `custom` without `maskUrl`. |
+

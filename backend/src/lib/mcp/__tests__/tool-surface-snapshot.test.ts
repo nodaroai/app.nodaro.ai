@@ -1915,6 +1915,16 @@ const FAVORITES_PAGE_NOTE_BYTES = 234
 // together leave the list 2 B over (560_606 B against 560_604 B), so this raise is 408 B.
 const LTX_2_5_BYTES = 408
 
+// RAISED 2026-11-23 by a price before the run for two video tools: one tool is ADDED —
+// `replace_video_span` (Edit Video Pro: replace a span of time inside a video; `estimate_only` prices
+// it) — and `relight_video` takes `estimate_only` and declares the `estimate` it answers. The
+// membership fixture moves by that one tool (cloud/all). Measured by this suite on the same tree
+// before and after: 566_313 B, then 569_035 B, 2_722 B more (`replace_video_span` 2_430 B,
+// `relight_video` 2_448 → 2_740 B); the list had 52 B of headroom against its budget of 566_365 B,
+// so the budget is raised by the 2_670 B over it and is left with none. Neither tool is near the
+// per-tool budget.
+const VIDEO_RUN_ESTIMATES_BYTES = 2_670
+
 // RAISED by Video Remake's Flash choices (decided 2026-11-22): `video_remake`'s `engine` takes "nodaro-prism-flash" and
 // "nodaro-pulse-flash" where the deployment offers them, and its description says what each renders. No tool was
 // added, so the membership fixtures do NOT move (the recorded tool list, tool-list-wire.json, does). Measured by this
@@ -2163,7 +2173,8 @@ export const TOOL_WIRE_BUDGET = {
     FAVORITES_EVERYTHING_BYTES +
     FAVORITES_PAGE_NOTE_BYTES +
     LTX_2_5_BYTES +
-    FLASH_CHOICES_BYTES,
+    FLASH_CHOICES_BYTES +
+    VIDEO_RUN_ESTIMATES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

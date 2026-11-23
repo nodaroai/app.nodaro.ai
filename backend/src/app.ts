@@ -70,6 +70,7 @@ export function buildCorsOptions(mcpIframeRe: RegExp) {
   }
 }
 import { loadPrivatePlugins } from "./lib/private-plugins/load.js"
+import { createRoutePricingRegistry } from "./lib/route-pricing-registry.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { generationSessionRoutes } from "./routes/generation-sessions.js"
@@ -572,6 +573,13 @@ export async function buildApp() {
     // Swap engine serves only their former prefix.
     rewriteUrl: videoRemakeRewriteUrl,
   })
+
+  // Every route's pricing chain, as registered: POST /v1/quote prices a node a
+  // deployment's own module runs with the chain that route attached
+  // (lib/route-pricing-registry.ts). Before any route, so none is missed.
+  const routePricing = createRoutePricingRegistry()
+  app.addHook("onRoute", routePricing.note)
+  app.decorate("routePricingOf", routePricing.pricingOf)
 
   // Concurrency lanes: every route handler runs in a request scope, so the
   // provider and LLM funnels inside it know whose request it is, how long it

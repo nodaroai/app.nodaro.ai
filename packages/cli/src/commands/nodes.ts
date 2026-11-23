@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import type { GenerateImageBatchResult } from "@nodaro/sdk/nodes"
+import type { GenerateImageBatchResult, NodeQuote } from "@nodaro/sdk/nodes"
 import { isVideoToVideoRemakeQuote } from "@nodaro/sdk/nodes"
 import { SEEDANCE_REFERENCE_TASK_TYPES } from "@nodaro/shared/models"
 import { buildClient, handleError } from "../client.js"
@@ -200,6 +200,8 @@ Examples:
   $ nodaro nodes run text-to-speech --param text="And so it begins." --param previousText="The night before, nobody slept." --param nextText="By noon the harbour was empty." --watch
   $ nodaro nodes run video-depth --param videoUrl=https://cdn.example/clip.mp4 --param colormap=turbo --watch
   $ nodaro nodes run generate-video --params-file body.json --reference-task-type extend --watch
+  $ nodaro nodes run switchx --param videoUrl=https://cdn.example/clip.mp4 --param alphaMode=auto --param prompt="golden hour" --watch
+  $ nodaro nodes run edit-video-pro --param videoUrl=https://cdn.example/clip.mp4 --param spanStart=5 --param spanEnd=13 --param prompt="the dog jumps into the pool" --watch
 
 Structured references (the editor's wired-reference shape) — let a {image:N} prompt
 token bind a labeled reference, assembled server-side into @image_N (same as the
@@ -291,5 +293,44 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
       },
     )
 
+  cmd
+    .command("quote <type> [extras...]")
+    .description("the price of a run before it starts: same inputs as `nodes run`, nothing is started and nothing is charged")
+    .option("--param <pairs...>", "input value, as for `nodes run`", collectVariadic)
+    .option("--params-file <path>", "JSON file with the full input body (--param flags override matching keys)")
+    .option("--profile <name>")
+    .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro nodes quote switchx --param videoUrl=https://cdn.example/clip.mp4 --param alphaMode=auto --param prompt="golden hour" --param maxResolution=720
+  $ nodaro nodes quote edit-video-pro --param videoUrl=https://cdn.example/clip.mp4 --param spanStart=5 --param spanEnd=13 --param prompt="the dog jumps into the pool"
+  $ nodaro nodes quote generate-video --params-file body.json
+
+A type the platform cannot quote answers with the list of those it can.`)
+    .action(async (type: string, extras: string[], opts: { param?: string[]; paramsFile?: string } & GlobalOpts) => {
+      rejectPositionalParams(extras, { cmd: `nodaro nodes quote ${type}`, key: "prompt" })
+      try {
+        const client = buildClient(opts.profile)
+        const quote = await client.nodes.quote(type, resolveParams(opts.param, opts.paramsFile))
+        if (opts.json) {
+          emit(quote, opts)
+          return
+        }
+        for (const line of quoteLines(type, quote)) info(line)
+        dim(`nothing was started; run it with: nodaro nodes run ${type} (same --param flags)`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   return cmd
+}
+
+/** A quote, as lines a person reads: the hold, the expected charge when it differs, then each note. */
+export function quoteLines(type: string, quote: NodeQuote): string[] {
+  const settles = quote.warnings.some((w) => w.code === "settles_to_actual")
+  const head = quote.expected !== undefined && quote.expected !== quote.reserve
+    ? `${type}: about ${quote.expected} credits (${quote.reserve} held while it runs)`
+    : `${type}: ${settles ? "at most " : ""}${quote.reserve} credits`
+  return [head, ...quote.adjustments.map((a) => `  ${a.message}`), ...quote.warnings.map((w) => `  ${w.message}`)]
 }

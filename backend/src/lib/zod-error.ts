@@ -25,3 +25,16 @@ export function formatZodError(error: ZodError): {
   const message = issues.length === 1 ? head : `${head} (+${issues.length - 1} more)`
   return { message, issues }
 }
+
+/**
+ * The refusal code a schema names for its FIRST failing rule, or undefined.
+ * A rule that has its own code beside `validation_error` (so a client can
+ * branch on the exact failure) declares it as the refine's
+ * `params: { code }`, and keeps its `message` a sentence a person can read.
+ * The run route and `POST /v1/quote` both read it here, so they answer alike.
+ */
+export function zodRefusalCode(error: ZodError): string | undefined {
+  const first = error.issues[0] as { params?: { code?: unknown } } | undefined
+  const code = first?.params?.code
+  return typeof code === "string" && code.length > 0 ? code : undefined
+}

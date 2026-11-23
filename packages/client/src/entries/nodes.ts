@@ -150,3 +150,13 @@ export type {
 export type { TopazUpscaleFactor, UpscaleFactor } from "@nodaro/shared/credits"
 
 export type { ImageToImageAttachColumn } from "@nodaro/shared/entities"
+
+// Relight & Switch (`nodes.run("switchx", …)`) and Edit Video Pro (`nodes.run("edit-video-pro", …)`).
+export type {
+  RelightSwitchMode,
+  RelightSwitchParams,
+  EditVideoProProvider,
+  EditVideoProParams,
+} from "../resources/nodes-relight-edit-params.js"
+
+export type { RelightSwitchJobOutput } from "../resources/nodes.js"

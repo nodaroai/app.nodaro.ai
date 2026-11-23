@@ -1,6 +1,7 @@
 import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Scene3DJobOutput, Pro3DRenderRunParams, Pro3DRenderJobOutput } from "./scene3d-types.js"
 import type { ImageToImageParams, EditImageParams, SplitImageParams, SplitImageResult, GenerateMaskParams, GenerateMaskJobOutput, ImageJobStarted } from "./nodes-image-params.js"
 import type { VideoToVideoParams, VideoToVideoRemakeParams, VideoToVideoRemakeQuote, NodeQuote } from "./nodes-video-params.js"
+import type { EditVideoProParams, RelightSwitchParams } from "./nodes-relight-edit-params.js"
 import type { LlmChatParams } from "./nodes-llm-params.js"
 import type { SunoAddVocalsParams, SunoAddInstrumentalParams } from "./nodes-suno-params.js"
 import type { NodaroClientCore } from "../core.js"
@@ -839,6 +840,16 @@ export interface RunAndWaitOptions {
   readonly idempotencyKey?: string
 }
 
+/** What a completed Relight & Switch job writes (`nodes.runAndWait("switchx", …)`). */
+export interface RelightSwitchJobOutput extends NodeJobOutput {
+  /** The relit video. */
+  readonly videoUrl?: string
+  /** A frame of it. */
+  readonly thumbnailUrl?: string
+  /** Present when the source was a little over 240 frames: it was cut to this many before the relight. */
+  readonly sourceTrimmedToFrames?: number
+}
+
 /** Per-call transport controls for {@link NodesResource.run}. */
 export interface RunNodeOptions {
   /** `Idempotency-Key` header. See {@link RunAndWaitOptions.idempotencyKey}. */
@@ -1015,6 +1026,10 @@ export class NodesResource {
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "social-search", params: SocialSearchParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "video-depth", params: VideoDepthParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  /** Relight & Switch. The completed job's `output_data` carries `videoUrl` and `thumbnailUrl`. */
+  run(type: "switchx", params: RelightSwitchParams, options?: RunNodeOptions): Promise<RunNodeResult>
+  /** Edit Video Pro (Nodaro Cloud): replace a span of a video. The completed job's `output_data` carries `videoUrl`. */
+  run(type: "edit-video-pro", params: EditVideoProParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "image-to-image", params: ImageToImageParams, options?: RunNodeOptions): Promise<ImageJobStarted>
   run(type: "edit-image", params: EditImageParams, options?: RunNodeOptions): Promise<ImageJobStarted>
   run(type: "generate-mask", params: GenerateMaskParams, options?: RunNodeOptions): Promise<ImageJobStarted>
@@ -1083,6 +1098,13 @@ export class NodesResource {
    *  exact tier; an unreadable size quotes the hold, with a `settles_to_actual`
    *  warning. Where the model is not offered the quote is refused as the run is. */
   quote(type: "edit-image", params: EditImageParams): Promise<NodeQuote>
+  /** Relight & Switch: the frame-block tier of the clip's frames, measured as the run measures
+   *  them (the 240-frame tier when they cannot be read), at the body's `maxResolution`. */
+  quote(type: "switchx", params: RelightSwitchParams): Promise<NodeQuote>
+  /** Edit Video Pro (Nodaro Cloud): `reserve` is the most the span can cost, with a
+   *  `settles_to_actual` warning; the run is charged for what it generates. A span the run
+   *  refuses (under 4 seconds, over the maximum, past the end of the video) is refused here too. */
+  quote(type: "edit-video-pro", params: EditVideoProParams): Promise<NodeQuote>
   quote(type: string, params?: Record<string, unknown>): Promise<NodeQuote>
   async quote(type: string, params: Record<string, unknown> = {}): Promise<NodeQuote> {
     const res = await this.client.request<{ data: NodeQuote }>("POST", "/v1/quote", { body: { type, params } })
@@ -1132,6 +1154,8 @@ export class NodesResource {
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "social-search", params: SocialSearchParams, opts?: RunAndWaitOptions): Promise<SocialSearchJobOutput>
   runAndWait(type: "video-depth", params: VideoDepthParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "switchx", params: RelightSwitchParams, opts?: RunAndWaitOptions): Promise<RelightSwitchJobOutput>
+  runAndWait(type: "edit-video-pro", params: EditVideoProParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "image-to-image", params: ImageToImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "edit-image", params: EditImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-mask", params: GenerateMaskParams, opts?: RunAndWaitOptions): Promise<GenerateMaskJobOutput>
