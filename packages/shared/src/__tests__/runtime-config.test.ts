@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
+  MAX_SAMPLE_REFERENCES,
+  MAX_SURFACE_SAMPLES,
+  MAX_VIDEO_SAMPLE_PROMPT,
   RUNTIME_CONFIG_GLOBAL,
   RUNTIME_SURFACE_DEFAULT,
   UI_STRING_PRODUCTS,
@@ -14,6 +17,7 @@ import {
   isSsoOnly,
   isWorldId,
   orderWorlds,
+  ownPictureAddress,
   parseRuntimeConfig,
   parseRuntimeStrings,
   parseRuntimeSurface,
@@ -24,6 +28,7 @@ import {
   surfaceStringOverride,
   surfaceUnitLabel,
   worldAllowed,
+  worldSoon,
 } from "../entries/runtime-config.js"
 
 describe("worlds", () => {
@@ -57,6 +62,17 @@ describe("worlds", () => {
     expect(worldAllowed({ allow: ["image"] }, "image")).toBe(true)
     expect(worldAllowed({ allow: ["image"] }, "explore")).toBe(false)
     expect(worldAllowed({ allow: [] }, "image")).toBe(false)
+  })
+
+  it("a world still to come (soon) is never let through, whatever the allowlist says", () => {
+    expect(worldSoon({ soon: ["music"] }, "music")).toBe(true)
+    expect(worldSoon({ soon: ["music"] }, "image")).toBe(false)
+    expect(worldSoon({}, "music")).toBe(false)
+    expect(worldSoon(undefined, "music")).toBe(false)
+    expect(worldAllowed({ soon: ["music"] }, "music")).toBe(false)
+    expect(worldAllowed({ soon: ["music"] }, "image")).toBe(true)
+    expect(worldAllowed({ allow: ["image", "music"], soon: ["music"] }, "music")).toBe(false)
+    expect(worldAllowed({ allow: ["image", "music"], soon: ["music"] }, "image")).toBe(true)
   })
 
   it("orders the deployment's choice first, then the rest canonically, each world once", () => {
@@ -234,9 +250,104 @@ describe("parseRuntimeSurface — every default applied", () => {
       imports: { links: true },
       header: "default",
       worlds: {},
+      toolApps: { menus: false, pages: false, pictures: {} },
+      samples: { image: [], video: [] },
       strings: {},
     })
     expect(Object.isFrozen(RUNTIME_SURFACE_DEFAULT.auth)).toBe(true)
+  })
+
+  it("toolApps: a switch is on only for the literal true; pictures by key, each an address a deployment may name", () => {
+    expect(parseRuntimeSurface({ toolApps: { menus: true, pages: true } }).toolApps).toEqual({ menus: true, pages: true, pictures: {} })
+    expect(parseRuntimeSurface({ toolApps: { menus: "true", pages: 1 } }).toolApps).toEqual({ menus: false, pages: false, pictures: {} })
+    expect(parseRuntimeSurface({ toolApps: true }).toolApps).toEqual({ menus: false, pages: false, pictures: {} })
+    const pictures = {
+      "image-upscale": " /brand/apps/upscale.webp ",
+      "tile:image:createImage": "https://media.example.com/create.png",
+      "image-outpaint": "//elsewhere.example.com/a.png",
+      "video-captions": "http://media.example.com/captions.png",
+      "video-trim": 7,
+      "": "/brand/apps/none.webp",
+      ["x".repeat(81)]: "/brand/apps/long.webp",
+    }
+    expect(parseRuntimeSurface({ toolApps: { pictures } }).toolApps.pictures).toEqual({
+      "image-upscale": "/brand/apps/upscale.webp",
+      "tile:image:createImage": "https://media.example.com/create.png",
+    })
+    expect(parseRuntimeSurface({ toolApps: { pictures: ["/a.png"] } }).toolApps.pictures).toEqual({})
+  })
+
+  it("worlds.soon keeps known ids once each, and is absent when none is left", () => {
+    expect(parseRuntimeSurface({ worlds: { soon: ["music", "bogus", "music", "voice"] } }).worlds).toEqual({ soon: ["music", "voice"] })
+    expect(parseRuntimeSurface({ worlds: { soon: ["bogus"] } }).worlds).toEqual({})
+    expect(parseRuntimeSurface({ worlds: { soon: "music" } }).worlds).toEqual({})
+  })
+
+  it("samples.image: a prompt and a picture a deployment may name; the model, ratio and centre when given; at most 12", () => {
+    const good = { prompt: "  a lighthouse at dusk  ", picture: "/brand/samples/lighthouse.webp", model: "model-a", aspectRatio: "16:9", center: true }
+    const image = [
+      good,
+      { prompt: "a fox", picture: "https://media.example.com/fox.png", model: "", aspectRatio: 3, center: "yes" },
+      { prompt: "", picture: "/a.png" },
+      { prompt: "x".repeat(4001), picture: "/a.png" },
+      { prompt: "elsewhere", picture: "//elsewhere.example.com/a.png" },
+      { prompt: "plain http", picture: "http://media.example.com/a.png" },
+      { prompt: "no picture" },
+      "a string",
+      null,
+    ]
+    expect(parseRuntimeSurface({ samples: { image } }).samples.image).toEqual([
+      { ...good, prompt: "a lighthouse at dusk" },
+      { prompt: "a fox", picture: "https://media.example.com/fox.png" },
+    ])
+    const many = Array.from({ length: 15 }, (_, i) => ({ prompt: `sample ${i}`, picture: `/s/${i}.png` }))
+    expect(parseRuntimeSurface({ samples: { image: many } }).samples.image).toHaveLength(MAX_SURFACE_SAMPLES)
+    expect(parseRuntimeSurface({ samples: { image: good } }).samples).toEqual({ image: [], video: [] })
+    expect(parseRuntimeSurface({ samples: "all" }).samples).toEqual({ image: [], video: [] })
+  })
+
+  it("samples.video: a title, a prompt, a clip and a still; the rest when of its kind; a bad reference is left out alone", () => {
+    const good = {
+      title: "  The talking suitcase  ",
+      prompt: "  a suitcase rolls through a corridor  ",
+      video: "/brand/samples/suitcase.mp4",
+      picture: "/brand/samples/suitcase.webp",
+      original: "https://media.example.com/suitcase.mp4",
+      model: "model-a",
+      duration: 12,
+      aspectRatio: "16:9",
+      resolution: "720p",
+      references: ["/brand/samples/sheet.webp", "http://media.example.com/plain.png", 7, "https://media.example.com/second.png"],
+    }
+    const bare = { title: "Bare", prompt: "a clip", video: "https://media.example.com/a.mp4", picture: "/a.webp" }
+    const video = [
+      good,
+      { ...bare, original: "//elsewhere.example.com/a.mp4", model: "", duration: "12", aspectRatio: 3, references: "none" },
+      { ...bare, title: "" },
+      { ...bare, title: "x".repeat(121) },
+      { ...bare, prompt: "x".repeat(MAX_VIDEO_SAMPLE_PROMPT + 1) },
+      { ...bare, video: "http://media.example.com/a.mp4" },
+      { ...bare, picture: undefined },
+      "a string",
+      null,
+    ]
+    expect(parseRuntimeSurface({ samples: { video } }).samples.video).toEqual([
+      { ...good, title: "The talking suitcase", prompt: "a suitcase rolls through a corridor", references: ["/brand/samples/sheet.webp", "https://media.example.com/second.png"] },
+      bare,
+    ])
+    expect(parseRuntimeSurface({ samples: { video: [{ ...bare, prompt: "x".repeat(MAX_VIDEO_SAMPLE_PROMPT), duration: 0 }] } }).samples.video).toEqual([{ ...bare, prompt: "x".repeat(MAX_VIDEO_SAMPLE_PROMPT) }])
+    const references = Array.from({ length: 20 }, (_, i) => `/r/${i}.png`)
+    expect(parseRuntimeSurface({ samples: { video: [{ ...bare, references }] } }).samples.video[0]?.references).toHaveLength(MAX_SAMPLE_REFERENCES)
+    const many = Array.from({ length: 15 }, (_, i) => ({ ...bare, title: `clip ${i}` }))
+    expect(parseRuntimeSurface({ samples: { video: many } }).samples.video).toHaveLength(MAX_SURFACE_SAMPLES)
+  })
+
+  it("ownPictureAddress: a path on the site or an https address, trimmed; nothing else", () => {
+    expect(ownPictureAddress(" /brand/a.webp ")).toBe("/brand/a.webp")
+    expect(ownPictureAddress("https://media.example.com/a.png")).toBe("https://media.example.com/a.png")
+    for (const bad of ["//elsewhere.example.com/a.png", "http://media.example.com/a.png", "brand/a.webp", "data:image/png;base64,AAAA", "https://", "", 7, null, undefined]) {
+      expect(ownPictureAddress(bad)).toBeUndefined()
+    }
   })
 
   it("keeps a deployment's values, and derives requireSignIn from SSO-only when it is absent", () => {

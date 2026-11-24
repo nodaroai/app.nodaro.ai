@@ -53,6 +53,8 @@ export interface SurfaceWorlds {
   allow?: WorldId[]
   home?: WorldId
   order?: WorldId[]
+  /** Worlds still to come: marked "Soon" in a white-label header, never offered. */
+  soon?: WorldId[]
 }
 
 export interface SurfaceProfile {
@@ -76,6 +78,13 @@ export interface SurfaceProfile {
   worlds?: SurfaceWorlds
   imports?: { links: boolean }
   header?: SurfaceHeaderMode
+  /** The tools app's mini apps on a white-label deployment; see the backend twin. Absent = nothing of it is offered. */
+  toolApps?: { menus: boolean; pages: boolean; pictures?: Record<string, string> }
+  /** The deployment's own welcome samples, by world; see the backend twin. Absent = none. */
+  samples?: {
+    image: { prompt: string; picture: string; model?: string; aspectRatio?: string; center?: true }[]
+    video?: { title: string; prompt: string; video: string; picture: string; original?: string; model?: string; duration?: number; aspectRatio?: string; resolution?: string; references?: string[] }[]
+  }
   /** UI-string overrides, validated by the backend; `lib/i18n` lays them over the dictionaries (see `localeText`). */
   strings?: RuntimeSurfaceStrings
   /** Who manages developer apps; see the backend twin. `"admin"`: the developer-app pages are offered to admins only. */
@@ -129,6 +138,8 @@ export function runtimeSurfaceProfile(): SurfaceProfile {
     ...(o.worlds ? { worlds: o.worlds } : {}),
     ...(o.imports ? { imports: o.imports } : {}),
     ...(o.header ? { header: o.header } : {}),
+    ...(o.toolApps ? { toolApps: o.toolApps } : {}),
+    ...(o.samples ? { samples: o.samples } : {}),
     ...(o.strings ? { strings: o.strings } : {}),
     ...(o.developerApps ? { developerApps: o.developerApps } : {}),
   }
