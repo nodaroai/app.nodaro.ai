@@ -261,3 +261,34 @@ describe("POST /v1/video-face-mesh — a child step", () => {
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 })
+
+describe("POST /v1/video-face-mesh — workingCopy", () => {
+  /** The job row's input_data and the queue payload of the last request sent. */
+  const sent = () => ({ inputData: inserted!.input_data, payload: vi.mocked(videoQueue.add).mock.calls.at(-1)![1] })
+
+  it("true from a child job: recorded server-only on the row, carried to the worker, at the same price", async () => {
+    expect((await asChild(BODY)).statusCode).toBe(202)
+    const plain = sent()
+    const plainId = guardedId
+    vi.clearAllMocks()
+    expect((await asChild({ ...BODY, workingCopy: true })).statusCode).toBe(202)
+    expect(guardedId).toBe(plainId)
+    const { inputData, payload } = sent()
+    expect(inputData).toEqual({ ...(plain.inputData as Record<string, unknown>), __workingCopy: true })
+    expect(payload).toEqual({ ...(plain.payload as Record<string, unknown>), workingCopy: true })
+  })
+
+  it("false or absent: the row and the payload are exactly the ones without it", async () => {
+    await asChild(BODY)
+    const plain = sent()
+    vi.clearAllMocks()
+    await asChild({ ...BODY, workingCopy: false })
+    expect(sent()).toEqual(plain)
+  })
+
+  it("does not open the door: a caller that is not a child job is still refused 403", async () => {
+    expect((await post({ ...BODY, workingCopy: true }, "jwt")).statusCode).toBe(403)
+    expect((await post({ ...BODY, workingCopy: true }, "internal")).statusCode).toBe(403)
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+})

@@ -22,6 +22,11 @@
  * The face mask is widened by that % of each face's height before the render,
  * its colours read from the leading video (providers/video/mask-face-grow.ts),
  * and the job's `output_data.faceGrow` says what was grown. Same price.
+ *
+ * `workingCopy: true` (a child job's ask, lib/working-copy-request.ts): the
+ * result is encoded as a near-lossless working copy for the next step
+ * (providers/video/working-copy-encode.ts), recorded as the job's server-only
+ * `input_data.__workingCopy`. Sent by any other caller it is ignored. Same price.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
@@ -49,6 +54,7 @@ import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "../l
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
 import { trustedPluginParentJobId } from "../lib/job-submission-context.js"
 import { CAST_SWAP_FACE_GROW_BOUNDS } from "@nodaro/render-rules"
+import { workingCopyChildFields, workingCopyHonoured, workingCopyStamp } from "../lib/working-copy-request.js"
 
 const b = MASK_COMPOSITE_BOUNDS
 const d = MASK_COMPOSITE_DEFAULTS
@@ -71,6 +77,8 @@ export const maskCompositeBody = z.object({
   audioSource: z.enum(MASK_COMPOSITE_AUDIO_SOURCES).optional().default(d.audioSource),
   // The face grow: an internal child's lever only (`faceGrowChildOnly`), never a node's or a client's.
   faceGrowPct: z.int().min(1).max(CAST_SWAP_FACE_GROW_BOUNDS.max).optional(),
+  // The working copy: a child job's ask only (`workingCopyHonoured`), ignored for every other caller.
+  ...workingCopyChildFields,
 })
 
 const FACE_GROW_INTERNAL_ONLY = {
@@ -156,7 +164,9 @@ export async function maskCompositeRoutes(app: FastifyInstance) {
         },
       })
     }
-    const body = parsed.data
+    // The working copy: honoured for a child job only, and never part of the body stored or queued.
+    const { workingCopy: workingCopyAsked, ...body } = parsed.data
+    const workingCopy = workingCopyStamp(workingCopyHonoured(req, workingCopyAsked))
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({
@@ -170,7 +180,7 @@ export async function maskCompositeRoutes(app: FastifyInstance) {
       force_private: extractForcePrivate(req.body) || undefined,
       user_id: userId,
       status: "pending",
-      input_data: { ...buildJobInputData(body, "mask-composite"), billedUnits },
+      input_data: { ...buildJobInputData(body, "mask-composite"), billedUnits, ...workingCopy.inputData },
       ...(mcpClient ? { mcp_client: mcpClient } : {}),
     })
     if (error) {
@@ -180,7 +190,7 @@ export async function maskCompositeRoutes(app: FastifyInstance) {
     if (reply.sent) return
     // The units it was charged ride the job (after the spread: a client's field never wins;
     // Zod strips one anyway): the render refuses a foreground / background that needs more.
-    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("mask-composite", { jobId: job.id, ...body, billedUnits, usageLogId: reservation?.usageLogId }))
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("mask-composite", { jobId: job.id, ...body, billedUnits, ...workingCopy.payload, usageLogId: reservation?.usageLogId }))
     if (reply.sent) return
     return { jobId: job.id }
   })

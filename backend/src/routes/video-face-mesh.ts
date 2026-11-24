@@ -18,6 +18,11 @@
  * Local compute, no provider. Priced by the clip's length (`video-face-mesh:<n>s`,
  * `measureVideoFaceMeshLength`), measured by the preHandler, billed to the
  * caller like the engine's other children.
+ *
+ * `workingCopy: true` (lib/working-copy-request.ts): the drawn clip is encoded
+ * as a near-lossless working copy for the next step
+ * (providers/video/working-copy-encode.ts), recorded as the job's server-only
+ * `input_data.__workingCopy`. Same price.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
@@ -42,6 +47,7 @@ import { createsChildJob } from "../lib/job-submission-context.js"
 import { measureVideoFaceMeshLength } from "../lib/video-face-mesh-length.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
+import { workingCopyChildFields, workingCopyHonoured, workingCopyStamp } from "../lib/working-copy-request.js"
 
 const L = VIDEO_FACE_MESH_LIMITS
 const facePct = z.number().min(L.FACE_HEIGHT_PCT_MIN).max(L.FACE_HEIGHT_PCT_MAX).optional().default(0)
@@ -75,6 +81,8 @@ export const videoFaceMeshBody = z
       .strictObject(Object.fromEntries(VIDEO_FACE_MESH_LAYERS.map((l) => [l, z.boolean().optional()])) as Record<VideoFaceMeshLayer, z.ZodOptional<z.ZodBoolean>>)
       .optional(),
     forcePrivate: z.literal(true).optional(),
+    // The drawn clip as a near-lossless working copy for the next step (lib/working-copy-request.ts).
+    ...workingCopyChildFields,
   })
   .refine((b) => b.parts === undefined || b.layers === undefined, {
     path: ["layers"],
@@ -142,18 +150,20 @@ export async function videoFaceMeshRoutes(app: FastifyInstance) {
       // Unreachable while measurePreHandler runs first; an invariant, not a user error.
       return sendInternalError(reply, req, new Error("video-face-mesh: length stash missing"), "Failed to create job")
     }
-    const { forcePrivate: _private, ...body } = parsed.data
+    // The working copy: honoured for a child job only, and never part of the body stored or queued.
+    const { forcePrivate: _private, workingCopy: workingCopyAsked, ...body } = parsed.data
+    const workingCopy = workingCopyStamp(workingCopyHonoured(req, workingCopyAsked))
     const { data: job, error } = await insertJob(req, {
       // Private by default: the lines are an intermediate of the parent's run.
       force_private: true,
       user_id: userId,
       status: "pending",
-      input_data: { ...buildJobInputData(body, "video-face-mesh"), billedSec: stash.billedSec, bucketKey: stash.creditId },
+      input_data: { ...buildJobInputData(body, "video-face-mesh"), billedSec: stash.billedSec, bucketKey: stash.creditId, ...workingCopy.inputData },
     })
     if (error || !job) return sendInternalError(reply, req, error, "Failed to create job")
     const reservation = await reserveCreditsForJob(req, reply, job.id, stash.creditId)
     if (reply.sent) return
-    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-face-mesh", { jobId: job.id, ...body, usageLogId: reservation?.usageLogId }))
+    await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-face-mesh", { jobId: job.id, ...body, ...workingCopy.payload, usageLogId: reservation?.usageLogId }))
     if (reply.sent) return
     return reply.status(202).send({ jobId: job.id })
   })

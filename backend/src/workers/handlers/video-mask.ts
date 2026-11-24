@@ -538,6 +538,8 @@ const handleMaskComposite: HandlerFn = async function handleMaskComposite(job, c
     billedUnits: data.billedUnits,
     // The face grow (an internal child's lever, routes/mask-composite.ts): absent, the render exactly as before.
     ...(typeof data.faceGrowPct === "number" && data.faceGrowPct > 0 ? { faceGrowPct: data.faceGrowPct } : {}),
+    // The working copy (a child job's ask, honoured by routes/mask-composite.ts only): absent, the delivery encode.
+    ...(data.workingCopy === true ? { workingCopy: true } : {}),
   })
   try {
     await setJobProgress(job, ctx.jobId, 80)

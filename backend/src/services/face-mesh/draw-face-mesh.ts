@@ -50,6 +50,8 @@ import { ffmpegFailureMessage, probeVideoOverlayBase, runFfprobe, withFfmpegSlot
 import { spawnFfmpeg } from "../../providers/video/ffmpeg-process.js"
 import { ffmpegEffectiveThreads } from "../../providers/video/ffmpeg-threads.js"
 import { countVideoFrames } from "../../providers/video/video-mask.js"
+import { probeMatched, type KeptPixFmt } from "../../providers/video/matched-encode.js"
+import { workingCopyCodecArgs, workingCopyPeakMemoryMiB, workingCopyPixFmt } from "../../providers/video/working-copy-encode.js"
 import { decodeYunet, fillYunetInput, paddedSize, type YunetFace } from "../face-detect/yunet-decode.js"
 import { yunetSession } from "../face-detect/yunet-session.js"
 import { FACE_MESH_INPUT_SIZE, FACE_MESH_MODEL_POINTS, FACE_MESH_POINTS } from "./face-mesh-model.js"
@@ -95,6 +97,13 @@ export interface DrawFaceMeshInput {
   /** What is drawn, layer by layer (`VideoFaceMeshLayers`), in place of `parts`. */
   readonly layers?: VideoFaceMeshLayers
   readonly filters: FaceMeshFilters
+  /**
+   * Encode the drawn clip as a working copy (an internal child's ask,
+   * routes/video-face-mesh.ts; providers/video/working-copy-encode.ts): in
+   * `drawOnPath`'s own pixel format, near-lossless. Left out: the delivery
+   * encode, as before.
+   */
+  readonly workingCopy?: boolean
   /** Where the output is written. */
   readonly outputPath: string
 }
@@ -299,9 +308,25 @@ export async function* streamFrames(
   }
 }
 
-/** The encoder's argv: raw RGB frames on stdin at the drawn clip's size and rate, its audio copied. Pure. */
-export function buildFaceMeshEncodeArgs(o: { width: number; height: number; frameRate: string; audioFrom: string; outputPath: string; colour?: ClipColour }): string[] {
+/**
+ * The encoder's argv: raw RGB frames on stdin at the drawn clip's size and
+ * rate, its audio copied. `workingCopy` (its pixel format: the drawn-on clip's,
+ * `workingCopyPixFmt`) writes the working copy (working-copy-encode.ts) in that
+ * format in place of the delivery encode; the colour is written and tagged the
+ * same either way. Pure.
+ */
+export function buildFaceMeshEncodeArgs(o: {
+  width: number
+  height: number
+  frameRate: string
+  audioFrom: string
+  outputPath: string
+  colour?: ClipColour
+  workingCopy?: { readonly pixFmt: KeptPixFmt }
+}): string[] {
   const c = o.colour ?? clipColourOf({})
+  const pix = o.workingCopy?.pixFmt ?? "yuv420p"
+  const codec = o.workingCopy ? workingCopyCodecArgs(pix) : ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p"]
   return [
     "-y", "-nostdin", "-v", "error",
     "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", `${o.width}x${o.height}`, "-framerate", o.frameRate,
@@ -310,8 +335,8 @@ export function buildFaceMeshEncodeArgs(o: { width: number; height: number; fram
     "-map", "0:v:0", "-map", "1:a:0?",
     "-fps_mode", "passthrough",
     // Written back with the clip's own matrix and range, and tagged as it was.
-    "-vf", `scale=out_color_matrix=${c.matrix}:out_range=${c.range},format=yuv420p,setparams=colorspace=${c.space}:color_primaries=${c.primaries}:color_trc=${c.transfer}:range=${c.range}`,
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p",
+    "-vf", `scale=out_color_matrix=${c.matrix}:out_range=${c.range},format=${pix},setparams=colorspace=${c.space}:color_primaries=${c.primaries}:color_trc=${c.transfer}:range=${c.range}`,
+    ...codec,
     "-colorspace", c.space, "-color_primaries", c.primaries, "-color_trc", c.transfer, "-color_range", c.range,
     "-c:a", "copy",
     "-movflags", "+faststart",
@@ -374,17 +399,20 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
   const { pw, ph } = paddedSize(dw, dh)
   const frameRate = frameRateOf(drawOn.probe)
   const colour = await probeColour(input.drawOnPath)
+  // The working copy keeps the drawn-on clip's own pixel format: probed only when asked for.
+  const workingCopy = input.workingCopy === true ? { pixFmt: workingCopyPixFmt(await probeMatched(input.drawOnPath)) } : undefined
   const timeoutMs = faceMeshTimeoutMs(frames)
-  const peakMemoryMiB = faceMeshPeakMemoryMiB(
+  const deliveryPeakMiB = faceMeshPeakMemoryMiB(
     { detect: det, draw, ...(maskSize ? { mask: maskSize } : {}), ...(depthSize ? { depth: depthSize } : {}) },
     Math.max(detector.intraOpThreads, mesh.intraOpThreads),
     ffmpegEffectiveThreads(),
   )
+  const peakMemoryMiB = workingCopy ? workingCopyPeakMemoryMiB(deliveryPeakMiB, workingCopy.pixFmt) : deliveryPeakMiB
 
   const counted = await withFfmpegSlot(async () => {
     const cpu0 = process.cpuUsage()
     const enc = spawnFfmpeg(
-      buildFaceMeshEncodeArgs({ ...draw, frameRate, audioFrom: input.drawOnPath, outputPath: input.outputPath, colour }),
+      buildFaceMeshEncodeArgs({ ...draw, frameRate, audioFrom: input.drawOnPath, outputPath: input.outputPath, colour, ...(workingCopy ? { workingCopy } : {}) }),
       { stdio: ["pipe", "ignore", "pipe"] },
     )
     let encErr = ""

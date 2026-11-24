@@ -294,3 +294,82 @@ describe("POST /v1/mask-composite — faceGrowPct, a child job's lever only", ()
     expect(vi.mocked(videoQueue.add).mock.calls[0]![1]).not.toHaveProperty("faceGrowPct")
   })
 })
+
+describe("POST /v1/mask-composite — workingCopy, honoured for a child job only", () => {
+  const BLUR = { backgroundUrl: URLS.backgroundUrl, maskUrl: URLS.maskUrl, fill: "blur" }
+  const PARENT = "00000000-0000-4000-8000-0000000000aa"
+  const internal = (payload: Record<string, unknown>, parentJobId?: string) => {
+    const send = () => app.inject({ method: "POST", url: "/v1/mask-composite", payload, headers: { "x-test-internal": "1" } })
+    return parentJobId
+      ? withJobSubmissionContext({ userId: USER, method: "POST", url: "/v1/mask-composite", parentJobId, trustedPluginCaller: true }, send)
+      : send()
+  }
+  let inserted: Array<Record<string, unknown>>
+
+  beforeEach(async () => {
+    await app.close()
+    inserted = []
+    vi.mocked(supabase.from).mockReturnValue({
+      insert: vi.fn((row: Record<string, unknown>) => {
+        inserted.push(row)
+        return { select: () => ({ single: () => Promise.resolve({ data: { id: "job-mc-1" }, error: null }) }) }
+      }),
+    } as never)
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (body?.userId && typeof body.userId === "string") req.userId = body.userId
+      if (req.headers["x-test-internal"]) {
+        req.userId = USER
+        req.authKind = "internal" as never
+      }
+    })
+    await app.register(async (i) => { await maskCompositeRoutes(i) })
+    await app.ready()
+  })
+
+  /** The job row's input_data and the queue payload of the one request sent. */
+  const sent = () => ({ inputData: inserted[0]!.input_data, payload: vi.mocked(videoQueue.add).mock.calls[0]![1] })
+
+  it("a child job's workingCopy: true is recorded server-only and rides the queue payload, at the same price", async () => {
+    const res = await internal({ ...BLUR, workingCopy: true }, PARENT)
+    expect(res.statusCode).toBe(200)
+    expect(guardedCredits).toBe(30)
+    const { inputData, payload } = sent()
+    expect(inputData).toMatchObject({ __workingCopy: true })
+    expect(inputData).not.toHaveProperty("workingCopy")
+    expect(payload).toMatchObject({ workingCopy: true })
+    // Exactly the body without it, plus the two keys.
+    vi.clearAllMocks()
+    inserted = []
+    await internal(BLUR, PARENT)
+    const plain = sent()
+    const { __workingCopy: _k, ...restInput } = inputData as Record<string, unknown>
+    const { workingCopy: _w, ...restPayload } = payload as Record<string, unknown>
+    expect(restInput).toEqual(plain.inputData)
+    expect(restPayload).toEqual(plain.payload)
+  })
+
+  it("absent, false, or sent by any caller that is not a child job: ignored — the row and the payload are the ones without it", async () => {
+    await internal(BLUR, PARENT)
+    const baseline = sent()
+    const cases: Array<[string, () => Promise<{ statusCode: number }>]> = [
+      ["child, false", () => internal({ ...BLUR, workingCopy: false }, PARENT)],
+      ["internal, no parent", () => internal({ ...BLUR, workingCopy: true })],
+      ["public caller", () => post({ ...BLUR, userId: USER, workingCopy: true })],
+    ]
+    for (const [name, send] of cases) {
+      vi.clearAllMocks()
+      inserted = []
+      const res = await send()
+      expect(res.statusCode, name).toBe(200)
+      expect(guardedCredits, name).toBe(30)
+      expect(sent().inputData, name).toEqual(baseline.inputData)
+      expect(sent().payload, name).toEqual(baseline.payload)
+    }
+  })
+
+  it("is validated as a boolean, like the other child-only fields", async () => {
+    expect((await post({ ...BLUR, userId: USER, workingCopy: "yes" })).statusCode).toBe(400)
+  })
+})
