@@ -71,7 +71,7 @@ beforeEach(() => {
   routes["GET /v1/admin/video-remake/shot-lock"] = () => ({ body: { data: { shotLock: null, updatedAt: null, engines: ENGINES, supported: false } } })
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
   // Offer Flash (flash-offer.test.tsx): never saved, on an engine that runs the Flash choices.
-  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" }], supported: true, environments: [] } } })
+  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Nodaro Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Nodaro Pulse Flash" }], supported: true, environments: [] } } })
   routes[`GET ${URL}`] = () => view()
   routes[`PUT ${URL}`] = (init) => view({ stored: JSON.parse(String(init?.body)).preciseUpscale })
 })
@@ -87,7 +87,7 @@ describe("the setting as it is saved and named", () => {
     expect(preciseUpscaleEffective({ "720p": "off" })).toEqual({ ...DEFAULTS, "720p": "off" })
     // A choice that resolution does not take reads as its default.
     expect(preciseUpscaleEffective({ "1080p": "720p" } as never)).toEqual(DEFAULTS)
-    // Prism Flash's rows: a setting stored before them reads their defaults; one of them is kept.
+    // Nodaro Prism Flash's rows: a setting stored before them reads their defaults; one of them is kept.
     expect(preciseUpscaleEffective({ "480p": "off" }).flash).toEqual(DEFAULTS.flash)
     expect(preciseUpscaleEffective({ flash: { "720p": "off" } }).flash).toEqual({ "480p": "1080p", "720p": "off" })
     expect(PRECISE_UPSCALE_SPEC.bodyOf(PRECISE_UPSCALE_SPEC.draftOf(null))).toEqual({ preciseUpscale: DEFAULTS })
@@ -111,7 +111,7 @@ describe("Admin → Video Remake → Precise upscale (Topaz)", () => {
     expect(saveButton()).toBeDisabled()
   })
 
-  it("Prism Flash has its own 480p and 720p rows (no 1080p), each Topaz 1080p by default, saved with the setting", async () => {
+  it("Nodaro Prism Flash has its own 480p and 720p rows (no 1080p), each Topaz 1080p by default, saved with the setting", async () => {
     const user = userEvent.setup()
     renderWith(<AdminNodaroMotionPage />)
     const flash = async (r: string) => within(await screen.findByRole("group", { name: PRECISE_UPSCALE_FLASH_HEADING })).findByRole("combobox", { name: `${PRECISE_UPSCALE_FLASH_HEADING} ${r}` })

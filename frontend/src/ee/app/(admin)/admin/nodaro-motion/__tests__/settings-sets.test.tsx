@@ -78,7 +78,7 @@ beforeEach(() => {
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
   // Offer Flash (flash-offer.test.tsx): never saved, on an engine that runs the Flash choices.
-  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" }], supported: true, environments: [] } } })
+  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Nodaro Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Nodaro Pulse Flash" }], supported: true, environments: [] } } })
   // The face grow (its own row): never saved.
   routes["GET /v1/admin/video-remake/face-grow"] = () => ({ body: { data: { faceGrow: null, updatedAt: null, supported: false } } })
   // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
@@ -174,7 +174,7 @@ describe("Admin → Video Remake → Stored settings", () => {
     await user.click(await within(await panel()).findByRole("button", { name: "Load as draft" }))
     const banner = await screen.findByRole("region", { name: "Draft" })
     expect(banner).toHaveTextContent("1 section differs from live: Label of flash-offer.")
-    expect(await screen.findByRole("switch", { name: "Offer Pulse Flash (beside Nodaro Pulse)" })).toBeChecked()
+    expect(await screen.findByRole("switch", { name: "Offer Nodaro Pulse Flash (beside Nodaro Pulse)" })).toBeChecked()
     expect(everyPut()).toEqual([])
     await user.click(within(banner).getByRole("button", { name: "Save all" }))
     await waitFor(() => expect(sentTo(`PUT ${BASE}/flash-offer`)).toEqual([{ flashOffer: { "nodaro-pulse": "on" } }]))

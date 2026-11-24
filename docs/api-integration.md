@@ -6074,21 +6074,21 @@ engine's own limits apply (Pulse takes fewer images per run than the 30 Prism
 allows), and the route refuses what it cannot run.
 
 **Flash choices.** Where Nodaro offers it, each engine also has a Flash
-choice beside it: `"nodaro-prism-flash"` (Prism Flash) and
-`"nodaro-pulse-flash"` (Pulse Flash). Each one runs its engine on the faster,
+choice beside it: `"nodaro-prism-flash"` (Nodaro Prism Flash) and
+`"nodaro-pulse-flash"` (Nodaro Pulse Flash). Each one runs its engine on the faster,
 lower-cost model of the same family, at that model's own price: the estimate
 (sent with the same body) shows it. The engine's settings (its style, art styles and
 preparation) apply unchanged.
 `GET /v1/video-remake/style-choice` answers
 `flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean }`. Offer a Flash
 choice only where it is `true`. A run or estimate naming one anywhere else is
-refused `409 flash_not_offered` ("Prism Flash isn't available right now.
+refused `409 flash_not_offered` ("Nodaro Prism Flash isn't available right now.
 Choose Nodaro Prism."), and a server from before it leaves `flash` out (read
 it as `false`).
 
-- Prism Flash renders 480p (the default, plain) or 720p and takes at most 10
+- Nodaro Prism Flash renders 480p (the default, plain) or 720p and takes at most 10
   images per run.
-- Pulse Flash renders 720p, at most 20 seconds of output and 20 seconds of
+- Nodaro Pulse Flash renders 720p, at most 20 seconds of output and 20 seconds of
   reference video in all.
 
 Neither has a draft or Full Quality. What a Flash choice cannot take (1080p, a

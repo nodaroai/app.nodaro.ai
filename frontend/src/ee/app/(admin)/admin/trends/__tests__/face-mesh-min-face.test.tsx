@@ -296,7 +296,7 @@ describe("both pages show it", { timeout: 20_000 }, () => {
     // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
     routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
   // Offer Flash (flash-offer.test.tsx): never saved, on an engine that runs the Flash choices.
-  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" }], supported: true, environments: [] } } })
+  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Nodaro Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Nodaro Pulse Flash" }], supported: true, environments: [] } } })
     // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
     routes["GET /v1/admin/video-remake/precise-upscale"] = () => ({ body: { data: { value: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, stored: null, defaults: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, updatedAt: null, supported: true } } })
     routes["GET /v1/admin/video-remake/prompt-parts"] = () => ({ body: { data: { promptParts: null, updatedAt: null, engines: ENGINES, styles: ["precise", "motion"] } } })
@@ -313,7 +313,7 @@ describe("both pages show it", { timeout: 20_000 }, () => {
     routes["GET /v1/admin/video-remake/prism-reference-audio"] = () => ({ body: { data: { prismReferenceAudio: null, updatedAt: null, supported: true } } })
     routes["GET /v1/admin/video-remake/steps"] = () => ({ body: { data: { steps: null, updatedAt: null, engines: ENGINES } } })
     routes["GET /v1/admin/trends/engine-environments"] = () => ({ body: { data: ALL_NEW } })
-    const prismOf = async () => (await screen.findByRole("heading", { name: /^Nodaro Prism/ })).closest("section") as HTMLElement
+    const prismOf = async () => (await screen.findByRole("heading", { name: /^Nodaro Prism(?! Flash)/ })).closest("section") as HTMLElement
     const { unmount } = renderWith(<AdminNodaroMotionPage />)
     const prism = await prismOf()
     const motion = await within(prism).findByRole("group", { name: /Prism Motion$/ })

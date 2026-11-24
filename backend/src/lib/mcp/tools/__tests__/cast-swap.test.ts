@@ -857,22 +857,22 @@ describe("video_remake", () => {
         "/v1/video-remake": { statusCode: 202, body: { jobId: "job-f" } },
       })
       const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse-flash" })
-      expect(res.structuredContent).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Pulse Flash", totalCredits: 300, confirmed: false })
-      expect(res.content[0]!.text).toContain("This Pulse Flash run costs about 300 credits.")
+      expect(res.structuredContent).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Nodaro Pulse Flash", totalCredits: 300, confirmed: false })
+      expect(res.content[0]!.text).toContain("This Nodaro Pulse Flash run costs about 300 credits.")
       await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse-flash", confirm: true })
       expect(calls.map((c) => (c.payload as { engine?: unknown }).engine)).toEqual(["nodaro-pulse-flash", "nodaro-pulse-flash"])
     })
 
     it("a refusal the route answers (not offered) is the tool's answer", async () => {
       const { fastify } = stubFastify({
-        "/v1/video-remake/estimate": { statusCode: 409, body: { error: { code: "flash_not_offered", message: "Prism Flash isn't available right now. Choose Nodaro Prism." } } },
+        "/v1/video-remake/estimate": { statusCode: 409, body: { error: { code: "flash_not_offered", message: "Nodaro Prism Flash isn't available right now. Choose Nodaro Prism." } } },
       })
       const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-prism-flash" })
       expect(res.isError).toBe(true)
       expect(res.content[0]!.text).toContain("flash_not_offered")
     })
 
-    it("every rule of the tool reads a Flash choice as its engine: an art style on Pulse Flash is Pulse's refusal", async () => {
+    it("every rule of the tool reads a Flash choice as its engine: an art style on Nodaro Pulse Flash is Pulse's refusal", async () => {
       const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
       const pulse = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse", art_style: "pop-art" })
       const flash = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse-flash", art_style: "pop-art" })

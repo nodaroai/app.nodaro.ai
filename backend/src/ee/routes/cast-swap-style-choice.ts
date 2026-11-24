@@ -115,8 +115,8 @@
  * included. A client reading a server from before it finds none and treats it
  * as false.
  *
- * `flash` says, per engine, whether its Flash choice is offered here — Prism
- * Flash (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Pulse Flash
+ * `flash` says, per engine, whether its Flash choice is offered here — Nodaro Prism
+ * Flash (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Nodaro Pulse Flash
  * (`"nodaro-pulse-flash"`) beside Nodaro Pulse (decided 2026-11-22): true only
  * while this environment's engine declares `castSwap.flashChoices` AND the
  * admin's Offer Flash is on for the engine (`flashOfferedEngines`,

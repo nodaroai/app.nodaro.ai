@@ -1,7 +1,7 @@
 /**
  * Video Remake's "Offer Flash", per engine (decided 2026-11-22): whether
- * EVERY user may pick that engine's Flash choice — Prism Flash
- * (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Pulse Flash
+ * EVERY user may pick that engine's Flash choice — Nodaro Prism Flash
+ * (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Nodaro Pulse Flash
  * (`"nodaro-pulse-flash"`) beside Nodaro Pulse — each its engine's run with
  * the video step on the faster, lower-cost model of the same family, at that
  * model's own price, picked per run. `"off"` (the default) or `"on"`.

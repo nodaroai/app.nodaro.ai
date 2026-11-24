@@ -223,7 +223,7 @@ describe("storing a set", () => {
     expect((await send("POST", BASE, { name: "Bad", settings: { "flash-offer": { flashOffer: { "nodaro-prism": "yes" } } } })).statusCode).toBe(400)
   })
 
-  it("holds the Precise upscale's Prism Flash rows: stored whole, a row left out at its default", async () => {
+  it("holds the Precise upscale's Nodaro Prism Flash rows: stored whole, a row left out at its default", async () => {
     const res = await send("POST", BASE, { name: "Flash upscale", settings: { "precise-upscale": { preciseUpscale: { flash: { "720p": "off" } } } } })
     expect(res.statusCode).toBe(201)
     expect(res.json().data.set.settings["precise-upscale"]).toEqual({

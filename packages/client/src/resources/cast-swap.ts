@@ -58,8 +58,8 @@ import type { NodaroClientCore } from "../core.js"
  * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
  * only).  A Flash choice ({@link VideoRemakeFlashEngine}) adds 409
  * `flash_not_offered` (not offered here) and 400
- * `flash_model_unsupported` (what it cannot take: 1080p, a draft, Prism
- * Flash's 10 images, Pulse Flash's 20 seconds).
+ * `flash_model_unsupported` (what it cannot take: 1080p, a draft, Nodaro Prism
+ * Flash's 10 images, Nodaro Pulse Flash's 20 seconds).
  */
 
 /**
@@ -82,10 +82,10 @@ export type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse"
  * engine; anywhere else a run or estimate naming one is refused 409
  * `flash_not_offered`. A trend may be made on one too.
  *
- * - `"nodaro-prism-flash"` (Prism Flash, a Nodaro Prism run): 480p (the
+ * - `"nodaro-prism-flash"` (Nodaro Prism Flash, a Nodaro Prism run): 480p (the
  *   default, plain) or 720p; no draft and no Full Quality; at most 10 images
  *   per run.
- * - `"nodaro-pulse-flash"` (Pulse Flash, a Nodaro Pulse run): 720p; no draft
+ * - `"nodaro-pulse-flash"` (Nodaro Pulse Flash, a Nodaro Pulse run): 720p; no draft
  *   and no Full Quality; at most 20 seconds of output, and 20 seconds of
  *   reference video in all.
  *
@@ -1124,8 +1124,8 @@ export interface VideoRemakeStyleChoice {
    */
   roleFace?: boolean
   /**
-   * Per engine, whether its Flash choice is offered here: Prism Flash
-   * (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Pulse Flash
+   * Per engine, whether its Flash choice is offered here: Nodaro Prism Flash
+   * (`engine: "nodaro-prism-flash"`) beside Nodaro Prism, Nodaro Pulse Flash
    * (`"nodaro-pulse-flash"`) beside Nodaro Pulse (see
    * {@link VideoRemakeFlashEngine}). `true` only where the engine runs it and
    * Nodaro offers it on this deployment; a run naming one anywhere else is
