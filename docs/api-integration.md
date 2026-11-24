@@ -6000,9 +6000,9 @@ length, with its own cast and new music, and can change the motion itself.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us)). |
+| `POST` | `/v1/video-remake/estimate` | Quote a run in credits before starting it. Free: nothing is created or reserved. Returns `{ engine, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, firstRemakeOffer?, resolution?, outputResolution?, upscale?, upscaleOffered? }`: `totalCredits` is held when the run starts, `expectedCredits` is what it is expected to be charged (`firstRemakeOffer`: see [First Remake on us](#first-remake-on-us); the last four: see Upscale to the next size below). |
 | `POST` | `/v1/video-remake` | Start the run. Returns `202 { jobId }`; follow the job like any other (`GET /v1/jobs/:id`). Takes an `Idempotency-Key` (see below). |
-| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), and whether each engine's Flash choice is offered (`flash`, see Flash choices below). Public: no sign-in needed. |
+| `GET` | `/v1/video-remake/style-choice` | Whether you choose a run's `style`, per engine, or it is fixed as Motion (`"precise"` sets only what Nodaro's own apps run), whether the engine takes a style-only run, whether a Precise run takes an art style (see Style below), whether a run may state a 3D previz clip (`previz`, see A 3D previz clip below), whether such a clip's roles can be planned (`planRolesPreviz`, see Roles planned from the prompt below), whether a person role may keep its own face (`roleFace`, see The Face chip below), whether each engine's Flash choice is offered (`flash`, see Flash choices below), and whether a run takes the upscale choice (`upscaleChoice`, see Upscale to the next size below). Public: no sign-in needed. |
 | `GET` | `/v1/video-remake/advanced` | Whether the Video Remake page shows its Advanced options (see below). Public: no sign-in needed. |
 | `POST` | `/v1/video-remake/describe-style` | Put an image's visual style into words, for a run's custom style (see A custom style below). Body `{ imageUrl, note? }`; returns `{ text, medium?, tones? }`. Free: no job, nothing charged. Signed in; 10 calls a minute per account. |
 | `POST` | `/v1/video-remake/plan-roles` | Plan a run's roles from a request in the person's own words and loose reference images (see Roles planned from the prompt below). Body `{ videoUrl, prompt, images, engine?, roles?, references?, preview?, previewStart?, clipKind?, previz? }`; returns `{ prompt, roles, references, postPrompt, removed, unresolved }`. Free: no job, nothing charged. Signed in; 6 calls a minute and 60 a day per account. |
@@ -6038,9 +6038,10 @@ and optionally `references` (see below), `prePrompt` (your own
 words placed at the start of the prompt, before the role instructions; it
 mentions roles as `{role:N}`, like `postPrompt`), `postPrompt`, `preview`,
 `previewStart`, `engine` (see below), `style` (see below), `direction` (an art
-style from the catalog, or a custom style in your own words, see below), `resolution` (`"480p"` — the default —
+style from the catalog, or a custom style in your own words, see below), `resolution` (the size the engine makes the video at: `"480p"` — the default —
 `"720p"` or `"1080p"`; on Nodaro Pulse `"720p"` — its default — or
-`"1080p"`), `draft` (off by default, so a 480p run is plain; `true` makes a
+`"1080p"`), `upscale` (`"off"` or `"next"`: whether the finished video is
+delivered upscaled to the next size, see Upscale to the next size below), `draft` (off by default, so a 480p run is plain; `true` makes a
 480p draft whose same take [Full Quality](#full-quality) can finish at 1080p;
 `true` above 480p is refused, and Nodaro Pulse has no draft), `prepareReferences` (default
 `true`, see below), `sessionId`, `origin` and, on the run only, `intent`
@@ -6073,22 +6074,45 @@ SDK's `estimate()` answers the current id). Each
 engine's own limits apply (Pulse takes fewer images per run than the 30 Prism
 allows), and the route refuses what it cannot run.
 
+**Upscale to the next size.** A run and its estimate take
+`upscale: "off" | "next"`. `"next"` upscales the finished video straight to
+the next size and delivers it at that size: 480p becomes 720p, 720p becomes
+1080p. `"off"` delivers it at the engine's size (`resolution`). Left out, a
+run is `"next"` where the choice is offered and `"off"` where it is not. It is
+not offered on a 1080p run (there is no next size), a draft or a trend run,
+and only where the deployment has turned it on:
+`GET /v1/video-remake/style-choice` answers `upscaleChoice: true` there (one
+boolean, not per engine; a server from before it leaves it out, read that as
+`false`). Elsewhere the field is accepted and ignored. Asking for `"next"`
+where it is not offered is never an error: the run is made as `"off"`.
+
+The estimate, sent the same body, is the authority on what a run gets:
+`upscaleOffered` (whether the choice is offered for this run), `upscale` (the
+choice the run would be made with), `resolution` (the engine's size),
+`outputResolution` (the size delivered) and, on a `"next"` run, the
+upscale's price in `breakdown.upscale`, included in both totals. Quote with
+the same `upscale` you will run with, since leaving it out can mean `"next"`
+and its price. A completed job's output carries `outputResolution` (the size
+delivered) and, on a `"next"` run, `upscale: "applied"` or `"skipped"`
+(skipped: the upscale step failed and the video was delivered at the
+engine's size). Its `resolution` stays the engine's size.
+
 **Flash choices.** Where Nodaro offers it, each engine also has a Flash
-choice beside it: `"nodaro-prism-flash"` (Prism Flash) and
-`"nodaro-pulse-flash"` (Pulse Flash). Each one runs its engine on the faster,
+choice beside it: `"nodaro-prism-flash"` (Nodaro Prism Flash) and
+`"nodaro-pulse-flash"` (Nodaro Pulse Flash). Each one runs its engine on the faster,
 lower-cost model of the same family, at that model's own price: the estimate
 (sent with the same body) shows it. The engine's settings (its style, art styles and
 preparation) apply unchanged.
 `GET /v1/video-remake/style-choice` answers
 `flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean }`. Offer a Flash
 choice only where it is `true`. A run or estimate naming one anywhere else is
-refused `409 flash_not_offered` ("Prism Flash isn't available right now.
+refused `409 flash_not_offered` ("Nodaro Prism Flash isn't available right now.
 Choose Nodaro Prism."), and a server from before it leaves `flash` out (read
 it as `false`).
 
-- Prism Flash renders 480p (the default, plain) or 720p and takes at most 10
+- Nodaro Prism Flash renders 480p (the default, plain) or 720p and takes at most 10
   images per run.
-- Pulse Flash renders 720p, at most 20 seconds of output and 20 seconds of
+- Nodaro Pulse Flash renders 720p, at most 20 seconds of output and 20 seconds of
   reference video in all.
 
 Neither has a draft or Full Quality. What a Flash choice cannot take (1080p, a
@@ -6202,7 +6226,7 @@ the motion of a clip.** Its two engines are also named providers of
 `POST /v1/video-to-video`: a request there with `provider: "nodaro-prism"` or
 `"nodaro-pulse"` starts nothing and answers `200` with this section's quote
 and the request to send here:
-`{ "quoteOnly": true, "message": "…", "videoRemake": { "quote": { engine, engineName, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower }, "run": { "method": "POST", "path": "/v1/video-remake", "body": { videoUrl, roles: [], postPrompt, engine, resolution?, draft? } } } }`.
+`{ "quoteOnly": true, "message": "…", "videoRemake": { "quote": { engine, engineName, totalCredits, expectedCredits, breakdown, privacyCredits?, settlesLower, resolution?, outputResolution?, upscale?, upscaleOffered? }, "run": { "method": "POST", "path": "/v1/video-remake", "body": { videoUrl, roles: [], postPrompt, engine, resolution?, draft? } } } }`.
 There is no `jobId` and nothing is held. The run is `POST /v1/video-remake`
 with `videoRemake.run.body`. The request's `prompt` becomes `postPrompt`; the
 other Video to Video fields are ignored, and a reference list is a
@@ -6609,7 +6633,9 @@ expected to be charged, never above `motion`; Prism only) and `privacy`
 always runs, in neither when it is the retry below), `prompt` (the prompt
 a language model writes for the run, when the engine's setting asks for
 one), `referenceAudio` (preparing the clip's sound for the video model,
-when the engine's setting runs that step), and `upscale` (a Topaz video
+when the engine's setting runs that step), and `upscale` (where the
+deployment offers the upscale choice, the upscale to the next size on a
+`"next"` run, see Upscale to the next size above; elsewhere a Topaz video
 upscale of the result: it appears only when the deployment's setting adds
 that step for a Precise run on Nodaro Prism at the run's resolution; Topaz
 upscales the take, which is then scaled back to the run's own resolution; it

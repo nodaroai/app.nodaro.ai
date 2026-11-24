@@ -73,7 +73,7 @@ describe("registerNodaroMotionEngineHook: the Flash choices", () => {
         const res = await post({ engine: "nodaro-prism-flash" }, url)
         expect(res, `${what} ${url}`).toEqual({
           status: 409,
-          body: { error: { code: "flash_not_offered", message: "Prism Flash isn't available right now. Choose Nodaro Prism." } },
+          body: { error: { code: "flash_not_offered", message: "Nodaro Prism Flash isn't available right now. Choose Nodaro Prism." } },
         })
       }
     }

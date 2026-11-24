@@ -188,7 +188,7 @@ describe("Video Remake's Flash choices", () => {
   it("two ids, their names and engines; never read as an engine by castSwapEngineFrom", async () => {
     const m = await import("../cast-swap-limits.js")
     expect(m.VIDEO_REMAKE_FLASH_ENGINES).toEqual(["nodaro-prism-flash", "nodaro-pulse-flash"])
-    expect(m.VIDEO_REMAKE_FLASH_ENGINE_NAMES).toEqual({ "nodaro-prism-flash": "Prism Flash", "nodaro-pulse-flash": "Pulse Flash" })
+    expect(m.VIDEO_REMAKE_FLASH_ENGINE_NAMES).toEqual({ "nodaro-prism-flash": "Nodaro Prism Flash", "nodaro-pulse-flash": "Nodaro Pulse Flash" })
     expect(m.NODARO_MOTION_ENGINE_OF_FLASH).toEqual({ "nodaro-prism-flash": "nodaro-prism", "nodaro-pulse-flash": "nodaro-pulse" })
     for (const engine of m.NODARO_MOTION_ENGINES) expect(m.nodaroMotionEngineOfFlash(m.videoRemakeFlashEngineOf(engine))).toBe(engine)
     for (const id of m.VIDEO_REMAKE_FLASH_ENGINES) {
@@ -202,7 +202,7 @@ describe("Video Remake's Flash choices", () => {
     for (const other of ["nodaro-prism", "seedance-2-5-flash", "kling-4-flash", undefined, 3]) expect(m.videoRemakeFlashEngineFrom(other)).toBeUndefined()
   })
 
-  it("what each renders: Prism Flash 480p or 720p, Pulse Flash 720p; 10 images and 20 seconds at the most", async () => {
+  it("what each renders: Nodaro Prism Flash 480p or 720p, Nodaro Pulse Flash 720p; 10 images and 20 seconds at the most", async () => {
     const m = await import("../cast-swap-limits.js")
     expect(m.VIDEO_REMAKE_FLASH_RESOLUTIONS).toEqual({ "nodaro-prism-flash": ["480p", "720p"], "nodaro-pulse-flash": ["720p"] })
     expect(m.VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES).toBe(10)

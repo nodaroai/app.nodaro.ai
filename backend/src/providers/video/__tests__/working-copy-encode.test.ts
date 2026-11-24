@@ -22,7 +22,7 @@ import {
 } from "../working-copy-encode.js"
 import { matchedPictureArgs, probeMatched } from "../matched-encode.js"
 import { buildMaskCompositeArgs, buildMaskCompositeFillArgs, maskCompositePeakMemoryMiB } from "../mask-composite.js"
-import { buildFaceMeshEncodeArgs, clipColourOf } from "../../../services/face-mesh/draw-face-mesh.js"
+import { EXACT_ENCODE_FLAGS, buildFaceMeshEncodeArgs, buildStreamFramesArgs, clipColourOf } from "../../../services/face-mesh/draw-face-mesh.js"
 
 const PROBE = { width: 1280, height: 720, frameRate: "30000/1001", durationSec: 4.5, startSec: 0.041, frameCount: 135, sar: 1, foregroundHasAudio: true, backgroundHasAudio: true }
 const video = (workingCopy?: Parameters<typeof buildMaskCompositeArgs>[0]["workingCopy"]) =>
@@ -40,6 +40,19 @@ const DEFAULT_BLUR = ["-y", "-i", "bg.mp4", "-i", "m.mp4", "-filter_complex", "[
 const DEFAULT_PIXELATE = ["-y", "-i", "bg.mp4", "-i", "m.mp4", "-filter_complex", "[0:v]setpts=PTS-STARTPTS,fps=30000/1001,scale=1280:720,setsar=1,format=yuv420p,split=2[bg][src];[src]scale=80:45:flags=area,scale=1280:720:flags=neighbor,format=yuva420p[fx];[1:v]setpts=PTS-STARTPTS,scale=1280:720,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30000/1001,tpad=stop_mode=clone:stop=-1[m];[fx][m]alphamerge[fxa];[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p,setpts=PTS+round(0.041000/TB)[vout]", "-map", "[vout]", "-t", "4.541", "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-an", "-movflags", "+faststart", "o.mp4"]
 const DEFAULT_FACE_MESH = ["-y", "-nostdin", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "720x1280", "-framerate", "30000/1001", "-i", "pipe:0", "-i", "/in.mp4", "-map", "0:v:0", "-map", "1:a:0?", "-fps_mode", "passthrough", "-vf", "scale=out_color_matrix=bt601:out_range=pc,format=yuv420p,setparams=colorspace=smpte170m:color_primaries=smpte170m:color_trc=smpte170m:range=pc", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-colorspace", "smpte170m", "-color_primaries", "smpte170m", "-color_trc", "smpte170m", "-color_range", "pc", "-c:a", "copy", "-movflags", "+faststart", "/out.mp4"]
 const DEFAULT_FACE_MESH_UNTAGGED = ["-y", "-nostdin", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "2x2", "-framerate", "24/1", "-i", "pipe:0", "-i", "/a", "-map", "0:v:0", "-map", "1:a:0?", "-fps_mode", "passthrough", "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv", "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv", "-c:a", "copy", "-movflags", "+faststart", "/o"]
+
+/**
+ * The face mesh's encode as it is now: the captured argv above with the one
+ * deliberate change since, exact rounding on its RGB → YUV scale
+ * (`EXACT_ENCODE_FLAGS`, so a round trip keeps the luma mean).
+ */
+const exactEncode = (argv: string[]) => {
+  const out = [...argv]
+  const vf = out.indexOf("-vf") + 1
+  out[vf] = out[vf]!.replace(/^(scale=out_color_matrix=[^,]+),/, `$1:flags=${EXACT_ENCODE_FLAGS},`)
+  expect(out[vf]).toContain(`:flags=${EXACT_ENCODE_FLAGS},format=`)
+  return out
+}
 
 /** The delivery encode's codec segment, as both Mask Composite graphs write it. */
 const DELIVERY = ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"]
@@ -117,15 +130,15 @@ describe("Mask Composite", () => {
 })
 
 describe("Video Face Mesh's encoder", () => {
-  it("without the working copy: exactly as before", () => {
-    expect(faceMesh()).toEqual(DEFAULT_FACE_MESH)
-    expect(buildFaceMeshEncodeArgs({ width: 2, height: 2, frameRate: "24/1", audioFrom: "/a", outputPath: "/o" })).toEqual(DEFAULT_FACE_MESH_UNTAGGED)
+  it("without the working copy: exactly as before, but for the exact rounding", () => {
+    expect(faceMesh()).toEqual(exactEncode(DEFAULT_FACE_MESH))
+    expect(buildFaceMeshEncodeArgs({ width: 2, height: 2, frameRate: "24/1", audioFrom: "/a", outputPath: "/o" })).toEqual(exactEncode(DEFAULT_FACE_MESH_UNTAGGED))
   })
 
   it("a working copy: the same colour round trip and tags, encoded preset fast, CRF 6, in the drawn-on clip's format", () => {
     const delivery = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p"]
-    expect(faceMesh({ pixFmt: "yuv420p" })).toEqual(replaced(DEFAULT_FACE_MESH, delivery, workingCopyCodecArgs("yuv420p")))
-    const full = replaced(DEFAULT_FACE_MESH, delivery, workingCopyCodecArgs("yuv444p"))
+    expect(faceMesh({ pixFmt: "yuv420p" })).toEqual(replaced(exactEncode(DEFAULT_FACE_MESH), delivery, workingCopyCodecArgs("yuv420p")))
+    const full = replaced(exactEncode(DEFAULT_FACE_MESH), delivery, workingCopyCodecArgs("yuv444p"))
     const vf = full.indexOf("-vf") + 1
     full[vf] = full[vf]!.replace(",format=yuv420p,", ",format=yuv444p,")
     expect(faceMesh({ pixFmt: "yuv444p" })).toEqual(full)
@@ -160,14 +173,15 @@ describe("the working copy, rendered by the real ffmpeg", () => {
       expect(stream(delivery)).toBe(`${W},${H},yuv420p,${N}`)
       expect(stream(working)).toBe(`${W},${H},${pixFmt},${N}`)
       // Measured on this grainy source with ffmpeg 9.0: 44.5 dB (4:2:0) and 45.2 dB (4:4:4) against the delivery
-      // encode's 32.4 and 36.3; the face mesh's encoder 44.5 / 45.5 against 39.5 / 31.8. The CI runner's ffmpeg
+      // encode's 32.4 and 36.3; the face mesh's encoder 48.5 / 45.5 against 40.6 / 32.1 (44.5 / 45.5 against
+      // 39.5 / 31.8 before its exact rounding: EXACT_DECODE_FLAGS / EXACT_ENCODE_FLAGS). The CI runner's ffmpeg
       // measured 41.9 dB for the 4:2:0 composite, so the floor sits under both.
       expect(psnr(src, working)).toBeGreaterThan(psnr(src, delivery) + 3)
       expect(psnr(src, working)).toBeGreaterThan(40)
 
       // The face mesh's encoder, fed the clip's own frames as the drawer feeds them (raw RGB, nothing drawn).
       const colour = clipColourOf({ color_space: "bt709", color_range: "tv" })
-      const rgb = ff(["-i", src, "-vf", `scale=${W}:${H}:in_color_matrix=bt709:in_range=tv`, "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"])
+      const rgb = ff(buildStreamFramesArgs(src, { pixFmt: "rgb24", width: W, height: H, colour, exact: true }))
       const encode = (outputPath: string, wc?: { pixFmt: "yuv420p" | "yuv444p" }) =>
         ff(buildFaceMeshEncodeArgs({ width: W, height: H, frameRate: "24/1", audioFrom: src, outputPath, colour, ...(wc ? { workingCopy: wc } : {}) }).slice(1), rgb)
       const fmDelivery = join(dir, "fm-delivery.mp4"), fmWorking = join(dir, "fm-working.mp4")

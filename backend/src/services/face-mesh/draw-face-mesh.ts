@@ -251,28 +251,69 @@ const fpsOf = (rate: string): number => {
 }
 
 /**
- * Decode `path` as raw frames of `width × height` (`pixFmt`: 3 bytes a pixel
- * for bgr24 / rgb24, 1 for gray), one REUSED buffer at a time, in display
- * orientation, never a frame duplicated or dropped. Spawned only inside the
- * caller's hold (this file's `drawFaceMeshVideo`, and the mask outline's
- * `drawMaskOutlineVideo`, which hold theirs around it). `what` names the step
- * in a timeout's message.
+ * The scaler flags of the two conversions a drawn clip makes at its own size,
+ * YUV → RGB (the frames drawn on) and RGB → YUV (the encode): exact rounding
+ * and full chroma interpolation, the chroma taken up by repeating each sample
+ * (`neighbor`) and brought back down by averaging (`area`), so a 4:2:0 round
+ * trip returns the chroma it started from. Measured on the pinned ffmpeg with
+ * nothing drawn: the scaler's defaults darkened an in-gamut 4:2:0 clip by 0.52
+ * of a luma level on x86 (0.08 on arm64, so the two gave different frames);
+ * these keep the luma mean (+0.006) and give the same frames on both. Exact
+ * rounding with the default bicubic kernel keeps the mean too, but blurs the
+ * round trip's chroma (a grainy clip's working copy fell from 44.5 to 38.2 dB).
+ * Set on the scale filters themselves: a global `-sws_flags` does not reach
+ * an explicit `scale`.
  */
-export async function* streamFrames(
-  path: string,
-  opts: { pixFmt: "bgr24" | "rgb24" | "gray"; width: number; height: number; timeoutMs: number; colour?: ClipColour; what?: string },
-): AsyncGenerator<Buffer> {
-  const read = opts.colour ? `:in_color_matrix=${opts.colour.matrix}:in_range=${opts.colour.range}` : ""
-  const args = [
+export const EXACT_DECODE_FLAGS = "neighbor+accurate_rnd+full_chroma_int"
+export const EXACT_ENCODE_FLAGS = "area+accurate_rnd+full_chroma_int"
+
+type StreamFramesOptions = {
+  pixFmt: "bgr24" | "rgb24" | "gray"
+  width: number
+  height: number
+  timeoutMs: number
+  colour?: ClipColour
+  /** Convert with `EXACT_DECODE_FLAGS`: the frames that are drawn on and encoded back. */
+  exact?: boolean
+  what?: string
+}
+
+/**
+ * `streamFrames`'s decoder argv (pure). An `exact` read sizes and converts in
+ * two scales: the first only resizes (a no-op at the clip's own size, the
+ * usual case; a clip whose frames come out at another size, such as one
+ * turned by its rotation tag, is resized as before), the second converts to
+ * RGB at that size with `EXACT_DECODE_FLAGS`, so the nearest-sample kernel
+ * never resizes a picture.
+ */
+export function buildStreamFramesArgs(path: string, opts: Omit<StreamFramesOptions, "timeoutMs" | "what">): string[] {
+  const read = opts.colour ? `in_color_matrix=${opts.colour.matrix}:in_range=${opts.colour.range}` : ""
+  const vf = opts.exact
+    ? `scale=${opts.width}:${opts.height},scale=${read ? `${read}:` : ""}flags=${EXACT_DECODE_FLAGS}`
+    : `scale=${opts.width}:${opts.height}${read ? `:${read}` : ""}`
+  return [
     "-nostdin", "-v", "error",
     "-i", path,
     "-map", "0:v:0", "-an", "-sn", "-dn",
-    "-vf", `scale=${opts.width}:${opts.height}${read}`,
+    "-vf", vf,
     "-fps_mode", "passthrough",
     "-f", "rawvideo", "-pix_fmt", opts.pixFmt,
     "pipe:1",
   ]
-  const proc = spawnFfmpeg(args, { stdio: ["ignore", "pipe", "pipe"] })
+}
+
+/**
+ * Decode `path` as raw frames of `width × height` (`pixFmt`: 3 bytes a pixel
+ * for bgr24 / rgb24, 1 for gray), one REUSED buffer at a time, in display
+ * orientation, never a frame duplicated or dropped. Spawned only inside the
+ * caller's hold (this file's `drawFaceMeshVideo`, and the mask outline's
+ * `drawMaskOutlineVideo`, which hold theirs around it). `exact` for the frames
+ * that are drawn on and encoded back (`EXACT_DECODE_FLAGS`); the reads that
+ * only decide (the detector's, the mask's) and the depth's colours keep the
+ * scaler's defaults. `what` names the step in a timeout's message.
+ */
+export async function* streamFrames(path: string, opts: StreamFramesOptions): AsyncGenerator<Buffer> {
+  const proc = spawnFfmpeg(buildStreamFramesArgs(path, opts), { stdio: ["ignore", "pipe", "pipe"] })
   let stderr = ""
   proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-8_000) })
   const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
@@ -334,8 +375,8 @@ export function buildFaceMeshEncodeArgs(o: {
     "-i", o.audioFrom,
     "-map", "0:v:0", "-map", "1:a:0?",
     "-fps_mode", "passthrough",
-    // Written back with the clip's own matrix and range, and tagged as it was.
-    "-vf", `scale=out_color_matrix=${c.matrix}:out_range=${c.range},format=${pix},setparams=colorspace=${c.space}:color_primaries=${c.primaries}:color_trc=${c.transfer}:range=${c.range}`,
+    // Written back with the clip's own matrix and range, rounded exactly (EXACT_ENCODE_FLAGS), and tagged as it was.
+    "-vf", `scale=out_color_matrix=${c.matrix}:out_range=${c.range}:flags=${EXACT_ENCODE_FLAGS},format=${pix},setparams=colorspace=${c.space}:color_primaries=${c.primaries}:color_trc=${c.transfer}:range=${c.range}`,
     ...codec,
     "-colorspace", c.space, "-color_primaries", c.primaries, "-color_trc", c.transfer, "-color_range", c.range,
     "-c:a", "copy",
@@ -428,7 +469,7 @@ export async function drawFaceMeshVideo(input: DrawFaceMeshInput): Promise<DrawF
     // The clip and the clip drawn on, in lockstep; the mask read forward to the frame each clip frame takes.
     const sources = [
       streamFrames(input.videoPath, { pixFmt: "bgr24", ...det, timeoutMs }),
-      streamFrames(input.drawOnPath, { pixFmt: "rgb24", ...draw, timeoutMs, colour }),
+      streamFrames(input.drawOnPath, { pixFmt: "rgb24", ...draw, timeoutMs, colour, exact: true }),
       // The depth, read as RGB with its own colour (its luminance the depth) in lockstep.
       ...(input.depth && depthSize ? [streamFrames(input.depth.path, { pixFmt: "rgb24", ...depthSize, timeoutMs, colour: depthColour })] : []),
     ]

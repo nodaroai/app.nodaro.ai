@@ -1,6 +1,6 @@
 /**
  * Admin → Video Remake's Offer Flash: per engine, whether every user may pick
- * its Flash choice (Prism Flash, Pulse Flash) at its own price
+ * its Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash) at its own price
  * (GET/PUT /v1/admin/video-remake/flash-offer). Never saved = off for every
  * engine. A section of the stored settings sets, so the page reads it with the
  * others.

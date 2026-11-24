@@ -229,8 +229,8 @@ export const CAST_SWAP_ENGINE_IDS_ACCEPTED = [
 /**
  * Video Remake's FLASH CHOICES (2026-11-22): each engine's faster, lower-cost
  * model offered as a choice of its own beside the engine, picked per run and
- * priced at that model's own rate — `"nodaro-prism-flash"` (Prism Flash, a
- * Nodaro Prism run) and `"nodaro-pulse-flash"` (Pulse Flash, a Nodaro Pulse
+ * priced at that model's own rate — `"nodaro-prism-flash"` (Nodaro Prism Flash, a
+ * Nodaro Prism run) and `"nodaro-pulse-flash"` (Nodaro Pulse Flash, a Nodaro Pulse
  * run). A deployment offers each only while its admin's "Offer Flash" is on
  * for the engine (`GET /v1/video-remake/style-choice` answers `flash`); a
  * request naming one anywhere else is refused 409 `flash_not_offered`.
@@ -246,8 +246,8 @@ export type VideoRemakeFlashEngine = (typeof VIDEO_REMAKE_FLASH_ENGINES)[number]
 
 /** The name people read for each Flash choice (exactly these). */
 export const VIDEO_REMAKE_FLASH_ENGINE_NAMES = {
-  "nodaro-prism-flash": "Prism Flash",
-  "nodaro-pulse-flash": "Pulse Flash",
+  "nodaro-prism-flash": "Nodaro Prism Flash",
+  "nodaro-pulse-flash": "Nodaro Pulse Flash",
 } as const satisfies Record<VideoRemakeFlashEngine, string>
 
 /** The engine each Flash choice is a run of. */
@@ -267,7 +267,7 @@ export function videoRemakeFlashEngineFrom(value: unknown): VideoRemakeFlashEngi
 }
 
 /**
- * The internal engine whose RUN a value names: a Flash choice's engine (a Prism
+ * The internal engine whose RUN a value names: a Flash choice's engine (a Nodaro Prism
  * Flash run is a Nodaro Prism run in every setting), else `castSwapEngineFrom`.
  * For the readers that apply an engine's settings to a run (its audio, its
  * reference audio): never for one that must refuse a Flash choice it cannot run.
@@ -283,20 +283,20 @@ export function nodaroMotionEngineOfFlash(choice: VideoRemakeFlashEngine): Nodar
 }
 
 /**
- * What each Flash choice renders, the default first: Prism Flash 480p (plain)
- * or 720p, Pulse Flash 720p. Neither has a draft, 1080p or Full Quality;
- * Prism Flash takes at most `VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES` pictures,
- * Pulse Flash at most `VIDEO_REMAKE_FLASH_PULSE_MAX_SEC` seconds of output.
+ * What each Flash choice renders, the default first: Nodaro Prism Flash 480p (plain)
+ * or 720p, Nodaro Pulse Flash 720p. Neither has a draft, 1080p or Full Quality;
+ * Nodaro Prism Flash takes at most `VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES` pictures,
+ * Nodaro Pulse Flash at most `VIDEO_REMAKE_FLASH_PULSE_MAX_SEC` seconds of output.
  */
 export const VIDEO_REMAKE_FLASH_RESOLUTIONS = {
   "nodaro-prism-flash": ["480p", "720p"],
   "nodaro-pulse-flash": ["720p"],
 } as const satisfies Record<VideoRemakeFlashEngine, readonly ("480p" | "720p" | "1080p")[]>
 
-/** The most images one Prism Flash run sends (Nodaro Prism: 30). */
+/** The most images one Nodaro Prism Flash run sends (Nodaro Prism: 30). */
 export const VIDEO_REMAKE_FLASH_PRISM_MAX_IMAGES = 10
 
-/** The longest output one Pulse Flash run renders, whole seconds (Nodaro Pulse: 30). */
+/** The longest output one Nodaro Pulse Flash run renders, whole seconds (Nodaro Pulse: 30). */
 export const VIDEO_REMAKE_FLASH_PULSE_MAX_SEC = 20
 
 /**

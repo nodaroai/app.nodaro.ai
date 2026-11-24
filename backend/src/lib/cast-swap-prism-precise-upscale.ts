@@ -23,9 +23,9 @@
  * trend runs and runs made the Flex way take no upscale), records the target
  * on the job at admit time, and quotes the step as the breakdown line `upscale`.
  *
- * Prism Flash (decided 2026-11-22) has its own two rows, `flash: { "480p"?: T |
- * "off"; "720p"?: T | "off" }` (Prism Flash renders no 1080p), default 1080p
- * each, as Nodaro Prism's: a Prism Flash Precise run takes the `flash` row, any
+ * Nodaro Prism Flash (decided 2026-11-22) has its own two rows, `flash: { "480p"?: T |
+ * "off"; "720p"?: T | "off" }` (Nodaro Prism Flash renders no 1080p), default 1080p
+ * each, as Nodaro Prism's: a Nodaro Prism Flash Precise run takes the `flash` row, any
  * other the resolution's own. A row stored before them has no `flash`: its
  * defaults apply. The engine is answered the effective value with `flash`
  * filled (an engine from before it ignores the key).
@@ -58,11 +58,11 @@ export const PRECISE_UPSCALE_DEFAULTS = {
   "1080p": "4k",
 } as const satisfies Record<CastSwapPrismResolution, PreciseUpscaleChoice>
 
-/** Prism Flash's resolutions (no 1080p): the rows of the setting's `flash`. */
+/** Nodaro Prism Flash's resolutions (no 1080p): the rows of the setting's `flash`. */
 export const PRECISE_UPSCALE_FLASH_RESOLUTIONS = ["480p", "720p"] as const
 export type PreciseUpscaleFlashResolution = (typeof PRECISE_UPSCALE_FLASH_RESOLUTIONS)[number]
 
-/** Prism Flash's row of a resolution left out, or never saved: Nodaro Prism's default for it. */
+/** Nodaro Prism Flash's row of a resolution left out, or never saved: Nodaro Prism's default for it. */
 export const PRECISE_UPSCALE_FLASH_DEFAULTS = {
   "480p": PRECISE_UPSCALE_DEFAULTS["480p"],
   "720p": PRECISE_UPSCALE_DEFAULTS["720p"],
@@ -80,10 +80,10 @@ type FlashRows<Opt extends boolean> = Opt extends true
   ? { [R in PreciseUpscaleFlashResolution]?: (typeof PRECISE_UPSCALE_CHOICES)[R][number] }
   : { [R in PreciseUpscaleFlashResolution]: (typeof PRECISE_UPSCALE_CHOICES)[R][number] }
 
-/** The stored setting: a resolution left out takes its default; `flash` left out, Prism Flash's defaults. */
+/** The stored setting: a resolution left out takes its default; `flash` left out, Nodaro Prism Flash's defaults. */
 export type NodaroMotionPreciseUpscale = { [R in CastSwapPrismResolution]?: (typeof PRECISE_UPSCALE_CHOICES)[R][number] } & { flash?: FlashRows<true> }
 
-/** The setting as the engine reads it: every resolution filled, Prism Flash's too. */
+/** The setting as the engine reads it: every resolution filled, Nodaro Prism Flash's too. */
 export type NodaroMotionPreciseUpscaleEffective = { [R in CastSwapPrismResolution]: (typeof PRECISE_UPSCALE_CHOICES)[R][number] } & { flash: FlashRows<false> }
 
 /** What an admin saves: strict (an unknown key or a choice the resolution does not take is a 400). */
@@ -91,7 +91,7 @@ export const nodaroMotionPreciseUpscaleSchema = z.strictObject({
   "480p": z.enum(PRECISE_UPSCALE_CHOICES["480p"]).optional(),
   "720p": z.enum(PRECISE_UPSCALE_CHOICES["720p"]).optional(),
   "1080p": z.enum(PRECISE_UPSCALE_CHOICES["1080p"]).optional(),
-  // Prism Flash's rows (no 1080p).
+  // Nodaro Prism Flash's rows (no 1080p).
   flash: z
     .strictObject({
       "480p": z.enum(PRECISE_UPSCALE_CHOICES["480p"]).optional(),
@@ -115,7 +115,7 @@ export function parseNodaroMotionPreciseUpscale(value: unknown, warn: (msg: stri
     if ((PRECISE_UPSCALE_CHOICES[r] as readonly unknown[]).includes(v)) out[r] = v as PreciseUpscaleChoice
     else warn(`[${NODARO_MOTION_PRECISE_UPSCALE_KEY}] the ${r} choice is not one it takes: its default (${PRECISE_UPSCALE_DEFAULTS[r]}) applies`)
   }
-  // Prism Flash's rows, read the same way (a row stored before them has none: their defaults apply).
+  // Nodaro Prism Flash's rows, read the same way (a row stored before them has none: their defaults apply).
   const flashRow = row.flash
   const flash: Record<string, PreciseUpscaleChoice> = {}
   if (typeof flashRow === "object" && flashRow !== null && !Array.isArray(flashRow)) {
@@ -123,7 +123,7 @@ export function parseNodaroMotionPreciseUpscale(value: unknown, warn: (msg: stri
       const v = (flashRow as Record<string, unknown>)[r]
       if (v === undefined || v === null) continue
       if ((PRECISE_UPSCALE_CHOICES[r] as readonly unknown[]).includes(v)) flash[r] = v as PreciseUpscaleChoice
-      else warn(`[${NODARO_MOTION_PRECISE_UPSCALE_KEY}] the Prism Flash ${r} choice is not one it takes: its default (${PRECISE_UPSCALE_FLASH_DEFAULTS[r]}) applies`)
+      else warn(`[${NODARO_MOTION_PRECISE_UPSCALE_KEY}] the Nodaro Prism Flash ${r} choice is not one it takes: its default (${PRECISE_UPSCALE_FLASH_DEFAULTS[r]}) applies`)
     }
   }
   return (Object.keys(flash).length > 0 ? { ...out, flash } : out) as NodaroMotionPreciseUpscale

@@ -197,7 +197,7 @@ export interface TrendDetail extends TrendCard {
    * never chooses it): `"nodaro-prism"` or `"nodaro-pulse"`.
    */
   engine: NodaroMotionEngine | VideoRemakeFlashEngine
-  /** Its name: "Nodaro Prism" or "Nodaro Pulse" ("Prism Flash" / "Pulse Flash" for a trend made on a Flash choice). */
+  /** Its name: "Nodaro Prism" or "Nodaro Pulse" ("Nodaro Prism Flash" / "Nodaro Pulse Flash" for a trend made on a Flash choice). */
   engineName: string
   /**
    * The resolutions a run of this trend may ask for, its default first:

@@ -8,7 +8,7 @@ import { sharedModelOf } from "../share-links/shared-job.js"
  * the engine of the run, `castSwapEngineOfRun`), and a shared link names it by the choice.
  */
 describe("a Flash run takes its engine's settings", () => {
-  it("Prism Flash is a Prism run, Pulse Flash a Pulse run", () => {
+  it("Nodaro Prism Flash is a Prism run, Nodaro Pulse Flash a Pulse run", () => {
     expect(isPrismRun("nodaro-prism-flash")).toBe(true)
     expect(isPulseRun("nodaro-prism-flash")).toBe(false)
     expect(isPulseRun("nodaro-pulse-flash")).toBe(true)
@@ -16,7 +16,7 @@ describe("a Flash run takes its engine's settings", () => {
   })
 
   it("a shared link names the choice", () => {
-    expect(sharedModelOf({ type: "cast-swap", engine: "nodaro-pulse-flash" })).toEqual({ id: "nodaro-pulse-flash", name: "Pulse Flash" })
+    expect(sharedModelOf({ type: "cast-swap", engine: "nodaro-pulse-flash" })).toEqual({ id: "nodaro-pulse-flash", name: "Nodaro Pulse Flash" })
     expect(sharedModelOf({ type: "cast-swap", engine: "nodaro-pulse" })).toEqual({ id: "nodaro-pulse", name: "Nodaro Pulse" })
   })
 })
