@@ -90,6 +90,49 @@ export interface RuntimeSurfaceBilling {
  * applied. Lists that are empty keep the product's own default, except
  * `worlds.allow` (see `SurfaceWorlds`).
  */
+/** How many pictures `toolApps.pictures` may name, and how many samples a world may give. */
+export const MAX_TOOL_APP_PICTURES = 200
+export const MAX_SURFACE_SAMPLES = 12
+
+/** One welcome sample of a deployment's own: the prompt it sets, the picture it made, and how it was made. */
+export interface SurfaceSample {
+  readonly prompt: string
+  /** A path on the deployment's own site, or an https address. */
+  readonly picture: string
+  readonly model?: string
+  readonly aspectRatio?: string
+  /** Drawn in the welcome's centre card, the wide one in front (a before and after reads whole there). The first sample that says so takes it. */
+  readonly center?: true
+}
+
+/** The longest prompt a video sample may carry (a clip's tells its story shot by shot), and the most pictures it may name. */
+export const MAX_VIDEO_SAMPLE_PROMPT = 12000
+export const MAX_SAMPLE_REFERENCES = 12
+
+/**
+ * One welcome sample of the Video world: a finished clip, and what "Use this
+ * video" puts back in the prompt bar. Every address is a path on the
+ * deployment's own site or an https address.
+ */
+export interface SurfaceVideoSample {
+  /** Its name, shown under the clip. */
+  readonly title: string
+  readonly prompt: string
+  /** The clip the welcome plays: small enough to start at once. */
+  readonly video: string
+  /** Its still, shown before the clip plays. */
+  readonly picture: string
+  /** The clip as made, for full screen; absent = `video`. */
+  readonly original?: string
+  readonly model?: string
+  /** Seconds. */
+  readonly duration?: number
+  readonly aspectRatio?: string
+  readonly resolution?: string
+  /** The pictures it was made from, in its prompt's order. */
+  readonly references?: readonly string[]
+}
+
 export interface RuntimeSurface {
   readonly nav: { readonly hide: readonly string[] }
   readonly features: { readonly hide: readonly string[] }
@@ -110,6 +153,21 @@ export interface RuntimeSurface {
   readonly imports: { readonly links: boolean }
   readonly header: SurfaceHeaderMode
   readonly worlds: SurfaceWorlds
+  /**
+   * The tools app's mini apps on a white-label deployment, where neither is
+   * offered unless the deployment asks: `pages` serves the apps' own pages
+   * (`/apps`, `/apps/<id>`), `menus` opens the header's apps-first menus in
+   * place of its classic ones. `pictures` gives the deployment's own picture
+   * for an app or a menu tile, by key (an app's id, or `tile:<world>:<tile>`);
+   * `{}` = none. No effect where the header is not white-label.
+   */
+  readonly toolApps: { readonly menus: boolean; readonly pages: boolean; readonly pictures: Readonly<Record<string, string>> }
+  /**
+   * The deployment's own welcome samples, by world: what a white-label
+   * deployment shows where the platform's sites show the platform's samples
+   * (which it never draws). `[]` = none.
+   */
+  readonly samples: { readonly image: readonly SurfaceSample[]; readonly video: readonly SurfaceVideoSample[] }
   /** The deployment's own wording for UI strings; `{}` = none. Read with `surfaceStringOverride`. */
   readonly strings: RuntimeSurfaceStrings
   /** Carried as given; no reader acts on it. */
@@ -450,7 +508,107 @@ function worldsOf(value: unknown): SurfaceWorlds {
   const allow = value.allow === undefined ? undefined : strings(value.allow)
   const order = Array.isArray(value.order) ? [...new Set(value.order.filter(isWorldId))] : []
   const home: WorldId | undefined = isWorldId(value.home) && (allow === undefined || allow.includes(value.home)) ? value.home : undefined
-  return { ...optional("allow", allow), ...optional("home", home), ...optional("order", order.length ? order : undefined) }
+  const soon = Array.isArray(value.soon) ? [...new Set(value.soon.filter(isWorldId))] : []
+  return {
+    ...optional("allow", allow),
+    ...optional("home", home),
+    ...optional("order", order.length ? order : undefined),
+    ...optional("soon", soon.length ? soon : undefined),
+  }
+}
+
+/**
+ * An address a deployment may name for a picture of its own: a path on its own
+ * site (one leading `/`) or an https address. Whether a page may draw it is the
+ * page's rule (its own site and its media origin); this only refuses what is
+ * neither.
+ */
+export function ownPictureAddress(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined
+  const address = value.trim()
+  if (address.startsWith("/")) return address.startsWith("//") ? undefined : address
+  return /^https:\/\/[^\s/]+\S*$/.test(address) ? address : undefined
+}
+
+/** `toolApps.pictures`: each key's own picture; an entry that is not an address a deployment may name is left out. */
+function toolAppPicturesOf(value: unknown): Readonly<Record<string, string>> {
+  const out: Record<string, string> = {}
+  for (const [key, given] of Object.entries(record(value)).slice(0, MAX_TOOL_APP_PICTURES)) {
+    const address = ownPictureAddress(given)
+    if (address !== undefined && key.length > 0 && key.length <= 80) out[key] = address
+  }
+  return out
+}
+
+/** Only the literal `true` asks for the menus or the pages: a reader older than its platform, or a malformed value, shows no more than before. */
+function toolAppsOf(value: unknown): RuntimeSurface["toolApps"] {
+  const given = record(value)
+  return { menus: given.menus === true, pages: given.pages === true, pictures: toolAppPicturesOf(given.pictures) }
+}
+
+const nonEmpty = (value: unknown, max: number): string | undefined => {
+  if (typeof value !== "string") return undefined
+  const text = value.trim()
+  return text.length > 0 && text.length <= max ? text : undefined
+}
+
+/** One world's own welcome samples: an entry without a prompt or a picture a deployment may name is left out. */
+function samplesOf(value: unknown): readonly SurfaceSample[] {
+  if (!Array.isArray(value)) return []
+  const out: SurfaceSample[] = []
+  for (const entry of value) {
+    if (out.length === MAX_SURFACE_SAMPLES) break
+    const given = record(entry)
+    const prompt = nonEmpty(given.prompt, 4000)
+    const picture = ownPictureAddress(given.picture)
+    if (prompt === undefined || picture === undefined) continue
+    out.push({
+      prompt,
+      picture,
+      ...optional("model", nonEmpty(given.model, 80)),
+      ...optional("aspectRatio", nonEmpty(given.aspectRatio, 20)),
+      ...(given.center === true ? { center: true as const } : {}),
+    })
+  }
+  return out
+}
+
+/** A clip's length in whole or part seconds, when it is a sensible one. */
+const secondsOf = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 3600 ? value : undefined)
+
+/** The pictures a video sample names: the addresses a deployment may name, in order, the rest left out. */
+function referencesOf(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => ownPictureAddress(entry) ?? []).slice(0, MAX_SAMPLE_REFERENCES)
+}
+
+/** The Video world's own welcome samples: an entry without a title, a prompt, a clip or a still a deployment may name is left out. */
+function videoSamplesOf(value: unknown): readonly SurfaceVideoSample[] {
+  if (!Array.isArray(value)) return []
+  const out: SurfaceVideoSample[] = []
+  for (const entry of value) {
+    if (out.length === MAX_SURFACE_SAMPLES) break
+    const given = record(entry)
+    const title = nonEmpty(given.title, 120)
+    const prompt = nonEmpty(given.prompt, MAX_VIDEO_SAMPLE_PROMPT)
+    const video = ownPictureAddress(given.video)
+    const picture = ownPictureAddress(given.picture)
+    if (title === undefined || prompt === undefined || video === undefined || picture === undefined) continue
+    const references = referencesOf(given.references)
+    out.push({
+      title,
+      prompt,
+      video,
+      picture,
+      ...optional("original", ownPictureAddress(given.original)),
+      ...optional("model", nonEmpty(given.model, 80)),
+      ...optional("duration", secondsOf(given.duration)),
+      ...optional("aspectRatio", nonEmpty(given.aspectRatio, 20)),
+      ...optional("resolution", nonEmpty(given.resolution, 20)),
+      ...(references.length ? { references } : {}),
+    })
+  }
+  return out
 }
 
 /** The surface block of `/config.js`, every default applied. Never throws. */
@@ -477,6 +635,8 @@ export function parseRuntimeSurface(raw: unknown): RuntimeSurface {
     imports: { links: linksAllowed(s.imports) },
     header: headerModeOf(s.header),
     worlds: worldsOf(s.worlds),
+    toolApps: toolAppsOf(s.toolApps),
+    samples: { image: samplesOf(record(s.samples).image), video: videoSamplesOf(record(s.samples).video) },
     strings: parseRuntimeStrings(s.strings),
     ...optional("catalogPolicy", s.catalogPolicy),
   }

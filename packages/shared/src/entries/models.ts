@@ -572,3 +572,4 @@ export {
 } from "../lip-sync-levers.js"
 export type { LipSyncModelLever } from "../lip-sync-levers.js"
 export { lipSyncResolutionChoices, lipSyncModelSwitchPatch, lipSyncResolutionRefusal, lipSyncResolutions, lipSyncResolutionSummary, type LipSyncResolution } from "../lip-sync-resolution.js"
+export { portraitVideoLipSyncModels } from "../driving-audio-lip-sync.js"

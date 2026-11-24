@@ -1,15 +1,20 @@
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
+  MAX_SAMPLE_REFERENCES,
+  MAX_SURFACE_SAMPLES,
+  MAX_TOOL_APP_PICTURES,
+  MAX_VIDEO_SAMPLE_PROMPT,
   SURFACE_CATALOG_IMAGES,
   isBrandLogoRef,
   isSameSitePath,
   isWorldId,
+  ownPictureAddress,
   type SurfaceCatalogImages,
   type SurfaceHeaderMode,
   type WorldId,
 } from "@nodaro/shared/runtime-config"
-import type { SurfaceWorlds } from "./surface-profile.js"
+import type { SurfaceSample, SurfaceSamples, SurfaceToolApps, SurfaceVideoSample, SurfaceWorlds } from "./surface-profile.js"
 
 /**
  * The surface-profile keys the client apps read through /config.js (worlds,
@@ -93,8 +98,172 @@ export const surfaceWorldsSchema = z
       else if (out.allow && !out.allow.includes(raw.home)) console.warn(`[surface-profile] worlds.home "${raw.home}" is not in worlds.allow — dropped`)
       else out.home = raw.home
     }
+    if (raw.soon !== undefined) {
+      const { known, dropped } = knownWorldIds(Array.isArray(raw.soon) ? raw.soon : [raw.soon])
+      if (dropped.length) console.warn(`[surface-profile] worlds.soon dropped unknown world ids ${JSON.stringify(dropped)}`)
+      if (known.length) out.soon = known
+    }
     return out
   })
+
+/**
+ * The tools app's mini apps on a white-label deployment (`toolApps`): `pages`
+ * serves their pages, `menus` opens the header's apps-first menus. Each widens
+ * what such a deployment shows, so only the literal `true` asks for it: a
+ * value that is not a boolean is refused, loudly, as off.
+ */
+export const surfaceToolAppsSchema = z
+  .unknown()
+  .optional()
+  .transform((raw): SurfaceToolApps | undefined => {
+    if (raw === undefined) return undefined
+    if (!isPlainObject(raw)) {
+      console.warn("[surface-profile] toolApps must be an object { menus?, pages?, pictures? } — nothing of it is offered")
+      return { menus: false, pages: false }
+    }
+    const asked = (key: "menus" | "pages"): boolean => {
+      const value = raw[key]
+      if (value === undefined || typeof value === "boolean") return value === true
+      console.warn(`[surface-profile] toolApps.${key} ${JSON.stringify(value)} is not true or false — off`)
+      return false
+    }
+    const pictures = toolAppPictures(raw.pictures)
+    return { menus: asked("menus"), pages: asked("pages"), ...(pictures ? { pictures } : {}) }
+  })
+
+/** `toolApps.pictures`: the deployment's own picture per key. An entry that is not a path on the site or an https address is dropped, loudly. */
+function toolAppPictures(raw: unknown): Record<string, string> | undefined {
+  if (raw === undefined) return undefined
+  if (!isPlainObject(raw)) {
+    console.warn("[surface-profile] toolApps.pictures must be an object { <key>: <address> } — no picture is given")
+    return undefined
+  }
+  const entries = Object.entries(raw)
+  if (entries.length > MAX_TOOL_APP_PICTURES) console.warn(`[surface-profile] toolApps.pictures names ${entries.length} pictures — only the first ${MAX_TOOL_APP_PICTURES} are kept`)
+  const out: Record<string, string> = {}
+  for (const [key, value] of entries.slice(0, MAX_TOOL_APP_PICTURES)) {
+    const address = ownPictureAddress(value)
+    if (address === undefined || key.length === 0 || key.length > 80) console.warn(`[surface-profile] toolApps.pictures[${JSON.stringify(key)}] is not a path on the site or an https address — dropped`)
+    else out[key] = address
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * The deployment's own welcome samples (`samples.<world>`): what a white-label
+ * deployment shows in place of the platform's samples. An entry needs a prompt
+ * and a picture a deployment may name; one without either is dropped, loudly.
+ */
+export const surfaceSamplesSchema = z
+  .unknown()
+  .optional()
+  .transform((raw): SurfaceSamples | undefined => {
+    if (raw === undefined) return undefined
+    if (!isPlainObject(raw)) {
+      console.warn("[surface-profile] samples must be an object { image?, video? } — no sample is given")
+      return undefined
+    }
+    const image = ownSamples("image", raw.image)
+    const video = ownVideoSamples(raw.video)
+    return image.length || video.length ? { image, ...(video.length ? { video } : {}) } : undefined
+  })
+
+const sampleText = (value: unknown, max: number): string | undefined => {
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 && trimmed.length <= max ? trimmed : undefined
+}
+
+/**
+ * `samples.video`: the Video world's own finished clips. An entry needs a
+ * title, a prompt, a clip and a still, each address one a deployment may name;
+ * one without is dropped, loudly. A reference picture that is no such address
+ * is dropped alone.
+ */
+function ownVideoSamples(raw: unknown): SurfaceVideoSample[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) {
+    console.warn("[surface-profile] samples.video must be an array — no sample is given")
+    return []
+  }
+  if (raw.length > MAX_SURFACE_SAMPLES) console.warn(`[surface-profile] samples.video has ${raw.length} entries — only the first ${MAX_SURFACE_SAMPLES} valid ones are kept`)
+  const out: SurfaceVideoSample[] = []
+  raw.forEach((entry, index) => {
+    if (out.length === MAX_SURFACE_SAMPLES) return
+    const given = isPlainObject(entry) ? entry : {}
+    const title = sampleText(given.title, 120)
+    const prompt = sampleText(given.prompt, MAX_VIDEO_SAMPLE_PROMPT)
+    const video = ownPictureAddress(given.video)
+    const picture = ownPictureAddress(given.picture)
+    if (title === undefined || prompt === undefined || video === undefined || picture === undefined) {
+      console.warn(`[surface-profile] samples.video[${index}] needs a title, a prompt, a video and a picture (each a path on the site or an https address) — dropped`)
+      return
+    }
+    const original = ownPictureAddress(given.original)
+    if (given.original !== undefined && original === undefined) console.warn(`[surface-profile] samples.video[${index}].original is not a path on the site or an https address — full screen plays its video`)
+    const model = sampleText(given.model, 80)
+    const aspectRatio = sampleText(given.aspectRatio, 20)
+    const resolution = sampleText(given.resolution, 20)
+    const duration = typeof given.duration === "number" && Number.isFinite(given.duration) && given.duration > 0 && given.duration <= 3600 ? given.duration : undefined
+    if (given.duration !== undefined && duration === undefined) console.warn(`[surface-profile] samples.video[${index}].duration ${JSON.stringify(given.duration)} is not a number of seconds — left out`)
+    const references = videoSampleReferences(index, given.references)
+    out.push({
+      title,
+      prompt,
+      video,
+      picture,
+      ...(original ? { original } : {}),
+      ...(model ? { model } : {}),
+      ...(duration !== undefined ? { duration } : {}),
+      ...(aspectRatio ? { aspectRatio } : {}),
+      ...(resolution ? { resolution } : {}),
+      ...(references.length ? { references } : {}),
+    })
+  })
+  return out
+}
+
+function videoSampleReferences(index: number, raw: unknown): string[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) {
+    console.warn(`[surface-profile] samples.video[${index}].references must be an array of addresses — none is given`)
+    return []
+  }
+  const kept = raw.flatMap((entry) => ownPictureAddress(entry) ?? [])
+  if (kept.length < raw.length) console.warn(`[surface-profile] samples.video[${index}].references: ${raw.length - kept.length} entries are not a path on the site or an https address — dropped`)
+  if (kept.length > MAX_SAMPLE_REFERENCES) console.warn(`[surface-profile] samples.video[${index}].references names ${kept.length} pictures — only the first ${MAX_SAMPLE_REFERENCES} are kept`)
+  return kept.slice(0, MAX_SAMPLE_REFERENCES)
+}
+
+function ownSamples(world: string, raw: unknown): SurfaceSample[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw)) {
+    console.warn(`[surface-profile] samples.${world} must be an array — no sample is given`)
+    return []
+  }
+  if (raw.length > MAX_SURFACE_SAMPLES) console.warn(`[surface-profile] samples.${world} has ${raw.length} entries — only the first ${MAX_SURFACE_SAMPLES} valid ones are kept`)
+  const text = (value: unknown, max: number): string | undefined => {
+    if (typeof value !== "string") return undefined
+    const trimmed = value.trim()
+    return trimmed.length > 0 && trimmed.length <= max ? trimmed : undefined
+  }
+  const out: SurfaceSample[] = []
+  raw.forEach((entry, index) => {
+    if (out.length === MAX_SURFACE_SAMPLES) return
+    const given = isPlainObject(entry) ? entry : {}
+    const prompt = text(given.prompt, 4000)
+    const picture = ownPictureAddress(given.picture)
+    if (prompt === undefined || picture === undefined) {
+      console.warn(`[surface-profile] samples.${world}[${index}] needs a prompt and a picture (a path on the site or an https address) — dropped`)
+      return
+    }
+    const model = text(given.model, 80)
+    const aspectRatio = text(given.aspectRatio, 20)
+    if (given.center !== undefined && typeof given.center !== "boolean") console.warn(`[surface-profile] samples.${world}[${index}].center ${JSON.stringify(given.center)} is not true or false — not the centre`)
+    out.push({ prompt, picture, ...(model ? { model } : {}), ...(aspectRatio ? { aspectRatio } : {}), ...(given.center === true ? { center: true as const } : {}) })
+  })
+  return out
+}
 
 /**
  * What a media INPUT given as a link to another site does where link imports

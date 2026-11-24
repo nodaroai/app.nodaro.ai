@@ -93,9 +93,27 @@ describe("the backend's surface projection reaches a reader whole", () => {
       },
       catalogs: { required: true, factoryPresets: false, images: "none" },
       catalogPolicy: { reviewed: true },
-      worlds: { allow: ["image", "video", "app"], home: "app", order: ["app", "image"] },
+      worlds: { allow: ["image", "video", "app"], home: "app", order: ["app", "image"], soon: ["music"] },
       imports: { links: false },
       header: "white-label",
+      toolApps: { menus: true, pages: true, pictures: { "image-upscale": "/brand/apps/upscale.webp", "tile:image:createImage": "https://media.acme.example/create.png" } },
+      samples: {
+        image: [{ prompt: "a lighthouse at dusk", picture: "/brand/samples/lighthouse.webp", model: "model-a", aspectRatio: "16:9", center: true }],
+        video: [
+          {
+            title: "The harbour",
+            prompt: "a harbour at dawn",
+            video: "/brand/samples/harbour.mp4",
+            picture: "/brand/samples/harbour.webp",
+            original: "https://media.acme.example/harbour.mp4",
+            model: "model-b",
+            duration: 12,
+            aspectRatio: "16:9",
+            resolution: "720p",
+            references: ["/brand/samples/sheet.webp"],
+          },
+        ],
+      },
       strings: { flow: { he: { "credits.allowanceExceeded": "נגמרה לכם המכסה." }, en: { "credits.allowanceExceeded": "Your allowance is used up." } } },
       jobs: { errorDetail: "admin" },
       mcp: { byPath: true, path: "/v1/mcp" },
@@ -122,6 +140,8 @@ describe("the backend's surface projection reaches a reader whole", () => {
     expect(rendered).not.toHaveProperty("worlds")
     expect(rendered).not.toHaveProperty("imports")
     expect(rendered).not.toHaveProperty("header")
+    expect(rendered).not.toHaveProperty("toolApps")
+    expect(rendered).not.toHaveProperty("samples")
     expect(rendered).not.toHaveProperty("strings")
     expect(read).toEqual({
       ...rendered,
@@ -130,6 +150,8 @@ describe("the backend's surface projection reaches a reader whole", () => {
       imports: { links: true },
       header: "default",
       worlds: {},
+      toolApps: { menus: false, pages: false, pictures: {} },
+      samples: { image: [], video: [] },
       strings: {},
     })
   })
