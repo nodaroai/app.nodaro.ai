@@ -51,6 +51,8 @@ import {
   measuredWireLengthSec,
   NEMOTRON_WIRE_READ_OPTIONS,
   nodaroVideoUpscaleBilledSec,
+  topazRheaBilledSec,
+  topazRheaEstimateUnits,
   nodaroVideoUpscaleEstimateUnits,
   nodaroVideoUpscaleUnits,
   CONTAINER_FALLBACK_GRACE_SEC,
@@ -192,12 +194,12 @@ describe("after a Dubbing, an Audio Isolation or a PixVerse V6 extension, a meas
     expect(LONG_OVERSHOOT_PLANNED_CLIP_SLACK_SEC).toBeGreaterThan(MEASURED_LONG_OVERSHOOT_SEC)
   })
 
-  it("the steps that measure the video stream: Video Overlay and Video Upscale (Topaz, Nodaro) with their one frame, and Combine Videos with its 0.15 s", () => {
+  it("the steps that measure the video stream: Video Overlay and Video Upscale (Topaz, Nodaro, Topaz Rhea) with their one frame, and Combine Videos with its 0.15 s", () => {
     expect(VIDEO_OVERLAY_READING).toBe("video-stream")
     expect(MEASURED_INPUT_READING["video-upscale"]).toBe("video-stream")
     expect(VIDEO_UTILITY_READING["combine-videos"]).toBe("video-stream")
     const stream = STEP_READS.filter(([, , reading]) => reading === "video-stream")
-    expect(stream.map(([step]) => step).sort()).toEqual(["combine-videos", "video-overlay", "video-upscale:nodaro", "video-upscale:topaz"])
+    expect(stream.map(([step]) => step).sort()).toEqual(["combine-videos", "video-overlay", "video-upscale:nodaro", "video-upscale:rhea", "video-upscale:topaz"])
     for (const [step, slack] of stream) expect(slack, step).toBe(step === "combine-videos" ? VIDEO_UTILITY_PLANNED_CLIP_SLACK_SEC : VIDEO_OVERLAY_PLANNED_CLIP_SLACK_SEC)
   })
 
@@ -321,7 +323,7 @@ describe("every measuring step's declared allowances cover a made file's oversho
   it("the table has a row for every step of the registries that read the measured walk (and the walk is read with a slack only through a row: measured-walk-callers.test.ts)", () => {
     const steps = new Set(Object.keys(MEASURING_STEP_ALLOWANCES))
     for (const t of Object.keys(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC) as MeasuredInputStepType[]) {
-      if (t === "video-upscale") expect([...steps].filter((s) => s.startsWith("video-upscale:")).sort()).toEqual(["video-upscale:nodaro", "video-upscale:topaz"])
+      if (t === "video-upscale") expect([...steps].filter((s) => s.startsWith("video-upscale:")).sort()).toEqual(["video-upscale:nodaro", "video-upscale:rhea", "video-upscale:topaz"])
       else if (t === "video-to-video") expect([...steps].filter((s) => s.startsWith("video-to-video:")).sort()).toEqual(["video-to-video:happyhorse-edit", "video-to-video:wan-videoedit"])
       else expect(steps.has(t), t).toBe(true)
     }
@@ -339,7 +341,7 @@ describe("every measuring step's declared allowances cover a made file's oversho
 
   it("each step's slack and reading are the ones its quote passes the walk, and Trim / Loop / Combine Videos read as their runs measure", () => {
     for (const t of Object.keys(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC) as MeasuredInputStepType[]) {
-      const ids = t === "video-upscale" ? ["video-upscale:topaz", "video-upscale:nodaro"] : t === "video-to-video" ? ["video-to-video:happyhorse-edit", "video-to-video:wan-videoedit"] : [t]
+      const ids = t === "video-upscale" ? ["video-upscale:topaz", "video-upscale:nodaro", "video-upscale:rhea"] : t === "video-to-video" ? ["video-to-video:happyhorse-edit", "video-to-video:wan-videoedit"] : [t]
       for (const id of ids as MeasuringStepId[]) {
         expect(MEASURING_STEP_ALLOWANCES[id].plannedClipSlackSec, id).toBe(MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC[t])
         expect(MEASURING_STEP_ALLOWANCES[id].reading, id).toBe(MEASURED_INPUT_READING[t])
@@ -410,6 +412,8 @@ const SWEPT: ReadonlyArray<{ readonly name: string; readonly step: MeasuringStep
   { name: "Video Overlay, the container fallback", step: "video-overlay", reading: "container", maxSec: 60, quote: (s) => videoOverlayVideoUnits(s), charge: (s) => videoOverlayVideoUnits(containerFallbackPricedSec(s, "container")) },
   { name: "Combine Videos (two clips), the stream", step: "combine-videos", reading: "video-stream", maxSec: 300, quote: (s) => videoUtilityUnitsOf("combine-videos", STEPS["combine-videos"], [s, s])!, charge: (s) => chargedUnits("combine-videos", s) },
   { name: "Combine Videos (two clips), the container fallback", step: "combine-videos", reading: "container", maxSec: 300, quote: (s) => videoUtilityUnitsOf("combine-videos", STEPS["combine-videos"], [s, s])!, charge: (s) => chargedUnits("combine-videos", containerFallbackPricedSec(s, "container")) },
+  { name: "Topaz Rhea, the stream", step: "video-upscale:rhea", reading: "video-stream", maxSec: 60, quote: (s) => topazRheaEstimateUnits(s), charge: (s) => topazRheaBilledSec(s, "video-stream") },
+  { name: "Topaz Rhea, the container fallback", step: "video-upscale:rhea", reading: "container", maxSec: 60, quote: (s) => topazRheaEstimateUnits(s), charge: (s) => topazRheaBilledSec(s, "container") },
   { name: "Nodaro Video Upscale, the container fallback", step: "video-upscale:nodaro", reading: "container", maxSec: 60, quote: (s) => nodaroVideoUpscaleEstimateUnits(s), charge: (s) => nodaroVideoUpscaleUnits(nodaroVideoUpscaleBilledSec(s, "container")) },
   { name: "AI Avatar in audio mode (its duration buckets)", step: "ai-avatar", reading: "container", maxSec: 600, quote: (s) => rowSecOf(aiAvatarQuoteCreditId({ speechMode: "audio" }, s)), charge: (s) => rowSecOf(aiAvatarCreditIdOf({ speechMode: "audio" }, Math.ceil(s))) },
   { name: "Nemotron 3.5 Transcribe", step: "nemotron", reading: "container", maxSec: 3600, quote: (s) => parseNemotronTranscribeCreditId(nemotronTranscribeQuoteCreditId(s))!.minutes, charge: (s) => parseNemotronTranscribeCreditId(nemotronTranscribeHeldCreditId(s))!.minutes },

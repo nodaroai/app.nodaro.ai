@@ -1,7 +1,7 @@
 // @test-watches backend/src/routes/{trim-video,loop-video,combine-videos,assemble-narrated-video,apply-edl,mask-composite,video-overlay,extend-video,video-retake,dubbing,lip-sync,motion-transfer,podcast-pack,video-to-video,audio-isolation,voice-changer}.ts
 // @test-watches backend/src/services/workflow-engine/node-executor.ts
 // @test-watches backend/src/workers/handlers/video-ai.ts
-// @test-watches backend/src/lib/{video-utility-credits,video-utility-length,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,motion-transfer-input,video-to-video-clip-input,audio-isolation-input,voice-changer-input,nodaro-video-upscale-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
+// @test-watches backend/src/lib/{video-utility-credits,video-utility-length,mask-composite-length,video-overlay-length,ltx-extend-credits,ltx-retake-credits,apply-edl-plan,speaker-view-plan,speaker-frames-plan,dubbing-span,lip-sync-inputs,motion-transfer-input,video-to-video-clip-input,audio-isolation-input,voice-changer-input,nodaro-video-upscale-plan,topaz-rhea-plan,seedance-extend-credits}.ts backend/src/lib/private-plugins/toolkit.ts
 // @test-watches backend/src/ee/pipelines/services/pipeline-combine-videos.ts
 /**
  * A per-unit run is CHARGED from the same price source it is QUOTED from.
@@ -34,10 +34,11 @@
  * host that lacks the member.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER, SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { NODARO_VIDEO_UPSCALE_CREDIT_IDS, NODARO_VIDEO_UPSCALE_TRANSPARENT_CREDIT_IDS, TOPAZ_RHEA_CREDIT_IDS, SEEDANCE_EXTEND_RATE_CREDIT_IDS_BY_PROVIDER, SEEDANCE_EXTEND_SENT_PRICED_PROVIDERS, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { topazVideoHoldBaseCredits } from "@/lib/topaz-video-plan.js"
 import { unitRateBaseCredits } from "@/lib/credit-base-cost.js"
 import { nodaroVideoUpscaleBaseCredits } from "@/lib/nodaro-video-upscale-plan.js"
+import { topazRheaBaseCredits } from "@/lib/topaz-rhea-plan.js"
 import { geminiOmniExtendRunBaseCredits, seedanceExtendBaseCredits } from "@/lib/seedance-extend-credits.js"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -234,6 +235,21 @@ const CHARGES: Readonly<Record<string, Charge>> = {
     Object.values(NODARO_VIDEO_UPSCALE_CREDIT_IDS).map((id): [string, Charge] => [
       id,
       { units: 2.5, charge: async () => markedUp(id, await nodaroVideoUpscaleBaseCredits({ creditId: id, billedSec: 10 })) },
+    ]),
+  ),
+  // routes/video-upscale.ts (computeCredits) and the workflow run's computeNodaroVideoUpscaleCreditOverride:
+  // a Transparent plan billed 7.5 s — 7.5 units of its tier's one-second row.
+  ...Object.fromEntries(
+    Object.values(NODARO_VIDEO_UPSCALE_TRANSPARENT_CREDIT_IDS).map((id): [string, Charge] => [
+      id,
+      { units: 7.5, charge: async () => markedUp(id, await nodaroVideoUpscaleBaseCredits({ mode: "transparent", creditId: id, billedSec: 7.5 })) },
+    ]),
+  ),
+  // routes/video-upscale.ts (computeCredits): a Topaz Rhea plan billed 7 s — 7 units of its target's one-second row.
+  ...Object.fromEntries(
+    Object.values(TOPAZ_RHEA_CREDIT_IDS).map((id): [string, Charge] => [
+      id,
+      { units: 7, charge: async () => markedUp(id, await topazRheaBaseCredits({ creditId: id, billedSec: 7 })) },
     ]),
   ),
   // routes/extend-video.ts (computeCredits), the workflow run's computeSeedanceExtendCreditOverride
@@ -449,6 +465,7 @@ describe("each charge site prices through the function this suite drives", () =>
     "lib/audio-isolation-input.ts": ["unitRateBaseCredits"],
     "lib/voice-changer-input.ts": ["unitRateBaseCredits"],
     "lib/nodaro-video-upscale-plan.ts": ["unitRateBaseCredits"],
+    "lib/topaz-rhea-plan.ts": ["unitRateBaseCredits"],
     // Seedance's sent-priced extends through the unit rate; Gemini Omni Flash 1.2 Extend's two rows through the shared lookup.
     "lib/seedance-extend-credits.ts": ["unitRateBaseCredits", "baseCreditCostFor", "seedanceExtendBaseCredits", "geminiOmniExtendRunBaseCredits"],
   }

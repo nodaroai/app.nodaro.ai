@@ -1,10 +1,10 @@
 # Upscale Video
 
-> Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, upscale a clip of up to 60 seconds to 1080p, 2K or 4K with Nodaro Video Upscale, re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p.
+> Upscale a video to 720p, 1080p or 4K at the frame rate you choose with Topaz, upscale a clip of up to 60 seconds to 720p, 1080p, 2K or 4K with Nodaro Video Upscale (Transparent or Sharp), re-render a VEO generation at 1080p or 4K, or finalize a Seedance 2.5 draft at 1080p.
 
 ## Overview
 
-The Video Upscale node enhances video resolution using AI upscaling. Choose between Topaz (any video, to a target resolution and frame rate, with quality enhancement), **Nodaro Video Upscale** (any clip of up to 60 seconds and 50 MB, into a 1080p, 2K or 4K frame, priced per second), VEO (fixed target resolutions), or **Seedance 2.5 HD (from draft)**, which finalizes a Seedance 2.5 draft at 1080p. Unlike most processing nodes, upscaling uses AI processing.
+The Video Upscale node enhances video resolution using AI upscaling. Choose between Topaz (any video, to a target resolution and frame rate, with quality enhancement), **Nodaro Video Upscale** (any clip of up to 60 seconds and 50 MB, in a Transparent or a Sharp mode, priced per second), VEO (fixed target resolutions), or **Seedance 2.5 HD (from draft)**, which finalizes a Seedance 2.5 draft at 1080p. Unlike most processing nodes, upscaling uses AI processing.
 
 ## Configuration
 
@@ -61,15 +61,29 @@ When the wired clip's length cannot be known before the run — a VEO or Runway 
 
 ### Nodaro Video Upscale
 
-Provider id `nodaro-video-upscale`. Upscales any clip of up to **60 seconds** and **50 MB** into a **1080p**, **2K** or **4K** frame:
+Provider id `nodaro-video-upscale`. Upscales any clip of up to **60 seconds** and **50 MB**, in one of two modes (`mode`):
+
+| Mode | What it does | Resolutions |
+|---|---|---|
+| **Transparent** (the default) | Keeps the clip's original colours and look. The safer choice for people and faces. | 720p, 1080p (the default), 2K, 4K |
+| **Sharp** | Adds crisp detail. Suits objects, products, scenery and text more than people. | 1080p (the default), 2K, 4K |
+
+A node or a request that names no mode runs **Transparent**. (Before Transparent was added, every run was what is now Sharp: choose Sharp to keep that look.) When no mode is named and Transparent cannot serve the clip at the chosen resolution (the clip already fills the frame, would need more than 4×, is past Transparent's length limit, or Transparent is not available on the deployment), the run is Sharp at Sharp's price instead of being refused; a mode named explicitly is always kept. Both modes keep the clip's frame rate, length and sound, and deliver an MP4 (H.264 with AAC sound) that plays in every browser and works as an input to every other node. There is no frame-rate setting: choose Topaz for that.
+
+Both modes deliver the clip **inside** the resolution's frame, keeping its shape and never cropping the picture, so a resolution means the same frame in either mode:
 
 | Resolution | Landscape clip | Portrait clip |
 |---|---|---|
+| 720p (Transparent only) | 1280×720 | 720×1280 |
 | 1080p (the default) | 1920×1080 | 1080×1920 |
 | 2K | 2560×1440 | 1440×2560 |
 | 4K | 3840×2160 | 2160×3840 |
 
-The clip is fitted into that frame and never cropped, so it keeps its shape. A clip that is already that size is enhanced at the same size. The result keeps the clip's frame rate, length and sound, delivered as an MP4 (H.264 with AAC sound) that plays in every browser and works as an input to every other node. There is no frame-rate setting and no 720p resolution: choose Topaz for those.
+A clip taller than it is wide gets the portrait frame; a square or wider clip the landscape one.
+
+**Transparent** enlarges the clip by the largest factor that fits it inside that frame, up to 4×: a 16:9 1280×720 clip at 1080p comes back 1920×1080, a 21:9 1680×720 clip at 1080p 1920×822 (the width fills the frame), a square 720×720 clip at 1080p 1080×1080, and a portrait 720×1280 clip at 4K 2160×3840. A clip that already fills the frame is refused (`video_already_at_target`), and so is one that would need more than 4× (`video_too_small`: the message names the largest resolution the clip can reach); either way nothing is held. Transparent also has a length limit by output size: at 4K a clip may be about 50 seconds at 24 fps, 40 at 30 fps or 20 at 60 fps, and at 2K about 45 seconds at 60 fps (any length up to 60 seconds otherwise); a longer one is refused (`video_too_long`, naming the longest it may be). The delivered file has exactly the clip's shape at that size (its sides rounded to even numbers), with no black bars.
+
+**Sharp** fits the clip into the same frame; a clip that is already that size is enhanced at the same size.
 
 **Where it is offered.** Nodaro Video Upscale is offered on Nodaro Cloud; a self-hosted install lists it only where its deployment serves it. An install that does not offer it leaves it out of the provider list, `GET /v1/models` and MCP `list_models`, and refuses a request or a workflow run that names it before anything is held.
 
@@ -77,11 +91,24 @@ The clip is fitted into that frame and never cropped, so it keeps its shape. A c
 
 **Limits.** A clip longer than 60 seconds, or a file larger than 50 MB, is refused before any credits are held, with a message that says the limit. Use Topaz for longer or larger clips. The length limit is exact, read from the longer of the clip's picture and sound: a clip cut to 60 seconds can measure 60.02 seconds and is then refused, so cut it a little shorter. A clip whose length or size cannot be read, or a file that is not a video, is refused too.
 
-A resolution this provider does not take (720p, saved by another provider or sent through the API) is read as 1080p; a 2K value saved on a Topaz node is ignored when the node runs, like any value Topaz does not take: Topaz then uses its 1080p default, or the node's older factor when it has one. A request sent straight to the API that names 2K for Topaz (or any provider but this one) is refused with a 400, as it always was.
+A resolution the chosen mode does not take (720p with Sharp, saved by another provider or sent through the API, or written into a workflow by an agent) is read as 1080p, the same in the editor and on the server; the editor lists 720p only in Transparent and moves a node's 720p to 1080p when its mode is switched to Sharp; a 2K value saved on a Topaz node is ignored when the node runs, like any value Topaz does not take: Topaz then uses its 1080p default, or the node's older factor when it has one. A request sent straight to the API that names 2K for Topaz (or any provider but this one) is refused with a 400, as it always was.
 
 #### Credits (Nodaro Video Upscale)
 
-Priced by the second: the clip's length, rounded up to a whole second, at the resolution's rate, rounded up once to a whole credit. The length is the clip's picture: its video stream's own length, else its `DURATION` tag (a WebM or MKV states its picture's length only there), else the end of its last frame (a tag or a last frame past the whole file's length is read as that length). Only when none of those can be read is the whole file's length used, and it is then billed less 0.15 seconds first, since a made clip's sound can carry its file that far past its planned length (a file of 5.15 seconds is billed as 5 seconds, one of 5.16 seconds as 6). The clip is measured before the run starts, and the amount held is the amount charged.
+Priced by the second, and the clip is measured before the run starts, so the amount held is the amount charged. The length is the clip's picture: its video stream's own length, else its `DURATION` tag (a WebM or MKV states its picture's length only there), else the end of its last frame (a tag or a last frame past the whole file's length is read as that length). Only when none of those can be read is the whole file's length used, and it is then billed less 0.15 seconds first, since a made clip's sound can carry its file that far past its planned length.
+
+**Transparent** bills the clip's exact length (counted in steps of 1/64 of a second, rounded up) at the resolution's rate, the total rounded up once to a whole credit. The shortest clip costs at least one credit.
+
+| Resolution | Per second | 4.04 s clip | 10 s clip | 10.04 s clip | 60 s clip |
+|---|---:|---:|---:|---:|---:|
+| 720p | 5.5<!-- credits-rate: nodaro-video-upscale:transparent:720p:per-sec --> | **24**<!-- credits: nodaro-video-upscale:transparent:720p:per-sec@4.046875 --> | **55**<!-- credits: nodaro-video-upscale:transparent:720p:per-sec@10 --> | **57**<!-- credits: nodaro-video-upscale:transparent:720p:per-sec@10.046875 --> | **330**<!-- credits: nodaro-video-upscale:transparent:720p:per-sec@60 --> |
+| 1080p | 11<!-- credits-rate: nodaro-video-upscale:transparent:1080p:per-sec --> | **46**<!-- credits: nodaro-video-upscale:transparent:1080p:per-sec@4.046875 --> | **110**<!-- credits: nodaro-video-upscale:transparent:1080p:per-sec@10 --> | **112**<!-- credits: nodaro-video-upscale:transparent:1080p:per-sec@10.046875 --> | **660**<!-- credits: nodaro-video-upscale:transparent:1080p:per-sec@60 --> |
+| 2K | 33<!-- credits-rate: nodaro-video-upscale:transparent:2k:per-sec --> | **135**<!-- credits: nodaro-video-upscale:transparent:2k:per-sec@4.046875 --> | **330**<!-- credits: nodaro-video-upscale:transparent:2k:per-sec@10 --> | **333**<!-- credits: nodaro-video-upscale:transparent:2k:per-sec@10.046875 --> | **1980**<!-- credits: nodaro-video-upscale:transparent:2k:per-sec@60 --> |
+| 4K | 33<!-- credits-rate: nodaro-video-upscale:transparent:4k:per-sec --> | **135**<!-- credits: nodaro-video-upscale:transparent:4k:per-sec@4.046875 --> | **330**<!-- credits: nodaro-video-upscale:transparent:4k:per-sec@10 --> | **333**<!-- credits: nodaro-video-upscale:transparent:4k:per-sec@10.046875 --> | **1980**<!-- credits: nodaro-video-upscale:transparent:4k:per-sec@60 --> |
+
+A 4.04-second clip is billed as 4.046875 seconds (259 steps of 1/64 s), not 5.
+
+**Sharp** bills the clip's length rounded up to a whole second, at the resolution's rate, rounded up once to a whole credit (a file measured by its whole length of 5.15 seconds is billed as 5 seconds, one of 5.16 seconds as 6):
 
 | Resolution | Per second | 10 s clip | 60 s clip |
 |---|---:|---:|---:|
@@ -89,11 +116,11 @@ Priced by the second: the clip's length, rounded up to a whole second, at the re
 | 2K | 8.25<!-- credits-rate: nodaro-video-upscale:2k:per-4s@0.25 --> | **83**<!-- credits: nodaro-video-upscale:2k:per-4s@2.5 --> | **495**<!-- credits: nodaro-video-upscale:2k:per-4s@15 --> |
 | 4K | 16.5<!-- credits-rate: nodaro-video-upscale:4k:per-4s@0.25 --> | **165**<!-- credits: nodaro-video-upscale:4k:per-4s@2.5 --> | **990**<!-- credits: nodaro-video-upscale:4k:per-4s@15 --> |
 
-For example, a clip of 10.2 seconds is billed as 11 seconds: at 1080p that is **47** credits<!-- credits: nodaro-video-upscale:1080p:per-4s@2.75 -->.
+For example, in Sharp a clip of 10.2 seconds is billed as 11 seconds: at 1080p that is **47** credits<!-- credits: nodaro-video-upscale:1080p:per-4s@2.75 -->.
 
 **The price you see before you run** is marked as an estimate (≈). The node's price, its Run button and the workflow's estimate (in the editor and on the server) read the wired clip's length exactly as Topaz's estimate does (the list above): an upload at its recorded length; a video another node makes in this run at the length that node will produce, plus one frame for each clip made on the way, so a 5-second generation is quoted as 6 seconds, as the run bills a clip a frame past 5 seconds; a node that does not run at the length recorded with the result it hands on. When that length cannot be known, and with nothing wired, it prices a 10-second clip: a minimum, not the price. The run itself measures the real clip. When the wired clip is known to be longer than 60 seconds — an upload or Library clip whose recorded length is past it, or a result that recorded such a length — no price is shown at all: that run would be refused, so the node's Run button shows no figure, the run confirmation lists the node as not priced (saying the clip is too long), and a workflow estimate from the API leaves it out. A clip another node will make in the run is only planned, so when its planned length is past 60 seconds (four 15-second generations joined, say: the quote counts a frame of slack on each, while the join trims a few frames), the quote is the 60-second price, the most a run bills; the run itself measures the clip and refuses it, with nothing held, only when it really is longer.
 
-Through the API: `POST /v1/video-upscale` with `{ "provider": "nodaro-video-upscale", "videoUrl": "<clip>", "targetResolution": "2k" }`. Every refusal comes before anything is held: `403 model_not_available` where the model is not offered; `400` for a clip past a limit or one that cannot be read (`video_too_long`, `video_too_large`, `video_unreadable`); `403 link_imports_disabled` for a link to another site where the deployment turned such links off; `422 upload_blocked` where its upload policy refuses the clip; `429 input_busy`, or `503 input_timed_out` / `input_failed`, when the clip could not be fetched just now. Via MCP: `video_upscale` with `model: "nodaro-video-upscale"` and `target_resolution` (`1080p`, `2k` or `4k`).
+Through the API: `POST /v1/video-upscale` with `{ "provider": "nodaro-video-upscale", "videoUrl": "<clip>", "targetResolution": "2k", "mode": "sharp" }` (`mode` is `transparent`, the default, or `sharp`; any other value is a `400`, and so is `mode` sent with another provider). Every refusal comes before anything is held: `403 model_not_available` where the model is not offered; `400` for a clip past a limit or one that cannot be read (`video_too_long`, `video_too_large`, `video_unreadable`), and in Transparent for one already at the resolution or too small for it (`video_already_at_target`, `video_too_small`); `503 provider_unavailable` where Transparent cannot run on this install; `403 link_imports_disabled` for a link to another site where the deployment turned such links off; `422 upload_blocked` where its upload policy refuses the clip; `429 input_busy`, or `503 input_timed_out` / `input_failed`, when the clip could not be fetched just now. Via MCP: `video_upscale` with `model: "nodaro-video-upscale"`, `mode` (`transparent` or `sharp`) and `target_resolution` (`720p` in Transparent only, `1080p`, `2k` or `4k`).
 
 ### VEO Options
 
@@ -171,7 +198,7 @@ Through the API: `POST /v1/video-upscale` with `{ "provider": "seedance-2-5-hd",
 
 ## Inputs & Outputs
 
-**Inputs:** Video (required). With a VEO provider it must come from a VEO generation node in this workflow; with Seedance 2.5 HD, from a Seedance 2.5 node with Draft on; with Nodaro Video Upscale, any clip of up to 60 seconds and 50 MB.
+**Inputs:** Video (required). With a VEO provider it must come from a VEO generation node in this workflow; with Seedance 2.5 HD, from a Seedance 2.5 node with Draft on; with Nodaro Video Upscale, any clip of up to 60 seconds and 50 MB (in Transparent, one that fills the resolution's frame when enlarged up to 4×).
 **Outputs:** Upscaled video
 
 With Topaz, a link must be an ordinary video file, not a streaming playlist (HLS, DASH): such a link is refused with a `400` before anything is charged, and a link whose host cannot be reached for now with a retryable `503` — see [media links](../../features/media-links.md). Nodaro Video Upscale refuses such a link as a video it cannot read.
@@ -181,6 +208,7 @@ With Topaz, a link must be an ordinary video file, not a streaming playlist (HLS
 - VEO 1080p is a good option for moderate upscaling
 - Use Topaz at 1080p for most publishing; pick 4K only for deliverables that need it
 - For a short clip (up to 60 s) whose frame rate should stay as it is, Nodaro Video Upscale's per-second price is easy to predict: the amount held is the amount charged
+- With Nodaro Video Upscale, choose Transparent for people and faces (it keeps the original look) and Sharp for products, objects, scenery and text (it adds crisp detail)
 - Upscale after all other processing is complete to avoid re-processing at higher resolution
 - Topaz at the source's own resolution (e.g. 1080p for a 1080p clip) enhances quality without resizing
 

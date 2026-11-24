@@ -149,7 +149,7 @@ describe("VideoUpscaleConfig — Nodaro Video Upscale", () => {
   })
 
   it("a node that already holds it keeps it listed, with its own tiers and no frame rate", () => {
-    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "2k" })} onUpdate={vi.fn()} {...EXTRA} />)
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })} onUpdate={vi.fn()} {...EXTRA} />)
     expect(screen.getByRole("button", { name: "Nodaro Video Upscale" })).toBeTruthy()
     expect(screen.getByLabelText("Resolution").textContent).toBe("2k")
     expect(screen.getByRole("button", { name: "1080p" })).toBeTruthy()
@@ -162,15 +162,37 @@ describe("VideoUpscaleConfig — Nodaro Video Upscale", () => {
 
   it("fail-safe: Topaz's 720p snaps to its 1080p, and the frame rate and factor it lacks are cleared", () => {
     const onUpdate = vi.fn()
-    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "720p", targetFps: 30, upscaleFactor: "2" })} onUpdate={onUpdate} {...EXTRA} />)
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "720p", targetFps: 30, upscaleFactor: "2" })} onUpdate={onUpdate} {...EXTRA} />)
     expect(onUpdate).toHaveBeenCalledWith({ targetResolution: "1080p", targetFps: undefined, upscaleFactor: undefined })
   })
 
   it("choosing a tier stores it", () => {
     const onUpdate = vi.fn()
-    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "1080p" })} onUpdate={onUpdate} {...EXTRA} />)
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p" })} onUpdate={onUpdate} {...EXTRA} />)
     fireEvent.click(screen.getByRole("button", { name: "2K" }))
     expect(onUpdate).toHaveBeenLastCalledWith({ targetResolution: "2k" })
+  })
+
+  it("no mode reads as Transparent: its help text, and 720p listed", () => {
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "720p" })} onUpdate={vi.fn()} {...EXTRA} />)
+    expect(screen.getByLabelText("Mode").textContent).toBe("transparent")
+    expect(screen.getByText(/Keeps the original colours and look/)).toBeTruthy()
+    expect(screen.getByRole("button", { name: "720p" })).toBeTruthy()
+    expect(screen.getByLabelText("Resolution").textContent).toBe("720p")
+  })
+
+  it("Sharp shows its own help text; choosing a mode stores it", () => {
+    const onUpdate = vi.fn()
+    render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p" })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(screen.getByText(/Adds crisp detail/)).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Transparent" }))
+    expect(onUpdate).toHaveBeenLastCalledWith({ mode: "transparent" })
+  })
+
+  it("fail-safe: the mode is cleared on any other provider", () => {
+    const onUpdate = vi.fn()
+    render(<VideoUpscaleConfig data={data({ provider: "topaz", mode: "sharp" as never })} onUpdate={onUpdate} {...EXTRA} />)
+    expect(onUpdate).toHaveBeenCalledWith({ mode: undefined })
   })
 
   it("Topaz given its 2K box clears it (the run reads Topaz's 1080p)", () => {

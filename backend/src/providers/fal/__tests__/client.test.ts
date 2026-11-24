@@ -254,6 +254,23 @@ describe("runFalRequest", () => {
     expect(mockStatus).toHaveBeenCalledTimes(4)
   })
 
+  it("maxWaitMs bounds the wait by wall clock: slow status reads cannot stretch it past the bound", async () => {
+    mockSubmit.mockResolvedValue({ request_id: "req-late" })
+    let now = 1_000_000
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now)
+    try {
+      // Each status read takes 40 s of wall clock.
+      mockStatus.mockImplementation(async () => { now += 40_000; return { status: "IN_PROGRESS" } })
+      await expect(
+        runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0, maxPolls: 1000, maxWaitMs: 100_000 }),
+      ).rejects.toThrow("fal request failed (req-late): timed out after 100 s")
+      // 0 s, 40 s, 80 s: three reads; the 120 s mark is past the bound.
+      expect(mockStatus).toHaveBeenCalledTimes(3)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it("propagates a result() failure wrapped with the request id", async () => {
     mockSubmit.mockResolvedValue({ request_id: "req-boom" })
     mockStatus.mockResolvedValue({ status: "COMPLETED" })

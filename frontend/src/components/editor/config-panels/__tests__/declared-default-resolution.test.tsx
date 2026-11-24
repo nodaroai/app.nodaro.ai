@@ -33,7 +33,7 @@ const FLUX_3_KLEIN = ["flux-3-klein", "flux-3-klein-i2i"]
 describe("the declared default size", () => {
   it("is declared by MiniMax H3 Image's, Seedream 5.5's, FLUX 3 Klein's and Kling Image 4.0's two ids each and by video models only", () => {
     const declaring = Object.values(MODEL_CATALOG).filter((m) => m.defaultResolution).map((m) => m.id).sort()
-    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "kling-image-4", "kling-image-4-i2i", "ltx-2.5-fast", "ltx-2.5-pro", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
+    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "kling-image-4", "kling-image-4-i2i", "ltx-2.5-fast", "ltx-2.5-pro", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "topaz-rhea", "wan-animate-move", "wan-animate-replace"])
     for (const id of FLUX_3_KLEIN) {
       expect(MODEL_CATALOG[id]!.defaultResolution, id).toBe("1K")
       expect(MODEL_CATALOG[id]!.resolutions?.[0], id).toBe("1K")

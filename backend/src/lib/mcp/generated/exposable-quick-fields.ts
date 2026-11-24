@@ -190,6 +190,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "v2vResolution": { valueType: "string", fixed: false, values: ["1080p","480p","720p"] },
   },
   "video-upscale": {
+    "mode": { valueType: "string", fixed: false, values: ["sharp","transparent"] },
     "provider": { valueType: "string", fixed: true, values: ["nodaro-video-upscale","seedance-2-5-hd","topaz","veo-1080p","veo-4k"] },
     "targetResolution": { valueType: "string", fixed: false, values: ["1080p","2k","4k","720p"] },
   },

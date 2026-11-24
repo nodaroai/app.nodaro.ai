@@ -114,6 +114,10 @@ describe("a mapped video node re-runs the call it was made from", () => {
     expect(run("/v1/video-upscale", topaz, { videoUrl: VIDEO })).toMatchObject({ provider: "topaz", upscaleFactor: "4", videoUrl: VIDEO })
     expect(run("/v1/video-upscale", { provider: "veo-1080p", upscaleFactor: "2", taskId: "veo-1" })).toMatchObject({ provider: "veo-1080p", kieTaskId: "veo-1" })
     expect(run("/v1/video-upscale", { provider: "seedance-2-5-hd", taskId: "draft-1" })).toMatchObject({ provider: "seedance-2-5-hd", kieTaskId: "draft-1" })
+    // Nodaro Video Upscale: an explicit mode is kept on the node, an absent one stays absent.
+    // (Read off the node: the house model is not served in this test process.)
+    expect(nodeFor("/v1/video-upscale", { provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k", videoUrl: VIDEO })?.data).toMatchObject({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })
+    expect(nodeFor("/v1/video-upscale", { provider: "nodaro-video-upscale", targetResolution: "1080p", videoUrl: VIDEO })?.data).not.toHaveProperty("mode")
   })
 
   it("trim_video, in each of its three modes", () => {

@@ -268,6 +268,12 @@ export async function runFalRequest(opts: {
   submitOnce?: boolean
   /** The most status polls before the wait gives up. Absent: 600 (30 minutes at the default cadence). */
   maxPolls?: number
+  /**
+   * The longest the wait may run, wall clock, from the first poll: past it the
+   * wait gives up as when the polls run out (a slow status read cannot stretch
+   * it). Absent: bounded by `maxPolls` only, as it always was.
+   */
+  maxWaitMs?: number
 }): Promise<{ output: unknown; requestId: string }> {
   ensureConfigured(opts.keyCoverage)
   if (opts.submitOnce) markSubmitOnce(opts.endpoint)
@@ -287,7 +293,9 @@ export async function runFalRequest(opts: {
   let statusErrors = 0
 
   const maxPolls = opts.maxPolls ?? MAX_POLLS
-  for (let i = 0; i < maxPolls; i++) {
+  const waitStarted = Date.now()
+  const pastDeadline = (): boolean => opts.maxWaitMs !== undefined && Date.now() - waitStarted >= opts.maxWaitMs
+  for (let i = 0; i < maxPolls && !pastDeadline(); i++) {
     let statusResp: { status: string; error?: unknown }
     try {
       statusResp = (await fal.queue.status(opts.endpoint, { requestId })) as {
@@ -324,7 +332,9 @@ export async function runFalRequest(opts: {
   }
 
   throw new Error(
-    `fal request failed (${requestId}): timed out after ${maxPolls} polls`,
+    pastDeadline()
+      ? `fal request failed (${requestId}): timed out after ${Math.round((opts.maxWaitMs ?? 0) / 1000)} s`
+      : `fal request failed (${requestId}): timed out after ${maxPolls} polls`,
   )
 }
 

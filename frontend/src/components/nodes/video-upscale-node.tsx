@@ -2,7 +2,7 @@
 
 import { SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import { isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
-import { nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
@@ -18,7 +18,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits, useSeedanceHdDraftCredits, useSeedanceHdMinimumCredits } from "@/ee/hooks/use-model-credits"
 import { useExactUnitQuote, useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
-import { useNodaroVideoUpscaleRefusedSec, useVideoUpscaleQuotedUnits } from "@/hooks/use-video-upscale-quoted-units"
+import { useNodaroVideoUpscaleEstimatedMode, useNodaroVideoUpscaleRefusedSec, useVideoUpscaleQuotedUnits } from "@/hooks/use-video-upscale-quoted-units"
 import { isTopazVideoUpscaleProvider } from "@/lib/video-utility-estimate"
 import { topazVideoResolutionLabel } from "@/lib/topaz-video-labels"
 import { resolveUpstreamKieTaskId } from "@/components/editor/workflow-editor/upstream-kie-task-id"
@@ -70,9 +70,11 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   // knows is past the 60-second limit shows no figure: that run is refused
   // before anything is held (the confirm says it is not priced).
   const isNodaro = upscaleProvider === NODARO_VIDEO_UPSCALE_PROVIDER
-  const nodaroTier = nodaroVideoUpscaleTierOf(nodeData.targetResolution)
+  // The mode it is priced in, decided from its wired clip as the run decides it.
+  const nodaroMode = useNodaroVideoUpscaleEstimatedMode(id)
+  const nodaroTier = nodaroVideoUpscaleModeTierOf(nodaroMode, nodeData.targetResolution)
   const nodaroRefused = useNodaroVideoUpscaleRefusedSec(id) !== undefined
-  const nodaroCredits = useExactUnitQuote(isNodaro && !nodaroRefused ? nodaroVideoUpscaleCreditId(nodaroTier) : undefined, quotedUnits)
+  const nodaroCredits = useExactUnitQuote(isNodaro && !nodaroRefused ? nodaroVideoUpscaleModeCreditId(nodaroMode, nodaroTier) : undefined, quotedUnits)
   // The Seedance draft finalize is priced by the DRAFT (its length, its
   // reference video), so the server prices it: once a draft is wired, the
   // exact credits its run reserves (named by the same task id the run sends —

@@ -7,6 +7,8 @@ import type { VideoUpscaleResolution } from "@nodaro/shared/model-catalog"
 import {
   DEFAULT_SUNO_MODEL,
   FLUX_LORA_CHARACTER_MODEL_ID,
+  isNodaroVideoUpscaleMode,
+  type NodaroVideoUpscaleMode,
   type VideoUpscaleProvider,
   type TtsProvider,
   type SunoSeparateType,
@@ -6924,6 +6926,11 @@ export async function videoUpscaleApi(opts: {
   targetResolution?: VideoUpscaleResolution
   /** Topaz: the output frame rate (15–60); absent = the source's own rate. */
   targetFps?: number
+  /** Nodaro Video Upscale only: the mode the node is EXPLICITLY set to. Absent
+   *  (a node that names none) is sent as absent, so the server picks the mode
+   *  (Transparent, else Sharp where Transparent cannot serve the clip); an
+   *  explicit mode is sent and honoured or refused, never swapped. */
+  mode?: NodaroVideoUpscaleMode
   /** Legacy Topaz lever — sent only by a saved node that has no `targetResolution`. */
   upscaleFactor?: "1" | "2" | "4"
   userId?: string
@@ -6938,6 +6945,7 @@ export async function videoUpscaleApi(opts: {
   if (opts.targetResolution) body.targetResolution = opts.targetResolution
   else if (opts.upscaleFactor) body.upscaleFactor = opts.upscaleFactor
   if (typeof opts.targetFps === "number" && Number.isFinite(opts.targetFps)) body.targetFps = opts.targetFps
+  if (isNodaroVideoUpscaleMode(opts.mode)) body.mode = opts.mode
   if (opts.userId) body.userId = opts.userId
   if (opts.provider) body.provider = opts.provider
   if (opts.kieTaskId) body.kieTaskId = opts.kieTaskId

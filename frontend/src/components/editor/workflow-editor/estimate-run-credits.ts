@@ -27,7 +27,7 @@ import { isModelEstimate, isModelRefused, refusedModelMessage } from "@/hooks/us
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import { NODE_CREDIT_COSTS, estimateNodeCredits, getCostFactors, isExecutableNode, videoToVideoClipRowOf, type RunCreditLine, type RunCreditQuantity } from "./types"
 import { previewRunnable } from "./preview-gate"
-import { isNodaroVideoUpscaleCreditId, nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { isNodaroVideoUpscaleModeCreditId, nodeProviders, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { isExpandedClone } from "@nodaro/shared/workflow"
 import { USE_CASE_FEE_STATIC_CREDITS, expandUseCaseNodes, isUseCaseNodeType, usecaseFeeCreditId, withUseCaseMembers, type UseCaseExpansion } from "@nodaro/render-rules"
 import { speechPriceIdsFor } from "@/lib/speech-estimate"
@@ -166,7 +166,7 @@ function isMeteredEstimate(
   // A Nodaro Video Upscale is priced by the clip's measured length, which the graph only estimates.
   if (node.type === "video-upscale") {
     const id = getModelIdentifier(node, edges, allNodes, rerunIds)
-    return id === TOPAZ_VIDEO_UNIT_CREDIT_ID || isNodaroVideoUpscaleCreditId(id)
+    return id === TOPAZ_VIDEO_UNIT_CREDIT_ID || isNodaroVideoUpscaleModeCreditId(id)
   }
   // A Lip Sync charged per second of its audio, quoted before its audio's length is known
   // (15 s): an estimate — the run measures the audio and holds what it costs.

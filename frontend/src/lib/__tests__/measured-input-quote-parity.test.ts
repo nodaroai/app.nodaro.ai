@@ -60,7 +60,7 @@ const STEP: Readonly<Record<Step, { type: string; data: Record<string, unknown>;
   pitchTempo: { type: "pitch-tempo", data: {}, input: "in" },
   dubbing: { type: "dubbing", data: { targetLanguage: "es" }, input: "video" },
   topaz: { type: "video-upscale", data: { targetResolution: "1080p" }, input: "video" },
-  nodaroUpscale: { type: "video-upscale", data: { provider: "nodaro-video-upscale", targetResolution: "1080p" }, input: "video" },
+  nodaroUpscale: { type: "video-upscale", data: { provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p" }, input: "video" },
   // A Lip Sync priced by the seconds of its audio (OmniHuman 2.0): named only by the cases that list it.
   lipSync: { type: "lip-sync", data: { provider: "omnihuman-2-0" }, input: "audio" },
   // A Lip Sync priced by a length tier (Kling Avatar): its figure is the tier's seconds. Named only by the cases that list it.

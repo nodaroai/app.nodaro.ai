@@ -67,7 +67,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -220,6 +220,9 @@ import {
   audioSoundtrackActive,
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  nodaroVideoUpscaleModeOf,
+  isNodaroVideoUpscaleMode,
+  TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER,
   retiredLipSyncProviderMessage,
   lipSyncResolutionRefusal,
   editVideoProProviderRefusal,
@@ -6119,21 +6122,42 @@ function buildPayloadOf(
       // row. node-executor measures the clip and holds the exact price
       // (stampNodaroVideoUpscale); this row is only the build-time basis. Its
       // job carries no frame rate, factor or task id: it has none of them.
+      // Its mode picks the engine, the tiers it takes and the row. The build
+      // carries the mode AS ASKED (only an explicit one); node-executor's stamp
+      // measures the clip and decides the mode that runs and is priced
+      // (`nodaroVideoUpscaleEffectiveMode`: no mode is Transparent, falling
+      // back to Sharp where Transparent cannot serve the clip) and stamps it.
+      // The row here is only the build-time basis (`nodaroVideoUpscaleModeOf`).
       if (vuProvider === NODARO_VIDEO_UPSCALE_PROVIDER) {
-        const vuTier = nodaroVideoUpscaleTierOf(data.targetResolution)
+        const vuMode = nodaroVideoUpscaleModeOf(data.mode)
+        const vuTier = nodaroVideoUpscaleModeTierOf(vuMode, data.targetResolution)
         return {
           jobName: "video-upscale",
           queueName: "video-generation",
-          modelIdentifier: nodaroVideoUpscaleCreditId(vuTier),
+          modelIdentifier: nodaroVideoUpscaleModeCreditId(vuMode, vuTier),
           payload: {
             jobId,
             videoUrl: resolvedInputs.videoUrl || data.videoUrl,
             provider: vuProvider,
+            ...(isNodaroVideoUpscaleMode(data.mode) ? { mode: data.mode } : {}),
             tier: vuTier,
             targetResolution: vuTier,
             usageLogId,
           },
         }
+      }
+      // Topaz Rhea is a route/API provider (decided 2026-11-24): a request to
+      // /v1/video-upscale, or a plugin's child job, measures the clip and plans
+      // its factor before anything is held. A workflow run has no such plan, so
+      // a node set to it is refused here, at build time, before a jobs row or a
+      // hold — never priced at another provider's row or run on another model.
+      if (vuProvider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER) {
+        const vuLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Upscale Video"
+        const err = new Error(
+          `provider_not_supported: node "${vuLabel}" is set to Topaz Rhea, which runs only as a direct POST /v1/video-upscale request — switch the node's provider to Topaz to upscale in a workflow.`,
+        ) as Error & { code?: string }
+        err.code = "provider_not_supported"
+        throw err
       }
       // The task it works on: the one its wired source hands on, else (no
       // source that fits wired) the one it holds — never its own old output.

@@ -37,11 +37,11 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { maskCompositeUnits } from "@nodaro/shared/media"
 import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
-import { applyDefaultVideoSelection, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
+import { applyDefaultVideoSelection, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleEffectiveMode, type TopazVideoResolution } from "@nodaro/shared/models"
 import { drivingAudioQuoteId, isDrivingAudioLipSyncProvider, takesDrivingAudio } from "@nodaro/shared/credits"
 import { referenceModalityForHandle } from "@nodaro/shared/workflow"
 import { withWiredSettings } from "@nodaro/shared/nodes"
-import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
+import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleModeEstimateUnits, nodaroVideoUpscaleModeTierOf, nodaroVideoUpscaleTransparentServes, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -608,8 +608,9 @@ export function videoUpscalePricingUnits(
   // longest clip a run takes — the rule the server's run estimate reads
   // (`nodaroVideoUpscaleEstimateUnits`). A clip the graph KNOWS is past the
   // limit is never priced ({@link nodaroVideoUpscaleRefusedSec}).
+  // Its mode (unset = transparent) picks the rule: transparent is billed at the exact length.
   if (data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
-    return nodaroVideoUpscaleEstimateUnits(topazVideoQuotedSourceSec(node, nodes, edges, rerunIds))
+    return nodaroVideoUpscaleModeEstimateUnits(nodaroVideoUpscaleEstimateMode(node, nodes, edges, rerunIds), topazVideoQuotedSourceSec(node, nodes, edges, rerunIds))
   }
   if (!isTopazVideoUpscaleProvider(data.provider)) return 1
   return topazVideoQuoteUnits(data, topazVideoQuotedSourceSec(node, nodes, edges, rerunIds), topazVideoQuotedSource(node, nodes, edges, rerunIds))
@@ -966,4 +967,28 @@ export function drivingAudioQuotedCreditId(
   if (!first) return undefined
   const audioSec = measuredInputReader("lip-sync", nodes, edges, rerunIds, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)(first.source)
   return drivingAudioQuoteId({ provider, resolution: data.resolution, fps: data.fps, audioSec })
+}
+
+/**
+ * Nodaro Video Upscale's mode for an editor estimate, decided as the server
+ * and the run decide it (`nodaroVideoUpscaleEffectiveMode`) from what the
+ * graph knows of the wired clip — its frame and rate, its length: an explicit
+ * mode is kept; no mode is Transparent unless the known clip cannot be served
+ * by it (then Sharp, at Sharp's price); a clip the graph does not know is
+ * Transparent (the run decides once it measures the clip, before any hold).
+ */
+export function nodaroVideoUpscaleEstimateMode(
+  node: WorkflowNode,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): "transparent" | "sharp" {
+  const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
+  if (data.mode === "transparent" || data.mode === "sharp") return data.mode
+  const source = topazVideoQuotedSource(node, nodes, edges, rerunIds)
+  const sec = topazVideoQuotedSourceSec(node, nodes, edges, rerunIds)
+  const clip = source.frame
+    ? { ...source.frame, ...(source.fps !== undefined ? { fps: source.fps } : {}), ...(sec !== undefined ? { sec } : {}) }
+    : undefined
+  return nodaroVideoUpscaleEffectiveMode(data.mode, nodaroVideoUpscaleTransparentServes(clip, nodaroVideoUpscaleModeTierOf("transparent", data.targetResolution)))
 }
