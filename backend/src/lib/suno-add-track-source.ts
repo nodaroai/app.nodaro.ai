@@ -11,13 +11,19 @@
  *     run on other accounts' songs);
  *   - the style: the request's own, else the style the ORIGINAL song was made
  *     with, read only off the caller's own job (another account's prompt
- *     text is never reused). On Add Vocals an "instrumental" tag in that
- *     style is left out: it would ask the singer not to sing;
+ *     text is never reused): its style or tags, else, for a song made in
+ *     description mode (Create Music's default, which records no style), the
+ *     description it was made from — never a prompt that holds lyrics. On
+ *     Add Vocals an "instrumental" tag in that style (in a description, the
+ *     words "instrumental" / "no vocals" wherever they stand) is left out:
+ *     it would ask the singer not to sing. Inherited, not typed, so it is cut
+ *     to the provider's style limit rather than refused;
  *   - the title: the request's own, else the original song's.
  *
  * A run with no file, or with no style and no original style to take, is
  * refused with a message the person can act on.
  */
+import { SUNO_ADD_TRACK_STYLE_MAX } from "@nodaro/shared/models"
 import { supabase } from "./supabase.js"
 import { unusableLinkError } from "./unusable-link.js"
 import { isAllowedSocialVideoUrl } from "./url-validator.js"
@@ -123,17 +129,78 @@ function byFinishedFirst(rows: readonly TaskRow[]): TaskRow[] {
 
 const INSTRUMENTAL_TAG = /^(instrumental|no vocals?|without vocals?|instrumental only)$/i
 
-/** The original song's style, as the new layer may reuse it. */
-export function inheritedSunoStyle(original: string | undefined, jobType: SunoAddTrackJobType): string | undefined {
-  const style = str(original)
+/** Where an inherited style comes from: the original's style or tags, or the description it was made from. */
+export type InheritedStyleSource = "style" | "description"
+
+/**
+ * Inherited text is the original's, not typed for this run: cut to the
+ * provider's limit, never refused for it. Counted in UTF-16 units — what the
+ * route's schema counts when a keyless install relays the run to the cloud —
+ * and never inside a character, so it is within the limit however counted.
+ */
+function toStyleLimit(style: string | undefined): string | undefined {
+  if (style === undefined) return undefined
+  const kept: string[] = []
+  let units = 0
+  for (const ch of style) {
+    if (units + ch.length > SUNO_ADD_TRACK_STYLE_MAX) break
+    kept.push(ch)
+    units += ch.length
+  }
+  return kept.join("").trim() || undefined
+}
+
+/**
+ * Words in a description that ask for no singing. A style's tags are judged
+ * whole (`INSTRUMENTAL_TAG`); a description is a sentence, so on Add Vocals
+ * these are taken out wherever they stand.
+ */
+const NO_SINGING_WORDS = /\b(?:instrumental(?:\s+only)?|(?:with\s+)?no\s+vocals?|without\s+vocals?)\b/gi
+
+/**
+ * The original song's style, as the new layer may reuse it: cut to the limit
+ * first (the original's text may be far longer, and nothing below runs over
+ * more than that), then, on Add Vocals, without what would ask the singer not
+ * to sing.
+ */
+export function inheritedSunoStyle(
+  original: string | undefined,
+  jobType: SunoAddTrackJobType,
+  from: InheritedStyleSource = "style",
+): string | undefined {
+  const style = toStyleLimit(str(original))
   if (!style || jobType !== "suno-add-vocals") return style
-  const kept = style.split(",").map((t) => t.trim()).filter((t) => t !== "" && !INSTRUMENTAL_TAG.test(t))
+  const singable = from === "description" ? style.replace(NO_SINGING_WORDS, " ").replace(/\s+/g, " ") : style
+  const kept = singable.split(",").map((t) => t.trim()).filter((t) => t !== "" && !INSTRUMENTAL_TAG.test(t))
   return kept.length > 0 ? kept.join(", ") : undefined
 }
 
-function originalStyleOf(row: TaskRow | undefined): string | undefined {
+/**
+ * The tools whose `prompt`, outside custom mode, is a description of the
+ * song (Suno's description mode). Elsewhere a prompt is lyrics (custom mode,
+ * an extend, Add Vocals) and is never taken as a style.
+ */
+const DESCRIPTION_MODE_JOB_TYPES: ReadonlySet<string> = new Set(["suno-generate", "suno-cover"])
+
+/**
+ * The description a song was made from, when it was made in description mode
+ * (`customMode` not true — Suno's default, so a row that does not say counts).
+ * Create Music's description mode records no style and no tags: its
+ * description is the only style the song has (Suno's returned tags are not
+ * kept).
+ */
+function originalDescriptionOf(input: Record<string, unknown>): string | undefined {
+  if (typeof input.type !== "string" || !DESCRIPTION_MODE_JOB_TYPES.has(input.type)) return undefined
+  if (input.customMode === true) return undefined
+  return str(input.prompt)
+}
+
+function originalStyleOf(row: TaskRow | undefined): { readonly text: string; readonly from: InheritedStyleSource } | undefined {
   const input = row?.input_data ?? {}
-  return str(input.style) ?? str(input.tags)
+  const style = str(input.style) ?? str(input.tags)
+  if (style) return { text: style, from: "style" }
+  const description = originalDescriptionOf(input)
+  return description ? { text: description, from: "description" } : undefined
 }
 
 function originalTitleOf(row: TaskRow | undefined, audioId: string | undefined): string | undefined {
@@ -158,7 +225,8 @@ export async function resolveSunoAddTrackSource(req: SunoAddTrackSourceRequest):
     if (!uploadUrl) return { ok: false, status: 400, code: SUNO_ADD_TRACK_SOURCE_CODE, message: SUNO_ADD_TRACK_NO_FILE_MESSAGE }
   }
 
-  const style = ownStyle ?? inheritedSunoStyle(originalStyleOf(ownRow), req.jobType)
+  const original = originalStyleOf(ownRow)
+  const style = ownStyle ?? inheritedSunoStyle(original?.text, req.jobType, original?.from)
   if (!style) return { ok: false, status: 400, code: SUNO_ADD_TRACK_STYLE_CODE, message: SUNO_ADD_TRACK_STYLE_MESSAGE }
 
   const title = ownTitle ?? originalTitleOf(ownRow, ids?.audioId)

@@ -13,8 +13,11 @@
  *
  * Required by the schemas: `upload_url`, `title`, `negative_tags`, and the
  * style — `style` on Add Vocals, `tags` on Add Instrumental. Every body here
- * carries all four; the caller resolves the source and the style first
- * (`lib/suno-add-track-source.ts`). Optional, sent only when set: `prompt`
+ * carries all four, none empty; the caller resolves the source and the style
+ * first (`lib/suno-add-track-source.ts`). KIE refuses an empty
+ * `negative_tags` (`422 "Please enter negativeTags."`, every run that
+ * excluded nothing, 2026-11-24), so a run that excludes nothing sends
+ * `SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS`. Optional, sent only when set: `prompt`
  * (Add Vocals only — the lyrics, or the direction for the voice; Add
  * Instrumental has no prompt field), `vocal_gender` (`m` / `f`; the platform
  * spells it `male` / `female`), `style_weight`, `weirdness_constraint`,
@@ -66,6 +69,14 @@ export interface SunoAddTrackRun extends SunoAddTrackDirection {
 
 /** The title sent when neither the request nor the source song names one (KIE requires a title). */
 export const SUNO_ADD_TRACK_FALLBACK_TITLE = "Untitled"
+
+/**
+ * What is sent as `negative_tags` when the person keeps nothing out: both
+ * schemas require the field and KIE refuses an empty one. Shared by both
+ * tools, so it names no genre, voice or instrument — only what no layer
+ * should be.
+ */
+export const SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS = "low quality"
 
 export function sunoVocalGenderCode(v: string | undefined): "m" | "f" | undefined {
   if (v === "male" || v === "m") return "m"
@@ -121,8 +132,8 @@ function sharedInput(run: SunoAddTrackRun): Record<string, unknown> {
     upload_url: run.uploadUrl,
     model: run.model ?? DEFAULT_SUNO_MODEL,
     title: titleOf(run.title) ?? SUNO_ADD_TRACK_FALLBACK_TITLE,
-    // Required by both schemas; an empty string when the person excludes nothing.
-    negative_tags: trimmed(run.negativeTags) ?? "",
+    // Required by both schemas, and KIE refuses it empty.
+    negative_tags: trimmed(run.negativeTags) ?? SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS,
     ...(gender ? { vocal_gender: gender } : {}),
     ...(styleWeight !== undefined ? { style_weight: styleWeight } : {}),
     ...(weirdness !== undefined ? { weirdness_constraint: weirdness } : {}),
