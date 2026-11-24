@@ -98,26 +98,41 @@ describe("the working copy's arguments", () => {
   })
 })
 
+/**
+ * Mask Composite's graphs as they are now: the captured argv above with the
+ * one deliberate change since, the overlay blending in the graph's own format
+ * (`overlay=format=yuv420`, so the background is never converted).
+ */
+const inFormatOverlay = (argv: string[]) => {
+  const out = [...argv]
+  const at = out.indexOf("-filter_complex") + 1
+  expect(out[at]).toContain("overlay=format=auto:")
+  out[at] = out[at]!.replace("overlay=format=auto:", "overlay=format=yuv420:")
+  return out
+}
+
 describe("Mask Composite", () => {
-  it("without the working copy: every argv exactly as before", () => {
-    expect(video()).toEqual(DEFAULT_VIDEO)
-    expect(blur()).toEqual(DEFAULT_BLUR)
-    expect(pixelate()).toEqual(DEFAULT_PIXELATE)
+  it("without the working copy: every argv exactly as before, but for the overlay's format", () => {
+    expect(video()).toEqual(inFormatOverlay(DEFAULT_VIDEO))
+    expect(blur()).toEqual(inFormatOverlay(DEFAULT_BLUR))
+    expect(pixelate()).toEqual(inFormatOverlay(DEFAULT_PIXELATE))
   })
 
   it("a 4:2:0 working copy: the same graph, only the encode changed (with the source's tags)", () => {
     const source = { pixFmt: "yuv420p", colorSpace: "bt709", colorRange: "tv" }
     const enc = [...workingCopyCodecArgs("yuv420p"), "-colorspace", "bt709", "-color_range", "tv"]
-    expect(video(source)).toEqual(replaced(DEFAULT_VIDEO, DELIVERY, enc))
-    expect(blur(source)).toEqual(replaced(DEFAULT_BLUR, DELIVERY, enc))
+    expect(video(source)).toEqual(replaced(inFormatOverlay(DEFAULT_VIDEO), DELIVERY, enc))
+    expect(blur(source)).toEqual(replaced(inFormatOverlay(DEFAULT_BLUR), DELIVERY, enc))
   })
 
   it("a 4:4:4 working copy: the graph in 4:4:4 throughout, encoded 4:4:4", () => {
     const source = { pixFmt: "yuv444p" }
     const as444 = (argv: string[]) => {
-      const graph = argv[argv.indexOf("-filter_complex") + 1]!
-      const out = replaced(argv, DELIVERY, workingCopyCodecArgs("yuv444p"))
-      out[out.indexOf("-filter_complex") + 1] = graph.replaceAll("format=yuva420p", "format=yuva444p").replaceAll("format=yuv420p", "format=yuv444p")
+      const current = inFormatOverlay(argv)
+      const graph = current[current.indexOf("-filter_complex") + 1]!
+      const out = replaced(current, DELIVERY, workingCopyCodecArgs("yuv444p"))
+      out[out.indexOf("-filter_complex") + 1] = graph
+        .replaceAll("format=yuva420p", "format=yuva444p").replaceAll("format=yuv420p", "format=yuv444p").replace("overlay=format=yuv420:", "overlay=format=yuv444:")
       return out
     }
     expect(video(source)).toEqual(as444(DEFAULT_VIDEO))
