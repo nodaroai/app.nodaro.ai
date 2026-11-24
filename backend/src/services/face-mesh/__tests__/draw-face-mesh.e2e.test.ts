@@ -432,7 +432,7 @@ describe("buildFaceMeshEncodeArgs", () => {
 
   it("writes the frames back in the clip's own colour and tags it as it was (untagged = BT.709, limited)", () => {
     const untagged = buildFaceMeshEncodeArgs({ width: 2, height: 2, frameRate: "24/1", audioFrom: "/a", outputPath: "/o" }).join(" ")
-    expect(untagged).toContain("scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv")
+    expect(untagged).toContain("scale=out_color_matrix=bt709:out_range=tv:flags=area+accurate_rnd+full_chroma_int,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv")
     expect(untagged).toContain("-colorspace bt709 -color_primaries bt709 -color_trc bt709 -color_range tv")
     const sd = clipColourOf({ color_space: "smpte170m", color_range: "pc", color_primaries: "bt470bg", color_transfer: "unknown" })
     expect(sd).toEqual({ matrix: "bt601", range: "pc", space: "smpte170m", primaries: "bt470bg", transfer: "smpte170m" })
