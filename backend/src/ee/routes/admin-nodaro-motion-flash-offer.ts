@@ -8,7 +8,7 @@
  *
  * The setting (`nodaro_motion_flash_offer`, lib/nodaro-motion-flash-offer.ts)
  * says, per engine, whether EVERY user may pick that engine's Flash choice
- * (Prism Flash, Pulse Flash) at its own price: `"off"` (the default, on every
+ * (Nodaro Prism Flash, Nodaro Pulse Flash) at its own price: `"off"` (the default, on every
  * deployment) or `"on"`.
  *
  * A save that turns any engine on is 409 `engine_unsupported` while NO

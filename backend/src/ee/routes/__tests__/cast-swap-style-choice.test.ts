@@ -562,7 +562,7 @@ describe("roleFace: whether a person role may keep its own face (the Face chip)"
   })
 })
 
-describe("flash: whether each engine's Flash choice (Prism Flash, Pulse Flash) is offered", () => {
+describe("flash: whether each engine's Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash) is offered", () => {
   const FLASH_ENGINE = { ...CS, flashChoices: true, engines: ["nodaro-prism", "nodaro-pulse", "nodaro-prism-flash", "nodaro-pulse-flash"] }
   const get = () => app.inject({ method: "GET", url: URL })
 

@@ -240,7 +240,7 @@ export function requestVideoRemakeEstimate(
  * `provider_not_supported` before anything is built for the node.
  */
 export function assertNoVideoRemakeEngineOnNode(provider: unknown, nodeLabel: string): void {
-  // A Flash choice too (Prism Flash, Pulse Flash): a node runs none of Video Remake's choices.
+  // A Flash choice too (Nodaro Prism Flash, Nodaro Pulse Flash): a node runs none of Video Remake's choices.
   const choice = videoRemakeChoiceOf(provider)
   if (!choice) return
   const err = new Error(

@@ -1,6 +1,6 @@
 /**
- * Whether this deployment offers an engine's Flash choice (Prism Flash,
- * Pulse Flash; `@nodaro/shared/models` `VIDEO_REMAKE_FLASH_ENGINES`): the ONE
+ * Whether this deployment offers an engine's Flash choice (Nodaro Prism Flash,
+ * Nodaro Pulse Flash; `@nodaro/shared/models` `VIDEO_REMAKE_FLASH_ENGINES`): the ONE
  * rule both the offering (`GET /v1/video-remake/style-choice`'s `flash`) and
  * the admitting (`nodaro-motion-engine.ts`, before the engine) read, so a
  * client is never shown a choice the platform then refuses, nor refused one it

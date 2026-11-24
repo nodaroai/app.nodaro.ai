@@ -125,7 +125,7 @@ export function isTrendRunInput(inputData: unknown): boolean {
 export function sharedModelOf(inputData: unknown): { id: string; name: string } | null {
   const input = record(inputData)
   if (input.type === "cast-swap") {
-    // A Flash choice's run is named as the choice (Prism Flash, Pulse Flash).
+    // A Flash choice's run is named as the choice (Nodaro Prism Flash, Nodaro Pulse Flash).
     const flash = videoRemakeFlashEngineFrom(input.engine)
     if (flash) return { id: flash, name: VIDEO_REMAKE_FLASH_ENGINE_NAMES[flash] }
     const engine = nodaroMotionEngineFrom(input.engine ?? CAST_SWAP_ENGINE_WHEN_OMITTED)

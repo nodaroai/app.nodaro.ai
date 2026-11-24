@@ -335,7 +335,7 @@ export function trendChoiceId(data: Pick<TrendVersionData, "engine" | "flash">):
   return trendIsFlash(data) ? videoRemakeFlashEngineOf(engine) : engine
 }
 
-/** A trend's choice by its name ("Prism Flash", else the engine's). */
+/** A trend's choice by its name ("Nodaro Prism Flash", else the engine's). */
 export function trendChoiceName(data: Pick<TrendVersionData, "engine" | "flash">): string {
   const id = trendChoiceId(data)
   return videoRemakeFlashEngineFrom(id) ? VIDEO_REMAKE_FLASH_ENGINE_NAMES[id as VideoRemakeFlashEngine] : nodaroMotionEngineName(engineOf(data))
@@ -446,7 +446,7 @@ export const trendVersionDataSchema: z.ZodType<TrendVersionData> = z
       .enum(CAST_SWAP_ENGINE_IDS_ACCEPTED)
       .transform((id): CastSwapEngine => castSwapEngineFrom(id)!)
       .optional(),
-    // The trend runs on its engine's Flash choice (Prism Flash, Pulse Flash); absent = the engine itself.
+    // The trend runs on its engine's Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash); absent = the engine itself.
     flash: z.literal(true).optional(),
     // Absent = "cut-end". Read only on a Kling 4 trend.
     klingLength: z.enum(CAST_SWAP_KLING_LENGTHS).optional(),

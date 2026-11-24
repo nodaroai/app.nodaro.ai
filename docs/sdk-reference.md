@@ -2410,7 +2410,7 @@ interface VideoRemakeParams {
 }
 
 type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse" // Nodaro Prism / Pulse: what the trend routes and estimate() answer
-type VideoRemakeFlashEngine = "nodaro-prism-flash" | "nodaro-pulse-flash" // Prism Flash / Pulse Flash, where offered (see Flash choices)
+type VideoRemakeFlashEngine = "nodaro-prism-flash" | "nodaro-pulse-flash" // Nodaro Prism Flash / Nodaro Pulse Flash, where offered (see Flash choices)
 type VideoRemakeEngineChoice = VideoRemakeEngine | VideoRemakeFlashEngine
 type VideoRemakeStyle = "precise" | "motion"            // how the run follows the clip (see below)
 type VideoRemakeEngineLegacyId = …     // @deprecated: the ids older clients sent; still accepted in a request, never returned
@@ -2506,15 +2506,15 @@ full Motion run of a clip over 27.9 s is refused as `400
 clip_too_long_for_style` ("Use a shorter clip or choose Precise").
 
 **Flash choices** (`VideoRemakeFlashEngine`). Where Nodaro offers it, each
-engine has a Flash choice beside it: `"nodaro-prism-flash"` (Prism Flash) and
-`"nodaro-pulse-flash"` (Pulse Flash). Each is its engine's run on the faster,
+engine has a Flash choice beside it: `"nodaro-prism-flash"` (Nodaro Prism Flash) and
+`"nodaro-pulse-flash"` (Nodaro Pulse Flash). Each is its engine's run on the faster,
 lower-cost model of the same family, at that model's own price: `estimate()`
 with the same body shows it. `styleChoice()` answers `flash` per engine (absent from an older
 server: `false`). Offer a Flash choice only where it is `true`; a `run()` or
 `estimate()` naming one anywhere else is refused `409 flash_not_offered`.
 Every other answer of `styleChoice()` is read for a Flash choice under its
-engine. Prism Flash renders 480p (the default, plain) or 720p and takes at most
-10 images per run. Pulse Flash renders 720p, at most 20 seconds of output and
+engine. Nodaro Prism Flash renders 480p (the default, plain) or 720p and takes at most
+10 images per run. Nodaro Pulse Flash renders 720p, at most 20 seconds of output and
 20 seconds of reference video in all. Neither has a draft or Full Quality.
 What a Flash choice cannot take is refused `400 flash_model_unsupported`, and
 nothing is held. A trend may be made on a Flash choice (its `engine` then names

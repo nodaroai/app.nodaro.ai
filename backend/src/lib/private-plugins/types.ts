@@ -4457,7 +4457,7 @@ export interface PluginSettingsToolkit {
    * ("off", or the Topaz target: 480p and 720p "720p" | "1080p" | "4k", 1080p
    * "1080p" | "4k"), a resolution never saved at its default (480p and 720p
    * "1080p", 1080p "4k"); every resolution "off" while this deployment does
-   * not run Topaz (its model withheld or switched off), and `flash`, Prism Flash's 480p and 720p rows (each "1080p"
+   * not run Topaz (its model withheld or switched off), and `flash`, Nodaro Prism Flash's 480p and 720p rows (each "1080p"
    * by default). Null only when this host's engine does not declare
    * `castSwap.preciseUpscale`. Returns a fresh object. REJECTS when the
    * settings could not be read. Advertised as
@@ -4626,7 +4626,7 @@ export type PluginNodaroMotionPreciseUpscale = {
   readonly "480p": "off" | "720p" | "1080p" | "4k"
   readonly "720p": "off" | "720p" | "1080p" | "4k"
   readonly "1080p": "off" | "1080p" | "4k"
-  /** Prism Flash's rows (decided 2026-11-22; no 1080p), each "1080p" by default: a Prism Flash Precise run takes these. */
+  /** Nodaro Prism Flash's rows (decided 2026-11-22; no 1080p), each "1080p" by default: a Nodaro Prism Flash Precise run takes these. */
   readonly flash: {
     readonly "480p": "off" | "720p" | "1080p" | "4k"
     readonly "720p": "off" | "720p" | "1080p" | "4k"

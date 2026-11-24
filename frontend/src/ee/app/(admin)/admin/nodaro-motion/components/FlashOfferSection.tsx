@@ -1,7 +1,7 @@
 // Admin → Video Remake, Offer Flash (the `nodaro_motion_flash_offer` setting):
 // a switch per engine, off by default. While an engine's is on, EVERY user
-// sees that engine's Flash choice beside it — Prism Flash beside Nodaro
-// Prism, Pulse Flash beside Nodaro Pulse — at its own (lower) price, and picks
+// sees that engine's Flash choice beside it — Nodaro Prism Flash beside Nodaro
+// Prism, Nodaro Pulse Flash beside Nodaro Pulse — at its own (lower) price, and picks
 // per run; a Flash choice is the engine's run on the faster, lower-cost model
 // of the same family, with that model's limits. While off, the two engines
 // only.
@@ -27,7 +27,7 @@ import type { NodaroMotionEngine, NodaroMotionFlashOffer, NodaroMotionFlashOffer
 export const FLASH_OFFER_HEADING = "Offer Flash"
 
 export const FLASH_OFFER_HINT =
-  "While an engine's switch is on, every user sees its Flash choice next to it (Prism Flash beside Nodaro Prism, Pulse Flash beside Nodaro Pulse) at its own lower price, and picks it per run. A Flash run is the engine's run on the faster, lower-cost model of the same family: no 1080p, no draft and no Full Quality; Prism Flash takes at most 10 images, Pulse Flash at most 20 seconds. Off, the two engines only. Saved with the page's Save, and part of the stored settings sets."
+  "While an engine's switch is on, every user sees its Flash choice next to it (Nodaro Prism Flash beside Nodaro Prism, Nodaro Pulse Flash beside Nodaro Pulse) at its own lower price, and picks it per run. A Flash run is the engine's run on the faster, lower-cost model of the same family: no 1080p, no draft and no Full Quality; Nodaro Prism Flash takes at most 10 images, Nodaro Pulse Flash at most 20 seconds. Off, the two engines only. Saved with the page's Save, and part of the stored settings sets."
 
 /** Said where this environment's engine does not run the Flash choices. */
 export const FLASH_OFFER_UNSUPPORTED = "This environment's engine does not run the Flash choices yet: nothing here is offered by it until it does."
@@ -48,7 +48,7 @@ export function flashOfferToSaved(setting: NodaroMotionFlashOffer | null | undef
   return out
 }
 
-/** A switch's label: "Offer Prism Flash (beside Nodaro Prism)". */
+/** A switch's label: "Offer Nodaro Prism Flash (beside Nodaro Prism)". */
 export const flashOfferSwitchLabel = (engine: { name: string; flashName: string }): string => `Offer ${engine.flashName} (beside ${engine.name})`
 
 interface Props {

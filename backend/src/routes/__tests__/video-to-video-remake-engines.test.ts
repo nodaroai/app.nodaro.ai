@@ -184,18 +184,18 @@ describe("POST /v1/video-to-video — Video Remake's engines are quoted, never r
     state.estimate = { status: 200, body: { ...PULSE_ESTIMATE, engine: "nodaro-pulse-flash", totalCredits: 150, expectedCredits: 150 } }
     const off = await run({ provider: "nodaro-pulse-flash" })
     expect(off.statusCode).toBe(409)
-    expect(off.json().error).toEqual({ code: "flash_not_offered", message: "Pulse Flash isn't available right now. Choose Nodaro Pulse." })
+    expect(off.json().error).toEqual({ code: "flash_not_offered", message: "Nodaro Pulse Flash isn't available right now. Choose Nodaro Pulse." })
     expect(state.estimates).toEqual([])
     state.flashOffered = { "nodaro-pulse-flash": true }
     const on = await run({ provider: "nodaro-pulse-flash" })
     expect(on.statusCode).toBe(200)
-    expect(on.json().videoRemake.quote).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Pulse Flash", totalCredits: 150 })
+    expect(on.json().videoRemake.quote).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Nodaro Pulse Flash", totalCredits: 150 })
     expect(on.json().videoRemake.run.body.engine).toBe("nodaro-pulse-flash")
     // The engine is asked with the Flash choice as it is.
     expect(state.estimates.at(-1)!.body.engine).toBe("nodaro-pulse-flash")
     expectNothingStarted()
     // A node can no more run a Flash choice than an engine.
-    expect(() => assertNoVideoRemakeEngineOnNode("nodaro-prism-flash", "Remake")).toThrow(/provider_not_supported: node "Remake" cannot run on nodaro-prism-flash\. Prism Flash is a Video Remake engine/)
+    expect(() => assertNoVideoRemakeEngineOnNode("nodaro-prism-flash", "Remake")).toThrow(/provider_not_supported: node "Remake" cannot run on nodaro-prism-flash\. Nodaro Prism Flash is a Video Remake engine/)
   })
 
   it("nodaro-pulse: its own quote, the engine named in the run", async () => {
