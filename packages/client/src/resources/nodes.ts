@@ -635,6 +635,17 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
  *   Metered: the run holds a ceiling read from its output size and is charged
  *   what the upscale actually costs, never more. `upscaleFactor` is the legacy
  *   lever, mapped over the source's short side when no `targetResolution` is set.
+ * - `topaz-rhea`: Topaz's Rhea model. Upscales any `videoUrl` by a factor (up
+ *   to 4×) chosen so its short side reaches `targetResolution` (720p / 1080p /
+ *   4k, default 1080p), at the clip's own frame rate and length, delivered as
+ *   H.264. The output's sides are the source's × the factor as the provider
+ *   rounds them, so close to, not exactly, the target's frame. Priced per
+ *   second of the clip by `targetResolution`, measured before anything is held
+ *   (the hold is the charge). Takes no `targetFps` or `upscaleFactor` (a 400).
+ *   Refused before anything is charged: `400 video_already_at_target` for a
+ *   clip whose short side is already at or above the target, `400
+ *   video_too_long` past the run's size limit, `400 video_unreadable`, and
+ *   `503 provider_unavailable` on an install with no fal key.
  * - `veo-1080p` / `veo-4k`: re-render a VEO generation by its `taskId`.
  * - `seedance-2-5-hd`: finalize a Seedance 2.5 DRAFT (a `draft: true` run) —
  *   the same take re-rendered at 1080p at the draft's own length. Name the
@@ -642,11 +653,20 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
  *   price comes from the draft (its length, and whether it used a reference
  *   video), never from this body. A foreign, unfinished or non-draft source is
  *   refused with a 4xx before anything is charged.
- * - `nodaro-video-upscale`: upscale any `videoUrl` of up to 60 s and 50 MB
- *   into a `targetResolution` frame (1080p / 2k / 4k, default 1080p), keeping
- *   its shape, frame rate, length and sound; a `targetResolution` it does not
- *   take (720p) runs at 1080p. Priced per second of the clip, measured before
- *   anything is held (the hold is the charge). Offered only where the server
+ * - `nodaro-video-upscale`: upscale any `videoUrl` of up to 60 s and 50 MB,
+ *   keeping its shape, frame rate, length and sound, in one of two `mode`s:
+ *   `"transparent"` (the DEFAULT when no mode is sent) keeps the clip's
+ *   original colours and look, the safer choice for people and faces — it is
+ *   enlarged (at most 4×) to fit inside the `targetResolution`'s frame
+ *   (1280×720, 1920×1080, 2560×1440 or 3840×2160, turned for a portrait clip;
+ *   default 1080p), priced per second of the clip at its exact length; `"sharp"` adds crisp detail, suiting objects, products, scenery and
+ *   text more than people — fitted into a 1080p / 2k / 4k frame, priced per
+ *   whole second (a 720p sent with sharp runs at 1080p). Measured before
+ *   anything is held (the hold is the charge). Transparent also refuses
+ *   `400 video_already_at_target` (the clip is already at or above the
+ *   target) and `400 video_too_small` (it would need more than 4×; the
+ *   message names the largest target it reaches), and answers
+ *   `503 provider_unavailable` where it cannot run. Offered only where the server
  *   lists it (`models.list`). Every refusal comes before anything is charged:
  *   `403 model_not_available` where it is not offered (a `ForbiddenError`, as
  *   for any model the deployment does not offer); `400` for the clip
@@ -662,11 +682,13 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
  * Any other route field passes through.
  */
 export interface VideoUpscaleParams extends GenerationSessionParams {
-  provider?: "topaz" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd" | "nodaro-video-upscale"
+  provider?: "topaz" | "topaz-rhea" | "veo-1080p" | "veo-4k" | "seedance-2-5-hd" | "nodaro-video-upscale"
   videoUrl?: string
-  /** topaz: the frame's short side (720p / 1080p / 4k; "2k" is a 400);
-   *  nodaro-video-upscale: the output frame (1080p / 2k / 4k). Default "1080p". */
+  /** topaz, topaz-rhea: the frame's short side (720p / 1080p / 4k; "2k" is a 400);
+   *  nodaro-video-upscale: transparent 720p / 1080p / 2k / 4k, sharp 1080p / 2k / 4k. Default "1080p". */
   targetResolution?: "720p" | "1080p" | "2k" | "4k"
+  /** nodaro-video-upscale only (a 400 with any other provider): "transparent" (default) or "sharp". */
+  mode?: "transparent" | "sharp"
   /** topaz: output frame rate, 15–60. Default: the source's own rate. */
   targetFps?: number
   /** @deprecated Legacy topaz lever — use `targetResolution`. */

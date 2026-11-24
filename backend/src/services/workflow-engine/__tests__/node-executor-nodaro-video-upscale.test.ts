@@ -181,7 +181,7 @@ describe("node-executor — the Nodaro Video Upscale stamp never leaves its plac
       jobName: "video-upscale",
       queueName: "video-generation",
       modelIdentifier: "nodaro-video-upscale:1080p:per-4s",
-      payload: { jobId: "test-job-id", provider: "nodaro-video-upscale", videoUrl: "https://cdn.example/clip.mp4", tier: "1080p", targetResolution: "1080p" },
+      payload: { jobId: "test-job-id", provider: "nodaro-video-upscale", mode: "sharp", videoUrl: "https://cdn.example/clip.mp4", tier: "1080p", targetResolution: "1080p" },
     }
   })
 

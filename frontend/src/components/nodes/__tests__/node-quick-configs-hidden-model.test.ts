@@ -106,12 +106,12 @@ describe("Video Upscale's strip and Nodaro Video Upscale (a house model, offered
 
   it("a node that already holds it keeps it, not moved to Topaz", () => {
     __resetSurfaceAvailabilityForTests({ nodes: [], models: ["nodaro-video-upscale"] })
-    const data = { provider: "nodaro-video-upscale" }
+    const data = { provider: "nodaro-video-upscale", mode: "sharp" }
     expect(quickConfigSnapPatch(control(), "nodaro-video-upscale", resolveQuickConfigOptions(control(), data), data)).toBeUndefined()
   })
 
   it("its resolution menu lists its own tiers, and snaps another provider's value to its default", () => {
-    const data = { provider: "nodaro-video-upscale" }
+    const data = { provider: "nodaro-video-upscale", mode: "sharp" }
     expect(resolveQuickConfigOptions(resolution(), data).map((o) => o.value)).toEqual(["1080p", "2k", "4k"])
     expect(quickConfigSnapPatch(resolution(), "720p", resolveQuickConfigOptions(resolution(), data), data)).toEqual({ targetResolution: "1080p" })
     expect(quickConfigSnapPatch(resolution(), "2K", resolveQuickConfigOptions(resolution(), data), data)).toEqual({ targetResolution: "2k" })

@@ -14,6 +14,8 @@ const probe = vi.hoisted(() => ({
   fail: undefined as Error | undefined,
   calls: [] as Array<{ src: string; signal?: AbortSignal }>,
 }))
+const falKey = vi.hoisted(() => ({ on: true }))
+vi.mock("../../providers/fal/enabled.js", () => ({ falEnabled: () => falKey.on }))
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   probeVideoSource: vi.fn(async (src: string, opts: { signal?: AbortSignal } = {}) => {
     probe.calls.push({ src, signal: opts.signal })
@@ -104,8 +106,9 @@ beforeEach(() => {
 describe("planNodaroVideoUpscale", () => {
   it("copies an outside clip, measures the LOCAL copy (its probe given the copy's signal), and plans on the stored clip", async () => {
     probe.source = { width: 1280, height: 720, durationSeconds: 10.31, videoDurationSeconds: 10.2 }
-    const plan = await planNodaroVideoUpscale(URL, "2k", USER)
+    const plan = await planNodaroVideoUpscale(URL, "2k", USER, "sharp")
     expect(plan).toEqual({
+      mode: "sharp",
       tier: "2k",
       creditId: "nodaro-video-upscale:2k:per-4s",
       videoUrl: STORED,
@@ -122,28 +125,28 @@ describe("planNodaroVideoUpscale", () => {
 
   it("a caller's signal reaches the copy and the stored clip's probe; once it fires, its stop is thrown as it is, never read as a refusal of the clip", async () => {
     const gone = new AbortController()
-    await planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", signal: gone.signal })
+    await planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", signal: gone.signal }, "sharp")
     expect(copy.calls[0]!.opts.signal).toBe(gone.signal)
-    await planNodaroVideoUpscale(OWN, "1080p", { userId: "user-a", signal: gone.signal })
+    await planNodaroVideoUpscale(OWN, "1080p", { userId: "user-a", signal: gone.signal }, "sharp")
     expect(probe.calls.at(-1)).toEqual({ src: OWN, signal: gone.signal })
 
     // The copy stopped by the caller (its reason thrown as is): not "unreadable", not "try again".
     gone.abort()
     const stop = new DOMException("This operation was aborted", "AbortError")
     copy.error = stop
-    await expect(planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", signal: gone.signal })).rejects.toBe(stop)
+    await expect(planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", signal: gone.signal }, "sharp")).rejects.toBe(stop)
     copy.error = undefined
     probe.fail = Object.assign(new Error("ffprobe failed: killed"), { killed: true })
-    await expect(planNodaroVideoUpscale(OWN, "1080p", { userId: "user-a", signal: gone.signal })).rejects.toBe(probe.fail)
+    await expect(planNodaroVideoUpscale(OWN, "1080p", { userId: "user-a", signal: gone.signal }, "sharp")).rejects.toBe(probe.fail)
   })
 
   it("copies into the job's scratch folder when it has a job", async () => {
-    await planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", jobId: "job-1" })
+    await planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", jobId: "job-1" }, "sharp")
     expect(copy.calls[0]!.opts.jobId).toBe("job-1")
   })
 
   it("a quote checks the same and stores nothing (the no-store twin)", async () => {
-    const plan = await planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", quote: true })
+    const plan = await planNodaroVideoUpscale(URL, "1080p", { userId: "user-a", quote: true }, "sharp")
     expect(copy.calls.map((c) => c.fn)).toEqual(["inspect"])
     expect(plan.videoUrl).toBe(URL)
     expect(plan.sourceSizeBytes).toBe(20_000_000)
@@ -151,7 +154,7 @@ describe("planNodaroVideoUpscale", () => {
 
   it("a stored clip is used as it is, sized from storage, measured where it is stored", async () => {
     copy.bytes = 12_345
-    const plan = await planNodaroVideoUpscale(OWN, "1080p", USER)
+    const plan = await planNodaroVideoUpscale(OWN, "1080p", USER, "sharp")
     expect(plan.videoUrl).toBe(OWN)
     expect(plan.sourceSizeBytes).toBe(12_345)
     expect(probe.calls.map((c) => c.src)).toEqual([OWN])
@@ -159,49 +162,49 @@ describe("planNodaroVideoUpscale", () => {
 
   it("bills the container's length when the picture reports none, less the 0.15 s a made clip's container can run past it, and a sliver one second", async () => {
     probe.source = { width: 1280, height: 720, durationSeconds: 7.5 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(8)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(8)
     // A 5 s clip's container measured 5.1 s: billed 5 s, as its quote (5 s plus a frame) names; past the allowance, 6.
     probe.source = { width: 1280, height: 720, durationSeconds: 5.1 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(5)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(5)
     probe.source = { width: 1280, height: 720, durationSeconds: 5.15 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(5)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(5)
     probe.source = { width: 1280, height: 720, durationSeconds: 5.16 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(6)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(6)
     // A WebM / MKV states its picture's length only in its DURATION tag: billed by it, as the stream's, no allowance.
     probe.source = { width: 1280, height: 720, durationSeconds: 5.4, videoTagDurationSeconds: 5.1, videoStreamIndex: 0 }
-    expect(await planNodaroVideoUpscale(URL, "1080p", USER)).toMatchObject({ sourceDurationSec: 5.1, billedSec: 6 })
+    expect(await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).toMatchObject({ sourceDurationSec: 5.1, billedSec: 6 })
     // The picture's length, when read, is billed as it is: no allowance (5.1 s is 6 s).
     probe.source = { width: 1280, height: 720, durationSeconds: 5.1, videoDurationSeconds: 5.1 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(6)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(6)
     probe.source = { width: 1280, height: 720, durationSeconds: 0.2, videoDurationSeconds: 0.2 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(1)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(1)
     probe.source = { width: 1280, height: 720, durationSeconds: 0.1 }
-    expect((await planNodaroVideoUpscale(URL, "1080p", USER)).billedSec).toBe(1)
+    expect((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp")).billedSec).toBe(1)
   })
 
   it("coerces the tier from the catalog: a spelling variant, another provider's value, and unset", async () => {
-    expect((await planNodaroVideoUpscale(URL, "2K", USER)).tier).toBe("2k")
-    expect((await planNodaroVideoUpscale(URL, "720p", USER)).tier).toBe("1080p")
-    expect((await planNodaroVideoUpscale(URL, undefined, USER)).tier).toBe("1080p")
-    expect((await planNodaroVideoUpscale(URL, "4k", USER)).creditId).toBe("nodaro-video-upscale:4k:per-4s")
+    expect((await planNodaroVideoUpscale(URL, "2K", USER, "sharp")).tier).toBe("2k")
+    expect((await planNodaroVideoUpscale(URL, "720p", USER, "sharp")).tier).toBe("1080p")
+    expect((await planNodaroVideoUpscale(URL, undefined, USER, "sharp")).tier).toBe("1080p")
+    expect((await planNodaroVideoUpscale(URL, "4k", USER, "sharp")).creditId).toBe("nodaro-video-upscale:4k:per-4s")
   })
 
   it("takes exactly 60 seconds and refuses a longer clip from the copy's check (nothing stored), judged on the longer of the container and the picture", async () => {
     probe.source = { width: 1920, height: 1080, durationSeconds: 60, videoDurationSeconds: 59.98 }
-    expect((await planNodaroVideoUpscale(URL, "4k", USER)).billedSec).toBe(60)
+    expect((await planNodaroVideoUpscale(URL, "4k", USER, "sharp")).billedSec).toBe(60)
     probe.source = { width: 1920, height: 1080, durationSeconds: 60.05, videoDurationSeconds: 59.98 }
-    const err = await planNodaroVideoUpscale(URL, "4k", USER).catch((e: unknown) => e)
+    const err = await planNodaroVideoUpscale(URL, "4k", USER, "sharp").catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NodaroVideoUpscaleTooLongError)
     expect((err as Error).message).toMatch(/^This clip is 60.05 seconds long\./)
     expect((err as Error).message).toMatch(/Topaz/)
     // A stored clip past the limit too.
-    const stored = await planNodaroVideoUpscale(OWN, "4k", USER).catch((e: unknown) => e)
+    const stored = await planNodaroVideoUpscale(OWN, "4k", USER, "sharp").catch((e: unknown) => e)
     expect(stored).toBeInstanceOf(NodaroVideoUpscaleTooLongError)
   })
 
   it("a clip over 50 MB (the copy's cap) is refused in this model's words", async () => {
     copy.error = new OutsideInputTooLargeError(50_000_000)
-    const err = await planNodaroVideoUpscale(URL, "1080p", USER).catch((e: unknown) => e)
+    const err = await planNodaroVideoUpscale(URL, "1080p", USER, "sharp").catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NodaroVideoUpscaleTooLargeError)
     expect((err as Error).message).toMatch(/larger than 50 MB/)
     expect((err as Error).message).toMatch(/Topaz/)
@@ -211,13 +214,13 @@ describe("planNodaroVideoUpscale", () => {
   it("an unreadable clip, one that is not a video, and one whose probe fails are refused as unreadable, pointing to Topaz", async () => {
     for (const error of [new OutsideInputUnreadableError(), new OutsideInputWrongKindError("video")]) {
       copy.error = error
-      const err = await planNodaroVideoUpscale(URL, "1080p", USER).catch((e: unknown) => e)
+      const err = await planNodaroVideoUpscale(URL, "1080p", USER, "sharp").catch((e: unknown) => e)
       expect(err).toBeInstanceOf(NodaroVideoUpscaleSourceUnreadableError)
       expect((err as Error).message).toMatch(/choose Topaz/)
     }
     copy.error = undefined
     probe.fail = new Error("ffprobe failed: Invalid data")
-    expect(await planNodaroVideoUpscale(URL, "1080p", USER).catch((e: unknown) => e)).toBeInstanceOf(NodaroVideoUpscaleSourceUnreadableError)
+    expect(await planNodaroVideoUpscale(URL, "1080p", USER, "sharp").catch((e: unknown) => e)).toBeInstanceOf(NodaroVideoUpscaleSourceUnreadableError)
   })
 
   it("busy, slow or failed on our side reads as try again in a moment (the copy's code kept), a killed probe too", async () => {
@@ -227,20 +230,20 @@ describe("planNodaroVideoUpscale", () => {
       [new OutsideInputFailedError(), "input_failed"],
     ] as const) {
       copy.error = error
-      const err = await planNodaroVideoUpscale(URL, "1080p", USER).catch((e: unknown) => e)
+      const err = await planNodaroVideoUpscale(URL, "1080p", USER, "sharp").catch((e: unknown) => e)
       expect(err).toBeInstanceOf(NodaroVideoUpscaleTryAgainError)
       expect((err as NodaroVideoUpscaleTryAgainError).code).toBe(code)
       expect((err as Error).message).toMatch(/Try again in a moment/)
     }
     copy.error = undefined
     probe.fail = Object.assign(new Error("ffprobe failed"), { killed: true })
-    expect(((await planNodaroVideoUpscale(URL, "1080p", USER).catch((e: unknown) => e)) as NodaroVideoUpscaleTryAgainError).code).toBe("input_failed")
+    expect(((await planNodaroVideoUpscale(URL, "1080p", USER, "sharp").catch((e: unknown) => e)) as NodaroVideoUpscaleTryAgainError).code).toBe("input_failed")
   })
 
   it("the link switch, the upload policy and a cancellation pass through as they are", async () => {
     for (const error of [new LinkImportsDisabledError(), new UploadBlockedError({ allow: false, reason: "No." }), new JobCancelledError("job-1")]) {
       copy.error = error
-      expect(await planNodaroVideoUpscale(URL, "1080p", USER).catch((e: unknown) => e)).toBe(error)
+      expect(await planNodaroVideoUpscale(URL, "1080p", USER, "sharp").catch((e: unknown) => e)).toBe(error)
     }
     expect(nodaroVideoUpscaleRefusalOf(new LinkImportsDisabledError())?.code).toBe("link_imports_disabled")
     expect(nodaroVideoUpscaleRefusalOf(new UploadBlockedError({ allow: false, reason: "No." }))).toEqual({ code: "upload_blocked", message: "No." })
@@ -260,8 +263,87 @@ describe("what a plan holds and is charged (base credits, before the markup)", (
   })
 })
 
+describe("planNodaroVideoUpscale in transparent mode (the default)", () => {
+  it("plans the run: the largest factor that fits the tier's box, its frame, the exact length on Transparent's own row", async () => {
+    probe.source = { width: 1280, height: 720, durationSeconds: 10.31, videoDurationSeconds: 10.04 }
+    const plan = await planNodaroVideoUpscale(URL, "2k", USER)
+    expect(plan).toEqual({
+      mode: "transparent",
+      tier: "2k",
+      creditId: "nodaro-video-upscale:transparent:2k:per-sec",
+      videoUrl: STORED,
+      sourceDurationSec: 10.04,
+      billedSec: 10.046875,
+      sourceSizeBytes: 20_000_000,
+      rhea: { upscaleRatio: 2, upscaleBilledSec: 10.046875, upscaleFrameWidth: 2560, upscaleFrameHeight: 1440, upscaleRateTier: "4k" },
+    })
+  })
+
+  it("takes 720p (sharp does not), priced on the 720p row", async () => {
+    probe.source = { width: 854, height: 480, durationSeconds: 4, videoDurationSeconds: 4 }
+    expect(await planNodaroVideoUpscale(URL, "720p", USER, "transparent")).toMatchObject({ tier: "720p", creditId: "nodaro-video-upscale:transparent:720p:per-sec", rhea: { upscaleRatio: 1.4989, upscaleFrameWidth: 1280, upscaleFrameHeight: 718 } })
+    expect(await planNodaroVideoUpscale(URL, "720p", USER, "sharp")).toMatchObject({ tier: "1080p", creditId: "nodaro-video-upscale:1080p:per-4s" })
+  })
+
+  it("reads the DISPLAYED frame: a clip stored 1920×1080 with a 90° rotation tag is portrait (fits the turned box)", async () => {
+    probe.source = { width: 1920, height: 1080, rotation: 90, durationSeconds: 4, videoDurationSeconds: 4 }
+    expect(await planNodaroVideoUpscale(URL, "4k", USER)).toMatchObject({ rhea: { upscaleRatio: 2, upscaleFrameWidth: 2160, upscaleFrameHeight: 3840 } })
+    await expect(planNodaroVideoUpscale(URL, "1080p", USER, "transparent")).rejects.toMatchObject({ code: "video_already_at_target", message: expect.stringContaining("1080×1920") })
+  })
+
+  it("applies the output bound: past 10 gigapixels it is refused before the hold, naming the longest this clip may be at that tier", async () => {
+    // 1280×720 → 4K is 3840×2160; at 30 fps 10 GP is 40 s.
+    probe.source = { width: 1280, height: 720, durationSeconds: 60, videoDurationSeconds: 60, fps: 30 }
+    await expect(planNodaroVideoUpscale(URL, "4k", USER, "transparent")).rejects.toMatchObject({
+      code: "video_too_long",
+      maxSec: 40,
+      message: "This clip is too long to upscale to 4K in Transparent mode — up to 40 seconds of it can be upscaled at that size. Trim the clip, or choose a lower resolution.",
+    })
+    // The same 60 s clip at 1080p is inside the bound; Sharp has no such bound.
+    await expect(planNodaroVideoUpscale(URL, "1080p", USER)).resolves.toMatchObject({ mode: "transparent", tier: "1080p" })
+    await expect(planNodaroVideoUpscale(URL, "4k", USER, "sharp")).resolves.toMatchObject({ mode: "sharp", tier: "4k" })
+  })
+
+  it("with NO mode sent, a clip Transparent cannot serve falls back to Sharp at Sharp's price (never refused); an explicit Transparent keeps its refusal", async () => {
+    // Already fills the 1080p frame.
+    probe.source = { width: 1920, height: 1080, durationSeconds: 4, videoDurationSeconds: 4 }
+    expect(await planNodaroVideoUpscale(URL, "1080p", USER)).toMatchObject({ mode: "sharp", tier: "1080p", creditId: "nodaro-video-upscale:1080p:per-4s", billedSec: 4 })
+    await expect(planNodaroVideoUpscale(URL, "1080p", USER, "transparent")).rejects.toMatchObject({ code: "video_already_at_target" })
+    // Needs more than 4×.
+    probe.source = { width: 160, height: 90, durationSeconds: 4, videoDurationSeconds: 4 }
+    expect(await planNodaroVideoUpscale(URL, "1080p", USER, "")).toMatchObject({ mode: "sharp", creditId: "nodaro-video-upscale:1080p:per-4s" })
+    // Past the output bound at 4K.
+    probe.source = { width: 1280, height: 720, durationSeconds: 60, videoDurationSeconds: 60, fps: 30 }
+    expect(await planNodaroVideoUpscale(URL, "4k", USER)).toMatchObject({ mode: "sharp", tier: "4k", creditId: "nodaro-video-upscale:4k:per-4s" })
+    // A Sharp fallback at a tier Sharp lacks (720p) runs at Sharp's rule for it: 1080p.
+    probe.source = { width: 1280, height: 720, durationSeconds: 4, videoDurationSeconds: 4 }
+    expect(await planNodaroVideoUpscale(URL, "720p", USER)).toMatchObject({ mode: "sharp", tier: "1080p" })
+  })
+
+  it("with NO mode sent on an install that cannot run Transparent, the run is Sharp (no 503); an explicit Transparent is not planned as Sharp", async () => {
+    falKey.on = false
+    try {
+      probe.source = { width: 1280, height: 720, durationSeconds: 4, videoDurationSeconds: 4 }
+      expect(await planNodaroVideoUpscale(URL, "2k", USER)).toMatchObject({ mode: "sharp", creditId: "nodaro-video-upscale:2k:per-4s" })
+      expect(await planNodaroVideoUpscale(URL, "2k", USER, "transparent")).toMatchObject({ mode: "transparent" })
+    } finally {
+      falKey.on = true
+    }
+  })
+
+  it("an explicit Transparent refuses a clip already at the tier, and one that would need more than 4× (naming the largest tier it reaches), before anything is held", async () => {
+    probe.source = { width: 1920, height: 1080, durationSeconds: 4, videoDurationSeconds: 4 }
+    await expect(planNodaroVideoUpscale(URL, "1080p", USER, "transparent")).rejects.toMatchObject({ code: "video_already_at_target" })
+    probe.source = { width: 640, height: 360, durationSeconds: 4, videoDurationSeconds: 4 }
+    await expect(planNodaroVideoUpscale(URL, "4k", USER, "transparent")).rejects.toMatchObject({
+      code: "video_too_small",
+      message: "This clip (640×360) is too small to upscale to 4K in Transparent mode — it can be enlarged up to 4×. Choose 2K or lower.",
+    })
+  })
+})
+
 describe("stampNodaroVideoUpscale (the workflow run's twin of the route)", () => {
-  const payload = (extra: Record<string, unknown> = {}) => ({ provider: "nodaro-video-upscale", videoUrl: URL, tier: "2k", ...extra })
+  const payload = (extra: Record<string, unknown> = {}) => ({ provider: "nodaro-video-upscale", mode: "sharp", videoUrl: URL, tier: "2k", ...extra })
   const ctx = { userId: "user-a", jobId: "job-1" }
 
   it("leaves every other job alone", async () => {
@@ -274,7 +356,7 @@ describe("stampNodaroVideoUpscale (the workflow run's twin of the route)", () =>
     const stamp = await stampNodaroVideoUpscale("video-upscale", payload(), ctx)
     expect(stamp).toEqual({
       ok: true,
-      patch: { targetResolution: "2k", videoUrl: STORED, tier: "2k", sourceDurationSec: 10, billedSec: 10, sourceSizeBytes: 20_000_000 },
+      patch: { targetResolution: "2k", videoUrl: STORED, mode: "sharp", tier: "2k", sourceDurationSec: 10, billedSec: 10, sourceSizeBytes: 20_000_000 },
     })
     expect(copy.calls[0]).toMatchObject({ fn: "copy", url: URL, opts: { userId: "user-a", jobId: "job-1" } })
   })

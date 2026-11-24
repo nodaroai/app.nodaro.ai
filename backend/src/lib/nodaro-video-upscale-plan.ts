@@ -16,27 +16,48 @@
  * anything is stored. That copy is what is measured, billed and sent. A quote
  * runs the same checks and stores nothing.
  *
- * Pricing (`@nodaro/render-rules` nodaro-video-upscale-pricing.ts): the tier's
- * four-second row × billed seconds ÷ 4, rounded up once. A flat per-second
- * price, so the hold IS the charge.
+ * Two modes (decided 2026-11-24), read through `nodaroVideoUpscaleModeOf`
+ * (unset: transparent). SHARP is the engine behind the house-model seam, as it
+ * always was: the tier's four-second row × whole billed seconds ÷ 4, rounded
+ * up once. TRANSPARENT runs on the Rhea lane (providers/fal/topaz-rhea.ts):
+ * the clip enlarged by the largest factor that fits it inside the tier's box
+ * (Sharp's box, and 1280×720 for 720p; turned for a portrait clip), at most
+ * 4× (a clip that already fills the box, or one that would need more, is
+ * refused), priced on Transparent's own one-second rows by tier × the exact
+ * length (1/64 s steps), rounded up once. Either way a flat price, so the hold IS
+ * the charge.
  *
- * Limits: a clip longer than 60 s or larger than 50 MB is refused, and so is
- * one that cannot be read — before any credits are held.
+ * Limits, both modes: a clip longer than 60 s or larger than 50 MB is
+ * refused, and so is one that cannot be read — before any credits are held.
+ * The 50 MB cap bounds the copy into our storage, which both modes go
+ * through, so it is kept for transparent too.
  */
 import {
   NODARO_VIDEO_UPSCALE_MAX_BYTES,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   NODARO_VIDEO_UPSCALE_MAX_SEC,
-  isNodaroVideoUpscaleTier,
-  type NodaroVideoUpscaleTier,
+  isNodaroVideoUpscaleMode,
+  nodaroVideoUpscaleEffectiveMode,
+  nodaroVideoUpscaleModeOf,
+  nodaroVideoUpscaleModeTakes,
+  type NodaroVideoUpscaleMode,
+  type NodaroVideoUpscaleModeTier,
 } from "@nodaro/shared/models"
 import {
-  nodaroVideoUpscaleBilledSec,
-  nodaroVideoUpscaleCreditId,
-  nodaroVideoUpscaleTierOf,
-  nodaroVideoUpscaleUnits,
+  nodaroVideoUpscaleModeBilledSec,
+  nodaroVideoUpscaleModeCreditId,
+  nodaroVideoUpscaleModeTierOf,
+  nodaroVideoUpscaleModeUnits,
+  nodaroVideoUpscaleTransparentPlan,
+  nodaroVideoUpscaleTransparentRateTarget,
+  nodaroVideoUpscaleTransparentServes,
+  TOPAZ_RHEA_FALLBACK_FPS,
+  TOPAZ_RHEA_MAX_OUTPUT_GIGAPIXELS,
 } from "@nodaro/render-rules"
+import { rheaRunFields, type RheaRunFields } from "./topaz-rhea-plan.js"
+import { nodaroTransparentAvailable } from "./nodaro-transparent-available.js"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { displayedFrame } from "./displayed-frame.js"
 import { PRE_CHARGE_PROBE_TIMEOUT_MS } from "./pre-charge-probe-bounds.js"
 import { guardedPacketScan, videoTrackHeaderOf, videoTrackLengthFrom, type VideoTrackLength } from "./video-track-length.js"
 import { unitRateBaseCredits } from "./credit-base-cost.js"
@@ -55,8 +76,11 @@ import { LinkImportsDisabledError } from "./link-imports.js"
 import { UploadBlockedError } from "./upload-policy.js"
 
 export interface NodaroVideoUpscalePlan {
-  readonly tier: NodaroVideoUpscaleTier
-  /** The tier's rate row (the price of four seconds) the run is charged a multiple of. */
+  /** The mode it runs in (`nodaroVideoUpscaleModeOf`). */
+  readonly mode: NodaroVideoUpscaleMode
+  /** The tier, one its mode takes (sharp never 720p). */
+  readonly tier: NodaroVideoUpscaleModeTier
+  /** The row the run is charged a multiple of (`nodaroVideoUpscaleModeCreditId`). */
   readonly creditId: string
   /**
    * The clip the run sends: a file of our own storage (an outside clip's copy,
@@ -66,10 +90,12 @@ export interface NodaroVideoUpscalePlan {
   readonly videoUrl: string
   /** The clip's length in seconds, unrounded: its picture stream's, else the container's. */
   readonly sourceDurationSec: number
-  /** The whole seconds the run is billed (`nodaroVideoUpscaleBilledSec`). */
+  /** The seconds the run is billed (`nodaroVideoUpscaleModeBilledSec`: whole seconds in sharp, 1/64 s steps in transparent). */
   readonly billedSec: number
   /** Its exact size: the bytes copied, or storage's record of a stored clip. */
   readonly sourceSizeBytes: number
+  /** Transparent only: the Rhea run (factor, billed seconds, delivered frame, rate target). */
+  readonly rhea?: RheaRunFields
 }
 
 /** A source that cannot be read (or is not a video): refused before anything is reserved. */
@@ -124,7 +150,55 @@ export class NodaroVideoUpscaleTryAgainError extends Error {
   }
 }
 
+/** Transparent: a clip that already fills the tier's box. */
+export class NodaroVideoUpscaleAlreadyAtTierError extends Error {
+  readonly code = "video_already_at_target"
+  constructor(tier: NodaroVideoUpscaleModeTier, width: number, height: number) {
+    super(
+      `This clip (${width}×${height}) already fills the ${tierLabel(tier)} frame — there is nothing to upscale. ` +
+      "Choose a larger resolution.",
+    )
+    this.name = "NodaroVideoUpscaleAlreadyAtTierError"
+  }
+}
+
+/** Transparent: a clip that would need more than 4× to reach the tier (it never delivers a smaller frame than the tier promises). */
+export class NodaroVideoUpscaleTooSmallError extends Error {
+  readonly code = "video_too_small"
+  constructor(tier: NodaroVideoUpscaleModeTier, width: number, height: number, largest: NodaroVideoUpscaleModeTier | undefined) {
+    super(
+      `This clip (${width}×${height}) is too small to upscale to ${tierLabel(tier)} in Transparent mode — it can be enlarged up to 4×. ` +
+      (largest ? `Choose ${tierLabel(largest)} or lower.` : "Use a larger clip."),
+    )
+    this.name = "NodaroVideoUpscaleTooSmallError"
+  }
+}
+
+/**
+ * Transparent: a clip whose output (frame × frames) is past the run's bound
+ * (`TOPAZ_RHEA_MAX_OUTPUT_GIGAPIXELS`, 10 gigapixels), naming the longest this
+ * clip may be at this tier. Under the 60 s limit it binds only at 4K (about
+ * 50 s at 24 fps, 40 s at 30, 20 s at 60) and at 2K at 60 fps (about 45 s).
+ */
+export class NodaroVideoUpscaleTransparentTooLongError extends Error {
+  readonly code = "video_too_long"
+  constructor(tier: NodaroVideoUpscaleModeTier, readonly maxSec: number) {
+    super(
+      `This clip is too long to upscale to ${tierLabel(tier)} in Transparent mode — up to ${maxSec} seconds of it can be upscaled at that size. ` +
+      "Trim the clip, or choose a lower resolution.",
+    )
+    this.name = "NodaroVideoUpscaleTransparentTooLongError"
+  }
+}
+
+function tierLabel(tier: NodaroVideoUpscaleModeTier): string {
+  return tier === "2k" ? "2K" : tier === "4k" ? "4K" : tier
+}
+
 export type NodaroVideoUpscaleRefusalError =
+  | NodaroVideoUpscaleTransparentTooLongError
+  | NodaroVideoUpscaleAlreadyAtTierError
+  | NodaroVideoUpscaleTooSmallError
   | NodaroVideoUpscaleSourceUnreadableError
   | NodaroVideoUpscaleTooLongError
   | NodaroVideoUpscaleTooLargeError
@@ -132,6 +206,9 @@ export type NodaroVideoUpscaleRefusalError =
 
 export function isNodaroVideoUpscaleRefusal(err: unknown): err is NodaroVideoUpscaleRefusalError {
   return err instanceof NodaroVideoUpscaleSourceUnreadableError
+    || err instanceof NodaroVideoUpscaleAlreadyAtTierError
+    || err instanceof NodaroVideoUpscaleTooSmallError
+    || err instanceof NodaroVideoUpscaleTransparentTooLongError
     || err instanceof NodaroVideoUpscaleTooLongError
     || err instanceof NodaroVideoUpscaleTooLargeError
     || err instanceof NodaroVideoUpscaleTryAgainError
@@ -205,6 +282,8 @@ export async function planNodaroVideoUpscale(
   videoUrl: string,
   targetResolution: unknown,
   ctx: NodaroVideoUpscalePlanContext,
+  /** The mode as asked: "sharp" / "transparent" sent explicitly, else none (Transparent, falling back to Sharp: `nodaroVideoUpscaleEffectiveMode`). */
+  modeAsked?: unknown,
 ): Promise<NodaroVideoUpscalePlan> {
   // An outside clip is measured from its local copy, the probe killed when the copy's time is up.
   const inspect = async (localPath: string, signal: AbortSignal): Promise<Source> =>
@@ -236,34 +315,74 @@ export async function planNodaroVideoUpscale(
     }
     withinLength(source)
   }
-  const tier = nodaroVideoUpscaleTierOf(targetResolution)
+  // Transparent: the largest factor that fits the tier's box, or the clip's refusal (before anything is held).
+  let rhea: RheaRunFields | undefined
   // The picture's length: the stream's, its DURATION tag (a WebM / MKV), its packets; only when all three fail, the
   // container's — billed less its allowance.
   const track = source.track ?? { sec: source.durationSeconds, reading: "container" as const }
   const sourceDurationSec = track.sec
+  // The mode, decided ONCE from what was asked and the measured clip
+  // (`nodaroVideoUpscaleEffectiveMode`): no mode runs Transparent unless it
+  // cannot serve this clip at this tier, or this install cannot run it — then
+  // Sharp at Sharp's price. An explicit mode is kept (Transparent's refusals below).
+  const transparentServes = isNodaroVideoUpscaleMode(modeAsked)
+    ? undefined
+    : !nodaroTransparentAvailable()
+      ? false
+      : nodaroVideoUpscaleTransparentServes(
+          { ...displayedFrame(source), ...(source.fps !== undefined ? { fps: source.fps } : {}), sec: sourceDurationSec },
+          nodaroVideoUpscaleModeTierOf("transparent", targetResolution),
+        )
+  const mode = nodaroVideoUpscaleEffectiveMode(modeAsked, transparentServes)
+  const tier = nodaroVideoUpscaleModeTierOf(mode, targetResolution)
+  const billedSec = nodaroVideoUpscaleModeBilledSec(mode, sourceDurationSec, track.reading)
+  if (mode === "transparent") {
+    // The DISPLAYED frame: a phone clip stored 1920×1080 with a 90° rotation tag is portrait.
+    const shown = displayedFrame(source)
+    const planned = nodaroVideoUpscaleTransparentPlan(shown, tier)
+    if (!planned.ok) {
+      throw planned.reason === "already_at_tier"
+        ? new NodaroVideoUpscaleAlreadyAtTierError(tier, shown.width, shown.height)
+        : new NodaroVideoUpscaleTooSmallError(tier, shown.width, shown.height, planned.largestTier)
+    }
+    // The same output bound as the bare provider: a run past it would outlast the worker's wait.
+    const fps = source.fps !== undefined && Number.isFinite(source.fps) && source.fps > 0 ? source.fps : TOPAZ_RHEA_FALLBACK_FPS
+    const framePixels = planned.frame.width * planned.frame.height
+    if ((framePixels * Math.ceil(sourceDurationSec * fps)) / 1e9 > TOPAZ_RHEA_MAX_OUTPUT_GIGAPIXELS) {
+      throw new NodaroVideoUpscaleTransparentTooLongError(tier, Math.floor((TOPAZ_RHEA_MAX_OUTPUT_GIGAPIXELS * 1e9) / (framePixels * fps)))
+    }
+    rhea = rheaRunFields(
+      { upscaleFactor: planned.factor, billedSec, outputWidth: planned.frame.width, outputHeight: planned.frame.height },
+      nodaroVideoUpscaleTransparentRateTarget(tier),
+    )
+  }
   return {
+    mode,
     tier,
-    creditId: nodaroVideoUpscaleCreditId(tier),
+    creditId: nodaroVideoUpscaleModeCreditId(mode, tier),
     videoUrl: stored.url,
     sourceDurationSec,
-    billedSec: nodaroVideoUpscaleBilledSec(sourceDurationSec, track.reading),
+    billedSec,
     sourceSizeBytes: stored.bytes,
+    ...(rhea ? { rhea } : {}),
   }
 }
 
-/** The BASE (pre-markup) credits a plan holds and is charged: its tier's row × billed seconds ÷ 4, rounded up once. 0 when credits are off. */
-export async function nodaroVideoUpscaleBaseCredits(plan: Pick<NodaroVideoUpscalePlan, "creditId" | "billedSec">): Promise<number> {
-  return unitRateBaseCredits(plan.creditId, nodaroVideoUpscaleUnits(plan.billedSec))
+/** The BASE (pre-markup) credits a plan holds and is charged: its mode's row × its units (sharp: billed seconds ÷ 4; transparent: billed seconds), rounded up once. 0 when credits are off. */
+export async function nodaroVideoUpscaleBaseCredits(plan: Pick<NodaroVideoUpscalePlan, "creditId" | "billedSec"> & { readonly mode?: NodaroVideoUpscaleMode }): Promise<number> {
+  return unitRateBaseCredits(plan.creditId, nodaroVideoUpscaleModeUnits(plan.mode ?? "sharp", plan.billedSec))
 }
 
 /** The job payload fields a plan stamps (what the worker runs): the stored clip's URL replaces the caller's. */
 export function nodaroVideoUpscalePlanFields(plan: NodaroVideoUpscalePlan): Record<string, unknown> {
   return {
     videoUrl: plan.videoUrl,
+    mode: plan.mode,
     tier: plan.tier,
     sourceDurationSec: plan.sourceDurationSec,
     billedSec: plan.billedSec,
     sourceSizeBytes: plan.sourceSizeBytes,
+    ...(plan.rhea ?? {}),
   }
 }
 
@@ -333,11 +452,15 @@ export async function stampNodaroVideoUpscale(
   if (!houseModelServed(NODARO_VIDEO_UPSCALE_PROVIDER)) {
     return { ok: false, refusal: { code: NODARO_VIDEO_UPSCALE_NOT_SERVED_CODE, message: NODARO_VIDEO_UPSCALE_NOT_SERVED_MESSAGE } }
   }
+  // Transparent mode runs on fal: an install with no fal key is refused before the clip is fetched.
+  if (payload.mode === "transparent" && !nodaroTransparentAvailable()) {
+    return { ok: false, refusal: { code: "provider_unavailable", message: "Nodaro Video Upscale's Transparent mode is not available on this deployment. You were not charged." } }
+  }
   const videoUrl = typeof payload.videoUrl === "string" ? payload.videoUrl : undefined
   if (!videoUrl) return { ok: false, refusal: { code: "video_unreadable", message: new NodaroVideoUpscaleSourceUnreadableError().message } }
   let plan: NodaroVideoUpscalePlan
   try {
-    plan = await planNodaroVideoUpscale(videoUrl, payload.tier, { userId: ctx.userId, jobId: ctx.jobId, ...(ctx.signal ? { signal: ctx.signal } : {}) })
+    plan = await planNodaroVideoUpscale(videoUrl, payload.tier, { userId: ctx.userId, jobId: ctx.jobId, ...(ctx.signal ? { signal: ctx.signal } : {}) }, payload.mode)
   } catch (err) {
     // Stopped (the run cancelled, the worker draining): the stop as it is, never a refusal.
     if (ctx.signal?.aborted) throw err
@@ -355,13 +478,17 @@ export async function nodaroVideoUpscaleStampedBaseCredits(
 ): Promise<number | undefined> {
   if (!isNodaroVideoUpscaleJob(jobName, payload)) return undefined
   const billedSec = payload.billedSec
-  if (!isNodaroVideoUpscaleTier(payload.tier)) return undefined
-  if (typeof billedSec !== "number" || !Number.isInteger(billedSec) || billedSec <= 0) return undefined
-  return nodaroVideoUpscaleBaseCredits({ creditId: nodaroVideoUpscaleCreditId(payload.tier), billedSec })
+  const mode = nodaroVideoUpscaleModeOf(payload.mode)
+  if (!nodaroVideoUpscaleModeTakes(mode, payload.tier)) return undefined
+  if (typeof billedSec !== "number" || !Number.isFinite(billedSec) || billedSec <= 0) return undefined
+  if (mode === "sharp" && !Number.isInteger(billedSec)) return undefined
+  return nodaroVideoUpscaleBaseCredits({ mode, creditId: nodaroVideoUpscaleModeCreditId(mode, payload.tier), billedSec })
 }
 
 /** The row a stamped Nodaro Video Upscale payload reserves under (its tier's), or undefined for every other job. */
 export function nodaroVideoUpscaleReserveId(jobName: string, payload: Record<string, unknown>): string | undefined {
-  if (!isNodaroVideoUpscaleJob(jobName, payload) || !isNodaroVideoUpscaleTier(payload.tier)) return undefined
-  return nodaroVideoUpscaleCreditId(payload.tier)
+  if (!isNodaroVideoUpscaleJob(jobName, payload)) return undefined
+  const mode = nodaroVideoUpscaleModeOf(payload.mode)
+  if (!nodaroVideoUpscaleModeTakes(mode, payload.tier)) return undefined
+  return nodaroVideoUpscaleModeCreditId(mode, payload.tier)
 }

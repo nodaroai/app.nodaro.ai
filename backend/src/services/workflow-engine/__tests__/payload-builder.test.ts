@@ -1305,7 +1305,7 @@ describe("buildPayload", () => {
       // The deployment's plugin serves it (lib/house-models.ts); without one, a house model is not served.
       serveEveryHouseModel()
       try {
-        const n = node("n1", "video-upscale", { provider: "nodaro-video-upscale", targetResolution: "720p", targetFps: 60, upscaleFactor: "2" })
+        const n = node("n1", "video-upscale", { provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "720p", targetFps: 60, upscaleFactor: "2" })
         const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
         expect(result.jobName).toBe("video-upscale")
         expect(result.modelIdentifier).toBe("nodaro-video-upscale:1080p:per-4s")
@@ -1315,6 +1315,18 @@ describe("buildPayload", () => {
       } finally {
         serveNoHouseModel()
       }
+    })
+
+    it("video-upscale on Topaz Rhea (a route/API provider): refused at build with a coded refusal, never run on Topaz's row", () => {
+      const n = node("n1", "video-upscale", { provider: "topaz-rhea", targetResolution: "1080p", label: "Upscale take" })
+      let err: (Error & { code?: string }) | undefined
+      try {
+        buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+      } catch (e) {
+        err = e as Error & { code?: string }
+      }
+      expect(err?.code).toBe("provider_not_supported")
+      expect(err?.message).toContain('node "Upscale take" is set to Topaz Rhea')
     })
 
     it("video-upscale on Nodaro Video Upscale (not served): refused at build, before anything is held", () => {

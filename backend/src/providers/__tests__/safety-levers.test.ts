@@ -5,7 +5,7 @@
  *
  * `// @test-watches`: the source reads below.
  */
-// @test-watches backend/src/*.ts backend/src/providers/kie/video.ts backend/src/providers/kie/models.ts backend/src/providers/kie/seedance-draft.ts backend/src/providers/replicate/image.ts backend/src/providers/replicate/video.ts backend/src/providers/fal/lip-sync.ts backend/src/providers/nodaro/video.ts backend/src/workers/video-worker.ts
+// @test-watches backend/src/*.ts backend/src/providers/kie/video.ts backend/src/providers/kie/models.ts backend/src/providers/kie/seedance-draft.ts backend/src/providers/replicate/image.ts backend/src/providers/replicate/video.ts backend/src/providers/fal/lip-sync.ts backend/src/providers/fal/topaz-rhea.ts backend/src/providers/nodaro/video.ts backend/src/workers/video-worker.ts
 import { describe, expect, it, vi } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { resolve, dirname, join, relative } from "node:path"
@@ -34,6 +34,7 @@ const FILES_NAMING_A_SAFETY_PARAM: ReadonlySet<string> = new Set([
   "kie/grok-video-15.ts", // Grok Imagine Video 1.5's allow-listed body sends today's `nsfw_checker: false` (declared on its config)
   "replicate/image.ts", // Flux's pinned tolerance and its levers
   "fal/lip-sync.ts", // the lever
+  "fal/topaz-rhea.ts", // the lever
 ])
 
 function sourceFiles(dir: string): string[] {

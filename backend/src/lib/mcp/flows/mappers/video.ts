@@ -1,4 +1,4 @@
-import { canonicalVideoProvider, isCatalogExtendProvider, isGrokExtendProvider, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
+import { canonicalVideoProvider, isCatalogExtendProvider, isNodaroVideoUpscaleMode, isGrokExtendProvider, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_REFERENCE_TASK_TYPES, type DeclaredSeedanceTaskType } from "@nodaro/shared/models"
 import { bool, defined, inputsOf, num, str, urls, type Body, type FlowNodeSpec, type RouteMapper, type RouteMappers } from "./kit.js"
 
 /** `loopTrim`: the route takes a Loop trim (the text-to-video route drops one, so its node must not keep it). */
@@ -139,7 +139,7 @@ const extendVideo: RouteMapper = {
  */
 const videoUpscale: RouteMapper = {
   tools: ["video_upscale"],
-  fields: new Set(["provider", "upscaleFactor", "targetResolution", "targetFps", "videoUrl", "taskId"]),
+  fields: new Set(["provider", "upscaleFactor", "targetResolution", "targetFps", "mode", "videoUrl", "taskId"]),
   map(body) {
     const provider = str(body.provider) ?? "topaz"
     const videoUrl = str(body.videoUrl)
@@ -153,6 +153,9 @@ const videoUpscale: RouteMapper = {
       targetResolution,
       targetFps: typeof body.targetFps === "number" ? body.targetFps : undefined,
       upscaleFactor: targetResolution ? undefined : str(body.upscaleFactor),
+      // Nodaro Video Upscale's mode only as the call sent it: an explicit one is
+      // kept on the node, an absent one stays absent (the server then decides).
+      mode: isNodaroVideoUpscaleMode(body.mode) ? body.mode : undefined,
       kieTaskId: taskId,
     }
     if (videoUrl) return videoNode("video-upscale", "video", videoUrl, data)

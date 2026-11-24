@@ -78,7 +78,9 @@ const nodaroInfo: ProviderInfo = {
     // refuses it (`draft_not_finalizable`), so the connection must not claim it.
     // Minus the house models (the catalog's `ownLabel`): they run only where
     // the deployment serves them, never through this connection.
-    "video-upscale": VIDEO_UPSCALE_PROVIDERS.filter((p) => p !== SEEDANCE_DRAFT_FINALIZE_PROVIDER && MODEL_CATALOG[p]?.ownLabel !== true),
+    // Minus Topaz Rhea: it runs on this install's own fal key (the worker's
+    // fal branch), never through this connection.
+    "video-upscale": VIDEO_UPSCALE_PROVIDERS.filter((p) => p !== SEEDANCE_DRAFT_FINALIZE_PROVIDER && p !== "topaz-rhea" && MODEL_CATALOG[p]?.ownLabel !== true),
     "lip-sync": [...LIP_SYNC_PROVIDERS],
     // Single-model node (Wan S2V) — the cloud's /v1/speech-to-video route
     // takes no provider field, so the routing id is the node's own name.

@@ -38,6 +38,11 @@ export const FAL_PRICING: Record<string, FalPrice> = {
   "sam-3-video": { unit: "per_16_frames", rate: 0.005 },
   // `sam-3.1-video` → fal endpoint `fal-ai/sam-3-1/video-rle`.
   "sam-3.1-video": { unit: "per_16_frames", rate: 0.01 },
+  // `topaz-rhea:<target>` → fal endpoint `topaz/upscale/video/precision`
+  // (model Rhea), per second of OUTPUT by the target's size, as fal lists it.
+  "topaz-rhea:720p": { unit: "per_second", rate: 0.01 },
+  "topaz-rhea:1080p": { unit: "per_second", rate: 0.02 },
+  "topaz-rhea:4k": { unit: "per_second", rate: 0.06 },
 }
 
 /**

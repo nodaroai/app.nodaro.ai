@@ -2,7 +2,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleModeOf } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
@@ -57,7 +57,7 @@ import { referenceSheetCreditId } from "@nodaro/shared/entities"
 import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared/edl"
 import { isRenderNodeType, transcribeNodeReturnsWords, withWiredSettings } from "@nodaro/shared/nodes"
 import { videoAuditAnalysisWired, videoToVideoClipRowOf } from "@/components/editor/workflow-editor/types"
-import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
+import { aiAvatarQuoteCreditId, switchXQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, LIP_SYNC_DEFAULT_PROVIDER, isSeedanceExtendPricedBySecondsSent, isUseCaseNodeType, nodaroImageUpscaleCreditId, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, renderEstimateCreditId, seedanceExtendRateCreditId, TOPAZ_VIDEO_UNIT_CREDIT_ID, usecaseFeeCreditId } from "@nodaro/render-rules"
 import { sendsPricedReferenceVideo } from "@/lib/seedance-ref-quote"
 import { seedanceTaskTypeRunDuration } from "@/lib/seedance-task-type"
 import { bypassTeleports, drawnSourceId, REPLACE_AUDIO_NODE_TYPE, replaceAudioNodeCreditId } from "@nodaro/render-rules"
@@ -67,7 +67,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, nodaroVideoUpscaleEstimateMode, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -867,7 +867,10 @@ export function getModelIdentifier(
   // estimate multiplies it by the clip's billed seconds ÷ 4
   // (PRICING_UNIT_ESTIMATORS → videoUpscalePricingUnits), as the server does.
   if (nodeType === "video-upscale" && data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
-    return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(data.targetResolution))
+    // Its mode's row, the mode decided as the server decides it from the wired
+    // clip (`nodaroVideoUpscaleEstimateMode`); with no graph, read from the node.
+    const mode = nodes && edges ? nodaroVideoUpscaleEstimateMode(storedNode, nodes, edges, reruns) : nodaroVideoUpscaleModeOf(data.mode)
+    return nodaroVideoUpscaleModeCreditId(mode, nodaroVideoUpscaleModeTierOf(mode, data.targetResolution))
   }
 
   // Motion Transfer (decided 2026-11-18): the row of its driving video's length

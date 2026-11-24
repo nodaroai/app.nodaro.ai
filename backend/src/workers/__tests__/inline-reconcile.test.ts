@@ -131,10 +131,25 @@ describe("tryInlineReconcile", () => {
     expect(mocks.reconcileFalJob).toHaveBeenCalledTimes(1)
     expect(mocks.reconcileFalJob).toHaveBeenCalledWith(
       expect.objectContaining({ provider_kind: "fal-request" }),
-      { claimant: "worker" },
+      { claimant: "worker", pollToEnd: true },
     )
     expect(mocks.reconcileKieJob).not.toHaveBeenCalled()
     expect(mocks.reconcileReplicateJob).not.toHaveBeenCalled()
+  })
+
+  it("dispatches a Rhea request (fal-rhea) to reconcileFalJob with pollToEnd: a re-pick waits a running request out instead of parking it for the cron", async () => {
+    await tryInlineReconcile({
+      id: "j-rhea",
+      provider_kind: "fal-rhea",
+      provider_task_id: "req-rhea",
+      reconcile_attempts: 0,
+      job_type: "video-upscale",
+      input_data: { provider: "topaz-rhea" },
+    })
+    expect(mocks.reconcileFalJob).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_kind: "fal-rhea", input_data: { provider: "topaz-rhea" } }),
+      { claimant: "worker", pollToEnd: true },
+    )
   })
 
   it("dispatches nodaro-cloud to reconcileNodaroCloudJob as claimant 'worker' — a stall re-pick re-takes its own finalize claim", async () => {

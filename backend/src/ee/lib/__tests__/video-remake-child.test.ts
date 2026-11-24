@@ -154,6 +154,8 @@ const PREVIEW = { provider: "seedance-2-5", prompt: "p", draft: true, referenceV
 const PULSE = { provider: "kling-4", prompt: "p", duration: 8, resolution: "1080p", referenceVideoUrls: ["https://cdn.example.com/clip.mp4"] }
 const FINALIZE = { provider: "seedance-2-5-hd", sourceJobId: "22222222-2222-4222-8222-222222222222" }
 const TOPAZ = { provider: "topaz", videoUrl: "https://cdn.example.com/take.mp4", targetResolution: "1080p", targetFps: 24, forcePrivate: true }
+// The step's model since 2026-11-24: Topaz Rhea.
+const RHEA = { provider: "topaz-rhea", videoUrl: "https://cdn.example.com/take.mp4", targetResolution: "1080p", forcePrivate: true }
 
 const internal = (userId = USER) => ({ "x-internal-orchestrator-secret": SECRET, "x-internal-user-id": userId })
 
@@ -302,16 +304,19 @@ describe("the watermark of a Video Remake run's own jobs", () => {
     it.each([
       ["a run's Precise upscale", "cast-swap"],
       ["a Full Quality's Precise upscale", "cast-swap-full-quality"],
-    ])("stores %s (Topaz on the take, already the marked result) unmarked", async (_name, type) => {
+    ])("stores %s (Topaz or Topaz Rhea on the take, already the marked result) unmarked", async (_name, type) => {
       parent(remakeRun({ job_type: type }))
       expect(markOf(await child(UPSCALE, TOPAZ))).toBe(false)
+      expect(markOf(await child(UPSCALE, RHEA))).toBe(false)
     })
 
-    it("judges a Topaz upscale asked directly, or under a parent that is no Video Remake run, as before", async () => {
+    it("judges a Topaz or Topaz Rhea upscale asked directly, or under a parent that is no Video Remake run, as before", async () => {
       parent(remakeRun())
       refusedAsFreeVideo(await direct(UPSCALE, TOPAZ))
+      refusedAsFreeVideo(await direct(UPSCALE, RHEA))
       parent(remakeRun({ job_type: "generate-video", input_data: { type: "generate-video" } }))
       refusedAsFreeVideo(await child(UPSCALE, TOPAZ))
+      refusedAsFreeVideo(await child(UPSCALE, RHEA))
     })
 
     it("still marks a result route reached with a query string", async () => {

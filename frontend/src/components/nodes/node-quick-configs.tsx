@@ -79,9 +79,11 @@ import {
   TOPAZ_VIDEO_RESOLUTIONS,
   lipSyncModelSwitchPatch,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  NODARO_VIDEO_UPSCALE_DEFAULT_MODE,
+  nodaroVideoUpscaleModeOf,
   RETIRED_LIP_SYNC_PROVIDERS,
 } from "@nodaro/shared/models"
-import { nodaroVideoUpscaleTierOf } from "@nodaro/render-rules"
+import { nodaroVideoUpscaleModeTierOf } from "@nodaro/render-rules"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { isTopazVideoUpscaleProvider } from "@/lib/video-utility-estimate"
 import { upscaleFactorSnapPatch } from "@/lib/upscale-factor-snap"
@@ -689,11 +691,26 @@ const videoUpscaleResolutionControl = (): QuickConfigControl => ({
     isTopazVideoUpscaleProvider(data.provider)
       ? TOPAZ_VIDEO_RESOLUTIONS.map((r) => ({ value: r, label: TOPAZ_VIDEO_RESOLUTION_LABELS[r] }))
       : data.provider === NODARO_VIDEO_UPSCALE_PROVIDER
-        ? videoUpscaleResolutionsFor(NODARO_VIDEO_UPSCALE_PROVIDER)
+        // The tiers its mode takes (transparent adds 720p).
+        ? videoUpscaleResolutionsFor(NODARO_VIDEO_UPSCALE_PROVIDER, data.mode)
           .map((r) => ({ value: r, label: (VIDEO_UPSCALE_RESOLUTION_LABELS as Readonly<Record<string, string>>)[r] ?? r }))
         : [],
-  // A value that is no option falls back to the first option (Topaz's rule).
-  snap: (value, data) => (data.provider === NODARO_VIDEO_UPSCALE_PROVIDER ? nodaroVideoUpscaleTierOf(value) : ""),
+  // A value that is no option falls back to the first option (Topaz's rule);
+  // Nodaro Video Upscale's to its mode's tier for it (sharp's 720p → 1080p).
+  snap: (value, data) => (data.provider === NODARO_VIDEO_UPSCALE_PROVIDER ? nodaroVideoUpscaleModeTierOf(nodaroVideoUpscaleModeOf(data.mode), value) : ""),
+})
+/** Nodaro Video Upscale's mode: transparent (the default) or sharp. Hidden, and
+ *  cleared, on every other provider, which has no such lever. */
+const videoUpscaleModeControl = (): QuickConfigControl => ({
+  field: "mode", ariaLabel: tx("vidcfg.nodaroUpscaleMode"), icon: Sparkles,
+  defaultValue: NODARO_VIDEO_UPSCALE_DEFAULT_MODE,
+  options: (data) =>
+    data.provider === NODARO_VIDEO_UPSCALE_PROVIDER
+      ? [
+          { value: "transparent", label: tx("vidcfg.nodaroModeTransparent") },
+          { value: "sharp", label: tx("vidcfg.nodaroModeSharp") },
+        ]
+      : [],
 })
 /** Video Depth levers. The valid set per provider comes from the shared
  *  contract (`videoDepthLevers` / `videoDepthColormaps`) — the same functions
@@ -1401,7 +1418,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "voice-design": [voiceDesignModelControl()],
   // voice-remix has no strip control: its endpoint takes no model, so the
   // model dropdown it used to show wrote a field the run never read.
-  "video-upscale": [videoUpscaleProviderControl(), videoUpscaleResolutionControl()],
+  "video-upscale": [videoUpscaleProviderControl(), videoUpscaleModeControl(), videoUpscaleResolutionControl()],
   "video-depth": [providerControl(VIDEO_DEPTH_MODELS), videoDepthSizeControl(), videoDepthColormapControl(), videoDepthResolutionControl(), videoDepthSideBySideControl()],
   // ── Language / resolution (other dropdown configs) ──
   "dubbing": [targetLanguageControl()],
