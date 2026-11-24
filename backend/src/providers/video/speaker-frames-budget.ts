@@ -127,9 +127,9 @@ import {
   faceDetectTimeoutMs,
 } from "../../services/face-detect/face-detect-budget.js"
 import {
+  DEFAULT_DOWNLOAD_MAX_MS,
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
-  DOWNLOAD_TIMEOUT_MS,
   FFMPEG_KILL_GRACE_MS,
   FFMPEG_SLOT_BACKSTOP_MS,
   FFPROBE_TIMEOUT_MS,
@@ -215,10 +215,15 @@ export const SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS = 120_000
  * (its fixed steps, then each window as a span at its own ceilings), its
  * download into the work dir, and one slot-gated capture per burst at the
  * plugin's limit plus its overrun.
+ *
+ * The download is charged `downloadFile`'s default ceiling (30 min), which is
+ * how the plugin runs it today (`tk.ffmpeg.downloadFile(url, dest)`, no
+ * bounds). When the plugin passes a `timeoutMs` (`tk.capabilities.downloadFileBounds`),
+ * charge that instead.
  */
 export function speakerFramesBurstBudgetMs(bursts: number): number {
   if (!(bursts > 0)) return 0
-  return SPEAKER_FRAMES_PROXY_FIXED_MS + DOWNLOAD_TIMEOUT_MS
+  return SPEAKER_FRAMES_PROXY_FIXED_MS + DEFAULT_DOWNLOAD_MAX_MS
     + bursts * (speakerFramesProxySpanBudgetMs(SPEAKER_FRAMES_BURST_MS)
       + SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS + SPEAKER_FRAMES_HOLD_OVERRUN_MS)
 }

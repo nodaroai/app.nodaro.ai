@@ -64,7 +64,7 @@ import { safeMediaExt, mediaProcessRoutes } from "../media-process.js"
 import { supabase } from "../../lib/supabase.js"
 import { uploadBufferToR2, deleteFromR2 } from "../../lib/storage.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
-import { createWorkDir, runFfmpeg } from "../../providers/video/ffmpeg-utils.js"
+import { createWorkDir, downloadFile, runFfmpeg } from "../../providers/video/ffmpeg-utils.js"
 import { withLinkImportsOff } from "@/test/link-imports-off.js"
 
 // ---------------------------------------------------------------------------
@@ -208,6 +208,18 @@ function post(body: Record<string, unknown>) {
     },
   })
 }
+
+describe("POST /v1/media/process — the source download", () => {
+  it("is a hard 120 s total and stops when the client goes away", async () => {
+    queueSupabaseResults({ data: { id: "new-output-asset" }, error: null })
+
+    const res = await post({ sourceUrl: OUR_SOURCE_URL })
+    expect(res.statusCode).toBe(200)
+    const opts = vi.mocked(downloadFile).mock.calls[0]![2] as { timeoutMs?: number; signal?: AbortSignal }
+    expect(opts.timeoutMs).toBe(120_000)
+    expect(opts.signal).toBeInstanceOf(AbortSignal)
+  })
+})
 
 describe("POST /v1/media/process — deleteSource", () => {
   it("flag omitted → processes fine and deletes nothing", async () => {

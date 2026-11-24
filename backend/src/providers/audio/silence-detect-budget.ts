@@ -18,8 +18,9 @@ import {
 } from "../video/ffmpeg-timeouts.js"
 
 /** Its audio proxy on a cache miss (fetch the original under the big-media
- *  ceiling, check it has an audio track, encode), fetch the proxy (flat 120 s —
- *  a 16 kHz mono proxy is small), one `silencedetect` pass (the default ffmpeg
+ *  ceiling, check it has an audio track, encode), fetch the proxy (counted at
+ *  120 s — a 16 kHz mono proxy is small, read from our storage; `downloadFile`'s
+ *  default limits would let a slow one run longer), one `silencedetect` pass (the default ffmpeg
  *  ceiling), one duration probe. */
 export const SILENCE_DETECT_BUDGET_MS =
   DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS + MEDIA_PROXY_FFMPEG_TIMEOUT_MS

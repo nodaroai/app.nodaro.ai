@@ -37,6 +37,7 @@ import {
   downloadFile,
   probeMediaDuration,
 } from "../video/ffmpeg-utils.js"
+import { DOWNLOAD_TIMEOUT_MS } from "../video/ffmpeg-timeouts.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { ensureMediaProxy, MediaHasNoAudioError } from "../../services/media-proxy.js"
 import { PCM_SAMPLE_RATE, streamPcm } from "./pcm-stream.js"
@@ -310,7 +311,9 @@ export async function audioSync(
         continue
       }
       const path = join(workDir, `src-${i}.m4a`)
-      await downloadFile(proxy.url, path)
+      // A hard total at the number its liveness budget charges for this fetch
+      // (the proxy is small 16 kHz mono audio, read from our storage in seconds).
+      await downloadFile(proxy.url, path, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
       files.push({ id: s.id, path })
     }
     const measured: AudioSyncResult = files.length >= AUDIO_SYNC_MIN_SOURCES

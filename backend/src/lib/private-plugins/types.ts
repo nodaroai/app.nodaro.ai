@@ -580,6 +580,14 @@ export interface PluginProvidersToolkit {
 // tk.ffmpeg — backend/src/providers/video/ffmpeg-utils.ts
 // ============================================================================
 
+/** `tk.ffmpeg.downloadFile`'s optional bounds (`PluginCapabilities.downloadFileBounds`). */
+export interface PluginDownloadFileOptions {
+  /** A hard total over the response and the body, in ms (capped at 120 s). */
+  readonly timeoutMs?: number
+  /** Stops the download when it aborts. */
+  readonly signal?: AbortSignal
+}
+
 export interface PluginFfmpegToolkit {
   runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string>
   runFfmpegCapture(
@@ -588,7 +596,15 @@ export interface PluginFfmpegToolkit {
   ): Promise<{ stdout: string; stderr: string }>
   createWorkDir(prefix: string): Promise<string>
   cleanupWorkDir(workDir: string): Promise<void>
-  downloadFile(url: string, dest: string): Promise<void>
+  /**
+   * Fetch `url` to `dest` (a file of this install's own storage is read from
+   * storage). Without `opts`, the host's default limits: the response within
+   * 120 s, then a minimum rate and a size-scaled deadline, at most 30 minutes.
+   * `opts` (additive-optional — `PluginCapabilities.downloadFileBounds`; an
+   * older host ignores it) bounds it: `timeoutMs` is a hard total (never above
+   * 120 s), `signal` stops it.
+   */
+  downloadFile(url: string, dest: string, opts?: PluginDownloadFileOptions): Promise<void>
   /**
    * Mirrors `combineVideos` (`providers/video/combine-videos.ts:183`),
    * adapted to always resolve an R2 URL — the toolkit implementation uploads
@@ -4168,6 +4184,12 @@ export interface PluginCapabilities {
    * which sends the prompt alone.
    */
   readonly llmStructuredImages?: boolean
+  /**
+   * `tk.ffmpeg.downloadFile` takes `opts` (`PluginDownloadFileOptions`): a
+   * `timeoutMs` hard total and an abort `signal`. False (or absent): an older
+   * host, which ignores them and runs the download under its defaults.
+   */
+  readonly downloadFileBounds?: boolean
 }
 
 /**

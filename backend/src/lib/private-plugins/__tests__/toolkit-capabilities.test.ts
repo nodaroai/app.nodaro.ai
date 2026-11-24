@@ -105,6 +105,11 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.videoRemake).toBe(true)
   })
 
+  it("advertises tk.ffmpeg.downloadFile's optional bounds ({ timeoutMs, signal })", () => {
+    // toolkit-download-file.test.ts proves the bounds reach the download.
+    expect(buildToolkit().capabilities?.downloadFileBounds).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

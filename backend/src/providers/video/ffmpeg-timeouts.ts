@@ -16,7 +16,9 @@ export const DEFAULT_FFMPEG_TIMEOUT_MS = 10 * 60 * 1000
 
 /** How long `downloadFile` waits for a response (status + headers), and the
  *  least time it ever gives a body. A body is then bounded by
- *  `downloadBodyDeadlineMs` and the per-window minimum rate, never by this. The
+ *  `downloadBodyDeadlineMs` and the per-window minimum rate (the big-media
+ *  limits, or the default path's looser `DEFAULT_DOWNLOAD_*` ones below), never
+ *  by this. A caller's own `timeoutMs` is a hard total, never above this. The
  *  R2-origin 404 fallback goes through the storage client, which has the same
  *  numbers of its own (`lib/storage-timeouts.ts`, Track 0.12). */
 export const DOWNLOAD_TIMEOUT_MS = 120_000
@@ -43,6 +45,36 @@ export const DOWNLOAD_FLOOR_BYTES_PER_SEC = 2 * 1024 * 1024
  *  camera file is ~15 GB). THE per-download ceiling a declared liveness budget
  *  counts (`applyEdlRenderBudgetMs`, `audioSyncRenderBudgetMs`). */
 export const DOWNLOAD_MAX_MS = 60 * 60_000
+
+/*
+ * The DEFAULT download path's body rule (every `downloadFile` caller that
+ * passes neither big-media `limits` nor a `timeoutMs` budget). Its one flat
+ * 120 s used to reach the response only — the body was never bounded, and a
+ * file trickling at a few kB/s held a worker for as long as it took. The body
+ * is now bounded, but more loosely than big media, because these callers fetch
+ * provider results that can be large on slow hosts and used to succeed:
+ *
+ *  - nothing is judged within `DOWNLOAD_TIMEOUT_MS` of the start, so a download
+ *    that finished within the old nominal 120 s still finishes;
+ *  - after that, every window must deliver a small minimum (a stall, or a
+ *    drip-feed that never quite goes silent, is ended);
+ *  - a body that announces its size gets that size at a conservative rate
+ *    (at least the 120 s), and nothing runs past the ceiling.
+ */
+
+/** The default path checks the body once per window of this length ... */
+export const DEFAULT_DOWNLOAD_RATE_WINDOW_MS = 60_000
+
+/** ... and ends it when a window (after the first 120 s) delivers under this:
+ *  1 MB a minute, about 17 kB/s. Far below any working host. */
+export const DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW = 1024 * 1024
+
+/** The slowest a default-path body of known size is assumed to arrive:
+ *  512 kB/s (4 Mbit/s) — a quarter of the big-media floor. */
+export const DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC = 512 * 1024
+
+/** The most one default-path download may take, whatever its size. */
+export const DEFAULT_DOWNLOAD_MAX_MS = 30 * 60_000
 
 /** The time a body of `contentLength` bytes is given: its size at the floor
  *  rate, at least `DOWNLOAD_TIMEOUT_MS`, at most `DOWNLOAD_MAX_MS`. Unknown size

@@ -255,7 +255,7 @@ describe("REMOTION_INPUT_VIDEO_ARGS", () => {
 // ===========================================================================
 
 describe("downloadFile", () => {
-  it("by default uses safeFetch (SSRF-protected) with one flat 120 s timeout — unchanged for the ~60 ordinary callers", async () => {
+  it("by default uses safeFetch (SSRF-protected) with its own abort signal, safeFetch's timer only a backstop past the default ceiling", async () => {
     mocks.safeFetch.mockResolvedValueOnce({
       ok: true,
       body: {} as never,
@@ -264,8 +264,30 @@ describe("downloadFile", () => {
     await downloadFile("https://example.com/video.mp4", "/tmp/out.mp4")
 
     expect(mocks.safeFetch).toHaveBeenCalledWith("https://example.com/video.mp4", {
-      timeoutMs: 120_000,
+      timeoutMs: 30 * 60_000 + 5_000,
+      signal: expect.any(AbortSignal),
     })
+  })
+
+  it("hands the SAME signal to the body pipeline, so a limit stops the body and not only the fetch", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: true, body: {} as never })
+
+    await downloadFile("https://example.com/video.mp4", "/tmp/out.mp4")
+
+    const fetchSignal = (mocks.safeFetch.mock.calls[0]![1] as { signal: AbortSignal }).signal
+    const last = mocks.pipeline.mock.calls[0]!.at(-1) as { signal?: AbortSignal }
+    expect(last.signal).toBe(fetchSignal)
+  })
+
+  it("a caller's budget is a hard total: safeFetch's backstop sits past it, and the pipeline gets the signal too", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: true, body: {} as never })
+
+    await downloadFile("https://example.com/video.mp4", "/tmp/out.mp4", { timeoutMs: 40_000 })
+
+    const init = mocks.safeFetch.mock.calls[0]![1] as { timeoutMs: number; signal: AbortSignal }
+    expect(init.timeoutMs).toBeGreaterThan(44_000)
+    expect(init.timeoutMs).toBeLessThanOrEqual(45_000)
+    expect((mocks.pipeline.mock.calls[0]!.at(-1) as { signal?: AbortSignal }).signal).toBe(init.signal)
   })
 
   it("with big-media limits, carries its own abort signal, sets safeFetch's timer past the overall ceiling (a backstop only) and asks for an uncompressed body", async () => {
@@ -307,8 +329,21 @@ describe("downloadFile", () => {
 
     await downloadFile("https://r2.example.com/videos/job-1.mp4", "/tmp/o.mp4")
 
-    expect(storageMocks.downloadR2ObjectToFile).toHaveBeenCalledWith("videos/job-1.mp4", "/tmp/o.mp4")
+    // Bounded by what is left of the call's deadline (the default 30 min ceiling).
+    expect(storageMocks.downloadR2ObjectToFile).toHaveBeenCalledWith("videos/job-1.mp4", "/tmp/o.mp4", { timeoutMs: expect.any(Number) })
+    const { timeoutMs } = storageMocks.downloadR2ObjectToFile.mock.calls[0]![2] as { timeoutMs: number }
+    expect(timeoutMs).toBeGreaterThan(30 * 60_000 - 1_000)
+    expect(timeoutMs).toBeLessThanOrEqual(30 * 60_000)
     expect(mocks.pipeline).not.toHaveBeenCalled()
+  })
+
+  it("404 on OUR link to a kept file (evidence bytes) does NOT read it from storage — the host's refusal stands", async () => {
+    for (const url of ["https://r2.example.com/evidence/r-1/videos/job-1.mp4", "https://r2.example.com/evidence%2Fr-1%2Fvideos/job-1.mp4"]) {
+      mocks.safeFetch.mockResolvedValueOnce({ ok: false, status: 404, body: null })
+      await expect(downloadFile(url, "/tmp/o.mp4")).rejects.toThrow(/Failed to download.*404/)
+    }
+
+    expect(storageMocks.downloadR2ObjectToFile).not.toHaveBeenCalled()
   })
 
   it("a caller on a budget hands it to the 404 fallback: what is left of its time, its signal, its cap", async () => {

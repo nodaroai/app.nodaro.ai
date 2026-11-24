@@ -52,7 +52,9 @@ import { dropClientMeasureFields, requestMeasure, setRequestMeasure } from "./re
  *   reservation;
  * - the WORKFLOW stamp and a pipeline step (no client waiting) read each
  *   clip's header within {@link PRE_CHARGE_PROBE_TIMEOUT_MS} and scan its packets
- *   within the render's own download bound (`DOWNLOAD_TIMEOUT_MS`).
+ *   within `DOWNLOAD_TIMEOUT_MS` (120 s, a hard total — the render's own
+ *   download of the clip runs under `downloadFile`'s default limits instead,
+ *   which give a large or slow file longer).
  * A read that runs out of time is a retryable refusal (`probe_timeout`), never
  * an unreadable clip. A scan has no size limit but its time.
  */
@@ -66,7 +68,7 @@ export { PRE_CHARGE_PROBE_TIMEOUT_MS, ROUTE_MEASURE_DEADLINE_MS }
  * The bound a measure runs under. A route passes `deadlineAt` (now +
  * {@link ROUTE_MEASURE_DEADLINE_MS}) and the `signal` of its client's
  * connection; with neither (the workflow stamp, a pipeline step) a packet scan
- * gets the render's own download bound, `DOWNLOAD_TIMEOUT_MS`.
+ * gets `DOWNLOAD_TIMEOUT_MS` (120 s) as a hard total.
  */
 export interface MeasureBounds {
   readonly deadlineAt?: number
@@ -309,8 +311,8 @@ async function clipReadingOf(
   if (refusal === "host") return "nohost"
   if (refusal !== "address") return "unreadable"
   if (!isOwnStoredFileUrl(url)) return "private"
-  // Within what is left of a route's deadline (none left: out of time, never a negative bound); the render's
-  // own download bound otherwise. The storage fallback of a 404 runs under the same bound and cap.
+  // Within what is left of a route's deadline (none left: out of time, never a negative bound); 120 s
+  // (`DOWNLOAD_TIMEOUT_MS`, a hard total) otherwise. A storage read of the file runs under the same bound and cap.
   const downloadMs = leftMs(bounds, DOWNLOAD_TIMEOUT_MS)
   if (downloadMs <= 0) return "timeout"
   try {
