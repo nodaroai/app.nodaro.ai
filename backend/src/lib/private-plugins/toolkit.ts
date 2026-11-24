@@ -1808,6 +1808,9 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // POST /v1/mask-composite takes `faceGrowPct` from a child (the face mask widened onto the face's own skin before
   // the render) and answers `output_data.faceGrow` (routes/mask-composite.ts, providers/video/mask-face-grow.ts).
   maskCompositeFaceGrow: true,
+  // POST /v1/mask-composite and POST /v1/video-face-mesh take `workingCopy: true` from a child: the output video
+  // encoded near-lossless for the next step (lib/working-copy-request.ts, providers/video/working-copy-encode.ts).
+  workingCopyEncode: true,
   // POST /v1/video-mask takes `tracks` (one track per subject, in its output) and POST /v1/mask-erase takes
   // `eraseTracks` (whole subjects dropped by a point on one frame): providers/video/video-mask-tracks.ts.
   videoMaskTracks: true,

@@ -440,6 +440,27 @@ describe("buildFaceMeshEncodeArgs", () => {
   })
 })
 
+describe("the working copy (workingCopy)", () => {
+  it("keeps the drawn-on clip's 4:4:4 and its frames, closer to it than the delivery encode; 4:2:0 stays 4:2:0", async () => {
+    const src = join(dir, "wc-444.mp4")
+    ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=24", "-frames:v", "24", "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv444p", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", src)
+    const delivery = join(dir, "wc-444-delivery.mp4"), working = join(dir, "wc-444-working.mp4")
+    await drawFaceMeshVideo({ videoPath: src, drawOnPath: src, filters: OFF, outputPath: delivery })
+    await drawFaceMeshVideo({ videoPath: src, drawOnPath: src, filters: OFF, outputPath: working, workingCopy: true })
+    expect(probe(delivery, "stream=pix_fmt")).toBe("yuv420p")
+    expect(probe(working, "stream=pix_fmt")).toBe("yuv444p")
+    expect(frames(working)).toBe(24)
+    expect(probe(working, "stream=color_space,color_primaries,color_transfer,color_range")).toBe(probe(delivery, "stream=color_space,color_primaries,color_transfer,color_range"))
+    const psnr = (file: string) => Number(/average:([0-9.]+)/.exec(execFileSync("sh", ["-c", `ffmpeg -v info -i "${src}" -i "${file}" -lavfi "[0:v]format=yuv444p[a];[1:v]format=yuv444p[b];[a][b]psnr" -f null - 2>&1`]).toString())![1])
+    expect(psnr(working)).toBeGreaterThan(psnr(delivery))
+    const src420 = join(dir, "wc-420.mp4"), out420 = join(dir, "wc-420-working.mp4")
+    ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=24", "-frames:v", "12", "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p", src420)
+    await drawFaceMeshVideo({ videoPath: src420, drawOnPath: src420, filters: OFF, outputPath: out420, workingCopy: true })
+    expect(probe(out420, "stream=pix_fmt")).toBe("yuv420p")
+    expect(frames(out420)).toBe(12)
+  }, 60_000)
+})
+
 describe("the colour round trip", () => {
   it("a BT.709 clip comes back tagged BT.709 (no face: nothing drawn)", async () => {
     const src = join(dir, "bt709.mp4")

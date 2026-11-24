@@ -187,6 +187,17 @@ describe("handleVideoFaceMesh", () => {
     expect(mocks.cleanupWorkDir).toHaveBeenCalledTimes(2)
   })
 
+  it("workingCopy: true reaches the drawer (the same output fields); absent or anything else, the drawer is called without it", async () => {
+    await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", workingCopy: true }), ctx)
+    expect(mocks.drawFaceMeshVideo).toHaveBeenLastCalledWith(expect.objectContaining({ workingCopy: true }))
+    const answered = mocks.markJobCompleted.mock.lastCall
+    for (const workingCopy of [undefined, false, "true"]) {
+      await handleVideoFaceMesh(job({ videoUrl: "https://x/clip.mp4", ...(workingCopy === undefined ? {} : { workingCopy }) }), ctx)
+      expect((mocks.drawFaceMeshVideo.mock.lastCall as unknown[])[0], String(workingCopy)).not.toHaveProperty("workingCopy")
+      expect(mocks.markJobCompleted.mock.lastCall).toEqual(answered)
+    }
+  })
+
   it("a job with no clip fails deterministically", async () => {
     await expect(handleVideoFaceMesh(job({}), ctx)).rejects.toBeInstanceOf(DeterministicJobError)
   })
