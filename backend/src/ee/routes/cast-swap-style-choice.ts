@@ -14,7 +14,8 @@
  *                                      previz: boolean,
  *                                      roleFace: boolean,
  *                                      flash: { "nodaro-prism": boolean, "nodaro-pulse": boolean },
- *                                      upscaleChoice: boolean }
+ *                                      upscaleChoice: boolean,
+ *                                      upscaleTo: { [engine]?: { [size]?: nextSize } } }
  *
  * TRANSITION SHIM (the 2026-11-17 engine ids): each map also answers every
  * engine under its previous id (`"motion-prism"`, `"motion-pulse"`), the same
@@ -138,6 +139,20 @@
  * `upscaleOffered` (never on a draft or a trend run, and not at a size the
  * admin turned off; a 1080p run is delivered at 4K). A client reading a server from before it finds none
  * and treats it as false.
+ *
+ * `upscaleTo` says, per engine (and Flash choice) and engine size, the size
+ * "next" delivers here, so a page can show its Upscale control before a clip
+ * is added: e.g. `{ "nodaro-prism": { "480p": "720p", "720p": "1080p",
+ * "1080p": "4k" }, "nodaro-pulse": { "720p": "1080p", "1080p": "4k" } }`.
+ * It is the engine's declared map (`castSwap.upscaleNext`) less every size the
+ * admin switched off (`nodaro_motion_precise_upscale`, read as the engine reads
+ * it: lib/video-remake-upscale-choice.ts `upscaleToOffered`); an engine with
+ * no size left is left out, and the map is `{}` when `upscaleChoice` is false
+ * or the engine declares none. A failed settings read answers no Prism or Prism
+ * Flash size (Pulse's map still: it reads no row). Keyed by its own ids only,
+ * never the previous ones (a new field: no client reads those). What a given
+ * run is offered stays the estimate's `upscaleOffered`. A client reading a
+ * server from before it finds none and treats it as `{}`.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"
 import { NODARO_MOTION_ENGINES, NODARO_MOTION_LEGACY_ENGINE_OF, type NodaroMotionEngine } from "@nodaro/shared/models"
@@ -155,7 +170,13 @@ import { getPluginSupports } from "../../lib/private-plugins/supports-registry.j
 import { engineTakesRoleFace } from "../../lib/cast-swap-role-face.js"
 import { flashOfferedEngines } from "../../lib/video-remake-flash.js"
 import { engineTakesFlashChoices } from "../../lib/nodaro-motion-flash-offer.js"
-import { engineTakesUpscaleChoice } from "../../lib/video-remake-upscale-choice.js"
+import {
+  engineTakesUpscaleChoice,
+  enginePreciseUpscale,
+  upscaleToOffered,
+  upscaleToReadsSettings,
+  type VideoRemakeUpscaleTo,
+} from "../../lib/video-remake-upscale-choice.js"
 
 /** How long a client (or a CDN) may keep the answer: about the settings cache's own life. */
 export const STYLE_CHOICE_MAX_AGE_SECONDS = 60
@@ -202,6 +223,8 @@ function answer(
   flash: Record<NodaroMotionEngine, boolean>,
   /** The engine takes the upscale choice (`castSwap.upscaleChoice`); the engine alone, never the settings. */
   upscaleChoice: boolean,
+  /** Per engine and size, what "next" delivers here (`upscaleToOffered`); keyed by its own ids, never the previous ones. */
+  upscaleTo: VideoRemakeUpscaleTo,
 ) {
   return {
     engines: withPreviousEngineIds(engines),
@@ -215,6 +238,7 @@ function answer(
     roleFace,
     flash: withPreviousEngineIds(flash),
     upscaleChoice,
+    upscaleTo,
   }
 }
 
@@ -235,11 +259,13 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
   const takesPreviz = engineTakesPreviz(castSwap)
   const roleFace = engineTakesRoleFace(castSwap)
   const upscaleChoice = engineTakesUpscaleChoice(castSwap)
+  const takesUpscaleTo = upscaleToReadsSettings(castSwap)
   // What the answer says without the settings: people choose the style, no custom style, no roles planned from the prompt, no 3D previz clip.
   const withoutSettings = () =>
-    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), upscaleChoice)
-  // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles, takes no 3D previz clip and no Flash choice.
-  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz && !engineTakesFlashChoices(castSwap)) {
+    answer(styleChoices(null), { styleOnly, preciseArtStyle, preciseArtStyleAlone, customStyle: customStyleEngines(false) }, false, false, roleFace, false, flashOfferedEngines(null, castSwap), upscaleChoice, upscaleToOffered(castSwap, null))
+  // Nothing of the answer reads the settings for this engine: it enforces no Style choice, takes no custom style, plans no roles, takes no 3D previz clip,
+  // no Flash choice, and offers no upscale choice on a Prism-family engine (Pulse's needs no row).
+  if (!takesStyleChoice && !takesCustomStyle && !takesPlanRoles && !takesPreviz && !engineTakesFlashChoices(castSwap) && !takesUpscaleTo) {
     return reply.header("Cache-Control", `public, max-age=${STYLE_CHOICE_MAX_AGE_SECONDS}`).send(withoutSettings())
   }
   let settings: Awaited<ReturnType<typeof getAppSettings>> | null = null
@@ -266,6 +292,7 @@ const styleChoiceHandler: RouteHandlerMethod = async (req, reply) => {
       engineTakesPlanRolesPreviz(castSwap),
       flashOfferedEngines(settings, castSwap),
       upscaleChoice,
+      upscaleToOffered(castSwap, enginePreciseUpscale(settings.nodaro_motion_precise_upscale, castSwap)),
     ),
   )
 }

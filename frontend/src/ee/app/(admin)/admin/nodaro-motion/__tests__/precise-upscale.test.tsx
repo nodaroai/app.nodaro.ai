@@ -8,6 +8,8 @@
  * - The note says it is Precise only, scaled back, and priced into the run.
  * - Save sends the whole setting; keeping the defaults is no change.
  * - Where this environment's engine runs no upscale, it says so and still saves.
+ * - While the engine takes the upscale choice, the same rows and values read as
+ *   that choice's switch per size: the heading and notes say so.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { screen, waitFor, within } from "@testing-library/react"
@@ -25,6 +27,10 @@ import AdminNodaroMotionPage from "../page"
 import {
   PRECISE_UPSCALE_HEADING,
   PRECISE_UPSCALE_NOTE,
+  PRECISE_UPSCALE_CHOICE_HEADING,
+  PRECISE_UPSCALE_CHOICE_NOTE,
+  PRECISE_UPSCALE_CHOICE_TOPAZ_DISABLED,
+  PRECISE_UPSCALE_CHOICE_UNSUPPORTED,
   PRECISE_UPSCALE_FLASH_HEADING,
   PRECISE_UPSCALE_TOPAZ_DISABLED,
   PRECISE_UPSCALE_UNSUPPORTED,
@@ -44,9 +50,10 @@ interface Over {
   stored?: Record<string, string> | null
   supported?: boolean
   topazDisabled?: boolean
+  upscaleChoice?: boolean
 }
-const view = ({ stored = null, supported = true, topazDisabled = false }: Over = {}) => ({
-  body: { data: { value: { ...DEFAULTS, ...(stored ?? {}) }, stored, defaults: DEFAULTS, updatedAt: stored ? "2026-11-22T10:00:00.000Z" : null, supported, topazDisabled } },
+const view = ({ stored = null, supported = true, topazDisabled = false, upscaleChoice = false }: Over = {}) => ({
+  body: { data: { value: { ...DEFAULTS, ...(stored ?? {}) }, stored, defaults: DEFAULTS, updatedAt: stored ? "2026-11-22T10:00:00.000Z" : null, supported, topazDisabled, upscaleChoice } },
 })
 
 beforeEach(() => {
@@ -165,5 +172,36 @@ describe("Admin → Video Remake → Precise upscale (Topaz)", () => {
     renderWith(<AdminNodaroMotionPage />)
     expect(await within(await group()).findByRole("status")).toHaveTextContent(PRECISE_UPSCALE_UNSUPPORTED)
     expect(await select("480p")).toBeEnabled()
+  })
+})
+
+describe("Admin → Video Remake → the upscale choice's switch per size (the engine takes the choice)", () => {
+  const choiceGroup = () => screen.findByRole("group", { name: PRECISE_UPSCALE_CHOICE_HEADING })
+  const choiceSelect = async (r: string) => within(await choiceGroup()).findByRole("combobox", { name: `${PRECISE_UPSCALE_CHOICE_HEADING} ${r}` })
+
+  it("says each row turns the choice on or off at its size, delivered at the next size; the values and the selects are unchanged", async () => {
+    const user = userEvent.setup()
+    routes[`GET ${URL}`] = () => view({ upscaleChoice: true })
+    routes[`PUT ${URL}`] = (init) => view({ stored: JSON.parse(String(init?.body)).preciseUpscale, upscaleChoice: true })
+    renderWith(<AdminNodaroMotionPage />)
+    expect(await choiceSelect("720p")).toHaveAccessibleDescription(PRECISE_UPSCALE_CHOICE_NOTE)
+    expect(screen.queryByRole("group", { name: PRECISE_UPSCALE_HEADING })).toBeNull()
+    expect(PRECISE_UPSCALE_CHOICE_NOTE).toMatch(/on or off/)
+    expect(PRECISE_UPSCALE_CHOICE_NOTE).toContain("480p → 720p, 720p → 1080p, 1080p → 4K")
+    expect(await choiceSelect("1080p")).toHaveTextContent("Topaz 4k (default)")
+    await user.click(await choiceSelect("480p"))
+    await user.click(await screen.findByRole("option", { name: "Off" }))
+    await user.click(saveButton())
+    await waitFor(() => expect(sentTo(`PUT ${URL}`)).toEqual([{ preciseUpscale: { ...DEFAULTS, "480p": "off" } }]))
+  })
+
+  it("says what Topaz withheld, and an engine that reads no row, mean for the choice", async () => {
+    routes[`GET ${URL}`] = () => view({ upscaleChoice: true, topazDisabled: true })
+    const first = renderWith(<AdminNodaroMotionPage />)
+    expect(await within(await choiceGroup()).findByRole("status")).toHaveTextContent(PRECISE_UPSCALE_CHOICE_TOPAZ_DISABLED)
+    first.unmount()
+    routes[`GET ${URL}`] = () => view({ upscaleChoice: true, supported: false })
+    renderWith(<AdminNodaroMotionPage />)
+    expect(await within(await choiceGroup()).findByRole("status")).toHaveTextContent(PRECISE_UPSCALE_CHOICE_UNSUPPORTED)
   })
 })

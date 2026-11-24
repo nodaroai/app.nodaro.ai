@@ -32,7 +32,7 @@ vi.mock("../../utils/file-validation.js", () => ({
 /**
  * THE ARMING GATE (lib/relay-possible.ts). Mocked rather than driven through
  * `R2_SHARED_WITH_RELAY_TARGET`, on purpose: that flag ALSO switches
- * `jobOutputReferrerPaths()` to the eleven-path list, which would silently
+ * `jobOutputReferrerPaths()` to the full path list, which would silently
  * rewrite the very query sequences this file's mainline pins assert. Default
  * ON — this file is the relay rule's own test; the pins flip it off.
  */
@@ -666,5 +666,145 @@ describe("the stem fence", () => {
     await expect(relayOwnedKeys([FAR_STEM_KEY])).resolves.toEqual(new Set())
     await expect(deletableKeys([FAR_STEM_KEY])).resolves.toEqual([FAR_STEM_KEY])
     expect(vi.mocked(supabase.from)).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Companion files (lib/asset-companions.ts): a job's own secondary file
+ * recorded on its result's row (`metadata.companions`) goes with that row's
+ * object under the same checks, and its recorded bytes join the refund.
+ */
+describe("permanentlyDeleteAsset — the row's companions", () => {
+  const ENGINE_KEY = `videos/${NEAR_JOB}-engine.mp4`
+  const FOREIGN_KEY = "videos/22222222-2222-4222-8222-222222222222-engine.mp4"
+
+  function companionScenario(opts: {
+    companions?: unknown
+    companionAssetRefs?: number
+    companionJobRefs?: number
+  }): Scenario {
+    const base = scenarioFor({ relayJobId: null })
+    return (table, calls, terminal) => {
+      if (table === "assets" && has(calls, "delete")) {
+        return {
+          data: [{ id: "asset-1", metadata: opts.companions === undefined ? {} : { companions: opts.companions } }],
+          error: null,
+        }
+      }
+      if (table === "assets" && eqVal(calls, "r2_key") === ENGINE_KEY && !has(calls, "neq")) {
+        return { count: opts.companionAssetRefs ?? 0, error: null }
+      }
+      if (table === "jobs" && String(eqVal(calls, "output_data->>engineVideoUrl") ?? "").endsWith(ENGINE_KEY)) {
+        return { count: opts.companionJobRefs ?? 0, error: null }
+      }
+      return base(table, calls, terminal)
+    }
+  }
+
+  const run = () =>
+    permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: NEAR_KEY, size_bytes: 4096, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+
+  it("deletes the companion with the row's object and refunds its bytes in the same decrement", async () => {
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }] }))
+    const result = await run()
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(NEAR_KEY)
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -5096)
+  })
+
+  it("ignores a companion outside the row's key family: neither deleted nor refunded", async () => {
+    useScenario(companionScenario({ companions: [{ key: FOREIGN_KEY, sizeBytes: 1000 }] }))
+    await run()
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(FOREIGN_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
+  it("keeps a companion on legal hold, and refunds nothing for it", async () => {
+    hold.keys.add(ENGINE_KEY)
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }] }))
+    await run()
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(NEAR_KEY)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
+  it.each([
+    ["another Library row", { companionAssetRefs: 1 }],
+    ["one of the user's job outputs", { companionJobRefs: 1 }],
+  ])("keeps a companion %s still names", async (_name, refs) => {
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }], ...refs }))
+    await run()
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(NEAR_KEY)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ENGINE_KEY)
+  })
+
+  it("releases the companion after its job is gone: the row's own proof covers its key family", async () => {
+    const base = companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }] })
+    useScenario((table, calls, terminal) => {
+      // No maker left: the job was deleted for good.
+      if (isMakerRead(table, calls)) return { data: [], error: null }
+      // Only the row's own object has a row naming it; the companion has none.
+      if (isProvenanceRead(table, calls)) {
+        const keys = (calls.find((c) => c.method === "in")?.args[1] ?? []) as string[]
+        return { data: originRows(calls).filter((r) => keys.includes(NEAR_KEY) && r.r2_key === NEAR_KEY), error: null }
+      }
+      return base(table, calls, terminal)
+    })
+    const result = await run()
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -5096)
+  })
+
+  it("keeps a companion another user's row claims, and refunds nothing for it", async () => {
+    const base = companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }] })
+    useScenario((table, calls, terminal) => {
+      if (isProvenanceRead(table, calls)) {
+        return {
+          data: originRows(calls).map((r) => (r.r2_key === ENGINE_KEY ? { ...r, id: "asset-9", user_id: "someone-else" } : r)),
+          error: null,
+        }
+      }
+      return base(table, calls, terminal)
+    })
+    await run()
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
+  it("never treats a non-canonical companion key as owned through the row", async () => {
+    const odd = `videos/../videos/${NEAR_JOB}-engine.mp4`
+    useScenario(companionScenario({ companions: [{ key: odd, sizeBytes: 1000 }] }))
+    await run()
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(NEAR_KEY)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(odd)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
+  })
+
+  it("a recorded-reference row carrying planted companions deletes nothing extra and refunds nothing", async () => {
+    const base = companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }] })
+    useScenario((table, calls, terminal) => {
+      if (isProvenanceRead(table, calls)) {
+        return { data: originRows(calls, { upload_source: "generated", recorded_reference: true }), error: null }
+      }
+      return base(table, calls, terminal)
+    })
+    await run()
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
+
+  it("leaves a row without companions exactly as before", async () => {
+    useScenario(companionScenario({}))
+    const result = await run()
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -4096)
   })
 })

@@ -36,6 +36,7 @@ import { isMissingFunctionError } from "../lib/postgrest-errors.js"
 // Pure key-family predicate (no S3 client, no supabase) — the one half of the
 // relay delete rule that is decidable at asset-creation time.
 import { isOwnedObjectKey } from "../lib/job-policy-outputs.js"
+import { companionsForRow } from "../lib/asset-companions.js"
 
 export interface JobContext {
   jobId: string
@@ -1919,6 +1920,10 @@ export async function createAssetFromJob(
       // job-history delete NULLs it on the surviving library row and the
       // job-row marker becomes unreachable exactly when the permanent delete
       // needs it. NULL on every non-relayed row, in every edition.
+      // The job's own secondary files that go with this row (lib/asset-companions.ts):
+      // recorded only beside the job's own output, each sized like the row itself.
+      const companions = ownOutput ? await companionsForRow(jobId, output, type, r2Key, getR2ObjectSize) : []
+
       const relayJobId =
         typeof job.relay_job_id === "string" && job.relay_job_id && !ownOutput
           ? job.relay_job_id
@@ -1940,7 +1945,7 @@ export async function createAssetFromJob(
         // Immutable once written — a job's calling surface never changes.
         source: job.source ?? null,
         source_detail: job.source_detail ?? null,
-        metadata: generatedAssetMetadata(output, job.job_type, type),
+        metadata: { ...generatedAssetMetadata(output, job.job_type, type), ...(companions.length > 0 ? { companions } : {}) },
       })
     }
 

@@ -17,8 +17,23 @@
  * (`castSwap.upscaleChoice`, read at load), and reads the estimate's answer
  * field by field.
  */
+import {
+  NODARO_MOTION_ENGINES,
+  NODARO_MOTION_ENGINE_OF_FLASH,
+  VIDEO_REMAKE_FLASH_ENGINES,
+  type NodaroMotionEngine,
+  type VideoRemakeFlashEngine,
+} from "@nodaro/shared/models"
 import type { PluginSupports } from "./private-plugins/types.js"
 import { getPluginSupports } from "./private-plugins/supports-registry.js"
+import {
+  PRECISE_UPSCALE_ALL_OFF,
+  effectivePreciseUpscale,
+  engineTakesPreciseUpscale,
+  type NodaroMotionPreciseUpscale,
+  type NodaroMotionPreciseUpscaleEffective,
+} from "./cast-swap-prism-precise-upscale.js"
+import { topazVideoDisabledHere } from "./topaz-video-availability.js"
 
 /** The request's choice, and the estimate's effective one. */
 export const VIDEO_REMAKE_UPSCALE_CHOICES = ["off", "next"] as const
@@ -73,3 +88,113 @@ export function upscaleQuoteOf(quote: unknown): VideoRemakeUpscaleQuote {
     ...(typeof q.upscaleOffered === "boolean" ? { upscaleOffered: q.upscaleOffered } : {}),
   }
 }
+
+/**
+ * What "next" delivers, per engine and size, as clients read it before a clip is added
+ * (`upscaleTo` on `GET /v1/video-remake/style-choice`, decided 2026-11-24).
+ *
+ * The engine declares what it CAN do (`castSwap.upscaleNext`, only while its switch is on); the
+ * platform removes what this deployment's admin switched off, reading the admin's Precise upscale
+ * (`nodaro_motion_precise_upscale`) exactly as the engine reads it: the value it is handed
+ * (`enginePreciseUpscale`, the same one `tk.settings.nodaroMotionPreciseUpscale()` answers), taken as a
+ * kill switch per engine size. Nodaro Prism: the size's row, "off" or missing = not offered, a target =
+ * offered. Nodaro Prism Flash: its own `flash` row for the size, else the size's row. Nodaro Pulse and
+ * Nodaro Pulse Flash have no row: offered wherever the engine declares it. The estimate's
+ * `upscaleOffered` stays the authority for an actual run (never on a draft or a trend run).
+ */
+export type VideoRemakeUpscaleSize = VideoRemakeResolution
+export type VideoRemakeUpscaleTarget = Exclude<VideoRemakeOutputResolution, "480p">
+export type VideoRemakeUpscaleEngine = NodaroMotionEngine | VideoRemakeFlashEngine
+export type VideoRemakeUpscaleTo = Partial<Record<VideoRemakeUpscaleEngine, Partial<Record<VideoRemakeUpscaleSize, VideoRemakeUpscaleTarget>>>>
+
+const UPSCALE_ENGINES: readonly VideoRemakeUpscaleEngine[] = [...NODARO_MOTION_ENGINES, ...VIDEO_REMAKE_FLASH_ENGINES]
+const UPSCALE_SIZES: readonly VideoRemakeUpscaleSize[] = ["480p", "720p", "1080p"]
+const UPSCALE_TARGETS: readonly VideoRemakeUpscaleTarget[] = ["720p", "1080p", "4k"]
+/** The admin's row values that turn a size on (any Topaz target). */
+const PRECISE_UPSCALE_ON: readonly unknown[] = ["720p", "1080p", "4k"]
+
+const ownValue = (o: object, key: string): unknown => (Object.prototype.hasOwnProperty.call(o, key) ? (o as Record<string, unknown>)[key] : undefined)
+const isPlainObject = (v: unknown): v is object => typeof v === "object" && v !== null && !Array.isArray(v)
+
+/**
+ * The engine's declared `castSwap.upscaleNext`, read defensively: only known engine ids, sizes and
+ * targets; an engine with no size left is dropped; anything malformed reads as nothing. Never throws.
+ * A new object.
+ */
+export function upscaleNextOf(cs: PluginSupports["castSwap"] | undefined): VideoRemakeUpscaleTo {
+  const declared: unknown = (cs as { upscaleNext?: unknown } | undefined)?.upscaleNext
+  if (!isPlainObject(declared)) return {}
+  const out: VideoRemakeUpscaleTo = {}
+  for (const engine of UPSCALE_ENGINES) {
+    const sizes = ownValue(declared, engine)
+    if (!isPlainObject(sizes)) continue
+    const kept: Partial<Record<VideoRemakeUpscaleSize, VideoRemakeUpscaleTarget>> = {}
+    for (const size of UPSCALE_SIZES) {
+      const target = ownValue(sizes, size)
+      if (UPSCALE_TARGETS.includes(target as VideoRemakeUpscaleTarget)) kept[size] = target as VideoRemakeUpscaleTarget
+    }
+    if (Object.keys(kept).length > 0) out[engine] = kept
+  }
+  return out
+}
+
+/**
+ * The admin's Precise upscale as the engine is handed it (`tk.settings.nodaroMotionPreciseUpscale()`):
+ * null where this engine does not declare `castSwap.preciseUpscale` (it reads no row), every size "off"
+ * while this deployment withholds Topaz, else the effective setting (a size never saved at its default).
+ * The ONE resolver the toolkit and `upscaleTo` share. A fresh object.
+ */
+export function enginePreciseUpscale(
+  stored: NodaroMotionPreciseUpscale | null | undefined,
+  cs: PluginSupports["castSwap"] | undefined,
+): NodaroMotionPreciseUpscaleEffective | typeof PRECISE_UPSCALE_ALL_OFF | null {
+  if (!engineTakesPreciseUpscale(cs)) return null
+  if (topazVideoDisabledHere()) return structuredClone(PRECISE_UPSCALE_ALL_OFF) as typeof PRECISE_UPSCALE_ALL_OFF
+  return effectivePreciseUpscale(stored)
+}
+
+/** Whether the admin's row (as the engine reads it) offers the choice at `size` on a Prism-family engine. */
+function prismRowOffers(precise: unknown, size: VideoRemakeUpscaleSize, flash: boolean): boolean {
+  if (!isPlainObject(precise)) return false
+  const flashRows = flash ? ownValue(precise, "flash") : undefined
+  const entry = isPlainObject(flashRows) && Object.prototype.hasOwnProperty.call(flashRows, size) ? ownValue(flashRows, size) : ownValue(precise, size)
+  return PRECISE_UPSCALE_ON.includes(entry)
+}
+
+/**
+ * `upscaleTo`: the engine's declared map with every size the admin switched off removed (the module
+ * doc above). `precise` is the value the engine is handed (`enginePreciseUpscale`), or null when it is
+ * null or the settings could not be read: Prism and Prism Flash are then offered nowhere, Pulse and
+ * Pulse Flash as declared. `{}` when the engine does not take the choice (`castSwap.upscaleChoice`),
+ * declares no map, or this deployment withholds the upscale step (every engine's "next" runs it). An engine with no size left is left out. A new object.
+ */
+export function upscaleToOffered(cs: PluginSupports["castSwap"] | undefined, precise: unknown): VideoRemakeUpscaleTo {
+  if (!engineTakesUpscaleChoice(cs)) return {}
+  // Every engine's "next" (Pulse's too) runs the same upscale step: while this deployment withholds it,
+  // no run is offered the choice, so nothing is.
+  if (topazVideoDisabledHere()) return {}
+  const declared = upscaleNextOf(cs)
+  const out: VideoRemakeUpscaleTo = {}
+  for (const engine of UPSCALE_ENGINES) {
+    const sizes = declared[engine]
+    if (!sizes) continue
+    const base = isFlashEngine(engine) ? NODARO_MOTION_ENGINE_OF_FLASH[engine] : engine
+    const kept: Partial<Record<VideoRemakeUpscaleSize, VideoRemakeUpscaleTarget>> = {}
+    for (const size of UPSCALE_SIZES) {
+      const target = sizes[size]
+      if (target === undefined) continue
+      if (base === "nodaro-pulse" || prismRowOffers(precise, size, engine === "nodaro-prism-flash")) kept[size] = target
+    }
+    if (Object.keys(kept).length > 0) out[engine] = kept
+  }
+  return out
+}
+
+/** Whether the engine's declared map names a Prism-family engine: only then does `upscaleTo` read the settings. */
+export function upscaleToReadsSettings(cs: PluginSupports["castSwap"] | undefined): boolean {
+  if (!engineTakesUpscaleChoice(cs)) return false
+  const declared = upscaleNextOf(cs)
+  return declared["nodaro-prism"] !== undefined || declared["nodaro-prism-flash"] !== undefined
+}
+
+const isFlashEngine = (e: VideoRemakeUpscaleEngine): e is VideoRemakeFlashEngine => (VIDEO_REMAKE_FLASH_ENGINES as readonly string[]).includes(e)

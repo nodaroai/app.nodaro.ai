@@ -1465,6 +1465,46 @@ describe("createAssetFromJob", () => {
     vi.mocked(getR2ObjectSize).mockResolvedValue(0)
   })
 
+  // A job's own secondary file that goes with its result's row
+  // (lib/asset-companions.ts): Video Remake's engine version beside an
+  // upscaled result, recorded with its size so a permanent delete can release
+  // and refund it.
+  describe("companions recorded on the result's row", () => {
+    const JOB = "11111111-1111-4111-8111-111111111111"
+    const videoUrl = `https://r2.example.com/videos/${JOB}.mp4`
+
+    async function fileWith(output: Record<string, unknown>) {
+      const { getR2ObjectSize } = await import("@/lib/storage.js")
+      vi.mocked(getR2ObjectSize).mockImplementation(async (key: string) => (key.endsWith("-engine.mp4") ? 7000 : 5000))
+      mocks.mockSingle.mockResolvedValueOnce({ data: { status: "completed", output_data: output }, error: null })
+      mocks.mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null })
+      await createAssetFromJob(JOB, "user-1")
+      vi.mocked(getR2ObjectSize).mockReset()
+      vi.mocked(getR2ObjectSize).mockResolvedValue(0)
+      return mocks.mockInsert.mock.calls.map((c) => c[0] as Record<string, unknown>)
+    }
+
+    it("records the engine version, in the job's own key family, with its size", async () => {
+      const rows = await fileWith({ videoUrl, engineVideoUrl: `https://r2.example.com/videos/${JOB}-engine.mp4` })
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toEqual(expect.objectContaining({
+        r2_key: `videos/${JOB}.mp4`,
+        size_bytes: 5000,
+        metadata: { companions: [{ key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000 }] },
+      }))
+    })
+
+    it("ignores a companion url outside the job's key family", async () => {
+      const rows = await fileWith({ videoUrl, engineVideoUrl: "https://r2.example.com/videos/22222222-2222-4222-8222-222222222222-engine.mp4" })
+      expect(rows[0]!.metadata).toEqual({})
+    })
+
+    it("leaves a job without the field unchanged", async () => {
+      const rows = await fileWith({ videoUrl })
+      expect(rows[0]!.metadata).toEqual({})
+    })
+  })
+
   // The extra images an image job filed beside its result (job-finalize.ts
   // extraImageSets with `library`, output_data.libraryImages): the result and
   // every one of them reach the Library, each extra image under its name.

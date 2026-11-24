@@ -7,6 +7,8 @@ import { jobOutputReferrerPaths } from "./job-output-urls.js"
 import { relayPossible } from "./relay-possible.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { judgeAssetRowDelete } from "./key-ownership.js"
+import { companionsOf } from "./asset-companions.js"
+import { releaseCompanions } from "./asset-companion-release.js"
 
 /**
  * THE RELAY DELETE RULE — the instance that CREATED an object deletes it; the
@@ -448,11 +450,13 @@ export async function permanentlyDeleteAsset(opts: {
   // lookup keeps the object and refunds nothing.
   let deleteObject = false
   let refundable = false
+  let rowOwned = false
   if (asset.r2_key && !relayOwned) {
     try {
       const verdict = await judgeAssetRowDelete(userId, asset)
       deleteObject = verdict.deleteObject
       refundable = verdict.refundable
+      rowOwned = verdict.owned
       if (!deleteObject) {
         console.log(
           `[asset-delete] Keeping R2 object ${asset.r2_key}: ` +
@@ -546,10 +550,26 @@ export async function permanentlyDeleteAsset(opts: {
     .delete()
     .eq("id", asset.id)
     .eq("user_id", userId)
-    .select("id")
+    // `metadata` rides back with the deleted row: it records the row's
+    // companion files (lib/asset-companions.ts), released below at no extra read.
+    .select("id, metadata")
 
   if (deleteError) {
     return { ok: false, dbError: deleteError }
+  }
+
+  // The row's companions (a job's own secondary files recorded on its result's
+  // row — lib/asset-companions.ts): they go with the row's object, under the
+  // same checks, and their recorded bytes join the refund below. Only for the
+  // row THIS call removed, and never for a relay-owned object.
+  let companionRefund = 0
+  const deletedRow = (deletedRows ?? [])[0] as { metadata?: unknown } | undefined
+  // Only a worker-written origin row (`refundable`) carries companions: a recorded
+  // reference never does, whatever its metadata says.
+  const companions = deletedRow && !relayOwned && refundable ? companionsOf(deletedRow.metadata, asset.r2_key) : []
+  if (companions.length > 0) {
+    const released = await releaseCompanions({ userId, companions, objectDeleted: r2Deleted, rowOwned, blockOnOwnJobReferrers })
+    companionRefund = released.refundBytes
   }
 
   try {
@@ -562,7 +582,7 @@ export async function permanentlyDeleteAsset(opts: {
     // charge to this user: one naming an object they cannot be shown to have
     // made, or one that only recorded a url (a library save, an attached
     // pipeline image, whose size its caller chose) — see `judgeAssetRowDelete`.
-    const sizeBytes = !relayOwned && refundable ? asset.size_bytes ?? 0 : 0
+    const sizeBytes = !relayOwned && refundable ? (asset.size_bytes ?? 0) + companionRefund : 0
     if (sizeBytes > 0 && (deletedRows?.length ?? 0) > 0) {
       await updateStorageUsage(userId, -sizeBytes)
     }

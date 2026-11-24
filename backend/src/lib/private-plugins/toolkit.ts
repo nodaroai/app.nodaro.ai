@@ -159,8 +159,7 @@ import { engineTakesStyleOnly, styleOnlyForPlugin } from "../nodaro-motion-style
 import { engineTakesPreciseArtStyle, preciseArtStyleForPlugin } from "../nodaro-motion-precise-art-style.js"
 import { engineTakesNoPersonSourceClip, noPersonForPlugin } from "../nodaro-motion-no-person.js"
 import { engineRoutesPreciseStyle, preciseStyleRouteForPlugin } from "../nodaro-motion-precise-style-route.js"
-import { PRECISE_UPSCALE_ALL_OFF, effectivePreciseUpscale, engineTakesPreciseUpscale } from "../cast-swap-prism-precise-upscale.js"
-import { topazVideoDisabledHere } from "../topaz-video-availability.js"
+import { enginePreciseUpscale } from "../video-remake-upscale-choice.js"
 import { customStyleForPlugin, engineTakesCustomStyle } from "../nodaro-motion-custom-style.js"
 import { customStyleOfferedByDefault } from "../nodaro-motion-custom-style-default.js"
 import { engineTakesPlanRoles, engineTakesPlanRolesReview, planRolesForPlugin } from "../nodaro-motion-plan-roles.js"
@@ -2571,9 +2570,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       nodaroMotionPreciseUpscale: async () => {
         const settings = await getAppSettings()
         if (settingsReadFailed(settings)) throw new Error("nodaro_motion_precise_upscale: the app settings could not be read")
-        if (!engineTakesPreciseUpscale(getPluginSupports().castSwap)) return null
-        if (topazVideoDisabledHere()) return structuredClone(PRECISE_UPSCALE_ALL_OFF) as typeof PRECISE_UPSCALE_ALL_OFF
-        return effectivePreciseUpscale(settings.nodaro_motion_precise_upscale)
+        // The one resolver `upscaleTo` (GET /v1/video-remake/style-choice) shares, so the two never drift.
+        return enginePreciseUpscale(settings.nodaro_motion_precise_upscale, getPluginSupports().castSwap)
       },
       // Same rules: a failed read throws (the engine reads that as not offered, with an alert). Null only to an
       // engine that does not declare `castSwap.customStyle` (it never asks). Otherwise ALWAYS an object, never

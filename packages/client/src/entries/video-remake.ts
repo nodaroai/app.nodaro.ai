@@ -28,6 +28,7 @@ export {
   type VideoRemakeUpscaleChoice,
   type VideoRemakeUpscaleOutcome,
   type VideoRemakeOutputResolution,
+  type VideoRemakeUpscaleTo,
   type VideoRemakeJobOutput,
   type VideoRemakeIntentPopupCode,
   type VideoRemakeIntentReportedCode,

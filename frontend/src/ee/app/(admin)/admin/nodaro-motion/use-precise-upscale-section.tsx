@@ -7,7 +7,7 @@
 import { useId, type ReactNode } from "react"
 import { useNodaroMotionPreciseUpscale, useSaveNodaroMotionPreciseUpscale } from "@/ee/hooks/queries/use-nodaro-motion-precise-upscale"
 import type { NodaroMotionPreciseUpscaleView } from "@/lib/api"
-import { PRECISE_UPSCALE_HEADING, PreciseUpscaleSection, preciseUpscaleEffective } from "./components/PreciseUpscaleSection"
+import { PreciseUpscaleSection, preciseUpscaleEffective, preciseUpscaleHeading } from "./components/PreciseUpscaleSection"
 import { PRECISE_UPSCALE_SPEC, type MotionSettingsBinding } from "./settings-sections"
 import { useSectionDraft } from "./use-section-draft"
 
@@ -29,11 +29,14 @@ export function usePreciseUpscaleSection(held: boolean): PreciseUpscaleSectionSt
   const headingId = useId()
   // Never saved reads as the defaults: a draft that keeps them then is no change.
   const changed = !!query.data && JSON.stringify(section.draft) !== JSON.stringify(preciseUpscaleEffective(query.data.stored))
+  // While the engine takes the upscale choice, each row turns it on or off at its size: the heading says so.
+  const upscaleChoice = query.data?.upscaleChoice === true
+  const heading = preciseUpscaleHeading(upscaleChoice)
 
   const node = (
-    <div role="group" aria-label={PRECISE_UPSCALE_HEADING} className="mt-4 max-w-md">
+    <div role="group" aria-label={heading} className="mt-4 max-w-md">
       <h3 id={headingId} className="mb-2 text-sm font-semibold">
-        {PRECISE_UPSCALE_HEADING}
+        {heading}
       </h3>
       {query.data ? (
         <PreciseUpscaleSection
@@ -41,6 +44,7 @@ export function usePreciseUpscaleSection(held: boolean): PreciseUpscaleSectionSt
           defaults={query.data.defaults}
           supported={query.data.supported}
           topazDisabled={query.data.topazDisabled === true}
+          upscaleChoice={upscaleChoice}
           saveError={saveMutation.error}
           headingId={headingId}
           onChange={(draft) => {

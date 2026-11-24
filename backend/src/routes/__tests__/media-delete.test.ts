@@ -149,6 +149,7 @@ const STEM_KEY = `audio/${EXPORT_JOB}-vcp-stem-0-A.mp3`
 const STEM_URL = `${R2_PUBLIC_URL}/${STEM_KEY}`
 const MUSIC_LAYER_URL = `${R2_PUBLIC_URL}/audios/${EXPORT_JOB}-music.m4a`
 const VIDEO_LAYER_URL = `${R2_PUBLIC_URL}/audios/${EXPORT_JOB}-video.m4a`
+const ENGINE_VIDEO_URL = `${R2_PUBLIC_URL}/videos/${EXPORT_JOB}-engine.mp4`
 const UNOWNED_URL = `${R2_PUBLIC_URL}/images/someone-elses.png`
 const FOREIGN_URL = "https://cdn.example.com/not-ours.mp3"
 
@@ -401,7 +402,8 @@ describe("POST /v1/media/delete — job-output path", () => {
     ["initial Video", VIDEO_LAYER_URL, "output_data->pro->audio->layers->video->>url"],
     ["published Music", MUSIC_LAYER_URL, "output_data->audio->layers->music->>url"],
     ["published Video", VIDEO_LAYER_URL, "output_data->audio->layers->video->>url"],
-  ])("proves ownership of a row-less %s audio derivative", async (_name, url, expectedPath) => {
+    ["Video Remake engine-version", ENGINE_VIDEO_URL, "output_data->>engineVideoUrl"],
+  ])("proves ownership of a row-less %s output", async (_name, url, expectedPath) => {
     useScenario((table, calls, terminal) => {
       if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }
       if (table === "assets") return { count: 0, error: null }
