@@ -24,6 +24,7 @@
  * raster picture, or is past the caps, is refused deterministically after the
  * download, before the hold.
  */
+import { DOWNSCALE_INPUT_PIXEL_CEILING, fitImageUnderPixels } from "../../lib/image-pixel-fit.js"
 import sharp from "sharp"
 import { withFfmpegSlot } from "../../providers/video/ffmpeg-utils.js"
 import { PublicDownloadTooLargeError, safeFetchBytes } from "../../lib/safe-fetch-bytes.js"
@@ -131,7 +132,7 @@ async function download(url: string): Promise<Buffer> {
 async function readHeader(bytes: Buffer): Promise<{ storedPixels: number; upright: { w: number; h: number } }> {
   let meta: sharp.Metadata
   try {
-    meta = await sharp(bytes, { limitInputPixels: FACE_DETECT_IMAGE_MAX_PIXELS }).metadata()
+    meta = await sharp(bytes, { limitInputPixels: DOWNSCALE_INPUT_PIXEL_CEILING }).metadata()
   } catch {
     throw new FaceDetectRequestError("the file is not a picture")
   }
@@ -140,12 +141,23 @@ async function readHeader(bytes: Buffer): Promise<{ storedPixels: number; uprigh
   if (!(Number.isInteger(width) && Number.isInteger(height) && width! > 0 && height! > 0)) {
     throw new FaceDetectRequestError("the picture has no size")
   }
-  if (width! * height! > FACE_DETECT_IMAGE_MAX_PIXELS) {
-    throw new FaceDetectRequestError(`a ${width}×${height} picture is over the ${FACE_DETECT_IMAGE_MAX_PIXELS}-pixel cap`)
+  // Over the decode cap but within the ceiling (an 8K model result) is scaled
+  // down to the cap before detection; past the ceiling is refused.
+  if (width! * height! > DOWNSCALE_INPUT_PIXEL_CEILING) {
+    throw new FaceDetectRequestError(`a ${width}×${height} picture is over the ${DOWNSCALE_INPUT_PIXEL_CEILING}-pixel cap`)
   }
   // EXIF orientations 5–8 turn the picture a quarter: its upright size is the stored one swapped.
   const quarter = typeof orientation === "number" && orientation >= 5 && orientation <= 8
   return { storedPixels: width! * height!, upright: quarter ? { w: height!, h: width! } : { w: width!, h: height! } }
+}
+
+/** The picture scaled down within the decode cap; one that cannot be decoded is a refusal, as any undecodable picture is. */
+async function fitForDetection(bytes: Buffer): Promise<Buffer> {
+  try {
+    return await fitImageUnderPixels(bytes, FACE_DETECT_IMAGE_MAX_PIXELS)
+  } catch {
+    throw new FaceDetectRequestError("the picture could not be decoded")
+  }
 }
 
 /** The detection size: the upright picture within `FACE_DETECT_IMAGE_MAX_SIDE`, never enlarged. */
@@ -190,20 +202,28 @@ export async function detectFacesInImage(input: DetectFacesInImageInput): Promis
   const { imageUrl, minScore } = input
   // Refuse before downloading: no model or no native module is a deterministic refusal.
   const session = await yunetSession()
+  // A picture over the decode cap (an 8K model result) is scaled down to fit
+  // it, not refused: detection runs on a 960 px picture either way.
   const bytes = await download(imageUrl)
+  // The picture's own size: the frame reported, and (its stored pixels) the
+  // memory the decode below is accounted for, a scale-down included.
   const { storedPixels, upright } = await readHeader(bytes)
+  const frame = upright
   const size = detectionSize(upright)
   const { pw, ph } = paddedSize(size.width, size.height)
   const timeoutMs = faceDetectTimeoutMs(1)
   const peakMemoryMiB = faceDetectImagePeakMemoryMiB(storedPixels, size, session.intraOpThreads)
 
   const boxes = await withFfmpegSlot(async () => {
-    const bgr = await decodeUprightBgr(bytes, size)
+    // A picture over the decode cap (an 8K model result) is first scaled down
+    // to it, inside the slot whose memory was accounted for its full size.
+    const fitted = storedPixels > FACE_DETECT_IMAGE_MAX_PIXELS ? await fitForDetection(bytes) : bytes
+    const bgr = await decodeUprightBgr(fitted, size)
     const tensor = new Float32Array(3 * pw * ph)
     fillYunetInput(bgr, size.width, size.height, pw, ph, tensor)
     const outputs = await session.run(tensor, pw, ph)
     return decodeYunet(outputs, { pw, ph, width: size.width, height: size.height, minScore }).map(roundFace)
   }, { timeoutMs, peakMemoryMiB, label: "face-detect" })
 
-  return { detector: session.detector, frame: upright, boxes }
+  return { detector: session.detector, frame, boxes }
 }

@@ -22,16 +22,18 @@ import { ConfigFieldRenderer } from "@/components/presentation/config-field-rend
 
 const MINIMAX = ["minimax-h3-image", "minimax-h3-image-i2i"]
 const SEEDREAM_5_5 = ["seedream-5-5", "seedream-5-5-i2i"]
-const DECLARING = [...MINIMAX, ...SEEDREAM_5_5]
+// Kling Image 4.0 has no 1K at all: its first listed size is its default, 2K, declared all the same.
+const KLING_IMAGE_4 = ["kling-image-4", "kling-image-4-i2i"]
+const DECLARING = [...MINIMAX, ...SEEDREAM_5_5, ...KLING_IMAGE_4]
 // FLUX 3 Klein declares its 1K, which is also its first listed size: declared
 // so a client reads it from the catalog, not from the order of the sizes.
 // Nothing an editor surface shows for it moves.
 const FLUX_3_KLEIN = ["flux-3-klein", "flux-3-klein-i2i"]
 
 describe("the declared default size", () => {
-  it("is declared by MiniMax H3 Image's, Seedream 5.5's and FLUX 3 Klein's two ids each and by video models only", () => {
+  it("is declared by MiniMax H3 Image's, Seedream 5.5's, FLUX 3 Klein's and Kling Image 4.0's two ids each and by video models only", () => {
     const declaring = Object.values(MODEL_CATALOG).filter((m) => m.defaultResolution).map((m) => m.id).sort()
-    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "ltx-2.5-fast", "ltx-2.5-pro", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
+    expect(declaring).toEqual(["flux-3-klein", "flux-3-klein-i2i", "gemini-omni-flash-1-2", "kling-image-4", "kling-image-4-i2i", "ltx-2.5-fast", "ltx-2.5-pro", "minimax-h3-image", "minimax-h3-image-i2i", "nodaro-video-upscale", "pixverse-v6-max", "seedream-5-5", "seedream-5-5-i2i", "wan-animate-move", "wan-animate-replace"])
     for (const id of FLUX_3_KLEIN) {
       expect(MODEL_CATALOG[id]!.defaultResolution, id).toBe("1K")
       expect(MODEL_CATALOG[id]!.resolutions?.[0], id).toBe("1K")
@@ -62,7 +64,7 @@ describe("the declared default size", () => {
     expect(MODEL_CATALOG["nodaro-video-upscale"]!.defaultResolution).toBe("1080p")
   })
 
-  it("is 2K on MiniMax H3 Image and Seedream 5.5, 1K on FLUX 3 Klein, and nothing on every other image model with a size menu", () => {
+  it("is 2K on MiniMax H3 Image, Seedream 5.5 and Kling Image 4.0, 1K on FLUX 3 Klein, and nothing on every other image model with a size menu", () => {
     for (const id of DECLARING) {
       expect(declaredDefaultResolution(id), id).toBe("2K")
       expect(defaultResolutionFor(id), id).toBe("2K")
@@ -121,5 +123,15 @@ describe("a published app's size field", () => {
     expect(renderSize("minimax-h3-image")).toHaveBeenCalledWith("2K")
     expect(renderSize("seedream-5-5")).toHaveBeenCalledWith("2K")
     expect(renderSize("gpt-image-2")).toHaveBeenCalledWith("1K")
+  })
+})
+
+describe("8K on the run strip", () => {
+  it("snaps to the model's largest size; other stale values as before", () => {
+    const control = getQuickConfigs("generate-image").find((q) => q.field === "resolution")!
+    const data = { provider: "nano-banana-pro", resolution: "8K" }
+    expect(quickConfigSnapPatch(control, "8K", resolveQuickConfigOptions(control, data), data)).toEqual({ resolution: "4K" })
+    const stale = { provider: "nano-banana-pro", resolution: "2 MP" }
+    expect(quickConfigSnapPatch(control, "2 MP", resolveQuickConfigOptions(control, stale), stale)).toEqual({ resolution: "1K" })
   })
 })

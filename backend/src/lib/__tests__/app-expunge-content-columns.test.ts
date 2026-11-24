@@ -77,6 +77,10 @@ const KEPT_JOB_COLUMNS = [
   // The metered LLM billing ledger (552): the billing record — cost, source,
   // lanes — never the runner's content, kept with the other billing columns.
   "llm_billing",
+  // The server-only bookkeeping of stored files (695, decided 2026-11-24):
+  // nothing writes it until the code that uses it ships, which erases it with
+  // the job's content and moves it to the erased side.
+  "server_output",
   "display_cost",
   "credits",
   "credits_actual",

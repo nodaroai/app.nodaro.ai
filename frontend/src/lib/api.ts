@@ -953,6 +953,10 @@ export async function generateImage(
     gifFrames?: number
     gifFrameDurationMs?: number
     svgLevel?: string
+    /** A set's images (2 to 10), on a model that makes sets; the route drops it on any other. */
+    imageSetCount?: number
+    /** Which character each reference came from, so the route can send a character's views as one named subject (Kling Image 4.0). */
+    referenceCharacters?: ReadonlyArray<import("@/lib/reference-characters").ReferenceCharacter>
   },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
@@ -1021,6 +1025,8 @@ export async function generateImage(
   if (inpaint?.gifFrames != null) body.gifFrames = inpaint.gifFrames
   if (inpaint?.gifFrameDurationMs != null) body.gifFrameDurationMs = inpaint.gifFrameDurationMs
   if (inpaint?.svgLevel) body.svgLevel = inpaint.svgLevel
+  if (inpaint?.imageSetCount != null && inpaint.imageSetCount > 1) body.imageSetCount = inpaint.imageSetCount
+  if (inpaint?.referenceCharacters && inpaint.referenceCharacters.length > 0) body.referenceCharacters = inpaint.referenceCharacters
   return apiJson("/v1/generate-image", {
     body,
     workflowId: true,

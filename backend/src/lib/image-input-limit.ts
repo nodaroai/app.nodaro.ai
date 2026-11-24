@@ -1,4 +1,4 @@
-import { getModel } from "@nodaro/shared/model-catalog"
+import { KLING_IMAGE_4_MAX_PICTURES, getModel, isKlingImage4 } from "@nodaro/shared/model-catalog"
 import { DEFAULT_REQUEST_IMAGE_LIMIT, MAX_REQUEST_IMAGE_LIMIT, refusesImagesOverLimitOn, requestImageLimit, T2I_TO_I2I_VARIANT, type ImageRunKind } from "@nodaro/shared/models"
 
 /**
@@ -35,6 +35,14 @@ export function imageInputLimitProblem(
   if (!refusesImagesOverLimitOn(model, run)) return null
   const limit = requestImageLimit(model)
   if (sentImages <= limit) return null
+  // Kling Image 4.0 counts input ITEMS (decided 2026-11-23): its callers pass
+  // the items, a named subject counted once whatever its views.
+  if (isKlingImage4(model)) {
+    return {
+      code: "validation_error",
+      message: `${modelLabel(model)} takes at most ${limit} input items (reference images and named subjects; a character sent with 2 to 4 of its images is one), the source or base image included, and this run would send ${sentImages}: remove ${sentImages - limit}.`,
+    }
+  }
   return {
     code: "validation_error",
     message: `${modelLabel(model)} takes at most ${limit} input images, the source or base image included, and this run would send ${sentImages}: remove ${sentImages - limit}.`,
@@ -78,6 +86,10 @@ export function baseImageReservedSeats(model: string | undefined, baseImageUrl: 
  *   with some left out.
  */
 export function structuredReferenceListLimit(models: readonly (string | undefined)[]): number {
+  // Kling Image 4.0 alone: its pictures may reach 10 named subjects of 4 views
+  // (`KLING_IMAGE_4_MAX_PICTURES`); its own check counts items. No other
+  // model's bound moves.
+  if (models.length > 0 && models.every((model) => isKlingImage4(model))) return KLING_IMAGE_4_MAX_PICTURES
   return models.length > 0 && models.every((model) => refusesImagesOverLimitOn(model, "request"))
     ? MAX_REQUEST_IMAGE_LIMIT
     : DEFAULT_REQUEST_IMAGE_LIMIT

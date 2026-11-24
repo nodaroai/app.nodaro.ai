@@ -56,8 +56,10 @@ describe("FLUX 3 Klein in the catalog", () => {
       expect(MODEL_CATALOG[id]!.defaultResolution).toBe("1K")
       expect(MODEL_CATALOG[id]!.defaultResolution).toBe(FLUX_3_KLEIN_DEFAULT_RESOLUTION)
       expect(defaultResolutionFor(id)).toBe("1K")
-      // A size it does not list snaps to the declared default.
-      expect(normalizeModelInput(id, { resolution: "8K" }).resolution).toBe("1K")
+      // A size above every one it lists runs at its largest (as MCP sends it);
+      // another size it does not list snaps to the declared default.
+      expect(normalizeModelInput(id, { resolution: "8K" }).resolution).toBe("4K")
+      expect(normalizeModelInput(id, { resolution: "1.5K" }).resolution).toBe("1K")
     }
     expect(FLUX_3_KLEIN_DEFAULT_RESOLUTION).toBe("1K")
     expect(flux3KleinResolution(undefined)).toBe("1K")
@@ -205,8 +207,8 @@ describe("a model that refuses images over its limit (`refusesImagesOverLimit`)"
   const flagged = Object.values(MODEL_CATALOG).filter((m) => m.refusesImagesOverLimit === true)
   const t2iOf = (i2i: string) => Object.keys(T2I_TO_I2I_VARIANT).filter((t2i) => T2I_TO_I2I_VARIANT[t2i] === i2i)
 
-  it("is FLUX 3 Klein alone today: every other model keeps its trim", () => {
-    expect(flagged.map((m) => m.id).sort()).toEqual([T2I, I2I])
+  it("is FLUX 3 Klein and Kling Image 4.0 today: every other model keeps its trim", () => {
+    expect(flagged.map((m) => m.id).sort()).toEqual([T2I, I2I, "kling-image-4", "kling-image-4-i2i"].sort())
   })
 
   it("is an image model that takes reference images", () => {

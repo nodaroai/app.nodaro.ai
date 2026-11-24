@@ -15,7 +15,7 @@
  */
 
 import { GROK_EXTEND_PROVIDER, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, PIXVERSE_V6_EXTEND_PROVIDER, requestImageLimit } from "@nodaro/shared/models"
-import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, SEEDREAM_5_5_DEFAULT_RESOLUTION, type Flux3KleinResolution, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
+import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, KLING_IMAGE_4_DEFAULT_RESOLUTION, SEEDREAM_5_5_DEFAULT_RESOLUTION, type Flux3KleinResolution, type KlingImage4Resolution, type Seedream55Resolution } from "@nodaro/shared/model-catalog"
 import { confirmedByRun, ENABLE_SAFETY_CHECKER_LEVER, NSFW_CHECKER_LEVER, NSFW_CHECKER_SENT_FALSE_LEVER, type SafetyLever, MODERATION_LEVER } from "../safety-levers.js"
 import { GEMINI_TTS_WIRE_MODELS } from "./gemini-tts-models.js"
 
@@ -47,6 +47,22 @@ export const MINIMAX_H3_IMAGE_KIE_HUNDREDTHS: Readonly<Record<"1K" | "2K" | "4K"
   "4K": 550,
 }
 export const MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS = 50
+
+/**
+ * What KIE bills for one Kling Image 4.0 picture, in hundredths of a KIE credit
+ * so sums are exact: 11.3 at 2K, 17 at 4K, 28.3 at 8K, and 0.5 more for each
+ * input item, a reference image or a named subject (kie.ai/kling-image-4-0 and
+ * KIE's price list, read 2026-11-22; a measured 8K task consumed 28.3). A set
+ * bills each image it returns. `kieImageCostUsd` (image-cost.ts) records it as
+ * the job's provider cost when the task record carries no figure; the credit
+ * rows are built from it (ee/billing/kling-image-4-pricing.ts).
+ */
+export const KLING_IMAGE_4_KIE_HUNDREDTHS: Readonly<Record<KlingImage4Resolution, number>> = {
+  "2K": 1130,
+  "4K": 1700,
+  "8K": 2830,
+}
+export const KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS = 50
 
 /**
  * What KIE bills for one Seedream 5.5 picture, in hundredths of a KIE credit so
@@ -1013,6 +1029,42 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     imageParam: "image_urls",  // Array, 1 to 16
     extraParams: { aspect_ratio: "16:9", resolution: "2K" },
+  },
+
+  // Kling Image 4.0 — ONE KIE endpoint (`kling-4-0/image`) for both ids: no
+  // `image_urls` is text to image, images make it image to image. The body is
+  // built whole by `buildKlingImage4Request` (kling-image-4.ts), an explicit
+  // allow-list (the schema is `additionalProperties: false`): `prompt` (max
+  // 20,000), `image_urls` and `elements` (named subjects of 2 to 4 views; the
+  // two together at most 10), `mode` (`default` | `series`), `count`,
+  // `resolution` (lowercase `2k` | `4k` | `8k`, no 1K) and `aspect_ratio`
+  // (auto + 8). No seed, no output format, no negative prompt, and no
+  // content-filter field, so no `safetyLevers`. Inputs are jpg/jpeg/png up to
+  // 20 MB each (`acceptedImageFormats`; `ensureImageForProvider` converts
+  // anything else and keeps each file under 10 MB). KIE returns PNG at 2K/4K
+  // and JPEG at 8K. Billed by what the task used (`costFromTaskRecord`; the
+  // listed figure is KLING_IMAGE_4_KIE_HUNDREDTHS above).
+  // See: docs.kie.ai/market/kling-4-0/image (fetched 2026-11-22)
+  "kling-image-4": {
+    model: "kling-4-0/image",
+    credits: KLING_IMAGE_4_KIE_HUNDREDTHS[KLING_IMAGE_4_DEFAULT_RESOLUTION] / 100,
+    cost: (KLING_IMAGE_4_KIE_HUNDREDTHS[KLING_IMAGE_4_DEFAULT_RESOLUTION] / 100) * KIE_CREDIT_USD,  // 2K, one image; kieImageCostUsd records what was sent
+    costFromTaskRecord: true,
+    acceptedImageFormats: ["jpeg", "png"],
+    imageParam: "image_urls",
+    maxInputImages: requestImageLimit("kling-image-4-i2i"),
+    extraParams: { resolution: KLING_IMAGE_4_DEFAULT_RESOLUTION },
+  },
+  "kling-image-4-i2i": {
+    model: "kling-4-0/image",
+    credits: (KLING_IMAGE_4_KIE_HUNDREDTHS[KLING_IMAGE_4_DEFAULT_RESOLUTION] + KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS) / 100,
+    cost: ((KLING_IMAGE_4_KIE_HUNDREDTHS[KLING_IMAGE_4_DEFAULT_RESOLUTION] + KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS) / 100) * KIE_CREDIT_USD,  // 2K, one input item
+    costFromTaskRecord: true,
+    acceptedImageFormats: ["jpeg", "png"],
+    inputType: "image-to-image",
+    imageParam: "image_urls",
+    maxInputImages: requestImageLimit("kling-image-4-i2i"),
+    extraParams: { resolution: KLING_IMAGE_4_DEFAULT_RESOLUTION },
   },
 
   // FLUX 3 Klein, the light FLUX 3 model (NOT FLUX 2 Klein, `flux-2-klein`,

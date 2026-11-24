@@ -346,6 +346,16 @@ export interface GenerateImageParams extends StructuredReferenceParams, Generati
    *  `provider`. models × count is at most 8. With `presetId`, the preset is
    *  applied once per model. */
   models?: string[]
+  /** A coherent SET of 2–10 images from ONE job, on a model that makes sets
+   *  (Kling Image 4.0): held for the images asked, charged for the images
+   *  returned (`imageUrls` on the job). Dropped, and said in `adjustments`, on
+   *  any other model and on a masked edit. Not with `count` above 1. */
+  imageSetCount?: number
+  /** On a flat request (a prompt you assembled), which character each of
+   *  `referenceImageUrls` came from: on Kling Image 4.0 a character's 2 to 4
+   *  images then go as one named subject, priced as one input item. Never
+   *  changes the prompt or the images sent. */
+  referenceCharacters?: Array<{ url: string; characterSlug: string; defaultName?: string; variantSlug?: string; bucket?: string; description?: string; characterCanonicalDescription?: string | null }>
   /** Image background, on the models that take one. On GPT Image `transparent` renders at 1K; Seedream 5.5 renders it at any size, as a PNG. */
   background?: ImageBackground
   /**

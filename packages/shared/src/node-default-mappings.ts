@@ -12,6 +12,7 @@ import {
 } from "./model-constants.js"
 import { LLM_MODEL_IDS } from "./llm-models.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION } from "./seedream-5-5.js"
+import { KLING_IMAGE_4_DEFAULT_RESOLUTION } from "./kling-image-4.js"
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -196,6 +197,10 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // low the cheapest, 1K (1.5K costs the same, and is the panel's to pick).
   "seedream-5-5":         { field: "resolution", values: { low: "1K", mid: SEEDREAM_5_5_DEFAULT_RESOLUTION, high: "2K" } },
   "seedream-5-5-i2i":     { field: "resolution", values: { low: "1K", mid: SEEDREAM_5_5_DEFAULT_RESOLUTION, high: "2K" } },
+  // Kling Image 4.0 has no 1K: low and mid are its default, 2K; high is 4K
+  // (8K, at more than twice the price, is the panel's to pick).
+  "kling-image-4":        { field: "resolution", values: { low: "2K", mid: KLING_IMAGE_4_DEFAULT_RESOLUTION, high: "4K" } },
+  "kling-image-4-i2i":    { field: "resolution", values: { low: "2K", mid: KLING_IMAGE_4_DEFAULT_RESOLUTION, high: "4K" } },
   // FLUX 3 Klein: three sizes, 1K its default and cheapest (as GPT Image 2).
   "flux-3-klein":         { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "flux-3-klein-i2i":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
