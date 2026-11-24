@@ -105,11 +105,13 @@ describe("buildMaskCompositeArgs", () => {
   })
   it("the video fill's argv is byte-identical to the graph before fills existed (defaults, and every setting at once)", () => {
     // Captured from the builder before `fill` was added; the video fill must never move — except
-    // for `fps` on the foreground, which puts it on the mask's frame grid (frame N meets mask N).
+    // for `fps` on the foreground, which puts it on the mask's frame grid (frame N meets mask N),
+    // and the overlay blending in the background's own format (`overlay=format=yuv420`, so the
+    // background is never converted to give it an alpha plane).
     expect(build({})).toEqual([
       "-y", "-i", "fg.mp4", "-stream_loop", "-1", "-i", "bg.mp4", "-i", "m.mp4",
       "-filter_complex",
-      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=increase,crop=640:360,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=increase,crop=640:360,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=yuv420:shortest=1,format=yuv420p[vout]",
       "-map", "[vout]", "-map", "0:a:0", "-t", "2.000",
       "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "o.mp4",
     ])
@@ -117,7 +119,7 @@ describe("buildMaskCompositeArgs", () => {
     const before = [
       "-y", "-i", "fg.mp4", "-stream_loop", "-1", "-i", "bg.mp4", "-i", "m.mp4",
       "-filter_complex",
-      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=auto:shortest=1,format=yuv420p[vout];[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+      "[0:v]fps=30/1,scale=640:360,setsar=1,format=yuva420p[fg];[1:v]setpts=PTS-STARTPTS,scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30/1,format=yuv420p[bg];[2:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',negate,dilation,dilation,gblur=sigma=2.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];[fg][m]alphamerge[fga];[bg][fga]overlay=format=yuv420:shortest=1,format=yuv420p[vout];[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[aout]",
       "-map", "[vout]", "-map", "[aout]", "-t", "2.000",
       "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "o.mp4",
     ]
@@ -146,7 +148,7 @@ describe("buildMaskCompositeFillArgs (pixelate / blur)", () => {
         // 640/32 = 20, 360/32 = 11.25 → 11 blocks.
         "[src]scale=20:11:flags=area,scale=640:360:flags=neighbor,format=yuva420p[fx];" +
         "[1:v]setpts=PTS-STARTPTS,scale=640:360,setsar=1,format=gray,lut=c0='clip((val-24)*255/206,0,255)',gblur=sigma=1.00,fps=30/1,tpad=stop_mode=clone:stop=-1[m];" +
-        "[fx][m]alphamerge[fxa];[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p[vout]",
+        "[fx][m]alphamerge[fxa];[bg][fxa]overlay=format=yuv420:shortest=1,format=yuv420p[vout]",
     )
     expect(argv[argv.indexOf("-t") + 1]).toBe("2.000")
   })

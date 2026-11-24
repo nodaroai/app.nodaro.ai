@@ -53,7 +53,7 @@ import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { maskCompositeRefusalForCharge } from "../../lib/mask-composite-refusal.js"
 import { growFaceMaskVideo, type FaceGrowStats } from "./mask-face-grow-video.js"
-import { probeMatched } from "./matched-encode.js"
+import { probeMatched, type KeptPixFmt } from "./matched-encode.js"
 import {
   withAlphaPlane,
   workingCopyPeakMemoryMiB,
@@ -182,11 +182,23 @@ function audioArgs(source: MaskCompositeAudioSource, probe: MaskCompositeProbe):
  * the working copy, its graph in that format. `pix` / `alpha` name the
  * graph's formats; for the delivery encode they are the ones it always had.
  */
-function pictureEncode(workingCopy: WorkingCopySource | undefined): { pix: string; alpha: string; args: string[] } {
+function pictureEncode(workingCopy: WorkingCopySource | undefined): { pix: KeptPixFmt; alpha: string; args: string[] } {
   if (!workingCopy) return { pix: "yuv420p", alpha: "yuva420p", args: ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"] }
   const pix = workingCopyPixFmt(workingCopy)
   return { pix, alpha: withAlphaPlane(pix), args: workingCopyPictureArgs(workingCopy) }
 }
+
+/**
+ * The overlay that lays the masked layer over the background, blending in the
+ * graph's own format (`yuv420p` → `format=yuv420`): the background goes in as
+ * it is and only the layer carries an alpha plane. With `format=auto` the
+ * overlay asked for an alpha plane on the background too, and ffmpeg's
+ * converter for it moved the picture through RGB whenever the two inputs'
+ * colour tags differed (a blur fill of a tagged clip, a video fill over an
+ * untagged one), darkening the background outside the mask by up to 1.4 luma
+ * levels on x86. Blending in the background's format converts nothing of it.
+ */
+const overlayInFormat = (pix: KeptPixFmt): string => `overlay=format=${pix.slice(0, -1)}`
 
 /**
  * The ffmpeg argv for one composite. Inputs: 0 = foreground, 1 = background
@@ -218,7 +230,7 @@ export function buildMaskCompositeArgs(args: {
     `[1:v]${ZERO_CLOCK},${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=${enc.pix}[bg]`,
     `[2:v]${maskChain(s, w, h, rate)}[m]`,
     "[fg][m]alphamerge[fga]",
-    `[bg][fga]overlay=format=auto:shortest=1,format=${enc.pix}${restoreStart(startSec)}[vout]`,
+    `[bg][fga]${overlayInFormat(enc.pix)}:shortest=1,format=${enc.pix}${restoreStart(startSec)}[vout]`,
     ...(audio.filter ? [audio.filter] : []),
   ].join(";")
   return [
@@ -303,7 +315,7 @@ export function buildMaskCompositeFillArgs(args: {
     `[src]${maskCompositeFillEffect(s, w, h)},format=${enc.alpha}[fx]`,
     `[1:v]${maskChain(s, w, h, rate)}[m]`,
     "[fx][m]alphamerge[fxa]",
-    `[bg][fxa]overlay=format=auto:shortest=1,format=${enc.pix}${restoreStart(startSec)}[vout]`,
+    `[bg][fxa]${overlayInFormat(enc.pix)}:shortest=1,format=${enc.pix}${restoreStart(startSec)}[vout]`,
   ].join(";")
   return [
     "-y",
