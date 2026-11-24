@@ -58,7 +58,7 @@ import {
   getVideoAudioCapability,
   type VideoUpscaleProvider
 } from "@nodaro/shared/models"
-import { SEEDANCE_LIP_SYNC_SECONDS, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution, usdToCredits } from "@nodaro/shared/credits"
+import { SEEDANCE_LIP_SYNC_SECONDS, isDrivingAudioLipSyncProvider, isLipSyncChargedAtRunCost, isSeedanceLipSyncProvider, seedanceLipSyncResolution, grokExtendSeconds, ltxExtendDurationSec, ltxRetakeDurationSec, pixverseExtendCreditId, pixverseExtendQuality, tailExtendResolution, usdToCredits } from "@nodaro/shared/credits"
 import { faceSwapSettle } from "../../lib/face-swap-input.js"
 import { ttsSupportsAudioTags, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared/pipeline"
@@ -995,6 +995,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     syncMode, temperature, activeSpeaker,
     mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
     lipSyncBilledSeconds,
+    audioToVideo, referenceAudioUrls, duration,
   } = job.data as {
     jobId: string
     imageUrl?: string
@@ -1033,6 +1034,11 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     // A model priced by its audio's length: the seconds the run was held for
     // (OmniHuman 2.0's whole seconds, a bucketed model's bucket).
     lipSyncBilledSeconds?: number
+    // An audio-to-video model (LTX 2.5 Fast): the server's stamp — the voice as the first reference
+    // audio, and the length to send (the measured voice less the margin).
+    audioToVideo?: boolean
+    referenceAudioUrls?: string[]
+    duration?: number
   }
 
   const resolvedProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
@@ -1073,7 +1079,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     // fal queue jobs reconcile via the "fal-request" kind (tags the row so the
     // reconcile cron can recover/refund a crashed mid-poll fal job).
     lipSyncKind = "fal-request"
-  } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+  } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never) || isDrivingAudioLipSyncProvider(resolvedProvider)) {
     lipSyncKind = providerKindForVideoModel(resolvedProvider)
   } else {
     lipSyncKind = providerKindForLipSyncModel(resolvedProvider)
@@ -1120,6 +1126,28 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultUrl = outUrl
     resultCost = cost
     resultProviderUsed = `replicate:${resolvedProvider}`
+  } else if (isDrivingAudioLipSyncProvider(resolvedProvider)) {
+    // LTX 2.5 Fast (decided 2026-11-23): Generate Video's audio-to-video run with the portrait as its
+    // start frame, run only from the server's stamp (the length the measuring step priced and sends). A job
+    // without it was never priced so: it fails, and is refunded — the length is never guessed here.
+    if (!imageUrl) throw new Error(`${resolvedProvider} lip-sync requires an image (face/portrait)`)
+    if (audioToVideo !== true || !(typeof duration === "number" && duration > 0) || !referenceAudioUrls?.[0]) {
+      throw new Error(`${resolvedProvider} lip-sync job carries no measured voice; it was not priced as an audio-to-video run`)
+    }
+    const result = await imageToVideo(
+      imageUrl,
+      resolvedProvider,
+      prompt || "A person speaking naturally",
+      duration,
+      undefined,
+      { audioToVideo: true, referenceAudioUrls: [referenceAudioUrls[0]], resolution, ...(typeof seed === "number" ? { seed } : {}) },
+      { onTaskCreated: lipSyncOnTaskCreated },
+    )
+    resultUrl = result.url
+    // What the runner records: the rate on the seconds sent.
+    resultCost = result.cost
+    resultProviderUsed = result.providerUsed
+    resultMeta = result
   } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // The Seedance 2 family and MiniMax Hailuo 3 — multimodal video models
     // that do native phoneme-level lip sync (8+ languages) when fed
@@ -1239,7 +1267,10 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     ? await addVoiceLineIfSilent({ videoUrl: resultUrl, voiceUrl: audioUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
     : undefined
   const voicedUrl = voicedUrlOf(voiceLine)
-  const r2Url = voicedUrl ?? await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // An audio-to-video model (LTX 2.5 Fast): a silent render gets the voice laid on and is stored once —
+  // Generate Video's own step (lib/driving-audio-lay.ts), the one the reconcile runs too.
+  const drivingAudioLaid = await layDrivingAudioForJob(resultUrl, { audioToVideo, referenceAudioUrls }, ctx)
+  const r2Url = voicedUrl ?? drivingAudioLaid ?? await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)

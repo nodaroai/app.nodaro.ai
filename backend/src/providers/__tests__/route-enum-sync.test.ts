@@ -25,6 +25,7 @@
  * (VEO upscale, Replicate-via-direct-SDK lip-sync, ElevenLabs v3).
  */
 
+import { isDrivingAudioLipSyncProvider } from "@nodaro/shared/credits"
 import { describe, it, expect, vi } from "vitest"
 
 // credits.ts imports supabase + config at module scope (transitively pulled
@@ -113,6 +114,10 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // multimodal models routed through i2v rather than a real lip-sync model, so
   // a future family member is exempt for the same reason without a test edit.
   ...SEEDANCE_LIP_SYNC_PROVIDERS,
+  // LTX 2.5 Fast on Lip Sync (decided 2026-11-23): its audio-to-video run goes through the i2v worker
+  // (a KIE_VIDEO_MODELS key), its voice as the first reference audio. DERIVED: every Lip Sync model
+  // that runs audio-to-video (`isDrivingAudioLipSyncProvider`).
+  ...LIP_SYNC_PROVIDERS.filter(isDrivingAudioLipSyncProvider),
   // ── TTS ────────────────────────────────────────────────────────────────
   // ElevenLabs v3 routes through ElevenLabs direct API
   // (backend/src/providers/elevenlabs/direct-tts.ts), not via KIE.

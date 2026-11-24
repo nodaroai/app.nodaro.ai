@@ -1,5 +1,0 @@
----
-"@nodaro/sdk": minor
----
-
-Typed bodies for two video tools on `nodes.run` / `nodes.runAndWait` / `nodes.quote`. `"switchx"` (Relight & Switch) takes `RelightSwitchParams`: the source video, `alphaMode` (`auto`, `fill`, `select`, `custom`), the mask image or mask video, the mask's frame, a reference image and/or a prompt, and `maxResolution` (720 or 1080); `runAndWait` resolves a `RelightSwitchJobOutput`. `"edit-video-pro"` (Nodaro Cloud) takes `EditVideoProParams`: the source video, the span's start and end in seconds (4 to 120 seconds), the prompt, the model (`EditVideoProProvider`) and up to 9 reference images. Both accept `origin` and `sessionId`. `nodes.quote("edit-video-pro", …)` is new on the platform: the most the edit can cost, with a `settles_to_actual` warning; a span the run refuses is refused by the quote too. Each node's limits come back as a `400` with its own code and a sentence to show (`VIDEO_TOO_MANY_FRAMES`, `SOURCE_TOO_LARGE`, `MISSING_STYLE_INPUT`, `MISSING_ALPHA`, `span_exceeds_source`).

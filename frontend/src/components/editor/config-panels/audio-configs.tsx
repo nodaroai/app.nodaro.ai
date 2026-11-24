@@ -1,4 +1,6 @@
 "use client"
+import { isDrivingAudioLipSyncProvider } from "@nodaro/shared/credits"
+import { lipSyncModelSwitchPatch, lipSyncResolutionChoices, type LipSyncResolution } from "@nodaro/shared/models"
 import { surfaceVoiceGenderAllowed } from "@/lib/surface-selectors"
 
 import { useMemo, useCallback, useEffect, useId } from "react"
@@ -86,7 +88,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncLeverClearPatch, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, TTS_OUTPUT_FORMATS, dialogueProviderOf, getDialogueCapabilities, dialogueMaxSpeakers, dialogueVoicesForModel, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, REPLICATE_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER, lipSyncTakesLever, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, TTS_OUTPUT_FORMATS, dialogueProviderOf, getDialogueCapabilities, dialogueMaxSpeakers, dialogueVoicesForModel, SUNO_SEPARATE_TYPES, SUNO_STEM_NAMES, DEFAULT_SUNO_STEM_NAME, SUNO_SEPARATE_STEM_FIELDS, type SunoSeparateType, type SunoStemName } from "@nodaro/shared/models"
 import { AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared/media"
 import { lipSyncFifteenSecondCreditId, sunoCreditType } from "@nodaro/shared/credits"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts/assembly"
@@ -1771,19 +1773,12 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-// Per-provider resolution option set for the Lip Sync node. OmniHuman 1.5 is
-// 720/1080 only (no 480p), default 1080; the full Seedance 2 adds 1080 to
-// 480/720; seedance-2-fast / -mini and other KIE avatars are 480/720 only
-// (fast has NO 1080p SKU — KIE pricing page verified 2026-06-25). Drives both
-// the dropdown and the fail-safe useEffect so a stale value snaps to a valid
-// one on provider switch.
-function lipSyncResolutionOptions(
-  provider: string,
-): { values: Array<"480p" | "720p" | "1080p">; def: "480p" | "720p" | "1080p" } {
-  if (provider === "omnihuman-1-5") return { values: ["720p", "1080p"], def: "1080p" }
-  if (provider === "seedance-2")
-    return { values: ["480p", "720p", "1080p"], def: "720p" }
-  return { values: ["480p", "720p"], def: "720p" }
+// Per-provider resolution option set for the Lip Sync node: the shared table
+// (`lipSyncResolutionChoices`, @nodaro/shared/models) the quick strip's model
+// switch, the route and the workflow run read too. A model with no choice
+// renders no dropdown, so its fallback here is never shown.
+function lipSyncResolutionOptions(provider: string): { values: readonly LipSyncResolution[]; def: LipSyncResolution } {
+  return lipSyncResolutionChoices(provider) ?? { values: ["480p", "720p"], def: "720p" }
 }
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
@@ -1839,18 +1834,10 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   useEffect(() => {
     // A retired model is the person's to replace: nothing is rewritten under it.
     if (retiredModel !== undefined) return
-    const notTaken = lipSyncLeverClearPatch(provider, data)
-    if (Object.keys(notTaken).length > 0) {
-      onUpdate(notTaken as Partial<LipSyncData>)
-      return
-    }
-    if (!imageInputKie) {
-      if (data.resolution !== undefined) onUpdate({ resolution: undefined })
-      return
-    }
-    if (data.resolution && !resOpts.values.includes(data.resolution)) {
-      onUpdate({ resolution: resOpts.def as LipSyncData["resolution"] })
-    }
+    // The model-switch patch the dropdown and the quick strip write (one rule): the levers it does not
+    // take, and a resolution it does not list snapped (LTX 2.5 Fast: its run's own rule) or cleared.
+    const patch = lipSyncModelSwitchPatch(provider, { ...data, provider })
+    if (Object.keys(patch).length > 0) onUpdate(patch as Partial<LipSyncData>)
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A saved node on a model retired from Lip Sync (decided 2026-11-12): it says
@@ -1861,7 +1848,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     return (
       <div className="flex flex-col gap-3">
         <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Select value="" onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"], ...lipSyncLeverClearPatch(v, data) } as Partial<LipSyncData>)}>
+          <Select value="" onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"], ...lipSyncModelSwitchPatch(v, data as Record<string, unknown>) } as Partial<LipSyncData>)}>
             <SelectTrigger aria-label={t("field.provider")}><SelectValue placeholder={retiredModel} /></SelectTrigger>
             <SelectContent>
               {offeredLipSyncModels.map((m) => (
@@ -1880,7 +1867,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"], ...lipSyncLeverClearPatch(v, data) } as Partial<LipSyncData>)}>
+        <Select value={provider} onValueChange={(v) => onUpdate({ provider: v as LipSyncData["provider"], ...lipSyncModelSwitchPatch(v, data as Record<string, unknown>) } as Partial<LipSyncData>)}>
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>
           <SelectContent>
             {offeredLipSyncModels.map((m) => (
@@ -1988,6 +1975,24 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintSameSeed")}</p>
           </div>
         </>
+      )}
+
+      {/* LTX 2.5 Fast — a seed (empty for a random one each run); its resolution is above. */}
+      {isDrivingAudioLipSyncProvider(provider) && (
+        <div>
+          <Label>{t("field.seed")}</Label>
+          <Input
+            type="number"
+            min={0}
+            value={data.seed ?? ""}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10)
+              onUpdate({ seed: Number.isNaN(n) || n < 0 ? undefined : n })
+            }}
+            placeholder={t("audiocfg.phSeedEmptyRandom")}
+          />
+          <p className="text-xs text-muted-foreground mt-1">{t("audiocfg.hintSameSeed")}</p>
+        </div>
       )}
 
       {/* LatentSync params */}

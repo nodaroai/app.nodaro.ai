@@ -5908,6 +5908,7 @@ export const ptBR: ChromeDict = {
   "audiocfg.phRandomLower": "aleatória",
   "audiocfg.phNegOneRandom": "-1 = aleatória",
   "audiocfg.phZeroRandom": "0 = aleatória",
+  "audiocfg.phSeedEmptyRandom": "Vazio = aleatório",
   "audiocfg.phCoverTitle": "Título do cover",
   "audiocfg.phSongTitle": "Título da música",
   "audiocfg.phExtendedTitle": "Título da faixa estendida",

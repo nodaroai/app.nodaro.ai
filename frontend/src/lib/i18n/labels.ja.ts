@@ -814,6 +814,7 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Versatile, 5-10s clips": "多用途、5〜10 秒のクリップ",
   "Versatile, good at diverse styles": "多用途、多様なスタイルに強い",
   "Video-to-video AI dubbing. Multi-speaker (basic mode). Cheapest modern dubbing, billed per second.": "動画から動画への AI 吹き替え。複数話者に対応（ベーシックモード）。最も安価な最新の吹き替え、秒単位の課金。",
+  "Portrait and voice to a talking clip as long as the voice, 2–20s, 720p/1080p/1440p, billed per second": "ポートレートと音声から、音声と同じ長さの話すクリップを生成。2～20秒、720p/1080p/1440p、秒単位で課金",
   "Video-to-video editing, up to 60s input": "動画から動画への編集、最大 60 秒の入力",
   "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame": "Wan 2.7 I2V、2〜15 秒、720p/1080p、開始＋終了フレーム",
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V、2〜15 秒、720p/1080p",

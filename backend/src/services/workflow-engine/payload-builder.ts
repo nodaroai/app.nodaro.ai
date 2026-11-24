@@ -132,6 +132,9 @@ import {
   lipSyncAudioRateOf,
   isSeedanceLipSyncProvider,
   referenceAudioLipSyncCreditId,
+  isDrivingAudioLipSyncProvider,
+  drivingAudioLipSyncResolution,
+  drivingAudioQuoteId,
   seedanceLipSyncResolution,
   resolveCinematicCreditId,
   buildVideoAnalysisCreditId,
@@ -218,6 +221,7 @@ import {
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   retiredLipSyncProviderMessage,
+  lipSyncResolutionRefusal,
   editVideoProProviderRefusal,
 } from "@nodaro/shared/models"
 import {
@@ -5756,12 +5760,45 @@ function buildPayloadOf(
       // model; another is the person's choice, never ours).
       const retiredLipSync = retiredLipSyncProviderMessage(provider)
       if (retiredLipSync) throw new Error(retiredLipSync)
+      // `1440p` on a model that does not render it (any but LTX 2.5 Fast): the route's refusal, before the hold.
+      const resolutionRefusal = lipSyncResolutionRefusal(provider, data.resolution)
+      if (resolutionRefusal) throw new Error(resolutionRefusal)
       // A model charged per second of its audio at a rate (OmniHuman 2.0)
       // reserves on its one-second row; the run measures the audio before the
       // hold (`stampLipSyncInputs`) and multiplies it by the billed seconds
       // (`computeLipSyncRateCreditOverride`). It takes none of the levers it
       // does not take — a resolution, fast mode or seed a node kept from
       // another model is dropped here, as the route drops it.
+      // An audio-to-video model (LTX 2.5 Fast, decided 2026-11-23): Generate Video's audio-to-video run with
+      // the portrait as its start frame. Marked for the executor, which reads the voice and prices the run
+      // before the hold (`stampDrivingAudioRun`, the route's own rule); held provisionally at the longest
+      // clip it can be. A portrait is required and a video face input refused, here, before anything is held.
+      if (isDrivingAudioLipSyncProvider(provider)) {
+        const portrait = resolvedInputs.imageUrl || data.imageUrl
+        const faceVideo = resolvedInputs.videoUrl || data.videoUrl
+        if (!portrait || faceVideo) {
+          throw new Error(`${MODEL_CATALOG[provider]?.label ?? provider} makes a talking clip from a portrait image and a voice line; it takes no video. Nothing was charged.`)
+        }
+        const voice = resolvedInputs.audioUrl || data.audioUrl
+        const sentResolution = drivingAudioLipSyncResolution(provider, data.resolution)
+        return {
+          jobName: "lip-sync",
+          queueName: "video-generation",
+          modelIdentifier: drivingAudioQuoteId({ provider, resolution: sentResolution, audioSec: undefined }),
+          payload: {
+            jobId,
+            imageUrl: portrait,
+            audioUrl: voice,
+            prompt: applyPromptAffixes((resolvedInputs.prompt || data.prompt) as string | undefined, readPromptAffixes(data), refMap) || "A person talking naturally",
+            provider,
+            resolution: sentResolution,
+            referenceAudioUrls: voice ? [voice] : [],
+            drivingAudioPending: true,
+            seed: data.seed,
+            usageLogId,
+          },
+        }
+      }
       const audioRate = lipSyncAudioRateOf(provider)
       if (audioRate) {
         const levers = withoutLipSyncLeversNotTaken(provider, { resolution: data.resolution, seed: data.seed, fastMode: data.fastMode })

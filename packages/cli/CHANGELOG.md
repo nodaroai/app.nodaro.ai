@@ -1,5 +1,59 @@
 # @nodaro/cli
 
+## 1.55.0
+
+### Minor Changes
+
+- 1b1edc9: `nodaro nodes quote <type> --param k=v …`: the price of a run before it starts, with the same inputs `nodes run` takes. Nothing is started and nothing is charged. It prints the credits the run holds, the expected charge when that is lower, and the quote's notes (`--json` prints the quote as it is). Works for every type the platform can quote, including `switchx` (Relight & Switch) and, on Nodaro Cloud, `edit-video-pro`.
+- d928f4b: `nodaro trends estimate|run --choice <slot>.face=new|original`: a trend's person slot takes the Face chip where `trends get` lists it (from your picture, or from the video to keep the person's own face).
+
+### Patch Changes
+
+- f85099a: Video Remake quotes may name an `upscale` part: a Topaz video upscale of the result, scaled back to the run's resolution, added when the deployment's setting runs that step for a Precise Nodaro Prism run (and for a draft's Full Quality at 1080p). `VideoRemakeEstimate.breakdown.upscale` and `VideoRemakeFullQualityEstimate.breakdown.upscale` type it; the CLI labels it "Topaz upscale".
+- Updated dependencies [b7f2997]
+- Updated dependencies [d1b773e]
+- Updated dependencies [d1b773e]
+- Updated dependencies [68bd4e3]
+- Updated dependencies [b681717]
+- Updated dependencies [b681717]
+- Updated dependencies [44bf5f0]
+- Updated dependencies [d1b773e]
+- Updated dependencies [e692c85]
+- Updated dependencies [e692c85]
+- Updated dependencies [f8d7ef1]
+- Updated dependencies [0fea0d0]
+- Updated dependencies [f4f9f3b]
+- Updated dependencies [baacb23]
+- Updated dependencies [baacb23]
+- Updated dependencies [baacb23]
+- Updated dependencies [4dafbea]
+- Updated dependencies [f85099a]
+- Updated dependencies [1b1edc9]
+- Updated dependencies [d1b773e]
+- Updated dependencies [bbc702f]
+- Updated dependencies [dbbbf5d]
+- Updated dependencies [6b5c7ca]
+- Updated dependencies [8c4259a]
+- Updated dependencies [d1b773e]
+- Updated dependencies [d1b773e]
+- Updated dependencies [d928f4b]
+- Updated dependencies [2143bb3]
+- Updated dependencies [7ec10b6]
+- Updated dependencies [cb70b92]
+- Updated dependencies [fbff039]
+- Updated dependencies [47b5fc5]
+- Updated dependencies [276d736]
+- Updated dependencies [a5cc133]
+- Updated dependencies [6e7936b]
+- Updated dependencies [f64e726]
+- Updated dependencies [a6fe823]
+- Updated dependencies [72ffe70]
+- Updated dependencies [b7f2997]
+- Updated dependencies [d3773ac]
+  - @nodaro/shared@3.73.0
+  - @nodaro/sdk@2.79.0
+  - @nodaro/prompts@1.60.1
+
 ## 1.54.0
 
 ### Minor Changes

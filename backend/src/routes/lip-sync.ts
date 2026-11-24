@@ -12,9 +12,10 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
-import { LIP_SYNC_PROVIDERS, lipSyncLeverClearPatch, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
-import { isLipSyncChargedAtRunCost, lipSyncAudioRateOf, referenceAudioLipSyncCreditId } from "@nodaro/shared/credits"
-import { checkLipSyncInputs, lipSyncAudioPricingOf, lipSyncHeldCreditId, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
+import { LIP_SYNC_PROVIDERS, lipSyncLeverClearPatch, lipSyncResolutionRefusal, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
+import { drivingAudioCreditId, drivingAudioLipSyncResolution, drivingAudioOf, isDrivingAudioLipSyncProvider, isLipSyncChargedAtRunCost, lipSyncAudioRateOf, referenceAudioLipSyncCreditId } from "@nodaro/shared/credits"
+import { drivingAudioFaceRefusal, drivingAudioFreeVideoRequest, drivingAudioRefusalStatus, measureDrivingAudio, type DrivingAudioMeasure } from "../lib/driving-audio-measure.js"
+import { checkLipSyncInputs, lipSyncAudioPricingOf, lipSyncHeldCreditId, lipSyncModelLabel, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
 import { lipSyncFloorRefusal } from "../lib/lip-sync-floor-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { probeAndCheckRefAudio, sentReferenceAudioUrls } from "../lib/ref-audio-probe.js"
@@ -31,7 +32,8 @@ export const lipSyncBody = z.object({
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
   // 1080p / 4k only valid for the seedance-2 family; infinitalk caps at 720p.
-  resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional(),
+  // 1440p: LTX 2.5 Fast's top tier (its audio-to-video run, decided 2026-11-23); another model renders its own.
+  resolution: z.enum(["480p", "720p", "1080p", "1440p", "4k"]).optional(),
   // Accepted for older clients and never read (decided 2026-11-13): every
   // model priced by its audio's length is priced on the length the server
   // measures (`lipSyncInputPreHandler`), and the job records that length.
@@ -71,14 +73,23 @@ export const lipSyncBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+/** A measured audio-to-video run (`measureDrivingAudio`'s answer when it prices the run). */
+type DrivingAudioRunMeasure = Extract<DrivingAudioMeasure, { ok: true }>
+
 /**
  * Single source of truth for the lip-sync credit identifier — used by BOTH the
  * creditGuard preHandler and the in-handler reservation so the reserved price
  * can never drift from the charged price. Mirrors extend-video.ts's
  * resolveExtendVideoIdentifier().
  */
-export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined, measured?: LipSyncMeasure): string {
+export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined, measured?: LipSyncMeasure, drivingAudio?: DrivingAudioRunMeasure): string {
   const provider = (body?.provider as string) ?? LIP_SYNC_DEFAULT_PROVIDER
+  // An audio-to-video model (LTX 2.5 Fast, decided 2026-11-23): the row of the voice the measuring step
+  // read — Generate Video's audio-to-video row, never a length the request sent. Never priced on a guess.
+  if (isDrivingAudioLipSyncProvider(provider)) {
+    if (!drivingAudio) throw new Error("lip-sync: an audio-to-video run reached its pricing without its measured voice")
+    return drivingAudio.creditId
+  }
   // A model charged per second of its audio at a rate (OmniHuman 2.0): its
   // one-second row, which `computeCredits` multiplies by the seconds the
   // guard's measuring step measured. Before the bucket branch below, which would bucket it.
@@ -123,6 +134,20 @@ export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefin
  */
 async function retiredLipSyncProviderPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const message = retiredLipSyncProviderMessage((req.body as Record<string, unknown> | null)?.provider)
+  if (message) {
+    return reply.status(400).send({ error: { code: "validation_error", message } })
+  }
+}
+
+/**
+ * `1440p` is LTX 2.5 Fast's alone on Lip Sync (decided 2026-11-23): the route
+ * took no `1440p` before, so for any other model it is refused before the
+ * credit guard (`lipSyncResolutionRefusal`, the workflow run's rule too) —
+ * never moved to a tier above it. Every other value is read as before.
+ */
+async function lipSyncResolutionPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const message = lipSyncResolutionRefusal(String(body.provider ?? LIP_SYNC_DEFAULT_PROVIDER), body.resolution)
   if (message) {
     return reply.status(400).send({ error: { code: "validation_error", message } })
   }
@@ -209,6 +234,7 @@ export async function lipSyncInputPreHandler(req: FastifyRequest, reply: Fastify
   dropClientMeasureFields(req.body, [MEASURED_AUDIO_SEC, BILLED_SECONDS])
   const body = (req.body ?? {}) as Record<string, unknown>
   const model = (body.provider ?? LIP_SYNC_DEFAULT_PROVIDER) as string
+  if (isDrivingAudioLipSyncProvider(model)) return drivingAudioLipSyncStep(req, reply, model, body)
   const pricing = lipSyncAudioPricingOf(model)
   if (!pricing) return
   const parsed = lipSyncBody.safeParse(body)
@@ -242,6 +268,48 @@ export async function lipSyncInputPreHandler(req: FastifyRequest, reply: Fastify
   // charged: a quote says so (a no-op on a run).
   if (isLipSyncChargedAtRunCost(model)) noteWarning(req, LIP_SYNC_RUN_COST_WARNING)
 }
+
+/**
+ * The measuring step of an audio-to-video model (LTX 2.5 Fast, decided
+ * 2026-11-23) — Generate Video's audio-to-video measurement, the same rule
+ * (`measureDrivingAudio`): the body is the handler's own schema; the portrait
+ * is required (a video face input is refused: the endpoint takes an image)
+ * before anything is downloaded; the payer must afford the shortest clip; the
+ * voice is read (decoded length, the endpoint's formats, no video file) and a
+ * voice the endpoint would not take is refused before the hold. The reading is
+ * kept on the server-side request (`req.drivingAudio`) for the pricing, the
+ * free-credit check (built only from it) and the queued job. The resolution is
+ * the Lip Sync rule's (`drivingAudioLipSyncResolution`); the node's frame-rate
+ * field belongs to other models and is not read (the run is sent at 24 fps).
+ */
+async function drivingAudioLipSyncStep(req: FastifyRequest, reply: FastifyReply, model: string, body: Record<string, unknown>): Promise<void> {
+  const parsed = lipSyncBody.safeParse(body)
+  if (!parsed.success) {
+    return void reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+  }
+  if (!parsed.data.imageUrl || parsed.data.videoUrl) {
+    return void reply.status(400).send({
+      error: { code: "lip_sync_image_required", message: `${lipSyncModelLabel(model)} makes a talking clip from a portrait image (imageUrl) and a voice line; it takes no video. Nothing was charged.` },
+    })
+  }
+  const resolution = drivingAudioLipSyncResolution(model, parsed.data.resolution)
+  const floor = await lipSyncFloorRefusal(req, { floorCreditId: drivingAudioCreditId(model, resolution, drivingAudioOf(model)?.minSec ?? 2) })
+  if (floor) return void reply.status(floor.statusCode).send(floor.body)
+  // The portrait must be a picture the run can use (decided 2026-11-24), read by content — after the cheap checks,
+  // before the voice is read and anything is held. A quote prices nothing from the face, so it never fetches it.
+  if (req.quoteOnly !== true) {
+    const face = await drivingAudioFaceRefusal(model, parsed.data.imageUrl)
+    if (face) return void reply.status(400).send({ error: { code: face.code, message: face.message } })
+  }
+  const measured = await measureDrivingAudio({ provider: model, audioUrl: parsed.data.audioUrl, resolution, userId: req.userId })
+  if (!measured.ok) {
+    return void reply.status(drivingAudioRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
+  }
+  req.drivingAudio = measured
+  req.freeVideoRequest = drivingAudioFreeVideoRequest(model, measured)
+  delete body.audioDurationSec
+}
+
 
 /** What a quote of a model charged what its run used says about its `reserve`. */
 const LIP_SYNC_RUN_COST_WARNING = {
@@ -292,7 +360,9 @@ export const LIP_SYNC_RATE_MODEL_REQUESTS_PER_MINUTE = 30
  */
 export function lipSyncRateLimitSkips(req: Pick<FastifyRequest, "body">): boolean {
   const body = req.body as Record<string, unknown> | undefined
-  return lipSyncAudioPricingOf(body?.provider ?? LIP_SYNC_DEFAULT_PROVIDER) === undefined
+  const model = body?.provider ?? LIP_SYNC_DEFAULT_PROVIDER
+  // An audio-to-video model downloads and reads its voice before the hold too: counted.
+  return lipSyncAudioPricingOf(model) === undefined && !isDrivingAudioLipSyncProvider(model)
 }
 
 /**
@@ -302,8 +372,8 @@ export function lipSyncRateLimitSkips(req: Pick<FastifyRequest, "body">): boolea
  * measures the audio and checks a reference voice line.
  */
 export const lipSyncPricing: RoutePricing = {
-  prechecks: [retiredLipSyncProviderPreHandler],
-  modelResolver: (req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req)),
+  prechecks: [retiredLipSyncProviderPreHandler, lipSyncResolutionPreHandler],
+  modelResolver: (req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req), req.drivingAudio),
   opts: {
     runModel: jobRunModel("lip-sync"),
     computeCredits: lipSyncComputeCredits,
@@ -387,6 +457,16 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     if (lipSyncAudioRateOf(resolvedModel) !== undefined) {
       Object.assign(parsed.data, lipSyncLeverClearPatch(provider, parsed.data))
     }
+    // An audio-to-video model: the run the measuring step priced — its resolution, the voice's length, the
+    // seconds held, the length sent — on the row and the queued job (`audioToVideo`, its voice as the
+    // first reference audio: the runner, the worker's and the reconcile's lay-on all read that shape).
+    const drivingAudio = isDrivingAudioLipSyncProvider(resolvedModel) ? req.drivingAudio : undefined
+    if (drivingAudio) {
+      Object.assign(parsed.data, { resolution: drivingAudio.resolution, audioDurationSec: drivingAudio.audioSec })
+    }
+    const drivingAudioFields = drivingAudio
+      ? { audioToVideo: true, referenceAudioUrls: [audioUrl], duration: drivingAudio.sentSec, drivingAudioSec: drivingAudio.audioSec, drivingAudioBilledSec: drivingAudio.billedSec }
+      : {}
     const { resolution: sentResolution, seed: sentSeed, fastMode: sentFastMode, audioDurationSec: sentAudioDurationSec } = parsed.data
 
     const mcpClient = extractMcpClient(req.body)
@@ -402,6 +482,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
         input_data: withResolvedModel({
           ...buildJobInputData(parsed.data, "lip-sync"),
           ...(billedSeconds !== undefined ? { lipSyncBilledSeconds: billedSeconds } : {}),
+          ...drivingAudioFields,
         }, "lip-sync"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
@@ -411,7 +492,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     }
 
     const baseProvider = provider ?? LIP_SYNC_DEFAULT_PROVIDER
-    const modelIdentifier = resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req))
+    const modelIdentifier = resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined, lipSyncMeasureOf(req), req.drivingAudio)
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
@@ -426,6 +507,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       resolution: sentResolution,
       audioDurationSec: sentAudioDurationSec,
       ...(billedSeconds !== undefined ? { lipSyncBilledSeconds: billedSeconds } : {}),
+      ...drivingAudioFields,
       guidanceScale, inferenceSteps, seed: sentSeed, fastMode: sentFastMode,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,

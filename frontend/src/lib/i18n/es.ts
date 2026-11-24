@@ -5908,6 +5908,7 @@ export const es: ChromeDict = {
   "audiocfg.phRandomLower": "aleatoria",
   "audiocfg.phNegOneRandom": "-1 = aleatoria",
   "audiocfg.phZeroRandom": "0 = aleatoria",
+  "audiocfg.phSeedEmptyRandom": "Vacío = aleatorio",
   "audiocfg.phCoverTitle": "Título del cover",
   "audiocfg.phSongTitle": "Título de la canción",
   "audiocfg.phExtendedTitle": "Título de la pista extendida",

@@ -557,3 +557,4 @@ export {
   withoutLipSyncLeversNotTaken,
 } from "../lip-sync-levers.js"
 export type { LipSyncModelLever } from "../lip-sync-levers.js"
+export { lipSyncResolutionChoices, lipSyncModelSwitchPatch, lipSyncResolutionRefusal, lipSyncResolutions, lipSyncResolutionSummary, type LipSyncResolution } from "../lip-sync-resolution.js"

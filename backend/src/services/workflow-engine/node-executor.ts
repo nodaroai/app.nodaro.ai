@@ -2622,7 +2622,7 @@ async function executeWorkerNode(
   // (`measureDrivingAudio`) and stamp the run it prices — the length sent, the resolution, the row —
   // BEFORE input_data, the free-credit check and the reservation below, which all read this payload
   // and this id. A clip the route would refuse leaves no jobs row, like the gates above.
-  const drivingAudioRun = await stampDrivingAudioRun(payload, modelIdentifier, ctx.userId)
+  const drivingAudioRun = await stampDrivingAudioRun(payload, modelIdentifier, ctx.userId, node.type === "lip-sync" ? { face: true } : {})
   if (!drivingAudioRun.ok) {
     await supabase.from("jobs").delete().eq("id", jobId)
     const err = new Error(drivingAudioRun.message) as Error & { errorCode?: string }

@@ -19,6 +19,8 @@ export type LipSyncModelLever = typeof LIP_SYNC_MODEL_LEVERS[number]
 
 const LEVERS_NOT_TAKEN: Readonly<Record<string, readonly LipSyncModelLever[]>> = {
   "omnihuman-2-0": ["resolution", "fastMode", "seed"],
+  // LTX 2.5 Fast (audio-to-video, decided 2026-11-23): its resolution and seed, no fast mode.
+  "ltx-2.5-fast": ["fastMode"],
 }
 
 /** The levers `provider` does not take (none for a model this table does not list). */

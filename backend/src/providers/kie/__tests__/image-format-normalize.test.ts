@@ -266,3 +266,45 @@ describe("HEIF inputs sharp cannot decode (10-bit AVIF, HEIC)", () => {
     expect(uploadBufferToR2).not.toHaveBeenCalled()
   })
 })
+
+// LTX 2.5 Fast's start frame (its Lip Sync portrait too, decided 2026-11-24): what the start-frame step does with each
+// still-image format the portrait check lets through, and with BMP, which it refuses up front.
+describe("LTX 2.5 Fast's start frame, by format", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    uploadBufferToR2.mockResolvedValue("https://cdn.test/converted")
+  })
+  const BMP = () => {
+    // A 1×1 24-bit BMP.
+    const b = Buffer.alloc(58)
+    b.write("BM", 0, "latin1"); b.writeUInt32LE(58, 2); b.writeUInt32LE(54, 10); b.writeUInt32LE(40, 14)
+    b.writeInt32LE(1, 18); b.writeInt32LE(1, 22); b.writeUInt16LE(1, 26); b.writeUInt16LE(24, 28); b.writeUInt32LE(4, 34)
+    return b
+  }
+  const SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="red"/></svg>')
+
+  it.each([
+    ["TIFF", () => tiff()],
+    ["SVG", async () => SVG],
+    ["HEIC", async () => heifFixture("hevc.heic")],
+  ])("a %s is converted and sent", async (_name, make) => {
+    await serve(await make())
+    const { ensureImageForProvider } = await import("../video.js")
+    expect(await ensureImageForProvider("https://cdn.test/face", "ltx-2.5-fast", { context: "Video generation" })).toBe("https://cdn.test/converted")
+  })
+
+  it.each([
+    ["no size and no viewBox", '<svg xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" fill="red"/></svg>'],
+    ["a percentage width behind a prolog", '\ufeff<?xml version="1.0"?><!DOCTYPE svg><!-- c --><svg xmlns="http://www.w3.org/2000/svg" width="100%"><rect width="64" height="64"/></svg>'],
+  ])("an SVG with %s is drawn and sent too", async (_shape, text) => {
+    await serve(Buffer.from(text, "utf8"))
+    const { ensureImageForProvider } = await import("../video.js")
+    expect(await ensureImageForProvider("https://cdn.test/face.svg", "ltx-2.5-fast", { context: "Video generation" })).toBe("https://cdn.test/converted")
+  })
+
+  it("a BMP cannot be read by the step: it would fail after the hold, so the portrait check refuses it first", async () => {
+    await serve(BMP())
+    const { ensureImageForProvider } = await import("../video.js")
+    await expect(ensureImageForProvider("https://cdn.test/face.bmp", "ltx-2.5-fast", { context: "Video generation" })).rejects.toThrow(/could not be read/)
+  })
+})

@@ -5908,6 +5908,7 @@ export const ko: ChromeDict = {
   "audiocfg.phRandomLower": "무작위",
   "audiocfg.phNegOneRandom": "-1 = 무작위",
   "audiocfg.phZeroRandom": "0 = 무작위",
+  "audiocfg.phSeedEmptyRandom": "비워 두면 = 무작위",
   "audiocfg.phCoverTitle": "커버 제목",
   "audiocfg.phSongTitle": "노래 제목",
   "audiocfg.phExtendedTitle": "연장된 트랙 제목",

@@ -101,7 +101,7 @@
  "lipsync-2-pro": "lip-sync",
  "ltx-2.3-fast": "character creature generate-video image-to-video location object text-to-video video-to-video",
  "ltx-2.3-pro": "character creature generate-video image-to-video location object text-to-video video-retake video-to-video",
- "ltx-2.5-fast": "character creature generate-video image-to-video location object text-to-video video-to-video",
+ "ltx-2.5-fast": "character creature generate-video image-to-video lip-sync location object text-to-video video-to-video",
  "ltx-2.5-pro": "character creature generate-video image-to-video location object text-to-video video-to-video",
  "luma-modify": "video-to-video",
  "minimax": "character creature generate-music generate-video image-to-video location object text-to-video video-to-video",
