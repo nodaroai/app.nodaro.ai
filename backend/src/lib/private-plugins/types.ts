@@ -5452,6 +5452,19 @@ export interface PluginSupports {
     readonly roleFace?: boolean
     readonly roleFaceStoredMask?: boolean
     readonly faceGrow?: boolean
+    /**
+     * Video Remake's upscale choice (2026-11-24): a run and its estimate take
+     * `upscale: "off" | "next"` ("next": the result upscaled to the next size
+     * and delivered at it, 480p → 720p, 720p → 1080p); the estimate answers
+     * `resolution` (the engine's size), `outputResolution` (the size
+     * delivered), `upscale` (the choice made) and `upscaleOffered`; a
+     * completed job's output `outputResolution` and, on a "next" run,
+     * `upscale: "applied" | "skipped"`. Declared only while the deployment has
+     * turned it on (read at load). Where it is offered is the estimate's to
+     * say (`upscaleOffered`), never this flag's. Absent: none of this, and the
+     * field is not sent (lib/video-remake-upscale-choice.ts).
+     */
+    readonly upscaleChoice?: boolean
   }
 }
 
