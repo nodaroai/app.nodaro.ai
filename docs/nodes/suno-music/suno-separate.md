@@ -15,6 +15,7 @@ The node picks the source by itself. There is no switch to set.
 
 - **A Suno task ID**, from a connected Suno track or typed into the node: Suno separates its own track by its IDs. The audio ID is taken from a connected Suno track first, then from the node's own Audio ID field; when there is none, the task ID is used as the audio ID. Workflows built on a Suno track run exactly as they did before any audio was accepted.
 - **Any other audio** (an upload, another node's audio, a URL): the file is sent to Suno by its URL. Audio sent this way can be up to **20 MB**.
+- **A video** by URL (through the API's `audioUrl` or MCP's `audio_url`): only its sound is separated. The platform takes the sound out of the video first, at no extra charge, and that sound is what is sent to Suno, checked against the 20 MB limit and handed to the Demucs fallback. A video can be up to 500 MB. A larger one, a video without sound ("This video has no sound to separate.") and a picture or GIF ("This file is an image, not audio or a video.") each fail and are refunded in full.
 - **One instrument** works on both. On a Suno track it uses the track's IDs; on any other audio it sends the file by URL.
 
 If the node has a Suno task ID (from a wired Suno node or typed in) as well as other audio, it uses the IDs and ignores the other audio, in the editor and in workflow runs alike. An audio ID without a task ID does not count. Clear Task ID to separate the wired audio instead.
@@ -31,7 +32,7 @@ If the node has a Suno task ID (from a wired Suno node or typed in) as well as o
 
 ## Inputs & Outputs
 
-- **Input:** `audio` — any audio: a Suno track, an upload, another node's audio output, or a URL.
+- **Input:** `audio` — any audio: a Suno track, an upload, another node's audio output, or a URL. A URL may also link a video; its sound is separated.
 - **Outputs** (each an audio URL):
   - `vocals` — the vocal track.
   - `instrumental` — the instrumental track.
@@ -81,7 +82,7 @@ Fixed per run:
 | Full stems | **143 credits**<!-- credits: suno-separate-stem --> |
 | One instrument | **88 credits**<!-- credits: suno-separate-single --> |
 
-The price is the same whether the audio is a Suno track or any other audio. A failed or refused run is refunded in full.
+The price is the same whether the audio is a Suno track, any other audio, or the sound of a video. A failed or refused run is refunded in full.
 
 When the Demucs fallback runs, you pay the Audio Separation price — 33 credits<!-- credits: audio-separation --> for vocals/instrumental, 66 credits<!-- credits: audio-separation:stems --> for full stems — never more than the Suno price you were quoted. The Suno price is held when the run starts, and the rest is released when the fallback finishes. For example, a refused Vocals / instrumental run holds 44 credits<!-- credits: suno-separate --> and charges 33 credits<!-- credits: audio-separation --> when Demucs finishes.
 

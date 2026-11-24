@@ -1721,7 +1721,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "set fallback_to_demucs to run Demucs instead (vocals and full stems " +
         "only), or use `separate_audio`.",
       inputSchema: {
-        audio_url: z.string().url().optional().describe("Any audio by URL."),
+        audio_url: z.string().url().optional().describe("Any audio by URL, or a video link (its sound is split)."),
         audio_asset_id: z
           .string()
           .min(1)
@@ -2346,7 +2346,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "Separate ANY audio into vocals + instrumental, or full stems (drums, " +
         "bass, other, guitar, piano), using Demucs. Works on uploaded or " +
         "generated audio, including commercially released recordings that " +
-        "`suno_separate_stems` refuses. Returns a job_id; the stems appear in the tool card — " +
+        "`suno_separate_stems` refuses. audio_url may link a video: its sound is split. " +
+        "Returns a job_id; the stems appear in the tool card — " +
         "read the per-stem URLs (vocalUrl, instrumentalUrl, drumsUrl, …) " +
         "via get_job.",
       inputSchema: {

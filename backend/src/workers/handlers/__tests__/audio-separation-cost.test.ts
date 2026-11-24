@@ -37,7 +37,17 @@ vi.mock("../../shared.js", async (importOriginal) => ({
   withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
 }))
 
+// The video-source step: a pass-through unless a test says the link is a
+// video. Its error class stays real, so the handler's failure is the real one.
+const separable = vi.hoisted(() => ({ toSeparableAudio: vi.fn(async (url: string) => url) }))
+vi.mock("@/providers/audio/separable-audio.js", async (orig) => ({
+  ...(await orig<typeof import("@/providers/audio/separable-audio.js")>()),
+  toSeparableAudio: separable.toSeparableAudio,
+}))
+
 import { audioAIHandlers } from "../audio-ai.js"
+import { NoAudioToSeparateError } from "@/providers/audio/separable-audio.js"
+import { isDeterministicJobError } from "@/lib/deterministic-job-error.js"
 
 const JOB_ID = "00000000-0000-4000-8000-000000000a01"
 const USAGE_LOG_ID = "00000000-0000-4000-8000-000000000a02"
@@ -60,6 +70,7 @@ const completedWith = () => mocks.markJobCompleted.mock.calls[0] as unknown as [
 
 beforeEach(() => {
   vi.clearAllMocks()
+  separable.toSeparableAudio.mockImplementation(async (url: string) => url)
   mocks.markJobCompleted.mockResolvedValue(true)
   mocks.shouldSaveJobResult.mockResolvedValue(true)
 })
@@ -97,5 +108,39 @@ describe("audio-separation — the recorded provider cost", () => {
       expect(mocks.commitJobCredits).toHaveBeenCalledTimes(1)
       expect(mocks.commitJobCredits.mock.calls[0]).toEqual([USAGE_LOG_ID, JOB_ID])
     }
+  })
+})
+
+describe("audio-separation — a video link splits its sound", () => {
+  const VIDEO = "https://example.com/clip.mp4"
+  const EXTRACTED = "https://r2.example.com/tmp/provider-input/job/separate-audio-1.mp3"
+
+  it("an audio link is sent to the split exactly as it came", async () => {
+    mocks.separateAudio.mockResolvedValueOnce({ ...VOCAL_SPLIT, cost: 0.01 })
+    await run()
+    expect(separable.toSeparableAudio).toHaveBeenCalledWith("https://example.com/song.mp3", JOB_ID)
+    expect(mocks.separateAudio).toHaveBeenCalledWith("https://example.com/song.mp3", { mode: "vocal_instrumental", quality: "auto" })
+  })
+
+  it("a video link: the split reads its extracted sound; same output keys, same reserved tier", async () => {
+    separable.toSeparableAudio.mockResolvedValueOnce(EXTRACTED)
+    mocks.separateAudio.mockResolvedValueOnce({ ...VOCAL_SPLIT, cost: 0.01 })
+    await run({ audioUrl: VIDEO, mode: "vocal_instrumental", quality: "best" })
+    expect(separable.toSeparableAudio).toHaveBeenCalledWith(VIDEO, JOB_ID)
+    expect(mocks.separateAudio).toHaveBeenCalledWith(EXTRACTED, { mode: "vocal_instrumental", quality: "best" })
+    // Nothing new on the result: the stems, as for any audio.
+    expect(completedWith()).toEqual([JOB_ID, { output_data: VOCAL_SPLIT_OUTPUT, provider_cost: 0.01 }])
+    expect(mocks.commitJobCredits.mock.calls).toEqual([[USAGE_LOG_ID, JOB_ID]])
+  })
+
+  it("a video without sound fails before the split: final (refunded at once), nothing completed or committed", async () => {
+    separable.toSeparableAudio.mockRejectedValueOnce(new NoAudioToSeparateError())
+    const err = await run({ audioUrl: VIDEO }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NoAudioToSeparateError)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe("This video has no sound to separate. Use a clip with audio in it, or connect the audio itself.")
+    expect(mocks.separateAudio).not.toHaveBeenCalled()
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.commitJobCredits).not.toHaveBeenCalled()
   })
 })
