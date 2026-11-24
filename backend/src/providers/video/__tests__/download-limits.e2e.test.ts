@@ -24,7 +24,7 @@ vi.mock("../../../lib/safe-fetch.js", async (importOriginal) => ({
   },
 }))
 
-const { downloadFile, downloadBodyDeadlineMs } = await import("../ffmpeg-utils.js")
+const { downloadFile, downloadBodyDeadlineMs, isDownloadByteCapError } = await import("../ffmpeg-utils.js")
 
 // Test limits: respond within 300 ms; every 600 ms window must deliver ≥ 128 B;
 // a known-size body is assumed to arrive at ≥ 1 kB/s; nothing lasts past 3 s;
@@ -217,6 +217,16 @@ describe("downloadFile limits (real HTTP, real streams)", () => {
     const elapsed = Date.now() - t0
     expect(elapsed).toBeGreaterThanOrEqual(1_500)
     expect(elapsed).toBeLessThan(2_600)
+  }, 10_000)
+
+  // The predicate a caller turns the refusal into a final error with reads the REAL wording, both ways it fails.
+  it("isDownloadByteCapError knows the refusal, mid-body and at the headers, and not a timeout", async () => {
+    const midBody = await downloadFile(`${base}/huge`, join(dir, "huge-pred.bin"), { limits: LIMITS }).catch((e: unknown) => e)
+    const atHeaders = await downloadFile(`${base}/announced-too-big`, join(dir, "big-pred.bin"), { maxBytes: 1024 * 1024 }).catch((e: unknown) => e)
+    const slow = await downloadFile(`${base}/drip`, join(dir, "drip-pred.bin"), { limits: LIMITS }).catch((e: unknown) => e)
+    expect(isDownloadByteCapError(midBody)).toBe(true)
+    expect(isDownloadByteCapError(atHeaders)).toBe(true)
+    expect(isDownloadByteCapError(slow)).toBe(false)
   }, 10_000)
 
   it("a body announcing a size over the cap fails at the headers, and its connection is released", async () => {

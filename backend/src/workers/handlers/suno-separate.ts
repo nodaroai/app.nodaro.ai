@@ -11,6 +11,11 @@
  *                  market endpoint offers (`sunoSeparateMarket`);
  *   - market-url — any audio by URL on the market endpoint.
  *
+ * Audio sent by URL may be a link to a video: its sound is taken out first
+ * (`toSeparableAudio`) and is what every later step — the size check, Suno,
+ * the fallback — reads, at no extra charge. A video without sound fails and
+ * refunds before either engine runs.
+ *
  * The market endpoint caps input at 20 MB, and Suno refuses audio it reads as
  * protected material on every lane (a commercially released recording; on the
  * old endpoint also one of its own tracks, for its lyrics). With
@@ -55,6 +60,7 @@ import {
 } from "../../providers/kie/suno-separate-market.js"
 import { isOurMediaUrl } from "../../providers/nodaro/client.js"
 import type { AudioSeparationResult, ReconcileOpts } from "../../providers/provider.interface.js"
+import { toSeparableAudio } from "../../providers/audio/separable-audio.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import {
   commitJobCredits,
@@ -328,7 +334,13 @@ export const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(j
   const cloud = await maybeSunoCloudOutput(job, ctx, "suno-separate")
   if (cloud) return finalizeFromCloud(job, ctx, cloud, type, stemName)
 
-  const fallbackUrl = source.audioUrl
+  // Any audio by URL may be a video: its sound is what is sized, sent to Suno
+  // and handed to the fallback — taken out BEFORE the size check, so a long
+  // video whose sound is small stays on Suno. An audio link is sent as it came.
+  const sent: SunoSeparateSource = source.audioUrl !== undefined
+    ? { audioUrl: await toSeparableAudio(source.audioUrl, ctx.jobId) }
+    : source
+  const fallbackUrl = sent.audioUrl
   if (fallbackUrl) {
     const size = await sunoInputByteSize(fallbackUrl)
     if (size !== undefined && size > SUNO_SEPARATE_MAX_INPUT_BYTES) {
@@ -338,7 +350,7 @@ export const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(j
   }
 
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
-  const call = sunoCallFor(source, type, stemName, { onTaskCreated, modelKey: sunoSeparateCreditId(type) })
+  const call = sunoCallFor(sent, type, stemName, { onTaskCreated, modelKey: sunoSeparateCreditId(type) })
   let result: SunoSeparateResult
   try {
     result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, call)

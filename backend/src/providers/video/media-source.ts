@@ -29,9 +29,17 @@ export interface ClassifiedMediaSource {
  * exactly the pre-incident behavior, and says so in the log. Demotion happens
  * only on a CONFIRMED `hasVideo === false`.
  */
-export async function classifyMediaSource(url: string, slot: MediaSlot): Promise<ClassifiedMediaSource> {
+export async function classifyMediaSource(
+  url: string,
+  slot: MediaSlot,
+  /** `timeoutMs`: how long the probe may take before it counts as failed (fail open). */
+  opts: { readonly timeoutMs?: number } = {},
+): Promise<ClassifiedMediaSource> {
   try {
-    const { hasVideo, hasAudio } = await probeMediaStreams(url)
+    // No time limit: the very call it always made.
+    const { hasVideo, hasAudio } = opts.timeoutMs !== undefined
+      ? await probeMediaStreams(url, { timeoutMs: opts.timeoutMs })
+      : await probeMediaStreams(url)
     return { url, slot, hasVideo, hasAudio, probed: true }
   } catch (err) {
     console.warn(

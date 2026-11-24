@@ -68,6 +68,15 @@ export {
   downloadBodyDeadlineMs,
 }
 
+/**
+ * Whether `err` is `downloadFile` refusing a body past its byte cap (`maxBytes`
+ * or the limits' own) — a refusal that is the same on every attempt, unlike a
+ * timeout. The one place that reads the refusal's wording.
+ */
+export function isDownloadByteCapError(err: unknown): boolean {
+  return err instanceof Error && /^Download exceeds /.test(err.message)
+}
+
 /** The staged limits a BIG-MEDIA download runs under (production:
  *  `BIG_MEDIA_DOWNLOAD_LIMITS`; a test passes small ones). `responseMs` is
  *  also how long the response (status + headers) may take; the body limits
@@ -1788,15 +1797,20 @@ export interface MediaStreams {
  * the probe guard (`readProbeSource`).
  * Throws (never guesses) when ffprobe's output is not parseable — callers
  * that want a fail-open decision catch and fall back on the slot's word.
+ * `timeoutMs` bounds the ffprobe run tighter than its own watchdog (never looser).
  */
-export async function probeMediaStreams(srcUrlOrPath: string, opts: { readonly userFile?: boolean } = {}): Promise<MediaStreams> {
+export async function probeMediaStreams(
+  srcUrlOrPath: string,
+  opts: { readonly userFile?: boolean; readonly timeoutMs?: number } = {},
+): Promise<MediaStreams> {
+  const runOpts = opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : undefined
   const output = await readProbeSource(srcUrlOrPath, (input, probe) => probe.run([
     "-v", "error",
     ...probe.inputArgs,
     "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
     "-of", "json",
     input,
-  ]), opts.userFile ? { userFile: true } : {})
+  ], runOpts), opts.userFile ? { userFile: true } : {})
   let parsed: { streams?: unknown }
   try {
     parsed = JSON.parse(output) as { streams?: unknown }

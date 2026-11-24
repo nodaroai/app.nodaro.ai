@@ -568,6 +568,28 @@ describe("POST /v1/suno/separate", () => {
     )
   })
 
+  // A video link is a valid source: the worker splits its sound, at the
+  // split's own price (no extra hold for taking the sound out).
+  it("accepts a video link as audioUrl, enqueued as it came, held at the split's own price", async () => {
+    const res = await authedPost("/v1/suno/separate", {
+      audioUrl: "https://cdn.example/clip.mp4",
+      type: "split_stem",
+      fallbackToDemucs: true,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoQueueAdd).toHaveBeenCalledWith("suno-separate", {
+      jobId: TEST_JOB_ID,
+      audioUrl: "https://cdn.example/clip.mp4",
+      separateType: "split_stem",
+      fallbackToDemucs: true,
+      usageLogId: "usage-1",
+    })
+    expect(mockReserveCreditsForJob).toHaveBeenCalledTimes(1)
+    expect(mockReserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), TEST_JOB_ID, "suno-separate-stem",
+    )
+  })
+
   it("rejects neither a task id nor audioUrl with 400 validation_error", async () => {
     for (const body of [{ type: "split_stem" }, { audioId: "audio-1" }, { taskId: "  " }]) {
       const res = await authedPost("/v1/suno/separate", body)

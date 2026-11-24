@@ -8973,7 +8973,7 @@ Connect flows are popup-based and meant for the web app; publishing is available
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/audio-separation` | Demucs stems (`{ audioUrl, mode?: vocal_instrumental\|stems, quality?: auto\|fast\|best }`) → job. |
+| `POST` | `/v1/audio-separation` | Demucs stems (`{ audioUrl, mode?: vocal_instrumental\|stems, quality?: auto\|fast\|best }`) → job. `audioUrl` may link a video (up to 500 MB): its sound is separated, at the same price; a larger video, a video without sound, or an image fails and is refunded. |
 | `POST` | `/v1/audio-isolation` | Voice isolation / denoise (`{ audioUrl }`, an audio or video file; a video's sound only is sent) → job. Priced per started 10 seconds of the audio (11 credits<!-- credits: elevenlabs-isolation:per-10s@1 --> each, audio up to 30 min); the length is read first — `400 audio_too_long` / `audio_unreadable` before any charge. See [Voice Extractor](./nodes/ai-audio/audio-isolation.md). |
 | `POST` | `/v1/audio-fx` | Reverb/echo/telephone/megaphone (`{ audioUrl, preset?, mix?, delayMs?, decay?, eqLow?, eqHigh? }`) → job. |
 | `POST` | `/v1/mix-audio` | Sum 2–20 tracks (`{ audioUrls, trackVolumes?, duck?, endAt? }`) → job. `duck` = `{ under, amount?, thresholdDb?, ratio?, attackMs?, releaseMs? }` dips every track except `audioUrls[under]` while that track is loud (sidechain compression; `amount` 0–100 default 75, `thresholdDb` default -30, `attackMs` 20, `releaseMs` 500; `ratio` 1–20 overrides `amount`). A ducked mix sums instead of averaging. Same price with or without `duck`. `endAt` (`"longest"`, the default, or `"voice"`): `"voice"` ends the mix when the `duck.under` track ends, and needs `duck` (else `400 validation_error`). |

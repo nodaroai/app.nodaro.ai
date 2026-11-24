@@ -55,6 +55,14 @@ vi.mock("../../shared.js", () => ({
   withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
 }))
 
+// The video-source step: a pass-through unless a test says the link is a
+// video. Its error class stays real, so the handler's failure is the real one.
+const separable = vi.hoisted(() => ({ toSeparableAudio: vi.fn(async (url: string) => url) }))
+vi.mock("@/providers/audio/separable-audio.js", async (orig) => ({
+  ...(await orig<typeof import("@/providers/audio/separable-audio.js")>()),
+  toSeparableAudio: separable.toSeparableAudio,
+}))
+
 import {
   handleSunoSeparate,
   demucsFallbackCreditId,
@@ -66,7 +74,8 @@ import {
 import type { SunoSeparateType } from "@nodaro/shared/models"
 import { sunoHandlers } from "../suno.js"
 import { config } from "@/lib/config.js"
-import { DeterministicJobError } from "@/lib/deterministic-job-error.js"
+import { DeterministicJobError, isDeterministicJobError } from "@/lib/deterministic-job-error.js"
+import { NoAudioToSeparateError } from "@/providers/audio/separable-audio.js"
 import { providerDetailOf } from "@/lib/provider-error-detail.js"
 import {
   SunoCatalogRefusalError,
@@ -115,6 +124,7 @@ const DEMUCS_STEMS = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  separable.toSeparableAudio.mockImplementation(async (url: string) => url)
   mocks.mockSunoSeparate.mockResolvedValue({
     taskId: "suno-task-1",
     vocalUrl: "https://suno.example.com/vocal.mp3",
@@ -671,5 +681,79 @@ describe("suno-separate on the connected cloud (#643)", () => {
     mocks.mockRunJobOnCloud.mockResolvedValueOnce({ vocalUrl: "https://cloud.example.com/v.mp3" })
     await run({ audioUrl: "https://example.com/a.mp3", separateType: "separate_vocal" })
     expect(mocks.mockSafeFetch).not.toHaveBeenCalled()
+    // Nor the video step: the cloud takes a video's sound out itself.
+    expect(separable.toSeparableAudio).not.toHaveBeenCalled()
+  })
+})
+
+describe("suno-separate — a video link splits its sound", () => {
+  const VIDEO = "https://example.com/clip.mp4"
+  const EXTRACTED = "https://r2.example.com/tmp/provider-input/job-1/separate-audio-1.mp3"
+
+  beforeEach(() => {
+    separable.toSeparableAudio.mockImplementation(async (url: string) => (url === VIDEO ? EXTRACTED : url))
+  })
+
+  it("an audio link goes to Suno exactly as it came", async () => {
+    await run({ audioUrl: "https://example.com/a.mp3", separateType: "separate_vocal" })
+    expect(separable.toSeparableAudio).toHaveBeenCalledWith("https://example.com/a.mp3", "job-1")
+    expect(mocks.mockSunoSeparateMarket).toHaveBeenCalledWith(
+      { source: { audioUrl: "https://example.com/a.mp3" }, type: "separate_vocal" },
+      expect.anything(),
+    )
+  })
+
+  it("a video link: Suno gets its extracted sound; same output keys, the Suno price", async () => {
+    await run({ audioUrl: VIDEO, separateType: "separate_vocal" })
+    expect(mocks.mockSunoSeparateMarket).toHaveBeenCalledWith(
+      { source: { audioUrl: EXTRACTED }, type: "separate_vocal" },
+      expect.objectContaining({ modelKey: "suno-separate" }),
+    )
+    expect(Object.keys(completedOutput()).sort()).toEqual(["audioUrl", "engineUsed", "instrumentalUrl", "separateType", "sunoTaskId", "vocalUrl"])
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockCommitJobCreditsAtChargedPrice).not.toHaveBeenCalled()
+  })
+
+  it("the size check reads the extracted sound, not the video: a big video with small sound stays on Suno", async () => {
+    mocks.mockSafeFetch.mockImplementation(async (url: string) => headResponse(String(url === VIDEO ? 200 * MB : 4 * MB)))
+    await run({ audioUrl: VIDEO, separateType: "split_stem", fallbackToDemucs: true })
+    expect(mocks.mockSafeFetch).toHaveBeenCalledWith(EXTRACTED, expect.anything())
+    expect(mocks.mockSafeFetch).not.toHaveBeenCalledWith(VIDEO, expect.anything())
+    expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
+    expect(completedOutput()).toMatchObject({ engineUsed: "suno" })
+  })
+
+  it("a refused video with the fallback on: the fallback splits the extracted sound at the unchanged fallback price", async () => {
+    mocks.mockSunoSeparateMarket.mockRejectedValue(new SunoCatalogRefusalError())
+    await run({ audioUrl: VIDEO, separateType: "split_stem", fallbackToDemucs: true })
+    expect(mocks.mockSeparateAudio).toHaveBeenCalledWith(EXTRACTED, { mode: "stems", quality: "auto" })
+    expect(mocks.mockCommitJobCreditsAtChargedPrice).toHaveBeenCalledWith("usage-1", "job-1", "audio-separation:stems")
+  })
+
+  it("an oversized extracted sound with the fallback on goes to the fallback with that sound", async () => {
+    mocks.mockSafeFetch.mockResolvedValue(headResponse(String(30 * MB)))
+    await run({ audioUrl: VIDEO, separateType: "separate_vocal", fallbackToDemucs: true })
+    expect(mocks.mockSunoSeparateMarket).not.toHaveBeenCalled()
+    expect(mocks.mockSeparateAudio).toHaveBeenCalledWith(EXTRACTED, { mode: "vocal_instrumental", quality: "auto" })
+    expect(mocks.mockCommitJobCreditsAtChargedPrice).toHaveBeenCalledWith("usage-1", "job-1", "audio-separation")
+  })
+
+  it("a video without sound fails before either engine, even with the fallback on: final, nothing settled", async () => {
+    separable.toSeparableAudio.mockRejectedValueOnce(new NoAudioToSeparateError())
+    const err = await run({ audioUrl: VIDEO, separateType: "split_stem", fallbackToDemucs: true }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NoAudioToSeparateError)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.mockSafeFetch).not.toHaveBeenCalled()
+    expect(mocks.mockSunoSeparateMarket).not.toHaveBeenCalled()
+    expect(mocks.mockSeparateAudio).not.toHaveBeenCalled()
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCreditsAtChargedPrice).not.toHaveBeenCalled()
+  })
+
+  it("a Suno track (ids) never goes through the video step", async () => {
+    await run({ taskId: "t", audioId: "a", audioUrl: VIDEO, separateType: "separate_vocal" })
+    expect(separable.toSeparableAudio).not.toHaveBeenCalled()
+    expect(mocks.mockSunoSeparate).toHaveBeenCalled()
   })
 })

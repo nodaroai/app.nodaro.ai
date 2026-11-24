@@ -41,6 +41,7 @@ import { generateMusic, type MusicProvider } from "../../providers/audio/generat
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
 import { KieAudioProvider } from "../../providers/kie/audio.js"
 import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
+import { toSeparableAudio } from "../../providers/audio/separable-audio.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { buildTranscriptFromOutput } from "../../providers/audio/transcript-normalize.js"
 import type { Caption } from "@remotion/captions"
@@ -1473,6 +1474,9 @@ const handleAudioSeparation: HandlerFn = async function handleAudioSeparation(jo
   const sepMode = mode ?? "vocal_instrumental"
   const sepQuality = quality ?? "auto"
   console.log(`[worker] audio-separation ${ctx.jobId} (mode: ${sepMode}, quality: ${sepQuality})`)
+  // A video link splits its sound: taken out here, before the split, at no
+  // extra charge. An audio link is sent exactly as it came.
+  const sourceUrl = await toSeparableAudio(audioUrl, ctx.jobId)
   const provider = new ReplicateAudioSeparationProvider()
   // No onTaskCreated: a crash fails+refunds rather than being single-URL
   // reconcile-recovered (which would flatten the stems). See design §C(c).
@@ -1480,7 +1484,7 @@ const handleAudioSeparation: HandlerFn = async function handleAudioSeparation(jo
     job,
     ctx.jobId,
     { start: 5, cap: 80 },
-    () => provider.separateAudio(audioUrl, { mode: sepMode, quality: sepQuality }),
+    () => provider.separateAudio(sourceUrl, { mode: sepMode, quality: sepQuality }),
   )
 
   // Upload each returned stem to R2. POST-PROVIDER: Demucs already delivered
