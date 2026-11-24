@@ -3790,7 +3790,8 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `previz_lighting` | boolean |  | previz only: also take the lighting direction and lighting changes from the clip. |
 | `previz_sound` | string |  | previz only: keep the clip's sound, or have it generated. One of `clip`, `generated`. |
 | `motion_length` | string |  | nodaro-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
-| `resolution` | string |  | Default "480p" (nodaro-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
+| `resolution` | string |  | The engine's size. Default "480p" (nodaro-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
+| `upscale` | string |  | "next" (default where the quote has upscaleOffered): delivered at the next size (480p→720p→1080p), priced in breakdown.upscale; "off": at resolution. One of `off`, `next`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |

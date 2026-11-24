@@ -412,11 +412,25 @@ export interface VideoRemakeParams {
   /** @deprecated use {@link motionLength} (still accepted). */
   klingLength?: VideoRemakeMotionLength
   /**
-   * The output resolution. Nodaro Prism: `"480p"` (default), `"720p"` or
-   * `"1080p"`. Nodaro Pulse: `"720p"` (default) or `"1080p"`; `"480p"`
-   * answers 400.
+   * The size the engine makes the video at. Nodaro Prism: `"480p"` (default),
+   * `"720p"` or `"1080p"`. Nodaro Pulse: `"720p"` (default) or `"1080p"`;
+   * `"480p"` answers 400. The video is delivered at this size unless the run
+   * is upscaled to the next one (see {@link upscale}); the estimate's
+   * `outputResolution` says which.
    */
   resolution?: "480p" | "720p" | "1080p"
+  /**
+   * Whether the finished video is upscaled to the next size (see
+   * {@link VideoRemakeUpscaleChoice}). Left out: `"next"` where the choice is
+   * offered, `"off"` where it is not. It is not offered on a 1080p run, a
+   * draft or a trend run, nor where the deployment has not turned it on
+   * ({@link VideoRemakeResource.styleChoice} answers `upscaleChoice` false):
+   * there the field is accepted and ignored, and a `"next"` sent anyway runs as
+   * `"off"` (never an error). The estimate, sent the same field, is the
+   * authority: `upscaleOffered`, the effective `upscale` and its price
+   * (`breakdown.upscale`).
+   */
+  upscale?: VideoRemakeUpscaleChoice
   /**
    * `true` makes a draft: a 480p run whose same take Full Quality can finish
    * at 1080p (Nodaro Prism only). Default `false`: a plain run, at 480p
@@ -453,6 +467,44 @@ export interface VideoRemakeParams {
    * `run()` only; one that is not this shape is dropped, never refused.
    */
   intent?: VideoRemakeRunIntent
+}
+
+/**
+ * Video Remake's upscale choice ({@link VideoRemakeParams.upscale}):
+ * - `"next"`: the result is upscaled straight to the next size and delivered
+ *   at it (480p → 720p, 720p → 1080p), at the price the estimate shows in
+ *   `breakdown.upscale`;
+ * - `"off"`: the result is delivered at the engine's size (`resolution`).
+ */
+export type VideoRemakeUpscaleChoice = "off" | "next"
+
+/**
+ * What became of a `"next"` run's upscale, on its completed job's output
+ * (`upscale`): `"applied"` (delivered at the next size) or `"skipped"` (the
+ * upscale step failed and the video was delivered at the engine's size).
+ */
+export type VideoRemakeUpscaleOutcome = "applied" | "skipped"
+
+/**
+ * The Video Remake keys of a completed job's output (`GET /v1/jobs/:id`,
+ * `output_data`) that a client reads; the output carries others too.
+ */
+export interface VideoRemakeJobOutput {
+  /** The delivered video. */
+  videoUrl?: string
+  /** The engine the run used, by its public id. */
+  engine?: VideoRemakeEngineChoice
+  /** The size the engine made the video at. */
+  resolution?: "480p" | "720p" | "1080p"
+  /**
+   * The size delivered: the next size on a `"next"` run whose upscale was
+   * applied, else `resolution`. Absent from a run made where the upscale
+   * choice is not taken: read `resolution` then.
+   */
+  outputResolution?: "480p" | "720p" | "1080p"
+  /** On a `"next"` run only: whether its upscale was applied (see {@link VideoRemakeUpscaleOutcome}). */
+  upscale?: VideoRemakeUpscaleOutcome
+  [key: string]: unknown
 }
 
 /** What a run would cost, in credits. */
@@ -854,13 +906,16 @@ export interface VideoRemakeEstimate {
    *   Nodaro's setting for the engine does so (absent otherwise).
    * - `referenceAudio`: preparing the clip's sound for the video model, when
    *   Nodaro's setting for the engine runs that step (absent otherwise).
-   * - `upscale`: a Topaz video upscale of the result (it is then scaled back
+   * - `upscale`: where the deployment offers the upscale choice
+   *   ({@link VideoRemakeStyleChoice.upscaleChoice}), the upscale to the next
+   *   size on a run whose `upscale` is `"next"` (absent on `"off"`). Elsewhere,
+   *   a Topaz video upscale of the result (it is then scaled back
    *   to the run's resolution), when the deployment's setting adds that step
    *   for a Precise run on Nodaro Prism at the run's resolution (absent
-   *   otherwise; never on a draft). In both totals; it settles to the units
+   *   otherwise; never on a draft); it settles to the units
    *   Topaz used. A Topaz step that fails or is refused is not charged; one
    *   that finished is charged even if the run then delivers without it
-   *   (rare).
+   *   (rare). Either way it is in both totals.
    *
    * `motion` and `motionExpected` are alternatives, so the parts sum to more
    * than either total: read `totalCredits` and `expectedCredits`, never the
@@ -901,6 +956,20 @@ export interface VideoRemakeEstimate {
    * (0 when the balance covers it, or the options are not covered).
    */
   firstRemakeOffer?: FirstRemakeOfferQuote
+  /**
+   * The size the engine would make the video at. Answered where the
+   * deployment offers the upscale choice; absent from any other server.
+   */
+  resolution?: "480p" | "720p" | "1080p"
+  /** The size the video would be delivered at: the next size on a `"next"` run, else `resolution`. */
+  outputResolution?: "480p" | "720p" | "1080p"
+  /** The upscale choice the run would be made with: the one asked for, `"off"` where it is not offered. */
+  upscale?: VideoRemakeUpscaleChoice
+  /**
+   * Whether the upscale choice is offered for this run: the authority (never
+   * on a 1080p run, a draft or a trend run). Absent: read it as `false`.
+   */
+  upscaleOffered?: boolean
 }
 
 /** `VideoRemakeEstimate.firstRemakeOffer` / `TrendEstimate.firstRemakeOffer`. */
@@ -1134,6 +1203,15 @@ export interface VideoRemakeStyleChoice {
    * missing from it: `false` (offer the two engines alone).
    */
   flash?: Partial<Record<VideoRemakeEngine, boolean>>
+  /**
+   * Whether a run and its estimate take the upscale choice here
+   * ({@link VideoRemakeParams.upscale}): one answer for the deployment, not
+   * per engine, `true` only where the deployment has turned it on. It says the
+   * field is taken, not that a given run is offered it: read the estimate's
+   * `upscaleOffered` for that. Absent from an older server: `false` (offer no
+   * upscale choice; the field sent anyway is ignored).
+   */
+  upscaleChoice?: boolean
 }
 
 /**

@@ -35,6 +35,9 @@ import {
   type VideoRemakeStyle,
   type VideoRemakeStyleChoice,
   type VideoRemakeStyleChoiceOption,
+  type VideoRemakeJobOutput,
+  type VideoRemakeUpscaleChoice,
+  type VideoRemakeUpscaleOutcome,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
@@ -1116,5 +1119,58 @@ describe("the intent check: whether the typed words ask for something Video Rema
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe("https://api.example.com/v1/video-remake")
     expect(JSON.parse(init.body as string).intent).toEqual(intent)
+  })
+})
+
+describe("the upscale choice", () => {
+  it("sends upscale on run and estimate as given, and the estimate's answer passes through typed", async () => {
+    for (const upscale of ["off", "next"] satisfies VideoRemakeUpscaleChoice[]) {
+      const quote: VideoRemakeEstimate = {
+        totalCredits: 20,
+        breakdown: { base: 5, references: 0, motion: 7, upscale: 8 },
+        settlesLower: true,
+        resolution: "480p",
+        outputResolution: upscale === "next" ? "720p" : "480p",
+        upscale,
+        upscaleOffered: true,
+      }
+      const fetchMock = vi.fn().mockReturnValueOnce(mockOk(quote)).mockReturnValueOnce(mockOk({ jobId: "j-up" }, 202))
+      const client = make(fetchMock)
+      const got = await client.videoRemake.estimate({ ...params, upscale })
+      expect(got).toEqual(quote)
+      const offered: boolean | undefined = got.upscaleOffered
+      expect(offered).toBe(true)
+      await client.videoRemake.run({ ...params, upscale })
+      for (const [url, init] of fetchMock.mock.calls as [string, RequestInit][]) {
+        expect(url).toMatch(/\/v1\/video-remake(\/estimate)?$/)
+        expect(JSON.parse(init.body as string).upscale).toBe(upscale)
+      }
+    }
+  })
+
+  it("sends no upscale when it is left out, and an older server's estimate answers none of the fields", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false }))
+    const got = await make(fetchMock).videoRemake.estimate(params)
+    expect("upscale" in JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toBe(false)
+    expect(got.upscaleOffered === true).toBe(false)
+    expect(got.outputResolution).toBeUndefined()
+  })
+
+  it("styleChoice passes upscaleChoice through, typed; an older server's answer has none", async () => {
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, upscaleChoice: true }
+    const got = await make(vi.fn().mockReturnValueOnce(mockOk(answer))).videoRemake.styleChoice()
+    const takes: boolean | undefined = got.upscaleChoice
+    expect(takes).toBe(true)
+    const older = make(vi.fn().mockReturnValueOnce(mockOk({ engines: answer.engines })))
+    expect((await older.videoRemake.styleChoice()).upscaleChoice === true).toBe(false)
+  })
+
+  it("types a completed job's output: the delivered size and a \"next\" run's outcome", () => {
+    const outcome: VideoRemakeUpscaleOutcome = "skipped"
+    const output: VideoRemakeJobOutput = { videoUrl: "https://cdn.example.com/out.mp4", engine: "nodaro-prism", resolution: "480p", outputResolution: "480p", upscale: outcome, width: 854 }
+    expect(output.outputResolution).toBe(output.resolution)
+    // @ts-expect-error the request's choice is not an outcome
+    const wrong: VideoRemakeJobOutput["upscale"] = "next"
+    expect(wrong).toBe("next")
   })
 })
