@@ -1,6 +1,7 @@
 // @test-units-by-name prices and builds only the video-upscale node it names
 // @test-watches backend/src/routes/video-upscale.ts backend/src/services/workflow-engine/payload-builder.ts backend/src/ee/billing/credits.ts backend/src/lib/nodaro-video-upscale-plan.ts backend/src/workers/handlers/video-ai.ts backend/src/lib/mcp/tools/verbs-video.ts frontend/src/components/editor/workflow-editor/execute-node.ts frontend/src/components/editor/config-panels/helpers.ts frontend/src/components/editor/config-panels/video-configs.tsx frontend/src/lib/video-utility-estimate.ts frontend/src/components/nodes/video-upscale-node.tsx frontend/src/components/nodes/node-quick-configs.tsx
 // @test-watches backend/src/lib/reconcile/*.ts
+// @test-watches backend/src/__tests__/fixtures/nodaro-video-upscale-mode-parity.json packages/render-rules/src/nodaro-video-upscale-pricing.ts
 /**
  * Nodaro Video Upscale's two modes (decided 2026-11-24): transparent (the
  * default) and sharp. ONE resolver reads the mode (`nodaroVideoUpscaleModeOf`)
@@ -90,7 +91,7 @@ describe("the one mode resolver", () => {
     "frontend/src/components/nodes/node-quick-configs.tsx",
   ]
   it.each(LANES)("%s reads the mode through the resolver", (file) => {
-    expect(readFileSync(join(ROOT, file), "utf8")).toMatch(/(nodaroVideoUpscale(QueuedModeOf|ModeOf|EffectiveMode|EstimateMode)|useNodaroVideoUpscaleEstimatedMode)\(/)
+    expect(readFileSync(join(ROOT, file), "utf8")).toMatch(/(nodaroVideoUpscale(QueuedModeOf|ModeOf|EffectiveMode|DecidedMode|EstimateMode|ShownMode)|useNodaroVideoUpscaleEstimatedMode)\(/)
   })
 })
 
@@ -238,5 +239,39 @@ describe("no mode sent: Transparent, falling back to Sharp where Transparent can
     } finally {
       transparent.available = true
     }
+  })
+})
+
+/** The case table the editor's estimate is held to as well (frontend/src/lib/__tests__/nodaro-video-upscale-mode-parity.test.ts). */
+type ModeParityCase = {
+  name: string
+  clip: { width: number; height: number } | null
+  tier: string
+  mode?: string
+  transparentRuns: boolean
+  expected: "transparent" | "sharp"
+}
+const MODE_PARITY = (JSON.parse(readFileSync(join(__dirname, "fixtures", "nodaro-video-upscale-mode-parity.json"), "utf8")) as { cases: ModeParityCase[] }).cases
+
+describe("the mode an estimate decides, the server's half of the parity with the editor (one case table)", () => {
+  const nodesOf = (c: ModeParityCase) => [
+    ...(c.clip ? [{ id: "take", type: "upload-video", data: { url: "https://cdn.example/take.mp4", duration: 10, fps: 30, metadata: { width: c.clip.width, height: c.clip.height } } }] : []),
+    { id: "x", type: "video-upscale", data: { provider: "nodaro-video-upscale", targetResolution: c.tier, ...(c.mode !== undefined ? { mode: c.mode } : {}) } },
+  ]
+  it.each(MODE_PARITY.map((c) => [c.name, c] as const))("%s", (_name, c) => {
+    transparent.available = c.transparentRuns
+    try {
+      const nodes = nodesOf(c)
+      const edges = c.clip ? [{ source: "take", target: "x", targetHandle: "video" }] : []
+      const units = graphPricingUnits(nodes[nodes.length - 1]! as never, nodes as never, edges as never, new Set(["x"]))
+      expect(units).toBe(nodaroVideoUpscaleModeEstimateUnits(c.expected, c.clip ? 10 : undefined))
+    } finally {
+      transparent.available = true
+    }
+  })
+
+  it("the table tells the modes apart by their units (a case that priced the other mode would fail)", () => {
+    expect(nodaroVideoUpscaleModeEstimateUnits("sharp", 10)).not.toBe(nodaroVideoUpscaleModeEstimateUnits("transparent", 10))
+    expect(nodaroVideoUpscaleModeEstimateUnits("sharp", undefined)).not.toBe(nodaroVideoUpscaleModeEstimateUnits("transparent", undefined))
   })
 })

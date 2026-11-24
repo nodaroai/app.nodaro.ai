@@ -59,6 +59,8 @@ let fetched: {
    *  allow/deny list or a models override that leaves a model off. A model an
    *  admin switched off is in `models` without being a restriction. */
   modelsRestricted: boolean
+  /** Modes of an offered model this install cannot run (`models.deniedModes`), as `<model id>:<mode>`. */
+  modelModes: ReadonlySet<string>
   hiddenFromUsers: ReadonlySet<string>
   /** Web Scrape SOURCES that follow a withheld node (the Instagram source follows
    *  the Instagram node). The backend sends the result, never the mapping. */
@@ -173,7 +175,7 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
     }
     const json = (await res.json()) as {
       nodes?: { denied?: unknown; hiddenFromUsers?: unknown }
-      models?: { denied?: unknown; restricted?: unknown }
+      models?: { denied?: unknown; restricted?: unknown; deniedModes?: unknown }
       webScrapeSources?: { denied?: unknown; hiddenFromUsers?: unknown }
       worlds?: unknown
     }
@@ -185,6 +187,8 @@ async function fetchAnswer(getAuthHeaders: () => Promise<Record<string, string>>
       models: toSet(json.models?.denied),
       // A server that predates the field restricts nothing as far as we know.
       modelsRestricted: json.models?.restricted === true,
+      // A server that predates the field runs every mode as far as we know.
+      modelModes: toSet(json.models?.deniedModes),
       hiddenFromUsers: toSet(json.nodes?.hiddenFromUsers),
       webScrapeSources: {
         denied: toSet(json.webScrapeSources?.denied),
@@ -228,6 +232,8 @@ export function __resetSurfaceAvailabilityForTests(
     models: string[]
     /** `models.restricted`; defaults to false (a test of the new-node rule opts in). */
     modelsRestricted?: boolean
+    /** `models.deniedModes`; defaults to none. */
+    modelModes?: string[]
     hiddenFromUsers?: string[]
     webScrapeSources?: { denied?: string[]; hiddenFromUsers?: string[] }
     worlds?: WorldId[]
@@ -238,6 +244,7 @@ export function __resetSurfaceAvailabilityForTests(
         nodes: new Set(next.nodes),
         models: new Set(next.models),
         modelsRestricted: next.modelsRestricted ?? false,
+        modelModes: new Set(next.modelModes ?? []),
         hiddenFromUsers: new Set(next.hiddenFromUsers ?? []),
         webScrapeSources: {
           denied: new Set(next.webScrapeSources?.denied ?? []),
@@ -387,6 +394,18 @@ export function isModelUnavailable(id: string): boolean {
   if (fetched) return fetched.models.has(id)
   if (Object.hasOwn(MODEL_CATALOG, id) && MODEL_CATALOG[id]!.ownLabel === true) return true
   return modelWithheldByLists(id)
+}
+
+/**
+ * True when this install cannot run a mode of a model it offers
+ * (`models.deniedModes`, keyed `<model id>:<mode>` — Nodaro Video Upscale's
+ * Transparent where it cannot run). Never true before the answer lands, after
+ * a failed read, or from a server that predates the field: the mode is then
+ * taken to run, as it did before the field existed, and the server stays the
+ * authority (a node that names no mode runs the mode its run decides).
+ */
+export function isModelModeUnavailable(modeId: string): boolean {
+  return fetched?.modelModes.has(modeId) ?? false
 }
 
 /**
