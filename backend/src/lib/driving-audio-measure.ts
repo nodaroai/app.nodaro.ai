@@ -19,7 +19,7 @@ import { measureAudio } from "./lip-sync-inputs.js"
 import { LIP_SYNC_MEASURE_SLOT_WAIT_MS, LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS } from "./lip-sync-download-slots.js"
 import { safeUrlSchema } from "./url-validator.js"
 import { probeImageSource } from "./image-source-probe.js"
-import { sniffInputType } from "./media-sniff.js"
+import { AVIF_BRANDS, HEIF_BRANDS, isoBrandsOf, sniffInputType } from "./media-sniff.js"
 import { looksLikeSvg } from "./svg-sanitize.js"
 
 /** The most bytes the endpoint takes for its audio (its schema: up to 50 MB). */
@@ -188,24 +188,50 @@ export function drivingAudioRefusalStatus(code: string): number {
 const FACE_FORMATS = "PNG, JPEG, WebP, AVIF, HEIC, GIF, TIFF or SVG"
 /** Still-image formats the start-frame step cannot read at all: BMP (the image library has no BMP reader). */
 const UNDECODED_IMAGE_EXTS: ReadonlySet<string> = new Set(["bmp"])
-/** ISO-BMFF brands that make the file certain: audio (an M4A / M4B), or a QuickTime movie. */
+/** ISO-BMFF major brands that make the file certainly audio (an M4A / M4B / M4P). */
 const AUDIO_BRANDS: ReadonlySet<string> = new Set(["M4A ", "M4B ", "M4P "])
+/** ISO-BMFF major brands that make the file certainly a QuickTime movie. */
 const MOVIE_BRANDS: ReadonlySet<string> = new Set(["qt  "])
+/**
+ * ISO-BMFF brands of an audio-or-video file: the MP4 family, an H.264 / M4V
+ * file, a DASH or CMAF segment, F4V. The 3GPP families are matched by prefix
+ * (`isAvBrand`), being open-ended. A brand outside these, the image brands and
+ * the two above is not called anything: the file is let through (a raw still
+ * such as `crx ` among them).
+ */
+const AV_BRANDS: ReadonlySet<string> = new Set([
+  "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "mp71", "avc1", "M4V ", "M4VH", "M4VP",
+  "dash", "msdh", "msix", "cmfc", "cmf2", "cmfs", "f4v ", "mmp4", "MSNV", "NDAS",
+])
+
+/** An audio-or-video brand: one listed above, or one of the 3GPP families (`3gp*`, `3g2*`, `3ge*`). */
+function isAvBrand(brand: string): boolean {
+  return AV_BRANDS.has(brand) || /^3g(p|2|e)/.test(brand)
+}
 
 /**
  * What a non-image file is, as sure as its first bytes make it: "a video (AVI)", "an audio file (WAV)",
  * or — for a container that holds either (MP4 by most brands, WebM, Ogg) — "a video or audio file (MP4)".
- * Never names a kind the bytes do not make certain.
+ * An ISO-BMFF file is named only by a brand that makes it so; one that lists an image brand anywhere is an
+ * image, and one whose brands say neither is not named (undefined: let through).
  */
 function mediaKindOf(head: Buffer): string | undefined {
+  const brands = isoBrandsOf(head)
+  if (brands) {
+    const all = [brands.major, ...brands.compatible]
+    // An image brand anywhere comes first: the file is an image.
+    if (all.some((b) => AVIF_BRANDS.has(b) || HEIF_BRANDS.has(b))) return undefined
+    if (AUDIO_BRANDS.has(brands.major)) return "an audio file (M4A)"
+    if (MOVIE_BRANDS.has(brands.major)) return "a video (MOV)"
+    if (isAvBrand(brands.major)) return "a video or audio file (MP4)"
+    // A major brand not known here: a compatible brand still makes it so. The generic `iso*` base brands do not
+    // (an image lists them too).
+    if (brands.compatible.some((b) => AUDIO_BRANDS.has(b))) return "an audio file (M4A)"
+    return brands.compatible.some((b) => isAvBrand(b) && !/^iso/.test(b)) ? "a video or audio file (MP4)" : undefined
+  }
   const video = sniffInputType(head, "video")
   const audio = sniffInputType(head, "audio")
   if (!video && !audio) return undefined
-  if (head.length >= 12 && head.subarray(4, 8).toString("latin1") === "ftyp") {
-    const brand = head.subarray(8, 12).toString("latin1")
-    if (AUDIO_BRANDS.has(brand)) return "an audio file (M4A)"
-    if (MOVIE_BRANDS.has(brand)) return "a video (MOV)"
-  }
   if (video && audio) return `a video or audio file (${video.ext.toUpperCase()})`
   return video ? `a video (${video.ext.toUpperCase()})` : `an audio file (${audio!.ext.toUpperCase()})`
 }
@@ -245,6 +271,9 @@ export async function drivingAudioFaceRefusal(provider: string, imageUrl: unknow
   // declaration, a doctype and comments). One with no size of its own still runs: the start-frame step draws it.
   if (image || probe.size || looksLikeSvg(probe.head)) return undefined
   const media = mediaKindOf(probe.head)
+  // An ISO-BMFF file its brands do not make certainly audio or video (an image brand anywhere, or brands that
+  // say neither) is let through, as a file it could not read is.
+  if (media === undefined && isoBrandsOf(probe.head)) return undefined
   if (media) return { code: "lip_sync_image_required", message: `${label} takes ${takes} as the portrait; this one is ${media}. Nothing was charged.` }
   return { code: "image_unreadable", message: `${label} could not read the portrait as an image. It takes ${takes}. Nothing was charged.` }
 }

@@ -32,6 +32,7 @@ import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-dr
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
+import { LIP_SYNC_PROVIDERS } from "./lip-sync-providers.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
@@ -5321,13 +5322,29 @@ export function listModels(filter?: {
   // A model the platform runs on its own is offered nowhere (`pickerHidden`).
   const all = Object.values(MODEL_CATALOG).filter((m) => m.pickerHidden !== true)
   if (!filter) return all
-  return all.filter((m) => {
+  const keep = (m: ModelCatalogEntry, byMode: boolean): boolean => {
     if (filter.kind && m.kind !== filter.kind) return false
-    if (filter.mode && !m.modes.includes(filter.mode)) return false
+    if (!byMode) return false
     if (filter.family && m.family.toLowerCase() !== filter.family.toLowerCase()) return false
     return true
-  })
+  }
+  const listed = all.filter((m) => keep(m, !filter.mode || m.modes.includes(filter.mode)))
+  // The lip-sync filter answers with EVERY model the Lip Sync node takes (decided 2026-11-24): the models of
+  // the lip-sync mode, then the node's own list (`LIP_SYNC_PROVIDERS`: the video models it runs a portrait and a
+  // voice through, whose own `modes` stay their video modes), in that list's order, each once.
+  if (filter.mode === "lip-sync") {
+    const ids = new Set(listed.map((m) => m.id))
+    for (const id of LIP_SYNC_PROVIDERS) {
+      const m = MODEL_CATALOG[id]
+      if (m && !ids.has(id) && m.pickerHidden !== true && keep(m, true)) {
+        listed.push(m)
+        ids.add(id)
+      }
+    }
+  }
+  return listed
 }
+
 
 /**
  * Group entries by family, returning a stable order.
