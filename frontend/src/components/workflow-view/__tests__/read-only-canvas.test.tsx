@@ -50,6 +50,14 @@ describe("ReadOnlyCanvas", () => {
     expect(screen.getByTestId("probe-a")).toHaveAttribute("data-mode", "view-detached")
   })
 
+  it("lets a view page's visitor move the cards, and nothing moves under the sub-workflow viewer", () => {
+    const view = renderCanvas([node("a")])
+    expect(view.container.querySelector(".react-flow__node")).toHaveClass("draggable")
+    cleanup()
+    const detached = renderCanvas([node("a")], "view-detached")
+    expect(detached.container.querySelector(".react-flow__node")).not.toHaveClass("draggable")
+  })
+
   it("never draws a node selected, even one saved selected", () => {
     renderCanvas([node("a", { selected: true })])
     expect(screen.getByTestId("probe-a")).toHaveAttribute("data-selected", "false")

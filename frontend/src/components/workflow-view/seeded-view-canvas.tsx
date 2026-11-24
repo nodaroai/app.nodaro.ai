@@ -17,7 +17,8 @@ interface SeededViewCanvasProps {
  * from the workflow store, exactly as in the editor, so the view loads the
  * workflow into that store — the same load, with the same migrations, the
  * editor runs — marked read-only, and empties it again when the page closes.
- * Nothing here saves: the editor's persistence is never mounted on these pages.
+ * Nothing here saves: the editor's persistence is never mounted on these pages,
+ * so a card the visitor moves or resizes is back in its place on the next visit.
  */
 export function SeededViewCanvas({ token, view, showMiniMap, children }: SeededViewCanvasProps) {
   const [seeded, setSeeded] = useState(false)
@@ -44,12 +45,13 @@ export function SeededViewCanvas({ token, view, showMiniMap, children }: SeededV
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const storeOnNodesChange = useWorkflowStore((s) => s.onNodesChange)
-  // Only React Flow's own measurements come back (no drag, select or remove
-  // can happen here); they keep each card's measured box current.
+  // React Flow's own measurements keep each card's measured box current, and a
+  // visitor's move or resize of a card changes this page's copy alone (nothing
+  // here saves). Nothing else comes back: no select, add or remove.
   const onNodesChange = useCallback(
     (changes: NodeChange<WorkflowNode>[]) => {
-      const measured = changes.filter((c) => c.type === "dimensions")
-      if (measured.length > 0) storeOnNodesChange(measured)
+      const arranged = changes.filter((c) => c.type === "dimensions" || c.type === "position")
+      if (arranged.length > 0) storeOnNodesChange(arranged)
     },
     [storeOnNodesChange],
   )
