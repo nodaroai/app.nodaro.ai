@@ -111,6 +111,7 @@ const WORDS: Readonly<Record<string, Lane<WordsKind>>> = {
   "lib/mcp/tools/diagnose.ts": lane("serves", "diagnose_run's providerReason (the job's words, else the node state's) goes through maskTrendRunError; on a run through providerWordsShownTo with the reader's relation to the run's workflow, on a job through runJobsProviderWords"),
   "ee/routes/admin-jobs.ts": lane("admin", "the admin one-job and child-jobs reads, behind requireAdmin: admins keep the words"),
   "lib/job-failure.ts": lane("writes", "markJobFailed writes the column a failure's caller hands it"),
+  "lib/reconcile/alternate-route.ts": lane("writes", "writes the upstream failure a reconcile finds on an alternate route's job, through providerDetailOf"),
   "lib/reconcile/bump-attempts.ts": lane("writes", "writes the redacted reason an exhausted reconcile gives up on"),
   "lib/reconcile/elevenlabs.ts": lane("writes", "writes the provider's failure a reconcile finds"),
   "lib/reconcile/fal.ts": lane("writes", "writes the provider's failure a reconcile finds"),

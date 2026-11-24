@@ -62,6 +62,11 @@ export const PROVIDER_KIND_VALUES = [
   // deployment's plugin returned from `start`. reconcileHouseModelJob re-polls
   // it through the same plugin — one idempotent status read, never a re-start.
   "house-model",
+  // A plugin's alternate route for a prepared video run (lib/alternate-route.ts):
+  // the task reference its `start` returned, saved as `alt:<ref>`. NOT `kie-*`:
+  // that prefix reads as "ran on the default upstream". reconcileAlternateRouteJob
+  // reads it through the same plugin — never a re-start.
+  "alternate-route",
 ] as const
 
 export type ProviderKind = (typeof PROVIDER_KIND_VALUES)[number]
@@ -177,6 +182,9 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // (lib/house-model-timeouts.ts), derived so a long model's row can never sit
   // below it — the cron never races a worker that is still polling.
   "house-model":              houseModelStaleThresholdMs(),
+  // Past the worker's own read budget (ALTERNATE_ROUTE_BUDGET_MS, 20 min —
+  // pinned in __tests__/types.test.ts), so the cron never races a live read.
+  "alternate-route":          30 * MIN,
 }
 
 /** Smallest entry in `STALE_THRESHOLD_MS`. Drives the SQL pre-filter cutoff
@@ -294,6 +302,13 @@ export const HOUSE_MODEL_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "house-model",
 ])
 
+/** Kinds recovered via reconcileAlternateRouteJob (a plugin's alternate route —
+ *  one status read through the plugin; a failed task is sent to the default
+ *  upstream as it was prepared, never started on the route again). */
+export const ALTERNATE_ROUTE_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "alternate-route",
+])
+
 /** Every kind with an async recover handler — the provider result can be
  *  re-fetched from the persisted provider_task_id and the job completed. */
 export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
@@ -303,6 +318,7 @@ export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
   ...FAL_RECOVER_KINDS,
   ...NODARO_CLOUD_RECOVER_KINDS,
   ...HOUSE_MODEL_RECOVER_KINDS,
+  ...ALTERNATE_ROUTE_RECOVER_KINDS,
   // The copilot turn has no upstream task to re-fetch, but it DOES have a
   // recover handler (`ee/copilot/reconcile.ts`): it settles the turn from the
   // spend persisted per iteration, charging what the model really cost

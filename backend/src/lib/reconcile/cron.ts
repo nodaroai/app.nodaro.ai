@@ -11,6 +11,7 @@ import {
   FAL_RECOVER_KINDS,
   NODARO_CLOUD_RECOVER_KINDS,
   HOUSE_MODEL_RECOVER_KINDS,
+  ALTERNATE_ROUTE_RECOVER_KINDS,
   COPILOT_KINDS,
   isSyncKind,
   type ProviderKind,
@@ -70,6 +71,7 @@ const ELEVENLABS_KINDS = ELEVENLABS_RECOVER_KINDS
 const FAL_KINDS = FAL_RECOVER_KINDS
 const NODARO_CLOUD_KINDS = NODARO_CLOUD_RECOVER_KINDS
 const HOUSE_MODEL_KINDS = HOUSE_MODEL_RECOVER_KINDS
+const ALTERNATE_ROUTE_KINDS = ALTERNATE_ROUTE_RECOVER_KINDS
 
 function sqlCutoff(): string {
   return new Date(Date.now() - SQL_PREFILTER_BUFFER_MS).toISOString()
@@ -243,6 +245,18 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
       } else if (HOUSE_MODEL_KINDS.has(kind)) {
         const { reconcileHouseModelJob } = await import("./house-model.js")
         await reconcileHouseModelJob({
+          id: row.id,
+          provider_task_id: row.provider_task_id,
+          reconcile_attempts: row.reconcile_attempts,
+          job_type: row.job_type,
+          input_data: row.input_data,
+        })
+        result.recovered++
+      } else if (ALTERNATE_ROUTE_KINDS.has(kind)) {
+        // A plugin's alternate route: read through the plugin where it is
+        // registered; a process without it leaves the row alone (no bump).
+        const { reconcileAlternateRouteJob } = await import("./alternate-route.js")
+        await reconcileAlternateRouteJob({
           id: row.id,
           provider_task_id: row.provider_task_id,
           reconcile_attempts: row.reconcile_attempts,

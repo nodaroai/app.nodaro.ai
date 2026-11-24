@@ -322,7 +322,7 @@ async function dispatchLtxIfRequested(
  * run, billed to the far end's account); and a length that could not be
  * measured, which keeps the adapter's figure.
  */
-function withMeasuredRenderCost<R extends { cost: number | null }>(
+function withMeasuredRenderCost<R extends { cost: number | null; routedVia?: string }>(
   result: R,
   run: {
     provider: string
@@ -334,6 +334,9 @@ function withMeasuredRenderCost<R extends { cost: number | null }>(
     settle: Seedance2Settle
   },
 ): R {
+  // An alternate route's run (lib/alternate-route.ts) carries that route's own
+  // figure: the default upstream's rates do not describe it.
+  if (result.routedVia) return result
   if (typeof result.cost !== "number") return result
   const hasVideoRef = Array.isArray(run.referenceVideoUrls) && run.referenceVideoUrls.length > 0
   if (isKling4RunnerProvider(run.provider)) {
@@ -352,6 +355,18 @@ function withMeasuredRenderCost<R extends { cost: number | null }>(
   }
   return { ...result, cost: seedance25CostUsd({ resolution: run.resolution, draft: run.draft === true, hasVideoRef, outputSec, inputSec }) }
 }
+
+/**
+ * The result finalize records: an alternate route's run names a generic
+ * provider (`jobs.provider` is read by the job's owner); every other result is
+ * passed as it is.
+ */
+function withRouteProvider<R extends { routedVia?: string; providerUsed: string }>(result: R): R {
+  return result.routedVia ? { ...result, providerUsed: ALTERNATE_ROUTE_PROVIDER_USED } : result
+}
+
+/** `jobs.provider` of a run an alternate route made. */
+const ALTERNATE_ROUTE_PROVIDER_USED = "alternate"
 
 /**
  * The provider cost of a Seedance Lip Sync run (an 8-second clip, no reference
@@ -532,7 +547,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "image-to-video" } })
   } finally {
     ramp.stop()
   }
@@ -683,7 +698,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-video",
-    result: recorded,
+    result: withRouteProvider(recorded),
     mediaUrl: finalVideoUrl,
     // Charge the loop-trim addon on top of provider cost when smart-loop-cut
     // succeeded; take it OFF the commit when it failed. Exactly one of these
@@ -864,9 +879,11 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // plugin repo's GVP rewrite-once (Task P5) — see content-policy-rewrite.ts's
   // header for the hand-sync contract.
   let contentPolicyRewrite: { original: string; rewritten: string } | undefined
+  // `routeJob`: this job may take a plugin's alternate route (lib/alternate-route.ts).
+  const t2vReconcile = { onTaskCreated: t2vOnTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "text-to-video" as const } }
   try {
     try {
-      result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })
+      result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, t2vOpts, t2vReconcile)
     } catch (err) {
       // W4/M-19b: allow-list the ONE class the rewriter can actually help.
       // The rewrite prompt (lib/content-policy-rewrite.ts) is copyright-aware
@@ -881,7 +898,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
       if (allowContentPolicyRewrite === false) throw err
       const rewritten = await rewriteForContentPolicy(prompt)
       if (!rewritten) throw err
-      result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, { onTaskCreated: t2vOnTaskCreated })
+      result = await textToVideo(rewritten, resolvedT2vProvider, duration, aspectRatio, t2vOpts, t2vReconcile)
       contentPolicyRewrite = { original: prompt, rewritten }
     }
   } finally {
@@ -949,7 +966,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-video",
-    result: recorded,
+    result: withRouteProvider(recorded),
     mediaUrl: r2Url,
     meteredBaseCredits,
     ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),
