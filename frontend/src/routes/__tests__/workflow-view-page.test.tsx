@@ -7,6 +7,11 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
   getWorkflowView: api.getWorkflowView,
 }))
+// The visitor is signed out, and the import (its own tests) is never reached.
+vi.mock("@/hooks/use-auth", () => ({ useCachedUserId: () => undefined }))
+vi.mock("@/hooks/use-import-workflow-json", () => ({
+  useImportWorkflowJson: () => ({ importFile: vi.fn(), importFrom: vi.fn(), isImporting: false }),
+}))
 // The canvas has its own tests; here it only has to say what it was given.
 vi.mock("@/components/workflow-view/seeded-view-canvas", () => ({
   SeededViewCanvas: ({ view, children }: any) => (
@@ -71,6 +76,8 @@ describe("the workflow view pages", () => {
     const download = screen.getByRole("link", { name: "Download workflow" })
     expect(download).toHaveAttribute("href", "/v1/workflow-views/t1/export")
     expect(download).toHaveAttribute("download")
+    // Beside the file: the same saved copy, into the visitor's own account, after signing in.
+    expect(screen.getByRole("link", { name: "Sign in to make your own copy" })).toHaveAttribute("href", "/login?redirect=%2Fview%2Ft1")
     await waitFor(() => expect(document.title).toBe(VIEW.name))
     expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute("content", "noindex")
     expect(api.getWorkflowView).toHaveBeenCalledWith("t1", expect.any(AbortSignal))
@@ -81,6 +88,7 @@ describe("the workflow view pages", () => {
     renderAt("/view/t1")
     await screen.findByTestId("canvas")
     expect(screen.queryByRole("link", { name: "Download workflow" })).toBeNull()
+    expect(screen.queryByRole("link", { name: "Sign in to make your own copy" })).toBeNull()
     expect(document.head.querySelector('meta[name="robots"]')).toBeNull()
   })
 

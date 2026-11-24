@@ -30,23 +30,27 @@ import {
  * There is no "add to the open canvas" choice here, unlike the editor toolbar:
  * on this screen there is no canvas to add to, so the file always becomes a new
  * workflow.
+ *
+ * `importFrom` takes the bundle's text from anywhere else (a view link's saved
+ * copy): the same parse, the same import, the same messages.
  */
 export function useImportWorkflowJson(): {
   readonly importFile: (file: File) => Promise<void>
+  readonly importFrom: (read: () => Promise<string>) => Promise<void>
   readonly isImporting: boolean
 } {
   const t = useT()
   const navigate = useNavigate()
   const [isImporting, setIsImporting] = useState(false)
 
-  const importFile = useCallback(
-    async (file: File) => {
+  const importFrom = useCallback(
+    async (read: () => Promise<string>) => {
       if (isImporting) return
       setIsImporting(true)
       try {
         // Parsing first: a file that is not a workflow should say so before we
         // lazy-create anybody's default project on its behalf.
-        const data = parseWorkflowJson(await readFileAsText(file))
+        const data = parseWorkflowJson(await read())
 
         const supabase = createClient()
         const {
@@ -113,5 +117,7 @@ export function useImportWorkflowJson(): {
     [isImporting, navigate, t],
   )
 
-  return { importFile, isImporting }
+  const importFile = useCallback((file: File) => importFrom(() => readFileAsText(file)), [importFrom])
+
+  return { importFile, importFrom, isImporting }
 }
