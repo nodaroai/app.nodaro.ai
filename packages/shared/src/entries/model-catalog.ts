@@ -54,6 +54,27 @@ export {
 } from "../seedream-5-5.js"
 export type { Seedream55Model, Seedream55Resolution } from "../seedream-5-5.js"
 export {
+  KLING_IMAGE_4_ASPECT_RATIOS,
+  KLING_IMAGE_4_DEFAULT_RESOLUTION,
+  KLING_IMAGE_4_I2I,
+  KLING_IMAGE_4_MAX_INPUT_ITEMS,
+  KLING_IMAGE_4_MAX_PICTURES,
+  KLING_IMAGE_4_MAX_PROMPT_CHARS,
+  KLING_IMAGE_4_RESOLUTIONS,
+  KLING_IMAGE_4_SET_MAX,
+  KLING_IMAGE_4_SET_MIN,
+  KLING_IMAGE_4_SUBJECT_DESCRIPTION_MAX,
+  KLING_IMAGE_4_SUBJECT_MAX_VIEWS,
+  KLING_IMAGE_4_SUBJECT_MIN_VIEWS,
+  KLING_IMAGE_4_T2I,
+  isKlingImage4,
+  isKlingImage4I2i,
+  klingImage4CreditId,
+  klingImage4Resolution,
+  klingImage4SetCount,
+} from "../kling-image-4.js"
+export type { KlingImage4Model, KlingImage4Resolution } from "../kling-image-4.js"
+export {
   FLUX_3_KLEIN_DEFAULT_RESOLUTION,
   FLUX_3_KLEIN_I2I,
   FLUX_3_KLEIN_MAX_INPUT_IMAGES,
@@ -69,14 +90,23 @@ export type { Flux3KleinModel, Flux3KleinResolution } from "../flux-3-klein.js"
 export {
   isPricedPerInputImage,
   isPricedPerInputImageEdit,
+  imageToImageSentImages,
   priceReadsInputImages,
   pricedEstimatedImages,
   pricedSentImages,
+  type ImageInputGraph,
 } from "../input-image-pricing.js"
+export {
+  klingImage4EstimatedItems,
+  klingImage4ItemsFromSubjects,
+  type ImageInputGraphEdge,
+  type ImageInputGraphNode,
+} from "../kling-image-4-items.js"
 export type { Flux2Model } from "../flux2-pricing.js"
 // Model catalog (single source of truth for MCP `list_models` and the
 // frontend config-panel registries).
 export {
+  imageResolutionFor8K,
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,
   // The companies behind the models (`maker` on every entry but one offered

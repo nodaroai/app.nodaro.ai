@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, expectTypeOf } from "vitest"
+import { klingImage4Subjects } from "../../lib/kling-image-4-subjects.js"
+import { parseGenerateImageRequest } from "../generate-image-body.js"
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 import type { z } from "zod"
 
@@ -74,6 +76,7 @@ import {
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
+import { imageCreditIdentifierFor } from "../generate-image-credit-id.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_GEN_PROVIDERS, MAX_REQUEST_IMAGE_LIMIT, PROMPT_HARD_CEILING, T2I_TO_I2I_VARIANT, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
 import type { ConnectedReference } from "@nodaro/shared/types"
@@ -2556,5 +2559,267 @@ describe("snap output is always route-enum representable", () => {
     // Guard the guard: a domain that silently collapsed would make this vacuous.
     expect(models.length).toBeGreaterThan(20)
     expect(ratios.length * resolutions.length * qualities.length).toBeGreaterThan(400)
+  })
+})
+
+describe("Kling Image 4.0 on /v1/generate-image: sizes and sets", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+  const post = (payload: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/generate-image", payload: { prompt: "a lighthouse at dawn", userId: VALID_UUID, provider: "kling-image-4", ...payload } })
+  const queued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+  const reservedId = () => vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("8K is accepted and priced at its row; 1K, which it has no row for, runs and is priced at 2K", async () => {
+    setupSupabaseMock({})
+    expect((await post({ resolution: "8K" })).statusCode).toBe(200)
+    expect(queued().resolution).toBe("8K")
+    expect(reservedId()).toBe("kling-image-4:8K")
+    setupSupabaseMock({})
+    const r = await post({ resolution: "1K" })
+    expect(r.statusCode).toBe(200)
+    expect(queued().resolution).toBe("2K")
+    expect(reservedId()).toBe("kling-image-4:2K")
+  })
+
+  it("8K on a model without it is moved to a size the model lists and priced there", async () => {
+    setupSupabaseMock({})
+    const r = await post({ provider: "seedream-5-5", resolution: "8K" })
+    expect(r.statusCode).toBe(200)
+    expect(queued().resolution).toBe("2K")
+    expect(reservedId()).toBe("seedream-5-5:2K")
+    expect((r.json() as { adjustments?: { field: string }[] }).adjustments?.some((a) => a.field === "resolution")).toBe(true)
+  })
+
+  it("a set is ONE job: queued with its count, held at its row, the hold recorded for the settlement", async () => {
+    const { jobInsert } = setupSupabaseMock({})
+    const r = await post({ imageSetCount: 6, resolution: "4K" })
+    expect(r.statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledTimes(1)
+    expect(queued().imageSetCount).toBe(6)
+    expect(reservedId()).toBe("kling-image-4:4K:x6")
+    const row = jobInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.setHoldCreditId).toBe("kling-image-4:4K:x6")
+  })
+
+  it("a set on a model that makes none is dropped, said in adjustments, and priced as one image", async () => {
+    const { jobInsert } = setupSupabaseMock({})
+    const r = await post({ provider: "seedream-5-5", imageSetCount: 6 })
+    expect(r.statusCode).toBe(200)
+    expect(queued().imageSetCount).toBeUndefined()
+    expect(reservedId()).toBe("seedream-5-5:2K")
+    expect((r.json() as { adjustments?: { field: string }[] }).adjustments?.some((a) => a.field === "imageSetCount")).toBe(true)
+    const row = jobInsert.mock.calls.at(-1)?.[0] as { input_data: Record<string, unknown> }
+    expect(row.input_data).not.toHaveProperty("setHoldCreditId")
+  })
+
+  it("a set and a batch count above 1 together are refused before anything is reserved", async () => {
+    setupSupabaseMock({})
+    const r = await post({ imageSetCount: 3, count: 2 })
+    expect(r.statusCode).toBe(400)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("an inpaint never asks for a set, and says the set was dropped", async () => {
+    setupSupabaseMock({})
+    const r = await post({ imageSetCount: 5, baseImageUrl: "https://r2.nodaro.ai/base.png", maskUrl: "https://r2.nodaro.ai/mask.png" })
+    expect(r.statusCode).toBe(200)
+    expect(queued().imageSetCount).toBeUndefined()
+    expect(reservedId()).not.toContain(":x")
+    const adj = (r.json() as { adjustments?: { field: string; from: unknown; to?: unknown }[] }).adjustments?.find((a) => a.field === "imageSetCount")
+    expect(adj?.from).toBe(5)
+    expect(adj).not.toHaveProperty("to")
+  })
+
+  it("a repeated reference is priced once, as it is sent once", async () => {
+    setupSupabaseMock({})
+    const A = "https://r2.nodaro.ai/a.png"
+    const B = "https://r2.nodaro.ai/b.png"
+    const r = await post({ referenceImageUrls: [A, A, B] })
+    expect(r.statusCode).toBe(200)
+    expect(reservedId()).toBe("kling-image-4-i2i:2K:2ref")
+    expect(imageCreditIdentifierFor({ prompt: "x", provider: "kling-image-4", referenceImageUrls: [A, A, B] }, undefined, undefined)).toBe(reservedId())
+  })
+
+  it("more than 10 images is refused before anything is reserved", async () => {
+    setupSupabaseMock({})
+    const refs = Array.from({ length: 11 }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`)
+    const r = await post({ referenceImageUrls: refs })
+    expect(r.statusCode).toBe(400)
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+})
+
+describe("Kling Image 4.0 on /v1/generate-image: named subjects", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+  const kira = [
+    { id: "k", defaultName: "Kira", source: "wired-character", url: "https://r2.nodaro.ai/kira.png", characterSlug: "kira", characterCanonicalDescription: "short red hair" },
+    { id: "k0", defaultName: "Kira / side", source: "wired-character", url: "https://r2.nodaro.ai/kira-side.png", characterSlug: "kira", variantSlug: "side" },
+    { id: "k1", defaultName: "Kira / back", source: "wired-character", url: "https://r2.nodaro.ai/kira-back.png", characterSlug: "kira", variantSlug: "back" },
+  ]
+  const queued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+  const reservedId = () => vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+  const post = (provider: string) =>
+    app.inject({
+      method: "POST",
+      url: "/v1/generate-image",
+      payload: { prompt: "@kira:1 at the harbour, @kira:2:side, @kira:3:back", userId: VALID_UUID, provider, connectedReferences: kira },
+    })
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it("a character sending its views is one named subject: queued with them, priced as one input item, CHECK === DEBIT", async () => {
+    setupSupabaseMock({})
+    const res = await post("kling-image-4")
+    expect(res.statusCode).toBe(200)
+    const q = queued()
+    const sent = q.referenceImageUrls as string[]
+    expect(sent.length).toBeGreaterThanOrEqual(2)
+    const subjects = q.imageSubjects as Array<{ name: string; imageUrls: string[]; description?: string }>
+    expect(subjects).toHaveLength(1)
+    expect(subjects[0]!.name).toBe("Kira")
+    expect(subjects[0]!.imageUrls[0]).toBe("https://r2.nodaro.ai/kira.png")
+    expect(subjects[0]!.description).toBe("short red hair")
+    const items = sent.length - (subjects[0]!.imageUrls.length - 1)
+    expect(reservedId()).toBe(`kling-image-4-i2i:2K:${items}ref`)
+    const check = imageCreditIdentifierFor({ prompt: "@kira:1 at the harbour, @kira:2:side, @kira:3:back", provider: "kling-image-4", connectedReferences: kira }, undefined, undefined)
+    expect(check).toBe(reservedId())
+  })
+
+  it("another model gets no subjects and is priced per image as before", async () => {
+    setupSupabaseMock({})
+    const res = await post("seedream-5-5")
+    expect(res.statusCode).toBe(200)
+    expect(queued()).not.toHaveProperty("imageSubjects")
+  })
+})
+
+describe("Kling Image 4.0 on /v1/generate-image: the limit counts items", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+  const views = ["front", "side", "back"]
+  const character = (slug: string, name: string) => [
+    { id: `${slug}`, defaultName: name, source: "wired-character", url: `https://r2.nodaro.ai/${slug}.png`, characterSlug: slug },
+    ...views.map((v) => ({ id: `${slug}-${v}`, defaultName: `${name} / ${v}`, source: "wired-character", url: `https://r2.nodaro.ai/${slug}-${v}.png`, characterSlug: slug, variantSlug: v })),
+  ]
+  const mentions = (slug: string) => [`@${slug}:1`, ...views.map((v, i) => `@${slug}:${i + 2}:${v}`)].join(" ")
+  const queued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+  const reservedId = () => vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it("three characters of four views each (12 pictures, 3 items) run, priced as 3 items", async () => {
+    setupSupabaseMock({})
+    const refs = [...character("kira", "Kira"), ...character("max", "Max"), ...character("ana", "Ana")]
+    const prompt = `${mentions("kira")} ${mentions("max")} ${mentions("ana")} at the harbour`
+    const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { prompt, userId: VALID_UUID, provider: "kling-image-4", connectedReferences: refs } })
+    expect(res.statusCode, res.body).toBe(200)
+    const q = queued()
+    expect((q.referenceImageUrls as string[]).length).toBe(12)
+    expect((q.imageSubjects as unknown[]).length).toBe(3)
+    expect(reservedId()).toBe("kling-image-4-i2i:2K:3ref")
+  })
+
+  it("eleven reference images (11 items) are refused before anything is held, saying to remove 1", async () => {
+    setupSupabaseMock({})
+    const refs = Array.from({ length: 11 }, (_, i) => `https://r2.nodaro.ai/r-${i}.png`)
+    const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { prompt: "x", userId: VALID_UUID, provider: "kling-image-4", referenceImageUrls: refs } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("takes at most 10 input items")
+    expect(res.json().error.message).toContain("remove 1")
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+})
+
+describe("Kling Image 4.0: the editor Run's flat request groups a character as the workflow run does", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+  const reservedId = () => vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+  const queued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+  beforeEach(() => vi.clearAllMocks())
+
+  // What the editor posts (api.generateImage): a prompt it assembled, flat
+  // references, and which character each came from.
+  const editorBody = (slugs: string[]) => {
+    const refs = slugs.flatMap((slug) => ["front", "side", "back", "smile"].map((v) => ({ url: `https://r2.nodaro.ai/${slug}-${v}.png`, characterSlug: slug, variantSlug: v === "front" ? undefined : v, defaultName: slug })))
+    return {
+      prompt: "Image 1 and Image 2 at the harbour",
+      userId: VALID_UUID,
+      provider: "kling-image-4",
+      referenceImageUrls: refs.map((r) => r.url),
+      referenceCharacters: refs.map(({ variantSlug, ...r }) => (variantSlug ? { ...r, variantSlug } : r)),
+    }
+  }
+
+  it("one 4-view character is one subject, one item (33 charged at 2K, not 38)", async () => {
+    setupSupabaseMock({})
+    const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: editorBody(["kira"]) })
+    expect(res.statusCode, res.body).toBe(200)
+    expect((queued().imageSubjects as unknown[]).length).toBe(1)
+    expect(reservedId()).toBe("kling-image-4-i2i:2K:1ref")
+    expect(imageCreditIdentifierFor(editorBody(["kira"]), undefined, undefined)).toBe("kling-image-4-i2i:2K:1ref")
+  })
+
+  it("a character over the provider's text limits runs as on a workflow: accepted, its subject cut the same way", async () => {
+    setupSupabaseMock({})
+    const long = editorBody(["kira"])
+    const description = "d".repeat(5000)
+    const defaultName = "N".repeat(300)
+    const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { ...long, referenceCharacters: long.referenceCharacters.map((r) => ({ ...r, description, defaultName, characterCanonicalDescription: description })) } })
+    expect(res.statusCode, res.body).toBe(200)
+    const editorSubjects = queued().imageSubjects as Array<{ name: string; description?: string }>
+    const workflowSubjects = klingImage4Subjects("kling-image-4", long.referenceCharacters.map((r) => ({ ...r, description, defaultName, characterCanonicalDescription: description })), long.referenceImageUrls)
+    expect(editorSubjects).toEqual(workflowSubjects)
+  })
+
+  it("three 4-view characters run as three items", async () => {
+    setupSupabaseMock({})
+    const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: editorBody(["kira", "maxi", "anna"]) })
+    expect(res.statusCode, res.body).toBe(200)
+    expect(reservedId()).toBe("kling-image-4-i2i:2K:3ref")
+  })
+})
+
+describe("a model that makes no sets and names no subjects ignores imageSetCount and referenceCharacters, as before they existed", () => {
+  const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+  beforeEach(() => vi.clearAllMocks())
+  const base = { prompt: "a lighthouse", userId: VALID_UUID, provider: "nano-banana" }
+  const reservedId = () => vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+  const queued = () => vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+
+  it("no 400 for a malformed, over-long or over-range value; priced and sent as without them", async () => {
+    setupSupabaseMock({})
+    const plain = await app.inject({ method: "POST", url: "/v1/generate-image", payload: base })
+    expect(plain.statusCode, plain.body).toBe(200)
+    const plainId = reservedId()
+    for (const extra of [
+      { referenceCharacters: "not a list" },
+      { referenceCharacters: [null, 3, { url: "nope" }] },
+      { referenceCharacters: Array.from({ length: 50 }, (_, i) => ({ url: `https://r2.nodaro.ai/${i}.png`, characterSlug: "kira" })) },
+      { imageSetCount: 11 },
+      { imageSetCount: "three" },
+    ]) {
+      setupSupabaseMock({})
+      const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { ...base, ...extra } })
+      expect(res.statusCode, `${JSON.stringify(extra)}: ${res.body}`).toBe(200)
+      expect(reservedId()).toBe(plainId)
+      expect(queued().imageSetCount).toBeUndefined()
+      expect(queued().referenceCharacters).toBeUndefined()
+    }
+  })
+
+  it("a set beside a batch count is not refused either (the body parses, without the set)", () => {
+    const parsed = parseGenerateImageRequest({ ...base, imageSetCount: 3, count: 2 })
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.imageSetCount).toBeUndefined()
+  })
+
+  it("Kling Image 4.0 still validates them", async () => {
+    setupSupabaseMock({})
+    for (const extra of [{ imageSetCount: 11 }, { imageSetCount: 3, count: 2 }, { referenceCharacters: [{ url: "nope" }] }]) {
+      const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: { ...base, provider: "kling-image-4", ...extra } })
+      expect(res.statusCode, JSON.stringify(extra)).toBe(400)
+    }
   })
 })

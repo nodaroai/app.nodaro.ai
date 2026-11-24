@@ -107,7 +107,7 @@ function hasFreshFinalizeClaim(row: CandidateRow): boolean {
  *   - kie-* → reconcileKieJob
  *   - replicate-* → reconcileReplicateJob
  *   - elevenlabs-async → reconcileElevenLabsJob
- *   - fal-request → reconcileFalJob
+ *   - fal-request, fal-rhea → reconcileFalJob
  *
  * Async per-provider handlers either complete the job (via finalizeJobWithMedia),
  * fail it (markFailed + refund), or bump reconcile_attempts and try next tick.

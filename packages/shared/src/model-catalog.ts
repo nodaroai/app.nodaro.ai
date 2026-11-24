@@ -35,6 +35,7 @@ import { isAutoVideoDuration } from "./video-duration-auto.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
+import { KLING_IMAGE_4_ASPECT_RATIOS, KLING_IMAGE_4_DEFAULT_RESOLUTION, KLING_IMAGE_4_RESOLUTIONS, KLING_IMAGE_4_SET_MAX, KLING_IMAGE_4_SET_MIN } from "./kling-image-4.js"
 import {
   GEMINI_3_1_DEFAULT_VOICE,
   GEMINI_3_1_TTS_ACCENTS,
@@ -436,6 +437,15 @@ export interface ModelCatalogEntryFields {
    * always has.
    */
   refusesImagesOverLimit?: true
+  /**
+   * The model can return a coherent SET of images from one task (Kling Image
+   * 4.0: KIE `mode: "series"` with `count`). A run asks for one with
+   * `imageSetCount`, kept by `normalizeModelInput` only on a model with this
+   * field and only in its range; the set is ONE job, priced by the images it
+   * asks for and settled on the images it returns. A model without it makes
+   * one image per job (Generate Image's `count` makes several jobs).
+   */
+  imageSet?: { readonly min: number; readonly max: number }
   /**
    * How this video model's provider addresses its images in the prompt, by
    * array order — the syntax its frame / identity binding sentences are written
@@ -2162,6 +2172,64 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "minimax-h3-image-i2i:4K:1ref", credits: 15, note: "4K, one reference image" },
       { identifier: "minimax-h3-image-i2i:2K:16ref", credits: 25, note: "2K, sixteen reference images" },
       { identifier: "minimax-h3-image-i2i:4K:16ref", credits: 34, note: "4K, sixteen reference images (the most)" },
+    ],
+  },
+
+  // ── Kling Image 4.0 ──
+  // Kling's image model (KIE `kling-4-0/image`, one endpoint for both ids). A
+  // prompt runs the text-to-image id; with input images the run moves to the
+  // edit id (`T2I_TO_I2I_VARIANT`), priced per input item: a reference image or
+  // a named subject (a wired character with 2 to 4 views). 2K, 4K or 8K, no
+  // 1K; a set of 2 to 10 images from one task (`imageSet`). Not the Kling 4.0
+  // video models (`kling-4*`). The rows are `ee/billing/kling-image-4-pricing.ts`.
+  // See: docs.kie.ai/market/kling-4-0/image
+  "kling-image-4": {
+    id: "kling-image-4",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling Image 4.0",
+    series: "Kling Image",
+    description: "Kling Image 4.0: native 2K, 4K or 8K pictures, text in quotation marks drawn into the image, and coherent sets of 2 to 10 images from one prompt. Eight shapes plus auto.",
+    useCases: ["high-res", "typography", "series", "general"],
+    features: ["reference-image"],
+    aspectRatios: KLING_IMAGE_4_ASPECT_RATIOS,
+    resolutions: KLING_IMAGE_4_RESOLUTIONS,
+    defaultResolution: KLING_IMAGE_4_DEFAULT_RESOLUTION,
+    refusesImagesOverLimit: true,
+    imageSet: { min: KLING_IMAGE_4_SET_MIN, max: KLING_IMAGE_4_SET_MAX },
+    pricing: [
+      { identifier: "kling-image-4", credits: 29, note: "2K default" },
+      { identifier: "kling-image-4:2K", credits: 29, note: "2K" },
+      { identifier: "kling-image-4:4K", credits: 43, note: "4K" },
+      { identifier: "kling-image-4:8K", credits: 71, note: "8K" },
+      { identifier: "kling-image-4:2K:x10", credits: 290, note: "a set of ten at 2K" },
+    ],
+  },
+  "kling-image-4-i2i": {
+    id: "kling-image-4-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling Image 4.0 (I2I)",
+    series: "Kling Image",
+    description: "Kling Image 4.0 with input images: up to 10 reference images and named subjects in all (a wired character with 2 to 4 views is one subject, called by name in the prompt), at 2K, 4K or 8K, one picture or a set of 2 to 10.",
+    useCases: ["edit", "multi-reference", "character", "series", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: KLING_IMAGE_4_ASPECT_RATIOS,
+    resolutions: KLING_IMAGE_4_RESOLUTIONS,
+    defaultResolution: KLING_IMAGE_4_DEFAULT_RESOLUTION,
+    refusesImagesOverLimit: true,
+    imageSet: { min: KLING_IMAGE_4_SET_MIN, max: KLING_IMAGE_4_SET_MAX },
+    pricing: [
+      { identifier: "kling-image-4-i2i", credits: 30, note: "2K, one input item" },
+      { identifier: "kling-image-4-i2i:2K:1ref", credits: 30, note: "2K, one input item (the least)" },
+      { identifier: "kling-image-4-i2i:4K:1ref", credits: 44, note: "4K, one input item" },
+      { identifier: "kling-image-4-i2i:8K:1ref", credits: 72, note: "8K, one input item" },
+      { identifier: "kling-image-4-i2i:2K:10ref", credits: 41, note: "2K, ten input items (the most)" },
+      { identifier: "kling-image-4-i2i:8K:10ref", credits: 84, note: "8K, ten input items" },
     ],
   },
 
@@ -4043,6 +4111,30 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // Topaz units the provider reports, never above the hold.
     pricing: [{ identifier: "topaz-video:per-unit", credits: 40, note: "per Topaz unit (metered)" }],
   },
+  // Topaz Rhea (decided 2026-11-24): Topaz's Rhea model, scaled so the output's
+  // short side reaches the target, at the source's own frame rate and length.
+  // Priced per second of the clip by the target's size; the hold is the
+  // charge. Run by the platform (Video Remake's upscale step) and reachable by
+  // the API, never offered by the editor (`pickerHidden`).
+  "topaz-rhea": {
+    id: "topaz-rhea",
+    kind: "video",
+    modes: ["video-upscale"] as const,
+    family: "Topaz",
+    maker: "topaz-labs",
+    label: "Topaz Rhea Upscale",
+    series: "Topaz",
+    description: "Topaz Rhea video upscale: the clip is scaled up to 4× so its short side reaches 720p, 1080p or 4K, at its own frame rate and length, delivered as H.264. Priced per second of the clip by the target size.",
+    useCases: ["upscale", "premium"],
+    resolutions: ["720p", "1080p", "4k"],
+    defaultResolution: "1080p",
+    pricing: [
+      { identifier: "topaz-rhea:720p:per-sec", credits: 5, note: "per second of the clip at 720p" },
+      { identifier: "topaz-rhea:1080p:per-sec", credits: 10, note: "per second of the clip at 1080p" },
+      { identifier: "topaz-rhea:4k:per-sec", credits: 30, note: "per second of the clip at 4K" },
+    ],
+    pickerHidden: true,
+  },
   // Nodaro Video Upscale (decided 2026-11-11): offered under the deployment's
   // own label, so it names no maker, and only where the deployment serves it
   // (the backend's house-model seam). Priced per second of the clip
@@ -4058,15 +4150,23 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     ownLabel: true,
     label: "Nodaro Video Upscale",
     series: "Nodaro Upscale",
-    description: "Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p.",
+    description: "Upscale any clip of up to 60 seconds and 50 MB, in one of two modes. Transparent (the default) keeps the clip's original colours and look, the safer choice for people and faces: 720p, 1080p, 2K or 4K, priced per second of the clip at its exact length. Sharp adds crisp detail, suiting objects, products, scenery and text more than people: 1080p, 2K or 4K, priced per whole second. Both keep the clip's shape, frame rate, length and sound. The listed price is one second of the clip at 1080p in Transparent.",
     useCases: ["upscale", "high-res"],
-    // An output box (1920×1080, 2560×1440, 3840×2160; turned for a portrait clip).
-    resolutions: ["1080p", "2k", "4k"],
+    // The tiers some mode takes: transparent 720p / 1080p / 2K / 4K (the short
+    // side reaches the tier's), sharp 1080p / 2K / 4K (an output box,
+    // 1920×1080, 2560×1440, 3840×2160, turned for a portrait clip). Which a
+    // mode takes: `videoUpscaleResolutionsFor(provider, mode)`.
+    resolutions: ["720p", "1080p", "2k", "4k"],
     defaultResolution: "1080p",
+    // The first row is the listed price: the default mode's (Transparent) one second at 1080p.
     pricing: [
-      { identifier: "nodaro-video-upscale:1080p:per-4s", credits: 15, note: "per 4 seconds of the clip at 1080p; charged per whole second" },
-      { identifier: "nodaro-video-upscale:2k:per-4s", credits: 30, note: "per 4 seconds of the clip at 2K; charged per whole second" },
-      { identifier: "nodaro-video-upscale:4k:per-4s", credits: 60, note: "per 4 seconds of the clip at 4K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:transparent:1080p:per-sec", credits: 10, note: "Transparent mode: per second of the clip at 1080p, at its exact length" },
+      { identifier: "nodaro-video-upscale:transparent:720p:per-sec", credits: 5, note: "Transparent mode: per second of the clip at 720p, at its exact length" },
+      { identifier: "nodaro-video-upscale:1080p:per-4s", credits: 15, note: "Sharp mode: per 4 seconds of the clip at 1080p; charged per whole second" },
+      { identifier: "nodaro-video-upscale:2k:per-4s", credits: 30, note: "Sharp mode: per 4 seconds of the clip at 2K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:4k:per-4s", credits: 60, note: "Sharp mode: per 4 seconds of the clip at 4K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:transparent:2k:per-sec", credits: 30, note: "Transparent mode: per second of the clip at 2K, at its exact length" },
+      { identifier: "nodaro-video-upscale:transparent:4k:per-sec", credits: 30, note: "Transparent mode: per second of the clip at 4K, at its exact length" },
     ],
   },
 
@@ -5495,7 +5595,7 @@ function sameOptionValue(a: string | number, b: string | number): boolean {
 /** Every lever `normalizeModelInput` can correct, as an adjustment names it. */
 export const MODEL_INPUT_ADJUSTMENT_FIELDS = [
   "aspectRatio", "resolution", "quality", "duration", "background",
-  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
+  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel", "imageSetCount",
   // A video model's frame rate (catalog `frameRates`, LTX 2.5).
   "fps",
 ] as const
@@ -5530,6 +5630,8 @@ export interface NormalizedModelInput {
   gifFrames?: number
   gifFrameDurationMs?: number
   svgLevel?: string
+  /** The images a set asks for (2 to 10), on a model that makes sets (`imageSet`); undefined for one image. */
+  imageSetCount?: number
   /** Empty when the input was already valid. */
   adjustments: ModelInputAdjustment[]
 }
@@ -5553,6 +5655,12 @@ export interface ModelInputContext {
   sourceImage?: SourceImageSize
   /** The request carries an inpainting mask (`maskUrl`). */
   masked?: boolean
+  /**
+   * The request carries an inpainting mask, read ONLY for the set lever (a
+   * masked edit returns one picture, so a set is dropped and said). For a
+   * caller that does not pass `masked` because it moves other levers.
+   */
+  imageSetMasked?: boolean
 }
 
 /**
@@ -5759,6 +5867,81 @@ export function resolutionAtAspectRatio(
   return atOrBelow.length > 0 ? atOrBelow[atOrBelow.length - 1]! : offered[0]!
 }
 
+/** `"8K"` → 8, `"1.5k"` → 1.5; anything not a K size is undefined. */
+function kTier(token: string): number | undefined {
+  const m = /^(\d+(?:\.\d+)?)K$/i.exec(token.trim())
+  return m ? Number(m[1]) : undefined
+}
+
+/**
+ * The model's largest K size when `asked` is 8K and the model does not list
+ * it, else undefined. Only 8K: it is the one size this vocabulary gained for
+ * Kling Image 4.0, and every value that was valid before keeps its old snap.
+ */
+function largestSizeFor8K(asked: string | undefined, listed: readonly string[] | undefined): string | undefined {
+  if (asked === undefined || !listed?.length || asked.trim().toUpperCase() !== "8K") return undefined
+  if (listed.some((r) => r.toUpperCase() === "8K")) return undefined
+  let best: string | undefined
+  let bestTier = -Infinity
+  for (const r of listed) {
+    const t = kTier(r)
+    if (t !== undefined && t > bestTier) { bestTier = t; best = r }
+  }
+  return best
+}
+
+/**
+ * The size an "8K" request runs at on image model `model` when the model does
+ * not list 8K: its largest K size (the catalog snap of `normalizeModelInput`).
+ * Undefined for any other value, a model that lists 8K, or a model without K
+ * sizes. Read by every place that shows or prices a node's size, so the badge,
+ * the estimate, the hold and the charge agree.
+ */
+export function imageResolutionFor8K(model: string | undefined, asked: unknown): string | undefined {
+  if (typeof asked !== "string" || !model) return undefined
+  const m = getModel(model)
+  return m?.kind === "image" ? largestSizeFor8K(asked, m.resolutions) : undefined
+}
+
+/**
+ * A set's image count as the model takes it (`imageSet` on its entry): a whole
+ * number in its range, or undefined for one image. 0 and 1 are one image, said
+ * nothing about. On a model that makes no sets, or on a masked edit (which
+ * returns one picture), a count of 2 or more is dropped and the drop is said;
+ * a count past the most is moved to the most.
+ */
+function normalizeImageSetCount(
+  m: ModelCatalogEntry,
+  asked: number | undefined,
+  masked: boolean,
+  adjustments: ModelInputAdjustment[],
+): number | undefined {
+  if (asked === undefined || !Number.isFinite(asked)) return undefined
+  const whole = Math.trunc(asked)
+  if (whole < 2) return undefined
+  if (!m.imageSet || masked) {
+    adjustments.push({
+      field: "imageSetCount",
+      from: whole,
+      to: undefined,
+      reason: masked && m.imageSet
+        ? `A masked edit on ${m.label} returns one picture, so the set was dropped.`
+        : `${m.label} makes no sets of images, so the set was dropped.`,
+    })
+    return undefined
+  }
+  const next = Math.min(Math.max(whole, m.imageSet.min), m.imageSet.max)
+  if (next !== whole) {
+    adjustments.push({
+      field: "imageSetCount",
+      from: whole,
+      to: next,
+      reason: `${m.label} makes sets of ${m.imageSet.min} to ${m.imageSet.max} images — using ${next}.`,
+    })
+  }
+  return next
+}
+
 /**
  * Coerce a model's parameters into a combination the model actually accepts.
  *
@@ -5802,6 +5985,7 @@ export function normalizeModelInput(
     gifFrames?: number
     gifFrameDurationMs?: number
     svgLevel?: string
+    imageSetCount?: number
   },
   context: ModelInputContext = {},
 ): NormalizedModelInput {
@@ -5810,6 +5994,7 @@ export function normalizeModelInput(
   if (!m) return { ...input, adjustments }
 
   const out: NormalizedModelInput = { ...input, adjustments }
+  out.imageSetCount = normalizeImageSetCount(m, input.imageSetCount, context.masked === true || context.imageSetMasked === true, adjustments)
 
   const snap = <T extends string | number>(
     field: ModelInputAdjustment["field"],
@@ -5907,7 +6092,9 @@ export function normalizeModelInput(
   if (followsSource) {
     // The size whose long side is nearest the photo's: the result is the
     // photo's own size, so the run is rendered, and priced, near it.
-    const asked = snap("resolution", input.resolution, m.resolutions, defaultResolutionFor(modelId))
+    // 8K on a model without it is its largest size here too (decided 2026-11-23).
+    const largestFor8K = m.kind === "image" ? largestSizeFor8K(input.resolution, m.resolutions) : undefined
+    const asked = snap("resolution", input.resolution, m.resolutions, largestFor8K ?? defaultResolutionFor(modelId))
     const nearest = resolutionNearestSource(modelId, out.aspectRatio, context.sourceImage)
     const from = asked ?? m.defaultResolution ?? m.resolutions?.[0]
     if (nearest !== undefined && from !== undefined && nearest !== from) {
@@ -5931,11 +6118,16 @@ export function normalizeModelInput(
     }
     out.resolution = undefined
   } else {
+    // 8K, which only Kling Image 4.0 lists, runs at an image model's largest
+    // size, as MCP's normaliser sends it. Every other value snaps exactly as
+    // it always has (its default fallback), so no price that was valid before
+    // 8K joined the vocabulary moves.
+    const largest = m.kind === "image" ? largestSizeFor8K(input.resolution, m.resolutions) : undefined
     out.resolution = snap(
       "resolution",
       input.resolution,
       m.resolutions,
-      defaultResolutionFor(modelId),
+      largest ?? defaultResolutionFor(modelId),
     )
   }
   out.quality = snap("quality", input.quality, m.qualities, m.defaultQuality)

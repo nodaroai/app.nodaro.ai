@@ -666,6 +666,26 @@ describe("generate-image", () => {
     expect(mockRunImageGeneration.mock.calls.at(-1)?.[3]).toEqual(urls(18))
   })
 
+  // A Run on Kling Image 4.0 posts which character each reference came from,
+  // so the route sends a character's views as ONE named subject (one item), as
+  // a workflow run does. Every other model's request is unchanged.
+  it("on Kling Image 4.0 the Run's request names each reference's character", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "two friends" })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    const views = ["front", "side", "back", "smile"]
+    const extraRefs = views.map((v) => ({ url: `https://cdn.test/kira-${v}.png`, characterSlug: "kira", variantSlug: v, variantDisplayName: v }))
+    await executeNode(makeNode("generate-image", { provider: "kling-image-4", extraRefs }), makeCtx())
+    const call = mockRunImageGeneration.mock.calls.at(-1)!
+    expect(call[3]).toEqual(views.map((v) => `https://cdn.test/kira-${v}.png`))
+    const inpaint = call[call.length - 1] as { referenceCharacters?: Array<{ url: string; characterSlug: string }> }
+    expect(inpaint.referenceCharacters?.map((r) => [r.url, r.characterSlug])).toEqual(views.map((v) => [`https://cdn.test/kira-${v}.png`, "kira"]))
+    // Another model sends no such list.
+    await executeNode(makeNode("generate-image", { provider: "seedream-5-5", extraRefs }), makeCtx())
+    const other = mockRunImageGeneration.mock.calls.at(-1)!
+    expect((other[other.length - 1] as { referenceCharacters?: unknown } | undefined)?.referenceCharacters).toBeUndefined()
+  })
+
   it("rejects with 'No prompt' when no prompt available", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(

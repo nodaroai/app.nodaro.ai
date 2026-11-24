@@ -1858,6 +1858,11 @@ export type GenerateImageData = PromptAffixFields & {
   gifFrameDurationMs?: number
   /** An SVG's level of detail. Kept while another format is chosen; read only with `outputFormat: "svg"`. */
   svgLevel?: string
+  /** A coherent SET of 2 to 10 images from one run, on a model that makes sets
+   *  (Kling Image 4.0, the catalog's `imageSet`): one job, held for the images
+   *  asked and charged for the images returned. Unset is one image. Cleared
+   *  when the model makes no sets. */
+  imageSetCount?: number
   seed?: number
   renderingSpeed?: string
   styleType?: string
@@ -3086,6 +3091,11 @@ export type VideoUpscaleData = {
    *  4k (an output box, default 1080p; a value it does not take is read as its
    *  default, `normalizeVideoUpscaleResolution`). */
   targetResolution?: VideoUpscaleResolution
+  /** Nodaro Video Upscale only: "transparent" (keeps the original colours and
+   *  look; 720p / 1080p / 2k / 4k) or "sharp" (adds crisp detail; 1080p / 2k /
+   *  4k). Absent = transparent (`nodaroVideoUpscaleModeOf`); cleared on any
+   *  other provider. */
+  mode?: "transparent" | "sharp"
   /** Topaz: the output frame rate, 15–60; absent = the source's own rate. */
   targetFps?: number
   /** Legacy Topaz lever (1×/2×/4× of the source). The run reads it only when

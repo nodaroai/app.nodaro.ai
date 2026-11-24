@@ -37,10 +37,9 @@ import { supabase } from "../../lib/supabase.js"
 import {
   claimJobFinalize,
   finalizeJobWithMedia,
-  releaseJobFinalizeClaim,
   type FinalizeClaimant,
 } from "../../lib/job-finalize.js"
-import { FINALIZE_CLAIM_TTL_MS } from "../../lib/reconcile/types.js"
+import { hasFreshFinalizeClaimNow, holdingFinalizeClaim } from "../../lib/finalize-claim-hold.js"
 import {
   createCloudJob,
   ensureCloudReachableTrackFileUrl,
@@ -354,62 +353,6 @@ export async function forwardStopToCloud(cloudJobId: string): Promise<void> {
   await nodaroCloudFetch(`/v1/generate-video-pro/${cloudJobId}/stop`, { method: "POST" })
 }
 
-/** How often a long copy re-stamps its finalize claim: well inside the TTL the
- *  reconcile cron's `hasFreshFinalizeClaim` measures the claim's age against. */
-const CLAIM_REFRESH_MS = Math.floor(FINALIZE_CLAIM_TTL_MS / 3)
-
-/** True when the row holds a finalize claim younger than its TTL, read now
- *  (not from the cron's scan). A failed read answers false: the claim RPC
- *  still guards against another claimant. */
-async function hasFreshFinalizeClaimNow(jobId: string): Promise<boolean> {
-  const { data, error } = await supabase.from("jobs").select("finalize_claimed_at").eq("id", jobId).maybeSingle()
-  if (error) return false
-  const at = (data as { finalize_claimed_at?: string | null } | null)?.finalize_claimed_at
-  if (typeof at !== "string") return false
-  return Date.now() - new Date(at).getTime() < FINALIZE_CLAIM_TTL_MS
-}
-
-/**
- * Run `work` (a copy that can outlive the finalize claim's TTL several times
- * over) holding the finalize claim `firstTs` won: re-stamped every
- * CLAIM_REFRESH_MS through the same-claimant re-entry of `claim_job_finalize`,
- * so the cron leaves the row alone for as long as the copy runs, and lapses
- * within one TTL of this process dying. A failed copy releases the LATEST
- * stamp, so a retry or the next tick need not wait the TTL out.
- */
-async function holdingFinalizeClaim<T>(
-  jobId: string,
-  claimant: FinalizeClaimant,
-  firstTs: string | null,
-  work: () => Promise<T>,
-): Promise<T> {
-  let ts = firstTs
-  let refreshing: Promise<void> = Promise.resolve()
-  const timer = setInterval(() => {
-    refreshing = refreshing
-      .then(() => claimJobFinalize(jobId, claimant))
-      .then(
-        (claim) => {
-          if (claim.won && claim.ts) ts = claim.ts
-        },
-        () => undefined,
-      )
-  }, CLAIM_REFRESH_MS)
-  timer.unref?.()
-  const stopRefreshing = async (): Promise<void> => {
-    clearInterval(timer)
-    await refreshing
-  }
-  try {
-    const out = await work()
-    await stopRefreshing()
-    return out
-  } catch (err) {
-    await stopRefreshing()
-    if (ts) await releaseJobFinalizeClaim(jobId, ts)
-    throw err
-  }
-}
 
 /**
  * Adapt a FINISHED cloud job's output into this instance's storage + row.

@@ -4084,12 +4084,19 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `upscaleFactor` is deprecated; it is still accepted and applied to the
 > source's short side.
 
-> **Nodaro Video Upscale.** `provider: "nodaro-video-upscale"` with
-> `targetResolution` (`"1080p" | "2k" | "4k"`, the output frame, default 1080p;
-> a value it does not take, such as `"720p"`, runs at 1080p):
-> `run("video-upscale", { provider: "nodaro-video-upscale", videoUrl, targetResolution: "2k" })`.
-> Clips of up to 60 seconds and 50 MB; priced per second of the clip, and the
-> amount held is the amount charged. Offered only where `models.list` lists it;
+> **Nodaro Video Upscale.** `provider: "nodaro-video-upscale"` with a `mode`
+> and a `targetResolution` (default 1080p). `mode: "transparent"` (the default
+> when none is sent) keeps the clip's original colours and look, the safer
+> choice for people and faces, at `"720p" | "1080p" | "2k" | "4k"`;
+> `mode: "sharp"` adds crisp detail, suiting objects, products, scenery and
+> text more than people, at `"1080p" | "2k" | "4k"` (a `"720p"` runs at 1080p):
+> `run("video-upscale", { provider: "nodaro-video-upscale", mode: "sharp", videoUrl, targetResolution: "2k" })`.
+> Clips of up to 60 seconds and 50 MB; priced per second of the clip
+> (Transparent at its exact length, Sharp per whole second), and the amount
+> held is the amount charged. Transparent also refuses a clip already at the
+> resolution (`400 video_already_at_target`) or one that would need more than
+> 4× (`400 video_too_small`), and answers `503 provider_unavailable` where it
+> cannot run. A `mode` with any other provider is a `400`. Offered only where `models.list` lists it;
 > elsewhere the request is refused with `403 model_not_available` (a
 > `ForbiddenError`). Its other refusals: `400` for a clip past a limit or one
 > that cannot be read (`video_too_long`, `video_too_large`, `video_unreadable`),
@@ -4684,6 +4691,13 @@ for the rules (credits for the batch as a whole or not at all, `seed + i`, the
 batch id). A `presetId` combines with both: N images of the preset's request,
 or the preset applied once per model.
 
+A SET is different: `imageSetCount` (2–10) on a model that makes sets (Kling
+Image 4.0) asks ONE job for a coherent set of that many images. Use
+`nodes.run("generate-image", { provider: "kling-image-4", prompt, imageSetCount: 4 })`
+(not this method): the job's output carries every image in `imageUrls`, and
+the job is charged for the images it returns. On any other model the set is
+dropped and reported in `adjustments`; with `count` above 1 it is refused.
+
 Resolves `{ batch, results }`:
 
 - `batch` — the submit's answer, `GenerateImageBatchResult`: `jobId` (the
@@ -4969,7 +4983,7 @@ candidate: it completes and lists like any other, but only `approvePortrait()`
 sets the portrait.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
@@ -5323,7 +5337,7 @@ result directly to the row's `source_image_url`; otherwise call
 `approveMainImage()` after picking a candidate.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base

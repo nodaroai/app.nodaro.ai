@@ -266,6 +266,8 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
+import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { nodaroVideoUpscaleModeCreditId } from "@nodaro/render-rules"
 import { DEFAULT_VIDEO_OVERLAY_LAYER, VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH, expandVideoOverlayLayer, videoOverlayCompositionKey, videoOverlaySlotSources } from "@nodaro/shared/video"
 
 // ---------------------------------------------------------------------------
@@ -704,6 +706,47 @@ describe("video-upscale", () => {
     const sent = mockVideoUpscaleApi.mock.calls[0][0] as Record<string, unknown>
     expect(sent).toMatchObject({ videoUrl: "http://low-res.mp4", upscaleFactor: 2, userId: "u1", provider: "topaz" })
     expect(sent.targetResolution).toBeUndefined()
+  })
+
+  // Nodaro Video Upscale's mode: only an EXPLICIT one is sent, so the mode the
+  // node is estimated in is the mode it is requested (and charged) in; an unset
+  // node reaches the server with no mode, which then decides it from the clip.
+  it("Nodaro Video Upscale: an explicit Sharp is estimated and requested as Sharp", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoUpscaleApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    const node = makeNode("video-upscale", { provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })
+    await executeNode(node, makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    const sent = mockVideoUpscaleApi.mock.calls[0][0] as Record<string, unknown>
+    expect(sent).toMatchObject({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })
+    // The estimate's row for the same node: Sharp's, never Transparent's.
+    expect(getModelIdentifier(node, [], [node])).toBe(nodaroVideoUpscaleModeCreditId("sharp", "2k"))
+  })
+
+  it("Nodaro Video Upscale: an explicit Transparent is sent as Transparent (never swapped)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockVideoUpscaleApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("video-upscale", { provider: "nodaro-video-upscale", mode: "transparent", targetResolution: "720p" }), makeCtx())
+    await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+    expect(mockVideoUpscaleApi.mock.calls[0][0]).toMatchObject({ mode: "transparent", targetResolution: "720p" })
+  })
+
+  it("Nodaro Video Upscale: a node with no mode (or an unknown one) is sent with NO mode, so the server's fallback applies", async () => {
+    for (const data of [{}, { mode: "" }, { mode: "bogus" }]) {
+      mockVideoUpscaleApi.mockClear()
+      mockPollJobWithNodeUpdate.mockClear()
+      mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+      mockVideoUpscaleApi.mockResolvedValue({ jobId: "j1" })
+      mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+      await executeNode(makeNode("video-upscale", { provider: "nodaro-video-upscale", targetResolution: "720p", ...data }), makeCtx())
+      await mockPollJobWithNodeUpdate.mock.calls[0][1]()
+      const sent = mockVideoUpscaleApi.mock.calls[0][0] as Record<string, unknown>
+      expect("mode" in sent).toBe(false)
+      // The unset node's tier is read as Transparent's (720p kept; the server coerces it on a fallback to Sharp).
+      expect(sent.targetResolution).toBe("720p")
+    }
   })
 
   it("passes undefined upscaleFactor when not set", async () => {

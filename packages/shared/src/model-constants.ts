@@ -59,10 +59,11 @@ export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIO_VALUES[number]
 
 /**
  * The K tiers of {@link IMAGE_RESOLUTION_VALUES}, smallest first. `1.5K` is
- * Seedream 5.5's middle size; no other model lists it, and the catalog snap
- * moves it to a size the chosen model does list.
+ * Seedream 5.5's middle size and `8K` Kling Image 4.0's largest; no other model
+ * lists either, and the catalog snap moves them to a size the chosen model does
+ * list.
  */
-export const IMAGE_K_RESOLUTION_VALUES = ["1K", "1.5K", "2K", "4K"] as const
+export const IMAGE_K_RESOLUTION_VALUES = ["1K", "1.5K", "2K", "4K", "8K"] as const
 
 /**
  * The `resolution` vocabulary `/v1/generate-image` and `/v1/image-to-image`
@@ -165,6 +166,9 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   "gpt-image-2-6-sunburst-i2i": 30000,   // docs.kie.ai/market/gpt/gpt-image-2-6-sunburst-image-to-image
   "gpt-image-2-6-economy": 20000,        // docs.kie.ai/market/gpt/gpt-image-2-6-economy-text-to-image
   "gpt-image-2-6-economy-i2i": 20000,    // docs.kie.ai/market/gpt/gpt-image-2-6-economy-image-to-image
+  // Kling Image 4.0 — one endpoint for both ids ("max 20000 characters").
+  "kling-image-4": 20000,                // docs.kie.ai/market/kling-4-0/image
+  "kling-image-4-i2i": 20000,            // docs.kie.ai/market/kling-4-0/image
   // ── lower than the 5000 default (over-send risk if left at default) ──
   "seedream": 3000,            // docs.kie.ai/market/seedream/4-5-text-to-image
   "seedream-edit": 3000,       // docs.kie.ai/market/seedream/4-5-edit
@@ -680,6 +684,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-flash",
   "minimax-h3-image",
   "seedream-5-5",
+  "kling-image-4",
   "flux",
   "flux-flex",
   "flux-3-klein",
@@ -707,6 +712,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-5-flash-i2i",
   "minimax-h3-image-i2i",
   "seedream-5-5-i2i",
+  "kling-image-4-i2i",
   "flux-3-klein-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
@@ -753,6 +759,9 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   // Seedream 5.5's text-to-image endpoint takes no image at all: its edit
   // endpoint is the only one that reads them (the provider swaps too).
   "seedream-5-5": "seedream-5-5-i2i",
+  // Kling Image 4.0: one endpoint for both ids; the edit id is the one priced
+  // per input item, so a run with images runs (and is priced) on it.
+  "kling-image-4": "kling-image-4-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
   // FLUX 3 Klein's text-to-image endpoint takes no image at all: its edit
@@ -800,6 +809,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "minimax-h3-image-i2i": 16,
   // Seedream 5.5 takes 1–10 `image_urls` (docs.kie.ai/market/seedream/5-5-image-to-image).
   "seedream-5-5-i2i": 10,
+  // Kling Image 4.0 takes up to 10 `image_urls` and `elements` together (docs.kie.ai/market/kling-4-0/image).
+  "kling-image-4-i2i": 10,
   // FLUX 3 Klein's edit takes 1–10 `image_urls` (docs.kie.ai/market/flux3/klein-edit-image).
   "flux-3-klein-i2i": 10,
   // Single-source i2i (one input image)
@@ -881,6 +892,7 @@ const REQUEST_IMAGE_LIMITS: Record<string, number> = {
   "gpt-image-2-6-sunburst-i2i": 16,
   "minimax-h3-image-i2i": 16,
   "seedream-5-5-i2i": 10,
+  "kling-image-4-i2i": 10,
   "flux-3-klein-i2i": 10,
 }
 
@@ -977,6 +989,9 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "seedream-5-pro-i2i": "quality",
   "seedream-5-5": "resolution",
   "seedream-5-5-i2i": "resolution",
+  // Also priced per input item and, for a set, per image (`klingImage4CreditId`).
+  "kling-image-4": "resolution",
+  "kling-image-4-i2i": "resolution",
   "topaz-image-upscale": "resolution",
   "ideogram-edit": "rendering-speed",
   "ideogram-remix": "rendering-speed",
@@ -1052,6 +1067,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "seedream-5-flash",
   "minimax-h3-image",
   "seedream-5-5",
+  "kling-image-4",
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
@@ -1093,6 +1109,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-5-flash-i2i",
   "minimax-h3-image-i2i",
   "seedream-5-5-i2i",
+  "kling-image-4-i2i",
   "flux-kontext",
   "flux-kontext-max",
   "flux-3-klein-i2i",
@@ -1638,6 +1655,10 @@ export const VIDEO_UPSCALE_PROVIDERS = [
   // box, priced per second. Offered only where the deployment serves it (see
   // nodaro-video-upscale.ts).
   "nodaro-video-upscale",
+  // Topaz Rhea: any clip upscaled so its short side reaches 720p, 1080p or 4K,
+  // priced per second of the output by its size. Reachable by the API and by a
+  // plugin's child job; the editor's Video Upscale node does not offer it.
+  "topaz-rhea",
 ] as const
 export type VideoUpscaleProvider = typeof VIDEO_UPSCALE_PROVIDERS[number]
 
@@ -2363,6 +2384,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "seedream-5-flash": "prompt",
   "minimax-h3-image": "prompt",
   "seedream-5-5": "prompt",
+  "kling-image-4": "prompt",
   "flux-3-klein": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",

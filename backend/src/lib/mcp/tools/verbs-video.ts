@@ -30,7 +30,7 @@ import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
 import { lipSyncResolutions, lipSyncResolutionSummary } from "@nodaro/shared/models"
-import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER, NODARO_VIDEO_UPSCALE_MODES, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
 import { type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel } from "@nodaro/shared/llm-models"
@@ -2975,11 +2975,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Video Upscale",
       description:
-        "Upscale a video to higher resolution using Topaz AI, Nodaro Video Upscale or VEO upscale, or finalize a Seedance 2.5 draft at 1080p. " +
+        "Upscale a video with Topaz AI, Nodaro Video Upscale or VEO upscale, or finalize a Seedance 2.5 draft at 1080p. " +
         "Returns a job_id with the enhanced video.\n\n" +
         "**Models**:\n" +
         "  • `topaz` (default) — Topaz upscale to target_resolution at target_fps. Metered: charged the actual cost, at most the quote.\n" +
-        "  • `nodaro-video-upscale` — any clip up to 60 s and 50 MB into a 1080p / 2k / 4k frame (target_resolution, default 1080p), keeping its shape, frame rate, length and sound. Priced per second of the clip; offered only where list_models lists it.\n" +
+        "  • `nodaro-video-upscale` — any clip up to 60 s and 50 MB, keeping its shape, frame rate, length and sound; offered only where list_models lists it. mode: transparent (default; keeps the original colours and look, safer for people; 720p/1080p/2k/4k, priced per second at the exact length) or sharp (adds crisp detail for objects, products, scenery, text; 1080p/2k/4k, per whole second).\n" +
         "  • `veo-1080p` — VEO upscale to 1080p (requires task_id from the original VEO generation).\n" +
         "  • `veo-4k` — VEO upscale to 4K (requires task_id from the original VEO generation).\n" +
         "  • `seedance-2-5-hd` — finalize a Seedance 2.5 DRAFT (a generate_video / animate_image / modify_video run with draft: true): " +
@@ -2989,7 +2989,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         video_url: z.string().url().optional().describe("Source video URL (required for topaz and nodaro-video-upscale)."),
         video_asset_id: z.string().optional().describe("Nodaro video job id (required for topaz and nodaro-video-upscale)."),
         model: z.enum(VIDEO_UPSCALE_PROVIDERS).optional().describe("Upscale model. Default topaz."),
-        target_resolution: z.enum(VIDEO_UPSCALE_RESOLUTIONS).optional().describe("topaz: 720p/1080p/4k (short side; 2k is refused); nodaro-video-upscale: 1080p/2k/4k (720p runs at 1080p). Default 1080p."),
+        target_resolution: z.enum(VIDEO_UPSCALE_RESOLUTIONS).optional().describe("topaz: 720p/1080p/4k (short side; 2k is refused); nodaro-video-upscale: transparent 720p/1080p/2k/4k, sharp 1080p/2k/4k (720p runs at 1080p). Default 1080p."),
+        mode: z.enum(NODARO_VIDEO_UPSCALE_MODES).optional().describe("nodaro-video-upscale only: transparent (default) or sharp."),
         target_fps: z.number().int().min(TOPAZ_VIDEO_FPS_MIN).max(TOPAZ_VIDEO_FPS_MAX).optional().describe("topaz: output fps. Default: the source's."),
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Legacy; use target_resolution."),
         task_id: z.string().optional().describe("Task id of the original VEO generation, its output providerTaskId (veo-1080p / veo-4k), or of the Seedance 2.5 draft (seedance-2-5-hd)."),
@@ -3044,8 +3045,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           }
         // Nodaro Video Upscale: its box (no frame rate, no factor); unset = the
         // route's default, a value it does not take is coerced there.
-        : provider === NODARO_VIDEO_UPSCALE_PROVIDER
-          ? (args.target_resolution ? { targetResolution: args.target_resolution } : {})
+        // Nodaro Video Upscale and Topaz Rhea: the target only (no frame
+        // rate, no factor); unset = the route's default (1080p).
+        : provider === NODARO_VIDEO_UPSCALE_PROVIDER || provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER
+          ? {
+              ...(args.target_resolution ? { targetResolution: args.target_resolution } : {}),
+              // The mode only with its provider (the route refuses it with any other); unset = transparent.
+              ...(provider === NODARO_VIDEO_UPSCALE_PROVIDER && args.mode ? { mode: args.mode } : {}),
+            }
           : {}
       const payload: Record<string, unknown> = {
         provider,

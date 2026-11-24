@@ -17,6 +17,7 @@ import {
   transcribeTranslationRefusal,
   transcribeTargetLanguageOf,
 } from "@nodaro/shared/nodes";
+import { referenceCharactersForRun } from "@/lib/reference-characters";
 import { toast } from "sonner";
 import { namesUserDirectionRef } from "@/lib/user-direction-refs";
 import { trainedCharacterModelWithheld } from "@/lib/trained-character-model";
@@ -76,6 +77,8 @@ import {
   DEFAULT_SUNO_STEM_NAME,
   isTopazVideoResolution,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  nodaroVideoUpscaleModeOf,
+  isNodaroVideoUpscaleMode,
   dialogueVoicesForModel,
   dialogueOutputFormatFor,
   getDialogueCapabilities,
@@ -117,7 +120,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleModeTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -2013,9 +2016,14 @@ function executeNodeCore(
         : undefined);
     // The file the run writes (and a GIF's frames and speed, an SVG's level)
     // rides the same options object as the background.
+    // A model that names subjects (Kling Image 4.0): which character each
+    // reference this Run sends came from, so the route groups a character's
+    // views into one named subject, as a workflow run does (`klingImage4Subjects`).
+    const referenceCharacters = internalLora ? [] : referenceCharactersForRun(providerKey, connectedReferences, result.referenceImageUrls)
     const inpaint =
       effectiveBase || imgData.maskUrl || imgData.strength != null || imgData.guidanceScale != null || imgData.background ||
-      imgData.outputFormat || imgData.gifFrames != null || imgData.gifFrameDurationMs != null || imgData.svgLevel
+      imgData.outputFormat || imgData.gifFrames != null || imgData.gifFrameDurationMs != null || imgData.svgLevel ||
+      imgData.imageSetCount != null || referenceCharacters.length > 0
         ? {
             baseImageUrl: effectiveBase,
             maskUrl: imgData.maskUrl,
@@ -2026,6 +2034,10 @@ function executeNodeCore(
             gifFrames: imgData.gifFrames,
             gifFrameDurationMs: imgData.gifFrameDurationMs,
             svgLevel: imgData.svgLevel,
+            // A set (Kling Image 4.0): one job of several images; the route
+            // keeps it only on a model that makes sets.
+            imageSetCount: imgData.imageSetCount,
+            ...(referenceCharacters.length > 0 && { referenceCharacters }),
           }
         : undefined;
     return runImageGeneration(
@@ -6889,12 +6901,22 @@ function executeNodeCore(
       setUserPromptTemplate(undefined);
       return runProcessingNode(
         node.id,
-        () => videoUpscaleApi({
-          videoUrl,
-          targetResolution: nodaroVideoUpscaleTierOf(vuData.targetResolution),
-          userId: ctx.userId,
-          provider,
-        }),
+        () => {
+          // Only a mode the node stores EXPLICITLY is sent: an unset node
+          // reaches the server with no mode, so the server decides it from the
+          // measured clip (Transparent, else Sharp where Transparent cannot
+          // serve it) — the rule the node's estimate reads too. The tier is
+          // read with the mode the node is set to (unset = transparent, which
+          // keeps a 720p; the server coerces it if it falls back to Sharp).
+          const explicitMode = isNodaroVideoUpscaleMode(vuData.mode) ? vuData.mode : undefined
+          return videoUpscaleApi({
+            videoUrl,
+            ...(explicitMode ? { mode: explicitMode } : {}),
+            targetResolution: nodaroVideoUpscaleModeTierOf(nodaroVideoUpscaleModeOf(vuData.mode), vuData.targetResolution),
+            userId: ctx.userId,
+            provider,
+          })
+        },
         "generatedVideoUrl",
         "Upscale Video",
         ctx,

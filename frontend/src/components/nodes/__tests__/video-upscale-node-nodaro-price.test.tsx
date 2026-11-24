@@ -30,6 +30,8 @@ const quoted = vi.hoisted(() => ({ units: 2.5, refusedSec: undefined as number |
 vi.mock("@/hooks/use-video-upscale-quoted-units", () => ({
   useVideoUpscaleQuotedUnits: () => quoted.units,
   useNodaroVideoUpscaleRefusedSec: () => quoted.refusedSec,
+  // The mode the node is priced in (decided from its wired clip by the real hook): these cases price Sharp.
+  useNodaroVideoUpscaleEstimatedMode: () => "sharp",
 }))
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: Object.assign(
@@ -69,7 +71,7 @@ function renderNode(data: Record<string, unknown>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <VideoUpscaleNode {...({ id: "up", data: { label: "Upscale", provider: "nodaro-video-upscale", ...data }, selected: false } as unknown as NodeProps)} />
+      <VideoUpscaleNode {...({ id: "up", data: { label: "Upscale", provider: "nodaro-video-upscale", mode: "sharp", ...data }, selected: false } as unknown as NodeProps)} />
     </QueryClientProvider>,
   )
   return screen.getByTestId("run").dataset

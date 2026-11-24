@@ -1,6 +1,7 @@
 import type { FastifyRequest } from "fastify"
 import { supabase } from "../../lib/supabase.js"
 import { trustedPluginParentJobId } from "../../lib/job-submission-context.js"
+import { TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 
 /**
  * Video Remake is open to every account, one that never paid included: its
@@ -79,8 +80,9 @@ const RESULT_ROUTES: ReadonlySet<string> = new Set(["/v1/generate-video", "/v1/v
 export type VideoRemakeStep = "result" | "helper"
 
 /**
- * A Topaz upscale (`/v1/video-upscale` with provider "topaz") under a Video
- * Remake parent is the Precise upscale step (2026-11-22): it upscales the take
+ * A Topaz upscale (`/v1/video-upscale` with provider "topaz", or "topaz-rhea",
+ * which the step moves to) under a Video Remake parent is the Precise upscale
+ * step (2026-11-22): it upscales the take
  * the run already made, which is then scaled back and delivered. That take is
  * the result and already follows the account's watermark rule, so the step is
  * a helper: a second watermark would be stamped on the first. A draft's Full
@@ -90,7 +92,8 @@ export type VideoRemakeStep = "result" | "helper"
 function isPreciseUpscaleStep(route: string, body: unknown): boolean {
   if (route !== "/v1/video-upscale") return false
   if (!body || typeof body !== "object" || Array.isArray(body)) return false
-  return (body as Record<string, unknown>).provider === "topaz"
+  const provider = (body as Record<string, unknown>).provider
+  return provider === "topaz" || provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER
 }
 
 export async function videoRemakeStepOf(req: FastifyRequest): Promise<VideoRemakeStep | null> {

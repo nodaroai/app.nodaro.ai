@@ -21,8 +21,39 @@ This note describes the seam between the two. The core module is
 
 The plugin member is `PluginServices.houseModels` (additive-optional: an install
 without it simply has no house models). The platform treats the upstream as an
-opaque task: it never sees the request, never calls a provider client of its
-own for a house model, and never names one.
+opaque task: for a run on the seam it never sees the request, never calls a
+provider client of its own, and never names one.
+
+## A house model with a mode the platform runs
+
+A house model can offer a mode that does not run on the seam. Nodaro Video
+Upscale has two (`mode`, read by one resolver, `nodaroVideoUpscaleModeOf` in
+`@nodaro/shared`; unset is Transparent):
+
+- **Sharp** runs on the seam, exactly as the rest of this note describes.
+- **Transparent** (the default) runs through one of the platform's own video
+  upscale lanes, the same lane the Video Upscale route offers under a
+  provider id of its own. The route, the quote, the workflow run and its
+  estimate, the worker and the recovery all pick the lane from the resolved
+  mode, so no lane can price one mode and run the other.
+
+Both modes keep the house model's availability (`houseModelServed`, the admin's
+switches and overrides on `nodaro-video-upscale`), its limits, and its output
+frames: each delivers the clip inside the tier's box, turned for a portrait
+clip. Transparent is priced on rows of its own
+(`nodaro-video-upscale:transparent:<tier>:per-sec`), so no id a client sees for
+this model names anything but the model.
+
+**The invariant now:** the platform never names an upstream *for* a house
+model. No provider configuration names a house model's id or price ids; no
+line that names a house model names a provider; the house-model modules import
+nothing from the provider clients. A platform-run mode reaches its lane only
+from modules that are not house-model modules (the model's plan and the video
+worker, which dispatch on the resolved mode). Guards:
+`backend/src/lib/__tests__/own-label-models-unnamed.test.ts` holds the naming
+and import boundary; `backend/src/__tests__/nodaro-video-upscale-modes.test.ts`
+holds that every lane reads the mode through the one resolver and prices a
+request on the same row.
 
 ## Availability: one rule
 
@@ -319,7 +350,9 @@ it.
 
 A guard test holds the boundary. No provider configuration names a house model.
 The house-model modules import nothing from the provider clients. No line that
-names a house model names a provider.
+names a house model names a provider. A mode the platform runs itself (see
+above) is dispatched from outside the house-model modules, priced on the house
+model's own rows, and read through one resolver that a totality test holds.
 
 ## Known gaps
 

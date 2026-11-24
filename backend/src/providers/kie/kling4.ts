@@ -113,17 +113,56 @@ function renumber(prompt: string, prefix: string, map: (n: number) => string | u
   })
 }
 
+/** The name characters of a mention, as the platform has always read them: Chinese, ASCII letters, digits, underscore. */
+const MENTION = /@([一-龥A-Za-z0-9_]+)/g
+/** A word character right before `@`: with a dotted domain after the name, the token is an e-mail address. */
+const WORD_CHAR = /[A-Za-z0-9_]/
+/** A dotted domain right after the name (`.com`): with a word character before `@`, an e-mail address. */
+const DOTTED_DOMAIN = /^\.[A-Za-z0-9]/
+/** A letter, combining mark or digit the mention pattern does not take (kana, hangul, accented letters, a combining accent). */
+const OTHER_NAME_CHAR = /^[\p{L}\p{M}\p{N}]$/u
+/** A Chinese character: a Chinese name may run straight into more Chinese text. */
+const CJK = /[一-龥]/
+
+/**
+ * How a mention is read beyond the platform's own rule. Kling 4.0 VIDEO reads
+ * mentions exactly as it always has (`DEV_MENTION_RULES`, every rule off);
+ * Kling Image 4.0 turns them on (`KLING_IMAGE_MENTION_RULES`, kling-image-4.ts).
+ */
+export interface MentionRules {
+  /** An e-mail-shaped token (a word character before `@`, a dotted domain after the name) is never a mention. */
+  readonly emailIsNotMention?: boolean
+  /** A declared name ending in a Chinese character, followed by more Chinese text, is that name (`@小明在跑`). */
+  readonly chineseNameBindsChineseText?: boolean
+  /** A name followed directly by another letter, combining mark or digit (kana, hangul, an accent) loses its `@`. */
+  readonly letterAfterNameDropsMention?: boolean
+}
+
+/** The platform's reading as it always was: what Kling 4.0 video sends. */
+export const DEV_MENTION_RULES: MentionRules = {}
+
 /**
  * Drop the `@` from every mention the request does not declare. A mention is
- * `@` followed by name characters; it is valid only when those characters are
- * EXACTLY a declared name (KIE's longest-match rule also forbids a name
- * followed by another name character).
+ * `@` followed by name characters (`MENTION`); it is kept, written as
+ * declared, when those characters are EXACTLY a declared name (any case)
+ * (KIE's longest-match rule also forbids a name followed by another name
+ * character). `rules` adds the readings a model turns on ({@link MentionRules});
+ * with none, every prompt reads exactly as it always has.
  */
-export function neutralizeUndeclaredMentions(prompt: string, declared: readonly string[]): string {
+export function neutralizeUndeclaredMentions(prompt: string, declared: readonly string[], rules: MentionRules = DEV_MENTION_RULES): string {
   const byLower = new Map(declared.map((d) => [d.toLowerCase(), d]))
-  return prompt.replace(/@([一-龥A-Za-z0-9_]+)/g, (_whole, word: string) => {
+  const cjkNames = rules.chineseNameBindsChineseText
+    ? declared.filter((d) => CJK.test(d[d.length - 1] ?? "")).sort((a, b) => b.length - a.length)
+    : []
+  return prompt.replace(MENTION, (whole, word: string, offset: number) => {
+    const before = offset > 0 ? prompt[offset - 1]! : ""
+    const after = prompt.slice(offset + whole.length)
+    if (rules.emailIsNotMention && WORD_CHAR.test(before) && DOTTED_DOMAIN.test(after)) return word
+    if (rules.letterAfterNameDropsMention && OTHER_NAME_CHAR.test(after[0] ?? "")) return word
     const hit = byLower.get(word.toLowerCase())
-    return hit !== undefined ? `@${hit}` : word
+    if (hit !== undefined) return `@${hit}`
+    const cjk = cjkNames.find((name) => word.startsWith(name) && CJK.test(word[name.length] ?? ""))
+    return cjk !== undefined ? `@${cjk}${word.slice(cjk.length)}` : word
   })
 }
 

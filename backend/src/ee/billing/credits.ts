@@ -90,6 +90,7 @@ import { PARAMETER_NODE_TYPES } from "@nodaro/shared/catalogs"
 import { pricedAsId } from "../../lib/retired-price-id.js"
 import { COVERED_METADATA_KEY, coveredMarkOf, type CoveredMark } from "../../lib/covered-step.js"
 import { aiAvatarCreditIdOf, switchXQuoteCreditId } from "../../lib/probed-credit-ids.js"
+import { nodaroTransparentAvailable } from "../../lib/nodaro-transparent-available.js"
 import { estimatedCaptionEngine } from "../../lib/add-captions-transcription.js"
 import { withWiredSettings, renderNodeOf, isRenderNodeType, withRunOverrides, transcribeNodeReturnsWords } from "@nodaro/shared/nodes"
 import {
@@ -105,6 +106,10 @@ import {
   audioSoundtrackActive,
   applyDefaultVideoSelection,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  nodaroVideoUpscaleModeOf,
+  nodaroVideoUpscaleEffectiveMode,
+  isNodaroVideoUpscaleMode,
+  TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
 import {
   CAMERA_SWITCH_CREDIT_ID,
@@ -138,7 +143,7 @@ import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/previ
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
 import { replaceAudioNodeCreditId } from "@nodaro/render-rules"
-import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
+import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeEstimateUnits, nodaroVideoUpscaleModeTierOf, nodaroVideoUpscaleTransparentServes, topazRheaCreditId, topazRheaEstimateUnits, topazRheaTargetOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -184,8 +189,9 @@ import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
 import { minimaxH3ImageStaticCosts } from "./minimax-h3-image-pricing.js"
 import { seedream55StaticCosts } from "./seedream-5-5-pricing.js"
+import { klingImage4StaticCosts } from "./kling-image-4-pricing.js"
 import { flux3KleinStaticCosts } from "./flux-3-klein-pricing.js"
-import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, isKlingImage4, imageResolutionFor8K, klingImage4SetCount, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type ImageInputGraph, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -890,6 +896,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...minimaxH3ImageStaticCosts(),
   // Seedream 5.5: per size, and an edit per input image too (seedream-5-5-pricing.ts).
   ...seedream55StaticCosts(),
+  // Kling Image 4.0: by size, by input item and, for a set, by image, both
+  // ids (see kling-image-4-pricing.ts).
+  ...klingImage4StaticCosts(),
   "flux-flex": 35,                // (1K default)
   "flux-flex:2K": 60,
   "z-image": 2,
@@ -2191,6 +2200,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "nodaro-video-upscale:1080p:per-4s": 15,
   "nodaro-video-upscale:2k:per-4s": 30,
   "nodaro-video-upscale:4k:per-4s": 60,
+  // Topaz Rhea (decided 2026-11-24): per second of the clip by the target's
+  // size (@nodaro/render-rules topaz-rhea-pricing.ts). Each row is the price of
+  // ONE second; a run is charged row × billed seconds, and the hold is the
+  // charge. Seeded by migration 701.
+  "topaz-rhea:720p:per-sec": 5,
+  "topaz-rhea:1080p:per-sec": 10,
+  "topaz-rhea:4k:per-sec": 30,
+  // Nodaro Video Upscale, Transparent mode (decided 2026-11-24): its own rows,
+  // per second of the clip by tier; 2K seeded at 4K's rate, its own row so it
+  // can be retuned. A run is charged row × its exact length (1/64 s steps),
+  // rounded up once; the hold is the charge. Seeded by migration 701.
+  "nodaro-video-upscale:transparent:720p:per-sec": 5,
+  "nodaro-video-upscale:transparent:1080p:per-sec": 10,
+  "nodaro-video-upscale:transparent:2k:per-sec": 30,
+  "nodaro-video-upscale:transparent:4k:per-sec": 30,
   // ── Motion Transfer (per second of the driving video) ──
   // Every model and size, per second of the driving video as the server reads
   // it (decided 2026-11-18): each row is the price of four seconds; a run is
@@ -5919,7 +5943,8 @@ function listingHoldsMeteredEstimate(
     componentHoldsMeteredEstimate(n) ||
     // A Topaz video upscale is metered too: quoted at its hold, charged the units it uses.
     // A Nodaro Video Upscale is priced by the clip's length, which a listing cannot read.
-    (n.type === "video-upscale" && (isTopazVideoUpscaleNode(n) || isNodaroVideoUpscaleNode(n)))
+    // A Topaz Rhea upscale is priced by the clip's length too.
+    (n.type === "video-upscale" && (isTopazVideoUpscaleNode(n) || isNodaroVideoUpscaleNode(n) || isTopazRheaVideoUpscaleNode(n)))
   ))
 }
 
@@ -6578,11 +6603,21 @@ function estimateNodeCredits(
     // Audio-to-video (LTX 2.5 Fast): its first audio wire, read as Lip Sync's audio wire is read.
     ...drivingAudioWireOf(node, edges, (sourceId) => wires.measuredSec(sourceId, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
+    // Kling Image 4.0: the node and its graph, so its input items are counted as its run counts them.
+    imageInputGraph: edges && nodes && node.id && isKlingImage4((node.data as { provider?: unknown } | undefined)?.provider)
+      ? {
+          nodeId: node.id,
+          nodes: nodes.filter((n): n is EstimateNode & { id: string } => typeof n.id === "string"),
+          edges: edges.filter((e): e is EstimateEdge & { source: string } => typeof e.source === "string"),
+        }
+      : undefined,
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
     masked: node.id ? nodeIsMasked(node.id, node.data, edges) : undefined,
     // Grok Extend: the clip its source made, when the source does not make a new one in this run (else its setting).
     grokExtendSourceResolution: node.type === "extend-video" ? grokExtendWiredSourceResolution(node.id, nodes, edges, rerunIds) : undefined,
+    // Nodaro Video Upscale: the mode its run is priced and run in, from what the graph knows of its clip.
+    nodaroVideoUpscaleMode: node.type === "video-upscale" && isNodaroVideoUpscaleNode(priced) ? nodaroEstimateMode(node, nodes, edges, rerunIds, (sourceId) => wires.measuredSec(sourceId, "video-upscale:rhea")) : undefined,
   })
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
@@ -7622,8 +7657,21 @@ export function graphPricingUnits(
   // billed as a run bills it (`nodaroVideoUpscaleEstimateUnits`). A clip the
   // graph knows is past the limit is left out by `estimateNodeCredits` before
   // it asks for units.
+  // Topaz Rhea: its target's one-second row × the billed seconds, at the
+  // length its video wire gives as the measured walk reads it (with its slack
+  // on a clip a node makes), else the estimate's 10 s; billed as a run bills
+  // it (`topazRheaEstimateUnits`). The run measures the real clip before it
+  // holds anything, and the hold is the charge.
+  if (node.type === "video-upscale" && isTopazRheaVideoUpscaleNode(node)) {
+    return topazRheaEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, "video-upscale:rhea")))
+  }
+  // Its mode (`nodaroVideoUpscaleModeOf`, unset = transparent) picks the rule:
+  // sharp as above; transparent the exact length in 1/64 s steps, as Topaz
+  // Rhea bills it (the measuring step of the rule it bills by).
   if (node.type === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
-    return nodaroVideoUpscaleEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, "video-upscale:nodaro")))
+    const mode = nodaroEstimateMode(node, nodes, edges, rerunIds, (sourceId) => measuredSec(sourceId, "video-upscale:rhea"))
+    const step = mode === "sharp" ? "video-upscale:nodaro" : "video-upscale:rhea"
+    return nodaroVideoUpscaleModeEstimateUnits(mode, videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, step)))
   }
   // Extend Video on Seedance 2.5: (seconds sent + seconds added) ÷ 2 of its
   // two-second row — the source's last 10 s at the length the graph knows it
@@ -7959,6 +8007,43 @@ function listingParts(
  * Pro extend adds (its row is per second — the same product the route's guard
  * and the workflow run reserve, lib/ltx-extend-credits.ts), else one.
  */
+/**
+ * Nodaro Video Upscale's mode for an estimate, decided as the run decides it
+ * (`nodaroVideoUpscaleEffectiveMode`) from what the graph knows of the wired
+ * clip: its frame and rate (`topazWiredSource`) and its length. An explicit
+ * mode is kept; no mode is Transparent unless the known clip cannot be served
+ * by it (then Sharp); a clip the graph does not know is Transparent, and the
+ * run's own plan decides once it is measured, before anything is held. Where
+ * this install cannot run Transparent at all, no mode is Sharp, as the run's
+ * plan decides it.
+ */
+function nodaroEstimateMode(
+  node: EstimateNode,
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  rerunIds: ReadonlySet<string>,
+  wireSec?: WireSecOf,
+): "transparent" | "sharp" {
+  const data = withWiredSettings(node, nodes, edges ?? []).data ?? {}
+  if (isNodaroVideoUpscaleMode(data.mode)) return data.mode
+  const source = edges && node.id ? topazWiredSource(node.id, listingGateNodes(nodes), listingGateEdges(edges), rerunIds) : {}
+  const sec = wireSec ? videoUpscaleWireSec(node, edges, wireSec) : undefined
+  const clip = source.frame
+    ? { ...source.frame, ...(source.fps !== undefined ? { fps: source.fps } : {}), ...(sec !== undefined ? { sec } : {}) }
+    : undefined
+  // Where this install cannot run Transparent, a node with no mode runs Sharp: the run's own reading
+  // (`nodaroTransparentAvailable`, which the plan asks), so the estimate never quotes a mode the run swaps.
+  const transparentServes = nodaroTransparentAvailable()
+    ? nodaroVideoUpscaleTransparentServes(clip, nodaroVideoUpscaleModeTierOf("transparent", data.targetResolution))
+    : false
+  return nodaroVideoUpscaleEffectiveMode(data.mode, transparentServes)
+}
+
+/** A Video Upscale node on Topaz Rhea. */
+function isTopazRheaVideoUpscaleNode(node: EstimateNode): boolean {
+  return node.data?.provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER
+}
+
 /** A Video Upscale node on Nodaro Video Upscale. */
 function isNodaroVideoUpscaleNode(node: EstimateNode): boolean {
   return node.data?.provider === NODARO_VIDEO_UPSCALE_PROVIDER
@@ -8123,6 +8208,8 @@ export function getNodeModelIdentifier(
     drivingAudioSec?: number
     /** Reference images wired into an image node (a GRAPH fact; undefined = unknown → the node's own list). */
     imageRefsWired?: number
+    /** The node and its graph, for a model that counts input items (Kling Image 4.0; a GRAPH fact). */
+    imageInputGraph?: ImageInputGraph
     /** The size of the photo wired into an image node, as its source node records it (a GRAPH fact). */
     sourceImage?: SourceImageSize
     /** The node carries an inpainting mask, its own or wired (a GRAPH fact; undefined = its own `maskUrl` only). */
@@ -8130,6 +8217,8 @@ export function getNodeModelIdentifier(
     /** Grok Extend: the resolution of the source wired in, when the graph says for sure (a GRAPH fact,
      *  `grokExtendWiredSourceResolution`; undefined = unknown → the dearer 720p row). */
     grokExtendSourceResolution?: string
+    /** Nodaro Video Upscale: the mode the estimate decided from the wired clip (`nodaroEstimateMode`); absent, read from the node (unknown clip: no mode is Transparent). */
+    nodaroVideoUpscaleMode?: "transparent" | "sharp"
   } = {},
 ): string {
   // A retired video model is quoted as the model it runs as — what the run reserves.
@@ -8441,7 +8530,14 @@ export function getNodeModelIdentifier(
   if (nodeType === "video-upscale" && isTopazVideoUpscaleNode(node)) return TOPAZ_VIDEO_UNIT_CREDIT_ID
   // Nodaro Video Upscale: its tier's four-second row; its units (the clip's
   // billed seconds ÷ 4): graphPricingUnits.
-  if (nodeType === "video-upscale" && isNodaroVideoUpscaleNode(node)) return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(data.targetResolution))
+  if (nodeType === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
+    const mode = graph.nodaroVideoUpscaleMode ?? nodaroVideoUpscaleModeOf(data.mode)
+    return nodaroVideoUpscaleModeCreditId(mode, nodaroVideoUpscaleModeTierOf(mode, data.targetResolution))
+  }
+  // Topaz Rhea: its target's one-second row (unset = 1080p; a target it does
+  // not take is refused by the run, priced here at 1080p's row); its units
+  // (the clip's billed seconds): graphPricingUnits.
+  if (nodeType === "video-upscale" && isTopazRheaVideoUpscaleNode(node)) return topazRheaCreditId(topazRheaTargetOf(data.targetResolution) ?? "1080p")
 
   // Lip Sync on a model charged per second of its audio (OmniHuman 2.0): its
   // one-second row, which the estimate multiplies by the seconds
@@ -8647,12 +8743,16 @@ export function getNodeModelIdentifier(
   return buildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
-    followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined),
+    // "8K" on a model that does not list it: priced at the size its run is sent at, its largest (the catalog snap).
+    followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, imageResolutionFor8K(provider, data.resolution) ?? data.resolution) : undefined),
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
-    priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
+    priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0, graph.imageInputGraph) : undefined,
     // A GIF's band of frames and an SVG's level, on a model they price (GPT Image 2.6).
     imageFormatLeversOf(data),
+    // A set's images, on a model that makes sets (Kling Image 4.0); a masked
+    // edit returns one picture.
+    masked ? undefined : klingImage4SetCount(data.imageSetCount),
   )
 }
 

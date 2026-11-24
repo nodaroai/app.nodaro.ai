@@ -430,6 +430,20 @@ describe("videoUpscaleApi", () => {
     expect(body.upscaleFactor).toBe("2")
   })
 
+  it("sends Nodaro Video Upscale's mode when one is given, and no mode when none is", async () => {
+    sessionWith("tok-vu")
+    const fetch = mockFetchJson({ jobId: "j-vu-3" })
+    vi.stubGlobal("fetch", fetch)
+
+    await videoUpscaleApi({ videoUrl: "https://r2/vid.mp4", provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })
+    await videoUpscaleApi({ videoUrl: "https://r2/vid.mp4", provider: "nodaro-video-upscale", targetResolution: "1080p" })
+
+    const explicit = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(explicit).toMatchObject({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })
+    const unset = JSON.parse(fetch.mock.calls[1][1].body)
+    expect("mode" in unset).toBe(false)
+  })
+
   it("works with only videoUrl", async () => {
     sessionWith("tok-vu")
     const fetch = mockFetchJson({ jobId: "j-vu-2" })

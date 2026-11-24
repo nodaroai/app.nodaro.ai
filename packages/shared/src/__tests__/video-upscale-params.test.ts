@@ -15,7 +15,9 @@ import { TOPAZ_VIDEO_RESOLUTIONS } from "../topaz-video.js"
  */
 describe("Video Upscale target resolution per provider", () => {
   it("only Nodaro Video Upscale's catalog entry declares resolutions; the route's enum covers every provider's", () => {
-    expect(videoUpscaleResolutionsFor("nodaro-video-upscale")).toEqual([...NODARO_VIDEO_UPSCALE_TIERS])
+    expect(videoUpscaleResolutionsFor("nodaro-video-upscale", "sharp")).toEqual([...NODARO_VIDEO_UPSCALE_TIERS])
+    // Transparent (the default) also takes 720p.
+    expect(videoUpscaleResolutionsFor("nodaro-video-upscale")).toEqual(["720p", ...NODARO_VIDEO_UPSCALE_TIERS])
     for (const p of ["topaz", undefined, "veo-1080p", "veo-4k", "seedance-2-5-hd"]) {
       expect(videoUpscaleResolutionsFor(p), String(p)).toEqual([])
     }
@@ -27,8 +29,9 @@ describe("Video Upscale target resolution per provider", () => {
 
   it("coerces a value Nodaro Video Upscale does not take to its default, and canonicalises its spelling", () => {
     expect(MODEL_CATALOG["nodaro-video-upscale"]!.defaultResolution).toBe(NODARO_VIDEO_UPSCALE_DEFAULT_TIER)
-    expect(normalizeVideoUpscaleResolution("nodaro-video-upscale", "720p").targetResolution).toBe("1080p")
-    expect(normalizeVideoUpscaleResolution("nodaro-video-upscale", "720p").adjustment?.reason).toMatch(/Nodaro Video Upscale/)
+    expect(normalizeVideoUpscaleResolution("nodaro-video-upscale", "720p", "sharp").targetResolution).toBe("1080p")
+    expect(normalizeVideoUpscaleResolution("nodaro-video-upscale", "720p", "sharp").adjustment?.reason).toMatch(/Nodaro Video Upscale/)
+    expect(normalizeVideoUpscaleResolution("nodaro-video-upscale", "720p").targetResolution).toBe("720p")
     expect(normalizeVideoUpscaleResolution("nodaro-video-upscale", "2K")).toEqual({ targetResolution: "2k" })
   })
 
@@ -50,13 +53,13 @@ describe("Video Upscale target resolution per provider", () => {
       // No provider named: Topaz, left alone.
       { id: "c", type: "video-upscale", data: { targetResolution: "720P" } },
       { id: "d", type: "video-upscale", data: { provider: "veo-4k", targetResolution: "2k" } },
-      { id: "e", type: "video-upscale", data: { provider: "nodaro-video-upscale", targetResolution: "720p", label: "E" } },
+      { id: "e", type: "video-upscale", data: { provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "720p", label: "E" } },
       { id: "f", type: "video-upscale", data: { provider: "topaz", targetResolution: "8k", upscaleFactor: "4" } },
       { id: "g", type: "video-upscale", data: { provider: "topaz", targetResolution: "2k", targetFps: 30 } },
     ]
     const { nodes: out, adjustments } = normalizeNodeModelParams(nodes)
     for (const i of [0, 1, 2, 3, 5, 6]) expect(out[i], nodes[i]!.id).toBe(nodes[i])
-    expect(out[4]!.data).toEqual({ provider: "nodaro-video-upscale", targetResolution: "1080p", label: "E" })
+    expect(out[4]!.data).toEqual({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p", label: "E" })
     expect(adjustments.map((a) => [a.nodeId, a.from, a.to])).toEqual([["e", "720p", "1080p"]])
   })
 })

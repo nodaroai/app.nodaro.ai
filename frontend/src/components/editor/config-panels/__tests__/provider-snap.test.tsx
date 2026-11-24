@@ -425,12 +425,14 @@ describe("GenerateImageConfig — provider-snap useEffect", () => {
     for (const [u] of onUpdate.mock.calls) expect("resolution" in u).toBe(false)
   })
 
-  it("a size gpt-image-2 does not list at all still snaps to its first", () => {
-    const onUpdate = vi.fn()
-    const data = baseGenerateImageData({ provider: "gpt-image-2", aspectRatio: "1:1", resolution: "8K" })
-    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
-    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
-    expect(merged.resolution).toBe("1K")
+  it("a size gpt-image-2 does not list at all still snaps to its first; 8K lands on its largest (decided 2026-11-23)", () => {
+    const snapOf = (resolution: string) => {
+      const onUpdate = vi.fn()
+      render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider: "gpt-image-2", aspectRatio: "1:1", resolution }))} />)
+      return (onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {}) as Record<string, unknown>).resolution
+    }
+    expect(snapOf("3K")).toBe("1K")
+    expect(snapOf("8K")).toBe("4K")
   })
 
   it.each(["27:16", "16:27", "9:8", "8:9"])("snaps GPT Image 2.5's 4K to 1K at %s, the only size it renders there", (aspectRatio) => {
@@ -1779,5 +1781,24 @@ describe("Image panels — the output format", () => {
     }
     const { queryByText } = gen({ outputFormat: "png", maskUrl: "https://cdn.nodaro.ai/m.png" })
     expect(queryByText(/can't be made with an inpainting mask/)).toBeNull()
+  })
+})
+
+describe("GenerateImageConfig: 8K on a model that does not list it", () => {
+  it("lands on the model's largest size; every other stale size keeps its snap", () => {
+    const merged = (data: Record<string, unknown>) => {
+      const onUpdate = vi.fn()
+      render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData(data))} />)
+      return onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {}) as Record<string, unknown>
+    }
+    expect(merged({ provider: "nano-banana-pro", resolution: "8K", aspectRatio: "1:1" }).resolution).toBe("4K")
+    // A stale size that is not 8K still snaps to the first listed one.
+    expect(merged({ provider: "nano-banana-pro", resolution: "3K", aspectRatio: "1:1" }).resolution).toBe("1K")
+  })
+
+  it("with several models selected, 8K is kept: each model runs it at its own largest size", () => {
+    const onUpdate = vi.fn()
+    render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider: "nano-banana-pro", providers: ["nano-banana-pro", "seedream-5-pro"], resolution: "8K", aspectRatio: "1:1" }))} />)
+    for (const [u] of onUpdate.mock.calls) expect("resolution" in u).toBe(false)
   })
 })

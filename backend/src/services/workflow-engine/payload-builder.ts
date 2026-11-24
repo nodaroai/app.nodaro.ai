@@ -1,4 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import { klingImage4PricedItems, klingImage4Subjects, type SubjectSourceRef } from "../../lib/kling-image-4-subjects.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
 import { aiAvatarCreditIdOf, switchXQuoteCreditId } from "../../lib/probed-credit-ids.js"
@@ -66,7 +67,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -98,8 +99,7 @@ import {
   ttsVoiceForModel,
   getTtsCapabilities,
   replicaOf,
-  ttsReplicaProblem,
-} from "@nodaro/shared/model-catalog"
+  ttsReplicaProblem, imageToImageSentImages } from "@nodaro/shared/model-catalog"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
 import {
@@ -220,6 +220,9 @@ import {
   audioSoundtrackActive,
   withoutLipSyncLeversNotTaken,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  nodaroVideoUpscaleModeOf,
+  isNodaroVideoUpscaleMode,
+  TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER,
   retiredLipSyncProviderMessage,
   lipSyncResolutionRefusal,
   editVideoProProviderRefusal,
@@ -3533,6 +3536,11 @@ function buildPayloadOf(
         result.referenceImageUrls ?? [],
         resolvedInputs.baseImageUrl || data.baseImageUrl,
       )
+      // Kling Image 4.0: a wired character sending 2 to 4 of those images is
+      // ONE named subject, priced as one input item, as on the route.
+      const generateSubjects = lora || !useConnectedRefs
+        ? []
+        : klingImage4Subjects(provider, generateConnectedRefs as SubjectSourceRef[] | undefined, result.referenceImageUrls ?? [])
       const imageParams = resolveNormalizedImageGen({
         provider,
         // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
@@ -3544,9 +3552,14 @@ function buildPayloadOf(
         // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
         ...imageFormatInputOf(data),
         // On a model whose price reads the images the base of an edit is one more image sent.
-        refCount: generateSentImages,
+        refCount: klingImage4PricedItems(generateSentImages, generateSubjects),
         swapToI2i: !lora,
         sourceImage: buildCtx?.sourceImage,
+        // A set's images, on a model that makes sets; an inpaint returns one
+        // picture, so the snap drops the set and says so (a trained character
+        // run makes one image and is sent none).
+        imageSetCount: lora ? undefined : data.imageSetCount,
+        imageSetMasked: Boolean(resolvedInputs.maskUrl || data.maskUrl),
       })
       if (imageParams.adjustments.length > 0) {
         console.warn(
@@ -3567,7 +3580,7 @@ function buildPayloadOf(
       // More images than FLUX 3 Klein takes: refused before any job row, as on
       // the route. A workflow run: every other model sends its first images up
       // to its limit (decided 2026-11-14), so a saved graph keeps running.
-      const generateTooMany = lora ? null : imageInputLimitProblem(provider, generateSentImages, "workflow")
+      const generateTooMany = lora ? null : imageInputLimitProblem(provider, klingImage4PricedItems(generateSentImages, generateSubjects), "workflow")
       if (generateTooMany) throw new Error(generateTooMany.message)
 
       return {
@@ -3600,6 +3613,11 @@ function buildPayloadOf(
           gifFrames: imageParams.gifFrames,
           gifFrameDurationMs: imageParams.gifFrameDurationMs,
           svgLevel: imageParams.svgLevel,
+          // A set (Kling Image 4.0), held at its id and settled on the images
+          // it stores (lib/image-set-settle.ts reads `setHoldCreditId`).
+          ...(imageParams.imageSetCount !== undefined ? { imageSetCount: imageParams.imageSetCount, setHoldCreditId: imageParams.identifier } : {}),
+          // Kling Image 4.0's named subjects (some of the references, named).
+          ...(generateSubjects.length > 0 ? { imageSubjects: generateSubjects } : {}),
           negativePrompt: result.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -3900,7 +3918,7 @@ function buildPayloadOf(
       if (i2iTooShort) throw new Error(i2iTooShort.message)
       // The source and its references past what FLUX 3 Klein takes: refused, as
       // on the route. Every other model's workflow run sends its first images.
-      const i2iTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0), "workflow")
+      const i2iTooMany = imageInputLimitProblem(provider, imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls), "workflow")
       if (i2iTooMany) throw new Error(i2iTooMany.message)
 
       return {
@@ -3918,7 +3936,7 @@ function buildPayloadOf(
           outputFormat: i2iParams.outputFormat,
           gifFrames: i2iParams.gifFrames,
           svgLevel: i2iParams.svgLevel,
-          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          refCount: imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls),
           swapToI2i: false,
         }),
         payload: {
@@ -4104,7 +4122,7 @@ function buildPayloadOf(
       if (modTooShort) throw new Error(modTooShort.message)
       // The source and its references past what FLUX 3 Klein takes: refused, as
       // on the route. Every other model's workflow run sends its first images.
-      const modTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0), "workflow")
+      const modTooMany = imageInputLimitProblem(provider, imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls), "workflow")
       if (modTooMany) throw new Error(modTooMany.message)
 
       return {
@@ -4120,7 +4138,7 @@ function buildPayloadOf(
           outputFormat: modParams.outputFormat,
           gifFrames: modParams.gifFrames,
           svgLevel: modParams.svgLevel,
-          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          refCount: imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls),
           swapToI2i: false,
         }),
         payload: {
@@ -6104,21 +6122,42 @@ function buildPayloadOf(
       // row. node-executor measures the clip and holds the exact price
       // (stampNodaroVideoUpscale); this row is only the build-time basis. Its
       // job carries no frame rate, factor or task id: it has none of them.
+      // Its mode picks the engine, the tiers it takes and the row. The build
+      // carries the mode AS ASKED (only an explicit one); node-executor's stamp
+      // measures the clip and decides the mode that runs and is priced
+      // (`nodaroVideoUpscaleEffectiveMode`: no mode is Transparent, falling
+      // back to Sharp where Transparent cannot serve the clip) and stamps it.
+      // The row here is only the build-time basis (`nodaroVideoUpscaleModeOf`).
       if (vuProvider === NODARO_VIDEO_UPSCALE_PROVIDER) {
-        const vuTier = nodaroVideoUpscaleTierOf(data.targetResolution)
+        const vuMode = nodaroVideoUpscaleModeOf(data.mode)
+        const vuTier = nodaroVideoUpscaleModeTierOf(vuMode, data.targetResolution)
         return {
           jobName: "video-upscale",
           queueName: "video-generation",
-          modelIdentifier: nodaroVideoUpscaleCreditId(vuTier),
+          modelIdentifier: nodaroVideoUpscaleModeCreditId(vuMode, vuTier),
           payload: {
             jobId,
             videoUrl: resolvedInputs.videoUrl || data.videoUrl,
             provider: vuProvider,
+            ...(isNodaroVideoUpscaleMode(data.mode) ? { mode: data.mode } : {}),
             tier: vuTier,
             targetResolution: vuTier,
             usageLogId,
           },
         }
+      }
+      // Topaz Rhea is a route/API provider (decided 2026-11-24): a request to
+      // /v1/video-upscale, or a plugin's child job, measures the clip and plans
+      // its factor before anything is held. A workflow run has no such plan, so
+      // a node set to it is refused here, at build time, before a jobs row or a
+      // hold — never priced at another provider's row or run on another model.
+      if (vuProvider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER) {
+        const vuLabel = typeof data.label === "string" && data.label.trim() ? data.label : "Upscale Video"
+        const err = new Error(
+          `provider_not_supported: node "${vuLabel}" is set to Topaz Rhea, which runs only as a direct POST /v1/video-upscale request — switch the node's provider to Topaz to upscale in a workflow.`,
+        ) as Error & { code?: string }
+        err.code = "provider_not_supported"
+        throw err
       }
       // The task it works on: the one its wired source hands on, else (no
       // source that fits wired) the one it holds — never its own old output.

@@ -1623,6 +1623,13 @@ const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 const FLUX_3_KLEIN_PER_TOOL_BYTES = 14
 const FLUX_3_KLEIN_TOTAL_BYTES = 66
 
+// RAISED 2026-11-22 by Kling Image 4.0 (`kling-image-4` t2i + `kling-image-4-i2i`), and nothing
+// else: the two ids join the catalog-derived model lists, generate_image gains `image_set_count`
+// (a set of 2-10 images from one job) and names 8K in its resolution note, image_to_image's
+// resolution enum gains `8K` and its reference note names Kling Image 4.0. No tool was added, so
+// the fixture does NOT move. Measured by this suite: 560_540 total − 560_198 = 342 B.
+const KLING_IMAGE_4_TOTAL_BYTES = 342
+
 // RAISED 2026-11-12 by Nemotron 3.5 Transcribe on `transcribe`, and nothing else: the tool gains
 // a `model` arg (the TRANSCRIBE_PROVIDERS enum, ElevenLabs STT still the default) and a
 // `target_language` arg (Nemotron's 32 translation targets), and its description and describes
@@ -1958,6 +1965,14 @@ const REMAKE_UPSCALE_CHOICE_BYTES = 239
 const REMAKE_UPSCALE_4K_PER_TOOL_BYTES = 3
 const REMAKE_UPSCALE_4K_BYTES = 3
 
+// RAISED by Video Upscale's second upscaler and Nodaro Video Upscale's two modes (2026-11-24): `video_upscale`'s
+// `model` enum gains `topaz-rhea`, it takes `mode` ("transparent" | "sharp"), and its text says what each mode does,
+// which tiers it takes and how it is priced. No tool was added, so the membership fixtures do NOT move
+// (tool-list-wire.json does). Measured by this suite on the same tree before and after: the list 570_400 B, then
+// 570_701 B, 301 B more (`video_upscale` stays under the per-tool budget). The list had no headroom, so it is raised
+// by exactly what it measures.
+const VIDEO_UPSCALE_MODES_BYTES = 301
+
 // RAISED by LTX 2.5 Fast on Lip Sync (decided 2026-11-23): its id and price hint join the `lip_sync` tool's
 // catalog-derived model list. No tool was added, so the membership fixtures do NOT move (the recorded
 // tool list, tool-list-wire.json, does). Measured by this suite on the same tree: the list went from
@@ -2189,6 +2204,7 @@ export const TOOL_WIRE_BUDGET = {
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
     FLUX_FILL_CATALOG_ENTRY_BYTES +
     FLUX_3_KLEIN_TOTAL_BYTES +
+    KLING_IMAGE_4_TOTAL_BYTES +
     NEMOTRON_TRANSCRIBE_BYTES +
     ADD_CAPTIONS_NEMOTRON_BYTES +
     SUNO_V4_5_CATALOG_ENTRIES_BYTES +
@@ -2227,6 +2243,7 @@ export const TOOL_WIRE_BUDGET = {
     REMAKE_INTENT_CHECK_BYTES +
     REMAKE_UPSCALE_CHOICE_BYTES +
     REMAKE_UPSCALE_4K_BYTES +
+    VIDEO_UPSCALE_MODES_BYTES +
     LTX_2_5_LIP_SYNC_BYTES +
     LIP_SYNC_RESOLUTION_LIST_BYTES +
     LIP_SYNC_SERVER_TIERS_BYTES +

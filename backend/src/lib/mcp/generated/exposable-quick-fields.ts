@@ -67,7 +67,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "reasoningEffort": { valueType: "string", fixed: false, values: ["high","low","max","medium","none","xhigh"] },
   },
   "generate-image": {
-    "resolution": { valueType: "string", fixed: false, values: ["0.5 MP","1 MP","1.5K","1K","2 MP","2K","4 MP","4K"] },
+    "resolution": { valueType: "string", fixed: false, values: ["0.5 MP","1 MP","1.5K","1K","2 MP","2K","4 MP","4K","8K"] },
   },
   "generate-mask": {
     "threshold": { valueType: "number", fixed: true, values: [0.2,0.3,0.45] },
@@ -190,6 +190,7 @@ export const EXPOSABLE_QUICK_FIELDS: Readonly<Record<string, Readonly<Record<str
     "v2vResolution": { valueType: "string", fixed: false, values: ["1080p","480p","720p"] },
   },
   "video-upscale": {
+    "mode": { valueType: "string", fixed: false, values: ["sharp","transparent"] },
     "provider": { valueType: "string", fixed: true, values: ["nodaro-video-upscale","seedance-2-5-hd","topaz","veo-1080p","veo-4k"] },
     "targetResolution": { valueType: "string", fixed: false, values: ["1080p","2k","4k","720p"] },
   },

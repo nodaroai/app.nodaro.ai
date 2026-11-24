@@ -37,7 +37,7 @@ import {
 } from "./measured-wire-length"
 import { NODARO_VIDEO_UPSCALE_CONTAINER_GRACE_SEC } from "./nodaro-video-upscale-pricing"
 import { CONTAINER_FALLBACK_GRACE_SEC } from "./made-clip-overshoot"
-import { NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { NODARO_VIDEO_UPSCALE_PROVIDER, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { TOPAZ_VIDEO_CONTAINER_GRACE_SEC } from "./topaz-pricing"
 import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC } from "./ai-avatar-audio"
 import type { MeasuredFileReading } from "./video-output-length"
@@ -67,6 +67,7 @@ export type MeasuringStepId =
   | Exclude<MeasuredInputStepType, "video-upscale" | "video-to-video">
   | "video-upscale:topaz"
   | "video-upscale:nodaro"
+  | "video-upscale:rhea"
   | "video-to-video:happyhorse-edit"
   | "video-to-video:wan-videoedit"
   | "mask-composite"
@@ -117,6 +118,8 @@ export const MEASURING_STEP_ALLOWANCES: Readonly<Record<MeasuringStepId, Measuri
   "video-upscale:topaz": { ...measuredInput("video-upscale", 0, 0), fallback: { reading: "container", chargeGraceSec: TOPAZ_VIDEO_CONTAINER_GRACE_SEC } },
   // Nodaro Video Upscale: the stream's seconds rounded up; a stream with no length, the container's less its allowance.
   "video-upscale:nodaro": { ...measuredInput("video-upscale", 0, 0), fallback: { reading: "container", chargeGraceSec: NODARO_VIDEO_UPSCALE_CONTAINER_GRACE_SEC } },
+  // Topaz Rhea: the stream's seconds rounded up (`topazRheaBilledSec`); a stream with no length, the container's less its allowance.
+  "video-upscale:rhea": { ...measuredInput("video-upscale", 0, 0), fallback: { reading: "container", chargeGraceSec: CONTAINER_FALLBACK_GRACE_SEC } },
   "mask-composite": { plannedClipSlackSec: MASK_COMPOSITE_PLANNED_CLIP_SLACK_SEC, reading: "container", quoteGraceSec: CLIP_PRICE_GRACE_SEC, chargeGraceSec: CLIP_PRICE_GRACE_SEC },
   // Video Overlay: its base's video stream; a base whose stream length, tag and packets all fail, its container less the fallback's allowance.
   "video-overlay": {
@@ -149,12 +152,13 @@ export function measuringStepReadOptions(step: MeasuringStepId): { readonly plan
 
 /**
  * The row of a step of `MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC`: Video Upscale's
- * by its model (Nodaro Video Upscale, else Topaz); Video to Video's by its
+ * by its model (Nodaro Video Upscale, Topaz Rhea, else Topaz); Video to Video's by its
  * model (HappyHorse Edit, else Wan 2.7 VideoEdit — the only two that read
  * their clip).
  */
 export function measuredInputStepId(type: MeasuredInputStepType, provider?: unknown): MeasuringStepId {
   if (type === "video-to-video") return provider === "happyhorse-edit" ? "video-to-video:happyhorse-edit" : "video-to-video:wan-videoedit"
   if (type !== "video-upscale") return type
+  if (provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER) return "video-upscale:rhea"
   return provider === NODARO_VIDEO_UPSCALE_PROVIDER ? "video-upscale:nodaro" : "video-upscale:topaz"
 }

@@ -139,3 +139,18 @@ export function topazVideoOutputSize(
   const portrait = source ? source.height > source.width : false
   return portrait ? { width: short, height: long } : { width: long, height: short }
 }
+
+/**
+ * Topaz Rhea — the Video Upscale route's `topaz-rhea` provider: Topaz's Rhea
+ * model, scaled by a factor (1–4) chosen so the output's SHORT side reaches the
+ * target (720p, 1080p or 4K), at the source's own frame rate and length. Priced
+ * per second of the output by the target's size (`@nodaro/render-rules`
+ * topaz-rhea-pricing.ts). A route/API provider only: the editor's Video
+ * Upscale node does not offer it.
+ */
+export const TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER = "topaz-rhea" as const
+
+/** Is `v` the Topaz Rhea provider id? */
+export function isTopazRheaVideoUpscaleProvider(v: unknown): v is typeof TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER {
+  return v === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER
+}

@@ -19,7 +19,7 @@ import type { NormalizedImageGen } from "@nodaro/shared/credits"
 /** The catalog-governed levers a route hands to the normalizer. */
 const SNAPPED_LEVER_FIELDS = [
   "aspectRatio", "resolution", "quality", "background",
-  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
+  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel", "imageSetCount",
 ] as const
 
 /** Just the snapped values — callers pass the whole `NormalizedImageGen`. */
