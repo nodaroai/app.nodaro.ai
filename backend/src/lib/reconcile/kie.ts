@@ -40,6 +40,7 @@ import {
   NOT_GENERIC_RECOVERABLE,
   loadUsageLogId,
   type FinalizeClaimant,
+  type FinalizeJobType,
 } from "../job-finalize.js"
 import { markJobCompleted } from "../../workers/shared.js"
 import { nemotronOutputFromResult } from "../../providers/kie/nemotron-transcribe.js"
@@ -684,6 +685,49 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     return
   }
 
+  await finalizeRecoveredMedia(row, row.job_type, {
+    url: result.url,
+    extraUrls: result.extraUrls,
+    // What KIE billed for the saved task (its record's credits), or null when
+    // the record carries none: the column is then left as it is. Recorded
+    // only: no `meteredCost`, so the reservation (or the metered base) is
+    // committed whatever this is.
+    cost: kieRecoveredCostUsd(result.kieCredits),
+    providerUsed: null,
+    providerMs: result.providerMs,
+    autoQualityKieCredits: autoQualityCreditsOf(row, result.kieCredits),
+  }, opts)
+}
+
+/**
+ * What a recovered task delivered, as {@link finalizeRecoveredMedia} takes it:
+ * the result's files, and the figures the row records. `cost` and
+ * `providerUsed` are recorded only (null leaves the column as it is); the
+ * user's charge is settled from the delivered file, as the worker settles it.
+ */
+export interface RecoveredDelivery {
+  url: string
+  extraUrls?: readonly string[]
+  cost: number | null
+  providerUsed: string | null
+  providerMs?: number
+  /** GPT Image 2.6 at quality Auto: the credits the task really used. */
+  autoQualityKieCredits?: number
+}
+
+/**
+ * The delivery tail of a recovered generation: the same settlement, post-steps
+ * and finalize the worker runs after its provider call — shared by every
+ * recovery lane that re-fetches a finished task (the KIE lane above, the
+ * alternate-route lane). Bumps `reconcile_attempts` on any failure instead of
+ * throwing, so a deterministic failure ends in the exhaustion refund.
+ */
+export async function finalizeRecoveredMedia(
+  row: KieJobRow,
+  jobType: FinalizeJobType,
+  result: RecoveredDelivery,
+  opts?: ReconcileOpts,
+): Promise<void> {
   // P0.1 (audit Blocker B1): the post-poll completion phase MUST bump
   // reconcile_attempts on failure. Without this, a poll-success-but-
   // finalize-failure propagated to the cron's per-row catch (errors++ only)
@@ -697,7 +741,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // (pure), applied by finalize AFTER markJobCompleted wins — committing it
     // up-front flipped the log out of `reserved` and defeated the exhaustion
     // refund when finalize kept failing (audit P0.3).
-    const loopTrimAddon = loopTrimAddonForReconcile(row.job_type, row.input_data ?? null)
+    const loopTrimAddon = loopTrimAddonForReconcile(jobType, row.input_data ?? null)
 
     // A Seedance reference-video run was reserved at a worst case (an edit
     // renders the source clip's length); the worker would have measured the
@@ -707,7 +751,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     // reservation's probe of them); `undefined` = not such a run, or
     // unmeasurable → the reservation is committed as before.
     const input = (row.input_data ?? {}) as Record<string, unknown>
-    const gptImageBase = await gptImage26AutoSettledBase(autoQualityCreditsOf(row, result.kieCredits))
+    const gptImageBase = await gptImage26AutoSettledBase(result.autoQualityKieCredits)
     // One measurement of the recovered clip: the settlement's credits and, for
     // a run that records its length, that length (finalize records it from
     // this instead of probing the clip again).
@@ -754,7 +798,7 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
     const deliveredVideoSec = mediaUrl === undefined && drivingAudioMedia === undefined ? settle?.deliveredSec : undefined
     await finalizeJobWithMedia({
       jobId: row.id,
-      jobType: row.job_type,
+      jobType,
       claimant: opts?.claimant ?? "cron",
       ...(mediaUrl !== undefined && { mediaUrl }),
       ...(drivingAudioMedia !== undefined && { mediaUrl: drivingAudioMedia }),
@@ -764,12 +808,10 @@ export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Pro
       result: {
         url: composite?.url ?? result.url,
         ...(composite ? {} : { extraUrls: result.extraUrls }),
-        // What KIE billed for the saved task (its record's credits), or null when
-        // the record carries none: the column is then left as it is. Recorded
-        // only: no `meteredCost`, so the reservation (or the metered base above)
-        // is committed whatever this is.
-        cost: kieRecoveredCostUsd(result.kieCredits),
-        providerUsed: null,
+        // Recorded only: no `meteredCost`, so the reservation (or the metered
+        // base above) is committed whatever this is.
+        cost: result.cost,
+        providerUsed: result.providerUsed,
         providerMs: result.providerMs,
       },
       ...(composite?.extraOutputData && { extraOutputData: composite.extraOutputData }),

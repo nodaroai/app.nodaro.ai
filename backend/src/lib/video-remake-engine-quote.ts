@@ -38,7 +38,7 @@ import { config } from "./config.js"
 import { callerGrantOf, withJobSubmissionContext } from "./job-submission-context.js"
 import { neutralBreakdown, privacyCreditsOf } from "./nodaro-motion-quote.js"
 import { CAST_SWAP_PREFIX, VIDEO_REMAKE_PREFIX } from "./video-remake-paths.js"
-import { upscaleQuoteOf, type VideoRemakeResolution, type VideoRemakeUpscaleChoice } from "./video-remake-upscale-choice.js"
+import { upscaleQuoteOf, type VideoRemakeOutputResolution, type VideoRemakeResolution, type VideoRemakeUpscaleChoice } from "./video-remake-upscale-choice.js"
 
 /** The engine's estimate route, in the spelling every engine version serves. */
 export const VIDEO_REMAKE_ESTIMATE_ROUTE = `${CAST_SWAP_PREFIX}/estimate`
@@ -129,8 +129,8 @@ export interface VideoRemakeEngineQuote {
   settlesLower: boolean
   /** The engine's size, where the engine answers the upscale choice (lib/video-remake-upscale-choice.ts). */
   resolution?: VideoRemakeResolution
-  /** The size delivered: the next size on a run the choice upscales. */
-  outputResolution?: VideoRemakeResolution
+  /** The size delivered: the next size on a run the choice upscales ("4k" for a 1080p run). */
+  outputResolution?: VideoRemakeOutputResolution
   /** The choice the run would be made with ("next" where offered and not turned off in the run's body). */
   upscale?: VideoRemakeUpscaleChoice
   /** Whether the choice is offered for this run. */

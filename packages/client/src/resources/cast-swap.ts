@@ -422,8 +422,9 @@ export interface VideoRemakeParams {
   /**
    * Whether the finished video is upscaled to the next size (see
    * {@link VideoRemakeUpscaleChoice}). Left out: `"next"` where the choice is
-   * offered, `"off"` where it is not. It is not offered on a 1080p run, a
-   * draft or a trend run, nor where the deployment has not turned it on
+   * offered, `"off"` where it is not. A 1080p run's next size is 4K. It is
+   * not offered on a draft or a trend run, nor where the deployment has not
+   * turned it on
    * ({@link VideoRemakeResource.styleChoice} answers `upscaleChoice` false):
    * there the field is accepted and ignored, and a `"next"` sent anyway runs as
    * `"off"` (never an error). The estimate, sent the same field, is the
@@ -472,7 +473,7 @@ export interface VideoRemakeParams {
 /**
  * Video Remake's upscale choice ({@link VideoRemakeParams.upscale}):
  * - `"next"`: the result is upscaled straight to the next size and delivered
- *   at it (480p → 720p, 720p → 1080p), at the price the estimate shows in
+ *   at it (480p → 720p, 720p → 1080p, 1080p → 4K), at the price the estimate shows in
  *   `breakdown.upscale`;
  * - `"off"`: the result is delivered at the engine's size (`resolution`).
  */
@@ -484,6 +485,14 @@ export type VideoRemakeUpscaleChoice = "off" | "next"
  * upscale step failed and the video was delivered at the engine's size).
  */
 export type VideoRemakeUpscaleOutcome = "applied" | "skipped"
+
+/**
+ * The size a Video Remake run is delivered at (`outputResolution`, on the
+ * estimate and on a completed job's output): the engine's sizes, and `"4k"`
+ * (lower-case) for a 1080p run upscaled to the next size. The engine's own
+ * size (`resolution`) is never `"4k"`.
+ */
+export type VideoRemakeOutputResolution = "480p" | "720p" | "1080p" | "4k"
 
 /**
  * The Video Remake keys of a completed job's output (`GET /v1/jobs/:id`,
@@ -498,10 +507,10 @@ export interface VideoRemakeJobOutput {
   resolution?: "480p" | "720p" | "1080p"
   /**
    * The size delivered: the next size on a `"next"` run whose upscale was
-   * applied, else `resolution`. Absent from a run made where the upscale
-   * choice is not taken: read `resolution` then.
+   * applied (`"4k"` for a 1080p run), else `resolution`. Absent from a run
+   * made where the upscale choice is not taken: read `resolution` then.
    */
-  outputResolution?: "480p" | "720p" | "1080p"
+  outputResolution?: VideoRemakeOutputResolution
   /** On a `"next"` run only: whether its upscale was applied (see {@link VideoRemakeUpscaleOutcome}). */
   upscale?: VideoRemakeUpscaleOutcome
   [key: string]: unknown
@@ -961,13 +970,14 @@ export interface VideoRemakeEstimate {
    * deployment offers the upscale choice; absent from any other server.
    */
   resolution?: "480p" | "720p" | "1080p"
-  /** The size the video would be delivered at: the next size on a `"next"` run, else `resolution`. */
-  outputResolution?: "480p" | "720p" | "1080p"
+  /** The size the video would be delivered at: the next size on a `"next"` run (`"4k"` for a 1080p run), else `resolution`. */
+  outputResolution?: VideoRemakeOutputResolution
   /** The upscale choice the run would be made with: the one asked for, `"off"` where it is not offered. */
   upscale?: VideoRemakeUpscaleChoice
   /**
    * Whether the upscale choice is offered for this run: the authority (never
-   * on a 1080p run, a draft or a trend run). Absent: read it as `false`.
+   * on a draft or a trend run; a 1080p run's next size is 4K). Absent: read
+   * it as `false`.
    */
   upscaleOffered?: boolean
 }

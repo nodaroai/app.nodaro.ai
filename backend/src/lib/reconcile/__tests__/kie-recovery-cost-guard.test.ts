@@ -56,7 +56,11 @@ const COMPLETIONS: Readonly<Record<string, Readonly<Record<string, { count: numb
   reconcileKieJob: {
     recoverEntityJob: { count: 1, rule: "recovered" },
     recoverGeminiSpeechJob: { count: 1, rule: "Gemini speech: geminiSpeechCostUsd over the record's credits, the worker's own rule" },
-    finalizeJobWithMedia: { count: 1, rule: "recovered" },
+  },
+  // The shared delivery tail: it records the `cost` its caller hands it — the
+  // KIE lane's call above computes that with kieRecoveredCostUsd (held below).
+  finalizeRecoveredMedia: {
+    finalizeJobWithMedia: { count: 1, rule: "the caller's figure: reconcileKieJob passes kieRecoveredCostUsd" },
   },
 }
 

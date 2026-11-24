@@ -259,6 +259,7 @@ import { KieError } from "../../providers/kie/client.js"
 // on isPostProcessingError, so tests must throw the genuine type.
 import { PostProcessingError } from "../../lib/post-processing-error.js"
 import { HouseModelRunPendingError } from "../../lib/house-model-failure.js"
+import { AlternateRoutePendingError } from "../../lib/alternate-route.js"
 // Real class (module not mocked) — the drain branch discriminates on
 // instanceof DrainAbortError, so tests must throw the genuine type.
 import { DrainAbortError, beginWorkerDrain, _resetWorkerDrainForTests } from "../../lib/worker-drain.js"
@@ -839,6 +840,22 @@ describe("video worker processor", () => {
       mocks.mockHandler.mockRejectedValueOnce(
         new HouseModelRunPendingError("House Fixture did not finish within 10 minutes; the run will be checked again.", "house-fixture"),
       )
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).resolves.toBeUndefined()
+
+      expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }))
+      expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("final attempt + an alternate route's task left to the recovery → row left processing, no failure, no refund", async () => {
+      mocks.mockSingle
+        .mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+        .mockResolvedValueOnce({
+          data: { provider_kind: "alternate-route", provider_task_id: "alt:ref-1", status: "processing" },
+          error: null,
+        })
+      mocks.mockHandler.mockRejectedValueOnce(new AlternateRoutePendingError("The video is still being made; it will be checked again."))
 
       const job = makeBullJob("generate-image")
       await expect(processor(job)).resolves.toBeUndefined()

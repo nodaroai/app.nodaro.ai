@@ -141,6 +141,10 @@ vi.mock("../fal.js", () => ({
   reconcileFalJob: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("../alternate-route.js", () => ({
+  reconcileAlternateRouteJob: vi.fn().mockResolvedValue(undefined),
+}))
+
 // The ONE sweep permitted to write a `pending_review` row (spec D31). It is
 // gated on JOB_HOLD_TTL_HOURS INSIDE itself, so the cron calls it
 // unconditionally and an unset variable costs nothing — not even a query.
@@ -176,6 +180,7 @@ import { reconcileKieJob } from "../kie.js"
 import { reconcileReplicateJob } from "../replicate.js"
 import { reconcileElevenLabsJob } from "../elevenlabs.js"
 import { reconcileFalJob } from "../fal.js"
+import { reconcileAlternateRouteJob } from "../alternate-route.js"
 import { sweepExpiredHolds } from "../hold-expiry.js"
 import { sweepUseCaseWrappers } from "../use-case-wrapper-sweep.js"
 import { sweepLaneGhosts, sweepLaneQueuedJobs } from "../../concurrency-lanes/queued-sweep.js"
@@ -312,6 +317,27 @@ describe("reconcileInflightJobs", () => {
     })
     const result = await reconcileInflightJobs()
     expect(reconcileFalJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-fal" }))
+    expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+    expect(result.recovered).toBe(1)
+  })
+
+  it("dispatches alternate-route to reconcileAlternateRouteJob (POSITIVE dispatch: the catch-all would fail and refund it)", async () => {
+    ;(reconcileAlternateRouteJob as ReturnType<typeof vi.fn>).mockClear()
+    const stale = new Date(Date.now() - STALE_THRESHOLD_MS["alternate-route"] - 60_000).toISOString()
+    mocks.rows.push({
+      id: "j-alt",
+      status: "processing",
+      provider_kind: "alternate-route",
+      provider_task_id: "alt:ref-1",
+      provider_call_started_at: stale,
+      reconcile_attempts: 0,
+      job_type: "text-to-video",
+      input_data: { provider: "some-model" },
+    })
+    const result = await reconcileInflightJobs()
+    expect(reconcileAlternateRouteJob).toHaveBeenCalledWith(
+      { id: "j-alt", provider_task_id: "alt:ref-1", reconcile_attempts: 0, job_type: "text-to-video", input_data: { provider: "some-model" } },
+    )
     expect(sweepStaleSyncJob).not.toHaveBeenCalled()
     expect(result.recovered).toBe(1)
   })

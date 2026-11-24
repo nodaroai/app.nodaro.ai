@@ -102,7 +102,7 @@
  * still states the clip.
  *
  * The upscale choice (`upscale: "off" | "next"`, 2026-11-24): "next" delivers
- * the result upscaled to the next size. Sent only to an engine that declares
+ * the result upscaled to the next size (a 1080p run at 4K, `"4k"`). Sent only to an engine that declares
  * `castSwap.upscaleChoice` (lib/video-remake-upscale-choice.ts); elsewhere it
  * is dropped, which is what such a deployment makes of it ("off"). Where it is
  * offered, and the choice left out's default, is the engine's to say: the
@@ -151,7 +151,7 @@ import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeade
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
 import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
-import { VIDEO_REMAKE_UPSCALE_CHOICES, loadedEngineTakesUpscaleChoice, upscaleQuoteOf } from "../../video-remake-upscale-choice.js"
+import { VIDEO_REMAKE_UPSCALE_CHOICES, loadedEngineTakesUpscaleChoice, outputResolutionLabel, upscaleQuoteOf } from "../../video-remake-upscale-choice.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -617,7 +617,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         upscale: z
           .enum(VIDEO_REMAKE_UPSCALE_CHOICES)
           .optional()
-          .describe('"next" (default where the quote has upscaleOffered): delivered at the next size (480p→720p→1080p), priced in breakdown.upscale; "off": at resolution.'),
+          .describe('"next" (default where the quote has upscaleOffered): delivered at the next size (480p→720p→1080p→4K), priced in breakdown.upscale; "off": at resolution.'),
         draft: z.boolean().optional().describe("true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
@@ -925,7 +925,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         const upscaleQuote = upscaleQuoteOf(quote)
         const upscaleSentence =
           upscaleQuote.upscale === "next" && upscaleQuote.outputResolution
-            ? ` It is delivered upscaled to ${upscaleQuote.outputResolution}${breakdown.upscale !== undefined ? `, which adds ${statedAmount(breakdown.upscale)} ${amountWord()}` : ""} (upscale: "off" keeps ${upscaleQuote.resolution ?? "the run's resolution"}).`
+            ? ` It is delivered upscaled to ${outputResolutionLabel(upscaleQuote.outputResolution)}${breakdown.upscale !== undefined ? `, which adds ${statedAmount(breakdown.upscale)} ${amountWord()}` : ""} (upscale: "off" keeps ${upscaleQuote.resolution ?? "the run's resolution"}).`
             : upscaleQuote.upscaleOffered === true && upscaleQuote.upscale === "off"
               ? " Upscaling it to the next size is offered (upscale: \"next\")."
               : ""

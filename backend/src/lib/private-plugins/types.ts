@@ -46,6 +46,7 @@ import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract
 import type { FrameFit, FrameDelivery } from "@nodaro/shared/video"
 import type { SeedanceReferenceTaskType } from "@nodaro/shared/models"
 import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared/edl"
+import type { AlternateRouteJobType } from "../alternate-route-request.js"
 import type { CastSwapSteps, TextStepSetting } from "../cast-swap-steps.js"
 import type {
   PluginAccountSecretsToolkit,
@@ -5456,9 +5457,9 @@ export interface PluginSupports {
     /**
      * Video Remake's upscale choice (2026-11-24): a run and its estimate take
      * `upscale: "off" | "next"` ("next": the result upscaled to the next size
-     * and delivered at it, 480p → 720p, 720p → 1080p); the estimate answers
-     * `resolution` (the engine's size), `outputResolution` (the size
-     * delivered), `upscale` (the choice made) and `upscaleOffered`; a
+     * and delivered at it, 480p → 720p, 720p → 1080p, 1080p → 4K); the
+     * estimate answers `resolution` (the engine's size), `outputResolution`
+     * (the size delivered: "480p", "720p", "1080p" or "4k"), `upscale` (the choice made) and `upscaleOffered`; a
      * completed job's output `outputResolution` and, on a "next" run,
      * `upscale: "applied" | "skipped"`. Declared only while the deployment has
      * turned it on (read at load). Where it is offered is the estimate's to
@@ -6200,6 +6201,88 @@ export interface PluginServices {
    * (`lib/house-models.ts`, docs/design/house-models.md).
    */
   houseModels?: PluginHouseModelsService
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * Alternate routes: a deployment may run a prepared video generation through
+   * another upstream it owns, at the same price to the person. The plugin owns
+   * the rule (which runs it takes), the upstream and its key; core owns the job
+   * (claim, checkpoint, poll loop, recovery, fallback to the default route,
+   * finalize). Absent ⇒ every run takes the default route, with no read and no
+   * log (`lib/alternate-route.ts`, docs/design/alternate-routes.md).
+   */
+  alternateRoutes?: PluginAlternateRoutesService
+}
+
+// ============================================================================
+// Alternate routes — a prepared video run sent through another upstream
+// ============================================================================
+
+/**
+ * One prepared video run, as core offers it: built from the default route's
+ * request once ALL preparation is done (prompt policies applied, references
+ * sized and re-encoded, the request's shape decided). Media URLs are this
+ * install's own stored files. Reference tokens in `prompt` are `@image_N` /
+ * `@video_N`. A request key core does not map makes the run "not offered".
+ */
+export interface PluginAlternateRouteRequest {
+  jobId: string
+  /** One of the two video generation lanes (`AlternateRouteJobType`). */
+  jobType: AlternateRouteJobType
+  /** The catalog model id the run was priced on. */
+  model: string
+  /** The job's parent (read from `jobs.parent_job_id`), or null for a job run on its own. */
+  parent: { jobId: string; jobType: string } | null
+  referenceTaskType?: string
+  resolution?: string
+  draft: boolean
+  outputFormat?: "mov"
+  prompt: string
+  aspectRatio?: string
+  durationSec?: number
+  generateAudio?: boolean
+  referenceImageUrls: readonly string[]
+  referenceVideoUrls: readonly string[]
+  referenceAudioUrls: readonly string[]
+  firstFrameUrl?: string
+  lastFrameUrl?: string
+}
+
+/**
+ * Why `start` refused. `created` is what the plugin knows of the upstream:
+ *   - "none": refused before a task existed (core falls back at once);
+ *   - "unknown": no answer (a timeout) — a task may exist and be billed. Core
+ *     falls back and raises an alert naming the job. Never retry such a create.
+ * A rejection without this shape is read as "unknown".
+ */
+export interface PluginAlternateRouteStartError {
+  created: "none" | "unknown"
+  message: string
+  retryAfterMs?: number
+}
+
+export type PluginAlternateRoutePoll =
+  | { state: "running"; nextPollMs?: number }
+  | { state: "done"; resultUrl: string; providerCostUsd?: number; providerMs?: number }
+  /** Ended without a result and NOT charged (a refusal included): core falls back. */
+  | { state: "failed" | "expired"; message: string; code?: string }
+  /** This process cannot read that task (no key here): core leaves the job alone for a process that can. */
+  | { state: "unreadable" }
+
+export interface PluginAlternateRoutesService {
+  /** Pure and synchronous: the plugin's switch and rules. A route id, or null for "not mine". */
+  accepts(req: PluginAlternateRouteRequest): { routeId: string } | null
+  /**
+   * Submits the run, once per job (core holds the job before calling). Resolves
+   * with an opaque task reference; rejects with a `PluginAlternateRouteStartError`.
+   * `plannedCostUsd` is recorded when the finished task reports no figure.
+   */
+  start(
+    routeId: string,
+    req: PluginAlternateRouteRequest,
+    ctx: { jobId: string },
+  ): Promise<{ taskRef: string; plannedCostUsd?: number }>
+  /** One status read. An upstream failure is RETURNED; a throw means the read itself failed (core reads again). */
+  poll(routeId: string, taskRef: string): Promise<PluginAlternateRoutePoll>
 }
 
 // ============================================================================

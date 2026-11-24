@@ -42,6 +42,7 @@ import {
   FAL_RECOVER_KINDS as FAL_KINDS,
   NODARO_CLOUD_RECOVER_KINDS as NODARO_CLOUD_KINDS,
   HOUSE_MODEL_RECOVER_KINDS as HOUSE_MODEL_KINDS,
+  ALTERNATE_ROUTE_RECOVER_KINDS as ALTERNATE_ROUTE_KINDS,
 } from "../lib/reconcile/types.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
 import { MAX_POLL_ATTEMPTS } from "../providers/kie/client.js"
@@ -127,6 +128,23 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
       // read to its end here, on the model's own cadence, as the provider path
       // does — not read once and parked for the cron's staleness threshold.
       await reconcileHouseModelJob({
+        id: row.id,
+        provider_task_id: row.provider_task_id,
+        reconcile_attempts: row.reconcile_attempts,
+        job_type: row.job_type,
+        input_data: row.input_data ?? null,
+      }, { claimant: "worker", pollToEnd: true })
+      return
+    }
+    if (ALTERNATE_ROUTE_KINDS.has(kind)) {
+      const { reconcileAlternateRouteJob } = await import("../lib/reconcile/alternate-route.js")
+      console.log(
+        `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
+        `(kind=${kind}, task=${row.provider_task_id}) — reading the alternate route's task inline`,
+      )
+      // Inside a live queue handler: a task still running is read on to the
+      // worker's own budget here; one this process cannot read is left alone.
+      await reconcileAlternateRouteJob({
         id: row.id,
         provider_task_id: row.provider_task_id,
         reconcile_attempts: row.reconcile_attempts,

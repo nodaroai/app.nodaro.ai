@@ -1,5 +1,6 @@
 import type { DeclaredSeedanceTaskType, TopazVideoResolution, TtsOutputFormat } from "@nodaro/shared/models"
 import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared/video"
+import type { AlternateRouteJobType } from "../lib/alternate-route-request.js"
 
 // Result types
 export interface ProviderResult {
@@ -61,6 +62,11 @@ export interface ProviderResult {
    *  as it was sent (the image the mask is aligned to). The image-to-image
    *  handler pastes it back everywhere outside the mask. */
   maskEditSourceUrl?: string
+  /** Set only when a plugin's alternate route ran this generation instead of
+   *  the default upstream (lib/alternate-route.ts): the route's id. `cost` is
+   *  then that route's own figure, and no handler re-derives it from the
+   *  default upstream's rates. Absent on every other result. */
+  routedVia?: string
 }
 
 // Capabilities a provider can support
@@ -101,6 +107,13 @@ export interface ReconcileOpts {
    *  price read. Booleans allowed (audio / videoInput two-state cost levers),
    *  mirroring EgressCall.dimensions in providers/egress.ts. */
   dimensions?: Record<string, string | number | boolean | undefined>
+  /** The job this call generates for, stated by the handler that owns it — the
+   *  explicit opt-in to an alternate route (lib/alternate-route.ts). Never read
+   *  from ambient job context: a toolkit call runs inside a PARENT job's
+   *  context, and a claim written there would land on the parent's row.
+   *  Absent ⇒ the alternate route is never tried. Stripped before any
+   *  upstream call. */
+  routeJob?: { jobId: string; jobType: AlternateRouteJobType }
 }
 
 // Standard options passed to all operations
