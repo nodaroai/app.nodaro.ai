@@ -185,6 +185,32 @@ describe("generate-image handler", () => {
     )
   })
 
+  it("a set's count reaches the provider; one image, or an inpaint, asks for none", async () => {
+    await handler(makeJob("generate-image", { prompt: "a day", provider: "kling-image-4", resolution: "2K", imageSetCount: 4 }) as never, makeCtx())
+    expect(mocks.mockGenerateImage).toHaveBeenLastCalledWith(
+      "a day", "kling-image-4", undefined, { resolution: "2K", image_set_count: 4 },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    await handler(makeJob("generate-image", { prompt: "a day", provider: "kling-image-4", imageSetCount: 1 }) as never, makeCtx())
+    expect(mocks.mockGenerateImage.mock.calls.at(-1)![3]).toBeUndefined()
+  })
+
+  it("an edit of a base on Kling Image 4.0 tells the provider how the prompt numbers the images", async () => {
+    await handler(makeJob("generate-image", { prompt: "Image 1", provider: "kling-image-4", baseImageUrl: "https://r/base.png", referenceImageUrls: ["https://r/1.png", "https://r/2.png"] }) as never, makeCtx())
+    const [, , refs, extra] = mocks.mockGenerateImage.mock.calls.at(-1)!
+    expect(refs).toEqual(["https://r/base.png", "https://r/1.png", "https://r/2.png"])
+    expect(extra).toMatchObject({ image_prompt_order: ["https://r/1.png", "https://r/2.png"] })
+    // Any other model is sent nothing new.
+    await handler(makeJob("generate-image", { prompt: "x", provider: "seedream-5-5", baseImageUrl: "https://r/base.png", referenceImageUrls: ["https://r/1.png"] }) as never, makeCtx())
+    expect(mocks.mockGenerateImage.mock.calls.at(-1)![3] ?? {}).not.toHaveProperty("image_prompt_order")
+  })
+
+  it("a job's named subjects reach the provider as they were planned", async () => {
+    const imageSubjects = [{ name: "Kira", imageUrls: ["https://r/1.png", "https://r/2.png"] }]
+    await handler(makeJob("generate-image", { prompt: "x", provider: "kling-image-4", referenceImageUrls: ["https://r/1.png", "https://r/2.png"], imageSubjects }) as never, makeCtx())
+    expect(mocks.mockGenerateImage.mock.calls.at(-1)![3]).toEqual({ image_subjects: imageSubjects })
+  })
+
   it("returns early when finalize reports ok=false (cancelled / already terminal)", async () => {
     mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob("generate-image", { prompt: "cancelled" })
@@ -393,6 +419,13 @@ describe("image-to-image handler", () => {
       jobType: "image-to-image",
       result: PROVIDER_RESULT,
     })
+  })
+
+  it("Kling Image 4.0: the source is sent first, and the provider is told the prompt numbers the references", async () => {
+    await handler(makeJob("image-to-image", { imageUrl: "https://main.png", referenceImageUrls: ["https://ref1.png"], prompt: "Image 1 on top", provider: "kling-image-4-i2i" }) as never, makeCtx())
+    const [, , images, extra] = mocks.mockGenerateImage.mock.calls.at(-1)!
+    expect(images).toEqual(["https://main.png", "https://ref1.png"])
+    expect(extra).toEqual({ image_prompt_order: ["https://ref1.png"] })
   })
 
   it("uses the edit default model (gpt-image-2-6-flare-i2i) when none specified", async () => {

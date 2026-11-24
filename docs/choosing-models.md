@@ -102,8 +102,10 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Pro (Safety Tolerance) | Black Forest Labs | Premium | 26<!-- credits: flux-2-pro --> | t2i, i2i | BFL Flux 2 Pro flagship via Replicate. Accepts up to 4 reference images. |
 | Flux Kontext Max | Black Forest Labs | Premium | 28<!-- credits: flux-kontext-max --> | t2i, edit | Premium Kontext — highest fidelity context-aware edits. |
 | Topaz Image Upscale | Topaz | Premium | 28<!-- credits: topaz-image-upscale --> | upscale | High-quality image upscale at 1x (enhance only), 2x or 4x. Best for production-ready output. |
+| Kling Image 4.0 | Kuaishou | Premium | 32<!-- credits: kling-image-4 --> | t2i | Kling Image 4.0: native 2K, 4K or 8K pictures, text in quotation marks drawn into the image, and coherent sets of 2 to 10 images from one prompt. Eight shapes plus auto. |
 | FLUX Fill Pro | Black Forest Labs | Premium | 33<!-- credits: flux-fill --> | edit | Masked inpainting from BFL via Replicate: repaints the mask's white area; the result keeps the image's size. |
 | Imagen 4 Ultra | Google | Premium | 33<!-- credits: imagen4-ultra --> | t2i | Premium Imagen 4 — highest fidelity, slower / more credits. |
+| Kling Image 4.0 (I2I) | Kuaishou | Premium | 33<!-- credits: kling-image-4-i2i --> | i2i | Kling Image 4.0 with input images: up to 10 reference images and named subjects in all (a wired character with 2 to 4 views is one subject, called by name in the prompt), at 2K, 4K or 8K, one picture or a set of 2 to 10. |
 | Kontext Multi (Open) | Black Forest Labs | Premium | 33<!-- credits: kontext-multi --> | i2i, edit | Multi-image Flux Kontext Pro via Replicate — up to 4 input images. |
 | Flux 2 Flex | Black Forest Labs | Premium | 39<!-- credits: flux-flex --> | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |
 | Ideogram Edit | Ideogram | Premium | 50<!-- credits: ideogram-edit --> | edit | Inpainting / mask-based editing with Ideogram. Pair with a mask URL. |

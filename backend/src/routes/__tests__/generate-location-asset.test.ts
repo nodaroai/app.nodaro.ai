@@ -544,7 +544,7 @@ describe("POST /v1/generate-location-asset — quality / resolution levers", () 
       method: "POST",
       url: "/v1/generate-location-asset",
       headers: { "x-user-id": TEST_USER_ID },
-      payload: { assetType: "timeOfDay", variant: "dusk", name: "Forest Glade", resolution: "8K" },
+      payload: { assetType: "timeOfDay", variant: "dusk", name: "Forest Glade", resolution: "16K" },
     })
 
     expect(res.statusCode).toBe(400)

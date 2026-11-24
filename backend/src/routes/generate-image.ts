@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
+import { klingImage4PricedItems, type KlingImageSubject } from "../lib/kling-image-4-subjects.js"
 import { z } from "zod"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { supabase } from "../lib/supabase.js"
@@ -355,9 +356,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
       // such a model) and a base image. Refused here, before any job row or
       // reservation, never left out by the assembler or the provider.
       const sentRefs = Array.isArray(plan.queueData.referenceImageUrls) ? (plan.queueData.referenceImageUrls as string[]) : []
+      // Kling Image 4.0 counts items: each named subject the plan recorded once.
+      const planSubjects = Array.isArray(plan.queueData.imageSubjects) ? (plan.queueData.imageSubjects as KlingImageSubject[]) : []
       const tooMany = imageInputLimitProblem(
         plan.queueData.provider as string | undefined,
-        pricedSentImages(plan.queueData.provider as string | undefined, sentRefs, plan.queueData.baseImageUrl),
+        klingImage4PricedItems(pricedSentImages(plan.queueData.provider as string | undefined, sentRefs, plan.queueData.baseImageUrl), planSubjects),
         "request",
       )
       if (tooMany) return reply.status(400).send({ error: tooMany })

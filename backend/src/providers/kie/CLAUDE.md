@@ -133,6 +133,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-5-i2i` | `seedream/5-5-image-to-image` | [seedream 5.5 i2i](https://docs.kie.ai/market/seedream/5-5-image-to-image.md) |
 | `flux-3-klein` | `flux-3/klein-text-to-image` (NOT FLUX 2 Klein, `flux-2-klein`, which runs on Replicate) | [flux 3 klein t2i](https://docs.kie.ai/market/flux3/klein-text-to-image.md) |
 | `flux-3-klein-i2i` | `flux-3/klein-edit-image` | [flux 3 klein edit](https://docs.kie.ai/market/flux3/klein-edit-image.md) |
+| `kling-image-4` / `kling-image-4-i2i` | `kling-4-0/image` (ONE endpoint for both; NOT the Kling 4.0 video models `kling-4*`) | [kling 4.0 image](https://docs.kie.ai/market/kling-4-0/image) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -1128,6 +1129,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | MiniMax H3 Image (T2I + edit) | `resolution` | `"1K"`, `"2K"` (default), `"4K"` at every ratio; 1K and 2K cost the same |
 | Seedream 5.5 (T2I + I2I) | **`size`**, as Flash | `"1K"`, `"1.5K"`, `"2K"` (default, and KIE's): priced per size, 1K and 1.5K the same (see the wire notes below) |
 | FLUX 3 Klein (T2I + edit) | `resolution` | `"1K"` (default, and KIE's), `"2K"`, `"4K"` at every ratio; priced per size, the same on both endpoints |
+| Kling Image 4.0 (both ids) | `resolution`, **lowercase** on the wire | `"2k"` (default), `"4k"`, `"8k"`; ours are uppercase (`2K`/`4K`/`8K`). No 1K. Only this model lists 8K (see the wire notes below) |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -1321,6 +1323,83 @@ MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
   `kieImageCostUsd` records the size and the references sent as
   `provider_cost`. The number of references counted is what the run sends,
   a Generate Image base included (`pricedSentImages`).
+
+### Kling Image 4.0 wire notes (`kling-image-4` / `kling-image-4-i2i`)
+
+One KIE endpoint, `kling-4-0/image`, for both ids: no `image_urls` is text to
+image, images make it image to image. The person picks Kling Image 4.0; a run
+with images runs on the `-i2i` id (`T2I_TO_I2I_VARIANT`, and
+`GPT_IMAGE_T2I_TO_I2I` for the callers that do not swap), which is the one
+priced per input item. Not the Kling 4.0 video models (`kling-4*`).
+
+- **The body is built whole** by `buildKlingImage4Request` (`kling-image-4.ts`,
+  pure): the schema is `additionalProperties: false`, so only `prompt`,
+  `image_urls`, `elements`, `mode`, `count`, `resolution` and `aspect_ratio`
+  are ever sent, whatever the worker's params carry. No seed, no output format,
+  no negative prompt (the editor folds it into the prompt as "Avoid: ..."), no
+  content-filter field (so no `safetyLevers`). `resolution` is lowercase.
+- **Names.** KIE names images `@image_N` (in `image_urls` order) and subjects
+  `@Name`, and REFUSES a prompt that names one the request does not carry.
+  Our image prompts write `Image N` (legacy assembly) or `reference image A`
+  (hybrid); the builder rewrites each seat in ONE pass to `@image_K` or the
+  `@Name` of the subject it belongs to (the other images renumber), cuts the
+  prompt to 20,000 characters, and then strips the `@` from every word it does
+  not declare (`neutralizeUndeclaredMentions`, shared with `kling4.ts`), last,
+  so no cut or later step can leave an undeclared mention. A typed handle
+  loses its `@`. The pass takes per-model rules (`MentionRules`): Kling 4.0
+  video passes none and reads every prompt exactly as it always did (fixture
+  `kling-mentions-dev.json`, no exception); Kling Image 4.0 turns on
+  `KLING_IMAGE_MENTION_RULES` (kling-image-4.ts, the one place to switch them):
+  an e-mail-shaped token (a word character before `@` and a dotted domain
+  after the name) is never a mention, a Chinese name followed directly by
+  Chinese text binds, and a name followed directly by another letter,
+  combining mark or digit (kana, hangul, an accent) loses its `@` (settled by
+  staging probes).
+  An ASCII name run straight into Chinese (`@image_1中…`) loses its `@`, as
+  before: whether KIE reads 中 as part of the name is unconfirmed (staging
+  probe). Quoted text (straight, curly, corner, white-corner quotes; an inch
+  mark opens none) is never renamed. "Image N" is the prompt's Nth reference
+  (`image_prompt_order`), even when a base or source is sent first. The
+  content guard is asked again on the exact text sent
+  (`guardProviderWireText`, with the job's recorded minor signal); Kling 4.0
+  video does not do this yet.
+- **Named subjects** (`elements`): a wired character whose run sends 2 to 4 of
+  its images is one subject (`name`, its views with the portrait first,
+  `tag: "character"`, `description` up to 100). Grouped at PLAN time by
+  `lib/kling-image-4-subjects.ts` (the route's CHECK, the planner and the
+  workflow payload builder call it on the same assembled list), carried on the
+  job as `imageSubjects`, and priced as ONE input item whatever its views. The
+  provider maps each view through the format conversion before sending.
+  Image to Image sends a character as reference images.
+- **Limits.** Up to 10 input ITEMS, as KIE counts them (decided 2026-11-23):
+  a reference image, a base, or a named subject whatever its views is one.
+  `requestImageLimit` (10) is read as items for this model: every path passes
+  the items (`klingImage4PricedItems`, `imageToImageSentImages`) to
+  `imageInputLimitProblem`, which refuses more before anything is reserved,
+  on a request and in a workflow run (`refusesImagesOverLimit`). A request on
+  this model alone has its picture lists bounded at `KLING_IMAGE_4_MAX_PICTURES`
+  (40: 10 subjects of 4 views; `structuredReferenceListLimit`). No other
+  model's limit moved (fixture `image-limits-dev.json`). Inputs are jpg/png
+  (`acceptedImageFormats`); `ensureImageForProvider` converts anything else
+  and keeps each under 10 MB (KIE takes 20 MB).
+- **Sets** (`mode: "series"`, `count` 2-10): one task returns a coherent set,
+  each URL a variant of the job (`extraUrls`). A set is held at its `:x<C>`
+  row (`klingImage4CreditId`) and settled in `finalizeJobWithMedia` on the
+  images stored (`lib/image-set-settle.ts`, from `input_data.setHoldCreditId`).
+  Default mode always sends one image (`count` omitted): Generate Image's own
+  `count` stays one job per image.
+- **Output format follows the size:** PNG at 2K/4K, JPEG at 8K. Every Kling
+  Image 4.0 job is stored on the as-its-bytes path
+  (`imageStoredAsItsBytes`, `lib/image-output-store.ts`), worker, reconcile
+  and entity tail alike. A measured 8K (16:9) was a 5.96 MB JPEG of 10880x6144
+  (about 67 MP) in 119 s; watermarking it peaks near 820 MB of memory, so that
+  path stores a set's pictures one at a time.
+- **Billing:** 11.3 KIE credits at 2K, 17 at 4K, 28.3 at 8K per picture, plus
+  0.5 per input item (`KLING_IMAGE_4_KIE_HUNDREDTHS`). Rows sum one picture in
+  hundredths and round once; a set is that row times the images
+  (`ee/billing/kling-image-4-pricing.ts`). `costFromTaskRecord` records the
+  task's `creditsConsumed`. **Unmeasured:** whether a set's per-reference
+  charge is per image or per task (the rows assume per image, never under).
 
 ### Seedream 5.5 wire notes (`seedream-5-5` / `seedream-5-5-i2i`)
 

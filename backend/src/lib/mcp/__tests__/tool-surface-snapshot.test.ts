@@ -1623,6 +1623,13 @@ const FLUX_FILL_CATALOG_ENTRY_BYTES = 22
 const FLUX_3_KLEIN_PER_TOOL_BYTES = 14
 const FLUX_3_KLEIN_TOTAL_BYTES = 66
 
+// RAISED 2026-11-22 by Kling Image 4.0 (`kling-image-4` t2i + `kling-image-4-i2i`), and nothing
+// else: the two ids join the catalog-derived model lists, generate_image gains `image_set_count`
+// (a set of 2-10 images from one job) and names 8K in its resolution note, image_to_image's
+// resolution enum gains `8K` and its reference note names Kling Image 4.0. No tool was added, so
+// the fixture does NOT move. Measured by this suite: 560_540 total − 560_198 = 342 B.
+const KLING_IMAGE_4_TOTAL_BYTES = 342
+
 // RAISED 2026-11-12 by Nemotron 3.5 Transcribe on `transcribe`, and nothing else: the tool gains
 // a `model` arg (the TRANSCRIBE_PROVIDERS enum, ElevenLabs STT still the default) and a
 // `target_language` arg (Nemotron's 32 translation targets), and its description and describes
@@ -2189,6 +2196,7 @@ export const TOOL_WIRE_BUDGET = {
     LLM_PRICE_KEY_EFFORT_WORDING_BYTES +
     FLUX_FILL_CATALOG_ENTRY_BYTES +
     FLUX_3_KLEIN_TOTAL_BYTES +
+    KLING_IMAGE_4_TOTAL_BYTES +
     NEMOTRON_TRANSCRIBE_BYTES +
     ADD_CAPTIONS_NEMOTRON_BYTES +
     SUNO_V4_5_CATALOG_ENTRIES_BYTES +

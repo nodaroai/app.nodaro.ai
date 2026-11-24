@@ -7,6 +7,7 @@
  * generate-image.ts, which keeps the credit CHECK, the OpenAPI entry and the
  * handler.
  */
+import { klingImage4PricedItems, klingImage4Subjects, subjectSourcesOf } from "../lib/kling-image-4-subjects.js"
 import type { FastifyBaseLogger } from "fastify"
 import type { ZodError } from "zod"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -25,7 +26,7 @@ import { backendHybridRoles } from "../lib/reference-format.js"
 // The pure half of the user-direction module (no database client): the
 // resolution's shape and the moodboard warning.
 import { moodboardWarnings, type ResolvedUserDirection, type RunWarning } from "../lib/user-direction-result.js"
-import { generateImageBody, unboundedImageArraysBody, type GenerateImageData } from "./generate-image-body.js"
+import { generateImageBody, unboundedImageArraysBody, withoutUnusedImageLevers, type GenerateImageData } from "./generate-image-body.js"
 
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
@@ -263,7 +264,7 @@ export function oversizedImageArraysProblem(
 ): { code: "validation_error"; message: string } | null {
   const onImageArrays = error.issues.every((issue) => issue.path.length === 1 && IMAGE_ARRAY_FIELDS.has(String(issue.path[0])))
   if (!onImageArrays || !error.issues.some((issue) => issue.code === "too_big")) return null
-  const parsed = unboundedImageArraysBody.safeParse(body)
+  const parsed = unboundedImageArraysBody.safeParse(withoutUnusedImageLevers(body))
   if (!parsed.success) return null
   const data = parsed.data as GenerateImageData
   const models = data.models?.length ? data.models : [data.provider ?? defaultImageModel("general", data.aspectRatio)]
@@ -271,7 +272,10 @@ export function oversizedImageArraysProblem(
     if (!refusesImagesOverLimitOn(model, "request")) continue
     const request = { ...data, provider: model as NonNullable<GenerateImageData["provider"]> }
     const assembled = assembleImageRequest(request, isStructuredImageMode(request), userDirection)
-    const problem = imageInputLimitProblem(model, pricedSentImages(model, assembled?.queueReferenceImageUrls ?? [], data.baseImageUrl), "request")
+    const sentRefs = assembled?.queueReferenceImageUrls ?? []
+    // Kling Image 4.0 counts items: a named subject once, whatever its views.
+    const subjects = klingImage4Subjects(model, subjectSourcesOf(request), sentRefs)
+    const problem = imageInputLimitProblem(model, klingImage4PricedItems(pricedSentImages(model, sentRefs, data.baseImageUrl), subjects), "request")
     if (problem) return problem
   }
   return null
@@ -324,6 +328,13 @@ export async function planImageJob(args: {
   // What the run sends, for a price by input image: on a model priced per input
   // image the base of an edit counts too (the worker sends it first).
   const sentImages = pricedSentImages(provider, assembledRefs, baseImageUrl)
+  // Kling Image 4.0: a wired character sending 2 to 4 of those images goes as
+  // ONE named subject, priced as one input item (the CHECK groups the same
+  // list the same way) and recorded on the job for the provider to send.
+  const subjects = resolvedLora
+    ? []
+    : klingImage4Subjects(provider, subjectSourcesOf(data), assembledRefs)
+  const pricedInputs = klingImage4PricedItems(sentImages, subjects)
   let effectiveNegativePrompt = args.assembled.negativePrompt
 
   // Append character descriptions to prompt. In structured mode the base is
@@ -405,9 +416,13 @@ export async function planImageJob(args: {
     gifFrames: rawGifFrames,
     gifFrameDurationMs: rawGifFrameDurationMs,
     svgLevel: rawSvgLevel,
-    refCount: sentImages,
+    refCount: pricedInputs,
     swapToI2i: true,
     sourceImage,
+    // A set's images, on a model that makes sets (the CHECK reads the same):
+    // an inpaint returns one picture, so the snap drops the set and says so.
+    imageSetCount: data.imageSetCount,
+    imageSetMasked: typeof maskUrl === "string" && maskUrl.length > 0,
   })
   const creditIdentifier = resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.identifier
 
@@ -419,6 +434,8 @@ export async function planImageJob(args: {
   // `aspectRatioForLoraModel` omits (the model then draws its default).
   if (!resolvedLora) applySnappedLevers(data, normalized, generateImageBody)
   else if (aspectRatioForLoraModel(data.aspectRatio) === undefined) data.aspectRatio = undefined
+  // The trained-character model makes one image.
+  if (resolvedLora) data.imageSetCount = undefined
 
   // A moodboard whose images did not all fit (the model's reference limit,
   // after the caller's own) says so — on the response and on the job. The
@@ -457,6 +474,10 @@ export async function planImageJob(args: {
     gifFrames: data.gifFrames,
     gifFrameDurationMs: data.gifFrameDurationMs,
     svgLevel: data.svgLevel,
+    // The snapped set (undefined for one image, and on every model without sets).
+    imageSetCount: resolvedLora ? undefined : normalized.imageSetCount,
+    // Kling Image 4.0's named subjects: some of the references above, named.
+    ...(subjects.length > 0 ? { imageSubjects: subjects } : {}),
     // Structured mode: only the NATIVE negative prompt rides this channel
     // (the non-native one is folded into `prompt`). Flat mode: the raw
     // negative prompt, unchanged.
@@ -498,6 +519,9 @@ export async function planImageJob(args: {
       // image-to-image sibling share one safety policy (pinned in
       // @nodaro/shared's safety-retry-policy test).
       resolvedModel: resolvedModelOfJob("generate-image", queueData),
+      // A set is held for the images it asks and settles on the images it
+      // stores (lib/image-set-settle.ts), from this recorded hold.
+      ...(queueData.imageSetCount !== undefined ? { setHoldCreditId: creditIdentifier } : {}),
       ...(warnings.length > 0 ? { warnings } : {}),
     },
     queueData,
