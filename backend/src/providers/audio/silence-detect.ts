@@ -32,6 +32,7 @@ import {
   runFfmpegCapture,
   probeMediaDuration,
 } from "../video/ffmpeg-utils.js"
+import { DOWNLOAD_TIMEOUT_MS } from "../video/ffmpeg-timeouts.js"
 import { ensureMediaProxy } from "../../services/media-proxy.js"
 import { ALL_RANGES_MIN_FLOOR_MS } from "./silence-detect-limits.js"
 
@@ -243,7 +244,9 @@ export async function detectSilence(
   const workDir = await createWorkDir("silence-detect")
   try {
     const local = join(workDir, "proxy.m4a")
-    await downloadFile(proxy.url, local)
+    // A hard total at the number its liveness budget charges for this fetch
+    // (the proxy is small 16 kHz mono audio, read from our storage in seconds).
+    await downloadFile(proxy.url, local, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
     return await runSilenceDetectOnFile(local, settings)
   } finally {
     await cleanupWorkDir(workDir)

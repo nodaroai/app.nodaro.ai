@@ -128,6 +128,34 @@ describe("Video Upscale's strip and Nodaro Video Upscale (a house model, offered
   })
 })
 
+describe("Video Upscale's Mode on a deployment that cannot run Transparent (`models.deniedModes`)", () => {
+  const mode = () => getQuickConfigs("video-upscale").find((c) => c.field === "mode")!
+  const resolution = () => getQuickConfigs("video-upscale").find((c) => c.field === "targetResolution")!
+  const unset = { provider: "nodaro-video-upscale" }
+
+  it("before the answer and where it runs: both modes offered, no mode shows Transparent with its 720p tier", () => {
+    expect(resolveQuickConfigOptions(mode(), unset).map((o) => [o.value, o.disabled ?? false])).toEqual([["transparent", false], ["sharp", false]])
+    expect(mode().defaultFor?.(unset)).toBe("transparent")
+    expect(resolveQuickConfigOptions(resolution(), unset).map((o) => o.value)).toContain("720p")
+  })
+
+  it("where it cannot: Transparent greyed with why, no mode shows Sharp and Sharp's tiers", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [], modelModes: ["nodaro-video-upscale:transparent"] })
+    const [transparent, sharp] = resolveQuickConfigOptions(mode(), unset)
+    expect(transparent).toMatchObject({ value: "transparent", disabled: true, reason: "Not available on this deployment" })
+    expect(sharp).toMatchObject({ value: "sharp" })
+    expect(sharp!.disabled).toBeUndefined()
+    expect(mode().defaultFor?.(unset)).toBe("sharp")
+    expect(resolveQuickConfigOptions(resolution(), unset).map((o) => o.value)).toEqual(["1080p", "2k", "4k"])
+  })
+
+  it("a node that names Transparent keeps it (greyed is never snapped away; its run is refused with why)", () => {
+    __resetSurfaceAvailabilityForTests({ nodes: [], models: [], modelModes: ["nodaro-video-upscale:transparent"] })
+    const data = { provider: "nodaro-video-upscale", mode: "transparent" }
+    expect(quickConfigSnapPatch(mode(), "transparent", resolveQuickConfigOptions(mode(), data), data)).toBeUndefined()
+  })
+})
+
 describe("the Lip Sync quick strip and the models retired from Lip Sync (decided 2026-11-12)", () => {
   const RETIRED = ["wav2lip", "video-retalking", "sadtalker"]
 

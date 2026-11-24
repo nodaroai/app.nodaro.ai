@@ -41,6 +41,7 @@ import { createsChildJob } from "../lib/job-submission-context.js"
 import { cleanupWorkDir, createWorkDir, downloadFile } from "../providers/video/ffmpeg-utils.js"
 import { maskGeometryPeakMemoryMiB, videoMaskFfmpegTimeoutMs } from "../providers/video/video-mask.js"
 import { SCENE_CUTS_INPUT_ARGS, detectCutTimes, probeSceneCutsClip } from "../services/scene-cut-frames.js"
+import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 
 /** The largest clip downloaded, bytes (a recast clip is far smaller). */
 export const SCENE_CUTS_MAX_BYTES = 500 * 1024 * 1024
@@ -78,12 +79,16 @@ export async function videoSceneCutsRoutes(app: FastifyInstance) {
     }
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
+    const clientGone = clientGoneSignal(reply)
     const workDir = await createWorkDir("video-scene-cuts")
     try {
       const localPath = join(workDir, "source")
       try {
-        await downloadFile(parsed.data.videoUrl, localPath, { maxBytes: SCENE_CUTS_MAX_BYTES })
+        // Stops when the caller goes away. No total of 120 s: a clip of up to
+        // SCENE_CUTS_MAX_BYTES gets downloadFile's size-scaled default limits.
+        await downloadFile(parsed.data.videoUrl, localPath, { maxBytes: SCENE_CUTS_MAX_BYTES, signal: clientGone })
       } catch (err) {
+        if (clientGone.aborted) return reply.status(499).send({ error: CLIENT_CLOSED })
         req.log.warn({ err: err instanceof Error ? err.message : String(err) }, "video-scene-cuts: the clip could not be downloaded")
         return reply.status(400).send({ error: { code: "video_unreadable", message: "The video could not be downloaded." } })
       }

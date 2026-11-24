@@ -24,6 +24,44 @@ export function storedDeferSettlement(inputData: unknown): boolean {
 }
 
 /**
+ * HOW a held child is decided when its plugin did not decide it, set by the
+ * ROUTE that admitted it (never by a caller), server-only beside
+ * `__deferSettlement`:
+ *  - absent: an engine take — a completed run keeps ONE take charged
+ *    (`planCompletedRun`, deferred-child-settlement-sweep.ts);
+ *  - `"delivered"`: a step whose file the run may or may not deliver (Video
+ *    Remake's upscale, /v1/video-upscale) — charged only when its run
+ *    completed AND its output names the child among the files it delivered
+ *    (`DELIVERED_HELD_CHILDREN_OUTPUT_KEY`). It is never pooled with the engine
+ *    takes, in either direction.
+ */
+export const DEFER_SETTLEMENT_RULE_INPUT_KEY = "__deferSettlementRule"
+
+export type DeferSettlementRule = "delivered"
+
+/** A stored job's rule, or null (an engine take, or a job that was not deferred). */
+export function storedDeferRule(inputData: unknown): DeferSettlementRule | null {
+  return isRecord(inputData) && inputData[DEFER_SETTLEMENT_RULE_INPUT_KEY] === "delivered" ? "delivered" : null
+}
+
+/**
+ * The server-only key of a PARENT's `output_data` naming the `"delivered"`
+ * children whose files its completion delivered (a string array; `[]` when it
+ * delivered none). Written by the plugin in the same completion as the
+ * delivery, so it is the truth a crash between the delivery and the plugin's
+ * own settle cannot lose.
+ */
+export const DELIVERED_HELD_CHILDREN_OUTPUT_KEY = "__deliveredHeldChildren"
+
+/**
+ * The `/v1/video-upscale` providers whose job may be held under the
+ * `"delivered"` rule: the two a Video Remake run's upscale step runs on. Both
+ * complete through `finalizeJobWithMedia` (their worker lanes and their
+ * reconciles; deferred-child-completion-lanes.test.ts holds it).
+ */
+export const DEFERRABLE_UPSCALE_PROVIDERS: ReadonlySet<string> = new Set(["topaz", "topaz-rhea"])
+
+/**
  * Whether THIS /v1/generate-video request may defer its job's settlement:
  * credits are on, the request is the plugin toolkit's own worker request with
  * a parent (`trustedPluginParentJobId` — never a header or a body field), and

@@ -2,7 +2,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleModeOf } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
 import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
@@ -67,7 +67,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, nodaroVideoUpscaleEstimateMode, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, nodaroVideoUpscaleEstimateMode, nodaroVideoUpscaleShownMode, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -868,8 +868,9 @@ export function getModelIdentifier(
   // (PRICING_UNIT_ESTIMATORS → videoUpscalePricingUnits), as the server does.
   if (nodeType === "video-upscale" && data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
     // Its mode's row, the mode decided as the server decides it from the wired
-    // clip (`nodaroVideoUpscaleEstimateMode`); with no graph, read from the node.
-    const mode = nodes && edges ? nodaroVideoUpscaleEstimateMode(storedNode, nodes, edges, reruns) : nodaroVideoUpscaleModeOf(data.mode)
+    // clip (`nodaroVideoUpscaleEstimateMode`); with no graph, as the run decides it before the clip is known
+    // (`nodaroVideoUpscaleShownMode`: Sharp where this deployment cannot run Transparent).
+    const mode = nodes && edges ? nodaroVideoUpscaleEstimateMode(storedNode, nodes, edges, reruns) : nodaroVideoUpscaleShownMode(data.mode)
     return nodaroVideoUpscaleModeCreditId(mode, nodaroVideoUpscaleModeTierOf(mode, data.targetResolution))
   }
 

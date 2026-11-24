@@ -25,6 +25,7 @@ import {
   NODARO_VIDEO_UPSCALE_TRANSPARENT_MAX_FACTOR,
   isNodaroVideoUpscaleTier,
   nodaroVideoUpscaleBoxFor,
+  nodaroVideoUpscaleEffectiveMode,
   nodaroVideoUpscaleModeTakes,
   type NodaroVideoUpscaleMode,
   type NodaroVideoUpscaleModeTier,
@@ -268,4 +269,34 @@ export function nodaroVideoUpscaleTransparentServes(
     if ((planned.frame.width * planned.frame.height * Math.ceil(clip.sec * fps)) / 1e9 > TOPAZ_RHEA_MAX_OUTPUT_GIGAPIXELS) return false
   }
   return true
+}
+
+/**
+ * The id Transparent is named by where an install says which model modes it
+ * cannot run (`GET /v1/surface/availability`'s `models.deniedModes`): the
+ * model id, a colon, the mode.
+ */
+export const NODARO_VIDEO_UPSCALE_TRANSPARENT_MODE_ID = `${NODARO_VIDEO_UPSCALE_PROVIDER}:transparent` as const
+
+/**
+ * THE mode a Nodaro Video Upscale is priced and run in, from what is asked,
+ * what is known of the clip and whether this install can run Transparent at
+ * all (`transparentRuns`). Every lane decides with it — the run's plan, the
+ * route's and the workflow run's stamp, the server's estimate, the editor's
+ * estimate — so the mode an estimate quotes is the mode the run runs:
+ * - an explicit `"sharp"` or `"transparent"`: that mode (an explicit
+ *   Transparent where it cannot run is refused by the run, never swapped);
+ * - no mode: Transparent, unless this install cannot run it, or it cannot
+ *   serve the known clip at its tier (`nodaroVideoUpscaleTransparentServes`)
+ *   — then Sharp; a clip not known yet is Transparent where it can run.
+ */
+export function nodaroVideoUpscaleDecidedMode(
+  asked: unknown,
+  clip: { readonly width: number; readonly height: number; readonly fps?: number; readonly sec?: number } | undefined,
+  targetResolution: unknown,
+  transparentRuns: boolean,
+): NodaroVideoUpscaleMode {
+  if (asked === "sharp" || asked === "transparent") return asked
+  const serves = transparentRuns ? nodaroVideoUpscaleTransparentServes(clip, nodaroVideoUpscaleModeTierOf("transparent", targetResolution)) : false
+  return nodaroVideoUpscaleEffectiveMode(asked, serves)
 }

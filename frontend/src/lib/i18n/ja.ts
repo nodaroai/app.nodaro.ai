@@ -1757,6 +1757,8 @@ export const ja: ChromeDict = {
   "vidcfg.nodaroModeSharp": "シャープ",
   "vidcfg.nodaroModeTransparentHelp": "元の色と見た目を保ちます。人物や顔にはこちらが安全です。",
   "vidcfg.nodaroModeSharpHelp": "くっきりしたディテールを加えます。人物よりも、物、製品、風景、文字に向いています。",
+  "vidcfg.nodaroModeTransparentUnavailable": "このインストールでは利用できません",
+  "vidcfg.nodaroModeTransparentUnavailableNotice": "このインストールでは Transparent を実行できないため、このモードでの実行は拒否されます。ここで実行するには Sharp を選んでください。",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale はクリップを切り抜かずに 1080p、2K、4K のフレームに収め、フレームレート、長さ、音声をそのまま保ちます。対応するのは 60 秒・50 MB までのクリップです。料金はクリップの秒数に応じて決まるため、実行時にクリップを測定するまでは表示される金額は見積もりです。確保される金額がそのまま請求額になります。",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale が対応するクリップは最大 {max} 秒までです（このクリップは {d} 秒）。トリミングしないと実行は拒否されます。",
   "vidcfg.topazLegacyFactorNote": "{factor} 倍として保存されています。クリップのサイズの {factor} 倍に最も近い解像度で出力されます。正確に指定するには解像度を選択してください。",

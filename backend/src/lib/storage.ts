@@ -18,6 +18,7 @@ import { evidenceKeyOf, isEvidenceKey, EVIDENCE_STORAGE_PREFIX } from "./evidenc
 import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
 import { IMAGE_HEADER_MAX_READ_BYTES, forgetStoredImage, noteStoredImage } from "./image-dimensions.js"
+import type { TransferRateLimits } from "./transfer-watchdog.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
   boundedStorageClientConfig,
@@ -721,9 +722,11 @@ export async function downloadR2ObjectToFile(
    * `AbortError` whose `cause` is the signal's reason, a `TimeoutError` when
    * the time ran out (as `s3.send` and `pipeline` reject) — and refuse an
    * object over `maxBytes`. Every other caller passes none and is bounded by
-   * the storage limits alone, as before.
+   * the storage limits alone, as before. `limits` replaces the storage body
+   * limits (`STORAGE_DOWNLOAD_LIMITS`) for a caller that has its own — the
+   * download that read the file over HTTP would have run under them.
    */
-  bounds: { readonly timeoutMs?: number; readonly signal?: AbortSignal; readonly maxBytes?: number } = {},
+  bounds: { readonly timeoutMs?: number; readonly signal?: AbortSignal; readonly maxBytes?: number; readonly limits?: TransferRateLimits } = {},
 ): Promise<void> {
   const controller = new AbortController()
   const stops = [
@@ -743,7 +746,7 @@ export async function downloadR2ObjectToFile(
     throw new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: r2 object ${key}`)
   }
   const body = guardStorageReadBody(res.Body as Readable, {
-    sizeBytes: res.ContentLength, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: STORAGE_DOWNLOAD_LIMITS,
+    sizeBytes: res.ContentLength, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: bounds.limits ?? STORAGE_DOWNLOAD_LIMITS,
   })
   if (stops.length === 1 && maxBytes === undefined) {
     await pipeline(body, createWriteStream(dest))

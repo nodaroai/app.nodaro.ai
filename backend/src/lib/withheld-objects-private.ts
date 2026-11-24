@@ -26,7 +26,7 @@ import { config } from "./config.js"
 import { keptStoragePrefix } from "./kept-storage-prefixes.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
 import { s3 } from "./storage.js"
-import { STORAGE_DELETES_OFF, storageDeletesSkipped } from "./storage-deletes-setting.js"
+import { STORAGE_DELETES_OFF, withheldObjectsGoPrivate } from "./storage-deletes-setting.js"
 
 export interface WithheldObjectsOutcome {
   /** The keys now private. */
@@ -37,10 +37,8 @@ export interface WithheldObjectsOutcome {
   readonly unsupported: boolean
 }
 
-/** Whether a withheld file is made private here: deletes are skipped, and objects are public by their own ACL. */
-export function withheldObjectsGoPrivate(): boolean {
-  return storageDeletesSkipped() && Boolean(config.STORAGE_OBJECT_ACL)
-}
+// Whether a withheld file is made private here — defined beside the setting it reads.
+export { withheldObjectsGoPrivate }
 
 /** A store's answer for an API it does not implement (R2 answers object ACL calls this way). */
 function isNotImplemented(err: unknown): boolean {

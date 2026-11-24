@@ -28,9 +28,9 @@ import {
   faceDetectTimeoutMs,
 } from "../../../services/face-detect/face-detect-budget.js"
 import {
+  DEFAULT_DOWNLOAD_MAX_MS,
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
-  DOWNLOAD_TIMEOUT_MS,
   FFMPEG_KILL_GRACE_MS,
   FFMPEG_SLOT_BACKSTOP_MS,
   FFPROBE_TIMEOUT_MS,
@@ -171,7 +171,8 @@ describe("the terms — each one a kill ceiling the handler's steps run under", 
     expect(speakerFramesBurstBudgetMs(0)).toBe(0)
     for (const n of [1, 40, 120]) {
       expect(speakerFramesBurstBudgetMs(n)).toBe(
-        SPEAKER_FRAMES_PROXY_FIXED_MS + DOWNLOAD_TIMEOUT_MS
+        // The download at downloadFile's default ceiling: the plugin passes it no bounds.
+        SPEAKER_FRAMES_PROXY_FIXED_MS + DEFAULT_DOWNLOAD_MAX_MS
         + n * (speakerFramesProxySpanBudgetMs(SPEAKER_FRAMES_BURST_MS) + SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS + SPEAKER_FRAMES_HOLD_OVERRUN_MS),
       )
     }
@@ -382,7 +383,7 @@ describe("worked examples", () => {
     expect(hours({ edl: edl([[0, 180 * MIN]], six) })).toBe(26.28)
     // P3.5's bursts with a two-speaker transcript: 40 per source, each a 1.5 s span (two encoder floors) and a 2-min capture.
     const two = { transcript: { words: [{ text: "a", startMs: 0, endMs: 3000, speaker: "Host" }, { text: "b", startMs: 3000, endMs: 6000, speaker: "Guest" }] } }
-    expect(Math.round((speakerFramesBurstBudgetMs(40) / H) * 100) / 100).toBe(10.85)
+    expect(Math.round((speakerFramesBurstBudgetMs(40) / H) * 100) / 100).toBe(11.32)
     expect(hours({ edl: tighten(90, 20_000, 6_000, ONE_CAM), ...two })).toBe(Math.round((speakerFramesJobBudgetMs({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })! / H + speakerFramesBurstBudgetMs(40) / H) * 100) / 100)
   })
 })
@@ -428,7 +429,7 @@ describe("the leaf is an upper bound on the handler's step ceilings", () => {
     let ms = DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS
     ms += bursts * (proxySpanEncodeTimeoutMs(SPEAKER_FRAMES_BURST_MS) + overrun + proxySpanProbeTimeoutMs(SPEAKER_FRAMES_BURST_MS))
     ms += MEDIA_PROXY_FFMPEG_TIMEOUT_MS + overrun + DEFAULT_FFMPEG_TIMEOUT_MS + FFPROBE_TIMEOUT_MS
-    ms += DOWNLOAD_TIMEOUT_MS
+    ms += DEFAULT_DOWNLOAD_MAX_MS // its download: downloadFile's default ceiling (the plugin passes no bounds)
     ms += bursts * (SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS + overrun)
     return ms
   }

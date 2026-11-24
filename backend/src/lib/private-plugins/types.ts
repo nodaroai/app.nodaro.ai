@@ -580,6 +580,14 @@ export interface PluginProvidersToolkit {
 // tk.ffmpeg — backend/src/providers/video/ffmpeg-utils.ts
 // ============================================================================
 
+/** `tk.ffmpeg.downloadFile`'s optional bounds (`PluginCapabilities.downloadFileBounds`). */
+export interface PluginDownloadFileOptions {
+  /** A hard total over the response and the body, in ms (capped at 120 s). */
+  readonly timeoutMs?: number
+  /** Stops the download when it aborts. */
+  readonly signal?: AbortSignal
+}
+
 export interface PluginFfmpegToolkit {
   runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string>
   runFfmpegCapture(
@@ -588,7 +596,15 @@ export interface PluginFfmpegToolkit {
   ): Promise<{ stdout: string; stderr: string }>
   createWorkDir(prefix: string): Promise<string>
   cleanupWorkDir(workDir: string): Promise<void>
-  downloadFile(url: string, dest: string): Promise<void>
+  /**
+   * Fetch `url` to `dest` (a file of this install's own storage is read from
+   * storage). Without `opts`, the host's default limits: the response within
+   * 120 s, then a minimum rate and a size-scaled deadline, at most 30 minutes.
+   * `opts` (additive-optional — `PluginCapabilities.downloadFileBounds`; an
+   * older host ignores it) bounds it: `timeoutMs` is a hard total (never above
+   * 120 s), `signal` stops it.
+   */
+  downloadFile(url: string, dest: string, opts?: PluginDownloadFileOptions): Promise<void>
   /**
    * Mirrors `combineVideos` (`providers/video/combine-videos.ts:183`),
    * adapted to always resolve an R2 URL — the toolkit implementation uploads
@@ -4060,7 +4076,7 @@ export interface PluginCapabilities {
    * `tk.http.workerRequest`, a child of the calling job) take
    * `workingCopy: true`: the step's output video is encoded as a working copy
    * for the next step — libx264 `-preset fast -crf 6`, capped at
-   * `-maxrate 25M -bufsize 50M`, in the input's own
+   * `-maxrate 50M -bufsize 100M`, in the input's own
    * pixel format where 8-bit H.264 holds it (4:2:0, 4:2:2 or 4:4:4), its
    * colour tags kept; same frames, size, sound, price and output fields — and
    * the child job records it as `input_data.__workingCopy`. Any other caller
@@ -4142,6 +4158,24 @@ export interface PluginCapabilities {
    */
   readonly deferredChildSettlement?: boolean
   /**
+   * `/v1/video-upscale` takes `deferSettlement: true` from a plugin's own
+   * child as `/v1/generate-video` does (providers "topaz" and "topaz-rhea"
+   * only; answered `settlementDeferred: true` when held), and settles or
+   * releases it through the same `tk.jobs.settleDeferredChild` /
+   * `releaseDeferredChild`. Such a child is a step whose file the run may or
+   * may not deliver (Video Remake's upscale), so a child its parent left held
+   * is decided by the parent's completion, never pooled with the run's engine
+   * takes: charged when the parent COMPLETED and its `output_data` lists the
+   * child's id under the server-only `__deliveredHeldChildren` (a string
+   * array, `[]` when it delivered none); released when the list leaves it out,
+   * or the parent failed, was cancelled, was deleted or ran 12 h (a parent
+   * parked for review is waited on however long it takes). A completion
+   * with no list at all is charged (the safe side), with an [ALERT]. Every
+   * other `/v1/video-upscale` request is settled when it completes, as before.
+   * False (or absent): an older host, whose route ignores the field.
+   */
+  readonly deferredUpscaleSettlement?: boolean
+  /**
    * `tk.llm.completeStructured` takes `imageUrls` (at most 5 https links on
    * this deployment's own media host): each is sent to the model as an image
    * beside the prompt, on the
@@ -4150,6 +4184,12 @@ export interface PluginCapabilities {
    * which sends the prompt alone.
    */
   readonly llmStructuredImages?: boolean
+  /**
+   * `tk.ffmpeg.downloadFile` takes `opts` (`PluginDownloadFileOptions`): a
+   * `timeoutMs` hard total and an abort `signal`. False (or absent): an older
+   * host, which ignores them and runs the download under its defaults.
+   */
+  readonly downloadFileBounds?: boolean
 }
 
 /**

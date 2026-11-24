@@ -23,9 +23,11 @@ export interface SurfaceAvailability {
    * deployment restricts models (a profile `models.allow` / `models.deny`, or an Admin →
    * Availability models override that leaves a model off). A model an admin switched off
    * is denied without being a restriction. Absent from a server that predates it: read
-   * that as `false`.
+   * that as `false`. `deniedModes`: modes of a model the deployment does offer that it cannot
+   * run, each `<model id>:<mode>` (`nodaro-video-upscale:transparent`). Absent from a server
+   * that predates it: read that as none.
    */
-  models: { denied: string[]; restricted?: boolean }
+  models: { denied: string[]; restricted?: boolean; deniedModes?: string[] }
   /** Web Scrape sources withdrawn with the node that governs them (Instagram follows the Instagram node). */
   webScrapeSources: { denied: string[]; hiddenFromUsers: string[] }
   /** Every world, in the deployment's display order. */

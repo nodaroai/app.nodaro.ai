@@ -22,6 +22,8 @@ import {
   COMBINE_DELIVERY_CRF,
 } from "../providers/video/ffmpeg-utils.js"
 import { mp3EncodeArgs } from "../providers/video/mp3-encode.js"
+import { DOWNLOAD_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
+import { CLIENT_CLOSED, clientGoneSignal } from "../lib/client-gone.js"
 
 const MIME_TYPES: Record<string, string> = {
   mp4: "video/mp4",
@@ -324,7 +326,15 @@ export async function mediaProcessRoutes(app: FastifyInstance) {
     const outputPath = join(workDir, `output.${outputExt}`)
 
     try {
-      await downloadFile(sourceUrl, inputPath)
+      // A request someone waits on: the source within 120 s in all (the response
+      // and the body), and not a moment past the client going away.
+      const clientGone = clientGoneSignal(reply)
+      try {
+        await downloadFile(sourceUrl, inputPath, { timeoutMs: DOWNLOAD_TIMEOUT_MS, signal: clientGone })
+      } catch (err) {
+        if (clientGone.aborted) return reply.status(499).send({ error: CLIENT_CLOSED })
+        throw err
+      }
 
       await runFfmpeg(mediaProcessArgs({ inputPath, outputPath, outputExt, type, crop, trim }), 300_000)
 

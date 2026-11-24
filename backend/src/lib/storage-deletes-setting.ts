@@ -35,6 +35,18 @@ export function storageDeletesSkipped(): boolean {
 }
 
 /**
+ * Whether a withheld file is made private here (`lib/withheld-objects-private.ts`):
+ * deletes are skipped, and objects are public by their own ACL. Then some
+ * files of the bucket are readable with storage's own credentials but no
+ * longer through their public link — so code that reads a link of ours
+ * straight from storage must not do so (`downloadFile`). Here, beside the
+ * setting it reads, so that check needs neither the storage client nor the ACL code.
+ */
+export function withheldObjectsGoPrivate(): boolean {
+  return storageDeletesSkipped() && Boolean(config.STORAGE_OBJECT_ACL)
+}
+
+/**
  * The line a process logs at boot when deletes are off, naming itself, else
  * null. Every process the image starts can delete (the API, the job worker, the
  * render worker, the orchestrator, the pipeline worker, the plugin daemon

@@ -11,6 +11,8 @@ import {
 } from "./availability-override.js"
 import { isModelSwitchedOff, switchedOffModelIds } from "./model-switch.js"
 import { houseModelServed, houseRuleWithholdsAModel, isOwnLabelModel } from "./house-models-served.js"
+import { nodaroTransparentAvailable } from "./nodaro-transparent-available.js"
+import { NODARO_VIDEO_UPSCALE_TRANSPARENT_MODE_ID } from "@nodaro/render-rules"
 
 /**
  * Backend-authoritative node/model availability for a deployment (B1 + B5).
@@ -479,6 +481,19 @@ export function effectiveDeniedModelIds(): string[] {
   // gateable universe is listed too — the browser hides exactly what runs refuse.
   for (const id of switchedOffModelIds()) if (isModelDenied(id)) denied.add(id)
   return [...denied]
+}
+
+/**
+ * The model MODES this install cannot run, as `<model id>:<mode>`: a mode
+ * that lives inside a model the deployment does offer, the way a Web Scrape
+ * source lives inside its node. Today one: Nodaro Video Upscale's Transparent
+ * (`nodaroTransparentAvailable`, the same reading its run plan, its route and
+ * its estimate ask). Where it is listed, a node that names no mode runs
+ * Sharp and an explicit Transparent is refused, so the editor prices the one
+ * and does not offer the other. Empty on an install that runs every mode.
+ */
+export function effectiveDeniedModelModes(): string[] {
+  return nodaroTransparentAvailable() ? [] : [NODARO_VIDEO_UPSCALE_TRANSPARENT_MODE_ID]
 }
 
 // ── Worlds ───────────────────────────────────────────────────────────────────

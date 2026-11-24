@@ -1653,6 +1653,8 @@ export const es: ChromeDict = {
   "vidcfg.nodaroModeSharp": "Nítido",
   "vidcfg.nodaroModeTransparentHelp": "Conserva los colores y el aspecto originales. La opción más segura para personas y rostros.",
   "vidcfg.nodaroModeSharpHelp": "Añade detalle nítido. Va mejor con objetos, productos, paisajes y texto que con personas.",
+  "vidcfg.nodaroModeTransparentUnavailable": "No disponible en esta instalación",
+  "vidcfg.nodaroModeTransparentUnavailableNotice": "Esta instalación no puede ejecutar Transparent, así que una ejecución en este modo se rechaza. Elige Sharp para ejecutarla aquí.",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale ajusta el clip a un fotograma de 1080p, 2K o 4K sin recortar y conserva su velocidad de fotogramas, su duración y su sonido. Admite clips de hasta 60 segundos y 50 MB. El precio es por segundo de clip, así que la cifra mostrada es una estimación hasta que la ejecución mide el clip; el importe reservado es el importe cobrado.",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale admite clips de hasta {max} s; este dura {d} s. Recórtalo o se rechazará la ejecución.",
   "vidcfg.topazLegacyFactorNote": "Guardado como {factor}×: se renderiza en la resolución más cercana a {factor}× el tamaño del clip. Elige una resolución para fijarla con exactitud.",

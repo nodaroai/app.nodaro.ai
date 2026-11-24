@@ -60,14 +60,14 @@ import {
   normalizeVideoUpscaleResolution,
   videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
-import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleModeOf, type NodaroVideoUpscaleMode, type TopazVideoResolution } from "@nodaro/shared/models"
+import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type NodaroVideoUpscaleMode, type TopazVideoResolution } from "@nodaro/shared/models"
 import { geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleModeTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from "@/lib/motion-transfer-sizes"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
-import { topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
+import { nodaroTransparentRunsHere, nodaroVideoUpscaleShownMode, topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
 import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { videoToVideoProviderOf, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
@@ -2327,12 +2327,16 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   const provider = data.provider || "topaz"
   const isTopaz = provider === "topaz"
   const isNodaro = provider === NODARO_VIDEO_UPSCALE_PROVIDER
-  // Nodaro Video Upscale's mode, read as every lane reads it (unset = transparent).
-  const nodaroMode = nodaroVideoUpscaleModeOf(data.mode)
   // Nodaro Video Upscale is offered only where this deployment serves it (the
   // fetched availability, which the server answers from the house-model seam);
   // a node that already holds it keeps it listed (its run refuses it there).
   useSurfaceAvailability()
+  // Whether this deployment can run Transparent (the server's answer; true until it lands). Where it
+  // cannot, Transparent is listed greyed with why, and a node with no mode shows (and is priced in) Sharp,
+  // the mode its run takes. A node that names Transparent keeps it, with a notice: its run is refused.
+  const transparentRuns = nodaroTransparentRunsHere()
+  // Nodaro Video Upscale's mode as its run decides it before the clip is known (`nodaroVideoUpscaleShownMode`).
+  const nodaroMode = nodaroVideoUpscaleShownMode(data.mode, transparentRuns)
   const offerNodaro = isNodaro || !isMenuRowWithheld({ nodeType: "video-upscale" }, NODARO_VIDEO_UPSCALE_PROVIDER)
   // Shown: the resolution the node is quoted at — the one reading its price
   // reads (`topazVideoQuotedResolution`). A saved node that still holds only the
@@ -2424,11 +2428,15 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
           >
             <SelectTrigger aria-label={t("vidcfg.nodaroUpscaleMode")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="transparent">{t("vidcfg.nodaroModeTransparent")}</SelectItem>
+              <LockableSelectItem value="transparent" locked={transparentRuns ? null : t("vidcfg.nodaroModeTransparentUnavailable")}>{t("vidcfg.nodaroModeTransparent")}</LockableSelectItem>
               <SelectItem value="sharp">{t("vidcfg.nodaroModeSharp")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="mt-1 px-1 text-xs text-muted-foreground">{t(nodaroMode === "sharp" ? "vidcfg.nodaroModeSharpHelp" : "vidcfg.nodaroModeTransparentHelp")}</p>
+          {nodaroMode === "transparent" && !transparentRuns ? (
+            <p role="status" className="mt-1 px-1 text-xs text-amber-600 dark:text-amber-400">{t("vidcfg.nodaroModeTransparentUnavailableNotice")}</p>
+          ) : (
+            <p className="mt-1 px-1 text-xs text-muted-foreground">{t(nodaroMode === "sharp" ? "vidcfg.nodaroModeSharpHelp" : "vidcfg.nodaroModeTransparentHelp")}</p>
+          )}
         </MappableField>
       )}
 

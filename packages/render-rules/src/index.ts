@@ -906,6 +906,8 @@ export {
   nodaroVideoUpscaleModeEstimateUnits,
   nodaroVideoUpscaleTransparentPlan,
   nodaroVideoUpscaleTransparentServes,
+  nodaroVideoUpscaleDecidedMode,
+  NODARO_VIDEO_UPSCALE_TRANSPARENT_MODE_ID,
   type NodaroVideoUpscaleTransparentPlan,
 } from "./nodaro-video-upscale-pricing"
 // Topaz Rhea video upscale: the factor that brings the short side to the target, and its per-second price by target.

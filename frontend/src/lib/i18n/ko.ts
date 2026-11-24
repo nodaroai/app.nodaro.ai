@@ -1653,6 +1653,8 @@ export const ko: ChromeDict = {
   "vidcfg.nodaroModeSharp": "샤프",
   "vidcfg.nodaroModeTransparentHelp": "원본의 색감과 느낌을 유지합니다. 사람과 얼굴에는 더 안전한 선택입니다.",
   "vidcfg.nodaroModeSharpHelp": "선명한 디테일을 더합니다. 사람보다는 사물, 제품, 풍경, 텍스트에 잘 맞습니다.",
+  "vidcfg.nodaroModeTransparentUnavailable": "이 설치에서는 사용할 수 없습니다",
+  "vidcfg.nodaroModeTransparentUnavailableNotice": "이 설치에서는 Transparent를 실행할 수 없어 이 모드의 실행은 거부됩니다. 여기서 실행하려면 Sharp를 선택하세요.",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale는 클립을 자르지 않고 1080p, 2K 또는 4K 프레임에 맞추며 프레임 레이트, 길이, 소리를 그대로 유지합니다. 최대 60초, 50MB의 클립을 지원합니다. 가격은 클립의 초 단위로 매겨지므로 실행 시 클립을 측정하기 전까지 표시된 금액은 예상치이며, 예약된 금액이 그대로 청구됩니다.",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale는 최대 {max}초까지의 클립을 지원합니다(이 클립은 {d}초). 자르지 않으면 실행이 거부됩니다.",
   "vidcfg.topazLegacyFactorNote": "{factor}배로 저장됨 — 클립 크기의 {factor}배에 가장 가까운 해상도로 출력됩니다. 정확히 지정하려면 해상도를 선택하세요.",

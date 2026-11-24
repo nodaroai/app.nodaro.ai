@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import {
   effectiveDeniedNodeTypes,
   effectiveDeniedModelIds,
+  effectiveDeniedModelModes,
   effectiveDeniedWebScrapeSources,
   effectiveWorlds,
   modelRestrictionConfigured,
@@ -45,6 +46,11 @@ import { viewerForUser } from "../lib/availability-viewer.js"
  * withholds only itself. The editor starts a new node on an offered model only
  * where this is true, so a deployment that restricts nothing keeps every
  * node's default exactly as it is.
+ *
+ * `models.deniedModes` names the modes of an offered model this install
+ * cannot run (`effectiveDeniedModelModes`, `<model id>:<mode>`), so the
+ * editor prices a node that names no mode in the mode its run takes and does
+ * not offer one its run refuses.
  */
 export async function surfaceAvailabilityRoutes(app: FastifyInstance) {
   app.get("/v1/surface/availability", async (req, reply) => {
@@ -54,7 +60,7 @@ export async function surfaceAvailabilityRoutes(app: FastifyInstance) {
         denied: effectiveDeniedNodeTypes(viewer),
         hiddenFromUsers: viewer.admin ? nodesHiddenFromUsers() : [],
       },
-      models: { denied: effectiveDeniedModelIds(), restricted: modelRestrictionConfigured() },
+      models: { denied: effectiveDeniedModelIds(), restricted: modelRestrictionConfigured(), deniedModes: effectiveDeniedModelModes() },
       webScrapeSources: {
         denied: effectiveDeniedWebScrapeSources(viewer),
         hiddenFromUsers: viewer.admin ? webScrapeSourcesHiddenFromUsers() : [],
