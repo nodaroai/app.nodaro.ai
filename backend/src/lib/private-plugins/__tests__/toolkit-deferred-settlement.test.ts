@@ -38,6 +38,10 @@ describe("tk.jobs deferred child settlement", () => {
     expect(buildToolkit().capabilities?.deferredChildSettlement).toBe(true)
   })
 
+  it("declares the upscale step's deferral (/v1/video-upscale under the delivered rule) beside it", () => {
+    expect(buildToolkit().capabilities?.deferredUpscaleSettlement).toBe(true)
+  })
+
   it("the parent's own handler settles and releases its child", async () => {
     const tk = buildToolkit()
     const answers = await runWithJobCancellation(PARENT, "u", async () => [

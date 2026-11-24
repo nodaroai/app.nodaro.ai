@@ -4142,6 +4142,24 @@ export interface PluginCapabilities {
    */
   readonly deferredChildSettlement?: boolean
   /**
+   * `/v1/video-upscale` takes `deferSettlement: true` from a plugin's own
+   * child as `/v1/generate-video` does (providers "topaz" and "topaz-rhea"
+   * only; answered `settlementDeferred: true` when held), and settles or
+   * releases it through the same `tk.jobs.settleDeferredChild` /
+   * `releaseDeferredChild`. Such a child is a step whose file the run may or
+   * may not deliver (Video Remake's upscale), so a child its parent left held
+   * is decided by the parent's completion, never pooled with the run's engine
+   * takes: charged when the parent COMPLETED and its `output_data` lists the
+   * child's id under the server-only `__deliveredHeldChildren` (a string
+   * array, `[]` when it delivered none); released when the list leaves it out,
+   * or the parent failed, was cancelled, was deleted or ran 12 h (a parent
+   * parked for review is waited on however long it takes). A completion
+   * with no list at all is charged (the safe side), with an [ALERT]. Every
+   * other `/v1/video-upscale` request is settled when it completes, as before.
+   * False (or absent): an older host, whose route ignores the field.
+   */
+  readonly deferredUpscaleSettlement?: boolean
+  /**
    * `tk.llm.completeStructured` takes `imageUrls` (at most 5 https links on
    * this deployment's own media host): each is sent to the model as an image
    * beside the prompt, on the

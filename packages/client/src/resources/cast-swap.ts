@@ -533,6 +533,14 @@ export interface VideoRemakeJobOutput {
   engineWidth?: number
   /** The engine version's height in pixels. Present only when `upscale` is `"applied"`. */
   engineHeight?: number
+  /**
+   * Whether the run's upscale step was charged: `true` when its upscaled
+   * file is the video delivered, `false` when the step was skipped (its
+   * credits are given back, so the run's charge is its total less the
+   * estimate's `breakdown.upscale`). Present on a run that had an upscale
+   * step, from a server that charges the step only when it is delivered.
+   */
+  upscaleCharged?: boolean
   [key: string]: unknown
 }
 

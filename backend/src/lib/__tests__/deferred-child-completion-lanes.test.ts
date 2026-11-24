@@ -72,3 +72,72 @@ describe("every completion lane of an image-to-video job writes the deferral rec
     expect(text).toMatch(/deferSettlementRequested && !dispatchesVoicedVideo\(parsed\.data\)/)
   })
 })
+
+/**
+ * The same promise for /v1/video-upscale (the "delivered" rule): it answers
+ * `settlementDeferred: true` only for "topaz" and "topaz-rhea", and every lane
+ * that completes a `video-upscale` job — its worker's Topaz and Rhea paths, the
+ * Replicate and fal reconciles — goes through `finalizeJobWithMedia`. A file
+ * that names the job type and completes a job directly is listed with why that
+ * completion is never a video upscale's.
+ */
+const UPSCALE_REVIEWED: Record<string, { calls: number; inside: string; why: string }> = {
+  "workers/handlers/video-ai.ts": {
+    calls: 1,
+    inside: "handleGenerateMask",
+    why: "handleVideoUpscale and runRheaUpscale complete through finalizeJobWithMedia; the one direct completion is the mask job's",
+  },
+  "lib/reconcile/replicate.ts": {
+    calls: 1,
+    inside: "reconcileReplicateJob",
+    why: "the one direct completion is the transcribe branch's (`row.job_type === \"transcribe\"`); a Topaz upscale recovers through finalizeJobWithMedia",
+  },
+  "lib/reconcile/kie.ts": {
+    calls: 1,
+    inside: "reconcileKieTranscribeJob",
+    why: "the one direct completion is the transcribe recovery's; an upscale on KIE (a draft finalize, VEO) recovers through finalizeJobWithMedia",
+  },
+}
+
+describe("every completion lane of a video upscale writes the deferral record", () => {
+  const files = sources(SRC)
+  const naming = files.filter((f) => /["']video-upscale["']/.test(readFileSync(f, "utf8")))
+
+  it("the files that name the job type and complete a job directly are the reviewed ones", () => {
+    const direct = naming
+      .map((f) => relative(SRC, f))
+      .filter((rel) => rel !== "lib/job-finalize.ts" && rel !== "workers/shared.ts")
+      .filter((rel) => DIRECT.test(readFileSync(join(SRC, rel), "utf8")) && ((DIRECT.lastIndex = 0), true))
+    expect(direct.sort()).toEqual(Object.keys(UPSCALE_REVIEWED).sort())
+  })
+
+  for (const [rel, review] of Object.entries(UPSCALE_REVIEWED)) {
+    it(`${rel}: only ${review.calls} direct completion, inside ${review.inside}`, () => {
+      const text = readFileSync(join(SRC, rel), "utf8")
+      const calls = [...text.matchAll(DIRECT)]
+      expect(calls).toHaveLength(review.calls)
+      for (const call of calls) {
+        const before = text.slice(0, call.index)
+        const last = [...before.matchAll(/const\s+(\w+)\s*:\s*HandlerFn|async function\s+(\w+)/g)].pop()
+        expect(last?.[1] ?? last?.[2], review.why).toBe(review.inside)
+      }
+    })
+  }
+
+  it("the fal reconcile (Topaz Rhea) completes only through finalizeJobWithMedia", () => {
+    const text = readFileSync(join(SRC, "lib/reconcile/fal.ts"), "utf8")
+    expect(text).not.toMatch(DIRECT)
+    expect(text).toMatch(/finalizeJobWithMedia\(/)
+  })
+
+  it("the route defers only the deferrable providers, through the trusted-parent check", () => {
+    const text = readFileSync(join(SRC, "routes/video-upscale.ts"), "utf8")
+    expect(text).toMatch(/deferSettlementRequested && DEFERRABLE_UPSCALE_PROVIDERS\.has\(provider\) && await deferSettlementHonoured\(req\)/)
+    expect(text).toMatch(/delete parsed\.data\.deferSettlement/)
+  })
+
+  it("finalize copies the request's rule into the record", () => {
+    const text = readFileSync(join(SRC, "lib/job-finalize.ts"), "utf8")
+    expect(text).toMatch(/rule: storedDeferRule\(job\.input_data\)/)
+  })
+})

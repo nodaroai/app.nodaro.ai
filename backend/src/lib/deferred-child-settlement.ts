@@ -4,7 +4,7 @@ import { heldCommitArgs, type HeldCommitReplay } from "./job-policy.js"
 import { coveredMarkOf } from "./covered-step.js"
 import { getAppSettings } from "./app-settings.js"
 import { commitJobCredits, refundLoopTrimAddon } from "../workers/shared.js"
-import { DEFER_SETTLEMENT_INPUT_KEY } from "./deferred-child-request.js"
+import { DEFER_SETTLEMENT_INPUT_KEY, DELIVERED_HELD_CHILDREN_OUTPUT_KEY, storedDeferRule, type DeferSettlementRule } from "./deferred-child-request.js"
 import { refundUsageLogConfirmed } from "./credits-job-lifecycle.js"
 import { IN_FLIGHT_JOB_STATUSES } from "./job-status.js"
 
@@ -67,6 +67,12 @@ export interface DeferredSettlementRecord {
   readonly decidedBy?: "plugin" | "sweep" | "delete"
   /** Why it was released (the plugin's words, or the platform's). */
   readonly reason?: string
+  /**
+   * How the host decides it when the plugin did not (deferred-child-request.ts
+   * `DeferSettlementRule`), copied from the request at completion; absent: an
+   * engine take.
+   */
+  readonly rule?: DeferSettlementRule
 }
 
 /**
@@ -199,6 +205,8 @@ export async function deferredCompletionFields(args: {
   commit: HeldCommitReplay
   providerCost: number | null
   workflowExecutionId: string | null
+  /** The job's stored rule (`storedDeferRule` of its `input_data`); absent or null: an engine take. */
+  rule?: DeferSettlementRule | null
 }): Promise<Record<string, unknown>> {
   const record: DeferredSettlementRecord = {
     version: 1,
@@ -207,6 +215,7 @@ export async function deferredCompletionFields(args: {
     commit: args.commit,
     providerCost: args.providerCost,
     deferredAt: new Date().toISOString(),
+    ...(args.rule ? { rule: args.rule } : {}),
   }
   let planned: number | undefined
   try {
@@ -218,6 +227,44 @@ export async function deferredCompletionFields(args: {
     held_completion_fields: { [DEFERRED_SETTLEMENT_KEY]: record },
     ...(planned !== undefined ? { credits_actual: planned } : {}),
   }
+}
+
+/** A held child's rule: its record's, else its request's (a record written before the rule was copied). */
+export function deferRuleOf(row: { input_data?: unknown; held_completion_fields?: unknown }): DeferSettlementRule | null {
+  return deferredSettlementOf(row.held_completion_fields)?.rule ?? storedDeferRule(row.input_data)
+}
+
+export interface DeliveredChildrenPlan {
+  settle: string[]
+  release: string[]
+  /** The parent's completion named no list: decided the safe way (charged), and an `[ALERT]`. */
+  listMissing: boolean
+}
+
+/**
+ * What a COMPLETED run's held `"delivered"` children get: the ones its
+ * completion lists (`DELIVERED_HELD_CHILDREN_OUTPUT_KEY`) are SETTLED — the
+ * person got that file — and every other one is RELEASED. A completion with
+ * no list at all (a writer that never wrote one) is charged, never given away:
+ * the most recently completed held child is settled and the rest released (a
+ * run delivers at most one such file), with `listMissing` for an `[ALERT]`.
+ */
+export function planDeliveredChildren(
+  parentOutput: unknown,
+  held: ReadonlyArray<{ id: string; completed_at: string | null }>,
+): DeliveredChildrenPlan {
+  if (held.length === 0) return { settle: [], release: [], listMissing: false }
+  const list = isRecord(parentOutput) ? parentOutput[DELIVERED_HELD_CHILDREN_OUTPUT_KEY] : undefined
+  if (Array.isArray(list)) {
+    const delivered = new Set(list.filter((v): v is string => typeof v === "string"))
+    return {
+      settle: held.filter((c) => delivered.has(c.id)).map((c) => c.id),
+      release: held.filter((c) => !delivered.has(c.id)).map((c) => c.id),
+      listMissing: false,
+    }
+  }
+  const keep = [...held].sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""))[0]!.id
+  return { settle: [keep], release: held.filter((c) => c.id !== keep).map((c) => c.id), listMissing: true }
 }
 
 // ── resolving a held child ──────────────────────────────────────────────────

@@ -2555,6 +2555,10 @@ with. A completed job's output (`VideoRemakeJobOutput`) carries
 `outputResolution` and, on a `"next"` run, `upscale: "applied" | "skipped"`
 (`VideoRemakeUpscaleOutcome`; skipped: the upscale step failed and the video
 was delivered at the engine's size); its `resolution` stays the engine's size.
+When it also carries `upscaleCharged`, the upscale was charged only because its
+file is the video delivered (`true`); `false` means it was skipped and its
+credits were given back (the run is charged its estimate less
+`breakdown.upscale`).
 On an `"applied"` run it may also carry `engineVideoUrl` (the engine's own
 version at the engine's size, removed together with `videoUrl` when the
 run's Library item is deleted for good),

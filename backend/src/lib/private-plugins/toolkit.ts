@@ -1828,6 +1828,10 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   // reservation stays held after it completes until tk.jobs.settleDeferredChild / releaseDeferredChild, or the
   // host's sweep, resolves it (lib/deferred-child-settlement.ts).
   deferredChildSettlement: true,
+  // /v1/video-upscale takes `deferSettlement` too (providers "topaz" and "topaz-rhea", answered `settlementDeferred:
+  // true`), under the "delivered" rule: the host charges such a child only when its run's completion lists it in
+  // `__deliveredHeldChildren` (lib/deferred-child-request.ts), and releases it otherwise.
+  deferredUpscaleSettlement: true,
   // tk.llm.completeStructured takes `imageUrls` (at most 5 https links), sent as image parts on the direct lane.
   llmStructuredImages: true,
 })

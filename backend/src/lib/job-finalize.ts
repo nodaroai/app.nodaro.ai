@@ -16,6 +16,7 @@ import {
 import { relayFieldsFrom } from "../providers/nodaro/relay-cost.js"
 import type { HeldCommitReplay } from "./job-policy.js"
 import { deferredCompletionFields, isDeferredSettlementJob, releaseIfScheduled, settleFinalizedJobCredits } from "./deferred-child-settlement.js"
+import { storedDeferRule } from "./deferred-child-request.js"
 import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
 import { recordedLengthBoundSec, recordedVideoLengthSec } from "./generated-video-recorded-length.js"
 import { grokSourceOutputFields, type JobTaskRow } from "./grok-source-record.js"
@@ -705,7 +706,7 @@ export async function finalizeJobWithMedia(
   // plugin settles or releases it, or the sweep does.
   const deferred = usageLogId !== null && isDeferredSettlementJob(job)
   const deferredFields = deferred && usageLogId !== null
-    ? await deferredCompletionFields({ usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id })
+    ? await deferredCompletionFields({ usageLogId, commit: commitReplay, providerCost: result.cost ?? null, workflowExecutionId: job.workflow_execution_id, rule: storedDeferRule(job.input_data) })
     : {}
   const outcome = await markJobCompletedDetailed(
     jobId,

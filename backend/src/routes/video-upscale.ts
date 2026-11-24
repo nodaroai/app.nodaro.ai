@@ -90,6 +90,7 @@ import {
   seedanceDraftFinalizeBilledSec,
 } from "../lib/seedance-draft-finalize.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
+import { DEFERRABLE_UPSCALE_PROVIDERS, DEFER_SETTLEMENT_INPUT_KEY, DEFER_SETTLEMENT_RULE_INPUT_KEY, deferSettlementHonoured } from "../lib/deferred-child-request.js"
 
 const isNodaroVideoUpscaleBody = (body: unknown): boolean =>
   (body as { provider?: unknown } | undefined)?.provider === NODARO_VIDEO_UPSCALE_PROVIDER
@@ -110,6 +111,17 @@ function videoUpscaleFields<T extends readonly [string, ...string[]]>(targetReso
     kieTaskId: z.string().optional(), // Deprecated alias of taskId, still accepted
     /** seedance-2-5-hd only: the draft's job id (alternative to taskId). */
     sourceJobId: z.string().optional(),
+    /**
+     * A private plugin's own child only (lib/deferred-child-request.ts): keep
+     * the job's credits HELD after it completes until its parent settles or
+     * releases them. Honoured for "topaz" and "topaz-rhea" only when the
+     * request is the plugin toolkit's own worker request and its parent is a
+     * job of the caller's own whose type ANY loaded private plugin handles
+     * (`deferSettlementHonoured`; Video Remake's upscale step is the one that
+     * asks today), answered `settlementDeferred: true` then; ignored from
+     * anyone else, and never stored as sent.
+     */
+    deferSettlement: z.boolean().optional(),
   }
 }
 
@@ -470,6 +482,9 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
+    // Never stored as sent: only the server's own decision below reaches the job.
+    const deferSettlementRequested = parsed.data.deferSettlement === true
+    delete parsed.data.deferSettlement
     const { videoUrl, upscaleFactor, provider } = parsed.data
     // Topaz: the target the preHandler measured and priced.
     const topaz = provider === "topaz" ? req.topazVideoUpscale : undefined
@@ -531,6 +546,10 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
     // render's provider cost from them (queue only — never the job record).
     // Read before the job row and the hold: a failure here leaves neither.
     const draftBilledSec = draft ? await seedanceDraftFinalizeBilledSec(draft) : undefined
+    // A plugin's own upscale step (Video Remake's) held after it completes, decided by whether its run delivers its
+    // file (the "delivered" rule, lib/deferred-child-request.ts). Every other request: settled when it completes.
+    const deferSettlement = deferSettlementRequested && DEFERRABLE_UPSCALE_PROVIDERS.has(provider) && await deferSettlementHonoured(req)
+    const deferredField = deferSettlement ? { settlementDeferred: true as const } : {}
 
     const { data: job, error } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
@@ -538,7 +557,8 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        input_data: withResolvedModel(buildJobInputData(
+        input_data: {
+          ...withResolvedModel(buildJobInputData(
           {
             ...parsed.data,
             ...(topaz
@@ -567,7 +587,13 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
               : {}),
           },
           "video-upscale",
-        ), "video-upscale"),
+          ), "video-upscale"),
+          // Server-only (top-level `__` keys no job read returns), written past
+          // `buildJobInputData` so no request field can set them: finalize keeps
+          // the reservation held, and the "delivered" rule decides it if its
+          // parent does not (lib/deferred-child-request.ts).
+          ...(deferSettlement ? { [DEFER_SETTLEMENT_INPUT_KEY]: true, [DEFER_SETTLEMENT_RULE_INPUT_KEY]: "delivered" } : {}),
+        },
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
 
@@ -591,7 +617,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
         usageLogId,
       }))
       if (reply.sent) return
-      return { jobId: job.id }
+      return { jobId: job.id, ...deferredField }
     }
 
     if (nodaro) {
@@ -627,6 +653,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
     }))
     if (reply.sent) return
 
-    return { jobId: job.id }
+    // `settlementDeferred`: told to the plugin child that asked, so it settles or releases it.
+    return { jobId: job.id, ...deferredField }
   })
 }
