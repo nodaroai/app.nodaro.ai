@@ -15,7 +15,7 @@ import { supabase } from "../../lib/supabase.js"
 import { IMAGE_MASK_MODE, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, type ImageGenProvider } from "@nodaro/shared/models"
 import { describeMaskRegion } from "@nodaro/shared/media"
 import { NODARO_IMAGE_UPSCALE_MODEL_ID, resolveTopazUpscale } from "@nodaro/shared/credits"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, isKlingImage4 } from "@nodaro/shared/model-catalog"
 import { EDIT_IMAGE_DEFAULT_PROVIDER, generateImageModelOf } from "./default-models.js"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions, pasteSourceOutsideMask } from "../../services/inpaint/composite.js"
 
@@ -51,7 +51,7 @@ export function outputFormatParams(levers: {
 }
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, background, outputFormat, gifFrames, gifFrameDurationMs, svgLevel, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
+  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, background, outputFormat, gifFrames, gifFrameDurationMs, svgLevel, imageSetCount, imageSubjects, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
@@ -71,6 +71,10 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     gifFrames?: number
     gifFrameDurationMs?: number
     svgLevel?: string
+    /** A set's images (2 to 10), catalog-snapped: only a model that makes sets carries one. */
+    imageSetCount?: number
+    /** Kling Image 4.0's named subjects, grouped and priced at plan time (lib/kling-image-4-subjects.ts). */
+    imageSubjects?: ReadonlyArray<{ name: string; imageUrls: readonly string[]; description?: string }>
     negativePrompt?: string
     seed?: number
     renderingSpeed?: string
@@ -112,6 +116,12 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     ...(quality && { quality }),
     ...(background && { background }),
     ...outputFormatParams({ outputFormat, gifFrames, gifFrameDurationMs, svgLevel }),
+    // An inpaint delivers one composited picture, so it never asks for a set.
+    ...(imageSetCount != null && imageSetCount > 1 && !maskUrl && { image_set_count: imageSetCount }),
+    ...((imageSubjects?.length ?? 0) > 0 && { image_subjects: imageSubjects }),
+    // Kling Image 4.0 names each image by its number: the prompt numbers the
+    // references, while a base is sent first (`providerRefs`).
+    ...(isKlingImage4(effectiveModel) && isI2I && { image_prompt_order: referenceImageUrls ?? [] }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),
     ...(renderingSpeed && { rendering_speed: renderingSpeed }),
@@ -383,6 +393,9 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     ...(quality && { quality }),
     ...(background && { background }),
     ...outputFormatParams({ outputFormat, gifFrames, gifFrameDurationMs, svgLevel }),
+    // Kling Image 4.0 names each image by its number: the prompt numbers the
+    // references, while the source is sent first.
+    ...(isKlingImage4(resolvedProvider) && { image_prompt_order: referenceImageUrls ?? [] }),
     ...(strength != null && { strength }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),

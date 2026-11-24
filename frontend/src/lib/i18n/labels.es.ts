@@ -649,6 +649,8 @@ const MODEL_DESCRIPTIONS_ES: Record<string, string> = {
   "Up to 16 reference images in one edit, readable text, up to 4K": "Hasta 16 imágenes de referencia en una edición, texto legible, hasta 4K",
   "Natural light, materials and skin, small text, transparent backgrounds": "Luz, materiales y piel naturales, texto pequeño, fondos transparentes",
   "Edits that keep the rest of the picture, up to 10 input images": "Ediciones que conservan el resto de la imagen, hasta 10 imágenes de entrada",
+  "Native 2K, 4K or 8K, text in the picture, sets of 2 to 10 images": "2K, 4K u 8K nativos, texto en la imagen, series de 2 a 10 imágenes",
+  "Up to 10 references and named subjects, at 2K, 4K or 8K": "Hasta 10 referencias y sujetos con nombre, en 2K, 4K u 8K",
   "Light FLUX 3: fast, low cost, up to 4K, edits from up to 10 references": "FLUX 3 ligero: rápido, económico, hasta 4K, ediciones a partir de hasta 10 referencias",
   "Fast, low-cost edits from up to 10 references, no extra cost per image": "Ediciones rápidas y económicas a partir de hasta 10 referencias, sin costo extra por imagen",
   "Fast Gemini, agentic-tuned": "Gemini rápido, ajustado para agentes",

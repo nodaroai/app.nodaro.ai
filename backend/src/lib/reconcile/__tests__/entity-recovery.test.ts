@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   loadUsageLogIdMock: vi.fn().mockResolvedValue("ul-1"),
 
   uploadImageMock: vi.fn().mockResolvedValue("https://r2/images/j-1.png"),
+  storeFormattedImagesMock: vi.fn(),
   uploadVideoMock: vi.fn().mockResolvedValue("https://r2/videos/j-1.mp4"),
   shouldSaveMock: vi.fn().mockResolvedValue(true),
   markJobCompletedMock: vi.fn().mockResolvedValue(true),
@@ -56,6 +57,10 @@ vi.mock("../../supabase.js", () => ({
 vi.mock("../../config.js", () => ({ hasCredits: () => true, config: {} }))
 vi.mock("../../job-failure.js", () => ({ markJobFailed: mocks.markJobFailedMock }))
 vi.mock("../../storage.js", () => ({ uploadToR2: vi.fn() }))
+vi.mock("../../image-output-store.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../image-output-store.js")>()),
+  storeFormattedImages: mocks.storeFormattedImagesMock,
+}))
 vi.mock("../../credits-job-lifecycle.js", () => ({ refundReservedCreditsForJob: mocks.refundMock }))
 vi.mock("../bump-attempts.js", () => ({ bumpAttemptsOrExhaust: mocks.bumpMock }))
 
@@ -183,6 +188,18 @@ describe("reconcile recovers a FINISHED entity generation instead of refunding i
     expect(mocks.bumpMock).not.toHaveBeenCalled()
     expect(mocks.refundMock).not.toHaveBeenCalled()
     expect(mocks.markJobFailedMock).not.toHaveBeenCalled()
+  })
+
+  it("a recovered Kling Image 4.0 portrait is stored as what its bytes are (a JPEG at 8K), not as a PNG", async () => {
+    mocks.jobRow.data = jobRowWith({ type: "generate-character", attachToCharacterId: CHARACTER_ID, provider: "kling-image-4", resolution: "8K" })
+    mocks.pollKieTaskMock.mockResolvedValue({ resultJson: { resultUrls: ["https://kie/result.jpg"] }, providerMs: 4200 })
+    mocks.storeFormattedImagesMock.mockResolvedValue({ urls: ["https://r2/images/j-1.jpg"], format: "jpeg", mimeType: "image/jpeg" })
+
+    await reconcileKieJob(row())
+
+    expect(mocks.storeFormattedImagesMock).toHaveBeenCalledWith({ sourceUrls: ["https://kie/result.jpg"], jobId: "j-1", userId: "u-1", watermark: false })
+    expect(mocks.uploadImageMock).not.toHaveBeenCalled()
+    expect(mocks.markJobCompletedMock).toHaveBeenCalledWith("j-1", { output_data: { imageUrl: "https://r2/images/j-1.jpg" } })
   })
 
   it("records what KIE billed for the saved task as provider_cost; the commit stays the unmetered reserved-tier commit", async () => {

@@ -60,6 +60,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`model\`
 - \`count\`
 - \`models\`
+- \`image_set_count\`
 - \`resolution\`
 - \`quality\`
 - \`background\`
@@ -85,7 +86,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`flow_id\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
-**Credit cost:** \`3-682\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
+**Credit cost:** \`3-781\` charged on Nodaro Cloud — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's figure live.
 **Inputs (target handles):** \`prompt\`, \`negative\`, \`references\`, \`assets\`, \`elements\`, \`look\`, \`settings\`
 **Outputs (source handles):** \`image\`
 
@@ -110,6 +111,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 - \`gifFrames?: number\`
 - \`gifFrameDurationMs?: number\`
 - \`svgLevel?: string\`
+- \`imageSetCount?: number\`
 - \`seed?: number\`
 - \`renderingSpeed?: string\`
 - \`styleType?: string\`

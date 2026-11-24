@@ -183,13 +183,22 @@ vi.mock("@/lib/character-auto-attach.js", () => autoAttachMocks)
 // only which path finalize takes, read from the job's recorded request.
 const formatStoreMocks = vi.hoisted(() => ({
   storeFormattedImages: vi.fn(),
+  discardUndeliveredImages: vi.fn(async () => {}),
 }))
 vi.mock("@/lib/image-output-store.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/image-output-store.js")>()),
   storeFormattedImages: formatStoreMocks.storeFormattedImages,
+  discardUndeliveredImages: formatStoreMocks.discardUndeliveredImages,
 }))
 vi.mock("@/lib/gpt-image-2-6-settle.js", () => ({
   gptImage26AutoSettledBase: async (k: number | undefined) => (k === undefined ? undefined : Math.ceil(k * 2.5)),
+}))
+// A set settles at its row of the images stored: 29 base credits an image here.
+vi.mock("@/lib/credit-id-base.js", () => ({
+  creditIdBaseCredits: async (id: string) => {
+    const m = /^kling-image-4:2K(?::x(\d+))?$/.exec(id)
+    return m ? 29 * Number(m[1] ?? 1) : undefined
+  },
 }))
 
 import { finalizeJobWithMedia, runCompletionTail } from "@/lib/job-finalize.js"
@@ -377,6 +386,34 @@ describe("finalizeJobWithMedia", () => {
     expect(released).not.toContainEqual({ finalize_claimed_at: null, finalize_claimed_by: null })
   })
 
+  it("a set's left-out picture is deleted only once this finalize's completion won, never on a lost race", async () => {
+    const undelivered = new Map([["images/j-set-v1.jpg", 1234]])
+    const setJob = { id: "j-set", user_id: "u1", should_watermark: false, is_public: true, job_type: "generate-image", workflow_execution_id: null, status: "processing", input_data: { provider: "kling-image-4", resolvedModel: "kling-image-4", resolution: "2K", setHoldCreditId: "kling-image-4:2K:x2" } }
+    const stored = { urls: ["https://r2.example/images/j-set.jpg"], format: "jpeg", mimeType: "image/jpeg", mimeTypes: ["image/jpeg"], dropped: 1, undelivered }
+    const run = () => finalizeJobWithMedia({ jobId: "j-set", jobType: "generate-image", result: { url: "https://kie/1.jpg", extraUrls: ["https://kie/2.jpg"], cost: 0.28, providerUsed: "kie" } })
+
+    // Another finalize completed the row (it may name the same key): nothing deleted.
+    mocks.jobsSingleMock.mockResolvedValueOnce({ data: setJob, error: null })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce(stored)
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
+    expect(await run()).toEqual({ ok: false, reason: "lost_race" })
+    expect(formatStoreMocks.discardUndeliveredImages).not.toHaveBeenCalled()
+
+    // Our completion won: the left-out key goes, never a delivered one.
+    mocks.jobsSingleMock.mockResolvedValueOnce({ data: setJob, error: null })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce(stored)
+    await run()
+    expect(formatStoreMocks.discardUndeliveredImages).toHaveBeenCalledWith("j-set", "u1", undelivered, ["https://r2.example/images/j-set.jpg"])
+
+    // A held completion: the left-out keys are not part of what is held, and go now.
+    formatStoreMocks.discardUndeliveredImages.mockClear()
+    mocks.jobsSingleMock.mockResolvedValueOnce({ data: setJob, error: null })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce(stored)
+    sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("held")
+    expect(await run()).toEqual({ ok: false, reason: "held" })
+    expect(formatStoreMocks.discardUndeliveredImages).toHaveBeenCalledWith("j-set", "u1", undelivered, ["https://r2.example/images/j-set.jpg"])
+  })
+
   it("a lost race is still distinguishable from a policy outcome", async () => {
     sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
     const result = await finalizeJobWithMedia({
@@ -468,6 +505,29 @@ describe("finalizeJobWithMedia", () => {
       imageMimeType: "image/gif",
       thumbnailUrl: "https://r2.example/images/j-gif-still.png",
     })
+  })
+
+  it("a Kling Image 4.0 run is stored as what its bytes are (a JPEG at 8K), its set's pictures with it", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-kling", user_id: "u1", should_watermark: false, is_public: true, job_type: "generate-image", workflow_execution_id: null, status: "processing", input_data: { provider: "kling-image-4", resolvedModel: "kling-image-4", resolution: "8K" } },
+      error: null,
+    })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce({
+      urls: ["https://r2.example/images/j-kling.jpg", "https://r2.example/images/j-kling-v1.jpg"],
+      format: "jpeg",
+      mimeType: "image/jpeg",
+    })
+    const out = await finalizeJobWithMedia({ jobId: "j-kling", jobType: "generate-image", result: { url: "https://kie/1.jpg", extraUrls: ["https://kie/2.jpg"], cost: 0.28, providerUsed: "kie" } })
+
+    expect(out).toEqual({ ok: true })
+    expect(formatStoreMocks.storeFormattedImages).toHaveBeenCalledWith({ sourceUrls: ["https://kie/1.jpg", "https://kie/2.jpg"], jobId: "j-kling", userId: "u1", watermark: false })
+    expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
+    expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data).toMatchObject({
+      imageUrl: "https://r2.example/images/j-kling.jpg",
+      imageMimeType: "image/jpeg",
+    })
+    // Each picture's own type is written for a set only; this job is not one.
+    expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data).not.toHaveProperty("imageMimeTypes")
   })
 
   it("an image asked for as PNG, or with no format, keeps the PNG path", async () => {
@@ -1346,6 +1406,51 @@ describe("finalizeJobWithMedia — measured settlement (meteredBaseCredits)", ()
     expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", null, 20, true)
     const commitReplay = sharedMocks.markJobCompletedDetailed.mock.calls[0]![3]
     expect(commitReplay).toMatchObject({ meteredBaseCredits: 20 })
+  })
+
+  it("a set that stored fewer images than it asked settles on the images stored, and a held run replays it", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-set", user_id: "u1", should_watermark: false, is_public: true, job_type: "generate-image", workflow_execution_id: null, status: "processing", input_data: { provider: "kling-image-4", setHoldCreditId: "kling-image-4:2K:x6" } },
+      error: null,
+    })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce({
+      urls: ["https://r2.example/images/j-set.png", "https://r2.example/images/j-set-v1.png", "https://r2.example/images/j-set-v2.png", "https://r2.example/images/j-set-v3.png"],
+      format: "png",
+      mimeType: "image/png",
+      mimeTypes: ["image/png", "image/png", "image/webp", "image/png"],
+      dropped: 1,
+    })
+    await finalizeJobWithMedia({
+      jobId: "j-set",
+      jobType: "generate-image",
+      result: { url: "https://kie/1.png", extraUrls: ["https://kie/2.png", "https://kie/3.png", "https://kie/4.png"], cost: 0.2, providerUsed: "kie" },
+    })
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j-set", null, 4 * 29, true)
+    expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![3]).toMatchObject({ meteredBaseCredits: 4 * 29 })
+    // The picture left out is said on the job; each picture keeps its own type.
+    expect(sharedMocks.markJobCompletedDetailed.mock.calls[0]![1].output_data).toMatchObject({
+      imagesNotSaved: 1,
+      imageMimeTypes: ["image/png", "image/png", "image/webp", "image/png"],
+    })
+  })
+
+  it("a set that stored every image it asked commits its hold", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-set", user_id: "u1", should_watermark: false, is_public: true, job_type: "generate-image", workflow_execution_id: null, status: "processing", input_data: { provider: "kling-image-4", setHoldCreditId: "kling-image-4:2K:x2" } },
+      error: null,
+    })
+    formatStoreMocks.storeFormattedImages.mockResolvedValueOnce({
+      urls: ["https://r2.example/images/j-set.png", "https://r2.example/images/j-set-v1.png"],
+      format: "png",
+      mimeType: "image/png",
+    })
+    await finalizeJobWithMedia({
+      jobId: "j-set",
+      jobType: "generate-image",
+      result: { url: "https://kie/1.png", extraUrls: ["https://kie/2.png"], cost: 0.2, providerUsed: "kie" },
+    })
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j-set", 0.2, undefined, undefined)
   })
 
   it("absent: the provider-cost / reserved-tier path is byte-identical to before", async () => {

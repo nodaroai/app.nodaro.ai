@@ -50,7 +50,7 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => ({
 import {
   detectFacesInImage,
   FACE_DETECT_IMAGE_MAX_BYTES,
-  FACE_DETECT_IMAGE_MAX_SIDE,
+  FACE_DETECT_IMAGE_MAX_PIXELS, FACE_DETECT_IMAGE_MAX_SIDE,
 } from "../detect-faces-image.js"
 import { FaceDetectRequestError } from "../detect-faces.js"
 import { yunetSession, releaseYunetSession } from "../yunet-session.js"
@@ -159,6 +159,26 @@ describe("detectFacesInImage", () => {
     for (const [i, want] of EXPECTED.entries()) {
       for (const k of ["x", "y", "w", "h"] as const) expect(Math.abs(got[i]![k] - want[k])).toBeLessThan(1e-2)
     }
+  })
+
+  it("a picture over the decode cap (an 8K model result) is scaled down and detected, its frame its own size", async () => {
+    // 7680 x 7680 = 59 MP, over the 50 MP cap; the people fill the picture.
+    const side = 7680
+    const huge = await sharp(framePng).resize(side, side, { fit: "fill" }).jpeg({ quality: 70 }).toBuffer()
+    const url = "https://cdn.example.com/eight-k.jpg"
+    fx.files.set(url, huge)
+    expect(side * side).toBeGreaterThan(FACE_DETECT_IMAGE_MAX_PIXELS)
+    const out = await detectFacesInImage({ imageUrl: url, minScore: 0.5 })
+    expect(out.frame).toEqual({ w: side, h: side })
+    expect(out.boxes.length).toBeGreaterThan(0)
+  })
+
+  it("a corrupt picture over the decode cap is refused as a picture that cannot be decoded", async () => {
+    const side = 7680
+    const huge = await sharp({ create: { width: side, height: side, channels: 3, background: "#888" } }).jpeg({ quality: 50 }).toBuffer()
+    const url = "https://cdn.example.com/broken-eight-k.jpg"
+    fx.files.set(url, huge.subarray(0, Math.floor(huge.length / 3)))
+    await expect(detectFacesInImage({ imageUrl: url, minScore: 0.5 })).rejects.toBeInstanceOf(FaceDetectRequestError)
   })
 
   it("a greyscale, a 16-bit and a transparent picture decode to the same faces", async () => {

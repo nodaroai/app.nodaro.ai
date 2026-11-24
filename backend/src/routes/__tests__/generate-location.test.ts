@@ -570,7 +570,7 @@ describe("POST /v1/generate-location — multi-candidate (Task 10)", () => {
         method: "POST",
         url: "/v1/generate-location",
         headers: { "x-user-id": TEST_USER_ID },
-        payload: { name: "Forest Glade", resolution: "8K" },
+        payload: { name: "Forest Glade", resolution: "16K" },
       })
 
       expect(res.statusCode).toBe(400)
