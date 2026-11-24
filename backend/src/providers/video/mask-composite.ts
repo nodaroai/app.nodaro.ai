@@ -23,6 +23,11 @@
  * render the face mask is widened by that % of each face's height, onto the
  * face's own skin only (mask-face-grow.ts), and the render reads the grown
  * mask in its place. Without it every argv is the one before it existed.
+ *
+ * `workingCopy` (an internal child's ask, routes/mask-composite.ts): the
+ * result is encoded as a working copy (working-copy-encode.ts) in the leading
+ * video's own pixel format, the graph kept in that format throughout, with
+ * its colour tags. Without it every argv is the one before it existed.
  */
 
 import { join } from "node:path"
@@ -48,6 +53,14 @@ import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { maskCompositeRefusalForCharge } from "../../lib/mask-composite-refusal.js"
 import { growFaceMaskVideo, type FaceGrowStats } from "./mask-face-grow-video.js"
+import { probeMatched } from "./matched-encode.js"
+import {
+  withAlphaPlane,
+  workingCopyPeakMemoryMiB,
+  workingCopyPictureArgs,
+  workingCopyPixFmt,
+  type WorkingCopySource,
+} from "./working-copy-encode.js"
 
 /** What the graph needs to know about the inputs (probed by `maskComposite`). */
 export interface MaskCompositeProbe {
@@ -164,6 +177,18 @@ function audioArgs(source: MaskCompositeAudioSource, probe: MaskCompositeProbe):
 }
 
 /**
+ * How the result's picture is written: the delivery encode (4:2:0, CRF 18),
+ * or with `workingCopy` (the leading video's pixel format and colour tags)
+ * the working copy, its graph in that format. `pix` / `alpha` name the
+ * graph's formats; for the delivery encode they are the ones it always had.
+ */
+function pictureEncode(workingCopy: WorkingCopySource | undefined): { pix: string; alpha: string; args: string[] } {
+  if (!workingCopy) return { pix: "yuv420p", alpha: "yuva420p", args: ["-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p"] }
+  const pix = workingCopyPixFmt(workingCopy)
+  return { pix, alpha: withAlphaPlane(pix), args: workingCopyPictureArgs(workingCopy) }
+}
+
+/**
  * The ffmpeg argv for one composite. Inputs: 0 = foreground, 1 = background
  * (looped), 2 = mask. Pure: no I/O.
  */
@@ -174,8 +199,11 @@ export function buildMaskCompositeArgs(args: {
   readonly outputPath: string
   readonly settings: MaskCompositeSettings
   readonly probe: MaskCompositeProbe
+  /** The working copy, from the foreground's pixel format and colour tags; absent = the delivery encode. */
+  readonly workingCopy?: WorkingCopySource
 }): string[] {
   const { settings: s, probe } = args
+  const enc = pictureEncode(args.workingCopy)
   // Display size: non-square pixels are squared, so the composite is not stretched.
   const w = even(probe.width * (probe.sar && probe.sar > 0 ? probe.sar : 1))
   const h = even(probe.height)
@@ -186,11 +214,11 @@ export function buildMaskCompositeArgs(args: {
   const graph = [
     // Every input on a clock starting at 0 (`ZERO_CLOCK`). Overlay emits one frame per background
     // frame, so the background starts with the foreground: a bare background frame never comes first.
-    `[0:v]${leadingClock(startSec, rate)}scale=${w}:${h},setsar=1,format=yuva420p[fg]`,
-    `[1:v]${ZERO_CLOCK},${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=yuv420p[bg]`,
+    `[0:v]${leadingClock(startSec, rate)}scale=${w}:${h},setsar=1,format=${enc.alpha}[fg]`,
+    `[1:v]${ZERO_CLOCK},${backgroundFitFilter(s.backgroundFit, w, h)},setsar=1${fpsStep},format=${enc.pix}[bg]`,
     `[2:v]${maskChain(s, w, h, rate)}[m]`,
     "[fg][m]alphamerge[fga]",
-    `[bg][fga]overlay=format=auto:shortest=1,format=yuv420p${restoreStart(startSec)}[vout]`,
+    `[bg][fga]overlay=format=auto:shortest=1,format=${enc.pix}${restoreStart(startSec)}[vout]`,
     ...(audio.filter ? [audio.filter] : []),
   ].join(";")
   return [
@@ -206,7 +234,7 @@ export function buildMaskCompositeArgs(args: {
     // `-t`'s rounding alone may keep: the frame count bounds it exactly.
     ...(probe.frameCount ? ["-frames:v", String(probe.frameCount)] : []),
     "-t", (startSec + probe.durationSec).toFixed(3),
-    "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+    ...enc.args,
     ...(audio.map.length > 0 ? ["-c:a", "aac", "-b:a", "192k"] : ["-an"]),
     "-movflags", "+faststart",
     args.outputPath,
@@ -258,8 +286,11 @@ export function buildMaskCompositeFillArgs(args: {
   readonly settings: MaskCompositeSettings
   /** The BACKGROUND's probe (its foreground* audio flag is unused). */
   readonly probe: MaskCompositeProbe
+  /** The working copy, from the background's pixel format and colour tags; absent = the delivery encode. */
+  readonly workingCopy?: WorkingCopySource
 }): string[] {
   const { settings: s, probe } = args
+  const enc = pictureEncode(args.workingCopy)
   const w = even(probe.width * (probe.sar && probe.sar > 0 ? probe.sar : 1))
   const h = even(probe.height)
   const startSec = probe.startSec && probe.startSec > 0 ? probe.startSec : 0
@@ -268,11 +299,11 @@ export function buildMaskCompositeFillArgs(args: {
   const withAudio = maskCompositeEffectiveAudioSource(s) !== "none" && probe.backgroundHasAudio
   const graph = [
     // Like the video fill: every input on a clock starting at 0 (`ZERO_CLOCK`), the start restored on the output.
-    `[0:v]${leadingClock(startSec, rate)}scale=${w}:${h},setsar=1,format=yuv420p,split=2[bg][src]`,
-    `[src]${maskCompositeFillEffect(s, w, h)},format=yuva420p[fx]`,
+    `[0:v]${leadingClock(startSec, rate)}scale=${w}:${h},setsar=1,format=${enc.pix},split=2[bg][src]`,
+    `[src]${maskCompositeFillEffect(s, w, h)},format=${enc.alpha}[fx]`,
     `[1:v]${maskChain(s, w, h, rate)}[m]`,
     "[fx][m]alphamerge[fxa]",
-    `[bg][fxa]overlay=format=auto:shortest=1,format=yuv420p${restoreStart(startSec)}[vout]`,
+    `[bg][fxa]overlay=format=auto:shortest=1,format=${enc.pix}${restoreStart(startSec)}[vout]`,
   ].join(";")
   return [
     "-y",
@@ -283,7 +314,7 @@ export function buildMaskCompositeFillArgs(args: {
     ...(withAudio ? ["-map", "0:a:0"] : []),
     // The render runs to the background's last frame, whatever the mask does.
     "-t", (startSec + probe.durationSec).toFixed(3),
-    "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+    ...enc.args,
     ...(withAudio ? ["-c:a", "aac", "-b:a", "192k"] : ["-an"]),
     "-movflags", "+faststart",
     args.outputPath,
@@ -310,6 +341,12 @@ export interface MaskCompositeParams {
    * render exactly as before.
    */
   readonly faceGrowPct?: number
+  /**
+   * The working copy (an internal child's ask, routes/mask-composite.ts): the
+   * result encoded near-lossless in the leading video's own pixel format
+   * (working-copy-encode.ts). Absent: the delivery encode, exactly as before.
+   */
+  readonly workingCopy?: boolean
 }
 
 export interface MaskCompositeResult {
@@ -330,6 +367,20 @@ async function maskForRender(params: MaskCompositeParams, maskPath: string, lead
   if (!(typeof params.faceGrowPct === "number" && params.faceGrowPct > 0)) return { maskPath }
   const grown = await growFaceMaskVideo({ maskPath, clipPath: leadPath, workDir, growPct: params.faceGrowPct })
   return { maskPath: grown.outputPath, faceGrow: grown.stats }
+}
+
+/**
+ * The working copy's source: the leading video's pixel format and colour tags,
+ * probed only when the working copy was asked for (the delivery encode makes
+ * no extra probe). An unreadable probe is an empty one: 4:2:0, untagged.
+ */
+async function workingCopySourceOf(params: MaskCompositeParams, leadPath: string): Promise<WorkingCopySource | undefined> {
+  return params.workingCopy === true ? probeMatched(leadPath) : undefined
+}
+
+/** The launch's declared peak: as it was, or for a working copy scaled by its pixel format (`workingCopyPeakMemoryMiB`). */
+export function maskCompositePeakMemoryMiB(peakMiB: number, workingCopy: WorkingCopySource | undefined): number {
+  return workingCopy ? workingCopyPeakMemoryMiB(peakMiB, workingCopyPixFmt(workingCopy)) : peakMiB
 }
 
 /** Kill budget: the default plus 4 s per second of output (a 4K, 5-minute composite stays inside it). */
@@ -378,13 +429,14 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
       backgroundHasAudio,
     }
     const mask = await maskForRender(params, maskPath, foregroundPath, workDir)
-    const argv = buildMaskCompositeArgs({ foregroundPath, backgroundPath, maskPath: mask.maskPath, outputPath, settings: params.settings, probe })
+    const workingCopy = await workingCopySourceOf(params, foregroundPath)
+    const argv = buildMaskCompositeArgs({ foregroundPath, backgroundPath, maskPath: mask.maskPath, outputPath, settings: params.settings, probe, ...(workingCopy ? { workingCopy } : {}) })
     // Three decoded pictures at the foreground's size feed one encode.
     const canvas = { width: even(fg.width * (fg.sar > 0 ? fg.sar : 1)), height: even(fg.height) }
     await runFfmpeg(argv, maskCompositeTimeoutMs(fg.streamDurationSec), {
       // Three input files; only the foreground's size is probed, so the largest
       // camera is left unknown (charged as 4K — conservative).
-      peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 3, cameraMegapixels: undefined }),
+      peakMemoryMiB: maskCompositePeakMemoryMiB(canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 3, cameraMegapixels: undefined }), workingCopy),
     })
     return { outputPath, width: canvas.width, height: canvas.height, durationSec: fg.streamDurationSec, ...(mask.faceGrow ? { faceGrow: mask.faceGrow } : {}) }
   } catch (err) {
@@ -422,11 +474,12 @@ async function maskCompositeFill(params: MaskCompositeParams): Promise<MaskCompo
       backgroundHasAudio,
     }
     const mask = await maskForRender(params, maskPath, backgroundPath, workDir)
-    const argv = buildMaskCompositeFillArgs({ backgroundPath, maskPath: mask.maskPath, outputPath, settings: params.settings, probe })
+    const workingCopy = await workingCopySourceOf(params, backgroundPath)
+    const argv = buildMaskCompositeFillArgs({ backgroundPath, maskPath: mask.maskPath, outputPath, settings: params.settings, probe, ...(workingCopy ? { workingCopy } : {}) })
     const canvas = { width: even(bg.width * (bg.sar > 0 ? bg.sar : 1)), height: even(bg.height) }
     await runFfmpeg(argv, maskCompositeTimeoutMs(bg.streamDurationSec), {
       // Two input files, three pictures at the background's size (the frame, its filtered copy, the mask).
-      peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 2, cameraMegapixels: undefined }),
+      peakMemoryMiB: maskCompositePeakMemoryMiB(canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 2, cameraMegapixels: undefined }), workingCopy),
     })
     return { outputPath, width: canvas.width, height: canvas.height, durationSec: bg.streamDurationSec, ...(mask.faceGrow ? { faceGrow: mask.faceGrow } : {}) }
   } catch (err) {

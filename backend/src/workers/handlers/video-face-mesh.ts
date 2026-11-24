@@ -67,6 +67,7 @@ const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, c
     depthUrl?: string
     parts?: unknown
     layers?: unknown
+    workingCopy?: unknown
   }
   if (typeof d.videoUrl !== "string" || !d.videoUrl) throw new DeterministicJobError("Video Face Mesh needs a video.")
   const filters = { minFaceHeightPct: pctOf(d.minFaceHeightPct), maxFaceHeightPct: pctOf(d.maxFaceHeightPct), zone: resolveVideoMaskZone(d.zone) }
@@ -103,6 +104,8 @@ const handleVideoFaceMesh: HandlerFn = async function handleVideoFaceMesh(job, c
       // The whole mesh is the drawer's own default: a job without `parts` draws exactly as before.
       ...(layers ? { layers } : parts !== "full" ? { parts } : {}),
       filters,
+      // The working copy (a child job's ask, honoured by routes/video-face-mesh.ts only): absent, the delivery encode.
+      ...(d.workingCopy === true ? { workingCopy: true } : {}),
       outputPath: faceMeshOutputPath(workDir),
     })
     await setJobProgress(job, ctx.jobId, 90)

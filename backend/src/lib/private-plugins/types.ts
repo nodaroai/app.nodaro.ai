@@ -4055,6 +4055,18 @@ export interface PluginCapabilities {
    */
   readonly maskCompositeFaceGrow?: boolean
   /**
+   * `POST /v1/mask-composite` and `POST /v1/video-face-mesh` (through
+   * `tk.http.workerRequest`, a child of the calling job) take
+   * `workingCopy: true`: the step's output video is encoded as a working copy
+   * for the next step — libx264 `-preset fast -crf 6`, in the input's own
+   * pixel format where 8-bit H.264 holds it (4:2:0, 4:2:2 or 4:4:4), its
+   * colour tags kept; same frames, size, sound, price and output fields — and
+   * the child job records it as `input_data.__workingCopy`. Any other caller
+   * has the field ignored. False (or absent): an older host, whose routes drop
+   * the key and write the delivery encode.
+   */
+  readonly workingCopyEncode?: boolean
+  /**
    * `POST /v1/video-mask` takes `tracks: true` and answers the mask's subjects
    * as `output_data.tracks` (each one's `id`, `fromFrame`, `toFrame`, `frames`
    * and the `viewFrame` / `viewBox` to look at it on, and `splitFrames`, the

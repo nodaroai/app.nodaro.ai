@@ -1308,4 +1308,16 @@ describe("mask-composite handler", () => {
     expect((mocks.maskComposite.mock.lastCall as unknown[] | undefined)?.[0]).not.toHaveProperty("faceGrowPct")
     expect(mocks.completeFfmpegVideoJob).toHaveBeenLastCalledWith("/tmp/mc/output.mp4", ctx, { width: 640, height: 360, durationSec: 3 })
   })
+
+  it("workingCopy: true reaches the render, with the same output fields; absent or anything else, the render is called without it", async () => {
+    const base = { backgroundUrl: "https://x/bg.mp4", maskUrl: "https://x/m.mp4", fill: "blur" }
+    await videoMaskHandlers["mask-composite"]!(job({ ...base, workingCopy: true }), ctx)
+    expect(mocks.maskComposite).toHaveBeenLastCalledWith(expect.objectContaining({ workingCopy: true }))
+    const answered = mocks.completeFfmpegVideoJob.mock.lastCall
+    for (const workingCopy of [undefined, false, "true"]) {
+      await videoMaskHandlers["mask-composite"]!(job({ ...base, ...(workingCopy === undefined ? {} : { workingCopy }) }), ctx)
+      expect((mocks.maskComposite.mock.lastCall as unknown[] | undefined)?.[0], String(workingCopy)).not.toHaveProperty("workingCopy")
+      expect(mocks.completeFfmpegVideoJob.mock.lastCall).toEqual(answered)
+    }
+  })
 })

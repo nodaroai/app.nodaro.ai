@@ -24,6 +24,31 @@ export const MATCHED_FALLBACK_CRF = "14"
 /** Pixel formats an 8-bit libx264 keeps as they are; any other is encoded as yuv420p. */
 const KEPT_PIX_FMTS = new Set(["yuv420p", "yuv422p", "yuv444p"])
 
+/** A pixel format 8-bit H.264 holds as it is. */
+export type KeptPixFmt = "yuv420p" | "yuv422p" | "yuv444p"
+
+/**
+ * The pixel format a source's picture is encoded in: its own where 8-bit
+ * libx264 can hold it (`yuvj420p`, full-range 4:2:0, as yuv420p, its range
+ * kept by the tag), else yuv420p. Shared by this encode and the working copy
+ * (`working-copy-encode.ts`).
+ */
+export function keptPixFmt(pixFmt: string | undefined): KeptPixFmt {
+  const pix = pixFmt === "yuvj420p" ? "yuv420p" : pixFmt
+  return pix && KEPT_PIX_FMTS.has(pix) ? (pix as KeptPixFmt) : "yuv420p"
+}
+
+/** The source's colour tags as output options; an absent or `unknown` one is left out. */
+export function colourTagArgs(probe: Pick<MatchedProbe, "colorSpace" | "colorPrimaries" | "colorTransfer" | "colorRange">): string[] {
+  const tag = (flag: string, v: string | undefined) => (v && v !== "unknown" ? [flag, v] : [])
+  return [
+    ...tag("-colorspace", probe.colorSpace),
+    ...tag("-color_primaries", probe.colorPrimaries),
+    ...tag("-color_trc", probe.colorTransfer),
+    ...tag("-color_range", probe.colorRange),
+  ]
+}
+
 /** What the probe read of a local clip (`probeMatched`). Absent = not reported. */
 export interface MatchedProbe {
   width?: number
@@ -97,9 +122,7 @@ export function matchedPictureArgs(
   probe: MatchedProbe,
   opts: { targetBitRate?: number; maxBitRate?: number; pass?: { n: 1 | 2; log: string } } = {},
 ): string[] {
-  const pix = probe.pixFmt === "yuvj420p" ? "yuv420p" : probe.pixFmt
-  const pixFmt = pix && KEPT_PIX_FMTS.has(pix) ? pix : "yuv420p"
-  const tag = (flag: string, v: string | undefined) => (v && v !== "unknown" ? [flag, v] : [])
+  const pixFmt = keptPixFmt(probe.pixFmt)
   const rate = matchedBitRate(probe, opts)
   const max = opts.maxBitRate
   const { pass } = opts
@@ -113,10 +136,7 @@ export function matchedPictureArgs(
     "-preset", "medium",
     ...quality,
     "-pix_fmt", pixFmt,
-    ...tag("-colorspace", probe.colorSpace),
-    ...tag("-color_primaries", probe.colorPrimaries),
-    ...tag("-color_trc", probe.colorTransfer),
-    ...tag("-color_range", probe.colorRange),
+    ...colourTagArgs(probe),
   ]
 }
 
