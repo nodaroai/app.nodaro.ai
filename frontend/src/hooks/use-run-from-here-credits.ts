@@ -37,6 +37,7 @@ import {
 } from "@/components/editor/workflow-editor/ugc-run-estimate"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /** A run set's price: the figure every surface quotes, what the run can hold, and why it is not the server's checked figure. */
@@ -120,6 +121,8 @@ export function useRunSetPrice(
   edges: WorkflowEdge[],
 ): RunSetPrice {
   const [pricesLoaded, setPricesLoaded] = useState(0)
+  // What this install runs prices some nodes (Nodaro Video Upscale with no mode): re-read once the answer lands.
+  const availability = useSurfaceAvailability()
   // Nothing runs on a view-only canvas, so it asks no price.
   const readOnly = useReadOnlyCanvas()
 
@@ -152,9 +155,9 @@ export function useRunSetPrice(
       ...(unchecked ? { unchecked } : {}),
       ...(figure.unpriced ? { unpriced: figure.unpriced } : {}),
     }
-    // `pricesLoaded` re-reads the cache once fetched prices land.
+    // `pricesLoaded` re-reads the cache once fetched prices land; `availability` once the install's answer does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [executable, nodes, edges, pricesLoaded, answers])
+  }, [executable, nodes, edges, pricesLoaded, answers, availability])
 }
 
 /** Why a figure that never waits is not the server's checked one, or undefined when it is (or has no UGC part). */

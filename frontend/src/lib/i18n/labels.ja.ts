@@ -652,6 +652,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Up to 16 reference images in one edit, readable text, up to 4K": "1 回の編集でリファレンス画像を最大 16 枚、読みやすい文字、最大 4K",
   "Natural light, materials and skin, small text, transparent backgrounds": "自然な光・質感・肌、細かい文字、透明背景",
   "Edits that keep the rest of the picture, up to 10 input images": "ほかの部分はそのままの編集、入力画像は最大 10 枚",
+  "Native 2K, 4K or 8K, text in the picture, sets of 2 to 10 images": "ネイティブ 2K・4K・8K、画像内の文字、2〜10 枚のセット",
+  "Up to 10 references and named subjects, at 2K, 4K or 8K": "参照画像と名前付きの被写体を最大 10 件、2K・4K・8K",
   "Light FLUX 3: fast, low cost, up to 4K, edits from up to 10 references": "軽量な FLUX 3：高速・低コスト、最大 4K、リファレンス画像は最大 10 枚で編集",
   "Fast, low-cost edits from up to 10 references, no extra cost per image": "リファレンス画像最大 10 枚で高速・低コストに編集、画像ごとの追加料金なし",
   "Fast Gemini, agentic-tuned": "高速な Gemini、エージェント向けに調整",

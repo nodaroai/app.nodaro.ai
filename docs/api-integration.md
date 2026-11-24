@@ -1389,6 +1389,28 @@ single call for it costs.) Without `count` / `models` — or with `count: 1` —
 the answer is the usual `{ "jobId" }`, unchanged. `jobId` is always the first
 job, so code that reads it keeps working.
 
+**A set from one job (`imageSetCount`).** On a model that makes sets (Kling
+Image 4.0, `kling-image-4`), `imageSetCount` (2–10) asks ONE job for a
+coherent set of that many images: the answer is the usual `{ "jobId" }`, and
+the job's output carries every image (`imageUrl` is the first, `imageUrls`
+all of them). The job is held at the price of the images asked (a set of
+two at 2K holds **64 credits**<!-- credits: kling-image-4:2K:x2 -->, a set of
+ten **319 credits**<!-- credits: kling-image-4:2K:x10 -->) and charged for the
+images it stores; a picture that cannot be stored is left out (`imagesNotSaved`
+on the job) and not charged, and a set none of whose pictures can be stored
+fails and is refunded. On any other model, and with a `maskUrl`, the set is dropped and the
+correction is reported in `adjustments`; `imageSetCount` and a `count` above 1
+together are a `400 validation_error`. `1` is one image.
+
+**Named subjects on a flat request (`referenceCharacters`).** On Kling Image
+4.0 a character sent with 2 to 4 of its images goes as one named subject and
+costs one input item. A structured request (`connectedReferences`) is grouped
+from its entries; a flat request (a prompt you assembled, flat
+`referenceImageUrls`) can say which character each reference came from:
+`referenceCharacters: [{ url, characterSlug, defaultName?, variantSlug?,
+description? }]`. It changes neither the prompt nor the images sent, and other
+models ignore it.
+
 - **Credits: the batch as a whole, or not at all.** A batch costs the sum of
   its jobs. The balance is checked against that sum before anything is
   created — short, the request answers `402 insufficient_credits` with
@@ -2623,7 +2645,7 @@ The image-generating routes (`/v1/generate-character`,
 `/v1/generate-character-asset`, and the location equivalents
 `/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
 `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution` (`"1K"` /
-`"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
+`"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
 **credit-affecting** and price exactly like `/v1/generate-image` (composite
 ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
 reserves more credits than the same model at its base tier. A value the chosen
@@ -3181,7 +3203,7 @@ charges anything: the hold is refunded.
 | Query param | Values | Purpose |
 |---|---|---|
 | `kind` | `image` / `video` / `audio` | Filter to one media kind. |
-| `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. |
+| `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. `lip-sync` lists every model the Lip Sync node takes (decided 2026-11-24): the lip-sync models and the video models it runs a portrait and a voice through (the Seedance 2 family, MiniMax Hailuo 3, LTX 2.5 Fast). The latter keep their own video `modes` in the entry. |
 | `family` | string | Vendor / lab name, e.g. `Google`, `Bytedance`. |
 | `featuredOnly` | boolean | Featured models only. |
 
@@ -3198,7 +3220,7 @@ No scopes required.
 ```json
 {
   "nodes": { "denied": ["social-publish"], "hiddenFromUsers": [] },
-  "models": { "denied": ["flux-flex"], "restricted": true },
+  "models": { "denied": ["flux-flex"], "restricted": true, "deniedModes": [] },
   "webScrapeSources": { "denied": [], "hiddenFromUsers": [] },
   "worlds": [
     { "id": "image", "enabled": true },
@@ -3213,6 +3235,7 @@ No scopes required.
 | `nodes.hiddenFromUsers` | For an admin only (empty for anyone else): node types the admin can use and the deployment's users cannot. |
 | `models.denied` | Model ids nobody on this deployment is offered (`model_not_available`). |
 | `models.restricted` | `true` when the deployment restricts models: its [surface profile](./deployment.md#keys-read-by-client-apps) lists `models.allow` or `models.deny`, or a models override in Admin → Availability leaves a model off. A model an admin switched off on the models page is listed in `models.denied` without being a restriction. The workflow editor starts a new node on a model its menu offers only where this is `true`. A server that predates the field omits it: read that as `false`. |
+| `models.deniedModes` | Modes of a model the deployment offers that it cannot run, each written `<model id>:<mode>`. Today the one it can list is `nodaro-video-upscale:transparent`, on a deployment that cannot run Nodaro Video Upscale's Transparent mode: there a request with no `mode` runs (and is priced) in Sharp, and an explicit `"mode": "transparent"` is refused with `503 provider_unavailable`. Empty where every mode runs. A server that predates the field omits it: read that as none. |
 | `webScrapeSources.denied` / `.hiddenFromUsers` | Web Scrape sources withdrawn with the node that governs them (the Instagram source follows the Instagram node), in the same two views. |
 | `worlds` | Every world of the shared site header — `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app` (the workflow editor) and `studio` — in the deployment's display order (`worlds.order` in its [surface profile](./deployment.md#keys-read-by-client-apps)). A newer server may add a world; handle an id you do not know. |
 | `worlds[].enabled` | `true` when the deployment's `worlds.allow` lets the world through (or sets none) and every node type the world runs is available to the caller: `image` runs `generate-image`, `video` runs `generate-video` and `text-to-video`, `music` runs `suno-generate`, `trends` and `motion` run `cast-swap`, `voice` runs `voice-changer-pro`; `explore`, `app` and `studio` run no node of their own. The table is published as `WORLD_REQUIRED_NODE_TYPES` in `@nodaro/shared/runtime-config`. |

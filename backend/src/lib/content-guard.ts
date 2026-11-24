@@ -40,9 +40,10 @@ import {
   type InsertJobBlock,
 } from "./job-policy.js"
 import type { PromptAssembly } from "./prompt-policy.js"
-import { subjectOfAssembly } from "./content-guard-subject.js"
+import { containsMinorAgeHint } from "@nodaro/prompts/picker-catalogs"
+import { subjectOfAssembly, subjectOfInputData } from "./content-guard-subject.js"
 import { currentRequestUserId } from "./request-user-scope.js"
-import { getJobUserId } from "./job-cancellation.js"
+import { getJobId, getJobUserId } from "./job-cancellation.js"
 
 /** The id a refusal of this guard carries, beside the platform's other rules. */
 export const CONTENT_GUARD_POLICY_ID = "platform:content-guard"
@@ -209,4 +210,53 @@ export function guardAssembledPrompt(a: PromptAssembly): void {
     userId: currentRequestUserId() ?? getJobUserId() ?? null,
   })
   if (block) throw new JobBlockedError(block)
+}
+
+/**
+ * The provider wire's check: the prompt a provider module rewrites AFTER the
+ * prompt funnel ran (Kling's mention pass: each image's name becomes the
+ * provider's `@image_N`, and the `@` of an undeclared word is removed, so text
+ * checked as `ki@ll` would be sent as `kill`), asked again on the exact texts
+ * the provider is sent, right before the call. The minor signal is the
+ * funnels': the catalog's age hints read over the texts sent, or what the
+ * job's own recorded request says (`subjectOfInputData` over its
+ * `input_data`, the row the insert funnel judged), so a structured minor
+ * subject is not lost to the rewrite. The same refusal as the prompt funnel:
+ * `JobBlockedError`, which a worker treats as final and refunds. The rewrite
+ * needs the request's final images (after dedupe and format conversion), which
+ * exist only in the provider, so it cannot run before the funnel. With no
+ * guard registered it returns at once.
+ */
+export async function guardProviderWireText(texts: readonly string[], kind: PromptAssembly["kind"], lane: string): Promise<void> {
+  if (!activeGuard) return
+  const minorSignal = texts.some((t) => containsMinorAgeHint(t)) || (await jobRecordSaysMinor())
+  const block = refuseProhibitedContent(
+    { texts, minorSignal, kind },
+    { lane: `provider:${lane}`, userId: currentRequestUserId() ?? getJobUserId() ?? null },
+  )
+  if (block) throw new JobBlockedError(block)
+}
+
+/**
+ * What the running job's recorded request says of a minor subject; false
+ * outside a job. A row that cannot be read counts as a minor signal, logged:
+ * an unreadable signal makes the check stricter, never looser.
+ */
+async function jobRecordSaysMinor(): Promise<boolean> {
+  const jobId = getJobId()
+  if (!jobId) return false
+  try {
+    const { supabase } = await import("./supabase.js")
+    // trash-read: the running job's own request, read while it runs, deleted or not
+    const { data, error } = await supabase.from("jobs").select("input_data").eq("id", jobId).single()
+    const inputData = (data as { input_data?: Record<string, unknown> } | null)?.input_data
+    if (error || !inputData) {
+      console.warn(`[content-guard] job ${jobId}'s recorded request could not be read for the wire check (${error?.message ?? "no row"}): checking as if the subject is a minor`)
+      return true
+    }
+    return subjectOfInputData(inputData).minorSignal
+  } catch (err) {
+    console.warn(`[content-guard] job ${jobId}'s recorded request could not be read for the wire check (${err instanceof Error ? err.message : String(err)}): checking as if the subject is a minor`)
+    return true
+  }
 }

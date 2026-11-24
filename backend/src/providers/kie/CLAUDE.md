@@ -133,6 +133,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-5-i2i` | `seedream/5-5-image-to-image` | [seedream 5.5 i2i](https://docs.kie.ai/market/seedream/5-5-image-to-image.md) |
 | `flux-3-klein` | `flux-3/klein-text-to-image` (NOT FLUX 2 Klein, `flux-2-klein`, which runs on Replicate) | [flux 3 klein t2i](https://docs.kie.ai/market/flux3/klein-text-to-image.md) |
 | `flux-3-klein-i2i` | `flux-3/klein-edit-image` | [flux 3 klein edit](https://docs.kie.ai/market/flux3/klein-edit-image.md) |
+| `kling-image-4` / `kling-image-4-i2i` | `kling-4-0/image` (ONE endpoint for both; NOT the Kling 4.0 video models `kling-4*`) | [kling 4.0 image](https://docs.kie.ai/market/kling-4-0/image) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | ~~`topaz-image-upscale`~~ | ~~`topaz/image-upscale`~~ | **RETIRED 2026-10-25** — runs on Replicate (`providers/replicate/topaz.ts`); config kept for the credit audit, `KIE_RETIRED_MODEL_KEYS` keeps it out of routing |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -238,7 +239,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 
 - **Suno Speech** (`suno-speech`, a node unit): `{ model: "ai-music-api/speech", input }`. Brief: exactly `customMode: false` + `prompt` (1–3,000 after trim). Script: `customMode: true` + `script` (1–5,000), and only when set `tone` (≤1,000), `variety` (integer 0–4), `vocalGender` (`f` / `m` — never `female` / `male`), `backgroundMusic`. The two sets are mutually exclusive; the allow-list is `sunoSpeechProviderInput` (`@nodaro/render-rules`). Two takes per run. KIE bills 12 credits a request (`SUNO_SPEECH_PROVIDER_COST_USD` → `jobs.provider_cost`). Its task is saved under `kie-suno-market`, so a job whose worker died is finished from the task by the reconcile (polled, never created again). Its output carries `sunoTrackKind: "speech"`: the takes have Suno ids and are not songs, so every tool that takes a track by its ids refuses them (`isSunoSpeechOutput`). Never relayed to a connected cloud.
 - **Cover by id**: the upload lane (`/api/v1/generate/upload-cover`, camelCase `uploadUrl`) is unchanged, and is what EVERY request with a file runs on while `SUNO_COVER_BY_ID_WHEN_FILE_PRESENT` (`lib/suno-id-source.ts`) is false — the gate, to lift after a real run proves the market lane. By id (ids alone: the API / MCP `taskId` + `audioId` form) sends `task_id` + `audio_id` (never `upload_url`), `model`, `instrumental`, and when set `lyrics`, `style`, `title`, `negative_tags`, `vocal_gender` (`m` / `f`), `persona_id` / `persona_model`. The market schema has no custom/simple switch and no description field, so the body (`sunoCoverByIdInput`, the pure leaf `suno-cover-by-id.ts`) exists only when it says everything the upload body would: `lyrics` only in custom mode with vocals and ONE text to sing (the prompt with no lyrics field, or the lyrics field with no prompt — both together have no by-id body); a prompt that is not sung goes as `style` when no style is set and it fits the style limit; a prompt beside a style, or over the limit, has NO by-id body — nothing is cut. By id only for the caller's own finished song whose saved tracks hold the audio id (`resolveSunoCoverSource`); with the gate lifted, ids beside a file must name that file's own track, a song older than 13 days goes by its file, and a create KIE DEFINITELY refuses (`isDefiniteCreateRefusal`: HTTP 4xx or an error code in the body — never a 5xx, a non-JSON answer, a missing task id or a lost connection, after which a task may exist) falls back to the upload lane in the same job. The task is saved under `kie-suno-market`, which is what the reconcile reads to poll it. `output_data.coverLane` says which lane ran.
-- **Add Vocals / Add Instrumental** (decided 2026-11-23): the old `/api/v1/generate/add-*` calls sent the track's ids alone and were refused on every run (422: "upload_url cannot be null" / "Please enter uploadUrl"); KIE documents both only on the market lane, and neither takes a task or track id. Body (`suno-add-track.ts`, allow-listed): `upload_url`, `model` (KIE default V6), and the schema's required `title`, `negative_tags` (sent as `""` when nothing is excluded — unprobed), and the style — `style` on Add Vocals, `tags` on Add Instrumental (≤1000). Optional, only when set: `prompt` (Add Vocals only, ≤5000: the lyrics or the vocal direction; Add Instrumental has no prompt), `vocal_gender` `m` / `f`, `style_weight` / `weirdness_constraint` / `audio_weight` (0–1, steps of 0.01). `lyrics` and `variety` are not offered. The file and the style are resolved before the hold (`lib/suno-add-track-source.ts`): the request's link, else the Suno track's saved audio (any account's track, as before); the request's style, else the caller's OWN original song's (`input_data.style` / `tags`; on Add Vocals without an "instrumental" tag), else refused (`suno_add_track_style`). The task is saved under `kie-suno-market`, so the reconcile polls it like any market Suno music task. **Not measured yet:** a real run of either (the record shape, whether an empty `negative_tags` passes, KIE's price per request).
+- **Add Vocals / Add Instrumental** (decided 2026-11-23): the old `/api/v1/generate/add-*` calls sent the track's ids alone and were refused on every run (422: "upload_url cannot be null" / "Please enter uploadUrl"); KIE documents both only on the market lane, and neither takes a task or track id. Body (`suno-add-track.ts`, allow-listed): `upload_url`, `model` (KIE default V6), and the schema's required `title`, `negative_tags` (never empty: KIE refused an empty one on every run, 422 "Please enter negativeTags." — 2026-11-24; when nothing is excluded the body sends `SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS`, `"low quality"`, which names no genre, voice or instrument; that a non-empty value passes is unprobed), and the style — `style` on Add Vocals, `tags` on Add Instrumental (≤1000). Optional, only when set: `prompt` (Add Vocals only, ≤5000: the lyrics or the vocal direction; Add Instrumental has no prompt), `vocal_gender` `m` / `f`, `style_weight` / `weirdness_constraint` / `audio_weight` (0–1, steps of 0.01). `lyrics` and `variety` are not offered. The file and the style are resolved before the hold (`lib/suno-add-track-source.ts`): the request's link, else the Suno track's saved audio (any account's track, as before); the request's style, else the caller's OWN original song's (`input_data.style` / `tags`, else — for a `suno-generate` / `suno-cover` row not in custom mode, i.e. Create Music's description mode, which records neither — its `prompt`, the description; a prompt that holds lyrics is never used; inherited text is cut to the 1000 limit in UTF-16 units, never inside a character, never refused for it; on Add Vocals without an "instrumental" tag, and a description also without the words "instrumental" / "no vocals" wherever they stand), else refused (`suno_add_track_style`). Suno's own returned tags are not kept on the row, so they cannot be inherited. The task is saved under `kie-suno-market`, so the reconcile polls it like any market Suno music task. **Not measured yet:** a real run of either (the record shape, KIE's price per request).
 - **A stem to WAV**: `{ task_id: <separation task>, audio_id: <stem id> }`; the file is `resultJson.resultUrls[0]`. A track's WAV keeps `/api/v1/wav/generate`. Stem ids: `origin_data[].id` (one-instrument: `extract.id` / `remove.id`), kept as `sunoStemIds` on the separation's output.
 - **Tracks of a finished task**: documented at recordInfo `data.response.data[]` (`audio_url`, `stream_audio_url`, `image_url`, `id`, `duration`); `pollSunoMarketTracks` also reads `resultJson` (`resultObject.data`, `data`, `sunoData`), since no real run has been recorded yet. `stream_audio_url` is never stored.
 - **Not measured yet** (staging): the real record shape of a speech and a by-id cover task; whether the old-lane separation task id is accepted by the market WAV model; KIE's 422 "already converted" answer on a stem converted twice.
@@ -1128,6 +1129,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | MiniMax H3 Image (T2I + edit) | `resolution` | `"1K"`, `"2K"` (default), `"4K"` at every ratio; 1K and 2K cost the same |
 | Seedream 5.5 (T2I + I2I) | **`size`**, as Flash | `"1K"`, `"1.5K"`, `"2K"` (default, and KIE's): priced per size, 1K and 1.5K the same (see the wire notes below) |
 | FLUX 3 Klein (T2I + edit) | `resolution` | `"1K"` (default, and KIE's), `"2K"`, `"4K"` at every ratio; priced per size, the same on both endpoints |
+| Kling Image 4.0 (both ids) | `resolution`, **lowercase** on the wire | `"2k"` (default), `"4k"`, `"8k"`; ours are uppercase (`2K`/`4K`/`8K`). No 1K. Only this model lists 8K (see the wire notes below) |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -1321,6 +1323,83 @@ MiniMax's H3 image model, a different model from the H3 video model `minimax-h3`
   `kieImageCostUsd` records the size and the references sent as
   `provider_cost`. The number of references counted is what the run sends,
   a Generate Image base included (`pricedSentImages`).
+
+### Kling Image 4.0 wire notes (`kling-image-4` / `kling-image-4-i2i`)
+
+One KIE endpoint, `kling-4-0/image`, for both ids: no `image_urls` is text to
+image, images make it image to image. The person picks Kling Image 4.0; a run
+with images runs on the `-i2i` id (`T2I_TO_I2I_VARIANT`, and
+`GPT_IMAGE_T2I_TO_I2I` for the callers that do not swap), which is the one
+priced per input item. Not the Kling 4.0 video models (`kling-4*`).
+
+- **The body is built whole** by `buildKlingImage4Request` (`kling-image-4.ts`,
+  pure): the schema is `additionalProperties: false`, so only `prompt`,
+  `image_urls`, `elements`, `mode`, `count`, `resolution` and `aspect_ratio`
+  are ever sent, whatever the worker's params carry. No seed, no output format,
+  no negative prompt (the editor folds it into the prompt as "Avoid: ..."), no
+  content-filter field (so no `safetyLevers`). `resolution` is lowercase.
+- **Names.** KIE names images `@image_N` (in `image_urls` order) and subjects
+  `@Name`, and REFUSES a prompt that names one the request does not carry.
+  Our image prompts write `Image N` (legacy assembly) or `reference image A`
+  (hybrid); the builder rewrites each seat in ONE pass to `@image_K` or the
+  `@Name` of the subject it belongs to (the other images renumber), cuts the
+  prompt to 20,000 characters, and then strips the `@` from every word it does
+  not declare (`neutralizeUndeclaredMentions`, shared with `kling4.ts`), last,
+  so no cut or later step can leave an undeclared mention. A typed handle
+  loses its `@`. The pass takes per-model rules (`MentionRules`): Kling 4.0
+  video passes none and reads every prompt exactly as it always did (fixture
+  `kling-mentions-dev.json`, no exception); Kling Image 4.0 turns on
+  `KLING_IMAGE_MENTION_RULES` (kling-image-4.ts, the one place to switch them):
+  an e-mail-shaped token (a word character before `@` and a dotted domain
+  after the name) is never a mention, a Chinese name followed directly by
+  Chinese text binds, and a name followed directly by another letter,
+  combining mark or digit (kana, hangul, an accent) loses its `@` (settled by
+  staging probes).
+  An ASCII name run straight into Chinese (`@image_1中…`) loses its `@`, as
+  before: whether KIE reads 中 as part of the name is unconfirmed (staging
+  probe). Quoted text (straight, curly, corner, white-corner quotes; an inch
+  mark opens none) is never renamed. "Image N" is the prompt's Nth reference
+  (`image_prompt_order`), even when a base or source is sent first. The
+  content guard is asked again on the exact text sent
+  (`guardProviderWireText`, with the job's recorded minor signal); Kling 4.0
+  video does not do this yet.
+- **Named subjects** (`elements`): a wired character whose run sends 2 to 4 of
+  its images is one subject (`name`, its views with the portrait first,
+  `tag: "character"`, `description` up to 100). Grouped at PLAN time by
+  `lib/kling-image-4-subjects.ts` (the route's CHECK, the planner and the
+  workflow payload builder call it on the same assembled list), carried on the
+  job as `imageSubjects`, and priced as ONE input item whatever its views. The
+  provider maps each view through the format conversion before sending.
+  Image to Image sends a character as reference images.
+- **Limits.** Up to 10 input ITEMS, as KIE counts them (decided 2026-11-23):
+  a reference image, a base, or a named subject whatever its views is one.
+  `requestImageLimit` (10) is read as items for this model: every path passes
+  the items (`klingImage4PricedItems`, `imageToImageSentImages`) to
+  `imageInputLimitProblem`, which refuses more before anything is reserved,
+  on a request and in a workflow run (`refusesImagesOverLimit`). A request on
+  this model alone has its picture lists bounded at `KLING_IMAGE_4_MAX_PICTURES`
+  (40: 10 subjects of 4 views; `structuredReferenceListLimit`). No other
+  model's limit moved (fixture `image-limits-dev.json`). Inputs are jpg/png
+  (`acceptedImageFormats`); `ensureImageForProvider` converts anything else
+  and keeps each under 10 MB (KIE takes 20 MB).
+- **Sets** (`mode: "series"`, `count` 2-10): one task returns a coherent set,
+  each URL a variant of the job (`extraUrls`). A set is held at its `:x<C>`
+  row (`klingImage4CreditId`) and settled in `finalizeJobWithMedia` on the
+  images stored (`lib/image-set-settle.ts`, from `input_data.setHoldCreditId`).
+  Default mode always sends one image (`count` omitted): Generate Image's own
+  `count` stays one job per image.
+- **Output format follows the size:** PNG at 2K/4K, JPEG at 8K. Every Kling
+  Image 4.0 job is stored on the as-its-bytes path
+  (`imageStoredAsItsBytes`, `lib/image-output-store.ts`), worker, reconcile
+  and entity tail alike. A measured 8K (16:9) was a 5.96 MB JPEG of 10880x6144
+  (about 67 MP) in 119 s; watermarking it peaks near 820 MB of memory, so that
+  path stores a set's pictures one at a time.
+- **Billing:** 11.3 KIE credits at 2K, 17 at 4K, 28.3 at 8K per picture, plus
+  0.5 per input item (`KLING_IMAGE_4_KIE_HUNDREDTHS`). Rows sum one picture in
+  hundredths and round once; a set is that row times the images
+  (`ee/billing/kling-image-4-pricing.ts`). `costFromTaskRecord` records the
+  task's `creditsConsumed`. **Unmeasured:** whether a set's per-reference
+  charge is per image or per task (the rows assume per image, never under).
 
 ### Seedream 5.5 wire notes (`seedream-5-5` / `seedream-5-5-i2i`)
 

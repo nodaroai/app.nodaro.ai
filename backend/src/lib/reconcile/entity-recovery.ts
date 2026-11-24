@@ -38,6 +38,7 @@
  * `bumpAttemptsOrExhaust` keeps its exhaustion-terminates-with-a-refund
  * property for a deterministically broken result.
  */
+import { imageStoredAsItsBytes } from "../image-output-store.js"
 import { supabase } from "../supabase.js"
 import { hasCredits } from "../config.js"
 import {
@@ -130,6 +131,7 @@ export async function recoverEntityJob(args: {
       shouldWatermark,
       usageLogId: await loadUsageLogId(jobId),
       spec: entityAttachSpecFrom(row.input_data),
+      storeAsItsBytes: imageStoredAsItsBytes(row.input_data),
       // The provider's bill is recorded when the caller read one off the saved
       // task; otherwise the cost fields stay unset so the completion write OMITS
       // them (writing NULL there clobbered the metadata a prior attempt had

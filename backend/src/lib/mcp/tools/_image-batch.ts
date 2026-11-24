@@ -19,7 +19,7 @@ import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
 import { mcpInject } from "../internal-request.js"
 import { normalizeAspectRatio, normalizeModel, normalizeQuality, normalizeResolution, requestedAspectRatio } from "../normalize.js"
-import { cardResultText, dispatchJob, errorResult, parseFailure, type SingleJobStructuredContent } from "./_verb-helpers.js"
+import { cardResultText, dispatchJob, errorResult, parseFailure, routeAdjustments, type SingleJobStructuredContent } from "./_verb-helpers.js"
 import { presetCallFields } from "./_image-preset-call.js"
 
 /**
@@ -177,7 +177,7 @@ export async function dispatchImageGeneration(
 interface ImageBatchAnswer {
   jobIds: string[]
   batchId: string
-  groups: Array<{ model: string; jobIds: string[]; warnings?: string[] }>
+  groups: Array<{ model: string; jobIds: string[]; warnings?: string[]; adjustments?: string[] }>
 }
 
 /** A route answer's `warnings[].message` (none when absent or malformed). */
@@ -196,7 +196,7 @@ export function parseImageBatch(body: string): ImageBatchAnswer | null {
     return {
       jobIds: parsed.jobIds,
       batchId: parsed.batchId,
-      groups: parsed.groups.map((group) => ({ model: group.model, jobIds: group.jobIds, warnings: warningMessages(group.warnings) })),
+      groups: parsed.groups.map((group) => ({ model: group.model, jobIds: group.jobIds, warnings: warningMessages(group.warnings), adjustments: routeAdjustments(group as { adjustments?: unknown }) })),
     }
   } catch {
     return null
@@ -217,7 +217,11 @@ export function imageBatchResult(
     pollHint: "poll get_job with each id every 5-10 s, or call wait_for_job for each",
   })
   // A moodboard whose images did not all fit says so, per model.
-  const notes = batch.groups.flatMap((group) => (group.warnings ?? []).map((w) => `Note (${group.model}): ${w}`))
+  const notes = batch.groups.flatMap((group) => [
+    ...(group.warnings ?? []).map((w) => `Note (${group.model}): ${w}`),
+    // What the server fitted to this model (an 8K size moved to its largest).
+    ...(group.adjustments ?? []).map((a) => `Adjusted (${group.model}): ${a}`),
+  ])
   const text = notes.length > 0 ? [started, "", ...notes].join("\n") : started
   return {
     content: [{ type: "text" as const, text }],

@@ -1,0 +1,605 @@
+{
+  "$comment": "origin/dev neutralizeUndeclaredMentions outputs (recorded 2026-11-23 from dev's function, verbatim)",
+  "corpus": [
+    {
+      "prompt": "@Kira walks",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kira walks"
+    },
+    {
+      "prompt": "x@Kira walks",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "x@Kira walks"
+    },
+    {
+      "prompt": ".@Kira",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": ".@Kira"
+    },
+    {
+      "prompt": "-@Kira",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "-@Kira"
+    },
+    {
+      "prompt": "+@Kira",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "+@Kira"
+    },
+    {
+      "prompt": "_@Kira",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "_@Kira"
+    },
+    {
+      "prompt": "1@Kira",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "1@Kira"
+    },
+    {
+      "prompt": "@Kira@Ann",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kira@Ann"
+    },
+    {
+      "prompt": "(@Kira)",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "(@Kira)"
+    },
+    {
+      "prompt": "\"@Kira\"",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "\"@Kira\""
+    },
+    {
+      "prompt": "@kira and @KIRA",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kira and @Kira"
+    },
+    {
+      "prompt": "@Kiran",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "Kiran"
+    },
+    {
+      "prompt": "@Kira_2",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "Kira_2"
+    },
+    {
+      "prompt": "@Hero2 and @Hero and @Heroic",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Hero2 and @Hero and Heroic"
+    },
+    {
+      "prompt": "@image_1 and @image_3",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@image_1 and image_3"
+    },
+    {
+      "prompt": "@image_1中的女孩",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "image_1中的女孩"
+    },
+    {
+      "prompt": "@小明在跑",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "小明在跑"
+    },
+    {
+      "prompt": "@小明跳舞 @小明",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "小明跳舞 @小明"
+    },
+    {
+      "prompt": "@小红在跑",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "小红在跑"
+    },
+    {
+      "prompt": "write to bob@image_1.com",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "write to bob@image_1.com"
+    },
+    {
+      "prompt": "mail kira@Kira.io now",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "mail kira@Kira.io now"
+    },
+    {
+      "prompt": "hi@example.com",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "hiexample.com"
+    },
+    {
+      "prompt": "@ handle",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@ handle"
+    },
+    {
+      "prompt": "@@Kira",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@@Kira"
+    },
+    {
+      "prompt": "@video_1 and @audio_1",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@video_1 and audio_1"
+    },
+    {
+      "prompt": "@Voice1 sings",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Voice1 sings"
+    },
+    {
+      "prompt": "a@b",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "ab"
+    },
+    {
+      "prompt": "x.@image_1.png",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "x.@image_1.png"
+    },
+    {
+      "prompt": "@Ann.",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Ann."
+    },
+    {
+      "prompt": "end @Ann",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "end @Ann"
+    },
+    {
+      "prompt": "@image_1の女性",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@image_1の女性"
+    },
+    {
+      "prompt": "@Kiraの笑顔",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kiraの笑顔"
+    },
+    {
+      "prompt": "@Kira한테",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kira한테"
+    },
+    {
+      "prompt": "@Kiraé",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kiraé"
+    },
+    {
+      "prompt": "@小明の顔",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@小明の顔"
+    },
+    {
+      "prompt": "@Kira, の",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kira, の"
+    },
+    {
+      "prompt": "@Kira 女性",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kira 女性"
+    },
+    {
+      "prompt": "@image_1é",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@image_1é"
+    },
+    {
+      "prompt": "@Kirá smiles",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@Kirá smiles"
+    },
+    {
+      "prompt": "@image_1́",
+      "declared": [
+        "Kira",
+        "Ann",
+        "image_1",
+        "image_2",
+        "video_1",
+        "Voice1",
+        "小明",
+        "Hero",
+        "Hero2"
+      ],
+      "dev": "@image_1́"
+    }
+  ]
+}

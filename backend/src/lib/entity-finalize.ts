@@ -44,6 +44,7 @@
  * motion columns the routes used to inline into their queue payloads (which
  * made them invisible to the persisted row, and so unrecoverable).
  */
+import { storeFormattedImages } from "./image-output-store.js"
 import {
   commitJobCredits,
   markJobCompleted,
@@ -184,6 +185,10 @@ export interface EntityFinalizeInput {
   shouldWatermark: boolean
   usageLogId: string | null | undefined
   spec: EntityAttachSpec
+  /** The image is stored as what its bytes are (`imageStoredAsItsBytes`: a
+   *  model whose format follows its size, Kling Image 4.0), not as the PNG
+   *  every other entity image is stored as. Read off the job's request. */
+  storeAsItsBytes?: boolean
   /** The provider's delivered media plus its cost metadata. On the recovery
    *  path `cost` is the provider's bill when the saved task's record carries
    *  one, and every other cost field is left unset — unset fields are OMITTED
@@ -216,9 +221,11 @@ export async function finalizeEntityJob(input: EntityFinalizeInput): Promise<str
   const job = ENTITY_MEDIA_JOB_SPECS.get(jobType)
   if (!job) throw new Error(`[entity-finalize] not an entity media job type: ${jobType}`)
 
-  const r2Url = job.media === "image"
-    ? await uploadImageMaybeWatermark(result.url, jobId, userId, shouldWatermark)
-    : await uploadVideoMaybeWatermark(result.url, jobId, userId, shouldWatermark)
+  const r2Url = job.media !== "image"
+    ? await uploadVideoMaybeWatermark(result.url, jobId, userId, shouldWatermark)
+    : input.storeAsItsBytes === true
+      ? (await storeFormattedImages({ sourceUrls: [result.url], jobId, userId, watermark: shouldWatermark })).urls[0]!
+      : await uploadImageMaybeWatermark(result.url, jobId, userId, shouldWatermark)
 
   await input.afterUpload?.(r2Url)
 

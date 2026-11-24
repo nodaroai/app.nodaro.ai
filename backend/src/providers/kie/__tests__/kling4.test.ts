@@ -250,3 +250,17 @@ describe("kling4Name / neutralizeUndeclaredMentions", () => {
     expect(neutralizeUndeclaredMentions("@maya and @Maya_s", ["Maya"])).toBe("@Maya and Maya_s")
   })
 })
+
+describe("neutralizeUndeclaredMentions: Kling Image 4.0's readings are its own", () => {
+  it("with the image model's rules, a Chinese subject followed by Chinese text keeps its @ and an e-mail is never a mention", async () => {
+    const { neutralizeUndeclaredMentions } = await import("../kling4.js")
+    const { KLING_IMAGE_MENTION_RULES } = await import("../kling-image-4.js")
+    expect(neutralizeUndeclaredMentions("@小明在跑 to hi@image_1.com and @image_1", ["小明", "image_1"], KLING_IMAGE_MENTION_RULES)).toBe("@小明在跑 to hiimage_1.com and @image_1")
+    expect(neutralizeUndeclaredMentions("@Maya2 @maya @Mayan", ["Maya", "Maya2"], KLING_IMAGE_MENTION_RULES)).toBe("@Maya2 @Maya Mayan")
+  })
+
+  it("without them (Kling 4.0 video), every prompt reads as it always has", async () => {
+    const { neutralizeUndeclaredMentions } = await import("../kling4.js")
+    expect(neutralizeUndeclaredMentions("@小明在跑 to hi@image_1.com and @image_1 @Kiraの", ["小明", "image_1", "Kira"])).toBe("小明在跑 to hi@image_1.com and @image_1 @Kiraの")
+  })
+})

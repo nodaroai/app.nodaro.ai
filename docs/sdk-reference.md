@@ -4691,6 +4691,13 @@ for the rules (credits for the batch as a whole or not at all, `seed + i`, the
 batch id). A `presetId` combines with both: N images of the preset's request,
 or the preset applied once per model.
 
+A SET is different: `imageSetCount` (2–10) on a model that makes sets (Kling
+Image 4.0) asks ONE job for a coherent set of that many images. Use
+`nodes.run("generate-image", { provider: "kling-image-4", prompt, imageSetCount: 4 })`
+(not this method): the job's output carries every image in `imageUrls`, and
+the job is charged for the images it returns. On any other model the set is
+dropped and reported in `adjustments`; with `count` above 1 it is refused.
+
 Resolves `{ batch, results }`:
 
 - `batch` — the submit's answer, `GenerateImageBatchResult`: `jobId` (the
@@ -4976,7 +4983,7 @@ candidate: it completes and lists like any other, but only `approvePortrait()`
 sets the portrait.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
@@ -5330,7 +5337,7 @@ result directly to the row's `source_image_url`; otherwise call
 `approveMainImage()` after picking a candidate.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
@@ -10614,7 +10621,7 @@ users), so it is never shared-cached. Signed out, the answer is a user's.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
-| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied, restricted }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `models.restricted` is `true` when the deployment restricts models (a profile `models.allow` / `models.deny`, or a models override that leaves a model off); a model an admin switched off is denied without being a restriction. An older server omits it: read that as `false`. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
+| `availability()` | `GET /v1/surface/availability` | `SurfaceAvailability`: `{ nodes: { denied, hiddenFromUsers }, models: { denied, restricted, deniedModes }, webScrapeSources: { denied, hiddenFromUsers }, worlds }`. `hiddenFromUsers` is empty for anyone but an admin. `models.restricted` is `true` when the deployment restricts models (a profile `models.allow` / `models.deny`, or a models override that leaves a model off); a model an admin switched off is denied without being a restriction. An older server omits it: read that as `false`. `models.deniedModes` names the modes of an offered model the deployment cannot run, each `<model id>:<mode>` (`nodaro-video-upscale:transparent` where Nodaro Video Upscale's Transparent mode cannot run: a request with no `mode` then runs Sharp, and an explicit Transparent is refused); an older server omits it: read that as none. `worlds` lists every world (`SurfaceAvailabilityWorld`: `{ id, enabled }`) in the deployment's display order: `explore`, `image`, `video`, `music`, `trends`, `motion`, `voice`, `app`, `studio`; a newer server may add one. A world is `enabled` when the deployment lets it through and every node type it runs is available to the caller. |
 
 ```ts
 // The shared header shows only the worlds this person can use.

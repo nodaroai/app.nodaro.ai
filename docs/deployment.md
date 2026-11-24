@@ -2075,6 +2075,11 @@ logo is dropped with a warning and the rest of `brand` is kept.
     warning, when `allow` does not include it.
   - `order`: the display order; worlds it leaves out follow in the order
     above.
+  - `soon`: worlds the deployment will open later. A white-label header draws
+    each as a tab marked "Soon" that leads nowhere, and the world is not
+    offered, whatever `allow` says: its pages are not served and
+    `GET /v1/surface/availability` answers it as not enabled. Unknown ids are
+    dropped with a warning. Leave it out for none.
 
   A world is also offered only while every node type it runs is available to
   the viewer (`video`, for example, runs `generate-video` and `text-to-video`).
@@ -2283,6 +2288,38 @@ logo is dropped with a warning and the rest of `brand` is kept.
   The header replaces the sidebar's logo, credit card, account row and
   language and theme switches, as Nodaro's header does. Absent or
   `"default"`, every deployment's editor is unchanged.
+- `toolApps`: `{ "menus": true, "pages": true, "pictures": { ... } }` — the
+  tools app's mini apps on a deployment whose header is white-label. Such a
+  deployment is offered neither unless it asks, so both switches are on only
+  for the literal `true`; any other value is off, with a warning. No effect
+  where the header is not white-label.
+  - `pages`: the tools app serves the apps' own pages (`/apps` and
+    `/apps/<id>`). An app is listed only while every node type it runs is
+    available to the viewer.
+  - `menus`: the header's Image, Video, Music and Speech tabs open the
+    apps-first menus in place of the classic ones, with nothing of Nodaro's
+    in them: no picture from outside the site and `mediaOrigin`, and only the
+    apps and pages the deployment offers.
+  - `pictures`: the deployment's own picture for an app or a menu tile, by key
+    (an app's id such as `image-upscale`, or `tile:<world>:<tile>`). Each
+    value is a path on this site or an `https://` URL; any other entry is
+    dropped with a warning. At most 200.
+- `samples`: `{ "image": [...], "video": [...] }` — the deployment's own
+  welcome samples, shown where Nodaro's sites show Nodaro's (a white-label
+  deployment never shows those). At most 12 a world. Every address is a path
+  on this site or an `https://` URL, and a page draws it only from the site or
+  `mediaOrigin`. An entry that lacks a required field is dropped alone, with a
+  warning.
+  - `image`: each `{ "prompt", "picture" }`, and optionally `model`,
+    `aspectRatio` and `center: true` (the first sample that says so takes the
+    welcome's centre card). Picking a sample fills the prompt bar; its model
+    and ratio are applied only where the viewer is offered that model.
+  - `video`: each `{ "title", "prompt", "video", "picture" }` (the clip the
+    page plays and its still), and optionally `original` (the clip as made,
+    for full screen), `model`, `duration` (seconds), `aspectRatio`,
+    `resolution` and `references` (the pictures it was made from, in the
+    prompt's order, at most 12). "Use this video" loads it as a past run is
+    reused; a model the viewer is not offered leaves theirs as it is.
 - `brand.logo`: the deployment's logo, as a path on this site
   (`/brand/logo.svg`) or an `https://` URL. A protocol-relative `//host/…`
   reference, any other scheme (`http:`, `data:`, `javascript:`), and anything

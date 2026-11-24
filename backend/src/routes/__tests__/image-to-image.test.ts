@@ -1433,3 +1433,14 @@ describe("imageToImageBody aspectRatio enum", () => {
     expect([...options]).toEqual([...IMAGE_ASPECT_RATIO_VALUES])
   })
 })
+
+describe("Kling Image 4.0 on /v1/image-to-image: a repeated image counts once", () => {
+  it("the source repeated among the references is priced and limited once", async () => {
+    const { resolveImageToImageCreditIdentifier } = await import("../image-to-image-credit-id.js")
+    const SRC = "https://r2.nodaro.ai/src.png"
+    const req = { body: { provider: "kling-image-4-i2i", imageUrl: SRC, referenceImageUrls: [SRC, "https://r2.nodaro.ai/a.png", "https://r2.nodaro.ai/a.png"] } }
+    expect(resolveImageToImageCreditIdentifier(req as never)).toBe("kling-image-4-i2i:2K:2ref")
+    const other = { body: { provider: "seedream-5-5-i2i", imageUrl: SRC, referenceImageUrls: [SRC, "https://r2.nodaro.ai/a.png"] } }
+    expect(resolveImageToImageCreditIdentifier(other as never)).toBe("seedream-5-5-i2i:2K:3ref")
+  })
+})

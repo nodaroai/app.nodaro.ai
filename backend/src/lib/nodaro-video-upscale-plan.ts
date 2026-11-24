@@ -37,20 +37,19 @@ import {
   NODARO_VIDEO_UPSCALE_PROVIDER,
   NODARO_VIDEO_UPSCALE_MAX_SEC,
   isNodaroVideoUpscaleMode,
-  nodaroVideoUpscaleEffectiveMode,
   nodaroVideoUpscaleModeOf,
   nodaroVideoUpscaleModeTakes,
   type NodaroVideoUpscaleMode,
   type NodaroVideoUpscaleModeTier,
 } from "@nodaro/shared/models"
 import {
+  nodaroVideoUpscaleDecidedMode,
   nodaroVideoUpscaleModeBilledSec,
   nodaroVideoUpscaleModeCreditId,
   nodaroVideoUpscaleModeTierOf,
   nodaroVideoUpscaleModeUnits,
   nodaroVideoUpscaleTransparentPlan,
   nodaroVideoUpscaleTransparentRateTarget,
-  nodaroVideoUpscaleTransparentServes,
   TOPAZ_RHEA_FALLBACK_FPS,
   TOPAZ_RHEA_MAX_OUTPUT_GIGAPIXELS,
 } from "@nodaro/render-rules"
@@ -282,7 +281,7 @@ export async function planNodaroVideoUpscale(
   videoUrl: string,
   targetResolution: unknown,
   ctx: NodaroVideoUpscalePlanContext,
-  /** The mode as asked: "sharp" / "transparent" sent explicitly, else none (Transparent, falling back to Sharp: `nodaroVideoUpscaleEffectiveMode`). */
+  /** The mode as asked: "sharp" / "transparent" sent explicitly, else none (Transparent, falling back to Sharp: `nodaroVideoUpscaleDecidedMode`). */
   modeAsked?: unknown,
 ): Promise<NodaroVideoUpscalePlan> {
   // An outside clip is measured from its local copy, the probe killed when the copy's time is up.
@@ -322,18 +321,15 @@ export async function planNodaroVideoUpscale(
   const track = source.track ?? { sec: source.durationSeconds, reading: "container" as const }
   const sourceDurationSec = track.sec
   // The mode, decided ONCE from what was asked and the measured clip
-  // (`nodaroVideoUpscaleEffectiveMode`): no mode runs Transparent unless it
+  // (`nodaroVideoUpscaleDecidedMode`): no mode runs Transparent unless it
   // cannot serve this clip at this tier, or this install cannot run it — then
   // Sharp at Sharp's price. An explicit mode is kept (Transparent's refusals below).
-  const transparentServes = isNodaroVideoUpscaleMode(modeAsked)
-    ? undefined
-    : !nodaroTransparentAvailable()
-      ? false
-      : nodaroVideoUpscaleTransparentServes(
-          { ...displayedFrame(source), ...(source.fps !== undefined ? { fps: source.fps } : {}), sec: sourceDurationSec },
-          nodaroVideoUpscaleModeTierOf("transparent", targetResolution),
-        )
-  const mode = nodaroVideoUpscaleEffectiveMode(modeAsked, transparentServes)
+  const mode = nodaroVideoUpscaleDecidedMode(
+    modeAsked,
+    { ...displayedFrame(source), ...(source.fps !== undefined ? { fps: source.fps } : {}), sec: sourceDurationSec },
+    targetResolution,
+    nodaroTransparentAvailable(),
+  )
   const tier = nodaroVideoUpscaleModeTierOf(mode, targetResolution)
   const billedSec = nodaroVideoUpscaleModeBilledSec(mode, sourceDurationSec, track.reading)
   if (mode === "transparent") {

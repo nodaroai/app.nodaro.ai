@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { mcpImageResolutionSent } from "./_image-resolution-sent.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
@@ -34,7 +35,7 @@ import {
 } from "./_image-batch.js"
 import { imageFormatArgs, imageFormatBody } from "./_image-format-args.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
+import { KLING_IMAGE_4_SET_MAX, defaultImageModel, isAutoAspectToken, modelIdsByKindMode } from "@nodaro/shared/model-catalog"
 import { I2I_MASK_SUPPORT, IMAGE_BACKGROUND_VALUES, IMAGE_K_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, refusesImagesOverLimitOn, requestImageLimit } from "@nodaro/shared/models"
 import { UPSCALE_FACTORS } from "@nodaro/shared/credits"
 import { SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared/nodes"
@@ -128,10 +129,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               `Call list_models for capability details.`,
             ),
           ...imageBatchArgs,
+          image_set_count: z.number().int().optional().describe("A set of 2-10 coherent images from one job, on models that make sets (Kling Image 4.0); charged per image returned. Not with count."),
           resolution: z
             .string()
             .optional()
-            .describe("Resolution: 1K / 1.5K / 2K / 4K. Falls back to nearest supported value."),
+            .describe("Resolution: 1K / 1.5K / 2K / 4K / 8K (8K: Kling Image 4.0). Falls back to nearest supported value."),
           quality: z
             .string()
             .optional()
@@ -405,8 +407,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           prompt: compositePrompt,
           ...(fanOut ? { models: fanModels } : { provider: model }),
           ...(count ? { count } : {}),
+          // A set: the route keeps it only on a model that makes sets, in its range.
+          ...(typeof args.image_set_count === "number" && args.image_set_count > 1
+            ? { imageSetCount: Math.min(Math.trunc(args.image_set_count), KLING_IMAGE_4_SET_MAX) }
+            : {}),
           aspectRatio,
-          resolution,
+          // 8K asked of a model without it goes as asked: the route moves it to
+          // the model's largest, as the snap above would, and says so.
+          resolution: fanOut ? resolution : mcpImageResolutionSent(effective.resolution, model, resolution),
           quality,
           ...(effective.background ? { background: effective.background } : {}),
           ...imageFormatBody(effective),
@@ -720,7 +728,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
-            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5 or FLUX 3 Klein — on those models more is refused, saying how many to remove) for multi-ref " +
+            "Extra reference images (URLs or Nodaro asset ids, up to 13; 15 on GPT Image 2.6 or MiniMax H3, 9 on Seedream 5.5, FLUX 3 Klein or Kling Image 4.0 — on those models more is refused, saying how many to remove) for multi-ref " +
             "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
             "or a JSON-stringified array is coerced.",
           ),

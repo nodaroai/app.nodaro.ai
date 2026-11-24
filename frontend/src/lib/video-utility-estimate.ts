@@ -37,12 +37,13 @@ import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { maskCompositeUnits } from "@nodaro/shared/media"
 import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
-import { applyDefaultVideoSelection, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleEffectiveMode, type TopazVideoResolution } from "@nodaro/shared/models"
+import { applyDefaultVideoSelection, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
 import { drivingAudioQuoteId, isDrivingAudioLipSyncProvider, takesDrivingAudio } from "@nodaro/shared/credits"
 import { referenceModalityForHandle } from "@nodaro/shared/workflow"
 import { withWiredSettings } from "@nodaro/shared/nodes"
-import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleModeEstimateUnits, nodaroVideoUpscaleModeTierOf, nodaroVideoUpscaleTransparentServes, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
+import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleModeEstimateUnits, nodaroVideoUpscaleDecidedMode, NODARO_VIDEO_UPSCALE_TRANSPARENT_MODE_ID, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
 import { readPlan } from "@/lib/apply-edl-estimate"
+import { isModelModeUnavailable } from "@/lib/surface-availability"
 import { getCombineUpstreamDurations, getUpstreamDuration, type WireDurationReader } from "@/lib/upstream-duration"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -970,18 +971,44 @@ export function drivingAudioQuotedCreditId(
 }
 
 /**
- * Nodaro Video Upscale's mode for an editor estimate, decided as the server
- * and the run decide it (`nodaroVideoUpscaleEffectiveMode`) from what the
- * graph knows of the wired clip — its frame and rate, its length: an explicit
- * mode is kept; no mode is Transparent unless the known clip cannot be served
- * by it (then Sharp, at Sharp's price); a clip the graph does not know is
- * Transparent (the run decides once it measures the clip, before any hold).
+ * Can this install run Nodaro Video Upscale's Transparent mode? The server's
+ * answer (`models.deniedModes` of GET /v1/surface/availability, the same
+ * reading its run plan and its estimate ask); true until that answer lands,
+ * as before the answer carried it. A component that draws from it calls
+ * `useSurfaceAvailability()` so it redraws when the answer arrives.
+ */
+export function nodaroTransparentRunsHere(): boolean {
+  return !isModelModeUnavailable(NODARO_VIDEO_UPSCALE_TRANSPARENT_MODE_ID)
+}
+
+/**
+ * The mode a Nodaro Video Upscale node's Mode control shows for its stored
+ * `mode`: that mode when it names one; with none, the mode the run takes on
+ * this install before the clip is known (`nodaroVideoUpscaleDecidedMode`):
+ * Transparent, or Sharp where this install cannot run Transparent. The tiers
+ * the node offers follow it.
+ */
+export function nodaroVideoUpscaleShownMode(mode: unknown, transparentRuns: boolean = nodaroTransparentRunsHere()): "transparent" | "sharp" {
+  return nodaroVideoUpscaleDecidedMode(mode, undefined, undefined, transparentRuns)
+}
+
+/**
+ * Nodaro Video Upscale's mode for an editor estimate, decided by the rule the
+ * server and the run decide it with (`nodaroVideoUpscaleDecidedMode`) from
+ * what the graph knows of the wired clip — its frame and rate, its length —
+ * and whether this install can run Transparent (`transparentRuns`, the
+ * server's answer by default): an explicit mode is kept; no mode is
+ * Transparent unless this install cannot run it or the known clip cannot be
+ * served by it (then Sharp, at Sharp's price); a clip the graph does not know
+ * is Transparent where it can run (the run decides once it measures the clip,
+ * before any hold).
  */
 export function nodaroVideoUpscaleEstimateMode(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
   rerunIds: ReadonlySet<string> = new Set(),
+  transparentRuns: boolean = nodaroTransparentRunsHere(),
 ): "transparent" | "sharp" {
   const data = (withWiredSettings(node, nodes, edges).data ?? {}) as Record<string, unknown>
   if (data.mode === "transparent" || data.mode === "sharp") return data.mode
@@ -990,5 +1017,5 @@ export function nodaroVideoUpscaleEstimateMode(
   const clip = source.frame
     ? { ...source.frame, ...(source.fps !== undefined ? { fps: source.fps } : {}), ...(sec !== undefined ? { sec } : {}) }
     : undefined
-  return nodaroVideoUpscaleEffectiveMode(data.mode, nodaroVideoUpscaleTransparentServes(clip, nodaroVideoUpscaleModeTierOf("transparent", data.targetResolution)))
+  return nodaroVideoUpscaleDecidedMode(data.mode, clip, data.targetResolution, transparentRuns)
 }

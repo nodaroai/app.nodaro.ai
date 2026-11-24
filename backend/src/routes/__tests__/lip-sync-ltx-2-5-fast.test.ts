@@ -276,6 +276,55 @@ describe("POST /v1/lip-sync — LTX 2.5 Fast's portrait must be a picture it can
     expect((await post()).statusCode).toBe(200)
   })
 
+  /** An `ftyp` box with its major brand and its compatible brands, as a file starts. */
+  const ftypBox = (major: string, compatible: readonly string[]) => {
+    const size = 16 + 4 * compatible.length
+    const box = Buffer.alloc(size)
+    box.writeUInt32BE(size, 0)
+    box.write("ftyp", 4, "latin1")
+    box.write(major, 8, "latin1")
+    compatible.forEach((b, i) => box.write(b, 16 + 4 * i, "latin1"))
+    return Buffer.concat([box, Buffer.alloc(24)])
+  }
+
+  it.each([
+    ["a generic image major brand (mif1)", ftypBox("mif1", ["heic", "mif1"])],
+    ["a generic image-sequence major brand (msf1)", ftypBox("msf1", ["msf1", "hevc"])],
+    ["an isom major brand with heic among its compatible brands", ftypBox("isom", ["isom", "heic", "mif1"])],
+    ["an isom major brand with avif among its compatible brands", ftypBox("isom", ["avif", "mif1", "miaf"])],
+    ["a major brand not known to be audio or video", ftypBox("abcd", ["abcd"])],
+  ])("an ISO-BMFF file with %s and no readable size is let through, never called a video", async (_shape, head) => {
+    face.probe = { fetched: true, head }
+    expect((await post()).statusCode).toBe(200)
+  })
+
+  it.each([
+    ["an isom major brand", ftypBox("isom", ["isom", "iso2", "avc1", "mp41"]), /is a video or audio file \(MP4\)/],
+    ["an unknown major brand with mp42 among its compatible brands", ftypBox("abcd", ["isom", "mp42"]), /is a video or audio file \(MP4\)/],
+    ["a CMAF cmfc major brand", ftypBox("cmfc", ["iso6", "cmfc"]), /is a video or audio file \(MP4\)/],
+    ["a CMAF cmf2 major brand", ftypBox("cmf2", ["cmf2"]), /is a video or audio file \(MP4\)/],
+    ["a CMAF cmfs major brand", ftypBox("cmfs", ["cmfs"]), /is a video or audio file \(MP4\)/],
+    ["a 3GPP 3gp7 major brand", ftypBox("3gp7", ["3gp7", "isom"]), /is a video or audio file \(MP4\)/],
+    ["a 3GPP 3gp9 major brand", ftypBox("3gp9", ["3gp9"]), /is a video or audio file \(MP4\)/],
+    ["a 3GPP 3ge7 major brand", ftypBox("3ge7", ["3ge7"]), /is a video or audio file \(MP4\)/],
+    ["a 3GPP2 3g2c major brand", ftypBox("3g2c", ["3g2c"]), /is a video or audio file \(MP4\)/],
+    ["an unknown major brand with 3gp5 among its compatible brands", ftypBox("abcd", ["3gp5"]), /is a video or audio file \(MP4\)/],
+    ["an unknown major brand with M4A among its compatible brands", ftypBox("abcd", ["isom", "M4A "]), /is an audio file \(M4A\)/],
+  ])("an audio or video file is still refused (%s)", async (_shape, head, message) => {
+    face.probe = { fetched: true, head }
+    const res = await post()
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(message)
+  })
+
+  it.each([
+    ["a HEIC with isom among its compatible brands", ftypBox("heic", ["mif1", "heic", "isom"])],
+    ["a raw still (crx)", ftypBox("crx ", ["crx ", "isom"])],
+  ])("%s is let through", async (_shape, head) => {
+    face.probe = { fetched: true, head }
+    expect((await post()).statusCode).toBe(200)
+  })
+
   it("another Lip Sync model is not probed this way: a video as Seedance 2's face goes as before", async () => {
     face.probe = { fetched: true, head: HEAD.mp4 }
     const res = await app.inject({ method: "POST", url: "/v1/lip-sync", payload: { provider: "seedance-2", imageUrl: "https://cdn.test/videos/clip.mp4", audioUrl: VOICE, userId: USER } })

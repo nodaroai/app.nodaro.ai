@@ -1,7 +1,7 @@
 /**
  * The working copy (working-copy-encode.ts) at every encode that takes it:
  * Mask Composite's two graphs and Video Face Mesh's encoder. Asked for, each
- * writes libx264 `-preset fast -crf 6`, capped at `-maxrate 25M -bufsize 50M`,
+ * writes libx264 `-preset fast -crf 6`, capped at `-maxrate 50M -bufsize 100M`,
  * in the source's own pixel format (its
  * graph in that format throughout); not asked for, each argv is exactly the
  * one before the working copy existed — the DEFAULT_* arrays below are those
@@ -66,9 +66,9 @@ const replaced = (argv: string[], from: string[], to: string[]) => {
 }
 
 describe("the working copy's arguments", () => {
-  it("libx264, preset fast, CRF 6 under a 25 Mbit/s cap, in the source's own pixel format where 8-bit H.264 holds it", () => {
+  it("libx264, preset fast, CRF 6 under a 50 Mbit/s cap, in the source's own pixel format where 8-bit H.264 holds it", () => {
     expect(WORKING_COPY_CRF).toBe("6")
-    expect(workingCopyCodecArgs("yuv444p")).toEqual(["-c:v", "libx264", "-preset", "fast", "-crf", "6", "-maxrate", "25M", "-bufsize", "50M", "-pix_fmt", "yuv444p"])
+    expect(workingCopyCodecArgs("yuv444p")).toEqual(["-c:v", "libx264", "-preset", "fast", "-crf", "6", "-maxrate", "50M", "-bufsize", "100M", "-pix_fmt", "yuv444p"])
     expect(workingCopyPixFmt({ pixFmt: "yuv420p" })).toBe("yuv420p")
     expect(workingCopyPixFmt({ pixFmt: "yuv422p" })).toBe("yuv422p")
     expect(workingCopyPixFmt({ pixFmt: "yuv444p" })).toBe("yuv444p")
@@ -84,19 +84,20 @@ describe("the working copy's arguments", () => {
   it("carries the source's colour tags, as the matched re-encode does (an unknown one left out)", () => {
     const source = { pixFmt: "yuvj420p", colorSpace: "smpte170m", colorPrimaries: "unknown", colorTransfer: "bt709", colorRange: "pc" }
     expect(workingCopyPictureArgs(source)).toEqual([
-      "-c:v", "libx264", "-preset", "fast", "-crf", "6", "-maxrate", "25M", "-bufsize", "50M", "-pix_fmt", "yuv420p",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "6", "-maxrate", "50M", "-bufsize", "100M", "-pix_fmt", "yuv420p",
       "-colorspace", "smpte170m", "-color_trc", "bt709", "-color_range", "pc",
     ])
     // The matched re-encode's own tags, through the same helper.
     expect(matchedPictureArgs(source).slice(-6)).toEqual(["-colorspace", "smpte170m", "-color_trc", "bt709", "-color_range", "pc"])
   })
 
-  it("bounds a copy's video at 25 Mbit/s for its length plus a 50 Mbit buffer: 30 s is at most 100 MB", () => {
-    expect(WORKING_COPY_MAX_RATE).toBe(25_000_000)
-    expect(WORKING_COPY_BUFFER).toBe(50_000_000)
+  it("bounds a copy's video at 50 Mbit/s for its length plus a 100 Mbit buffer: 15 s is at most 106 MB, 30 s 200 MB", () => {
+    expect(WORKING_COPY_MAX_RATE).toBe(50_000_000)
+    expect(WORKING_COPY_BUFFER).toBe(2 * WORKING_COPY_MAX_RATE)
     const maxVideoBytes = (seconds: number) => (WORKING_COPY_MAX_RATE * seconds + WORKING_COPY_BUFFER) / 8
-    expect(maxVideoBytes(10)).toBe(37_500_000)
-    expect(maxVideoBytes(30)).toBe(100_000_000)
+    expect(maxVideoBytes(10)).toBe(75_000_000)
+    expect(maxVideoBytes(15)).toBe(106_250_000)
+    expect(maxVideoBytes(30)).toBe(200_000_000)
     // The argv states the same two numbers (ffmpeg reads "M" as 10^6).
     const argv = workingCopyCodecArgs("yuv420p")
     expect(Number(argv[argv.indexOf("-maxrate") + 1]!.replace("M", "")) * 1e6).toBe(WORKING_COPY_MAX_RATE)
@@ -154,7 +155,7 @@ describe("Mask Composite", () => {
     expect(blur(source)).toEqual(as444(DEFAULT_BLUR))
     for (const argv of [video(source), blur(source)]) {
       expect(argv.join(" ")).not.toContain("420p")
-      expect(argv.slice(argv.indexOf("-crf"), argv.indexOf("-crf") + 8)).toEqual(["-crf", "6", "-maxrate", "25M", "-bufsize", "50M", "-pix_fmt", "yuv444p"])
+      expect(argv.slice(argv.indexOf("-crf"), argv.indexOf("-crf") + 8)).toEqual(["-crf", "6", "-maxrate", "50M", "-bufsize", "100M", "-pix_fmt", "yuv444p"])
     }
   })
 })

@@ -2,9 +2,9 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { unitCreditIdOf } from "@/lib/unit-price-ids"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleModeOf } from "@nodaro/shared/models"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, isSeedanceVideoEditProvider, videoToVideoProviderOf, isCatalogExtendProvider, isGrokExtendProvider, canonicalVideoProvider, applyDefaultVideoSelection, MUSIC_CREDIT_ID, dialogueProviderOf, sunoSeparateCreditId, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { videoMaskCreditId, resolveVideoMaskProvider, videoDepthCreditId, resolveVideoDepthProvider } from "@nodaro/shared/media"
-import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, imageResolutionFor8K, klingImage4SetCount, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type ImageInputGraph, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { countImageInputEdges, nodeIsMasked, wiredImageSize } from "@nodaro/shared/workflow"
 import {
   buildCreditModelIdentifier as sharedBuildCreditModelIdentifier,
@@ -67,7 +67,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, nodaroVideoUpscaleEstimateMode, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
+import { addCaptionsQuotedSec, aiAvatarQuotedAudioSec, drivingAudioQuotedCreditId, isTopazVideoUpscaleProvider, lipSyncQuotedAudioSec, nodaroVideoUpscaleEstimateMode, nodaroVideoUpscaleShownMode, motionTransferQuote, videoToVideoQuote, pitchTempoQuotedSec, transcribeQuotedSec, videoDepthQuotedSec, videoMaskQuotedSec, videoOverlayQuotesVideoOf, videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -868,8 +868,9 @@ export function getModelIdentifier(
   // (PRICING_UNIT_ESTIMATORS → videoUpscalePricingUnits), as the server does.
   if (nodeType === "video-upscale" && data.provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
     // Its mode's row, the mode decided as the server decides it from the wired
-    // clip (`nodaroVideoUpscaleEstimateMode`); with no graph, read from the node.
-    const mode = nodes && edges ? nodaroVideoUpscaleEstimateMode(storedNode, nodes, edges, reruns) : nodaroVideoUpscaleModeOf(data.mode)
+    // clip (`nodaroVideoUpscaleEstimateMode`); with no graph, as the run decides it before the clip is known
+    // (`nodaroVideoUpscaleShownMode`: Sharp where this deployment cannot run Transparent).
+    const mode = nodes && edges ? nodaroVideoUpscaleEstimateMode(storedNode, nodes, edges, reruns) : nodaroVideoUpscaleShownMode(data.mode)
     return nodaroVideoUpscaleModeCreditId(mode, nodaroVideoUpscaleModeTierOf(mode, data.targetResolution))
   }
 
@@ -1015,6 +1016,7 @@ export function getModelIdentifier(
       masked: nodeIsMasked(node.id, data, edges),
       sourceImage: edges && nodes ? wiredImageSize(node.id, nodes, edges) : undefined,
     },
+    edges && nodes ? { nodeId: node.id, nodes, edges } : undefined,
   )
 }
 
@@ -1032,6 +1034,9 @@ export function buildCreditModelIdentifier(
   data: Record<string, unknown>,
   wiredImageRefs = 0,
   photo?: { masked?: boolean; sourceImage?: SourceImageSize },
+  // The node and its graph: Kling Image 4.0 then counts input items as its
+  // run does (a character's views grouped, each image once).
+  graph?: ImageInputGraph,
 ): string {
   // Nodaro Image Upscale is priced by the OUTPUT's size: the wired photo's recorded
   // size × the factor, by the one sizing every lane uses — the hold when the
@@ -1042,9 +1047,9 @@ export function buildCreditModelIdentifier(
   // refs) so the displayed credit number matches what the route will charge.
   const refs = data.referenceImageUrls as string[] | undefined
   // A model priced per input image (GPT Image 2.6, MiniMax H3 Image, Seedream
-  // 5.5), or FLUX 3 Klein (priced on the edit id it runs on whenever an image
+  // 5.5, Kling Image 4.0), or FLUX 3 Klein (priced on the edit id it runs on whenever an image
   // goes), counts every image the run will send.
-  const refCount = priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs) : (refs?.length ?? 0)
+  const refCount = priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, wiredImageRefs, graph) : (refs?.length ?? 0)
   // Topaz bills on the upscale FACTOR. The legacy `targetResolution` still on
   // stored node data is mapped forward by resolveTopazUpscale — the same
   // authority the route, the estimator and the worker use — so the credit badge
@@ -1057,11 +1062,15 @@ export function buildCreditModelIdentifier(
     : (data.targetResolution as string | undefined)
   // The size the run renders at its ratio: GPT Image 2.5 draws 27:16, 16:27,
   // 9:8 and 8:9 at 1K only, and the run is charged that size.
-  const followed = (photo?.masked ?? (typeof data.maskUrl === "string" && data.maskUrl.length > 0))
+  const masked = photo?.masked ?? (typeof data.maskUrl === "string" && data.maskUrl.length > 0)
+  const followed = masked
     ? maskedEditResolution(provider, data, photo?.sourceImage)
     : undefined
-  const resolution = followed ?? (typeof data.resolution === "string"
-    ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution)
+  // "8K" on a model that does not list it is priced at the size its run is
+  // sent at, its largest (the catalog snap), as the estimate, hold and charge are.
+  const asked = typeof data.resolution === "string" ? (imageResolutionFor8K(provider, data.resolution) ?? data.resolution) : undefined
+  const resolution = followed ?? (asked !== undefined
+    ? resolutionAtAspectRatio(provider, data.aspectRatio, asked)
     : undefined)
   return sharedBuildCreditModelIdentifier(
     provider,
@@ -1073,5 +1082,8 @@ export function buildCreditModelIdentifier(
     // A GIF (its band of frames) and an SVG (its level) price apart from a
     // PNG, JPEG or WebP: read only by a model priced by format (GPT Image 2.6).
     imageFormatLeversOf(data),
+    // A set's images, read only by a model that makes sets (Kling Image 4.0);
+    // a masked edit returns one picture.
+    masked ? undefined : klingImage4SetCount(data.imageSetCount),
   )
 }

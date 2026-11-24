@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { KLING_IMAGE_4_MAX_PICTURES, isKlingImage4 } from "@nodaro/shared/model-catalog"
 import {
   DEFAULT_REQUEST_IMAGE_LIMIT,
   IMAGE_GEN_PROVIDERS,
@@ -50,8 +51,9 @@ describe("structuredReferenceListLimit", () => {
   it("follows exactly the models with a request image limit of its own", () => {
     for (const model of IMAGE_GEN_PROVIDERS) {
       expect(refusesImagesOverLimitOn(model, "request"), model).toBe(hasOwnRequestImageLimit(model))
+      // Kling Image 4.0 alone counts items: its picture lists reach 10 subjects of 4 views.
       expect(structuredReferenceListLimit([model]), model).toBe(
-        hasOwnRequestImageLimit(model) ? MAX_REQUEST_IMAGE_LIMIT : DEFAULT_REQUEST_IMAGE_LIMIT,
+        isKlingImage4(model) ? KLING_IMAGE_4_MAX_PICTURES : hasOwnRequestImageLimit(model) ? MAX_REQUEST_IMAGE_LIMIT : DEFAULT_REQUEST_IMAGE_LIMIT,
       )
     }
   })

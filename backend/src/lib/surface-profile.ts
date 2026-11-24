@@ -14,6 +14,8 @@ import {
   requireSignInSchema,
   surfaceHeaderSchema,
   surfaceImportsSchema,
+  surfaceSamplesSchema,
+  surfaceToolAppsSchema,
   surfaceWorldsSchema,
   type InputLinksMode,
 } from "./surface-profile-client-keys.js"
@@ -152,6 +154,53 @@ export interface SurfaceWorlds {
   allow?: WorldId[]
   home?: WorldId
   order?: WorldId[]
+  /** Worlds still to come: a white-label header marks each "Soon", and none is offered whatever `allow` says. */
+  soon?: WorldId[]
+}
+
+/**
+ * The tools app's mini apps on a white-label deployment: `pages` serves their
+ * pages, `menus` opens the header's apps-first menus, `pictures` gives the
+ * deployment's own picture for an app or a menu tile, by key.
+ */
+export interface SurfaceToolApps {
+  menus: boolean
+  pages: boolean
+  pictures?: Record<string, string>
+}
+
+/** One welcome sample of a deployment's own: the prompt it sets, the picture it made, and how it was made. */
+export interface SurfaceSample {
+  prompt: string
+  picture: string
+  model?: string
+  aspectRatio?: string
+  /** Drawn in the welcome's centre card; the first sample that says so takes it. */
+  center?: true
+}
+
+/** One welcome sample of the Video world: a finished clip, and what "Use this video" puts back in the prompt bar. */
+export interface SurfaceVideoSample {
+  title: string
+  prompt: string
+  /** The clip the welcome plays, and its still. */
+  video: string
+  picture: string
+  /** The clip as made, for full screen; absent = `video`. */
+  original?: string
+  model?: string
+  /** Seconds. */
+  duration?: number
+  aspectRatio?: string
+  resolution?: string
+  /** The pictures it was made from, in its prompt's order. */
+  references?: string[]
+}
+
+/** A deployment's own welcome samples, by world. */
+export interface SurfaceSamples {
+  image: SurfaceSample[]
+  video?: SurfaceVideoSample[]
 }
 
 export interface SurfaceProfile {
@@ -180,6 +229,10 @@ export interface SurfaceProfile {
    */
   imports?: { links: boolean; inputLinks?: InputLinksMode }
   header?: SurfaceHeaderMode
+  /** The tools app's mini apps on a white-label deployment. Absent = nothing of it is offered. */
+  toolApps?: SurfaceToolApps
+  /** The deployment's own welcome samples, by world. Absent = none. */
+  samples?: SurfaceSamples
   /**
    * UI-string overrides, `product → locale → key → text`. Carried RAW and never
    * read by the server. The /config.js projection is what validates them,
@@ -645,6 +698,8 @@ export const SurfaceProfileSchema: z.ZodType<SurfaceProfile> = z.object({
   worlds: surfaceWorldsSchema.optional(),
   imports: surfaceImportsSchema.optional(),
   header: surfaceHeaderSchema.optional(),
+  toolApps: surfaceToolAppsSchema.optional(),
+  samples: surfaceSamplesSchema.optional(),
   strings: z.unknown().optional(),
   jobs: surfaceJobsSchema.optional(),
   mcp: surfaceMcpSchema.optional(),
@@ -674,6 +729,8 @@ function mergeOverDefault(override: Partial<SurfaceProfile>): SurfaceProfile {
     ...(override.worlds ? { worlds: override.worlds } : {}),
     ...(override.imports ? { imports: override.imports } : {}),
     ...(override.header ? { header: override.header } : {}),
+    ...(override.toolApps ? { toolApps: override.toolApps } : {}),
+    ...(override.samples ? { samples: override.samples } : {}),
     ...(override.strings !== undefined ? { strings: override.strings } : {}),
     ...(override.jobs ? { jobs: override.jobs } : {}),
     ...(override.mcp ? { mcp: override.mcp } : {}),

@@ -32,9 +32,11 @@ import { isSeedanceDraftCapable, SEEDANCE_DRAFT_RESOLUTION } from "./seedance-dr
 import { isFlux2Model } from "./flux2-pricing.js"
 import { MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION, MINIMAX_H3_IMAGE_RESOLUTIONS } from "./minimax-h3-image.js"
 import { isAutoVideoDuration } from "./video-duration-auto.js"
+import { LIP_SYNC_PROVIDERS } from "./lip-sync-providers.js"
 import type { DeclaredSeedanceTaskType } from "./seedance-task-type.js"
 import { SEEDREAM_5_5_DEFAULT_RESOLUTION, SEEDREAM_5_5_RESOLUTIONS } from "./seedream-5-5.js"
 import { FLUX_3_KLEIN_DEFAULT_RESOLUTION, FLUX_3_KLEIN_RESOLUTIONS } from "./flux-3-klein.js"
+import { KLING_IMAGE_4_ASPECT_RATIOS, KLING_IMAGE_4_DEFAULT_RESOLUTION, KLING_IMAGE_4_RESOLUTIONS, KLING_IMAGE_4_SET_MAX, KLING_IMAGE_4_SET_MIN } from "./kling-image-4.js"
 import {
   GEMINI_3_1_DEFAULT_VOICE,
   GEMINI_3_1_TTS_ACCENTS,
@@ -436,6 +438,15 @@ export interface ModelCatalogEntryFields {
    * always has.
    */
   refusesImagesOverLimit?: true
+  /**
+   * The model can return a coherent SET of images from one task (Kling Image
+   * 4.0: KIE `mode: "series"` with `count`). A run asks for one with
+   * `imageSetCount`, kept by `normalizeModelInput` only on a model with this
+   * field and only in its range; the set is ONE job, priced by the images it
+   * asks for and settled on the images it returns. A model without it makes
+   * one image per job (Generate Image's `count` makes several jobs).
+   */
+  imageSet?: { readonly min: number; readonly max: number }
   /**
    * How this video model's provider addresses its images in the prompt, by
    * array order — the syntax its frame / identity binding sentences are written
@@ -2162,6 +2173,64 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "minimax-h3-image-i2i:4K:1ref", credits: 15, note: "4K, one reference image" },
       { identifier: "minimax-h3-image-i2i:2K:16ref", credits: 25, note: "2K, sixteen reference images" },
       { identifier: "minimax-h3-image-i2i:4K:16ref", credits: 34, note: "4K, sixteen reference images (the most)" },
+    ],
+  },
+
+  // ── Kling Image 4.0 ──
+  // Kling's image model (KIE `kling-4-0/image`, one endpoint for both ids). A
+  // prompt runs the text-to-image id; with input images the run moves to the
+  // edit id (`T2I_TO_I2I_VARIANT`), priced per input item: a reference image or
+  // a named subject (a wired character with 2 to 4 views). 2K, 4K or 8K, no
+  // 1K; a set of 2 to 10 images from one task (`imageSet`). Not the Kling 4.0
+  // video models (`kling-4*`). The rows are `ee/billing/kling-image-4-pricing.ts`.
+  // See: docs.kie.ai/market/kling-4-0/image
+  "kling-image-4": {
+    id: "kling-image-4",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling Image 4.0",
+    series: "Kling Image",
+    description: "Kling Image 4.0: native 2K, 4K or 8K pictures, text in quotation marks drawn into the image, and coherent sets of 2 to 10 images from one prompt. Eight shapes plus auto.",
+    useCases: ["high-res", "typography", "series", "general"],
+    features: ["reference-image"],
+    aspectRatios: KLING_IMAGE_4_ASPECT_RATIOS,
+    resolutions: KLING_IMAGE_4_RESOLUTIONS,
+    defaultResolution: KLING_IMAGE_4_DEFAULT_RESOLUTION,
+    refusesImagesOverLimit: true,
+    imageSet: { min: KLING_IMAGE_4_SET_MIN, max: KLING_IMAGE_4_SET_MAX },
+    pricing: [
+      { identifier: "kling-image-4", credits: 29, note: "2K default" },
+      { identifier: "kling-image-4:2K", credits: 29, note: "2K" },
+      { identifier: "kling-image-4:4K", credits: 43, note: "4K" },
+      { identifier: "kling-image-4:8K", credits: 71, note: "8K" },
+      { identifier: "kling-image-4:2K:x10", credits: 290, note: "a set of ten at 2K" },
+    ],
+  },
+  "kling-image-4-i2i": {
+    id: "kling-image-4-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Kuaishou",
+    maker: "kuaishou",
+    label: "Kling Image 4.0 (I2I)",
+    series: "Kling Image",
+    description: "Kling Image 4.0 with input images: up to 10 reference images and named subjects in all (a wired character with 2 to 4 views is one subject, called by name in the prompt), at 2K, 4K or 8K, one picture or a set of 2 to 10.",
+    useCases: ["edit", "multi-reference", "character", "series", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: KLING_IMAGE_4_ASPECT_RATIOS,
+    resolutions: KLING_IMAGE_4_RESOLUTIONS,
+    defaultResolution: KLING_IMAGE_4_DEFAULT_RESOLUTION,
+    refusesImagesOverLimit: true,
+    imageSet: { min: KLING_IMAGE_4_SET_MIN, max: KLING_IMAGE_4_SET_MAX },
+    pricing: [
+      { identifier: "kling-image-4-i2i", credits: 30, note: "2K, one input item" },
+      { identifier: "kling-image-4-i2i:2K:1ref", credits: 30, note: "2K, one input item (the least)" },
+      { identifier: "kling-image-4-i2i:4K:1ref", credits: 44, note: "4K, one input item" },
+      { identifier: "kling-image-4-i2i:8K:1ref", credits: 72, note: "8K, one input item" },
+      { identifier: "kling-image-4-i2i:2K:10ref", credits: 41, note: "2K, ten input items (the most)" },
+      { identifier: "kling-image-4-i2i:8K:10ref", credits: 84, note: "8K, ten input items" },
     ],
   },
 
@@ -5321,13 +5390,29 @@ export function listModels(filter?: {
   // A model the platform runs on its own is offered nowhere (`pickerHidden`).
   const all = Object.values(MODEL_CATALOG).filter((m) => m.pickerHidden !== true)
   if (!filter) return all
-  return all.filter((m) => {
+  const keep = (m: ModelCatalogEntry, byMode: boolean): boolean => {
     if (filter.kind && m.kind !== filter.kind) return false
-    if (filter.mode && !m.modes.includes(filter.mode)) return false
+    if (!byMode) return false
     if (filter.family && m.family.toLowerCase() !== filter.family.toLowerCase()) return false
     return true
-  })
+  }
+  const listed = all.filter((m) => keep(m, !filter.mode || m.modes.includes(filter.mode)))
+  // The lip-sync filter answers with EVERY model the Lip Sync node takes (decided 2026-11-24): the models of
+  // the lip-sync mode, then the node's own list (`LIP_SYNC_PROVIDERS`: the video models it runs a portrait and a
+  // voice through, whose own `modes` stay their video modes), in that list's order, each once.
+  if (filter.mode === "lip-sync") {
+    const ids = new Set(listed.map((m) => m.id))
+    for (const id of LIP_SYNC_PROVIDERS) {
+      const m = MODEL_CATALOG[id]
+      if (m && !ids.has(id) && m.pickerHidden !== true && keep(m, true)) {
+        listed.push(m)
+        ids.add(id)
+      }
+    }
+  }
+  return listed
 }
+
 
 /**
  * Group entries by family, returning a stable order.
@@ -5527,7 +5612,7 @@ function sameOptionValue(a: string | number, b: string | number): boolean {
 /** Every lever `normalizeModelInput` can correct, as an adjustment names it. */
 export const MODEL_INPUT_ADJUSTMENT_FIELDS = [
   "aspectRatio", "resolution", "quality", "duration", "background",
-  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel",
+  "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel", "imageSetCount",
   // A video model's frame rate (catalog `frameRates`, LTX 2.5).
   "fps",
 ] as const
@@ -5562,6 +5647,8 @@ export interface NormalizedModelInput {
   gifFrames?: number
   gifFrameDurationMs?: number
   svgLevel?: string
+  /** The images a set asks for (2 to 10), on a model that makes sets (`imageSet`); undefined for one image. */
+  imageSetCount?: number
   /** Empty when the input was already valid. */
   adjustments: ModelInputAdjustment[]
 }
@@ -5585,6 +5672,12 @@ export interface ModelInputContext {
   sourceImage?: SourceImageSize
   /** The request carries an inpainting mask (`maskUrl`). */
   masked?: boolean
+  /**
+   * The request carries an inpainting mask, read ONLY for the set lever (a
+   * masked edit returns one picture, so a set is dropped and said). For a
+   * caller that does not pass `masked` because it moves other levers.
+   */
+  imageSetMasked?: boolean
 }
 
 /**
@@ -5791,6 +5884,81 @@ export function resolutionAtAspectRatio(
   return atOrBelow.length > 0 ? atOrBelow[atOrBelow.length - 1]! : offered[0]!
 }
 
+/** `"8K"` → 8, `"1.5k"` → 1.5; anything not a K size is undefined. */
+function kTier(token: string): number | undefined {
+  const m = /^(\d+(?:\.\d+)?)K$/i.exec(token.trim())
+  return m ? Number(m[1]) : undefined
+}
+
+/**
+ * The model's largest K size when `asked` is 8K and the model does not list
+ * it, else undefined. Only 8K: it is the one size this vocabulary gained for
+ * Kling Image 4.0, and every value that was valid before keeps its old snap.
+ */
+function largestSizeFor8K(asked: string | undefined, listed: readonly string[] | undefined): string | undefined {
+  if (asked === undefined || !listed?.length || asked.trim().toUpperCase() !== "8K") return undefined
+  if (listed.some((r) => r.toUpperCase() === "8K")) return undefined
+  let best: string | undefined
+  let bestTier = -Infinity
+  for (const r of listed) {
+    const t = kTier(r)
+    if (t !== undefined && t > bestTier) { bestTier = t; best = r }
+  }
+  return best
+}
+
+/**
+ * The size an "8K" request runs at on image model `model` when the model does
+ * not list 8K: its largest K size (the catalog snap of `normalizeModelInput`).
+ * Undefined for any other value, a model that lists 8K, or a model without K
+ * sizes. Read by every place that shows or prices a node's size, so the badge,
+ * the estimate, the hold and the charge agree.
+ */
+export function imageResolutionFor8K(model: string | undefined, asked: unknown): string | undefined {
+  if (typeof asked !== "string" || !model) return undefined
+  const m = getModel(model)
+  return m?.kind === "image" ? largestSizeFor8K(asked, m.resolutions) : undefined
+}
+
+/**
+ * A set's image count as the model takes it (`imageSet` on its entry): a whole
+ * number in its range, or undefined for one image. 0 and 1 are one image, said
+ * nothing about. On a model that makes no sets, or on a masked edit (which
+ * returns one picture), a count of 2 or more is dropped and the drop is said;
+ * a count past the most is moved to the most.
+ */
+function normalizeImageSetCount(
+  m: ModelCatalogEntry,
+  asked: number | undefined,
+  masked: boolean,
+  adjustments: ModelInputAdjustment[],
+): number | undefined {
+  if (asked === undefined || !Number.isFinite(asked)) return undefined
+  const whole = Math.trunc(asked)
+  if (whole < 2) return undefined
+  if (!m.imageSet || masked) {
+    adjustments.push({
+      field: "imageSetCount",
+      from: whole,
+      to: undefined,
+      reason: masked && m.imageSet
+        ? `A masked edit on ${m.label} returns one picture, so the set was dropped.`
+        : `${m.label} makes no sets of images, so the set was dropped.`,
+    })
+    return undefined
+  }
+  const next = Math.min(Math.max(whole, m.imageSet.min), m.imageSet.max)
+  if (next !== whole) {
+    adjustments.push({
+      field: "imageSetCount",
+      from: whole,
+      to: next,
+      reason: `${m.label} makes sets of ${m.imageSet.min} to ${m.imageSet.max} images — using ${next}.`,
+    })
+  }
+  return next
+}
+
 /**
  * Coerce a model's parameters into a combination the model actually accepts.
  *
@@ -5834,6 +6002,7 @@ export function normalizeModelInput(
     gifFrames?: number
     gifFrameDurationMs?: number
     svgLevel?: string
+    imageSetCount?: number
   },
   context: ModelInputContext = {},
 ): NormalizedModelInput {
@@ -5842,6 +6011,7 @@ export function normalizeModelInput(
   if (!m) return { ...input, adjustments }
 
   const out: NormalizedModelInput = { ...input, adjustments }
+  out.imageSetCount = normalizeImageSetCount(m, input.imageSetCount, context.masked === true || context.imageSetMasked === true, adjustments)
 
   const snap = <T extends string | number>(
     field: ModelInputAdjustment["field"],
@@ -5939,7 +6109,9 @@ export function normalizeModelInput(
   if (followsSource) {
     // The size whose long side is nearest the photo's: the result is the
     // photo's own size, so the run is rendered, and priced, near it.
-    const asked = snap("resolution", input.resolution, m.resolutions, defaultResolutionFor(modelId))
+    // 8K on a model without it is its largest size here too (decided 2026-11-23).
+    const largestFor8K = m.kind === "image" ? largestSizeFor8K(input.resolution, m.resolutions) : undefined
+    const asked = snap("resolution", input.resolution, m.resolutions, largestFor8K ?? defaultResolutionFor(modelId))
     const nearest = resolutionNearestSource(modelId, out.aspectRatio, context.sourceImage)
     const from = asked ?? m.defaultResolution ?? m.resolutions?.[0]
     if (nearest !== undefined && from !== undefined && nearest !== from) {
@@ -5963,11 +6135,16 @@ export function normalizeModelInput(
     }
     out.resolution = undefined
   } else {
+    // 8K, which only Kling Image 4.0 lists, runs at an image model's largest
+    // size, as MCP's normaliser sends it. Every other value snaps exactly as
+    // it always has (its default fallback), so no price that was valid before
+    // 8K joined the vocabulary moves.
+    const largest = m.kind === "image" ? largestSizeFor8K(input.resolution, m.resolutions) : undefined
     out.resolution = snap(
       "resolution",
       input.resolution,
       m.resolutions,
-      defaultResolutionFor(modelId),
+      largest ?? defaultResolutionFor(modelId),
     )
   }
   out.quality = snap("quality", input.quality, m.qualities, m.defaultQuality)
