@@ -28,6 +28,9 @@ permissions: {}
 # linux/x64 unless told to skip; nothing here runs the GPU path.
 env:
   ONNXRUNTIME_NODE_INSTALL: skip
+  # youtube-dl-exec's postinstall asks the GitHub API for a binary no step here
+  # runs; unauthenticated, that request gets rate limited and fails `npm ci`.
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
 
 jobs:
   build:
