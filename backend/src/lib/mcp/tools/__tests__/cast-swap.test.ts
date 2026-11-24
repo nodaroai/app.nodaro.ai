@@ -1050,3 +1050,71 @@ describe("video_remake is gated on the edition", () => {
     expect(await names(true)).toContain("video_remake")
   })
 })
+
+describe("video_remake: the intent check (check_intent) and the run's intent", () => {
+  const JOB = { jobId: "00000000-0000-4000-8000-0000000000a1" }
+  const MISMATCH = { checked: true, fits: false, code: "wants-extend" }
+
+  it("the quote checks the words only when asked, beside the estimate, with the same body", async () => {
+    const { fastify, calls } = stubFastify({
+      "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/video-remake/intent": { statusCode: 200, body: MISMATCH },
+    })
+    const plain = await callTool(serverWith(fastify), "video_remake", ARGS)
+    expect(calls.map((c) => c.url)).toEqual(["/v1/video-remake/estimate"])
+    expect(plain.structuredContent).not.toHaveProperty("intent")
+    calls.length = 0
+
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, check_intent: true })
+    expect(res.isError).toBeFalsy()
+    expect(calls.map((c) => c.url).sort()).toEqual(["/v1/video-remake/estimate", "/v1/video-remake/intent"])
+    for (const c of calls) expect(c.payload).toEqual(BODY)
+    expect(res.structuredContent).toMatchObject({ totalCredits: 12, confirmed: false, intent: { code: "wants-extend", meaning: expect.any(String) } })
+    expect(res.content[0]!.text).toContain("wants-extend")
+    expect(res.content[0]!.text).toContain('intent: { code: "wants-extend", action: "continued" }')
+  })
+
+  it("anything but a confident mismatch with a known code is no answer: the quote is as before", async () => {
+    for (const intent of [
+      { statusCode: 200, body: { checked: false, fits: true } },
+      { statusCode: 200, body: { checked: true, fits: true } },
+      { statusCode: 200, body: { checked: true, fits: false, code: "wants-something-new" } },
+      { statusCode: 200, body: "not json" },
+      { statusCode: 429, body: { error: { code: "rate_limit_exceeded", message: "Too many requests." } } },
+      { statusCode: 403, body: { error: { code: "node_not_available", message: "No." } } },
+    ]) {
+      const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake/intent": intent })
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, check_intent: true })
+      expect(res.isError, JSON.stringify(intent)).toBeFalsy()
+      expect(res.structuredContent, JSON.stringify(intent)).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
+    }
+    // A host without the route (the router's 404) is no answer too.
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    expect((await callTool(serverWith(fastify), "video_remake", { ...ARGS, check_intent: true })).structuredContent).not.toHaveProperty("intent")
+  })
+
+  it("the confirmed run sends intent as given, and never checks; the quote never sends intent", async () => {
+    const { fastify, calls } = stubFastify({
+      "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE },
+      "/v1/video-remake/intent": { statusCode: 200, body: MISMATCH },
+      "/v1/video-remake": { statusCode: 202, body: JOB },
+    })
+    const intent = { code: "wants-extend", action: "continued" }
+    await callTool(serverWith(fastify), "video_remake", { ...ARGS, intent })
+    expect(calls[0]!.payload).toEqual(BODY)
+    calls.length = 0
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, confirm: true, check_intent: true, intent })
+    expect(res.isError).toBeFalsy()
+    expect(calls.map((c) => c.url)).toEqual(["/v1/video-remake"])
+    expect(calls[0]!.payload).toEqual({ ...BODY, intent })
+  })
+
+  it("refuses an intent that is not the route's shape", async () => {
+    const { fastify, calls } = stubFastify({ "/v1/video-remake": { statusCode: 202, body: JOB } })
+    for (const intent of [{ code: "x".repeat(41), action: "continued" }, { code: "wants-extend", action: "ignored" }]) {
+      const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, confirm: true, intent })
+      expect(res.isError, JSON.stringify(intent)).toBe(true)
+    }
+    expect(calls).toEqual([])
+  })
+})

@@ -158,6 +158,8 @@ describe("POST /v1/switchx", () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("MISSING_ALPHA")
+    // A sentence a person can read, not the code again.
+    expect(res.json().error.message).toMatch(/needs a mask/)
     expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
@@ -175,7 +177,25 @@ describe("POST /v1/switchx", () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("MISSING_STYLE_INPUT")
+    expect(res.json().error.message).toMatch(/prompt, a reference image, or both/)
     expect(videoQueue.add).not.toHaveBeenCalled()
+
+  })
+
+  it("keeps the client app's origin on the job, and refuses one that is not a slug before any job exists", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-origin" }, error: null })
+    const body = { videoUrl: VALID_VIDEO_URL, prompt: "golden hour", alphaMode: "auto", userId: VALID_USER_ID }
+    const ok = await app.inject({ method: "POST", url: "/v1/switchx", payload: { ...body, origin: "video-player" } })
+    expect(ok.statusCode, ok.body).toBe(200)
+    const row = mockInsert.mock.calls[0]![0] as { input_data: Record<string, unknown> }
+    expect(row.input_data.origin).toBe("video-player")
+    expect(row.input_data.type).toBe("switchx")
+
+    mockInsert.mockClear()
+    const bad = await app.inject({ method: "POST", url: "/v1/switchx", payload: { ...body, origin: "Not A Slug!" } })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error.code).toBe("validation_error")
+    expect(mockInsert).not.toHaveBeenCalled()
   })
 
   it("returns 400 VIDEO_TOO_MANY_FRAMES when the source is well over the cap (> auto-trim zone)", async () => {

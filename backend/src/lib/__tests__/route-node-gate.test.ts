@@ -148,6 +148,9 @@ const PLUGIN_GUARDED_ROUTE_NODES: Readonly<Record<string, string>> = {
   // Roles planned from the prompt: the model and node checks alone, under both prefixes.
   "/v1/cast-swap/plan-roles": "cast-swap",
   "/v1/video-remake/plan-roles": "cast-swap",
+  // What the typed words ask for, checked before a run: the model and node checks alone, under both prefixes.
+  "/v1/cast-swap/intent": "cast-swap",
+  "/v1/video-remake/intent": "cast-swap",
   "/v1/competitor-scan": "competitor-scan",
   "/v1/topic-scan": "topic-scan",
   "/v1/content-ideas": "content-ideas",
@@ -212,6 +215,7 @@ describe("routeNodeGate — the Cloud plugin's credit-guarded routes", () => {
       ["/v1/video-remake/face-mask", "/v1/cast-swap/face-mask"],
       ["/v1/video-remake/describe-style", "/v1/cast-swap/describe-style"],
       ["/v1/video-remake/plan-roles", "/v1/cast-swap/plan-roles"],
+      ["/v1/video-remake/intent", "/v1/cast-swap/intent"],
     ]) {
       expect(routeNodeGate(remake!, {}), remake).toEqual(routeNodeGate(cast!, {}))
     }

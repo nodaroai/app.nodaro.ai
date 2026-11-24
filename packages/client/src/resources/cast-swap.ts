@@ -447,6 +447,12 @@ export interface VideoRemakeParams {
   sessionId?: string
   /** The client app that sent the run (stored on the job as `input_data.origin`). */
   origin?: string
+  /**
+   * What the person did about {@link VideoRemakeResource.intent}'s answer, on
+   * a run that went ahead anyway (see {@link VideoRemakeRunIntent}). Read on
+   * `run()` only; one that is not this shape is dropped, never refused.
+   */
+  intent?: VideoRemakeRunIntent
 }
 
 /** What a run would cost, in credits. */
@@ -1209,6 +1215,88 @@ export interface VideoRemakePreview {
 }
 
 /**
+ * What a request's words may ask for that Video Remake does not do, as
+ * {@link VideoRemakeResource.intent} names it, each with a good place to send
+ * the person instead:
+ * - `"wants-extend"`: continue the clip past its end;
+ * - `"wants-voice-change"`: change the voices of the people in it;
+ * - `"wants-dub"`: the speech in another language;
+ * - `"wants-recast"`: a different story, or people moving differently than they do in the clip;
+ * - `"wants-new-video"`: a new video that is not an edit of this clip;
+ * - `"wants-join"`: join or reorder several clips;
+ * - `"wants-reframe"`: another shape or aspect ratio;
+ * - `"wants-shorter"`: trim or cut the clip.
+ */
+export type VideoRemakeIntentPopupCode =
+  | "wants-extend"
+  | "wants-voice-change"
+  | "wants-dub"
+  | "wants-recast"
+  | "wants-new-video"
+  | "wants-join"
+  | "wants-reframe"
+  | "wants-shorter"
+
+/**
+ * Further things a request may ask for that Video Remake does not do. Nodaro's
+ * own apps show nothing for these and let the run go ahead:
+ * - `"wants-lipsync"`: someone saying or singing other words;
+ * - `"wants-upscale"`: only a sharper or larger video, nothing else changed;
+ * - `"wants-captions"`: subtitles or captions;
+ * - `"wants-sound"`: other music, sound effects or sound;
+ * - `"wants-speed"`: faster, slower, reversed or looped;
+ * - `"wants-watermark-removal"`: a watermark or logo taken off.
+ */
+export type VideoRemakeIntentReportedCode =
+  | "wants-lipsync"
+  | "wants-upscale"
+  | "wants-captions"
+  | "wants-sound"
+  | "wants-speed"
+  | "wants-watermark-removal"
+
+/** Every code {@link VideoRemakeResource.intent} names today. */
+export type VideoRemakeIntentCode = VideoRemakeIntentPopupCode | VideoRemakeIntentReportedCode
+
+/**
+ * The answer of {@link VideoRemakeResource.intent}:
+ * - `{ checked: false, fits: true }`: not checked (the check is off on this
+ *   deployment, took too long, or there were no words to read). Go ahead.
+ * - `{ checked: true, fits: true }`: the words fit what Video Remake does.
+ * - `{ checked: true, fits: false, code }`: the words ask for something else;
+ *   `code` says what (see {@link VideoRemakeIntentCode}). A code this SDK does
+ *   not know may come from a newer server: treat it as a fit.
+ */
+export interface VideoRemakeIntentCheck {
+  checked: boolean
+  fits: boolean
+  code?: VideoRemakeIntentCode | (string & {})
+}
+
+/**
+ * What the person did about the check's answer: `"continued"` = they were
+ * shown what the words ask for and went on anyway; `"unserved"` = the check
+ * named a code the app shows nothing for, and the run went ahead.
+ */
+export type VideoRemakeIntentAction = "continued" | "unserved"
+
+/**
+ * A run's `intent`: the check's `code` (kebab-case, at most 40 characters)
+ * and what the person did about it. Send it only on a run that went ahead
+ * after a `fits: false` answer.
+ */
+export interface VideoRemakeRunIntent {
+  code: VideoRemakeIntentCode | (string & {})
+  action: VideoRemakeIntentAction
+}
+
+/**
+ * How long {@link VideoRemakeResource.intent} waits by default: the check is quick (a few seconds at most), and a
+ * slower answer is no answer, so a run is never held up by it.
+ */
+const INTENT_TIMEOUT_MS = 10_000
+
+/**
  * How long {@link VideoRemakeResource.planRoles} waits by default: longer than the server gives the plan and its checks
  * (about three minutes), so a slow plan is answered rather than cut off here.
  */
@@ -1372,6 +1460,30 @@ export class VideoRemakeResource {
     if (params.locale) query.locale = params.locale
     const res = await this.client.request<{ data: VideoRemakePreview[] }>("GET", "/v1/video-remake/previews", { query })
     return res.data
+  }
+
+  /**
+   * Check, before a run, whether the words a person typed (`prePrompt`,
+   * `postPrompt`, a custom style) ask for something Video Remake does
+   * (`POST /v1/video-remake/intent`). Takes the same body as {@link estimate}
+   * and {@link run}; answers {@link VideoRemakeIntentCheck}. Free: no job, no
+   * credits, nothing kept. It never refuses a run: when it answers
+   * `fits: false` you may show the person what the `code` says and let them
+   * go on, then send `intent: { code, action: "continued" }` on the run.
+   *
+   * Treat `checked: false`, an error, a timeout and an unknown `code` as
+   * "go ahead". Only where the deployment has the check switched on (it
+   * answers `checked: false` elsewhere). Signed in; 12 calls a minute per
+   * account (429 `rate_limit_exceeded`, with `Retry-After`). Waits 10 s by
+   * default; pass `options.timeoutMs` for another wait and `options.signal`
+   * to cancel.
+   */
+  intent(params: VideoRemakeParams, options: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<VideoRemakeIntentCheck> {
+    return this.client.request("POST", "/v1/video-remake/intent", {
+      body: params,
+      timeoutMs: options.timeoutMs ?? INTENT_TIMEOUT_MS,
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    })
   }
 
   /** Quote a run before starting it (`POST /v1/video-remake/estimate`); spends nothing. */

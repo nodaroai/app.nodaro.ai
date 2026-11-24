@@ -97,8 +97,18 @@ The CLI exposes the three execution paths the platform supports — pick the one
 | Run a saved DAG | `nodaro workflows run <workflowId>` |
 | Run a published app (curated inputs/outputs) | `nodaro apps run <slug> --input k=v` |
 | Run a single node directly (no DAG) | `nodaro nodes run <type> --param k=v` |
+| Ask what a node run costs first | `nodaro nodes quote <type> --param k=v` |
 
 The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools (`generate_image`, `generate_video`, etc.) — it posts to the node's route (`POST /v1/<type>` for most node types; the SDK reference's `nodes.run` section lists the ones with a route of their own, such as `llm-chat` and the `suno-*` nodes), so any node listed by `nodaro nodes list` that runs on its own can be invoked with `nodaro nodes run`. A node type with no route of its own (`modify-image`, `paint-mask`, …) fails before calling the API, naming what to run instead.
+
+`nodes quote` takes the same inputs and answers the price without starting anything (`POST /v1/quote`): the credits the run holds, what it is expected to cost when that is lower, and any note (a `reserve` that is the most the run can cost says so). For example, Relight & Switch and Edit Video Pro:
+
+```bash
+nodaro nodes quote switchx --param videoUrl=https://cdn.example/clip.mp4 --param alphaMode=auto --param prompt="golden hour" --param maxResolution=720
+nodaro nodes quote edit-video-pro --param videoUrl=https://cdn.example/clip.mp4 --param spanStart=5 --param spanEnd=13 --param prompt="the dog jumps into the pool"
+```
+
+A clip or a span the run would refuse (more than 240 frames for Relight & Switch; a span under 4 seconds, over 120, or past the end of the video for Edit Video Pro) is refused by the quote with the same message. A type the platform cannot quote answers with the list of those it can.
 
 ## Commands
 
@@ -181,6 +191,7 @@ nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 nodaro nodes run generate-image --param prompt="…" [--count 1-4] [--models <id,id,…>] [--watch]   # several images in one call
 nodaro nodes run generate-video|text-to-video … [--reference-task-type auto|reference|edit|extend]   # what the reference media is for (Seedance 2.5)
+nodaro nodes quote <type> --param k=v … | --params-file body.json [--json]   # the price of that run before it starts: nothing is started or charged
 
 # Models — browse the model catalog (makers, capability sheets, credit pricing, prompt tips)
 nodaro models list [--kind image|video|audio] [--mode t2v|i2v|t2i|tts|…] [--family <vendor>] [--featured] [--json]

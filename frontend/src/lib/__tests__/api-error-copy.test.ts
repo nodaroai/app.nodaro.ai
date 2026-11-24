@@ -233,3 +233,15 @@ describe("apiErrorMessage — Needs up to N credits", () => {
     expect(message).toContain(translate("he", "apiErr.reason.insufficientCredits"))
   })
 })
+
+describe("Relight & Switch and Edit Video Pro refusals have a sentence in every offered language", () => {
+  const CODES = ["VIDEO_TOO_MANY_FRAMES", "SOURCE_TOO_LARGE", "MISSING_STYLE_INPUT", "MISSING_ALPHA", "span_exceeds_source"]
+  it.each(["de", "es", "he", "ja", "ko", "pt-BR"] as const)("%s", (locale) => {
+    for (const code of CODES) {
+      const key = apiErrorReasonKey(code)
+      expect(key, code).toBeDefined()
+      expect(translate(locale, key!), `${locale} ${code}`).not.toBe(translate("en", key!))
+    }
+  })
+})
+

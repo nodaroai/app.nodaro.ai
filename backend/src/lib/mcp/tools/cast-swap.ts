@@ -141,6 +141,7 @@ import { originalCdnImageUrls } from "../../cdn-original-url.js"
 import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeaders, parseJobId } from "./_verb-helpers.js"
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
 import { statedName } from "../deployment-name.js"
+import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -493,7 +494,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default; 480p, 720p, 1080p) or "nodaro-pulse" (Nodaro Pulse; 720p default or 1080p, no draft). ' +
-        "Image and video URLs must be http(s): upload local files with the upload tools first." +
+        "Image and video URLs must be http(s): upload local files with the upload tools first. " +
+        "check_intent: true on the quote also checks (free) if the prompt asks for something Video Remake does not do." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
         amountsNote(),
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
@@ -607,6 +609,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
         session_id: z.string().min(1).optional().describe("A generation session to file the result in."),
         confirm: z.boolean().optional().describe("true ONLY after the user accepted the quoted credits in this conversation."),
+        check_intent: checkIntentArg,
+        intent: runIntentArg,
         client_request_id: clientRequestIdSchema.optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -856,7 +860,13 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         // A quote never reads the image: it is sent the caller's note, else a neutral placeholder. Sound,
         // because the price does not depend on the style's words; the image is read once the run is confirmed.
         const payload = customImage !== undefined ? { ...quoted, direction: { customStyle: customNote ?? CUSTOM_STYLE_QUOTE_PLACEHOLDER } } : quoted
-        const est = await mcpInject(fastify, session, { method: "POST", url: "/v1/video-remake/estimate", payload })
+        // The intent check beside the quote, when asked: free, and no answer of its own can fail the quote. It reads
+        // the caller's own words only, never the quote's placeholder style.
+        const intentPayload = customImage !== undefined && customNote === undefined ? quoted : payload
+        const [est, intentMismatch] = await Promise.all([
+          mcpInject(fastify, session, { method: "POST", url: "/v1/video-remake/estimate", payload }),
+          args.check_intent === true ? videoRemakeIntentMismatch(fastify, session, intentPayload) : Promise.resolve(undefined),
+        ])
         // A deployment that does not accept a 3D previz clip answers as an engine without the mode does.
         if (previzNotAvailable(est.statusCode, est.body)) return PREVIZ_UNAVAILABLE
         if (est.statusCode >= 400) return refusal(est.statusCode, est.body)
@@ -900,7 +910,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
             {
               type: "text" as const,
               text:
-                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower}${imageStyle} ` +
+                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
                 (plannedAnswer ? `${plannedAnswer.sentence} ` : "") +
                 `${QUOTE_NEXT}${
                   quoteFor?.next ??
@@ -922,6 +932,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
             settlesLower: quote.settlesLower === true,
             confirmed: false,
             ...(plannedAnswer ? { planned: plannedAnswer.planned, arguments: plannedAnswer.arguments } : {}),
+            ...(intentMismatch ? { intent: intentMismatch } : {}),
             ...unitFields(),
           },
         }
@@ -929,7 +940,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
 
       // The confirmed run with an image: its style is put into words first (no job, no charge), and a refusal
       // there is the tool's answer — nothing is held or started.
-      let payload: typeof body & { direction?: { style: string } | { customStyle: string } } = body
+      // What the user did about a check_intent mismatch: on the run alone (the quote never sends it).
+      let payload: typeof body & { direction?: { style: string } | { customStyle: string }; intent?: NonNullable<typeof args.intent> } =
+        args.intent !== undefined ? { ...body, intent: args.intent } : body
       let describedText: string | undefined
       if (customImage !== undefined) {
         const described = await mcpInject(fastify, session, {
@@ -949,7 +962,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           return { content: [{ type: "text" as const, text: "The image's style could not be read. Nothing was started or charged." }], isError: true as const }
         }
         describedText = text
-        payload = { ...body, direction: { customStyle: text } }
+        payload = { ...payload, direction: { customStyle: text } }
       }
 
       const res = await mcpInject(fastify, session, {

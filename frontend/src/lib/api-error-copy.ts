@@ -27,6 +27,13 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   unauthorized: "apiErr.reason.signIn",
   access_blocked: "apiErr.reason.accessBlocked",
   forbidden: "apiErr.reason.forbidden",
+  // Relight & Switch's own refusals (POST /v1/switchx and its quote): a clip it cannot take, a missing input.
+  VIDEO_TOO_MANY_FRAMES: "apiErr.reason.relightTooManyFrames",
+  SOURCE_TOO_LARGE: "apiErr.reason.relightSourceTooLarge",
+  MISSING_STYLE_INPUT: "apiErr.reason.relightMissingStyle",
+  MISSING_ALPHA: "apiErr.reason.relightMissingMask",
+  // Edit Video Pro: the span ends past the end of the source.
+  span_exceeds_source: "apiErr.reason.spanExceedsSource",
   // The credit guard's 403 for a model an admin switched off (model_pricing.is_enabled).
   model_disabled: "apiErr.reason.modelDisabled",
   // The credit guard's door for a model this deployment does not offer — a

@@ -12,7 +12,7 @@ import { SWITCHX_PROBED_FIELD, SWITCHX_TRIM_FIELD, switchXCreditIdOf } from "../
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { formatZodError } from "../lib/zod-error.js"
+import { formatZodError, zodRefusalCode } from "../lib/zod-error.js"
 import { probeVideoFrames, exactFrameCount } from "../lib/ffprobe-frames.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
 
@@ -43,16 +43,14 @@ export const switchXBody = z
   })
   // At least one style driver — a text prompt OR a reference image.
   .refine((b) => Boolean(b.prompt) || Boolean(b.referenceImageUrl), {
-    message: "MISSING_STYLE_INPUT",
+    message: "Give a prompt, a reference image, or both: the relight needs at least one to know what to make.",
+    params: { code: "MISSING_STYLE_INPUT" },
   })
   // select/custom alpha need a user-supplied mask; auto/fill derive it.
   .refine((b) => !(b.alphaMode === "select" || b.alphaMode === "custom") || Boolean(b.maskUrl), {
-    message: "MISSING_ALPHA",
+    message: "This mode needs a mask: a mask image for `select`, a mask video for `custom` (send it as maskUrl). `auto` and `fill` need none.",
+    params: { code: "MISSING_ALPHA" },
   })
-
-/** Refine sentinels that map to their own top-level error codes (not the
- *  generic validation_error) so the client can branch on the exact failure. */
-const REFINE_CODES = new Set(["MISSING_STYLE_INPUT", "MISSING_ALPHA"])
 
 /** What the preflight measured, kept on the server-side request (`lib/request-measure.ts`), never the body. */
 export interface SwitchXMeasure {
@@ -166,13 +164,13 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const parsed = switchXBody.safeParse(req.body)
       if (!parsed.success) {
-        const firstMessage = parsed.error.issues[0]?.message
-        const code = firstMessage && REFINE_CODES.has(firstMessage) ? firstMessage : "validation_error"
+        // A rule with a code of its own (MISSING_STYLE_INPUT, MISSING_ALPHA) answers it, so a
+        // client can branch on the exact failure; its message is a sentence either way.
+        const code = zodRefusalCode(parsed.error)
         return reply.status(400).send({
-          error:
-            code === "validation_error"
-              ? { code, ...formatZodError(parsed.error) }
-              : { code, message: firstMessage as string },
+          error: code
+            ? { code, message: parsed.error.issues[0]!.message }
+            : { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 

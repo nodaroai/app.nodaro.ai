@@ -165,6 +165,9 @@ export const ROUTE_NODES: Readonly<Record<string, string | BodyResolver>> = Obje
   // Roles planned from a person's request and loose reference images: no job
   // and no charge, but a model the same engine runs (its model and node checks).
   "/v1/cast-swap/plan-roles": "cast-swap",
+  // Whether the typed words ask for something Video Remake does, before a run:
+  // no job and no charge, but a model the same engine runs (its model and node checks).
+  "/v1/cast-swap/intent": "cast-swap",
   "/v1/video-face-mesh": "cast-swap",
   "/v1/mask-erase": "cast-swap",
   "/v1/mask-outline": "cast-swap",
@@ -245,6 +248,9 @@ export const PLUGIN_CREDIT_GUARDED_ROUTES: readonly string[] = Object.freeze([
   // The same checks alone: roles planned from the prompt.
   "/v1/cast-swap/plan-roles",
   "/v1/video-remake/plan-roles",
+  // The same checks alone: the check of what the typed words ask for.
+  "/v1/cast-swap/intent",
+  "/v1/video-remake/intent",
   "/v1/competitor-scan",
   "/v1/topic-scan",
   "/v1/content-ideas",

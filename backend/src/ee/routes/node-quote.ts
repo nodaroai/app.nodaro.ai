@@ -4,11 +4,12 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { nodeRunRoute } from "@nodaro/shared/nodes"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
-import { formatZodError } from "../../lib/zod-error.js"
+import { formatZodError, zodRefusalCode } from "../../lib/zod-error.js"
 import { deniedModelRejectionMessage } from "../../lib/surface-deny.js"
 import { routeNodeGate } from "../../lib/route-node-gate.js"
 import { EMPTY_PRICE_NOTES, type PriceNotes } from "../../lib/price-notes.js"
 import { unitQuotableTypes, unitQuoteOf } from "../../lib/unit-quotes.js"
+import type { RoutePricing as RegisteredPricing } from "../../middleware/credit-guard.js"
 import { deniedRunModels, runNodeRefusal, type RoutePricing } from "../../middleware/credit-guard.js"
 import { callerBodyOf } from "../../middleware/server-only-body-keys.js"
 import { handlePriceNotConfigured, markedUpCredits, reservedCreditsFor } from "../lib/credit-guard-impl.js"
@@ -28,6 +29,8 @@ const ROUTE = "/v1/quote"
 export interface QuotableNode {
   readonly schema: () => z.ZodTypeAny
   readonly pricing: RoutePricing
+  /** What every quote of this type says beside its price. */
+  readonly notes?: PriceNotes
 }
 
 /**
@@ -56,16 +59,83 @@ export const QUOTABLE_NODE_TYPES: Readonly<Record<string, QuotableNode>> = {
   "lip-sync": { schema: () => lipSyncBody, pricing: lipSyncPricing },
 }
 
-/** What a quote prices `type` with: a hand-written row, else the node unit's quote.ts; undefined when it cannot be quoted. */
-export function quotableNodeOf(type: string): QuotableNode | undefined {
-  if (Object.hasOwn(QUOTABLE_NODE_TYPES, type)) return QUOTABLE_NODE_TYPES[type]
-  const unit = unitQuoteOf(type)
-  return unit ? { schema: unit.body, pricing: unit.pricing } : undefined
+/**
+ * The least an Edit Video Pro quote's body must be, checked here. The run
+ * route is the authority on everything else (the span's 4-second floor and
+ * its ceiling, the prompt's length, the model): its pre-checks answer those,
+ * for the run and the quote alike. Loose on purpose — a client sends `origin`
+ * and `sessionId` in the same body.
+ */
+const editVideoProQuoteBody = z
+  .object({
+    // Present, no more: the route's own chain judges the link, as on the run.
+    videoUrl: z.string().min(1),
+    spanStart: z.number().min(0),
+    spanEnd: z.number().positive(),
+    prompt: z.string().min(1),
+  })
+  .passthrough()
+
+/**
+ * Node types whose run route a deployment's own module registers, so this
+ * file has no `RoutePricing` to import: the quote prices them with the chain
+ * the app registered at their run route (lib/route-pricing-registry.ts) — the
+ * same functions, by construction. Such a type is quotable only where that
+ * route is registered (its module is loaded); elsewhere it is a
+ * `quote_unsupported`, like any type with no quote.
+ */
+const ROUTE_PRICED_NODE_TYPES: Readonly<Record<string, Pick<QuotableNode, "schema" | "notes">>> = {
+  // Edit Video Pro holds the most a span can cost (its length, the bridge
+  // clips around it, the source's own frame size) and is charged for what it
+  // generated.
+  "edit-video-pro": {
+    schema: () => editVideoProQuoteBody,
+    notes: {
+      adjustments: [],
+      warnings: [{ code: "settles_to_actual", message: "This is the most the edit can cost: the run is charged for what it generates and the rest of the hold is released." }],
+    },
+  },
 }
 
-/** Every node type a quote can price: the hand-written rows, then the node units. */
-export function quotableNodeTypes(): string[] {
-  return [...Object.keys(QUOTABLE_NODE_TYPES), ...unitQuotableTypes()]
+/** How the quote reads a registered route's chain: the app's own registry (`app.routePricingOf`). */
+type RoutePricingLookup = (url: string) => RegisteredPricing | undefined
+
+/** A route-priced type's entry, when the app registered its run route as quotable. */
+function routePricedNodeOf(type: string, routePricingOf: RoutePricingLookup | undefined): QuotableNode | undefined {
+  if (!routePricingOf || !Object.hasOwn(ROUTE_PRICED_NODE_TYPES, type)) return undefined
+  const route = nodeRunRoute(type)
+  const pricing = route ? routePricingOf(route) : undefined
+  return pricing ? { ...ROUTE_PRICED_NODE_TYPES[type]!, pricing } : undefined
+}
+
+/**
+ * What a quote prices `type` with: a hand-written row, else the node unit's
+ * quote.ts, else the chain its run route registered (a route-priced type,
+ * read through the app's `routePricingOf`); undefined when it cannot be quoted.
+ */
+export function quotableNodeOf(type: string, routePricingOf?: RoutePricingLookup): QuotableNode | undefined {
+  if (Object.hasOwn(QUOTABLE_NODE_TYPES, type)) return QUOTABLE_NODE_TYPES[type]
+  const unit = unitQuoteOf(type)
+  return unit ? { schema: unit.body, pricing: unit.pricing } : routePricedNodeOf(type, routePricingOf)
+}
+
+/**
+ * Every node type a quote can price NOW: the hand-written rows, the node
+ * units, then the route-priced types whose run route is registered as
+ * quotable. Read per request (a refusal's `supported` list), never at boot: a
+ * route-priced type's route registers after this file's own.
+ */
+export function quotableNodeTypes(routePricingOf?: RoutePricingLookup): string[] {
+  return [
+    ...Object.keys(QUOTABLE_NODE_TYPES),
+    ...unitQuotableTypes(),
+    ...Object.keys(ROUTE_PRICED_NODE_TYPES).filter((type) => routePricedNodeOf(type, routePricingOf) !== undefined),
+  ]
+}
+
+/** The types the API reference names: every type this build can quote, whether or not its route is loaded yet. */
+function documentedQuotableTypes(): string[] {
+  return [...Object.keys(QUOTABLE_NODE_TYPES), ...unitQuotableTypes(), ...Object.keys(ROUTE_PRICED_NODE_TYPES)]
 }
 
 const quoteBody = z.object({
@@ -103,7 +173,7 @@ export function registerNodeQuote(app: FastifyInstance): void {
     description:
       "The credits a node run would reserve, and what it is expected to cost, without starting it. " +
       "Send the node type and exactly the body you would send to its run route. " +
-      `Priceable types: ${quotableNodeTypes().join(", ")}.`,
+      `Priceable types: ${documentedQuotableTypes().join(", ")}.`,
     security: [{ bearerAuth: [] }],
     request: { body: { content: { "application/json": { schema: quoteBody } } } },
     responses: {
@@ -128,9 +198,10 @@ export function registerNodeQuote(app: FastifyInstance): void {
     // The run's body, less the keys the server keeps its own measurements
     // under, exactly as the run's route reads it.
     const params = callerBodyOf(req, parsed.data.params)
-    const entry = quotableNodeOf(type)
+    const routePricingOf = req.server.routePricingOf
+    const entry = quotableNodeOf(type, routePricingOf)
     if (!entry) {
-      const supported = quotableNodeTypes()
+      const supported = quotableNodeTypes(routePricingOf)
       return reply.status(400).send({
         error: {
           code: "quote_unsupported",
@@ -143,7 +214,7 @@ export function registerNodeQuote(app: FastifyInstance): void {
     const runRoute = nodeRunRoute(type)
     if (!runRoute) {
       return reply.status(400).send({
-        error: { code: "quote_unsupported", message: `"${type}" cannot be quoted: it has no run route of its own.`, supported: quotableNodeTypes() },
+        error: { code: "quote_unsupported", message: `"${type}" cannot be quoted: it has no run route of its own.`, supported: quotableNodeTypes(routePricingOf) },
       })
     }
 
@@ -181,17 +252,29 @@ export function registerNodeQuote(app: FastifyInstance): void {
     // The run's handler answers an invalid body with this same 400, before anything is reserved.
     const valid = entry.schema().safeParse(params)
     if (!valid.success) {
-      return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(valid.error) } })
+      // A rule that names its own code answers it here as on the run (lib/zod-error.ts `zodRefusalCode`).
+      const refusalCode = zodRefusalCode(valid.error)
+      return reply.status(400).send({
+        error: refusalCode
+          ? { code: refusalCode, message: valid.error.issues[0]!.message }
+          : { code: "validation_error", ...formatZodError(valid.error) },
+      })
     }
     try {
       const identifier = entry.pricing.modelResolver(req)
       const reserve = await reservedCreditsFor(req, identifier, entry.pricing.opts)
-      return { data: await quoteFrom(identifier, reserve, req.priceNotes ?? EMPTY_PRICE_NOTES, adjustmentsForRun(req.videoNorm?.adjustments ?? [], req.drivingAudio)) }
+      return { data: await quoteFrom(identifier, reserve, withEntryNotes(req.priceNotes ?? EMPTY_PRICE_NOTES, entry.notes), adjustmentsForRun(req.videoNorm?.adjustments ?? [], req.drivingAudio)) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       throw err
     }
   })
+}
+
+/** The request's notes with what every quote of the type says. */
+function withEntryNotes(notes: PriceNotes, own: PriceNotes | undefined): PriceNotes {
+  if (!own) return notes
+  return { ...notes, adjustments: [...notes.adjustments, ...own.adjustments], warnings: [...notes.warnings, ...own.warnings] }
 }
 
 async function quoteFrom(

@@ -9,6 +9,8 @@ import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { registerOverlayImagesVerb } from "./verbs-video-overlay.js"
 import { registerVideoMaskVerbs } from "./verbs-video-mask.js"
+import { registerReplaceVideoSpanVerb } from "./verbs-video-span.js"
+import { estimateOnlySchema, estimateOutputSchema, nodeQuoteResult } from "./_node-quote.js"
 import { registerUseCaseVerbs } from "./verbs-use-case.js"
 import { registerSplitMediaVerb } from "./verbs-split-media.js"
 import { registerShotCutsVerb } from "./verbs-shot-cuts.js"
@@ -1930,7 +1932,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "(`alpha_keyframe_index` picks the frame it describes).\n" +
         "  • **custom** — `mask_url` is a full per-frame alpha matte video.\n\n" +
         "Source must be ≤240 frames and ≤2,770,000 px. Output 720p or 1080p " +
-        "(default 1080p). Powered by SwitchX — attribution is shown on outputs.",
+        "(default 1080p). Powered by SwitchX — attribution is shown on outputs. " +
+        "`estimate_only: true` prices the run first; nothing is created or charged.",
       inputSchema: {
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
@@ -1941,9 +1944,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         alpha_keyframe_index: z.number().int().min(0).optional().describe("select mode — 0-based reference frame."),
         max_resolution: z.enum(["720", "1080"]).optional().describe("Default 1080."),
         seed: z.number().int().min(0).max(4294967295).optional().describe("Reproducibility seed (0–4294967295)."),
+        estimate_only: estimateOnlySchema,
       },
       outputSchema: {
-        jobId: z.string(),
+        // Absent from an estimate, which starts no job and answers `estimate` alone.
+        jobId: z.string().optional(),
+        estimate: estimateOutputSchema,
         prompt: z.string().optional(),
         alphaMode: z.string().optional(),
         resolution: z.string().optional(),
@@ -2002,6 +2008,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.seed !== undefined ? { seed: args.seed } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
+      }
+      if (args.estimate_only === true) {
+        return nodeQuoteResult(fastify, session, { tool: "relight_video", label: "Relight & Switch", type: "switchx", params: payload })
       }
       return dispatchJob(fastify, session, {
         url: "/v1/switchx",
@@ -2769,6 +2778,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
 
   // ── video_mask + mask_composite (Video Mask / Mask Composite) — their own module ──
   registerVideoMaskVerbs({ server, session, fastify })
+
+  // ── replace_video_span (Edit Video Pro) — its own module ──
+  registerReplaceVideoSpanVerb({ server, session, fastify })
 
   // ── tighten_episode + continue_use_case (podcast use-case nodes) — their own module ──
   registerUseCaseVerbs({ server, session, fastify })

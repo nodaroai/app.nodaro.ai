@@ -2359,6 +2359,7 @@ recreates a whole video from zero instead.
 ```ts
 run(params: VideoRemakeParams, options?: { idempotencyKey?: string }): Promise<{ jobId: string; deduped?: boolean }> // POST /v1/video-remake → 202 (200 + deduped on a keyed repeat)
 estimate(params: VideoRemakeParams): Promise<VideoRemakeEstimate> // POST /v1/video-remake/estimate, free
+intent(params: VideoRemakeParams, options?: { timeoutMs?: number; signal?: AbortSignal }): Promise<VideoRemakeIntentCheck> // POST /v1/video-remake/intent, free; never refuses a run; waits 10 s by default
 fullQualityEstimate(jobId: string): Promise<VideoRemakeFullQualityEstimate> // POST /v1/video-remake/:jobId/full-quality/estimate, free
 fullQuality(jobId: string, params?: { sessionId?: string }): Promise<VideoRemakeFullQualityResult> // POST /v1/video-remake/:jobId/full-quality → 202 (200 + existing)
 styleChoice(): Promise<VideoRemakeStyleChoice> // GET /v1/video-remake/style-choice, public
@@ -2802,6 +2803,70 @@ Refused as a run refuses such a clip (the codes are in
 `name`) and `400 previz_not_for_trends`. Where `planRolesPreviz` is not `true`
 leave `clipKind` out of `planRoles()`: a server that does not plan such a clip
 refuses the field with `400 validation_error`.
+
+**Checking the request first** (`intent()`, `VideoRemakeIntentCheck`): a
+quick, free check of whether the words a person typed (`prePrompt`,
+`postPrompt`, a custom style) ask for something Video Remake does, before the
+run. It takes the same body as `estimate()` and `run()`, starts no job,
+charges nothing and keeps nothing, and it never refuses a run: it only tells
+you when the words ask for something else, so you can point the person to the
+tool that does it.
+
+```ts
+const check = await client.videoRemake.intent(params).catch(() => null) // an error is "not checked"
+if (check?.checked && !check.fits && check.code === "wants-extend") {
+  // Show the person that the clip can be extended elsewhere; if they go on anyway:
+  await client.videoRemake.run({ ...params, intent: { code: check.code, action: "continued" } })
+}
+```
+
+It answers `{ checked, fits, code? }`:
+
+- `{ checked: false, fits: true }`: not checked (switched off on this
+  deployment, took too long, or there were no words to read). Go ahead.
+- `{ checked: true, fits: true }`: the words fit what Video Remake does.
+- `{ checked: true, fits: false, code }`: the words ask for something else.
+
+Treat `checked: false`, a thrown error (a refusal, a `429`, a timeout) and a
+`code` this SDK does not know as "go ahead". The check exists only where the
+deployment has it switched on; elsewhere it answers `checked: false`. It needs
+a signed-in account and is limited to 12 calls a minute per account
+(`429 rate_limit_exceeded`, with `Retry-After`). It waits 10 s by default; pass
+`{ timeoutMs }` as its second argument to wait another time, or `{ signal }` to
+cancel.
+
+The codes (`VideoRemakeIntentCode`). These have a better place to go, and
+Nodaro's own apps say so before the run (`VideoRemakeIntentPopupCode`):
+
+| `code` | The words ask for |
+|---|---|
+| `wants-extend` | The clip continued past its end. |
+| `wants-voice-change` | Other voices for the people in it. |
+| `wants-dub` | The speech in another language. |
+| `wants-recast` | A different story, or people moving differently than they do in the clip. |
+| `wants-new-video` | A new video that is not an edit of this clip. |
+| `wants-join` | Several clips joined or reordered. |
+| `wants-reframe` | Another shape or aspect ratio. |
+| `wants-shorter` | The clip trimmed or cut. |
+
+These are reported only: Nodaro's own apps show nothing and let the run go
+ahead (`VideoRemakeIntentReportedCode`):
+
+| `code` | The words ask for |
+|---|---|
+| `wants-lipsync` | Someone saying or singing other words. |
+| `wants-upscale` | Only a sharper or larger video, nothing else changed. |
+| `wants-captions` | Subtitles or captions. |
+| `wants-sound` | Other music, sound effects or sound. |
+| `wants-speed` | Faster, slower, reversed or looped. |
+| `wants-watermark-removal` | A watermark or logo taken off. |
+
+A run that went ahead after a `fits: false` answer may say so with `intent`
+(`VideoRemakeRunIntent`, optional, read by `run()` only):
+`{ code, action: "continued" }` when the person was shown the answer and went
+on anyway, `{ code, action: "unserved" }` when the app shows nothing for that
+code. `code` is the check's code as answered (kebab-case, at most 40
+characters). An `intent` of any other shape is dropped, never refused.
 
 **A 3D previz clip** (`clipKind`, `previz`, a role's `subject`): where
 `styleChoice()` answers `previz` `true`, `run()` and `estimate()` take
@@ -4158,6 +4223,84 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > })
 > ```
 
+> **Relight & Switch.** `run("switchx", …)` / `runAndWait("switchx", …)` /
+> `quote("switchx", …)` have a typed overload — `RelightSwitchParams`
+> (`POST /v1/switchx`): relight a subject, restyle or swap a background, or
+> composite new elements onto a video's own pixels.
+>
+> | Field | Type | Default | Notes |
+> |---|---|---|---|
+> | `videoUrl` | `string` | — | Required. At most 240 frames and 2.77 megapixels a frame. |
+> | `alphaMode` | `"auto" \| "fill" \| "select" \| "custom"` | — | Required. `auto`: the subject, found for you. `fill`: the whole scene. `select`: `maskUrl` is a mask image of one frame, followed across the clip. `custom`: `maskUrl` is a mask video. |
+> | `maskUrl` | `string` | — | Required by `select` (an image) and `custom` (a video). |
+> | `alphaKeyframeIndex` | `number` | `0` | `select` only: the frame the mask image belongs to, counted from 0. |
+> | `referenceImageUrl` | `string` | — | A picture whose light and look the result takes. Give this, a `prompt`, or both. |
+> | `prompt` | `string` | — | Up to 2,000 characters. |
+> | `maxResolution` | `720 \| 1080` | `1080` | Part of the price. |
+> | `seed` | `number` | — | 0–4294967295. |
+> | `sessionId`, `origin` | `string` | — | As on every generation: the session the job is filed in, and your app's slug (`jobs.list({ origin })`). |
+>
+> Priced by the clip's frames, in blocks of 30, and by `maxResolution`:
+> `quote("switchx", params)` measures the clip as the run does and answers the
+> exact tier (see the [Relight & Switch node docs](nodes/ai-video/switchx.md#credit-cost)).
+> The clip is measured before any credits are reserved; each refusal is a
+> `400` whose `message` is a sentence you can show: `VIDEO_TOO_MANY_FRAMES`
+> (more than 240 frames; a clip up to 270 is cut to its first 240 instead, and
+> the job's `output_data.sourceTrimmedToFrames` says so), `SOURCE_TOO_LARGE`
+> (a frame over 2.77 megapixels), `MISSING_STYLE_INPUT` (neither a prompt nor a
+> reference image), `MISSING_ALPHA` (`select` or `custom` without `maskUrl`).
+> The quote answers the same codes. The completed job's `output_data`
+> (`RelightSwitchJobOutput`) carries `videoUrl` and `thumbnailUrl`.
+>
+> ```ts
+> const params = {
+>   videoUrl: "https://cdn.example.com/clip.mp4",
+>   alphaMode: "auto",
+>   prompt: "golden hour, warm rim light",
+>   maxResolution: 720,
+>   origin: "video-player",
+> } as const
+> const { reserve } = await client.nodes.quote("switchx", params)
+> const { videoUrl } = await client.nodes.runAndWait("switchx", params)
+> ```
+
+> **Edit Video Pro.** `run("edit-video-pro", …)` / `runAndWait("edit-video-pro", …)` /
+> `quote("edit-video-pro", …)` have a typed overload — `EditVideoProParams`
+> (`POST /v1/edit-video-pro`, Nodaro Cloud): replace a span of time inside a
+> video with newly generated content, stitched back into the source.
+>
+> | Field | Type | Default | Notes |
+> |---|---|---|---|
+> | `videoUrl` | `string` | — | Required. |
+> | `spanStart`, `spanEnd` | `number` | — | Required, in seconds. The span is 4 to 120 seconds long and ends inside the video. |
+> | `prompt` | `string` | — | Required: what happens in the span. |
+> | `provider` | `EditVideoProProvider` | `"seedance-2"` | A Seedance 2 family model (see the [Edit Video Pro node docs](nodes/ai-video/edit-video-pro.md#providers)). |
+> | `referenceImageUrls` | `string[]` | `[]` | Up to 9 pictures the new content may draw on. |
+> | `generateAudio` | `boolean` | `true` | Generate the span's sound too. |
+> | `sessionId`, `origin` | `string` | — | As on every generation. |
+>
+> `quote("edit-video-pro", params)` answers the most the edit can cost as
+> `reserve`, with a `settles_to_actual` warning: the run is charged for what it
+> generates (see [credit pricing](nodes/ai-video/edit-video-pro.md#credit-pricing)).
+> Each refusal is a `400` whose `message` is a sentence you can show:
+> `validation_error` (a span under 4 seconds or over the maximum, no prompt)
+> and `span_exceeds_source` (`spanEnd` past the end of the video); the quote
+> refuses the same spans. A model the deployment does not offer answers
+> `403 model_not_available`. The completed job's `output_data` carries
+> `videoUrl`.
+>
+> ```ts
+> const params = {
+>   videoUrl: "https://cdn.example.com/clip.mp4",
+>   spanStart: 5,
+>   spanEnd: 13,
+>   prompt: "the dog jumps into the pool",
+>   origin: "video-player",
+> }
+> const { reserve } = await client.nodes.quote("edit-video-pro", params)
+> const { videoUrl } = await client.nodes.runAndWait("edit-video-pro", params)
+> ```
+
 > **Assemble Narrated Video.** `run("assemble-narrated-video", …)` also has a
 > typed overload — `AssembleNarratedVideoParams`: `blocks: { videoUrl: string;
 > audioUrl?: string }[]` (1–60, in play order) plus `voiceVolume` (0–200,
@@ -4297,8 +4440,9 @@ body you would pass to `run`: the platform prices it with the run route's own
 code — validation, measuring reference clips or a picture, the credit id and
 the amount — and starts nothing. Typed for `text-to-video`, `generate-video`,
 `video-to-video`, `video-upscale` (a Seedance 2.5 draft's 1080p finalize is
-priced from the draft) and `edit-image`; `ai-avatar`, `cinematic-avatar`,
-`switchx` and `lip-sync` take their run bodies as-is, and `split-into-layers` is quotable too and
+priced from the draft), `edit-image`, `switchx` (Relight & Switch) and
+`edit-video-pro` (on Nodaro Cloud); `ai-avatar`, `cinematic-avatar` and
+`lip-sync` take their run bodies as-is, and `split-into-layers` is quotable too and
 takes the body `client.media.splitIntoLayers` takes. Those are the types the
 platform can quote today (any other rejects with `400 quote_unsupported`). It
 rejects with the run's own `400` / `403` for a body, model or node the run would
