@@ -61,10 +61,23 @@ export interface SurfaceWorlds {
   readonly home?: WorldId
   /** Display order; worlds it leaves out follow in canonical order. */
   readonly order?: readonly WorldId[]
+  /**
+   * Worlds the deployment will open later. A white-label header draws each as
+   * a tab marked "Soon" that leads nowhere, and the world is not offered: its
+   * pages are not served and nothing of it runs, whatever `allow` says.
+   * Absent: none.
+   */
+  readonly soon?: readonly WorldId[]
 }
 
-/** Does the profile's allowlist let this world through? (Node availability is checked separately.) */
+/** Whether the deployment marks this world as one it will open later (`soon`): drawn as "Soon", never offered. */
+export function worldSoon(worlds: SurfaceWorlds | undefined, id: string): boolean {
+  return (worlds?.soon as readonly string[] | undefined)?.includes(id) ?? false
+}
+
+/** Does the profile let this world through: its allowlist does, and it is not one still to come (`soon`)? (Node availability is checked separately.) */
 export function worldAllowed(worlds: SurfaceWorlds | undefined, id: string): boolean {
+  if (worldSoon(worlds, id)) return false
   return worlds?.allow === undefined || worlds.allow.includes(id)
 }
 

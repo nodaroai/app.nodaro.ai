@@ -647,6 +647,131 @@ describe("worlds — an allowlist where presence narrows", () => {
     warn()
     expect(worlds({ order: ["voice", "bogus", "voice", "image"] }).worlds).toEqual({ order: ["voice", "image"] })
   })
+
+  it("soon keeps known ids once each, loudly dropping the rest; nothing usable leaves the key out", () => {
+    const { calls } = warn()
+    expect(worlds({ allow: ["image", "music"], soon: ["music", "bogus", "music"] }).worlds).toEqual({ allow: ["image", "music"], soon: ["music"] })
+    expect(worlds({ soon: "voice" }).worlds).toEqual({ soon: ["voice"] })
+    expect(worlds({ soon: ["bogus"] }).worlds).toEqual({})
+    expect(calls().filter((m) => m.includes("worlds.soon") && m.includes("bogus")).length).toBe(2)
+  })
+})
+
+describe("toolApps — widens what a white-label deployment shows: on only for the literal true", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const toolApps = (value: unknown) => parseSurfaceProfile(JSON.stringify({ toolApps: value, nav: { hide: ["gallery"] } }))
+
+  it("absent, the key is absent; each switch is kept as given", () => {
+    expect(parseSurfaceProfile("{}").toolApps).toBeUndefined()
+    expect(toolApps({ menus: true, pages: true }).toolApps).toEqual({ menus: true, pages: true })
+    expect(toolApps({ pages: true }).toolApps).toEqual({ menus: false, pages: true })
+    expect(toolApps({ menus: false }).toolApps).toEqual({ menus: false, pages: false })
+  })
+
+  it("a value that is not true or false is off, loudly, and never takes a sibling key down", () => {
+    const { calls } = warn()
+    expect(toolApps({ menus: "true", pages: 1 }).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps(true).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps(["menus"]).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps("all").nav.hide).toEqual(["gallery"])
+    expect(calls().filter((m) => m.includes("[surface-profile] toolApps")).length).toBeGreaterThanOrEqual(5)
+  })
+
+  it("pictures: each key's own picture, a path on the site or an https address; any other entry is dropped, loudly", () => {
+    const { calls } = warn()
+    const pictures = {
+      "image-upscale": " /brand/apps/upscale.webp ",
+      "tile:image:createImage": "https://media.example.com/create.png",
+      "image-outpaint": "//elsewhere.example.com/a.png",
+      "video-captions": "http://media.example.com/captions.png",
+      "video-trim": 7,
+    }
+    expect(toolApps({ pages: true, pictures }).toolApps).toEqual({
+      menus: false,
+      pages: true,
+      pictures: { "image-upscale": "/brand/apps/upscale.webp", "tile:image:createImage": "https://media.example.com/create.png" },
+    })
+    expect(calls().filter((m) => m.includes("toolApps.pictures[")).length).toBe(3)
+    expect(toolApps({ pictures: ["/a.png"] }).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps({ pictures: { "image-upscale": "nowhere" } }).toolApps).toEqual({ menus: false, pages: false })
+  })
+})
+
+describe("samples — a deployment's own welcome samples", () => {
+  const warn = () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    return { calls: () => spy.mock.calls.map((c) => String(c[0])) }
+  }
+  afterEach(() => vi.restoreAllMocks())
+  const samples = (value: unknown) => parseSurfaceProfile(JSON.stringify({ samples: value, nav: { hide: ["gallery"] } }))
+  const picture = { prompt: "a lighthouse at dusk", picture: "/brand/samples/lighthouse.webp" }
+  const clip = { title: "The harbour", prompt: "a harbour at dawn", video: "/brand/samples/harbour.mp4", picture: "/brand/samples/harbour.webp" }
+
+  it("absent, or with nothing usable, the key is absent", () => {
+    warn()
+    expect(parseSurfaceProfile("{}").samples).toBeUndefined()
+    expect(samples({}).samples).toBeUndefined()
+    expect(samples({ image: [], video: [] }).samples).toBeUndefined()
+    expect(samples("all").samples).toBeUndefined()
+    expect(samples({ image: picture }).samples).toBeUndefined()
+    expect(samples("all").nav.hide).toEqual(["gallery"])
+  })
+
+  it("image: a prompt and a picture, trimmed; the model, ratio and centre when given; a bad entry is dropped alone, loudly", () => {
+    const { calls } = warn()
+    const image = [
+      { prompt: "  a lighthouse at dusk  ", picture: " /brand/samples/lighthouse.webp ", model: "model-a", aspectRatio: "16:9", center: true },
+      { ...picture, prompt: "a fox", model: "", aspectRatio: 3, center: "yes" },
+      { prompt: "", picture: "/a.png" },
+      { prompt: "x".repeat(4001), picture: "/a.png" },
+      { prompt: "plain http", picture: "http://media.example.com/a.png" },
+      "a string",
+    ]
+    expect(samples({ image }).samples).toEqual({
+      image: [
+        { ...picture, model: "model-a", aspectRatio: "16:9", center: true },
+        { ...picture, prompt: "a fox" },
+      ],
+    })
+    expect(calls().filter((m) => m.includes("samples.image[") && m.includes("dropped")).length).toBe(4)
+    expect(calls().some((m) => m.includes("samples.image[1].center"))).toBe(true)
+  })
+
+  it("video: a title, a prompt, a clip and a still; the rest when of its kind; a bad reference is dropped alone", () => {
+    const { calls } = warn()
+    const video = [
+      { ...clip, original: "https://media.example.com/harbour.mp4", model: "model-a", duration: 12, aspectRatio: "16:9", resolution: "720p", references: ["/brand/samples/sheet.webp", "http://media.example.com/plain.png"] },
+      { ...clip, title: "Bare", original: "//elsewhere.example.com/a.mp4", duration: "12", references: "none" },
+      { ...clip, title: "" },
+      { ...clip, video: "http://media.example.com/a.mp4" },
+      { ...clip, picture: undefined },
+    ]
+    expect(samples({ video }).samples).toEqual({
+      image: [],
+      video: [
+        { ...clip, original: "https://media.example.com/harbour.mp4", model: "model-a", duration: 12, aspectRatio: "16:9", resolution: "720p", references: ["/brand/samples/sheet.webp"] },
+        { ...clip, title: "Bare" },
+      ],
+    })
+    expect(calls().filter((m) => m.includes("samples.video[") && m.includes("dropped")).length).toBe(4)
+    expect(calls().some((m) => m.includes("samples.video[1].original"))).toBe(true)
+    expect(calls().some((m) => m.includes("samples.video[1].duration"))).toBe(true)
+    expect(calls().some((m) => m.includes("samples.video[1].references"))).toBe(true)
+  })
+
+  it("keeps at most twelve a world, and at most twelve pictures a clip", () => {
+    warn()
+    const image = Array.from({ length: 15 }, (_, i) => ({ ...picture, prompt: `sample ${i}` }))
+    const video = [{ ...clip, references: Array.from({ length: 20 }, (_, i) => `/r/${i}.png`) }, ...Array.from({ length: 14 }, (_, i) => ({ ...clip, title: `clip ${i}` }))]
+    const kept = samples({ image, video }).samples
+    expect(kept?.image.map((s) => s.prompt)).toEqual(image.slice(0, 12).map((s) => s.prompt))
+    expect(kept?.video).toHaveLength(12)
+    expect(kept?.video?.[0]?.references).toHaveLength(12)
+  })
 })
 
 describe("imports.links — a safety switch: a present false never flips open", () => {
