@@ -1,10 +1,10 @@
 /**
  * Suno Add Vocals / Add Instrumental on KIE's market lane (decided
  * 2026-11-23): the bodies are the documented allow-lists (the song as
- * `upload_url`, the four required fields always present, every optional field
- * only when set, `vocal_gender` as m / f, the style as `tags` on Add
- * Instrumental, no prompt there), and the two runs create the documented
- * market models and return the task's tracks.
+ * `upload_url`, the four required fields always present and never empty,
+ * every optional field only when set, `vocal_gender` as m / f, the style as
+ * `tags` on Add Instrumental, no prompt there), and the two runs create the
+ * documented market models and return the task's tracks.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
@@ -19,6 +19,7 @@ vi.mock("@/lib/config.js", () => ({
 
 import {
   SUNO_ADD_INSTRUMENTAL_MARKET_MODEL,
+  SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS,
   SUNO_ADD_TRACK_FALLBACK_TITLE,
   SUNO_ADD_VOCALS_MARKET_MODEL,
   sunoAddInstrumentalInput,
@@ -31,10 +32,34 @@ import { sunoAddInstrumental, sunoAddVocals } from "../suno-market.js"
 const SONG = "https://cdn.example/song.wav"
 const BARE = { uploadUrl: SONG, style: "soulful pop", title: "Fresh Step" }
 
+describe("negative_tags: required by both schemas, and KIE refuses an empty one", () => {
+  // Every run that excluded nothing failed at createTask with
+  // `422 {"msg":"Please enter negativeTags."}` while the body sent "".
+  const bodies = [
+    ["Add Vocals", sunoAddVocalsInput],
+    ["Add Instrumental", sunoAddInstrumentalInput],
+  ] as const
+
+  it.each(bodies)("%s: nothing excluded (unset, empty or blank) sends the neutral default, never an empty value", (_name, build) => {
+    for (const negativeTags of [undefined, "", "   "]) {
+      expect(build({ ...BARE, negativeTags }).negative_tags).toBe(SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS)
+    }
+  })
+
+  it.each(bodies)("%s: the person's own styles to keep out are sent as they are", (_name, build) => {
+    expect(build({ ...BARE, negativeTags: " heavy metal, fast drums " }).negative_tags).toBe("heavy metal, fast drums")
+  })
+
+  it("the default is non-empty and inside the schema's 200-character limit", () => {
+    expect(SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS.trim()).not.toBe("")
+    expect(sunoAddTrackTextProblem({ negativeTags: SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS })).toBeNull()
+  })
+})
+
 describe("the Add Vocals body", () => {
-  it("an old-style run (no direction) still carries what KIE requires: the file, title, style, an empty negative_tags, the model", () => {
+  it("an old-style run (no direction) still carries what KIE requires: the file, title, style, negative_tags, the model", () => {
     expect(sunoAddVocalsInput(BARE)).toEqual({
-      upload_url: SONG, model: "V6", title: "Fresh Step", negative_tags: "", style: "soulful pop",
+      upload_url: SONG, model: "V6", title: "Fresh Step", negative_tags: SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS, style: "soulful pop",
     })
   })
 
@@ -85,7 +110,7 @@ describe("the Add Vocals body", () => {
 describe("the Add Instrumental body", () => {
   it("the style goes as tags; there is no prompt field", () => {
     const body = sunoAddInstrumentalInput({ ...BARE, prompt: "ignored", vocalGender: "male", audioWeight: 0.7 })
-    expect(body).toEqual({ upload_url: SONG, model: "V6", title: "Fresh Step", negative_tags: "", tags: "soulful pop", vocal_gender: "m", audio_weight: 0.7 })
+    expect(body).toEqual({ upload_url: SONG, model: "V6", title: "Fresh Step", negative_tags: SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS, tags: "soulful pop", vocal_gender: "m", audio_weight: 0.7 })
     const documented = ["upload_url", "model", "title", "negative_tags", "tags", "lyrics", "vocal_gender", "style_weight", "weirdness_constraint", "audio_weight", "variety"]
     for (const key of Object.keys(body)) expect(documented).toContain(key)
   })
@@ -133,6 +158,7 @@ describe("the two runs on the market lane", () => {
     const onTaskCreated = vi.fn()
     const result = await run(() => sunoAddVocals({ ...BARE, prompt: "la la", vocalGender: "female" }, { onTaskCreated, modelKey: "suno-add-vocals" }))
     expect(sent()).toEqual({ model: SUNO_ADD_VOCALS_MARKET_MODEL, input: sunoAddVocalsInput({ ...BARE, prompt: "la la", vocalGender: "female" }) })
+    expect(sent().input.negative_tags).toBe(SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS)
     expect(onTaskCreated).toHaveBeenCalledWith("t-add")
     expect(result.tracks).toEqual([{ id: "trk-1", audioUrl: "https://cdn.example/out.mp3", title: "Fresh Step", duration: 70 }])
   })
@@ -140,5 +166,6 @@ describe("the two runs on the market lane", () => {
   it("Add Instrumental creates ai-music-api/add-instrumental", async () => {
     await run(() => sunoAddInstrumental(BARE))
     expect(sent()).toEqual({ model: SUNO_ADD_INSTRUMENTAL_MARKET_MODEL, input: sunoAddInstrumentalInput(BARE) })
+    expect(sent().input.negative_tags).toBe(SUNO_ADD_TRACK_DEFAULT_NEGATIVE_TAGS)
   })
 })
