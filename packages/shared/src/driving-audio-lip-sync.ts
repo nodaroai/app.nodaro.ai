@@ -10,7 +10,7 @@
  * resolution.
  */
 import { MODEL_CATALOG } from "./model-catalog.js"
-import { LIP_SYNC_PROVIDERS, isLtx25Provider, normalizeLtx25Resolution } from "./model-constants.js"
+import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, isLtx25Provider, normalizeLtx25Resolution } from "./model-constants.js"
 import { takesDrivingAudio } from "./driving-audio.js"
 
 /** Is this Lip Sync model an audio-to-video run (a Lip Sync model whose catalog entry has `drivingAudio`)? */
@@ -30,4 +30,17 @@ export function drivingAudioLipSyncResolution(provider: string, resolution?: unk
   const asked = typeof resolution === "string" && resolution !== "" ? resolution : LIP_SYNC_DEFAULT_RESOLUTION
   if ((MODEL_CATALOG[provider]?.resolutions ?? []).includes(asked)) return asked
   return isLtx25Provider(provider) ? normalizeLtx25Resolution(provider, asked) : asked
+}
+
+/**
+ * The Lip Sync models that make a NEW clip from a portrait and a voice line
+ * (rather than dubbing a video or animating an avatar on its own lane): the
+ * multimodal video models the node sends the voice as reference audio
+ * (`SEEDANCE_LIP_SYNC_PROVIDERS`: the Seedance 2 family, MiniMax Hailuo 3)
+ * and the ones that run audio-to-video (`isDrivingAudioLipSyncProvider`:
+ * LTX 2.5 Fast), in the node's own order. The one list a product reads
+ * instead of re-deriving it (decided 2026-11-24).
+ */
+export function portraitVideoLipSyncModels(): readonly string[] {
+  return LIP_SYNC_PROVIDERS.filter((id) => SEEDANCE_LIP_SYNC_PROVIDERS.has(id) || isDrivingAudioLipSyncProvider(id))
 }

@@ -3203,7 +3203,7 @@ charges anything: the hold is refunded.
 | Query param | Values | Purpose |
 |---|---|---|
 | `kind` | `image` / `video` / `audio` | Filter to one media kind. |
-| `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. |
+| `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. `lip-sync` lists every model the Lip Sync node takes (decided 2026-11-24): the lip-sync models and the video models it runs a portrait and a voice through (the Seedance 2 family, MiniMax Hailuo 3, LTX 2.5 Fast). The latter keep their own video `modes` in the entry. |
 | `family` | string | Vendor / lab name, e.g. `Google`, `Bytedance`. |
 | `featuredOnly` | boolean | Featured models only. |
 

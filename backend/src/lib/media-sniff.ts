@@ -10,8 +10,8 @@ export type SniffKind = "image" | "video" | "audio"
 
 
 /** ISO-BMFF brands of a still image (AVIF, HEIF): every other `ftyp` brand is an audio-or-video container. */
-const AVIF_BRANDS = new Set(["avif", "avis"])
-const HEIF_BRANDS = new Set(["heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"])
+export const AVIF_BRANDS: ReadonlySet<string> = new Set(["avif", "avis"])
+export const HEIF_BRANDS: ReadonlySet<string> = new Set(["heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"])
 /** A QuickTime file whose first box is not `ftyp`: the box types it can start with. */
 const QUICKTIME_FIRST_BOXES = new Set(["wide", "free", "skip", "mdat", "moov"])
 
@@ -65,4 +65,18 @@ export function sniffInputType(head: Buffer, kind: SniffKind): { readonly ext: s
   // Last: a QuickTime file whose first box is not `ftyp` (only a box type marks it).
   if (head.length >= 8 && QUICKTIME_FIRST_BOXES.has(ascii(4, 8))) return video ? { ext: "mov", contentType: "video/quicktime" } : undefined
   return undefined
+}
+
+/**
+ * An ISO-BMFF file's brands from its `ftyp` box: the major brand and the
+ * compatible ones listed after it, or undefined when the first box is not
+ * `ftyp`. Reads only what the head holds.
+ */
+export function isoBrandsOf(head: Buffer): { readonly major: string; readonly compatible: readonly string[] } | undefined {
+  if (head.length < 12 || head.subarray(4, 8).toString("latin1") !== "ftyp") return undefined
+  const boxSize = head.readUInt32BE(0)
+  const end = Math.min(head.length, boxSize >= 16 ? boxSize : 16)
+  const compatible: string[] = []
+  for (let at = 16; at + 4 <= end; at += 4) compatible.push(head.subarray(at, at + 4).toString("latin1"))
+  return { major: head.subarray(8, 12).toString("latin1"), compatible }
 }
