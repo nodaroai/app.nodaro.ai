@@ -3,7 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 /**
  * `/v1/admin/video-remake/flash-offer`: per engine, Offer Flash — whether
- * every user may pick its Flash choice (Prism Flash, Pulse Flash): "off" (the
+ * every user may pick its Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash): "off" (the
  * default) or "on".
  *
  * What must hold:
@@ -76,8 +76,8 @@ const CS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolution
 const envRow = (env: string, castSwap: Record<string, unknown>) => ({ env, pluginBuildId: null, supports: { castSwap: { ...CS, ...castSwap } }, updatedAt: "2026-11-01T00:00:00.000Z" })
 const FLASH = { flashChoices: true }
 const ENGINES = [
-  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" },
-  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Nodaro Prism Flash" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Nodaro Pulse Flash" },
 ]
 
 let app: FastifyInstance

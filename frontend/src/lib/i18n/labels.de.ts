@@ -811,6 +811,7 @@ const MODEL_DESCRIPTIONS_DE: Record<string, string> = {
   "Versatile, 5-10s clips": "Vielseitig, Clips von 5-10 s",
   "Versatile, good at diverse styles": "Vielseitig, stark in verschiedenen Stilen",
   "Video-to-video AI dubbing. Multi-speaker (basic mode). Cheapest modern dubbing, billed per second.": "KI-Synchronisation Video zu Video. Mehrere Sprecher (Basismodus). Günstigste moderne Synchronisation, Abrechnung pro Sekunde.",
+  "Portrait and voice to a talking clip as long as the voice, 2–20s, 720p/1080p/1440p, billed per second": "Porträt und Stimme zu einem sprechenden Clip so lang wie die Stimme, 2–20 s, 720p/1080p/1440p, Abrechnung pro Sekunde",
   "Video-to-video editing, up to 60s input": "Video-zu-Video-Bearbeitung, Eingabe bis 60 s",
   "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame": "Wan 2.7 I2V, 2–15 s, 720p/1080p, Start- + Endframe",
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15 s, 720p/1080p",

@@ -12359,7 +12359,7 @@ export interface AdminTrendData {
   sourceCrop?: { aspect: AdminTrendCropAspect; position: number; fromUrl: string; startedAt: string; by: string; error?: { code: string; message: string; at: string } }
   /** The video engine every run uses (hidden choice, public result). Absent = `"seedance-2-5"`. */
   engine?: AdminTrendEngine
-  /** The trend runs on its engine's Flash choice (Prism Flash, Pulse Flash). Absent = the engine itself. */
+  /** The trend runs on its engine's Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash). Absent = the engine itself. */
   flash?: true
   /** Kling 4 only: how a run fits the clip to whole seconds (hidden). Absent = `"cut-end"`. */
   klingLength?: AdminTrendKlingLength
@@ -13952,7 +13952,7 @@ export async function saveNodaroMotionShotLock(shotLock: NodaroMotionShotLock): 
 
 // ---- Admin: Video Remake's Offer Flash (/v1/admin/video-remake/flash-offer, admin-nodaro-motion-flash-offer.ts) ----
 
-/** One engine's Offer Flash: whether every user may pick its Flash choice (Prism Flash, Pulse Flash). */
+/** One engine's Offer Flash: whether every user may pick its Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash). */
 export type NodaroMotionFlashOfferValue = "off" | "on"
 
 /** Offer Flash per engine, keyed by public id; an engine left out (or "off") offers no Flash choice. */
@@ -13962,7 +13962,7 @@ export interface NodaroMotionFlashOfferView {
   /** null = never saved: off for every engine. Only the engines that are on are listed. */
   flashOffer: NodaroMotionFlashOffer | null
   updatedAt: string | null
-  /** Each engine, with the name of its Flash choice ("Prism Flash", "Pulse Flash"). */
+  /** Each engine, with the name of its Flash choice ("Nodaro Prism Flash", "Nodaro Pulse Flash"). */
   engines: Array<{ id: NodaroMotionEngine; name: string; internal: AdminTrendEngine; flashName: string }>
   /** Whether this environment's Cast Swap engine runs the Flash choices. */
   supported: boolean
@@ -14263,7 +14263,7 @@ export interface NodaroMotionPreciseUpscale {
   "480p"?: "off" | "720p" | "1080p" | "4k"
   "720p"?: "off" | "720p" | "1080p" | "4k"
   "1080p"?: "off" | "1080p" | "4k"
-  /** Prism Flash's rows (no 1080p): what a Prism Flash Precise run takes; a row left out takes its default. */
+  /** Nodaro Prism Flash's rows (no 1080p): what a Nodaro Prism Flash Precise run takes; a row left out takes its default. */
   flash?: { "480p"?: "off" | "720p" | "1080p" | "4k"; "720p"?: "off" | "720p" | "1080p" | "4k" }
 }
 

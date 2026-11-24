@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 /**
- * A Video Remake request's `engine` may name a Flash choice (Prism Flash, Pulse Flash): a hook or helper that applies
+ * A Video Remake request's `engine` may name a Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash): a hook or helper that applies
  * an engine's settings to a run must read the engine OF THE RUN (`castSwapEngineOfRun`), which reads a Flash choice
  * as its engine. `castSwapEngineFrom` reads it as no engine, so the run would silently miss its engine's settings.
  *

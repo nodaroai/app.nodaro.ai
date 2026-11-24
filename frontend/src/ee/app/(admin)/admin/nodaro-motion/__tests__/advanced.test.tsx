@@ -61,7 +61,7 @@ beforeEach(() => {
   // The shot list's frame rate (shot-list-fps.test.tsx): never saved, and an engine that reads none.
   routes["GET /v1/admin/video-remake/shot-list-fps"] = () => ({ body: { data: { shotListFps: null, fps: 6, defaultFps: 6, options: [1, 2, 3, 4, 6, 8, 12], updatedAt: null, supported: false, rateCarried: true } } })
   // Offer Flash (flash-offer.test.tsx): never saved, on an engine that runs the Flash choices.
-  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" }], supported: true, environments: [] } } })
+  routes["GET /v1/admin/video-remake/flash-offer"] = () => ({ body: { data: { flashOffer: null, updatedAt: null, engines: [{ id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Nodaro Prism Flash" }, { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Nodaro Pulse Flash" }], supported: true, environments: [] } } })
   // The Precise upscale (precise-upscale.test.tsx): never saved, every default.
   routes["GET /v1/admin/video-remake/precise-upscale"] = () => ({ body: { data: { value: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, stored: null, defaults: { "480p": "1080p", "720p": "1080p", "1080p": "4k" }, updatedAt: null, supported: true } } })
 })
@@ -76,7 +76,7 @@ describe("Admin → Video Remake → Advanced in Video Remake", () => {
     expect(toggle).not.toBeChecked()
     expect(toggle).toHaveAccessibleDescription(ADVANCED_SWITCH_HINT)
     // Page level: once, and in no engine's section.
-    expect(await screen.findByRole("heading", { name: /^Nodaro Prism/ })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: /^Nodaro Prism(?! Flash)/ })).toBeInTheDocument()
     expect(screen.getAllByRole("switch", { name: ADVANCED_SWITCH_LABEL })).toHaveLength(1)
     expect(toggle.closest("section")).toBeNull()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
@@ -131,7 +131,7 @@ describe("Admin → Video Remake → Advanced in Video Remake", () => {
     routes[`PUT ${ADVANCED_URL}`] = (init) => view(JSON.parse(String(init?.body)).show)
     renderWith(<AdminNodaroMotionPage />)
     await user.click(await advancedSwitch())
-    const pulse = (await screen.findByRole("heading", { name: /^Nodaro Pulse/ })).closest("section") as HTMLElement
+    const pulse = (await screen.findByRole("heading", { name: /^Nodaro Pulse(?! Flash)/ })).closest("section") as HTMLElement
     await user.click(await within(pulse).findByRole("combobox", { name: "Style" }))
     await user.click(await screen.findByRole("option", { name: "Always Flex" }))
     await user.click(screen.getByRole("button", { name: "Save" }))

@@ -30,12 +30,13 @@ export function lipSyncFloorCreditId(pricing: LipSyncAudioPricing): string {
  */
 export async function lipSyncFloorRefusal(
   req: FastifyRequest,
-  pricing: LipSyncAudioPricing,
+  pricing: LipSyncAudioPricing | { readonly floorCreditId: string },
 ): Promise<{ readonly statusCode: number; readonly body: unknown } | undefined> {
   if (!hasCredits()) return undefined
   try {
     const { CreditsService } = await import("../ee/billing/credits.js")
-    const credits = await CreditsService.getModelCreditCost(lipSyncFloorCreditId(pricing))
+    // An audio-to-video model (LTX 2.5 Fast) names its cheapest row itself: its shortest clip.
+    const credits = await CreditsService.getModelCreditCost("floorCreditId" in pricing ? pricing.floorCreditId : lipSyncFloorCreditId(pricing))
     const afford = await checkPayerCanAfford(req, credits)
     if (afford.ok) return undefined
     // An account that still owes its consent is answered by the guard's own

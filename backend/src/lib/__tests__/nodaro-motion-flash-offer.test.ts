@@ -12,7 +12,7 @@ import {
 
 /**
  * `nodaro_motion_flash_offer`: per Video Remake engine, whether every user may
- * pick its Flash choice (Prism Flash, Pulse Flash).
+ * pick its Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash).
  *
  * What must hold:
  *  - a NEW key: the retired admin-only test's row (`nodaro_motion_flash_model`)

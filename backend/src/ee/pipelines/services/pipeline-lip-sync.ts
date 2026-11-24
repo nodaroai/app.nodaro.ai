@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, buildLipSyncCreditId, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
+import { MINIMAX_H3_LIP_SYNC_CREDIT_ID, buildLipSyncCreditId, isDrivingAudioLipSyncProvider, isSeedanceLipSyncProvider, seedanceLipSyncCreditId, seedanceLipSyncResolution } from "@nodaro/shared/credits"
 import { isMinimaxH3Provider } from "@nodaro/shared/models"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
@@ -113,6 +113,9 @@ export function pipelineLipSyncPricing(
   resolution: string | undefined,
   audioDurationSec: number | undefined,
 ): { modelIdentifier: string; resolution: string | undefined } {
+  // An audio-to-video model (LTX 2.5 Fast) is priced on its voice as the server reads it before the hold,
+  // which this step does not do: it is not offered here (refused before anything is held).
+  if (isDrivingAudioLipSyncProvider(provider)) throw new Error(`${provider} is not available for the pipeline's lip sync step. Pick another Lip Sync model.`)
   if (provider === "infinitalk") return { modelIdentifier: `infinitalk:${resolution ?? "720p"}`, resolution }
   if (isMinimaxH3Provider(provider)) return { modelIdentifier: MINIMAX_H3_LIP_SYNC_CREDIT_ID, resolution }
   if (isSeedanceLipSyncProvider(provider)) {

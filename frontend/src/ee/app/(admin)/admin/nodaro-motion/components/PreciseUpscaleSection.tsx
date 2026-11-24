@@ -9,9 +9,9 @@
 // Topaz 1080p; 1080p: Topaz 4k), marked "(default)". The draft is always the
 // whole effective setting, and Save sends it whole.
 //
-// Prism Flash (decided 2026-11-22) has its own two rows (480p, 720p: it
-// renders no 1080p), default Topaz 1080p each, in a "Prism Flash" block: a
-// Prism Flash Precise run takes those, any other run the rows above.
+// Nodaro Prism Flash (decided 2026-11-22) has its own two rows (480p, 720p: it
+// renders no 1080p), default Topaz 1080p each, in a "Nodaro Prism Flash" block: a
+// Nodaro Prism Flash Precise run takes those, any other run the rows above.
 //
 // Where this environment's engine runs no upscale (`supported` false), the
 // setting still saves, and the block says that nothing reads it here.
@@ -33,12 +33,12 @@ export const PRECISE_UPSCALE_UNSUPPORTED = "This environment's engine runs no up
 
 export type PreciseUpscaleResolution = Exclude<keyof NodaroMotionPreciseUpscaleEffective, "flash">
 
-/** Prism Flash's rows (no 1080p). */
+/** Nodaro Prism Flash's rows (no 1080p). */
 export type PreciseUpscaleFlashResolution = keyof NodaroMotionPreciseUpscaleEffective["flash"]
 export const PRECISE_UPSCALE_FLASH_RESOLUTIONS: readonly PreciseUpscaleFlashResolution[] = ["480p", "720p"]
 
-/** The Prism Flash block's heading. */
-export const PRECISE_UPSCALE_FLASH_HEADING = "Prism Flash"
+/** The Nodaro Prism Flash block's heading. */
+export const PRECISE_UPSCALE_FLASH_HEADING = "Nodaro Prism Flash"
 
 export const PRECISE_UPSCALE_RESOLUTIONS: readonly PreciseUpscaleResolution[] = ["480p", "720p", "1080p"]
 
@@ -59,7 +59,7 @@ export function preciseUpscaleEffective(stored: NodaroMotionPreciseUpscale | nul
     const v = stored?.[r]
     if (v !== undefined && (PRECISE_UPSCALE_CHOICES[r] as readonly string[]).includes(v)) (out as unknown as Record<string, string>)[r] = v
   }
-  // Prism Flash's rows (a setting stored before them has none: their defaults).
+  // Nodaro Prism Flash's rows (a setting stored before them has none: their defaults).
   for (const r of PRECISE_UPSCALE_FLASH_RESOLUTIONS) {
     const v = stored?.flash?.[r]
     if (v !== undefined && (PRECISE_UPSCALE_CHOICES[r] as readonly string[]).includes(v)) (out.flash as Record<string, string>)[r] = v

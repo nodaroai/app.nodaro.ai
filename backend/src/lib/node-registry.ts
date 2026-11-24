@@ -5,6 +5,7 @@ import {
   TEXT_TO_VIDEO_PROVIDERS,
   VIDEO_GEN_PROVIDERS,
   LIP_SYNC_PROVIDERS,
+  lipSyncResolutions,
   VOICE_CHANGER_MODEL_IDS,
   GVP_SUPPORTED_PROVIDERS,
   SEEDANCE_2_PROVIDERS,
@@ -1637,7 +1638,8 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "audioUrl", type: "audio-url", required: true },
         { key: "provider", type: "select", options: [...LIP_SYNC_PROVIDERS] },
         { key: "prompt", type: "text" },
-        { key: "resolution", type: "select", options: ["480p", "720p", "1080p"] },
+        // Every resolution some Lip Sync model offers (`lipSyncResolutions`, the panel's table).
+        { key: "resolution", type: "select", options: [...lipSyncResolutions()] },
         { key: "fastMode", type: "boolean" },
         { key: "seed", type: "number" },
       ],

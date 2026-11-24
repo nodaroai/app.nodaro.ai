@@ -98,3 +98,23 @@ describe("audio-to-video in the video worker", () => {
     expect(mocks.uploadVideoMaybeWatermark.mock.calls[0]![0]).toBe(OUT.url)
   })
 })
+
+describe("LTX 2.5 Fast on Lip Sync in the video worker (decided 2026-11-23)", () => {
+  const LS = { jobId: "job-1", provider: "ltx-2.5-fast", imageUrl: "https://cdn.nodaro.ai/images/face.png", audioUrl: AUDIO, resolution: "720p", seed: 7, referenceAudioUrls: [AUDIO], audioToVideo: true, duration: 4.25 }
+
+  it("runs the audio-to-video endpoint from the stamp, and the laid-on file is stored once as the job's media", async () => {
+    await videoAIHandlers["lip-sync"]!(job("lip-sync", LS), ctx(true))
+    const [image, provider, , duration, , options] = mocks.imageToVideo.mock.calls[0]!
+    expect([image, provider, duration]).toEqual([LS.imageUrl, "ltx-2.5-fast", 4.25])
+    expect(options).toMatchObject({ audioToVideo: true, referenceAudioUrls: [AUDIO], resolution: "720p", seed: 7 })
+    expect(mocks.lay).toHaveBeenCalledWith({ videoUrl: OUT.url, audioUrl: AUDIO, jobId: "job-1", userId: "user-1", watermark: true })
+    expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example.com/videos/job-1.mp4" }))
+  })
+
+  it("a job without the server's stamp is never guessed: it fails before any provider call", async () => {
+    const { duration: _d, ...unstamped } = LS
+    await expect(videoAIHandlers["lip-sync"]!(job("lip-sync", unstamped), ctx())).rejects.toThrow(/no measured voice/)
+    expect(mocks.imageToVideo).not.toHaveBeenCalled()
+  })
+})

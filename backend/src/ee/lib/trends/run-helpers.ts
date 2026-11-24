@@ -146,7 +146,7 @@ const FULL_QUALITY_WINDOW_MS = CAST_SWAP_FULL_QUALITY_WINDOW_MS
  * when it names none (every run before the choice) or names no engine.
  */
 export function runEngineOf(input: Rec): CastSwapEngine {
-  // A Flash run (Prism Flash, Pulse Flash) is its engine's run.
+  // A Flash run (Nodaro Prism Flash, Nodaro Pulse Flash) is its engine's run.
   return castSwapEngineOfRun(input.engine) ?? CAST_SWAP_ENGINE_WHEN_OMITTED
 }
 

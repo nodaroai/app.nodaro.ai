@@ -209,7 +209,7 @@ export interface TrendForm {
   faceMasking: AdminTrendFaceMasking | undefined
   /** As stored: undefined = the draft names none (Seedance 2.5), so loading an old draft is no change. */
   engine: AdminTrendEngine | undefined
-  /** As stored: the trend runs on its engine's Flash choice (Prism Flash, Pulse Flash); undefined = the engine itself. */
+  /** As stored: the trend runs on its engine's Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash); undefined = the engine itself. */
   flash?: true
   /** As stored: undefined = none set ("cut-end"). Saved only while the engine is Kling 4. */
   klingLength: AdminTrendKlingLength | undefined

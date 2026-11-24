@@ -1,8 +1,8 @@
 /**
  * Admin → Video Remake → Offer Flash, one of the page's settings (decided 2026-11-22).
  *
- * A switch per engine, off by default: while on, every user sees that engine's Flash choice next to it (Prism Flash,
- * Pulse Flash) at its own price; its hint says so.
+ * A switch per engine, off by default: while on, every user sees that engine's Flash choice next to it (Nodaro Prism Flash,
+ * Nodaro Pulse Flash) at its own price; its hint says so.
  * - Never saved shows every engine off.
  * - A switch changes the page's draft only; its save (the page's Save, or a stored set's Save all) sends the engines
  *   that are on, and off everywhere as an empty setting.
@@ -27,11 +27,11 @@ import { MOTION_SETTINGS_KEYS, MOTION_SETTINGS_SPECS } from "../settings-section
 
 const URL = "/v1/admin/video-remake/flash-offer"
 const ENGINES = [
-  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Prism Flash" },
-  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Pulse Flash" },
+  { id: "nodaro-prism", name: "Nodaro Prism", internal: "seedance-2-5", flashName: "Nodaro Prism Flash" },
+  { id: "nodaro-pulse", name: "Nodaro Pulse", internal: "kling-4", flashName: "Nodaro Pulse Flash" },
 ]
-const PRISM = "Offer Prism Flash (beside Nodaro Prism)"
-const PULSE = "Offer Pulse Flash (beside Nodaro Pulse)"
+const PRISM = "Offer Nodaro Prism Flash (beside Nodaro Prism)"
+const PULSE = "Offer Nodaro Pulse Flash (beside Nodaro Pulse)"
 const view = (flashOffer: unknown = null, over: { supported?: boolean; environments?: string[] } = {}) => ({
   body: { data: { flashOffer, updatedAt: flashOffer ? "2026-11-22T10:00:00.000Z" : null, engines: ENGINES, supported: over.supported ?? true, environments: over.environments ?? ["staging"] } },
 })

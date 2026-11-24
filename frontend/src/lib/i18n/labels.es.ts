@@ -811,6 +811,7 @@ const MODEL_DESCRIPTIONS_ES: Record<string, string> = {
   "Versatile, 5-10s clips": "Versátil, clips de 5-10 s",
   "Versatile, good at diverse styles": "Versátil, bueno con estilos diversos",
   "Video-to-video AI dubbing. Multi-speaker (basic mode). Cheapest modern dubbing, billed per second.": "Doblaje con IA de video a video. Varios hablantes (modo básico). El doblaje moderno más económico, facturado por segundo.",
+  "Portrait and voice to a talking clip as long as the voice, 2–20s, 720p/1080p/1440p, billed per second": "Retrato y voz a un clip que habla, tan largo como la voz, 2–20 s, 720p/1080p/1440p, se cobra por segundo",
   "Video-to-video editing, up to 60s input": "Edición de video a video, entrada de hasta 60 s",
   "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame": "Wan 2.7 I2V, 2–15 s, 720p/1080p, fotograma inicial + final",
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15 s, 720p/1080p",

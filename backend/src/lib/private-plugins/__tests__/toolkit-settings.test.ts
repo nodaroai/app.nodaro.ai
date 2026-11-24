@@ -1479,7 +1479,7 @@ describe("tk.settings.nodaroMotionPreciseUpscale", () => {
     upscalingEngine()
     h.preciseUpscale = { "480p": "off", "1080p": "1080p", flash: { "720p": "off" } }
     const got = await buildToolkit().settings!.nodaroMotionPreciseUpscale!()
-    // Prism Flash's rows are its own (a row left out at its default), never Nodaro Prism's 480p.
+    // Nodaro Prism Flash's rows are its own (a row left out at its default), never Nodaro Prism's 480p.
     expect(got).toStrictEqual({ "480p": "off", "720p": "1080p", "1080p": "1080p", flash: { "480p": "1080p", "720p": "off" } })
     ;(got as unknown as Record<string, string>)["480p"] = "4k"
     expect(h.preciseUpscale).toEqual({ "480p": "off", "1080p": "1080p", flash: { "720p": "off" } })

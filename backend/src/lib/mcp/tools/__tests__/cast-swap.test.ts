@@ -857,22 +857,22 @@ describe("video_remake", () => {
         "/v1/video-remake": { statusCode: 202, body: { jobId: "job-f" } },
       })
       const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse-flash" })
-      expect(res.structuredContent).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Pulse Flash", totalCredits: 300, confirmed: false })
-      expect(res.content[0]!.text).toContain("This Pulse Flash run costs about 300 credits.")
+      expect(res.structuredContent).toMatchObject({ engine: "nodaro-pulse-flash", engineName: "Nodaro Pulse Flash", totalCredits: 300, confirmed: false })
+      expect(res.content[0]!.text).toContain("This Nodaro Pulse Flash run costs about 300 credits.")
       await callTool(serverWith(fastify), "video_remake", { ...ARGS, preview: false, engine: "nodaro-pulse-flash", confirm: true })
       expect(calls.map((c) => (c.payload as { engine?: unknown }).engine)).toEqual(["nodaro-pulse-flash", "nodaro-pulse-flash"])
     })
 
     it("a refusal the route answers (not offered) is the tool's answer", async () => {
       const { fastify } = stubFastify({
-        "/v1/video-remake/estimate": { statusCode: 409, body: { error: { code: "flash_not_offered", message: "Prism Flash isn't available right now. Choose Nodaro Prism." } } },
+        "/v1/video-remake/estimate": { statusCode: 409, body: { error: { code: "flash_not_offered", message: "Nodaro Prism Flash isn't available right now. Choose Nodaro Prism." } } },
       })
       const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-prism-flash" })
       expect(res.isError).toBe(true)
       expect(res.content[0]!.text).toContain("flash_not_offered")
     })
 
-    it("every rule of the tool reads a Flash choice as its engine: an art style on Pulse Flash is Pulse's refusal", async () => {
+    it("every rule of the tool reads a Flash choice as its engine: an art style on Nodaro Pulse Flash is Pulse's refusal", async () => {
       const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
       const pulse = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse", art_style: "pop-art" })
       const flash = await callTool(serverWith(fastify), "video_remake", { ...ARGS, engine: "nodaro-pulse-flash", art_style: "pop-art" })
@@ -1116,5 +1116,68 @@ describe("video_remake: the intent check (check_intent) and the run's intent", (
       expect(res.isError, JSON.stringify(intent)).toBe(true)
     }
     expect(calls).toEqual([])
+  })
+})
+
+describe("video_remake: the upscale choice", () => {
+  afterEach(() => _resetPluginSupportsForTests())
+  const run = { statusCode: 202, body: { jobId: "job-up" } }
+
+  it("sends upscale to the quote and the run only where the loaded engine takes the choice", async () => {
+    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
+    for (const upscale of ["off", "next"] as const) {
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake": run })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale, confirm: true })
+      expect(calls.map((c) => (c.payload as { upscale?: unknown }).upscale), upscale).toEqual([upscale, upscale])
+    }
+  })
+
+  it("drops it, quote and run alike, where the engine does not take it (an engine from before it, or a deployment that has not turned it on)", async () => {
+    for (const castSwap of [undefined, {}, { upscaleChoice: false }]) {
+      _resetPluginSupportsForTests()
+      if (castSwap) setPluginSupports({ castSwap: castSwap as never })
+      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake": run })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "next" })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "next", confirm: true })
+      expect(calls.map((c) => c.payload), JSON.stringify(castSwap)).toEqual([BODY, BODY])
+    }
+  })
+
+  it("refuses a value it does not list", async () => {
+    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
+    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "1080p" })
+    expect(res.isError).toBe(true)
+    expect(calls).toEqual([])
+  })
+
+  it("answers the engine's size, the delivered size, the choice and the offer, and says the upscale part", async () => {
+    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true, confirmed: false })
+    expect(res.content[0]!.text).toContain("delivered upscaled to 720p, which adds 8 credits")
+    expect(res.content[0]!.text).toContain('upscale: "off" keeps 480p')
+  })
+
+  it("says the choice is offered on an \"off\" quote where it is, and nothing where it is not", async () => {
+    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
+    const off = { ...QUOTE, resolution: "720p", outputResolution: "720p", upscale: "off", upscaleOffered: true }
+    let { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: off } })
+    let res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "off" })
+    expect(res.content[0]!.text).toContain('upscale: "next"')
+    ;({ fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: { ...off, resolution: "1080p", outputResolution: "1080p", upscaleOffered: false } } }))
+    res = await callTool(serverWith(fastify), "video_remake", ARGS)
+    expect(res.content[0]!.text).not.toContain("upscale")
+    expect(res.structuredContent).toMatchObject({ resolution: "1080p", outputResolution: "1080p", upscale: "off", upscaleOffered: false })
+  })
+
+  it("keeps only the contract's values of the fields, and adds none for an engine that answers none", async () => {
+    const odd = { ...QUOTE, resolution: "4k", outputResolution: 720, upscale: "applied", upscaleOffered: "yes" }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: odd } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
   })
 })

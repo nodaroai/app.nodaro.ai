@@ -77,7 +77,7 @@ import {
   SUNO_SEPARATE_TYPES,
   TOPAZ_VIDEO_DEFAULT_RESOLUTION,
   TOPAZ_VIDEO_RESOLUTIONS,
-  lipSyncLeverClearPatch,
+  lipSyncModelSwitchPatch,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   RETIRED_LIP_SYNC_PROVIDERS,
 } from "@nodaro/shared/models"
@@ -442,7 +442,7 @@ const providerControl = (
  *  `write` without data and so writes the provider alone. */
 const lipSyncProviderControl = (): QuickConfigControl => ({
   ...providerControl(LIP_SYNC_MODELS, "kling-avatar"),
-  write: (value, data) => ({ provider: value, ...lipSyncLeverClearPatch(value, data ?? {}) }),
+  write: (value, data) => ({ provider: value, ...lipSyncModelSwitchPatch(value, data ?? {}) }),
 })
 
 /** Upscale Image model dropdown. Switching to a model that does not take the

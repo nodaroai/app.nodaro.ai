@@ -100,6 +100,15 @@
  * does not declare it refuses the key on its plan route, so it is not sent:
  * the roles are planned as an ordinary clip's, as before it, and the run
  * still states the clip.
+ *
+ * The upscale choice (`upscale: "off" | "next"`, 2026-11-24): "next" delivers
+ * the result upscaled to the next size. Sent only to an engine that declares
+ * `castSwap.upscaleChoice` (lib/video-remake-upscale-choice.ts); elsewhere it
+ * is dropped, which is what such a deployment makes of it ("off"). Where it is
+ * offered, and the choice left out's default, is the engine's to say: the
+ * quote carries its `resolution` (the engine's size), `outputResolution`,
+ * `upscale` and `upscaleOffered`, and its text names the delivered size and
+ * the `breakdown.upscale` part.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -142,6 +151,7 @@ import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeade
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
 import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
+import { VIDEO_REMAKE_UPSCALE_CHOICES, loadedEngineTakesUpscaleChoice, upscaleQuoteOf } from "../../video-remake-upscale-choice.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -603,7 +613,11 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           .enum(LENGTHS)
           .optional()
           .describe('nodaro-pulse only: cut the clip to whole seconds at its end (default) or start.'),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('Default "480p" (nodaro-pulse: "720p"; no 480p).'),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('The engine\'s size. Default "480p" (nodaro-pulse: "720p"; no 480p).'),
+        upscale: z
+          .enum(VIDEO_REMAKE_UPSCALE_CHOICES)
+          .optional()
+          .describe('"next" (default where the quote has upscaleOffered): delivered at the next size (480p→720p→1080p), priced in breakdown.upscale; "off": at resolution.'),
         draft: z.boolean().optional().describe("true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
@@ -764,6 +778,9 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         ...(length !== undefined ? { [castSwapLengthKey()]: length } : {}),
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
         ...(args.draft !== undefined ? { draft: args.draft } : {}),
+        // Sent only to an engine that takes the choice (where the deployment has turned it on); elsewhere the run
+        // is made as "off", which is what the engine would make of it, and an older engine never sees the key.
+        ...(args.upscale !== undefined && loadedEngineTakesUpscaleChoice() ? { upscale: args.upscale } : {}),
         ...(args.prepare_references !== undefined ? { prepareReferences: args.prepare_references } : {}),
         ...(args.quality !== undefined ? { quality: args.quality } : {}),
         ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
@@ -904,13 +921,21 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           expected === null && quote.settlesLower
             ? " The video's length is left to the model, so the final charge is expected to come out lower than this quote."
             : ""
+        // The upscale choice, where the engine answers it: the size delivered, and what "next" adds.
+        const upscaleQuote = upscaleQuoteOf(quote)
+        const upscaleSentence =
+          upscaleQuote.upscale === "next" && upscaleQuote.outputResolution
+            ? ` It is delivered upscaled to ${upscaleQuote.outputResolution}${breakdown.upscale !== undefined ? `, which adds ${statedAmount(breakdown.upscale)} ${amountWord()}` : ""} (upscale: "off" keeps ${upscaleQuote.resolution ?? "the run's resolution"}).`
+            : upscaleQuote.upscaleOffered === true && upscaleQuote.upscale === "off"
+              ? " Upscaling it to the next size is offered (upscale: \"next\")."
+              : ""
         const imageStyle = customImage !== undefined ? " The image's style is read when the run is confirmed; the price does not depend on it." : ""
         return {
           content: [
             {
               type: "text" as const,
               text:
-                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
+                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${upscaleSentence}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
                 (plannedAnswer ? `${plannedAnswer.sentence} ` : "") +
                 `${QUOTE_NEXT}${
                   quoteFor?.next ??
@@ -930,6 +955,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
             breakdown: statedAmountRecord(breakdown),
             ...(privacyCredits !== undefined ? { privacyCredits: statedAmount(privacyCredits) } : {}),
             settlesLower: quote.settlesLower === true,
+            // The engine's size, the size delivered, the choice made and whether it is offered (an older engine: none).
+            ...upscaleQuote,
             confirmed: false,
             ...(plannedAnswer ? { planned: plannedAnswer.planned, arguments: plannedAnswer.arguments } : {}),
             ...(intentMismatch ? { intent: intentMismatch } : {}),

@@ -830,6 +830,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Versatile, 5-10s clips": "רב־תכליתי, קליפים של 5–10 שניות",
   "Versatile, good at diverse styles": "רב־תכליתי, מצטיין במגוון סגנונות",
   "Video-to-video AI dubbing. Multi-speaker (basic mode). Cheapest modern dubbing, billed per second.": "דיבוב AI מווידאו לווידאו. ריבוי דוברים (מצב בסיסי). הדיבוב המודרני הזול ביותר, חיוב לפי שנייה.",
+  "Portrait and voice to a talking clip as long as the voice, 2–20s, 720p/1080p/1440p, billed per second": "דיוקן וקול לקליפ מדבר באורך הקול, 2–20 שניות, 720p/1080p/1440p, חיוב לפי שנייה",
   "Video-to-video editing, up to 60s input": "עריכת וידאו לווידאו, קלט עד 60 שניות",
   "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame": "Wan 2.7 I2V, 2–15 שניות, 720p/1080p, פריים פתיחה וסיום",
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15 שניות, 720p/1080p",

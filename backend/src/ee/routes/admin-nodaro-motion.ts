@@ -40,7 +40,7 @@
  *   GET/PUT /v1/admin/video-remake/shot-list-fps
  *                                         how many frames a second the model that writes a run's shot list is shown of the clip (admin-nodaro-motion-shot-list-fps.ts)
  *   GET/PUT /v1/admin/video-remake/flash-offer
- *                                         per engine, Offer Flash: whether every user may pick the engine's Flash choice (Prism Flash, Pulse Flash); a section of the stored settings sets (admin-nodaro-motion-flash-offer.ts)
+ *                                         per engine, Offer Flash: whether every user may pick the engine's Flash choice (Nodaro Prism Flash, Nodaro Pulse Flash); a section of the stored settings sets (admin-nodaro-motion-flash-offer.ts)
  *   GET/PUT /v1/admin/video-remake/face-grow
  *                                         per engine, how far a direct Precise run's face mask is widened onto the face's own skin (admin-nodaro-motion-face-grow.ts)
  *   GET/POST /v1/admin/video-remake/settings-sets, PUT/DELETE …/settings-sets/:id, POST …/settings-sets/check, …/export, …/:id/live
