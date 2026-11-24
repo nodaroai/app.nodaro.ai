@@ -5456,9 +5456,9 @@ export interface PluginSupports {
     /**
      * Video Remake's upscale choice (2026-11-24): a run and its estimate take
      * `upscale: "off" | "next"` ("next": the result upscaled to the next size
-     * and delivered at it, 480p → 720p, 720p → 1080p); the estimate answers
-     * `resolution` (the engine's size), `outputResolution` (the size
-     * delivered), `upscale` (the choice made) and `upscaleOffered`; a
+     * and delivered at it, 480p → 720p, 720p → 1080p, 1080p → 4K); the
+     * estimate answers `resolution` (the engine's size), `outputResolution`
+     * (the size delivered: "480p", "720p", "1080p" or "4k"), `upscale` (the choice made) and `upscaleOffered`; a
      * completed job's output `outputResolution` and, on a "next" run,
      * `upscale: "applied" | "skipped"`. Declared only while the deployment has
      * turned it on (read at load). Where it is offered is the estimate's to

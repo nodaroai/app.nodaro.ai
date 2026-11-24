@@ -2400,7 +2400,7 @@ interface VideoRemakeParams {
   motionLength?: "cut-end" | "cut-start" // VideoRemakeMotionLength, nodaro-pulse only; default "cut-end"
   resolution?: "480p" | "720p" | "1080p" // the engine's size: default "480p"; nodaro-pulse: "720p" (default) or "1080p"
   upscale?: "off" | "next"         // VideoRemakeUpscaleChoice: "next" = delivered upscaled to the next size
-                                   // (480p → 720p, 720p → 1080p); left out = "next" where offered, else "off"
+                                   // (480p → 720p, 720p → 1080p, 1080p → 4K); left out = "next" where offered, else "off"
                                    // (see Upscale to the next size)
   draft?: boolean                  // default false (480p is plain); true = a 480p draft whose same take
                                    // Full Quality can finish at 1080p; true above 480p is a 400;
@@ -2440,7 +2440,8 @@ interface VideoRemakeEstimate {
                           // Remake on us — allowed: these options are a covered run; coverCredits: what
                           // the offer would cover of this quote (0 when the balance covers it)
   resolution?: "480p" | "720p" | "1080p"       // the engine's size (where the upscale choice is answered)
-  outputResolution?: "480p" | "720p" | "1080p" // the size delivered: the next size on a "next" run
+  outputResolution?: "480p" | "720p" | "1080p" | "4k" // VideoRemakeOutputResolution: the size delivered,
+                                               // the next size on a "next" run ("4k" for a 1080p run)
   upscale?: "off" | "next"                     // the choice the run would be made with
   upscaleOffered?: boolean                     // whether the choice is offered for this run (absent: false)
 }
@@ -2531,16 +2532,17 @@ job's output in its `engine`.
 
 **Upscale to the next size** (`upscale`, `VideoRemakeUpscaleChoice`): `"next"`
 upscales the finished video straight to the next size and delivers it at that
-size (480p becomes 720p, 720p becomes 1080p); `"off"` delivers it at the
-engine's size (`resolution`). Left out, a run is `"next"` where the choice is
-offered and `"off"` where it is not. It is not offered on a 1080p run, a draft
-or a trend run, and only where the deployment has turned it on:
+size (480p becomes 720p, 720p becomes 1080p, 1080p becomes 4K); `"off"`
+delivers it at the engine's size (`resolution`). Left out, a run is `"next"`
+where the choice is offered and `"off"` where it is not. It is not offered on
+a draft or a trend run, and only where the deployment has turned it on:
 `styleChoice()` answers `upscaleChoice: true` there (absent from an older
 server: read it as `false`); elsewhere the field is accepted and ignored. A
 `"next"` asked where it is not offered is never an error: the run is made as
 `"off"`. `estimate()`, sent the same params, is the authority:
 `upscaleOffered`, the effective `upscale`, `resolution` (the engine's size),
-`outputResolution` (the size delivered) and, on a `"next"` run, the price in
+`outputResolution` (the size delivered, `VideoRemakeOutputResolution`: `"4k"`
+for a 1080p run upscaled; `resolution` is never `"4k"`) and, on a `"next"` run, the price in
 `breakdown.upscale`, in both totals. Quote with the `upscale` you will run
 with. A completed job's output (`VideoRemakeJobOutput`) carries
 `outputResolution` and, on a `"next"` run, `upscale: "applied" | "skipped"`

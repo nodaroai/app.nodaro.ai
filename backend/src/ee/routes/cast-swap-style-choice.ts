@@ -135,8 +135,8 @@
  * lib/video-remake-upscale-choice.ts). Like `roleFace` it follows the engine
  * alone and is in every answer, the failed-read one included. It says the
  * field is TAKEN, not that a given run is offered it: that is the estimate's
- * `upscaleOffered` (never on 1080p, a draft or a trend run, and not at a size
- * the admin turned off). A client reading a server from before it finds none
+ * `upscaleOffered` (never on a draft or a trend run, and not at a size the
+ * admin turned off; a 1080p run is delivered at 4K). A client reading a server from before it finds none
  * and treats it as false.
  */
 import type { FastifyInstance, RouteHandlerMethod } from "fastify"

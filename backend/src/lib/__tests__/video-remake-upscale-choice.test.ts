@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { engineTakesUpscaleChoice, loadedEngineTakesUpscaleChoice, upscaleQuoteOf } from "../video-remake-upscale-choice.js"
+import { engineTakesUpscaleChoice, loadedEngineTakesUpscaleChoice, outputResolutionLabel, upscaleQuoteOf } from "../video-remake-upscale-choice.js"
 import { videoRemakeEngineQuoteOf } from "../video-remake-engine-quote.js"
 import { _resetPluginSupportsForTests, setPluginSupports } from "../private-plugins/supports-registry.js"
 
@@ -29,6 +29,15 @@ describe("the upscale choice", () => {
       upscaleOffered: true,
     })
     expect(upscaleQuoteOf({ resolution: "4k", outputResolution: 720, upscale: "applied", upscaleOffered: "yes" })).toEqual({})
+    // A 1080p run is delivered at 4K: "4k" (lower-case, exactly) is a delivered size, never the engine's.
+    expect(upscaleQuoteOf({ resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true })).toEqual({
+      resolution: "1080p",
+      outputResolution: "4k",
+      upscale: "next",
+      upscaleOffered: true,
+    })
+    expect(upscaleQuoteOf({ resolution: "1080p", outputResolution: "4K" })).toEqual({ resolution: "1080p" })
+    expect(upscaleQuoteOf({ resolution: "1080p", outputResolution: "2160p" })).toEqual({ resolution: "1080p" })
     expect(upscaleQuoteOf(null)).toEqual({})
     expect(upscaleQuoteOf({ totalCredits: 1 })).toEqual({})
   })
@@ -42,7 +51,19 @@ describe("the upscale choice", () => {
       upscale: "next",
       upscaleOffered: true,
     })
+    expect(videoRemakeEngineQuoteOf({ data: { ...base, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true } }, "nodaro-prism")).toMatchObject({
+      resolution: "1080p",
+      outputResolution: "4k",
+      upscale: "next",
+      upscaleOffered: true,
+    })
     const older = videoRemakeEngineQuoteOf(base, "nodaro-prism")!
     for (const key of ["resolution", "outputResolution", "upscale", "upscaleOffered"]) expect(key in older, key).toBe(false)
+  })
+
+  it("names a delivered size in words: 4K for \"4k\", the others as spelled", () => {
+    expect(outputResolutionLabel("4k")).toBe("4K")
+    expect(outputResolutionLabel("1080p")).toBe("1080p")
+    expect(outputResolutionLabel("720p")).toBe("720p")
   })
 })
