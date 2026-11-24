@@ -16,7 +16,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 const STORED = "https://cdn.example.com/tmp/provider-input/outside-input-x.mp4"
 const plan = vi.hoisted(() => ({
-  result: { tier: "2k", creditId: "nodaro-video-upscale:2k:per-4s", videoUrl: "https://cdn.example.com/tmp/provider-input/outside-input-x.mp4", sourceDurationSec: 9.4, billedSec: 10, sourceSizeBytes: 12_000_000 } as Record<string, unknown>,
+  result: { mode: "sharp", tier: "2k", creditId: "nodaro-video-upscale:2k:per-4s", videoUrl: "https://cdn.example.com/tmp/provider-input/outside-input-x.mp4", sourceDurationSec: 9.4, billedSec: 10, sourceSizeBytes: 12_000_000 } as Record<string, unknown>,
   error: undefined as Error | undefined,
   calls: [] as unknown[][],
 }))
@@ -48,6 +48,8 @@ vi.mock("@/lib/topaz-video-plan.js", async (importOriginal) => ({
 vi.mock("@/lib/insert-job.js", () => ({
   insertJob: vi.fn().mockResolvedValue({ data: { id: "job-nvu" }, error: null }),
 }))
+const falKey = vi.hoisted(() => ({ on: true }))
+vi.mock("@/providers/fal/enabled.js", () => ({ falEnabled: () => falKey.on }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: vi.fn().mockResolvedValue({ id: "q" }) }, redis: {} }))
 vi.mock("@/middleware/credit-guard.js", () => ({
   // As the real guard: its `beforePricing` step past the gates, then the price.
@@ -110,12 +112,12 @@ describe("POST /v1/video-upscale — nodaro-video-upscale", () => {
   afterEach(async () => { await app.close() })
 
   const post = (payload: Record<string, unknown>) =>
-    app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "nodaro-video-upscale", userId: "user-a", videoUrl: CLIP, ...payload } })
+    app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "nodaro-video-upscale", mode: "sharp", userId: "user-a", videoUrl: CLIP, ...payload } })
 
   it("served: holds the tier's row at the clip's exact price, and queues the measured plan", async () => {
     const res = await post({ targetResolution: "2k", targetFps: 60, upscaleFactor: "2" })
     expect(res.statusCode).toBe(200)
-    expect(plan.calls).toEqual([[CLIP, "2k", { userId: "user-a", quote: false, signal: expect.any(AbortSignal) }]])
+    expect(plan.calls).toEqual([[CLIP, "2k", { userId: "user-a", quote: false, signal: expect.any(AbortSignal) }, "sharp"]])
     // Planned, and run, on the STORED clip — never the caller's link.
     expect(planHouseModelRun).toHaveBeenCalledWith("nodaro-video-upscale", { videoUrl: STORED, tier: "2k", billedSec: 10 })
     expect(guardSeen).toEqual([{ id: "nodaro-video-upscale:2k:per-4s", base: 75 }])
@@ -128,12 +130,56 @@ describe("POST /v1/video-upscale — nodaro-video-upscale", () => {
       videoUrl: STORED,
       provider: "nodaro-video-upscale",
       targetResolution: "2k",
+      mode: "sharp",
       tier: "2k",
       sourceDurationSec: 9.4,
       billedSec: 10,
       sourceSizeBytes: 12_000_000,
       usageLogId: "u-1",
     })
+  })
+
+  it("no mode runs TRANSPARENT (the default): planned in transparent, never the house model's plan, its row the plan's", async () => {
+    plan.result = { ...plan.result, mode: "transparent", tier: "2k", creditId: "topaz-rhea:4k:per-sec", billedSec: 9.4 }
+    try {
+      const res = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "nodaro-video-upscale", userId: "user-a", videoUrl: CLIP, targetResolution: "2k" } })
+      expect(res.statusCode, res.body).toBe(200)
+      // The mode AS ASKED (none): the plan decides, from the measured clip, the mode that is priced and run.
+      expect(plan.calls).toEqual([[CLIP, "2k", { userId: "user-a", quote: false, signal: expect.any(AbortSignal) }, undefined]])
+      expect(planHouseModelRun).not.toHaveBeenCalled()
+      expect(guardSeen[0]).toMatchObject({ id: "topaz-rhea:4k:per-sec" })
+    } finally {
+      plan.result = { ...plan.result, mode: "sharp", tier: "2k", creditId: "nodaro-video-upscale:2k:per-4s", billedSec: 10 }
+    }
+  })
+
+  it("transparent on an install with no fal key: 503 provider_unavailable, the clip never fetched", async () => {
+    falKey.on = false
+    try {
+      const res = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "nodaro-video-upscale", mode: "transparent", userId: "user-a", videoUrl: CLIP } })
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error.code).toBe("provider_unavailable")
+      expect(plan.calls).toEqual([])
+      // Sharp does not need it.
+      expect((await post({ targetResolution: "2k" })).statusCode).toBe(200)
+      // No mode sent: never a 503 — the plan falls back to Sharp.
+      plan.calls = []
+      const noMode = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "nodaro-video-upscale", userId: "user-a", videoUrl: CLIP } })
+      expect(noMode.statusCode).toBe(200)
+      expect(plan.calls).toHaveLength(1)
+    } finally {
+      falKey.on = true
+    }
+  })
+
+  it("an unknown mode is a 400, nothing fetched; a mode with another provider is a 400", async () => {
+    const bad = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "nodaro-video-upscale", mode: "vivid", userId: "user-a", videoUrl: CLIP } })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error.code).toBe("validation_error")
+    expect(plan.calls).toEqual([])
+    const other = await app.inject({ method: "POST", url: "/v1/video-upscale", payload: { provider: "topaz", mode: "sharp", userId: "user-a", videoUrl: CLIP } })
+    expect(other.statusCode).toBe(400)
+    expect(JSON.stringify(other.json().error)).toContain("mode is a Nodaro Video Upscale setting")
   })
 
   it("not served: refused first — the clip never fetched, nothing reserved — in a sentence that names nothing behind it, with the 403 every refused model gets", async () => {
@@ -199,9 +245,9 @@ describe("POST /v1/video-upscale — nodaro-video-upscale", () => {
     })
     await quoteApp.ready()
     try {
-      const res = await quoteApp.inject({ method: "POST", url: "/q", payload: { provider: "nodaro-video-upscale", videoUrl: CLIP, targetResolution: "2k" } })
+      const res = await quoteApp.inject({ method: "POST", url: "/q", payload: { provider: "nodaro-video-upscale", mode: "sharp", videoUrl: CLIP, targetResolution: "2k" } })
       expect(res.statusCode).toBe(200)
-      expect(plan.calls).toEqual([[CLIP, "2k", { userId: "user-a", quote: true, signal: expect.any(AbortSignal) }]])
+      expect(plan.calls).toEqual([[CLIP, "2k", { userId: "user-a", quote: true, signal: expect.any(AbortSignal) }, "sharp"]])
       expect(res.json().body.videoUrl).toBe(CLIP)
       expect(insertJob).not.toHaveBeenCalled()
       expect(videoQueue.add).not.toHaveBeenCalled()
@@ -243,7 +289,7 @@ describe("POST /v1/video-upscale — nodaro-video-upscale", () => {
   it("this provider reads a target it does not take (Topaz's 720p) as its default, never a 400", async () => {
     const res = await post({ targetResolution: "720p" })
     expect(res.statusCode).toBe(200)
-    expect(plan.calls).toEqual([[CLIP, "720p", { userId: "user-a", quote: false, signal: expect.any(AbortSignal) }]])
+    expect(plan.calls).toEqual([[CLIP, "720p", { userId: "user-a", quote: false, signal: expect.any(AbortSignal) }, "sharp"]])
   })
 
   it("a client that leaves mid-fetch stops the clip's fetch: the plan is handed a live signal of the request", async () => {

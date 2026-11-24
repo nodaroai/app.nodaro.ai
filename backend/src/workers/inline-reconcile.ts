@@ -101,7 +101,10 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
       )
       // reconcileFalJob recovers the fal endpoint from input_data.provider, so
       // the row must carry it (the worker's stall-retry SELECT includes input_data).
-      await reconcileFalJob({ ...row, input_data: row.input_data ?? null }, { claimant: "worker" })
+      // A Rhea request (`fal-rhea`) the dead worker left still running is read
+      // to its end here, inside the live queue handler, within what is left of
+      // its wait — not read once and parked for the cron's 75-minute threshold.
+      await reconcileFalJob({ ...row, input_data: row.input_data ?? null }, { claimant: "worker", pollToEnd: true })
       return
     }
     if (NODARO_CLOUD_KINDS.has(kind)) {

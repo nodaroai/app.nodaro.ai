@@ -22,6 +22,9 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask, KieError } from "../..
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
 import { falLipSync } from "../../providers/fal/lip-sync.js"
+import { falTopazRheaUpscale } from "../../providers/fal/topaz-rhea.js"
+import { readRheaRunFields } from "../../lib/topaz-rhea-plan.js"
+import { deliverRheaOutput } from "../../lib/topaz-rhea-delivery.js"
 import { falGeminiOmniExtend, GEMINI_OMNI_EXTEND_KEY_COVERAGE, GEMINI_OMNI_EXTEND_SENT_REQUEST_KEY, geminiOmniExtendSentRequestOf, type GeminiOmniExtendSentRequest } from "../../providers/fal/gemini-omni-extend.js"
 import { falGeminiOmniExtendCostUsd } from "../../providers/fal/pricing.js"
 import { requireProviderKey } from "../../providers/provider-keys.js"
@@ -107,7 +110,7 @@ import {
 import { unitRateBaseCredits } from "../../lib/credit-base-cost.js"
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import type { DeclaredSeedanceTaskType, TopazVideoResolution } from "@nodaro/shared/models"
-import { isKling4RunnerProvider, isNodaroVideoUpscaleTier, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
+import { isKling4RunnerProvider, isNodaroVideoUpscaleTier, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleQueuedModeOf, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { runHouseModelTask } from "../../lib/house-models.js"
 import { houseModelTiming } from "../../lib/house-model-timeouts.js"
 import { deliverHouseModelRun } from "../../lib/house-model-delivery.js"
@@ -165,7 +168,8 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { measureSeedance2Settle, type Seedance2Settle } from "../../lib/seedance2-ref-video-settle.js"
-import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { claimJobFinalize, finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { holdingFinalizeClaim, isFinalizeClaimLost } from "../../lib/finalize-claim-hold.js"
 import { handleAiAvatar } from "./heygen-avatar.js"
 import { handleCinematicAvatar } from "./heygen-cinematic.js"
 import { handleBeebleSwitchX } from "./beeble-switchx.js"
@@ -1457,6 +1461,126 @@ async function runNodaroVideoUpscale(job: Parameters<HandlerFn>[0], ctx: Paramet
   if (ok) console.log(`[worker] Job ${ctx.jobId} completed (provider: ${NODARO_VIDEO_UPSCALE_PROVIDER})`)
 }
 
+/**
+ * A Topaz Rhea run on fal (decided 2026-11-24): the `topaz-rhea` provider, and
+ * Nodaro Video Upscale's transparent mode. It runs exactly what the route or
+ * the workflow run measured and priced — the clip, the factor and the billed
+ * seconds (`readRheaRunFields`). The fal request id is persisted before the
+ * wait (`fal-rhea`, whose threshold outlasts the wait), so the reconcile reads
+ * the same request only when this worker cannot. The delivery runs under the
+ * finalize claim, taken before it and kept fresh while it runs, so the worker
+ * and the reconcile cron never both do the delivery work; the job completes
+ * and is charged once either way. The engine's file is brought to the planned frame (black
+ * padding cropped, a dropped soundtrack laid back on: lib/topaz-rhea-delivery.ts,
+ * the same delivery the reconcile runs), then stored with the account's
+ * watermark rule. Charged its hold: the price depends on nothing the run
+ * reports. The provider cost is recorded from the listed rate of its target.
+ */
+/** Where a Rhea run keeps its submitted request's id on its queue job (job data only; never the stored request). */
+const UPSCALE_REQUEST_ID_KEY = "upscaleRequestId"
+
+/** Keep the submitted request's id on the job for a retry: tried three times, then best effort (the run goes on either way). */
+async function keepUpscaleRequestId(job: Parameters<HandlerFn>[0], jobId: string, requestId: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await job.updateData({ ...(job.data as Record<string, unknown>), [UPSCALE_REQUEST_ID_KEY]: requestId })
+      return
+    } catch (err) {
+      if (attempt >= 3) {
+        console.warn(`[worker] Job ${jobId}: upscale request ${requestId} not kept on the job for a retry:`, err)
+        return
+      }
+    }
+  }
+}
+
+/** Forget a request the engine answered as failed, so a retry submits a new one. A failed write never replaces the engine's error. */
+async function forgetUpscaleRequestId(job: Parameters<HandlerFn>[0], jobId: string): Promise<void> {
+  try {
+    const { [UPSCALE_REQUEST_ID_KEY]: _forgotten, ...rest } = job.data as Record<string, unknown>
+    await job.updateData(rest)
+  } catch (err) {
+    console.warn(`[worker] Job ${jobId}: the failed upscale request was not cleared from the job:`, err)
+  }
+}
+
+async function runRheaUpscale(job: Parameters<HandlerFn>[0], ctx: Parameters<HandlerFn>[1], providerUsed: string): Promise<void> {
+  const data = job.data as Record<string, unknown>
+  const videoUrl = data.videoUrl
+  const run = readRheaRunFields(data)
+  if (typeof videoUrl !== "string" || !run) throw new DeterministicJobError("Couldn't read the video to upscale.")
+  // A request this job already submitted (kept on the job right after submit)
+  // is polled again, never submitted twice. Only a request the engine answered
+  // as failed is forgotten, so a retry of THAT submits a new one.
+  const prior = typeof data[UPSCALE_REQUEST_ID_KEY] === "string" ? (data[UPSCALE_REQUEST_ID_KEY] as string) : undefined
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, "fal-rhea")
+  // A resumed request restamps the row (its kind and the wait's start): the
+  // pickup put it back on the pre-task sentinel, and this attempt's own wait
+  // must be covered by the kind's threshold, never the first attempt's.
+  if (prior) await onTaskCreated(prior)
+  let result: Awaited<ReturnType<typeof falTopazRheaUpscale>>
+  try {
+    result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 85 }, () => falTopazRheaUpscale({
+      videoUrl,
+      upscaleFactor: run.upscaleRatio,
+      target: run.upscaleRateTier,
+      billedSec: run.upscaleBilledSec,
+      reconcileOpts: { onTaskCreated },
+      ...(prior ? { resumeRequestId: prior } : {}),
+      onSubmitted: (requestId) => keepUpscaleRequestId(job, ctx.jobId, requestId),
+    }))
+  } catch (err) {
+    if (prior !== undefined || typeof (job.data as Record<string, unknown>)[UPSCALE_REQUEST_ID_KEY] === "string") {
+      if ((err as { ended?: unknown } | null)?.ended === true) await forgetUpscaleRequestId(job, ctx.jobId)
+    }
+    throw err
+  }
+  await setJobProgress(job, ctx.jobId, 90)
+  // The finalize claim BEFORE the delivery (download, encode, upload), held
+  // fresh while it runs: a reconcile that reached this run is delivering it,
+  // so this worker stops here; one that reaches it later skips the row. (The
+  // claim is re-entrant per claimant name, so a second "worker" finalizer is
+  // not kept off by it; the job still completes once and is charged once.)
+  const claim = await claimJobFinalize(ctx.jobId, "worker")
+  if (!claim.won) {
+    console.log(`[worker] Job ${ctx.jobId}: its upscale is being delivered by another finalizer; left to it`)
+    return
+  }
+  let delivered: Awaited<ReturnType<typeof deliverRheaOutput<string>>>
+  try {
+    delivered = await holdingFinalizeClaim(ctx.jobId, "worker", claim.ts, (hold) => deliverRheaOutput({
+      outputUrl: result.url,
+      expected: { width: run.upscaleFrameWidth, height: run.upscaleFrameHeight },
+      sourceUrl: videoUrl,
+      jobId: ctx.jobId,
+      // Stored only while the claim is still this worker's.
+      store: async (localPath) => {
+        hold.assertHeld()
+        return watermarkLocalVideoAndUpload(localPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      },
+    }), { stopOnLoss: true })
+  } catch (err) {
+    // Another finalizer took the claim mid-delivery: it delivers; this one stops without storing or finalizing.
+    if (isFinalizeClaimLost(err)) {
+      console.log(`[worker] Job ${ctx.jobId}: the finalize claim was taken mid-delivery; left to the finalizer that holds it`)
+      return
+    }
+    throw err
+  }
+  const r2Url = delivered.stored
+  await setJobProgress(job, ctx.jobId, 100)
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "video-upscale",
+    result: { url: result.url, cost: result.cost, providerUsed, providerMs: result.providerMs },
+    mediaUrl: r2Url,
+    // The stored file's own frame, probed, never the plan's.
+    extraOutputData: { thumbnailUrl: thumbUrl, width: delivered.width, height: delivered.height },
+  })
+  if (ok) console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${providerUsed}, ×${run.upscaleRatio})`)
+}
+
 const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx) {
   const { videoUrl, upscaleFactor, targetResolution, targetFps, provider, kieTaskId, draftAudioMux, draftNsfwChecker, draftVideoUrl, draftHasRefVideo } = job.data as {
     jobId: string
@@ -1483,7 +1607,16 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   }
   const upscaleProvider = provider ?? VIDEO_UPSCALE_DEFAULT_PROVIDER
   console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
-  if (upscaleProvider === NODARO_VIDEO_UPSCALE_PROVIDER) return runNodaroVideoUpscale(job, ctx)
+  // Nodaro Video Upscale runs the mode its job was priced in: transparent on
+  // the Rhea lane, sharp behind the house-model seam.
+  if (upscaleProvider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+    // A queued job names its mode (every enqueue writes the resolved one); a job
+    // queued before modes existed names none and is the pre-change shape: Sharp.
+    return nodaroVideoUpscaleQueuedModeOf((job.data as Record<string, unknown>).mode) === "transparent"
+      ? runRheaUpscale(job, ctx, NODARO_VIDEO_UPSCALE_PROVIDER)
+      : runNodaroVideoUpscale(job, ctx)
+  }
+  if (upscaleProvider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER) return runRheaUpscale(job, ctx, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER)
 
   // Wrap each branch in a progress ramp — none of these (VEO upscale,
   // Topaz, etc.) reliably surface live progress; without the ramp the

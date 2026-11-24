@@ -9,6 +9,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isHouseModelRunError, isHouseModelRunPending } from "../lib/house-model-failure.js"
+import { isProviderRunPending } from "../lib/provider-run-pending.js"
 import { isAlternateRoutePending } from "../lib/alternate-route.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { declaredJobBudgetMs } from "../lib/job-budget.js"
@@ -666,7 +667,9 @@ export function createVideoWorker() {
       // Likewise an alternate route's task left to the recovery
       // (`AlternateRoutePendingError`, lib/alternate-route.ts): it may still be
       // running upstream, so it is never failed here while it can be read.
-      if (finalAttempt && (isPostProcessingError(err) || isHouseModelRunPending(err) || isAlternateRoutePending(err))) {
+      // A provider run whose wait ran out with its request id saved
+      // (`ProviderRunPendingError`, lib/provider-run-pending.ts) is left the same way.
+      if (finalAttempt && (isPostProcessingError(err) || isHouseModelRunPending(err) || isAlternateRoutePending(err) || isProviderRunPending(err))) {
         const { data: row } = await supabase
           .from("jobs")
           .select("provider_kind, provider_task_id, status")

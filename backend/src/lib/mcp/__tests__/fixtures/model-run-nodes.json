@@ -162,6 +162,7 @@
  "suno-v6_wild": "suno-add-instrumental suno-add-vocals suno-cover suno-extend suno-generate suno-mashup suno-upload-extend",
  "sync-lipsync-v3": "lip-sync",
  "topaz-image-upscale": "upscale-image",
+ "topaz-rhea": "video-upscale",
  "topaz-video": "video-upscale",
  "veo-1080p": "video-upscale",
  "veo-4k": "video-upscale",

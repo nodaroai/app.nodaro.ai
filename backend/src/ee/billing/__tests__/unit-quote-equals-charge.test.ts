@@ -286,7 +286,7 @@ describe("which wires the server's run estimate reads a length off", () => {
 describe("a Nodaro Video Upscale of a clip the graph knows is past its 60-second limit", () => {
   // The run refuses such a clip before anything is held (`video_too_long`), so the server's run
   // estimate prices it nowhere, as the editor's Run confirm leaves it out and its pill shows no figure.
-  const x = { id: "x", type: "video-upscale", data: { provider: "nodaro-video-upscale", targetResolution: "1080p" } }
+  const x = { id: "x", type: "video-upscale", data: { provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p" } }
   const upload = (sec: number) => ({ id: "v", type: "upload-video", data: { url: "https://m.test/v.mp4", duration: sec, videoDurationSec: sec } })
   const edges = [{ id: "v-x", source: "v", target: "x", targetHandle: "video" }]
 

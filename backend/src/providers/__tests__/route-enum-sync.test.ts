@@ -83,6 +83,9 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // handler to `bytedance/seedance-2-5-draft` (providers/kie/seedance-draft.ts),
   // keyed by the DRAFT's task id — there is no URL to route.
   "seedance-2-5-hd",
+  // Topaz Rhea: dispatched directly by the video-upscale handler to fal
+  // (providers/fal/topaz-rhea.ts), not via providerRegistry.
+  "topaz-rhea",
   // ── Lip sync ───────────────────────────────────────────────────────────
   // Replicate-direct lip-sync providers — implemented in
   // backend/src/providers/replicate/lip-sync.ts and dispatched directly from

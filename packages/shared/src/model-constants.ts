@@ -1638,6 +1638,10 @@ export const VIDEO_UPSCALE_PROVIDERS = [
   // box, priced per second. Offered only where the deployment serves it (see
   // nodaro-video-upscale.ts).
   "nodaro-video-upscale",
+  // Topaz Rhea: any clip upscaled so its short side reaches 720p, 1080p or 4K,
+  // priced per second of the output by its size. Reachable by the API and by a
+  // plugin's child job; the editor's Video Upscale node does not offer it.
+  "topaz-rhea",
 ] as const
 export type VideoUpscaleProvider = typeof VIDEO_UPSCALE_PROVIDERS[number]
 

@@ -1186,6 +1186,7 @@
      "type": "video-upscale",
      "data": {
       "provider": "nodaro-video-upscale",
+      "mode": "sharp",
       "targetResolution": "2k"
      }
     },

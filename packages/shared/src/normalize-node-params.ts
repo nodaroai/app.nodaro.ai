@@ -221,8 +221,8 @@ export function normalizeNodeModelParams<T extends NodeLike>(
 /**
  * A Video Upscale node: its `targetResolution` held to what its provider takes,
  * only for a provider whose catalog entry declares its resolutions
- * (`normalizeVideoUpscaleResolution`; today Nodaro Video Upscale's 1080p / 2K /
- * 4K). Every other provider's node — Topaz's, VEO's, Seedance HD's — is
+ * (`normalizeVideoUpscaleResolution`; today Nodaro Video Upscale's, by its
+ * mode: transparent 720p / 1080p / 2K / 4K, sharp 1080p / 2K / 4K). Every other provider's node — Topaz's, VEO's, Seedance HD's — is
  * returned as it came: its run reads the field by its own rules. Only that one
  * key is rewritten, and only when it holds a value some Video Upscale provider
  * takes (`VIDEO_UPSCALE_RESOLUTIONS`, spelled any way); an unset value and any
@@ -234,10 +234,11 @@ function normalizeVideoUpscaleNode<T extends NodeLike>(node: T, adjustments: Nod
   const d = data as Record<string, unknown>
   if (typeof d.targetResolution !== "string" || d.targetResolution === "") return node
   const provider = typeof d.provider === "string" && d.provider !== "" ? d.provider : "topaz"
-  if (videoUpscaleResolutionsFor(provider).length === 0) return node
+  if (videoUpscaleResolutionsFor(provider, d.mode).length === 0) return node
   const asked = d.targetResolution.trim().toLowerCase()
   if (!(VIDEO_UPSCALE_RESOLUTIONS as readonly string[]).includes(asked)) return node
-  const normalized = normalizeVideoUpscaleResolution(provider, d.targetResolution)
+  // Nodaro Video Upscale's tiers follow its mode (sharp does not take 720p).
+  const normalized = normalizeVideoUpscaleResolution(provider, d.targetResolution, d.mode)
   if (normalized.targetResolution === d.targetResolution) return node
   const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
   if (normalized.adjustment) adjustments.push({ ...normalized.adjustment, nodeId, provider })

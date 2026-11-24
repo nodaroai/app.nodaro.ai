@@ -1071,7 +1071,7 @@ describe("probeVideoSource", () => {
     execFileOnce(withRate({ avg_frame_rate: "30/1" }))
     await probeVideoSource("/tmp/v.mp4")
     // The video stream's index and DURATION tag (a WebM / MKV states its picture's length only there) and the file's start ride the same read.
-    expect(execArgs()).toContain("stream=index,width,height,sample_aspect_ratio,avg_frame_rate,r_frame_rate,duration:stream_tags=DURATION:format=duration,start_time")
+    expect(execArgs()).toContain("stream=index,width,height,sample_aspect_ratio,avg_frame_rate,r_frame_rate,duration:stream_side_data=rotation:stream_tags=rotate,DURATION:format=duration,start_time")
   })
 
   it("reads a sample aspect ratio other than 1:1 (non-square pixels), and none for square or unstated ones", async () => {

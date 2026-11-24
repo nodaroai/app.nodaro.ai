@@ -13,6 +13,7 @@
  * reads the field by its own rules.
  */
 import { MODEL_CATALOG, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
+import { NODARO_VIDEO_UPSCALE_DEFAULT_TIER, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleModeOf, nodaroVideoUpscaleTiersFor } from "./nodaro-video-upscale.js"
 
 /**
  * Every target resolution some Video Upscale provider takes — Nodaro Video
@@ -34,10 +35,18 @@ export function videoUpscaleModelOf(provider: string): string {
   return provider === "topaz" ? "topaz-video" : provider
 }
 
-/** The resolutions a Video Upscale provider's catalog entry declares, in its order; empty when it declares none (Topaz keeps its own list). */
-export function videoUpscaleResolutionsFor(provider: string | undefined): readonly string[] {
+/**
+ * The resolutions a Video Upscale provider takes, in its catalog order; empty
+ * when it declares none (Topaz keeps its own list). Nodaro Video Upscale's
+ * depend on its `mode` (`nodaroVideoUpscaleModeOf`: unset is transparent):
+ * transparent takes 720p / 1080p / 2K / 4K, sharp 1080p / 2K / 4K.
+ */
+export function videoUpscaleResolutionsFor(provider: string | undefined, mode?: unknown): readonly string[] {
   const id = videoUpscaleModelOf(provider || DEFAULT_VIDEO_UPSCALE_PROVIDER)
-  return MODEL_CATALOG[id]?.resolutions ?? []
+  const all = MODEL_CATALOG[id]?.resolutions ?? []
+  if (id !== NODARO_VIDEO_UPSCALE_PROVIDER) return all
+  const takes = nodaroVideoUpscaleTiersFor(nodaroVideoUpscaleModeOf(mode)) as readonly string[]
+  return all.filter((r) => takes.includes(r))
 }
 
 export interface NormalizedVideoUpscaleResolution {
@@ -57,11 +66,21 @@ export interface NormalizedVideoUpscaleResolution {
 export function normalizeVideoUpscaleResolution(
   provider: string | undefined,
   targetResolution: unknown,
+  /** Nodaro Video Upscale's mode (unset: transparent): a tier the mode does not take becomes the default. */
+  mode?: unknown,
 ): NormalizedVideoUpscaleResolution {
   if (typeof targetResolution !== "string" || targetResolution === "") return { targetResolution: undefined }
   const id = videoUpscaleModelOf(provider || DEFAULT_VIDEO_UPSCALE_PROVIDER)
   if ((MODEL_CATALOG[id]?.resolutions ?? []).length === 0) return { targetResolution }
   const normalized = normalizeModelInput(id, { resolution: targetResolution })
   const adjustment = normalized.adjustments.find((a) => a.field === "resolution")
+  // Nodaro Video Upscale: a tier its mode does not take (sharp's 720p) is the mode's default.
+  if (id === NODARO_VIDEO_UPSCALE_PROVIDER && normalized.resolution !== undefined && !videoUpscaleResolutionsFor(id, mode).includes(normalized.resolution)) {
+    const fallback = MODEL_CATALOG[id]?.defaultResolution ?? NODARO_VIDEO_UPSCALE_DEFAULT_TIER
+    return {
+      targetResolution: fallback,
+      adjustment: { field: "resolution", from: targetResolution, to: fallback, reason: `Nodaro Video Upscale's ${nodaroVideoUpscaleModeOf(mode)} mode does not take ${normalized.resolution}` } as ModelInputAdjustment,
+    }
+  }
   return adjustment ? { targetResolution: normalized.resolution, adjustment } : { targetResolution: normalized.resolution }
 }

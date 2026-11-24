@@ -1,8 +1,9 @@
 // @test-watches docs/choosing-models.md
 /**
  * A catalog entry marked `pickerHidden` is a model the platform runs on its own
- * (the trained-character model), never one a person or a client picks (decided
- * 2026-11-12). It is listed nowhere a model is offered, and it is still a model
+ * (the trained-character model; Topaz Rhea, which Video Remake's upscale step
+ * asks for and the API reaches, decided 2026-11-24), never one the editor or a
+ * model listing offers (decided 2026-11-12). It is listed nowhere a model is offered, and it is still a model
  * a deployment's restriction can name.
  */
 import { describe, it, expect } from "vitest"
@@ -13,12 +14,13 @@ import { buildModelTree, searchModelVariants } from "@nodaro/shared/models"
 import { GATEABLE_MODEL_IDS } from "../lib/availability-override.js"
 
 const HIDDEN = Object.values(MODEL_CATALOG).filter((m) => m.pickerHidden === true)
+const LABELS: Readonly<Record<string, string>> = { "flux-lora-character": "Trained character (FLUX LoRA)", "topaz-rhea": "Topaz Rhea Upscale" }
 const KINDS: readonly ModelKind[] = ["image", "video", "audio"]
 const MODES = [...new Set(Object.values(MODEL_CATALOG).flatMap((m) => m.modes))] as ModelMode[]
 
 describe("a model the platform runs on its own", () => {
-  it("is the trained-character model, and only it", () => {
-    expect(HIDDEN.map((m) => m.id)).toEqual(["flux-lora-character"])
+  it("is the trained-character model and Topaz Rhea, and only they", () => {
+    expect(HIDDEN.map((m) => m.id).sort()).toEqual(["flux-lora-character", "topaz-rhea"])
   })
 
   it("is in no model listing: GET /v1/models and MCP list_models (`listModels`), with or without a filter", () => {
@@ -66,7 +68,7 @@ describe("a model the platform runs on its own", () => {
     for (const m of HIDDEN) {
       expect(GATEABLE_MODEL_IDS.has(m.id)).toBe(true)
       // What GET /v1/admin/availability lists (ee/routes/admin-availability.ts): every catalog entry, by label.
-      expect(Object.entries(MODEL_CATALOG).find(([id]) => id === m.id)?.[1].label).toBe("Trained character (FLUX LoRA)")
+      expect(Object.entries(MODEL_CATALOG).find(([id]) => id === m.id)?.[1].label).toBe(LABELS[m.id])
     }
   })
 })

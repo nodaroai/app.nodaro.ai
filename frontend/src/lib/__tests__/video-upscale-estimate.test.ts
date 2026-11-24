@@ -20,7 +20,7 @@ vi.mock("@/hooks/use-model-credit-cost", () => ({
 }))
 
 import { TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoEstimateUnits } from "@nodaro/render-rules"
-import { nodaroVideoUpscaleRefusedSec, topazVideoQuotedResolution, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
+import { nodaroVideoUpscaleEstimateMode, nodaroVideoUpscaleRefusedSec, topazVideoQuotedResolution, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { estimateRunCreditLines, estimateWholeRun } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { getExactPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
@@ -146,24 +146,24 @@ describe("the run estimate", () => {
 
 describe("Nodaro Video Upscale", () => {
   it("is quoted at its tier's four-second row, a quarter-unit per billed second of the wired clip", () => {
-    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "2k" })
+    const x = upscale({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "2k" })
     expect(getModelIdentifier(x, [], [x])).toBe("nodaro-video-upscale:2k:per-4s")
     expect(videoUpscalePricingUnits(x, [x, upload(8)], [wire])).toBe(2)
     expect(getExactPricingUnits(x, [x, upload(8)], [wire], NO_RERUNS)).toBe(2)
   })
 
   it("nothing wired: a 10 s clip, as the server's estimate prices it", () => {
-    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "4k" })
+    const x = upscale({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "4k" })
     expect(videoUpscalePricingUnits(x, [x], [])).toBe(2.5)
   })
 
   it("a value it does not take (Topaz's 720p) is quoted at its default tier", () => {
-    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "720p" })
+    const x = upscale({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "720p" })
     expect(getModelIdentifier(x, [], [x])).toBe("nodaro-video-upscale:1080p:per-4s")
   })
 
   it("the run estimate prices the whole run (its quote id) and marks it an estimate", () => {
-    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+    const x = upscale({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p" })
     const prices: Record<string, number> = { "nodaro-video-upscale:1080p:per-4s:2.5u": 42, "nodaro-video-upscale:1080p:per-4s": 17 }
     const [line] = estimateRunCreditLines([x], [x], [], (id) => prices[id])
     expect(line!.credits).toBe(42)
@@ -177,7 +177,7 @@ describe("Nodaro Video Upscale of a clip past its 60-second limit (refused befor
     "nodaro-video-upscale:1080p:per-4s:15u": 248,
     "nodaro-video-upscale:1080p:per-4s:18.75u": 311,
   }
-  const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+  const x = upscale({ provider: "nodaro-video-upscale", mode: "sharp", targetResolution: "1080p" })
 
   it("a known 75 s clip: no units, and the Run confirm's line is priced nowhere, saying why", () => {
     expect(nodaroVideoUpscaleRefusedSec(x, [x, upload(75)], [wire])).toBe(75)
@@ -209,5 +209,32 @@ describe("Nodaro Video Upscale of a clip past its 60-second limit (refused befor
   it("only Nodaro Video Upscale: Topaz on the same 75 s clip is priced as before", () => {
     const t = upscale({ provider: "topaz", targetResolution: "1080p" })
     expect(nodaroVideoUpscaleRefusedSec(t, [t, upload(75)], [wire])).toBeUndefined()
+  })
+})
+
+describe("Nodaro Video Upscale with no mode: Transparent, Sharp where Transparent cannot serve the wired clip", () => {
+  const take = (width: number, height: number): WorkflowNode =>
+    ({ id: "take", type: "upload-video", position: { x: 0, y: 0 }, data: { label: "Take", url: "https://cdn.example/take.mp4", duration: 10, fps: 30, metadata: { width, height } } }) as unknown as WorkflowNode
+  const wire: WorkflowEdge[] = [{ id: "e", source: "take", target: "x", targetHandle: "video" } as WorkflowEdge]
+
+  it("a clip that already fills the 1080p frame is priced as Sharp (the run falls back to it)", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+    const nodes = [take(1920, 1080), x]
+    expect(nodaroVideoUpscaleEstimateMode(x, nodes, wire)).toBe("sharp")
+    expect(getModelIdentifier(x, wire, nodes)).toBe("nodaro-video-upscale:1080p:per-4s")
+    expect(videoUpscalePricingUnits(x, nodes, wire)).toBe(2.5)
+  })
+
+  it("a 720p clip at 1080p is priced as Transparent; an explicit Transparent stays Transparent whatever the clip", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+    expect(nodaroVideoUpscaleEstimateMode(x, [take(1280, 720), x], wire)).toBe("transparent")
+    expect(getModelIdentifier(x, wire, [take(1280, 720), x])).toBe("nodaro-video-upscale:transparent:1080p:per-sec")
+    const explicit = upscale({ provider: "nodaro-video-upscale", mode: "transparent", targetResolution: "1080p" })
+    expect(nodaroVideoUpscaleEstimateMode(explicit, [take(1920, 1080), explicit], wire)).toBe("transparent")
+  })
+
+  it("nothing wired: Transparent (the run decides once it measures the clip)", () => {
+    const x = upscale({ provider: "nodaro-video-upscale", targetResolution: "1080p" })
+    expect(nodaroVideoUpscaleEstimateMode(x, [x], [])).toBe("transparent")
   })
 })

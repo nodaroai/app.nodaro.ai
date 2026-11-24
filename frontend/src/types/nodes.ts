@@ -3086,6 +3086,11 @@ export type VideoUpscaleData = {
    *  4k (an output box, default 1080p; a value it does not take is read as its
    *  default, `normalizeVideoUpscaleResolution`). */
   targetResolution?: VideoUpscaleResolution
+  /** Nodaro Video Upscale only: "transparent" (keeps the original colours and
+   *  look; 720p / 1080p / 2k / 4k) or "sharp" (adds crisp detail; 1080p / 2k /
+   *  4k). Absent = transparent (`nodaroVideoUpscaleModeOf`); cleared on any
+   *  other provider. */
+  mode?: "transparent" | "sharp"
   /** Topaz: the output frame rate, 15–60; absent = the source's own rate. */
   targetFps?: number
   /** Legacy Topaz lever (1×/2×/4× of the source). The run reads it only when

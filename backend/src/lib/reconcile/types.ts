@@ -1,4 +1,5 @@
 import { houseModelStaleThresholdMs } from "../house-model-timeouts.js"
+import { topazRheaStaleThresholdMs } from "../topaz-rhea-timeouts.js"
 
 /**
  * Provider kinds for reconciliation. Each kind maps 1:1 to one upstream
@@ -43,6 +44,11 @@ export const PROVIDER_KIND_VALUES = [
   // result and finalizes (or exhausts→refund). Classified async — see
   // FAL_RECOVER_KINDS + the cron/inline dispatch branches.
   "fal-request",
+  // A Rhea upscale request (the `topaz-rhea` provider, and the house video
+  // upscale's transparent mode). Recovered by reconcileFalJob like `fal-request`, but its
+  // worker waits up to an hour on the request and then delivers the file, so
+  // it is its own kind with its own threshold (lib/topaz-rhea-timeouts.ts).
+  "fal-rhea",
   // 4b: an exclusive-node job relayed to the connected cloud
   // (workers/handlers/nodaro-exclusive-relay.ts persists the CLOUD job id
   // here). reconcileNodaroCloudJob re-polls that cloud job — idempotent, it
@@ -153,6 +159,12 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // MIN_STALE_THRESHOLD_MS unchanged while giving a live worker headroom before
   // reconcileFalJob (the async recover handler) re-fetches a stalled row.
   "fal-request":               5 * MIN,
+  // A Rhea run: past the worker's longest wait on the request plus a margin
+  // (`topazRheaStaleThresholdMs`, 75 min), so the cron does not read a request
+  // a live worker is still waiting on (a worker's re-pick moves the stamp
+  // before it waits again). The delivery after the wait is guarded by the
+  // finalize claim, which both lanes take before it.
+  "fal-rhea":                 topazRheaStaleThresholdMs(),
   // Sentinel kind written when the worker transitions to `processing` BEFORE
   // any upstream provider call. If the handler crashes before firing
   // `onTaskCreated` (or `markProviderCallStart` for sync ops), the row would
@@ -288,6 +300,7 @@ export const ELEVENLABS_RECOVER_KINDS: ReadonlySet<string> = new Set([
  *  and finalizes, or exhausts→refund after MAX_ATTEMPTS. */
 export const FAL_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "fal-request",
+  "fal-rhea",
 ])
 
 /** Kinds recovered via reconcileNodaroCloudJob (4b exclusive-node relay —

@@ -6,7 +6,7 @@
  * when the units move.
  */
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { nodaroVideoUpscaleRefusedSec, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
+import { nodaroVideoUpscaleEstimateMode, nodaroVideoUpscaleRefusedSec, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
 import type { WorkflowNode } from "@/types/nodes"
 
 export function useVideoUpscaleQuotedUnits(nodeId: string): number {
@@ -26,5 +26,13 @@ export function useNodaroVideoUpscaleRefusedSec(nodeId: string): number | undefi
   return useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === nodeId) as WorkflowNode | undefined
     return node ? nodaroVideoUpscaleRefusedSec(node, s.nodes, s.edges) : undefined
+  })
+}
+
+/** The mode a Nodaro Video Upscale node is priced in, decided from its wired clip (`nodaroVideoUpscaleEstimateMode`). */
+export function useNodaroVideoUpscaleEstimatedMode(nodeId: string): "transparent" | "sharp" {
+  return useWorkflowStore((s) => {
+    const node = s.nodes.find((n) => n.id === nodeId) as WorkflowNode | undefined
+    return node ? nodaroVideoUpscaleEstimateMode(node, s.nodes, s.edges) : "transparent"
   })
 }

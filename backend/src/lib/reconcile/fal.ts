@@ -1,5 +1,8 @@
 import { markJobFailed } from "../job-failure.js"
-import { finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE } from "../job-finalize.js"
+import { claimJobFinalize, finalizeJobWithMedia, isFinalizeJobType, NOT_GENERIC_RECOVERABLE, releaseJobFinalizeClaim } from "../job-finalize.js"
+import { hasFreshFinalizeClaimNow, holdingFinalizeClaim, isFinalizeClaimLost } from "../finalize-claim-hold.js"
+import { isWorkerDraining, DrainAbortError } from "../worker-drain.js"
+import { TOPAZ_RHEA_MAX_WAIT_MS, TOPAZ_RHEA_POLL_INTERVAL_MS, topazRheaRepickDeadline } from "../topaz-rhea-timeouts.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { redactProviderDetail, logProviderFailure } from "../provider-error-detail.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
@@ -7,6 +10,13 @@ import { isEntityMediaJobType, recoverEntityJob } from "./entity-recovery.js"
 import { fetchFalRequestStatus, extractFalUrl } from "../../providers/fal/client.js"
 import { FAL_LIP_SYNC_CONFIGS } from "../../providers/fal/lip-sync.js"
 import { FAL_VIDEO_DEPTH_CONFIGS } from "../../providers/fal/video-depth.js"
+import { FAL_TOPAZ_RHEA_CONFIGS, FAL_TOPAZ_RHEA_ENDPOINT, topazRheaCostUsd } from "../../providers/fal/topaz-rhea.js"
+import { NODARO_VIDEO_UPSCALE_PROVIDER, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleQueuedModeOf } from "@nodaro/shared/models"
+import { readRheaRunFields } from "../topaz-rhea-plan.js"
+import { deliverRheaOutput } from "../topaz-rhea-delivery.js"
+import { watermarkLocalVideoAndUpload } from "../../workers/shared.js"
+import { supabase } from "../supabase.js"
+import { isDeterministicJobError } from "../deterministic-job-error.js"
 import type { ReconcileOpts } from "./kie.js"
 
 export interface FalJobRow {
@@ -43,11 +53,26 @@ export interface FalJobRow {
 const FAL_ENDPOINT_REGISTRIES: ReadonlyArray<Record<string, { endpoint: string }>> = [
   FAL_LIP_SYNC_CONFIGS,
   FAL_VIDEO_DEPTH_CONFIGS,
+  FAL_TOPAZ_RHEA_CONFIGS,
 ]
+
+/**
+ * Is this stored request a Rhea run on fal — the `topaz-rhea` provider, or
+ * Nodaro Video Upscale in transparent mode (the mode read as every lane reads
+ * it for a stored job, `nodaroVideoUpscaleQueuedModeOf`)?
+ */
+function isRheaRequest(inputData: Record<string, unknown> | null | undefined): boolean {
+  const provider = inputData?.provider
+  if (provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER) return true
+  // A stored request that names no mode was made before modes existed: Sharp.
+  return provider === NODARO_VIDEO_UPSCALE_PROVIDER && nodaroVideoUpscaleQueuedModeOf(inputData?.mode) === "transparent"
+}
 
 function resolveFalEndpoint(inputData: Record<string, unknown> | null | undefined): string | null {
   const provider = inputData?.provider
   if (typeof provider !== "string") return null
+  // Nodaro Video Upscale's transparent mode runs on the Rhea endpoint.
+  if (isRheaRequest(inputData)) return FAL_TOPAZ_RHEA_ENDPOINT
   for (const registry of FAL_ENDPOINT_REGISTRIES) {
     // own-key check: a stored provider like "toString" must not hit Object.prototype
     if (Object.hasOwn(registry, provider)) return registry[provider].endpoint
@@ -83,7 +108,8 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
 }
 
 /**
- * Reconcile a stuck fal.ai queue job (`provider_kind="fal-request"`). Mirrors
+ * Reconcile a stuck fal.ai queue job (`provider_kind="fal-request"`, or
+ * `"fal-rhea"` for a Rhea upscale). Mirrors
  * `reconcileReplicateJob`: resolve the fal endpoint from the row, check the
  * queue status ONCE via `fetchFalRequestStatus`, then:
  *   - COMPLETED → finalize with the extracted output URL (output_data written,
@@ -100,7 +126,61 @@ async function markFailed(jobId: string, reason: string, detail: string | null =
  * (per the Replicate/KIE twins) so a deterministic finalize failure (R2 upload,
  * bad output shape) exhausts to refund+anomaly instead of looping every tick.
  */
-export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Promise<void> {
+/** The fal reconcile's options: the shared ones, and the worker re-pick's wait. */
+export interface FalReconcileOpts extends ReconcileOpts {
+  /**
+   * A Rhea row (`fal-rhea`) still running upstream is read until it ends,
+   * within what is left of its wait ({@link waitOutRheaRequest}) — the
+   * worker's inline re-pick, inside a live queue handler, as the KIE re-pick's
+   * `pollAttempts` and the house model's `pollToEnd` do. Without it: one read
+   * a tick (the cron). Ignored for every other fal row.
+   */
+  pollToEnd?: boolean
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * A worker's re-pick of a Rhea request still running upstream: read it until
+ * it ends, or until its wait's end (`topazRheaRepickDeadline`: the original
+ * hour from the row's stamp, at least {@link TOPAZ_RHEA_REPICK_MIN_WAIT_MS}
+ * from now). BEFORE waiting, the row's stamp is moved so the cron's `fal-rhea`
+ * threshold falls past this wait (stamp = deadline − the hour): the cron never
+ * reads the row while this process waits, and takes it over at its threshold
+ * if this process dies too. Waiting spends no recovery attempt; a wait that
+ * reaches its end leaves the row as it is for the cron, also without one.
+ * Undefined: the wait ended with the request still running.
+ */
+async function waitOutRheaRequest(
+  row: FalJobRow,
+  endpoint: string,
+  requestId: string,
+): Promise<Awaited<ReturnType<typeof fetchFalRequestStatus>> | undefined> {
+  const { data } = await supabase.from("jobs").select("provider_call_started_at").eq("id", row.id).maybeSingle()
+  const stampAt = (data as { provider_call_started_at?: string | null } | null)?.provider_call_started_at
+  const stampMs = typeof stampAt === "string" && Number.isFinite(Date.parse(stampAt)) ? Date.parse(stampAt) : undefined
+  const deadline = topazRheaRepickDeadline(stampMs, Date.now())
+  const newStampMs = deadline - TOPAZ_RHEA_MAX_WAIT_MS
+  if (stampMs === undefined || newStampMs > stampMs) {
+    await supabase
+      .from("jobs")
+      .update({ provider_call_started_at: new Date(newStampMs).toISOString() })
+      .eq("id", row.id)
+      .eq("provider_kind", "fal-rhea")
+      .in("status", ["pending", "processing"])
+  }
+  while (Date.now() < deadline) {
+    if (isWorkerDraining()) throw new DrainAbortError()
+    await sleep(TOPAZ_RHEA_POLL_INTERVAL_MS)
+    const remote = await fetchFalRequestStatus(endpoint, requestId)
+    // A transient status-read failure reads as pending: keep waiting.
+    if (remote.status !== "pending") return remote
+  }
+  console.log(`[reconcile/fal] job ${row.id}: the Rhea request is still running at the end of its wait; left to the cron`)
+  return undefined
+}
+
+export async function reconcileFalJob(row: FalJobRow, opts?: FalReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
 
   const endpoint = resolveFalEndpoint(row.input_data)
@@ -116,7 +196,14 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
     return
   }
 
-  const remote = await fetchFalRequestStatus(endpoint, row.provider_task_id)
+  let remote = await fetchFalRequestStatus(endpoint, row.provider_task_id)
+
+  // The worker's re-pick of a Rhea run still going: wait it out here (no attempt spent).
+  if (remote.status === "pending" && opts?.pollToEnd && row.provider_kind === "fal-rhea") {
+    const ended = await waitOutRheaRequest(row, endpoint, row.provider_task_id)
+    if (!ended) return
+    remote = ended
+  }
 
   if (remote.status === "pending") {
     await bumpAttemptsOrExhaust(row.id, remote.error ?? "fal request still in queue")
@@ -166,6 +253,26 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
     return
   }
 
+  // A Rhea run: delivered exactly as the worker delivers it (the planned frame,
+  // the source's sound), then finalized with the stored file.
+  if (isRheaRequest(row.input_data) && row.job_type === "video-upscale") {
+    try {
+      // A false answer means another finalizer holds the claim and is delivering
+      // this run: nothing to do here, and nothing bumped.
+      await deliverRheaRow(row, extractFalUrl(remote.output), opts?.claimant ?? "cron")
+    } catch (err) {
+      // The file itself cannot be brought to its frame: the same file fails
+      // again, so fail and refund now instead of retrying for the whole window.
+      if (isDeterministicJobError(err)) {
+        await markFailed(row.id, "The upscaled video could not be prepared. Your credits were refunded.", redactProviderDetail(err instanceof Error ? err.message : String(err)) ?? null)
+        await refundReservedCreditsForJob(row.id)
+        return
+      }
+      await bumpAttemptsOrExhaust(row.id, err)
+    }
+    return
+  }
+
   // COMPLETED — extract + finalize. B1 guard: a poll-success-but-finalize-failure
   // (R2 upload, unexpected output shape) MUST bump so a deterministic failure
   // exhausts to refund+anomaly instead of looping at every cron tick forever.
@@ -184,4 +291,63 @@ export async function reconcileFalJob(row: FalJobRow, opts?: ReconcileOpts): Pro
   } catch (err) {
     await bumpAttemptsOrExhaust(row.id, err)
   }
+}
+
+/**
+ * A recovered Rhea run's delivery: its planned frame and source from its
+ * stored request, its owner's watermark rule from the job. The finalize claim
+ * is taken BEFORE the delivery (download, encode, upload) and kept fresh while
+ * it runs (lib/finalize-claim-hold.ts), so the worker and the cron never both
+ * do the delivery work: false when another finalizer holds the claim, or takes
+ * it mid-delivery (nothing stored or finalized here). The claim is re-entrant
+ * per claimant name, so two overlapping cron ticks are kept apart by the fresh
+ * claim read below, not by the claim itself; whatever overlaps, the job
+ * completes once and is charged once. A claim whose holder died lapses within
+ * its TTL, so the run is still recovered.
+ */
+async function deliverRheaRow(row: FalJobRow, outputUrl: string, claimant: NonNullable<ReconcileOpts["claimant"]>): Promise<boolean> {
+  const run = readRheaRunFields(row.input_data)
+  const sourceUrl = row.input_data?.videoUrl
+  if (!run || typeof sourceUrl !== "string") throw new Error("Rhea run without its plan in the stored request")
+  // Two reconcile ticks share the claimant "cron", which the claim lets re-enter
+  // its own fresh claim: a tick on an old scan must not re-enter one a later
+  // tick took for its delivery, so it reads the claim again first.
+  if (claimant === "cron" && (await hasFreshFinalizeClaimNow(row.id))) return false
+  const claim = await claimJobFinalize(row.id, claimant)
+  if (!claim.won) return false
+  const { data: job, error } = await supabase.from("jobs").select("user_id, should_watermark").eq("id", row.id).single()
+  if (error || !job) {
+    if (claim.ts) await releaseJobFinalizeClaim(row.id, claim.ts)
+    throw new Error(`could not read job ${row.id} for its delivery: ${error?.message ?? "no row"}`)
+  }
+  const userId = (job as { user_id?: string | null }).user_id ?? undefined
+  const watermark = (job as { should_watermark?: boolean | null }).should_watermark === true
+  let delivered: Awaited<ReturnType<typeof deliverRheaOutput<string>>>
+  try {
+    delivered = await holdingFinalizeClaim(row.id, claimant, claim.ts, (hold) => deliverRheaOutput({
+      outputUrl,
+      expected: { width: run.upscaleFrameWidth, height: run.upscaleFrameHeight },
+      sourceUrl,
+      jobId: row.id,
+      // Stored only while the claim is still this finalizer's.
+      store: async (localPath) => {
+        hold.assertHeld()
+        return watermarkLocalVideoAndUpload(localPath, row.id, userId, watermark)
+      },
+    }), { stopOnLoss: true })
+  } catch (err) {
+    // Another finalizer took the claim mid-delivery: it delivers; nothing is stored or finalized here.
+    if (isFinalizeClaimLost(err)) return false
+    throw err
+  }
+  await finalizeJobWithMedia({
+    jobId: row.id,
+    jobType: "video-upscale",
+    claimant,
+    result: { url: outputUrl, cost: topazRheaCostUsd(run.upscaleRateTier, run.upscaleBilledSec), providerUsed: String(row.input_data?.provider ?? "fal") },
+    mediaUrl: delivered.stored,
+    // The stored file's own frame, probed, never the plan's.
+    extraOutputData: { width: delivered.width, height: delivered.height },
+  })
+  return true
 }
