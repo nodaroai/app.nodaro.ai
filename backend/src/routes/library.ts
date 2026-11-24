@@ -4,6 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { isCloud } from "../lib/config.js"
 import { permanentlyDeleteAsset } from "../lib/asset-delete.js"
+import { withoutCompanions } from "../lib/asset-companions.js"
 import { judgeUrlForRecording } from "../lib/key-ownership.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { assetSourceColumns, JOB_SOURCES } from "../lib/job-source.js"
@@ -527,7 +528,7 @@ export async function libraryRoutes(app: FastifyInstance) {
           size_bytes: 0,
           r2_key: r2Key,
           r2_url: r2Url,
-          metadata: { ...(metadata ?? {}), ...(songName ? { name: songName } : {}) },
+          metadata: { ...withoutCompanions(metadata), ...(songName ? { name: songName } : {}) },
           is_library_item: isLibraryItem,
           upload_source: "generated",
           // Which surface saved this into the library (migration 285). There

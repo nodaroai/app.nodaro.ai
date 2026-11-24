@@ -495,6 +495,15 @@ export type VideoRemakeUpscaleOutcome = "applied" | "skipped"
 export type VideoRemakeOutputResolution = "480p" | "720p" | "1080p" | "4k"
 
 /**
+ * What the upscale choice's `"next"` delivers here, per engine (or Flash
+ * choice) and the engine's size: e.g. `{ "nodaro-prism": { "480p": "720p",
+ * "720p": "1080p", "1080p": "4k" }, "nodaro-pulse": { "720p": "1080p" } }`.
+ * A size missing from an engine's map, or an engine missing from the answer,
+ * is not offered here. See {@link VideoRemakeStyleChoice.upscaleTo}.
+ */
+export type VideoRemakeUpscaleTo = Partial<Record<VideoRemakeEngineChoice, Partial<Record<"480p" | "720p" | "1080p", Exclude<VideoRemakeOutputResolution, "480p">>>>>
+
+/**
  * The Video Remake keys of a completed job's output (`GET /v1/jobs/:id`,
  * `output_data`) that a client reads; the output carries others too.
  */
@@ -513,6 +522,17 @@ export interface VideoRemakeJobOutput {
   outputResolution?: VideoRemakeOutputResolution
   /** On a `"next"` run only: whether its upscale was applied (see {@link VideoRemakeUpscaleOutcome}). */
   upscale?: VideoRemakeUpscaleOutcome
+  /**
+   * The engine's own version of the video, at the engine's size, beside the
+   * upscaled `videoUrl`. Present only when `upscale` is `"applied"`; it is
+   * removed together with `videoUrl` when the run's Library item is deleted
+   * for good.
+   */
+  engineVideoUrl?: string
+  /** The engine version's width in pixels. Present only when `upscale` is `"applied"`. */
+  engineWidth?: number
+  /** The engine version's height in pixels. Present only when `upscale` is `"applied"`. */
+  engineHeight?: number
   [key: string]: unknown
 }
 
@@ -1222,6 +1242,17 @@ export interface VideoRemakeStyleChoice {
    * upscale choice; the field sent anyway is ignored).
    */
   upscaleChoice?: boolean
+  /**
+   * Per engine (or Flash choice) and the engine's size, the size `"next"`
+   * delivers here, so a page can show its Upscale control before a clip is
+   * added: what the engine can do, less every size this deployment has
+   * switched off. An engine with no size offered is left out; `{}` where
+   * {@link upscaleChoice} is false. It says what the deployment offers in
+   * general; the estimate's `upscaleOffered` stays the authority for an
+   * actual run (never on a draft or a trend run). Absent from an older
+   * server: treat it as `{}`.
+   */
+  upscaleTo?: VideoRemakeUpscaleTo
 }
 
 /**

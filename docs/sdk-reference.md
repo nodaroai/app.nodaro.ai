@@ -2539,7 +2539,14 @@ a draft or a trend run, and only where the deployment has turned it on:
 `styleChoice()` answers `upscaleChoice: true` there (absent from an older
 server: read it as `false`); elsewhere the field is accepted and ignored. A
 `"next"` asked where it is not offered is never an error: the run is made as
-`"off"`. `estimate()`, sent the same params, is the authority:
+`"off"`. `styleChoice()` also answers `upscaleTo` (`VideoRemakeUpscaleTo`):
+per engine (or Flash choice) and the engine's size, the size `"next"`
+delivers here, e.g. `{ "nodaro-prism": { "480p": "720p", "720p": "1080p", "1080p": "4k" }, "nodaro-pulse": { "720p": "1080p" } }`,
+so a page can show its Upscale control before a clip is added. A size or
+engine missing from it is not offered; it is `{}` where `upscaleChoice` is
+false (absent from an older server: read it as `{}`). It says what the
+deployment offers in general; `estimate()`, sent the same params, is the
+authority for an actual run:
 `upscaleOffered`, the effective `upscale`, `resolution` (the engine's size),
 `outputResolution` (the size delivered, `VideoRemakeOutputResolution`: `"4k"`
 for a 1080p run upscaled; `resolution` is never `"4k"`) and, on a `"next"` run, the price in
@@ -2548,11 +2555,15 @@ with. A completed job's output (`VideoRemakeJobOutput`) carries
 `outputResolution` and, on a `"next"` run, `upscale: "applied" | "skipped"`
 (`VideoRemakeUpscaleOutcome`; skipped: the upscale step failed and the video
 was delivered at the engine's size); its `resolution` stays the engine's size.
+On an `"applied"` run it may also carry `engineVideoUrl` (the engine's own
+version at the engine's size, removed together with `videoUrl` when the
+run's Library item is deleted for good),
+`engineWidth` and `engineHeight`.
 
 **A forced style** (`styleChoice()`, `VideoRemakeStyleChoice`): Nodaro may fix
 an engine's style for everyone as Motion, and every `run()` and `estimate()` on it then
 uses that style whatever `style` says. `styleChoice()` answers
-`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, upscaleChoice?: boolean }`,
+`{ engines: { "nodaro-prism": VideoRemakeStyleChoiceOption, "nodaro-pulse": VideoRemakeStyleChoiceOption }, styleOnly?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, preciseArtStyleAlone?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, customStyle?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, planRoles?: boolean, planRolesPreviz?: boolean, previz?: boolean, roleFace?: boolean, flash?: { "nodaro-prism"?: boolean, "nodaro-pulse"?: boolean }, upscaleChoice?: boolean, upscaleTo?: VideoRemakeUpscaleTo }`,
 each engine `"user"` (the caller chooses), `"precise"` or `"flex"`
 (`style: "motion"`, fixed as above). `"precise"` changes no request: Nodaro's
 own apps run Precise on that engine and hide their style control, and every

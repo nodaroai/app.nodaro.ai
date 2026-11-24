@@ -4635,6 +4635,9 @@ export type PluginNodaroMotionPreciseUpscale = {
   }
 }
 
+/** Video Remake's upscale choice: per engine id (or Flash choice), each engine size's next size ("next" delivers it). */
+export type PluginCastSwapUpscaleNext = Readonly<Record<string, Readonly<Partial<Record<"480p" | "720p" | "1080p", "720p" | "1080p" | "4k">>>>>
+
 /** Video Remake's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
 export type PluginNodaroMotionPreciseStyleRoute = {
   readonly routing?: "on" | "off"
@@ -5467,6 +5470,15 @@ export interface PluginSupports {
      * field is not sent (lib/video-remake-upscale-choice.ts).
      */
     readonly upscaleChoice?: boolean
+    /**
+     * What the upscale choice's "next" delivers, per engine (or Flash choice) and engine size, e.g.
+     * `{ "nodaro-prism": { "480p": "720p", "720p": "1080p", "1080p": "4k" }, … }` (2026-11-24). What the
+     * engine CAN do, present only while its switch is on: the platform removes what the admin switched off
+     * (`nodaro_motion_precise_upscale` read as a kill switch, as the engine reads it) and answers the rest as
+     * `upscaleTo` on `GET /v1/video-remake/style-choice`. Read defensively (`upscaleNextOf`,
+     * lib/video-remake-upscale-choice.ts): an unknown engine id, size or target is dropped, never thrown on.
+     */
+    readonly upscaleNext?: PluginCastSwapUpscaleNext
   }
 }
 

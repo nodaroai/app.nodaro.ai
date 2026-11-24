@@ -2,7 +2,7 @@
  * Video Remake's Precise upscale (registered by `adminNodaroMotionRoutes`,
  * admin-nodaro-motion.ts, so it shares its edition gate). Admin-only.
  *
- *   GET /v1/admin/video-remake/precise-upscale   { value, stored, defaults, updatedAt, supported }
+ *   GET /v1/admin/video-remake/precise-upscale   { value, stored, defaults, updatedAt, supported, topazDisabled, upscaleChoice }
  *   PUT /v1/admin/video-remake/precise-upscale   { preciseUpscale }: save the whole setting (a resolution left out at its default); audit-logged
  *
  * The setting (`nodaro_motion_precise_upscale`, lib/cast-swap-prism-precise-upscale.ts)
@@ -21,7 +21,12 @@
  * `castSwap.preciseUpscale` never reads the row and runs no upscale, so no 409
  * waits for one. `supported` is whether THIS environment's engine declares it;
  * `topazDisabled` whether this deployment withholds Topaz (then the engine is
- * answered every resolution "off", whatever is saved).
+ * answered every resolution "off", whatever is saved). `upscaleChoice` whether
+ * this environment's engine takes Video Remake's upscale choice
+ * (`castSwap.upscaleChoice`, lib/video-remake-upscale-choice.ts): while it does,
+ * the hidden step runs nowhere and the engine reads each row as a kill switch
+ * instead ("off" = the choice is not offered at that size; any target = it is,
+ * delivered at the next size), so the admin page words the rows that way.
  * Each save writes an `admin_actions` row
  * (`update_nodaro_motion_precise_upscale`) with the setting before and after.
  */
@@ -38,6 +43,7 @@ import {
   type NodaroMotionPreciseUpscaleEffective,
 } from "../../lib/cast-swap-prism-precise-upscale.js"
 import { readNodaroMotionPreciseUpscale, saveNodaroMotionPreciseUpscale } from "../../lib/nodaro-motion-precise-upscale-store.js"
+import { engineTakesUpscaleChoice } from "../../lib/video-remake-upscale-choice.js"
 import { getPluginSupports } from "../../lib/private-plugins/supports-registry.js"
 import { topazVideoDisabledHere } from "../../lib/topaz-video-availability.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -78,6 +84,8 @@ export interface NodaroMotionPreciseUpscaleView {
   supported: boolean
   /** Whether this deployment withholds Topaz video upscale (its model or its credit row switched off): every run is then answered "off". */
   topazDisabled: boolean
+  /** Whether this environment's engine takes the upscale choice: each row then turns that choice on or off at its size. */
+  upscaleChoice: boolean
 }
 
 async function view(): Promise<NodaroMotionPreciseUpscaleView> {
@@ -89,6 +97,7 @@ async function view(): Promise<NodaroMotionPreciseUpscaleView> {
     updatedAt,
     supported: engineTakesPreciseUpscale(getPluginSupports().castSwap),
     topazDisabled: topazVideoDisabledHere(),
+    upscaleChoice: engineTakesUpscaleChoice(getPluginSupports().castSwap),
   }
 }
 

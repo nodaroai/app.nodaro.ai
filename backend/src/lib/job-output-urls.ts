@@ -20,6 +20,8 @@ import { config } from "./config.js"
  *   pro->audio->layers->…->url       Recast's initial derivatives live on the
  *   audio->layers->…->url            GVP checkpoint; a published rescore copies
  *                                    its current derivatives onto the child.
+ *   engineVideoUrl                   Video Remake's engine version beside an
+ *                                    upscaled result — row-less too.
  *
  * One `.eq()` per path, NEVER a hand-built `.or()` string: PostgREST does not
  * quote values inside an `.or()` filter and URLs contain reserved chars
@@ -41,6 +43,10 @@ export const JOB_OUTPUT_URL_PATHS = [
   "output_data->pro->audio->layers->video->>url",
   "output_data->audio->layers->music->>url",
   "output_data->audio->layers->video->>url",
+  // Video Remake's engine version beside an upscaled result (cloud-plugins):
+  // row-less, a companion recorded on the result's Library row
+  // (lib/asset-companions.ts).
+  "output_data->>engineVideoUrl",
 ] as const
 
 /**
@@ -59,7 +65,7 @@ export const PRIMARY_JOB_OUTPUT_URL_PATHS = [
  *
  * Gated on the shared-bucket flag, and the gate is about round trips, not
  * correctness. Off the flag, `uploadToR2` copies: two jobs never share an
- * object, so the extra eight probes can only ever come back empty, and issuing
+ * object, so the extra probes can only ever come back empty, and issuing
  * them would change the query profile of a delete path on every mainline
  * deployment for no behavioural difference. On the flag, aliasing is real and
  * the full list is the only thing that sees it.
