@@ -8,17 +8,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const ff = vi.hoisted(() => ({
   runFfmpegCapture: vi.fn(),
   probeMediaDuration: vi.fn(),
+  downloadFile: vi.fn(),
+  ensureMediaProxy: vi.fn(),
 }))
 vi.mock("../../video/ffmpeg-utils.js", () => ({
   runFfmpegCapture: ff.runFfmpegCapture,
   probeMediaDuration: ff.probeMediaDuration,
-  createWorkDir: vi.fn(),
-  cleanupWorkDir: vi.fn(),
-  downloadFile: vi.fn(),
+  createWorkDir: async () => "/tmp/silence-detect-pass",
+  cleanupWorkDir: async () => undefined,
+  downloadFile: ff.downloadFile,
 }))
-vi.mock("../../../services/media-proxy.js", () => ({ ensureMediaProxy: vi.fn() }))
+vi.mock("../../../services/media-proxy.js", () => ({ ensureMediaProxy: ff.ensureMediaProxy }))
 
-import { ALL_RANGES_MIN_FLOOR_MS, runSilenceDetectOnFile } from "../silence-detect.js"
+import { ALL_RANGES_MIN_FLOOR_MS, detectSilence, runSilenceDetectOnFile } from "../silence-detect.js"
+import { DOWNLOAD_TIMEOUT_MS } from "../../video/ffmpeg-timeouts.js"
 
 const STDERR = [
   // 349.94 ms: 5,599 samples at 16 kHz, one sample short of 350 ms.
@@ -95,4 +98,14 @@ describe("a failed pass is read only when ffmpeg ran to the end", () => {
       await expect(runSilenceDetectOnFile("/tmp/x.m4a", SETTINGS)).rejects.toThrow("ffmpeg exited")
     },
   )
+})
+
+describe("the proxy fetch", () => {
+  it("is bounded by the 120 s the liveness budget charges for it (silence-detect-budget.ts)", async () => {
+    ff.ensureMediaProxy.mockResolvedValue({ url: "https://files.example.test/proxies/a.m4a", key: "proxies/a.m4a", kind: "audio", cached: true })
+    ff.downloadFile.mockResolvedValue(undefined)
+    await detectSilence("https://files.example.test/a.mp4", SETTINGS)
+    const opts = ff.downloadFile.mock.calls[0]![2] as { timeoutMs?: number }
+    expect(opts.timeoutMs).toBeLessThanOrEqual(DOWNLOAD_TIMEOUT_MS)
+  })
 })

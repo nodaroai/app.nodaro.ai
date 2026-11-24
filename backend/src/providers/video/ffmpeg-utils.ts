@@ -33,6 +33,10 @@ import { acquireFfmpegSlot as acquireFfmpegAdmission, ffmpegMemoryBudgetNow } fr
 import { describeFfmpegMemoryBudget } from "./ffmpeg-memory.js"
 import { ffmpegStallError, watchForStall, type FfmpegStallWatch } from "./ffmpeg-stall-watchdog.js"
 import {
+  DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DEFAULT_DOWNLOAD_MAX_MS,
+  DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DEFAULT_DOWNLOAD_RATE_WINDOW_MS,
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_FLOOR_BYTES_PER_SEC,
   DOWNLOAD_MAX_MS,
@@ -55,6 +59,10 @@ export { constantFrameRate, parseFrameRate }
 // The ceilings live in a dependency-free leaf (see its header); re-exported so
 // every existing `ffmpeg-utils.js` import keeps working.
 export {
+  DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DEFAULT_DOWNLOAD_MAX_MS,
+  DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DEFAULT_DOWNLOAD_RATE_WINDOW_MS,
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_FLOOR_BYTES_PER_SEC,
   DOWNLOAD_MAX_MS,
@@ -90,7 +98,8 @@ export interface DownloadLimits extends TransferRateLimits {
  *  media proxy's source (decided 2026-09-25, Track 0.19). Their URLs are
  *  user-supplied, so the limits guard a hostile one: a minimum rate per window
  *  (a drip-feed fails within a minute) and a byte cap (a fast one cannot fill
- *  the disk). Every other caller keeps the flat default. */
+ *  the disk). Every other caller runs under the default path's looser limits
+ *  (`DEFAULT_DOWNLOAD_LIMITS`). */
 export const BIG_MEDIA_DOWNLOAD_LIMITS: DownloadLimits = Object.freeze({
   responseMs: DOWNLOAD_TIMEOUT_MS,
   windowMs: DOWNLOAD_RATE_WINDOW_MS,
@@ -100,73 +109,360 @@ export const BIG_MEDIA_DOWNLOAD_LIMITS: DownloadLimits = Object.freeze({
   maxMs: DOWNLOAD_MAX_MS,
 })
 
-const seconds = (ms: number) => `${Math.round(ms / 1000)} s`
+/** The default path's body limits (`DEFAULT_DOWNLOAD_*`, decided 2026-11-24):
+ *  looser than big media's, since its callers fetch provider results that can
+ *  be large on slow hosts — see the constants' header in `ffmpeg-timeouts.ts`. */
+export const DEFAULT_DOWNLOAD_LIMITS: TransferRateLimits = Object.freeze({
+  responseMs: DOWNLOAD_TIMEOUT_MS,
+  windowMs: DEFAULT_DOWNLOAD_RATE_WINDOW_MS,
+  minBytesPerWindow: DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  floorBytesPerSec: DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  maxMs: DEFAULT_DOWNLOAD_MAX_MS,
+})
+
+/** A limit in words: whole seconds, or milliseconds under one. */
+const seconds = (ms: number) => (ms < 1000 ? `${Math.max(0, Math.round(ms))} ms` : `${Math.round(ms / 1000)} s`)
+
+/** A download that took longer than this is logged (how long, how much, how fast, which way). */
+const SLOW_DOWNLOAD_LOG_MS = 120_000
+
+/** The bound a storage read inside `saveResponse`'s 404 fallback runs under. */
+interface StorageReadBounds {
+  timeoutMs: number
+  signal?: AbortSignal
+  maxBytes?: number
+  limits?: TransferRateLimits
+}
+
+/** What one `downloadFile` call is bounded by. */
+interface DownloadOptions {
+  maxBytes?: number
+  limits?: DownloadLimits
+  timeoutMs?: number
+  signal?: AbortSignal
+}
 
 /**
  * Fetch `url` to `dest`.
  *
- * DEFAULT: one flat `DOWNLOAD_TIMEOUT_MS` (120 s) covers the response AND the
- * body. For the ~60 callers that fetch provider results, images and
- * user-supplied URLs that is also their only bound — a server trickling a byte
- * a minute holds a worker at most that long, and fills at most 120 s × link
- * rate of disk (`maxBytes` caps it further where a caller passes one).
+ * OUR OWN FILES (a link strictly under this install's `R2_PUBLIC_URL`, with
+ * storage configured) are read straight from storage, not back through the
+ * public host: the first read of a freshly written object is a miss at the
+ * edge and can arrive at a few kB/s. A file storage does not have fails as the
+ * HTTP path would ("Failed to download: <url> (404)"); any other storage
+ * failure falls back to HTTP, and an HTTP timeout of one of our files is
+ * retried once from storage. An install without storage, and every other
+ * link, goes over HTTP only, as before.
+ *
+ * Over HTTP every limit reaches the BODY: one signal stops the fetch AND the
+ * stream that writes it, so a body cannot keep arriving past its limit.
+ *
+ * DEFAULT (no `limits`, no `timeoutMs`): the response within
+ * `DOWNLOAD_TIMEOUT_MS` (120 s); the body is never judged within 120 s of the
+ * start, then must keep a small minimum rate per window, gets its announced
+ * size at a conservative floor rate, and stops at a ceiling
+ * (`DEFAULT_DOWNLOAD_LIMITS`). So a slow-but-steady large file still arrives;
+ * a stalled or drip-fed one is ended.
  *
  * BIG MEDIA (`opts.limits`, normally `BIG_MEDIA_DOWNLOAD_LIMITS`): a transfer
  * runs while it keeps a minimum rate — aborted when a `windowMs` window
  * delivers under `minBytesPerWindow` (a dead or drip-fed transfer: these
  * callers take user-supplied URLs), when a known-size body outlasts its size at
  * the floor rate, at `maxMs` overall, or past `maxBytes` on disk. The flat 120 s
- * could never deliver a 3-hour camera original (~15 GB). Every timeout starts
- * "Download timeout:" and names its limit. The rate applies only after
- * `responseMs` (review round 3 of #1656, decided 2026-09-25): a slow source the
- * flat 120 s delivered still arrives. The body is fetched uncompressed and a
- * compressed one is refused — the rate counts decoded bytes, so gzip would let
- * a drip-feed pass it at ~1000:1.
+ * could never deliver a 3-hour camera original (~15 GB). The rate applies only
+ * after `responseMs` (review round 3 of #1656, decided 2026-09-25). The body is
+ * fetched uncompressed and a compressed one is refused — the rate counts
+ * decoded bytes, so gzip would let a drip-feed pass it at ~1000:1.
  *
- * On the DEFAULT path a caller on a tighter budget passes `timeoutMs` (never
- * above `DOWNLOAD_TIMEOUT_MS`) and a caller whose client may go away a
- * `signal`; neither changes a caller that passes neither.
+ * Every timeout starts "Download timeout:" and names its limit. On the DEFAULT
+ * path a caller on a tighter budget passes `timeoutMs` (never above
+ * `DOWNLOAD_TIMEOUT_MS`; a hard total, rejecting as a `TimeoutError`) and a
+ * caller whose client may go away a `signal`.
  */
-export async function downloadFile(
+export async function downloadFile(url: string, dest: string, opts: DownloadOptions = {}): Promise<void> {
+  const startedAt = Date.now()
+  const route: string[] = []
+  let failed = true
+  try {
+    await downloadFileOnce(url, dest, opts, startedAt, route)
+    failed = false
+  } finally {
+    const tookMs = Date.now() - startedAt
+    // Never lets the log line change the download's own outcome.
+    if (tookMs > SLOW_DOWNLOAD_LOG_MS) await logSlowDownload(url, dest, tookMs, route, failed).catch(() => undefined)
+  }
+}
+
+/**
+ * One line for a download that took over {@link SLOW_DOWNLOAD_LOG_MS}: so
+ * production can see who runs long, and confirm nobody working is being cut
+ * off. The link without its query (a signed link's query is a credential).
+ */
+async function logSlowDownload(url: string, dest: string, tookMs: number, route: readonly string[], failed: boolean): Promise<void> {
+  let where = "(unparseable link)"
+  try { const u = new URL(url); where = `${u.origin}${u.pathname}` } catch { /* keep the placeholder */ }
+  const bytes = await fs.stat(dest).then((st) => st.size, () => 0)
+  const kBps = Math.round(bytes / 1024 / (tookMs / 1000))
+  console.warn(`[downloadFile] slow download ${failed ? "failed" : "finished"}: ${where} — ${Math.round(tookMs / 1000)} s, ${bytes} bytes, ${kBps} kB/s average, via ${route.join("-then-") || "nothing"}`)
+}
+
+async function downloadFileOnce(url: string, dest: string, opts: DownloadOptions, startedAt: number, route: string[]): Promise<void> {
+  const budgetMs = opts.limits || opts.timeoutMs === undefined ? undefined : Math.min(DOWNLOAD_TIMEOUT_MS, opts.timeoutMs)
+  // ONE deadline for the whole call, whichever reads it takes (storage, the
+  // link, storage again): the caller's budget, else its path's ceiling.
+  const deadlineAt = startedAt + (budgetMs ?? (opts.limits ? opts.limits.maxMs : DEFAULT_DOWNLOAD_LIMITS.maxMs))
+  const timeLeft = () => deadlineAt - Date.now()
+  const maxBytes = opts.limits ? Math.min(opts.maxBytes ?? Infinity, opts.limits.maxBytes) : opts.maxBytes
+  const signal = opts.limits ? undefined : opts.signal
+
+  const key = await ownStorageKey(url)
+  const fromStorage = key
+    ? () => {
+      route.push("storage")
+      return readOwnStoredObject(key, url, dest, {
+        ...(Number.isFinite(maxBytes) && maxBytes !== undefined ? { maxBytes } : {}),
+        ...(opts.limits ? { limits: opts.limits } : {}),
+        ...(signal ? { signal } : {}),
+        timeLeft,
+      })
+    }
+    : undefined
+  if (fromStorage && (await fromStorage())) return
+
+  // The 404 fallback reads storage within the same deadline — and not at all
+  // when the storage read above already failed for this very key.
+  const storageFallback = {
+    skip: key !== null,
+    bounds: (): StorageReadBounds => ({
+      timeoutMs: timeLeft(),
+      ...(signal ? { signal } : {}),
+      ...(maxBytes !== undefined && Number.isFinite(maxBytes) ? { maxBytes } : {}),
+      ...(opts.limits ? { limits: opts.limits } : {}),
+    }),
+  }
+  route.push("http")
+  try {
+    await (opts.limits
+      ? downloadOverHttpBigMedia(url, dest, opts.limits, maxBytes!, { startedAt, deadlineAt, storageFallback })
+      : downloadOverHttpDefault(url, dest, { maxBytes, signal, budgetMs, deadlineAt, storageFallback }))
+  } catch (err) {
+    // Our own file timed out at the public host: one more read from storage,
+    // on whatever is left of the call's deadline.
+    if (fromStorage && isDownloadTimeoutError(err) && !signal?.aborted && timeLeft() > 0) {
+      if (await fromStorage().catch(() => false)) return
+    }
+    throw err
+  }
+}
+
+/** A `downloadFile` limit ran out (its own words, or a budget's `TimeoutError`). */
+function isDownloadTimeoutError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  return err.name === "TimeoutError" || err.message.startsWith("Download timeout")
+}
+
+/**
+ * The storage key of `url` when it is one of OUR files and storage is
+ * configured here; null otherwise (the link then goes over HTTP only).
+ * Strictly ours (`isOwnStoredFileUrl`: no escape, no edge transform, the one
+ * normal form), so the key is exactly the path under the public base — a link
+ * that is not strict stays on HTTP rather than risk reading a wrong key.
+ * Storage is loaded only for such a link (its module builds a client); a test
+ * whose partial mock of it throws gets HTTP.
+ */
+async function ownStorageKey(url: string): Promise<string | null> {
+  if (!isOwnStoredFileUrl(url)) return null
+  try {
+    const { isStorageConfigured, r2KeyFromOurUrl } = await import("../../lib/storage.js")
+    if (!isStorageConfigured()) return null
+    const key = r2KeyFromOurUrl(url)
+    return key && (await storageMayServeDirectly(key)) ? key : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether storage may hand over `key` without its public link being asked —
+ * false wherever the link is refused by a rule storage itself does not know:
+ *
+ *  - a kept prefix (`lib/kept-storage-prefixes.ts`): the deployment's own
+ *    files, among them a restricted file's evidence bytes (`evidence/…`),
+ *    which the public host refuses to serve;
+ *  - every key, on a deployment that makes withheld results private by their
+ *    ACL (`withheldObjectsGoPrivate`): such a file's link no longer reads it,
+ *    but storage's credentials still would, and which files are withheld is
+ *    not known here without a lookup per download.
+ *
+ * The key is checked as given and decoded (a link's path may escape it). Any
+ * doubt — a module that cannot be read — is a refusal: the link is then read
+ * over HTTP, where the host's own rules apply.
+ */
+async function storageMayServeDirectly(key: string): Promise<boolean> {
+  try {
+    const [{ keptStoragePrefix }, { withheldObjectsGoPrivate }] = await Promise.all([
+      import("../../lib/kept-storage-prefixes.js"),
+      import("../../lib/storage-deletes-setting.js"),
+    ])
+    if (withheldObjectsGoPrivate()) return false
+    let decoded = key
+    try { decoded = decodeURIComponent(key) } catch { return false }
+    return keptStoragePrefix(key) === undefined && keptStoragePrefix(decoded) === undefined
+  } catch {
+    return false
+  }
+}
+
+/** Storage's own "no such object" — GetObject's `NoSuchKey` only. Any other
+ *  refusal (a bucket it does not know, a bare 404 from a proxy in front of it)
+ *  says nothing about the file, so the link is tried instead. */
+function isStorageNotFound(err: unknown): boolean {
+  const e = err as { name?: unknown; Code?: unknown } | null
+  return e?.name === "NoSuchKey" || e?.Code === "NoSuchKey"
+}
+
+/**
+ * Read one of our objects from storage to `dest`. Resolves true once written;
+ * false when the read failed in a way HTTP may not (storage unreachable, a
+ * refused credential, a stalled read) — the caller then fetches over HTTP.
+ * Throws what HTTP would fail the same way: a missing object (worded as the
+ * HTTP path's 404), a byte-cap refusal, the caller's abort, a spent budget.
+ */
+async function readOwnStoredObject(
+  key: string,
   url: string,
   dest: string,
-  opts: { maxBytes?: number; limits?: DownloadLimits; timeoutMs?: number; signal?: AbortSignal } = {},
+  bounds: { maxBytes?: number; limits?: TransferRateLimits; signal?: AbortSignal; timeLeft: () => number },
+): Promise<boolean> {
+  const left = bounds.timeLeft()
+  if (left <= 0) {
+    throw Object.assign(new Error(`Download timeout: no time left to read ${url}`), { name: "TimeoutError" })
+  }
+  try {
+    const { downloadR2ObjectToFile } = await import("../../lib/storage.js")
+    await downloadR2ObjectToFile(key, dest, {
+      ...(bounds.maxBytes !== undefined ? { maxBytes: bounds.maxBytes } : {}),
+      ...(bounds.limits ? { limits: bounds.limits } : {}),
+      ...(bounds.signal ? { signal: bounds.signal } : {}),
+      timeoutMs: left,
+    })
+    return true
+  } catch (err) {
+    if (isStorageNotFound(err)) throw new Error(`Failed to download: ${url} (404)`)
+    if (isDownloadByteCapError(err) || bounds.signal?.aborted || bounds.timeLeft() <= 0) throw err
+    // Visible, so a storage that is always failing here (credentials, a
+    // bucket name) does not just quietly add its retries to every download.
+    console.warn(`[downloadFile] reading ${key} from storage failed (${err instanceof Error ? err.message : String(err)}); fetching its link instead`)
+    return false
+  }
+}
+
+/** The DEFAULT path over HTTP (see `downloadFile`). */
+async function downloadOverHttpDefault(
+  url: string,
+  dest: string,
+  o: {
+    maxBytes?: number
+    signal?: AbortSignal
+    budgetMs?: number
+    deadlineAt: number
+    storageFallback: { skip: boolean; bounds: () => StorageReadBounds }
+  },
 ): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
   // sourceUrl into ffmpeg. Without DNS-aware SSRF protection, a hostname
   // resolving to an internal IP would have the response processed and the
   // result uploaded to R2 (read-oracle). See backend/src/lib/safe-fetch.ts.
-  const limits = opts.limits
-  if (!limits) {
-    const startedAt = Date.now()
-    const timeoutMs = Math.min(DOWNLOAD_TIMEOUT_MS, opts.timeoutMs ?? DOWNLOAD_TIMEOUT_MS)
-    const response = await safeFetch(url, { timeoutMs, ...(opts.signal ? { signal: opts.signal } : {}) })
-    // A caller on a budget hands it to the 404 fallback too (what is left of it, its signal, its cap);
-    // every other caller's fallback runs as before.
-    const bounded = opts.timeoutMs !== undefined || opts.signal !== undefined
-    await saveResponse(url, dest, response, opts.maxBytes, bounded
-      ? { fallbackBounds: () => ({ timeoutMs: timeoutMs - (Date.now() - startedAt), ...(opts.signal ? { signal: opts.signal } : {}), ...(opts.maxBytes !== undefined ? { maxBytes: opts.maxBytes } : {}) }) }
-      : {})
-    return
+  const ctrl = new AbortController()
+  // A `TimeoutError`, as the flat timer's rejection was: a caller may tell a
+  // timeout from another failure by its name.
+  const abortWith = (what: string) => {
+    if (!ctrl.signal.aborted) ctrl.abort(Object.assign(new Error(`Download timeout: ${what}: ${url}`), { name: "TimeoutError" }))
   }
+  const onCallerAbort = () => { if (!ctrl.signal.aborted) ctrl.abort(o.signal!.reason) }
+  if (o.signal?.aborted) onCallerAbort()
+  else o.signal?.addEventListener("abort", onCallerAbort, { once: true })
 
+  const limits = DEFAULT_DOWNLOAD_LIMITS
+  // Every timer is OURS, so every abort names its limit; safeFetch's own timer
+  // is only a backstop set past them.
+  const timers: Array<ReturnType<typeof setTimeout>> = []
+  const clearTimers = () => { for (const t of timers) clearTimeout(t); timers.length = 0 }
+  let body: TransferWatch | undefined
+  const remaining = o.deadlineAt - Date.now()
+  const left = o.budgetMs === undefined ? undefined : remaining
+  try {
+    let phase: ReturnType<typeof setTimeout> | undefined
+    if (remaining <= 0) throw Object.assign(new Error(`Download timeout: no time left to read ${url}`), { name: "TimeoutError" })
+    if (left !== undefined) {
+      // A caller on a budget: one hard total over the response AND the body.
+      timers.push(setTimeout(() => abortWith(`over its ${seconds(o.budgetMs!)} limit`), left))
+    } else {
+      timers.push(setTimeout(() => abortWith(`over its ${seconds(limits.maxMs)} overall ceiling`), remaining))
+      phase = setTimeout(() => abortWith(`no response within ${seconds(limits.responseMs)}`), limits.responseMs)
+      timers.push(phase)
+    }
+    const httpStartedAt = Date.now()
+    const response = await safeFetch(url, { timeoutMs: (left ?? limits.maxMs) + 5_000, signal: ctrl.signal })
+    clearTimeout(phase)
+    await saveResponse(url, dest, response, o.maxBytes, {
+      signal: ctrl.signal,
+      // The storage fallback runs under what is left of the call's deadline.
+      onFallback: clearTimers,
+      storageFallback: o.storageFallback,
+      ...(left === undefined
+        ? {
+          onBody: () => {
+            // Only an unencoded length is the size of what arrives.
+            const size = contentEncoding(response) ? NaN : Number(response.headers?.get?.("content-length") ?? NaN)
+            body = watchTransferBody({ limits, sizeBytes: size, startedAt: httpStartedAt, stop: abortWith })
+            return body.count
+          },
+        }
+        : {}),
+    })
+  } catch (err) {
+    // Our own abort reason says what happened; the fetch/stream layers would
+    // otherwise surface a bare "This operation was aborted".
+    if (ctrl.signal.aborted && ctrl.signal.reason instanceof Error) throw ctrl.signal.reason
+    throw err
+  } finally {
+    clearTimers()
+    body?.stop()
+    o.signal?.removeEventListener("abort", onCallerAbort)
+  }
+}
+
+/** The BIG-MEDIA path over HTTP (see `downloadFile`). */
+async function downloadOverHttpBigMedia(
+  url: string,
+  dest: string,
+  limits: DownloadLimits,
+  maxBytes: number,
+  call: { startedAt: number; deadlineAt: number; storageFallback: { skip: boolean; bounds: () => StorageReadBounds } },
+): Promise<void> {
   const startedAt = Date.now()
+  const { deadlineAt } = call
   const ctrl = new AbortController()
   const abortWith = (what: string) => {
     if (!ctrl.signal.aborted) ctrl.abort(new Error(`Download timeout: ${what}: ${url}`))
   }
   // Every timer is OURS, so every abort names its limit; safeFetch's own timer
   // is only a backstop set past the overall ceiling.
+  // The call's ceiling, less what a storage read before this took — and the
+  // reason says so when that read took part of it.
+  const spentOnStorage = startedAt - call.startedAt
   let overall: ReturnType<typeof setTimeout> | undefined = setTimeout(
-    () => abortWith(`over its ${seconds(limits.maxMs)} overall ceiling`),
-    limits.maxMs,
+    () => abortWith(spentOnStorage >= 1000
+      ? `over its ${seconds(limits.maxMs)} overall ceiling, ${seconds(spentOnStorage)} of it spent first on a storage read that failed`
+      : `over its ${seconds(limits.maxMs)} overall ceiling`),
+    Math.max(0, deadlineAt - Date.now()),
   )
   let phase: ReturnType<typeof setTimeout> | undefined = setTimeout(
     () => abortWith(`no response within ${seconds(limits.responseMs)}`),
     limits.responseMs,
   )
   let body: TransferWatch | undefined
-  const maxBytes = Math.min(opts.maxBytes ?? Infinity, limits.maxBytes)
   try {
     // Identity only: camera and audio originals are never sent compressed, and
     // a compressed body would be counted decoded by the rate window below.
@@ -182,9 +478,11 @@ export async function downloadFile(
       throw new Error(`Download refused: the server sent a compressed body (Content-Encoding: ${encoding}) though an uncompressed one was requested: ${url}`)
     }
     await saveResponse(url, dest, response, maxBytes, {
-      // The R2 fallback is bounded by the storage client's own limits (the
-      // same body rule — `lib/storage-timeouts.ts`, Track 0.12); ours stop here.
+      signal: ctrl.signal,
+      // The storage fallback runs under the caller's limits and what is left
+      // of the call's deadline; ours stop here.
       onFallback: () => { clearTimeout(overall); overall = undefined },
+      storageFallback: call.storageFallback,
       onBody: () => {
         const size = Number(response.headers?.get?.("content-length") ?? NaN)
         // The size deadline and, once `responseMs` has passed since the start
@@ -194,8 +492,6 @@ export async function downloadFile(
       },
     })
   } catch (err) {
-    // Our own abort reason says what happened; the fetch/stream layers would
-    // otherwise surface a bare "This operation was aborted".
     if (ctrl.signal.aborted && ctrl.signal.reason instanceof Error) throw ctrl.signal.reason
     throw err
   } finally {
@@ -211,17 +507,20 @@ function contentEncoding(response: Response): string {
   return value === "identity" ? "" : value
 }
 
-/** Write an already-fetched response to `dest` (both download paths). */
+/** Write an already-fetched response to `dest` (both HTTP download paths). */
 async function saveResponse(
   url: string,
   dest: string,
   response: Response,
   maxBytes: number | undefined,
   hooks: {
+    /** Stops the body too: the one signal the fetch was given (a limit, the caller's abort). */
+    readonly signal?: AbortSignal
     readonly onFallback?: () => void
     readonly onBody?: () => (bytes: number) => void
-    /** The bound the 404 fallback runs under, for a caller on a budget (read when the fallback starts). */
-    readonly fallbackBounds?: () => { timeoutMs?: number; signal?: AbortSignal; maxBytes?: number }
+    /** The 404 fallback's storage read: skipped when storage already failed for this
+     *  link's key; else bounded by `bounds()` (read when the fallback starts). */
+    readonly storageFallback?: { readonly skip: boolean; readonly bounds: () => StorageReadBounds }
   },
 ): Promise<void> {
   if (!response.ok) {
@@ -233,19 +532,20 @@ async function saveResponse(
     // bucket, bypass the edge and stream straight from the R2 origin —
     // r2KeyFromOurUrl returns null for foreign URLs, so provider links keep
     // the plain failure path.
-    if (response.status === 404) {
+    if (response.status === 404 && hooks.storageFallback && !hooks.storageFallback.skip) {
       // Dynamic import keeps storage (and its module-level S3 client) out of
       // this module's graph — the fallback is a cold error path and several
       // test suites load ffmpeg-utils with a minimal config mock.
       const { r2KeyFromOurUrl, downloadR2ObjectToFile } = await import("../../lib/storage.js")
       const key = r2KeyFromOurUrl(url)
-      if (key) {
+      // Never a file whose link the public host refuses (`storageMayServeDirectly`).
+      if (key && (await storageMayServeDirectly(key))) {
         hooks.onFallback?.()
-        const bounds = hooks.fallbackBounds?.()
-        if (bounds?.timeoutMs !== undefined && bounds.timeoutMs <= 0) {
+        const bounds = hooks.storageFallback.bounds()
+        if (bounds.timeoutMs <= 0) {
           throw Object.assign(new Error(`Download timeout: no time left for the storage fallback: ${url}`), { name: "TimeoutError" })
         }
-        await (bounds ? downloadR2ObjectToFile(key, dest, bounds) : downloadR2ObjectToFile(key, dest))
+        await downloadR2ObjectToFile(key, dest, bounds)
         return
       }
     }
@@ -281,7 +581,10 @@ async function saveResponse(
     }))
   }
   stages.push(createWriteStream(dest))
-  await (pipeline as (...s: unknown[]) => Promise<void>)(...stages)
+  // The signal goes to the pipeline as well as the fetch: aborting only the
+  // fetch does not reliably end a body already streaming (after a garbage
+  // collection it kept arriving past its limit), so a limit was not real.
+  await (pipeline as (...s: unknown[]) => Promise<void>)(...stages, ...(hooks.signal ? [{ signal: hooks.signal }] : []))
 }
 
 // The ffmpeg admission (`ffmpeg-admission-instance.ts`): FFMPEG_CONCURRENCY

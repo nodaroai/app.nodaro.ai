@@ -15,6 +15,7 @@ import { join } from "node:path"
 import { mergeEdlSourceOffsets, transcriptSpeakerLabels, type Edl, type EdlSource } from "@nodaro/shared/edl"
 import { wholeEpisodeEdl } from "@nodaro/render-rules"
 import { cleanupWorkDir, createWorkDir, downloadFile, probeMediaDuration } from "../video/ffmpeg-utils.js"
+import { DOWNLOAD_TIMEOUT_MS } from "../video/ffmpeg-timeouts.js"
 import { ensureMediaProxy, MediaHasNoAudioError } from "../../services/media-proxy.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { PCM_SAMPLE_RATE, streamPcm } from "./pcm-stream.js"
@@ -85,7 +86,9 @@ export async function computeSpeakerMap(input: SpeakerMapJobInput): Promise<Spea
       }
       const path = join(workDir, `src-${i}.m4a`)
       try {
-        await downloadFile(proxy.url, path)
+        // A hard total at the number its liveness budget charges for this fetch
+        // (the proxy is small 16 kHz mono audio, read from our storage in seconds).
+        await downloadFile(proxy.url, path, { timeoutMs: DOWNLOAD_TIMEOUT_MS })
         durations.set(s.id, Math.round((await probeMediaDuration(path)) * 1000))
         if (!candidates.has(s.id)) continue
         const power = new HopPower((PCM_SAMPLE_RATE * SPEAKER_MAP_HOP_MS) / 1000)

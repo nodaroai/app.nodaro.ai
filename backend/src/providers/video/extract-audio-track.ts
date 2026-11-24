@@ -29,7 +29,7 @@ export interface ExtractedAudio {
  *
  * `opts.download` bounds the download (big-media limits, a byte cap) for a
  * caller that takes videos of any size; without it the download runs under
- * `downloadFile`'s flat default, exactly as before.
+ * `downloadFile`'s default limits.
  */
 export async function extractAudioTrack(
   videoUrl: string,

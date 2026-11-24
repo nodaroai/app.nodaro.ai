@@ -15,13 +15,16 @@ import { basename, join } from "node:path"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 
-const fx = vi.hoisted(() => ({ dir: "", noAudio: new Set<string>() }))
+const fx = vi.hoisted(() => ({ dir: "", noAudio: new Set<string>(), downloadTimeouts: [] as Array<number | undefined> }))
 vi.mock("../../video/ffmpeg-utils.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../video/ffmpeg-utils.js")>()
   return {
     ...actual,
     probeMediaStreams: async () => { throw new Error("audio-sync must not probe a source URL") },
-    downloadFile: async (url: string, dest: string) => { await fs.copyFile(join(fx.dir, basename(new URL(url).pathname)), dest) },
+    downloadFile: async (url: string, dest: string, opts?: { timeoutMs?: number }) => {
+      fx.downloadTimeouts.push(opts?.timeoutMs)
+      await fs.copyFile(join(fx.dir, basename(new URL(url).pathname)), dest)
+    },
   }
 })
 vi.mock("../../../services/media-proxy.js", async (importOriginal) => {
@@ -66,6 +69,13 @@ describe("audioSync over remote sources (network edges faked)", () => {
     expect(Math.abs(by.camA!.offsetMs - 2500)).toBeLessThanOrEqual(1)
     expect(r.notes.some((n) => n.includes('"pic"') && n.includes("no audio track"))).toBe(true)
   }, 120_000)
+
+  it("every proxy fetch is bounded by the 120 s its liveness budget charges for it", async () => {
+    const { DOWNLOAD_TIMEOUT_MS } = await import("../../video/ffmpeg-timeouts.js")
+    expect(fx.downloadTimeouts.length).toBeGreaterThan(0)
+    for (const t of fx.downloadTimeouts) expect(t).toBeLessThanOrEqual(DOWNLOAD_TIMEOUT_MS)
+    expect(fx.downloadTimeouts.every((t) => typeof t === "number")).toBe(true)
+  })
 
   it("only the reference has sound: every other source is a noted row, not a failure", async () => {
     const r = await audioSync([

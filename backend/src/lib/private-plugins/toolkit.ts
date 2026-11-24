@@ -209,7 +209,7 @@ import type { ZodType } from "zod"
 import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
 import { PluginHttpError } from "./types.js"
 import type { PluginBillingContext, PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginJobErrorHint, PluginOwnedJobRow, PluginOwnedRawJob } from "./types.js"
-import type { PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
+import type { PluginDownloadFileOptions, PluginFfmpegToolkit, PluginLlmToolkit, PluginMediaToolkit, PluginProvidersToolkit } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmSpend, PluginLlmSideHoldPayer, PluginLlmSideHoldToolkit, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -1834,7 +1834,17 @@ const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   deferredUpscaleSettlement: true,
   // tk.llm.completeStructured takes `imageUrls` (at most 5 https links), sent as image parts on the direct lane.
   llmStructuredImages: true,
+  // tk.ffmpeg.downloadFile takes `{ timeoutMs?, signal? }`: a hard total and an abort signal.
+  downloadFileBounds: true,
 })
+
+/** `tk.ffmpeg.downloadFile`: only the bounds a plugin may set reach `downloadFile`. */
+function pluginDownloadFile(url: string, dest: string, opts?: PluginDownloadFileOptions): Promise<void> {
+  return downloadFile(url, dest, {
+    ...(typeof opts?.timeoutMs === "number" ? { timeoutMs: opts.timeoutMs } : {}),
+    ...(opts?.signal ? { signal: opts.signal } : {}),
+  })
+}
 
 export interface BuildToolkitOptions {
   /**
@@ -1970,7 +1980,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       runFfmpegCapture: runFfmpegCaptureReadingLinks,
       createWorkDir,
       cleanupWorkDir,
-      downloadFile,
+      downloadFile: pluginDownloadFile,
       combineVideos: combineVideosToUrl,
       extractTail: extractTailToUrl,
       renderEdlTimeline: renderEdlTimelineToUrl,

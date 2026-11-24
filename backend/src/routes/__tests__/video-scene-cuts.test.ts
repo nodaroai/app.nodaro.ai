@@ -139,7 +139,7 @@ describe("POST /v1/video-scene-cuts — a child step (real ffmpeg)", () => {
     expect(body.cutsSec[1]).toBeCloseTo(2.5, 1)
     expect(Math.abs(body.durationSec - 3.5)).toBeLessThanOrEqual(1 / 24 + 1e-6)
     // The download is capped.
-    expect(download).toHaveBeenCalledWith(THREE_SHOTS, expect.any(String), { maxBytes: SCENE_CUTS_MAX_BYTES })
+    expect(download).toHaveBeenCalledWith(THREE_SHOTS, expect.any(String), { maxBytes: SCENE_CUTS_MAX_BYTES, signal: expect.any(AbortSignal) })
   }, 60_000)
 
   it("answers no cut for a single shot", async () => {
@@ -194,6 +194,6 @@ describe("POST /v1/video-scene-cuts — a child step (real ffmpeg)", () => {
     const res = await asChild({ videoUrl: THREE_SHOTS })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("video_unreadable")
-    expect(download).toHaveBeenCalledWith(THREE_SHOTS, expect.any(String), { maxBytes: SCENE_CUTS_MAX_BYTES })
+    expect(download).toHaveBeenCalledWith(THREE_SHOTS, expect.any(String), { maxBytes: SCENE_CUTS_MAX_BYTES, signal: expect.any(AbortSignal) })
   })
 })

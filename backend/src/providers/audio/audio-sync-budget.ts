@@ -34,7 +34,8 @@ export const AUDIO_SYNC_FINE_WINDOWS = 3
 /** Ceiling of everything one source costs, in the order the node runs it: its
  *  audio proxy on a cache miss (`ensureMediaProxy` fetches the source under the
  *  big-media download ceiling, checks it has an audio track — one ffprobe — then
- *  encodes it), the proxy fetch (the flat 120 s: a 16 kHz mono proxy is small),
+ *  encodes it), the proxy fetch (counted at 120 s: a 16 kHz mono proxy is small, read from
+ *  our storage; `downloadFile`'s default limits would let a slow one run longer),
  *  the duration probe, the envelope decode, and —
  *  for each fine window — a reference window and a source window decode.
  *  Correlation itself is in-process arithmetic well inside the per-source slack.
