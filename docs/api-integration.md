@@ -6150,7 +6150,11 @@ the same `upscale` you will run with, since leaving it out can mean `"next"`
 and its price. A completed job's output carries `outputResolution` (the size
 delivered) and, on a `"next"` run, `upscale: "applied"` or `"skipped"`
 (skipped: the upscale step failed and the video was delivered at the
-engine's size). Its `resolution` stays the engine's size. On an `"applied"`
+engine's size). Its `resolution` stays the engine's size. When the output
+also carries `upscaleCharged`, the upscale was charged only because its file
+is the video delivered (`true`); `false` means the upscale was skipped and its
+credits were given back, so the run is charged its estimate less
+`breakdown.upscale`. On an `"applied"`
 run it may also carry `engineVideoUrl`, the engine's own version at the
 engine's size, with its `engineWidth` and `engineHeight` in pixels; that file is
 removed together with the delivered video when the run's Library item is

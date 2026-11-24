@@ -1,8 +1,10 @@
 import { supabase } from "./supabase.js"
 import { hasCredits } from "./config.js"
 import {
+  deferRuleOf,
   deferredSettlementOf,
   listOpenDeferredChildren,
+  planDeliveredChildren,
   resolveDeferredChild,
   scheduledReleaseOf,
   type DeferredSettleOutcome,
@@ -33,6 +35,14 @@ import {
  * after which the First Remake offer stops waiting for a run's holds
  * (migration 684, `p_ignore_holds`).
  *
+ * A `"delivered"` child (deferred-child-request.ts: Video Remake's upscale) is
+ * never pooled with the engine takes: its completed run charges it only when
+ * its completion lists it among the files it delivered, and releases it
+ * otherwise (`planDeliveredChildren`; a completion with no list at all is
+ * charged, with an `[ALERT]`); a failed, cancelled, gone or 12-hour run
+ * releases it as it does a take — but a run parked for review is waited on
+ * however long its review takes (its approve completes it with its list).
+ *
  * A child whose release was scheduled while it ran (and that its completion did
  * not release) is released whatever its run's state. It also finishes a
  * decision recorded before a crash (its hold still open) and
@@ -57,12 +67,15 @@ interface ParentRow {
   id: string
   status: string
   completed_at: string | null
+  /** Read for a `"delivered"` child's decision (`planDeliveredChildren`). */
+  output_data?: Record<string, unknown> | null
 }
 
 interface SiblingRow {
   id: string
   parent_job_id: string
   completed_at: string | null
+  input_data?: Record<string, unknown> | null
   held_completion_fields: Record<string, unknown> | null
 }
 
@@ -98,7 +111,7 @@ async function readParents(ids: readonly string[]): Promise<Map<string, ParentRo
   const out = new Map<string, ParentRow>()
   for (const batch of chunks([...new Set(ids)])) {
     // trash-read: a run in the Trash still decides what its held steps cost.
-    const { data, error } = await supabase.from("jobs").select("id, status, completed_at").in("id", batch)
+    const { data, error } = await supabase.from("jobs").select("id, status, completed_at, output_data").in("id", batch)
     if (error) {
       console.error(`[deferred-settlement-sweep] reading parents failed: ${error.message}`)
       return null
@@ -108,7 +121,7 @@ async function readParents(ids: readonly string[]): Promise<Map<string, ParentRo
   return out
 }
 
-/** Every deferred child (any state, open or closed) of the given runs, each run read as its owner's. */
+/** Every deferred ENGINE child (any state, open or closed) of the given runs, each run read as its owner's: a `"delivered"` child is never one of a run's takes. */
 async function readDeferredSiblings(runs: ReadonlyArray<{ parentId: string; userId: string }>): Promise<Map<string, SiblingRow[]> | null> {
   const out = new Map<string, SiblingRow[]>()
   const byUser = new Map<string, string[]>()
@@ -117,7 +130,7 @@ async function readDeferredSiblings(runs: ReadonlyArray<{ parentId: string; user
     // trash-read: the run's other steps, Trash included, decide which take is charged.
     const { data, error } = await supabase
       .from("jobs")
-      .select("id, parent_job_id, completed_at, held_completion_fields")
+      .select("id, parent_job_id, completed_at, input_data, held_completion_fields")
       .eq("user_id", userId)
       .in("parent_job_id", batch)
       .eq("status", "completed")
@@ -126,7 +139,7 @@ async function readDeferredSiblings(runs: ReadonlyArray<{ parentId: string; user
       return null
     }
     for (const row of (data ?? []) as SiblingRow[]) {
-      if (!deferredSettlementOf(row.held_completion_fields)) continue
+      if (!deferredSettlementOf(row.held_completion_fields) || deferRuleOf(row) !== null) continue
       out.set(row.parent_job_id, [...(out.get(row.parent_job_id) ?? []), row])
     }
   }
@@ -219,17 +232,30 @@ export async function sweepDeferredChildSettlements(now: Date = new Date()): Pro
     : new Map<string, SiblingRow[]>()
   if (!siblings) return { ...summary, errors: summary.errors + 1 }
 
-  for (const [parentId, held] of byParent) {
+  for (const [parentId, all] of byParent) {
     const parent = parents.get(parentId)
     if (!parent) {
-      for (const c of held) await act(c.id, "released", "its run no longer exists")
+      for (const c of all) await act(c.id, "released", "its run no longer exists")
       continue
     }
+    // The run's held "delivered" children, decided by what its completion delivered; the rest are its takes.
+    const delivered = all.filter((c) => deferRuleOf(c) === "delivered")
+    const held = all.filter((c) => deferRuleOf(c) !== "delivered")
+    if (completedRuns.includes(parentId) && delivered.length > 0) {
+      const plan = planDeliveredChildren(parent.output_data, delivered)
+      if (plan.listMissing) {
+        console.error(`[ALERT] [deferred-settlement-sweep] run ${parentId} completed without naming the files it delivered — its held step ${plan.settle.join(", ")} is charged${plan.release.length > 0 ? `, ${plan.release.length} other released` : ""}`)
+      }
+      for (const id of plan.settle) await act(id, "settled")
+      for (const id of plan.release) await act(id, "released", "its run did not deliver its file")
+    }
+    if (completedRuns.includes(parentId) && held.length === 0) continue
+    if (parent.status === "completed" && !completedRuns.includes(parentId)) continue // inside the grace period
     if (completedRuns.includes(parentId)) {
-      const all = (siblings.get(parentId) ?? []).map((s) => ({ id: s.id, completed_at: s.completed_at, state: deferredSettlementOf(s.held_completion_fields)?.state ?? "held" }))
-      const plan = planCompletedRun(all.length > 0 ? all : held.map((c) => ({ id: c.id, completed_at: c.completed_at, state: "held" })), held.map((c) => c.id))
+      const takes = (siblings.get(parentId) ?? []).map((s) => ({ id: s.id, completed_at: s.completed_at, state: deferredSettlementOf(s.held_completion_fields)?.state ?? "held" }))
+      const plan = planCompletedRun(takes.length > 0 ? takes : held.map((c) => ({ id: c.id, completed_at: c.completed_at, state: "held" })), held.map((c) => c.id))
       if (plan.alert) {
-        console.error(`[ALERT] [deferred-settlement-sweep] run ${parentId} completed with ${all.length} deferred children and ${held.length} still held — settling ${plan.settle.length}, releasing ${plan.release.length} (the person pays for one take)`)
+        console.error(`[ALERT] [deferred-settlement-sweep] run ${parentId} completed with ${takes.length} deferred children and ${held.length} still held — settling ${plan.settle.length}, releasing ${plan.release.length} (the person pays for one take)`)
       }
       for (const id of plan.settle) await act(id, "settled")
       for (const id of plan.release) await act(id, "released", "a discarded take of a completed run")
@@ -237,13 +263,15 @@ export async function sweepDeferredChildSettlements(now: Date = new Date()): Pro
     }
     if (parent.status === "failed" || parent.status === "cancelled") {
       if (parent.completed_at === null || ageMs(parent.completed_at, nowMs) >= DEFERRED_CHILD_SWEEP.graceMs) {
-        for (const c of held) await act(c.id, "released", `its run ${parent.status === "failed" ? "failed" : "was cancelled"}`)
+        for (const c of all) await act(c.id, "released", `its run ${parent.status === "failed" ? "failed" : "was cancelled"}`)
       }
       continue
     }
-    if (parent.status === "completed") continue // inside the grace period
-    for (const c of held) {
+    for (const c of all) {
       if (ageMs(c.completed_at, nowMs) < DEFERRED_CHILD_SWEEP.longParentMs) continue
+      // A run parked for review already delivered its "delivered" step's file into the held completion: an approve
+      // completes it (and its list charges the step), a refusal fails it (and releases it) — never released for its wait.
+      if (parent.status === "pending_review" && deferRuleOf(c) === "delivered") continue
       console.error(`[ALERT] [deferred-settlement-sweep] run ${parentId} is still ${parent.status} 12 hours after its held child ${c.id} completed — the child's credits are released`)
       await act(c.id, "released", "its run did not end in time")
     }
