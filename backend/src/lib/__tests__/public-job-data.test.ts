@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { maskTrendRunError, nonAdminJobInputData, redactPrivateJobData, TREND_RUN_FAILURE_MESSAGE } from "../public-job-data.js"
+import { ALTERNATE_ROUTE_KEY } from "../alternate-route-request.js"
 
 describe("redactPrivateJobData", () => {
   it("removes unscoredUrl recursively while preserving siblings and arrays", () => {
@@ -91,6 +92,12 @@ describe("redactPrivateJobData — server-only input_data keys", () => {
     expect(JSON.stringify(out)).not.toContain("castSwapFaults")
     expect(JSON.stringify(redactPrivateJobData({ data: [{ job: row }] }))).not.toContain("castSwapFaults")
   })
+  it("drops an alternate route's record (its saved request included) from input_data", () => {
+    expect(ALTERNATE_ROUTE_KEY.startsWith("__")).toBe(true)
+    const row = { input_data: { provider: "m", [ALTERNATE_ROUTE_KEY]: { state: "running", routeId: "r", fallback: { body: { prompt: "p" } } } } }
+    expect(redactPrivateJobData(row)).toEqual({ input_data: { provider: "m" } })
+  })
+
   it("drops input_data __ keys inside lists and envelopes", () => {
     const env = { data: [{ job: { input_data: { __postPrompt: "p", slots: [] } } }] }
     expect(redactPrivateJobData(env)).toEqual({ data: [{ job: { input_data: { slots: [] } } }] })

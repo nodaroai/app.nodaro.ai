@@ -326,4 +326,10 @@ describe("what a held child shows it will cost (display only; the settle overwri
     expect(Object.keys(fields).sort()).toEqual(["credits_actual", "held_completion_fields"])
     expect((fields.held_completion_fields as Record<string, Record<string, unknown>>).deferredSettlement).toMatchObject({ state: "held", open: true, providerCost: 0.5 })
   })
+
+  it("stores the provider cost exactly as finalize hands it — an alternate route's own figure included (lib/alternate-route.ts)", async () => {
+    seed()
+    const fields = await deferredCompletionFields({ usageLogId: LOG, commit: { metered: false }, providerCost: 0.4213, workflowExecutionId: null })
+    expect((fields.held_completion_fields as Record<string, Record<string, unknown>>).deferredSettlement!.providerCost).toBe(0.4213)
+  })
 })

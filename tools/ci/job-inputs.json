@@ -350,6 +350,8 @@
         "backend/src/lib/add-captions-transcription.ts",
         "backend/src/lib/admin-check.ts",
         "backend/src/lib/allowed-origins.ts",
+        "backend/src/lib/alternate-route-request.ts",
+        "backend/src/lib/alternate-route.ts",
         "backend/src/lib/anthropic.ts",
         "backend/src/lib/app-reports.ts",
         "backend/src/lib/app-run-final-column.ts",

@@ -15,6 +15,7 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 | [content-guard](./content-guard.md) | Refusing a request by registration, before any credit is reserved or provider called, on every generation lane |
 | [job-policy-seam](./job-policy-seam.md) | Gating generations by registration — a request gate at the job-insert funnel and a result gate before publication, fail-closed, verdict-idempotent by payload hash, with the money and storage consequences applied by the platform |
 | [house-models](./house-models.md) | Models a deployment offers under its own label — the platform runs the job (hold, checkpoint, poll, recovery, charge) while the deployment's plugin supplies an opaque upstream; one availability rule, one failure mapper |
+| [alternate-routes](./alternate-routes.md) | A deployment's plugin running a prepared video generation on another upstream at the same price: an explicit opt-in, one task per job held by the row, a fallback to the default request that never runs beside a task still in flight, and recovery that leaves a row to the process that can read it |
 | [smart-progress-bars](./smart-progress-bars.md) | EMA-based progress estimation, outlier guards, a non-linear progress curve, weighted multi-node aggregation |
 | [router-node](./router-node.md) | Conditional control-flow routing between branches of a workflow |
 | [sub-workflow-node](./sub-workflow-node.md) | Nested workflows as a reusable structural primitive |

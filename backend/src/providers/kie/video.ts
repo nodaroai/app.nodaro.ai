@@ -77,6 +77,7 @@ import { imageHasMetadata } from "../../lib/image-metadata.js"
 import { labelInputFailure, urlForLog, type InputStep } from "./input-label.js"
 import { pictureShapeSentence } from "./aspect-ratio-sentence.js"
 import { displayedSize, planImageSize } from "../../lib/image-min-size.js"
+import { takeAlternateRoute } from "../../lib/alternate-route.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -344,10 +345,13 @@ async function runVideoTaskWithSeedanceEditRetry(
   options: ProviderOptions | undefined,
   reconcileOpts: ReconcileOpts | undefined,
 ): Promise<Awaited<ReturnType<typeof runKieTask>> & { sentInput: Record<string, unknown> }> {
+  // `routeJob` is the alternate route's opt-in (lib/alternate-route.ts), read
+  // before this call: it never rides on to the upstream call.
+  const { routeJob: _routeJob, ...upstreamOpts } = reconcileOpts ?? {}
   const meta = (payload: Record<string, unknown>) => ({
-    ...reconcileOpts,
+    ...upstreamOpts,
     modelKey: provider,
-    dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(payload) },
+    dimensions: { ...upstreamOpts.dimensions, ...deriveKieEgressDimensions(payload) },
   })
 
   try {
@@ -3111,6 +3115,10 @@ export class KieVideoProvider
     const taskModel = isMinimaxH3Provider(provider)
       ? minimaxH3TaskModel(modelConfig.model, input)
       : modelConfig.model
+    // A plugin's alternate route may run this prepared request instead
+    // (lib/alternate-route.ts); null = send it here, unchanged.
+    const alternate = await takeAlternateRoute({ provider, taskModel, body: input, reconcileOpts })
+    if (alternate) return alternate
     const { resultJson, rawRecordInfo, taskId: kieTaskId, providerMs, sentInput } =
       await runVideoTaskWithSeedanceEditRetry(provider, taskModel, input, options, reconcileOpts)
 
@@ -3456,6 +3464,9 @@ export class KieVideoProvider
     const t2vTaskModel = isMinimaxH3Provider(provider)
       ? minimaxH3TaskModel(modelConfig.model, input)
       : modelConfig.model
+    // See the image-to-video path: an alternate route may run it instead.
+    const alternate = await takeAlternateRoute({ provider, taskModel: t2vTaskModel, body: input, reconcileOpts })
+    if (alternate) return alternate
     const { resultJson, taskId: kieTaskId, providerMs, rawRecordInfo } =
       await runVideoTaskWithSeedanceEditRetry(provider, t2vTaskModel, input, options, reconcileOpts)
 

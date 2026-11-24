@@ -49,6 +49,8 @@ if (edition === "cloud") {
     // House models are listed only at run time (`houseModelServed`); generated
     // text is written from the catalog and never asks what an install serves.
     houseModels: {} as never,
+    // Alternate routes are asked only inside a video run; no tool registers on them.
+    alternateRoutes: {} as never,
   }
   const engines: Required<{ [K in keyof PluginEngines]: never }> = { scene3d: engine, surround: engine, smartCut: engine }
   publishStandInPluginServices(services)

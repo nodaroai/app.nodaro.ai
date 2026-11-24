@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   reconcileFalJob: vi.fn().mockResolvedValue(undefined),
   reconcileNodaroCloudJob: vi.fn().mockResolvedValue(undefined),
   reconcileHouseModelJob: vi.fn().mockResolvedValue(undefined),
+  reconcileAlternateRouteJob: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("../../lib/reconcile/kie.js", () => ({
@@ -31,6 +32,10 @@ vi.mock("../../lib/reconcile/nodaro-cloud.js", () => ({
 
 vi.mock("../../lib/reconcile/house-model.js", () => ({
   reconcileHouseModelJob: mocks.reconcileHouseModelJob,
+}))
+
+vi.mock("../../lib/reconcile/alternate-route.js", () => ({
+  reconcileAlternateRouteJob: mocks.reconcileAlternateRouteJob,
 }))
 
 import { tryInlineReconcile } from "../inline-reconcile.js"
@@ -157,6 +162,22 @@ describe("tryInlineReconcile", () => {
     })
     expect(mocks.reconcileHouseModelJob).toHaveBeenCalledWith(
       { id: "j-house", provider_task_id: "ref-house", reconcile_attempts: 1, job_type: "edit-image", input_data: { provider: "some-house-model" } },
+      { claimant: "worker", pollToEnd: true },
+    )
+    expect(mocks.reconcileKieJob).not.toHaveBeenCalled()
+  })
+
+  it("dispatches alternate-route to reconcileAlternateRouteJob as claimant 'worker', reading the task to its end — never a re-start", async () => {
+    await tryInlineReconcile({
+      id: "j-alt",
+      provider_kind: "alternate-route",
+      provider_task_id: "alt:ref-1",
+      reconcile_attempts: 0,
+      job_type: "text-to-video",
+      input_data: { provider: "some-model" },
+    })
+    expect(mocks.reconcileAlternateRouteJob).toHaveBeenCalledWith(
+      { id: "j-alt", provider_task_id: "alt:ref-1", reconcile_attempts: 0, job_type: "text-to-video", input_data: { provider: "some-model" } },
       { claimant: "worker", pollToEnd: true },
     )
     expect(mocks.reconcileKieJob).not.toHaveBeenCalled()

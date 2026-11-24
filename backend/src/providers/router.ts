@@ -94,6 +94,8 @@ export interface RouteResult {
   /** See ProviderResult.maskEditSourceUrl: present only when the run sent a
    *  mask to a model that redraws outside it. */
   maskEditSourceUrl?: string
+  /** See ProviderResult.routedVia: present only when an alternate route ran it. */
+  routedVia?: string
 }
 
 // ─── Core routing engine ──────────────────────────────────────────
@@ -302,6 +304,9 @@ async function walkChainAndExecute(
       // A masked edit whose model redrew outside the mask: absent on every
       // other result, so a handler pastes the source back only when it is set.
       ...(result.maskEditSourceUrl ? { maskEditSourceUrl: result.maskEditSourceUrl } : {}),
+      // An alternate route's run (lib/alternate-route.ts): absent on every other
+      // result, so the handlers keep their own cost rule for those.
+      ...(result.routedVia ? { routedVia: result.routedVia } : {}),
     }
   }
 

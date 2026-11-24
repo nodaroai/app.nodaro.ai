@@ -475,6 +475,24 @@ describe("routeAndExecute (via generateImage)", () => {
     expect(result.maskEditSourceUrl).toBe("https://src.png")
   })
 
+  // An alternate route's run (lib/alternate-route.ts) carries `routedVia`; the
+  // video handlers then keep its own cost instead of re-deriving the default
+  // upstream's. Absent on every other result, as the relay keys are.
+  it("propagates routedVia, and yields no such key for any other result", async () => {
+    const run = vi.fn().mockResolvedValueOnce({ url: "u", cost: 0.4, routedVia: "route-1" }).mockResolvedValueOnce({ url: "u", cost: 1 })
+    configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
+    registryMocks.supportsModel.mockReturnValue(true)
+    registryMocks.getProvider.mockReturnValue(makeProviderInstance({ video: { textToVideo: run } }))
+
+    const routed = await textToVideo("p", "m")
+    expect(routed.routedVia).toBe("route-1")
+    expect(routed.cost).toBe(0.4)
+    expect("kieTaskId" in routed && routed.kieTaskId !== undefined).toBe(false)
+
+    const plain = await textToVideo("p", "m")
+    expect("routedVia" in plain).toBe(false)
+  })
+
   it("throws when the resolved provider instance is missing the requested submodule", async () => {
     configMocks.buildRoutingDecision.mockResolvedValue(decision({ chain: ["kie"] }))
     registryMocks.supportsModel.mockReturnValue(true)
