@@ -14,7 +14,7 @@ import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { LIP_SYNC_DEFAULT_PROVIDER } from "../workers/handlers/default-models.js"
 import { LIP_SYNC_PROVIDERS, lipSyncLeverClearPatch, lipSyncResolutionRefusal, retiredLipSyncProviderMessage } from "@nodaro/shared/models"
 import { drivingAudioCreditId, drivingAudioLipSyncResolution, drivingAudioOf, isDrivingAudioLipSyncProvider, isLipSyncChargedAtRunCost, lipSyncAudioRateOf, referenceAudioLipSyncCreditId } from "@nodaro/shared/credits"
-import { drivingAudioFreeVideoRequest, drivingAudioRefusalStatus, measureDrivingAudio, type DrivingAudioMeasure } from "../lib/driving-audio-measure.js"
+import { drivingAudioFaceRefusal, drivingAudioFreeVideoRequest, drivingAudioRefusalStatus, measureDrivingAudio, type DrivingAudioMeasure } from "../lib/driving-audio-measure.js"
 import { checkLipSyncInputs, lipSyncAudioPricingOf, lipSyncHeldCreditId, lipSyncModelLabel, lipSyncRateBaseCredits } from "../lib/lip-sync-inputs.js"
 import { lipSyncFloorRefusal } from "../lib/lip-sync-floor-check.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -295,6 +295,12 @@ async function drivingAudioLipSyncStep(req: FastifyRequest, reply: FastifyReply,
   const resolution = drivingAudioLipSyncResolution(model, parsed.data.resolution)
   const floor = await lipSyncFloorRefusal(req, { floorCreditId: drivingAudioCreditId(model, resolution, drivingAudioOf(model)?.minSec ?? 2) })
   if (floor) return void reply.status(floor.statusCode).send(floor.body)
+  // The portrait must be a picture the run can use (decided 2026-11-24), read by content — after the cheap checks,
+  // before the voice is read and anything is held. A quote prices nothing from the face, so it never fetches it.
+  if (req.quoteOnly !== true) {
+    const face = await drivingAudioFaceRefusal(model, parsed.data.imageUrl)
+    if (face) return void reply.status(400).send({ error: { code: face.code, message: face.message } })
+  }
   const measured = await measureDrivingAudio({ provider: model, audioUrl: parsed.data.audioUrl, resolution, userId: req.userId })
   if (!measured.ok) {
     return void reply.status(drivingAudioRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })

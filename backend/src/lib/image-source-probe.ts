@@ -27,6 +27,13 @@ export interface ImageSourceProbe {
   readonly size?: ImageDimensions
   /** The file's size in bytes as its server declares it, or undefined when it declared none. */
   readonly sizeBytes?: number
+  /**
+   * The server answered with the file (a 2xx with a body), so an unknown `size` is the file's, not the
+   * fetch's: a caller can tell "not an image" from "not read". Absent when nothing was read.
+   */
+  readonly fetched?: true
+  /** The first bytes read (at most `IMAGE_HEADER_MAX_READ_BYTES`), for a caller that sniffs what the file is. */
+  readonly head?: Buffer
 }
 
 /** The total length of the file a response is (part of), from its headers. */
@@ -67,11 +74,12 @@ async function readProbe(url: string, signal: AbortSignal): Promise<ImageSourceP
         total += value.byteLength
       }
       if (!done && total < decodeAt) continue
-      const size = await imageDimensionsOf(Buffer.concat(chunks, Math.min(total, IMAGE_HEADER_MAX_READ_BYTES)))
+      const head = Buffer.concat(chunks, Math.min(total, IMAGE_HEADER_MAX_READ_BYTES))
+      const size = await imageDimensionsOf(head)
       if (size || done || total >= IMAGE_HEADER_MAX_READ_BYTES) {
         // A server that ignored the range and ended within it sent the whole file.
         const whole = sizeBytes ?? (done && res.status === 200 ? total : undefined)
-        return { ...(size ? { size } : {}), ...(whole !== undefined ? { sizeBytes: whole } : {}) }
+        return { ...(size ? { size } : {}), ...(whole !== undefined ? { sizeBytes: whole } : {}), fetched: true, head }
       }
       decodeAt = IMAGE_HEADER_MAX_READ_BYTES
     }

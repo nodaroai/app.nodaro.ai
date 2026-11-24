@@ -26,7 +26,9 @@ const state = vi.hoisted(() => ({
   freeVideo: [] as unknown[],
 }))
 
-vi.mock("@/lib/image-source-probe.js", () => ({ probeImageSource: async () => ({ size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }) }))
+// What the portrait's header probe answers: an image by default; a test sets what the file really is.
+const face = vi.hoisted(() => ({ probe: { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 } as Record<string, unknown> }))
+vi.mock("@/lib/image-source-probe.js", () => ({ probeImageSource: async () => face.probe }))
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/providers/video/ffmpeg-utils.js")>()),
   downloadFile: async (_url: string, path: string) => {
@@ -191,5 +193,92 @@ describe("POST /v1/lip-sync — 1440p is LTX 2.5 Fast's alone (decided 2026-11-2
     expect(res.json().error.message).toMatch(/does not render 1440p/)
     expect(state.guardCalls).toEqual([])
     expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+})
+
+/** The first bytes of a file of each kind (what the probe read). */
+const ftyp = (brand: string) => Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftyp" + brand), Buffer.alloc(20)])
+const HEAD = {
+  mp4: ftyp("isom"),
+  m4a: ftyp("M4A "),
+  mov: ftyp("qt  "),
+  wav: Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt "), Buffer.alloc(16)]),
+  webm: Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(28)]),
+  heic: ftyp("heic"),
+  bmp: Buffer.concat([Buffer.from("BM"), Buffer.alloc(30)]),
+  pdf: Buffer.from("%PDF-1.7 not a picture"),
+  html: Buffer.from("<html>not found</html>"),
+}
+
+describe("POST /v1/lip-sync — LTX 2.5 Fast's portrait must be a picture it can use (decided 2026-11-24)", () => {
+  let app: FastifyInstance
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    Object.assign(state, { audio: 3.5, broke: false, floorAsked: [], downloads: 0, guardCalls: [], guardSawLength: [], hasVideo: false, freeVideo: [] })
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const b = req.body as Record<string, unknown> | undefined
+      if (typeof b?.userId === "string") req.userId = b.userId
+    })
+    await app.register(async (i) => { await lipSyncRoutes(i) })
+    await app.ready()
+  })
+  afterEach(async () => {
+    face.probe = { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }
+    await app.close()
+  })
+  const post = () => app.inject({ method: "POST", url: "/v1/lip-sync", payload: { provider: "ltx-2.5-fast", imageUrl: "https://cdn.test/videos/clip.mp4", audioUrl: VOICE, userId: USER, resolution: "720p" } })
+
+  it.each([
+    ["an MP4 (video or audio by its brand)", HEAD.mp4, /is a video or audio file \(MP4\)/],
+    ["an M4A", HEAD.m4a, /is an audio file \(M4A\)/],
+    ["a QuickTime movie", HEAD.mov, /is a video \(MOV\)/],
+    ["a WAV", HEAD.wav, /is an audio file \(WAV\)/],
+    ["a WebM", HEAD.webm, /is a video or audio file \(WEBM\)/],
+    ["a BMP", HEAD.bmp, /is a BMP image, which it cannot read/],
+    ["a PDF", HEAD.pdf, /could not read the portrait as an image/],
+    ["a web page", HEAD.html, /could not read the portrait as an image/],
+    ["an empty answer", Buffer.alloc(0), /answered with an empty file/],
+  ])("%s as the face is refused with a 400 before the voice is read or anything is held", async (_kind, head, message) => {
+    face.probe = { fetched: true, head }
+    const res = await post()
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(message)
+    expect(res.json().error.message).toMatch(/PNG, JPEG, WebP, AVIF, HEIC, GIF, TIFF or SVG/)
+    expect(res.json().error.message).toMatch(/Nothing was charged\.$/)
+    expect(state.downloads).toBe(0)
+    expect(state.guardCalls).toEqual([])
+    expect(reserveCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a portrait that could not be read (a failed or slow fetch) is not refused: the run goes on as before", async () => {
+    face.probe = {}
+    const res = await post()
+    expect(res.statusCode).toBe(200)
+    expect(reserveCreditsForJob).toHaveBeenCalled()
+  })
+
+  it("a still image passes: one the probe sizes (an SVG among them), and a HEIC the start-frame step converts", async () => {
+    expect((await post()).statusCode).toBe(200)
+    vi.clearAllMocks()
+    face.probe = { fetched: true, head: HEAD.heic, size: { width: 64, height: 64 } }
+    expect((await post()).statusCode).toBe(200)
+    vi.clearAllMocks()
+    face.probe = { fetched: true, head: Buffer.from("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"), size: { width: 64, height: 64 } }
+    expect((await post()).statusCode).toBe(200)
+  })
+
+  it.each([
+    ["no size, no viewBox", '<svg xmlns="http://www.w3.org/2000/svg"><rect width="64" height="64" fill="red"/></svg>'],
+    ["a percentage width, behind a BOM, an XML declaration, a doctype and a comment", '\ufeff<?xml version="1.0"?>\n<!DOCTYPE svg>\n<!-- drawn by hand -->\n<svg xmlns="http://www.w3.org/2000/svg" width="100%"><circle r="10"/></svg>'],
+  ])("an SVG with %s passes (it has no size the probe can read)", async (_shape, text) => {
+    face.probe = { fetched: true, head: Buffer.from(text, "utf8") }
+    expect((await post()).statusCode).toBe(200)
+  })
+
+  it("another Lip Sync model is not probed this way: a video as Seedance 2's face goes as before", async () => {
+    face.probe = { fetched: true, head: HEAD.mp4 }
+    const res = await app.inject({ method: "POST", url: "/v1/lip-sync", payload: { provider: "seedance-2", imageUrl: "https://cdn.test/videos/clip.mp4", audioUrl: VOICE, userId: USER } })
+    expect(res.statusCode).toBe(200)
   })
 })

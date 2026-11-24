@@ -18,6 +18,9 @@ import { CLIP_PRICE_GRACE_SEC } from "@nodaro/shared/media"
 import { measureAudio } from "./lip-sync-inputs.js"
 import { LIP_SYNC_MEASURE_SLOT_WAIT_MS, LIP_SYNC_RUN_MEASURE_SLOT_WAIT_MS } from "./lip-sync-download-slots.js"
 import { safeUrlSchema } from "./url-validator.js"
+import { probeImageSource } from "./image-source-probe.js"
+import { sniffInputType } from "./media-sniff.js"
+import { looksLikeSvg } from "./svg-sanitize.js"
 
 /** The most bytes the endpoint takes for its audio (its schema: up to 50 MB). */
 export const DRIVING_AUDIO_MAX_BYTES = 50_000_000
@@ -103,6 +106,8 @@ export async function stampDrivingAudioRun(
   payload: Record<string, unknown>,
   modelIdentifier: string,
   userId: string | undefined,
+  /** A Lip Sync run: its portrait (`payload.imageUrl`) must be a still image, checked before the voice is read. */
+  opts: { readonly face?: true } = {},
 ): Promise<
   | {
       readonly ok: true
@@ -117,6 +122,10 @@ export async function stampDrivingAudioRun(
   const { drivingAudioPending: _pending, ...rest } = payload
   const provider = String(payload.provider)
   const audioUrls = Array.isArray(payload.referenceAudioUrls) ? payload.referenceAudioUrls : []
+  if (opts.face) {
+    const face = await drivingAudioFaceRefusal(provider, payload.imageUrl)
+    if (face) return { ok: false, code: face.code, message: face.message }
+  }
   if (audioUrls.length > 1) {
     return { ok: false, code: "validation_error", message: `${MODEL_CATALOG[provider]?.label ?? provider} makes a video from one audio clip; ${audioUrls.length} are wired. Wire one. Nothing was charged.` }
   }
@@ -173,4 +182,69 @@ export function drivingAudioRefusalStatus(code: string): number {
   if (code === "audio_busy") return 429
   if (code === "audio_measure_stopped") return 503
   return 400
+}
+
+/** The still-image formats an LTX 2.5 Fast portrait runs from: the start-frame step converts each (a HEIC through its own decoder). */
+const FACE_FORMATS = "PNG, JPEG, WebP, AVIF, HEIC, GIF, TIFF or SVG"
+/** Still-image formats the start-frame step cannot read at all: BMP (the image library has no BMP reader). */
+const UNDECODED_IMAGE_EXTS: ReadonlySet<string> = new Set(["bmp"])
+/** ISO-BMFF brands that make the file certain: audio (an M4A / M4B), or a QuickTime movie. */
+const AUDIO_BRANDS: ReadonlySet<string> = new Set(["M4A ", "M4B ", "M4P "])
+const MOVIE_BRANDS: ReadonlySet<string> = new Set(["qt  "])
+
+/**
+ * What a non-image file is, as sure as its first bytes make it: "a video (AVI)", "an audio file (WAV)",
+ * or — for a container that holds either (MP4 by most brands, WebM, Ogg) — "a video or audio file (MP4)".
+ * Never names a kind the bytes do not make certain.
+ */
+function mediaKindOf(head: Buffer): string | undefined {
+  const video = sniffInputType(head, "video")
+  const audio = sniffInputType(head, "audio")
+  if (!video && !audio) return undefined
+  if (head.length >= 12 && head.subarray(4, 8).toString("latin1") === "ftyp") {
+    const brand = head.subarray(8, 12).toString("latin1")
+    if (AUDIO_BRANDS.has(brand)) return "an audio file (M4A)"
+    if (MOVIE_BRANDS.has(brand)) return "a video (MOV)"
+  }
+  if (video && audio) return `a video or audio file (${video.ext.toUpperCase()})`
+  return video ? `a video (${video.ext.toUpperCase()})` : `an audio file (${audio!.ext.toUpperCase()})`
+}
+
+/**
+ * Why the face of an audio-to-video Lip Sync run (LTX 2.5 Fast, decided
+ * 2026-11-24) is refused before anything is held, or undefined to let the run
+ * go on. The ONE check the Lip Sync route's measuring step and the workflow
+ * run's stamp both run. Read by content, never the link's name: the existing
+ * header probe (`probeImageSource`) and the first bytes it read, by the
+ * first-bytes sniff (`sniffInputType`).
+ *
+ * It refuses ONLY what it positively read and is not a picture the run can
+ * use: a video or an audio file, a file that is no image at all (a PDF, a web
+ * page, an empty body), or a still image the start-frame step cannot read
+ * (BMP; a HEIC it converts, so it passes). A portrait it could NOT read — the fetch failed, timed out, or
+ * the host refused it — is never refused here: the run goes on as before, and
+ * the provider fetches it itself.
+ */
+export async function drivingAudioFaceRefusal(provider: string, imageUrl: unknown): Promise<{ readonly code: string; readonly message: string } | undefined> {
+  const label = MODEL_CATALOG[provider]?.label ?? provider
+  const takes = `a still image (${FACE_FORMATS})`
+  if (typeof imageUrl !== "string" || !safeUrlSchema.safeParse(imageUrl).success) {
+    return { code: "validation_error", message: `${label}: the portrait must be an http(s) link that does not point to localhost or a private network. Nothing was charged.` }
+  }
+  const probe = await probeImageSource(imageUrl)
+  // Not read (a failed or slow fetch, a host that refused it): never refused on what we could not see.
+  if (!probe.fetched || !probe.head) return undefined
+  if (probe.head.length === 0) {
+    return { code: "image_unreadable", message: `${label} takes ${takes} as the portrait; this link answered with an empty file. Nothing was charged.` }
+  }
+  const image = sniffInputType(probe.head, "image")
+  if (image && UNDECODED_IMAGE_EXTS.has(image.ext)) {
+    return { code: "image_unreadable", message: `${label} takes ${takes} as the portrait; this one is a ${image.ext.toUpperCase()} image, which it cannot read. Convert it to one of those. Nothing was charged.` }
+  }
+  // An SVG has no binary signature: its text says so (the existing sniff, `looksLikeSvg`, past a BOM, an XML
+  // declaration, a doctype and comments). One with no size of its own still runs: the start-frame step draws it.
+  if (image || probe.size || looksLikeSvg(probe.head)) return undefined
+  const media = mediaKindOf(probe.head)
+  if (media) return { code: "lip_sync_image_required", message: `${label} takes ${takes} as the portrait; this one is ${media}. Nothing was charged.` }
+  return { code: "image_unreadable", message: `${label} could not read the portrait as an image. It takes ${takes}. Nothing was charged.` }
 }

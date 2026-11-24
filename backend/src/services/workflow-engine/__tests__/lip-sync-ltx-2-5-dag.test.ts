@@ -49,9 +49,8 @@ const probes = vi.hoisted(() => ({
   /** What the payload builder built for the node. */
   built: undefined as undefined | { modelIdentifier: string; payload: Record<string, unknown> },
 }))
-vi.mock("@/lib/image-source-probe.js", () => ({
-  probeImageSource: async () => ({ size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }),
-}))
+const face = vi.hoisted(() => ({ probe: { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 } as Record<string, unknown> }))
+vi.mock("@/lib/image-source-probe.js", () => ({ probeImageSource: async () => face.probe }))
 // The audio is downloaded and its decoded length counted (decided 2026-11-12): both stood in.
 vi.mock("@/providers/video/decoded-audio-length.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("@/providers/video/decoded-audio-length.js")>()
@@ -166,5 +165,19 @@ describe("an LTX 2.5 Fast Lip Sync node in a workflow run", () => {
     expect(mockCheckCredits).not.toHaveBeenCalled()
     expect(mockReserveCredits).not.toHaveBeenCalled()
     expect(mockQueueAdd).not.toHaveBeenCalled()
+  })
+})
+
+describe("an LTX 2.5 Fast Lip Sync node whose face is a video (decided 2026-11-24)", () => {
+  it("is refused before the voice is read, the preflight, the hold or the job", async () => {
+    face.probe = { fetched: true, head: Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypisom"), Buffer.alloc(20)]) }
+    try {
+      await expect(executeNode(node, {}, [], [], {}, makeCtx())).rejects.toThrow(/is a video or audio file \(MP4\).*Nothing was charged\./)
+      expect(mockCheckCredits).not.toHaveBeenCalled()
+      expect(mockReserveCredits).not.toHaveBeenCalled()
+      expect(mockQueueAdd).not.toHaveBeenCalled()
+    } finally {
+      face.probe = { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }
+    }
   })
 })

@@ -28,12 +28,21 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", async (importOriginal) => ({
     const { writeFile } = await import("node:fs/promises")
     await writeFile(path, "")
   },
+  // The downloaded voice is audio only (LTX 2.5 Fast's voice is read for a picture stream).
+  probeMediaStreams: async () => ({ hasVideo: false, hasAudio: true }),
 }))
 vi.mock("../../../providers/video/decoded-audio-length.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../providers/video/decoded-audio-length.js")>()),
   measureDecodedAudio: async () => ({ overCap: false, samples: Math.round(state.audioSec * 44_100), seconds: state.audioSec }),
 }))
-vi.mock("../../../lib/image-source-probe.js", () => ({ probeImageSource: async () => ({ size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }) }))
+// The portrait's header probe: counted, and answering what the file really is (an image unless a test says).
+const faceProbe = vi.hoisted(() => ({
+  calls: [] as string[],
+  answer: { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 } as Record<string, unknown>,
+}))
+vi.mock("../../../lib/image-source-probe.js", () => ({
+  probeImageSource: async (url: string) => (faceProbe.calls.push(url), faceProbe.answer),
+}))
 vi.mock("../../../lib/lip-sync-floor-check.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/lip-sync-floor-check.js")>()),
   lipSyncFloorRefusal: async () => undefined,
@@ -181,5 +190,22 @@ describe("POST /v1/quote prices Lip Sync as its run reserves", () => {
     expect(run.json().error).toEqual(q.json().error)
     expect(reserveSpy).not.toHaveBeenCalled()
     await app.close()
+  })
+})
+
+describe("POST /v1/quote on LTX 2.5 Fast never fetches the face (decided 2026-11-24)", () => {
+  it("a quote with a video as the face returns the voice's price, and the face is never fetched", async () => {
+    faceProbe.calls = []
+    faceProbe.answer = { fetched: true, head: Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypisom"), Buffer.alloc(20)]) }
+    try {
+      state.audioSec = 3.5
+      const app = await buildApp()
+      const q = await app.inject({ method: "POST", url: "/v1/quote", payload: { type: "lip-sync", params: { provider: "ltx-2.5-fast", imageUrl: "https://cdn.example.com/clip.mp4", audioUrl: "https://cdn.example.com/voice.mp3", resolution: "720p" } } })
+      expect(q.statusCode, q.body).toBe(200)
+      expect((q.json() as { data: Quote }).data.identifier).toBe("ltx-2.5-fast:4s:720p")
+      expect(faceProbe.calls).toEqual([])
+    } finally {
+      faceProbe.answer = { size: { width: 1024, height: 1536 }, sizeBytes: 2_000_000 }
+    }
   })
 })
