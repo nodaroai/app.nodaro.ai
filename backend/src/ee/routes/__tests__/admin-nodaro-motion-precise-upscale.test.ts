@@ -89,9 +89,15 @@ describe("GET /v1/admin/video-remake/precise-upscale", () => {
   })
 
   it("answers the defaults until it is saved, and whether this environment's engine runs the step", async () => {
-    expect((await get()).json().data).toEqual({ value: DEFAULTS, stored: null, defaults: DEFAULTS, updatedAt: null, supported: false, topazDisabled: false })
+    expect((await get()).json().data).toEqual({ value: DEFAULTS, stored: null, defaults: DEFAULTS, updatedAt: null, supported: false, topazDisabled: false, upscaleChoice: false })
     setPluginSupports({ castSwap: { ...CS, preciseUpscale: true } } as never)
     expect((await get()).json().data.supported).toBe(true)
+  })
+
+  it("says whether this environment's engine takes the upscale choice (the rows then turn it on or off per size)", async () => {
+    expect((await get()).json().data.upscaleChoice).toBe(false)
+    setPluginSupports({ castSwap: { ...CS, preciseUpscale: true, upscaleChoice: true } } as never)
+    expect((await get()).json().data.upscaleChoice).toBe(true)
   })
 
   it("answers the saved row, each resolution left out at its default", async () => {
@@ -103,6 +109,7 @@ describe("GET /v1/admin/video-remake/precise-upscale", () => {
       updatedAt: "2026-11-22T12:00:00.000Z",
       supported: false,
       topazDisabled: false,
+      upscaleChoice: false,
     })
   })
 

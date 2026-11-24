@@ -15,6 +15,14 @@
 //
 // Where this environment's engine runs no upscale (`supported` false), the
 // setting still saves, and the block says that nothing reads it here.
+//
+// While this environment's engine takes Video Remake's upscale choice (the
+// view's `upscaleChoice`, decided 2026-11-24), the hidden step runs nowhere and
+// the engine reads each row as a switch instead: "Off" = the choice is not
+// offered at that size, any Topaz size = it is, and a run that picks it is
+// delivered at the next size (480p → 720p, 720p → 1080p, 1080p → 4K). The
+// stored values and the selects stay as they are; the heading and the notes
+// say what a row does there (the `*_CHOICE_*` strings).
 
 import { useId } from "react"
 import { Label } from "@/components/ui/label"
@@ -30,6 +38,23 @@ export const PRECISE_UPSCALE_TOPAZ_DISABLED = "Topaz is disabled on this deploym
 
 /** Said where this environment's engine runs no upscale. */
 export const PRECISE_UPSCALE_UNSUPPORTED = "This environment's engine runs no upscale yet: its Precise runs are delivered as the edit made them until it does."
+
+/** The heading while the engine takes the upscale choice: each row turns it on or off at its size. */
+export const PRECISE_UPSCALE_CHOICE_HEADING = "Upscale choice by size"
+
+export const PRECISE_UPSCALE_CHOICE_NOTE =
+  "Each row turns the Upscale choice on or off for runs made at that size: Off hides it there, any Topaz size offers it (the size picked here is not used). A run that picks it is delivered at the next size (480p → 720p, 720p → 1080p, 1080p → 4K), and the upscale is added to its price. Nodaro Pulse always offers it."
+
+/** Said, while the engine takes the upscale choice, when this deployment withholds Topaz. */
+export const PRECISE_UPSCALE_CHOICE_TOPAZ_DISABLED = "Topaz is disabled on this deployment: no engine offers the Upscale choice, whatever is saved here."
+
+/** Said, while the engine takes the upscale choice, where it reads none of these rows. */
+export const PRECISE_UPSCALE_CHOICE_UNSUPPORTED = "This environment's engine does not read these rows: Nodaro Prism and Nodaro Prism Flash offer the Upscale choice at no size here."
+
+/** The block's heading: what a row does on this environment's engine. */
+export function preciseUpscaleHeading(upscaleChoice: boolean): string {
+  return upscaleChoice ? PRECISE_UPSCALE_CHOICE_HEADING : PRECISE_UPSCALE_HEADING
+}
 
 export type PreciseUpscaleResolution = Exclude<keyof NodaroMotionPreciseUpscaleEffective, "flash">
 
@@ -81,19 +106,21 @@ interface Props {
   readonly supported: boolean
   /** Whether this deployment withholds Topaz. */
   readonly topazDisabled: boolean
+  /** Whether the engine takes the upscale choice: each row then turns it on or off at its size. */
+  readonly upscaleChoice: boolean
   /** The last save's refusal, said under the selects. */
   readonly saveError: unknown
   /** The id of the block's heading, which names each select with its resolution. */
   readonly headingId: string
 }
 
-export function PreciseUpscaleSection({ value, onChange, defaults, supported, topazDisabled, saveError, headingId }: Props) {
+export function PreciseUpscaleSection({ value, onChange, defaults, supported, topazDisabled, upscaleChoice, saveError, headingId }: Props) {
   const id = useId()
   const noteId = `${id}-note`
   return (
     <div className="flex min-w-0 flex-col gap-3 text-sm" data-testid="precise-upscale">
       <p id={noteId} className="text-xs text-muted-foreground">
-        {PRECISE_UPSCALE_NOTE}
+        {upscaleChoice ? PRECISE_UPSCALE_CHOICE_NOTE : PRECISE_UPSCALE_NOTE}
       </p>
       {PRECISE_UPSCALE_RESOLUTIONS.map((r) => {
         const labelId = `${id}-${r}-label`
@@ -146,12 +173,12 @@ export function PreciseUpscaleSection({ value, onChange, defaults, supported, to
       </div>
       {topazDisabled && (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
-          {PRECISE_UPSCALE_TOPAZ_DISABLED}
+          {upscaleChoice ? PRECISE_UPSCALE_CHOICE_TOPAZ_DISABLED : PRECISE_UPSCALE_TOPAZ_DISABLED}
         </p>
       )}
       {!supported && (
         <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
-          {PRECISE_UPSCALE_UNSUPPORTED}
+          {upscaleChoice ? PRECISE_UPSCALE_CHOICE_UNSUPPORTED : PRECISE_UPSCALE_UNSUPPORTED}
         </p>
       )}
       {saveError instanceof Error && (

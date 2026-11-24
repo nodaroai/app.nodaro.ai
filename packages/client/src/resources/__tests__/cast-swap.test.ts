@@ -39,6 +39,7 @@ import {
   type VideoRemakeUpscaleChoice,
   type VideoRemakeUpscaleOutcome,
   type VideoRemakeOutputResolution,
+  type VideoRemakeUpscaleTo,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
@@ -1164,6 +1165,19 @@ describe("the upscale choice", () => {
     expect(takes).toBe(true)
     const older = make(vi.fn().mockReturnValueOnce(mockOk({ engines: answer.engines })))
     expect((await older.videoRemake.styleChoice()).upscaleChoice === true).toBe(false)
+  })
+
+  it("styleChoice passes upscaleTo through, typed per engine and size; an older server's answer has none", async () => {
+    const upscaleTo: VideoRemakeUpscaleTo = {
+      "nodaro-prism": { "480p": "720p", "720p": "1080p", "1080p": "4k" },
+      "nodaro-pulse-flash": { "720p": "1080p" },
+    }
+    const answer: VideoRemakeStyleChoice = { engines: { "nodaro-prism": "user", "nodaro-pulse": "user" }, upscaleChoice: true, upscaleTo }
+    const got = await make(vi.fn().mockReturnValueOnce(mockOk(answer))).videoRemake.styleChoice()
+    expect(got.upscaleTo).toEqual(upscaleTo)
+    expect(got.upscaleTo?.["nodaro-prism"]?.["1080p"]).toBe("4k")
+    const older = make(vi.fn().mockReturnValueOnce(mockOk({ engines: answer.engines })))
+    expect((await older.videoRemake.styleChoice()).upscaleTo ?? {}).toEqual({})
   })
 
   it("types a completed job's output: the delivered size and a \"next\" run's outcome", () => {

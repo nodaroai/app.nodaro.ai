@@ -14283,6 +14283,8 @@ export interface NodaroMotionPreciseUpscaleView {
   supported: boolean
   /** Whether this deployment withholds Topaz video upscale: every run is then answered "off", whatever is saved. Absent from an older server: false. */
   topazDisabled?: boolean
+  /** Whether this environment's engine takes Video Remake's upscale choice: each row then turns that choice on or off at its size. Absent from an older server: false. */
+  upscaleChoice?: boolean
 }
 
 const ADMIN_NODARO_MOTION_PRECISE_UPSCALE = "/v1/admin/video-remake/precise-upscale"
