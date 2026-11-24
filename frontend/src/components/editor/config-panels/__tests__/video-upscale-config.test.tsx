@@ -30,6 +30,10 @@ vi.mock("@/components/ui/select", async (importOriginal) => {
       const { onValueChange } = useContext(Ctx)
       return <button type="button" onClick={() => onValueChange?.(value)}>{children}</button>
     },
+    // A locked row (`LockableSelectItem`): listed, unpickable, its reason beside it.
+    SelectItemWithMeta: ({ children, description }: { children: ReactNode; description?: ReactNode }) => (
+      <button type="button" disabled>{children}<span>{description}</span></button>
+    ),
   }
 })
 vi.mock("@/hooks/use-free-video-limits", () => ({ useFreeVideoLimits: () => null }))
@@ -40,10 +44,12 @@ vi.mock("@/ee/hooks/use-model-credits", async (importOriginal) => ({
 }))
 vi.mock("@/components/editor/node-docs/compare-models-link", () => ({ CompareModelsLink: () => null }))
 // Whether the deployment serves Nodaro Video Upscale, as the fetched availability answers it.
-const offered = vi.hoisted(() => ({ nodaro: false }))
+// And whether it can run its Transparent mode (`models.deniedModes`).
+const offered = vi.hoisted(() => ({ nodaro: false, transparent: true }))
 vi.mock("@/lib/surface-availability", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   isModelUnavailable: (id: string) => id === "nodaro-video-upscale" && !offered.nodaro,
+  isModelModeUnavailable: (id: string) => id === "nodaro-video-upscale:transparent" && !offered.transparent,
 }))
 
 import { VideoUpscaleConfig } from "../video-configs"
@@ -187,6 +193,39 @@ describe("VideoUpscaleConfig — Nodaro Video Upscale", () => {
     expect(screen.getByText(/Adds crisp detail/)).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Transparent" }))
     expect(onUpdate).toHaveBeenLastCalledWith({ mode: "transparent" })
+  })
+
+  describe("on a deployment that cannot run Transparent", () => {
+    const cannotRun = (fn: () => void) => {
+      offered.transparent = false
+      try {
+        fn()
+      } finally {
+        offered.transparent = true
+      }
+    }
+
+    it("Transparent is listed greyed with why; no mode shows Sharp (the mode its run takes) and Sharp's tiers", () => {
+      cannotRun(() => {
+        render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", targetResolution: "1080p" })} onUpdate={vi.fn()} {...EXTRA} />)
+        expect(screen.getByLabelText("Mode").textContent).toBe("sharp")
+        const row = screen.getByRole("button", { name: /^Transparent/ }) as HTMLButtonElement
+        expect(row.disabled).toBe(true)
+        expect(row.textContent).toContain("Not available on this deployment")
+        expect(screen.getByText(/Adds crisp detail/)).toBeTruthy()
+        expect(screen.queryByRole("button", { name: "720p" })).toBeNull()
+      })
+    })
+
+    it("a node that names Transparent keeps it, with a notice that its run is refused here", () => {
+      cannotRun(() => {
+        const onUpdate = vi.fn()
+        render(<VideoUpscaleConfig data={data({ provider: "nodaro-video-upscale", mode: "transparent", targetResolution: "1080p" })} onUpdate={onUpdate} {...EXTRA} />)
+        expect(screen.getByLabelText("Mode").textContent).toBe("transparent")
+        expect(screen.getByText(/cannot run Transparent, so a run in this mode is refused/).getAttribute("role")).toBe("status")
+        expect(onUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ mode: expect.anything() }))
+      })
+    })
   })
 
   it("fail-safe: the mode is cleared on any other provider", () => {

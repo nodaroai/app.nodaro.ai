@@ -1708,6 +1708,8 @@ export const he: ChromeDict = {
   "vidcfg.nodaroModeSharp": "חד",
   "vidcfg.nodaroModeTransparentHelp": "שומר על הצבעים והמראה המקוריים. הבחירה הבטוחה יותר לאנשים ולפנים.",
   "vidcfg.nodaroModeSharpHelp": "מוסיף פרטים חדים. מתאים יותר לחפצים, מוצרים, נופים וטקסט מאשר לאנשים.",
+  "vidcfg.nodaroModeTransparentUnavailable": "לא זמין בהתקנה הזו",
+  "vidcfg.nodaroModeTransparentUnavailableNotice": "ההתקנה הזו לא יכולה להריץ את Transparent, ולכן הרצה במצב הזה תידחה. בחרו Sharp כדי להריץ כאן.",
   "vidcfg.descNodaroUpscale": "Nodaro Video Upscale מתאים את הקליפ למסגרת 1080p, 2K או 4K בלי לחתוך, ושומר על קצב הפריימים, האורך והקול שלו. הוא מקבל קליפים של עד 60 שניות ו-50MB. המחיר הוא לפי שנייה של הקליפ, ולכן הסכום המוצג הוא הערכה עד שההרצה מודדת את הקליפ; הסכום שנשמר הוא הסכום שמחויב.",
   "vidcfg.nodaroUpscaleTooLong": "Nodaro Video Upscale מקבל קליפים באורך של עד {max} שנ׳ — האורך של זה {d} שנ׳. קצרו אותו, אחרת ההרצה תידחה.",
   "vidcfg.topazLegacyFactorNote": "נשמר כהגדלה פי {factor} – הקליפ יוגדל לרזולוציה הקרובה ביותר לגודלו פי {factor}. בחרו רזולוציה כדי לקבוע אותה במדויק.",

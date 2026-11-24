@@ -6,6 +6,7 @@ import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
 import { filterCloneNodes } from "@nodaro/shared/workflow"
 import { getOutputType } from "@nodaro/shared/apps"
 import { ReactFlowProvider } from "@xyflow/react";
+import { useSurfaceAvailability } from "@/lib/surface-availability";
 import { useQuery } from "@tanstack/react-query";
 import {
   Play,
@@ -562,6 +563,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
   const wholeRunNodes = useMemo(() => wholeRunExecutable(storeNodes), [storeNodes]);
   const ugcAnswers = useUgcRunAnswers(wholeRunNodes, storeNodes, storeEdges);
+  // What this install runs prices some nodes (Nodaro Video Upscale with no mode): re-price once its answer lands.
+  const surfaceAvailability = useSurfaceAvailability();
   useEffect(() => {
     if (!hasCredits()) return;
     const publish = ({ total, estimate, unpriced }: { total: number; estimate: boolean; unpriced?: RunUnpriced }) => {
@@ -600,7 +603,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     // All costs cached — publish immediately
     setEstimateLoading(false);
     publish(first);
-  }, [storeNodes, storeEdges, wholeRunNodes, ugcAnswers]);
+  }, [storeNodes, storeEdges, wholeRunNodes, ugcAnswers, surfaceAvailability]);
 
   // Only poll /v1/stats while there is local activity worth watching: a
   // workflow/single-node run in progress, store nodes still running/pending,

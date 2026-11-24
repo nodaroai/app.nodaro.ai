@@ -6,10 +6,13 @@
  * when the units move.
  */
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { nodaroVideoUpscaleEstimateMode, nodaroVideoUpscaleRefusedSec, videoUpscalePricingUnits } from "@/lib/video-utility-estimate"
 import type { WorkflowNode } from "@/types/nodes"
 
 export function useVideoUpscaleQuotedUnits(nodeId: string): number {
+  // The mode a node with none is priced in follows what this install runs: re-read when that answer lands.
+  useSurfaceAvailability()
   return useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === nodeId) as WorkflowNode | undefined
     return node ? videoUpscalePricingUnits(node, s.nodes, s.edges) : 1
@@ -29,8 +32,9 @@ export function useNodaroVideoUpscaleRefusedSec(nodeId: string): number | undefi
   })
 }
 
-/** The mode a Nodaro Video Upscale node is priced in, decided from its wired clip (`nodaroVideoUpscaleEstimateMode`). */
+/** The mode a Nodaro Video Upscale node is priced in, decided from its wired clip and what this install runs (`nodaroVideoUpscaleEstimateMode`). */
 export function useNodaroVideoUpscaleEstimatedMode(nodeId: string): "transparent" | "sharp" {
+  useSurfaceAvailability()
   return useWorkflowStore((s) => {
     const node = s.nodes.find((n) => n.id === nodeId) as WorkflowNode | undefined
     return node ? nodaroVideoUpscaleEstimateMode(node, s.nodes, s.edges) : "transparent"

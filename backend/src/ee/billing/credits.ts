@@ -106,8 +106,6 @@ import {
   audioSoundtrackActive,
   applyDefaultVideoSelection,
   NODARO_VIDEO_UPSCALE_PROVIDER,
-  nodaroVideoUpscaleModeOf,
-  nodaroVideoUpscaleEffectiveMode,
   isNodaroVideoUpscaleMode,
   TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER,
 } from "@nodaro/shared/models"
@@ -143,7 +141,7 @@ import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/previ
 import { ugcGraphVideos, ugcRunSetVideos, ugcVideoEstimate } from "./ugc-run-set.js"
 import { UgcListingUnpricedError, UgcPartUnpricedError } from "./ugc-listing-unpriced.js"
 import { replaceAudioNodeCreditId } from "@nodaro/render-rules"
-import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeEstimateUnits, nodaroVideoUpscaleModeTierOf, nodaroVideoUpscaleTransparentServes, topazRheaCreditId, topazRheaEstimateUnits, topazRheaTargetOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
+import { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId, EXTEND_VIDEO_DEFAULT_PROVIDER, LIP_SYNC_DEFAULT_PROVIDER, NEMOTRON_WIRE_READ_OPTIONS, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuoteSeconds, MEASURED_INPUT_PLANNED_CLIP_SLACK_SEC, type MeasuredInputStepType, RECORDING_SOURCE_TYPES, measuredWireLengthSec, type MeasuredWireLengthOptions, recordingLengthSec, bypassTeleports, keptLengthWire, expandUseCaseNodes, usecaseFanOutRefused, USE_CASE_FEE_STATIC_CREDITS, withUseCaseMembers, fanInClipCount, inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, trimVideoCutsFixedWindow, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireFps, runWireLengthSec, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, maskCompositeLeadSec, videoOverlayBaseSec, videoOverlayQuotesVideo, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength, withoutMediaShape, renderEstimateCreditId, speakerViewPriceTier, type SpeakerViewWireSettings, SPEAKER_FRAMES_CEILING_BLOCKS, SPEAKER_FRAMES_CREDIT_ID, SPEAKER_FRAMES_CREDITS_PER_BLOCK, speakerFramesEstimateBlocks, ugcChains, ugcFiguresPerNode, ugcSumPerNode, type UgcEstimateInput, dubbingQuotedMinutes, dubbingSourceHandle, DUBBING_MAX_SPAN_MINUTES, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazVideoQuoteUnits, topazWiredSource, type UseCaseViewerFlags, forwardedVideoLengthSec, nodaroImageUpscaleCreditId, nodaroVideoUpscaleCreditId, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, nodaroVideoUpscaleTierOf, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeEstimateUnits, nodaroVideoUpscaleModeTierOf, nodaroVideoUpscaleDecidedMode, topazRheaCreditId, topazRheaEstimateUnits, topazRheaTargetOf, extendSourceEstimateSec, geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, seedanceExtendPrice, seedanceExtendRateCreditId, SEEDANCE_EXTEND_SENT_PRICED_PROVIDER, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId, type VideoUtilityStepType } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { plainEntityCreditIdentifier, workflowEntityCreditIdentifier } from "../../lib/entity-credit-identifier.js"
@@ -7665,7 +7663,7 @@ export function graphPricingUnits(
   if (node.type === "video-upscale" && isTopazRheaVideoUpscaleNode(node)) {
     return topazRheaEstimateUnits(videoUpscaleWireSec(node, edges, (sourceId) => measuredSec(sourceId, "video-upscale:rhea")))
   }
-  // Its mode (`nodaroVideoUpscaleModeOf`, unset = transparent) picks the rule:
+  // Its mode (`nodaroEstimateMode`, the run's own decision) picks the rule:
   // sharp as above; transparent the exact length in 1/64 s steps, as Topaz
   // Rhea bills it (the measuring step of the rule it bills by).
   if (node.type === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
@@ -8009,7 +8007,7 @@ function listingParts(
  */
 /**
  * Nodaro Video Upscale's mode for an estimate, decided as the run decides it
- * (`nodaroVideoUpscaleEffectiveMode`) from what the graph knows of the wired
+ * (`nodaroVideoUpscaleDecidedMode`) from what the graph knows of the wired
  * clip: its frame and rate (`topazWiredSource`) and its length. An explicit
  * mode is kept; no mode is Transparent unless the known clip cannot be served
  * by it (then Sharp); a clip the graph does not know is Transparent, and the
@@ -8031,12 +8029,9 @@ function nodaroEstimateMode(
   const clip = source.frame
     ? { ...source.frame, ...(source.fps !== undefined ? { fps: source.fps } : {}), ...(sec !== undefined ? { sec } : {}) }
     : undefined
-  // Where this install cannot run Transparent, a node with no mode runs Sharp: the run's own reading
-  // (`nodaroTransparentAvailable`, which the plan asks), so the estimate never quotes a mode the run swaps.
-  const transparentServes = nodaroTransparentAvailable()
-    ? nodaroVideoUpscaleTransparentServes(clip, nodaroVideoUpscaleModeTierOf("transparent", data.targetResolution))
-    : false
-  return nodaroVideoUpscaleEffectiveMode(data.mode, transparentServes)
+  // Whether this install can run Transparent is the run's own reading (`nodaroTransparentAvailable`, which
+  // the plan asks too), so the estimate never quotes a mode the run swaps.
+  return nodaroVideoUpscaleDecidedMode(data.mode, clip, data.targetResolution, nodaroTransparentAvailable())
 }
 
 /** A Video Upscale node on Topaz Rhea. */
@@ -8531,7 +8526,8 @@ export function getNodeModelIdentifier(
   // Nodaro Video Upscale: its tier's four-second row; its units (the clip's
   // billed seconds ÷ 4): graphPricingUnits.
   if (nodeType === "video-upscale" && isNodaroVideoUpscaleNode(node)) {
-    const mode = graph.nodaroVideoUpscaleMode ?? nodaroVideoUpscaleModeOf(data.mode)
+    // No graph-decided mode: as the run decides it before the clip is known (Sharp where Transparent cannot run here).
+    const mode = graph.nodaroVideoUpscaleMode ?? nodaroVideoUpscaleDecidedMode(data.mode, undefined, data.targetResolution, nodaroTransparentAvailable())
     return nodaroVideoUpscaleModeCreditId(mode, nodaroVideoUpscaleModeTierOf(mode, data.targetResolution))
   }
   // Topaz Rhea: its target's one-second row (unset = 1080p; a target it does

@@ -31,6 +31,9 @@ vi.mock("@/lib/node-registry.js", () => ({
     { type: "web-scrape", category: "input" },
   ],
 }))
+/** Whether this install can run Nodaro Video Upscale's Transparent mode (`models.deniedModes`): on unless a test turns it off. */
+const transparent = vi.hoisted(() => ({ available: true }))
+vi.mock("@/lib/nodaro-transparent-available.js", () => ({ nodaroTransparentAvailable: () => transparent.available }))
 // surfaceGateOpen() must be true for the profile case below.
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud" },
@@ -77,6 +80,7 @@ afterEach(async () => {
   delete process.env.NODARO_SURFACE_PROFILE
   __resetSurfaceProfileCacheForTests()
   __resetModelSwitchForTests()
+  transparent.available = true
 })
 
 const get = (userId?: string) =>
@@ -96,7 +100,7 @@ describe("GET /v1/surface/availability", () => {
     for (const who of [USER, ADMIN]) {
       const body = (await get(who)).json()
       expect(body.nodes).toEqual({ denied: [], hiddenFromUsers: [] })
-      expect(body.models).toEqual({ denied: [...ownLabelModelIds()], restricted: false })
+      expect(body.models).toEqual({ denied: [...ownLabelModelIds()], restricted: false, deniedModes: [] })
     }
     expect([...ownLabelModelIds()]).toContain("nodaro-image-upscale")
   })
@@ -113,7 +117,22 @@ describe("GET /v1/surface/availability", () => {
   it("a deployment that serves its house models lists none of them as denied", async () => {
     serveEveryHouseModel()
     try {
-      expect((await get(USER)).json().models).toEqual({ denied: [], restricted: false })
+      expect((await get(USER)).json().models).toEqual({ denied: [], restricted: false, deniedModes: [] })
+    } finally {
+      serveNoHouseModel()
+    }
+  })
+
+  // `deniedModes` is what the editor prices a Nodaro Video Upscale with no mode by, and greys Transparent by:
+  // the run's own reading (`nodaroTransparentAvailable`), the same for every viewer.
+  it("names the model modes this install cannot run: none where Transparent runs, Nodaro Video Upscale's Transparent where it cannot", async () => {
+    serveEveryHouseModel()
+    try {
+      for (const who of [undefined, USER, ADMIN]) expect((await get(who)).json().models.deniedModes).toEqual([])
+      transparent.available = false
+      for (const who of [undefined, USER, ADMIN]) expect((await get(who)).json().models.deniedModes).toEqual(["nodaro-video-upscale:transparent"])
+      // The mode is withheld, not the model: the model stays offered.
+      expect((await get(USER)).json().models.denied).not.toContain("nodaro-video-upscale")
     } finally {
       serveNoHouseModel()
     }
