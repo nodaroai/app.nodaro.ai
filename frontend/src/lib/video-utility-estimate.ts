@@ -38,7 +38,7 @@ import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { maskCompositeUnits } from "@nodaro/shared/media"
 import { combineVideosRunFields, fanInClipCount, GENERATE_VIDEO_PRO_DEFAULT_MAX_DURATION_SEC, loopVideoRunFields, maskCompositeLeadSec, measuredWireLengthSec, runWireFps, videoDepthClipSec, videoMaskClipSec, videoSfxClipSec, dubbingQuotedMinutes, dubbingSourceHandle, VIDEO_UTILITY_READING, trimVideoRunFields, videoOverlayBaseSec, videoOverlayBaseWireSec, videoOverlayQuotesVideo, videoUtilityUnitsOf, type MeasuredInputStepType, type MeasuredWireLengthOptions, type VideoUtilityStepType, measuringStepReadOptions, measuredInputStepId, type MeasuringStepId } from "@nodaro/render-rules"
 import { applyDefaultVideoSelection, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
-import { drivingAudioQuoteId, takesDrivingAudio } from "@nodaro/shared/credits"
+import { drivingAudioQuoteId, isDrivingAudioLipSyncProvider, takesDrivingAudio } from "@nodaro/shared/credits"
 import { referenceModalityForHandle } from "@nodaro/shared/workflow"
 import { withWiredSettings } from "@nodaro/shared/nodes"
 import { aiAvatarAudioSourceId, aiAvatarPlaysAudio, lipSyncAudioSourceId, LIP_SYNC_AUDIO_WIRE_READ_OPTIONS, lipSyncRateQuotedAudioSec, NEMOTRON_WIRE_READ_OPTIONS, nodaroVideoUpscaleEstimateUnits, nodaroVideoUpscaleRefusesLength, topazLegacyFactorOf, topazQuotedTarget, topazVideoQuoteUnits, topazWiredSource, type TopazWiredSource } from "@nodaro/render-rules"
@@ -710,6 +710,8 @@ export function lipSyncQuoteIsEstimate(
 ): boolean {
   const provider = (withWiredSettings(node, nodes, edges).data as { provider?: unknown } | undefined)?.provider
   if (isLipSyncChargedAtRunCost(provider)) return true
+  // An audio-to-video model (LTX 2.5 Fast) quoted before its voice's length is known: the longest clip it can hold.
+  if (isDrivingAudioLipSyncProvider(provider)) return lipSyncQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
   const rate = lipSyncAudioRateOf(provider)
   return rate !== undefined && rateModelQuotedAudioSec(node, nodes, edges, rerunIds) === undefined
 }

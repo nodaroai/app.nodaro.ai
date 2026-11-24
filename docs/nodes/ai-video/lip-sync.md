@@ -13,7 +13,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Provider | Select | kling-avatar | AI model for lip sync |
-| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); OmniHuman 2.0 has no choice (always 720p, the field is hidden); the full `seedance-2` adds **1080p / 4K** and `seedance-2-5` adds **1080p** (`seedance-2-fast` and `seedance-2-mini` are 480p/720p only) |
+| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); OmniHuman 2.0 has no choice (always 720p, the field is hidden); the full `seedance-2` adds **1080p / 4K** and `seedance-2-5` adds **1080p** (`seedance-2-fast` and `seedance-2-mini` are 480p/720p only); `ltx-2.5-fast` is **720p (default) / 1080p / 1440p** |
 | Motion Prompt | Textarea | — | Optional: describe head/expression motions (KIE providers only) |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
@@ -83,6 +83,19 @@ Some damage cannot be told from a complete file. Such a file is priced on, and s
 
 `minimax-h3` (MiniMax H3) rides the same audio-as-reference mechanism: portrait + voice line route through its reference-to-video endpoint with the audio as `reference_audio_urls`. Output renders at H3's **2K default** — the lip-sync surface's Resolution select never names H3's own 768P tier, so any value collapses onto the 2K-rate duration composite — audio is always on, reference audio caps at **15 s per clip**, and the reservation tier is the 8s duration composite (`minimax-h3:8s` = 803<!-- credits: minimax-h3:8s --> cr) on every path: a single run, a workflow or app run, and the estimates. See [Generate Video](./generate-video.md) for the full pricing formula (768P applies on the generation surfaces, not here).
 
+### LTX 2.5 Fast (portrait + voice, as long as the voice)
+
+`ltx-2.5-fast` (LTX 2.5 Fast, decided 2026-11-23) makes a talking clip from a **portrait image** and the **voice line**, and the clip is **as long as the voice**. It is the same audio-to-video run as Generate Video's [LTX 2.5 Fast with an audio clip](./generate-video.md#audio-to-video-ltx-25-fast), with the portrait as the first frame: the clip takes the portrait's shape.
+
+- **Inputs**: a portrait image is required; a video face input is refused before anything is charged (this model makes a clip from an image).
+- **The voice**: an MP3, WAV, M4A, AAC, OGG or FLAC file of up to 50 MB, **2.05 to 20 seconds** long — **10 seconds at most at 1440p**. A voice from any source works: an uploaded file or a voice made in the run by a speech node.
+- **Measured before the hold**: Nodaro reads the voice's decoded length before anything is held (a length the request or the node states is not read) and sends the model that length less a twentieth of a second.
+- **Refused before anything is charged**: a voice shorter than 2.05 s, one longer than the run takes at its resolution (the message names the setting to change), a video file wired as the voice, or a file whose length cannot be read. Unlike the bucketed models above, a voice past the limit is **refused, not trimmed**: the clip follows the voice, and a trimmed voice would cut the line.
+- **Resolution**: 720p (the node's default), 1080p or 1440p; a request naming another resolution runs, and is charged, at 1080p. **Seed** is taken; **fast mode** is not.
+- **Sound**: the clip is made to the voice. A render that comes back without a soundtrack gets the voice laid on, fitted to the clip, and is stored once (watermarked when the run is).
+- **Free credits**: open at 720p for a voice up to 4 seconds.
+- **Not offered in the film pipeline's lip sync step.**
+
 ### HeyGen Lipsync Precision options
 
 | Field | Type | Default | Description |
@@ -150,6 +163,7 @@ Wav2Lip, VideoReTalking and SadTalker are retired from Lip Sync. A saved node, a
 | `lipsync-2-pro` | 5 minutes* |
 | `sync-lipsync-v3` | 5 minutes* |
 | `volcengine-lipsync` | 5 minutes |
+| `ltx-2.5-fast` | 20 seconds (10 at 1440p; at least 2.05 s) — refused past it, not trimmed |
 
 Audio longer than the cap is trimmed to half a second under it before it is sent, and a model priced by the length of its audio charges its top tier for it (see [How the audio's length is measured](#how-the-audios-length-is-measured)). `infinitalk` is trimmed the same way. `omnihuman-2-0` is the exception: audio past its 5 minutes is refused before anything is held, not trimmed. Long-audio runs on `kling-avatar(-pro)` and `volcengine-lipsync` can take tens of minutes — the editor polls for up to ~1 hour before timing out.
 
@@ -166,6 +180,23 @@ Kling AI Avatar and OmniHuman 1.5 are priced by the length of their audio, round
 | `omnihuman-1-5` (720p/1080p) | ~74 CR/s | 1,122<!-- credits: omnihuman-1-5:15s --> | 2,233<!-- credits: omnihuman-1-5:30s --> | 4,455<!-- credits: omnihuman-1-5:60s --> | — | — |
 
 `omnihuman-1-5` is capped at 60s of audio (longer is auto-trimmed), so only the 15s / 30s / 60s tiers apply. Resolution (720p vs 1080p) does not change the price.
+
+### LTX 2.5 Fast pricing
+
+`ltx-2.5-fast` is charged on the voice's measured length **rounded up to a whole second** (a few hundredths past a whole second are forgiven), at the resolution sent, from the same per-second rows as Generate Video's LTX 2.5 Fast (`ltx-2.5-fast:<N>s:<resolution>`, one row for every whole second from 2 s). The hold is the charge. Some of the rows:
+
+| Voice (rounded up) | 720p | 1080p | 1440p |
+|---|---|---|---|
+| 2s | 66<!-- credits: ltx-2.5-fast:2s:720p --> | 88<!-- credits: ltx-2.5-fast:2s:1080p --> | 132<!-- credits: ltx-2.5-fast:2s:1440p --> |
+| 3s | 99<!-- credits: ltx-2.5-fast:3s:720p --> | 132<!-- credits: ltx-2.5-fast:3s:1080p --> | 198<!-- credits: ltx-2.5-fast:3s:1440p --> |
+| 4s | 121<!-- credits: ltx-2.5-fast:4s:720p --> | 176<!-- credits: ltx-2.5-fast:4s:1080p --> | 253<!-- credits: ltx-2.5-fast:4s:1440p --> |
+| 5s | 154<!-- credits: ltx-2.5-fast:5s:720p --> | 220<!-- credits: ltx-2.5-fast:5s:1080p --> | 319<!-- credits: ltx-2.5-fast:5s:1440p --> |
+| 8s | 242<!-- credits: ltx-2.5-fast:8s:720p --> | 352<!-- credits: ltx-2.5-fast:8s:1080p --> | 506<!-- credits: ltx-2.5-fast:8s:1440p --> |
+| 10s | 297<!-- credits: ltx-2.5-fast:10s:720p --> | 429<!-- credits: ltx-2.5-fast:10s:1080p --> | 627<!-- credits: ltx-2.5-fast:10s:1440p --> |
+| 15s | 451<!-- credits: ltx-2.5-fast:15s:720p --> | 649<!-- credits: ltx-2.5-fast:15s:1080p --> | — |
+| 20s | 594<!-- credits: ltx-2.5-fast:20s:720p --> | 858<!-- credits: ltx-2.5-fast:20s:1080p --> | — |
+
+A 7.2 s voice at 720p is charged as 8 s: 242<!-- credits: ltx-2.5-fast:8s:720p --> credits. Every whole second is listed on the [Generate Video](./generate-video.md) page. An estimate made before the voice's length is known quotes the longest clip the run can hold at its resolution (20 s, or 10 s at 1440p) and shows it as an estimate.
 
 ### OmniHuman 2.0 pricing
 

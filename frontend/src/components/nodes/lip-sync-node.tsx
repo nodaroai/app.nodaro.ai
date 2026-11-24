@@ -30,7 +30,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, retiredLipSyncProviderName } from "@nodaro/shared/models"
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared/nodes"
-import { buildLipSyncCreditId, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
+import { buildLipSyncCreditId, drivingAudioLipSyncResolution, drivingAudioQuoteId, isDrivingAudioLipSyncProvider, isPerSecondLipSyncProvider, lipSyncAudioRateOf } from "@nodaro/shared/credits"
 import { useUnitQuoteCredits } from "@/hooks/use-unit-quote-credits"
 import { useLipSyncQuoteIsEstimate, useLipSyncQuotedAudioSec, useLipSyncQuotedSeconds } from "@/hooks/use-lip-sync-quote"
 import { probeAudioDuration } from "@/lib/audio-duration"
@@ -162,6 +162,10 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       // can hold — the Run button's rule (`getModelIdentifier`). The run
       // itself measures the audio and holds its bucket.
       return buildLipSyncCreditId(lipSyncProvider, quotedAudioSec)
+    }
+    // An audio-to-video model (LTX 2.5 Fast): the row of its voice's length, the Run button's rule.
+    if (isDrivingAudioLipSyncProvider(lipSyncProvider)) {
+      return drivingAudioQuoteId({ provider: lipSyncProvider, resolution: drivingAudioLipSyncResolution(lipSyncProvider, nodeData.resolution), audioSec: quotedAudioSec })
     }
     return lipSyncProvider
   }, [lipSyncProvider, nodeData.resolution, quotedAudioSec])

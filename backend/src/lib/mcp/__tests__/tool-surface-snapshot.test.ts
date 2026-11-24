@@ -1942,6 +1942,30 @@ const FLASH_CHOICES_PER_TOOL_BYTES = 242
 const REMAKE_INTENT_CHECK_BYTES = 581
 const REMAKE_INTENT_CHECK_PER_TOOL_BYTES = 581
 
+// RAISED by LTX 2.5 Fast on Lip Sync (decided 2026-11-23): its id and price hint join the `lip_sync` tool's
+// catalog-derived model list. No tool was added, so the membership fixtures do NOT move (the recorded
+// tool list, tool-list-wire.json, does). Measured by this suite on the same tree: the list went from
+// within its budget of 566_365 B to 566_400 B, so the budget is raised by exactly the 35 B over it.
+const LTX_2_5_LIP_SYNC_BYTES = 35
+
+// RAISED by the Lip Sync resolution list made catalog-derived (decided 2026-11-23): `lip_sync`'s
+// `resolution` enum and its description now come from the node's own table (`lipSyncResolutions`,
+// `lipSyncResolutionSummary`), naming every model that takes a resolution and its choices (the
+// hand-written line named four and was wrong for Seedance 2 Fast), with 1440p as LTX 2.5 Fast's alone.
+// Measured by this suite on the same tree: 566_400 B to 566_587 B, so the budget is raised by 187 B.
+const LIP_SYNC_RESOLUTION_LIST_BYTES = 187
+
+// RAISED by the Lip Sync menu offering what the server runs (decided 2026-11-23): the derived list now
+// names Seedance 2.5's 1080p and Seedance 2's 4K, and the enum takes `4k`. Measured by this suite on
+// the same tree: 566_587 B to 566_612 B, so the budget is raised by 25 B.
+const LIP_SYNC_SERVER_TIERS_BYTES = 25
+
+// RAISED on merging dev's VIDEO_RUN_ESTIMATES_BYTES: both changes were measured against the same 52 B of
+// headroom the list then had (dev's raise "used" it, and LTX 2.5 Fast on Lip Sync's first raise counted
+// on it), so the merged tree is exactly 52 B over the sum of the two raises. Measured by this suite on
+// the merged tree: 569_577 B against 569_525 B.
+const MERGED_HEADROOM_BYTES = 52
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES,
   totalBytes:
@@ -2184,7 +2208,11 @@ export const TOOL_WIRE_BUDGET = {
     LTX_2_5_BYTES +
     FLASH_CHOICES_BYTES +
     VIDEO_RUN_ESTIMATES_BYTES +
-    REMAKE_INTENT_CHECK_BYTES,
+    REMAKE_INTENT_CHECK_BYTES +
+    LTX_2_5_LIP_SYNC_BYTES +
+    LIP_SYNC_RESOLUTION_LIST_BYTES +
+    LIP_SYNC_SERVER_TIERS_BYTES +
+    MERGED_HEADROOM_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

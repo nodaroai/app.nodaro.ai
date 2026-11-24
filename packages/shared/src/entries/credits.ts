@@ -251,3 +251,4 @@ export {
   DRIVING_AUDIO_SEND_MARGIN_SEC,
 } from "../driving-audio.js"
 export type { DrivingAudioRun, DrivingAudioRefusalCode } from "../driving-audio.js"
+export { isDrivingAudioLipSyncProvider, drivingAudioLipSyncResolution } from "../driving-audio-lip-sync.js"

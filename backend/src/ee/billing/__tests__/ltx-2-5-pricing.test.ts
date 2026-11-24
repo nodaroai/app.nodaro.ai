@@ -292,3 +292,43 @@ describe("ltx-2.5 Fast audio-to-video in the workflow run", () => {
     }
   })
 })
+
+describe("ltx-2.5 Fast on Lip Sync: the workflow build and the estimate (decided 2026-11-23)", () => {
+  const ls = (data: Record<string, unknown> = {}): SimpleNode =>
+    ({ id: "l", type: "lip-sync", data: { provider: "ltx-2.5-fast", ...data } }) as unknown as SimpleNode
+  const VOICE = "https://cdn.example/voice.mp3"
+  const FACE = "https://cdn.example/face.png"
+
+  it("marks the run for the executor with the voice as its first reference audio, at the node's 720p", () => {
+    const n = ls({ seed: 7 })
+    const built = buildPayload(n, "job-1", { imageUrl: FACE, audioUrl: VOICE }, undefined, { nodes: [n], edges: [], nodeStates: {} })
+    expect(built.jobName).toBe("lip-sync")
+    expect(built.modelIdentifier).toBe("ltx-2.5-fast:20s:720p")
+    expect(built.payload).toMatchObject({ provider: "ltx-2.5-fast", imageUrl: FACE, audioUrl: VOICE, referenceAudioUrls: [VOICE], resolution: "720p", drivingAudioPending: true, seed: 7 })
+  })
+
+  it("refuses a run without a portrait, or with a video face input, before anything is held", () => {
+    for (const inputs of [{ audioUrl: VOICE }, { imageUrl: FACE, videoUrl: "https://cdn.example/f.mp4", audioUrl: VOICE }]) {
+      const n = ls()
+      expect(() => buildPayload(n, "job-1", inputs, undefined, { nodes: [n], edges: [], nodeStates: {} })).toThrow(/portrait image/)
+    }
+  })
+
+  it("the estimate quotes the voice's row by the run's rule, the longest clip while its length is not known", () => {
+    expect(getNodeModelIdentifier(ls(), { lipSyncAudioSec: 7.2 })).toBe("ltx-2.5-fast:8s:720p")
+    expect(getNodeModelIdentifier(ls({ resolution: "1440p" }), {})).toBe("ltx-2.5-fast:10s:1440p")
+    expect(getNodeModelIdentifier(ls({ resolution: "1080p" }), {})).toBe("ltx-2.5-fast:20s:1080p")
+  })
+})
+
+describe("Lip Sync in the workflow run: 1440p is LTX 2.5 Fast's alone (decided 2026-11-23)", () => {
+  it.each(["seedance-2", "kling-avatar", "infinitalk"])("%s with a stale 1440p is refused before anything is held", (provider) => {
+    const n = { id: "l", type: "lip-sync", data: { provider, resolution: "1440p" } } as unknown as SimpleNode
+    expect(() => buildPayload(n, "job-1", { imageUrl: "https://cdn.example/f.png", audioUrl: "https://cdn.example/v.mp3" }, undefined, { nodes: [n], edges: [], nodeStates: {} })).toThrow(/does not render 1440p/)
+  })
+
+  it("other resolutions resolve as before (seedance-2 at 1080p, kling-avatar at 720p)", () => {
+    const seed = { id: "l", type: "lip-sync", data: { provider: "seedance-2", resolution: "1080p" } } as unknown as SimpleNode
+    expect(buildPayload(seed, "job-1", { imageUrl: "https://cdn.example/f.png", audioUrl: "https://cdn.example/v.mp3" }, undefined, { nodes: [seed], edges: [], nodeStates: {} }).payload.resolution).toBe("1080p")
+  })
+})

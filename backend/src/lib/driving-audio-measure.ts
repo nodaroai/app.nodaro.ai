@@ -162,3 +162,15 @@ export function drivingAudioFreeVideoRequest(provider: string, measured: { reado
 } {
   return { provider, duration: measured.billedSec, resolution: measured.resolution, videoSize: null, audioDriven: true }
 }
+
+/**
+ * The HTTP status a refusal of the driving clip answers with — one mapper for
+ * every route that reads one (Generate Video's two, Lip Sync's): busy is a 429
+ * (try again in a moment), a stopped reading a 503 (ours), the rest the
+ * request's own (400).
+ */
+export function drivingAudioRefusalStatus(code: string): number {
+  if (code === "audio_busy") return 429
+  if (code === "audio_measure_stopped") return 503
+  return 400
+}
