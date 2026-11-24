@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, hasAudioStream, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, hasAudioStream, createWorkDir, cleanupWorkDir, type DownloadLimits } from "./ffmpeg-utils.js"
 import { extractAudioArgs } from "./extract-audio.js"
 
 /** Thrown when the source video has no audio track to revoice. The worker
@@ -26,12 +26,20 @@ export interface ExtractedAudio {
  *
  * The caller owns `workDir` cleanup (so the extracted audio survives until it's
  * read into a buffer). `downloadFile` is SSRF-guarded (`safeFetch`).
+ *
+ * `opts.download` bounds the download (big-media limits, a byte cap) for a
+ * caller that takes videos of any size; without it the download runs under
+ * `downloadFile`'s flat default, exactly as before.
  */
-export async function extractAudioTrack(videoUrl: string): Promise<ExtractedAudio> {
+export async function extractAudioTrack(
+  videoUrl: string,
+  opts: { readonly download?: { readonly limits?: DownloadLimits; readonly maxBytes?: number } } = {},
+): Promise<ExtractedAudio> {
   const workDir = await createWorkDir("vc-extract")
   try {
     const videoPath = join(workDir, "input.mp4")
-    await downloadFile(videoUrl, videoPath)
+    if (opts.download) await downloadFile(videoUrl, videoPath, { ...opts.download })
+    else await downloadFile(videoUrl, videoPath)
 
     if (!(await hasAudioStream(videoPath))) {
       throw new NoAudioTrackError()

@@ -3,7 +3,7 @@
 
 ## Overview
 
-The Audio Separation node (internally `audio-separation`) uses Demucs (Meta's Hybrid-Transformer source-separation model) on Replicate to split **any** audio into its component stems. It accepts any uploaded or upstream audio (a song, a recording, an extracted video track, etc.), including commercially released recordings, which [Suno Separate](../suno-music/suno-separate.md) refuses.
+The Audio Separation node (internally `audio-separation`) uses Demucs (Meta's Hybrid-Transformer source-separation model) on Replicate to split **any** audio into its component stems. It accepts any uploaded or upstream audio (a song, a recording, an extracted video track, etc.), including commercially released recordings, which [Suno Separate](../suno-music/suno-separate.md) refuses. It also accepts a link to a **video**: only the video's sound is separated (see [A video as the source](#a-video-as-the-source)).
 
 It has two modes:
 
@@ -20,12 +20,21 @@ It has two modes:
 
 ## Inputs & Outputs
 
-- **Input**: `audio` — any audio file (URL). Wire from an upload, a generated track, or an extracted video audio track.
+- **Input**: `audio` — any audio file (URL). Wire from an upload, a generated track, or an extracted video audio track. Through the API (`audioUrl`) and MCP (`audio_url`) it may also be a link to a video.
 - **Outputs** (per stem, each an audio URL):
   - `vocals`, `instrumental` (Vocal/Instrumental mode)
   - `vocals`, `drums`, `bass`, `other`, `guitar`, `piano` (Full stems mode)
 
 Outputs not produced by the chosen mode/model are inactive. Wire each stem from its own output. The node no longer has a single `audio` output: a wire saved on that name is left as it is, because it could mean any stem, so reconnect it to the stem you want.
+
+### A video as the source
+
+`audioUrl` may point at a video file. The platform reads the file to see what it holds (never its name): when it has a picture, its sound is taken out first and that sound is separated. There is no extra step and no extra charge: the run costs the same as for audio, and the job returns the same stem fields.
+
+- A video can be up to **500 MB**. A larger one fails with "This video is larger than 500 MB." and is refunded in full: trim it, or connect its audio instead.
+- A video **without sound** fails with "This video has no sound to separate." and the credits are refunded in full.
+- A picture or a GIF fails with "This file is an image, not audio or a video." and is refunded in full.
+- An audio file (an MP3 with cover art included) is separated exactly as it came, as before.
 
 ## Credits
 

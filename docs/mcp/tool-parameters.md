@@ -3379,7 +3379,7 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `audio_url` | string (URL) |  | Any audio by URL. |
+| `audio_url` | string (URL) |  | Any audio by URL, or a video link (its sound is split). |
 | `audio_asset_id` | string |  | Nodaro audio job id or uploaded audio asset id. A Suno generation is separated by its Suno ids (looked up server-side). At least 1 character. |
 | `type` | string |  | `separate_vocal` (default) = vocals + instrumental. `split_stem` = full multi-stem split. `split_stem_advanced` = one instrument (`stem_name`) alone and the song without it. One of `separate_vocal`, `split_stem`, `split_stem_advanced`. |
 | `stem_name` | string |  | One of Suno's instrument names, e.g. Piano or Lead Vocal (only for split_stem_advanced; default Lead Vocal) |

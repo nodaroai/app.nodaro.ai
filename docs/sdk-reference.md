@@ -8512,7 +8512,9 @@ separate(input: {
 
 Separate an audio track into stems (`POST /v1/audio-separation`, Demucs).
 `"vocal_instrumental"` (default) splits voice from music/SFX; `"stems"`
-returns the full drums/bass/other/… breakdown.
+returns the full drums/bass/other/… breakdown. `audioUrl` may also link a
+video (up to 500 MB): its sound is separated, at the same price. A larger
+video, a video without sound, or an image fails and is refunded.
 
 #### `isolate(input)`
 

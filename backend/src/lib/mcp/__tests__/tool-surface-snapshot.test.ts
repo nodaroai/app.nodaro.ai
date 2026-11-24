@@ -1990,6 +1990,13 @@ const LIP_SYNC_SERVER_TIERS_BYTES = 25
 // the merged tree: 569_577 B against 569_525 B.
 const MERGED_HEADROOM_BYTES = 52
 
+// RAISED by both audio splitters taking a video link (2026-11-24): `separate_audio`'s text and
+// `suno_separate_stems`'s `audio_url` say a video's sound is split. No tool was added, so the membership
+// fixtures do NOT move (tool-list-wire.json does). Measured by this suite on the same tree: the list
+// 571_043 B, then 571_129 B, 86 B more (neither tool near the per-tool budget). The list had no headroom,
+// so it is raised by exactly what it measures.
+const SPLIT_TAKES_VIDEO_BYTES = 86
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES + REMAKE_UPSCALE_CHOICE_PER_TOOL_BYTES + REMAKE_UPSCALE_4K_PER_TOOL_BYTES,
   totalBytes:
@@ -2239,7 +2246,8 @@ export const TOOL_WIRE_BUDGET = {
     LTX_2_5_LIP_SYNC_BYTES +
     LIP_SYNC_RESOLUTION_LIST_BYTES +
     LIP_SYNC_SERVER_TIERS_BYTES +
-    MERGED_HEADROOM_BYTES,
+    MERGED_HEADROOM_BYTES +
+    SPLIT_TAKES_VIDEO_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
