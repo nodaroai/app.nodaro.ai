@@ -311,6 +311,16 @@ export function surfaceHeaderMode(): SurfaceHeaderMode {
   return runtimeSurfaceProfile().header ?? "default"
 }
 
+/** The worlds the deployment will open later (`worlds.soon`): drawn as "Soon", never offered. */
+export function surfaceSoonWorlds(): readonly WorldId[] {
+  return runtimeSurfaceProfile().worlds?.soon ?? []
+}
+
+/** The tools app's mini apps on a white-label deployment (`toolApps`); undefined where the deployment set none. */
+export function surfaceToolApps(): { readonly menus: boolean; readonly pages: boolean; readonly pictures?: Readonly<Record<string, string>>; readonly apps?: readonly string[] } | undefined {
+  return runtimeSurfaceProfile().toolApps
+}
+
 /** The deployment's own logo (a same-site path or an https URL), or undefined for the product's. */
 export function surfaceBrandLogo(): string | undefined {
   return runtimeSurfaceProfile().brand.logo

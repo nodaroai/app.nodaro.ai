@@ -112,6 +112,14 @@ export interface SiteHeaderProps {
   readonly worlds?: readonly SiteWorldId[]
   /** The pages below a world its menu may open; a white-label header draws only those named, none for a world left out. */
   readonly worldMenus?: Partial<Readonly<Record<SiteWorldId, SiteWorldMenu>>>
+  /** Worlds to come: each a tab marked "Soon", with no link and no menu (white-label mode only). */
+  readonly soonWorlds?: readonly SiteWorldId[]
+  /** The apps-first world menus, held to white-label mode (white-label mode only). */
+  readonly appsMenus?: boolean
+  /** The mini apps the host serves, by id; with the apps menus on, none is drawn without the list. */
+  readonly offeredApps?: readonly string[]
+  /** The host's own pictures for the apps menus, by key (an app's id, or `tile:<world>:<tile>`). */
+  readonly appPictures?: Readonly<Record<string, string>>
   /** The deployment's own mark, drawn instead of Nodaro's. */
   readonly logo?: SiteHeaderLogo
   /** The deployment's name, said where the header would say Nodaro (white-label mode only). */

@@ -2308,6 +2308,20 @@ logo is dropped with a warning and the rest of `brand` is kept.
     (an app's id such as `image-upscale`, or `tile:<world>:<tile>`). Each
     value is a path on this site or an `https://` URL; any other entry is
     dropped with a warning. At most 200.
+  - `apps`: the mini apps the deployment offers, by id (`image-upscale`). As
+    with `worlds.allow`, **presence is what narrows**: a list offers exactly
+    its apps (each still only while the viewer may run it), and `[]` offers
+    none. Leave it out to offer every app the viewer may run. A value that is
+    not a list offers none, and an entry that is not an app id is dropped,
+    both with a warning. The editor's own header (below) lists apps only from
+    this list: it does not know which node types an app runs, so a deployment
+    that turns `menus` on names its apps here for both headers on the site to
+    show the same ones.
+
+  On an image that carries the shared header, the editor's white-label header
+  follows the same keys, so it and the tools app's header agree: a world named
+  in `worlds.soon` is a tab marked "Soon", and with `menus` its tabs open the
+  apps-first menus with the apps of `apps` and the pictures of `pictures`.
 - `samples`: `{ "image": [...], "video": [...] }` — the deployment's own
   welcome samples, shown where Nodaro's sites show Nodaro's (a white-label
   deployment never shows those). At most 12 a world. Every address is a path

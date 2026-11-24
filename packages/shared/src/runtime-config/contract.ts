@@ -92,6 +92,13 @@ export interface RuntimeSurfaceBilling {
  */
 /** How many pictures `toolApps.pictures` may name, and how many samples a world may give. */
 export const MAX_TOOL_APP_PICTURES = 200
+/** How many mini apps `toolApps.apps` may name. */
+export const MAX_TOOL_APPS = 200
+
+/** A mini app's id, as the tools app addresses it below `/apps` (`image-upscale`). */
+export function isToolAppId(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(value)
+}
 export const MAX_SURFACE_SAMPLES = 12
 
 /** One welcome sample of a deployment's own: the prompt it sets, the picture it made, and how it was made. */
@@ -159,9 +166,13 @@ export interface RuntimeSurface {
    * (`/apps`, `/apps/<id>`), `menus` opens the header's apps-first menus in
    * place of its classic ones. `pictures` gives the deployment's own picture
    * for an app or a menu tile, by key (an app's id, or `tile:<world>:<tile>`);
-   * `{}` = none. No effect where the header is not white-label.
+   * `{}` = none. `apps` names the mini apps the deployment offers, by id:
+   * when present, exactly those may be offered (each still only while the
+   * viewer may run it), and `[]` offers none; absent, every app the viewer
+   * may run. The editor's own header lists apps only from this list. No
+   * effect where the header is not white-label.
    */
-  readonly toolApps: { readonly menus: boolean; readonly pages: boolean; readonly pictures: Readonly<Record<string, string>> }
+  readonly toolApps: { readonly menus: boolean; readonly pages: boolean; readonly pictures: Readonly<Record<string, string>>; readonly apps?: readonly string[] }
   /**
    * The deployment's own welcome samples, by world: what a white-label
    * deployment shows where the platform's sites show the platform's samples
@@ -541,9 +552,16 @@ function toolAppPicturesOf(value: unknown): Readonly<Record<string, string>> {
 }
 
 /** Only the literal `true` asks for the menus or the pages: a reader older than its platform, or a malformed value, shows no more than before. */
+/** `toolApps.apps`: absent stays absent (no list); a list keeps its app ids, each once; anything else names none, the restrictive side. */
+function toolAppIdsOf(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter(isToolAppId))].slice(0, MAX_TOOL_APPS)
+}
+
 function toolAppsOf(value: unknown): RuntimeSurface["toolApps"] {
   const given = record(value)
-  return { menus: given.menus === true, pages: given.pages === true, pictures: toolAppPicturesOf(given.pictures) }
+  return { menus: given.menus === true, pages: given.pages === true, pictures: toolAppPicturesOf(given.pictures), ...optional("apps", toolAppIdsOf(given.apps)) }
 }
 
 const nonEmpty = (value: unknown, max: number): string | undefined => {
