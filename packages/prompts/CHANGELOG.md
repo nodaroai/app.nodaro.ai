@@ -1,5 +1,25 @@
 # @nodaro/prompts
 
+## 1.60.1
+
+### Patch Changes
+
+- 44bf5f0: Image presets: 38 Generate Image factory presets no longer invent text and facts, and their effects show more clearly. The reference boards drop their metadata blocks (names, ages, heights, specs) for a larger hero image and write nothing that is not visible in the photo; the vehicle board never writes a manufacturer or model name, and the mascot and pet boards never name the subject. The photo-edit tiles no longer print their own template name as a headline, and Old Family Photo Restoration restores without colorizing. Caricature, anime and claymation push their look further, Four Seasons and Times of Day give each panel its own outdoor scene, Decade Timeline shows a clearly different age per decade, and Phone Camera Look and Undo Beauty Filter make a visible change. The edits shared with Modify Image change there too.
+- baacb23: LTX 2.5 Fast and Pro (`ltx-2.5-fast`, `ltx-2.5-pro`): a prompting doctrine from the provider's contract (sound described in the prompt, quoted text spoken as dialogue, "Shot 1 / Shot 2" for several shots, no negative prompt or camera setting) and prompt-wizard capability lines for text-to-video and image-to-video.
+- Updated dependencies [b7f2997]
+- Updated dependencies [b681717]
+- Updated dependencies [e692c85]
+- Updated dependencies [0fea0d0]
+- Updated dependencies [f4f9f3b]
+- Updated dependencies [baacb23]
+- Updated dependencies [6b5c7ca]
+- Updated dependencies [8c4259a]
+- Updated dependencies [d1b773e]
+- Updated dependencies [2143bb3]
+- Updated dependencies [7ec10b6]
+- Updated dependencies [b7f2997]
+  - @nodaro/shared@3.73.0
+
 ## 1.60.0
 
 ### Minor Changes
