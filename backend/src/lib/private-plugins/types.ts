@@ -4060,7 +4060,7 @@ export interface PluginCapabilities {
    * `tk.http.workerRequest`, a child of the calling job) take
    * `workingCopy: true`: the step's output video is encoded as a working copy
    * for the next step — libx264 `-preset fast -crf 6`, capped at
-   * `-maxrate 25M -bufsize 50M`, in the input's own
+   * `-maxrate 50M -bufsize 100M`, in the input's own
    * pixel format where 8-bit H.264 holds it (4:2:0, 4:2:2 or 4:4:4), its
    * colour tags kept; same frames, size, sound, price and output fields — and
    * the child job records it as `input_data.__workingCopy`. Any other caller

@@ -8,7 +8,7 @@
  * through this one module so the two cannot drift:
  *
  * - libx264, `-preset fast`, constant quality `-crf 6`, bounded by a rate
- *   cap (`-maxrate 25M -bufsize 50M`) so heavy grain cannot blow the file up;
+ *   cap (`-maxrate 50M -bufsize 100M`) so heavy grain cannot blow the file up;
  * - the source's own pixel format where 8-bit H.264 holds it (4:2:0 stays
  *   4:2:0, 4:2:2 stays 4:2:2, 4:4:4 stays 4:4:4), else 4:2:0 — the same rule
  *   as the matched re-encode (`keptPixFmt`, matched-encode.ts);
@@ -26,14 +26,19 @@ export const WORKING_COPY_CRF = "6"
 export const WORKING_COPY_PRESET = "fast"
 /**
  * The working copy's rate cap (x264 VBV), in bits per second, and its buffer
- * in bits. CRF 6 alone has no ceiling: on heavily grained 1080p it measured
- * about 150 Mbit/s, so a 30 s copy ran to several hundred MB, which the next
- * step downloads under a fixed timeout. Capped, a copy's video is at most
- * `WORKING_COPY_MAX_RATE × seconds + WORKING_COPY_BUFFER` bits (30 s: 100 MB).
- * Ordinary footage at CRF 6 sits under the cap, so it is encoded as before.
+ * in bits (twice the rate). CRF 6 alone has no ceiling: on heavily grained
+ * 1080p it measured about 150 Mbit/s, so a 30 s copy ran to several hundred
+ * MB, which the next step downloads under a fixed timeout. Capped, a copy's
+ * video is at most `WORKING_COPY_MAX_RATE × seconds + WORKING_COPY_BUFFER`
+ * bits (15 s: 106 MB; 30 s: 200 MB). 50 Mbit/s is the same ceiling Video
+ * Remake's own working copies use (decided 2026-11-24), so a clip keeps one
+ * ceiling across every step of the chain. Ordinary footage at CRF 6 sits
+ * under the cap, so it is encoded as before. A copy that goes on to a video
+ * engine is re-encoded within that engine's size limit on the way
+ * (`providers/kie/reference-video-reencode.ts`), so the cap is no engine's limit.
  */
-export const WORKING_COPY_MAX_RATE = 25_000_000
-export const WORKING_COPY_BUFFER = 50_000_000
+export const WORKING_COPY_MAX_RATE = 50_000_000
+export const WORKING_COPY_BUFFER = 100_000_000
 
 /** What a working copy reads of its source: the picture's pixel format and colour tags (`probeMatched`). */
 export type WorkingCopySource = Pick<MatchedProbe, "pixFmt" | "colorSpace" | "colorPrimaries" | "colorTransfer" | "colorRange">
