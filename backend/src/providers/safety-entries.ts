@@ -6,6 +6,7 @@
 import { kieModelIdsWithoutSafetyLever, kieSafetyEntries, type ProviderSafetyEntry } from "./kie/models.js"
 import { replicateSafetyEntries } from "./replicate/image.js"
 import { falSafetyEntries } from "./fal/lip-sync.js"
+import { topazRheaSafetyEntries } from "./fal/topaz-rhea.js"
 
 export type { ProviderSafetyEntry } from "./kie/models.js"
 
@@ -28,7 +29,7 @@ export function providerSafetyGroups(): readonly ProviderSafetyGroup[] {
   return [
     { provider: "kie", label: "KIE", entries: dedupeByModelId(kieSafetyEntries()), withoutLever: kieModelIdsWithoutSafetyLever() },
     { provider: "replicate", label: "Replicate", entries: replicateSafetyEntries(), withoutLever: [...REPLICATE_WITHOUT_LEVER] },
-    { provider: "fal", label: "fal", entries: falSafetyEntries(), withoutLever: [...FAL_WITHOUT_LEVER] },
+    { provider: "fal", label: "fal", entries: [...falSafetyEntries(), ...topazRheaSafetyEntries()], withoutLever: [...FAL_WITHOUT_LEVER] },
   ]
 }
 

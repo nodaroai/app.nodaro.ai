@@ -8,6 +8,10 @@
  * - VEO 4K (taskId-based, from completed VEO generation)
  * - Seedance 2.5 HD (from draft): the 1080p finalize of a Seedance 2.5 DRAFT —
  *   the same take re-rendered at 1080p (taskId- or sourceJobId-based)
+ * - Topaz Rhea (via fal): the clip scaled (1–4×) so its short side reaches
+ *   720p / 1080p / 4K, at its own frame rate and length, as H.264. Priced per
+ *   second of the clip by the target (measured before anything is held; the
+ *   hold is the charge). A route/API provider: the editor does not offer it.
  * - Nodaro Video Upscale: any clip up to 60 s / 50 MB into a 1080p, 2K or 4K
  *   box, per second of the clip (measured before anything is held; the hold is
  *   the charge). A house model (lib/house-models.ts): accepted only where the
@@ -19,11 +23,14 @@
  *   — any other value is a 400, for every provider but Nodaro Video Upscale;
  *   Nodaro Video Upscale "1080p" | "2k" | "4k" (an output box), default 1080p,
  *   and a value it does not take (720p) runs at its default
- *   (`nodaroVideoUpscaleTierOf`, from the catalog).
+ *   (`nodaroVideoUpscaleModeTierOf`, from the catalog); in transparent mode
+ *   (`mode`, the default) also 720p.
+ * - mode: Nodaro Video Upscale only — "transparent" (default) or "sharp"; a 400
+ *   with any other provider.
  * - targetFps: 15–60 — Topaz only, default the source's own rate
  * - upscaleFactor: "1", "2", or "4" — legacy Topaz lever, read only without a
  *   targetResolution (mapped over the source's short side)
- * - provider: "topaz" (default), "veo-1080p", "veo-4k", "seedance-2-5-hd" or "nodaro-video-upscale"
+ * - provider: "topaz" (default), "topaz-rhea", "veo-1080p", "veo-4k", "seedance-2-5-hd" or "nodaro-video-upscale"
  * - taskId: Required for VEO providers (the original VEO job's providerTaskId; kieTaskId is a deprecated alias).
  *   For seedance-2-5-hd: the draft's providerTaskId (or pass sourceJobId).
  * - sourceJobId: seedance-2-5-hd only — the draft's job id.
@@ -44,15 +51,25 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { withResolvedModel } from "../lib/job-resolved-model.js"
 import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
 import {
+  NODARO_VIDEO_UPSCALE_MODES,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  isNodaroVideoUpscaleMode,
+  isNodaroVideoUpscaleTier,
+  nodaroVideoUpscaleModeOf,
   TOPAZ_VIDEO_FPS_MAX,
   TOPAZ_VIDEO_FPS_MIN,
+  TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER,
   TOPAZ_VIDEO_RESOLUTIONS,
   VIDEO_UPSCALE_PROVIDERS,
 } from "@nodaro/shared/models"
-import { nodaroVideoUpscaleCreditId, nodaroVideoUpscaleTierOf, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
+import { nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, topazRheaCreditId, topazRheaTargetOf, TOPAZ_VIDEO_UNIT_CREDIT_ID } from "@nodaro/render-rules"
 import { planTopazVideoUpscale, topazVideoHoldBaseCredits, TopazVideoSourceUnreadableError, TopazVideoTooLongError } from "../lib/topaz-video-plan.js"
 import { probeRefusalStatus } from "../providers/video/probe-guard.js"
+import { planTopazRheaUpscale, rheaRunFields, topazRheaBaseCredits, topazRheaRefusalOf } from "../lib/topaz-rhea-plan.js"
+import { falEnabled } from "../providers/fal/enabled.js"
+import { nodaroTransparentAvailable } from "../lib/nodaro-transparent-available.js"
+import { MissingProviderKeyError } from "../providers/provider-keys.js"
+import { TOPAZ_RHEA_KEY_COVERAGE } from "../providers/fal/topaz-rhea.js"
 import {
   isNodaroVideoUpscaleTryAgain,
   NODARO_VIDEO_UPSCALE_NOT_SERVED_CODE,
@@ -119,8 +136,12 @@ const upscaleBody = z.object(videoUpscaleFields(TOPAZ_VIDEO_RESOLUTIONS)).refine
   }
 )
 
-/** Nodaro Video Upscale: any provider's target (one it does not take, such as 720p, runs at its default: `nodaroVideoUpscaleTierOf`), and its clip's link. */
-const nodaroUpscaleBody = z.object(videoUpscaleFields(VIDEO_UPSCALE_RESOLUTIONS)).refine(
+/**
+ * Nodaro Video Upscale: any provider's target (one its mode does not take —
+ * sharp's 720p — runs at the default: `nodaroVideoUpscaleModeTierOf`), its
+ * clip's link, and its `mode` (transparent, the default, or sharp).
+ */
+const nodaroUpscaleBody = z.object({ ...videoUpscaleFields(VIDEO_UPSCALE_RESOLUTIONS), mode: z.enum(NODARO_VIDEO_UPSCALE_MODES).optional() }).refine(
   (data) => !!data.videoUrl,
   { message: "Nodaro Video Upscale requires videoUrl" },
 )
@@ -133,14 +154,22 @@ const nodaroUpscaleBody = z.object(videoUpscaleFields(VIDEO_UPSCALE_RESOLUTIONS)
  * was, its provider list aside (it now names nodaro-video-upscale too).
  */
 export const videoUpscaleBody = z.unknown().transform((body, ctx) => {
+  // `mode` is Nodaro Video Upscale's own setting: refused with any other provider, never dropped unseen.
+  if (!isNodaroVideoUpscaleBody(body) && (body as { mode?: unknown } | null | undefined)?.mode !== undefined) {
+    ctx.addIssue({ code: "custom", message: "mode is a Nodaro Video Upscale setting (\"transparent\" or \"sharp\"); send it only with provider \"nodaro-video-upscale\"", path: ["mode"], input: (body as { mode?: unknown }).mode })
+    return z.NEVER
+  }
   const parsed = (isNodaroVideoUpscaleBody(body) ? nodaroUpscaleBody : upscaleBody).safeParse(body)
   if (parsed.success) return parsed.data
   for (const issue of parsed.error.issues) ctx.addIssue({ code: "custom", message: issue.message, path: [...issue.path], input: issue.input })
   return z.NEVER
 })
 
-function upscaleCreditModel(provider: string): string {
+function upscaleCreditModel(provider: string, targetResolution?: unknown): string {
   if (provider === "veo-1080p") return "veo-1080p"
+  // Topaz Rhea: its target's per-second row (a target it does not take is a
+  // 400 before anything is held; priced here at the default's row).
+  if (provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER) return topazRheaCreditId(topazRheaTargetOf(targetResolution) ?? "1080p")
   if (provider === "veo-4k") return "veo-4k"
   if (provider === SEEDANCE_DRAFT_FINALIZE_PROVIDER) return SEEDANCE_DRAFT_FINALIZE_PROVIDER
   // Topaz is held per unit: the unit's row × the units the clip's plan holds.
@@ -180,6 +209,81 @@ async function topazPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Pr
     throw err
   }
 }
+
+const isTopazRheaBody = (body: unknown): boolean =>
+  (body as { provider?: unknown } | undefined)?.provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER
+
+/**
+ * Topaz Rhea's cheap refusals, BEFORE the credit guard (every edition), before
+ * anything is read or held: a frame rate or a legacy factor (this provider
+ * takes neither: 400), a link to outside content where link imports are off
+ * (403), an install with no fal key (503). The clip itself is copied,
+ * measured and priced by the guard's `beforePricing` step
+ * ({@link topazRheaBeforePricing}). Inert for every other provider.
+ */
+async function topazRheaPlanPreHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!isTopazRheaBody(req.body)) return
+  const body = req.body as Record<string, unknown>
+  const unsupported = ["targetFps", "upscaleFactor"].filter((k) => body[k] !== undefined)
+  if (unsupported.length > 0) {
+    return reply.status(400).send({
+      error: {
+        code: "validation_error",
+        message: `topaz-rhea takes no ${unsupported.join(" or ")}: it keeps the source's frame rate, and scales the clip so its short side reaches targetResolution (720p, 1080p or 4k).`,
+      },
+    })
+  }
+  const videoUrl = typeof body.videoUrl === "string" ? body.videoUrl : undefined
+  const target = topazRheaTargetOf(body.targetResolution)
+  // No URL, one Zod will refuse, or a target it does not take → the handler answers the validation error.
+  if (!videoUrl || !safeUrlSchema.safeParse(videoUrl).success || target === undefined) return
+  const linkRefused = linkImportRefusal(videoUrl)
+  if (linkRefused) return reply.status(403).send({ error: linkRefused })
+  // Rhea runs on fal: an install with no fal key is refused before anything is read or held.
+  if (!falEnabled()) {
+    return reply.status(503).send({ error: { code: "provider_unavailable", message: new MissingProviderKeyError("FAL_KEY", undefined, TOPAZ_RHEA_KEY_COVERAGE).message } })
+  }
+}
+
+/**
+ * Topaz Rhea's clip, run by the credit guard as its `beforePricing` step (past
+ * every cheaper gate, with the user known): an outside clip is copied into our
+ * storage and measured from the copy, a stored one measured where it is (a
+ * quote checks the same and stores nothing), and the plan priced. The STORED
+ * clip's URL is written into the request, so the job and the worker send the
+ * clip that was measured. Inert for every other provider.
+ */
+async function topazRheaBeforePricing(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!isTopazRheaBody(req.body)) return
+  const body = req.body as Record<string, unknown>
+  const videoUrl = typeof body.videoUrl === "string" ? body.videoUrl : undefined
+  const target = topazRheaTargetOf(body.targetResolution)
+  // Refused already by the pre-check, or the handler answers the validation error / 401.
+  if (!videoUrl || !safeUrlSchema.safeParse(videoUrl).success || target === undefined || !req.userId) return
+  if (body.targetFps !== undefined || body.upscaleFactor !== undefined || !falEnabled() || linkImportRefusal(videoUrl)) return
+  const quote = req.quoteOnly === true
+  const signal = clientGoneSignal(reply)
+  try {
+    req.topazRheaUpscale = await planTopazRheaUpscale(videoUrl, target, { userId: req.userId, quote, signal })
+  } catch (err) {
+    if (signal.aborted) return reply.status(499).send({ error: CLIENT_CLOSED })
+    const refusal = topazRheaRefusalOf(err)
+    if (!refusal) throw err
+    return reply.status(refusal.status).send({ error: { code: refusal.code, message: refusal.message } })
+  }
+  // The stored clip from here on: what the job records, what the worker sends.
+  if (!quote) body.videoUrl = req.topazRheaUpscale.videoUrl
+}
+
+/** The guard's `beforePricing` steps, each inert for every provider but its own. */
+async function videoUpscaleBeforePricing(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await topazRheaBeforePricing(req, reply)
+  if (reply.sent) return
+  await nodaroVideoUpscaleBeforePricing(req, reply)
+}
+
+/** Transparent mode where this deployment cannot run it: the product's own sentence, naming no setting or supplier. */
+export const NODARO_TRANSPARENT_UNAVAILABLE_MESSAGE = "Nodaro Video Upscale's Transparent mode is not available on this deployment. You were not charged."
 
 /** The refusal of a Nodaro Video Upscale this deployment cannot run. */
 const nodaroNotServed = { code: NODARO_VIDEO_UPSCALE_NOT_SERVED_CODE, message: NODARO_VIDEO_UPSCALE_NOT_SERVED_MESSAGE }
@@ -233,6 +337,14 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
   if (!videoUrl || !safeUrlSchema.safeParse(videoUrl).success || !req.userId) return
   // Refused already, by the pre-check or the guard's deny; never fetched.
   if (!houseModelServed(NODARO_VIDEO_UPSCALE_PROVIDER)) return reply.status(NOT_SERVED_STATUS).send({ error: nodaroNotServed })
+  // A mode Zod refuses: the handler answers the validation error, nothing fetched.
+  if (body.mode !== undefined && !isNodaroVideoUpscaleMode(body.mode)) return
+  // An explicit Transparent where this install cannot run it is refused before
+  // anything is fetched or held; with no mode the plan falls back to Sharp
+  // (`nodaroVideoUpscaleEffectiveMode`).
+  if (body.mode === "transparent" && !nodaroTransparentAvailable()) {
+    return reply.status(503).send({ error: { code: "provider_unavailable", message: NODARO_TRANSPARENT_UNAVAILABLE_MESSAGE } })
+  }
   // Copying an outside clip into our storage is an import: refused here where
   // the deployment turned links to outside content off (the copy asks again).
   const linkRefused = linkImportRefusal(videoUrl)
@@ -243,7 +355,7 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
   const signal = clientGoneSignal(reply)
   let plan: Awaited<ReturnType<typeof planNodaroVideoUpscale>>
   try {
-    plan = await planNodaroVideoUpscale(videoUrl, body.targetResolution, { userId: req.userId, quote, signal })
+    plan = await planNodaroVideoUpscale(videoUrl, body.targetResolution, { userId: req.userId, quote, signal }, body.mode)
   } catch (err) {
     // The client went away mid-fetch: the request ends here, nothing held (a
     // client's own disconnect is no server error to report — as the keyed
@@ -261,7 +373,8 @@ async function nodaroVideoUpscaleBeforePricing(req: FastifyRequest, reply: Fasti
       : 400
     return reply.status(status).send({ error: refusal })
   }
-  if (!planHouseModelRun(NODARO_VIDEO_UPSCALE_PROVIDER, { videoUrl: plan.videoUrl, tier: plan.tier, billedSec: plan.billedSec })) {
+  // Sharp runs behind the house-model seam, which plans its run; transparent runs on the Rhea lane.
+  if (plan.mode === "sharp" && isNodaroVideoUpscaleTier(plan.tier) && !planHouseModelRun(NODARO_VIDEO_UPSCALE_PROVIDER, { videoUrl: plan.videoUrl, tier: plan.tier, billedSec: plan.billedSec })) {
     return reply.status(NOT_SERVED_STATUS).send({ error: nodaroNotServed })
   }
   // The stored clip from here on: what the job records, what the worker sends.
@@ -302,12 +415,16 @@ async function seedanceDraftFinalizePreHandler(req: FastifyRequest, reply: Fasti
 const resolveCreditModel = (req: FastifyRequest): string => {
   if (req.nodaroVideoUpscale) return req.nodaroVideoUpscale.creditId
   if (req.seedanceDraftFinalize) return req.seedanceDraftFinalize.creditId
+  if (req.topazRheaUpscale) return req.topazRheaUpscale.creditId
   const body = req.body as Record<string, unknown> | undefined
   const provider = (body?.provider as string | undefined) ?? "topaz"
   // Unreachable without a plan (the `beforePricing` step refuses first); priced
   // at the asked tier's row, never another provider's.
-  if (provider === NODARO_VIDEO_UPSCALE_PROVIDER) return nodaroVideoUpscaleCreditId(nodaroVideoUpscaleTierOf(body?.targetResolution))
-  return upscaleCreditModel(provider)
+  if (provider === NODARO_VIDEO_UPSCALE_PROVIDER) {
+    const mode = nodaroVideoUpscaleModeOf(body?.mode)
+    return nodaroVideoUpscaleModeCreditId(mode, nodaroVideoUpscaleModeTierOf(mode, body?.targetResolution))
+  }
+  return upscaleCreditModel(provider, body?.targetResolution)
 }
 
 /**
@@ -319,16 +436,20 @@ const resolveCreditModel = (req: FastifyRequest): string => {
  * `-ref` row cannot express alone (same as the generation lane).
  */
 export const videoUpscalePricing: RoutePricing = {
-  prechecks: [seedanceDraftFinalizePreHandler, topazPlanPreHandler, nodaroVideoUpscalePreHandler],
+  prechecks: [seedanceDraftFinalizePreHandler, topazPlanPreHandler, topazRheaPlanPreHandler, nodaroVideoUpscalePreHandler],
   modelResolver: resolveCreditModel,
   opts: {
     runModel: jobRunModel("video-upscale"),
     // Nodaro Video Upscale's clip is fetched, measured and planned only past every cheaper gate.
-    beforePricing: nodaroVideoUpscaleBeforePricing,
+    beforePricing: videoUpscaleBeforePricing,
     computeCredits: async (_body, req) => {
       if (req.topazVideoUpscale) return topazVideoHoldBaseCredits(req.topazVideoUpscale)
-      // Nodaro Video Upscale: the tier's four-second row × billed seconds ÷ 4,
-      // rounded up once — the hold IS the charge.
+      // Topaz Rhea: the target's per-second row × billed seconds, rounded up
+      // once — the hold IS the charge.
+      if (req.topazRheaUpscale) return topazRheaBaseCredits(req.topazRheaUpscale)
+      // Nodaro Video Upscale: its mode's row × its units (sharp: the tier's
+      // four-second row × billed seconds ÷ 4; transparent: Rhea's one-second
+      // row × the exact length), rounded up once — the hold IS the charge.
       if (req.nodaroVideoUpscale) return nodaroVideoUpscaleBaseCredits(req.nodaroVideoUpscale)
       if (!req.seedanceDraftFinalize?.hasRefVideo) return undefined
       const base = await seedanceDraftFinalizeBaseCredits(req.seedanceDraftFinalize)
@@ -353,6 +474,14 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
     // Topaz: the target the preHandler measured and priced.
     const topaz = provider === "topaz" ? req.topazVideoUpscale : undefined
     if (provider === "topaz" && !topaz) {
+      // Only reachable if the preHandler did not run (it always does on this route).
+      return reply.status(400).send({
+        error: { code: "video_unreadable", message: "Couldn't read the video to upscale." },
+      })
+    }
+    // Topaz Rhea: the factor, target and seconds the preHandler measured and priced.
+    const rhea = provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER ? req.topazRheaUpscale : undefined
+    if (provider === TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER && !rhea) {
       // Only reachable if the preHandler did not run (it always does on this route).
       return reply.status(400).send({
         error: { code: "video_unreadable", message: "Couldn't read the video to upscale." },
@@ -396,7 +525,7 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
       })
     }
 
-    const creditModel = nodaro ? nodaro.creditId : draft ? draft.creditId : upscaleCreditModel(provider)
+    const creditModel = nodaro ? nodaro.creditId : draft ? draft.creditId : rhea ? rhea.creditId : upscaleCreditModel(provider, parsed.data.targetResolution)
     const mcpClient = extractMcpClient(req.body)
     // The seconds the finalize's charge bills, so the worker records the
     // render's provider cost from them (queue only — never the job record).
@@ -414,6 +543,11 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
             ...parsed.data,
             ...(topaz
               ? { targetResolution: topaz.resolution, targetFps: topaz.fps, topazHoldUnits: topaz.holdUnits }
+              : {}),
+            // The target it is priced at, the factor it sends and the seconds it
+            // is billed (no frame rate or legacy factor: this provider has neither).
+            ...(rhea
+              ? { targetResolution: rhea.target, targetFps: undefined, upscaleFactor: undefined, ...rheaRunFields(rhea, rhea.target) }
               : {}),
             // The tier it runs at, and the measured clip it was priced on (no
             // frame rate or factor: this provider has neither).
@@ -444,6 +578,21 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
     const reservation = await reserveCreditsForJob(req, reply, job.id, creditModel)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
+
+    if (rhea) {
+      // The clip, the factor, the target and the billed seconds the hold was
+      // priced on — the worker sends exactly these.
+      await enqueueRouteJob(req, reply, job.id, () => videoQueue.add("video-upscale", {
+        jobId: job.id,
+        provider,
+        videoUrl,
+        targetResolution: rhea.target,
+        ...rheaRunFields(rhea, rhea.target),
+        usageLogId,
+      }))
+      if (reply.sent) return
+      return { jobId: job.id }
+    }
 
     if (nodaro) {
       // The clip, the tier and the measured seconds the hold was priced on —

@@ -523,6 +523,8 @@ export {
   clampTopazVideoFps,
   resolveTopazVideoTarget,
   topazVideoOutputSize,
+  TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER,
+  isTopazRheaVideoUpscaleProvider,
 } from "../topaz-video.js"
 export type {
   TopazVideoResolution,
@@ -540,8 +542,20 @@ export {
   NODARO_VIDEO_UPSCALE_MAX_BYTES,
   isNodaroVideoUpscaleTier,
   isNodaroVideoUpscaleProvider,
+  NODARO_VIDEO_UPSCALE_MODES,
+  NODARO_VIDEO_UPSCALE_DEFAULT_MODE,
+  isNodaroVideoUpscaleMode,
+  nodaroVideoUpscaleModeOf,
+  nodaroVideoUpscaleQueuedModeOf,
+  nodaroVideoUpscaleEffectiveMode,
+  NODARO_VIDEO_UPSCALE_MODE_BOX,
+  nodaroVideoUpscaleBoxFor,
+  NODARO_VIDEO_UPSCALE_TRANSPARENT_MAX_FACTOR,
+  NODARO_VIDEO_UPSCALE_TRANSPARENT_TIERS,
+  nodaroVideoUpscaleTiersFor,
+  nodaroVideoUpscaleModeTakes,
 } from "../nodaro-video-upscale.js"
-export type { NodaroVideoUpscaleTier } from "../nodaro-video-upscale.js"
+export type { NodaroVideoUpscaleTier, NodaroVideoUpscaleMode, NodaroVideoUpscaleModeTier } from "../nodaro-video-upscale.js"
 export {
   AUDIO_SOUNDTRACK_MIN_SEC,
   AUDIO_SOUNDTRACK_FPS,

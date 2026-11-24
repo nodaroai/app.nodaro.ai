@@ -4043,6 +4043,30 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // Topaz units the provider reports, never above the hold.
     pricing: [{ identifier: "topaz-video:per-unit", credits: 40, note: "per Topaz unit (metered)" }],
   },
+  // Topaz Rhea (decided 2026-11-24): Topaz's Rhea model, scaled so the output's
+  // short side reaches the target, at the source's own frame rate and length.
+  // Priced per second of the clip by the target's size; the hold is the
+  // charge. Run by the platform (Video Remake's upscale step) and reachable by
+  // the API, never offered by the editor (`pickerHidden`).
+  "topaz-rhea": {
+    id: "topaz-rhea",
+    kind: "video",
+    modes: ["video-upscale"] as const,
+    family: "Topaz",
+    maker: "topaz-labs",
+    label: "Topaz Rhea Upscale",
+    series: "Topaz",
+    description: "Topaz Rhea video upscale: the clip is scaled up to 4× so its short side reaches 720p, 1080p or 4K, at its own frame rate and length, delivered as H.264. Priced per second of the clip by the target size.",
+    useCases: ["upscale", "premium"],
+    resolutions: ["720p", "1080p", "4k"],
+    defaultResolution: "1080p",
+    pricing: [
+      { identifier: "topaz-rhea:720p:per-sec", credits: 5, note: "per second of the clip at 720p" },
+      { identifier: "topaz-rhea:1080p:per-sec", credits: 10, note: "per second of the clip at 1080p" },
+      { identifier: "topaz-rhea:4k:per-sec", credits: 30, note: "per second of the clip at 4K" },
+    ],
+    pickerHidden: true,
+  },
   // Nodaro Video Upscale (decided 2026-11-11): offered under the deployment's
   // own label, so it names no maker, and only where the deployment serves it
   // (the backend's house-model seam). Priced per second of the clip
@@ -4058,15 +4082,23 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     ownLabel: true,
     label: "Nodaro Video Upscale",
     series: "Nodaro Upscale",
-    description: "Upscale any clip of up to 60 seconds and 50 MB into a 1080p, 2K or 4K frame. It keeps the clip's shape (nothing is cropped), frame rate, length and sound. Priced per second of the clip; the listed price is four seconds at 1080p.",
+    description: "Upscale any clip of up to 60 seconds and 50 MB, in one of two modes. Transparent (the default) keeps the clip's original colours and look, the safer choice for people and faces: 720p, 1080p, 2K or 4K, priced per second of the clip at its exact length. Sharp adds crisp detail, suiting objects, products, scenery and text more than people: 1080p, 2K or 4K, priced per whole second. Both keep the clip's shape, frame rate, length and sound. The listed price is one second of the clip at 1080p in Transparent.",
     useCases: ["upscale", "high-res"],
-    // An output box (1920×1080, 2560×1440, 3840×2160; turned for a portrait clip).
-    resolutions: ["1080p", "2k", "4k"],
+    // The tiers some mode takes: transparent 720p / 1080p / 2K / 4K (the short
+    // side reaches the tier's), sharp 1080p / 2K / 4K (an output box,
+    // 1920×1080, 2560×1440, 3840×2160, turned for a portrait clip). Which a
+    // mode takes: `videoUpscaleResolutionsFor(provider, mode)`.
+    resolutions: ["720p", "1080p", "2k", "4k"],
     defaultResolution: "1080p",
+    // The first row is the listed price: the default mode's (Transparent) one second at 1080p.
     pricing: [
-      { identifier: "nodaro-video-upscale:1080p:per-4s", credits: 15, note: "per 4 seconds of the clip at 1080p; charged per whole second" },
-      { identifier: "nodaro-video-upscale:2k:per-4s", credits: 30, note: "per 4 seconds of the clip at 2K; charged per whole second" },
-      { identifier: "nodaro-video-upscale:4k:per-4s", credits: 60, note: "per 4 seconds of the clip at 4K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:transparent:1080p:per-sec", credits: 10, note: "Transparent mode: per second of the clip at 1080p, at its exact length" },
+      { identifier: "nodaro-video-upscale:transparent:720p:per-sec", credits: 5, note: "Transparent mode: per second of the clip at 720p, at its exact length" },
+      { identifier: "nodaro-video-upscale:1080p:per-4s", credits: 15, note: "Sharp mode: per 4 seconds of the clip at 1080p; charged per whole second" },
+      { identifier: "nodaro-video-upscale:2k:per-4s", credits: 30, note: "Sharp mode: per 4 seconds of the clip at 2K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:4k:per-4s", credits: 60, note: "Sharp mode: per 4 seconds of the clip at 4K; charged per whole second" },
+      { identifier: "nodaro-video-upscale:transparent:2k:per-sec", credits: 30, note: "Transparent mode: per second of the clip at 2K, at its exact length" },
+      { identifier: "nodaro-video-upscale:transparent:4k:per-sec", credits: 30, note: "Transparent mode: per second of the clip at 4K, at its exact length" },
     ],
   },
 

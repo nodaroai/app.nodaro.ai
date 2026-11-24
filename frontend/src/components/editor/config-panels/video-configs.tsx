@@ -60,8 +60,8 @@ import {
   normalizeVideoUpscaleResolution,
   videoUpscaleResolutionsFor,
 } from "@nodaro/shared/model-catalog"
-import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, type TopazVideoResolution } from "@nodaro/shared/models"
-import { geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
+import { TOPAZ_VIDEO_FPS_CHOICES, TOPAZ_VIDEO_RESOLUTIONS, clampTopazVideoFps, isTopazVideoResolution, NODARO_VIDEO_UPSCALE_PROVIDER, nodaroVideoUpscaleModeOf, type NodaroVideoUpscaleMode, type TopazVideoResolution } from "@nodaro/shared/models"
+import { geminiOmniExtendEstimateSource, geminiOmniExtendResolution, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, nodaroVideoUpscaleModeTierOf, seedanceExtendRateCreditId } from "@nodaro/render-rules"
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate"
 import { unitQuoteCredits, unitQuoteIdFor } from "@/lib/unit-quote"
 import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from "@/lib/motion-transfer-sizes"
@@ -2327,6 +2327,8 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   const provider = data.provider || "topaz"
   const isTopaz = provider === "topaz"
   const isNodaro = provider === NODARO_VIDEO_UPSCALE_PROVIDER
+  // Nodaro Video Upscale's mode, read as every lane reads it (unset = transparent).
+  const nodaroMode = nodaroVideoUpscaleModeOf(data.mode)
   // Nodaro Video Upscale is offered only where this deployment serves it (the
   // fetched availability, which the server answers from the house-model seam);
   // a node that already holds it keeps it listed (its run refuses it there).
@@ -2350,10 +2352,14 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   // its default (the catalog's, `normalizeVideoUpscaleResolution`), and the
   // frame rate and the old factor, levers it does not have, are cleared. An
   // unset value is left unset.
+  // Nodaro Video Upscale's tiers follow its mode: sharp does not take 720p, so a
+  // 720p left from transparent snaps to the default when the mode turns sharp
+  // (`normalizeVideoUpscaleResolution` with the mode). Its `mode` is cleared on
+  // any other provider, which has no such lever.
   useEffect(() => {
     const updates: Partial<VideoUpscaleData> = {}
     if (isNodaro) {
-      const snapped = normalizeVideoUpscaleResolution(provider, data.targetResolution).targetResolution
+      const snapped = normalizeVideoUpscaleResolution(provider, data.targetResolution, data.mode).targetResolution
       if (data.targetResolution !== undefined && snapped !== data.targetResolution) updates.targetResolution = snapped as VideoUpscaleData["targetResolution"]
       if (data.targetFps !== undefined) updates.targetFps = undefined
       if (data.upscaleFactor !== undefined) updates.upscaleFactor = undefined
@@ -2365,8 +2371,9 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
       if (data.targetResolution !== undefined && !isTopazVideoResolution(data.targetResolution)) updates.targetResolution = undefined
       if (data.targetFps !== undefined && fps !== data.targetFps) updates.targetFps = fps
     }
+    if (!isNodaro && data.mode !== undefined) updates.mode = undefined
     if (Object.keys(updates).length > 0) onUpdate(updates)
-  }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [provider, data.mode]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -2410,15 +2417,31 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
 
       {isNodaro && (
+        <MappableField field="mode" label={t("vidcfg.nodaroUpscaleMode")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Select
+            value={nodaroMode}
+            onValueChange={(v) => onUpdate({ mode: v as NodaroVideoUpscaleMode })}
+          >
+            <SelectTrigger aria-label={t("vidcfg.nodaroUpscaleMode")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="transparent">{t("vidcfg.nodaroModeTransparent")}</SelectItem>
+              <SelectItem value="sharp">{t("vidcfg.nodaroModeSharp")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="mt-1 px-1 text-xs text-muted-foreground">{t(nodaroMode === "sharp" ? "vidcfg.nodaroModeSharpHelp" : "vidcfg.nodaroModeTransparentHelp")}</p>
+        </MappableField>
+      )}
+
+      {isNodaro && (
         <MappableField field="targetResolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
-            value={nodaroVideoUpscaleTierOf(data.targetResolution)}
+            value={nodaroVideoUpscaleModeTierOf(nodaroMode, data.targetResolution)}
             onValueChange={(v) => onUpdate({ targetResolution: v as VideoUpscaleData["targetResolution"] })}
           >
             <SelectTrigger aria-label={t("field.resolution")}><SelectValue /></SelectTrigger>
             <SelectContent>
-              {/* The provider's own set, from the catalog (`videoUpscaleResolutionsFor`). */}
-              {videoUpscaleResolutionsFor(provider).map((r) => (
+              {/* The tiers its mode takes, from the catalog (`videoUpscaleResolutionsFor`). */}
+              {videoUpscaleResolutionsFor(provider, nodaroMode).map((r) => (
                 <SelectItem key={r} value={r}>{(VIDEO_UPSCALE_RESOLUTION_LABELS as Readonly<Record<string, string>>)[r] ?? r}</SelectItem>
               ))}
             </SelectContent>

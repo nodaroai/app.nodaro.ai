@@ -54,7 +54,7 @@ const ctx = { jobId: "job-nvu", jobUserId: "user-1", usageLogId: "log-1", should
 const CLIP = "https://cdn.example.com/tmp/provider-input/job-nvu/outside-input-x.mp4"
 const job = (data: Record<string, unknown> = {}) => ({
   name: "video-upscale",
-  data: { jobId: "job-nvu", provider: "nodaro-video-upscale", videoUrl: CLIP, tier: "2k", targetResolution: "2k", billedSec: 10, sourceDurationSec: 9.4, sourceSizeBytes: 12_000_000, ...data },
+  data: { jobId: "job-nvu", provider: "nodaro-video-upscale", mode: "sharp", videoUrl: CLIP, tier: "2k", targetResolution: "2k", billedSec: 10, sourceDurationSec: 9.4, sourceSizeBytes: 12_000_000, ...data },
   id: "b",
   updateProgress: vi.fn(),
 })

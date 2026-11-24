@@ -19,6 +19,7 @@
  * per-second lip-sync rate (`LIP_SYNC_AUDIO_RATES`: whole seconds, from the
  * model's minimum to its maximum — OmniHuman 2.0's 4 to 300), the Nodaro
  * Video Upscale tiers' four-second rows (a quarter-unit per billed second),
+ * the Topaz Rhea targets' one-second rows (the exact length, in 1/64 s steps),
  * Motion Transfer's per-second rows (a quarter-unit per billed second of the
  * driving video), Video to Video's clip rows (HappyHorse Edit: an eighth of a
  * unit per started half-second of the clip; Wan 2.7 VideoEdit: a quarter-unit
@@ -70,6 +71,8 @@ import {
   type SentPricedSeedanceExtendProvider,
   SPEAKER_FRAMES_CREDIT_ID,
   TOPAZ_VIDEO_UNIT_CREDIT_ID,
+  TOPAZ_RHEA_CREDIT_IDS,
+  NODARO_VIDEO_UPSCALE_TRANSPARENT_CREDIT_IDS,
 } from "@nodaro/render-rules"
 import { MODEL_CATALOG } from "@nodaro/shared/model-catalog"
 import { SCAN_PAGE_CREDIT_COSTS } from "@nodaro/shared/social"
@@ -145,6 +148,12 @@ export const UNIT_QUOTE_RATES: ReadonlyMap<string, UnitQuoteRule> = new Map([
   ].map((id) => [id, ANY_UNITS] as const),
   // Topaz video upscale: whole Topaz units (its hold, lib/topaz-video-plan.ts).
   [TOPAZ_VIDEO_UNIT_CREDIT_ID, { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: true }] as const,
+  // Topaz Rhea: each target's row prices one second, and a run is billed its
+  // exact length in 1/64 s steps (fractional units; the run's limit is in
+  // output gigapixels or Nodaro Video Upscale's 60 s, not here).
+  ...Object.values(TOPAZ_RHEA_CREDIT_IDS).map((id) => [id, { maxUnits: UNIT_QUOTE_MAX_UNITS, wholeUnits: false }] as const),
+  // Nodaro Video Upscale's Transparent rows: one per second, the exact length (1/64 s steps), up to its 60 s clip.
+  ...Object.values(NODARO_VIDEO_UPSCALE_TRANSPARENT_CREDIT_IDS).map((id) => [id, { maxUnits: NODARO_VIDEO_UPSCALE_MAX_SEC, wholeUnits: false }] as const),
   // Nodaro Video Upscale: each tier's row prices four seconds, so a run is a
   // quarter-unit per billed second (2.5 units for 10 s), up to the longest clip.
   ...Object.values(NODARO_VIDEO_UPSCALE_CREDIT_IDS).map((id) => [

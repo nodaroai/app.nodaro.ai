@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-11-13T13:09:37.857Z
-generated_from: 69fd86aa98
+generated_at: 2026-11-24T12:11:59.731Z
+generated_from: 3ccd7b1c19
 ---
 
 # Upscale Video
@@ -20,6 +20,7 @@ generated_from: 69fd86aa98
 
 **Optional data fields:**
 - `targetResolution?: VideoUpscaleResolution`
+- `mode?: "transparent" | "sharp"`
 - `targetFps?: number`
 - `upscaleFactor?: "1" | "2" | "4"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
@@ -58,6 +59,7 @@ generated_from: 69fd86aa98
 - `video_asset_id`
 - `model`
 - `target_resolution`
+- `mode`
 - `target_fps`
 - `upscale_factor`
 - `task_id`

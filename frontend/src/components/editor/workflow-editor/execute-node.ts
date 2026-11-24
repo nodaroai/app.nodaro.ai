@@ -76,6 +76,8 @@ import {
   DEFAULT_SUNO_STEM_NAME,
   isTopazVideoResolution,
   NODARO_VIDEO_UPSCALE_PROVIDER,
+  nodaroVideoUpscaleModeOf,
+  isNodaroVideoUpscaleMode,
   dialogueVoicesForModel,
   dialogueOutputFormatFor,
   getDialogueCapabilities,
@@ -117,7 +119,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleModeTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -6889,12 +6891,22 @@ function executeNodeCore(
       setUserPromptTemplate(undefined);
       return runProcessingNode(
         node.id,
-        () => videoUpscaleApi({
-          videoUrl,
-          targetResolution: nodaroVideoUpscaleTierOf(vuData.targetResolution),
-          userId: ctx.userId,
-          provider,
-        }),
+        () => {
+          // Only a mode the node stores EXPLICITLY is sent: an unset node
+          // reaches the server with no mode, so the server decides it from the
+          // measured clip (Transparent, else Sharp where Transparent cannot
+          // serve it) — the rule the node's estimate reads too. The tier is
+          // read with the mode the node is set to (unset = transparent, which
+          // keeps a 720p; the server coerces it if it falls back to Sharp).
+          const explicitMode = isNodaroVideoUpscaleMode(vuData.mode) ? vuData.mode : undefined
+          return videoUpscaleApi({
+            videoUrl,
+            ...(explicitMode ? { mode: explicitMode } : {}),
+            targetResolution: nodaroVideoUpscaleModeTierOf(nodaroVideoUpscaleModeOf(vuData.mode), vuData.targetResolution),
+            userId: ctx.userId,
+            provider,
+          })
+        },
         "generatedVideoUrl",
         "Upscale Video",
         ctx,

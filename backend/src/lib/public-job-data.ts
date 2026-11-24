@@ -35,11 +35,18 @@ export function redactPrivateJobOutput<T>(output: T): T {
 /**
  * The `input_data` keys a NON-ADMIN never reads on a job: the orchestrator's
  * bookkeeping (`userId`, `jobId`, `usageLogId`, `force_private` — it stores the
- * full worker payload) and the model fields — `provider` (the model id on
- * character/entity jobs) and `resolvedModel` (the model the job ran). Admins
+ * full worker payload), the model fields — `provider` (the model id on
+ * character/entity jobs) and `resolvedModel` (the model the job ran) — and a
+ * video upscale's run plan. Admins
  * read them for forensics, so they keep them.
  */
-const NON_ADMIN_HIDDEN_INPUT_KEYS = ["userId", "jobId", "usageLogId", "force_private", "provider", "resolvedModel"] as const
+const NON_ADMIN_HIDDEN_INPUT_KEYS = [
+  "userId", "jobId", "usageLogId", "force_private", "provider", "resolvedModel",
+  // A video upscale's run plan (lib/topaz-rhea-plan.ts `RheaRunFields`): the
+  // ratio sent, the seconds billed, the planned frame and the tier its cost is
+  // recorded at — bookkeeping the owner has no use for.
+  "upscaleRatio", "upscaleBilledSec", "upscaleFrameWidth", "upscaleFrameHeight", "upscaleRateTier",
+] as const
 
 /**
  * A job's `input_data` as a non-admin reads it: a copy without

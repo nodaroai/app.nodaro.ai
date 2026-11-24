@@ -14,7 +14,10 @@ import {
   COPILOT_KINDS,
   ASYNC_RECOVERABLE_KINDS,
   isReconcileRecoverable,
+  MAX_ATTEMPTS,
 } from "../types.js"
+import { TOPAZ_RHEA_MAX_WAIT_MS, TOPAZ_RHEA_STALE_MARGIN_MS } from "../../topaz-rhea-timeouts.js"
+import { TOPAZ_RHEA_MAX_POLLS } from "../../../providers/fal/topaz-rhea.js"
 import { ALTERNATE_ROUTE_BUDGET_MS } from "../../alternate-route.js"
 import { ALTERNATE_ROUTE_PROVIDER_KIND } from "../../alternate-route-request.js"
 
@@ -30,6 +33,7 @@ describe("ProviderKind registry", () => {
       "heygen",
       "beeble",
       "fal-request",
+      "fal-rhea",
       "nodaro-cloud",
       "copilot-turn",
       "pre-task",
@@ -76,8 +80,8 @@ describe("ProviderKind registry", () => {
 })
 
 describe("recoverable-kind sets (single source of truth — audit M5)", () => {
-  it("FAL_RECOVER_KINDS holds exactly the fal-request kind", () => {
-    expect(new Set(FAL_RECOVER_KINDS)).toEqual(new Set(["fal-request"]))
+  it("FAL_RECOVER_KINDS holds exactly the fal-request and fal-rhea kinds", () => {
+    expect(new Set(FAL_RECOVER_KINDS)).toEqual(new Set(["fal-request", "fal-rhea"]))
   })
 
   it("HOUSE_MODEL_RECOVER_KINDS holds exactly the house-model kind", () => {
@@ -161,5 +165,26 @@ describe("isReconcileRecoverable (worker leave-for-reconcile predicate)", () => 
   it("false for unknown or null kinds", () => {
     expect(isReconcileRecoverable(row("kie-mysterious", "t-1"))).toBe(false)
     expect(isReconcileRecoverable(row(null, "t-1"))).toBe(false)
+  })
+})
+
+describe("the fal-rhea kind (a Rhea upscale's fal request)", () => {
+  const CRON_CADENCE_MS = 5 * 60_000
+
+  it("is recovered by the fal reconcile, and left to it by the worker", () => {
+    expect(FAL_RECOVER_KINDS.has("fal-rhea")).toBe(true)
+    expect(isSyncKind("fal-rhea")).toBe(false)
+    expect(isReconcileRecoverable({ provider_kind: "fal-rhea", provider_task_id: "req-1" })).toBe(true)
+  })
+
+  it("is taken over only past the worker's longest wait plus the margin, and still within the reconcile envelope", () => {
+    // The worker's wait is bounded by wall clock (and its polls fit inside it at the 3 s cadence).
+    expect(TOPAZ_RHEA_MAX_POLLS * 3_000).toBeLessThanOrEqual(TOPAZ_RHEA_MAX_WAIT_MS)
+    expect(STALE_THRESHOLD_MS["fal-rhea"]).toBe(TOPAZ_RHEA_MAX_WAIT_MS + TOPAZ_RHEA_STALE_MARGIN_MS)
+    expect(STALE_THRESHOLD_MS["fal-rhea"]).toBeGreaterThan(TOPAZ_RHEA_MAX_WAIT_MS)
+    // A plain fal request's 5-minute threshold would race a live hour-long wait.
+    expect(STALE_THRESHOLD_MS["fal-rhea"]).toBeGreaterThan(STALE_THRESHOLD_MS["fal-request"])
+    // The exhaustion budget (MAX_ATTEMPTS ticks of the 5-min cron) keeps 15 min of headroom above the threshold.
+    expect(STALE_THRESHOLD_MS["fal-rhea"]).toBeLessThanOrEqual(MAX_ATTEMPTS * CRON_CADENCE_MS - 15 * 60_000)
   })
 })
