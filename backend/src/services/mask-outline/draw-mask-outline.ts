@@ -151,7 +151,7 @@ export async function drawMaskOutlineVideo(input: DrawMaskOutlineInput): Promise
     enc.stdin.on("error", () => { /* surfaced by close */ })
     const watchdog = setTimeout(() => enc.kill("SIGKILL"), timeoutMs)
 
-    const video = streamFrames(input.videoPath, { pixFmt: "rgb24", ...draw, timeoutMs, colour, what: "mask outline" })
+    const video = streamFrames(input.videoPath, { pixFmt: "rgb24", ...draw, timeoutMs, colour, exact: true, what: "mask outline" })
     const maskStream = streamFrames(input.maskPath, { pixFmt: "gray", ...maskSize, timeoutMs, what: "mask outline" })
     let maskAt = -1
     let maskGray: Buffer | undefined
