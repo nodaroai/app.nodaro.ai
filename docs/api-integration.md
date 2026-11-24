@@ -6077,10 +6077,10 @@ allows), and the route refuses what it cannot run.
 **Upscale to the next size.** A run and its estimate take
 `upscale: "off" | "next"`. `"next"` upscales the finished video straight to
 the next size and delivers it at that size: 480p becomes 720p, 720p becomes
-1080p. `"off"` delivers it at the engine's size (`resolution`). Left out, a
-run is `"next"` where the choice is offered and `"off"` where it is not. It is
-not offered on a 1080p run (there is no next size), a draft or a trend run,
-and only where the deployment has turned it on:
+1080p, 1080p becomes 4K. `"off"` delivers it at the engine's size
+(`resolution`). Left out, a run is `"next"` where the choice is offered and
+`"off"` where it is not. It is not offered on a draft or a trend run, and only
+where the deployment has turned it on:
 `GET /v1/video-remake/style-choice` answers `upscaleChoice: true` there (one
 boolean, not per engine; a server from before it leaves it out, read that as
 `false`). Elsewhere the field is accepted and ignored. Asking for `"next"`
@@ -6089,7 +6089,8 @@ where it is not offered is never an error: the run is made as `"off"`.
 The estimate, sent the same body, is the authority on what a run gets:
 `upscaleOffered` (whether the choice is offered for this run), `upscale` (the
 choice the run would be made with), `resolution` (the engine's size),
-`outputResolution` (the size delivered) and, on a `"next"` run, the
+`outputResolution` (the size delivered: `"480p"`, `"720p"`, `"1080p"` or,
+for a 1080p run upscaled, `"4k"`) and, on a `"next"` run, the
 upscale's price in `breakdown.upscale`, included in both totals. Quote with
 the same `upscale` you will run with, since leaving it out can mean `"next"`
 and its price. A completed job's output carries `outputResolution` (the size

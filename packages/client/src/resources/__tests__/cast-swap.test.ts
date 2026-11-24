@@ -38,6 +38,7 @@ import {
   type VideoRemakeJobOutput,
   type VideoRemakeUpscaleChoice,
   type VideoRemakeUpscaleOutcome,
+  type VideoRemakeOutputResolution,
 } from "../../index.js"
 
 function mockOk<T>(body: T, status = 200) {
@@ -1172,5 +1173,21 @@ describe("the upscale choice", () => {
     // @ts-expect-error the request's choice is not an outcome
     const wrong: VideoRemakeJobOutput["upscale"] = "next"
     expect(wrong).toBe("next")
+  })
+
+  it("types a 1080p run delivered at 4K: \"4k\" is a delivered size, never the engine's", async () => {
+    const delivered: VideoRemakeOutputResolution = "4k"
+    const output: VideoRemakeJobOutput = { videoUrl: "https://cdn.example.com/out.mp4", resolution: "1080p", outputResolution: delivered, upscale: "applied" }
+    expect(output.outputResolution).toBe("4k")
+    // @ts-expect-error the engine's size is never 4K
+    const engineSize: VideoRemakeJobOutput["resolution"] = "4k"
+    expect(engineSize).toBe("4k")
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ totalCredits: 20, breakdown: { base: 5, references: 0, motion: 7, upscale: 8 }, settlesLower: false, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true }),
+    )
+    const got = await make(fetchMock).videoRemake.estimate({ ...params, resolution: "1080p" })
+    const quoted: VideoRemakeOutputResolution | undefined = got.outputResolution
+    expect(quoted).toBe("4k")
+    expect(got.upscaleOffered).toBe(true)
   })
 })

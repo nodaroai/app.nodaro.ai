@@ -1162,6 +1162,16 @@ describe("video_remake: the upscale choice", () => {
     expect(res.content[0]!.text).toContain('upscale: "off" keeps 480p')
   })
 
+  it("says a 1080p run is delivered at 4K, and keeps \"4k\" as the engine spells it", async () => {
+    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, resolution: "1080p" })
+    expect(res.structuredContent).toMatchObject({ resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true })
+    expect(res.content[0]!.text).toContain("delivered upscaled to 4K, which adds 8 credits")
+    expect(res.content[0]!.text).toContain('upscale: "off" keeps 1080p')
+  })
+
   it("says the choice is offered on an \"off\" quote where it is, and nothing where it is not", async () => {
     setPluginSupports({ castSwap: { upscaleChoice: true } as never })
     const off = { ...QUOTE, resolution: "720p", outputResolution: "720p", upscale: "off", upscaleOffered: true }
