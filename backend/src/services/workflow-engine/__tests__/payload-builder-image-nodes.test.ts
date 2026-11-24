@@ -1114,3 +1114,59 @@ describe("FLUX 3 Klein in a workflow run", () => {
     })
   })
 })
+
+describe("Kling Image 4.0 in a workflow run", () => {
+  const SRC = "https://media.nodaro.ai/src.png"
+  const REF = (n: number) => `https://media.nodaro.ai/ref-${n}.png`
+  const node = (type: string, data: Record<string, unknown>): SimpleNode => ({ id: "n1", type, data })
+
+  it("Generate Image is priced by its size, 8K included, 2K when none is named", () => {
+    expect(buildPayload(node("generate-image", { prompt: "a", provider: "kling-image-4", aspectRatio: "16:9" }), "j", {}, "u").modelIdentifier)
+      .toBe("kling-image-4:2K")
+    const r = buildPayload(node("generate-image", { prompt: "a", provider: "kling-image-4", aspectRatio: "16:9", resolution: "8K" }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("kling-image-4:8K")
+    expect(r.payload.resolution).toBe("8K")
+  })
+
+  it("a stale 8K on a model without it is moved to a size it renders before it is priced", () => {
+    const r = buildPayload(node("generate-image", { prompt: "a", provider: "nano-banana-pro", aspectRatio: "16:9", resolution: "8K" }), "j", {}, "u")
+    expect(r.payload.resolution).not.toBe("8K")
+    expect(r.modelIdentifier).not.toContain("8K")
+  })
+
+  it("a set is one job: its count rides the payload, priced and recorded as the hold", () => {
+    const r = buildPayload(node("generate-image", { prompt: "a", provider: "kling-image-4", aspectRatio: "16:9", imageSetCount: 5 }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("kling-image-4:2K:x5")
+    expect(r.payload.imageSetCount).toBe(5)
+    expect(r.payload.setHoldCreditId).toBe("kling-image-4:2K:x5")
+  })
+
+  it("a set left on a node moved to a model without sets is dropped and priced as one image", () => {
+    const r = buildPayload(node("generate-image", { prompt: "a red apple", provider: "seedream-5-5", aspectRatio: "16:9", imageSetCount: 5 }), "j", {}, "u")
+    expect(r.modelIdentifier).toBe("seedream-5-5:2K")
+    expect(r.payload.imageSetCount).toBeUndefined()
+    expect(r.payload).not.toHaveProperty("setHoldCreditId")
+  })
+
+  it("Generate Image with references and a base runs the edit, priced per item sent", () => {
+    const r = buildPayload(
+      node("generate-image", { prompt: "a", provider: "kling-image-4", aspectRatio: "16:9", resolution: "4K", referenceImageUrls: [REF(1)], baseImageUrl: SRC }),
+      "j",
+      {},
+      "u",
+    )
+    expect(r.modelIdentifier).toBe("kling-image-4-i2i:4K:2ref")
+  })
+
+  it("Image to Image counts its source", () => {
+    const r = buildPayload(node("image-to-image", { prompt: "a", provider: "kling-image-4-i2i", resolution: "8K" }), "j", { imageUrl: SRC }, "u")
+    expect(r.modelIdentifier).toBe("kling-image-4-i2i:8K:1ref")
+  })
+
+  it("a workflow run over 10 images is refused before any job row", () => {
+    const refs = (n: number) => Array.from({ length: n }, (_, i) => REF(i))
+    const gen = (n: number) => buildPayload(node("generate-image", { prompt: "a", provider: "kling-image-4", aspectRatio: "16:9" }), "j", { referenceImageUrls: refs(n) }, "u")
+    expect(gen(10).modelIdentifier).toBe("kling-image-4-i2i:2K:10ref")
+    expect(() => gen(11)).toThrow(/Kling Image 4\.0 takes at most 10 input items.*would send 11: remove 1/)
+  })
+})

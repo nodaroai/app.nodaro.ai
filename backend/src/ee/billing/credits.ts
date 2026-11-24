@@ -187,8 +187,9 @@ import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { gptImage26StaticCosts } from "./gpt-image-2-6-pricing.js"
 import { minimaxH3ImageStaticCosts } from "./minimax-h3-image-pricing.js"
 import { seedream55StaticCosts } from "./seedream-5-5-pricing.js"
+import { klingImage4StaticCosts } from "./kling-image-4-pricing.js"
 import { flux3KleinStaticCosts } from "./flux-3-klein-pricing.js"
-import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModelForNode, imageFormatLeversOf, isFlux3Klein, isPricedPerInputImage, isKlingImage4, imageResolutionFor8K, klingImage4SetCount, maskedEditResolution, priceReadsInputImages, pricedEstimatedImages, resolutionAtAspectRatio, type ImageInputGraph, type SourceImageSize } from "@nodaro/shared/model-catalog"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
@@ -893,6 +894,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   ...minimaxH3ImageStaticCosts(),
   // Seedream 5.5: per size, and an edit per input image too (seedream-5-5-pricing.ts).
   ...seedream55StaticCosts(),
+  // Kling Image 4.0: by size, by input item and, for a set, by image, both
+  // ids (see kling-image-4-pricing.ts).
+  ...klingImage4StaticCosts(),
   "flux-flex": 35,                // (1K default)
   "flux-flex:2K": 60,
   "z-image": 2,
@@ -6597,6 +6601,14 @@ function estimateNodeCredits(
     // Audio-to-video (LTX 2.5 Fast): its first audio wire, read as Lip Sync's audio wire is read.
     ...drivingAudioWireOf(node, edges, (sourceId) => wires.measuredSec(sourceId, "lip-sync", LIP_SYNC_AUDIO_WIRE_READ_OPTIONS)),
     imageRefsWired: edges && node.id ? countImageInputEdges(edges, node.id) : undefined,
+    // Kling Image 4.0: the node and its graph, so its input items are counted as its run counts them.
+    imageInputGraph: edges && nodes && node.id && isKlingImage4((node.data as { provider?: unknown } | undefined)?.provider)
+      ? {
+          nodeId: node.id,
+          nodes: nodes.filter((n): n is EstimateNode & { id: string } => typeof n.id === "string"),
+          edges: edges.filter((e): e is EstimateEdge & { source: string } => typeof e.source === "string"),
+        }
+      : undefined,
     // A masked edit on a model that follows its photo is priced at the photo's size, when its source records it.
     sourceImage: edges && node.id ? wiredImageSize(node.id, nodes, edges) : undefined,
     masked: node.id ? nodeIsMasked(node.id, node.data, edges) : undefined,
@@ -8191,6 +8203,8 @@ export function getNodeModelIdentifier(
     drivingAudioSec?: number
     /** Reference images wired into an image node (a GRAPH fact; undefined = unknown → the node's own list). */
     imageRefsWired?: number
+    /** The node and its graph, for a model that counts input items (Kling Image 4.0; a GRAPH fact). */
+    imageInputGraph?: ImageInputGraph
     /** The size of the photo wired into an image node, as its source node records it (a GRAPH fact). */
     sourceImage?: SourceImageSize
     /** The node carries an inpainting mask, its own or wired (a GRAPH fact; undefined = its own `maskUrl` only). */
@@ -8725,12 +8739,16 @@ export function getNodeModelIdentifier(
   return buildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
-    followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, data.resolution) : undefined),
+    // "8K" on a model that does not list it: priced at the size its run is sent at, its largest (the catalog snap).
+    followedSize ?? (typeof data.resolution === "string" ? resolutionAtAspectRatio(provider, data.aspectRatio, imageResolutionFor8K(provider, data.resolution) ?? data.resolution) : undefined),
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
-    priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0) : undefined,
+    priceReadsInputImages(provider) ? pricedEstimatedImages(provider, data, graph.imageRefsWired ?? 0, graph.imageInputGraph) : undefined,
     // A GIF's band of frames and an SVG's level, on a model they price (GPT Image 2.6).
     imageFormatLeversOf(data),
+    // A set's images, on a model that makes sets (Kling Image 4.0); a masked
+    // edit returns one picture.
+    masked ? undefined : klingImage4SetCount(data.imageSetCount),
   )
 }
 

@@ -4695,6 +4695,13 @@ for the rules (credits for the batch as a whole or not at all, `seed + i`, the
 batch id). A `presetId` combines with both: N images of the preset's request,
 or the preset applied once per model.
 
+A SET is different: `imageSetCount` (2–10) on a model that makes sets (Kling
+Image 4.0) asks ONE job for a coherent set of that many images. Use
+`nodes.run("generate-image", { provider: "kling-image-4", prompt, imageSetCount: 4 })`
+(not this method): the job's output carries every image in `imageUrls`, and
+the job is charged for the images it returns. On any other model the set is
+dropped and reported in `adjustments`; with `count` above 1 it is refused.
+
 Resolves `{ batch, results }`:
 
 - `batch` — the submit's answer, `GenerateImageBatchResult`: `jobId` (the
@@ -4980,7 +4987,7 @@ candidate: it completes and lists like any other, but only `approvePortrait()`
 sets the portrait.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
@@ -5334,7 +5341,7 @@ result directly to the row's `source_image_url`; otherwise call
 `approveMainImage()` after picking a candidate.
 
 Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
-(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+(`"1K"` / `"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
 select the image model's output tier and are **credit-affecting** — they price
 exactly like Generate Image (composite ids such as `gpt-image:high` /
 `nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base

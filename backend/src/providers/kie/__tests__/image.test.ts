@@ -72,6 +72,9 @@ vi.mock("../models.js", async (importOriginal) => {
       // MiniMax H3 Image — the REAL configs: an allow-listed body, priced by size and references.
       "minimax-h3-image": actual.KIE_IMAGE_MODELS["minimax-h3-image"],
       "minimax-h3-image-i2i": actual.KIE_IMAGE_MODELS["minimax-h3-image-i2i"],
+      // Kling Image 4.0 — the REAL configs: one endpoint, a body built whole.
+      "kling-image-4": actual.KIE_IMAGE_MODELS["kling-image-4"],
+      "kling-image-4-i2i": actual.KIE_IMAGE_MODELS["kling-image-4-i2i"],
       "gpt-image-2-5-flare": { model: "gpt-image-2-5-flare-text-to-image", cost: 0.03, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "gpt-image-2-5-flare-i2i": { model: "gpt-image-2-5-flare-image-to-image", cost: 0.03, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
       "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
@@ -99,6 +102,11 @@ vi.mock("../models.js", async (importOriginal) => {
 // the network nor R2 is touched. See image-format-normalize.test.ts for the
 // conversion behaviour itself.
 vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
+// The running job's recorded request, read by the content guard's wire check.
+const jobRow = vi.hoisted(() => ({ inputData: {} as Record<string, unknown>, error: null as { message: string } | null }))
+vi.mock("../../../lib/supabase.js", () => ({
+  supabase: { from: () => ({ select: () => ({ eq: () => ({ single: async () => (jobRow.error ? { data: null, error: jobRow.error } : { data: { input_data: jobRow.inputData }, error: null }) }) }) }) },
+}))
 vi.mock("../../../lib/storage.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/storage.js")>()),
   uploadBufferToR2: mocks.mockUploadBufferToR2,
@@ -1021,5 +1029,151 @@ describe("MiniMax H3 Image on the wire", () => {
       await provider.generateImage("x", undefined, "minimax-h3-image", { output_format: format })
       expect(sent()[1]).not.toHaveProperty("output_format")
     }
+  })
+})
+
+describe("Kling Image 4.0 on the wire", () => {
+  const REFS = (n: number) => Array.from({ length: n }, (_, i) => `https://cdn.example.com/ref-${i + 1}.png`)
+  const sent = () => mocks.mockRunKieTask.mock.calls[0]!
+
+  it("a prompt sends only what the schema declares, the size lowercase, whatever the caller's params carry", async () => {
+    const result = await provider.generateImage("a poster that reads \"OPEN\"", undefined, "kling-image-4", {
+      aspect_ratio: "21:9",
+      resolution: "8K",
+      seed: 7,
+      negative_prompt: "blur",
+      output_format: "jpeg",
+      quality: "high",
+      background: "transparent",
+      mask_url: "https://cdn.example.com/mask.png",
+    })
+    const [model, input, , , opts] = sent()
+    expect(model).toBe("kling-4-0/image")
+    expect(input).toEqual({ prompt: "a poster that reads \"OPEN\"", aspect_ratio: "21:9", resolution: "8k" })
+    expect(opts).toMatchObject({ modelKey: "kling-image-4" })
+    expect(result.cost).toBeCloseTo(28.3 * KIE_CREDIT_USD, 10)
+  })
+
+  it("names no size: its default, 2K, is sent", async () => {
+    await provider.generateImage("a cat", undefined, "kling-image-4")
+    expect(sent()[1]).toEqual({ prompt: "a cat", resolution: "2k" })
+  })
+
+  it("images go as image_urls on the same endpoint, named @image_N, the run logged as the edit id", async () => {
+    const result = await provider.generateImage("Image 1 beside Image 2, by @someone", REFS(2), "kling-image-4", { resolution: "4K" })
+    const [model, input, , , opts] = sent()
+    expect(model).toBe("kling-4-0/image")
+    expect(input).toEqual({ prompt: "@image_1 beside @image_2, by someone", resolution: "4k", image_urls: REFS(2) })
+    expect(opts).toMatchObject({ modelKey: "kling-image-4-i2i" })
+    expect(result.cost).toBeCloseTo((17 + 0.5 * 2) * KIE_CREDIT_USD, 10)
+  })
+
+  it("a set asks for series mode and its count; every image it returns is a variant", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example.com/1.png", "https://kie.example.com/2.png", "https://kie.example.com/3.png"] },
+    })
+    const result = await provider.generateImage("a day in the life", undefined, "kling-image-4", { image_set_count: 3 })
+    expect(sent()[1]).toEqual({ prompt: "a day in the life", resolution: "2k", mode: "series", count: 3 })
+    expect(result.url).toBe("https://kie.example.com/1.png")
+    expect(result.extraUrls).toEqual(["https://kie.example.com/2.png", "https://kie.example.com/3.png"])
+    expect(result.cost).toBeCloseTo(11.3 * 3 * KIE_CREDIT_USD, 10)
+  })
+
+  it("records the task's own consumed credits when its record states them", async () => {
+    mocks.mockRunKieTask.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example.com/1.jpg"] },
+      rawRecordInfo: { code: 200, data: { creditsConsumed: 28.3 } },
+    })
+    const result = await provider.generateImage("x", undefined, "kling-image-4", { resolution: "8K" })
+    expect(result.cost).toBeCloseTo(28.3 * KIE_CREDIT_USD, 10)
+  })
+
+  it("a named subject goes as one element, its seats named, and is recorded as one item", async () => {
+    const result = await provider.generateImage("Image 1 and Image 2 hold the cup from Image 3", REFS(3), "kling-image-4", {
+      image_subjects: [{ name: "Kira", imageUrls: REFS(2), description: "short red hair" }],
+    })
+    const input = sent()[1] as Record<string, unknown>
+    expect(input.prompt).toBe("@Kira and @Kira hold the cup from @image_1")
+    expect(input.image_urls).toEqual([REFS(3)[2]])
+    expect(input.elements).toEqual([{ name: "Kira", image_urls: REFS(2), tag: "character", description: "short red hair" }])
+    expect(result.cost).toBeCloseTo((11.3 + 0.5 * 2) * KIE_CREDIT_USD, 10)
+  })
+
+  it("sends at most ten images", async () => {
+    await provider.generateImage("x", REFS(12), "kling-image-4-i2i")
+    expect((sent()[1] as { image_urls: string[] }).image_urls).toEqual(REFS(10))
+  })
+})
+
+describe("Kling Image 4.0: the content guard is asked on the text actually sent", () => {
+  it("a word split by an undeclared @ is checked as it is sent, and refused before the provider is called", async () => {
+    const { registerContentGuard, clearContentGuard } = await import("../../../lib/content-guard.js")
+    const { JobBlockedError } = await import("../../../lib/job-policy.js")
+    registerContentGuard({
+      id: "test-wire",
+      proveReady: () => true,
+      check: (s) => (s.texts.some((t) => /\bforbidden\b/.test(t)) ? { refused: true, reason: "test" } : { refused: false }),
+    })
+    try {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      const err = await provider.generateImage("a forb@idden word", undefined, "kling-image-4").catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(JobBlockedError)
+      expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+      // Text the rewrite leaves alone runs.
+      await provider.generateImage("a quiet word", undefined, "kling-image-4")
+      expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(1)
+    } finally {
+      clearContentGuard()
+    }
+  })
+})
+
+describe("Kling Image 4.0: the wire check keeps the funnels' minor signal", () => {
+  it("a split word is refused when the job's recorded request says the subject is a minor", async () => {
+    const { registerContentGuard, clearContentGuard } = await import("../../../lib/content-guard.js")
+    const { JobBlockedError } = await import("../../../lib/job-policy.js")
+    const { runWithJobCancellation } = await import("../../../lib/job-cancellation.js")
+    registerContentGuard({
+      id: "test-minor",
+      proveReady: () => true,
+      check: (s) => (s.minorSignal && s.texts.some((t) => /\bforbidden\b/.test(t)) ? { refused: true, reason: "test" } : { refused: false }),
+    })
+    try {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      jobRow.inputData = { prompt: "a forb@idden scene", subject: { person: { age: "age-child" } }, subjectMinor: true }
+      const err = await runWithJobCancellation("job-minor", "user-1", () => provider.generateImage("a forb@idden scene", undefined, "kling-image-4")).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(JobBlockedError)
+      expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
+      // A row that cannot be read is checked as if the subject is a minor: refused.
+      jobRow.error = { message: "connection reset" }
+      const unread = await runWithJobCancellation("job-unread", "user-1", () => provider.generateImage("a forb@idden scene", undefined, "kling-image-4")).catch((e: unknown) => e)
+      expect(unread).toBeInstanceOf(JobBlockedError)
+      jobRow.error = null
+      // The same text with no minor signal anywhere runs.
+      jobRow.inputData = { prompt: "a forb@idden scene" }
+      await runWithJobCancellation("job-adult", "user-1", () => provider.generateImage("a forb@idden scene", undefined, "kling-image-4"))
+      expect(mocks.mockRunKieTask).toHaveBeenCalledTimes(1)
+    } finally {
+      clearContentGuard()
+      jobRow.inputData = {}
+      jobRow.error = null
+    }
+  })
+})
+
+describe("Kling Image 4.0: a repeated reference is converted and sent once", () => {
+  it("[A, A, B] needing conversion goes as two images, the prompt's numbers kept", async () => {
+    const webp = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#123" } }).webp().toBuffer()
+    mocks.mockSafeFetch.mockResolvedValue({ ok: true, status: 200, headers: new Headers(), arrayBuffer: async () => webp })
+    let n = 0
+    mocks.mockUploadBufferToR2.mockImplementation(async () => `https://cdn.example.com/converted-${++n}.png`)
+    const A = "https://cdn.example.com/a.webp"
+    const B = "https://cdn.example.com/b.webp"
+    await provider.generateImage("Image 1, Image 2 and Image 3", [A, A, B], "kling-image-4")
+    const input = mocks.mockRunKieTask.mock.calls[0]![1] as { image_urls: string[]; prompt: string }
+    expect(input.image_urls).toHaveLength(2)
+    expect(new Set(input.image_urls).size).toBe(2)
+    expect(n).toBe(2)
+    expect(input.prompt).toBe("@image_1, @image_1 and @image_2")
   })
 })
