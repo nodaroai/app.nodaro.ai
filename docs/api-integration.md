@@ -1615,8 +1615,10 @@ the API's `GET /og/s/:token`; `SHARE_SITE_ORIGIN` is set in
 A workflow's creator can open a **read-only view of its canvas** to anyone
 holding a link: every node with the results it has made (pictures, videos,
 3D scenes), its prompts, its notes and the wires between them. The viewer
-needs no account, can pan, zoom and play the videos, and changes nothing. The
-same canvas can be embedded in any web page with an iframe. This link is
+needs no account and can pan, zoom and play the videos. They can also move and
+resize the nodes to read them: that arrangement lives in their own browser tab
+only, is gone on a reload, and never reaches the workflow. Nothing can be run
+or saved. The same canvas can be embedded in any web page with an iframe. This link is
 separate from the presentation link (`/present/<token>`), which lets a viewer
 run the workflow and never shows the canvas; turning one on or off never
 touches the other.
@@ -1630,7 +1632,8 @@ echo "$APP_ORIGIN/view/$TOKEN"
 ```
 
 The page is `<app origin>/view/<token>`; the embed, without the page's top
-bar, is `<app origin>/embed/view/<token>`:
+bar, is `<app origin>/embed/view/<token>`. On Nodaro Cloud the page also
+carries the site's header; the embed never does:
 
 ```html
 <iframe src="https://app.nodaro.ai/embed/view/<token>" width="100%" height="600"
@@ -1647,6 +1650,12 @@ bar, is `<app origin>/embed/view/<token>`:
 | `DELETE /v1/workflows/:id/view-link` | Turns the link off: the page, the embed, the download and the preview stop answering at once. Turning it on again makes a new link. |
 | `GET /v1/workflow-views/:token` | **No credential.** What the link shows: `{ name, nodes, edges, indexable, export }`. |
 | `GET /v1/workflow-views/:token/export` | **No credential.** The saved copy, as a file in the export format; `404` when none is offered. |
+
+Where a copy is saved, the page offers it two ways: as a file to download,
+and as **Copy to my account**, which imports that same saved copy into the
+signed-in viewer's own account and opens it in the editor (a signed-out viewer
+is asked to sign in first and comes back to the page). Both use the frozen
+copy, never the live canvas, and neither is offered without one.
 
 The owner's routes are for the workflow's **creator** only (anyone else gets
 `404`), like the presentation link: turning a public link on is a decision

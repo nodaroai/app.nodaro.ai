@@ -21,6 +21,14 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 // on screen at once, and nothing here is edited at that scale.
 const VIEW_ZOOM_MIN = 0.05
 
+/**
+ * A finger's drag pans the canvas, as it always has on a phone: moving a card
+ * is for a pointer that can aim at one (a mouse, a trackpad, a pen).
+ */
+function finePointer(): boolean {
+  return typeof window === "undefined" || typeof window.matchMedia !== "function" || !window.matchMedia("(pointer: coarse)").matches
+}
+
 const edgeTypes = {
   default: AnimatedFlowEdge as never,
   animatedFlow: AnimatedFlowEdge as never,
@@ -44,7 +52,9 @@ interface ReadOnlyCanvasProps {
 
 /**
  * A workflow canvas that can only be looked at: pan, zoom, play the media in
- * each node. Nothing can be dragged, connected, selected, run or saved. The
+ * each node. Nothing can be connected, selected, run or saved. On a view page
+ * (`view`) the visitor may also move and resize the cards (with a mouse or
+ * trackpad; a finger pans), for this visit only; under the sub-workflow viewer (`view-detached`) nothing moves. The
  * caller wraps it in a `ReactFlowProvider`.
  */
 export function ReadOnlyCanvas({ nodes, edges, mode, onNodesChange, showMiniMap = true, children }: ReadOnlyCanvasProps) {
@@ -66,7 +76,7 @@ export function ReadOnlyCanvas({ nodes, edges, mode, onNodesChange, showMiniMap 
         onNodesChange={onNodesChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesDraggable={false}
+        nodesDraggable={mode === "view" && finePointer()}
         nodesConnectable={false}
         nodesFocusable={false}
         elementsSelectable={false}

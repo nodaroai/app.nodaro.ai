@@ -26,7 +26,8 @@ import { siteHeaderMode, type SiteHeaderMode } from "@/lib/site-header-mode"
  *     rather than losing sign-out, credits, language and theme with no header
  *     to hold them.
  *
- * Only `DashboardLayout` mounts the header at all, so admin and every public
+ * Only `DashboardLayout` and the shared canvas page (`/view/:token`, Nodaro's
+ * own header only) mount the header at all, so admin and every other public
  * route (sign-in, shares, embeds, published apps) never get one either way.
  */
 
@@ -78,8 +79,8 @@ export function useSharedHeaderMode(): SiteHeaderMode | null {
 
 /*
  * Whether the header is MOUNTED on this page right now — narrower than the
- * gate: only `DashboardLayout` mounts it, so sign-in, shares, published apps
- * and admin have no header even where the gate is open. The header carries the
+ * gate: only `DashboardLayout` and the shared canvas page mount it, so sign-in,
+ * shares, published apps and admin have no header even where the gate is open. The header carries the
  * accessibility menu every product shares; where it is mounted, the app's own
  * menu steps aside (`AccessibilityMenuRoot`), and everywhere else it stays.
  * Set by the header's mount itself, once it rendered (a failed or still-loading

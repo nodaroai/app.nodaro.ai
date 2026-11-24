@@ -5,11 +5,12 @@ import { describe, expect, it } from "vitest"
 
 /**
  * Where the shared site header can appear — derived from the code, not a list
- * of routes. It mounts through ONE slot, the slot is rendered by ONE layout
- * (DashboardLayout: the signed-in app), and that layout is the element of ONE
- * route in the router. So the admin layout and every route outside it — sign-in
- * and sign-up, shares, embeds, published apps, tutorials, OAuth, MCP — never
- * render it, and inside it `sharedHeaderActive()` still keeps it off embedded,
+ * of routes. It mounts through ONE slot; the slot is rendered by ONE layout
+ * (DashboardLayout: the signed-in app), which is the element of ONE route in
+ * the router, and by the shared canvas page (`/view/:token`, Nodaro's own
+ * header only, never its embed). So the admin layout and every other route —
+ * sign-in and sign-up, shares, embeds, published apps, tutorials, OAuth, MCP —
+ * never render it, and inside it `sharedHeaderActive()` still keeps it off embedded,
  * white-label and prepaid pages (lib/__tests__/shared-header.test.ts).
  */
 
@@ -28,8 +29,15 @@ const FILES = sourceFiles(SRC).map((file) => ({ path: posix(relative(SRC, file))
 const where = (pattern: RegExp) => FILES.filter(({ src }) => pattern.test(src)).map(({ path }) => path).sort()
 
 describe("where the shared site header can render", () => {
-  it("the slot is rendered by exactly one component: DashboardLayout", () => {
-    expect(where(/<SiteHeaderSlot\b/)).toEqual(["layouts/dashboard-layout.tsx"])
+  it("the slot is rendered by DashboardLayout and the shared canvas page, and nowhere else", () => {
+    expect(where(/<SiteHeaderSlot\b/)).toEqual(["layouts/dashboard-layout.tsx", "routes/workflow-view-page.tsx"])
+  })
+
+  it("the shared canvas page is one route, and its embed never renders the slot", () => {
+    const router = FILES.find(({ path }) => path === "router.tsx")?.src ?? ""
+    expect(router.match(/element:\s*<SuspenseWrapper><WorkflowViewPage\s*\/><\/SuspenseWrapper>/g) ?? []).toHaveLength(1)
+    const embed = FILES.find(({ path }) => path === "routes/workflow-view-embed-page.tsx")?.src ?? ""
+    expect(embed).not.toMatch(/SiteHeaderSlot/)
   })
 
   it("DashboardLayout is the element of exactly one route", () => {

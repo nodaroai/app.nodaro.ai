@@ -26,8 +26,9 @@
  * can also fail after this point (its files, loaded live): its mount closes
  * the gate on its failure event (`ee/shell/hosted-header.tsx`).
  *
- * Rendered by `DashboardLayout` only, so admin and every public route never get
- * the header (`__tests__/site-header-routes.test.ts`).
+ * Rendered by `DashboardLayout` and by the shared canvas page
+ * (`routes/workflow-view-page.tsx`, never its embed), so admin and every other
+ * public route never get the header (`__tests__/site-header-routes.test.ts`).
  */
 import { Component, Suspense, lazy, type ComponentType, type ReactNode } from "react"
 import { linkSharedAccessibilityStylesheet } from "@/lib/accessibility-preferences"
@@ -43,6 +44,11 @@ export interface SiteHeaderSlotProps {
   readonly onHeaderOverlay: () => void
   /** The app's phone drawer is open: the hosted header closes its overlays, so the two never stack. */
   readonly drawerOpen: boolean
+  /**
+   * A public page (a shared canvas): signing out leaves the visitor on it,
+   * signed out, where a signed-in page lands on the sign-in page.
+   */
+  readonly publicPage?: boolean
 }
 
 const HostedHeader: ComponentType<SiteHeaderSlotProps> | null =

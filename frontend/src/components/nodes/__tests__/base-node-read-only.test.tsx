@@ -83,8 +83,23 @@ describe("BaseNode on a view-only canvas", () => {
     expect(screen.getAllByTestId("resize-control").length).toBeGreaterThan(0)
   })
 
-  it("shows no run strip, toolbar or resize corner on hover", () => {
+  it("on a view page, hover shows the resize corners (a visitor may arrange the cards) and nothing that runs or edits", () => {
     const { container } = renderNode("view")
+    hover(container)
+    expect(screen.queryByText("RUNME")).toBeNull()
+    expect(screen.queryByTestId("top-toolbar")).toBeNull()
+    expect(screen.getAllByTestId("resize-control")).toHaveLength(2)
+  })
+
+  it("on a view page, a card with a zoom handle gets the plain resize corners, never the handle that writes a setting", () => {
+    const { container } = renderNode("view", { category: "parameter" })
+    hover(container)
+    expect(screen.getAllByTestId("resize-control")).toHaveLength(2)
+    expect(screen.queryByTestId("zoom-handle")).toBeNull()
+  })
+
+  it("in the sub-workflow viewer, hover shows no run strip, toolbar or resize corner", () => {
+    const { container } = renderNode("view-detached")
     hover(container)
     expect(screen.queryByText("RUNME")).toBeNull()
     expect(screen.queryByTestId("top-toolbar")).toBeNull()

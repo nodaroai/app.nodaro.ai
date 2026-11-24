@@ -10,7 +10,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
 import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
-import { useCanvasMode } from "./read-only-canvas-context"
+import { useArrangeableCanvas, useCanvasMode } from "./read-only-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { useNodeTextDir } from "./node-text-dir"
 import { NodeRunStripShell } from "./node-run-strip-shell"
@@ -208,11 +208,13 @@ function BaseNodeComponent({
   // canvas (see node-text-dir.ts) — this lands on text leaves, never on a row.
   const textDir = useNodeTextDir()
   // A canvas that only shows the workflow (view link, embed, sub-workflow
-  // viewer): no hover chrome, run strip, resize corners, settings or prices.
+  // viewer): no hover chrome, run strip, settings or prices.
   // `view-detached`: the workflow store is someone else's (the editor's), so
   // this node never writes its box into it.
   const canvasMode = useCanvasMode()
   const readOnly = canvasMode !== "editor"
+  // A view page: the visitor may move and resize the cards (this visit only).
+  const arrangeable = useArrangeableCanvas()
   const detachedFromStore = canvasMode === "view-detached"
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
@@ -243,8 +245,9 @@ function BaseNodeComponent({
   // future overlay node in one place, with no per-node opt-in. Falls back to the
   // parent (or BaseNode's own element) when no RF wrapper is present (unit tests).
   useEffect(() => {
-    // Nothing on a view-only canvas appears on hover.
-    if (readOnly) return
+    // Nothing on a view-only canvas appears on hover, but the resize corners
+    // of a canvas whose cards a visitor may arrange.
+    if (readOnly && !arrangeable) return
     const host =
       outerRef.current?.closest(".react-flow__node") ??
       outerRef.current?.parentElement ??
@@ -263,7 +266,7 @@ function BaseNodeComponent({
       host.removeEventListener("mouseenter", onEnter)
       host.removeEventListener("mouseleave", onLeave)
     }
-  }, [readOnly])
+  }, [readOnly, arrangeable])
 
   // Inner zoom wrapper bookkeeping + per-node flags + stored height. Combine
   // into ONE selector with shallow compare so we do a single `nodes.find(...)`
@@ -742,7 +745,7 @@ function BaseNodeComponent({
       {/* Content above card (e.g. thumbnail gallery) — floats 4px higher than
           the card's top edge gap (-translate-y-6 = 24px vs the prior 20px) so
           the results strip clears the node with a touch more breathing room. */}
-      {bottomToolbarContent && isHovered && (
+      {bottomToolbarContent && isHovered && !readOnly && (
         <div className="relative">
           <div className="absolute left-0 right-0 bottom-0 -translate-y-6 z-50 flex justify-center">
             {bottomToolbarContent}
@@ -1055,8 +1058,10 @@ function BaseNodeComponent({
           one corner + a single resize dot on the other (Alt-swappable). All
           other categories get plain resize dots on both corners — no
           per-node zoom. */}
-      {!readOnly && !isMobile && (isHovered || !!selected) && (
-        (category === "parameter" || enableZoomHandle) ? (
+      {/* A view page's visitor gets the plain resize dots only: the zoom
+          magnifier writes a setting, and nothing there may. */}
+      {(!readOnly || arrangeable) && !isMobile && (isHovered || !!selected) && (
+        !readOnly && (category === "parameter" || enableZoomHandle) ? (
           <>
             {/* Hold Alt to swap: resize moves to bottom-left, zoom to bottom-right. */}
             <NodeResizeControl

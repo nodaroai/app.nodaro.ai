@@ -8,7 +8,7 @@ import { markSharedHeaderFailed, markSharedHeaderMounted } from "@/lib/shared-he
 /**
  * The app's mount of the hosted Nodaro header on Nodaro's own deployments
  * (reached only through `components/layout/site-header-slot.tsx`, inside
- * `DashboardLayout`). A white-label deployment keeps the npm header
+ * `DashboardLayout` and on the shared canvas page). A white-label deployment keeps the npm header
  * (`white-label-header.tsx`): the hosted element has no white-label mode.
  *
  * The page says only which page it is on: the element and its one attribute.
@@ -31,7 +31,7 @@ import { markSharedHeaderFailed, markSharedHeaderMounted } from "@/lib/shared-he
 /** The element, as JSX: the package declares it for itself in `JSX.IntrinsicElements`, and this app typechecks without the package. */
 const NodaroHeader = HEADER_TAG as unknown as ComponentType<{ readonly page: string; readonly children?: ReactNode }>
 
-type HostedHeaderProps = Pick<SiteHeaderSlotProps, "compact" | "onHeaderOverlay" | "drawerOpen"> & Partial<Pick<SiteHeaderSlotProps, "onOpenMenu">>
+type HostedHeaderProps = Pick<SiteHeaderSlotProps, "compact" | "onHeaderOverlay" | "drawerOpen" | "publicPage"> & Partial<Pick<SiteHeaderSlotProps, "onOpenMenu">>
 
 /** The loader's tag (and a preconnect to its origin), added once for the page's life. */
 function addHeaderLoader(): void {
@@ -48,7 +48,7 @@ function addHeaderLoader(): void {
   document.head.appendChild(loader)
 }
 
-export default function HostedHeader({ compact, onHeaderOverlay, drawerOpen }: HostedHeaderProps) {
+export default function HostedHeader({ compact, onHeaderOverlay, drawerOpen, publicPage }: HostedHeaderProps) {
   const navigate = useNavigate()
   const { rows, pick } = useUiLanguage()
 
@@ -89,15 +89,17 @@ export default function HostedHeader({ compact, onHeaderOverlay, drawerOpen }: H
 
   // A sign-out lands on this app's sign-in page, as it always has. The
   // header's default is a reload, after which the layout would send the next
-  // sign-in back to the previous account's page (`loginPathFor`).
+  // sign-in back to the previous account's page (`loginPathFor`). A public
+  // page keeps that default: the visitor stays on it, signed out.
   useEffect(() => {
+    if (publicPage) return
     const onSignedOut = (event: Event) => {
       event.preventDefault()
       navigate("/login")
     }
     window.addEventListener(HEADER_EVENTS.signedOut, onSignedOut)
     return () => window.removeEventListener(HEADER_EVENTS.signedOut, onSignedOut)
-  }, [navigate])
+  }, [navigate, publicPage])
 
   // Mounted (the app's accessibility menu steps aside) only once the header
   // has drawn: a layout effect, so it runs before the header can say so.
