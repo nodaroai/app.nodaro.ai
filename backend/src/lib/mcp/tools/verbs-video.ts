@@ -29,6 +29,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
+import { lipSyncResolutions, lipSyncResolutionSummary } from "@nodaro/shared/models"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
@@ -1505,13 +1506,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `. Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). ` +
             `An unknown model is refused.`,
           ),
+        // Derived from the Lip Sync node's table (`lipSyncResolutionChoices`): the union, and each model's own.
         resolution: z
-          .enum(["480p", "720p", "1080p"])
+          .enum(lipSyncResolutions() as [string, ...string[]])
           .optional()
-          .describe(
-            "Resolution lever. infinitalk: 480p|720p. seedance-2(-fast): 480p|720p|1080p. " +
-            "omnihuman-1-5: 720p|1080p (default 1080p). omnihuman-2-0 is always 720p. Other models ignore this.",
-          ),
+          .describe(`Resolution lever, per model: ${lipSyncResolutionSummary()}. 1440p is ltx-2.5-fast's alone (another model is refused it). Other models ignore this.`),
         seed: z
           .number()
           .int()

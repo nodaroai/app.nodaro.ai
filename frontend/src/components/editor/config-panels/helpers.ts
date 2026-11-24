@@ -35,6 +35,9 @@ import {
   buildLipSyncCreditId,
   isPerSecondLipSyncProvider,
   referenceAudioLipSyncCreditId,
+  isDrivingAudioLipSyncProvider,
+  drivingAudioLipSyncResolution,
+  drivingAudioQuoteId,
   lipSyncAudioRateOf,
   videoOverlayCreditId,
   geminiOmniExtendQuoteCreditId,
@@ -992,6 +995,11 @@ export function getModelIdentifier(
     // (`minimax-h3:8s`): the row the run holds (decided 2026-11-16).
     const referenceAudioId = referenceAudioLipSyncCreditId(provider, data.resolution)
     if (referenceAudioId) return referenceAudioId
+    // An audio-to-video model (LTX 2.5 Fast, decided 2026-11-23): the row of the voice the editor's Run
+    // plays, by the run's own rule; the longest clip it can hold while that length is not known.
+    if (isDrivingAudioLipSyncProvider(provider)) {
+      return drivingAudioQuoteId({ provider, resolution: drivingAudioLipSyncResolution(provider, data.resolution), audioSec: lipSyncQuotedAudioSec(node, nodes ?? [], edges ?? [], reruns) })
+    }
   }
 
   return buildCreditModelIdentifier(

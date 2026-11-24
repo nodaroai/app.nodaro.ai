@@ -6012,6 +6012,7 @@ export const ja: ChromeDict = {
   "audiocfg.phRandomLower": "ランダム",
   "audiocfg.phNegOneRandom": "-1 = ランダム",
   "audiocfg.phZeroRandom": "0 = ランダム",
+  "audiocfg.phSeedEmptyRandom": "空欄 = ランダム",
   "audiocfg.phCoverTitle": "カバー曲のタイトル",
   "audiocfg.phSongTitle": "曲のタイトル",
   "audiocfg.phExtendedTitle": "延長したトラックのタイトル",

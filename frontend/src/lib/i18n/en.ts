@@ -6074,6 +6074,7 @@ export const en = {
   "audiocfg.phRandomLower": "random",
   "audiocfg.phNegOneRandom": "-1 = random",
   "audiocfg.phZeroRandom": "0 = random",
+  "audiocfg.phSeedEmptyRandom": "Empty = random",
   "audiocfg.phCoverTitle": "Cover title",
   "audiocfg.phSongTitle": "Song title",
   "audiocfg.phExtendedTitle": "Extended track title",

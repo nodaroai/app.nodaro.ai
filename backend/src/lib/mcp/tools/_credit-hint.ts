@@ -24,6 +24,7 @@
  * edition backs with tables. Off-cloud every hint is the same pointer
  * `list_models` answers with for `pricing`, and the table is never read.
  */
+import { drivingAudioCreditId, isDrivingAudioLipSyncProvider } from "@nodaro/shared/credits"
 import { hasCredits } from "../../../lib/config.js"
 import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 import { statedPrices } from "../../../ee/billing/stated-prices.js"
@@ -97,6 +98,11 @@ export function lipSyncPriceSuffix(id: string): string {
     const least = stated(rateCreditsOf(rate.rateId, rate.minSeconds), `${rate.rateId}@${rate.minSeconds}`)
     const cr = amountAbbreviation()
     return ` (${per15} ${cr}/15s, per second of audio, at least ${least} ${cr})`
+  }
+  // An audio-to-video model (LTX 2.5 Fast): the voice's length rounded up to a whole second, by resolution.
+  if (isDrivingAudioLipSyncProvider(id)) {
+    const fourAt720 = drivingAudioCreditId(id, "720p", 4)
+    return ` (by the voice's length, a whole second at a time: ${stated(creditsOf(fourAt720), fourAt720)} ${amountAbbreviation()} for 4s at 720p)`
   }
   // A Seedance model: one 8-second clip, priced by the resolution it renders
   // (decided 2026-11-16) — its 720p price, the default.

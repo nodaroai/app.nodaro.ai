@@ -6,6 +6,8 @@ import {
   lipSyncAudioRateOf,
   takesDrivingAudio,
   drivingAudioQuoteId,
+  isDrivingAudioLipSyncProvider,
+  drivingAudioLipSyncResolution,
   lipSyncEstimateSeconds,
   TEXT_TO_AUDIO_SFX_CREDIT_IDS,
   textToAudioCreditId,
@@ -8458,6 +8460,11 @@ export function getNodeModelIdentifier(
     // (`minimax-h3:8s`): the row the run holds (decided 2026-11-16).
     const referenceAudioId = referenceAudioLipSyncCreditId(lipSyncModel, data.resolution)
     if (referenceAudioId) return referenceAudioId
+    // An audio-to-video model (LTX 2.5 Fast, decided 2026-11-23): the row of its voice's length by the
+    // run's own rule, else the longest clip it can hold at its resolution (one row: the whole price).
+    if (isDrivingAudioLipSyncProvider(lipSyncModel)) {
+      return drivingAudioQuoteId({ provider: lipSyncModel, resolution: drivingAudioLipSyncResolution(lipSyncModel, data.resolution), audioSec: graph.lipSyncAudioSec })
+    }
   }
 
   // Audio Isolation (decided 2026-11-18): its per-10-second row, which every

@@ -814,6 +814,7 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Versatile, 5-10s clips": "다용도, 5-10초 클립",
   "Versatile, good at diverse styles": "다용도, 다양한 스타일에 강함",
   "Video-to-video AI dubbing. Multi-speaker (basic mode). Cheapest modern dubbing, billed per second.": "동영상→동영상 AI 더빙. 다중 화자(기본 모드). 가장 저렴한 최신 더빙, 초 단위 과금.",
+  "Portrait and voice to a talking clip as long as the voice, 2–20s, 720p/1080p/1440p, billed per second": "초상화와 음성으로 음성 길이만큼 말하는 클립 생성, 2–20초, 720p/1080p/1440p, 초 단위 과금",
   "Video-to-video editing, up to 60s input": "동영상→동영상 편집, 입력 최대 60초",
   "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame": "Wan 2.7 I2V, 2–15초, 720p/1080p, 시작+종료 프레임",
   "Wan 2.7 T2V, 2–15s, 720p/1080p": "Wan 2.7 T2V, 2–15초, 720p/1080p",

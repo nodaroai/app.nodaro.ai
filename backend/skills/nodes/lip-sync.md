@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-10-24T23:37:39.604Z
-generated_from: db68a9ee4
+generated_at: 2026-11-23T20:38:18.245Z
+generated_from: a5d67af6da
 ---
 
 # Lip Sync
@@ -16,7 +16,7 @@ generated_from: db68a9ee4
 **Required data fields:**
 - `label: string`
 - `provider: LipSyncProvider`
-- `resolution: "480p" | "720p" | "1080p"`
+- `resolution: "480p" | "720p" | "1080p" | "1440p" | "4k"`
 - `prompt: string`
 - `fieldMappings: FieldMappings`
 

@@ -17,7 +17,7 @@ import { resolveVideoRequestNorm, videoRequestAsRun, videoRequestReferenceMedia 
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { pricedRefVideoInput, probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { probeAndCheckRefAudio } from "../lib/ref-audio-probe.js"
-import { adjustmentsForRun, drivingAudioFreeVideoRequest, measureDrivingAudio } from "../lib/driving-audio-measure.js"
+import { adjustmentsForRun, drivingAudioFreeVideoRequest, drivingAudioRefusalStatus, measureDrivingAudio } from "../lib/driving-audio-measure.js"
 import { isDrivingAudioRun } from "@nodaro/shared/credits"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
@@ -910,7 +910,7 @@ export async function drivingAudioPreHandler(req: FastifyRequest, reply: Fastify
   }
   const measured = await measureDrivingAudio({ provider, audioUrl: audio[0], resolution: body.resolution, fps: body.fps, userId: req.userId })
   if (!measured.ok) {
-    return reply.status(400).send({ error: { code: measured.code, message: measured.message } })
+    return reply.status(drivingAudioRefusalStatus(measured.code)).send({ error: { code: measured.code, message: measured.message } })
   }
   req.drivingAudio = measured
 }

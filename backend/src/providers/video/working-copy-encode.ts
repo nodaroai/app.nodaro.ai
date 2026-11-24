@@ -7,7 +7,8 @@
  * (`lib/working-copy-request.ts`). Used by Mask Composite and Video Face Mesh,
  * through this one module so the two cannot drift:
  *
- * - libx264, `-preset fast`, constant quality `-crf 6`;
+ * - libx264, `-preset fast`, constant quality `-crf 6`, bounded by a rate
+ *   cap (`-maxrate 25M -bufsize 50M`) so heavy grain cannot blow the file up;
  * - the source's own pixel format where 8-bit H.264 holds it (4:2:0 stays
  *   4:2:0, 4:2:2 stays 4:2:2, 4:4:4 stays 4:4:4), else 4:2:0 — the same rule
  *   as the matched re-encode (`keptPixFmt`, matched-encode.ts);
@@ -23,6 +24,16 @@ import { colourTagArgs, keptPixFmt, type KeptPixFmt, type MatchedProbe } from ".
 export const WORKING_COPY_CRF = "6"
 /** The working copy's x264 preset. */
 export const WORKING_COPY_PRESET = "fast"
+/**
+ * The working copy's rate cap (x264 VBV), in bits per second, and its buffer
+ * in bits. CRF 6 alone has no ceiling: on heavily grained 1080p it measured
+ * about 150 Mbit/s, so a 30 s copy ran to several hundred MB, which the next
+ * step downloads under a fixed timeout. Capped, a copy's video is at most
+ * `WORKING_COPY_MAX_RATE × seconds + WORKING_COPY_BUFFER` bits (30 s: 100 MB).
+ * Ordinary footage at CRF 6 sits under the cap, so it is encoded as before.
+ */
+export const WORKING_COPY_MAX_RATE = 25_000_000
+export const WORKING_COPY_BUFFER = 50_000_000
 
 /** What a working copy reads of its source: the picture's pixel format and colour tags (`probeMatched`). */
 export type WorkingCopySource = Pick<MatchedProbe, "pixFmt" | "colorSpace" | "colorPrimaries" | "colorTransfer" | "colorRange">
@@ -37,9 +48,13 @@ export function withAlphaPlane(pixFmt: KeptPixFmt): string {
   return `yuva${pixFmt.slice("yuv".length)}`
 }
 
-/** The encoder's arguments: codec, preset, quality and pixel format, no colour tags. */
+/** The encoder's arguments: codec, preset, quality, rate cap and pixel format, no colour tags. */
 export function workingCopyCodecArgs(pixFmt: KeptPixFmt): string[] {
-  return ["-c:v", "libx264", "-preset", WORKING_COPY_PRESET, "-crf", WORKING_COPY_CRF, "-pix_fmt", pixFmt]
+  return [
+    "-c:v", "libx264", "-preset", WORKING_COPY_PRESET, "-crf", WORKING_COPY_CRF,
+    "-maxrate", `${WORKING_COPY_MAX_RATE / 1_000_000}M`, "-bufsize", `${WORKING_COPY_BUFFER / 1_000_000}M`,
+    "-pix_fmt", pixFmt,
+  ]
 }
 
 /** The encoder's arguments with the source's colour tags: for a step that writes no tags of its own. */

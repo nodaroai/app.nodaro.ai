@@ -41,6 +41,7 @@
 //
 // An LLM call counts against the provider the LLM router serves it from now
 // (laneForCallNow in lib/llm/router.ts: keys and refused-account latches).
+import { isDrivingAudioLipSyncProvider } from "@nodaro/shared/credits"
 import { FAL_VIDEO_DEPTH_PROVIDERS, REPLICATE_VIDEO_DEPTH_PROVIDERS } from "@nodaro/shared/media"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS, SEEDANCE_DRAFT_FINALIZE_PROVIDER } from "@nodaro/shared/model-catalog"
 import {
@@ -163,7 +164,8 @@ function lipSyncProvider(d: Data): string | null {
   // A retired model ran on Replicate (a job queued before it was retired).
   if (REPLICATE_LIP_SYNC_PROVIDERS.has(model as never) || retiredLipSyncProviderName(model) !== undefined) return "replicate"
   if (FAL_LIP_SYNC_PROVIDERS.has(model as never)) return "fal"
-  if (SEEDANCE_LIP_SYNC_PROVIDERS.has(model as never)) return route("image-to-video", model)
+  // An audio-to-video model (LTX 2.5 Fast) runs its image-to-video lane too.
+  if (SEEDANCE_LIP_SYNC_PROVIDERS.has(model as never) || isDrivingAudioLipSyncProvider(model)) return route("image-to-video", model)
   return route("lip-sync", model)
 }
 

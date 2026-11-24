@@ -1826,6 +1826,11 @@ export const LIP_SYNC_PROVIDERS = [
   // reference_audio_urls paired with an image ref); rides the same
   // reference-audio lip-sync surface as the Seedance 2 family.
   "minimax-h3",
+  // LTX 2.5 Fast — its audio-to-video endpoint (catalog `drivingAudio`) makes
+  // a talking clip from a portrait and the voice line, as long as the voice
+  // (decided 2026-11-23). Priced and sent by the same rule as Generate Video's
+  // audio-to-video run (`driving-audio.ts`): never one of the lanes above.
+  "ltx-2.5-fast",
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 

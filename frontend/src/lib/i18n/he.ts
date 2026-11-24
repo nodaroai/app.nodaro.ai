@@ -6043,6 +6043,7 @@ export const he: ChromeDict = {
   "audiocfg.phRandomLower": "אקראי",
   "audiocfg.phNegOneRandom": "‎-1 = אקראי",
   "audiocfg.phZeroRandom": "0 = אקראי",
+  "audiocfg.phSeedEmptyRandom": "ריק = אקראי",
   "audiocfg.phCoverTitle": "כותרת הקאבר",
   "audiocfg.phSongTitle": "כותרת השיר",
   "audiocfg.phExtendedTitle": "כותרת הרצועה המורחבת",

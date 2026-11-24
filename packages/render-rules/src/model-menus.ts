@@ -300,6 +300,7 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
   { value: "lipsync-2-pro", label: "Lipsync 2 Pro", desc: "Studio-grade sync.so lip sync. Video input, expressive." },
   { value: "sync-lipsync-v3", label: "Sync Lipsync v3", desc: "fal.ai sync.so v3 dubbing. Video input, billed per second." },
   { value: "volcengine-lipsync", label: "Volcengine Lip Sync", desc: "Video-to-video AI dubbing. Multi-speaker (basic mode). Cheapest modern dubbing, billed per second." },
+  { value: "ltx-2.5-fast", label: "LTX 2.5 Fast", desc: "Portrait and voice to a talking clip as long as the voice, 2–20s, 720p/1080p/1440p, billed per second" },
 ]
 
 export const TTS_MODELS: readonly { value: string; label: string; desc: string }[] = [

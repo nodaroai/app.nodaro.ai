@@ -5815,6 +5815,12 @@ const dub = await client.nodes.runAndWait("lip-sync", {
 // No length to send: the server measures the audio and charges its length's tier.
 ```
 
+`ltx-2.5-fast` (decided 2026-11-23) makes a talking clip from an `imageUrl` and
+a voice of 2.05 to 20 seconds (10 at `resolution: "1440p"`), as long as the
+voice: the server measures it, refuses one it cannot take before anything is
+held, and charges its length rounded up to a whole second
+([Lip Sync](nodes/ai-video/lip-sync.md#ltx-25-fast-pricing)).
+
 Binding a creature into a shot uses the shared reference contract:
 `toConnectedReference({ kind: "creature", id, name, url, description })`
 (from `@nodaro/shared`) emits a `wired-creature` reference — it auto-attaches

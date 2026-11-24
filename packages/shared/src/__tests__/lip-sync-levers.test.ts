@@ -22,10 +22,15 @@ describe("Lip Sync levers a model does not take", () => {
 
   it("every other model keeps every lever exactly as it was (kling, infinitalk, 1.5, the rest)", () => {
     const data = { resolution: "1080p", fastMode: true, seed: 7 }
-    for (const provider of LIP_SYNC_PROVIDERS.filter((p) => p !== "omnihuman-2-0")) {
+    for (const provider of LIP_SYNC_PROVIDERS.filter((p) => p !== "omnihuman-2-0" && p !== "ltx-2.5-fast")) {
       expect(lipSyncLeversNotTaken(provider), provider).toEqual([])
       expect(withoutLipSyncLeversNotTaken(provider, data), provider).toBe(data)
     }
     expect(lipSyncLeversNotTaken(undefined)).toEqual([])
+  })
+
+  it("LTX 2.5 Fast takes its resolution and seed, not fast mode (decided 2026-11-23)", () => {
+    expect(lipSyncLeversNotTaken("ltx-2.5-fast")).toEqual(["fastMode"])
+    expect(withoutLipSyncLeversNotTaken("ltx-2.5-fast", { resolution: "1080p", fastMode: true, seed: 7 })).toEqual({ resolution: "1080p", fastMode: undefined, seed: 7 })
   })
 })
