@@ -23,6 +23,26 @@ interface CurrentPlanCardProps {
   storageLimitBytes: number | undefined
   onManageSubscription: () => void
   managePending: boolean
+  /**
+   * The person's outputs are private now, on a plan that allows it. A
+   * scheduled cancellation then also says what happens to them: on Free the
+   * setting returns to public for new results, and nothing made while private
+   * is republished. The caller leaves it false for an account private on a
+   * plan without it (from before that rule): its cancellation resets nothing.
+   */
+  outputsPrivate?: boolean
+}
+
+/**
+ * Whether a scheduled cancellation will return this person's outputs to
+ * public: they are private now, on a plan that allows it. An account private
+ * on a plan without it (from before that rule) is not reset by the
+ * cancellation, so it is told nothing.
+ */
+export function cancelResetsPrivateOutputs(
+  settings: { publicOutputs: boolean; privateOutputsAllowed?: boolean } | undefined,
+): boolean {
+  return settings?.publicOutputs === false && settings.privateOutputsAllowed === true
 }
 
 function formatBytes(bytes: number): string {
@@ -63,6 +83,7 @@ export function CurrentPlanCard({
   storageLimitBytes,
   onManageSubscription,
   managePending,
+  outputsPrivate = false,
 }: CurrentPlanCardProps) {
   const tr = useT()
   const effectiveTier = balance?.effectiveTier ?? "free"
@@ -133,6 +154,12 @@ export function CurrentPlanCard({
           <p className="text-sm text-amber-700 dark:text-amber-400">
             {tr("billing.cancelScheduledPrefix")}{tr("common.fragmentGap")}
             <strong>{formatDate(scheduledCancelDate)}</strong>{tr("billing.cancelScheduledSuffix")}
+            {outputsPrivate && (
+              <>
+                {tr("common.fragmentGap")}
+                {tr("billing.cancelOutputsBackToPublic")}
+              </>
+            )}
           </p>
         </div>
       )}

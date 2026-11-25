@@ -737,6 +737,7 @@
         "backend/src/lib/pricing/cinematic-avatar-cost.ts",
         "backend/src/lib/pricing/flux2-cost.ts",
         "backend/src/lib/pricing/llm-cost.ts",
+        "backend/src/lib/private-outputs-plan.ts",
         "backend/src/lib/private-plugins/daemons.ts",
         "backend/src/lib/private-plugins/edit-plan-per-minute.ts",
         "backend/src/lib/private-plugins/engine-registry.ts",

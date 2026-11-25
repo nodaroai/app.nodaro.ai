@@ -8,6 +8,10 @@ import { DEFAULT_NODE_DOUBLE_CLICK_ACTION, type NodeDoubleClickAction } from "@/
 interface UserSettings {
   publicOutputs: boolean
   tier: string
+  /** The plan may switch outputs to private (the server's rule; absent from an older server). */
+  privateOutputsAllowed: boolean | undefined
+  /** When a plan drop returned the outputs to public, while that still holds (else null). */
+  privateOutputsEndedByPlanAt: string | null
   promptTemplates: Record<string, string>
   /** User-defined Generate Text templates (profiles.text_templates). Ungated —
    *  available to all editions, exactly like promptTemplates. */
@@ -39,6 +43,8 @@ async function fetchUserSettings(userId: string): Promise<UserSettings> {
   return {
     publicOutputs: data.publicOutputs ?? true,
     tier: data.tier ?? "free",
+    privateOutputsAllowed: typeof data.privateOutputsAllowed === "boolean" ? data.privateOutputsAllowed : undefined,
+    privateOutputsEndedByPlanAt: typeof data.privateOutputsEndedByPlanAt === "string" ? data.privateOutputsEndedByPlanAt : null,
     promptTemplates: data.promptTemplates ?? {},
     textTemplates: data.textTemplates ?? [],
     preferredLocale: data.preferredLocale ?? null,

@@ -1,7 +1,19 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
+
+const edition = vi.hoisted(() => ({ credits: true, payerTier: null as string | null }))
+vi.mock("../../../lib/config.js", () => ({ hasCredits: () => edition.credits }))
+vi.mock("../../../lib/deployment-payer.js", () => ({
+  payerCoverage: () => (edition.payerTier ? { payerId: "payer", tier: edition.payerTier, storedTier: edition.payerTier } : null),
+}))
+
 import { tierColumns, resolveTierFrom } from "../tier-columns.js"
+
+beforeEach(() => {
+  edition.credits = true
+  edition.payerTier = null
+})
 
 // Tier lives in two columns on `profiles` (`tier` + `subscription_tier`) and
 // nothing in the schema keeps them in step. Every Stripe path wrote only
@@ -57,7 +69,48 @@ function profilesUpdateBodies(source: string): string[] {
 
 describe("tierColumns / resolveTierFrom", () => {
   it("writes both columns from one value", () => {
-    expect(tierColumns("basic")).toEqual({ tier: "basic", subscription_tier: "basic" })
+    expect(tierColumns("pro", "basic")).toEqual({ tier: "pro", subscription_tier: "pro" })
+  })
+
+  // A DROP from a plan with private outputs to one without returns the setting
+  // to public in the same write (lib/private-outputs-plan.ts); any other move
+  // leaves the person's choice alone.
+  it.each([
+    ["standard", "basic"],
+    ["pro", "free"],
+    ["business", "basic"],
+  ])("a drop from %s to %s also returns outputs to public", (from, to) => {
+    expect(tierColumns(to, from)).toEqual({ tier: to, subscription_tier: to, public_outputs: true })
+  })
+
+  it.each([
+    ["an upgrade", "basic", "pro"],
+    ["a change between plans that both include it", "pro", "standard"],
+    ["the same paid plan again", "pro", "pro"],
+    // Already on a plan without private outputs (downgraded before this rule):
+    // a renewal, a repeated cancellation or a free → basic grant never resets it in passing.
+    ["Basic rewritten as Basic", "basic", "basic"],
+    ["Free rewritten as Free", "free", "free"],
+    ["Basic to Free", "basic", "free"],
+    ["Free to Basic", "free", "basic"],
+  ])("%s leaves the outputs setting alone", (_label, from, to) => {
+    expect(tierColumns(to, from)).toEqual({ tier: to, subscription_tier: to })
+  })
+
+  it("an unknown plan before writes nothing about outputs", () => {
+    expect(tierColumns("free", null)).toEqual({ tier: "free", subscription_tier: "free" })
+  })
+
+  it("leaves the setting alone in an edition without credits (any plan may be private there)", () => {
+    edition.credits = false
+    expect(tierColumns("free", "pro")).toEqual({ tier: "free", subscription_tier: "free" })
+  })
+
+  it("under a deployment payer, asks the payer's plan, not the person's own", () => {
+    edition.payerTier = "pro"
+    expect(tierColumns("free", "pro")).toEqual({ tier: "free", subscription_tier: "free" })
+    edition.payerTier = "basic"
+    expect(tierColumns("free", "pro")).toEqual({ tier: "free", subscription_tier: "free" })
   })
 
   it("resolves tier first — it is the column the Stripe paths write", () => {

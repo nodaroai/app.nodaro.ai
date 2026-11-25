@@ -129,3 +129,30 @@ describe("privateToastMessage", () => {
     expect(privateToastMessage(t, 3)).toBe("Outputs are now private. 3 items were removed from the public gallery.")
   })
 })
+
+describe("GalleryVisibilityCard — after a plan drop returned the outputs to public", () => {
+  const SINCE = "2026-11-25T08:00:00.000Z"
+
+  it("says so with the day, and links to the plans", async () => {
+    const { MemoryRouter } = await import("react-router-dom")
+    const { formatDate } = await import("@/lib/i18n/format")
+    render(
+      <MemoryRouter>
+        <GalleryVisibilityCard userId={USER} publicOutputs canToggle={false} endedByPlanAt={SINCE} />
+      </MemoryRouter>,
+    )
+    const day = formatDate(SINCE, { year: "numeric", month: "long", day: "numeric" })
+    expect(
+      screen.getByText(translate("en", "settings.privateEndedByPlan", { date: day })),
+    ).toBeTruthy()
+    expect(en["settings.privateEndedByPlan"]).toBe(
+      "Your plan no longer includes private outputs. New results are public since {date}; what you made while private stays private",
+    )
+    expect(screen.getByRole("link", { name: en["credits.upgradePlanCta"] }).getAttribute("href")).toBe("/pricing")
+  })
+
+  it("shows nothing of it otherwise", () => {
+    render(<GalleryVisibilityCard userId={USER} publicOutputs canToggle={false} endedByPlanAt={null} />)
+    expect(screen.queryByTestId("private-ended-by-plan")).toBeNull()
+  })
+})
