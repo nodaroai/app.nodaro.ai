@@ -15,7 +15,14 @@
  * a fetch, destroy a stream). Every reason reads like the big-media path's
  * ("longer than … for its size", "too slow — …"); the caller prefixes it.
  */
-import { downloadBodyDeadlineMs } from "../providers/video/ffmpeg-timeouts.js"
+import {
+  DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  DEFAULT_DOWNLOAD_MAX_MS,
+  DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  DEFAULT_DOWNLOAD_RATE_WINDOW_MS,
+  DOWNLOAD_TIMEOUT_MS,
+  downloadBodyDeadlineMs,
+} from "../providers/video/ffmpeg-timeouts.js"
 
 export interface TransferRateLimits {
   /** The grace: within this long of the start the rate never applies, and the
@@ -30,6 +37,21 @@ export interface TransferRateLimits {
   /** Nothing takes longer than this. */
   readonly maxMs: number
 }
+
+/** The default download path's body limits (`DEFAULT_DOWNLOAD_*`, decided
+ *  2026-11-24): looser than big media's, since their callers fetch provider
+ *  results that can be large on slow hosts — see the constants' header in
+ *  `ffmpeg-timeouts.ts`. `downloadFile` runs its default path under them
+ *  (re-exported from `ffmpeg-utils.ts`), and a large public fetch opts into
+ *  them (`boundedPublicChunks`'s `rate`). Here, not in `ffmpeg-utils.ts`, so
+ *  that a caller of the public fetch does not load the ffmpeg runtime. */
+export const DEFAULT_DOWNLOAD_LIMITS: TransferRateLimits = Object.freeze({
+  responseMs: DOWNLOAD_TIMEOUT_MS,
+  windowMs: DEFAULT_DOWNLOAD_RATE_WINDOW_MS,
+  minBytesPerWindow: DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW,
+  floorBytesPerSec: DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC,
+  maxMs: DEFAULT_DOWNLOAD_MAX_MS,
+})
 
 export interface TransferWatch {
   /** Count bytes as they arrive (feeds the current rate window). */

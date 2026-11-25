@@ -29,8 +29,9 @@ beforeEach(async () => {
 describe("bounded public source-frame extraction", () => {
   it("downloads publicly to a private workdir, extracts one local frame and removes all temporary bytes", async () => {
     expect(await readPublicVideoFrame({ videoUrl: "https://media.test/source.mp4", timeSec: 1.25 })).toEqual(frame)
-    // The 120 s limit rides on its own signal (it ends the body too); the fetch timer is a backstop past it.
-    expect(state.fetch).toHaveBeenCalledWith("https://media.test/source.mp4", { timeoutMs: 125_000, signal: expect.any(AbortSignal) })
+    // Size-scaled (up to 500 MB): the limits ride on their own signal (they end the body too);
+    // the fetch timer is a backstop past the request path's 10-min ceiling, so it never ends a steady body.
+    expect(state.fetch).toHaveBeenCalledWith("https://media.test/source.mp4", { timeoutMs: 10 * 60_000 + 5_000, signal: expect.any(AbortSignal) })
     const [args, timeout] = state.run.mock.calls[0]!
     expect(args).toContain("1.25")
     expect(args.slice(args.indexOf("-frames:v"), args.indexOf("-frames:v") + 2)).toEqual(["-frames:v", "1"])

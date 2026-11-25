@@ -44,6 +44,7 @@ let dir: string
 const closed = new Set<string>()
 const routes: Record<string, (req: IncomingMessage, res: ServerResponse) => void> = {
   "/bucket/healthy.bin": (_req, res) => { res.writeHead(200, { "Content-Length": "5" }); res.end("hello") },
+  "/bucket/typed.webp": (_req, res) => { res.writeHead(200, { "Content-Length": "4", "Content-Type": "image/webp" }); res.end("webp") },
   "/bucket/stalls.bin": (_req, res) => { res.writeHead(200, { "Content-Length": "1000" }); res.write(Buffer.alloc(10)) },
   // A full-object checksum makes the SDK wrap the body (ChecksumStream):
   // destroying only the wrapper would leave this connection open.
@@ -73,6 +74,13 @@ describe("the storage client is bounded (Track 0.12)", () => {
     await storage.downloadR2ObjectToFile("healthy.bin", join(dir, "healthy.bin"))
     expect(await readFile(join(dir, "healthy.bin"), "utf8")).toBe("hello")
     expect((await storage.readR2Object("healthy.bin"))?.body.toString()).toBe("hello")
+  })
+
+  it("tells onSource the stored object's type and size before writing its body (downloadFile's hook)", async () => {
+    const onSource = vi.fn()
+    await storage.downloadR2ObjectToFile("typed.webp", join(dir, "typed.webp"), { onSource })
+    expect(onSource).toHaveBeenCalledWith({ contentType: "image/webp", contentLength: 4 })
+    expect(await readFile(join(dir, "typed.webp"), "utf8")).toBe("webp")
   })
 
   it("a body that stops mid-stream fails at the body rule, naming the limit and the key", async () => {
