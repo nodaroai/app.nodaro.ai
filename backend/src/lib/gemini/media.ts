@@ -9,8 +9,14 @@
  * else. An R2 URL passed straight to `generateContent` is not a supported
  * input and is silently useless.
  *
- * So this module is the bridge: URL → bytes (SSRF-safe) → either `inlineData`
- * for small assets or a Files API upload for large ones.
+ * So this module is the bridge: URL → bytes → either `inlineData` for small
+ * assets or a Files API upload for large ones. The bytes come through
+ * `downloadFile` (`providers/video/ffmpeg-utils.ts`): one of OUR stored files
+ * is read straight from storage, never back through the public host (a
+ * freshly written object can arrive from the edge at a few kB/s); any other
+ * link over the SSRF-safe fetch, under the shared default limits (the
+ * response within 120 s, then a body that keeps moving gets its announced
+ * size at a floor rate, up to a ceiling) instead of one flat 120 s.
  *
  * One block needs no bridge because it never had a URL: `video_base64` carries
  * the exact clip inline, for callers that must analyse bytes they already hold
@@ -25,17 +31,15 @@
  * one request without anyone having to reason about the aggregate.
  */
 
-import { createWriteStream } from "node:fs"
-import { mkdir, rm, stat, writeFile } from "node:fs/promises"
+// @reads-none reads back only the media it downloads into its own temp folder
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
-import { Readable } from "node:stream"
-import { pipeline } from "node:stream/promises"
 import type { GoogleGenAI, Part } from "@google/genai"
-import { safeFetch } from "../safe-fetch.js"
-import { downloadTimeoutError, transferDeadline, type TransferDeadline } from "../transfer-watchdog.js"
+import type { DownloadSource } from "../../providers/video/ffmpeg-utils.js"
 import type { LlmContentBlock } from "../llm-client.js"
+import { LLM_ROUTE_REQUEST_TIMEOUT_MS } from "../llm-route-timeout.js"
 import { FILE_LANE_ERROR } from "../llm/message-builders.js"
 import { LLM_VIDEO_FPS_MAX } from "../llm/types.js"
 
@@ -52,13 +56,18 @@ const INLINE_MAX_BYTES = 6 * 1024 * 1024
  */
 export const INLINE_REQUEST_MAX_BYTES = 12 * 1024 * 1024
 
-/** Refuse absurd inputs rather than streaming them to disk indefinitely. */
+/** Refuse absurd inputs rather than streaming them to disk indefinitely: the
+ *  download stops at this many bytes (at the headers, when it announces more). */
 const MAX_MEDIA_BYTES = 512 * 1024 * 1024
 
-/** Download budget: one hard total over the response AND the body (the body
- *  is read under the same signal, so the limit really ends it). Long videos
- *  on a cold R2 edge are genuinely slow. */
-const FETCH_TIMEOUT_MS = 120_000
+/**
+ * The most ONE media fetch may take (the default path's size-scaled rule,
+ * under this ceiling): 8 min, two under the synchronous LLM routes' 10-min
+ * socket idle timeout (`LLM_ROUTE_REQUEST_TIMEOUT_MS`), so a fetch always ends
+ * on its own limit, with its "Download timeout" words, before the route can
+ * cut the request with no message.
+ */
+export const MEDIA_FETCH_CEILING_MS = LLM_ROUTE_REQUEST_TIMEOUT_MS - 2 * 60_000
 
 /** Google's documented ceiling for `VideoMetadata.fps`. */
 const MAX_SAMPLING_FPS = LLM_VIDEO_FPS_MAX
@@ -192,49 +201,32 @@ async function waitUntilActive(ai: GoogleGenAI, name: string, mimeType: string):
   }
 }
 
-/**
- * Stream the response body to a temp file and upload by PATH rather than
- * buffering. A 600 s video-analysis input can be hundreds of MB; holding that
- * in a worker's heap alongside ffmpeg is how you OOM a container.
- */
-async function uploadViaTempFile(
-  ai: GoogleGenAI,
-  response: Response,
-  url: string,
-  mimeType: string,
-  deadline: TransferDeadline,
-): Promise<Part> {
-  const workDir = join(tmpdir(), `gemini-upload-${randomUUID()}`)
-  await mkdir(workDir, { recursive: true })
-  const localPath = join(workDir, "media")
-  try {
-    if (!response.body) throw new Error(`Gemini media fetch returned no body: ${url}`)
-    // The download's signal reaches the stream writing the body, so the
-    // limit ends a body that stalls or trickles, not only the request.
-    await pipeline(
-      Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
-      createWriteStream(localPath),
-      { signal: deadline.signal },
-    )
-    // The bytes are held: the upload and its processing wait are not the download's.
-    deadline.clear()
-
-    const { size } = await stat(localPath)
-    if (size > MAX_MEDIA_BYTES) {
-      throw new Error(`Gemini media too large: ${size} bytes exceeds ${MAX_MEDIA_BYTES} (${url})`)
-    }
-
-    const uploaded = await ai.files.upload({ file: localPath, config: { mimeType } })
-    if (!uploaded.name || !uploaded.uri) {
-      throw new Error(`Gemini Files API: upload returned no name/uri for ${url}`)
-    }
-    await waitUntilActive(ai, uploaded.name, mimeType)
-
-    cacheSet(url, { fileUri: uploaded.uri, mimeType, cachedAt: Date.now() })
-    return { fileData: { fileUri: uploaded.uri, mimeType } }
-  } finally {
-    await rm(workDir, { recursive: true, force: true }).catch(() => {})
+/** Upload a file we hold by PATH, wait until it is usable, and cache its handle under `url`. */
+async function uploadFile(ai: GoogleGenAI, localPath: string, url: string, mimeType: string): Promise<Part> {
+  const uploaded = await ai.files.upload({ file: localPath, config: { mimeType } })
+  if (!uploaded.name || !uploaded.uri) {
+    throw new Error(`Gemini Files API: upload returned no name/uri for ${url}`)
   }
+  await waitUntilActive(ai, uploaded.name, mimeType)
+  cacheSet(url, { fileUri: uploaded.uri, mimeType, cachedAt: Date.now() })
+  return { fileData: { fileUri: uploaded.uri, mimeType } }
+}
+
+/**
+ * A downloader's failure in this module's words: a refused response as
+ * "fetch failed (<status>)", a body over the cap as "too large", a timeout in
+ * its own `Download timeout:` words naming its limit (without the link — this
+ * lane's timeouts never carried one), and anything else as is.
+ */
+function mediaFetchError(err: unknown, block: { type: string; url: string }, isByteCap: (err: unknown) => boolean): unknown {
+  if (isByteCap(err)) return new Error(`Gemini media too large: over ${MAX_MEDIA_BYTES} bytes (${block.url})`)
+  const status = err instanceof Error ? /^Failed to download: .* \((\d{3})\)$/.exec(err.message)?.[1] : undefined
+  if (status) return new Error(`Gemini media fetch failed (${status}) for ${block.type}: ${block.url}`)
+  const linkSuffix = `: ${block.url}`
+  if (err instanceof Error && err.message.startsWith("Download timeout:") && err.message.endsWith(linkSuffix)) {
+    return Object.assign(new Error(err.message.slice(0, -linkSuffix.length)), { name: err.name })
+  }
+  return err
 }
 
 /**
@@ -416,48 +408,59 @@ async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock, opts: G
   const cached = cacheGet(block.url)
   if (cached) return { fileData: { fileUri: cached.fileUri, mimeType: cached.mimeType } }
 
-  // One limit over the response AND the body, held by our own timer and given
-  // to the body read as well as the fetch (`transferDeadline`); the fetch's own
-  // timeout is only a backstop past it.
-  const deadline = transferDeadline({ ms: FETCH_TIMEOUT_MS, reason: () => downloadTimeoutError(FETCH_TIMEOUT_MS) })
+  return fetchToPart(ai, block, declared, opts)
+}
+
+/**
+ * Download a URL block's bytes to a temp file (`downloadFile`: our own stored
+ * file from storage, any other link over HTTP; capped at
+ * {@link MAX_MEDIA_BYTES}), then send them inline or through the Files API.
+ * The choice is made as the headers would make it: inline when the source
+ * announced a length within {@link INLINE_MAX_BYTES} and what the request may
+ * still carry inline; an unknown or larger one is uploaded by path, never held
+ * in the heap — a 600 s video-analysis input can be hundreds of MB. The
+ * download's limits stop with it: the upload and its processing wait are not
+ * the download's. The temp folder is removed on every way out, and a failed
+ * fetch throws — never a dropped reference.
+ */
+async function fetchToPart(
+  ai: GoogleGenAI,
+  block: { type: "image" | "video" | "audio"; url: string },
+  declared: string | undefined,
+  opts: GeminiPartOptions,
+): Promise<Part> {
+  const workDir = join(tmpdir(), `gemini-upload-${randomUUID()}`)
+  await mkdir(workDir, { recursive: true })
+  const localPath = join(workDir, "media")
   try {
-    const response = await safeFetch(block.url, { timeoutMs: FETCH_TIMEOUT_MS + 5_000, signal: deadline.signal })
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => undefined)
-      throw new Error(`Gemini media fetch failed (${response.status}) for ${block.type}: ${block.url}`)
+    // Loaded on use, as `clip-measure.ts` does: the LLM lane does not load the ffmpeg runtime until it fetches media.
+    const { downloadFile, isDownloadByteCapError } = await import("../../providers/video/ffmpeg-utils.js")
+    let source: DownloadSource = {}
+    try {
+      await downloadFile(block.url, localPath, { maxBytes: MAX_MEDIA_BYTES, ceilingMs: MEDIA_FETCH_CEILING_MS, onSource: (s) => { source = s } })
+    } catch (err) {
+      throw mediaFetchError(err, block, isDownloadByteCapError)
     }
 
-    const mimeType = resolveMimeType(block.type, declared, response.headers.get("content-type"), block.url)
-    const declaredLength = Number(response.headers.get("content-length") ?? Number.NaN)
+    const mimeType = resolveMimeType(block.type, declared, source.contentType ?? null, block.url)
+    const declaredLength = source.contentLength ?? Number.NaN
 
     // Small and self-declared: inline it and skip the upload round-trip entirely.
     if (Number.isFinite(declaredLength) && declaredLength > 0 && declaredLength <= INLINE_MAX_BYTES && (!opts.inlineBudget || declaredLength <= opts.inlineBudget.left)) {
-      const bytes = await readBodyWithin(response, deadline.signal)
+      const bytes = await readFile(localPath)
       spendInline(opts, bytes.length)
       return { inlineData: { mimeType, data: bytes.toString("base64") } }
     }
 
-    // Unknown or large: stream to disk, upload by path.
-    return await uploadViaTempFile(ai, response, block.url, mimeType, deadline)
-  } catch (err) {
-    // The limit's own words, not the stream layer's bare "aborted".
-    if (deadline.timedOut()) throw deadline.signal.reason
-    throw err
+    // Unknown or large: upload by path.
+    const { size } = await stat(localPath)
+    if (size > MAX_MEDIA_BYTES) {
+      throw new Error(`Gemini media too large: ${size} bytes exceeds ${MAX_MEDIA_BYTES} (${block.url})`)
+    }
+    return await uploadFile(ai, localPath, block.url, mimeType)
   } finally {
-    deadline.clear()
+    await rm(workDir, { recursive: true, force: true }).catch(() => {})
   }
-}
-
-/** A whole (small) body, read under `signal` so a limit ends it mid-body. */
-async function readBodyWithin(response: Response, signal: AbortSignal): Promise<Buffer> {
-  if (!response.body) return Buffer.alloc(0)
-  const chunks: Buffer[] = []
-  await pipeline(
-    Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
-    async (source: AsyncIterable<Buffer>) => { for await (const chunk of source) chunks.push(chunk) },
-    { signal },
-  )
-  return Buffer.concat(chunks)
 }
 
 /** Resolve a whole message's content. Sequential by design: a fan-out here would

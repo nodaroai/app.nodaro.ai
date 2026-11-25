@@ -745,8 +745,16 @@ export async function downloadR2ObjectToFile(
    * the storage limits alone, as before. `limits` replaces the storage body
    * limits (`STORAGE_DOWNLOAD_LIMITS`) for a caller that has its own — the
    * download that read the file over HTTP would have run under them.
+   * `onSource` is told the object's stored type and size before its body is
+   * written (`downloadFile`'s hook of the same name).
    */
-  bounds: { readonly timeoutMs?: number; readonly signal?: AbortSignal; readonly maxBytes?: number; readonly limits?: TransferRateLimits } = {},
+  bounds: {
+    readonly timeoutMs?: number
+    readonly signal?: AbortSignal
+    readonly maxBytes?: number
+    readonly limits?: TransferRateLimits
+    readonly onSource?: (source: { readonly contentType?: string; readonly contentLength?: number }) => void
+  } = {},
 ): Promise<void> {
   const controller = new AbortController()
   const stops = [
@@ -765,6 +773,10 @@ export async function downloadR2ObjectToFile(
     controller.abort()
     throw new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: r2 object ${key}`)
   }
+  bounds.onSource?.({
+    ...(res.ContentType ? { contentType: res.ContentType } : {}),
+    ...(typeof res.ContentLength === "number" ? { contentLength: res.ContentLength } : {}),
+  })
   const body = guardStorageReadBody(res.Body as Readable, {
     sizeBytes: res.ContentLength, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: bounds.limits ?? STORAGE_DOWNLOAD_LIMITS,
   })
