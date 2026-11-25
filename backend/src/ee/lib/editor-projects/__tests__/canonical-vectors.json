@@ -1,0 +1,62 @@
+[
+  {
+    "name": "keys sorted at two depths",
+    "value": {"b":1,"a":{"d":2,"c":3}},
+    "text": "{\"a\":{\"c\":3,\"d\":2},\"b\":1}",
+    "hash": "78d48859c3252943aab7306f76c80f3f07783582e05ab8f944ce0696f2dbfc67"
+  },
+  {
+    "name": "array kept in order, objects inside sorted",
+    "value": [3,1,2,{"b":0,"a":0},[2,1]],
+    "text": "[3,1,2,{\"a\":0,\"b\":0},[2,1]]",
+    "hash": "41ba79a97195352d7b1b235d42cc0cabad9a4d18a6e8323623f1971a3f1b8c08"
+  },
+  {
+    "name": "unicode outside the BMP kept as characters",
+    "value": {"g":"\ud834\udd1e","emoji":"😀 ok"},
+    "text": "{\"emoji\":\"😀 ok\",\"g\":\"𝄞\"}",
+    "hash": "d8d010bd385fe63f723d0ce03fc92474c8469f7ad624fd1ecbfe412c114709e5"
+  },
+  {
+    "name": "quotes, backslash and control characters escaped",
+    "value": {"s":"say \"hi\"\n\t\u0001\\ \u001f/"},
+    "text": "{\"s\":\"say \\\"hi\\\"\\n\\t\\u0001\\\\ \\u001f/\"}",
+    "hash": "f2056896229e66953e576689486984c25eb59fdbbca651eb51f2147c3f1a0dd2"
+  },
+  {
+    "name": "1e21 written as 1e+21",
+    "value": {"n":1e21},
+    "text": "{\"n\":1e+21}",
+    "hash": "f1ee2b60ee95a3170fdc07a577e5f3514ced26867443d69da265acadead81007"
+  },
+  {
+    "name": "minus zero written as 0",
+    "value": [-0,{"z":-0}],
+    "text": "[0,{\"z\":0}]",
+    "hash": "c96476b16316aa207a25159ccd7113a9578664bfbd1ced8a99f80beabdb379de"
+  },
+  {
+    "name": "large integer under 2^53",
+    "value": {"max":9007199254740991,"neg":-9007199254740991},
+    "text": "{\"max\":9007199254740991,\"neg\":-9007199254740991}",
+    "hash": "006b2308c1ebf11f90fd2797695af6f9869dd0c1ab42c09750625c2850be3480"
+  },
+  {
+    "name": "floats",
+    "value": [0.1,-2.5,1.5e-7,100.0],
+    "text": "[0.1,-2.5,1.5e-7,100]",
+    "hash": "e04efcbda57ce5ec02b64dc50444e3dd3bcba1e172cf8ca6127450acb748aa49"
+  },
+  {
+    "name": "null and nested empty object and array",
+    "value": {"d":[{},[]],"c":[],"b":{},"a":null},
+    "text": "{\"a\":null,\"b\":{},\"c\":[],\"d\":[{},[]]}",
+    "hash": "ef17fa58abaff25b7f6d04f6505b913805902d924deb59a9c98a83b0454f9ba0"
+  },
+  {
+    "name": "keys sorted by UTF-16 code unit, not by locale or code point",
+    "value": {"b":1,"B":2,"a":3,"A":4,"é":5,"Z":6,"_":7,"9":8,"10":9,"～":10,"😀":11},
+    "text": "{\"10\":9,\"9\":8,\"A\":4,\"B\":2,\"Z\":6,\"_\":7,\"a\":3,\"b\":1,\"é\":5,\"😀\":11,\"～\":10}",
+    "hash": "74bd236fd4610137aee1e1c03d5e0a6d575bd154730496cde07ec9f9fc7bf624"
+  }
+]

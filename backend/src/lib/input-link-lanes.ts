@@ -96,6 +96,10 @@ export const EXEMPT_ROUTES: Readonly<Record<string, string>> = Object.freeze({
   // Deleting or looking up the caller's own files and records.
   "POST /v1/media/delete": "deletes the caller's own files by their address; nothing is fetched",
   "POST /v1/media/discard": "discards this deployment's own uploaded files by their address",
+  // A video-editor project's content: a gzip body (a Buffer, not fields), stored
+  // for its owner and never fetched; a run that takes the media it names judges them then.
+  "PUT /v1/editor-projects/:id/file": "a video-editor project's saved content, stored for its owner; nothing is fetched",
+  "PATCH /v1/editor-projects/:id/file": "a patch to a video-editor project's saved content, stored for its owner; nothing is fetched",
   "POST /v1/saved-posts/lookup": "looks up the caller's own saved posts by their address; nothing is fetched",
   "POST /v1/collection-read": "reads the caller's own collection records",
   // Records kept as data: their links and media are judged where a run uses them.

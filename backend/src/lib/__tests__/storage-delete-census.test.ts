@@ -80,6 +80,11 @@ const RAW_DELETES_ALLOWED: Readonly<Record<string, { count: number; why: string;
     why: "a separate bucket with its own artifact cleanup lane; the retry pass deletes from the media bucket only",
     setting: "asks",
   },
+  "ee/lib/editor-projects/bucket.ts": {
+    count: 1,
+    why: "the video-editor projects' private bucket (EDITOR_PROJECTS_BUCKET); the retry pass deletes from the media bucket only, and a failed delete leaves an orphan no row can name (keys are never reused)",
+    setting: "asks",
+  },
 }
 
 /** The storage helpers (lib/storage.ts): each asks the STORAGE_DELETES setting itself. */

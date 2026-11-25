@@ -41,6 +41,8 @@ describe("physical object deletion boundaries", () => {
       "lib/retained-videos.ts": 1,
       // Independently configured private bucket; cannot be the public bucket.
       "services/scene3d-artifacts/object-store.ts": 1,
+      // The video-editor projects' own private bucket; cannot be the public bucket.
+      "ee/lib/editor-projects/bucket.ts": 1,
     })
   })
 })
