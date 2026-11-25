@@ -17,6 +17,7 @@ import {
   transcribeTranslationRefusal,
   transcribeTargetLanguageOf,
 } from "@nodaro/shared/nodes";
+import { manualReferenceImages } from "@nodaro/shared/workflow";
 import { referenceCharactersForRun } from "@/lib/reference-characters";
 import { toast } from "sonner";
 import { namesUserDirectionRef } from "@/lib/user-direction-refs";
@@ -1596,22 +1597,15 @@ function executeNodeCore(
     // injected into the final prompt.
     const refMetaMap = new Map<string, Omit<ConnectedReference, "id">>();
 
-    // Manual uploads (new multi-image format)
-    const manualImgs = imgData.referenceImageUrls ?? [];
+    // Manual uploads (`{ id, url }` entries), else the legacy single
+    // referenceImageUrl: one reader with the workflow run and every estimate.
+    const manualImgs = manualReferenceImages(imgData);
     for (let i = 0; i < manualImgs.length; i++) {
       const img = manualImgs[i];
-      refMetaMap.set(img.id, {
+      refMetaMap.set(img.id as string, {
         defaultName: `Image ${i + 1}`,
         source: "manual",
-        url: img.url,
-      });
-    }
-    // Legacy single referenceImageUrl
-    if (imgData.referenceImageUrl && refMetaMap.size === 0) {
-      refMetaMap.set("__legacy__", {
-        defaultName: "Image 1",
-        source: "manual",
-        url: imgData.referenceImageUrl,
+        url: img.url as string,
       });
     }
     // Wired upstream images — include char/face/object/location for rich metadata

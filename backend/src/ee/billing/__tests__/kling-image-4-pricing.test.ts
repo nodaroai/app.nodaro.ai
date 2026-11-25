@@ -162,3 +162,13 @@ describe("8K on a model that does not list it: estimate = hold = charge", () => 
     expect(imageCreditIdentifierFor({ provider: "nano-banana-pro", resolution: "8K", prompt: "x" }, undefined, undefined)).toBe(at("4K"))
   })
 })
+
+describe("the workflow estimate counts uploads in the editor's { id, url } shape", () => {
+  it("one uploaded reference, a set of 2 at 2K: the row the run holds", () => {
+    const node = { id: "g", type: "generate-image", data: { provider: "kling-image-4", resolution: "2K", imageSetCount: 2, referenceImageUrls: [{ id: "u1", url: "https://cdn.test/u1.png" }] } }
+    const graph = { imageRefsWired: 0, imageInputGraph: { nodeId: "g", nodes: [node], edges: [] } }
+    expect(getNodeModelIdentifier(node as never, graph)).toBe("kling-image-4-i2i:2K:1ref:x2")
+    const single = { ...node, data: { ...node.data, imageSetCount: undefined } }
+    expect(getNodeModelIdentifier(single as never, { imageRefsWired: 0, imageInputGraph: { nodeId: "g", nodes: [single], edges: [] } })).toBe("kling-image-4-i2i:2K:1ref")
+  })
+})

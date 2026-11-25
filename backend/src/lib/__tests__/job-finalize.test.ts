@@ -403,7 +403,7 @@ describe("finalizeJobWithMedia", () => {
     mocks.jobsSingleMock.mockResolvedValueOnce({ data: setJob, error: null })
     formatStoreMocks.storeFormattedImages.mockResolvedValueOnce(stored)
     await run()
-    expect(formatStoreMocks.discardUndeliveredImages).toHaveBeenCalledWith("j-set", "u1", undelivered, ["https://r2.example/images/j-set.jpg"])
+    expect(formatStoreMocks.discardUndeliveredImages).toHaveBeenCalledWith("j-set", "u1", undelivered, ["https://r2.example/images/j-set.jpg"], ["completed"])
 
     // A held completion: the left-out keys are not part of what is held, and go now.
     formatStoreMocks.discardUndeliveredImages.mockClear()
@@ -411,7 +411,7 @@ describe("finalizeJobWithMedia", () => {
     formatStoreMocks.storeFormattedImages.mockResolvedValueOnce(stored)
     sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("held")
     expect(await run()).toEqual({ ok: false, reason: "held" })
-    expect(formatStoreMocks.discardUndeliveredImages).toHaveBeenCalledWith("j-set", "u1", undelivered, ["https://r2.example/images/j-set.jpg"])
+    expect(formatStoreMocks.discardUndeliveredImages).toHaveBeenCalledWith("j-set", "u1", undelivered, ["https://r2.example/images/j-set.jpg"], ["pending_review"])
   })
 
   it("a lost race is still distinguishable from a policy outcome", async () => {

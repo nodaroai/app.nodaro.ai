@@ -1,4 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import { manualReferenceImages } from "@nodaro/shared/workflow"
 import { klingImage4PricedItems, klingImage4Subjects, type SubjectSourceRef } from "../../lib/kling-image-4-subjects.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
@@ -3212,18 +3213,10 @@ function buildPayloadOf(
       // Build a map of all available reference images by ID
       const refUrlMap = new Map<string, string>()
 
-      // Manual uploads (new multi-image format: ManualReferenceImage[])
-      const manualRefs = data.referenceImageUrls as Array<{ id: string; url: string }> | undefined
-      if (manualRefs?.length) {
-        for (const img of manualRefs) {
-          refUrlMap.set(img.id, img.url)
-        }
-      }
-      // Legacy single referenceImageUrl
-      const nodeRefUrl = data.referenceImageUrl as string | undefined
-      if (nodeRefUrl && refUrlMap.size === 0) {
-        refUrlMap.set("__legacy__", nodeRefUrl)
-      }
+      // Manual uploads (`{ id, url }` entries), else the legacy single
+      // referenceImageUrl: one reader with the editor and every estimate.
+      // (An entry in another shape keeps what it always made: no id, no url.)
+      for (const img of manualReferenceImages(data)) refUrlMap.set(img.id as string, img.url as string)
       // Wired upstream images — use source node IDs as keys (matching frontend)
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)

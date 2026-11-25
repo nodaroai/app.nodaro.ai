@@ -25,11 +25,14 @@ import { variantJobId } from "@nodaro/shared/workflow"
 import { IMAGE_OUTPUT_FORMAT_EXT, IMAGE_OUTPUT_FORMAT_MIME, IMAGE_OUTPUT_FORMAT_VALUES, type ImageOutputFormat } from "@nodaro/shared/models"
 import { isKlingImage4 } from "@nodaro/shared/model-catalog"
 import { safeFetch } from "./safe-fetch.js"
-import { getR2ObjectSize, mediaObjectKey, r2KeyFromOurUrl, uploadBufferToR2 } from "./storage.js"
+import { randomUUID } from "node:crypto"
+import { isPreconditionFailed, mediaObjectKey, r2KeyFromOurUrl, r2Url, uploadBufferToR2 } from "./storage.js"
+import { noteStoredImage } from "./image-dimensions.js"
+import { chargeSetStorage, discardSetKeys, isStorageStateUnknown, knownObjectState, StorageStateUnknownError } from "./image-set-storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
 import { appendSvgWatermark, isSvgRefusedError, looksLikeSvg, sanitizeSvg, SVG_REFUSED_MESSAGE } from "./svg-sanitize.js"
 import { DeterministicJobError, isDeterministicJobError } from "./deterministic-job-error.js"
-import { getSizeLimit, updateStorageUsage } from "../utils/file-validation.js"
+import { getSizeLimit } from "../utils/file-validation.js"
 import { applyAnimatedGifWatermark, applyImageWatermark, WATERMARK_TEXT } from "../utils/watermark.js"
 
 /** A format stored on this path: every one but PNG. */
@@ -109,23 +112,84 @@ interface PreparedImage {
 }
 
 /**
- * The most bytes this path downloads for one file: a raster over the stored
- * cap is re-encoded to fit it ({@link fitToCap}), so the download may be
- * larger than the cap, but not without bound.
+ * The most bytes this path downloads for one PNG, JPEG or WebP: one over the
+ * stored cap is re-encoded to fit it ({@link fitToCap}), so its download may
+ * be larger than the cap, but not without bound. Anything else (an SVG, a
+ * GIF, a file of no recognised type) is never re-encoded: its download is held
+ * to the cap itself, as it always was.
  */
 const DOWNLOAD_CEILING_FACTOR = 4
 
+/** How many leading bytes are enough to tell a file's format (an SVG's prolog included). */
+const FORMAT_SNIFF_BYTES = 4096
+
+/**
+ * The most bytes a file of `format` may download: only a file positively
+ * recognised as a PNG, JPEG or WebP (which the re-encoder fits to the cap) may
+ * go past the cap. An SVG, a GIF and a file of no recognised type are held to
+ * the cap itself, as every download always was.
+ */
+function downloadLimitFor(format: ImageOutputFormat | undefined, cap: number): number {
+  return format === "png" || format === "jpeg" || format === "webp" ? cap * DOWNLOAD_CEILING_FACTOR : cap
+}
+
+/**
+ * Download one file, held to its limit as it arrives: a declared length over
+ * the ceiling stops before any byte is read; an SVG or a GIF over the cap
+ * stops as soon as its first bytes say what it is (with the error a download
+ * held to the cap always gave, `upload-size-exceeded`), so it is never read
+ * up to the ceiling.
+ */
 async function download(url: string): Promise<Buffer> {
   const response = await safeFetch(url, { timeoutMs: 120_000 })
   if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
-  const ceiling = getSizeLimit("image") * DOWNLOAD_CEILING_FACTOR
+  const cap = getSizeLimit("image")
+  const ceiling = cap * DOWNLOAD_CEILING_FACTOR
   const advertised = parseInt(response.headers.get("content-length") ?? "", 10)
+  const cancel = async () => { try { await response.body?.cancel() } catch { /* best effort */ } }
+  const tooLarge = (got: number, limit: number) =>
+    Number.isFinite(advertised) && advertised > limit
+      ? new Error(`upload-size-exceeded: Content-Length ${advertised} > ${limit === cap ? "cap" : "ceiling"} ${limit}`)
+      : new Error(`upload-size-exceeded: ${got} > ${limit === cap ? "cap" : "ceiling"} ${limit}`)
   if (Number.isFinite(advertised) && advertised > ceiling) {
-    try { await response.body?.cancel() } catch { /* best effort */ }
-    throw new Error(`upload-size-exceeded: Content-Length ${advertised} > ceiling ${ceiling}`)
+    await cancel()
+    throw tooLarge(advertised, ceiling)
   }
-  const bytes = Buffer.from(await response.arrayBuffer())
-  if (bytes.length > ceiling) throw new Error(`upload-size-exceeded: ${bytes.length} > ceiling ${ceiling}`)
+  const reader = (response.body as ReadableStream<Uint8Array> | null | undefined)?.getReader?.()
+  if (!reader) {
+    const bytes = Buffer.from(await response.arrayBuffer())
+    const limit = downloadLimitFor(sniffImageFormat(bytes.subarray(0, FORMAT_SNIFF_BYTES)), cap)
+    if (bytes.length > limit) throw tooLarge(bytes.length, limit)
+    return bytes
+  }
+  const chunks: Buffer[] = []
+  let got = 0
+  let limit = ceiling
+  let sniffed = false
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(Buffer.from(value))
+    got += value.byteLength
+    if (!sniffed && got >= FORMAT_SNIFF_BYTES) {
+      sniffed = true
+      limit = downloadLimitFor(sniffImageFormat(Buffer.concat(chunks).subarray(0, FORMAT_SNIFF_BYTES)), cap)
+      // An SVG or GIF that declares more than the cap stops here, as it always did.
+      if (Number.isFinite(advertised) && advertised > limit) {
+        await reader.cancel().catch(() => undefined)
+        throw tooLarge(got, limit)
+      }
+    }
+    if (got > limit) {
+      await reader.cancel().catch(() => undefined)
+      throw tooLarge(got, limit)
+    }
+  }
+  const bytes = Buffer.concat(chunks)
+  if (!sniffed) {
+    limit = downloadLimitFor(sniffImageFormat(bytes), cap)
+    if (bytes.length > limit) throw tooLarge(bytes.length, limit)
+  }
   return bytes
 }
 
@@ -205,32 +269,25 @@ async function prepareAndStore(sourceUrl: string, jobId: string, index: number, 
  * caller runs it only once its own completion of the job won, or once its
  * fence says nothing will complete it. Best effort; never throws.
  */
-export async function discardUndeliveredImages(jobId: string, userId: string | undefined, undelivered: ReadonlyMap<string, number> | undefined, delivered: readonly string[] = []): Promise<void> {
+export async function discardUndeliveredImages(
+  jobId: string,
+  userId: string | undefined,
+  undelivered: ReadonlyMap<string, number> | undefined,
+  delivered: readonly string[] = [],
+  /** The row states in which this caller cleans up (a completed or held row: only these keys). */
+  statuses?: readonly string[],
+): Promise<void> {
   if (!undelivered || undelivered.size === 0) return
   // A key a delivered url names, by its parsed key or its path's end.
   const names = (key: string) => delivered.some((url) => r2KeyFromOurUrl(url) === key || url.split("?")[0]!.endsWith(`/${key}`))
   const keys = [...undelivered.keys()].filter((key) => !names(key))
   if (keys.length === 0) return
-  try {
-    // Each key's bytes in storage are what its owner was charged for it (a
-    // set charges by what the key holds), so that is what is given back.
-    const { discardOwnedKeys } = await import("./discard-job-copies.js")
-    await discardOwnedKeys(jobId, userId, keys)
-  } catch (err) {
-    console.warn(`[image-output-store] job ${jobId}: a set's undelivered upload could not be discarded: ${String(err)}`)
-  }
+  // Each key's bytes in storage are what its owner was charged for it (a set
+  // charges by what the key holds), read just before the delete; a key whose
+  // size cannot be read is kept, never given back on a guess.
+  await discardSetKeys(jobId, userId, keys, statuses ? { statuses } : {})
 }
 
-/** Delete `keys` (this job's own) and give back their stored bytes; best effort, never throws. */
-async function discardWrittenKeys(jobId: string, userId: string | undefined, keys: readonly string[]): Promise<void> {
-  if (keys.length === 0) return
-  try {
-    const { discardOwnedKeys } = await import("./discard-job-copies.js")
-    await discardOwnedKeys(jobId, userId, [...new Set(keys)])
-  } catch (err) {
-    console.warn(`[image-output-store] job ${jobId}: a refused set's stored pictures could not be discarded: ${String(err)}`)
-  }
-}
 
 /** `fn`, tried a second time after a short pause when the first try fails for a reason that is not final. */
 async function withOneRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -262,11 +319,6 @@ async function watermarked(image: PreparedImage): Promise<Buffer> {
   }
 }
 
-/** Give `userId`'s storage the change in bytes a set's write made (either sign); best effort. */
-function chargeStorage(userId: string | undefined, delta: number): void {
-  if (!userId || delta === 0) return
-  updateStorageUsage(userId, delta).catch((err) => console.error("[image-output-store] Failed to track usage:", err))
-}
 
 /**
  * Store variant `index` of the job at `images/<jobId>[-v<n>].<ext>`; answers
@@ -275,32 +327,78 @@ function chargeStorage(userId: string | undefined, delta: number): void {
 async function store(image: PreparedImage, jobId: string, index: number, userId: string | undefined, watermark: boolean, charged?: Map<string, number>): Promise<{ url: string; key: string; stored: PreparedImage }> {
   const bytes = watermark ? await watermarked(image) : image.bytes
   const key = mediaObjectKey(variantJobId(jobId, index), "image", IMAGE_OUTPUT_FORMAT_EXT[image.format])
-  // A set's picture is charged by what its key holds in storage, not by
-  // which attempt wrote it: the difference between the object after the write
-  // and before it. So a re-store of the same key (a retry, or another finalize
-  // of the job that took it over) charges only the difference, and a write
-  // that failed after its bytes landed is charged for them. Every key it
-  // touched is noted (`charged`, the bytes last seen there) for the clean-up.
-  const before = charged ? await getR2ObjectSize(key) : 0
-  if (charged) charged.set(key, before)
-  let url: string
-  try {
+  if (!charged) {
     // The key written inline, as the storage-writer census reads it (the same key).
-    url = await uploadBufferToR2(bytes, mediaObjectKey(variantJobId(jobId, index), "image", IMAGE_OUTPUT_FORMAT_EXT[image.format]), IMAGE_OUTPUT_FORMAT_MIME[image.format], charged ? undefined : userId)
-  } catch (err) {
-    if (charged) {
-      const after = await getR2ObjectSize(key)
-      charged.set(key, after)
-      chargeStorage(userId, after - before)
+    const url = await uploadBufferToR2(bytes, mediaObjectKey(variantJobId(jobId, index), "image", IMAGE_OUTPUT_FORMAT_EXT[image.format]), IMAGE_OUTPUT_FORMAT_MIME[image.format], userId)
+    return { url, key, stored: { format: image.format, bytes } }
+  }
+  // A set's picture is charged by what its key holds in storage, not by which
+  // attempt wrote it: the write lands only on the state just read (a
+  // conditional write), and is charged the difference. So a re-store of the
+  // same key (a retry, or another finalize that took the job over) charges
+  // only the difference, two writers racing on one key cannot both charge
+  // in full, and a write that errored after landing is charged only when
+  // storage shows it was this one (its own marker). A read that fails fails
+  // the step (`StorageStateUnknownError`): nothing is charged on a guess.
+  const marker = randomUUID()
+  for (let round = 0; round < SET_WRITE_ROUNDS; round++) {
+    const before = await knownObjectState(key)
+    // An earlier write of this picture whose outcome could not be read: if
+    // its marker is there now, it landed, and is charged once, here.
+    const pending = pendingSetWrites.get(charged)
+    if (pending && pending.key === key) {
+      pendingSetWrites.delete(charged)
+      if (before.exists && before.metadata?.[SET_WRITE_MARKER] === pending.marker) chargeSetStorage(userId, before.size - pending.base)
     }
-    throw err
-  }
-  if (charged) {
+    charged.set(key, before.size)
+    const conditional = before.exists
+      ? { ifMatch: before.etag, metadata: { [SET_WRITE_MARKER]: marker } }
+      : { ifNoneMatch: "*" as const, metadata: { [SET_WRITE_MARKER]: marker } }
+    let url: string
+    try {
+      // The key written inline, as the storage-writer census reads it (the same key).
+      url = await uploadBufferToR2(bytes, mediaObjectKey(variantJobId(jobId, index), "image", IMAGE_OUTPUT_FORMAT_EXT[image.format]), IMAGE_OUTPUT_FORMAT_MIME[image.format], undefined, conditional)
+    } catch (err) {
+      // Note this write before reading again: if the read fails, the next
+      // attempt of this picture settles it from the marker.
+      pendingSetWrites.set(charged, { key, marker, base: before.size })
+      const after = await knownObjectState(key)
+      pendingSetWrites.delete(charged)
+      // This write landed (its own marker is there): a 412 is then the answer
+      // to the client's own retry of it, an error a lost response. Charged once.
+      if (after.exists && after.metadata?.[SET_WRITE_MARKER] === marker) {
+        charged.set(key, after.size)
+        chargeSetStorage(userId, after.size - before.size)
+        if (isPreconditionFailed(err)) {
+          const landedUrl = r2Url(key)
+          await noteStoredImage(landedUrl, bytes)
+          return { url: landedUrl, key, stored: { format: image.format, bytes } }
+        }
+        throw err
+      }
+      // Another writer got there first: read again and write on that.
+      if (isPreconditionFailed(err)) continue
+      throw err
+    }
     charged.set(key, bytes.length)
-    chargeStorage(userId, bytes.length - before)
+    chargeSetStorage(userId, bytes.length - before.size)
+    return { url, key, stored: { format: image.format, bytes } }
   }
-  return { url, key, stored: { format: image.format, bytes } }
+  throw new StorageStateUnknownError(`${key} kept changing while it was written`)
 }
+
+/**
+ * A set picture's write whose outcome could not be read (it errored, then the
+ * read after it failed): its marker and the size it wrote over, so the next
+ * attempt of the same picture charges it once if it landed. Keyed by the
+ * picture's own record of the keys it touched.
+ */
+const pendingSetWrites = new WeakMap<Map<string, number>, { key: string; marker: string; base: number }>()
+
+/** How many read-then-write rounds a set's picture gets against other writers of its key. */
+const SET_WRITE_ROUNDS = 3
+/** The metadata a set's write carries, so an errored write that landed is known to be this one. */
+const SET_WRITE_MARKER = "nodaro-write"
 
 /**
  * A PNG still of a GIF (its first frame) or an SVG (drawn, at most
@@ -374,15 +472,17 @@ export async function storeFormattedImages(opts: {
       // Only a GIF's or an SVG's first stored file is kept, for its still.
       if (urls.length === 1 && (image.format === "gif" || image.format === "svg")) still = out.stored
     } catch (err) {
-      // A refused SVG is the job's answer, not a drop: the job fails and is
-      // refunded, so nothing of it is delivered. The pictures already stored
-      // and every key an attempt touched are deleted here and given back:
-      // any other finalize of the job reads the same refused file and fails
-      // too, so no one will deliver them.
-      if (isDeterministicJobError(err)) {
-        const written = [...storedKeys, ...undelivered.keys(), ...charged.keys()]
-        await discardWrittenKeys(jobId, userId, written)
-        throw err
+      // A refused SVG is the job's answer, not a drop; a storage state that
+      // could not be read fails the step (retryable) rather than drop a
+      // picture on a guess. Either way nothing is deleted here: another
+      // finalize of the job may hold the same keys and complete it. What this
+      // store wrote rides on the error for the finalize's fence; once the row
+      // is failed, the failure funnel deletes every picture of the set
+      // (`discardEndedSetImages`, lib/image-set-storage.ts).
+      if (isDeterministicJobError(err) || isStorageStateUnknown(err)) {
+        const written = new Map<string, number>([...undelivered, ...charged])
+        for (const key of storedKeys) if (!written.has(key)) written.set(key, 0)
+        throw Object.assign(err as Error, { undelivered: written })
       }
       lastError = err
       // Nothing of a dropped picture is delivered: what it may have written goes, later.
