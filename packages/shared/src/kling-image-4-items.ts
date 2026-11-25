@@ -17,6 +17,7 @@ import { resolveEffectiveSourceType } from "./entity-image-handle.js"
 import { entityImageUrl } from "./entity-image-url.js"
 import { characterMentionableAssetArrays } from "./character-variant-assets.js"
 import { characterMentionSlug, findCharacterMentionTokens } from "./character-mention-slug.js"
+import { manualReferenceImages } from "./manual-reference-images.js"
 
 /**
  * The items `sentImages` distinct images make when the given groups of them
@@ -142,7 +143,11 @@ export function klingImage4EstimatedItems(
   }
   const urls = (v: unknown): string[] => (Array.isArray(v) ? v.filter((u): u is string => typeof u === "string" && u.length > 0) : [])
   const one = (v: unknown): string[] => (typeof v === "string" && v.length > 0 ? [v] : [])
-  for (const url of [...urls(data.referenceImageUrls), ...one(data.referenceImageUrl), ...one(data.baseImageUrl), ...one(data.sourceImageUrl)]) {
+  // The pictures attached by hand, read as the run reads them (`{ id, url }`
+  // entries, or the older single `referenceImageUrl`); a list of plain strings
+  // (written by an older client) is counted too, so the estimate is never low.
+  const manual = manualReferenceImages(data).map((r) => r.url).filter((u): u is string => typeof u === "string" && u.length > 0)
+  for (const url of [...manual, ...urls(data.referenceImageUrls), ...one(data.baseImageUrl), ...one(data.sourceImageUrl)]) {
     add(`url:${url}`)
   }
   if (Array.isArray(data.extraRefs)) {

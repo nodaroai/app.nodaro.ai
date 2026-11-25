@@ -509,6 +509,7 @@
         "backend/src/lib/image-min-size.ts",
         "backend/src/lib/image-pixel-fit.ts",
         "backend/src/lib/image-prompt-minimum.ts",
+        "backend/src/lib/image-set-storage.ts",
         "backend/src/lib/image-source-probe.ts",
         "backend/src/lib/image-source-size.ts",
         "backend/src/lib/import-gate.ts",

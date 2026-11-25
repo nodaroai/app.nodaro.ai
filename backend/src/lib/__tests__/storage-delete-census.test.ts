@@ -49,6 +49,7 @@ const RAW_DELETES_ALLOWED: Readonly<Record<string, { count: number; why: string;
     setting: "asks",
   },
   "lib/storage-delete.ts": { count: 2, why: "the funnel: it deletes, then records what failed", setting: "helpers" },
+
   "lib/storage-delete-retries.ts": {
     count: 1,
     why: "the retry pass: a failure counts an attempt on the existing record",

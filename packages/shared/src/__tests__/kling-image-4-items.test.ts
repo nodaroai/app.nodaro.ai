@@ -78,3 +78,16 @@ describe("a character the run cannot group", () => {
     expect(n).toBe(1)
   })
 })
+
+describe("pictures attached by hand, in the editor's shape", () => {
+  it("{ id, url } uploads count, each once, as the run reads them", async () => {
+    const { manualReferenceImages } = await import("../manual-reference-images.js")
+    const uploads = [{ id: "a", url: "https://cdn.test/a.png" }, { id: "b", url: "https://cdn.test/b.png" }, { id: "c", url: "https://cdn.test/a.png" }]
+    expect(manualReferenceImages({ referenceImageUrls: uploads }).map((r) => r.url)).toEqual(["https://cdn.test/a.png", "https://cdn.test/b.png", "https://cdn.test/a.png"])
+    expect(items([], [], { referenceImageUrls: [{ id: "a", url: "https://cdn.test/a.png" }] })).toBe(1)
+    expect(items([], [], { referenceImageUrls: uploads })).toBe(2)
+    // The older single field counts only when there is no list, as the run reads it.
+    expect(items([], [], { referenceImageUrl: "https://cdn.test/old.png" })).toBe(1)
+    expect(items([], [], { referenceImageUrls: [{ id: "a", url: "https://cdn.test/a.png" }], referenceImageUrl: "https://cdn.test/old.png" })).toBe(1)
+  })
+})

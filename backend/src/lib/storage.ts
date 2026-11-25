@@ -588,11 +588,28 @@ function isImageContentType(contentType: string): boolean {
   return contentType.toLowerCase().startsWith("image/")
 }
 
+/**
+ * A write that lands only on the state its caller read (`ifMatch`: the
+ * object's ETag; `ifNoneMatch: "*"`: no object), else storage answers 412
+ * (`isPreconditionFailed`), and the object's own metadata.
+ */
+export interface ConditionalWrite {
+  readonly ifMatch?: string
+  readonly ifNoneMatch?: "*"
+  readonly metadata?: Record<string, string>
+}
+
+/** True for storage's answer to a conditional write whose condition no longer held. */
+export function isPreconditionFailed(err: unknown): boolean {
+  return (err as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata?.httpStatusCode === 412
+}
+
 export async function uploadBufferToR2(
   buffer: Buffer,
   key: string,
   contentType: string,
   trackUserId?: string,
+  conditional?: ConditionalWrite,
 ): Promise<string> {
   refuseEvidenceKey(key)
   await s3.send(
@@ -602,6 +619,9 @@ export async function uploadBufferToR2(
       Body: buffer,
       ContentType: contentType,
       CacheControl: R2_CACHE_CONTROL,
+      ...(conditional?.ifMatch !== undefined ? { IfMatch: conditional.ifMatch } : {}),
+      ...(conditional?.ifNoneMatch !== undefined ? { IfNoneMatch: conditional.ifNoneMatch } : {}),
+      ...(conditional?.metadata !== undefined ? { Metadata: conditional.metadata } : {}),
     })),
     storageTransferOptions(buffer.length),
   )
@@ -909,7 +929,7 @@ export async function getR2ObjectSize(key: string): Promise<number> {
 export async function headR2Object(
   key: string,
   opts: { abortSignal?: AbortSignal } = {},
-): Promise<{ exists: boolean; lastModified?: Date; etag?: string; contentType?: string; sizeBytes?: number }> {
+): Promise<{ exists: boolean; lastModified?: Date; etag?: string; contentType?: string; sizeBytes?: number; metadata?: Record<string, string> }> {
   try {
     const command = new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key })
     const head = await (opts.abortSignal ? s3.send(command, { abortSignal: opts.abortSignal }) : s3.send(command))
@@ -919,6 +939,7 @@ export async function headR2Object(
       ...(head.ETag ? { etag: head.ETag } : {}),
       ...(head.ContentType ? { contentType: head.ContentType } : {}),
       ...(typeof head.ContentLength === "number" ? { sizeBytes: head.ContentLength } : {}),
+      ...(head.Metadata ? { metadata: head.Metadata } : {}),
     }
   } catch (err) {
     const e = err as { name?: string; $metadata?: { httpStatusCode?: number } }

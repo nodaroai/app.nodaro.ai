@@ -50,7 +50,8 @@ export async function fitImageUnderPixels(bytes: Buffer, maxPixels: number, maxE
   const height = meta.autoOrient?.height ?? meta.height
   // An animated picture (several frames) is left exactly as it is: a scale
   // down would keep one frame. Its caller's own limits apply to it as before.
-  if (!width || !height || meta.format === "svg" || (meta.pages ?? 1) > 1) return bytes
+  // The library counts no frames for an animated PNG: its `acTL` chunk does.
+  if (!width || !height || meta.format === "svg" || (meta.pages ?? 1) > 1 || isAnimatedPng(bytes)) return bytes
   if (width * height <= maxPixels && Math.max(width, height) <= maxEdge) return bytes
   const size = sizeWithinPixels(width, height, maxPixels, maxEdge)
   const pipeline = sharp(bytes, { limitInputPixels: DOWNSCALE_INPUT_PIXEL_CEILING })
@@ -59,3 +60,22 @@ export async function fitImageUnderPixels(bytes: Buffer, maxPixels: number, maxE
   return meta.hasAlpha ? pipeline.png().toBuffer() : pipeline.jpeg({ quality: 95 }).toBuffer()
 }
 
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+/**
+ * True for an animated PNG: a PNG whose chunks, before its first image data
+ * (`IDAT`), carry an animation control chunk (`acTL`). Read chunk by chunk,
+ * so bytes inside compressed data are never mistaken for one.
+ */
+export function isAnimatedPng(bytes: Buffer): boolean {
+  if (bytes.length < 8 || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return false
+  let at = 8
+  while (at + 8 <= bytes.length) {
+    const length = bytes.readUInt32BE(at)
+    const type = bytes.toString("latin1", at + 4, at + 8)
+    if (type === "acTL") return true
+    if (type === "IDAT" || type === "IEND") return false
+    at += 12 + length
+  }
+  return false
+}
