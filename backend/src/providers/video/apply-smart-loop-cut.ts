@@ -1,32 +1,25 @@
 import { dirname } from "node:path"
-import { uploadFileToR2 } from "../../lib/storage.js"
-import { cleanupWorkDir } from "./ffmpeg-utils.js"
 import { smartLoopCut, type SmartLoopCutOptions } from "./smart-loop-cut.js"
 
-/** Apply smart-loop-cut as a post-process to a video URL.
- *  Downloads from R2 (or whatever URL source smartLoopCut accepts), runs
- *  smart-loop-cut, uploads the result back to R2, returns the new URL.
- *  Cleans up the work directory.
+/** A video kept on local disk between two steps: its file, and the folder to remove once it is stored. */
+export interface LocalVideo {
+  readonly path: string
+  readonly dir: string
+}
+
+/** Apply smart-loop-cut as a post-process to a video URL and keep the result
+ *  on LOCAL disk (decided 2026-11-22): the step after it (the store, a merge)
+ *  reads the file directly, so no intermediate copy is ever stored — on a
+ *  watermarked run it would be the unwatermarked picture, and nothing would
+ *  name it for a sweep. The caller removes `dir` once it is done with it.
  *
  *  Used by the i2v worker handler to replace the legacy VEO-only fixed
  *  8-frame trim. Throws on failure — caller is responsible for keeping
- *  the original URL and refunding the addon.
- *
- *  `userId` is forwarded to uploadFileToR2 for storage-quota tracking.
- *  Accepts `undefined` (matching `WorkerContext.jobUserId` and the upstream
- *  uploadFileToR2 signature) so the worker can pass `ctx.jobUserId` directly
- *  without a non-null assertion. */
-export async function applySmartLoopCutToR2Url(
+ *  the original URL and refunding the addon. */
+export async function applySmartLoopCutLocal(
   videoUrl: string,
-  jobId: string,
-  userId: string | undefined,
   options: Omit<SmartLoopCutOptions, "videoUrl">,
-): Promise<string> {
+): Promise<LocalVideo> {
   const slc = await smartLoopCut({ videoUrl, ...options })
-  try {
-    const newUrl = await uploadFileToR2(slc.videoPath, `${jobId}-loop-cut`, "video", userId)
-    return newUrl
-  } finally {
-    await cleanupWorkDir(dirname(slc.videoPath))
-  }
+  return { path: slc.videoPath, dir: dirname(slc.videoPath) }
 }

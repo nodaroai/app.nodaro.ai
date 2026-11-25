@@ -60,6 +60,11 @@ export interface FixtureSet {
    *  the bands fingerprint which master seconds were read and the envelope
    *  pins WHERE each read starts (a constant-level tone would hide a shift). */
   readonly masterStepsM4a: string
+  /** testsrc2 640x360@30, 2 s, with a 440 Hz tone — HEVC Main 10 (yuv420p10le)
+   *  tagged HLG / BT.2020: an HDR provider file, for the browser-safe preview. */
+  readonly clipHlgHevc10Mp4: string
+  /** The same picture as HEVC Main 10 tagged SDR BT.709: a 10-bit SDR provider file. */
+  readonly clipSdrHevc10Mp4: string
   /** A TIME-CODED camera, 640×360@30, 4 s: every frame's luma is its own
    *  index (24 + 8·(N mod 26)), so a picture read one frame early or late
    *  moves the per-frame luma fingerprint past tolerance (testsrc2's mean luma
@@ -70,6 +75,18 @@ export interface FixtureSet {
    *  640×360 canvas), 4 s: luma 230 − 9·(N mod 23); 880 Hz pulsing ~167 ms. */
   readonly rampBMp4: string
 }
+
+/** An HEVC Main 10 clip of testsrc2 (640x360@30, 2 s, 440 Hz tone) tagged `prim`/`trc`/`matrix` three ways: on the frames, the encoder and x265's own VUI. */
+const hevc10Clip = (prim: string, trc: string, matrix: string) => (out: string): string[] => [
+  "-y",
+  "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=2",
+  "-f", "lavfi", "-i", "sine=f=440:d=2:r=48000",
+  "-vf", `setparams=color_primaries=${prim}:color_trc=${trc}:colorspace=${matrix}:range=tv`,
+  "-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
+  "-x265-params", `log-level=error:colorprim=${prim}:transfer=${trc}:colormatrix=${matrix}`,
+  "-color_primaries", prim, "-color_trc", trc, "-colorspace", matrix,
+  "-c:a", "aac", "-shortest", out,
+]
 
 /** One ffmpeg invocation per fixture, ordered to match FixtureSet fields. */
 const GENERATORS: ReadonlyArray<{ file: string; args: (out: string) => string[] }> = [
@@ -186,6 +203,8 @@ const GENERATORS: ReadonlyArray<{ file: string; args: (out: string) => string[] 
       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", out,
     ],
   },
+  { file: "clip-hlg-hevc10.mp4", args: hevc10Clip("bt2020", "arib-std-b67", "bt2020nc") },
+  { file: "clip-sdr-hevc10.mp4", args: hevc10Clip("bt709", "bt709", "bt709") },
 ]
 
 /**
@@ -219,6 +238,8 @@ export async function ensureFixtures(): Promise<FixtureSet> {
     masterStepsM4a: join(dir, "master-steps.m4a"),
     rampAMp4: join(dir, "ramp-a.mp4"),
     rampBMp4: join(dir, "ramp-b.mp4"),
+    clipHlgHevc10Mp4: join(dir, "clip-hlg-hevc10.mp4"),
+    clipSdrHevc10Mp4: join(dir, "clip-sdr-hevc10.mp4"),
   }
 }
 

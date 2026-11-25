@@ -39,7 +39,6 @@ import {
   probeMediaDuration,
   probeMediaStreams,
   needsTranscode,
-  transcodeToBrowserSafe,
   COMBINE_DELIVERY_CRF,
   needsContainerRemux,
 } from "../../providers/video/ffmpeg-utils.js"
@@ -58,7 +57,6 @@ import { applyImageWatermark } from "../../utils/watermark.js"
 import {
   uploadBufferToR2,
   uploadFileToR2,
-  uploadToR2,
   uploadFileWithKeyToR2,
   r2Url,
   getR2ObjectSize,
@@ -74,13 +72,13 @@ import { markProviderCallStart, markProviderCallStartIfLive } from "../reconcile
 import { sendInternalError } from "../http-errors.js"
 import { runPostProcessing } from "../post-processing-error.js"
 import { uploadJobScratchFile } from "../job-scratch.js"
+import { storeVideoAsIs, storedVideoFields, storeVideoResult } from "../video-result-store.js"
 import {
   markJobCompletedDetailed,
   setJobProgress,
   withProgressRamp,
   commitJobCredits,
   refundJobCredits,
-  uploadVideoMaybeWatermark,
   requestJobStop,
   generateAndUploadThumbnail,
 } from "../../workers/shared.js"
@@ -607,9 +605,16 @@ async function rehostUpscaledVideo(url: string): Promise<string> {
   try {
     const inputPath = join(workDir, "input.mp4")
     await downloadFile(url, inputPath)
-    const outPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"), COMBINE_DELIVERY_CRF)
     // In the running job's family, never the bare job id (the final deliverable's key).
-    return await uploadFileToR2(outPath, jobFileObjectId(getJobId(), "upscaled"), "video")
+    // Through the funnel, browser-safe at the upscale's CRF; the url alone is returned, so no original is kept.
+    const stored = await storeVideoResult({ path: inputPath }, {
+      jobId: jobFileObjectId(getJobId(), "upscaled"),
+      userId: undefined,
+      watermark: false,
+      crf: COMBINE_DELIVERY_CRF,
+      original: "never",
+    })
+    return stored.videoUrl
   } finally {
     await cleanupWorkDir(workDir)
   }
@@ -2022,7 +2027,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       mergeVideoAudio,
       applyAudioFx,
       applyImageWatermark,
-      uploadVideoMaybeWatermark,
+      // The string-returning member cannot hand an original back, so it keeps none (`original: "never"`).
+      uploadVideoMaybeWatermark: async (url, jobId, userId, watermark) =>
+        (await storeVideoResult({ url }, { jobId, userId, watermark, original: "never" })).videoUrl,
+      // The whole funnel: the original kept beside the preview, every field returned for the plugin to write.
+      storeVideoResult: async (url, jobId, userId, watermark) =>
+        storedVideoFields(await storeVideoResult({ url }, { jobId, userId, watermark })),
     }, MEDIA_MEMBER_LANES),
     storage: {
       retainImage, readRetainedImage, copyRetainedImage, canRetainImages: isStorageConfigured(),
@@ -2036,8 +2046,10 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       // Exactly four arguments: the job id is always the running job's
       // (`getJobId()`), never one a plugin names.
       uploadJobScratchFile: (filePath, name, ext, contentType) => uploadJobScratchFile(filePath, name, ext, contentType),
-      // Mirrors `uploadToR2` (`lib/storage.ts:126`) narrowed to video.
-      uploadVideoFromUrl: (url, jobId, trackUserId) => uploadToR2(url, jobId, "video", trackUserId),
+      // Mirrors `uploadToR2` (`lib/storage.ts`) narrowed to video.
+      // Stored as delivered (a per-segment copy, never the deliverable): the funnel's as-is door.
+      uploadVideoFromUrl: async (url, jobId, trackUserId) =>
+        (await storeVideoAsIs({ url }, { jobId, userId: trackUserId, ext: "mp4" })).videoUrl,
       uploadFileWithKeyToR2,
       r2Url,
       getR2ObjectSize,

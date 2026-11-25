@@ -58,10 +58,25 @@ vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 
 vi.mock("@/lib/storage.js", () => ({
   mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}`,
+  getR2ObjectSize: vi.fn(async () => 4321),
   uploadToR2: mocks.mockUploadToR2,
   uploadBufferToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/buf.mp4"),
 }))
 vi.mock("@/lib/job-scratch.js", () => ({ uploadJobScratchFile: mocks.mockUploadJobScratchFile }))
+const serverOutput = vi.hoisted(() => ({
+  record: vi.fn(async (_a: Record<string, unknown>): Promise<{ outcome: string; charged?: number }> => ({ outcome: "recorded", charged: 0 })),
+  discard: vi.fn(async (_jobId: string, _key: string) => {}),
+  clear: vi.fn(async (_jobId: string): Promise<boolean> => true),
+  last: { value: false },
+}))
+vi.mock("@/lib/job-server-output.js", async (orig) => ({
+  ...(await orig<object>()),
+  recordStoredObjectAndCharge: serverOutput.record,
+  storeBeginTime: async () => "2026-11-23T10:00:00.000Z",
+  clearRawExtensionUrl: serverOutput.clear,
+  isLastAttempt: async () => serverOutput.last.value,
+  discardJustStored: serverOutput.discard,
+}))
 
 vi.mock("@/lib/seedance-extend-mov-chain.js", () => ({
   findChainedMovReference: mocks.mockFindChainedMovReference,
@@ -132,7 +147,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
     commitJobCredits: vi.fn().mockResolvedValue(undefined),
     shouldSaveJobResult: vi.fn().mockResolvedValue(true),
     markJobCompleted: vi.fn().mockResolvedValue(true),
-    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4"),
+    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" }),
     watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
     generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
     setJobProgress: vi.fn(async () => {}),
@@ -257,7 +272,7 @@ beforeEach(() => {
   mocks.mockCleanupWorkDir.mockResolvedValue(undefined)
   mocks.mockDownloadFile.mockResolvedValue(undefined)
   mocks.mockStitchExtension.mockResolvedValue({ outputPath: STITCHED_PATH, boundary: BOUNDARY })
-  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
+  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue({ videoUrl: STITCHED_R2 })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockDiscardFailedRunCopies.mockResolvedValue(undefined)
@@ -508,7 +523,7 @@ describe("seedance-2-5-extend — the provider guide's recipe", () => {
     expect(mocks.mockDownloadFile).toHaveBeenCalledWith(KIE_MP4, `${STITCH_DIR}/extension.mp4`)
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(STITCHED_PATH, "job-1", "user-1", false)
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
-    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.video?.videoUrl).toBe(STITCHED_R2)
     expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "seedance-2-5-extend" })
   })
 
@@ -535,7 +550,7 @@ describe("seedance-2-5-extend — the provider guide's recipe", () => {
     await run()
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
     expect(finalize).not.toHaveProperty("meteredBaseCredits")
-    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.video?.videoUrl).toBe(STITCHED_R2)
   })
 
   it("the retired seedance-2-extend settles as Seedance 2.5", async () => {
@@ -672,7 +687,7 @@ describe("a short extension fails the run with a full refund", () => {
     await run({ provider, duration: 5 })
     expect(mocks.mockStitchExtension).toHaveBeenCalledTimes(1)
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
-    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].mediaUrl).toBe(STITCHED_R2)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].video?.videoUrl).toBe(STITCHED_R2)
   })
 
   it("reads the picture's length, not the container's (the sound may run past the last frame)", async () => {
@@ -851,7 +866,7 @@ describe("seedance-2-5-extend — the mov reference chain", () => {
     await run()
 
     expect(generation().options).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
-    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].mediaUrl).toBe(STITCHED_R2)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].video?.videoUrl).toBe(STITCHED_R2)
   })
 
   it("a mov result is stored as OUR R2 .mov and persisted — never KIE's expiring URL", async () => {
@@ -892,9 +907,72 @@ describe("seedance-2-5-extend — the mov reference chain", () => {
     mocks.mockUploadToR2.mockRejectedValue(new Error("R2 down"))
     await run()
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
-    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.video?.videoUrl).toBe(STITCHED_R2)
     // Chain broken (next extension falls back to the tail), job still correct.
     expect(finalize.extraOutputData.rawExtensionUrl).toBe(KIE_MOV)
+  })
+
+  describe("a watermarked run (decided 2026-11-22)", () => {
+    const watermarked = async (url: string) => {
+      ctx.shouldWatermark = true
+      try {
+        mocks.mockTextToVideo.mockResolvedValue({ url, cost: 0.3 })
+        await run()
+      } finally {
+        ctx.shouldWatermark = false
+      }
+      return mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
+    }
+
+    it("keeps the raw mov at an unguessable key in the job's family, recorded only in jobs.server_output — nothing the owner can read names it", async () => {
+      serverOutput.record.mockClear()
+      const finalize = await watermarked(KIE_MOV)
+      const [, keyId, , userId, opts] = mocks.mockUploadToR2.mock.calls[0]!
+      expect(keyId).toMatch(/^job-1-raw-[0-9a-f-]{36}$/)
+      expect(opts).toEqual({ ext: "mov" })
+      // Uploaded uncharged, then charged once on its record.
+      expect(userId).toBeUndefined()
+      expect(serverOutput.record).toHaveBeenCalledWith({
+        jobId: "job-1", key: `videos/${keyId}.mov`, bytes: 4321, begunAt: "2026-11-23T10:00:00.000Z", patch: { rawExtensionUrl: R2_MOV },
+      })
+      // The completion — output_data and every other field it writes — carries neither the url nor the key.
+      const written = JSON.stringify(finalize)
+      expect(written).not.toContain(R2_MOV)
+      expect(written).not.toContain(String(keyId))
+      expect(finalize.extraOutputData).not.toHaveProperty("rawExtensionUrl")
+    })
+
+    it("a copy whose record does not land is deleted again (it must not exist)", async () => {
+      serverOutput.discard.mockClear()
+      serverOutput.record.mockResolvedValueOnce({ outcome: "unrecorded" })
+      await watermarked(KIE_MOV)
+      const [, keyId] = mocks.mockUploadToR2.mock.calls[0]!
+      expect(serverOutput.discard).toHaveBeenCalledWith("job-1", `videos/${keyId}.mov`, "unrecorded")
+    })
+
+    it("each attempt clears an earlier attempt's raw clip reference before copying its own, even one that keeps none", async () => {
+      serverOutput.clear.mockClear()
+      await watermarked(KIE_MP4)
+      expect(serverOutput.clear).toHaveBeenCalledWith("job-1")
+    })
+
+    it("a clear that does not land retries the attempt (it must not chain from an earlier clip), and goes on only on the last", async () => {
+      serverOutput.clear.mockResolvedValueOnce(false)
+      await expect(watermarked(KIE_MP4)).rejects.toMatchObject({ postProcessing: true })
+      serverOutput.clear.mockResolvedValueOnce(false)
+      serverOutput.last.value = true
+      try {
+        await expect(watermarked(KIE_MP4)).resolves.toBeDefined()
+      } finally {
+        serverOutput.last.value = false
+      }
+    })
+
+    it("never records the provider's temporary url", async () => {
+      const finalize = await watermarked(KIE_MP4)
+      expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+      expect(finalize.extraOutputData).not.toHaveProperty("rawExtensionUrl")
+    })
   })
 
   // Independent review round: the raw copy is written after the generation,
@@ -1034,7 +1112,7 @@ describe("kling-4-extend — the tail recipe on Kling 4", () => {
       workDir: STITCH_DIR,
     })
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
-    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.video?.videoUrl).toBe(STITCHED_R2)
     expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "kling-4-extend" })
   })
 })

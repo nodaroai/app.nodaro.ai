@@ -23,6 +23,7 @@
  * refund only when WE flipped the row.
  */
 import { supabase } from "./supabase.js"
+import { withServerOutput } from "./job-server-output-column.js"
 import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "./job-status.js"
 import type { ErrorHint } from "./safety-block.js"
 
@@ -91,7 +92,7 @@ export type JobFailureOutcome = "flipped" | "missed" | "error"
  */
 export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedInput): Promise<JobFailureOutcome> {
   const extra = await extraWithPairedDisplayCost(input.extra)
-  const { data, error } = await supabase
+  const { data, error } = await withServerOutput("id, user_id", (cols) => supabase
     .from("jobs")
     .update({
       status: "failed",
@@ -105,7 +106,9 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
     })
     .eq("id", jobId)
     .in("status", [...(input.from ?? FAILABLE_STATUSES)])
-    .select("id")
+    // user_id + server_output (695): what a video store kept beside its
+    // playable copy, discarded below.
+    .select(cols))
 
   if (error) {
     console.error(`[job-failure] failed to mark job ${jobId} failed:`, error.message)
@@ -121,6 +124,15 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
   // a job that never waited (only wait entries are dropped, never a lease).
   // Lazy, so this module's static graph stays supabase + job-status.
   void import("./concurrency-lanes/withdraw.js").then((m) => m.withdrawFromLane(jobId)).catch(() => undefined)
+  // Objects a video store kept beside its playable copy (a kept original, an
+  // Extend's raw clip) that no completion will now name: deleted, and their
+  // recorded bytes given back (lib/job-server-output.ts, decided 2026-11-22).
+  // Awaited, so a caller that deletes the job's other files next (a review
+  // reject) finds these already handled; never throws; lazy like the two above.
+  const failedRow = data[0] as { user_id?: unknown; server_output?: unknown }
+  if (failedRow.server_output) {
+    await import("./job-server-output.js").then((m) => m.discardStoredObjectsOfFailedJob(jobId, failedRow)).catch(() => undefined)
+  }
   // A SET job (Kling Image 4.0) that failed leaves no picture behind, whatever
   // failed it: what its stores wrote is deleted and given back. A no-op for
   // every other job. Not awaited and never throws; lazy, like the rest.

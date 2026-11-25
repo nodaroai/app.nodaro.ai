@@ -213,6 +213,28 @@ export type JobRating = "good" | "bad"
 export type JobRatingFilter = JobRating | "rated" | "unrated"
 
 /**
+ * The `output_data` of a completed video job (narrow `Job.output_data` to it
+ * when the job produced a video).
+ *
+ * `videoUrl` is always a file a browser can play. When the provider's file is
+ * one the browser-safe step would change (it is not H.264 in yuv420p: an HEVC
+ * 10-bit or HDR file, say), that file is kept untouched as `originalVideoUrl`
+ * and `videoUrl` is its 8-bit H.264 preview (an HDR original's is tone-mapped
+ * to SDR). Download `originalVideoUrl` when it is there; play `videoUrl`. A
+ * watermarked run keeps no original.
+ *
+ * `videoPreviewUnavailable` is `true` when the preview could not be made:
+ * `videoUrl` is then the original itself, which some browsers cannot play.
+ */
+export interface VideoJobOutput {
+  videoUrl: string
+  thumbnailUrl?: string | null
+  originalVideoUrl?: string
+  videoPreviewUnavailable?: true
+  [key: string]: unknown
+}
+
+/**
  * Job record returned to non-admin SDK consumers. Field names are snake_case
  * to match the wire format (per the OpenAPI fix in Phase 1).
  *

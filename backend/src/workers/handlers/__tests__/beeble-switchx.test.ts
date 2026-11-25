@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => {
     throwIfJobCancelled: vi.fn(async () => {}),
     onTaskCreated,
     makeOnTaskCreated: vi.fn(() => onTaskCreated),
-    uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.nodaro.ai/videos/job1.mp4"),
+    uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.nodaro.ai/videos/job1.mp4" })),
     generateAndUploadThumbnail: vi.fn(async () => "https://r2.nodaro.ai/thumb/job1.webp"),
     setJobProgress: vi.fn(async () => {}),
     finalizeJobWithMedia: vi.fn(async () => ({ ok: true })),
@@ -101,7 +101,7 @@ beforeEach(() => {
   cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
   mocks.withSwitchXSlot.mockImplementation(async (fn: () => Promise<unknown>) => fn())
   mocks.makeOnTaskCreated.mockReturnValue(mocks.onTaskCreated)
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.nodaro.ai/videos/job1.mp4")
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.nodaro.ai/videos/job1.mp4" })
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://r2.nodaro.ai/thumb/job1.webp")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.capVideoToFrames.mockImplementation(async (_in: string, out: string) => out)
@@ -166,7 +166,7 @@ describe("handleBeebleSwitchX", () => {
     expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({
         jobType: "switchx",
-        mediaUrl: "https://r2.nodaro.ai/videos/job1.mp4",
+        video: { videoUrl: "https://r2.nodaro.ai/videos/job1.mp4" },
         result: expect.objectContaining({
           url: "https://r2.nodaro.ai/videos/job1.mp4",
           cost: null,

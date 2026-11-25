@@ -50,6 +50,14 @@ vi.mock("../../../lib/import-gate.js", () => ({
 }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2 }))
+// The music video goes through the video result funnel; here it stores what it is handed as is, through the storage mock.
+vi.mock("@/lib/video-result-store.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/video-result-store.js")>()),
+  storeVideoResult: vi.fn(async (source: { url: string }, opts: { jobId: string; userId: string | undefined; watermark: boolean }) => {
+    expect(opts.watermark).toBe(false)
+    return { videoUrl: await mocks.mockUploadToR2(source.url, opts.jobId, "video", opts.userId) }
+  }),
+}))
 vi.mock("@/lib/nodaro-connect.js", () => ({ isNodaroConnected: mocks.mockIsNodaroConnected }))
 vi.mock("@/providers/nodaro/run-on-cloud.js", () => ({ runJobOnCloud: mocks.mockRunJobOnCloud }))
 const market = vi.hoisted(() => ({ coverById: vi.fn() }))

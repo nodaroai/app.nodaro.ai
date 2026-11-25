@@ -203,6 +203,10 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
 
 // youtube-dl-exec is only used by downloadAudioToR2 which we're not testing
 vi.mock("youtube-dl-exec", () => ({ default: vi.fn() }))
+// The lost-race hook's discard (lib/job-server-output.ts): its own reads are its own suite's.
+const discardEnded = vi.hoisted(() => vi.fn(async (_jobId: string) => {}))
+const pruneUnnamed = vi.hoisted(() => vi.fn(async (_jobId: string) => {}))
+vi.mock("@/lib/job-server-output.js", () => ({ discardStoredObjectsIfJobEnded: discardEnded, pruneUnnamedStoredObjects: pruneUnnamed }))
 
 // ---------------------------------------------------------------------------
 // Import module under test
@@ -278,13 +282,17 @@ describe("isSocialUrl", () => {
 
 describe("shouldSaveJobResult", () => {
   it("returns true when job is processing", async () => {
+    discardEnded.mockClear()
     mocks.mockSingle.mockResolvedValueOnce({ data: { status: "processing" }, error: null })
     expect(await shouldSaveJobResult("job-1")).toBe(true)
+    expect(discardEnded).not.toHaveBeenCalled()
   })
 
-  it("returns false when job is cancelled", async () => {
+  it("returns false when job is cancelled, and what its video stores kept goes with the result", async () => {
+    discardEnded.mockClear()
     mocks.mockSingle.mockResolvedValueOnce({ data: { status: "cancelled" }, error: null })
     expect(await shouldSaveJobResult("job-1")).toBe(false)
+    expect(discardEnded).toHaveBeenCalledWith("job-1")
   })
 
   it("returns true when job record not found", async () => {
@@ -723,9 +731,12 @@ describe("markJobCompleted — completes and settles atomically through complete
 
   it("a lost CAS (cancelled / terminal / held row) is lost_race, and settles nothing", async () => {
     mocks.mockRpc.mockResolvedValueOnce({ data: { completed: false }, error: null })
+    discardEnded.mockClear()
     expect(await markJobCompletedDetailed("job-1", { output_data: {} })).toBe("lost_race")
     expect(mocks.mockManagedSettlement).not.toHaveBeenCalled()
     expect(mocks.mockFrom).not.toHaveBeenCalled()
+    // What its video stores kept goes with the result that did not land.
+    expect(discardEnded).toHaveBeenCalledWith("job-1")
   })
 
   it("any other database error is lost_race with no second write — the transaction wrote nothing", async () => {

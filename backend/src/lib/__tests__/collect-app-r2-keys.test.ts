@@ -361,3 +361,17 @@ describe("collectAppR2Keys — whose file", () => {
     expect(keys).not.toContain(victimKey)
   })
 })
+
+describe("the expunge's refund record", () => {
+  it("names each kept object once, however many of the app's jobs recorded it", async () => {
+    const key = "videos/alice-run-job-master.mov"
+    tables.current.jobs = tables.current.jobs!.map((j) =>
+      j.id === "alice-run-job"
+        ? { ...j, output_data: { ...(j.output_data as object), originalVideoUrl: url(key) }, server_output: { stored: { [key]: 9000 } } }
+        : j.id === "alice-final-job" ? { ...j, server_output: { stored: { [key]: 9000 } } } : j,
+    )
+    const report = await collectAppR2KeyReport("app")
+    expect(report.keys).toContain(key)
+    expect(report.recorded).toEqual([{ key, userId: "alice", bytes: 9000, jobId: "alice-run-job" }])
+  })
+})

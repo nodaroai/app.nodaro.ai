@@ -6477,6 +6477,7 @@ export const ja: ChromeDict = {
   "node.pausePreview": "プレビューを一時停止",
   "node.playPreview": "プレビューを再生",
   "node.videoLoadFailed": "動画を読み込めませんでした",
+  "node.videoCannotPlayInBrowser": "この動画はここで再生できませんでした。ダウンロードをお試しください。",
   "node.openUrl": "URL を開く",
   "node.assembled": "合成済み",
   "node.startState": "開始状態",

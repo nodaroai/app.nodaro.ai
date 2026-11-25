@@ -6373,6 +6373,7 @@ export const ptBR: ChromeDict = {
   "node.pausePreview": "Pausar prévia",
   "node.playPreview": "Ouvir prévia",
   "node.videoLoadFailed": "Falha ao carregar o vídeo",
+  "node.videoCannotPlayInBrowser": "Não foi possível reproduzir este vídeo aqui. Tente baixá-lo.",
   "node.openUrl": "Abrir URL",
   "node.assembled": "Montado",
   "node.startState": "Estado inicial",

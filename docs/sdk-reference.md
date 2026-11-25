@@ -1524,6 +1524,24 @@ for (const entry of trash) {
 A "job" is a single AI generation unit (one image, one video render, one TTS
 call). Workflows produce one job per AI node.
 
+A completed **video** job's `output_data` is typed `VideoJobOutput`:
+`videoUrl` is always a file a browser can play. When the provider's file is
+one the browser-safe step would change (not H.264 `yuv420p`, e.g. HEVC 10-bit
+or HDR), that file is kept untouched as `originalVideoUrl` and `videoUrl` is
+its 8-bit H.264 preview (an HDR original's tone-mapped to SDR). Download
+`originalVideoUrl` when it is present. `videoPreviewUnavailable: true` means the
+preview could not be made, so `videoUrl` is the original itself. A watermarked
+run keeps no original.
+[Design note](./design/video-original-and-preview.md).
+
+```ts
+import type { VideoJobOutput } from "@nodaro/sdk/jobs"
+
+const { data: job } = await client.jobs.get(jobId)
+const out = job.output_data as VideoJobOutput
+const downloadUrl = out.originalVideoUrl ?? out.videoUrl
+```
+
 #### `get(id)`
 
 ```ts

@@ -56,10 +56,10 @@ import {
   rawExtensionObjectId,
   rawExtensionReferenceObjectId,
   sideBySideVideoKey,
-  silentVideoKey,
 } from "../job-output-keys.js"
 import { applyEdlOutputData } from "../apply-edl-output.js"
 import { JOB_SCRATCH_ROOT, jobScratchKey, jobScratchPrefix } from "../job-scratch-keys.js"
+import { originalVideoObjectId } from "../video-original-keys.js"
 import { parseText, sourceFiles as shippedSourceFiles, relPath } from "./source-scan.js"
 import ts from "typescript"
 
@@ -259,27 +259,23 @@ const IN_FAMILY_BUILT_ELSEWHERE: Readonly<Record<string, { key: (jobId: string) 
     key: (j) => inpaintCompositeKey(j),
     why: "an inpaint job's composite, `inpaint/<jobId>.png`: the job's own slot",
   },
-  "workers/handlers/video-ai.ts :: silentVideoKey(jobId)": {
-    key: (j) => silentVideoKey(j),
-    why: "Veo's audio-stripped copy, `videos/<jobId>-silent.mp4`: the job's family",
-  },
   "ee/lib/video-remake-side-by-side-job.ts :: key": {
     key: (j) => sideBySideVideoKey(j, "s".repeat(32), 1),
     why: "a Video Remake run's side by side, `videos/<jobId>-side-by-side-v<recipe>-<hash>.mp4` (sideBySideObjectKey → sideBySideVideoKey): the run's family, recorded in its output_data",
   },
   // Decided 2026-10-08: these four were known gaps (random keys) and now key
   // in the job's family. Each entry runs the writer's REAL builder.
-  "workers/handlers/video-ai.ts :: rawExtensionObjectId(ctx.jobId)": {
-    key: (j) => `videos/${rawExtensionObjectId(j)}.mov`,
-    why: "a Seedance extend's raw .mov copy, `<jobId>-raw`: the job's family, never the deliverable's slot",
+  // The video result funnel (decided 2026-11-22): every video result is stored
+  // by it under the id its caller hands it as `jobId` (in the job's family:
+  // video-result-store-totality.test.ts holds every caller's id to that), and a
+  // kept original beside it under `<jobId>-master`.
+  "lib/video-result-store.ts :: originalId → originalVideoUrl": {
+    key: (j) => `videos/${originalVideoObjectId(j)}.mov`,
+    why: "a video result's kept original, `videos/<jobId>-master.<ext>` (`originalId = originalVideoObjectId(opts.jobId)`): the job's family, beside its preview at the job's own slot",
   },
   "lib/private-plugins/toolkit.ts :: jobFileObjectId(getJobId(), \"combine\")": {
     key: (j) => `videos/${jobFileObjectId(j, "combine")}.mp4`,
     why: "the toolkit's combine-videos result, keyed by the RUNNING job (`getJobId()`, the job whose handler called the toolkit); outside a job no job owns it and the id is random",
-  },
-  "lib/private-plugins/toolkit.ts :: jobFileObjectId(getJobId(), \"upscaled\")": {
-    key: (j) => `videos/${jobFileObjectId(j, "upscaled")}.mp4`,
-    why: "the toolkit's Topaz-upscaled clip re-hosted as H.264 (Topaz delivers HEVC), keyed by the running job like the combine result",
   },
   "lib/private-plugins/toolkit.ts :: `images/${jobFileObjectId(getJobId(), \"plate\")}.${ext}`": {
     key: (j) => `images/${jobFileObjectId(j, "plate")}.png`,

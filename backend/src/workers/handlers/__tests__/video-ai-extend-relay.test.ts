@@ -112,7 +112,7 @@ vi.mock("@/workers/shared.js", async (importOriginal) => {
     commitJobCredits: vi.fn(async () => {}),
     shouldSaveJobResult: vi.fn(async () => true),
     markJobCompleted: vi.fn(async () => true),
-    uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.example.com/wm.mp4"),
+    uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.example.com/wm.mp4" })),
     watermarkLocalVideoAndUpload: mocks.mockWatermarkLocal,
     generateAndUploadThumbnail: mocks.mockThumb,
     setJobProgress: vi.fn(async () => {}),

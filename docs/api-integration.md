@@ -1632,6 +1632,29 @@ On a deployment's own server the card is the bundled proxy's `/s/*`, handed to
 the API's `GET /og/s/:token`; `SHARE_SITE_ORIGIN` is set in
 [deployment.md](./deployment.md).
 
+<a id="video-outputs-original-and-preview"></a>
+### Video outputs: the original and its preview
+
+A completed video job's `output_data.videoUrl` is always a file a browser can
+play. When the provider's file is one the browser-safe step would change (it
+is not H.264 `yuv420p`: HEVC, 10-bit, HDR, ProRes…), that file is kept untouched
+and named by `output_data.originalVideoUrl` (its own container and content
+type), and `videoUrl` is its 8-bit H.264 preview. An HDR original (HLG or PQ)
+has a preview tone-mapped to SDR BT.709. Use `originalVideoUrl` to download and
+`videoUrl` to play.
+
+- An H.264 `yuv420p` file gets no `originalVideoUrl`: the file is already
+  browser-safe.
+- A watermarked run never has an `originalVideoUrl`.
+- A file whose picture does not decode keeps no original; a file with no
+  video frame at all (sound alone, an empty or broken picture) fails the job,
+  and its credits are refunded.
+- `videoPreviewUnavailable: true`: the preview could not be made. The job still
+  completed, and `videoUrl` names the original, which some browsers cannot play.
+
+MCP job views (`get_job`, `wait_for_job`) carry it in `outputData.originalVideoUrl`;
+`outputUrl` is the playable file. See the [design note](./design/video-original-and-preview.md).
+
 ## 4i. A workflow's view link
 
 A workflow's creator can open a **read-only view of its canvas** to anyone

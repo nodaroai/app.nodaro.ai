@@ -1,5 +1,7 @@
 import { join } from "node:path"
 import { config } from "./config.js"
+import { serverOutputOf } from "./job-server-output.js"
+import { withServerOutput } from "./job-server-output-column.js"
 import { supabase } from "./supabase.js"
 import { downloadFile, getVideoStreamDuration, runFfmpeg } from "../providers/video/ffmpeg-utils.js"
 import { reencodePeakMemoryMiB } from "../providers/video/video-file-stages.js"
@@ -39,6 +41,7 @@ function isOurR2Url(url: string): boolean {
     return false
   }
 }
+
 
 /**
  * Produced-media keys are deterministic (`videos/<jobId>.<ext>`), so a
@@ -85,14 +88,21 @@ export async function findChainedMovReference(
   const jobId = jobIdFromDeliverableUrl(sourceUrl)
   if (!jobId) return undefined
   try {
-    const { data } = await supabase
+    const { data } = await withServerOutput("output_data", (cols) => supabase
       .from("jobs")
-      .select("output_data")
+      // server_output: a watermarked run keeps its raw mov there, never in output_data (migration 695).
+      .select(cols)
       .eq("id", jobId)
       // Scoped to the caller: never chain off another user's stored object.
       .eq("user_id", userId)
-      .maybeSingle()
-    const raw = (data?.output_data as { rawExtensionUrl?: unknown } | null | undefined)?.rawExtensionUrl
+      .maybeSingle())
+    const row = data as unknown as { output_data?: unknown; server_output?: unknown } | null
+    const output = row?.output_data as Record<string, unknown> | null | undefined
+    // A job whose content was erased (an expunge nulls `output_data`) is never
+    // a chain source, whatever its server-only record still names (decided
+    // 2026-11-25).
+    if (!output || typeof output !== "object") return undefined
+    const raw = output.rawExtensionUrl ?? serverOutputOf(row?.server_output).rawExtensionUrl
     if (typeof raw !== "string") return undefined
     return isMovUrl(raw) && isOurR2Url(raw) ? raw : undefined
   } catch (err) {

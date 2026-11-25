@@ -39,8 +39,8 @@ const mocks = vi.hoisted(() => {
   // A Rhea row's delivery reads the job's owner and watermark rule.
   const jobsSelectMock = vi.fn(() => ({ eq: () => ({ single: async () => ({ data: { user_id: "user-1", should_watermark: true }, error: null }) }) }))
   const fromMock = vi.fn((_table: string) => ({ update: jobsUpdateMock, select: jobsSelectMock }))
-  const deliverMock = vi.fn(async (opts: { store: (p: string) => Promise<string> }) => ({ stored: await opts.store("/tmp/fitted.mp4"), width: 720, height: 1278 }))
-  const storeMock = vi.fn(async () => "https://r2.example/rhea.mp4")
+  const deliverMock = vi.fn(async (opts: { store: (p: string) => Promise<unknown> }) => ({ stored: await opts.store("/tmp/fitted.mp4"), width: 720, height: 1278 }))
+  const storeMock = vi.fn(async () => ({ videoUrl: "https://r2.example/rhea.mp4" }))
 
   // The finalize claim a Rhea delivery takes first (won unless a test says otherwise), and the claim read now.
   const claimMock = vi.fn().mockResolvedValue({ won: true, ts: "2026-11-24T10:00:00.000Z" })
@@ -253,7 +253,7 @@ describe("reconcileFalJob", () => {
       jobId: "j-rhea",
       jobType: "video-upscale",
       claimant: "cron",
-      mediaUrl: "https://r2.example/rhea.mp4",
+      video: { videoUrl: "https://r2.example/rhea.mp4" },
       result: expect.objectContaining({ url: "https://fal.media/r.mp4", providerUsed: inputData.provider }),
       // The stored file's probed frame, never the plan's.
       extraOutputData: { width: 720, height: 1278 },
