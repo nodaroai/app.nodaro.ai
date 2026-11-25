@@ -1,7 +1,7 @@
 import Fastify, { type FastifyRequest } from "fastify"
 import { requestLogSerializer } from "./lib/log-redaction.js"
 import { installLaneRequestScope } from "./lib/concurrency-lanes/request-scope.js"
-import { createHash, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled } from "./lib/config.js"
@@ -15,6 +15,7 @@ import { useProviderSafetySettings } from "./lib/provider-safety.js"
 import { CLIENT_HEADER } from "./lib/job-source.js"
 import { IDEMPOTENCY_HEADER } from "./lib/idempotency-header.js"
 import { WORKSPACE_HEADER } from "@nodaro/shared/organizations"
+import { EDITOR_PROJECT_REQUEST_HEADERS } from "./lib/editor-project-headers.js"
 
 /**
  * The CORS options the app registers. Exported so a test can register them on
@@ -43,7 +44,10 @@ export const CORS_PREFLIGHT_MAX_AGE_SECONDS = 7200
 export function buildCorsOptions(mcpIframeRe: RegExp) {
   const base = {
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER, POLL_KEY_HEADER, IDEMPOTENCY_HEADER],
+    // The video editor saves projects from another origin (`/v1/editor-projects/:id/file`):
+    // its save headers must pass the preflight. (The revision its file read answers with is
+    // exposed by that route itself, so no other response changes.)
+    allowedHeaders: ["Content-Type", "Authorization", CLIENT_HEADER, WORKSPACE_HEADER, POLL_KEY_HEADER, IDEMPOTENCY_HEADER, ...EDITOR_PROJECT_REQUEST_HEADERS],
     credentials: true,
     maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
   }
@@ -225,6 +229,8 @@ import { registerCopilotRoutes } from "./ee/routes/copilot.js"
 import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
 import { welcomeOfferRoutes } from "./ee/routes/welcome-offer.js"
 import { accessibilityReportRoutes } from "./ee/routes/accessibility-report.js"
+import { editorProjectRoutes } from "./ee/routes/editor-projects.js"
+import { editorProjectsStore } from "./ee/lib/editor-projects/bucket.js"
 import { adminFreeGrantRoutes } from "./ee/routes/admin-free-grants.js"
 import { adminUsersLinkageRoutes } from "./ee/routes/admin-users-linkage.js"
 import { adminAccessRoutes } from "./ee/routes/admin-access.js"
@@ -431,48 +437,14 @@ import { registerNodaroMotionPulseReferenceAudioHook } from "./middleware/nodaro
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
-import { rateLimitAddressKey } from "./lib/client-address.js"
-import { internalRequestUser } from "./lib/internal-caller.js"
+import { rateLimitKeyGenerator } from "./lib/rate-limit-key.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
 import { registerInternalErrorSanitizer, registerErrorTelemetry, registerRefusalErrorHandler } from "./lib/http-errors.js"
 
-/**
- * Rate-limit key derivation.
- *
- * SECURITY: authenticated requests are keyed by a hash of the credential
- * (Bearer JWT / `ndr_app_` OAuth token / `ndr_` API token), NOT by the
- * client-supplied `X-Forwarded-For`. The previous XFF-only keyer let any caller
- * escape a per-route limit (e.g. suno `/voice/generate` 5/min, 20 cr each) just
- * by rotating the header — a stolen JWT could drain a balance at full speed.
- * Keying by the credential is unspoofable (the attacker would need the token)
- * and gives a stable per-identity bucket regardless of source IP. We only fall
- * back to the client's network for UNauthenticated routes (e.g. OAuth
- * dynamic-client registration), where there is no credential to key on —
- * `lib/client-address.ts`, the one derivation every address reader shares.
- *
- * Exported for unit testing.
- */
-export function rateLimitKeyGenerator(req: {
-  headers: Record<string, string | string[] | undefined>
-  ip?: string
-  socket?: { remoteAddress?: string | undefined } | null
-}): string {
-  // An internal request (an MCP tool, the orchestrator) acts for the user it
-  // names: one bucket per user. It carries no credential, so it used to key
-  // on the loopback address: ONE bucket per instance, where one user's MCP
-  // fan-out 429'd every other user's (#1888). Checked first, as the auth hook
-  // checks the secret first. A forged secret names no user here, so it falls
-  // through to the address key and cannot mint a fresh bucket per request.
-  const internalUser = internalRequestUser(req.headers)
-  if (internalUser) return "user:" + internalUser
-  const auth = req.headers["authorization"]
-  if (typeof auth === "string" && auth.length > 0) {
-    return "cred:" + createHash("sha256").update(auth).digest("hex")
-  }
-  return rateLimitAddressKey(req)
-}
+/** Rate-limit key derivation (`lib/rate-limit-key.ts`), re-exported for its tests. */
+export { rateLimitKeyGenerator }
 
 export async function buildApp() {
   // Load any deployment-supplied overlay BEFORE routes/workers so its egress
@@ -978,6 +950,12 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // Nodaro Keepers: the shared catalog of the four item kinds (migration 566),
   // copied through the community clone rule — the same editions as sharing.
   if (isMultiUser()) await app.register(keeperRoutes)
+  // Video-editor projects saved to the account (migration 703; ee/routes/editor-projects.ts).
+  if (isCloud()) {
+    // Resolved once now, so a misconfigured private bucket is logged at boot (the routes then answer 503).
+    editorProjectsStore(app.log)
+    await app.register(editorProjectRoutes)
+  }
   await app.register(aiWriterRoutes)
   await app.register(llmChatRoutes)
   await app.register(llmSuggestDescriptionRoutes)

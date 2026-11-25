@@ -42,6 +42,17 @@ function isWithObjectAcl(node: ts.Node | undefined): boolean {
   )
 }
 
+/** The private buckets' own param builders, each allowed only in its file. */
+const PRIVATE_BUCKET_PARAMS: Readonly<Record<string, string>> = {
+  "lib/private-plugins/scene3d-upload-grants.ts": "withPrivateSceneObjectParams",
+  "ee/lib/editor-projects/bucket.ts": "withPrivateEditorProjectParams",
+}
+
+function isPrivateBucketParams(rel: string, arg: ts.Node | undefined): boolean {
+  const builder = PRIVATE_BUCKET_PARAMS[rel]
+  return !!builder && !!arg && ts.isCallExpression(arg) && ts.isIdentifier(arg.expression) && arg.expression.text === builder
+}
+
 /** The `params:` property of an object-literal argument, if present. */
 function paramsInitializer(arg: ts.Node | undefined): ts.Node | undefined {
   if (!arg || !ts.isObjectLiteralExpression(arg)) return undefined
@@ -68,9 +79,9 @@ function writeSites(): Site[] {
       if (WRITE_COMMANDS.has(name)) {
         sites.push({
           where: `${rel}:${lineOf(sf, n)} — new ${name}`,
-          wrapped: isWithObjectAcl(arg) || (rel === "lib/private-plugins/scene3d-upload-grants.ts" &&
-            !!arg && ts.isCallExpression(arg) && ts.isIdentifier(arg.expression) &&
-            arg.expression.text === "withPrivateSceneObjectParams"),
+          // The two private buckets bind their own params, which can carry no
+          // ACL at all: their objects are never public, whatever STORAGE_OBJECT_ACL says.
+          wrapped: isWithObjectAcl(arg) || isPrivateBucketParams(rel, arg),
         })
       } else if (name === UPLOADER) {
         sites.push({

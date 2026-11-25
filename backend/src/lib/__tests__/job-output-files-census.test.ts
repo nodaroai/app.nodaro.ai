@@ -161,6 +161,7 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   // Raw sends past the writers.
   "lib/retained-images.ts :: key": `${NOT_A_JOB} (a retained image, \`retainedImageKey(row.id)\`: its own row owns and reaps it)`,
   "lib/retained-videos.ts :: key": `${NOT_A_JOB} (a retained video, \`retainedVideoKey(row.id)\`: its own row owns and reaps it)`,
+  "ee/lib/editor-projects/bucket.ts :: key": `${NOT_A_JOB} (a video-editor project's file in its own private bucket, under \`editor-projects/<userId>/<projectId>/\`: its project row owns it, and deleting the project deletes it)`,
   "lib/private-plugins/scene3d-upload-grants.ts :: key":
     `${NOT_A_JOB} (a presigned PUT into the private scene bucket, keyed by user + revision, with its own reservation record)`,
   "routes/upload.ts :: key": UPLOAD,
