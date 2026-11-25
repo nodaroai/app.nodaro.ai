@@ -396,7 +396,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     const reset = supabase
       .from("profiles")
       .update({
-        ...tierColumns(tier),
+        ...tierColumns(tier, oldTier),
         subscription_credits: newCredits,
       })
       .eq("id", id)

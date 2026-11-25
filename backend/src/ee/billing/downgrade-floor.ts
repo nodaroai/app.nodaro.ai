@@ -18,6 +18,34 @@ import { isMissingColumnError } from "../../lib/postgrest-errors.js"
 import { ENDED_SUBSCRIPTION_CREDITS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { resolveTierFrom, tierColumns } from "./tier-columns.js"
 
+/**
+ * The plan a tier write leaves, as `tierColumns` takes it for the
+ * private-outputs reset (a drop from a plan with private outputs returns that
+ * setting to public): the PROFILE's stored tier, read immediately before the
+ * write — not the subscription row, which an earlier writer may already have
+ * moved, and which an admin-set tier does not follow.
+ *
+ * Null, so nothing is reset, when the person's outputs are public already
+ * (there is nothing to return, and no caller needs to confirm a drop with
+ * Stripe for it) or when the row cannot be read.
+ */
+export async function readStoredTier(userId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier, public_outputs")
+      .eq("id", userId)
+      .maybeSingle()
+    if (error || !data) return null
+    const row = data as { tier?: string | null; subscription_tier?: string | null; public_outputs?: boolean | null }
+    if (row.public_outputs !== false) return null
+    return resolveTierFrom(row)
+  } catch (err) {
+    console.error(`[billing] reading the plan of ${userId} before a tier write failed; private outputs left as they are:`, err)
+    return null
+  }
+}
+
 /** Storage floor for a user with the given NET lifetime top-up credits. */
 export function storageFloorFor(lifetimeTopupCredits: number): number {
   return lifetimeTopupCredits > 0 ? TIER_STORAGE_LIMITS.payg : TIER_STORAGE_LIMITS.free
@@ -38,8 +66,10 @@ export async function fetchLifetimeTopups(userIds: string[]): Promise<Map<string
 }
 
 /**
- * Downgrade ONE user to the free/payg effective floor. Caller-specific
- * columns (credit caps, subscription_ended_at, ...) ride along in `extra`.
+ * Downgrade ONE user to the free/payg effective floor. `fromTier` is the plan
+ * the profile holds before this write (`tierColumns`: a drop from a plan with
+ * private outputs returns that setting to public). Caller-specific columns
+ * (credit caps, subscription_ended_at, ...) ride along in `extra`.
  * Returns whether the user landed on the payg floor.
  *
  * `onlyIf`: write only while each named column still holds the given value
@@ -50,6 +80,7 @@ export async function fetchLifetimeTopups(userIds: string[]): Promise<Map<string
  */
 export async function downgradeToEffectiveFloor(
   userId: string,
+  fromTier: string | null,
   extra: Record<string, unknown> = {},
   onlyIf?: Readonly<Record<string, string | number | null>>,
 ): Promise<{ isPayg: boolean; error: { message: string } | null; matched: boolean }> {
@@ -58,7 +89,7 @@ export async function downgradeToEffectiveFloor(
   let update = supabase
     .from("profiles")
     .update({
-      ...tierColumns("free"),
+      ...tierColumns("free", fromTier),
       storage_limit_bytes: storageFloorFor(lifetime),
       ...extra,
     })
@@ -174,6 +205,7 @@ export async function endPaidPlan(userId: string, extra: Record<string, unknown>
     const before = profile.subscription_credits ?? null
     const res = await downgradeToEffectiveFloor(
       userId,
+      resolveTierFrom(profile),
       { ...extra, subscription_credits: ENDED_SUBSCRIPTION_CREDITS },
       { subscription_credits: before, credits_reset_at: profile.credits_reset_at ?? null },
     )

@@ -77,7 +77,7 @@ describe("downgradeToEffectiveFloor", () => {
       data: [{ id: "u1", lifetime_topup_credits: 3300 }],
       error: null,
     })
-    const res = await downgradeToEffectiveFloor("u1", { subscription_ended_at: "now" })
+    const res = await downgradeToEffectiveFloor("u1", "pro", { subscription_ended_at: "now" })
     expect(res.isPayg).toBe(true)
     const write = updates.find((u) => u.table === "profiles")
     expect(write?.payload.storage_limit_bytes).toBe(10 * GB)
@@ -91,10 +91,20 @@ describe("downgradeToEffectiveFloor", () => {
       data: [{ id: "u1", lifetime_topup_credits: 0 }],
       error: null,
     })
-    const res = await downgradeToEffectiveFloor("u1")
+    const res = await downgradeToEffectiveFloor("u1", "pro")
     expect(res.isPayg).toBe(false)
     const write = updates.find((u) => u.table === "profiles")
     expect(write?.payload.storage_limit_bytes).toBe(1 * GB)
+    // From Pro (private outputs) to Free (none): the setting returns to public.
+    expect(write?.payload.public_outputs).toBe(true)
+  })
+
+  it("from a plan without private outputs (Basic), the outputs setting is left alone", async () => {
+    tableResponses.set("profiles", { data: [{ id: "u1", lifetime_topup_credits: 0 }], error: null })
+    await downgradeToEffectiveFloor("u1", "basic")
+    const write = updates.find((u) => u.table === "profiles")
+    expect(write?.payload.tier).toBe("free")
+    expect(write?.payload).not.toHaveProperty("public_outputs")
   })
 })
 

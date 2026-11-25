@@ -293,6 +293,16 @@ describe("cleanup-service", () => {
       // A ledger line per account, of exactly what its plan end removed.
       expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", amount: -3000, source: "expiry", balanceAfter: 0 }))
       expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-2", amount: -100, source: "expiry", balanceAfter: 0 }))
+      // A drop from Pro (private outputs) to Free returns the setting to public
+      // in the same write; Basic → Free (no private outputs on either) leaves it alone.
+      const profileUpdates = mockFrom.mock.calls
+        .map(([table], i) => (table === "profiles" ? (mockFrom.mock.results[i]!.value as { update: ReturnType<typeof vi.fn> }).update.mock.calls : []))
+        .flat()
+        .map(([row]) => row as Record<string, unknown>)
+      expect(profileUpdates).toHaveLength(2)
+      expect(profileUpdates[0]).toMatchObject({ tier: "free", subscription_tier: "free", public_outputs: true })
+      expect(profileUpdates[1]).toMatchObject({ tier: "free", subscription_tier: "free" })
+      expect(profileUpdates[1]).not.toHaveProperty("public_outputs")
     })
 
     it("does NOT downgrade a re-subscriber who has a stale canceled row AND a live active row", async () => {

@@ -2482,6 +2482,10 @@ Two behaviors to know:
   right after it, and one that finishes later stays private. Turning
   private mode off again applies to new outputs only: items the switch
   hid stay private, even if a moderation hold on one is lifted later.
+  Leaving a plan with private mode for one without it (a downgrade to Free
+  or Basic, a cancelled or expired subscription) turns it off the same way:
+  new outputs are public again, and everything made while private stays
+  private.
 - **Media retention follows account activity.** Your generated files are
   stored while your account is active; after roughly 3 months without a
   purchase or any credit spend, files older than 60 days may be cleaned
@@ -4948,7 +4952,7 @@ statement template configured (`LOOPS_MONTHLY_STATEMENT_ID`); a deployment
 without one sends nothing.
 
 **User settings.** `GET /v1/user/settings` answers the signed-in person's own
-settings, `{ data: { tier, publicOutputs, promptTemplates, textTemplates,
+settings, `{ data: { tier, publicOutputs, privateOutputsAllowed, privateOutputsEndedByPlanAt, promptTemplates, textTemplates,
 preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes,
 variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail } }`, and
 `PATCH /v1/user/settings` changes the fields sent (any subset of the same,
@@ -4979,6 +4983,27 @@ and no other field of the patch is written; sending `false` again is safe and
 finishes the job. `publicOutputs: true` republishes nothing: every item the
 switch hid stays private, including one under a moderation hold that is
 lifted later.
+
+When the person's plan drops from one with private mode (Standard, Pro,
+Business) to one without (Free, Basic) on Nodaro Cloud — a plan change down, a
+cancelled or expired subscription, an admin moving the account —
+`publicOutputs` returns to `true` in the same write as the plan, with the same
+effect: new results are public again, and nothing made while private is
+republished. Any other plan change (an upgrade, Pro to Standard, a renewal)
+leaves the setting as it was. A change arriving from Stripe out of order
+resets it only when the subscription is still on the lower plan.
+
+What the person made while private stays private for good, whichever way the
+setting went back to public (their own switch or a plan drop): an item
+created before that moment is never made public, including a generation that
+was still running then and finishes later. Items created after it follow the
+setting. `privateOutputsAllowed` says whether the account's plan may switch
+outputs to private at all. `privateOutputsEndedByPlanAt` is the time a plan
+drop returned the outputs to public, while the account is still public on a
+plan without private mode (`null` otherwise); the Settings page shows it with
+a link to the plans. On Nodaro Cloud that drop also sends the person one email
+saying so (when the deployment has the template, `LOOPS_OUTPUTS_PUBLIC_ID`),
+once per drop.
 
 `Transaction` fields: `id`, `created_at`, `credits_charged`,
 `credits_reserved`, `credits_used`, `action`, `provider`, `status`,

@@ -32,7 +32,7 @@ import { ensureStripeCustomer } from "../billing/provision-credits.js"
 import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 import { rateLimitAddressKey } from "../../lib/client-address.js"
 import { tierColumns } from "../billing/tier-columns.js"
-import { readLiveOrClaimedSubscriptions } from "../billing/downgrade-floor.js"
+import { readLiveOrClaimedSubscriptions, readStoredTier } from "../billing/downgrade-floor.js"
 import { runtimeSurfaceProfile } from "../../lib/surface-profile.js"
 import { deploymentPayerId, payerCoverage } from "../../lib/deployment-payer.js"
 import { byNewest, invoiceDocument, paymentMethodView, receiptDocument, type PurchaseRow } from "../billing/billing-documents.js"
@@ -886,7 +886,11 @@ export async function billingRoutes(app: FastifyInstance) {
       // UPGRADE — on a downgrade the current (higher) storage stays until the
       // next renewal, matching handleSubscriptionUpdated, so nobody is pushed
       // over a smaller quota mid-cycle. Credits are never written here.
-      const profileUpdate: Record<string, unknown> = { ...tierColumns(newTier) }
+      // The plan it leaves is the PROFILE's, read now: an admin-set tier or a
+      // stale subscription row must not decide the private-outputs reset. A
+      // price mapping to no plan reads as "free" and is never a drop.
+      const leavingTier = newTier === "free" ? null : await readStoredTier(userId)
+      const profileUpdate: Record<string, unknown> = { ...tierColumns(newTier, leavingTier) }
       if (isUpgrade) {
         profileUpdate.storage_limit_bytes = newStorageLimit
       }

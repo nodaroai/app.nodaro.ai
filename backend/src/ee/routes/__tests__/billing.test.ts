@@ -526,6 +526,8 @@ describe("POST /v1/billing/change-plan", () => {
     })
     expect(tables.updates("profiles").some((p) => "subscription_credits" in p)).toBe(false)
     expect(tables.updates("profiles")).toContainEqual(expect.objectContaining({ subscription_tier: "pro" }))
+    // Pro includes private outputs: the upgrade leaves the person's setting as it is.
+    expect(tables.updates("profiles").some((p) => "public_outputs" in p)).toBe(false)
   })
 
   it("an upgrade whose payment did not complete changes nothing locally and answers 409 with the invoice to pay", async () => {
@@ -630,7 +632,10 @@ describe("POST /v1/billing/change-plan", () => {
   })
 
   it("a downgrade keeps today's terms (credited at the next invoice, no clawback) and notes the plan held this period", async () => {
-    const tables = mockTables({ subscriptions: { single: { ...activeBasic, stripe_price_id: "pri_pro" } } })
+    const tables = mockTables({
+      subscriptions: { single: { ...activeBasic, stripe_price_id: "pri_pro" } },
+      profiles: { single: { tier: "pro", subscription_tier: "pro", public_outputs: false } },
+    })
     vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub() as never)
     vi.mocked(stripe.subscriptions.update).mockResolvedValue({ id: "sub_existing", pending_update: null, latest_invoice: "in_cycle_0" } as never)
 
@@ -650,6 +655,25 @@ describe("POST /v1/billing/change-plan", () => {
     const profileWrites = tables.updates("profiles")
     expect(profileWrites.some((p) => "subscription_credits" in p)).toBe(false)
     expect(profileWrites.some((p) => "storage_limit_bytes" in p)).toBe(false)
+    // Basic has no private outputs: the setting returns to public in the tier's own write.
+    expect(profileWrites).toContainEqual(expect.objectContaining({ tier: "basic", subscription_tier: "basic", public_outputs: true }))
+  })
+
+  it("a downgrade decides the private-outputs reset from the PROFILE's plan, not the subscription's price", async () => {
+    // The subscription says Pro, but the profile is already on Basic (and private from before): no reset.
+    const tables = mockTables({
+      subscriptions: { single: { ...activeBasic, stripe_price_id: "pri_pro" } },
+      profiles: { single: { tier: "basic", subscription_tier: "basic", public_outputs: false } },
+    })
+    vi.mocked(stripe.subscriptions.retrieve).mockResolvedValue(liveSub() as never)
+    vi.mocked(stripe.subscriptions.update).mockResolvedValue({ id: "sub_existing", pending_update: null, latest_invoice: "in_cycle_0" } as never)
+
+    const res = await app.inject({ method: "POST", url: "/v1/billing/change-plan", payload: { userId: "user-123", newPriceId: "pri_basic" } })
+
+    expect(res.statusCode).toBe(200)
+    const writes = tables.updates("profiles")
+    expect(writes).toContainEqual(expect.objectContaining({ tier: "basic" }))
+    expect(writes.some((p) => "public_outputs" in p)).toBe(false)
   })
 })
 

@@ -49,7 +49,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { clearMemory } from "@/lib/node-defaults"
 
-const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
 const VALID_TEMPLATE_KEYS = new Set(Object.keys(SYSTEM_PROMPT_TEMPLATES))
 
@@ -81,7 +80,6 @@ export default function SettingsPage() {
   const variableModeMutation = useUpdateVariableDisplayModeMutation()
 
   const publicOutputs = settings?.publicOutputs ?? true
-  const tier = settings?.tier ?? "free"
   const showRecentNodes = settings?.showRecentNodes ?? false
   const variableDisplayMode = settings?.variableDisplayMode ?? "raw"
 
@@ -280,8 +278,9 @@ export default function SettingsPage() {
   // Tier gating is a Cloud monetisation lever. On a self-host there is no
   // tier to buy and the gallery is the operator's own — locking their outputs
   // public with an "upgrade to Standard" tooltip is nonsense (community grind,
-  // 2026-08-13).
-  const canToggle = !hasCredits() || PRIVATE_MODE_TIERS.has(tier)
+  // 2026-08-13). The server answers which plans may be private
+  // (`privateOutputsAllowed`, the same rule it enforces), so no list lives here.
+  const canToggle = settings?.privateOutputsAllowed ?? !hasCredits()
 
   if (authLoading || settingsLoading) {
     return (
@@ -313,7 +312,12 @@ export default function SettingsPage() {
 
       {/* Gallery Visibility — switching to private also hides existing items */}
       {user?.id && (
-        <GalleryVisibilityCard userId={user.id} publicOutputs={publicOutputs} canToggle={canToggle} />
+        <GalleryVisibilityCard
+          userId={user.id}
+          publicOutputs={publicOutputs}
+          canToggle={canToggle}
+          endedByPlanAt={settings?.privateOutputsEndedByPlanAt ?? null}
+        />
       )}
 
       {/* Email preferences (Cloud-only; self-hiding) */}
