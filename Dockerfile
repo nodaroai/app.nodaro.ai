@@ -640,6 +640,16 @@ if ! node /app/backend/dist/lib/moved-pages-check.js; then
   exit 1
 fi
 
+# The Supabase keys (docs/deployment.md, "Supabase keys in production"): a
+# production install refuses the public defaults docker-compose.community.yml
+# ships, before anything starts. The API refuses them too, but this script
+# would restart a refusing API in a loop and still start Caddy, which hands
+# /supabase/* to the auth and database services.
+if ! node /app/backend/dist/lib/selfhost-keys-check.js; then
+  echo "[start.sh] the Supabase keys must not be used here (see the lines above): nothing was started"
+  exit 1
+fi
+
 # Generate an internal orchestrator secret if not provided so every
 # sibling process in this container inherits the SAME value. Required
 # for orchestrator → API auth; without it, the auth hook rejects

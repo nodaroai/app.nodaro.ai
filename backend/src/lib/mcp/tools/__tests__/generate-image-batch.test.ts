@@ -260,4 +260,54 @@ describe("generate_image — count / models", () => {
     expect(structured.jobId).toBe("job-1")
     expect(structured).not.toHaveProperty("groups")
   })
+
+  it("8K on a model that stops at 4K goes to the route as asked and its fitting is said, alone or in a fan-out", async () => {
+    const reason = 'MiniMax H3 Image does not support resolution "8K" — using "4K" instead.'
+    const single = stubRoute("POST", "/v1/generate-image", { jobId: "job-1", adjustments: [{ field: "resolution", from: "8K", to: "4K", reason }] })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: single.fastify })
+    const one = await callTool(server, "generate_image", { prompt: "a red car", model: "minimax-h3-image", resolution: "8K" })
+    expect(single.received.body).toMatchObject({ provider: "minimax-h3-image", resolution: "8K" })
+    expect(textOf(one)).toContain(`Adjusted: ${reason}`)
+
+    const fan = stubRoute("POST", "/v1/generate-image", {
+      ...BATCH,
+      groups: [
+        { model: "kling-image-4", jobIds: ["job-1", "job-2"] },
+        { model: "minimax-h3-image", jobIds: ["job-3", "job-4"], adjustments: [{ field: "resolution", from: "8K", to: "4K", reason }] },
+      ],
+    })
+    const server2 = buildServer()
+    registerVerbs({ server: server2, session: executeSession(), fastify: fan.fastify })
+    const both = await callTool(server2, "generate_image", { prompt: "a red car", models: ["kling-image-4", "minimax-h3-image"], count: 2, resolution: "8K" })
+    expect(textOf(both)).toContain(`Adjusted (minimax-h3-image): ${reason}`)
+  })
+
+  it("any other size off a model's list is fitted by the tool exactly as before (4K on a 2K model goes as 2K)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "job-1" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_image", { prompt: "a red car", model: "flux", resolution: "4K" })
+    expect(received.body).toMatchObject({ provider: "flux", resolution: "2K" })
+  })
+
+  it("a size the model lists is still sent as the tool fitted it", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "job-1" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_image", { prompt: "a red car", model: "kling-image-4", resolution: "8k" })
+    expect(received.body).toMatchObject({ provider: "kling-image-4", resolution: "8K" })
+  })
+})
+
+describe("8K across Kling Image 4.0 and a model without it", () => {
+  it("goes as 8K: Kling renders it, the other model runs at its largest and says so", async () => {
+    const { fanOutLevers } = await import("../_image-batch.js")
+    const { normalizeModelInput } = await import("@nodaro/shared/model-catalog")
+    expect(fanOutLevers(["kling-image-4", "nano-banana-pro"], { resolution: "8K" }, {}).resolution).toBe("8K")
+    expect(normalizeModelInput("kling-image-4", { resolution: "8K" }).resolution).toBe("8K")
+    const other = normalizeModelInput("nano-banana-pro", { resolution: "8K" })
+    expect(other.resolution).toBe("4K")
+    expect(other.adjustments.some((a) => a.field === "resolution" && a.to === "4K")).toBe(true)
+  })
 })

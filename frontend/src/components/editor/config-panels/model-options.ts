@@ -610,6 +610,29 @@ export function declaredDefaultResolution(provider: string): string | undefined 
 }
 
 /**
+ * The image counts a model's SET takes (its catalog `imageSet`: Kling Image
+ * 4.0, 2 to 10), or undefined for a model that makes one image per run. The
+ * one registry the Set switch, its count and the fail-safe below read.
+ */
+export function imageSetRangeFor(provider: string | undefined): { readonly min: number; readonly max: number } | undefined {
+  return provider ? getModel(provider)?.imageSet : undefined
+}
+
+/**
+ * The fail-safe for a node's set (Provider Enum Sync 12b): a model with no
+ * sets clears it, a model with sets moves a count into its range. Returns only
+ * the fields that change. The catalog snap (`normalizeModelInput`) applies the
+ * same rule at run time, wherever the node was written from.
+ */
+export function imageSetFailSafe(provider: string | undefined, data: { readonly imageSetCount?: number }): { imageSetCount?: number } {
+  if (data.imageSetCount == null) return {}
+  const range = imageSetRangeFor(provider)
+  if (!range) return { imageSetCount: undefined }
+  const next = Math.min(Math.max(Math.trunc(data.imageSetCount), range.min), range.max)
+  return next === data.imageSetCount ? {} : { imageSetCount: next }
+}
+
+/**
  * Default resolution when no (or a stale) resolution is set on the node: the
  * catalog's declared default first (`declaredDefaultResolution`), else the
  * Flux 2 family's. Flux 2 uses ascending MP options ("0.5 MP" … "4 MP"), so

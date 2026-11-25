@@ -212,7 +212,12 @@ For anything reachable by other people:
 1. Mint fresh auth keys — `node tools/generate-selfhost-keys.mjs >> .env`
    (JWT secret + anon + service keys must always come from the same run).
    A changed anon key needs only a restart — the container hands it to the
-   browser at runtime (`/config.js`), no rebuild.
+   browser at runtime (`/config.js`), no rebuild. This one is enforced: once
+   `PUBLIC_URL` is anything but an address on this machine, the stack refuses
+   to start on the defaults and names each variable to replace. On
+   `localhost` it starts and logs a warning, because port 3000 is published on
+   every network interface. See
+   [Supabase keys in production](deployment.md#2b-1-supabase-keys-in-production).
 2. Set `POSTGRES_PASSWORD` and a matching `DATABASE_URL`, and fresh MinIO
    credentials (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`). Note the
    Postgres role passwords are aligned at the database's FIRST init — if

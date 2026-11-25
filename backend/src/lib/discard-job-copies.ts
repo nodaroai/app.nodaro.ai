@@ -52,8 +52,35 @@ export function ownedCopyKeys(jobId: string, urls: ReadonlyArray<string | undefi
  * a legal hold; a deployment that deletes nothing) gives nothing back. The
  * caller has decided nothing will name these files. Never throws.
  */
-export async function discardOwnedKeys(jobId: string, userId: string | undefined, keys: readonly string[]): Promise<void> {
+export async function discardOwnedKeys(
+  jobId: string,
+  userId: string | undefined,
+  keys: readonly string[],
+  /** `set`: whether the job is a SET (its size), when the caller already knows it; else the row is read. */
+  opts: { readonly set?: { readonly setCount: number } | null } = {},
+): Promise<void> {
   if (keys.length === 0) return
+  // A SET job's files go through the set's own clean-up, claimed on the job
+  // row, so its clean-ups never give one back twice.
+  let set: { userId?: string; setCount: number; status?: string } | null | undefined = opts.set === undefined ? undefined : opts.set
+  try {
+    if (set === undefined) set = await (await import("./image-set-storage.js")).setJobOwner(jobId)
+  } catch (err) {
+    // Whether this is a set cannot be read. Files that may be a set's pictures
+    // still go (a failed delete is recorded for the retry pass) with nothing
+    // given back, so a set's own clean-up can never give the same bytes back
+    // twice. Any other job's files are handled as always, below.
+    set = null
+    if ((await import("./image-set-storage.js")).mayBeSetPictures(jobId, keys)) {
+      console.warn(`[discard-job-copies] job ${jobId}: its row could not be read; its pictures are deleted without giving storage back: ${String(err)}`)
+      await deleteKeysRecordingFailures(keys, "job-output", { jobIdOf: () => jobId }).catch(() => undefined)
+      return
+    }
+  }
+  if (set) {
+    await (await import("./image-set-storage.js")).discardSetKeys(jobId, userId ?? set.userId, keys, { setCount: set.setCount, ...(set.status ? { rowStatus: set.status } : {}) })
+    return
+  }
   try {
     const sizes = new Map(await Promise.all(keys.map(async (key) => [key, await getR2ObjectSize(key)] as const)))
     const result = await deleteKeysRecordingFailures(keys, "job-output", { jobIdOf: () => jobId })
@@ -74,11 +101,15 @@ export async function discardFailedRunCopies(
     const keys = ownedCopyKeys(jobId, urls)
     if (keys.length === 0) return
 
-    const { data, error } = await supabase.from("jobs").select("status").eq("id", jobId).maybeSingle()
-    const status = (data as { status?: string } | null)?.status
+    const { data, error } = await supabase.from("jobs").select("status, setHoldCreditId:input_data->>setHoldCreditId").eq("id", jobId).maybeSingle()
+    const row = data as { status?: string; setHoldCreditId?: string | null } | null
+    const status = row?.status
     if (error || !status || status === "completed") return
 
-    await discardOwnedKeys(jobId, userId, keys)
+    // The row just read says whether the job is a SET: no second read.
+    const hold = row?.setHoldCreditId
+    const { setStoreLimit } = await import("./image-set-storage.js")
+    await discardOwnedKeys(jobId, userId, keys, { set: typeof hold === "string" && hold.length > 0 ? { setCount: setStoreLimit(hold) } : null })
   } catch (err) {
     console.error(`[discard-job-copies] Discarding job ${jobId}'s copies after a failed run failed:`, err)
   }

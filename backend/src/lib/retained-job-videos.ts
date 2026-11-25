@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js"
 import { retainVideo, readRetainedVideo, type RetainedVideo } from "./retained-videos.js"
-import { boundedPublicChunks } from "./safe-fetch-bytes.js"
+import { boundedPublicChunks, REQUEST_PATH_VIDEO_DOWNLOAD } from "./safe-fetch-bytes.js"
 import { TRASHED_JOB_COLUMN } from "./public-job-data.js"
 
 export interface RetainedJobVideo {
@@ -60,10 +60,20 @@ export async function retainJobVideo(args: { userId: string; workflowId: string;
   return verified(recorded.data as unknown as RecordRow)
 }
 
+/**
+ * A provider's finished video, up to 500 MB, from wherever the provider left
+ * it. Size-scaled, as the default download path holds a provider result: the
+ * response within 120 s; then a body that keeps moving (after 120 s, at least
+ * 1 MB a minute) gets its announced size at 512 kB/s, and nothing runs past
+ * 10 min (`REQUEST_PATH_VIDEO_DOWNLOAD`). That ceiling is the most this call
+ * waits on the download; it runs on a plugin route's request, which declares
+ * no budget of its own for it. No abort signal reaches it: the toolkit's
+ * `retainJobVideo` takes none.
+ */
 async function downloadVideo(source: string): Promise<Buffer> {
   const chunks: Buffer[] = []
   let length = 0
-  for await (const chunk of boundedPublicChunks(source, { maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video" })) {
+  for await (const chunk of boundedPublicChunks(source, { maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video", rate: REQUEST_PATH_VIDEO_DOWNLOAD })) {
     chunks.push(chunk); length += chunk.length
   }
   return Buffer.concat(chunks, length)

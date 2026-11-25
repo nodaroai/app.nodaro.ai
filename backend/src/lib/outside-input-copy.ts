@@ -84,6 +84,7 @@ import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { isOwnStoredFileUrl } from "./own-storage-url.js"
 import { boundedPublicChunks, PublicDownloadTooLargeError } from "./safe-fetch-bytes.js"
+import { DEFAULT_DOWNLOAD_LIMITS, type TransferRateLimits } from "./transfer-watchdog.js"
 import { headR2Object, r2KeyFromOurUrl, r2Url } from "./storage.js"
 import { keptStoragePrefix } from "./kept-storage-prefixes.js"
 import { uploadJobScratchFile } from "./job-scratch.js"
@@ -124,6 +125,23 @@ export function outsideInputSlotsHeld(set: "copy" | "quote", userId?: string): n
 
 /** The longest a download may take, and the default: the SSRF-safe fetch's own ceiling. */
 export const OUTSIDE_INPUT_MAX_TIMEOUT_MS = 120_000
+/** Of the slot's {@link OUTSIDE_INPUT_MAX_HOLD_MS}, what a size-scaled download
+ *  leaves for the rest of the hold: `inspect` (a pre-charge probe is bounded at
+ *  30 s), the upload policy and the upload. */
+export const OUTSIDE_INPUT_AFTER_DOWNLOAD_MS = 60_000
+/** The most a size-scaled download ({@link OutsideInputBaseOptions.downloadRate}) may take in all: inside the hold. */
+export const OUTSIDE_INPUT_DOWNLOAD_MAX_MS = OUTSIDE_INPUT_MAX_HOLD_MS - OUTSIDE_INPUT_AFTER_DOWNLOAD_MS
+/**
+ * The size-scaled download a lane copying a large clip opts into: the default
+ * download path's body rule (`DEFAULT_DOWNLOAD_LIMITS` — after 120 s at least
+ * 1 MB a minute, an announced size at 512 kB/s) under a ceiling of
+ * {@link OUTSIDE_INPUT_DOWNLOAD_MAX_MS}, so the download ends inside the
+ * slot's hold, which bounds the whole step.
+ */
+export const OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD: TransferRateLimits = Object.freeze({
+  ...DEFAULT_DOWNLOAD_LIMITS,
+  maxMs: OUTSIDE_INPUT_DOWNLOAD_MAX_MS,
+})
 /** The largest cap a lane may pass: the SSRF-safe fetch's own ceiling. */
 export const OUTSIDE_INPUT_MAX_BYTES_CEILING = 500 * 1024 * 1024
 
@@ -134,8 +152,16 @@ interface OutsideInputBaseOptions {
   readonly maxBytes: number
   /** Whom the input is fetched for: their slots, and the upload policy's user. */
   readonly userId: string
-  /** The download's time limit in ms (default and maximum {@link OUTSIDE_INPUT_MAX_TIMEOUT_MS}). */
+  /** The download's time limit in ms (default and maximum {@link OUTSIDE_INPUT_MAX_TIMEOUT_MS}):
+   *  over the response and the body, or — with `downloadRate` — the response only. */
   readonly timeoutMs?: number
+  /**
+   * A size-scaled download instead of the flat `timeoutMs` (normally
+   * {@link OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD}), for a lane whose cap is
+   * hundreds of MB: `boundedPublicChunks`'s `rate`. Its `maxMs` is at most
+   * {@link OUTSIDE_INPUT_DOWNLOAD_MAX_MS}. Omitted: the flat limit.
+   */
+  readonly downloadRate?: TransferRateLimits
   /** Aborts the work (its reason is thrown as is). */
   readonly signal?: AbortSignal
 }
@@ -339,6 +365,9 @@ function checkOptions(opts: OutsideInputBaseOptions): void {
   if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > OUTSIDE_INPUT_MAX_TIMEOUT_MS) {
     throw new Error(`outside-input: timeoutMs must be from 1 to ${OUTSIDE_INPUT_MAX_TIMEOUT_MS}`)
   }
+  if (opts.downloadRate && !(opts.downloadRate.maxMs >= 1 && opts.downloadRate.maxMs <= OUTSIDE_INPUT_DOWNLOAD_MAX_MS)) {
+    throw new Error(`outside-input: downloadRate.maxMs must be from 1 to ${OUTSIDE_INPUT_DOWNLOAD_MAX_MS}`)
+  }
   if (typeof opts.userId !== "string" || opts.userId === "") throw new Error("outside-input: userId is required")
 }
 
@@ -477,6 +506,7 @@ async function download(url: string, dest: string, opts: OutsideInputBaseOptions
     // Only names the fetch's own error messages, which are replaced below.
     label: opts.kind === "image" ? "Image" : "Video",
     signal: opts.signal,
+    ...(opts.downloadRate ? { rate: opts.downloadRate } : {}),
   })
   // Only the fetch's failures are refusals; a local write failure is not.
   async function* fetched(): AsyncGenerator<Buffer> {

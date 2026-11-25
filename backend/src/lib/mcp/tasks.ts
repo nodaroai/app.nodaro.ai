@@ -163,6 +163,8 @@ async function markJobCancelled(jobId: string, userId: string): Promise<void> {
     // POST /v1/jobs/:id/cancel — through the one shared sweep (lazy for the
     // same reason as below).
     const input = (flipped[0] as { input_data?: unknown }).input_data as Record<string, unknown> | null | undefined
+    // A cancelled SET job leaves no picture behind (no extra read for any other job).
+    if (typeof input?.setHoldCreditId === "string") await (await import("../image-set-storage.js")).discardEndedSetImages(jobId)
     const analysisJobId = typeof input?.analysisJobId === "string" ? input.analysisJobId : null
     const { cancelRunningChildJobs } = await import("../cancel-job.js")
     await cancelRunningChildJobs(jobId, userId, { analysisJobId })

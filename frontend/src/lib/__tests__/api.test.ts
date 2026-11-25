@@ -202,6 +202,20 @@ describe("generateImage", () => {
     expect(body).toEqual({ prompt: "a spinning logo", provider: "gpt-image-2-6-flare", outputFormat: "gif", gifFrames: 12, gifFrameDurationMs: 100 })
   })
 
+  it("sends a set's count and each reference's character (Kling Image 4.0) from the inpaint options", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j4" })
+    vi.stubGlobal("fetch", mock)
+    const referenceCharacters = [{ url: "https://cdn.test/a.png", characterSlug: "kira" }, { url: "https://cdn.test/b.png", characterSlug: "kira" }]
+    await generateImage(
+      "two views", ["https://cdn.test/a.png", "https://cdn.test/b.png"], "kling-image-4", undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      { imageSetCount: 3, referenceCharacters },
+    )
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).toEqual({ prompt: "two views", referenceImageUrls: ["https://cdn.test/a.png", "https://cdn.test/b.png"], provider: "kling-image-4", imageSetCount: 3, referenceCharacters })
+  })
+
   it("throws Error on non-ok response", async () => {
     noSession()
     vi.stubGlobal(

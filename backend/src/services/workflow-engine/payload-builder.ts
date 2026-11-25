@@ -1,4 +1,6 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import { manualReferenceImages } from "@nodaro/shared/workflow"
+import { klingImage4PricedItems, klingImage4Subjects, type SubjectSourceRef } from "../../lib/kling-image-4-subjects.js"
 import type { SpeakerViewClipFacts, SpeakerViewTracksResolved } from "@nodaro/render-rules"
 import { moodboardWarnings, type ResolvedUserDirection } from "../../lib/user-direction-result.js"
 import { aiAvatarCreditIdOf, switchXQuoteCreditId } from "../../lib/probed-credit-ids.js"
@@ -98,8 +100,7 @@ import {
   ttsVoiceForModel,
   getTtsCapabilities,
   replicaOf,
-  ttsReplicaProblem,
-} from "@nodaro/shared/model-catalog"
+  ttsReplicaProblem, imageToImageSentImages } from "@nodaro/shared/model-catalog"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
 import {
@@ -3212,18 +3213,10 @@ function buildPayloadOf(
       // Build a map of all available reference images by ID
       const refUrlMap = new Map<string, string>()
 
-      // Manual uploads (new multi-image format: ManualReferenceImage[])
-      const manualRefs = data.referenceImageUrls as Array<{ id: string; url: string }> | undefined
-      if (manualRefs?.length) {
-        for (const img of manualRefs) {
-          refUrlMap.set(img.id, img.url)
-        }
-      }
-      // Legacy single referenceImageUrl
-      const nodeRefUrl = data.referenceImageUrl as string | undefined
-      if (nodeRefUrl && refUrlMap.size === 0) {
-        refUrlMap.set("__legacy__", nodeRefUrl)
-      }
+      // Manual uploads (`{ id, url }` entries), else the legacy single
+      // referenceImageUrl: one reader with the editor and every estimate.
+      // (An entry in another shape keeps what it always made: no id, no url.)
+      for (const img of manualReferenceImages(data)) refUrlMap.set(img.id as string, img.url as string)
       // Wired upstream images — use source node IDs as keys (matching frontend)
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
@@ -3536,6 +3529,11 @@ function buildPayloadOf(
         result.referenceImageUrls ?? [],
         resolvedInputs.baseImageUrl || data.baseImageUrl,
       )
+      // Kling Image 4.0: a wired character sending 2 to 4 of those images is
+      // ONE named subject, priced as one input item, as on the route.
+      const generateSubjects = lora || !useConnectedRefs
+        ? []
+        : klingImage4Subjects(provider, generateConnectedRefs as SubjectSourceRef[] | undefined, result.referenceImageUrls ?? [])
       const imageParams = resolveNormalizedImageGen({
         provider,
         // Unset = Auto, as the dropdown shows it (`nodeAspectRatio`).
@@ -3547,9 +3545,14 @@ function buildPayloadOf(
         // The file written, and a GIF's or an SVG's own levers (a GIF and an SVG price differently).
         ...imageFormatInputOf(data),
         // On a model whose price reads the images the base of an edit is one more image sent.
-        refCount: generateSentImages,
+        refCount: klingImage4PricedItems(generateSentImages, generateSubjects),
         swapToI2i: !lora,
         sourceImage: buildCtx?.sourceImage,
+        // A set's images, on a model that makes sets; an inpaint returns one
+        // picture, so the snap drops the set and says so (a trained character
+        // run makes one image and is sent none).
+        imageSetCount: lora ? undefined : data.imageSetCount,
+        imageSetMasked: Boolean(resolvedInputs.maskUrl || data.maskUrl),
       })
       if (imageParams.adjustments.length > 0) {
         console.warn(
@@ -3570,7 +3573,7 @@ function buildPayloadOf(
       // More images than FLUX 3 Klein takes: refused before any job row, as on
       // the route. A workflow run: every other model sends its first images up
       // to its limit (decided 2026-11-14), so a saved graph keeps running.
-      const generateTooMany = lora ? null : imageInputLimitProblem(provider, generateSentImages, "workflow")
+      const generateTooMany = lora ? null : imageInputLimitProblem(provider, klingImage4PricedItems(generateSentImages, generateSubjects), "workflow")
       if (generateTooMany) throw new Error(generateTooMany.message)
 
       return {
@@ -3603,6 +3606,11 @@ function buildPayloadOf(
           gifFrames: imageParams.gifFrames,
           gifFrameDurationMs: imageParams.gifFrameDurationMs,
           svgLevel: imageParams.svgLevel,
+          // A set (Kling Image 4.0), held at its id and settled on the images
+          // it stores (lib/image-set-settle.ts reads `setHoldCreditId`).
+          ...(imageParams.imageSetCount !== undefined ? { imageSetCount: imageParams.imageSetCount, setHoldCreditId: imageParams.identifier } : {}),
+          // Kling Image 4.0's named subjects (some of the references, named).
+          ...(generateSubjects.length > 0 ? { imageSubjects: generateSubjects } : {}),
           negativePrompt: result.nativeNegativePrompt,
           seed: data.seed,
           renderingSpeed: data.renderingSpeed,
@@ -3903,7 +3911,7 @@ function buildPayloadOf(
       if (i2iTooShort) throw new Error(i2iTooShort.message)
       // The source and its references past what FLUX 3 Klein takes: refused, as
       // on the route. Every other model's workflow run sends its first images.
-      const i2iTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0), "workflow")
+      const i2iTooMany = imageInputLimitProblem(provider, imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls), "workflow")
       if (i2iTooMany) throw new Error(i2iTooMany.message)
 
       return {
@@ -3921,7 +3929,7 @@ function buildPayloadOf(
           outputFormat: i2iParams.outputFormat,
           gifFrames: i2iParams.gifFrames,
           svgLevel: i2iParams.svgLevel,
-          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          refCount: imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls),
           swapToI2i: false,
         }),
         payload: {
@@ -4107,7 +4115,7 @@ function buildPayloadOf(
       if (modTooShort) throw new Error(modTooShort.message)
       // The source and its references past what FLUX 3 Klein takes: refused, as
       // on the route. Every other model's workflow run sends its first images.
-      const modTooMany = imageInputLimitProblem(provider, 1 + (i2iResult.referenceImageUrls?.length ?? 0), "workflow")
+      const modTooMany = imageInputLimitProblem(provider, imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls), "workflow")
       if (modTooMany) throw new Error(modTooMany.message)
 
       return {
@@ -4123,7 +4131,7 @@ function buildPayloadOf(
           outputFormat: modParams.outputFormat,
           gifFrames: modParams.gifFrames,
           svgLevel: modParams.svgLevel,
-          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          refCount: imageToImageSentImages(provider, i2iMainImage, i2iResult.referenceImageUrls),
           swapToI2i: false,
         }),
         payload: {

@@ -766,6 +766,9 @@ export function createVideoWorker() {
           // refund below is unchanged either way.
           ...(errorHint ? { error_hint: errorHint } : {}),
         })
+        // The row had already ended (a cancel won while this run failed): a SET
+        // job still leaves no picture behind. The flip itself runs it in the funnel.
+        if (!flipped) await (await import("../lib/image-set-storage.js")).discardEndedSetImages(jobId)
 
         // Only refund if WE flipped the row. If a concurrent writer already
         // completed it, skip (the asset was delivered + credits committed); if

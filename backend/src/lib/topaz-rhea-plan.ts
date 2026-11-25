@@ -30,6 +30,7 @@ import { probeLinkRefusal, probeRefusalStatus } from "../providers/video/probe-g
 import {
   copyOutsideInput,
   inspectOutsideInput,
+  OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD,
   isOutsideInputRefusal,
   OUTSIDE_INPUT_MAX_BYTES_CEILING,
   OutsideInputBusyError,
@@ -199,7 +200,12 @@ export async function planTopazRheaUpscale(
     planned = planOf(clip, target)
     return clip
   }
-  const common = { kind: "video" as const, maxBytes: TOPAZ_RHEA_MAX_BYTES, userId: ctx.userId, inspect, ...(ctx.signal ? { signal: ctx.signal } : {}) }
+  // Up to 500 MB from an outside host: size-scaled (a flat 120 s needs 4.2 MB/s),
+  // ending inside the copy slot's 5-min hold that bounds this whole step.
+  const common = {
+    kind: "video" as const, maxBytes: TOPAZ_RHEA_MAX_BYTES, userId: ctx.userId, inspect,
+    downloadRate: OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD, ...(ctx.signal ? { signal: ctx.signal } : {}),
+  }
   let storedUrl: string
   try {
     storedUrl = ctx.quote
