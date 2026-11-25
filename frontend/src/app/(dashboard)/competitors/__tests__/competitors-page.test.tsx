@@ -6,6 +6,7 @@
  */
 import { createContext, useContext, type ReactNode } from "react"
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter } from "react-router-dom"
@@ -695,7 +696,7 @@ describe("did it work", () => {
     fireEvent.click(await screen.findByRole("button", { name: new RegExp(en["marks.resultsInOne"]) }))
     expect(await screen.findByText("Worked: 2.1x your usual")).toBeInTheDocument()
     expect(screen.getByText("2 of 3 worked for you")).toBeInTheDocument()
-    await waitFor(() => expect(api.updateCardMark).toHaveBeenCalledWith(done.id, { seen: true }), { timeout: 3000 })
+    await waitFor(() => expect(api.updateCardMark).toHaveBeenCalledWith(done.id, { seen: true }), { timeout: scaledTimeout(3000) })
     expect(api.updateCardMark).toHaveBeenCalledTimes(1)
   })
 })

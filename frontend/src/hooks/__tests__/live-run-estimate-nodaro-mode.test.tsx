@@ -10,6 +10,7 @@
  * it, while the run took Sharp.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../tools/vitest/ci-limits.mjs"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -92,6 +93,6 @@ describe("the live figure re-prices when the availability answer lands", () => {
     act(() => { answer(false) })
     const sharpTotal = figureNow()
     expect(sharpTotal).not.toBe(transparentTotal)
-    await waitFor(() => expect(result.current.total).toBe(sharpTotal), { timeout: 2_000 })
+    await waitFor(() => expect(result.current.total).toBe(sharpTotal), { timeout: scaledTimeout(2_000) })
   })
 })
