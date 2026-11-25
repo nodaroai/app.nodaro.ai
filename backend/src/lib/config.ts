@@ -304,6 +304,10 @@ export const envSchema = z.object({
    *  `action`). Empty = the case's screen says that email cannot be sent. */
   LOOPS_CONTENT_RESTRICTED_ID: z.string().default(""),
   LOOPS_COMPLAINT_UPDATE_ID: z.string().default(""),
+  /** The Loops transactional template sent once when a plan drop returns a
+   *  person's private outputs to public (ee/notifications/outputs-public-notice.ts;
+   *  data variables `date`, `plansUrl`). Empty = no such email is sent. */
+  LOOPS_OUTPUTS_PUBLIC_ID: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

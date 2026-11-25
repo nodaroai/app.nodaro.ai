@@ -9,13 +9,14 @@ import { getUserEarnings } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { invalidateBalance } from "@/ee/lib/invalidate-balance"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { useUserSettings } from "@/hooks/queries/use-user-settings-queries"
 import {
   useSubscription,
   useTransactions,
   useStorageProfile,
   useManageSubscriptionMutation,
 } from "@/ee/hooks/queries/use-billing-queries"
-import { CurrentPlanCard } from "@/ee/components/billing/CurrentPlanCard"
+import { CurrentPlanCard, cancelResetsPrivateOutputs } from "@/ee/components/billing/CurrentPlanCard"
 import { CreditBalanceCard } from "@/ee/components/billing/CreditBalanceCard"
 import { CreditActivity } from "@/ee/components/billing/CreditActivity"
 import { ConnectedInstances } from "@/ee/components/billing/ConnectedInstances"
@@ -110,6 +111,7 @@ export default function BillingPage() {
   // "resets monthly" was a designer assumption). Balance passes through
   // untouched: monthlyAllocation 0 → "one-time grant" semantics everywhere.
   const { data: balance, isLoading: creditsLoading } = useUserCredits(user?.id)
+  const { data: settings } = useUserSettings(user?.id)
   const { data: subscription, isLoading: subLoading } = useSubscription(user?.id)
   const { data: transactions = [], isLoading: txLoading } = useTransactions(user?.id)
   const { data: storage } = useStorageProfile(user?.id)
@@ -210,6 +212,7 @@ export default function BillingPage() {
           storageLimitBytes={storage?.storageLimit ?? undefined}
           onManageSubscription={handleManageSubscription}
           managePending={manageMutation.isPending}
+          outputsPrivate={cancelResetsPrivateOutputs(settings)}
         />
 
         <CreditBalanceCard

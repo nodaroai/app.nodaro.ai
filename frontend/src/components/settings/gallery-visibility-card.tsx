@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { Globe, Loader2, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useT, type TFunction } from "@/lib/i18n"
+import { formatDate } from "@/lib/i18n/format"
 import { useUpdatePublicOutputsMutation } from "@/hooks/queries/use-user-settings-queries"
 
 interface GalleryVisibilityCardProps {
@@ -22,6 +24,12 @@ interface GalleryVisibilityCardProps {
   publicOutputs: boolean
   /** Whether this plan may switch outputs to private. */
   canToggle: boolean
+  /**
+   * When a plan drop returned the outputs to public (the server's
+   * `privateOutputsEndedByPlanAt`; null when not, or no longer, the case):
+   * the card says so, with the day and a link to the plans.
+   */
+  endedByPlanAt?: string | null
 }
 
 /** The success toast after switching to private: how many items left the gallery. */
@@ -37,7 +45,7 @@ export function privateToastMessage(t: TFunction, hidden: number): string {
  * transaction), so it asks first and says so. Switching back to public needs
  * no confirmation: it republishes nothing, which the private description says.
  */
-export function GalleryVisibilityCard({ userId, publicOutputs, canToggle }: GalleryVisibilityCardProps) {
+export function GalleryVisibilityCard({ userId, publicOutputs, canToggle, endedByPlanAt = null }: GalleryVisibilityCardProps) {
   const t = useT()
   const mutation = useUpdatePublicOutputsMutation()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -71,6 +79,16 @@ export function GalleryVisibilityCard({ userId, publicOutputs, canToggle }: Gall
           <p className="mt-1 text-sm text-muted-foreground">
             {publicOutputs ? t("settings.galleryPublicDesc") : t("settings.galleryPrivateDesc")}
           </p>
+          {endedByPlanAt && (
+            <div className="mt-3 flex flex-wrap items-center gap-3" data-testid="private-ended-by-plan">
+              <p className="text-sm">
+                {t("settings.privateEndedByPlan", { date: formatDate(endedByPlanAt, { year: "numeric", month: "long", day: "numeric" }) })}
+              </p>
+              <Button asChild size="sm">
+                <Link to="/pricing">{t("credits.upgradePlanCta")}</Link>
+              </Button>
+            </div>
+          )}
         </div>
 
         <TooltipProvider>

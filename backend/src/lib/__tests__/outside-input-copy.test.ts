@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   /** Answers for the test hosts; anything else goes to the real SSRF-safe fetch. */
   responses: new Map<string, () => unknown>(),
   fetched: [] as string[],
+  inits: [] as unknown[],
   head: vi.fn(),
   uploads: [] as Array<{ key: string; contentType: string; body: Buffer }>,
   uploadError: undefined as Error | undefined,
@@ -29,6 +30,7 @@ vi.mock("../safe-fetch.js", async (importOriginal) => {
     ...actual,
     safeFetch: vi.fn(async (url: string, init?: unknown) => {
       h.fetched.push(url)
+      h.inits.push(init)
       const answer = h.responses.get(url)
       if (answer) return answer()
       return actual.safeFetch(url, init as Parameters<typeof actual.safeFetch>[1])
@@ -68,7 +70,10 @@ import {
   copyOutsideInput,
   inspectOutsideInput,
   isOutsideInputRefusal,
+  OUTSIDE_INPUT_AFTER_DOWNLOAD_MS,
+  OUTSIDE_INPUT_DOWNLOAD_MAX_MS,
   OUTSIDE_INPUT_MAX_HOLD_MS,
+  OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD,
   OUTSIDE_INPUT_MAX_INFLIGHT_GLOBAL,
   OUTSIDE_INPUT_QUOTE_SLOT_WAIT_MS,
   OUTSIDE_INPUT_SLOT_WAIT_MS,
@@ -86,6 +91,7 @@ import { isOwnStoredFileUrl } from "../own-storage-url.js"
 import { applyUploadPolicies, clearUploadPolicies, registerUploadPolicy, UploadBlockedError, type UploadCheckInput } from "../upload-policy.js"
 import { LinkImportsDisabledError } from "../link-imports.js"
 import { JobCancelledError } from "../job-cancellation.js"
+import { DEFAULT_DOWNLOAD_LIMITS } from "../transfer-watchdog.js"
 
 const CLOUD = "https://cdn.example.com"
 const SELF_HOST = "http://localhost:3000/storage/nodaro-assets"
@@ -120,6 +126,7 @@ beforeEach(() => {
   process.env.R2_PUBLIC_URL = CLOUD
   h.responses.clear()
   h.fetched = []
+  h.inits = []
   h.uploads = []
   h.uploadError = undefined
   h.jobId = undefined
@@ -640,5 +647,88 @@ describe("sniffInputType (real header bytes)", () => {
     const out = await copyOutsideInput(OUTSIDE, { kind: "audio", maxBytes: 1_000, userId: USER, inspect: () => "opus" })
     expect(out.url).toMatch(/\.webm$/)
     expect(h.uploads[0]!.contentType).toBe("audio/webm")
+  })
+})
+
+/**
+ * A lane copying a large clip (Topaz Rhea, up to 500 MB) opts into a
+ * size-scaled download (`downloadRate`) instead of the flat 120 s: the response
+ * within `timeoutMs`, then a body that keeps moving runs on, its ceiling
+ * inside the slot's hold. Small numbers stand in for the production rule.
+ */
+describe("a size-scaled download (downloadRate)", () => {
+  /** Grace 1 s, then ≥ 10 bytes per 1 s window; a known size at 10 B/s; at most 60 s. */
+  const rate = { responseMs: 1_000, windowMs: 1_000, minBytesPerWindow: 10, floorBytesPerSec: 10, maxMs: 60_000 }
+
+  /** The MP4's first bytes at once, then `count` × 20 bytes, one every `everyMs` (or silence for ever). */
+  function trickle(count: number, everyMs: number | "stall") {
+    let sent = -1
+    return () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({}),
+      body: new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          if (sent === -1) { sent = 0; controller.enqueue(new Uint8Array(MP4)); return }
+          if (everyMs === "stall") return new Promise<void>(() => undefined)
+          if (sent === count) { controller.close(); return }
+          await new Promise((r) => setTimeout(r, everyMs))
+          sent++
+          controller.enqueue(new Uint8Array(20).fill(7))
+        },
+      }),
+    })
+  }
+
+  /** Fake time, step by step, with real I/O (temp files, the upload) let through between steps. */
+  async function runUntil(settled: Promise<unknown>, stepMs: number, maxMs: number): Promise<number> {
+    let done = false
+    void settled.then(() => { done = true })
+    await vi.waitFor(() => expect(h.fetched).toContain(OUTSIDE))
+    let elapsed = 0
+    while (!done && elapsed < maxMs) {
+      await vi.advanceTimersByTimeAsync(stepMs)
+      elapsed += stepMs
+      for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r))
+    }
+    return elapsed
+  }
+
+  it("a slow-but-steady copy finishes long past its flat limit", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] })
+    h.responses.set(OUTSIDE, trickle(40, 250))
+    const copying = copyOutsideInput(OUTSIDE, video({ maxBytes: 10_000, timeoutMs: 2_000, downloadRate: rate })).then((v) => v, (e: unknown) => e)
+    // 40 × 250 ms = 10 s: five times the 2 s that would bound it flat.
+    expect(await runUntil(copying, 250, 20_000)).toBeGreaterThan(9_000)
+    expect(await copying).toMatchObject({ copied: true, bytes: MP4.length + 40 * 20 })
+    expect(h.uploads).toHaveLength(1)
+  })
+
+  it("a stalled copy ends once the grace has passed, refused as unreadable (the lane's 400), nothing stored", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] })
+    h.responses.set(OUTSIDE, trickle(0, "stall"))
+    const copying = copyOutsideInput(OUTSIDE, video({ maxBytes: 10_000, timeoutMs: 2_000, downloadRate: rate })).then((v) => v, (e: unknown) => e)
+    // Ended by the window rule after the 1 s grace — never the 60 s ceiling. (How
+    // many fake steps that takes depends on how fast this runner's real I/O is.)
+    expect(await runUntil(copying, 250, 60_000)).toBeLessThan(60_000)
+    expect(await copying).toBeInstanceOf(OutsideInputUnreadableError)
+    expect(vi.mocked(console.warn).mock.calls.flat().join(" ")).toMatch(/download refused: Video download timed out: too slow/)
+    expect(h.uploads).toEqual([])
+  })
+
+  it("without it a lane keeps the flat limit over the response and the body", async () => {
+    h.responses.set(OUTSIDE, respond([MP4]))
+    await copyOutsideInput(OUTSIDE, video())
+    expect(h.inits[0]).toMatchObject({ timeoutMs: 120_000 + 5_000 })
+  })
+
+  it("the production rule is the default download path's, its ceiling inside the hold", () => {
+    expect(OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD).toEqual({ ...DEFAULT_DOWNLOAD_LIMITS, maxMs: OUTSIDE_INPUT_DOWNLOAD_MAX_MS })
+    expect(OUTSIDE_INPUT_DOWNLOAD_MAX_MS + OUTSIDE_INPUT_AFTER_DOWNLOAD_MS).toBe(OUTSIDE_INPUT_MAX_HOLD_MS)
+  })
+
+  it("refuses a ceiling past what the hold leaves the download, before any fetch", async () => {
+    await expect(copyOutsideInput(OUTSIDE, video({ downloadRate: { ...rate, maxMs: OUTSIDE_INPUT_DOWNLOAD_MAX_MS + 1 } }))).rejects.toThrow("downloadRate.maxMs")
+    expect(h.fetched).toEqual([])
   })
 })

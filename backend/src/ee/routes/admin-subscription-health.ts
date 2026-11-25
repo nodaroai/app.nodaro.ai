@@ -6,6 +6,7 @@ import { requirePlatformOperator } from "../middleware/require-platform-operator
 import { syncGrantedSubscriptionFromStripe } from "../billing/subscription-self-heal.js"
 import { getTierFromPriceId } from "../billing/stripe-config.js"
 import { tierColumns } from "../billing/tier-columns.js"
+import { readStoredTier } from "../billing/downgrade-floor.js"
 
 // ============================================================
 // Admin Subscription Health Routes
@@ -209,10 +210,15 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
 
     const { tier, periodStart: freshStart, periodEnd: freshEnd } = synced
 
-    // Update profile
+    // Update profile. The plan it holds now decides whether this is a drop
+    // that returns the outputs setting to public (`tierColumns`); unread, the
+    // setting is left alone.
+    // A price that maps to no plan (unknown or retired) reads as "free": a
+    // subscription is never on Free, so that is not a drop and resets nothing.
+    const leavingTier = tier === "free" ? null : await readStoredTier(userId)
     await supabase
       .from("profiles")
-      .update({ current_period_end: freshEnd, ...tierColumns(tier) })
+      .update({ current_period_end: freshEnd, ...tierColumns(tier, leavingTier) })
       .eq("id", userId)
 
     return {

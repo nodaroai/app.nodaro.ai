@@ -1,7 +1,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError, isMissingFunctionError, isMissingTableError } from "../../lib/postgrest-errors.js"
 import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
-import { tierColumns } from "./tier-columns.js"
+import { resolveTierFrom, tierColumns } from "./tier-columns.js"
 import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups, readLiveOrClaimedSubscriptions } from "./downgrade-floor.js"
 import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared/credits"
 /**
@@ -751,7 +751,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     // offer claimed, an admin gift) and is not this reap's to end. The reap
     // changes tier and storage, and deletes media.
     if ((lifetimes.get(user.id) ?? 0) > 0) {
-      const { error: floorErr } = await downgradeToEffectiveFloor(user.id)
+      const { error: floorErr } = await downgradeToEffectiveFloor(user.id, resolveTierFrom(user))
       if (floorErr) {
         console.error("[cleanup] payg floor downgrade failed:", user.id, floorErr.message)
         errors++
@@ -937,7 +937,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     await supabase
       .from("profiles")
       .update({
-        ...tierColumns(FREE_TIER_DEFAULTS.tier),
+        ...tierColumns(FREE_TIER_DEFAULTS.tier, resolveTierFrom(user)),
         storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
         storage_used_bytes: 0,
       })

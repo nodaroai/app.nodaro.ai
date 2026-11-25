@@ -61,6 +61,18 @@ export interface UserSettings {
    * nothing.
    */
   publicOutputs: boolean
+  /**
+   * Whether the account's plan may switch outputs to private (`publicOutputs:
+   * false`). On Nodaro Cloud: Standard, Pro and Business. Absent from a server
+   * that predates it.
+   */
+  privateOutputsAllowed?: boolean
+  /**
+   * When a plan drop (to a plan without private outputs) returned the outputs
+   * to public, as an ISO timestamp, while the account is still on such a plan
+   * and public; `null` otherwise. Absent from a server that predates it.
+   */
+  privateOutputsEndedByPlanAt?: string | null
   /** Per-template overrides of the system prompts, by template key. */
   promptTemplates: Record<string, string>
   /** The person's own Generate Text templates. */

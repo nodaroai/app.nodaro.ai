@@ -20,6 +20,7 @@ import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
 import { runFounderNotifyTick } from "../notifications/founder-notify.js"
 import { maybeSendMonthlyStatements } from "../notifications/monthly-statement.js"
+import { sendOutputsPublicNotices } from "../notifications/outputs-public-notice.js"
 import { getNotifyConfig } from "../notifications/notify-config.js"
 import { runCostShortfallSweep } from "./cost-shortfall-store.js"
 import { COST_SHORTFALL_SWEEP } from "./cost-shortfall.js"
@@ -116,6 +117,14 @@ export function startCleanupCron(): void {
       await maybeSendMonthlyStatements(new Date(), (await getNotifyConfig()).digestHour)
     } catch (err) {
       console.error("[cron] monthly statement tick failed:", err)
+    }
+    // The one email per plan-drop reset of private outputs to public (enqueued
+    // by the database on the reset itself). Dormant without
+    // LOOPS_OUTPUTS_PUBLIC_ID, and on the standby sender; never throws.
+    try {
+      await sendOutputsPublicNotices(new Date())
+    } catch (err) {
+      console.error("[cron] outputs-public notice tick failed:", err)
     }
   })
 

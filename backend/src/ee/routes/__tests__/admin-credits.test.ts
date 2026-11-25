@@ -299,6 +299,31 @@ describe("PUT /v1/admin/users/:id/tier", () => {
     expect(body.total_credits).toBe(4520)
   })
 
+  it.each([
+    ["basic", true],
+    ["standard", false],
+    ["business", false],
+  ])("an admin move to %s returns outputs to public only on a plan without private outputs", async (tier, resets) => {
+    const profileChain = supabaseChain({ data: { subscription_tier: "pro", subscription_credits: 50, topup_credits: 20 }, error: null })
+    const updateChain = supabaseChain({ data: [{ id: VALID_UUID }], error: null })
+    let callCount = 0
+    mockFrom.mockImplementation(() => (++callCount === 1 ? profileChain : updateChain))
+    vi.mocked(CreditsService.adminAdjustCredits).mockResolvedValue({ newBalance: 495 })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/tier`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { tier, adminUserId: ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const written = updateChain.update.mock.calls[0]![0] as Record<string, unknown>
+    expect(written).toMatchObject({ tier, subscription_tier: tier })
+    if (resets) expect(written.public_outputs).toBe(true)
+    else expect(written).not.toHaveProperty("public_outputs")
+  })
+
   /** Routes each table to its own chain: the profile read, the live-subscription read, the profile write. */
   function routeTables(opts: { live: unknown[]; written?: unknown[]; credits?: number | null }) {
     const profileRead = supabaseChain({
@@ -331,6 +356,8 @@ describe("PUT /v1/admin/users/:id/tier", () => {
     expect(body).toMatchObject({ tier: "free", subscription_credits: 0, total_credits: 20, credit_delta: -9000 })
     expect(profileWrite.update).toHaveBeenCalledWith(expect.objectContaining({ subscription_credits: 0 }))
     expect(profileWrite.update.mock.calls[0]![0]).not.toHaveProperty("topup_credits")
+    // Free has no private outputs: the setting returns to public in the same write.
+    expect(profileWrite.update).toHaveBeenCalledWith(expect.objectContaining({ tier: "free", public_outputs: true }))
     // Written only while the balance is still the one read: the logged amount is exact.
     expect(profileWrite.eq).toHaveBeenCalledWith("subscription_credits", 9000)
     expect(vi.mocked(CreditsService.logTransaction)).toHaveBeenCalledWith(

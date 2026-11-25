@@ -1,15 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { hasCredits } from "../lib/config.js"
 import { payerCoverage } from "../lib/deployment-payer.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 import { invalidateUserPreferences } from "../lib/mcp/user-preferences.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { MakeOutputsPrivateError, makeOutputsPrivate } from "../lib/gallery-removal.js"
+import { planAllowsPrivateOutputs } from "../lib/private-outputs-plan.js"
 import { LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
-
-const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
 /**
  * Drop keys whose value is `null` or `undefined`. Used by the
@@ -77,12 +75,12 @@ const PROFILE_COLUMNS_BASE =
  * remove it once the migration is everywhere. Everything in this list degrades
  * to its default instead of taking the whole route down.
  */
-const PENDING_COLUMNS = ["variable_display_mode", "node_double_click_action", "monthly_statement_email"] as const
+const PENDING_COLUMNS = ["variable_display_mode", "node_double_click_action", "monthly_statement_email", "outputs_public_since", "outputs_public_reason"] as const
 // Spelled out rather than joined from the array above: supabase-js infers the
 // row type from a STRING LITERAL, so a computed select() collapses every field
 // to `GenericStringError`. Keep this in sync with PENDING_COLUMNS by hand.
 const PROFILE_COLUMNS =
-  "tier, public_outputs, prompt_templates, text_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes, variable_display_mode, node_double_click_action, monthly_statement_email"
+  "tier, public_outputs, prompt_templates, text_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes, variable_display_mode, node_double_click_action, monthly_statement_email, outputs_public_since, outputs_public_reason"
 
 async function selectProfile(userId: string) {
   const full = await supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", userId).single()
@@ -171,6 +169,24 @@ const updateSettingsBody = z.object({
 /** Generate Text user-defined template preset (stored on profiles.text_templates). */
 export type TextTemplate = NonNullable<z.infer<typeof updateSettingsBody>["textTemplates"]>[number]
 
+/**
+ * When a plan drop returned this person's private outputs to public (the
+ * database's stamp, reason `plan`, migration 713), while they are still on a
+ * plan without private outputs and public: the Settings card says so, with
+ * the date and an upgrade link. Null otherwise — never reset by a plan, back
+ * on a plan that allows it, or private again.
+ */
+function privateOutputsEndedByPlanAt(profile: {
+  tier?: string | null
+  public_outputs?: boolean | null
+  outputs_public_since?: string | null
+  outputs_public_reason?: string | null
+}): string | null {
+  if (profile.outputs_public_reason !== "plan" || !profile.outputs_public_since) return null
+  if (profile.public_outputs === false || planAllowsPrivateOutputs(profile.tier)) return null
+  return profile.outputs_public_since
+}
+
 export async function userSettingsRoutes(app: FastifyInstance) {
   /**
    * GET /v1/user/settings - Fetch user settings (public_outputs, tier)
@@ -193,6 +209,10 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         // Under a deployment payer, the payer account's plan (`payerCoverage`).
         tier: payerCoverage()?.storedTier ?? profile.tier,
         publicOutputs: profile.public_outputs ?? true,
+        // Whether this plan may switch outputs to private (the same rule the
+        // PATCH below and every plan change ask), so no client keeps a tier list.
+        privateOutputsAllowed: planAllowsPrivateOutputs(profile.tier),
+        privateOutputsEndedByPlanAt: privateOutputsEndedByPlanAt(profile),
         promptTemplates: (profile.prompt_templates as Record<string, string>) ?? {},
         textTemplates: (profile.text_templates as TextTemplate[]) ?? [],
         preferredLocale: profile.preferred_locale ?? null,
@@ -250,9 +270,10 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     // Self-hosted editions have no tier to buy and the gallery is the
     // operator's own instance, so the restriction doesn't apply there
     // (community grind, 2026-08-13). Under a deployment payer the plan is the
-    // payer account's grade (`payerCoverage`, decided 2026-11-08).
-    const planTier = payerCoverage()?.tier ?? profile.tier ?? "free"
-    if (hasCredits() && publicOutputs === false && !PRIVATE_MODE_TIERS.has(planTier)) {
+    // payer account's grade (`payerCoverage`, decided 2026-11-08). The same
+    // rule returns the setting to public when a plan change drops the person
+    // to a plan without it (`tierColumns`), so the two cannot disagree.
+    if (publicOutputs === false && !planAllowsPrivateOutputs(profile.tier)) {
       return reply.status(403).send({
         error: "Private mode is available on Standard plan and above",
       })

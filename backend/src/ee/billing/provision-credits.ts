@@ -19,7 +19,8 @@ import {
 import { tierColumns } from "./tier-columns.js"
 import { notifyPaidConversion, notifyCancellation } from "../notifications/founder-notify.js"
 import { getStripe } from "./stripe-client.js"
-import { endPaidPlan, raiseStorageFloorOnActivation, readLiveOrClaimedSubscriptions, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
+import { endPaidPlan, raiseStorageFloorOnActivation, readLiveOrClaimedSubscriptions, readStoredTier, reapplyStorageFloorAfterClawback } from "./downgrade-floor.js"
+import { outputsColumnsForPlanChange, planAllowsPrivateOutputs } from "../../lib/private-outputs-plan.js"
 import { StripeEventRetryError } from "./stripe-event-retry.js"
 import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
@@ -264,6 +265,45 @@ interface SubscriptionUpdatedData {
   readonly metadata: Record<string, string> | null
 }
 
+/**
+ * The plan to hand `tierColumns` as the one this update leaves, for the
+ * private-outputs reset: the PROFILE's tier read now (`readStoredTier`), or
+ * null — no reset — when the reset must not happen:
+ *  - the event's price maps to no plan (`getTierFromPriceId` reads it as
+ *    "free"): a subscription is always on a paid plan, so that is an unknown
+ *    price, not a drop, and the wrong tier it writes heals on the next event
+ *    while a reset would not;
+ *  - it would reset, but Stripe's subscription as it is NOW is not on a plan
+ *    without private outputs. Stripe does not deliver events in order or only
+ *    once: a Standard → Basic event arriving after the Basic → Standard one
+ *    must not turn a Standard subscriber's outputs public. The tier it writes
+ *    is unchanged (that heals as before); only the reset waits on agreement.
+ * Reading Stripe's subscription fails → `StripeEventRetryError`. It is asked
+ * near the top of `handleSubscriptionUpdated`, before the renewal hold, the
+ * ledger lines, the subscription row and the profile are written, so a
+ * redelivery starts clean (and still fires what it would have fired, the
+ * cancellation alert included). The reset is never dropped to let the rest
+ * through: it could not be applied later.
+ */
+async function outputsResetFrom(userId: string, subscriptionId: string, newTier: string): Promise<string | null> {
+  if (newTier === "free") return null
+  const fromTier = await readStoredTier(userId)
+  if (!("public_outputs" in outputsColumnsForPlanChange(fromTier, newTier))) return fromTier
+  let freshPrice: string | undefined
+  try {
+    const fresh = await getStripe().subscriptions.retrieve(subscriptionId)
+    freshPrice = fresh.items?.data?.[0]?.price?.id
+  } catch (err) {
+    throw new StripeEventRetryError(`subscription.updated: reading ${subscriptionId} to confirm a plan drop failed: ${(err as Error).message}`)
+  }
+  const freshTier = freshPrice ? getTierFromPriceId(freshPrice) : "free"
+  const stillDropped = freshTier !== "free" && !planAllowsPrivateOutputs(freshTier)
+  if (!stillDropped) {
+    console.warn(`[stripe] subscription.updated: ${subscriptionId} is on ${freshTier} now, not ${newTier}; private outputs left as they are`)
+  }
+  return stillDropped ? fromTier : null
+}
+
 export async function handleSubscriptionUpdated(
   data: SubscriptionUpdatedData
 ): Promise<void> {
@@ -337,6 +377,15 @@ export async function handleSubscriptionUpdated(
       }
     }
   }
+
+  // The private-outputs reset this event would make, decided BEFORE any of the
+  // writes below: confirming a drop asks Stripe, and when that fails the event
+  // is retried with nothing of it written (`outputsResetFrom`). Only a paid
+  // status writes the profile's tier below; any other leaves it alone.
+  const resetFrom =
+    !lateForEnded && PAID_TIER_STATUSES.has(data.status)
+      ? await outputsResetFrom(userId, data.subscriptionId, getTierFromPriceId(data.priceId))
+      : null
 
   // A renewal charge that failed (past_due, or unpaid once Stripe gives up):
   // the period's remaining credits go on hold until that renewal is paid
@@ -499,7 +548,7 @@ export async function handleSubscriptionUpdated(
     const { error: profileError } = await supabase
       .from("profiles")
       .update({
-        ...tierColumns(newTier),
+        ...tierColumns(newTier, resetFrom),
         storage_limit_bytes: storageLimit,
         current_period_end: data.currentPeriodEnd,
         // Clear any stale cancellation marker — an updated/active subscription is

@@ -210,7 +210,22 @@ vi.mock("@/ee/notifications/founder-notify.js", () => ({
   notifyPaidConversion: state.notifyPaidConversion,
   notifyCancellation: state.notifyCancellation,
 }))
-vi.mock("@/ee/billing/stripe-client.js", () => ({ getStripe: () => ({}) }))
+// Stripe's subscription as it is now: what a plan drop that resets private
+// outputs confirms against. `fresh.price` when a test sets it, else the price
+// the stored row holds.
+const fresh = vi.hoisted(() => ({ retrieve: null as null | ((id: string) => Promise<unknown>), price: null as string | null }))
+vi.mock("@/ee/billing/stripe-client.js", () => ({
+  getStripe: () => ({
+    subscriptions: {
+      retrieve: (id: string) =>
+        fresh.retrieve
+          ? fresh.retrieve(id)
+          : Promise.resolve({
+              items: { data: [{ price: { id: fresh.price ?? ((state.db.tables.subscriptions ?? []) as Row[]).find((r) => r.stripe_subscription_id === id)?.stripe_price_id } }] },
+            }),
+    },
+  }),
+}))
 vi.mock("@/ee/billing/signup-grant.js", () => ({
   activateSignupGrantOnPurchase: vi.fn(async () => ({ activated: false, state: "granted" })),
 }))
@@ -319,6 +334,8 @@ let errorSpy: ReturnType<typeof vi.spyOn>
 let warnSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
+  fresh.retrieve = null
+  fresh.price = null
   state.db = migratedDb()
   state.writes.length = 0
   state.missingColumns.clear()
@@ -719,6 +736,168 @@ describe("an update sets the paid tier only while active, trialing or past_due",
       expect(profile()).toMatchObject({ tier: "pro", subscription_tier: "pro" })
     },
   )
+})
+
+// A plan without private outputs returns the setting to public in the same
+// write as the tier (tierColumns → lib/private-outputs-plan.ts). Jobs are
+// never touched here; that nothing old is republished is proven against a real
+// Postgres in supabase/tests/private-outputs-hide-existing.behavior.sql (P11).
+describe("the outputs setting follows the plan", () => {
+  async function privatePro() {
+    await handleSubscriptionCreated(created("active"))
+    ;(state.db.tables.profiles as Row[])[0]!.public_outputs = false
+    state.writes.length = 0
+  }
+  const jobWrites = () => state.writes.filter((w) => w.table === "jobs")
+
+  it("an update down to Basic returns the setting to public, in the tier's own write", async () => {
+    await privatePro()
+    fresh.price = STRIPE_PRODUCTS.basic.monthly
+
+    await handleSubscriptionUpdated(updated("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+
+    expect(profile()).toMatchObject({ tier: "basic", subscription_tier: "basic", public_outputs: true })
+    expect(profileWrites().filter((w) => (w.update as Row | undefined)?.public_outputs === true)).toHaveLength(1)
+    expect(profileWrites().every((w) => (w.update as Row | undefined)?.public_outputs !== false)).toBe(true)
+    expect(jobWrites()).toEqual([])
+  })
+
+  it.each([
+    ["a lateral or lower plan that still includes it (Standard)", "standard"],
+    ["the same plan again (a redelivered update)", "pro"],
+    ["an upgrade (Business)", "business"],
+  ])("%s keeps the private setting", async (_label, tier) => {
+    await privatePro()
+
+    await handleSubscriptionUpdated(updated("active", { priceId: STRIPE_PRODUCTS[tier as "standard" | "pro" | "business"].monthly }))
+
+    expect(profile()).toMatchObject({ tier, public_outputs: false })
+    expect(profileWrites().some((w) => "public_outputs" in ((w.update as Row | undefined) ?? {}))).toBe(false)
+  })
+
+  it("a cancellation returns the setting to public; a redelivered one changes nothing more", async () => {
+    await privatePro()
+
+    await handleSubscriptionCanceled(canceled)
+    expect(profile()).toMatchObject({ tier: "free", subscription_tier: "free", public_outputs: true })
+    const after = { ...profile() }
+
+    await handleSubscriptionCanceled(canceled)
+    expect(profile()).toEqual(after)
+    expect(jobWrites()).toEqual([])
+  })
+
+  it("an account on Basic that is private (from before this rule) stays private on a Basic update", async () => {
+    await handleSubscriptionCreated(created("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+    ;(state.db.tables.profiles as Row[])[0]!.public_outputs = false
+    state.writes.length = 0
+
+    await handleSubscriptionUpdated(
+      updated("active", { priceId: STRIPE_PRODUCTS.basic.monthly, currentPeriodStart: "2026-12-01T00:00:00.000Z", currentPeriodEnd: "2027-01-01T00:00:00.000Z" }),
+    )
+
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: false })
+    expect(profileWrites().some((w) => "public_outputs" in ((w.update as Row | undefined) ?? {}))).toBe(false)
+  })
+
+  it("a Free account that is private (from before this rule) stays private when it is granted Basic", async () => {
+    state.db = migratedDb({ ...FREE_PROFILE, public_outputs: false })
+
+    await handleSubscriptionCreated(created("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: false })
+  })
+
+  it("an update whose price maps to no plan never resets (it reads as free, which no subscription is)", async () => {
+    await privatePro()
+
+    await handleSubscriptionUpdated(updated("active", { priceId: "price_not_in_the_catalog" }))
+
+    expect(profile()).toMatchObject({ public_outputs: false })
+  })
+
+  it("a stale Standard → Basic event, arriving after the move back to Standard, resets nothing", async () => {
+    await privatePro()
+    ;(state.db.tables.profiles as Row[])[0]!.tier = "standard"
+    ;(state.db.tables.profiles as Row[])[0]!.subscription_tier = "standard"
+    fresh.retrieve = async () => ({ items: { data: [{ price: { id: STRIPE_PRODUCTS.standard.monthly } }] } })
+
+    await handleSubscriptionUpdated(updated("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+
+    // The tier this event says is written as before (the next event heals it); the outputs are not touched.
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: false })
+  })
+
+  it("the same drop, in order (Stripe still on Basic), resets", async () => {
+    await privatePro()
+    fresh.retrieve = async () => ({ items: { data: [{ price: { id: STRIPE_PRODUCTS.basic.monthly } }] } })
+
+    await handleSubscriptionUpdated(updated("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: true })
+  })
+
+  it("a drop whose confirmation cannot be read asks Stripe to redeliver, before the profile is written", async () => {
+    await privatePro()
+    fresh.retrieve = async () => {
+      throw new Error("stripe down")
+    }
+
+    // A drop that is also a renewal and a scheduled cancellation: every write it would make.
+    const event = updated("active", {
+      priceId: STRIPE_PRODUCTS.basic.monthly,
+      currentPeriodStart: "2026-12-01T00:00:00.000Z",
+      currentPeriodEnd: "2027-01-01T00:00:00.000Z",
+      cancelAtPeriodEnd: true,
+    })
+    const rowBefore = { ...subscription() }
+    state.logTransaction.mockClear()
+    state.notifyCancellation.mockClear()
+    await expect(handleSubscriptionUpdated(event)).rejects.toMatchObject({ name: "StripeEventRetryError" })
+
+    // Nothing of the event is written: no table write, no RPC, no ledger line, no alert.
+    expect(state.writes).toEqual([])
+    expect(state.logTransaction).not.toHaveBeenCalled()
+    expect(state.notifyCancellation).not.toHaveBeenCalled()
+    expect(subscription()).toEqual(rowBefore)
+    expect(profile()).toMatchObject({ tier: "pro", public_outputs: false })
+
+    // The redelivery, once Stripe answers, applies all of it — the reset and the cancellation alert included.
+    fresh.retrieve = null
+    fresh.price = STRIPE_PRODUCTS.basic.monthly
+    await handleSubscriptionUpdated(event)
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: true })
+    expect(state.notifyCancellation).toHaveBeenCalled()
+  })
+
+  it("decides from the PROFILE's plan, not the subscription row's", async () => {
+    await privatePro()
+    // The subscription row already says Basic (an earlier writer moved it); the profile is still Pro.
+    const sub = (state.db.tables.subscriptions as Row[]).find((r) => r.stripe_subscription_id === SUB)!
+    sub.tier = "basic"
+    fresh.price = STRIPE_PRODUCTS.basic.monthly
+
+    await handleSubscriptionUpdated(updated("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: true })
+  })
+
+  it("a profile already on Basic and private is not reset because the subscription row said Pro", async () => {
+    await privatePro()
+    ;(state.db.tables.profiles as Row[])[0]!.tier = "basic"
+    ;(state.db.tables.profiles as Row[])[0]!.subscription_tier = "basic"
+
+    await handleSubscriptionUpdated(updated("active", { priceId: STRIPE_PRODUCTS.basic.monthly }))
+    expect(profile()).toMatchObject({ tier: "basic", public_outputs: false })
+  })
+
+  it("an account already public on a plan drop stays public", async () => {
+    await handleSubscriptionCreated(created("active"))
+    ;(state.db.tables.profiles as Row[])[0]!.public_outputs = true
+
+    await handleSubscriptionCanceled(canceled)
+
+    expect(profile()).toMatchObject({ tier: "free", public_outputs: true })
+  })
 })
 
 describe("rows the marker does not know", () => {
