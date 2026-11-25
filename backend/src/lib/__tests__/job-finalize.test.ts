@@ -119,7 +119,7 @@ const sharedMocks = vi.hoisted(() => ({
   uploadImageVariantsMaybeWatermark: vi
     .fn<(urls: readonly string[], jobId: string) => Promise<readonly string[]>>()
     .mockResolvedValue(["https://r2.example/img-j1.png"]),
-  uploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://r2.example/vid-j1.mp4"),
+  uploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example/vid-j1.mp4" }),
   buildImageOutputData: vi.fn((result: unknown, urls: readonly string[]) => ({
     imageUrl: urls[0],
     ...(urls.length > 1 ? { imageUrls: urls } : {}),
@@ -162,6 +162,9 @@ const deleteLaneMocks = vi.hoisted(() => ({
   updateStorageUsage: vi.fn(async (_userId: string, _bytes: number) => undefined),
 }))
 vi.mock("@/lib/storage-delete.js", () => ({ deleteKeysRecordingFailures: deleteLaneMocks.deleteKeysRecordingFailures }))
+// What a cancelled or failed job's video stores recorded (migration 695): discarded on every path a finalize does not complete.
+const endedDiscard = vi.hoisted(() => vi.fn(async (_jobId: string) => {}))
+vi.mock("@/lib/job-server-output.js", async (orig) => ({ ...(await orig<object>()), discardStoredObjectsIfJobEnded: endedDiscard }))
 vi.mock("@/utils/file-validation.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/utils/file-validation.js")>()),
   updateStorageUsage: deleteLaneMocks.updateStorageUsage,
@@ -234,7 +237,7 @@ function resetMocksToHappyPath() {
   sharedMocks.uploadImageVariantsMaybeWatermark.mockResolvedValue([
     "https://r2.example/img-j1.png",
   ])
-  sharedMocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.example/vid-j1.mp4")
+  sharedMocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example/vid-j1.mp4" })
   sharedMocks.buildImageOutputData.mockImplementation((_result, urls) => ({
     imageUrl: urls[0],
     ...(urls.length > 1 ? { imageUrls: urls } : {}),
@@ -785,7 +788,7 @@ describe("finalizeJobWithMedia", () => {
   // audio-merge produces a local file)
   // -------------------------------------------------------------------------
 
-  it("video + mediaUrl: skips uploadVideoMaybeWatermark, uses the passed R2 URL", async () => {
+  it("video + a pre-stored video: skips uploadVideoMaybeWatermark, uses the passed R2 URL", async () => {
     mocks.jobsSingleMock.mockResolvedValueOnce({
       data: {
         id: "j-pre",
@@ -803,7 +806,7 @@ describe("finalizeJobWithMedia", () => {
       jobId: "j-pre",
       jobType: "image-to-video",
       result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
-      mediaUrl: "https://r2.example/already-uploaded.mp4",
+      video: { videoUrl: "https://r2.example/already-uploaded.mp4" },
     })
 
     expect(sharedMocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
@@ -830,7 +833,7 @@ describe("finalizeJobWithMedia", () => {
       jobId: "j-thumb",
       jobType: "image-to-video",
       result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
-      mediaUrl: "https://r2.example/v.mp4",
+      video: { videoUrl: "https://r2.example/v.mp4" },
       extraOutputData: {
         thumbnailUrl: "https://r2.example/thumb.png",
         seed: 12345,
@@ -855,6 +858,62 @@ describe("finalizeJobWithMedia", () => {
 
     expect(mocks.jobsSingleMock).not.toHaveBeenCalled()
     expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
+  })
+
+  it("video + a bare mediaUrl: refused before any read (a url alone would drop the kept original)", async () => {
+    await expect(
+      finalizeJobWithMedia({
+        jobId: "j-vid-bare",
+        jobType: "image-to-video",
+        result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+        mediaUrl: "https://r2.example/v.mp4",
+      }),
+    ).rejects.toThrow(/pass the stored video as `video`/)
+    expect(mocks.jobsSingleMock).not.toHaveBeenCalled()
+  })
+
+  it("video: the kept original and the no-preview flag are written at the completion write", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-orig", user_id: "u1", should_watermark: false, is_public: true, job_type: "image-to-video", workflow_execution_id: null, status: "processing" },
+      error: null,
+    })
+    sharedMocks.uploadVideoMaybeWatermark.mockResolvedValueOnce({
+      videoUrl: "https://r2.example/videos/j-orig-master.mp4",
+      originalVideoUrl: "https://r2.example/videos/j-orig-master.mp4",
+      videoPreviewUnavailable: true,
+    })
+
+    await finalizeJobWithMedia({
+      jobId: "j-orig",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+    })
+
+    const updateArg = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as { output_data: Record<string, unknown> }
+    expect(updateArg.output_data).toMatchObject({
+      videoUrl: "https://r2.example/videos/j-orig-master.mp4",
+      originalVideoUrl: "https://r2.example/videos/j-orig-master.mp4",
+      videoPreviewUnavailable: true,
+    })
+  })
+
+  it("video: a pre-stored original rides into output_data beside its preview", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: { id: "j-pair", user_id: "u1", should_watermark: false, is_public: true, job_type: "image-to-video", workflow_execution_id: null, status: "processing" },
+      error: null,
+    })
+
+    await finalizeJobWithMedia({
+      jobId: "j-pair",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+      video: { videoUrl: "https://r2.example/videos/j-pair.mp4", originalVideoUrl: "https://r2.example/videos/j-pair-master.mov" },
+    })
+
+    const updateArg = sharedMocks.markJobCompletedDetailed.mock.calls[0]![1] as { output_data: Record<string, unknown> }
+    expect(updateArg.output_data.videoUrl).toBe("https://r2.example/videos/j-pair.mp4")
+    expect(updateArg.output_data.originalVideoUrl).toBe("https://r2.example/videos/j-pair-master.mov")
+    expect(updateArg.output_data).not.toHaveProperty("videoPreviewUnavailable")
   })
 
   it("image for a watermarked user: the uploaded image is watermarked and charged to the user", async () => {
@@ -946,7 +1005,7 @@ describe("finalizeJobWithMedia", () => {
     })
   })
 
-  it("auto-attach: uses the pre-uploaded mediaUrl when finalize didn't upload", async () => {
+  it("auto-attach: uses the pre-stored video when finalize didn't upload", async () => {
     mocks.jobsSingleMock.mockResolvedValueOnce({
       data: {
         id: "j-pre",
@@ -965,7 +1024,7 @@ describe("finalizeJobWithMedia", () => {
       jobId: "j-pre",
       jobType: "image-to-video",
       result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
-      mediaUrl: "https://r2.example/already-uploaded.mp4",
+      video: { videoUrl: "https://r2.example/already-uploaded.mp4" },
     })
 
     expect(autoAttachMocks.appendCharacterReferenceVideo).toHaveBeenCalledWith(
@@ -1159,6 +1218,24 @@ describe("finalizeJobWithMedia", () => {
       expect(sharedMocks.markJobCompletedDetailed).not.toHaveBeenCalled()
       expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
     })
+
+    it.each([["the worker lane", "worker"], ["a reconcile lane", "cron"]] as const)(
+      "claim lost in %s: what a cancelled or failed row's video stores recorded is discarded",
+      async (_lane, claimant) => {
+        endedDiscard.mockClear()
+        mocks.rpcMock.mockResolvedValueOnce({ data: null, error: null })
+        const result = await finalizeJobWithMedia({
+          jobId: "j1",
+          jobType: "image-to-video",
+          result: { url: "https://kie.example/x.mp4", cost: 0.02, providerUsed: "p" },
+          video: { videoUrl: "https://r2/videos/j1.mp4", originalVideoUrl: "https://r2/videos/j1-master.mov" },
+          claimant,
+        })
+        expect(result.ok).toBe(false)
+        // Gated inside on the row being cancelled or failed (job-server-output.test.ts).
+        expect(endedDiscard).toHaveBeenCalledWith("j1")
+      },
+    )
 
     it("claim RPC error: proceeds anyway (availability over exclusion — duplicate uploads are benign)", async () => {
       mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { message: "rpc down" } })
@@ -2133,7 +2210,7 @@ describe("finalizeJobWithMedia — what a finalize that does not complete stored
   it("a caller's pre-uploaded media is never deleted: this finalize did not store it", async () => {
     row.status = "cancelled"
     sharedMocks.markJobCompletedDetailed.mockResolvedValueOnce("lost_race")
-    await finalizeJobWithMedia({ jobId: "j1", jobType: "image-to-video", result: { url: "https://kie.example/v.mp4", cost: 0 }, mediaUrl: "https://r2.example/videos/j1.mp4" })
+    await finalizeJobWithMedia({ jobId: "j1", jobType: "image-to-video", result: { url: "https://kie.example/v.mp4", cost: 0 }, video: { videoUrl: "https://r2.example/videos/j1.mp4" } })
     expect(fenceCalls()).toHaveLength(0)
     expect(deleteLaneMocks.deleteKeysRecordingFailures).not.toHaveBeenCalled()
   })

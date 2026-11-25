@@ -1524,6 +1524,24 @@ for (const entry of trash) {
 A "job" is a single AI generation unit (one image, one video render, one TTS
 call). Workflows produce one job per AI node.
 
+A completed **video** job's `output_data` is typed `VideoJobOutput`:
+`videoUrl` is always a file a browser can play. When the provider's file is
+one the browser-safe step would change (not H.264 `yuv420p`, e.g. HEVC 10-bit
+or HDR), that file is kept untouched as `originalVideoUrl` and `videoUrl` is
+its 8-bit H.264 preview (an HDR original's tone-mapped to SDR). Download
+`originalVideoUrl` when it is present. `videoPreviewUnavailable: true` means the
+preview could not be made, so `videoUrl` is the original itself. A watermarked
+run keeps no original.
+[Design note](./design/video-original-and-preview.md).
+
+```ts
+import type { VideoJobOutput } from "@nodaro/sdk/jobs"
+
+const { data: job } = await client.jobs.get(jobId)
+const out = job.output_data as VideoJobOutput
+const downloadUrl = out.originalVideoUrl ?? out.videoUrl
+```
+
 #### `get(id)`
 
 ```ts
@@ -2942,8 +2960,11 @@ if (previz === true) {
 On a previz run each role's `name` is the locator of its model in the clip
 (its colour, or its shape and position: `"the pink model"`); a role with
 pictures and no name is refused. `subject` (`VideoRemakeRolePrevizSettings`,
-on every role kind, 1–200 characters) says what the role is in the result,
-which its script calls it by; any other run ignores it. `previz`
+on every role kind, 1–200 characters) says what its model becomes in the
+result, which its script calls it by: the finished thing, not the previz
+model, and without the model's colour unless the real thing has it
+(`"a jockey on a bay racehorse"`, not `"the driver of the red car"`); any
+other run ignores it. `previz`
 (`VideoRemakePrevizOptions`): `lighting: true` also follows the clip's
 lighting direction and lighting changes; `sound` is `"clip"` (keep the clip's
 own sound) or `"generated"` (the engine makes environmental and action sounds,
@@ -10607,8 +10628,8 @@ back only the fields it changes.
 
 | Method | Endpoint | Notes |
 |--------|----------|-------|
-| `get()` | `GET /v1/user/settings` | `UserSettings`: `{ tier, publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail }`. `UnauthorizedError` when signed out. |
-| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time, and `null` clears one of its fields (`UserMcpPreferencesPatch`: `update({ mcpPreferences: { image: { model: null } } })`), so the MCP tools fall back to their own default for it. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`) and also takes every existing item out of the public gallery in the same transaction, then makes one more pass after that commits for an item that finished generating during it; other people can then no longer see or use those items. The answer's optional `hiddenFromGallery` (`UserSettingsSaved`) is the total (`0` for any other patch; absent from a server that predates it). When either pass fails `update()` throws a `NodaroError` with status 500 (503 where the deployment's database does not support it yet), no other field of the patch is written, and sending `false` again is safe. `publicOutputs: true` republishes nothing. An invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
+| `get()` | `GET /v1/user/settings` | `UserSettings`: `{ tier, publicOutputs, privateOutputsAllowed?, privateOutputsEndedByPlanAt?, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes, variableDisplayMode, nodeDoubleClickAction, monthlyStatementEmail }`. `UnauthorizedError` when signed out. |
+| `update(patch)` | `PATCH /v1/user/settings` | Only the fields sent change; answers the settings as saved (without `tier`). `promptTemplates` and `textTemplates` replace the stored value whole (send the full map or list; a template key the server does not know, or a value equal to the default, is dropped), `mcpPreferences` merges one axis at a time, and `null` clears one of its fields (`UserMcpPreferencesPatch`: `update({ mcpPreferences: { image: { model: null } } })`), so the MCP tools fall back to their own default for it. `publicOutputs: false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`) and also takes every existing item out of the public gallery in the same transaction, then makes one more pass after that commits for an item that finished generating during it; other people can then no longer see or use those items. The answer's optional `hiddenFromGallery` (`UserSettingsSaved`) is the total (`0` for any other patch; absent from a server that predates it). When either pass fails `update()` throws a `NodaroError` with status 500 (503 where the deployment's database does not support it yet), no other field of the patch is written, and sending `false` again is safe. `publicOutputs: true` republishes nothing; so does the server's own return to `true` when the account's plan drops from one with private mode to one without (Free or Basic, a cancelled or expired subscription): new results are public again, and items made while private stay private (one created before the switch back, a generation still running then included, never turns public). `privateOutputsAllowed` says whether the plan may switch outputs to private, and `privateOutputsEndedByPlanAt` when a plan drop returned the outputs to public (while still on such a plan; `null` otherwise). An invalid value is a `NodaroError` with status 400 (`validation_error`), and so is a patch with nothing to change; `NotFoundError` with no profile row. `preferredLocale` is one of the languages Nodaro ships (`UserSettingsLocale`). |
 
 ```ts
 // The monthly statement toggle on a billing screen.

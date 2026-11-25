@@ -1,6 +1,7 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanFace, Loader2, AlertCircle, X, Image as ImageIcon, Clapperboard, LayoutGrid, Expand, Download, Link, Settings } from "lucide-react"
@@ -42,6 +43,8 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  // A kept original this browser cannot decode: a message and Download (decided 2026-11-22).
+  const unplayableVideo = useVideoUnplayable(activeUrl)
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
@@ -142,6 +145,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
           <video
             ref={videoRef}
             src={activeUrl}
+            onError={unplayableVideo.onError}
             crossOrigin="anonymous"
             poster={activeThumbnail || undefined}
             className="w-full h-full object-cover rounded-xl"
@@ -156,6 +160,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
             playsInline
           />
         )}
+        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
 
         {!activeUrl && status !== "running" && status !== "failed" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 text-muted-foreground h-[160px]">

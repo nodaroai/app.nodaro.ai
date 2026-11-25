@@ -153,9 +153,11 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
+const mockGetR2ObjectSize = vi.hoisted(() => vi.fn(async (_key?: string): Promise<number> => 0))
 vi.mock("@/lib/storage.js", () => ({
   deleteFromR2: mockDeleteFromR2,
   batchDeleteFromR2: mockBatchDeleteFromR2,
+  getR2ObjectSize: mockGetR2ObjectSize,
 }))
 
 vi.mock("@/utils/file-validation.js", () => ({
@@ -293,6 +295,16 @@ describe("cleanup-service", () => {
       // A ledger line per account, of exactly what its plan end removed.
       expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", amount: -3000, source: "expiry", balanceAfter: 0 }))
       expect(mockLogTransaction).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-2", amount: -100, source: "expiry", balanceAfter: 0 }))
+      // A drop from Pro (private outputs) to Free returns the setting to public
+      // in the same write; Basic → Free (no private outputs on either) leaves it alone.
+      const profileUpdates = mockFrom.mock.calls
+        .map(([table], i) => (table === "profiles" ? (mockFrom.mock.results[i]!.value as { update: ReturnType<typeof vi.fn> }).update.mock.calls : []))
+        .flat()
+        .map(([row]) => row as Record<string, unknown>)
+      expect(profileUpdates).toHaveLength(2)
+      expect(profileUpdates[0]).toMatchObject({ tier: "free", subscription_tier: "free", public_outputs: true })
+      expect(profileUpdates[1]).toMatchObject({ tier: "free", subscription_tier: "free" })
+      expect(profileUpdates[1]).not.toHaveProperty("public_outputs")
     })
 
     it("does NOT downgrade a re-subscriber who has a stale canceled row AND a live active row", async () => {
@@ -1964,6 +1976,188 @@ describe("cleanup-service", () => {
       const result = await cleanupFreeUserMedia()
       // At least some files were deleted via batch
       expect(result.filesDeleted).toBeGreaterThan(0)
+    })
+
+    it("a kept video original it reaps gives back exactly what its store was charged (jobs.server_output, decided 2026-11-22)", async () => {
+      const JOB = "11111111-2222-4333-8444-555555555555"
+      const row = {
+        id: JOB,
+        user_id: "free-user-1",
+        output_data: {
+          videoUrl: `https://cdn.example.com/videos/${JOB}.mp4`,
+          originalVideoUrl: `https://cdn.example.com/videos/${JOB}-master.mov`,
+        },
+        server_output: { stored: { [`videos/${JOB}-master.mov`]: 9000 } },
+      }
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }, { data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [row], error: null }, { data: [row], error: null }, { data: [], error: null }, { data: [], error: null }])
+      mockGetR2ObjectSize.mockResolvedValue(8800)
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 2, errors: 0 })
+      // The claim off the job's record (migration 695) answers what was charged; a second claim answers nothing.
+      const claims: string[][] = []
+      mockRpc.mockImplementation(async (fn: string, args?: { p_keys?: string[] }) => {
+        if (fn !== "claim_job_stored_objects") return defaultRpc(fn, args as never)
+        claims.push(args?.p_keys ?? [])
+        return { data: { owner: "free-user-1", claimed: claims.length === 1 ? { [`videos/${JOB}-master.mov`]: 9000 } : {} }, error: null }
+      })
+      try {
+        await cleanupFreeUserMedia()
+        expect(claims[0]).toEqual([`videos/${JOB}-master.mov`])
+        // The claimed bytes, never the size in storage.
+        expect(mockUpdateStorageUsage).toHaveBeenCalledWith("free-user-1", -9000)
+      } finally {
+        mockRpc.mockImplementation(defaultRpc)
+        mockGetR2ObjectSize.mockResolvedValue(0)
+      }
+    })
+
+    it("one retention run: a library row naming a kept original (A1) and its job's record (A2) give its bytes back once, never the row's size as well", async () => {
+      const JOB = "11111111-2222-4333-8444-555555555555"
+      const MASTER = `videos/${JOB}-master.mov`
+      const row = {
+        id: JOB,
+        user_id: "free-user-1",
+        output_data: { videoUrl: `https://cdn.example.com/${MASTER}`, originalVideoUrl: `https://cdn.example.com/${MASTER}`, videoPreviewUnavailable: true },
+        server_output: { stored: { [MASTER]: 9000 } },
+      }
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      // One response at each read's .in(), one at its .limit(): A1 really reads the row.
+      mockTableQueue("assets", [{ data: [], error: null }, { data: [{ id: "asset-m", user_id: "free-user-1", r2_key: MASTER, size_bytes: 8800 }], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [row], error: null }, { data: [row], error: null }, { data: [], error: null }, { data: [], error: null }])
+      ownerRows.push(uploadRow("free-user-1", MASTER, 8800, "asset-m"))
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 1, errors: 0 })
+      let recorded = true
+      mockRpc.mockImplementation(async (fn: string, args?: { p_keys?: string[] }) => {
+        if (fn !== "claim_job_stored_objects") return defaultRpc(fn, args as never)
+        const claimed = recorded && (args?.p_keys ?? []).includes(MASTER) ? { [MASTER]: 9000 } : {}
+        recorded = false
+        return { data: { owner: "free-user-1", claimed }, error: null }
+      })
+      try {
+        await cleanupFreeUserMedia()
+        const refunds = mockUpdateStorageUsage.mock.calls.filter(([, d]) => (d as number) < 0)
+        expect(refunds).toEqual([["free-user-1", -9000]])
+        // A1 deleted it (by its claim); A2 found it claimed and refunded nothing more.
+        expect(mockBatchDeleteFromR2.mock.calls.flatMap(([keys]) => keys as string[])).toContain(MASTER)
+      } finally {
+        mockRpc.mockImplementation(defaultRpc)
+        mockBatchDeleteFromR2.mockResolvedValue({ deleted: 0, errors: 0 })
+      }
+    })
+
+    it("a library row naming a kept original whose job is gone: the object is still deleted (its claim answers nothing), nothing refunded", async () => {
+      const JOB = "11111111-2222-4333-8444-555555555555"
+      const MASTER = `videos/${JOB}-master.mov`
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      // One response at the read's .in(), one at its .limit() (as the other A1 cases).
+      mockTableQueue("assets", [{ data: [], error: null }, { data: [{ id: "asset-m", user_id: "free-user-1", r2_key: MASTER, size_bytes: 8800 }], error: null }, { data: [], error: null }, { data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [], error: null }, { data: [], error: null }])
+      ownerRows.push(uploadRow("free-user-1", MASTER, 8800, "asset-m"))
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 1, errors: 0 })
+      mockRpc.mockImplementation(async (fn: string, args?: { p_keys?: string[] }) => {
+        if (fn === "claim_job_stored_objects") return { data: { owner: null, claimed: {} }, error: null }
+        return defaultRpc(fn, args as never)
+      })
+      try {
+        await cleanupFreeUserMedia()
+        expect(mockBatchDeleteFromR2.mock.calls.flatMap(([keys]) => keys as string[])).toContain(MASTER)
+        expect(mockUpdateStorageUsage.mock.calls.filter(([, d]) => (d as number) < 0)).toEqual([])
+      } finally {
+        mockRpc.mockImplementation(defaultRpc)
+        mockBatchDeleteFromR2.mockResolvedValue({ deleted: 0, errors: 0 })
+      }
+    })
+
+    it("a library row naming a preview: the kept original beside it goes too, by its claim", async () => {
+      const JOB = "11111111-2222-4333-8444-555555555555"
+      const PREVIEW = `videos/${JOB}.mp4`
+      const MASTER = `videos/${JOB}-master.mov`
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+        { data: [{ id: "asset-p", user_id: "free-user-1", r2_key: PREVIEW, size_bytes: 2048 }], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ])
+      mockTableQueue("jobs", [{ data: [], error: null }, { data: [], error: null }])
+      ownerRows.push(uploadRow("free-user-1", PREVIEW, 2048, "asset-p"))
+      mockGetR2ObjectSize.mockImplementation(async (key?: string) => (key === MASTER ? 8800 : 0))
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 1, errors: 0 })
+      mockRpc.mockImplementation(async (fn: string, args?: { p_keys?: string[] }) => {
+        if (fn === "claim_job_stored_objects") return { data: { owner: "free-user-1", claimed: { [MASTER]: 9000 } }, error: null }
+        return defaultRpc(fn, args as never)
+      })
+      try {
+        await cleanupFreeUserMedia()
+        const deletedKeys = mockBatchDeleteFromR2.mock.calls.flatMap(([keys]) => keys as string[])
+        expect(deletedKeys).toContain(PREVIEW)
+        expect(deletedKeys).toContain(MASTER)
+        expect(mockUpdateStorageUsage).toHaveBeenCalledWith("free-user-1", -9000)
+      } finally {
+        mockRpc.mockImplementation(defaultRpc)
+        mockGetR2ObjectSize.mockResolvedValue(0)
+        mockBatchDeleteFromR2.mockResolvedValue({ deleted: 0, errors: 0 })
+      }
+    })
+
+    it("a job whose recorded objects cannot be claimed keeps them, and stays unmarked for the next run", async () => {
+      const JOB = "11111111-2222-4333-8444-555555555555"
+      const MASTER = `videos/${JOB}-master.mov`
+      const row = {
+        id: JOB,
+        user_id: "free-user-1",
+        output_data: { videoUrl: `https://cdn.example.com/videos/${JOB}.mp4` },
+        // Recorded but named by no url (a store that could not tell its record landed).
+        server_output: { stored: { [MASTER]: 9000 } },
+      }
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }, { data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [row], error: null }, { data: [row], error: null }, { data: [], error: null }])
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 1, errors: 0 })
+      mockRpc.mockImplementation(async (fn: string, args?: { p_keys?: string[] }) => {
+        if (fn === "claim_job_stored_objects") return { data: null, error: { code: "57014", message: "timeout" } }
+        return defaultRpc(fn, args as never)
+      })
+      try {
+        await cleanupFreeUserMedia()
+        const deletedKeys = mockBatchDeleteFromR2.mock.calls.flatMap(([keys]) => keys as string[])
+        expect(deletedKeys).not.toContain(MASTER)
+        const marks = mockRpc.mock.calls.filter(([fn]) => fn === "mark_job_outputs_cleaned")
+        expect(marks.flatMap(([, a]) => ((a as { p_ids?: string[] }).p_ids ?? []))).not.toContain(JOB)
+      } finally {
+        mockRpc.mockImplementation(defaultRpc)
+        mockBatchDeleteFromR2.mockResolvedValue({ deleted: 0, errors: 0 })
+      }
+    })
+
+    it("a recorded object no url names is reaped by its claim", async () => {
+      const JOB = "11111111-2222-4333-8444-555555555555"
+      const MASTER = `videos/${JOB}-master.mkv`
+      const row = {
+        id: JOB,
+        user_id: "free-user-1",
+        output_data: { videoUrl: `https://cdn.example.com/videos/${JOB}.mp4` },
+        server_output: { stored: { [MASTER]: 700 } },
+      }
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }, { data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [row], error: null }, { data: [row], error: null }, { data: [], error: null }])
+      mockBatchDeleteFromR2.mockResolvedValue({ deleted: 1, errors: 0 })
+      mockRpc.mockImplementation(async (fn: string, args?: { p_keys?: string[] }) => {
+        if (fn === "claim_job_stored_objects") return { data: { owner: "free-user-1", claimed: { [MASTER]: 700 } }, error: null }
+        return defaultRpc(fn, args as never)
+      })
+      try {
+        await cleanupFreeUserMedia()
+        const deletedKeys = mockBatchDeleteFromR2.mock.calls.flatMap(([keys]) => keys as string[])
+        expect(deletedKeys).toContain(MASTER)
+        expect(mockUpdateStorageUsage).toHaveBeenCalledWith("free-user-1", -700)
+      } finally {
+        mockRpc.mockImplementation(defaultRpc)
+        mockBatchDeleteFromR2.mockResolvedValue({ deleted: 0, errors: 0 })
+      }
     })
 
     it("handles assets query error gracefully", async () => {

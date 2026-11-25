@@ -140,6 +140,12 @@ export async function approveHeldJob(jobId: string, reviewer: Reviewer, note?: s
   // 3. The shared tail — gallery asset, sole-cause reopen, reference-video attach.
   const out = (row.held_output_data ?? {}) as Record<string, unknown>
   await runCompletionTail(row, typeof out.videoUrl === "string" ? out.videoUrl : undefined)
+  // The completion the worker's own path prunes after (workers/shared.ts
+  // afterCompletion): what the job's record holds that the approved output
+  // does not name is claimed, deleted and given back. Never throws.
+  await import("./job-server-output.js")
+    .then((m) => (m.completionMayHoldRecordedObjects(jobId, out) ? m.pruneUnnamedStoredObjects(jobId) : undefined))
+    .catch(() => undefined)
 
   await recordJobPolicyDecision({
     jobId,

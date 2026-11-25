@@ -107,14 +107,14 @@ describe("video_remake's previz arguments", () => {
     const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
     const props = (tool.inputSchema as { properties: Record<string, { type?: string; enum?: string[]; description?: string; items?: { anyOf?: Array<{ properties: Record<string, { description?: string }> }>; oneOf?: Array<{ properties: Record<string, { description?: string }> }> } }> }).properties
     expect(props.clip_kind!.enum).toEqual(["footage", "previz"])
-    expect(props.clip_kind!.description).toContain("a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model's colour or position; with no art_style or custom_style the result is real-world, live-action footage")
+    expect(props.clip_kind!.description).toContain("a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model's colour or position, its subject by what it becomes; with no art_style or custom_style the result is real-world, live-action footage")
     expect(props.previz_lighting!.type).toBe("boolean")
-    expect(props.previz_lighting!.description).toContain("also take the lighting direction and lighting changes from the clip")
+    expect(props.previz_lighting!.description).toContain("also take the clip's lighting direction and changes")
     expect(props.previz_sound!.enum).toEqual(["clip", "generated"])
     const kinds = props.roles!.items!.anyOf ?? props.roles!.items!.oneOf ?? []
     expect(kinds).toHaveLength(4)
     for (const kind of kinds) expect(kind.properties.subject, JSON.stringify(Object.keys(kind.properties))).toBeDefined()
-    expect(kinds[0]!.properties.subject!.description).toContain("what the role is, used in the script; name is then the locator of its model")
+    expect(kinds[0]!.properties.subject!.description).toContain("what its model becomes in the finished video, not the previz model; no model colour the real thing lacks")
   })
 })
 

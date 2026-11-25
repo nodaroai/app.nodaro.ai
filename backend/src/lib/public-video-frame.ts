@@ -5,10 +5,15 @@ import { join } from "node:path"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { createWorkDir, cleanupWorkDir, runFfmpeg } from "../providers/video/ffmpeg-utils.js"
-import { boundedPublicChunks } from "./safe-fetch-bytes.js"
+import { boundedPublicChunks, REQUEST_PATH_VIDEO_DOWNLOAD } from "./safe-fetch-bytes.js"
 
 /** Capture a source the caller has already authorized. Downloads are public
- * HTTP only, streamed to disk under the normal 500 MiB video-upload ceiling.
+ * HTTP only, streamed to disk under the normal 500 MiB video-upload ceiling,
+ * size-scaled for a request path (`REQUEST_PATH_VIDEO_DOWNLOAD`: the response
+ * within 120 s, a body that keeps moving gets its announced size at 512 kB/s,
+ * at most 10 min in all — the most this call waits on the download; its plugin
+ * callers declare no budget of their own for it, and pass no abort signal: the
+ * toolkit's `readPublicVideoFrame` takes none).
  * No job, credits or storage write occurs here; retainImage polices the result. */
 export async function readPublicVideoFrame(input: { videoUrl: string; timeSec: number }): Promise<Buffer> {
   if (!Number.isFinite(input.timeSec) || input.timeSec < 0) throw new Error("Invalid source frame timestamp")
@@ -17,7 +22,7 @@ export async function readPublicVideoFrame(input: { videoUrl: string; timeSec: n
     const source = join(directory, "source-video")
     const output = join(directory, "frame.png")
     await pipeline(Readable.from(boundedPublicChunks(input.videoUrl, {
-      maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video",
+      maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video", rate: REQUEST_PATH_VIDEO_DOWNLOAD,
     })), createWriteStream(source, { flags: "wx", mode: 0o600 }))
     // Container allowlisting excludes playlists/concat scripts; ffmpeg cannot
     // follow a malicious media file into network protocols or remote manifests.

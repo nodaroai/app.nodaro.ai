@@ -39,4 +39,6 @@ export type {
   JobCoverInput,
   UpdateJobParams,
   UpdateJobResult,
+  // A completed video job's output: its playable file and the original kept beside it.
+  VideoJobOutput,
 } from "../resources/jobs.js"

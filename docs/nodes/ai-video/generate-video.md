@@ -566,6 +566,10 @@ carries neither key is untouched — its prompt reaches the model byte-for-byte 
 before. Node presets and workflow export/import capture the ids along with the
 rest of the node, which is deliberate: a preset should carry its look.
 
+## Output files
+
+Some models deliver video a browser cannot show correctly, such as HEVC in 10-bit or an HDR (HLG or PQ) picture. Nodaro keeps the model's file untouched as the result's **original** and plays and passes on a browser-safe H.264 copy. An HDR original's copy is tone-mapped to SDR. The original is in the job's output as `originalVideoUrl` (API, SDK and MCP). A file that is already H.264 8-bit is kept as it is, and a watermarked run keeps only the watermarked file. If the copy cannot be made, the result is the original alone, and the player offers Download if your browser cannot play it. See [Video originals and previews](../../design/video-original-and-preview.md).
+
 ## Credit pricing
 
 Pricing is computed at credit-reservation time via `buildVideoCreditModelIdentifier(provider, duration, sound, mode, videoSize, resolution, hasVideoRef)` in `@nodaro/shared/credit-identifiers`. With a wired [Settings input](#settings-input), `provider` and `duration` are the wired model and the fitted duration. The `mode` argument is the dispatched mode (`"image-to-video"` or `"text-to-video"`), so T2V and I2V prices can differ per provider (via `T2V_CREDIT_OVERRIDES`).

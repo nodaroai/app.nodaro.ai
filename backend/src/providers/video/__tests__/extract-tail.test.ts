@@ -71,8 +71,8 @@ describe("extractTailArgs", () => {
     const filter = deliveredPictureFilter(hdrProbe(transfer))!
     expect(filter).toBe(
       `setparams=color_primaries=bt2020:color_trc=${transfer}:colorspace=bt2020nc:range=tv,` +
-        "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0," +
-        "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion,format=yuv420p",
+        "zscale=t=linear:npl=100:agamma=0,format=gbrpf32le,zscale=p=bt709:agamma=0,tonemap=tonemap=hable:desat=0," +
+        "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion:agamma=0,format=yuv420p",
     )
     expect(extractTailArgs("/w/source.mp4", 3, 2, "/w/source.mp4.tail.mp4", filter)).toEqual([...PLAIN.slice(0, 6), "-vf", filter, ...PLAIN.slice(6)])
   })

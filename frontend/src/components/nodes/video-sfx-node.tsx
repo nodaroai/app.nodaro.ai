@@ -1,6 +1,7 @@
 "use client"
 
 import { useT, tx } from "@/lib/i18n"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import {
@@ -78,6 +79,8 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = (nodeData.activeResultIndex as number | undefined) ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? (nodeData.generatedVideoUrl as string | undefined)
+  // A kept original this browser cannot decode: a message and Download (decided 2026-11-22).
+  const unplayableVideo = useVideoUnplayable(activeUrl)
   const activeThumbnail = activeResult?.thumbnailUrl
   const playState = (nodeData.videoPlayState as "loop" | "paused" | "stopped" | undefined) ?? "loop"
   const shouldPlay = videoAutoplay && playState === "loop"
@@ -216,6 +219,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
               <video
                 ref={videoRef}
                 src={activeUrl}
+                onError={unplayableVideo.onError}
                 crossOrigin="anonymous"
                 autoPlay={shouldPlay}
                 loop={shouldPlay}
@@ -235,6 +239,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
                   if (shouldPlay) v.play().catch(() => {})
                 }}
               />
+              {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
               {/* Top-right: delete */}
               {results.length > 0 && (
                 <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">

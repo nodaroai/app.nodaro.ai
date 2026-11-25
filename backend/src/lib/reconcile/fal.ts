@@ -18,6 +18,7 @@ import { watermarkLocalVideoAndUpload } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
 import { isDeterministicJobError } from "../deterministic-job-error.js"
 import type { ReconcileOpts } from "./kie.js"
+import type { StoredVideo } from "../video-result-store.js"
 
 export interface FalJobRow {
   id: string
@@ -322,7 +323,7 @@ async function deliverRheaRow(row: FalJobRow, outputUrl: string, claimant: NonNu
   }
   const userId = (job as { user_id?: string | null }).user_id ?? undefined
   const watermark = (job as { should_watermark?: boolean | null }).should_watermark === true
-  let delivered: Awaited<ReturnType<typeof deliverRheaOutput<string>>>
+  let delivered: Awaited<ReturnType<typeof deliverRheaOutput<StoredVideo>>>
   try {
     delivered = await holdingFinalizeClaim(row.id, claimant, claim.ts, (hold) => deliverRheaOutput({
       outputUrl,
@@ -345,7 +346,7 @@ async function deliverRheaRow(row: FalJobRow, outputUrl: string, claimant: NonNu
     jobType: "video-upscale",
     claimant,
     result: { url: outputUrl, cost: topazRheaCostUsd(run.upscaleRateTier, run.upscaleBilledSec), providerUsed: String(row.input_data?.provider ?? "fal") },
-    mediaUrl: delivered.stored,
+    video: delivered.stored,
     // The stored file's own frame, probed, never the plan's.
     extraOutputData: { width: delivered.width, height: delivered.height },
   })

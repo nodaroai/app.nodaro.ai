@@ -1,6 +1,8 @@
 -- ============================================================================
 -- Behavioral proof: migration 706 — switching outputs to private takes the
--- person's existing items out of the public gallery, and nothing else.
+-- person's existing items out of the public gallery, and nothing else — and
+-- migration 713: what was made while private stays private after the setting
+-- returns to public.
 --
 -- WHAT IT PINS (none of it is provable from the SQL text or a mocked route):
 --   P1  Only the service role can call the two functions (anon and
@@ -22,6 +24,22 @@
 --       back to public, is not republished when the restriction is lifted
 --       (the lift restores the visibility its immutable record kept); the
 --       same lift for a user who never went private still restores it.
+--   P11 A plan drop to one without private outputs (the exact write
+--       tierColumns makes: tier, subscription_tier and public_outputs = true
+--       in one UPDATE) republishes nothing: rows the switch hid and rows
+--       completed while private stay private, a hidden row written public
+--       again is still refused, and a NEW row is public again.
+--   P12 (713) After the setting returns to public — by a plan drop or the
+--       person's own switch — a row CREATED before that never turns public:
+--       an unmarked row completed while private written public again, and a
+--       job queued while private that completes after. A row created after
+--       is public. The time is stamped by the database on false → true only:
+--       an account that was public all along gets no stamp.
+--   P13 (713) The stamp says why ('plan' when the same update changed the
+--       tier, 'owner' otherwise), and only the trigger writes it; a plan reset
+--       enqueues exactly one notice, a repeated write and the person's own
+--       switch none; the notice table is closed to anon and authenticated
+--       (no grant, no policy).
 --
 -- Fixtures, then assertions; rolls back. Own uuid range: a7060000-….
 --
@@ -239,6 +257,128 @@ SELECT pg_temp.assert_eq('P10 the lift does not republish the row of a user who 
   (SELECT is_public::text || '/' || (restricted_at IS NULL)::text FROM public.jobs WHERE id = 'a7065000-0000-4000-8000-000000000003'), 'false/true');
 SELECT pg_temp.assert_eq('P10 the same lift still restores a user who never went private',
   (SELECT is_public::text FROM public.jobs WHERE id = 'a7065000-0000-4000-8000-000000000004'), 'true');
+
+-- ---------------------------------------------------------------------------
+-- P11: a plan drop returns the setting to public; nothing old is republished.
+-- E is on Pro, public, with one public row; goes private (the row is hidden by
+-- the switch); completes one generation while private; then drops to Free.
+-- ---------------------------------------------------------------------------
+INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES
+  ('a7060000-0000-4000-8000-000000000005', 'po-e@po.test', '{}', 'authenticated', 'authenticated');
+UPDATE public.profiles SET public_outputs = true, tier = 'pro', subscription_tier = 'pro'
+ WHERE id = 'a7060000-0000-4000-8000-000000000005';
+INSERT INTO public.jobs (id, user_id, status, is_public) VALUES
+  ('a7067000-0000-4000-8000-000000000001', 'a7060000-0000-4000-8000-000000000005', 'completed', true);
+SELECT pg_temp.assert_eq('P11 the switch hides E''s public row',
+  public.make_outputs_private('a7060000-0000-4000-8000-000000000005')::text, '1');
+-- A generation completed while private: written public, kept private by the clamp, not marked.
+INSERT INTO public.jobs (id, user_id, status, is_public) VALUES
+  ('a7067000-0000-4000-8000-000000000002', 'a7060000-0000-4000-8000-000000000005', 'completed', true);
+SELECT pg_temp.assert_eq('P11 a row completed while private is private and unmarked',
+  (SELECT is_public::text || '/' || (hidden_by_owner_at IS NULL)::text FROM public.jobs WHERE id = 'a7067000-0000-4000-8000-000000000002'), 'false/true');
+
+-- The downgrade write, as tierColumns('free') spreads it.
+UPDATE public.profiles SET tier = 'free', subscription_tier = 'free', public_outputs = true
+ WHERE id = 'a7060000-0000-4000-8000-000000000005';
+SELECT pg_temp.assert_eq('P11 the drop leaves the setting public',
+  (SELECT public_outputs::text || '/' || tier FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000005'), 'true/free');
+SELECT pg_temp.assert_eq('P11 nothing E made before the drop is public',
+  (SELECT count(*)::text FROM public.jobs WHERE user_id = 'a7060000-0000-4000-8000-000000000005' AND is_public IS TRUE), '0');
+SELECT pg_temp.assert_eq('P11 the row the switch hid keeps its marker',
+  (SELECT (hidden_by_owner_at IS NOT NULL)::text FROM public.jobs WHERE id = 'a7067000-0000-4000-8000-000000000001'), 'true');
+UPDATE public.jobs SET is_public = true WHERE id = 'a7067000-0000-4000-8000-000000000001';
+SELECT pg_temp.assert_eq('P11 the row the switch hid is refused public after the drop',
+  (SELECT is_public::text FROM public.jobs WHERE id = 'a7067000-0000-4000-8000-000000000001'), 'false');
+INSERT INTO public.jobs (id, user_id, status, is_public) VALUES
+  ('a7067000-0000-4000-8000-000000000003', 'a7060000-0000-4000-8000-000000000005', 'completed', true);
+SELECT pg_temp.assert_eq('P11 a new row after the drop is public',
+  (SELECT is_public::text FROM public.jobs WHERE id = 'a7067000-0000-4000-8000-000000000003'), 'true');
+-- The same write again (a redelivered webhook, the expiry safety net) changes nothing.
+UPDATE public.profiles SET tier = 'free', subscription_tier = 'free', public_outputs = true
+ WHERE id = 'a7060000-0000-4000-8000-000000000005';
+SELECT pg_temp.assert_eq('P11 a repeated drop republishes nothing',
+  (SELECT count(*)::text FROM public.jobs WHERE user_id = 'a7060000-0000-4000-8000-000000000005' AND is_public IS TRUE), '1');
+
+-- ---------------------------------------------------------------------------
+-- P12: made while private stays private (migration 713).
+-- F on Pro goes private, completes a generation, has a job still queued, then
+-- drops to Free. The test runs in one transaction, where now() is fixed, so
+-- the rows carry explicit creation times around that instant.
+-- ---------------------------------------------------------------------------
+INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES
+  ('a7060000-0000-4000-8000-000000000006', 'po-f@po.test', '{}', 'authenticated', 'authenticated'),
+  ('a7060000-0000-4000-8000-000000000007', 'po-g@po.test', '{}', 'authenticated', 'authenticated');
+UPDATE public.profiles SET public_outputs = true, tier = 'pro', subscription_tier = 'pro'
+ WHERE id IN ('a7060000-0000-4000-8000-000000000006', 'a7060000-0000-4000-8000-000000000007');
+SELECT pg_temp.assert_eq('P12 an account public all along has no stamp',
+  (SELECT (outputs_public_since IS NULL)::text FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000006'), 'true');
+SELECT public.make_outputs_private('a7060000-0000-4000-8000-000000000006');
+INSERT INTO public.jobs (id, user_id, status, is_public, created_at) VALUES
+  ('a7068000-0000-4000-8000-000000000001', 'a7060000-0000-4000-8000-000000000006', 'completed', true, now() - interval '2 hours'),
+  ('a7068000-0000-4000-8000-000000000002', 'a7060000-0000-4000-8000-000000000006', 'processing', false, now() - interval '1 hour');
+SELECT pg_temp.assert_eq('P12 the row completed while private is private and unmarked',
+  (SELECT is_public::text || '/' || (hidden_by_owner_at IS NULL)::text FROM public.jobs WHERE id = 'a7068000-0000-4000-8000-000000000001'), 'false/true');
+
+-- The drop, as tierColumns spreads it.
+UPDATE public.profiles SET tier = 'free', subscription_tier = 'free', public_outputs = true
+ WHERE id = 'a7060000-0000-4000-8000-000000000006';
+SELECT pg_temp.assert_eq('P12 the drop stamps when the setting went back to public',
+  (SELECT (outputs_public_since = now())::text FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000006'), 'true');
+UPDATE public.jobs SET is_public = true WHERE id = 'a7068000-0000-4000-8000-000000000001';
+SELECT pg_temp.assert_eq('P12 an unmarked row made while private stays private when written public',
+  (SELECT is_public::text FROM public.jobs WHERE id = 'a7068000-0000-4000-8000-000000000001'), 'false');
+UPDATE public.jobs SET status = 'completed', is_public = true WHERE id = 'a7068000-0000-4000-8000-000000000002';
+SELECT pg_temp.assert_eq('P12 a job queued while private that completes after stays private',
+  (SELECT is_public::text || '/' || status FROM public.jobs WHERE id = 'a7068000-0000-4000-8000-000000000002'), 'false/completed');
+INSERT INTO public.jobs (id, user_id, status, is_public, created_at) VALUES
+  ('a7068000-0000-4000-8000-000000000003', 'a7060000-0000-4000-8000-000000000006', 'processing', false, now() + interval '1 minute');
+UPDATE public.jobs SET status = 'completed', is_public = true WHERE id = 'a7068000-0000-4000-8000-000000000003';
+SELECT pg_temp.assert_eq('P12 a job created after the drop is public',
+  (SELECT is_public::text FROM public.jobs WHERE id = 'a7068000-0000-4000-8000-000000000003'), 'true');
+
+-- A write of true over true (an account already public) stamps nothing, and
+-- its older rows may still turn public.
+UPDATE public.profiles SET tier = 'free', subscription_tier = 'free', public_outputs = true
+ WHERE id = 'a7060000-0000-4000-8000-000000000007';
+SELECT pg_temp.assert_eq('P12 true over true stamps nothing',
+  (SELECT (outputs_public_since IS NULL)::text FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000007'), 'true');
+INSERT INTO public.jobs (id, user_id, status, is_public, created_at) VALUES
+  ('a7068000-0000-4000-8000-000000000004', 'a7060000-0000-4000-8000-000000000007', 'processing', false, now() - interval '1 hour');
+UPDATE public.jobs SET status = 'completed', is_public = true WHERE id = 'a7068000-0000-4000-8000-000000000004';
+SELECT pg_temp.assert_eq('P12 an always-public account''s older job completes public',
+  (SELECT is_public::text FROM public.jobs WHERE id = 'a7068000-0000-4000-8000-000000000004'), 'true');
+-- The person's own switch back (the settings route's plain write) stamps too.
+SELECT pg_temp.assert_eq('P12 the person''s own switch back is stamped',
+  (SELECT (outputs_public_since IS NOT NULL)::text FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000001'), 'true');
+
+-- ---------------------------------------------------------------------------
+-- P13: why, and the one notice (migration 713).
+-- ---------------------------------------------------------------------------
+SELECT pg_temp.assert_eq('P13 a plan drop is stamped plan',
+  (SELECT outputs_public_reason FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000006'), 'plan');
+SELECT pg_temp.assert_eq('P13 the person''s own switch is stamped owner',
+  (SELECT outputs_public_reason FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000001'), 'owner');
+SELECT pg_temp.assert_eq('P13 the plan drop enqueued one notice, at its stamp',
+  (SELECT count(*)::text || '/' || bool_and(public_since = now())::text FROM public.outputs_public_notices WHERE user_id = 'a7060000-0000-4000-8000-000000000006'), '1/true');
+SELECT pg_temp.assert_eq('P13 the person''s own switch enqueued none',
+  (SELECT count(*)::text FROM public.outputs_public_notices WHERE user_id = 'a7060000-0000-4000-8000-000000000001'), '0');
+SELECT pg_temp.assert_eq('P13 an always-public account''s write enqueued none',
+  (SELECT count(*)::text FROM public.outputs_public_notices WHERE user_id = 'a7060000-0000-4000-8000-000000000007'), '0');
+-- E (P11) dropped too: one notice; its repeated write added none.
+SELECT pg_temp.assert_eq('P13 a repeated drop write enqueues nothing more',
+  (SELECT count(*)::text FROM public.outputs_public_notices WHERE user_id = 'a7060000-0000-4000-8000-000000000005'), '1');
+-- Only the trigger writes the stamp: a direct write is put back.
+UPDATE public.profiles SET outputs_public_since = NULL, outputs_public_reason = 'owner'
+ WHERE id = 'a7060000-0000-4000-8000-000000000006';
+SELECT pg_temp.assert_eq('P13 a direct write of the stamp is put back',
+  (SELECT (outputs_public_since = now())::text || '/' || outputs_public_reason FROM public.profiles WHERE id = 'a7060000-0000-4000-8000-000000000006'), 'true/plan');
+SELECT pg_temp.assert_eq('P13 the notice table has row security on',
+  (SELECT relrowsecurity::text FROM pg_class WHERE oid = 'public.outputs_public_notices'::regclass), 'true');
+SELECT pg_temp.assert_eq('P13 anon and authenticated hold no privilege on the notice table',
+  (SELECT (has_table_privilege('anon', 'public.outputs_public_notices', 'SELECT,INSERT,UPDATE,DELETE')
+        OR has_table_privilege('authenticated', 'public.outputs_public_notices', 'SELECT,INSERT,UPDATE,DELETE'))::text), 'false');
+SELECT pg_temp.assert_eq('P13 no policy opens the notice table',
+  (SELECT count(*)::text FROM pg_policies WHERE schemaname = 'public' AND tablename = 'outputs_public_notices'), '0');
 
 DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;
 ROLLBACK;

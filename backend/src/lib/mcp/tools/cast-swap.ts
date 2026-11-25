@@ -475,7 +475,7 @@ export const castSwapRolePreviewArgs = {
  * pointed at from the others (each kind's copy is in the tool list). Exported for the schema walk.
  */
 const roleSubject = (description: string) => ({ subject: z.string().max(200).optional().describe(description) })
-export const castSwapRolePrevizArgs = roleSubject("previz only: what the role is, used in the script; name is then the locator of its model.")
+export const castSwapRolePrevizArgs = roleSubject('previz only: what its model becomes in the finished video, not the previz model; no model colour the real thing lacks ("a jockey on a racehorse", not "the red car\'s driver").')
 export const castSwapRolePrevizArgsBrief = roleSubject("As a person's subject.")
 
 function refusal(statusCode: number, body: string) {
@@ -504,8 +504,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
         'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default; 480p, 720p, 1080p) or "nodaro-pulse" (Nodaro Pulse; 720p default or 1080p, no draft). ' +
-        "Image and video URLs must be http(s): upload local files with the upload tools first. " +
-        "check_intent: true on the quote also checks (free) if the prompt asks for something Video Remake does not do." +
+        "Image and video URLs must be http(s): upload local files with the upload tools first." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
         amountsNote(),
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
@@ -606,8 +605,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         clip_kind: z
           .enum(CLIP_KINDS)
           .optional()
-          .describe('"previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model\'s colour or position; with no art_style or custom_style the result is real-world, live-action footage. Default "footage".'),
-        previz_lighting: z.boolean().optional().describe("previz only: also take the lighting direction and lighting changes from the clip."),
+          .describe('"previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model\'s colour or position, its subject by what it becomes; with no art_style or custom_style the result is real-world, live-action footage. Default "footage".'),
+        previz_lighting: z.boolean().optional().describe("previz only: also take the clip's lighting direction and changes."),
         previz_sound: z.enum(["clip", "generated"]).optional().describe("previz only: keep the clip's sound, or have it generated."),
         motion_length: z
           .enum(LENGTHS)

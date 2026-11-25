@@ -85,6 +85,23 @@ describe("downloadFile — our own stored files", () => {
     expect(await written()).toBe("from-http")
   })
 
+  it("a lower ceilingMs bounds the storage read of our file too (the call's one deadline)", async () => {
+    await downloadFile(OWN, dest, { ceilingMs: 8 * 60_000 })
+    const { timeoutMs } = mocks.downloadR2ObjectToFile.mock.calls[0]![2] as { timeoutMs: number }
+    expect(timeoutMs).toBeGreaterThan(8 * 60_000 - 1_000)
+    expect(timeoutMs).toBeLessThanOrEqual(8 * 60_000)
+  })
+
+  it("onSource reaches the storage read of our file, and the link's headers when it goes over HTTP", async () => {
+    const onSource = vi.fn()
+    await downloadFile(OWN, dest, { onSource })
+    expect(mocks.downloadR2ObjectToFile).toHaveBeenCalledWith("tmp/provider-input/job-1/fitted-1.mp4", dest, { timeoutMs: expect.any(Number), onSource })
+    mocks.safeFetch.mockImplementationOnce(async () => new Response("from-http", { headers: { "content-type": "video/mp4", "content-length": "9" } }))
+    const fromHttp = vi.fn()
+    await downloadFile(FOREIGN, dest, { onSource: fromHttp })
+    expect(fromHttp).toHaveBeenCalledWith({ contentType: "video/mp4", contentLength: 9 })
+  })
+
   it("a storage read that fails for another reason than 'not found' falls back to HTTP", async () => {
     mocks.downloadR2ObjectToFile.mockRejectedValueOnce(Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }))
     await downloadFile(OWN, dest)

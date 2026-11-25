@@ -29,7 +29,7 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 const shared = vi.hoisted(() => ({
-  uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.example/vid-j1.mp4"),
+  uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.example/vid-j1.mp4" })),
   markJobCompletedDetailed: vi.fn(async (_id: string, _fields: Record<string, unknown>) => "completed" as const),
   commitJobCredits: vi.fn(async () => undefined),
   refundLoopTrimAddon: vi.fn(async () => undefined),
@@ -62,7 +62,7 @@ async function complete(jobType: FinalizeJobType, extra: Record<string, unknown>
     jobId: "j1",
     jobType,
     result: { url: "https://provider.example/out.mp4", cost: null },
-    mediaUrl: R2,
+    video: { videoUrl: R2 },
     extraOutputData: { thumbnailUrl: "https://r2.example/thumb.jpg" },
     ...extra,
   })

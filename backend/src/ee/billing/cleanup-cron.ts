@@ -20,6 +20,7 @@ import { sweepAbandonedCopilotWorkflows } from "../copilot/abandoned-sweep.js"
 import { sweepUnsyncedConsents } from "../lib/consent-loops-sync.js"
 import { runFounderNotifyTick } from "../notifications/founder-notify.js"
 import { maybeSendMonthlyStatements } from "../notifications/monthly-statement.js"
+import { sendOutputsPublicNotices } from "../notifications/outputs-public-notice.js"
 import { getNotifyConfig } from "../notifications/notify-config.js"
 import { runCostShortfallSweep } from "./cost-shortfall-store.js"
 import { COST_SHORTFALL_SWEEP } from "./cost-shortfall.js"
@@ -39,6 +40,7 @@ import { DEFERRED_CHILD_SWEEP, sweepDeferredChildSettlements } from "../../lib/d
  * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
  * - sweepVideoAnalysisTmp:      daily at 04:30 UTC (double-stall orphan reaper)
  * - sweepAbandonedCopilotWorkflows: every hour at :45 (#904)
+ * - sweepEndedJobsStoredObjects: every hour at :50 (ended jobs' kept originals)
  * - sendStorageWarnings:        daily at 09:00 UTC
  *
  * All jobs are idempotent and wrapped in try/catch to prevent server crashes.
@@ -116,6 +118,14 @@ export function startCleanupCron(): void {
       await maybeSendMonthlyStatements(new Date(), (await getNotifyConfig()).digestHour)
     } catch (err) {
       console.error("[cron] monthly statement tick failed:", err)
+    }
+    // The one email per plan-drop reset of private outputs to public (enqueued
+    // by the database on the reset itself). Dormant without
+    // LOOPS_OUTPUTS_PUBLIC_ID, and on the standby sender; never throws.
+    try {
+      await sendOutputsPublicNotices(new Date())
+    } catch (err) {
+      console.error("[cron] outputs-public notice tick failed:", err)
     }
   })
 
@@ -264,6 +274,23 @@ export function startCleanupCron(): void {
       )
     } catch (err) {
       console.error("[cron] tmp orphan sweep failed:", err)
+    }
+  })
+
+  // Ended jobs' kept originals (decided 2026-11-23) -- every hour at :50. A
+  // cancelled or failed job whose record still holds stored objects (a cancel
+  // no worker was alive to act on, a discard that failed) has them claimed,
+  // deleted and given back, a bounded number a run
+  // (lib/job-server-output.ts `sweepEndedJobsStoredObjects`).
+  cron.schedule("50 * * * *", async () => {
+    try {
+      const { sweepEndedJobsStoredObjects } = await import("../../lib/job-server-output.js")
+      const result = await sweepEndedJobsStoredObjects()
+      if (result.jobs > 0 || result.failed > 0) {
+        console.log(`[cron] ended jobs' stored objects: ${result.jobs} job(s) swept, ${result.refunded} bytes given back, ${result.failed} left for the next run`)
+      }
+    } catch (err) {
+      console.error("[cron] ended jobs' stored-objects sweep failed:", err)
     }
   })
 

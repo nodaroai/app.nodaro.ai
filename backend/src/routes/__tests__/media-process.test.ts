@@ -261,10 +261,11 @@ describe("POST /v1/media/process — deleteSource", () => {
     )
     // insert, ownership, the library rows naming the key (whose object —
     // key-ownership.ts, decided 2026-10-07; the allow proof 2026-10-15),
-    // asset-refs, jobs×3, row delete. With no relay target the relay rule
+    // asset-refs, jobs×4 (the three media urls and a video's kept original,
+    // decided 2026-11-24), row delete. With no relay target the relay rule
     // issues nothing.
     expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual([
-      "assets", "assets", "assets", "assets", "jobs", "jobs", "jobs", "assets",
+      "assets", "assets", "assets", "assets", "jobs", "jobs", "jobs", "jobs", "assets",
     ])
     expect(updateStorageUsage).toHaveBeenCalledExactlyOnceWith(
       TEST_USER_ID,

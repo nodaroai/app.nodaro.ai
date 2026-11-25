@@ -13,6 +13,7 @@ import {
 } from "./provider-keys-runtime.js"
 import { llmMeteredSchemaReady } from "./llm-metered-schema-gate.js"
 import { liveStripeKeyProblem } from "./stripe-mode-settings.js"
+import { selfhostKeysProblem } from "./selfhost-keys-settings.js"
 
 /**
  * An overridable service base URL: defaults to the vendor's own host, and
@@ -304,6 +305,10 @@ export const envSchema = z.object({
    *  `action`). Empty = the case's screen says that email cannot be sent. */
   LOOPS_CONTENT_RESTRICTED_ID: z.string().default(""),
   LOOPS_COMPLAINT_UPDATE_ID: z.string().default(""),
+  /** The Loops transactional template sent once when a plan drop returns a
+   *  person's private outputs to public (ee/notifications/outputs-public-notice.ts;
+   *  data variables `date`, `plansUrl`). Empty = no such email is sent. */
+  LOOPS_OUTPUTS_PUBLIC_ID: z.string().default(""),
   PORT: z.coerce.number().default(8000),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -815,6 +820,10 @@ function loadConfig() {
   // A deployment that must stay on Stripe's test mode: refused here, at boot, in every process, naming the setting.
   const liveStripeKey = liveStripeKeyProblem(process.env)
   if (liveStripeKey) throw new Error(`Invalid env vars: ${liveStripeKey}`)
+  // A production install on the public default Supabase keys (the compose file's): refused in every process.
+  // start.sh asks the same rule before anything starts (lib/selfhost-keys-check.ts); this covers a process started without it.
+  const selfhostKeys = selfhostKeysProblem(process.env)
+  if (selfhostKeys) throw new Error(`Invalid env vars: ${selfhostKeys}`)
   // Settings that only make sense together: refused here, at boot, naming the setting.
   const movedPages = movedPagesSettingsProblem(result.data)
   if (movedPages) throw new Error(`Invalid env vars: ${movedPages}`)

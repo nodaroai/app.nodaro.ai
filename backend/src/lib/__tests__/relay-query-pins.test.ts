@@ -201,6 +201,9 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       "jobs[output_data->>imageUrl]",
       "jobs[output_data->>videoUrl]",
       "jobs[output_data->>audioUrl]",
+      // A video's kept original (decided 2026-11-24): a Library row saved
+      // from it must not take it from the job that names it.
+      "jobs[output_data->>originalVideoUrl]",
       "assets",
     ])
   })
@@ -223,6 +226,9 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       "jobs[output_data->>imageUrl]",
       "jobs[output_data->>videoUrl]",
       "jobs[output_data->>audioUrl]",
+      // A video's kept original (decided 2026-11-24): a Library row saved
+      // from it must not take it from the job that names it.
+      "jobs[output_data->>originalVideoUrl]",
       "assets",
     ])
   })
@@ -249,6 +255,9 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       "jobs[output_data->>imageUrl]",
       "jobs[output_data->>videoUrl]",
       "jobs[output_data->>audioUrl]",
+      // A video's kept original (decided 2026-11-24): a Library row saved
+      // from it must not take it from the job that names it.
+      "jobs[output_data->>originalVideoUrl]",
       "assets",
     ])
   })

@@ -119,9 +119,10 @@ here for each one anyway.
 | Variable | Default | What it does |
 |---|---|---|
 | `SUPABASE_URL` | **required** | Supabase project URL (bundled: `http://rest:3000` behind the compose network) |
-| `SUPABASE_SERVICE_ROLE_KEY` | **required** | Service-role JWT the backend uses (bundled: generated on first boot) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **required** | Service-role JWT the backend uses (bundled: a public default from the compose file; a production install refuses it, see 2b-1) |
 | `INTERNAL_ORCHESTRATOR_SECRET` | **required**, ≥ 32 chars | Shared secret between the orchestrator and the API (bundled: generated on first boot) |
-| `SUPABASE_ANON_KEY` | `""` | Anon key handed to the frontend and GoTrue |
+| `SUPABASE_ANON_KEY` | `""` | Anon key handed to the frontend and GoTrue (bundled: a public default; refused in production, see 2b-1) |
+| `SUPABASE_JWT_SECRET` | `""` (bundled: a public default) | The secret the bundled `auth` and `rest` services verify keys with. The API only checks with it at boot: a production install refuses the shipped default, and on the bundled stack keys it did not sign (2b-1) |
 | `FRONTEND_SUPABASE_URL` | `""` (bundled: derived `PUBLIC_URL/supabase`) | Supabase URL the **browser** uses — written into `/config.js` at boot; set it when auth lives on a managed Supabase project |
 | `DEFAULT_LOCALE` | `""` (browser detection) | The locale a fresh visitor starts in — e.g. `he`, `ar`, `de`, `fr`, `es`, `hi`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `en`. Written into `/config.js` at boot; a user's own saved choice always wins, and an unset/blank/unrecognised value falls back to the visitor's browser language. Restart to apply |
 | `NODARO_TUTORIAL_PACKS` | `""` (built-in tutorials only) | Business / self-host — comma-separated directories of extra tutorial packs (each: a `manifest.json` + one `*.json` per tutorial), mounted read-only into the container. Additive; a malformed pack is skipped and logged, never corrupting the built-in tutorials. Restart to apply. On Cloud a pack is written only by the environment holding the [template seeder claim](#template-seeder-claim-cloud), or, while no claim exists, by an environment with no `PUBLIC_URL`. See [tutorials.md](./tutorials.md) for the pack format |
@@ -145,6 +146,7 @@ here for each one anyway.
 | `STRIPE_TEST_CATALOG` | `""` | Cloud, a deployment on Stripe's test mode (a staging environment): the test-mode prices it sells, as JSON `{ "products": { "basic" \| "standard" \| "pro" \| "business": { "productId", "monthly", "yearly" } }, "retired": { "<price id>": { "plan", "interval" } }, "topUps": { "<price id>": <credits> } }`. Read only when `STRIPE_SECRET_KEY` is a test-mode key (`sk_test_`, or a restricted `rk_test_`); a live key always sells the live catalogue. Used only when whole: all four plans with both intervals, distinct ids, and packs that grant the live packs' credits one for one. Otherwise the live ids stay, with a warning at boot, and test mode shows those prices as unavailable. Restart to apply |
 | `STRIPE_REQUIRE_TEST_MODE` | `""` (unset = nothing is checked) | `true` for a deployment that must never reach Stripe's live mode, such as a staging environment on a copy of production's database: the server refuses to start while any setting holds a live Stripe key (`sk_live_`, `rk_live_` or `pk_live_`), naming each such setting, never the key. Any other value than `true` (`TRUE`, `1`, a trailing newline) also stops it from starting, so a typo never leaves the guard off. Restart to apply |
 | `LOOPS_MONTHLY_STATEMENT_ID` | `""` | Cloud: the Loops transactional template id of the monthly statement, sent on the 1st to each person who opted in (`monthlyStatementEmail` in their settings) and paid in the month: a short email with the month's payment documents. Unset = no statements are sent. The template's data variables: `name`, `month`, `paidUsd` (net of refunds), `documents` (`1 invoice and 2 receipts`), `documentTitle`, `documentLabel` and `documentUrl` (the newest linked document: the Stripe invoice's PDF, else the receipt's page, else the billing page), `balance`, `billingUrl` (all strings, never empty). Each person's month is claimed in `monthly_statements` before the send, so it never goes twice |
+| `LOOPS_OUTPUTS_PUBLIC_ID` | `""` | Cloud: the Loops transactional template id of the email sent once when a plan drop (to Free or Basic) returns a person's private outputs to public. Data variables: `date` (the day, in English, e.g. `November 25, 2026`) and `plansUrl` (the plans page). The database enqueues one notice per drop (`outputs_public_notices`), the 5-minute cron sends it and never twice. Unset = no such email is sent |
 | `LOOPS_COMPLAINT_VERIFY_ID` | `""` | Cloud: the Loops transactional template id of the public complaints form's email verification (`POST /v1/content-complaints`): the one-time link that proves the complainant's email. Data variables: `reference` (the case's number) and `verifyUrl` (the link, good for 72 hours). Unset = the case is still opened and recorded; the handler sees it was never mailed |
 | `LOOPS_COMPLAINT_RECEIVED_ID` | `""` | Cloud: the Loops transactional template id of the complaint acknowledgment, sent once the complainant's email is proven. Data variable: `reference`. Unset = no acknowledgment is sent; the case stands |
 | `LOOPS_CONTENT_RESTRICTED_ID` | `""` | Cloud: the Loops transactional template id of "Content access restricted", which an administrator sends from a copyright case to the account whose content a restriction covers. Data variables: `content` (the account's file: its name, kind and day, or several files by count), `source` (the link it was imported from, or `Not available`), `reason` (the reason the administrator writes for the account), `reference` (the case's number) and `counterNoticeUrl` (the account's counter-notification page, from `PUBLIC_URL`). Unset = the case's screen says the email cannot be sent |
@@ -278,6 +280,65 @@ secret, a new container generates a new one unless it is set). `NODARO_ENCRYPTIO
 AES-256-GCM key material used to encrypt stored credentials at rest —
 social-OAuth tokens and in-app provider keys (§12). `SOCIAL_ENCRYPTION_KEY`
 is the older name for the same variable and still works (see §8).
+
+### 2b-1. Supabase keys in production
+
+The community compose ships working Supabase defaults so the quickstart needs
+nothing configured: `SUPABASE_JWT_SECRET`, and `SUPABASE_ANON_KEY` and
+`SUPABASE_SERVICE_ROLE_KEY` signed with it. They are public, because they are
+in the published compose file. The service role key bypasses row level
+security. So an install that other people can reach must run on its own set:
+
+```bash
+node tools/generate-selfhost-keys.mjs >> .env
+docker compose -f docker-compose.community.yml up -d
+```
+
+All three values come from one run of the generator. Mint them again together
+whenever you replace them.
+
+**This is enforced in production.** An install counts as production when
+`NODE_ENV=production`, which the image always sets, and `PUBLIC_URL` is
+anything but an address on this machine (`localhost`, `127.0.0.1`, `::1`,
+`*.localhost`). An unset `PUBLIC_URL` counts too. Such an install refuses to
+start when any of these holds:
+
+- `SUPABASE_JWT_SECRET` is the shipped default.
+- `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_ANON_KEY` is signed with the
+  shipped secret. That covers the two shipped keys and any key someone signs
+  with the public secret.
+- On the bundled stack, a key is not signed by your `SUPABASE_JWT_SECRET`. A
+  key and secret from different runs would make the auth and database services
+  refuse every request.
+
+The check runs in three places, so nothing starts half-way:
+
+- the `keys-check` one-shot, before the `auth` and `rest` services
+- `start.sh`, before the proxy, `/config.js` or the API
+- the API's own configuration, at boot
+
+Each refusal names every offending variable, never its value, and gives the
+command above. There is no switch to turn it off.
+
+**Local play is unaffected.** On the quickstart's `http://localhost:3000` the
+stack starts on the defaults and logs a warning on every boot. That warning
+matters: the compose file publishes port 3000 on every network interface, so a
+machine others can reach is exposed even while `PUBLIC_URL` says localhost.
+Mint your own keys before anyone else can reach it. Development
+(`NODE_ENV=development` or `test`) is never checked.
+
+**A managed Supabase project** (`SUPABASE_URL` pointing at supabase.com) keeps
+its own keys. They are never compared with the bundled secret. The bundled
+`auth` and `rest` services still run, though, so give them a secret of your
+own without touching your project's keys:
+
+```bash
+node tools/generate-selfhost-keys.mjs | grep '^SUPABASE_JWT_SECRET=' >> .env
+```
+
+**Upgrading an install that already runs on the defaults behind a domain:**
+the first boot of an image with this check stops at the refusal. Mint the set,
+restart, and sign in again, because sessions signed with the old secret end.
 
 ### 2b-2. Social network apps (optional, per network)
 
@@ -2746,6 +2807,15 @@ Cloud edition.
 which Zod-validated vars are wrong. Common culprits:
 `SUPABASE_SERVICE_ROLE_KEY` empty, `INTERNAL_ORCHESTRATOR_SECRET` shorter
 than 32 chars.
+
+**"refusing to start: this install runs in production … on Supabase keys it
+must not use".** The install runs on the public default Supabase keys, or on
+keys its secret did not sign, while `PUBLIC_URL` is not an address on this
+machine. With `up -d` you see only `service "keys-check" didn't complete
+successfully: exit 1`. Read the full message with `docker compose -f
+docker-compose.community.yml logs keys-check`. Then run the command it gives
+(`node tools/generate-selfhost-keys.mjs >> .env`) and restart. See
+[2b-1](#2b-1-supabase-keys-in-production).
 
 **`port is already allocated` on `docker compose up`.** Only two host
 ports are published — 3000 (app) and loopback 9001 (MinIO console); Redis

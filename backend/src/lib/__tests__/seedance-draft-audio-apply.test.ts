@@ -39,19 +39,19 @@ beforeEach(() => {
   m.merge.mockResolvedValue("/tmp/w/merged.mp4")
   m.streams.mockResolvedValue({ hasVideo: true, hasAudio: true })
   m.dur.mockResolvedValue(4.04)
-  m.upload.mockResolvedValue("https://r2/hd-silent.mp4")
-  m.wmUpload.mockResolvedValue("https://r2/hd-audio.mp4")
+  m.upload.mockResolvedValue({ videoUrl: "https://r2/hd-silent.mp4" })
+  m.wmUpload.mockResolvedValue({ videoUrl: "https://r2/hd-audio.mp4" })
 })
 
 describe("applyDraftAudioMux failure handling", () => {
   it("success: the muxed clip, no warning", async () => {
-    expect(await applyDraftAudioMux({ ...base, mux: voice })).toEqual({ url: "https://r2/hd-audio.mp4" })
+    expect(await applyDraftAudioMux({ ...base, mux: voice })).toEqual({ stored: { videoUrl: "https://r2/hd-audio.mp4" } })
   })
 
   it("deterministic failure (and the copy fallback too): no retry, silent HD + warning", async () => {
     m.merge.mockRejectedValue(new Error("ffmpeg exited with code 1: Invalid data found when processing input"))
     const r = await applyDraftAudioMux({ ...base, mux: voice, draftVideoUrl: "https://r2/draft.mp4" })
-    expect(r).toEqual({ url: "https://r2/hd-silent.mp4", warning: expect.objectContaining({ code: "draft_audio_not_reapplied" }) })
+    expect(r).toEqual({ stored: { videoUrl: "https://r2/hd-silent.mp4" }, warning: expect.objectContaining({ code: "draft_audio_not_reapplied" }) })
     expect(sleeps).toEqual([])
     expect(m.upload).toHaveBeenCalledWith("https://kie/hd.mp4", "job-hd", "u", false)
   })
@@ -59,7 +59,7 @@ describe("applyDraftAudioMux failure handling", () => {
   it("transient failure: short bounded retry, then success", async () => {
     m.merge.mockRejectedValueOnce(new Error("Download failed: fetch failed (ECONNRESET)")).mockResolvedValueOnce("/tmp/w/merged.mp4")
     const r = await applyDraftAudioMux({ ...base, mux: voice })
-    expect(r).toEqual({ url: "https://r2/hd-audio.mp4" })
+    expect(r).toEqual({ stored: { videoUrl: "https://r2/hd-audio.mp4" } })
     expect(sleeps).toEqual([TRANSIENT_RETRY_DELAYS_MS[0]])
   })
 
@@ -74,7 +74,7 @@ describe("applyDraftAudioMux failure handling", () => {
   it("a copy from a stored draft with no audio stream: the picture as rendered, NO warning (nothing to keep)", async () => {
     m.streams.mockResolvedValue({ hasVideo: true, hasAudio: false })
     const r = await applyDraftAudioMux({ ...base, mux: { kind: "copy-draft-audio", draftVideoUrl: "https://r2/draft.mp4" } })
-    expect(r).toStrictEqual({ url: "https://r2/hd-silent.mp4" })
+    expect(r).toStrictEqual({ stored: { videoUrl: "https://r2/hd-silent.mp4" } })
     expect(m.merge).not.toHaveBeenCalled()
     expect(m.dur).not.toHaveBeenCalled()
   })
@@ -108,7 +108,7 @@ describe("copying the stored draft's audio: only onto a take of the same length"
   it("same length (within a frame or two — video streams, not containers): the audio is copied", async () => {
     lengths(4.04, 4.0)
     const r = await applyDraftAudioMux({ ...base, mux: copy })
-    expect(r).toStrictEqual({ url: "https://r2/hd-audio.mp4" })
+    expect(r).toStrictEqual({ stored: { videoUrl: "https://r2/hd-audio.mp4" } })
     expect(m.merge.mock.calls).toStrictEqual([[{
       videoUrl: "https://kie/hd.mp4",
       audioTracks: [{ url: "https://r2/draft.mp4", startTime: 0, volume: 100, sourceType: "video" }],
@@ -122,7 +122,7 @@ describe("copying the stored draft's audio: only onto a take of the same length"
   it("a stored clip SHORTER than the take (Smart Loop Cut, a trim): the picture silent, WITH the warning — never truncated audio", async () => {
     lengths(4.04, 3.2)
     const r = await applyDraftAudioMux({ ...base, mux: copy })
-    expect(r).toStrictEqual({ url: "https://r2/hd-silent.mp4", warning: { ...DRAFT_AUDIO_NOT_REAPPLIED } })
+    expect(r).toStrictEqual({ stored: { videoUrl: "https://r2/hd-silent.mp4" }, warning: { ...DRAFT_AUDIO_NOT_REAPPLIED } })
     expect(m.merge).not.toHaveBeenCalled()
     expect(sleeps).toEqual([]) // a length mismatch is an outcome, not a failure to retry
   })
@@ -131,14 +131,14 @@ describe("copying the stored draft's audio: only onto a take of the same length"
     lengths(8.0, 6.5)
     m.merge.mockRejectedValueOnce(new Error("Failed to download: https://a/gone.mp3 (404)"))
     const r = await applyDraftAudioMux({ ...base, mux: voice, draftVideoUrl: "https://r2/draft.mp4" })
-    expect(r).toStrictEqual({ url: "https://r2/hd-silent.mp4", warning: { ...DRAFT_AUDIO_NOT_REAPPLIED } })
+    expect(r).toStrictEqual({ stored: { videoUrl: "https://r2/hd-silent.mp4" }, warning: { ...DRAFT_AUDIO_NOT_REAPPLIED } })
     expect(m.merge).toHaveBeenCalledTimes(1) // the recipe's own try; the copy never ran
   })
 
   it("no audio stream (silent, no warning) and a length mismatch (silent, warning) stay distinguishable", async () => {
     m.streams.mockResolvedValue({ hasVideo: true, hasAudio: false })
     lengths(4.04, 3.2)
-    expect(await applyDraftAudioMux({ ...base, mux: copy })).toStrictEqual({ url: "https://r2/hd-silent.mp4" })
+    expect(await applyDraftAudioMux({ ...base, mux: copy })).toStrictEqual({ stored: { videoUrl: "https://r2/hd-silent.mp4" } })
     m.streams.mockResolvedValue({ hasVideo: true, hasAudio: true })
     expect((await applyDraftAudioMux({ ...base, mux: copy })).warning).toStrictEqual({ ...DRAFT_AUDIO_NOT_REAPPLIED })
   })

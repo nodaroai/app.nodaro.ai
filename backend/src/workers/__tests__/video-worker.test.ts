@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
   const mockRefundJobCredits = vi.fn().mockResolvedValue(undefined)
   // R38: the cancelled metered settle. Default: not a metered job on a cancelled row.
   const mockSettleCancelledMeteredJob = vi.fn().mockResolvedValue(false)
+  const mockDiscardEndedJobStores = vi.fn().mockResolvedValue(undefined)
   // R38 (m5): the metered hold of a job discarded at pickup (cancelled while queued for a retry).
   const mockSettleDiscarded = vi.fn().mockResolvedValue(undefined)
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
@@ -57,6 +58,7 @@ const mocks = vi.hoisted(() => {
     mockHasCreditsRef,
     mockRefundJobCredits,
     mockSettleCancelledMeteredJob,
+    mockDiscardEndedJobStores,
     mockSettleDiscarded,
     mockCreateAssetFromJob,
     mockIsFinalJobAttempt,
@@ -151,6 +153,7 @@ vi.mock("../../services/scene3d-artifacts/delivery-provider-access.js", () => ({
 vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
   settleCancelledMeteredJob: mocks.mockSettleCancelledMeteredJob,
+  discardEndedJobStores: mocks.mockDiscardEndedJobStores,
   settleDiscardedCancelledMeteredHold: mocks.mockSettleDiscarded,
   LLM_PRODUCT_JOB_TYPES: new Set(["llm-structured", "generate-3d-scene", "edit-3d-scene"]),
   createAssetFromJob: mocks.mockCreateAssetFromJob,
@@ -355,6 +358,9 @@ describe("video worker processor", () => {
     expect(mocks.mockSettleCancelledMeteredJob).toHaveBeenCalledWith("usage-1", "job-1", err)
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: "failed" })) // no markJobFailed
     expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    // A cancel that stopped a store (its preview encode) after the original was
+    // recorded: the original is deleted and its charge given back.
+    expect(mocks.mockDiscardEndedJobStores).toHaveBeenCalledWith("job-1")
   })
 
   it("R38: a failure on a row cancelled meanwhile (metered) is settled there — not failed, not refunded, not retried", async () => {

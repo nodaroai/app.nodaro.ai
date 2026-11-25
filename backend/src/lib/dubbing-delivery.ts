@@ -19,6 +19,7 @@ import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { supabase } from "./supabase.js"
 import { uploadBufferToR2, mediaObjectKey } from "./storage.js"
+import { storedVideoFields, type StoredVideo } from "./video-result-store.js"
 import { runPostProcessing } from "./post-processing-error.js"
 import { finalizeJobWithMedia, type FinalizeClaimant } from "./job-finalize.js"
 import { createWorkDir, cleanupWorkDir, probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
@@ -201,7 +202,7 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
   // Buffer → temp file → (maybe watermark +) upload; then the audio sidecar
   // and thumbnail, then the CAS'd completion. All post-provider.
   const workDir = await createWorkDir("dub-video")
-  let videoR2Url: string
+  let storedVideo: StoredVideo
   let videoSeconds: number | undefined
   try {
     const localPath = join(workDir, "dubbed.mp4")
@@ -212,10 +213,11 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
       videoSeconds = await deliveredSeconds(localPath)
     }
     // watermarkLocalVideoAndUpload wraps its own runPostProcessing.
-    videoR2Url = await watermarkLocalVideoAndUpload(localPath, jobId, userId, args.shouldWatermark)
+    storedVideo = await watermarkLocalVideoAndUpload(localPath, jobId, userId, args.shouldWatermark)
   } finally {
     await cleanupWorkDir(workDir)
   }
+  const videoR2Url = storedVideo.videoUrl
 
   // Audio sidecar — the dubbed dialogue track alone, surfaced on the node's
   // audio output handle (mirrors voice-changer's video-mode contract). A dub
@@ -243,7 +245,7 @@ export async function deliverDubbedMedia(args: DeliverDubbedMediaArgs): Promise<
   const providerCost = dubbingProviderCost(settle, spanSec)
   const ok = await markJobCompleted(jobId, {
     output_data: {
-      videoUrl: videoR2Url,
+      ...storedVideoFields(storedVideo),
       ...(audioR2Url ? { audioUrl: audioR2Url } : {}),
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
       providerUsed: "elevenlabs-dubbing",

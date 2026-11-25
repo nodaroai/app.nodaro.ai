@@ -3,9 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const state = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), fetch: vi.fn(), retain: vi.fn(), read: vi.fn(),
   filters: [] as unknown[][], rows: [] as unknown[] } ))
 vi.mock("../supabase.js", () => ({ supabase: { from: state.from, rpc: state.rpc } }))
-vi.mock("../safe-fetch-bytes.js", () => ({ boundedPublicChunks: state.fetch }))
+vi.mock("../safe-fetch-bytes.js", async (importOriginal) => ({
+  REQUEST_PATH_VIDEO_DOWNLOAD: (await importOriginal<typeof import("../safe-fetch-bytes.js")>()).REQUEST_PATH_VIDEO_DOWNLOAD,
+  boundedPublicChunks: state.fetch,
+}))
 vi.mock("../retained-videos.js", () => ({ retainVideo: state.retain, readRetainedVideo: state.read }))
 import { readRetainedJobVideos, retainJobVideo } from "../retained-job-videos.js"
+import { DEFAULT_DOWNLOAD_LIMITS } from "../transfer-watchdog.js"
+const REQUEST_PATH_VIDEO_DOWNLOAD = { ...DEFAULT_DOWNLOAD_LIMITS, maxMs: 10 * 60_000 }
 
 const video = { assetId: "retained", contentHash: "a".repeat(64), url: "https://media.test/retained", width: 3, height: 2, durationMs: 1200, byteLength: 12 }
 const record = { job_id: "job", user_id: "owner", workflow_id: "film", video_id: video.assetId, submission_context: { kind: "test" } }
@@ -39,7 +44,9 @@ describe("server-attested retained job videos", () => {
     }
     // A job in the Trash is never retained: it reads as one that does not exist.
     expect(state.filters).toContainEqual(["jobs", "deleted_at", null])
-    expect(state.fetch).toHaveBeenCalledWith("https://media.test/source", { maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video" })
+    // Up to 500 MB from the provider: the response within 120 s, then the default path's
+    // size-scaled body rule under a request path's 10-min ceiling (not the default 30).
+    expect(state.fetch).toHaveBeenCalledWith("https://media.test/source", { maxBytes: 500 * 1024 * 1024, timeoutMs: 120_000, label: "Video", rate: REQUEST_PATH_VIDEO_DOWNLOAD })
     expect(state.retain).toHaveBeenCalledWith({ userId: "owner", workflowId: "film", body: Buffer.from("source bytes") })
     expect(state.rpc).toHaveBeenCalledWith("record_retained_job_video", {
       p_user_id: "owner", p_workflow_id: "film", p_job_id: "job", p_video_id: "retained", p_source_url: "https://media.test/source",

@@ -1,6 +1,7 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { UserRound, Loader2, AlertCircle, AlertTriangle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Settings } from "lucide-react"
@@ -44,6 +45,8 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  // A kept original this browser cannot decode: a message and Download (decided 2026-11-22).
+  const unplayableVideo = useVideoUnplayable(activeUrl)
   const activeThumbnail = activeResult?.thumbnailUrl
   // Non-fatal notice (e.g. audio auto-trimmed to the 600s cap). Prefer the
   // active result's own warning (so switching versions shows the right one),
@@ -188,6 +191,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
             <video
               ref={videoRef}
               src={activeUrl}
+              onError={unplayableVideo.onError}
               crossOrigin="anonymous"
               poster={activeThumbnail || undefined}
               className="w-full h-full object-cover rounded-xl"
@@ -201,6 +205,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               loop={shouldPlay}
               playsInline
             />
+            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
 
             {/* A LATER run failed while an earlier version is on show: say so
                 over the video (the toast alone was easy to miss). The retry is

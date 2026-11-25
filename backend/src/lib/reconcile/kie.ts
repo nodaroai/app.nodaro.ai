@@ -55,7 +55,8 @@ import { measureSeedanceDraftRenderSec, draftRenderOutputData } from "../seedanc
 import { readDraftAudioMux, draftAudioMuxOutputData } from "../seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData, type DraftAudioMuxResult } from "../seedance-draft-audio-apply.js"
 import { drivingAudioUrlOf, layDrivingAudioIfSilent } from "../driving-audio-lay.js"
-import { addVoiceLineIfSilent, lipSyncSendsVoiceAsReference, voicedUrlOf, voiceLineOutputData, type VoiceLineOutcome } from "../lip-sync-voice-line.js"
+import type { StoredVideo } from "../video-result-store.js"
+import { addVoiceLineIfSilent, lipSyncSendsVoiceAsReference, voicedVideoOf, voiceLineOutputData, type VoiceLineOutcome } from "../lip-sync-voice-line.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { recoveredMaskComposite } from "./mask-paste-back.js"
@@ -172,14 +173,14 @@ async function recoveredLipSyncVoiceLine(
  * has its sound (finalize stores it as usual). A job row that cannot be read
  * throws (its owner and watermark flag are needed): the next tick retries.
  */
-async function recoveredDrivingAudioMedia(row: KieJobRow, input: Record<string, unknown>, resultUrl: string): Promise<string | undefined> {
+async function recoveredDrivingAudioMedia(row: KieJobRow, input: Record<string, unknown>, resultUrl: string): Promise<StoredVideo | undefined> {
   const audioUrl = drivingAudioUrlOf(input)
   if (!audioUrl) return undefined
   const { data, error } = await supabase.from("jobs").select("user_id, should_watermark").eq("id", row.id).single()
   if (error || !data) throw new Error(`audio-to-video job row could not be read: ${error?.message ?? "no row"}`)
   const job = data as { user_id?: string | null; should_watermark?: boolean | null }
   const laid = await layDrivingAudioIfSilent({ videoUrl: resultUrl, audioUrl, jobId: row.id, userId: job.user_id ?? undefined, watermark: job.should_watermark ?? false })
-  return laid.kind === "stored" ? laid.url : undefined
+  return laid.kind === "stored" ? laid.stored : undefined
 }
 
 /**
@@ -783,9 +784,9 @@ export async function finalizeRecoveredMedia(
     const finalizeMedia = await draftFinalizeMedia(row, input, result.url)
     // A recovered lip sync that came back silent gets the caller's voice line.
     const voiceLine = await recoveredLipSyncVoiceLine(row, input, result.url)
-    const voicedUrl = voicedUrlOf(voiceLine)
+    const voiced = voicedVideoOf(voiceLine)
     const voiceLineData = voiceLineOutputData(voiceLine)
-    const mediaUrl = finalizeMedia?.url ?? voicedUrl
+    const video = finalizeMedia?.stored ?? voiced
     // A recovered inpaint or masked edit gets the paste-back its worker runs
     // before finalize (REFUND-CRITICAL there too: a failure throws into the
     // catch below, never a redraw finalized as the result).
@@ -795,13 +796,13 @@ export async function finalizeRecoveredMedia(
     const drivingAudioMedia = await recoveredDrivingAudioMedia(row, input, result.url)
 
     // The measured clip is the one stored, unless a draft finalize re-muxed it.
-    const deliveredVideoSec = mediaUrl === undefined && drivingAudioMedia === undefined ? settle?.deliveredSec : undefined
+    const deliveredVideoSec = video === undefined && drivingAudioMedia === undefined ? settle?.deliveredSec : undefined
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType,
       claimant: opts?.claimant ?? "cron",
-      ...(mediaUrl !== undefined && { mediaUrl }),
-      ...(drivingAudioMedia !== undefined && { mediaUrl: drivingAudioMedia }),
+      ...(video !== undefined && { video }),
+      ...(drivingAudioMedia !== undefined && { video: drivingAudioMedia }),
       ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       ...(meteredBaseCredits !== undefined && { meteredBaseCredits }),
       ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),

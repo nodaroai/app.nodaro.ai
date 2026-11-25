@@ -94,7 +94,7 @@ vi.mock("@/lib/config.js", () => ({
 // Imports under test (after mocks)
 // ---------------------------------------------------------------------------
 
-import { applySmartLoopCutToR2Url } from "../apply-smart-loop-cut.js"
+import { applySmartLoopCutLocal } from "../apply-smart-loop-cut.js"
 import { combineAudio } from "../combine-audio.js"
 import { addCaptions } from "../add-captions.js"
 import { socialMediaFormat } from "../social-media-format.js"
@@ -134,54 +134,26 @@ function ffargs(index = 0): string[] {
 // 1) apply-smart-loop-cut.ts
 // ===========================================================================
 
-describe("applySmartLoopCutToR2Url", () => {
-  it("runs smartLoopCut, uploads result to R2, cleans up the work dir", async () => {
+describe("applySmartLoopCutLocal", () => {
+  it("runs smartLoopCut and keeps the result on local disk: nothing is uploaded (decided 2026-11-22)", async () => {
     mocks.smartLoopCut.mockResolvedValueOnce({
       videoPath: "/tmp/slc-work/cut.mp4",
       chosenFrameIndex: 50, psnr: 33, sourceFrameCount: 100, fps: 24,
     })
-    mocks.uploadFileToR2.mockResolvedValueOnce("https://r2/job-1-loop-cut.mp4")
 
-    const url = await applySmartLoopCutToR2Url(
-      "https://r2/in.mp4", "job-1", "user-7", { lookbackFrames: 16 },
-    )
+    const cut = await applySmartLoopCutLocal("https://r2/in.mp4", { lookbackFrames: 16 })
 
-    expect(url).toBe("https://r2/job-1-loop-cut.mp4")
-    expect(mocks.smartLoopCut).toHaveBeenCalledWith({
-      videoUrl: "https://r2/in.mp4",
-      lookbackFrames: 16,
-    })
-    expect(mocks.uploadFileToR2).toHaveBeenCalledWith(
-      "/tmp/slc-work/cut.mp4", "job-1-loop-cut", "video", "user-7",
-    )
-    // Cleanup uses the parent dir of the smart-cut output
-    expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/slc-work")
-  })
-
-  it("forwards undefined userId without coercing to string", async () => {
-    await applySmartLoopCutToR2Url("u", "j", undefined, {})
-    expect(mocks.uploadFileToR2).toHaveBeenCalledWith(
-      expect.any(String), "j-loop-cut", "video", undefined,
-    )
-  })
-
-  it("still cleans up work dir if upload fails (finally block)", async () => {
-    mocks.uploadFileToR2.mockRejectedValueOnce(new Error("R2 down"))
-
-    await expect(
-      applySmartLoopCutToR2Url("u", "j", undefined, {}),
-    ).rejects.toThrow(/R2 down/)
-    expect(mocks.cleanupWorkDir).toHaveBeenCalled()
-  })
-
-  it("propagates smartLoopCut errors without uploading or cleaning", async () => {
-    mocks.smartLoopCut.mockRejectedValueOnce(new Error("psnr too low"))
-
-    await expect(
-      applySmartLoopCutToR2Url("u", "j", undefined, {}),
-    ).rejects.toThrow(/psnr too low/)
+    expect(cut).toEqual({ path: "/tmp/slc-work/cut.mp4", dir: "/tmp/slc-work" })
+    expect(mocks.smartLoopCut).toHaveBeenCalledWith({ videoUrl: "https://r2/in.mp4", lookbackFrames: 16 })
     expect(mocks.uploadFileToR2).not.toHaveBeenCalled()
+    // The caller removes the folder once it has stored the take.
     expect(mocks.cleanupWorkDir).not.toHaveBeenCalled()
+  })
+
+  it("propagates smartLoopCut errors without uploading", async () => {
+    mocks.smartLoopCut.mockRejectedValueOnce(new Error("psnr too low"))
+    await expect(applySmartLoopCutLocal("u", {})).rejects.toThrow(/psnr too low/)
+    expect(mocks.uploadFileToR2).not.toHaveBeenCalled()
   })
 })
 

@@ -21,8 +21,26 @@ const configMock = vi.hoisted(() => ({
 }))
 vi.mock("../config.js", () => configMock)
 
+// A video preview's kept original (lib/video-original-keys.ts): none unless a pin stores one;
+// `recorded` is what its job recorded it was charged (jobs.server_output, migration 695).
+const originals = vi.hoisted(() => ({ present: new Map<string, number>(), recorded: {} as Record<string, number>, claimFails: false, headThrows: false }))
+const USER_ID_FOR_CLAIMS = "00000000-0000-4000-8000-000000000001"
+vi.mock("../job-server-output.js", async (orig) => ({
+  ...(await orig<object>()),
+  // The claim off the job's record (migration 695): each recorded key once.
+  claimStoredObjects: vi.fn(async (_jobId: string, keys: string[]) => {
+    if (originals.claimFails) return { ok: false, claimed: {} }
+    const claimed: Record<string, number> = {}
+    for (const k of keys) if (k in originals.recorded) { claimed[k] = originals.recorded[k]!; delete originals.recorded[k] }
+    return { ok: true, ownerId: USER_ID_FOR_CLAIMS, claimed }
+  }),
+}))
 vi.mock("../storage.js", () => ({
   deleteFromR2: vi.fn().mockResolvedValue(undefined),
+  headR2Object: vi.fn(async (key: string) => {
+    if (originals.headThrows) throw new Error("R2 HEAD 503")
+    return originals.present.has(key) ? { exists: true, sizeBytes: originals.present.get(key) } : { exists: false }
+  }),
 }))
 
 vi.mock("../../utils/file-validation.js", () => ({
@@ -42,6 +60,14 @@ vi.mock("../relay-possible.js", () => ({ relayPossible: () => relayGate.on }))
 // The legal hold (lib/legal-hold.ts): a key kept as evidence of a complaint
 // is not deleted, whoever asks. Empty by default; one pin fills it.
 const hold = vi.hoisted(() => ({ keys: new Set<string>() }))
+// Which urls a job made at or after a moment names (lib/job-output-references.ts, the index of migration 495).
+const linked = vi.hoisted(() => ({ calls: [] as Array<{ url: string; since: Date }>, laterJobs: new Map<string, Date>() }))
+vi.mock("../job-output-references.js", () => ({
+  urlsLinkedByJobsSince: vi.fn(async (links: Array<{ url: string; since: Date }>) => {
+    linked.calls.push(...links)
+    return new Set(links.filter((l) => { const at = linked.laterJobs.get(l.url); return at !== undefined && at >= l.since }).map((l) => l.url))
+  }),
+}))
 vi.mock("../legal-hold.js", () => ({
   heldAmong: vi.fn(async (keys: readonly string[]) => new Set(keys.filter((k) => hold.keys.has(k)))),
 }))
@@ -139,6 +165,15 @@ function scenarioFor(opts: {
   }
 }
 
+/** The base scenario, where a job's output names `url` at `path` (the referrer probes). */
+function jobsNamingScenario(url: string, path: string): Scenario {
+  const base = scenarioFor({ relayJobId: null })
+  return (table, calls, terminal) => {
+    if (table === "jobs" && terminal !== "maybeSingle" && eqVal(calls, path) === url) return { count: 1, error: null }
+    return base(table, calls, terminal)
+  }
+}
+
 /** The whose-file reads (lib/key-ownership.ts): who made the key, and the rows naming it. */
 const isMakerRead = (table: string, calls: Recorded[]) =>
   table === "jobs" && calls.some((c) => c.method === "select" && c.args[0] === "id, user_id")
@@ -170,7 +205,220 @@ beforeEach(() => {
   configMock.config.R2_SHARED_WITH_RELAY_TARGET = false
   relayGate.on = true
   hold.keys.clear()
+  originals.present.clear()
+  originals.recorded = {}
+  linked.calls.length = 0
+  linked.laterJobs.clear()
+  originals.claimFails = false
+  originals.headThrows = false
   vi.mocked(deleteFromR2).mockResolvedValue(undefined)
+})
+
+describe("permanentlyDeleteAsset — a video's kept original (decided 2026-11-22)", () => {
+  const PREVIEW_KEY = `videos/${NEAR_JOB}.mp4`
+  const ORIGINAL_KEY = `videos/${NEAR_JOB}-master.mov`
+
+  it("goes with its preview, and gives back exactly what its store was charged (its recorded size)", async () => {
+    originals.present.set(ORIGINAL_KEY, 8800)
+    originals.recorded = { [ORIGINAL_KEY]: 9000 }
+    useScenario(scenarioFor({ relayJobId: null }))
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(PREVIEW_KEY)
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ORIGINAL_KEY)
+    // The original's claim, given back when it is made; the preview's row size on its own.
+    expect(vi.mocked(updateStorageUsage).mock.calls).toEqual([[USER, -9000], [USER, -2048]])
+  })
+
+  it("a Library row saved from the original, while the completed job still names it, never deletes it (decided 2026-11-24)", async () => {
+    const MASTER = `videos/${NEAR_JOB}-master.mov`
+    originals.recorded = { [MASTER]: 9000 }
+    useScenario(jobsNamingScenario(`https://r2.test.com/${MASTER}`, "output_data->>originalVideoUrl"))
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-2", r2_key: MASTER, size_bytes: 8800, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(MASTER)
+    expect(result).toMatchObject({ ok: true })
+    expect(originals.recorded).toEqual({ [MASTER]: 9000 })
+  })
+
+  describe("a really-delete caller (blockOnOwnJobReferrers false, decided 2026-11-25)", () => {
+    const OWN_JOB_MADE = "2026-11-20T10:00:00.000Z"
+    /** The base scenario, where the original's own job answers when it was made. */
+    const withOwnJob = (): Scenario => {
+      const base = scenarioFor({ relayJobId: null })
+      return (table, calls, terminal) => {
+        if (table === "jobs" && terminal === "maybeSingle" && calls.some((c) => c.method === "select" && c.args[0] === "created_at")) {
+          return { data: { created_at: OWN_JOB_MADE }, error: null }
+        }
+        return base(table, calls, terminal)
+      }
+    }
+    const run = () => permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: false,
+    })
+
+    beforeEach(() => {
+      linked.calls.length = 0
+      linked.laterJobs.clear()
+      originals.present.set(ORIGINAL_KEY, 8800)
+      originals.recorded = { [ORIGINAL_KEY]: 9000 }
+    })
+
+    it("the original's own job naming it does not keep it: it goes with the preview, its claim given back", async () => {
+      // Only the own job names it: a link at its own creation, before the asked moment.
+      linked.laterJobs.set(`https://r2.test.com/${ORIGINAL_KEY}`, new Date(OWN_JOB_MADE))
+      useScenario(withOwnJob())
+      await run()
+      expect(linked.calls).toEqual([{ url: `https://r2.test.com/${ORIGINAL_KEY}`, since: new Date(Date.parse(OWN_JOB_MADE) + 1) }])
+      expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(PREVIEW_KEY)
+      expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ORIGINAL_KEY)
+      expect(vi.mocked(updateStorageUsage).mock.calls).toEqual([[USER, -9000], [USER, -2048]])
+    })
+
+    it("a later job that names it keeps it, while the preview goes", async () => {
+      linked.laterJobs.set(`https://r2.test.com/${ORIGINAL_KEY}`, new Date("2026-11-21T10:00:00.000Z"))
+      useScenario(withOwnJob())
+      await run()
+      expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(PREVIEW_KEY)
+      expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ORIGINAL_KEY)
+      expect(originals.recorded).toEqual({ [ORIGINAL_KEY]: 9000 })
+    })
+  })
+
+  it("with own jobs keeping files, any job naming the original beside a preview keeps it (asked of the index from the start)", async () => {
+    originals.present.set(ORIGINAL_KEY, 8800)
+    originals.recorded = { [ORIGINAL_KEY]: 9000 }
+    linked.calls.length = 0
+    linked.laterJobs.clear()
+    linked.laterJobs.set(`https://r2.test.com/${ORIGINAL_KEY}`, new Date("2026-11-20T10:00:00.000Z"))
+    useScenario(scenarioFor({ relayJobId: null }))
+    await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(linked.calls).toEqual([{ url: `https://r2.test.com/${ORIGINAL_KEY}`, since: new Date(0) }])
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ORIGINAL_KEY)
+  })
+
+  it("a row that IS a kept original (a job completed on it): its claim is given back, never its size as well; a later sweep claims nothing", async () => {
+    const MASTER = `videos/${NEAR_JOB}-master.mov`
+    originals.recorded = { [MASTER]: 9000 }
+    useScenario(scenarioFor({ relayJobId: null }))
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: MASTER, size_bytes: 8800, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2).mock.calls).toEqual([[MASTER]])
+    expect(vi.mocked(updateStorageUsage).mock.calls).toEqual([[USER, -9000]])
+    // Library delete, then the retention sweep: the record no longer holds it.
+    expect(originals.recorded).toEqual({})
+  })
+
+  it("a sweep that claimed the kept original first: the library delete deletes it and gives nothing back", async () => {
+    const MASTER = `videos/${NEAR_JOB}-master.mov`
+    useScenario(scenarioFor({ relayJobId: null }))
+    await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: MASTER, size_bytes: 8800, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
+
+  it("a preview whose own delete fails still has its kept original deleted (the claim is spent)", async () => {
+    originals.present.set(ORIGINAL_KEY, 8800)
+    originals.recorded = { [ORIGINAL_KEY]: 9000 }
+    vi.mocked(deleteFromR2).mockImplementation(async (key: string) => {
+      if (key === PREVIEW_KEY) throw new Error("R2 down")
+    })
+    useScenario(scenarioFor({ relayJobId: null }))
+    await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ORIGINAL_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -9000)
+  })
+
+  it("a look beside the preview that fails (storage HEAD error) never skips the preview's own delete; the unchecked original is not deleted or refunded", async () => {
+    originals.present.set(ORIGINAL_KEY, 8800)
+    originals.recorded = { [ORIGINAL_KEY]: 9000 }
+    originals.headThrows = true
+    useScenario(scenarioFor({ relayJobId: null }))
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2).mock.calls).toEqual([[PREVIEW_KEY]])
+    expect(vi.mocked(updateStorageUsage).mock.calls).toEqual([[USER, -2048]])
+    expect(originals.recorded).toEqual({ [ORIGINAL_KEY]: 9000 })
+  })
+
+  it("a claim that did not run deletes nothing and answers an error, the row kept for another try", async () => {
+    originals.present.set(ORIGINAL_KEY, 8800)
+    originals.recorded = { [ORIGINAL_KEY]: 9000 }
+    originals.claimFails = true
+    useScenario(scenarioFor({ relayJobId: null }))
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(result).toMatchObject({ ok: false, dbError: expect.anything() })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    expect(vi.mocked(updateStorageUsage)).not.toHaveBeenCalled()
+  })
+
+  it("an original its job's record no longer names (another path claimed it) is deleted and gives nothing back again", async () => {
+    originals.present.set(ORIGINAL_KEY, 7000)
+    useScenario(scenarioFor({ relayJobId: null }))
+    await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ORIGINAL_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -2048)
+  })
+
+  it("a preview with no original deletes the preview alone", async () => {
+    useScenario(scenarioFor({ relayJobId: null }))
+    await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(vi.mocked(deleteFromR2).mock.calls).toEqual([[PREVIEW_KEY]])
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -2048)
+  })
+
+  it("an original kept as evidence stays, and is not refunded", async () => {
+    originals.present.set(ORIGINAL_KEY, 9000)
+    hold.keys.add(ORIGINAL_KEY)
+    useScenario(scenarioFor({ relayJobId: null }))
+    await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: PREVIEW_KEY, size_bytes: 2048, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalledWith(ORIGINAL_KEY)
+    expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -2048)
+  })
 })
 
 describe("permanentlyDeleteAsset — the legal hold", () => {
@@ -538,7 +786,7 @@ describe("permanentlyDeleteAsset — the save-to-storage referrer", () => {
 
   // Mainline byte-identity: flag off, exactly the three queries this route has
   // always issued, in the same order.
-  it("probes exactly the original three paths when the flag is off", async () => {
+  it("probes exactly the primary paths when the flag is off: the three media urls and a video's kept original", async () => {
     useScenario(probeScenario(null))
 
     const result = await permanentlyDeleteAsset({
@@ -552,6 +800,7 @@ describe("permanentlyDeleteAsset — the save-to-storage referrer", () => {
       "output_data->>imageUrl",
       "output_data->>videoUrl",
       "output_data->>audioUrl",
+      "output_data->>originalVideoUrl",
     ])
   })
 })
@@ -716,6 +965,22 @@ describe("permanentlyDeleteAsset — the row's companions", () => {
     expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ENGINE_KEY)
     expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(updateStorageUsage)).toHaveBeenCalledWith(USER, -5096)
+  })
+
+  it("a kept original beside the preview and a companion: the original's claim is given back on its own, the row and its companion together", async () => {
+    const ORIGINAL = `videos/${NEAR_JOB}-master.mov`
+    originals.present.set(ORIGINAL, 8800)
+    originals.recorded = { [ORIGINAL]: 9000 }
+    useScenario(companionScenario({ companions: [{ key: ENGINE_KEY, sizeBytes: 1000 }] }))
+    const result = await permanentlyDeleteAsset({
+      userId: USER,
+      asset: { id: "asset-1", r2_key: `videos/${NEAR_JOB}.mp4`, size_bytes: 4096, job_id: NEAR_JOB },
+      blockOnOwnJobReferrers: true,
+    })
+    expect(result).toEqual({ ok: true, r2Deleted: true })
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ORIGINAL)
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith(ENGINE_KEY)
+    expect(vi.mocked(updateStorageUsage).mock.calls).toEqual([[USER, -9000], [USER, -5096]])
   })
 
   it("ignores a companion outside the row's key family: neither deleted nor refunded", async () => {

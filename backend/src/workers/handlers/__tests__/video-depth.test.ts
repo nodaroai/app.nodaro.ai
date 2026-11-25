@@ -48,8 +48,8 @@ beforeEach(() => {
   mocks.replicateVideoDepth.mockResolvedValue({ videoUrl: "https://replicate.delivery/depth.mp4", cost: 0.03 })
   mocks.grayscaleVideo.mockResolvedValue({ outputPath: "/tmp/gray/output.mp4", workDir: "/tmp/gray" })
   mocks.cleanupWorkDir.mockResolvedValue(undefined)
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2/out.mp4")
-  mocks.watermarkLocalVideoAndUpload.mockResolvedValue("https://r2/gray.mp4")
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2/out.mp4" })
+  mocks.watermarkLocalVideoAndUpload.mockResolvedValue({ videoUrl: "https://r2/gray.mp4" })
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://r2/thumb.png")
   mocks.setJobProgress.mockResolvedValue(undefined)
   mocks.startProgressRamp.mockReturnValue({ stop: mocks.rampStop })
@@ -79,7 +79,7 @@ describe("handleVideoDepth", () => {
       jobId: "job-1",
       jobType: "video-depth",
       result: { url: "https://fal.media/depth.mp4", cost: 0.12, providerUsed: "fal" },
-      mediaUrl: "https://r2/out.mp4",
+      video: { videoUrl: "https://r2/out.mp4" },
       extraOutputData: { thumbnailUrl: "https://r2/thumb.png" },
     })
   })
@@ -123,7 +123,7 @@ describe("handleVideoDepth", () => {
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/gray")
     expect(mocks.generateAndUploadThumbnail).toHaveBeenCalledWith("https://r2/gray.mp4", "job-1", "user-1")
-    expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2/gray.mp4" }))
+    expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ video: { videoUrl: "https://r2/gray.mp4" } }))
   })
 
   it("replicate + grayscale pass: an upload failure rethrows, still cleans the work dir and never finalizes", async () => {

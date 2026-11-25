@@ -482,7 +482,7 @@ export async function grantSubscriptionPlan(
   const { error: writeError } = await supabase
     .from("profiles")
     .update({
-      ...tierColumns(tier),
+      ...tierColumns(tier, priorTier),
       subscription_credits: credits,
       credits_reset_at: stamp,
       storage_limit_bytes: storageLimit,

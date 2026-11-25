@@ -73,8 +73,8 @@ const HLG_SOURCE: MatchedProbe = {
  * tone-mapped, back to BT.709 4:2:0, error-diffusion dithered on the step down to 8 bits.
  */
 const toSdr = (tags: string): string =>
-  `setparams=${tags},zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,` +
-  "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion,format=yuv420p"
+  `setparams=${tags},zscale=t=linear:npl=100:agamma=0,format=gbrpf32le,zscale=p=bt709:agamma=0,tonemap=tonemap=hable:desat=0,` +
+  "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion:agamma=0,format=yuv420p"
 
 /** A full-range SDR source's picture taken to limited range: its frames tagged full range, the levels converted, 4:2:0. */
 const TO_LIMITED = "setparams=range=pc,scale=out_range=tv,format=yuv420p"

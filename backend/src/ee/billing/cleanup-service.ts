@@ -1,7 +1,7 @@
 import { supabase } from "../../lib/supabase.js"
 import { isMissingColumnError, isMissingFunctionError, isMissingTableError } from "../../lib/postgrest-errors.js"
-import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
-import { tierColumns } from "./tier-columns.js"
+import { deleteFromR2, getR2ObjectSize, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
+import { resolveTierFrom, tierColumns } from "./tier-columns.js"
 import { downgradeToEffectiveFloor, endPaidPlan, fetchLifetimeTopups, readLiveOrClaimedSubscriptions } from "./downgrade-floor.js"
 import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared/credits"
 /**
@@ -28,6 +28,9 @@ export const EDIT_PLAN_TMP_PREFIX = "edit-plan-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
 import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
+import { reapRecordedObjects, refundClaimedRecordedObjects, serverOutputOf } from "../../lib/job-server-output.js"
+import { jobIdOfKeptOriginalKey, keptOriginalKeysOf } from "../../lib/video-original-keys.js"
+import { withServerOutput } from "../../lib/job-server-output-column.js"
 import { ownedJobOutputFiles, r2KeyFromUrl, type JobOutputFile } from "../../lib/job-output-keys.js"
 import { blankUrlsInEveryJobOutput, jobOutputBlankingAvailable, markJobOutputsCleaned } from "../../lib/job-output-references.js"
 import { judgeAssetRows, keysHeldByOtherLibraryRows, keysUserMayDelete } from "../../lib/key-ownership.js"
@@ -111,13 +114,23 @@ export { r2KeyFromUrl }
  * library lookup fails; the reaper then stops the batch.
  */
 async function reapableJobFiles(
-  jobs: ReadonlyArray<{ id: unknown; output_data: unknown }>,
+  jobs: ReadonlyArray<{ id: unknown; output_data: unknown; server_output?: unknown }>,
 ): Promise<{ keys: string[]; files: ReapedFile[]; heldBack: number; libraryKept: number }> {
   const byJob = new Map<string, JobOutputFile[]>()
   let heldBack = 0
   for (const job of jobs) {
-    const owned = ownedJobOutputFiles(job.id as string, job.output_data)
-    byJob.set(job.id as string, owned.files)
+    // The job's server-only record too (migration 695): a watermarked Extend's
+    // raw clip is named there and nowhere the owner can read.
+    const owned = ownedJobOutputFiles(job.id as string, { output: job.output_data, server: job.server_output ?? null })
+    // And every object the record holds, whether or not a url names it
+    // (decided 2026-11-23): a store that could not tell its record landed, an
+    // earlier attempt's original. Its key is in the job's family by
+    // construction; isOwnedObjectKey still fences it below.
+    const named = new Set(owned.files.map((f) => f.key))
+    const recordedOnly = Object.keys(serverOutputOf(job.server_output).stored ?? {})
+      .filter((key) => !named.has(key) && isOwnedObjectKey(job.id as string, key))
+      .map((key) => ({ key, url: publicUrlOfKey(key) ?? key }))
+    byJob.set(job.id as string, [...owned.files, ...recordedOnly])
     heldBack += owned.heldBack
   }
   const ownKeys = [...byJob.values()].flatMap((files) => files.map((f) => f.key))
@@ -130,6 +143,15 @@ async function reapableJobFiles(
     list.filter((f) => candidates.has(f.key)).map((f) => ({ ...f, jobId })),
   )
   return { keys: [...candidates], files, heldBack, libraryKept: libraryHeld.size }
+}
+
+/** The reaped files whose job recorded them as stored (migration 695): the ones a claim gives back. */
+function recordedFilesOf(
+  jobs: ReadonlyArray<{ id: unknown; server_output?: unknown }>,
+  files: readonly ReapedFile[],
+): ReapedFile[] {
+  const byJob = new Map(jobs.map((j) => [j.id as string, serverOutputOf(j.server_output)]))
+  return files.filter((f) => byJob.get(f.jobId)?.stored?.[f.key] !== undefined)
 }
 
 /** A file a reaper is about to delete, with the job whose output names it. */
@@ -261,18 +283,37 @@ async function reapAssetBatch(
   const isHeld = (a: AgedAssetRow) => !!a.r2_key && heldKeys.has(a.r2_key)
   const deletable = rows.filter((a) => verdictOf(a)?.deleteObject && !isHeld(a)).map((a) => a.r2_key as string)
   const relayKept = await relayOwnedKeys(deletable)
+  // A row naming a kept original (a job that completed on its original when
+  // its preview could not be made): that object's bytes are its job's
+  // record's, so it is claimed off the record, deleted only once the claim
+  // ran, and given back by the claim — never by the row's size as well
+  // (decided 2026-11-23). A row whose claim did not run keeps its key.
+  const originals = deletable.filter((k) => !relayKept.has(k) && jobIdOfKeptOriginalKey(k) !== undefined)
+  // And the original kept beside a preview this batch deletes (as a library
+  // delete takes it): still in storage and named by no other library row.
+  const besidePreviews = await originalsBesidePreviews(deletable.filter((k) => !relayKept.has(k) && !originals.includes(k)), new Set(rows.map((a) => String(a.id))))
+  // Every one is deleted once its claim ran, claimed or not — a row whose job
+  // is gone claims nothing, and its object must not outlive the row — and
+  // only the claim is given back (decided 2026-11-23).
+  const originalReap = await reapRecordedObjects(
+    [...originals, ...besidePreviews].map((key) => ({ jobId: jobIdOfKeptOriginalKey(key)!, key })),
+    "retention",
+    { deleteUnclaimed: true },
+  )
+  const originalKept = new Set(originals.filter((k) => originalReap.failedJobIds.has(jobIdOfKeptOriginalKey(k)!) || originalReap.keptKeys.has(k)))
+  const isOriginalRow = (a: AgedAssetRow) => originals.includes(a.r2_key as string)
   // What storage did not delete is recorded for a later retry (decided
   // 2026-10-08), BEFORE the rows lose their keys: if the record fails, the
   // rows stay keyed and the next run deletes them again.
   const batch = await deleteKeysRecordingFailures(
-    deletable.filter((k) => !relayKept.has(k)),
+    deletable.filter((k) => !relayKept.has(k) && !originals.includes(k)),
     "retention",
     { recordErrors: "throw" },
   )
 
   const letGo = rows.filter((a) => {
     const v = verdictOf(a)
-    return (v?.deleteObject || v?.claimedByOthers) && !isHeld(a)
+    return (v?.deleteObject || v?.claimedByOthers) && !isHeld(a) && !originalKept.has(a.r2_key as string)
   })
   const keptWithKey = rows.length - letGo.length
   if (letGo.length > 0) {
@@ -292,7 +333,8 @@ async function reapAssetBatch(
   const refunds = new Map<string, number>()
   for (const a of letGo) {
     const v = verdictOf(a)
-    if (!v?.refundable || relayKept.has(a.r2_key as string)) continue
+    // A kept original's row: its claim gave its bytes back above.
+    if (!v?.refundable || relayKept.has(a.r2_key as string) || isOriginalRow(a)) continue
     const size = Number(a.size_bytes ?? 0)
     if (!(size > 0)) continue
     if (v.deleteObject) bytesFreed += size
@@ -304,7 +346,33 @@ async function reapAssetBatch(
   if (keptWithKey > heldRows) {
     console.warn(`[cleanup] ${where}: ${keptWithKey - heldRows} row(s) name an object nobody can be shown to own; the rows keep their keys and the objects stay`)
   }
-  return { deleted: batch.deleted, errors: batch.errors, bytesFreed, refunds, keptWithKey, stop: false }
+  return { deleted: batch.deleted + originalReap.deleted, errors: batch.errors + originalReap.errors, bytesFreed: bytesFreed + originalReap.refunded, refunds, keptWithKey, stop: false }
+}
+
+/**
+ * The kept originals beside `previewKeys` (`videos/<id>-master.<ext>` next to
+ * `videos/<id>.mp4`) that are still in storage and that no library row other
+ * than this batch's names. Throws when the library lookup fails (the batch
+ * then stops, as for any ownership lookup).
+ */
+async function originalsBesidePreviews(previewKeys: readonly string[], batchRowIds: ReadonlySet<string>): Promise<string[]> {
+  const candidates = previewKeys.flatMap((k) => keptOriginalKeysOf(k))
+  if (candidates.length === 0) return []
+  const sizeOf = async (k: string): Promise<number> => {
+    try {
+      return Number(await getR2ObjectSize(k)) || 0
+    } catch {
+      return 0
+    }
+  }
+  const present = (await Promise.all(candidates.map(async (k) => [k, await sizeOf(k)] as const)))
+    .filter(([, size]) => size > 0)
+    .map(([k]) => k)
+  if (present.length === 0) return []
+  const { data, error } = await supabase.from("assets").select("id, r2_key").in("r2_key", present)
+  if (error) throw new Error(`[cleanup] library lookup of kept originals failed: ${error.message}`)
+  const named = new Set(((data ?? []) as Array<{ id: unknown; r2_key: unknown }>).filter((r) => !batchRowIds.has(String(r.id))).map((r) => String(r.r2_key)))
+  return present.filter((k) => !named.has(k))
 }
 
 /** A user's location keys minus every object they cannot be shown to own
@@ -539,9 +607,10 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   if (jobPass.failed) errors++
   let hasMoreJobs = jobPass.ready
   while (hasMoreJobs) {
-    const { data: jobs, error } = await supabase
+    // The job's server-only store record too (695).
+    const { data: jobRows, error } = await withServerOutput("id, user_id, output_data", (cols) => supabase
       .from("jobs")
-      .select("id, user_id, output_data")
+      .select(cols)
       .in("user_id", freeUserIds)
       .eq("status", "completed")
       .not("output_data", "is", null)
@@ -551,7 +620,8 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       // other predicates, so the same BATCH_SIZE rows return forever and
       // the loop never terminates (jobs.length stays at BATCH_SIZE).
       .is("output_data->>_cleaned", null)
-      .limit(BATCH_SIZE)
+      .limit(BATCH_SIZE))
+    const jobs = jobRows as unknown as Array<{ id: string; user_id: string; output_data: unknown; server_output?: unknown }> | null
 
     if (error) {
       console.error("[cleanup] Failed to query free user jobs:", error.message)
@@ -593,12 +663,27 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     // (`blankDeletedLinks`), all before marking this batch. A failed record
     // or blanking leaves the batch unmarked: the next run walks it again.
     let deleted = new Set<string>()
+    // Jobs whose recorded objects could not be claimed: left unmarked (their
+    // record still holds keys), and this run's pass stops after the batch.
+    let failedClaimJobIds: ReadonlySet<string> = new Set()
     try {
       if (reap.keys.length > 0) {
-        const batchResult = await deleteKeysRecordingFailures(reap.keys, "retention", jobFileRecording(reap.files))
-        filesDeleted += batchResult.deleted
-        errors += batchResult.errors
-        deleted = deletedLinks(reap.files, batchResult.notDeleted)
+        // A kept video original (or raw clip) was charged its recorded bytes
+        // when stored: claimed off its job's record, deleted only once the
+        // claim ran, and given back once, whichever other path deletes the
+        // same object (`reapRecordedObjects`). The rest in one batch.
+        const recorded = recordedFilesOf(jobsToClean, reap.files)
+        const recordedKeys = new Set(recorded.map((f) => f.key))
+        const recordedReap = await refundClaimedRecordedObjects(recorded, new Set(reap.keys))
+        failedClaimJobIds = recordedReap.failedJobIds
+        const plain = reap.keys.filter((k) => !recordedKeys.has(k))
+        const batchResult = plain.length > 0
+          ? await deleteKeysRecordingFailures(plain, "retention", jobFileRecording(reap.files))
+          : { deleted: 0, errors: 0, notDeleted: [] as string[] }
+        filesDeleted += batchResult.deleted + recordedReap.deleted
+        errors += batchResult.errors + recordedReap.errors
+        const notDeleted = [...(batchResult.notDeleted ?? []), ...recorded.filter((f) => !recordedReap.deletedKeys.has(f.key)).map((f) => f.key)]
+        deleted = deletedLinks(reap.files, notDeleted)
       }
       await blankDeletedLinks(deleted)
     } catch (err) {
@@ -611,11 +696,15 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     // deleted links nulled (`markJobOutputsCleaned`): an output written from
     // this read would put back a link another path blanked since.
     try {
-      const ids = jobsToClean.map((job) => job.id as string)
-      const marked = await markJobOutputsCleaned(ids, deleted)
+      const ids = jobsToClean.map((job) => job.id as string).filter((id) => !failedClaimJobIds.has(id))
+      const marked = ids.length > 0 ? await markJobOutputsCleaned(ids, deleted) : 0
       // A row left unmarked would be selected again: stop rather than spin.
       if (marked < ids.length) {
         console.warn(`[cleanup] ${ids.length - marked} free-user job output(s) were not marked cleaned; stopping this run's job-output pass`)
+        break
+      }
+      if (failedClaimJobIds.size > 0) {
+        console.warn(`[cleanup] ${failedClaimJobIds.size} free-user job(s) keep recorded objects whose claim failed; they stay unmarked for the next run`)
         break
       }
     } catch (err) {
@@ -751,7 +840,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     // offer claimed, an admin gift) and is not this reap's to end. The reap
     // changes tier and storage, and deletes media.
     if ((lifetimes.get(user.id) ?? 0) > 0) {
-      const { error: floorErr } = await downgradeToEffectiveFloor(user.id)
+      const { error: floorErr } = await downgradeToEffectiveFloor(user.id, resolveTierFrom(user))
       if (floorErr) {
         console.error("[cleanup] payg floor downgrade failed:", user.id, floorErr.message)
         errors++
@@ -811,9 +900,9 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     if (!jobPass.ready) ownershipFailed = true
     let hasMore = jobPass.ready
     while (hasMore) {
-      const { data: jobs } = await supabase
+      const { data: jobRows } = await withServerOutput("id, output_data", (cols) => supabase
         .from("jobs")
-        .select("id, output_data")
+        .select(cols)
         .eq("user_id", user.id)
         .eq("status", "completed")
         .not("output_data", "is", null)
@@ -822,7 +911,8 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         // other predicates, so the same BATCH_SIZE rows return forever and
         // the loop never terminates.
         .is("output_data->>_cleaned", null)
-        .limit(BATCH_SIZE)
+        .limit(BATCH_SIZE))
+      const jobs = jobRows as unknown as Array<{ id: string; output_data: unknown; server_output?: unknown }> | null
 
       if (!jobs || jobs.length === 0) {
         hasMore = false
@@ -858,12 +948,22 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       // before marking; a failure leaves the user's wipe incomplete, so no
       // downgrade.
       let deleted = new Set<string>()
+      let failedClaimJobIds: ReadonlySet<string> = new Set()
       try {
         if (reap.keys.length > 0) {
-          const batchResult = await deleteKeysRecordingFailures(reap.keys, "retention", jobFileRecording(reap.files))
-          userFilesDeleted += batchResult.deleted
-          errors += batchResult.errors
-          deleted = deletedLinks(reap.files, batchResult.notDeleted)
+          // Recorded objects only once their claim ran (`reapRecordedObjects`), the rest in one batch.
+          const recorded = recordedFilesOf(jobsToClean, reap.files)
+          const recordedKeys = new Set(recorded.map((f) => f.key))
+          const recordedReap = await refundClaimedRecordedObjects(recorded, new Set(reap.keys))
+          failedClaimJobIds = recordedReap.failedJobIds
+          const plain = reap.keys.filter((k) => !recordedKeys.has(k))
+          const batchResult = plain.length > 0
+            ? await deleteKeysRecordingFailures(plain, "retention", jobFileRecording(reap.files))
+            : { deleted: 0, errors: 0, notDeleted: [] as string[] }
+          userFilesDeleted += batchResult.deleted + recordedReap.deleted
+          errors += batchResult.errors + recordedReap.errors
+          const notDeleted = [...(batchResult.notDeleted ?? []), ...recorded.filter((f) => !recordedReap.deletedKeys.has(f.key)).map((f) => f.key)]
+          deleted = deletedLinks(reap.files, notDeleted)
         }
         await blankDeletedLinks(deleted)
       } catch (err) {
@@ -876,11 +976,11 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       // Mark the batch in the database, from each row's current output (see
       // the free-user reaper). A failed mark leaves the wipe incomplete.
       try {
-        const ids = jobsToClean.map((job) => job.id as string)
-        const marked = await markJobOutputsCleaned(ids, deleted)
+        const ids = jobsToClean.map((job) => job.id as string).filter((id) => !failedClaimJobIds.has(id))
+        const marked = ids.length > 0 ? await markJobOutputsCleaned(ids, deleted) : 0
         // A row left unmarked would be selected again: stop rather than spin.
-        if (marked < ids.length) {
-          console.warn(`[cleanup] ${ids.length - marked} job output(s) of canceled user ${user.id} were not marked cleaned; the wipe finishes next run`)
+        if (marked < ids.length || failedClaimJobIds.size > 0) {
+          console.warn(`[cleanup] job output(s) of canceled user ${user.id} were not all marked cleaned (recorded objects whose claim failed stay unmarked); the wipe finishes next run`)
           ownershipFailed = true
           break
         }
@@ -937,7 +1037,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     await supabase
       .from("profiles")
       .update({
-        ...tierColumns(FREE_TIER_DEFAULTS.tier),
+        ...tierColumns(FREE_TIER_DEFAULTS.tier, resolveTierFrom(user)),
         storage_limit_bytes: FREE_TIER_DEFAULTS.storage_limit_bytes,
         storage_used_bytes: 0,
       })

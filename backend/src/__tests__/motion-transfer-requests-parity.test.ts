@@ -115,7 +115,7 @@ vi.mock("@/workers/shared.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../workers/shared.js")>()),
   setJobProgress: vi.fn().mockResolvedValue(undefined),
   withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, run: () => Promise<unknown>) => run()),
-  uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.test/videos/job-1.mp4"),
+  uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.test/videos/job-1.mp4" })),
   generateAndUploadThumbnail: vi.fn(async () => undefined),
 }))
 

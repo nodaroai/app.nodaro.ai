@@ -21,7 +21,7 @@ vi.mock("@/ee/billing/stripe-client.js", () => ({
   getStripe: () => ({ subscriptions: { list: async () => ({ data: state.stripeSubs }) } }),
 }))
 vi.mock("@/ee/billing/stripe-config.js", () => ({
-  getTierFromPriceId: (price: string) => (price === "price_basic" ? "basic" : "pro"),
+  getTierFromPriceId: (price: string) => (price === "price_basic" ? "basic" : price === "price_retired" ? "free" : "pro"),
 }))
 
 import { adminSubscriptionHealthRoutes } from "../admin-subscription-health.js"
@@ -68,6 +68,33 @@ describe("admin subscription sync", () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toMatchObject({ synced: true, stripeSubscriptionId: "sub_a", tier: "pro" })
     expect((state.db.tables.profiles as Row[])[0]!.current_period_end).toBe(new Date(END * 1000).toISOString())
+  })
+
+  it("a sync that finds the account on a lower plan (Pro → Basic) returns private outputs to public", async () => {
+    ;(state.db.tables.profiles as Row[])[0]!.public_outputs = false
+    state.db.tables.subscriptions = [row("sub_a")]
+    state.stripeSubs = [stripeSub("sub_a", "price_basic")]
+    const res = await sync()
+    expect(res.statusCode).toBe(200)
+    expect((state.db.tables.profiles as Row[])[0]).toMatchObject({ tier: "basic", public_outputs: true })
+  })
+
+  it("a sync onto a price that maps to no plan (unknown or retired: read as free) resets nothing", async () => {
+    ;(state.db.tables.profiles as Row[])[0]!.public_outputs = false
+    state.db.tables.subscriptions = [row("sub_a")]
+    state.stripeSubs = [stripeSub("sub_a", "price_retired")]
+    const res = await sync()
+    expect(res.statusCode).toBe(200)
+    expect((state.db.tables.profiles as Row[])[0]).toMatchObject({ public_outputs: false })
+  })
+
+  it("a sync on the same plan leaves private outputs alone", async () => {
+    ;(state.db.tables.profiles as Row[])[0]!.public_outputs = false
+    state.db.tables.subscriptions = [row("sub_a")]
+    state.stripeSubs = [stripeSub("sub_a")]
+    const res = await sync()
+    expect(res.statusCode).toBe(200)
+    expect((state.db.tables.profiles as Row[])[0]).toMatchObject({ tier: "pro", public_outputs: false })
   })
 
   it("answers 409 for a refused second subscription and writes nothing", async () => {

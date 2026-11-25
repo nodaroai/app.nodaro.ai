@@ -86,7 +86,7 @@ describe("useUserSettings", () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: { publicOutputs: false, tier: "pro", promptTemplates: { k: "v" } },
+        data: { publicOutputs: false, tier: "pro", privateOutputsAllowed: true, privateOutputsEndedByPlanAt: null, promptTemplates: { k: "v" } },
       }),
     })
     mockUseQuery.mockReturnValue({ data: null })
@@ -96,6 +96,8 @@ describe("useUserSettings", () => {
     expect(result).toEqual({
       publicOutputs: false,
       tier: "pro",
+      privateOutputsAllowed: true,
+      privateOutputsEndedByPlanAt: null,
       promptTemplates: { k: "v" },
       textTemplates: [],
       preferredLocale: null,
@@ -119,6 +121,9 @@ describe("useUserSettings", () => {
     expect(result).toEqual({
       publicOutputs: true,
       tier: "free",
+      // An older server answers neither: unknown, and no plan-drop line.
+      privateOutputsAllowed: undefined,
+      privateOutputsEndedByPlanAt: null,
       promptTemplates: {},
       textTemplates: [],
       preferredLocale: null,

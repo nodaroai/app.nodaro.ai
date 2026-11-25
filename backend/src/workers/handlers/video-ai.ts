@@ -5,6 +5,7 @@ import {
   VIDEO_RETAKE_MODEL, QUEUED_VIDEO_TO_VIDEO_PROVIDER, VIDEO_UPSCALE_DEFAULT_PROVIDER, VOICED_VIDEO_DEFAULT_PROVIDER,
 } from "./default-models.js"
 import { uploadToR2 } from "../../lib/storage.js"
+import { storeVideoAsIs, type StoredVideo } from "../../lib/video-result-store.js"
 import {
   imageToVideo,
   textToVideo,
@@ -90,7 +91,9 @@ import { isExtendChargedBySecondsSent, seedanceExtendHeldSourceSec, sentChargedE
 import { creditIdBaseCredits } from "../../lib/credit-id-base.js"
 import { pixverseExtendSeconds } from "../../lib/extend-native.js"
 import { cutChainedMovTail, findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
-import { rawExtensionObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
+import { jobFileObjectId, rawExtensionObjectId } from "../../lib/job-output-keys.js"
+import { clearRawExtensionUrl, deleteUnnamedDeliveredObject, deliveredKeepsKey, discardIfNeverRecorded, discardJustStored, isLastAttempt, recordStoredObjectAndCharge, storeBeginTime } from "../../lib/job-server-output.js"
+import { isFinalAttemptOfRunningJob, JobCancelledError } from "../../lib/job-cancellation.js"
 import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import { runSeedanceDraftFinalize } from "../../providers/kie/seedance-draft.js"
@@ -99,7 +102,7 @@ import { kling4CostUsd } from "../../providers/kie/kling4-cost.js"
 import { measureSeedanceDraftRenderSec, draftRenderOutputData, positiveSeconds, seedanceDraftFinalizeQueuedBilledSec } from "../../lib/seedance-draft-finalize.js"
 import { generateVideoAudioMergeRecipe, voiceTrackMuxRecipe, draftAudioMuxMergeArgs, draftAudioMuxOutputData, readDraftAudioMux, type DraftAudioMux } from "../../lib/seedance-draft-audio.js"
 import { applyDraftAudioMux, draftAudioWarningOutputData } from "../../lib/seedance-draft-audio-apply.js"
-import { addVoiceLineIfSilent, voicedUrlOf, voiceLineOutputData } from "../../lib/lip-sync-voice-line.js"
+import { addVoiceLineIfSilent, voicedVideoOf, voiceLineOutputData } from "../../lib/lip-sync-voice-line.js"
 import {
   cleanupWorkDir,
   COMBINE_DELIVERY_CRF,
@@ -114,12 +117,12 @@ import { isKling4RunnerProvider, isNodaroVideoUpscaleTier, NODARO_VIDEO_UPSCALE_
 import { runHouseModelTask } from "../../lib/house-models.js"
 import { houseModelTiming } from "../../lib/house-model-timeouts.js"
 import { deliverHouseModelRun } from "../../lib/house-model-delivery.js"
-import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
+import { applySmartLoopCutLocal, type LocalVideo } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
-import { uploadBufferToR2, mediaObjectKey } from "../../lib/storage.js"
+import { uploadBufferToR2, mediaObjectKey, getR2ObjectSize } from "../../lib/storage.js"
 import { uploadJobScratchFile } from "../../lib/job-scratch.js"
-import { runPostProcessing } from "../../lib/post-processing-error.js"
+import { PostProcessingError, runPostProcessing } from "../../lib/post-processing-error.js"
 import { rewriteForContentPolicy } from "../../lib/content-policy-rewrite.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
@@ -134,23 +137,26 @@ import { assertVoicesAllowed } from "../../lib/voice-lock.js"
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
  * docs (no native sound-off flag). When the user passes `sound: false`,
  * we honour intent by stream-copying the video and dropping the audio
- * track, then re-uploading. Cheap (no re-encode).
+ * track. Cheap (no re-encode). The result stays on LOCAL disk (decided
+ * 2026-11-22): the store reads it directly, so no unwatermarked copy is ever
+ * stored at a key anyone could derive. A local `source` is read in place and
+ * its folder removed; the caller removes the returned one.
  */
-async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<string> {
-  // POST-PROVIDER: `videoUrl` is the delivered VEO result; download/strip/
-  // upload failures are post-delivery → PostProcessingError (refund skipped).
+async function stripAudioLocal(source: string | LocalVideo, jobId: string): Promise<LocalVideo> {
+  // POST-PROVIDER: `source` is the delivered VEO result; download/strip
+  // failures are post-delivery → PostProcessingError (refund skipped).
   return runPostProcessing(async () => {
-    let workDir: string | undefined
+    const workDir = await createWorkDir("veo3-strip-audio")
     try {
-      workDir = await createWorkDir("veo3-strip-audio")
-      const inputPath = join(workDir, "in.mp4")
+      const inputPath = typeof source === "string" ? join(workDir, "in.mp4") : source.path
+      if (typeof source === "string") await downloadFile(source, inputPath)
       const outputPath = join(workDir, "out.mp4")
-      await downloadFile(videoUrl, inputPath)
       await stripAudio(inputPath, outputPath)
-      const buffer = await readFile(outputPath)
-      return await uploadBufferToR2(buffer, silentVideoKey(jobId), "video/mp4")
-    } finally {
-      if (workDir) await cleanupWorkDir(workDir)
+      if (typeof source !== "string") await cleanupWorkDir(source.dir)
+      return { path: outputPath, dir: workDir }
+    } catch (err) {
+      await cleanupWorkDir(workDir)
+      throw err
     }
   })
 }
@@ -271,12 +277,13 @@ async function dispatchLtxIfRequested(
     ramp.stop()
   }
 
-  const r2Url = await uploadVideoMaybeWatermark(
+  const storedVideo = await uploadVideoMaybeWatermark(
     result.videoUrl,
     ctx.jobId,
     ctx.jobUserId,
     ctx.shouldWatermark,
   )
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -297,7 +304,7 @@ async function dispatchLtxIfRequested(
       // Commit the reserved tier, as every fixed/composite-priced provider does.
       meteredCost: false,
     },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })
   if (ok) {
@@ -430,11 +437,19 @@ async function layDrivingAudioForJob(
   renderUrl: string,
   data: { audioToVideo?: boolean; referenceAudioUrls?: string[] },
   ctx: Parameters<HandlerFn>[1],
-): Promise<string | undefined> {
+  /** The render already on local disk (a loop cut, a sound strip). */
+  renderPath?: string,
+): Promise<StoredVideo | undefined> {
   const audioUrl = drivingAudioUrlOf(data)
   if (!audioUrl) return undefined
-  const laid = await runPostProcessing(() => layDrivingAudioIfSilent({ videoUrl: renderUrl, audioUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark }))
-  return laid.kind === "stored" ? laid.url : undefined
+  const laid = await runPostProcessing(() => layDrivingAudioIfSilent({
+    videoUrl: renderUrl, ...(renderPath ? { videoPath: renderPath } : {}), audioUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark,
+  })).catch((err: unknown) => {
+    // A cancel stays a cancel, as from the store itself.
+    const cause = (err as { cause?: unknown } | null)?.cause
+    throw cause instanceof JobCancelledError ? cause : err
+  })
+  return laid.kind === "stored" ? laid.stored : undefined
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
@@ -614,6 +629,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // replay itself lives in `lib/job-policy-review.ts`).
   let loopTrimAddonToCharge = 0
   let loopTrimAddonToRefund = 0
+  // A post-processed take kept on local disk (the loop cut, the sound strip):
+  // the store reads it directly, and its folder goes once the job is done with
+  // it, on every way out (decided 2026-11-22: no intermediate is ever stored).
+  let localOutput: LocalVideo | undefined
+  const audioMerge = audioUrl ? generateVideoAudioMergeRecipe(audioUrl, generateAudio) : undefined
+  let finalVideo: StoredVideo
+  try {
   if (loopTrim?.enabled) {
     // Same sizing as the route's reservation — Auto is priced at the model's ceiling.
     const addonCredits = loopTrimAddonCreditsFor(loopTrim, resolvedI2vProvider, duration)
@@ -622,7 +644,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
         `[worker] image-to-video ${ctx.jobId} smart-loop-cut ` +
         `(quality=${loopTrim.quality ?? "precise"}, framesToTest=${loopTrim.framesToTest ?? 16})`,
       )
-      providerOutputUrl = await applySmartLoopCutToR2Url(providerOutputUrl, ctx.jobId, ctx.jobUserId, {
+      localOutput = await applySmartLoopCutLocal(providerOutputUrl, {
         lookbackFrames: loopTrim.framesToTest ?? 16,
         quality: loopTrim.quality ?? "precise",
         outputSilent: sound === false ? true : undefined,
@@ -650,44 +672,54 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     console.log(
       `[worker] VEO sound=false — stripping audio from output for job ${ctx.jobId}`,
     )
-    providerOutputUrl = await stripAudioFromR2Url(providerOutputUrl, ctx.jobId)
+    localOutput = await stripAudioLocal(localOutput ?? providerOutputUrl, ctx.jobId)
   }
 
-  // Upload the generated video to R2
-  // If audio merge follows, upload without watermark (watermark applied to final)
-  // POST-PROVIDER: `providerOutputUrl` is the delivered i2v result; the bare
-  // uploadToR2 here (audio-merge branch) is wrapped so an R2 failure skips the
-  // refund (uploadVideoMaybeWatermark already wraps itself).
+
+  // Store the generated video. With an audio merge to follow, the provider's
+  // file is merged straight from where it was delivered and only the merge is
+  // stored (watermarked when the run is): nothing unmerged is stored beside it
+  // (decided 2026-11-22 — the earlier raw copy at the job's bare key was never
+  // named by the job's output, so no expiry found it, and on a watermarked run
+  // it was the unwatermarked picture at a key anyone could derive).
   //
   // A MOV the provider actually returned (decided by the result, never the
   // request alone — the text-to-video lane's rule) is kept as it is, `.mov`:
   // its parent re-encodes it, and the browser-safe transcode would undo the
   // very container it asked for. A watermarked run, or one with an audio merge
-  // to follow, takes the mp4 path as before.
-  // Audio-to-video: a render that came back silent gets its driving clip laid on and is stored once,
-  // watermarked when the job is (lib/driving-audio-lay.ts) — that stored file is the job's media.
-  const drivingAudioLaid = await layDrivingAudioForJob(providerOutputUrl, { audioToVideo, referenceAudioUrls }, ctx)
-  let finalVideoUrl = drivingAudioLaid
-    ? drivingAudioLaid
-    : audioUrl
-    ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId))
-    : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
-      ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId, { ext: "mov" }))
-      : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await setJobProgress(job, ctx.jobId, 90)
-
-  // If audio URL is provided, merge it with the video. ONE recipe, so a
-  // Seedance draft's 1080p finalize can re-apply exactly this mux.
-  const audioMerge = audioUrl ? generateVideoAudioMergeRecipe(audioUrl, generateAudio) : undefined
+  // to follow, takes the browser-safe path as before.
+  // Audio-to-video: a render that came back silent gets its driving clip laid
+  // on and is stored once, through the funnel, watermarked when the job is
+  // (lib/driving-audio-lay.ts) — that stored video is the job's media.
+  const drivingAudioLaid = await layDrivingAudioForJob(providerOutputUrl, { audioToVideo, referenceAudioUrls }, ctx, localOutput?.path)
   if (audioMerge?.kind === "audio-track") {
+    // ONE recipe, so a Seedance draft's 1080p finalize can re-apply exactly this mux.
     console.log(`[worker] Merging audio into video for job ${ctx.jobId}`)
-    const mergedPath = await mergeVideoAudio(draftAudioMuxMergeArgs(finalVideoUrl, audioMerge))
+    const mergedPath = await mergeVideoAudio({
+      ...draftAudioMuxMergeArgs(drivingAudioLaid?.videoUrl ?? providerOutputUrl, audioMerge),
+      ...(localOutput && !drivingAudioLaid ? { videoPath: localOutput.path } : {}),
+    })
     await setJobProgress(job, ctx.jobId, 95)
-
-    // Upload merged video (with watermark if applicable)
-    finalVideoUrl = await watermarkLocalVideoAndUpload(mergedPath, `${ctx.jobId}-merged`, ctx.jobUserId, ctx.shouldWatermark)
-    await cleanupWorkDir(dirname(mergedPath))
+    try {
+      finalVideo = await watermarkLocalVideoAndUpload(mergedPath, `${ctx.jobId}-merged`, ctx.jobUserId, ctx.shouldWatermark)
+    } finally {
+      await cleanupWorkDir(dirname(mergedPath))
+    }
+  } else {
+    finalVideo = drivingAudioLaid
+      ? drivingAudioLaid
+      : localOutput
+      ? await watermarkLocalVideoAndUpload(localOutput.path, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
+        ? await storeVideoAsIs({ url: providerOutputUrl }, { jobId: ctx.jobId, userId: ctx.jobUserId, ext: "mov" })
+        : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    await setJobProgress(job, ctx.jobId, 90)
   }
+  } finally {
+    if (localOutput) await cleanupWorkDir(localOutput.dir)
+  }
+  const postProcessed = localOutput !== undefined
+  const finalVideoUrl = finalVideo.videoUrl
 
   await setJobProgress(job, ctx.jobId, 100)
 
@@ -697,13 +729,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // when nothing after it changed the length: the watermark re-encode and the
   // upload keep it, a loop cut or an audio merge may not. Otherwise finalize
   // measures the stored file itself, if the run records a length.
-  const deliveredVideoSec = providerOutputUrl === result.url && !audioMerge ? settle.deliveredSec : undefined
+  const deliveredVideoSec = providerOutputUrl === result.url && !postProcessed && !audioMerge ? settle.deliveredSec : undefined
 
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-video",
     result: withRouteProvider(recorded),
-    mediaUrl: finalVideoUrl,
+    video: finalVideo,
     // Charge the loop-trim addon on top of provider cost when smart-loop-cut
     // succeeded; take it OFF the commit when it failed. Exactly one of these
     // is ever non-zero.
@@ -773,7 +805,8 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
   )
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const storedVideo = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -782,7 +815,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     jobId: ctx.jobId,
     jobType: "video-to-video",
     result,
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
@@ -939,11 +972,13 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // operates on the 4K output (reserved at the `<model>:4k` composite).
   if (wantsVeo4k) providerOutputUrl = await chainVeoBaseTo4k(result, job, ctx.jobId)
 
+  let stripped: LocalVideo | undefined
   if (sound === false && isVeoProvider(provider)) {
     console.log(
       `[worker] VEO sound=false — stripping audio from t2v output for job ${ctx.jobId}`,
     )
-    providerOutputUrl = await stripAudioFromR2Url(providerOutputUrl, ctx.jobId)
+    // Kept on local disk and stored from there (decided 2026-11-22).
+    stripped = await stripAudioLocal(providerOutputUrl, ctx.jobId)
   }
 
   // A MOV the provider actually returned (decided by the result, never the
@@ -951,13 +986,21 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `.mov` / `video/quicktime` — its parent re-encodes it, and the browser-
   // safe transcode would undo the very container it asked for. A watermarked
   // run re-encodes in the watermark step, which writes an honest mp4.
-  // Audio-to-video: a silent render's laid-on file, stored once (lib/driving-audio-lay.ts), is the job's media.
-  const drivingAudioLaid = await layDrivingAudioForJob(providerOutputUrl, { audioToVideo, referenceAudioUrls }, ctx)
-  const r2Url = drivingAudioLaid
-    ? drivingAudioLaid
-    : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
-    ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId, { ext: "mov" }))
-    : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // Audio-to-video: a silent render's laid-on file, stored once through the funnel (lib/driving-audio-lay.ts), is the job's media.
+  let storedVideo: StoredVideo
+  try {
+    const drivingAudioLaid = await layDrivingAudioForJob(providerOutputUrl, { audioToVideo, referenceAudioUrls }, ctx, stripped?.path)
+    storedVideo = drivingAudioLaid
+      ? drivingAudioLaid
+      : stripped
+      ? await watermarkLocalVideoAndUpload(stripped.path, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      : wantsMov && isMovUrl(providerOutputUrl) && !ctx.shouldWatermark
+        ? await storeVideoAsIs({ url: providerOutputUrl }, { jobId: ctx.jobId, userId: ctx.jobUserId, ext: "mov" })
+        : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  } finally {
+    if (stripped) await cleanupWorkDir(stripped.dir)
+  }
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -965,13 +1008,13 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // The settlement measured the provider's take: the stored video's length (the
   // watermark re-encode and the upload keep it) unless a post-process (VEO's 4K
   // chain or sound strip) replaced the file.
-  const deliveredVideoSec = providerOutputUrl === result.url ? settle.deliveredSec : undefined
+  const deliveredVideoSec = providerOutputUrl === result.url && !stripped ? settle.deliveredSec : undefined
 
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-video",
     result: withRouteProvider(recorded),
-    mediaUrl: r2Url,
+    video: storedVideo,
     meteredBaseCredits,
     ...(deliveredVideoSec !== undefined && { deliveredVideoSec }),
     extraOutputData: {
@@ -1270,11 +1313,11 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   const voiceLine = voiceSentAsReference
     ? await addVoiceLineIfSilent({ videoUrl: resultUrl, voiceUrl: audioUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
     : undefined
-  const voicedUrl = voicedUrlOf(voiceLine)
   // An audio-to-video model (LTX 2.5 Fast): a silent render gets the voice laid on and is stored once —
   // Generate Video's own step (lib/driving-audio-lay.ts), the one the reconcile runs too.
   const drivingAudioLaid = await layDrivingAudioForJob(resultUrl, { audioToVideo, referenceAudioUrls }, ctx)
-  const r2Url = voicedUrl ?? drivingAudioLaid ?? await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const storedVideo = voicedVideoOf(voiceLine) ?? drivingAudioLaid ?? await uploadVideoMaybeWatermark(resultUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -1303,7 +1346,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       // which leaves `resultMeta` undefined) ⇒ no key, no column written.
       ...(resultMeta?.relayJobId && { relayJobId: resultMeta.relayJobId, relayCredits: resultMeta.relayCredits ?? null }),
     },
-    mediaUrl: r2Url,
+    video: storedVideo,
     // `voiceLineMuxed`: the voice on the stored clip was put there by the
     // platform. `voiceLineProbeFailed`: the clip could not be checked for audio.
     extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta), ...voiceLineOutputData(voiceLine) },
@@ -1350,7 +1393,8 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
   )
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const storedVideo = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -1359,7 +1403,7 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
     jobId: ctx.jobId,
     jobType: "image-to-video",
     result,
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
@@ -1409,7 +1453,8 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
   )
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const storedVideo = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -1418,7 +1463,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
     jobId: ctx.jobId,
     jobType: "motion-transfer",
     result,
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
@@ -1546,7 +1591,7 @@ async function runRheaUpscale(job: Parameters<HandlerFn>[0], ctx: Parameters<Han
     console.log(`[worker] Job ${ctx.jobId}: its upscale is being delivered by another finalizer; left to it`)
     return
   }
-  let delivered: Awaited<ReturnType<typeof deliverRheaOutput<string>>>
+  let delivered: Awaited<ReturnType<typeof deliverRheaOutput<StoredVideo>>>
   try {
     delivered = await holdingFinalizeClaim(ctx.jobId, "worker", claim.ts, (hold) => deliverRheaOutput({
       outputUrl: result.url,
@@ -1567,14 +1612,14 @@ async function runRheaUpscale(job: Parameters<HandlerFn>[0], ctx: Parameters<Han
     }
     throw err
   }
-  const r2Url = delivered.stored
+  const r2Url = delivered.stored.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-upscale",
     result: { url: result.url, cost: result.cost, providerUsed, providerMs: result.providerMs },
-    mediaUrl: r2Url,
+    video: delivered.stored,
     // The stored file's own frame, probed, never the plan's.
     extraOutputData: { thumbnailUrl: thumbUrl, width: delivered.width, height: delivered.height },
   })
@@ -1707,15 +1752,16 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   const muxed = finalizeMux
     ? await applyDraftAudioMux({ videoUrl: outputUrl, mux: finalizeMux, draftVideoUrl, jobId: ctx.jobId, userId: ctx.jobUserId, watermark: ctx.shouldWatermark })
     : undefined
-  // Topaz delivers HEVC 10-bit: the delivery transcodes it to browser-safe
-  // H.264 at the visually lossless CRF — the user paid for detail. Every other
-  // upscaler here delivers H.264, which is
-  // uploaded as delivered (the transcode runs only for a codec browsers
-  // cannot play).
+  // Topaz delivers HEVC 10-bit: the file is kept as the original and its
+  // browser-safe preview is encoded at the visually lossless CRF — the user
+  // paid for detail. Every other upscaler here delivers H.264, which is
+  // uploaded as delivered (the preview is made only for a file a browser may
+  // not play).
   const isTopaz = upscaleProvider === "topaz"
-  const r2Url = muxed?.url ?? (isTopaz
+  const storedVideo = muxed?.stored ?? (isTopaz
     ? await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark, { crf: COMBINE_DELIVERY_CRF })
     : await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark))
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -1741,7 +1787,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
       // Same rebuilt-literal carry as lip-sync above, same reason.
       ...(upscaleMeta?.relayJobId && { relayJobId: upscaleMeta.relayJobId, relayCredits: upscaleMeta.relayCredits ?? null }),
     },
-    mediaUrl: r2Url,
+    video: storedVideo,
     // The finalize's audio could not be re-applied: the render is delivered
     // (and charged) silent, with a visible warning on the result.
     extraOutputData: {
@@ -1783,12 +1829,13 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     } finally {
       ltxExtendRamp.stop()
     }
-    const ltxExtendR2Url = await uploadVideoMaybeWatermark(
+    const ltxExtendStored = await uploadVideoMaybeWatermark(
       ltxExtendResult.videoUrl,
       ctx.jobId,
       ctx.jobUserId,
       ctx.shouldWatermark,
     )
+    const ltxExtendR2Url = ltxExtendStored.videoUrl
     await setJobProgress(job, ctx.jobId, 100)
     const ltxExtendThumbUrl = await generateAndUploadThumbnail(
       ltxExtendR2Url,
@@ -1805,7 +1852,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         // Priced by output tier, never GPU time — see the main LTX finalize above.
         meteredCost: false,
       },
-      mediaUrl: ltxExtendR2Url,
+      video: ltxExtendStored,
       extraOutputData: { thumbnailUrl: ltxExtendThumbUrl },
     })
     if (ltxExtendOk) {
@@ -2119,12 +2166,68 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // so the reconcile cron can never finalize this job with the raw extension.
       // A copy failure only breaks the chain (the next extend falls back to the
       // tail) — it must not fail a job whose deliverable is the stitch.
-      let rawExtensionUrl = gen.url
-      if (isMovUrl(gen.url)) {
+      //
+      // A WATERMARKED run (decided 2026-11-22): the extension is the
+      // unwatermarked picture, so nothing the owner can read may name it —
+      // not output_data, which the owner reads directly (PostgREST, Realtime).
+      // The mov is kept at an unguessable key in the job's family
+      // (`jobFileObjectId`) and recorded only in `jobs.server_output`
+      // (lib/job-server-output.ts, granted to no browser role), with its bytes,
+      // so the chain still reads it, the sweeps find it and its charge is
+      // given back when it goes; the provider's temporary url is never
+      // recorded at all. The clean clip stays the next extension's reference,
+      // so a chain carries no logo (decided 2026-11-24).
+      const serverOnly = ctx.shouldWatermark
+      let rawExtensionUrl: string | undefined = serverOnly ? undefined : gen.url
+      // This attempt's raw clip is the only one the record may name (decided
+      // 2026-11-23): an earlier attempt's reference is cleared before this
+      // attempt copies its own (or keeps none), so a completed job never
+      // chains from another attempt's clip.
+      // A clear that does not land (after its retries) would leave the earlier
+      // clip named if this attempt keeps none: the attempt is retried instead,
+      // except on its last, where it goes on (and says so).
+      if (serverOnly && !(await clearRawExtensionUrl(ctx.jobId))) {
+        if (!(await isLastAttempt(ctx.jobId, isFinalAttemptOfRunningJob()))) {
+          throw new PostProcessingError(`job ${ctx.jobId}: an earlier attempt's raw clip reference could not be cleared`)
+        }
+        console.warn(`[worker] Job ${ctx.jobId}: an earlier attempt's raw clip reference could not be cleared on the last attempt; going on`)
+      }
+      // When this store began, by the database's clock (a server-only copy's record needs it).
+      const rawBegunAt = isMovUrl(gen.url) && serverOnly ? await storeBeginTime() : undefined
+      if (isMovUrl(gen.url) && (!serverOnly || rawBegunAt !== undefined)) {
         try {
-          rawExtensionUrl = await uploadToR2(gen.url, rawExtensionObjectId(ctx.jobId), "video", ctx.jobUserId, { ext: "mov" })
-          if (rawExtensionUrl !== gen.url) rawCopyUrl = rawExtensionUrl
+          const rawId = serverOnly ? jobFileObjectId(ctx.jobId, "raw") : rawExtensionObjectId(ctx.jobId)
+          const stored = await storeVideoAsIs({ url: gen.url }, {
+            jobId: rawId,
+            // A server-only copy is charged once, on its record, below.
+            userId: serverOnly ? undefined : ctx.jobUserId,
+            ext: "mov",
+          })
+          if (serverOnly) {
+            const key = mediaObjectKey(rawId, "video", "mov")
+            const recorded = await recordStoredObjectAndCharge({
+              jobId: ctx.jobId, key, bytes: await getR2ObjectSize(key), begunAt: rawBegunAt!, patch: { rawExtensionUrl: stored.videoUrl },
+            })
+            if (recorded.outcome === "ended" || recorded.outcome === "unrecorded") {
+              // Cancelled or failed meanwhile, or its record did not land: the copy must not exist.
+              await discardJustStored(ctx.jobId, key, recorded.outcome)
+              if (recorded.outcome === "ended") throw new JobCancelledError(ctx.jobId)
+            } else if (recorded.outcome === "unknown") {
+              // Whether it was recorded cannot be told: discarded unless a record names it.
+              await discardIfNeverRecorded(ctx.jobId, key)
+            } else if (recorded.outcome === "delivered" && (await deliveredKeepsKey(ctx.jobId, key)) !== "named") {
+              // The job is already delivered (or its row is gone) without this
+              // copy, whose key no one can guess: deleted (decided 2026-11-23).
+              await deleteUnnamedDeliveredObject(ctx.jobId, key)
+            }
+            // A recorded copy is the record's: its delete on a failure is the
+            // failure funnel's, never this run's own discard below.
+          } else {
+            if (stored.videoUrl !== gen.url) rawCopyUrl = stored.videoUrl
+            rawExtensionUrl = stored.videoUrl
+          }
         } catch (err) {
+          if (err instanceof JobCancelledError) throw err
           console.warn(`[worker] Job ${ctx.jobId}: raw mov copy failed, chain not extended:`, err)
         }
       }
@@ -2144,7 +2247,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // fails the job (full refund) — never deliver the bare extension (or the
       // bare source) as the result.
       const stitchDir = await createWorkDir("extend-stitch")
-      let stitchedR2Url: string
+      let stitchedVideo: StoredVideo
       let stitchBoundary: ExtendStitchResult["boundary"]
       try {
         const generatedPath = join(stitchDir, isMovUrl(gen.url) ? "extension.mov" : "extension.mp4")
@@ -2195,7 +2298,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         stitchBoundary = stitched.boundary
         await setJobProgress(job, ctx.jobId, 85)
 
-        stitchedR2Url = await watermarkLocalVideoAndUpload(
+        stitchedVideo = await watermarkLocalVideoAndUpload(
           stitched.outputPath,
           ctx.jobId,
           ctx.jobUserId,
@@ -2205,6 +2308,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         await cleanupWorkDir(stitchDir)
       }
       await setJobProgress(job, ctx.jobId, 100)
+      const stitchedR2Url = stitchedVideo.videoUrl
 
       const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
       // Seedance 2.5 is charged per second sent and added, on the source
@@ -2251,15 +2355,16 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
           // and the row carried no provenance for support to follow.
           ...(gen.relayJobId && { relayJobId: gen.relayJobId, relayCredits: gen.relayCredits ?? null }),
         },
-        mediaUrl: stitchedR2Url,
+        video: stitchedVideo,
         extraOutputData: {
           thumbnailUrl: stitchedThumbUrl,
           // Gemini Omni Flash 1.2: the tier the new seconds were generated and
           // charged at (never above the source's, decided 2026-11-17).
           ...(isGeminiOmniExtendProvider(provider) ? { resolution: ranResolution } : {}),
           // Raw (unstitched) extension clip — provenance/debug, AND the mov
-          // the next extension in this chain cuts its reference from.
-          rawExtensionUrl,
+          // the next extension in this chain cuts its reference from (on a
+          // watermarked run in jobs.server_output only, above).
+          ...(rawExtensionUrl !== undefined ? { rawExtensionUrl } : {}),
           // Where the stitch actually cut (smart-cut decision + PSNR), in the
           // shape combineVideos reported it: one boundary, its fields in its order.
           smartCuts: [{
@@ -2344,7 +2449,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       }
 
       const stitchDir = await createWorkDir("extend-stitch")
-      let stitchedR2Url: string
+      let stitchedVideo: StoredVideo
       let stitchBoundary: ExtendStitchResult["boundary"]
       // Whether the new part the run delivers has sound (its cut's probe below).
       let newPartHasSound = false
@@ -2402,11 +2507,12 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         })
         stitchBoundary = stitched.boundary
         await setJobProgress(job, ctx.jobId, 85)
-        stitchedR2Url = await watermarkLocalVideoAndUpload(stitched.outputPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+        stitchedVideo = await watermarkLocalVideoAndUpload(stitched.outputPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
       } finally {
         await cleanupWorkDir(stitchDir)
       }
       await setJobProgress(job, ctx.jobId, 100)
+      const stitchedR2Url = stitchedVideo.videoUrl
 
       const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
       // Charged for the sound it delivers: a run whose sound was on (held at
@@ -2426,11 +2532,12 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         jobType: "extend-video",
         ...(silentBaseCredits !== undefined ? { meteredBaseCredits: silentBaseCredits } : {}),
         result: { url: stitchedR2Url, cost: null, providerUsed: provider },
-        mediaUrl: stitchedR2Url,
+        video: stitchedVideo,
         extraOutputData: {
           thumbnailUrl: stitchedThumbUrl,
-          // PixVerse's whole clip (KIE's own URL) — provenance/debug only.
-          rawExtensionUrl: gen.url,
+          // PixVerse's whole clip (KIE's own URL) — provenance/debug only;
+          // never on a watermarked run, whose output names no unwatermarked file.
+          ...(ctx.shouldWatermark ? {} : { rawExtensionUrl: gen.url }),
           // Where the stitch cut, in combineVideos' shape: its start trim counts
           // the leading repeats dropped after the cut too.
           smartCuts: [{
@@ -2499,7 +2606,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // Grok's clip is measured, then stored as it is (the same file); the
     // folder is removed on every way out.
     const workDir = await createWorkDir("extend-grok")
-    let r2Url: string
+    let storedVideo: StoredVideo
     try {
       const grokPath = join(workDir, "grok.mp4")
       await downloadFile(gen.url, grokPath)
@@ -2513,10 +2620,11 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         throw new DeterministicJobError(extensionTooShortMessage(newSec, extSeconds))
       }
       await setJobProgress(job, ctx.jobId, 85)
-      r2Url = await watermarkLocalVideoAndUpload(grokPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      storedVideo = await watermarkLocalVideoAndUpload(grokPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     } finally {
       await cleanupWorkDir(workDir)
     }
+    const r2Url = storedVideo.videoUrl
     await setJobProgress(job, ctx.jobId, 100)
 
     const grokThumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -2528,7 +2636,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
       // extends only a text- or image-to-video task). No task on its output
       // for a node after it to extend.
       result: { url: gen.url, cost: null, providerUsed: provider, kieTaskId: gen.kieTaskId, ...(gen.providerMs !== undefined ? { providerMs: gen.providerMs } : {}) },
-      mediaUrl: r2Url,
+      video: storedVideo,
       extraOutputData: { thumbnailUrl: grokThumbUrl },
     })
     if (grokOk) console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
@@ -2572,7 +2680,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   const newTaskId: string | undefined = extendResult.taskId
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const storedVideo = await uploadVideoMaybeWatermark(videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -2581,7 +2690,7 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     jobId: ctx.jobId,
     jobType: "extend-video",
     result: { url: videoUrl, cost: null, providerUsed: provider },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...(newTaskId && { kieTaskId: newTaskId }),
@@ -2627,12 +2736,13 @@ const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) 
     ramp.stop()
   }
 
-  const r2Url = await uploadVideoMaybeWatermark(
+  const storedVideo = await uploadVideoMaybeWatermark(
     result.videoUrl,
     ctx.jobId,
     ctx.jobUserId,
     ctx.shouldWatermark,
   )
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   const { ok } = await finalizeJobWithMedia({
@@ -2643,7 +2753,7 @@ const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) 
       cost: result.cost,
       providerUsed: "ltx-2.3-pro",
     },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })
   if (ok) {
@@ -2680,7 +2790,8 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   await setJobProgress(job, ctx.jobId, 50)
 
   // The swap comes back without sound: put the source clip's audio back on it.
-  const r2Url = await uploadSwapWithSourceAudio(outputUrl, videoUrl, ctx)
+  const storedVideo = await uploadSwapWithSourceAudio(outputUrl, videoUrl, ctx)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -2693,7 +2804,7 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
     // it is charged); past it, what the run cost is charged, collected above
     // the hold (`faceSwapSettle`, decided 2026-11-22).
     result: { url: outputUrl, cost, providerUsed: "roop", ...(await faceSwapSettle(cost)) },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })
   if (!ok) return
@@ -2772,7 +2883,7 @@ async function revoiceClipToR2(
   ctx: Parameters<HandlerFn>[1],
   videoUrl: string,
   voiceId: string,
-): Promise<string> {
+): Promise<StoredVideo> {
   const { audioPath, workDir } = await extractAudioTrack(videoUrl)
   let revoicedR2: string
   try {
@@ -2805,7 +2916,7 @@ async function mergeVoiceTrackToR2(
   ctx: Parameters<HandlerFn>[1],
   videoUrl: string,
   audioUrl: string,
-): Promise<string> {
+): Promise<StoredVideo> {
   const mergedPath = await mergeVideoAudio(draftAudioMuxMergeArgs(videoUrl, voiceTrackMuxRecipe(audioUrl)))
   const out = await watermarkLocalVideoAndUpload(mergedPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await cleanupWorkDir(dirname(mergedPath))
@@ -2920,7 +3031,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   await setJobProgress(job, ctx.jobId, 5)
 
   let result: Awaited<ReturnType<typeof imageToVideo>> | undefined
-  let finalUrl: string | undefined
+  let finalVideo: StoredVideo | undefined
   let voiceApplied = false
   let voiceWarning: string | undefined
   // The voice track muxed onto an audio-driven clip — a draft records it so
@@ -2943,7 +3054,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
       // result.url shipped a silent clip with voiceApplied:true). Inside the try
       // so a mux failure still degrades to the plain-clip fallback below.
       const genUrl = result.url
-      finalUrl = await withProgressRamp(job, ctx.jobId, { start: 85, cap: 95 },
+      finalVideo = await withProgressRamp(job, ctx.jobId, { start: 85, cap: 95 },
         () => mergeVoiceTrackToR2(ctx, genUrl, trackUrl))
       voiceApplied = true
       voiceTrackMux = voiceTrackMuxRecipe(trackUrl)
@@ -2951,7 +3062,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
       console.warn(`[worker] voiced-video ${ctx.jobId}: audio_driven voice chain failed — falling back to a silent clip: ${err instanceof Error ? err.message : String(err)}`)
       voiceWarning = "voice_chain_failed"
       result = undefined
-      finalUrl = undefined
+      finalVideo = undefined
     }
   } else if (mode === "native_speech" && primaryVoiceId) {
     // Bake the line during generation (VEO speaks + lip-syncs), then revoice it.
@@ -2963,16 +3074,16 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
       () => imageToVideo(d.imageUrl, provider, veoPrompt, d.duration, undefined,
         { generateAudio: true, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
     try {
-      finalUrl = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
+      finalVideo = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
       voiceApplied = true
     } catch (err) {
       console.warn(`[worker] voiced-video ${ctx.jobId}: revoice failed — keeping the model's baked audio: ${err instanceof Error ? err.message : String(err)}`)
       voiceWarning = "revoice_failed"
-      finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      finalVideo = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     }
   }
 
-  if (!result || !finalUrl) {
+  if (!result || !finalVideo) {
     // No voice resolvable for this mode, OR the audio_driven voice chain failed
     // above -> plain silent clip. The reserved audio addon auto-refunds (finalize
     // commits at the video provider cost only, voiceApplied=false).
@@ -2982,7 +3093,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
       () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
         { generateAudio: d.generateAudio, sound: d.sound, draft: d.draft, ...taskTypeOption, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls, referenceAudioUrls: d.referenceAudioUrls }))
-    finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    finalVideo = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     voiceApplied = false
   }
 
@@ -3011,13 +3122,13 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft: d.draft, provider, outputUrl: result.url })
 
   await setJobProgress(job, ctx.jobId, 95)
-  const thumbUrl = await generateAndUploadThumbnail(finalUrl, ctx.jobId, ctx.jobUserId)
+  const thumbUrl = await generateAndUploadThumbnail(finalVideo.videoUrl, ctx.jobId, ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "image-to-video",
     result,
-    mediaUrl: finalUrl,
+    video: finalVideo,
     // Charge the audio step only when it ran; otherwise finalize commits at the
     // video provider cost and the reserved addon is refunded automatically.
     extraNonProviderCredits: voiceApplied ? audioAddon : 0,
@@ -3033,7 +3144,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     },
   })
   if (!ok) return
-  console.log(`[worker] voiced-video ${ctx.jobId} completed (voiceApplied=${voiceApplied}${voiceWarning ? `, warning=${voiceWarning}` : ""}): ${finalUrl}`)
+  console.log(`[worker] voiced-video ${ctx.jobId} completed (voiceApplied=${voiceApplied}${voiceWarning ? `, warning=${voiceWarning}` : ""}): ${finalVideo.videoUrl}`)
 }
 
 export const videoAIHandlers: Record<string, HandlerFn> = {
