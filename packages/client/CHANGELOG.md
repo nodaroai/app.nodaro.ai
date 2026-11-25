@@ -1,5 +1,33 @@
 # @nodaro/sdk
 
+## 2.80.0
+
+### Minor Changes
+
+- 5825df3: `GenerateImageParams.imageSetCount` (2–10): on a model that makes sets (Kling Image 4.0), one job returns a coherent set of that many images, charged for the images returned. `ImageResolution` takes `8K` (Kling Image 4.0's largest size). `GenerateImageParams.referenceCharacters`: on a flat request, which character each reference came from, so Kling Image 4.0 sends a character's views as one named subject.
+- 61d1f1f: `VideoUpscaleParams` takes `mode` (`"transparent"` or `"sharp"`) for `nodaro-video-upscale`. With no mode a run is transparent: it keeps the clip's original colours and look, takes 720p / 1080p / 2k / 4k, and is priced per second of the clip at its exact length. Sharp adds crisp detail and takes 1080p / 2k / 4k, as before. With no mode, a clip Transparent cannot serve at the chosen resolution runs as Sharp at Sharp's price instead of being refused; an explicit `"transparent"` keeps its refusals.
+- 6196a70: `userSettings.update({ publicOutputs: false })` now also takes every existing item out of the public gallery, in the same transaction as the setting, and the answer's new optional `hiddenFromGallery` says how many it took out (0 otherwise; absent from a server that predates it). When that step fails `update()` throws and no other field of the patch is written; sending `false` again is safe. Turning `publicOutputs` back on republishes nothing.
+- 361bd83: `JobErrorHint` has a new arm, `InputUnusableHint` (`{ kind: "input-unusable", reason: "image" | "no-sound" | "too-large" }`): the platform refused the job's input file from what the file is, before any provider call (a separation sent a picture, a video with no sound, or a video over the size it can take the sound out of), so the same file is refused again. Send a different file. `InputUnusableHint` is exported from `@nodaro/sdk/jobs`.
+- d9b41f1: `client.surface.availability()` types the new `models.deniedModes`: the modes of an offered model the deployment cannot run, each `<model id>:<mode>` (`nodaro-video-upscale:transparent` where Nodaro Video Upscale's Transparent mode cannot run there). Optional: a server that predates it omits it.
+- 61d1f1f: `VideoUpscaleParams.provider` accepts `"topaz-rhea"`: Topaz's Rhea model, which scales the clip (up to 4×) so its short side reaches `targetResolution` (720p / 1080p / 4k), at its own frame rate and length, as H.264, priced per second of the clip by the target.
+- e58c98c: Video Remake's upscale choice now reaches 4K: a 1080p run's next size is 4K, so `"next"` on a 1080p run delivers it at 4K where the choice is offered. The estimate's and a completed job's `outputResolution` can therefore be `"4k"` (lower-case); the engine's own size, `resolution`, stays 480p, 720p or 1080p. New type `VideoRemakeOutputResolution` (`"480p" | "720p" | "1080p" | "4k"`), used by `VideoRemakeEstimate.outputResolution` and `VideoRemakeJobOutput.outputResolution`. The estimate's `upscaleOffered` remains the authority on whether a run is offered the choice.
+- 5ae6d89: `VideoRemakeJobOutput` gains `upscaleCharged`: whether a Video Remake run's upscale step was charged. It is `true` when the upscaled file is the video delivered and `false` when the step was skipped and its credits were given back.
+- 6abf2b8: `videoRemake.styleChoice()` now answers `upscaleTo`: per engine (or Flash choice) and the engine's size, the size the upscale choice's `"next"` delivers on this deployment (for example `{ "nodaro-prism": { "480p": "720p", "720p": "1080p", "1080p": "4k" } }`), so a page can show its Upscale control before a clip is added. A size or engine missing from it is not offered; it is `{}` where `upscaleChoice` is false, and absent from an older server. New type `VideoRemakeUpscaleTo`. The estimate's `upscaleOffered` stays the authority for an actual run.
+
+  `VideoRemakeJobOutput` now types `engineVideoUrl`, `engineWidth` and `engineHeight`: on a run whose upscale was applied, the engine's own version of the video at the engine's size, beside the upscaled `videoUrl`.
+
+### Patch Changes
+
+- Updated dependencies [5825df3]
+- Updated dependencies [6f4e40e]
+- Updated dependencies [0f58c36]
+- Updated dependencies [61d1f1f]
+- Updated dependencies [61d1f1f]
+- Updated dependencies [01b15d3]
+- Updated dependencies [3ca2cde]
+  - @nodaro/shared@3.74.0
+  - @nodaro/prompts@1.61.0
+
 ## 2.79.0
 
 ### Minor Changes
