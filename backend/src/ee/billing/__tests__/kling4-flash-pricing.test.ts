@@ -81,8 +81,8 @@ describe("kling-4-flash static credits", () => {
   it("adds no row to the Kling 4.0 ids (Flash extends their prefix, never their ladders)", () => {
     const k4 = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k === "kling-4" || k.startsWith("kling-4:"))
     const k4kf = Object.keys(STATIC_CREDIT_COSTS).filter((k) => k === "kling-4-keyframes" || k.startsWith("kling-4-keyframes:"))
-    expect(k4).toHaveLength(1 + 56 + 56)
-    expect(k4kf).toHaveLength(1 + 56)
+    expect(k4).toHaveLength(1 + 84 + 84)
+    expect(k4kf).toHaveLength(1 + 84)
   })
 
   it("the bare id equals the default render it stands for (5s @ 720p)", () => {

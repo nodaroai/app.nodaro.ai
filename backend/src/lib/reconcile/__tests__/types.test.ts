@@ -27,7 +27,7 @@ describe("ProviderKind registry", () => {
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-suno-market",
       "kie-suno-voice-create", "kie-suno-voice-validate",
       "kie-kontext", "kie-luma",
-      "kie-kling3", "kie-runway", "kie-aleph", "kie-seedance-draft", "kie-lip-sync", "kie-llm",
+      "kie-kling3", "kie-runway", "kie-aleph", "kie-seedance-draft", "kie-lip-sync", "kie-long-video", "kie-llm",
       "replicate-prediction", "replicate-training",
       "elevenlabs-async", "elevenlabs-sync", "anthropic-sync",
       "heygen",

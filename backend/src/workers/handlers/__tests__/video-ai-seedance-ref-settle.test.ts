@@ -204,7 +204,7 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
     const job = { prompt: "a cat in the style of @video_1", provider: "seedance-2-5", resolution: "720p", duration: -1, referenceVideoUrls: REFS, refVideoDurationsSec: [5] }
     await handler(makeJob("text-to-video", { ...job, referenceTaskType: "reference" }) as never, ctx as never)
     expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toStrictEqual({
-      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], characterReferences: undefined, duration: -1, referenceTaskType: "reference", jobId: "job-1",
+      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], characterReferences: undefined, duration: -1, referenceTaskType: "reference", dynamicRange: undefined, jobId: "job-1",
     })
     await handler(makeJob("text-to-video", job) as never, ctx as never)
     expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toHaveProperty("referenceTaskType", undefined)

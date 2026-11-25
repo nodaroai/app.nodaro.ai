@@ -47,12 +47,15 @@ describe("buildKling4Request — reference-to-video (kling-4)", () => {
     expect(input).toEqual({ prompt: "a quiet street at dawn", duration: 5, resolution: "720p" })
   })
 
-  it("normalizes the resolution (1080p kept, anything else → 720p) and passes a declared aspect", () => {
+  it("normalizes the resolution (1080p and 4k kept, anything else → 720p) and passes a declared aspect", () => {
     expect(buildKling4Request(ref({ resolution: "1080P" })).input.resolution).toBe("1080p")
-    expect(buildKling4Request(ref({ resolution: "4k" })).input.resolution).toBe("720p")
+    // 4k renders 4K (decided 2026-11-22; it used to be sent as 720p).
+    expect(buildKling4Request(ref({ resolution: "4k" })).input.resolution).toBe("4k")
+    expect(buildKling4Request(ref({ resolution: "2k" })).input.resolution).toBe("720p")
     expect(buildKling4Request(ref({ aspectRatio: "21:9" })).input.aspect_ratio).toBe("21:9")
     expect(buildKling4Request(ref({ aspectRatio: "auto" })).input.aspect_ratio).toBe("auto")
-    expect(buildKling4Request(ref({ aspectRatio: "4:3" })).input).not.toHaveProperty("aspect_ratio")
+    expect(buildKling4Request(ref({ aspectRatio: "4:3" })).input.aspect_ratio).toBe("4:3")
+    expect(buildKling4Request(ref({ aspectRatio: "3:4" })).input).not.toHaveProperty("aspect_ratio")
   })
 
   it("demotes a start frame into the reference images after the caller's own, named as the opening frame", () => {

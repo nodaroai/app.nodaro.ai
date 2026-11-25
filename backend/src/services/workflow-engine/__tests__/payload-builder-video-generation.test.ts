@@ -723,6 +723,27 @@ describe("payload-builder.kling-4.test.ts", () => {
     expect(r.modelIdentifier).toBe("kling-4:10s:720p-ref")
   })
 
+  it("4K renders and is priced as 4K, on both lanes and the -ref rate", () => {
+    expect(build(n("kling-4", { resolution: "4k" })).modelIdentifier).toBe("kling-4:5s:4k")
+    expect(build(n("kling-4-keyframes", { resolution: "4k" }), { endFrameUrl: END }).modelIdentifier).toBe("kling-4-keyframes:5s:4k")
+    expect(build(n("kling-4", { resolution: "4k", duration: 8 }), { referenceVideoUrls: ["https://cdn.example/v.mp4"] }).modelIdentifier).toBe("kling-4:8s:4k-ref")
+  })
+
+  it("HDR rides the payload only on an HDR run, so the hold prices its add-on and the runner sends it", () => {
+    const hdr = build(n("kling-4", { resolution: "1080p", dynamicRange: "hdr" }))
+    expect(hdr.payload.dynamicRange).toBe("hdr")
+    // The clip's own id is unchanged: the add-on is its own line (node-executor).
+    expect(hdr.modelIdentifier).toBe("kling-4:5s:1080p")
+    expect(build(n("kling-4", { resolution: "1080p", dynamicRange: "sdr" })).payload).not.toHaveProperty("dynamicRange")
+    // Flash has no HDR: the stored value is not sent.
+    expect(build(n("kling-4-flash", { dynamicRange: "hdr" })).payload).not.toHaveProperty("dynamicRange")
+  })
+
+  it("HDR at 720p (or no size: 720p) is refused before any job exists", () => {
+    expect(() => build(n("kling-4", { resolution: "720p", dynamicRange: "hdr" }))).toThrow(/renders HDR at 1080p or 4k only, not 720p.*Nothing was charged/)
+    expect(() => build(n("kling-4-keyframes", { dynamicRange: "hdr" }), { endFrameUrl: END })).toThrow(/not 720p/)
+  })
+
   it("a wired Character becomes a named subject, portrait first, and never the start frame", () => {
     const character: SimpleNode = {
       id: "char-1",

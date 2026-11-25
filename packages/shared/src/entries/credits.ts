@@ -24,6 +24,7 @@ export {
   normalizedImageGenModelId,
   imageGenAutoAspectNeedsSourceImage,
   buildVideoCreditModelIdentifier,
+  videoHdrAddonCreditId,
   seedanceVideoEditCreditId,
   tailExtendCreditId,
   tailExtendResolution,

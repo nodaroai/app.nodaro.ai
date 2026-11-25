@@ -161,6 +161,9 @@ export interface ProviderOptions {
   // Kling 4.0 reference-to-video: keep the reference videos' own sound instead
   // of generating new sound (KIE `keep_original_sound`; ignored without a video).
   keepOriginalSound?: boolean
+  // A video model with an HDR setting (catalog `hdr`, Kling 4.0): "hdr" renders
+  // HDR at 1080p / 4K (KIE `dynamic_range`); anything else renders SDR.
+  dynamicRange?: string
   // Start/end FRAME handling, applied once at dispatch (lib/video-frame-dispatch.ts),
   // never inside a provider. `frameFit` reshapes the frame to the model's MEASURED
   // output canvas, because a frame that is not already that size gets reshaped by

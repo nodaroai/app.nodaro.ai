@@ -1471,6 +1471,7 @@ Needs `workflows:execute`.
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
 | `character_references[].video_url` | string |  | kling-4(-flash): 3-8s clip; a video subject. |
 | `keep_original_sound` | boolean |  | kling-4(-flash): keep ref videos' sound. |
+| `dynamic_range` | string |  | kling-4(-keyframes): hdr at 1080p/4k, extra cost. One of `sdr`, `hdr`. |
 | `audio_soundtrack` | boolean |  | kling-4: false = every audio clip a voice, no soundtrack. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |

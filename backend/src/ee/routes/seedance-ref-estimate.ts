@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { audioSoundtrackClipSec, billsReferenceVideoSeconds, pricedOutputDurationSec, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES } from "@nodaro/shared/models"
+import { audioSoundtrackClipSec, billsReferenceVideoSeconds, pricedOutputDurationSec, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, VIDEO_DYNAMIC_RANGES, videoHdrResolutionProblem } from "@nodaro/shared/models"
+import { uiResolutionFill } from "@nodaro/shared/video"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 import { openApiRegistry } from "../../lib/openapi-registry.js"
 import { formatZodError } from "../../lib/zod-error.js"
@@ -8,6 +9,7 @@ import { sendInternalError } from "../../lib/http-errors.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations, refVideoCapFor } from "../../lib/ref-video-probe.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { seedance2RefVideoChargedQuote } from "../billing/seedance2-ref-video-quote.js"
+import { videoHdrAddonBaseCredits } from "../../lib/video-hdr-addon.js"
 
 const ROUTE = "/v1/credits/seedance-ref-estimate"
 const MAX_CLIPS = SEEDANCE_2_5_REF_LIMITS.videos
@@ -48,6 +50,8 @@ export const seedanceRefEstimateBody = z.object({
   /** Gemini Omni Flash 1.2: the node's trim of its source clip, in seconds. It decides what is billed. */
   videoTrimStart: z.number().int().min(0).optional(),
   videoTrimEnd: z.number().int().min(0).optional(),
+  /** Kling 4.0: `hdr` adds the HDR add-on on the output seconds (1080p and 4K only; refused at 720p, as the run is). */
+  dynamicRange: z.enum(VIDEO_DYNAMIC_RANGES).optional(),
 })
 
 /**
@@ -112,6 +116,11 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
       parsed.data.unknownReferenceVideos ?? 0,
       Math.max(0, refVideoCapFor(provider) - referenceVideoUrls.length),
     )
+    // HDR at a size that does not render it is refused, as the run refuses it.
+    const hdrProblem = videoHdrResolutionProblem(provider, { resolution: resolution ?? uiResolutionFill(provider), dynamicRange: parsed.data.dynamicRange })
+    if (hdrProblem) {
+      return reply.status(400).send({ error: { code: hdrProblem.code, message: hdrProblem.message } })
+    }
     if (!billsReferenceVideoSeconds(provider)) {
       return reply.status(400).send({ error: { code: "validation_error", message: `"${provider}" is not a model whose price follows its reference clips (Seedance 2, Kling 4.0, Kling 4.0 Flash, Gemini Omni Flash 1.2).` } })
     }
@@ -136,7 +145,9 @@ export function registerSeedanceRefEstimate(app: FastifyInstance): void {
         : parsed.data.unknownSoundtrack === true ? outputSec : undefined
       const durationsSec = soundtrackSec === undefined ? probed : [...probed, soundtrackSec]
       const videoTrim = { start: parsed.data.videoTrimStart, end: parsed.data.videoTrimEnd }
-      return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, referenceTaskType, durationsSec, unknownClips, videoTrim }) }
+      // A Kling 4.0 HDR run's add-on, at the size and length it runs at.
+      const hdrAddonBase = await videoHdrAddonBaseCredits({ provider, duration, resolution: resolution ?? uiResolutionFill(provider), dynamicRange: parsed.data.dynamicRange })
+      return { data: await seedance2RefVideoChargedQuote({ provider, resolution, duration, draft, referenceTaskType, durationsSec, unknownClips, videoTrim, hdrAddonBase }) }
     } catch (err) {
       if (handlePriceNotConfigured(err, reply, ROUTE)) return reply
       return sendInternalError(reply, req, err, "Failed to estimate the reference-video credits")

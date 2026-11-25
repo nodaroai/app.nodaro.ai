@@ -198,7 +198,7 @@ function autoQualityCreditsOf(row: KieJobRow, kieCredits: number | undefined): n
 }
 
 /** The kinds polled on KIE's standard `/jobs/recordInfo` endpoint, whose finished task carries a whole `resultJson`. */
-const RECORD_INFO_KINDS: ReadonlySet<string> = new Set(["kie-standard", "kie-seedance-draft", "kie-lip-sync"])
+const RECORD_INFO_KINDS: ReadonlySet<string> = new Set(["kie-standard", "kie-seedance-draft", "kie-lip-sync", "kie-long-video"])
 
 /**
  * One read of a record-info task (Kling avatar / InfiniTalk use it too): its
@@ -235,7 +235,8 @@ async function singlePoll(row: KieJobRow, pollAttempts = 1): Promise<{
   switch (row.provider_kind) {
     case "kie-standard":
     case "kie-seedance-draft":
-    case "kie-lip-sync": {
+    case "kie-lip-sync":
+    case "kie-long-video": {
       const r = await readRecordInfoTask(row, pollAttempts)
       const urls = r.result.resultUrls ?? (
         r.result.videoUrl ? [r.result.videoUrl]
@@ -767,6 +768,7 @@ export async function finalizeRecoveredMedia(
         duration: input.duration,
         // Recorded only when a type was declared: the hold the reservation sized.
         referenceTaskType: input.referenceTaskType,
+        dynamicRange: input.dynamicRange,
         jobId: row.id,
       })
       : undefined

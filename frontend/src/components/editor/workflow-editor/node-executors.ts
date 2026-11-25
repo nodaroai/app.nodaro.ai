@@ -361,6 +361,8 @@ export function runVideoGeneration(
     characterReferences?: VideoCharacterReference[];
     /** Kling 4.0: keep the reference videos' own sound. */
     keepOriginalSound?: boolean;
+    /** Kling 4.0: "hdr" renders HDR at 1080p / 4K (the route refuses it at 720p). */
+    dynamicRange?: "sdr" | "hdr";
     /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
     audioSoundtrack?: boolean;
     /** Frame rate (LTX 2.5), as stored — a number or a numeric string; the route ignores it for a model without the setting. */
@@ -402,6 +404,7 @@ export function runVideoGeneration(
         referenceAudioUrls: extras?.referenceAudioUrls,
         characterReferences: extras?.characterReferences,
         keepOriginalSound: extras?.keepOriginalSound,
+        ...(extras?.dynamicRange ? { dynamicRange: extras.dynamicRange } : {}),
         audioSoundtrack: extras?.audioSoundtrack,
         webSearch: extras?.webSearch,
         nsfwChecker: extras?.nsfwChecker,
@@ -527,6 +530,8 @@ export function runTextToVideoGeneration(
     characterReferences?: VideoCharacterReference[];
     /** Kling 4.0: keep the reference videos' own sound. */
     keepOriginalSound?: boolean;
+    /** Kling 4.0: "hdr" renders HDR at 1080p / 4K (the route refuses it at 720p). */
+    dynamicRange?: "sdr" | "hdr";
     /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
     audioSoundtrack?: boolean;
     /** Frame rate (LTX 2.5), as stored — a number or a numeric string; the route ignores it for a model without the setting. */

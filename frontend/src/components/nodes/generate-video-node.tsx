@@ -38,6 +38,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { hdrAddonCreditIdOf } from "@/lib/video-hdr"
 import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -189,7 +190,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
     hasVideoRef,
     fps: runData.fps,
   })
-  const rowCredits = useModelCredits(creditIdentifier, 25)
+  // Kling 4.0 HDR: its add-on's own row on top of the clip's, as the run holds both.
+  const hdrAddonCredits = useModelCredits(hdrAddonCreditIdOf({ type: "generate-video", data: runData }), 0)
+  const rowCredits = useModelCredits(creditIdentifier, 25) + (drivingAudioId ? 0 : hdrAddonCredits)
   // A Seedance run with reference video(s) is priced by the server from the
   // probed clips — exactly what the run reserves (see useNodeVideoPrice).
   const price = useNodeVideoPrice(id, rowCredits)

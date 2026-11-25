@@ -2,6 +2,8 @@ import { join } from "node:path"
 import { copyFile } from "node:fs/promises"
 import { downloadFile, runFfmpeg, needsTranscode, probeMediaStreams, getVideoStreamDuration, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
+import { probeMatched, type MatchedProbe } from "./matched-encode.js"
+import { isHdr } from "./extend-stitch-args.js"
 import { NoVideoStreamError, isNoVideoStreamError } from "../../lib/media-stream-errors.js"
 
 interface AudioTrack {
@@ -38,6 +40,26 @@ interface MergeVideoAudioOptions {
    * as long as its longest stream, as before.
    */
   readonly fitAudioToVideo?: boolean
+  /**
+   * When true, an HDR picture (HLG or PQ, `isHdr` on the probed file) is
+   * stream-copied as it is — only the audio is encoded — so the merged file
+   * keeps its HDR and the store keeps it as the original beside a browser-safe
+   * preview. Set by Generate Video's audio track (decided 2026-11-25: an HDR
+   * run is never charged for an 8-bit file). Every other picture, and every
+   * other caller, takes the merge's usual path.
+   */
+  readonly keepHdrPicture?: boolean
+}
+
+/**
+ * The merge's picture arguments: an HDR picture kept (`keepHdrPicture` and an
+ * HDR probe) is copied, an HEVC one tagged `hvc1` so players open the MP4; a
+ * picture a browser cannot play is otherwise re-encoded to browser-safe H.264;
+ * any other picture is copied. Pure, so its choice is tested on probes.
+ */
+export function mergeVideoStreamArgs(o: { needsReencode: boolean; keepHdr: boolean; probe: MatchedProbe }): string[] {
+  if (o.keepHdr && isHdr(o.probe)) return ["-c:v", "copy", ...(o.probe.videoCodec === "hevc" ? ["-tag:v", "hvc1"] : [])]
+  return o.needsReencode ? [...BROWSER_SAFE_VIDEO_ARGS] : ["-c:v", "copy"]
 }
 
 /** The label the fitted audio leaves the filter graph on (`fitAudioToVideo`). */
@@ -205,6 +227,9 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
       console.log("[mergeVideoAudio] Could not probe codec — re-encoding to browser-safe H.264")
     }
 
+    // Probed only where an HDR picture may be kept: every other merge is as before.
+    const hdrProbe: MatchedProbe = options.keepHdrPicture === true ? await probeMatched(videoPath) : {}
+
     // `fitAudioToVideo`: the VIDEO STREAM's length (never the container's),
     // read from the downloaded file. Silence is appended without end and the
     // output stops at the picture's last frame, so a longer voice line is cut
@@ -221,7 +246,7 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
         "-filter_complex", fitSec === undefined ? filter : `${filter};[aout]apad${FITTED_AUDIO_LABEL}`,
         "-map", "0:v",
         "-map", fitSec === undefined ? "[aout]" : FITTED_AUDIO_LABEL,
-        ...(needsReencode ? [...BROWSER_SAFE_VIDEO_ARGS] : ["-c:v", "copy"]),
+        ...mergeVideoStreamArgs({ needsReencode, keepHdr: options.keepHdrPicture === true, probe: hdrProbe }),
         "-c:a", "aac",
         // Fitted output only (the default arguments stay as they were): the
         // index is written at the front, so the clip starts playing before it

@@ -342,6 +342,8 @@ function withMeasuredRenderCost<R extends { cost: number | null; routedVia?: str
     referenceVideoUrls: readonly unknown[] | undefined
     /** The request's own duration (Auto = -1). */
     duration: unknown
+    /** The run's dynamic range (`"hdr"` on an HDR run): its add-on is part of the cost. */
+    dynamicRange: unknown
     settle: Seedance2Settle
   },
 ): R {
@@ -353,7 +355,7 @@ function withMeasuredRenderCost<R extends { cost: number | null; routedVia?: str
   if (isKling4RunnerProvider(run.provider)) {
     const seconds = run.settle.seconds
     if (!hasVideoRef || !seconds) return result
-    return { ...result, cost: kling4CostUsd({ provider: run.provider, resolution: run.resolution, hasVideoRef, outputSec: seconds.outputSec, inputSec: seconds.inputSec }) }
+    return { ...result, cost: kling4CostUsd({ provider: run.provider, resolution: run.resolution, dynamicRange: run.dynamicRange, hasVideoRef, outputSec: seconds.outputSec, inputSec: seconds.inputSec }) }
   }
   if (run.provider !== "seedance-2-5" && run.provider !== "seedance-2-5-flash") return result
   const fixedSec = hasVideoRef ? undefined : positiveSeconds(run.duration)
@@ -455,7 +457,7 @@ async function layDrivingAudioForJob(
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   // A retired model in a queued job (any producer: a pipeline shot, an older
   // job) runs as the model it became — the one its credit id was priced on.
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps, audioToVideo } = withRunningVideoProvider({ data: job.data }).data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps, audioToVideo } = withRunningVideoProvider({ data: job.data }).data as {
     jobId: string
     /** The frame rate, carried only for a model with a frame-rate setting
      *  (LTX 2.5, resolved by `resolveVideoRequestNorm`); absent otherwise. */
@@ -498,6 +500,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     characterReferences?: VideoCharacterReference[]
     /** Kling 4.0: keep the reference videos' own sound. */
     keepOriginalSound?: boolean
+    dynamicRange?: string
     /** Start/end frame handling; absent = platform defaults. */
     frameFit?: FrameFit
     frameDelivery?: FrameDelivery
@@ -554,7 +557,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const resolvedI2vProvider = provider ?? IMAGE_TO_VIDEO_DEFAULT_PROVIDER
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
-    providerKindForVideoModel(resolvedI2vProvider),
+    // A Kling 4.0 run at 4K or in HDR is its own, slower kind (kie-long-video).
+    providerKindForVideoModel(resolvedI2vProvider, { resolution, dynamicRange }),
   )
   // VEO direct-4K: KIE's generate endpoint has no "4k" — 4K is produced by
   // chaining get-4k-video off the base task (see chainVeoBaseTo4k below).
@@ -566,7 +570,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const wantsMov = outputFormat === "mov" && resolvedI2vProvider === "seedance-2-5"
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "image-to-video" } })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, draft, ...(referenceTaskType ? { referenceTaskType } : {}), ...(wantsMov ? { outputFormat: "mov" as const } : {}) }, { onTaskCreated, routeJob: { jobId: ctx.jobId, jobType: "image-to-video" } })
   } finally {
     ramp.stop()
   }
@@ -594,10 +598,11 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     duration,
     // The type the route declared (the hold it sized): absent = none.
     referenceTaskType,
+    dynamicRange,
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits
-  const recorded = withMeasuredRenderCost(result, { provider: resolvedI2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
+  const recorded = withMeasuredRenderCost(result, { provider: resolvedI2vProvider, resolution, draft, referenceVideoUrls, duration, dynamicRange, settle })
   // A Seedance DRAFT records its RAW take length — before the loop-cut / audio
   // merge below — because the 1080p finalize re-renders (and bills) that take.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedI2vProvider, outputUrl: result.url })
@@ -698,6 +703,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     const mergedPath = await mergeVideoAudio({
       ...draftAudioMuxMergeArgs(drivingAudioLaid?.videoUrl ?? providerOutputUrl, audioMerge),
       ...(localOutput && !drivingAudioLaid ? { videoPath: localOutput.path } : {}),
+      // An HDR picture (Kling 4.0) is copied as it is, so the merged file keeps
+      // its HDR as the stored original (decided 2026-11-25).
+      keepHdrPicture: true,
     })
     await setJobProgress(job, ctx.jobId, 95)
     try {
@@ -824,7 +832,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
   // A retired model in a queued job runs as the model it became.
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps, audioToVideo } = withRunningVideoProvider({ data: job.data }).data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, enableTranslation, contentPolicyRewrite: allowContentPolicyRewrite, refVideoDurationsSec, draft, outputFormat, referenceTaskType, fps, audioToVideo } = withRunningVideoProvider({ data: job.data }).data as {
     /** The frame rate, carried only for a model with a frame-rate setting (LTX 2.5); absent otherwise. */
     fps?: number
     audioToVideo?: boolean
@@ -859,6 +867,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     characterReferences?: VideoCharacterReference[]
     /** See the image-to-video payload above. */
     keepOriginalSound?: boolean
+    dynamicRange?: string
     /** See the image-to-video payload above. */
     refVideoDurationsSec?: Array<number | null>
     webSearch?: boolean
@@ -893,7 +902,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   const resolvedT2vProvider = provider ?? TEXT_TO_VIDEO_DEFAULT_PROVIDER
   const t2vOnTaskCreated = makeOnTaskCreated(
     ctx.jobId,
-    providerKindForVideoModel(resolvedT2vProvider),
+    providerKindForVideoModel(resolvedT2vProvider, { resolution, dynamicRange }),
   )
   // VEO direct-4K: run the base at VEO_4K_BASE_RESOLUTION, then chain get-4k-video below.
   const wantsVeo4k = resolution === "4k" && isVeoProvider(provider)
@@ -904,7 +913,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // `outputFormat` only when the route honoured mov (Seedance 2.5, a child
   // job): the mp4 options stay key-for-key what they were.
   const wantsMov = outputFormat === "mov" && resolvedT2vProvider === "seedance-2-5"
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, ...(fps !== undefined ? { fps } : {}), ...(audioToVideo === true ? { audioToVideo: true } : {}), generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, keepOriginalSound, dynamicRange, webSearch, nsfwChecker, enableTranslation, draft, ...(referenceTaskType ? { referenceTaskType } : {}), contentPolicyRewrite: allowContentPolicyRewrite, ...(wantsMov ? { outputFormat: "mov" as const } : {}) }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -961,10 +970,11 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     characterReferences,
     duration,
     referenceTaskType,
+    dynamicRange,
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits
-  const recorded = withMeasuredRenderCost(result, { provider: resolvedT2vProvider, resolution, draft, referenceVideoUrls, duration, settle })
+  const recorded = withMeasuredRenderCost(result, { provider: resolvedT2vProvider, resolution, draft, referenceVideoUrls, duration, dynamicRange, settle })
   // Seedance DRAFT: record the raw take length the 1080p finalize bills.
   const draftRenderSec = await measureSeedanceDraftRenderSec({ draft, provider: resolvedT2vProvider, outputUrl: result.url })
 
@@ -3111,6 +3121,9 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     characterReferences: (d as { characterReferences?: unknown }).characterReferences,
     duration: d.duration,
     referenceTaskType: d.referenceTaskType,
+    // No HDR here: the voiced lane runs only a model that speaks dialogue, and
+    // Kling 4.0 (the one model with HDR) does not, so this lane is never HDR.
+    dynamicRange: undefined,
     jobId: ctx.jobId,
   })
   const meteredBaseCredits = settle.baseCredits

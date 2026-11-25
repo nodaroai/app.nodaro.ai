@@ -107,6 +107,20 @@ beforeEach(() => {
 
 afterEach(() => _resetPluginServicesForTests())
 
+describe("a Kling 4.0 resend at 4K or in HDR keeps the long kind", () => {
+  it.each([
+    [{ prompt: "p", resolution: "4k" }, "kie-long-video"],
+    [{ prompt: "p", resolution: "1080p", dynamic_range: "hdr" }, "kie-long-video"],
+    [{ prompt: "p", resolution: "1080p" }, "kie-standard"],
+  ] as const)("%o → %s", async (body, kind) => {
+    const fallback = { taskModel: "kling-4.0/reference-to-video", modelKey: "kling-4", body }
+    job().input_data = { provider: "kling-4", [ALTERNATE_ROUTE_KEY]: { state: "running", at: Date.now() - 40 * 60_000, routeId: "route-1", taskRef: "task-9", fallback } }
+    service(async () => ({ state: "failed", message: "refused" }))
+    await reconcileAlternateRouteJob(rowArg())
+    expect(job()).toMatchObject({ provider_kind: kind, provider_task_id: "default-1" })
+  })
+})
+
 describe("a process that cannot read the task leaves the row alone", () => {
   it("no service registered: untouched, attempts not bumped", async () => {
     const before = structuredClone(job())

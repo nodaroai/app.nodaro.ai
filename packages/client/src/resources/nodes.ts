@@ -521,6 +521,12 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
    *  sound instead of generating new sound. Ignored without a reference video
    *  and by every other model. */
   keepOriginalSound?: boolean
+  /** Kling 4.0 (`kling-4`, `kling-4-keyframes`): `"hdr"` renders HDR (HEVC
+   *  10-bit, BT.2020, HLG) at `1080p` or `4k`, priced as an add-on on the
+   *  output seconds. HDR at `720p` (or with no resolution, which renders 720p)
+   *  answers `400` before anything is charged. The downloaded clip keeps HDR;
+   *  editing nodes produce SDR. Default `"sdr"`; ignored by every other model. */
+  dynamicRange?: "sdr" | "hdr"
   /** Kling 4.0 (`kling-4`): play the first `referenceAudioUrls` clip as the
    *  result's soundtrack — it is sent as one more reference video (a still
    *  frame carrying the audio) with its sound kept, so it is priced as a
@@ -611,6 +617,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0 (`kling-4`, `kling-4-flash`): keep the reference videos' own sound — see {@link GenerateVideoParams.keepOriginalSound}. */
   keepOriginalSound?: boolean
+  /** Kling 4.0 (`kling-4`, `kling-4-keyframes`): HDR at 1080p or 4K — see {@link GenerateVideoParams.dynamicRange}. */
+  dynamicRange?: "sdr" | "hdr"
   /** Kling 4.0 (`kling-4`): play the first audio clip as the soundtrack — see {@link GenerateVideoParams.audioSoundtrack}. */
   audioSoundtrack?: boolean
   /** Cinematic direction as catalog IDS — the route renders the wording. */

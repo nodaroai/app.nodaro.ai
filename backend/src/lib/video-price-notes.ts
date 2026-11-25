@@ -83,11 +83,13 @@ export function noteAutoDurationSettles(req: FastifyRequest): void {
 }
 
 /** A separately priced add-on folded into the run's price (generate-video). */
-export function noteAddon(req: FastifyRequest, code: "loop_trim_addon" | "voiced_audio_addon", baseCredits: number): void {
+const ADDON_MESSAGES = {
+  loop_trim_addon: "Includes the seamless-loop trim.",
+  voiced_audio_addon: "Includes the character voice track.",
+  hdr_addon: "Includes HDR, priced on the output seconds.",
+} as const
+
+export function noteAddon(req: FastifyRequest, code: keyof typeof ADDON_MESSAGES, baseCredits: number): void {
   if (baseCredits <= 0) return
-  noteAdjustment(req, {
-    code,
-    message: code === "loop_trim_addon" ? "Includes the seamless-loop trim." : "Includes the character voice track.",
-    baseCredits,
-  })
+  noteAdjustment(req, { code, message: ADDON_MESSAGES[code], baseCredits })
 }

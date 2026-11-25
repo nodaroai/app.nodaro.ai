@@ -65,6 +65,7 @@ import { RunNodeButton } from "./run-node-button"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { hdrAddonCreditIdOf } from "@/lib/video-hdr"
 import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import type { FieldMappings } from "@/types/nodes"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared/model-catalog"
@@ -257,7 +258,9 @@ export function PromptQuickEditModal() {
   const imageCredits = useModelCredits(imageCreditsId, 1)
   // A Seedance run with reference video(s): the server's quote from the probed
   // clips (never a row price below what the run reserves) — as on the node.
-  const videoRowCredits = useModelCredits(videoCreditsId, 25)
+  // Kling 4.0 HDR: the add-on's own row on top of the clip's, as the run holds both.
+  const videoHdrCredits = useModelCredits(nodeType === "generate-video" && node ? hdrAddonCreditIdOf(node) : undefined, 0)
+  const videoRowCredits = useModelCredits(videoCreditsId, 25) + videoHdrCredits
   const videoCredits = useNodeVideoPrice(nodeId ?? "", videoRowCredits).runCredits
 
   // While the modal is open, keep its Radix focus trap from yanking focus out

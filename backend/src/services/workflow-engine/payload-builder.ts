@@ -198,6 +198,8 @@ import {
   isGeminiOmniProvider,
   videoProviderTakesLoneEndFrame,
   videoStartFrameOnlyProblem,
+  videoHdrResolutionProblem,
+  videoRunsHdr,
   PRICING_DEFAULT_RESOLUTION,
   supportsExtendRender,
   COMPOSER_PLAN_MAP,
@@ -4935,6 +4937,10 @@ function buildPayloadOf(
         endFrameUrl,
         inBetweenFrameUrls: referenceImageUrls,
       })
+      // HDR at a size that does not render it (Kling 4.0 at 720p): refused
+      // before the reservation, with the sentence the routes answer.
+      const hdrProblem = videoHdrResolutionProblem(resolvedProvider, { resolution: gvNorm.resolution, dynamicRange: data.dynamicRange, nothingCharged: true })
+      if (hdrProblem) throw new Error(hdrProblem.message)
       return videoGenerationResult(
         effectiveMode,
         {
@@ -4997,6 +5003,8 @@ function buildPayloadOf(
           elements: data.elements,
           ...(gvCharacterReferences && gvCharacterReferences.length > 0 ? { characterReferences: gvCharacterReferences } : {}),
           keepOriginalSound: data.keepOriginalSound,
+          // Only on an HDR run: the reservation prices its add-on from it, the runner sends it.
+          ...(videoRunsHdr(resolvedProvider, data.dynamicRange) ? { dynamicRange: "hdr" } : {}),
           audioSoundtrack: data.audioSoundtrack,
           grokMode: data.grokMode,
           videoSize: data.videoSize,

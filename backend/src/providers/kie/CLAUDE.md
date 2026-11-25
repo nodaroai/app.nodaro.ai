@@ -75,7 +75,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
   at the same rate, read off the poll it already made, else nothing (the column is left as it
   is: a recovery knows the task, not the request the worker ran it with, so it names no catalog
   figure). Covered: the generic finalize and the entity tail in `lib/reconcile/kie.ts` for every
-  record-carrying kind (`kie-standard`, `kie-seedance-draft`, `kie-lip-sync`, `kie-luma`,
+  record-carrying kind (`kie-standard`, `kie-seedance-draft`, `kie-lip-sync`, `kie-long-video`, `kie-luma`,
   `kie-veo`); kinds whose poll returns only a URL record nothing.
   `lib/reconcile/__tests__/kie-recovery-cost-guard.test.ts` holds every recovered kind, every
   completion call in `lib/reconcile/kie.ts` and every `recover.ts` to it, with short lists.
@@ -553,10 +553,26 @@ afterwards (300-65536 px per side, aspect 0.4-2.5, our 2048 px cap).
 
 - Both schemas are `additionalProperties: false`: explicit allow-list, INTEGER
   `duration` 3-30, lowercase `resolution` via `normalizeKling4Resolution`
-  (`720p` / `1080p`, anything else → 720p, billed the same), no seed, no audio
-  lever (native audio always on). `aspect_ratio` (`auto` / `16:9` / `9:16` /
-  `1:1` / `21:9`) is sent on reference runs, and on keyframe runs only when no
-  frame is attached (the output follows the start frame otherwise).
+  (`720p` / `1080p` / `4k`, anything else → 720p, billed the same), no seed,
+  no audio lever (native audio always on). `aspect_ratio` (`auto` / `16:9` /
+  `9:16` / `1:1` / `21:9` / `4:3`; Flash without `4:3`) is sent on reference
+  runs, and on keyframe runs only when no frame is attached (the output follows
+  the start frame otherwise).
+- **HDR** (decided 2026-11-22): `dynamic_range: "hdr"` is sent only on an HDR
+  run (`videoRunsHdr`), at 1080p or 4K; SDR sends nothing, so an SDR body is
+  byte-identical. 720p + HDR is KIE's parameter error and is refused before the
+  hold on every path (`videoHdrResolutionProblem`; the builder throws as the
+  last guard). The output is HEVC 10-bit BT.2020 HLG: stored as the original
+  beside a tone-mapped SDR preview (`video-result-store.ts`). HDR is priced as
+  its own add-on row on the output seconds (`kling-4-hdr:<N>s:<res>`,
+  `videoHdrAddonCreditId`), added by every holder (`withVideoHdrAddon` on the
+  routes, `computeVideoHdrCreditOverride` / the ref override in node-executor,
+  the quotes and estimates) and kept by the reference-video settle
+  (`measureSeedance2Settle`'s required `dynamicRange`). Flash has no HDR.
+- **4K / HDR render slowly** (KIE: 5 s ≈ 164 s at 4K, 156 s at 1080p HDR, 226 s
+  at 4K HDR): `kling4PollAttempts` polls 2 × 45 s per output second (≈45 min
+  for 30 s) instead of the ~19 min default. A task KIE cannot deliver at that
+  spec fails (no fallback) and refunds like any KIE failure.
 - **Names are the whole risk.** KIE refuses a prompt that mentions a material
   the request does not carry ("prompt references undeclared material @image_1",
   a 422, live 2026-10-23). The builder maps the platform's numbering onto

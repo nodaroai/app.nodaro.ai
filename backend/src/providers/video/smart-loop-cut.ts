@@ -36,6 +36,66 @@ import {
   createWorkDir,
   cleanupWorkDir,
 } from "./ffmpeg-utils.js"
+import { colourTagArgs, probeMatched, type MatchedProbe } from "./matched-encode.js"
+import { isHdr } from "./extend-stitch-args.js"
+import { PREVIEW_SEC_PER_4K_SEC } from "./browser-safe-preview.js"
+import { UHD_CANVAS } from "./ffmpeg-memory-model.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
+
+/**
+ * The precise cut's picture encode. An SDR source: 8-bit H.264, exactly as it
+ * always was. An HDR source (HLG or PQ, `isHdr` on the probed file; Kling 4.0
+ * HDR): 10-bit HEVC, tagged `hvc1` for players, with the source's own colour
+ * signalling (`colourTagArgs`: BT.2020, HLG), so the cut keeps its HDR and the
+ * store keeps it as the original beside a browser-safe preview (decided
+ * 2026-11-25: an HDR run is never charged for an 8-bit file). Pure, so its
+ * choice is tested on probes.
+ */
+export function loopCutPictureArgs(probe: MatchedProbe): string[] {
+  if (!isHdr(probe)) return ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "20"]
+  return [
+    "-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1", "-preset", "fast", "-crf", "20",
+    ...colourTagArgs(probe),
+    // The same signalling in the HEVC stream itself (its VUI), where players read it.
+    ...x265ColourParams(probe),
+  ]
+}
+
+/** x265's VUI colour fields from the probed tags; a tag the probe did not read is left out. */
+function x265ColourParams(probe: MatchedProbe): string[] {
+  const read = (v: string | undefined) => (v && v !== "unknown" && v !== "reserved" ? v : undefined)
+  const params = [
+    ["colorprim", read(probe.colorPrimaries)],
+    ["transfer", read(probe.colorTransfer)],
+    ["colormatrix", read(probe.colorSpace)],
+  ].flatMap(([k, v]) => (v ? [`${k}=${v}`] : []))
+  return params.length > 0 ? ["-x265-params", params.join(":")] : []
+}
+
+/** Wall seconds the HDR cut's 10-bit HEVC encode is given per second of 4K picture (twice the preview's `PREVIEW_SEC_PER_4K_SEC`: x265 is slower than x264). */
+export const LOOP_CUT_HDR_SEC_PER_4K_SEC = 2 * PREVIEW_SEC_PER_4K_SEC
+/** The longest the HDR cut's encode is given: 15 minutes, which keeps a 30 s 4K run inside its recovery kind's 75 minutes. */
+export const LOOP_CUT_HDR_MAX_TIMEOUT_MS = 15 * 60 * 1000
+
+/**
+ * How long the precise cut's encode may run. An SDR source: the default ffmpeg
+ * limit, as always (`undefined`). An HDR source (the 10-bit HEVC encode):
+ * {@link LOOP_CUT_HDR_SEC_PER_4K_SEC} per second of picture, scaled by its size
+ * against 4K, never below the default limit and never above
+ * {@link LOOP_CUT_HDR_MAX_TIMEOUT_MS} — the preview encode's rule
+ * (`previewTimeoutMs`). A cut that runs out of time keeps the untrimmed clip
+ * and refunds the trim, as any failed cut does.
+ */
+export function loopCutTimeoutMs(probe: MatchedProbe): number | undefined {
+  if (!isHdr(probe)) return undefined
+  const seconds = probe.videoDurationSec ?? probe.durationSec
+  if (seconds === undefined || !(seconds > 0)) return LOOP_CUT_HDR_MAX_TIMEOUT_MS
+  const w = probe.width ?? UHD_CANVAS.width
+  const h = probe.height ?? UHD_CANVAS.height
+  const scale = (w * h) / (UHD_CANVAS.width * UHD_CANVAS.height)
+  const wanted = Math.ceil(seconds * LOOP_CUT_HDR_SEC_PER_4K_SEC * scale * 1000)
+  return Math.min(LOOP_CUT_HDR_MAX_TIMEOUT_MS, Math.max(DEFAULT_FFMPEG_TIMEOUT_MS, wanted))
+}
 
 export interface SmartLoopCutOptions {
   readonly videoUrl: string
@@ -252,15 +312,15 @@ export async function smartLoopCut(
     // 1-frame freeze since f(K) ≈ f0 by selection. `-vframes` works
     // regardless of variable frame rate.
     const audioArgs = options.outputSilent ? ["-an"] : ["-c:a", "copy"]
+    const sourceProbe = await probeMatched(inputPath)
     await runFfmpeg([
       "-y", "-i", inputPath,
       "-vframes", String(chosenFrameIndex),
-      "-c:v", "libx264", "-pix_fmt", "yuv420p",
-      "-preset", "fast", "-crf", "20",
+      ...loopCutPictureArgs(sourceProbe),
       ...audioArgs,
       "-movflags", "+faststart",
       outputPath,
-    ])
+    ], loopCutTimeoutMs(sourceProbe))
 
     console.log(
       `[smartLoopCut] Source ${frameCount} frames @ ${fps}fps; ` +

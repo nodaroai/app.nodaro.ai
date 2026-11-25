@@ -16,6 +16,7 @@ import {
   VEO_RESOLUTION_TIERED_PROVIDERS,
   VIDEO_DURATION_TIERS,
   pricedOutputDurationSec,
+  videoHdrResolution,
   snapToNearestDuration,
   PRICING_DEFAULT_RESOLUTION,
   MOTION_DURATION_TIERS,
@@ -571,6 +572,28 @@ function wireNormalizedResolution(provider: string, resolution: string | undefin
   if (isPixverseV6MaxProvider(provider)) return normalizePixverseV6MaxQuality(resolution)
   if (isLtx25Provider(provider)) return normalizeLtx25Resolution(provider, resolution)
   return resolution
+}
+
+/**
+ * The credit id of a video run's HDR add-on (catalog `hdr`, decided
+ * 2026-11-22): its own line beside the clip's price, on the OUTPUT seconds
+ * only — `<addonCreditPrefix>:<N>s:<res>` (`kling-4-hdr:5s:1080p`), N the
+ * seconds the run renders (`pricedOutputDurationSec`), res the HDR size it
+ * renders at (`videoHdrResolution`). Never a row of the model's ladder and
+ * never on its `-ref` rate, so a reference-video run's input seconds do not
+ * move it. Undefined when the run renders SDR, or asks HDR at a size that is
+ * refused.
+ */
+export function videoHdrAddonCreditId(
+  provider: string,
+  duration: number | string | undefined,
+  resolution: string | undefined,
+  dynamicRange: unknown,
+): string | undefined {
+  const res = videoHdrResolution(provider, resolution, dynamicRange)
+  if (res === undefined) return undefined
+  const prefix = MODEL_CATALOG[provider]!.hdr!.addonCreditPrefix
+  return `${prefix}:${pricedOutputDurationSec(provider, duration)}s:${res}`
 }
 
 export function buildVideoCreditModelIdentifier(

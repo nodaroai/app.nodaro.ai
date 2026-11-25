@@ -3470,12 +3470,28 @@ so a value the model doesn't support is ignored, never a 400:
   rewritten to `@keyframe_N`). `aspectRatio` applies only with no frame
   attached. No reference videos, audio or characters.
 - **Both Kling 4.0 ids:** `duration` is a whole number of seconds from **3 to
-  30** (default 5); `resolution` is `720p` (default) or `1080p`, and anything
-  else renders and bills 720p; `aspectRatio` is `auto` (default — follows the
-  materials, 16:9 with none) / `16:9` / `9:16` / `1:1` / `21:9`; native audio is
-  always on (`sound` is ignored); no `seed`; `prompt` up to 8,000 characters.
-  Priced per second on one ladder per resolution. Not available on the free
-  tier.
+  30** (default 5); `resolution` is `720p` (default), `1080p` or `4k` (`4K`
+  accepted), and anything else renders and bills 720p (a `4k` sent before this
+  release rendered and billed 720p; it now renders and bills 4K); `aspectRatio`
+  is `auto` (default — follows the materials, 16:9 with none) / `16:9` / `9:16`
+  / `1:1` / `21:9` / `4:3`; native audio is always on (`sound` is ignored); no
+  `seed`; `prompt` up to 8,000 characters. Priced per second on one ladder per
+  resolution. Not available on the free tier.
+- **HDR on both Kling 4.0 ids:** `dynamicRange` is `sdr` (default) or `hdr`
+  (on `POST /v1/generate-video` and `POST /v1/text-to-video`). `hdr` renders
+  HEVC 10-bit, BT.2020, HLG, at `1080p` or `4k` only. `hdr` at `720p`, or with
+  no `resolution` (which renders 720p), is a `400`
+  `hdr_resolution_unsupported` before anything is reserved; the quote
+  endpoints (`POST /v1/quote`, `POST /v1/credits/seedance-ref-estimate`)
+  refuse it the same way. HDR is priced as its own add-on on the output
+  seconds (`kling-4-hdr:<N>s:<resolution>`), added to the clip's price and
+  charged once with it; a reference video's seconds never move it. The job's
+  stored original keeps the HDR file (`output_data.originalVideoUrl`; none on a
+  watermarked run), and the
+  `videoUrl` the browser plays is an SDR copy; editing nodes produce SDR. A 4K
+  or HDR task the provider cannot deliver fails and is refunded; it never
+  falls back to 1080p SDR. Every other model ignores `dynamicRange` (it is not
+  sent and not billed). Kling 4.0 Flash has no 4K and no HDR.
 - **`kling-4-flash`** (Kling 4.0 Flash) is one id over two provider
   endpoints, picked by what is sent: an `imageUrl` with no
   `referenceImageUrls`, no `referenceVideoUrls` and no `characterReferences`

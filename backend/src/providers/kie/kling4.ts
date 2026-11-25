@@ -11,8 +11,9 @@
  *     ({@link kling4FlashEndpoint}; docs.kie.ai/market/kling/v4-flash-*)
  *
  * Every schema is `additionalProperties: false`, so each body is an explicit
- * allow-list: integer `duration`, lowercase `resolution`, no seed, no negative
- * prompt. Flash adds: 720p only, no end frame, no `voices` (a reference audio
+ * allow-list: integer `duration`, lowercase `resolution` (720p / 1080p / 4k),
+ * `dynamic_range: "hdr"` only on an HDR run (SDR sends nothing, so an SDR body
+ * is what it always was), no seed, no negative prompt. Flash adds: 720p only, no end frame, no `voices` (a reference audio
  * clip is a subject's `voice_url`), no in-between frames.
  *
  * NAMES. Kling addresses every material by an `@` name in the prompt, and KIE
@@ -31,8 +32,9 @@
  * — editor, workflow, API, MCP — can reach the 422.
  */
 import type { VideoCharacterReference } from "@nodaro/shared/video"
-import { kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, normalizeKling4Resolution, KLING_4_FLASH_RESOLUTION } from "@nodaro/shared/models"
+import { kling4KeyframeFrameCap, KLING_4_MAX_MIDDLE_FRAMES, normalizeKling4Resolution, KLING_4_FLASH_RESOLUTION, videoHdrResolutionProblem, videoRunsHdr } from "@nodaro/shared/models"
 import { placeFramesAfterReferences } from "@nodaro/prompts/assembly"
+import { pollDelay } from "./poll-delay.js"
 
 import {
   KLING_4_REFERENCE_MODEL,
@@ -50,7 +52,10 @@ const MAX_SUBJECT_IMAGES = 4
 const SUBJECT_DESCRIPTION_MAX = 100
 const NAME_MAX = 20
 
+/** Kling 4.0 Flash's ratios. */
 const KLING_4_ASPECTS = new Set(["auto", "16:9", "9:16", "1:1", "21:9"])
+/** Kling 4.0's (both endpoints): Flash's plus 4:3. */
+const KLING_4_0_ASPECTS = new Set([...KLING_4_ASPECTS, "4:3"])
 
 /** Names KIE reserves for its own materials (case-insensitive, N a number). */
 const RESERVED_NAME = /^(image|video|keyframe|object|audio)_\d+$|^(first|last)_frame$/i
@@ -69,6 +74,9 @@ export interface Kling4RequestArgs {
   referenceAudioUrls?: readonly string[]
   characterReferences?: readonly VideoCharacterReference[]
   keepOriginalSound?: boolean
+  /** `"hdr"` renders HDR (Kling 4.0 at 1080p or 4K: HEVC 10-bit, BT.2020, HLG);
+   *  anything else, and Flash whatever it asks, renders SDR and sends nothing. */
+  dynamicRange?: string
 }
 
 export interface Kling4Request {
@@ -178,6 +186,53 @@ function withPromptSuffix(prompt: string, suffix: string): string {
   return suffix ? (prompt.trim() ? `${prompt}\n\n${suffix}` : suffix) : prompt
 }
 
+/**
+ * `{ dynamic_range: "hdr" }` on an HDR run of Kling 4.0, else nothing (SDR is
+ * the provider's default, so an SDR body stays what it always was). HDR at a
+ * size that does not render it is refused before any credits are held on
+ * every path (`videoHdrResolutionProblem`); one that still arrives here throws
+ * rather than send the provider's parameter error.
+ */
+function hdrField(args: Kling4RequestArgs): { dynamic_range?: "hdr" } {
+  if (!videoRunsHdr(args.provider, args.dynamicRange)) return {}
+  const problem = videoHdrResolutionProblem(args.provider, { resolution: normalizeKling4Resolution(args.resolution), dynamicRange: args.dynamicRange })
+  if (problem) throw new Error(problem.message)
+  return { dynamic_range: "hdr" }
+}
+
+/**
+ * The provider's own measure of a slow Kling 4.0 render (read 2026-11-22): a
+ * 5 s clip took about 164 s at 4K, 156 s at 1080p HDR and 226 s at 4K HDR —
+ * about 45 s of waiting per output second at the slowest.
+ */
+export const KLING_4_SLOW_RENDER_SEC_PER_OUTPUT_SEC = 45
+/** The margin over that measure a 4K or HDR run is polled for (a 30 s one was not measured). */
+export const KLING_4_SLOW_RENDER_MARGIN = 2
+
+/**
+ * How many times a Kling 4.0 task is polled (`runKieTask`'s attempt count, on
+ * `pollDelay`'s schedule). A 720p or 1080p SDR run keeps the video default
+ * (`defaultAttempts`, about 19 minutes). A 4K or HDR run, which the provider
+ * renders much slower, is polled for {@link KLING_4_SLOW_RENDER_MARGIN} times
+ * its measured rate over the clip's seconds, never less than the default: a
+ * 30 s 4K HDR clip about 45 minutes, inside the 90-minute node ceiling with
+ * room for the stored preview's encode. A task still running past it fails
+ * and refunds like any provider failure.
+ */
+export function kling4PollAttempts(
+  input: Readonly<Record<string, unknown>>,
+  defaultAttempts: number,
+  pollDelayMs: (attempt: number) => number = pollDelay,
+): number {
+  const slow = input.resolution === "4k" || input.dynamic_range === "hdr"
+  if (!slow) return defaultAttempts
+  const seconds = typeof input.duration === "number" && input.duration > 0 ? input.duration : 5
+  const budgetMs = seconds * KLING_4_SLOW_RENDER_SEC_PER_OUTPUT_SEC * KLING_4_SLOW_RENDER_MARGIN * 1000
+  let attempts = 0
+  for (let waited = 0; waited < budgetMs; ) waited += pollDelayMs(++attempts)
+  return Math.max(defaultAttempts, attempts)
+}
+
 export function buildKling4Request(args: Kling4RequestArgs): Kling4Request {
   if (args.provider === "kling-4-flash") return buildFlash(args)
   return args.provider === "kling-4-keyframes" ? buildKeyframes(args) : buildReference(args)
@@ -262,6 +317,7 @@ function buildKeyframes(args: Kling4RequestArgs): Kling4Request {
     prompt,
     duration: args.durationSec,
     resolution: normalizeKling4Resolution(args.resolution),
+    ...hdrField(args),
   }
   if (first) input.first_frame_url = first
   if (middle.length > 0) input.keyframe_urls = middle
@@ -269,7 +325,7 @@ function buildKeyframes(args: Kling4RequestArgs): Kling4Request {
   // The ratio applies only when no frame is attached (the output follows the
   // first frame otherwise).
   const aspect = args.aspectRatio?.trim()
-  if (!first && middle.length === 0 && !last && aspect && KLING_4_ASPECTS.has(aspect)) input.aspect_ratio = aspect
+  if (!first && middle.length === 0 && !last && aspect && KLING_4_0_ASPECTS.has(aspect)) input.aspect_ratio = aspect
   return { model: KLING_4_KEYFRAME_MODEL, input, notes }
 }
 
@@ -444,9 +500,10 @@ function buildReference(args: Kling4RequestArgs, opts: { flash?: boolean; notes?
     prompt,
     duration: args.durationSec,
     resolution: flash ? KLING_4_FLASH_RESOLUTION : normalizeKling4Resolution(args.resolution),
+    ...(flash ? {} : hdrField(args)),
   }
   const aspect = args.aspectRatio?.trim()
-  if (aspect && KLING_4_ASPECTS.has(aspect)) input.aspect_ratio = aspect
+  if (aspect && (flash ? KLING_4_ASPECTS : KLING_4_0_ASPECTS).has(aspect)) input.aspect_ratio = aspect
   if (images.length > 0) input.image_urls = images
   if (videos.length > 0) {
     input.video_urls = videos

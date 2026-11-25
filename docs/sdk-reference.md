@@ -3838,8 +3838,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `imageUrl`, up to 8 in-between frames as `referenceImageUrls` (in order) and
 > `endFrameUrl`; the frames in all are capped by `duration` (3 s → 4 … 9 s or
 > longer → 10), more is a `400`. Both: `duration` 3–30 (default 5);
-> `resolution` `720p` / `1080p` (anything else → 720p); `aspectRatio` `auto` /
-> `16:9` / `9:16` / `1:1` / `21:9`; audio always on; no seed. See
+> `resolution` `720p` / `1080p` / `4k` (anything else → 720p); `aspectRatio`
+> `auto` / `16:9` / `9:16` / `1:1` / `21:9` / `4:3`; audio always on; no seed.
+> `dynamicRange: "hdr"` renders HDR (HEVC 10-bit HLG) at `1080p` or `4k`,
+> priced as an add-on on the output seconds; at `720p` (or with no
+> `resolution`) it is a `400` before anything is reserved. The downloaded clip
+> keeps HDR; editing nodes produce SDR. See
 > [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
 > **Kling 4.0 Flash** (`kling-4-flash`) takes an `imageUrl` alone as the exact
 > opening frame; anything else (a prompt alone, `referenceImageUrls` ≤ 10,

@@ -28,6 +28,10 @@ export const PROVIDER_KIND_VALUES = [
   // (its task id is the FINALIZE task; the draft's id lives in input_data).
   "kie-seedance-draft",
   "kie-lip-sync",
+  // A Kling 4.0 run at 4K or in HDR (decided 2026-11-22): the standard
+  // `/api/v1/jobs/recordInfo` task, polled up to ~45 min by its worker
+  // (`kling4PollAttempts`), so its own kind with a threshold past that budget.
+  "kie-long-video",
   "kie-llm",
   "replicate-prediction",
   "replicate-training",
@@ -118,6 +122,13 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // stays clear of a long 30 s render without delaying recovery much.
   "kie-seedance-draft":       20 * MIN,
   "kie-lip-sync":             75 * MIN,
+  // 75 min, as `kie-lip-sync`: past everything a live worker does for a 30 s
+  // 4K HDR Kling 4.0 run — the poll (~45 min, `kling4PollAttempts`), a precise
+  // loop cut's 10-bit encode (≤ 15 min, `loopCutTimeoutMs`), the audio-track
+  // merge (a stream copy, about a minute), the stored preview's encode (≤ 10
+  // min for 30 s of 4K, `previewTimeoutMs`) and the uploads — so the cron never
+  // races a live worker.
+  "kie-long-video":           75 * MIN,
   "kie-llm":                   5 * MIN,
   "replicate-prediction":     20 * MIN,
   "replicate-training":       30 * MIN,
@@ -281,7 +292,7 @@ export function isAsyncKind(kind: ProviderKind): boolean {
 export const KIE_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-suno-market", "kie-kontext",
   "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
-  "kie-seedance-draft",
+  "kie-seedance-draft", "kie-long-video",
 ])
 
 /** Kinds recovered via reconcileReplicateJob. */

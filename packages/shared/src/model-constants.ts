@@ -2632,13 +2632,18 @@ export const KLING_4_DEFAULT_RESOLUTION = "720p"
 
 /**
  * SINGLE normalization for the Kling 4.0 resolution lever. The KIE wire enum is
- * lowercase ("720p" | "1080p"), the same spelling as the catalog and the credit
- * identifiers; this folds case and collapses anything else to
+ * lowercase ("720p" | "1080p" | "4k"), the same spelling as the catalog and
+ * the credit identifiers; this folds case and collapses anything else to
  * {@link KLING_4_DEFAULT_RESOLUTION}. The runner sends what this returns and
- * the credit identifier bills what this returns.
+ * the credit identifier bills what this returns. `4k` renders and bills 4K
+ * (decided 2026-11-22; it used to collapse to 720p).
  */
-export function normalizeKling4Resolution(resolution: string | undefined): "720p" | "1080p" {
-  return resolution?.trim().toLowerCase() === "1080p" ? "1080p" : KLING_4_DEFAULT_RESOLUTION
+export function normalizeKling4Resolution(resolution: string | undefined): "720p" | "1080p" | "4k" {
+  switch (resolution?.trim().toLowerCase()) {
+    case "1080p": return "1080p"
+    case "4k": return "4k"
+    default: return KLING_4_DEFAULT_RESOLUTION
+  }
 }
 
 /** Most in-between frames Kling 4.0 Keyframes takes (`keyframe_urls`). */
@@ -3874,11 +3879,11 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
   // PRICING_DEFAULT_RESOLUTION, and normalizeViduQ4Resolution pins the same
   // 720p at the wire.
   "vidu-q4": ["540p", "720p", "1080p", "2k", "4k"],
-  // Kling 4.0 — per-second billing at two resolution rates on both endpoints.
+  // Kling 4.0 — per-second billing at three resolution rates on both endpoints.
   // `kling-4` adds a `-ref` rate for a run with a reference video
   // (VIDEO_REF_RATE_PROVIDERS).
-  "kling-4": ["720p", "1080p"],
-  "kling-4-keyframes": ["720p", "1080p"],
+  "kling-4": ["720p", "1080p", "4k"],
+  "kling-4-keyframes": ["720p", "1080p", "4k"],
   // Kling 4.0 Flash — 720p only (both schemas), one rate on both endpoints,
   // plus a `-ref` rate for a run with a reference video (VIDEO_REF_RATE_PROVIDERS).
   "kling-4-flash": ["720p"],
@@ -4169,6 +4174,91 @@ export function videoStartFrameOnlyProblem(
     message: videoStartFrameOnlyMessage(provider, tier, { nothingCharged: args.nothingCharged }),
     resolution: tier,
     fallbackResolution: videoFramesResolutionFallback(provider),
+  }
+}
+
+/** A video request's dynamic range: SDR (the default) or HDR (catalog `hdr`). */
+export const VIDEO_DYNAMIC_RANGES = ["sdr", "hdr"] as const
+export type VideoDynamicRange = (typeof VIDEO_DYNAMIC_RANGES)[number]
+
+/** The error code of a {@link videoHdrResolutionProblem} refusal. */
+export const VIDEO_HDR_RESOLUTION_CODE = "hdr_resolution_unsupported" as const
+
+/** Whether `provider` has an HDR setting (catalog `hdr`). */
+export function videoTakesHdr(provider: string | undefined): boolean {
+  return !!provider && MODEL_CATALOG[provider]?.hdr !== undefined
+}
+
+/**
+ * Whether a run of `provider` renders HDR: the model has the setting and the
+ * request asks for `"hdr"` (any case). Every other value, and every model
+ * without the setting, is SDR: nothing is sent for it and nothing is billed.
+ * The ONE reading the wire, the price, the refusal and the settle share.
+ */
+export function videoRunsHdr(provider: string | undefined, dynamicRange: unknown): boolean {
+  return videoTakesHdr(provider) && typeof dynamicRange === "string" && dynamicRange.trim().toLowerCase() === "hdr"
+}
+
+/**
+ * The size a run of `provider` renders for `resolution`, in catalog spelling:
+ * a listed size (any case), else what the model renders for an unlisted or
+ * missing one (`unlistedResolutionRendersAs`, Kling 4.0: 720p).
+ */
+function renderedVideoResolution(provider: string, resolution: string | undefined): string | undefined {
+  const entry = MODEL_CATALOG[provider]
+  const r = resolution?.trim().toLowerCase()
+  const listed = r ? entry?.resolutions?.find((x) => x.toLowerCase() === r) : undefined
+  return listed ?? entry?.unlistedResolutionRendersAs ?? entry?.defaultResolution ?? entry?.resolutions?.[0]
+}
+
+/**
+ * The HDR size a run of `provider` renders at, or undefined when it renders
+ * SDR ({@link videoRunsHdr}) or asks HDR at a size that does not render it
+ * (refused, {@link videoHdrResolutionProblem}). What the HDR add-on is priced at.
+ */
+export function videoHdrResolution(provider: string | undefined, resolution: string | undefined, dynamicRange: unknown): string | undefined {
+  if (!provider || !videoRunsHdr(provider, dynamicRange)) return undefined
+  const rendered = renderedVideoResolution(provider, resolution)
+  return rendered !== undefined && MODEL_CATALOG[provider]!.hdr!.resolutions.includes(rendered) ? rendered : undefined
+}
+
+/** A {@link videoHdrResolutionProblem} refusal. */
+export interface VideoHdrResolutionProblem {
+  readonly code: typeof VIDEO_HDR_RESOLUTION_CODE
+  /** The sentence, in English: the API's `error.message`. */
+  readonly message: string
+  /** The size the run would render (catalog spelling). */
+  readonly resolution: string
+  /** The sizes HDR renders at. */
+  readonly hdrResolutions: readonly string[]
+}
+
+/**
+ * THE rule for HDR at a size the model does not render it at (decided
+ * 2026-11-22: refuse before anything is held). Kling 4.0 renders HDR at 1080p
+ * and 4K; HDR at 720p, or with no size named (it renders 720p), is the
+ * provider's parameter error. Judged on the size the run renders, so `720P`,
+ * an unlisted value and an omitted one are refused alike. Undefined when the
+ * run renders SDR or the pair renders. Read by `/v1/generate-video`,
+ * `/v1/text-to-video` (their pre-checks, so a quote refuses too), the
+ * workflow payload builder and the editor's Run.
+ */
+export function videoHdrResolutionProblem(
+  provider: string | undefined,
+  args: { readonly resolution: string | undefined; readonly dynamicRange: unknown; readonly nothingCharged?: boolean },
+): VideoHdrResolutionProblem | undefined {
+  if (!provider || !videoRunsHdr(provider, args.dynamicRange)) return undefined
+  const hdrResolutions = MODEL_CATALOG[provider]!.hdr!.resolutions
+  const rendered = renderedVideoResolution(provider, args.resolution) ?? args.resolution ?? ""
+  if (hdrResolutions.includes(rendered)) return undefined
+  const label = MODEL_CATALOG[provider]?.label ?? provider
+  const sizes = hdrResolutions.join(" or ")
+  const sentence = `${label} renders HDR at ${sizes} only, not ${rendered}. Choose ${sizes}, or turn HDR off.`
+  return {
+    code: VIDEO_HDR_RESOLUTION_CODE,
+    message: args.nothingCharged ? `${sentence} Nothing was charged.` : sentence,
+    resolution: rendered,
+    hdrResolutions,
   }
 }
 

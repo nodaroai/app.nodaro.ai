@@ -70,6 +70,8 @@ import {
   videoProviderRefsReplaceStartFrame,
   videoProviderTakesLoneEndFrame,
   videoStartFrameOnlyProblem,
+  videoHdrResolutionProblem,
+  videoRunsHdr,
   selectLoraRoutingForMentions,
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
@@ -566,6 +568,7 @@ import {
 } from "@/lib/upstream-duration";
 import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 import { startFrameOnlyText } from "@/lib/video-start-frame-only";
+import { hdrResolutionText } from "@/lib/video-hdr";
 
 /** The models that clone a voice, by their names, for the refusal on any other model (`replicaModels`). */
 function cloningModelNames(): string {
@@ -3230,6 +3233,18 @@ function executeNodeCore(
       toast.error(nodeRunText(i2vData.label, startFrameOnlyText(nodeProvider, startFrameOnly, "nodeRun.startFrameOnlyResolution")));
       return Promise.reject(new Error(startFrameOnly.message));
     }
+    // HDR at a size that does not render it (Kling 4.0 at 720p): refused here,
+    // before the server is called, with the rule the server and the workflow
+    // run use.
+    const i2vHdrProblem = videoHdrResolutionProblem(nodeProvider, {
+      resolution: i2vData.resolution ?? (nodeProvider ? uiResolutionFill(nodeProvider) : undefined),
+      dynamicRange: (i2vData as Record<string, unknown>).dynamicRange,
+      nothingCharged: true,
+    });
+    if (i2vHdrProblem && nodeProvider) {
+      toast.error(nodeRunText(i2vData.label, hdrResolutionText(nodeProvider, i2vHdrProblem)));
+      return Promise.reject(new Error(i2vHdrProblem.message));
+    }
 
     // Read canonical `mode`/`sound` first, fall back to legacy
     // `kling3Mode`/`kling3Sound`. The generate-video widget writes to the
@@ -3332,6 +3347,8 @@ function executeNodeCore(
           ? { characterReferences: wiredSubjectReferences(node, nodes, edges, nodeProvider) }
           : {}),
         keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
+        // Kling 4.0 HDR, only on an HDR run (the route drops it on any other model).
+        ...(videoRunsHdr(nodeProvider, (i2vData as Record<string, unknown>).dynamicRange) ? { dynamicRange: "hdr" as const } : {}),
         audioSoundtrack: (i2vData as Record<string, unknown>).audioSoundtrack as boolean | undefined,
         // The frame rate as stored, as the orchestrator sends it (payload-builder);
         // the server reads it once through `videoFrameRateFor` (a numeric string
@@ -3751,10 +3768,22 @@ function executeNodeCore(
         ? { characterReferences: wiredSubjectReferences(node, nodes, edges, t2vProvider) }
         : {}),
       keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
+      // Kling 4.0 HDR, only on an HDR run — see the image path above.
+      ...(videoRunsHdr(t2vProvider, t2vRaw.dynamicRange) ? { dynamicRange: "hdr" as const } : {}),
       audioSoundtrack: t2vRaw.audioSoundtrack as boolean | undefined,
       // Seedance 2.5 reference task type — see the image path above.
       ...(t2vTaskType ? { referenceTaskType: t2vTaskType } : {}),
     };
+    // HDR at a size that does not render it (Kling 4.0 at 720p): refused before the server is called.
+    const t2vHdrProblem = videoHdrResolutionProblem(t2vProvider, {
+      resolution: (t2vOptions.resolution as string | undefined) ?? (t2vProvider ? uiResolutionFill(t2vProvider) : undefined),
+      dynamicRange: t2vRaw.dynamicRange,
+      nothingCharged: true,
+    });
+    if (t2vHdrProblem && t2vProvider) {
+      toast.error(nodeRunText(t2vData.label, hdrResolutionText(t2vProvider, t2vHdrProblem)));
+      return Promise.reject(new Error(t2vHdrProblem.message));
+    }
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(
       node.id,

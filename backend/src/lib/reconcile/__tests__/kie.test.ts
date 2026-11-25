@@ -341,6 +341,7 @@ describe("reconcileKieJob", () => {
       characterReferences: undefined,
       duration: -1,
       referenceTaskType: "reference",
+      dynamicRange: undefined,
       jobId: "j-ref",
     })
     expect(mocks.finalizeMock).toHaveBeenCalledWith(expect.objectContaining({ jobId: "j-ref", meteredBaseCredits: 3325 }))

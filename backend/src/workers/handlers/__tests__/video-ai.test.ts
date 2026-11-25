@@ -266,6 +266,8 @@ describe("image-to-video handler", () => {
       voiceoverVolume: 100,
       backgroundVolume: 30,
       keepOriginalAudio: false,
+      // An HDR picture is copied as it is (decided 2026-11-25); any other merges as before.
+      keepHdrPicture: true,
     }]])
 
     // Should watermark the merged file
