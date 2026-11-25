@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useSurfaceAvailabilityLoader } from "@/hooks/use-surface-availability-loader"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
 import { useT } from "@/lib/i18n"
@@ -11,6 +12,9 @@ export default function PresentPage() {
   const { shareToken } = useParams<{ shareToken: string }>()
   const navigate = useNavigate()
   const { loading: authLoading } = useAuth()
+  // What this install runs, as the editor reads it: the live estimate prices a
+  // node the way the run takes it (a mode this install cannot run is not quoted).
+  useSurfaceAvailabilityLoader()
   const loadSharedWorkflow = usePresentationStore((s) => s.loadSharedWorkflow)
   const executionStatus = usePresentationStore((s) => s.executionStatus)
   const errorMessage = usePresentationStore((s) => s.errorMessage)

@@ -14,7 +14,7 @@ import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { useLoadUserSettings } from "@/hooks/use-load-user-settings"
 import { useAuth } from "@/hooks/use-auth"
 import { useEmbedSessionHandoff, isEmbedded } from "@/hooks/use-embed-session-handoff"
-import { loadSurfaceAvailability, resetSurfaceAvailability } from "@/lib/surface-availability"
+import { useSurfaceAvailabilityLoader } from "@/hooks/use-surface-availability-loader"
 import { loadScene3DProAvailability } from "@/lib/scene3d-pro-availability"
 import { watchEditPlanModes } from "@/lib/edit-plan-modes"
 import { getAuthHeaders } from "@/lib/api"
@@ -65,14 +65,8 @@ export default function DashboardLayout() {
   // admin runtime override can't ride the static /config.js profile, so the
   // picker / model-dropdown filters read this fetched set (the profile's own
   // lists are their pre-fetch fallback; the backend refuses denied types regardless).
-  // Keyed on the user: the answer is per viewer (an admin's includes nodes their
-  // users must not be offered), so it is dropped on sign-out and on a change of
-  // account instead of lingering until — or unless — the next fetch lands.
-  useEffect(() => {
-    if (authLoading) return
-    if (user) void loadSurfaceAvailability(getAuthHeaders, user.id)
-    else resetSurfaceAvailability()
-  }, [authLoading, user])
+  // The same loader every runner page outside the dashboard calls.
+  useSurfaceAvailabilityLoader()
 
   // Engine readiness for 3D Render Pro — the picker hides the node until the
   // install answers "yes". Same authenticated, once-per-session shape as the

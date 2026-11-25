@@ -1,3 +1,4 @@
+// @test-reads-none lists only the OS temp folder, to see its own download's temp folder removed
 /**
  * Media resolution for the direct Gemini lane.
  *
@@ -6,8 +7,22 @@
  * regression here shows up as a model that silently "can't see" the video —
  * not as an error. Hence the coverage.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest"
+import { readdir, rm } from "node:fs/promises"
 import type { GoogleGenAI } from "@google/genai"
+
+/** This file's own temp folder (the module's `tmpdir()`), so a check that its
+ *  download left nothing behind cannot see another test file's folders. */
+const privateTmp = vi.hoisted(() => ({ dir: "" }))
+vi.mock("node:os", async (importOriginal) => {
+  const os = await importOriginal<typeof import("node:os")>()
+  const { mkdtempSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  privateTmp.dir = mkdtempSync(join(os.tmpdir(), "gemini-media-test-"))
+  const tmpdir = () => privateTmp.dir
+  return { ...os, tmpdir, default: { ...os, tmpdir } }
+})
+afterAll(async () => { await rm(privateTmp.dir, { recursive: true, force: true }) })
 
 const safeFetch = vi.fn()
 vi.mock("../../safe-fetch.js", () => ({ safeFetch }))
@@ -445,5 +460,82 @@ describe("inline video bytes need no network and are validated first", () => {
       { text: "describe this clip" },
     ])
     expect(safeFetch).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The 120 s download limit ends the BODY, not only the request: a body that
+ * keeps its connection open and never ends is stopped at the limit even when
+ * the fetch ignores its signal (the stub below does), and nothing is uploaded.
+ */
+describe("the download limit ends a body that never finishes", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }) })
+  afterEach(() => { vi.useRealTimers() })
+
+  /** A body that sends one chunk, then holds the stream open for ever. */
+  function endlessResponse(headers: Record<string, string>) {
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array(64).fill(1)) },
+      cancel,
+    })
+    // Ignores init.signal on purpose: the limit must not depend on the fetch honouring it.
+    safeFetch.mockImplementation(async () => new Response(body, { status: 200, headers }))
+    return cancel
+  }
+
+  const uploadDirs = async () => (await readdir(privateTmp.dir)).filter((n) => n.startsWith("gemini-upload-"))
+
+  it("on the upload path: rejects at 120 s naming the limit, cancels the body, removes the temp dir, uploads nothing", async () => {
+    const cancel = endlessResponse({ "content-type": "video/mp4" })
+    const ai = fakeAi()
+    const attempt = blockToGeminiPart(ai, { type: "video", url: "https://r2.example/endless.mp4" })
+    const settled = attempt.then(() => undefined, (e: unknown) => e)
+
+    await vi.advanceTimersByTimeAsync(119_999)
+    expect(cancel).not.toHaveBeenCalled()
+    // The download is writing into its own temp folder (in this file's tmpdir).
+    expect(await uploadDirs()).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    const err = await settled
+    expect(err).toMatchObject({ name: "TimeoutError", message: "Download timeout: over its 120 s limit" })
+    expect(cancel).toHaveBeenCalled()
+    expect(ai.files.upload).not.toHaveBeenCalled()
+    expect(await uploadDirs()).toEqual([])
+  })
+
+  it("on the inline path: a small declared body that never ends is stopped at 120 s too", async () => {
+    const cancel = endlessResponse({ "content-type": "image/png", "content-length": "1024" })
+    const attempt = blockToGeminiPart(fakeAi(), { type: "image", url: "https://r2.example/endless.png" })
+    const settled = attempt.then(() => undefined, (e: unknown) => e)
+
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(await settled).toMatchObject({ name: "TimeoutError", message: "Download timeout: over its 120 s limit" })
+    expect(cancel).toHaveBeenCalled()
+  })
+
+  it("the fetch and the body read get the same signal; the fetch's own timer is only a backstop past the limit", async () => {
+    safeFetch.mockResolvedValue(bodyResponse(Buffer.from("stream"), { "content-type": "video/mp4" }))
+    await blockToGeminiPart(fakeAi(), { type: "video", url: "https://r2.example/ok.mp4" })
+    const init = safeFetch.mock.calls[0]![1] as { timeoutMs: number; signal: AbortSignal }
+    expect(init.timeoutMs).toBe(125_000)
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    expect(init.signal.aborted).toBe(false)
+  })
+
+  it("stops counting once the bytes are held: a processing wait past 120 s still succeeds", async () => {
+    safeFetch.mockResolvedValue(bodyResponse(Buffer.from("x".repeat(1024)), { "content-type": "video/mp4" }))
+    // 90 polls at 2 s: 180 s of processing after the download finished.
+    const ai = fakeAi({ states: [...Array(90).fill("PROCESSING"), "ACTIVE"] })
+    const attempt = blockToGeminiPart(ai, { type: "video", url: "https://r2.example/slow-processing.mp4" })
+    const settled = attempt.then((v) => v, (e: unknown) => e)
+    // Let the real file write finish (fake time stands still meanwhile).
+    while (ai.files.upload.mock.calls.length === 0) await new Promise((r) => setImmediate(r))
+
+    await vi.advanceTimersByTimeAsync(200_000)
+
+    expect(await settled).toHaveProperty("fileData")
   })
 })
