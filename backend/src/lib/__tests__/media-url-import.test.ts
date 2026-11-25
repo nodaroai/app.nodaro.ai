@@ -1,5 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+// @test-reads-none lists only the OS temp folder, to see its own download's temp folder removed
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest"
 import { promises as nodeFs } from "node:fs"
+import { readdir, rm } from "node:fs/promises"
+
+/** This file's own temp folder (the module's `tmpdir()`), so a check that its
+ *  download left nothing behind cannot see another test file's folders. */
+const privateTmp = vi.hoisted(() => ({ dir: "" }))
+vi.mock("node:os", async (importOriginal) => {
+  const os = await importOriginal<typeof import("node:os")>()
+  const { mkdtempSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  privateTmp.dir = mkdtempSync(join(os.tmpdir(), "media-url-import-test-"))
+  const tmpdir = () => privateTmp.dir
+  return { ...os, tmpdir, default: { ...os, tmpdir } }
+})
+afterAll(async () => { await rm(privateTmp.dir, { recursive: true, force: true }) })
 
 vi.mock("../safe-fetch.js", () => ({ safeFetch: vi.fn() }))
 vi.mock("../storage.js", () => ({ uploadLocalFileToR2Key: vi.fn() }))
@@ -231,5 +246,88 @@ describe("importRecordingFromUrl — concurrency cap", () => {
     expect(r3).toMatchObject({ ok: false, status: 429, code: "too_many_imports" })
     release()
     await Promise.all([p1, p2])
+  })
+})
+
+/**
+ * The 40-minute limit ends the BODY, not only the request: a body that holds
+ * its connection open and never ends is stopped at the limit even when the
+ * fetch ignores its signal (this stub does), reported as a timeout (not as
+ * "cancelled"), with the stream cancelled and the temp folder gone.
+ */
+describe("importRecordingFromUrl — the download limit ends a body that never finishes", () => {
+  const LIMIT_MS = 40 * 60_000
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }) })
+  afterEach(() => { vi.useRealTimers() })
+
+  /** A recording that sends one chunk, then holds the stream open for ever. */
+  function endless() {
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array(64).fill(1)) },
+      cancel,
+    })
+    // Ignores init.signal on purpose: the limit must not depend on the fetch honouring it.
+    vi.mocked(safeFetch).mockImplementation(async () => new Response(body, { status: 200, headers: { "content-type": "video/mp4" } }))
+    return cancel
+  }
+  const importDirs = async () => (await readdir(privateTmp.dir)).filter((n) => n.startsWith("media-url-import-"))
+
+  it("stops at 40 minutes with a timeout naming the limit, cancels the body, removes the temp folder and probes nothing", async () => {
+    const cancel = endless()
+    const settled = importRecordingFromUrl("u-endless", URL_OK)
+
+    await vi.advanceTimersByTimeAsync(LIMIT_MS - 1)
+    expect(cancel).not.toHaveBeenCalled()
+    // The download is writing into its own temp folder (in this file's tmpdir).
+    expect(await importDirs()).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(await settled).toEqual({
+      ok: false,
+      status: 422,
+      code: "fetch_failed",
+      // The limit in words, never the link (a signed link's query is a credential).
+      message: "Import failed: Download timeout: over its 40 min limit",
+    })
+    expect(cancel).toHaveBeenCalled()
+    expect(probeMediaDuration).not.toHaveBeenCalled()
+    expect(await importDirs()).toEqual([])
+  })
+
+  it("the caller going away mid-body is still 'cancelled', not a timeout", async () => {
+    const cancel = endless()
+    const caller = new AbortController()
+    const settled = importRecordingFromUrl("u-gone", URL_OK, { signal: caller.signal })
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    caller.abort(new Error("client disconnected"))
+
+    expect(await settled).toMatchObject({ ok: false, code: "aborted", message: "Import was cancelled" })
+    expect(cancel).toHaveBeenCalled()
+  })
+
+  it("the fetch and the body pipeline get the same signal; the fetch's own timer is only a backstop past the limit", async () => {
+    vi.mocked(safeFetch).mockResolvedValue(mediaResponse("bytes", { "content-type": "video/mp4" }))
+    await importRecordingFromUrl("u-signal", URL_OK)
+    const init = vi.mocked(safeFetch).mock.calls[0]![1] as { timeoutMs: number; signal: AbortSignal }
+    expect(init.timeoutMs).toBe(LIMIT_MS + 5_000)
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it("stops counting once the file is held: a faststart past the limit still imports", async () => {
+    vi.mocked(safeFetch).mockResolvedValue(mediaResponse("bytes", { "content-type": "video/mp4" }))
+    let releaseFaststart: () => void = () => undefined
+    vi.mocked(faststartVideoFile).mockImplementation((path) => new Promise((resolve) => {
+      releaseFaststart = () => resolve({ path, outcome: "already-faststart" })
+    }))
+    const settled = importRecordingFromUrl("u-slow-remux", URL_OK)
+    // Let the real file write finish (fake time stands still meanwhile).
+    while (vi.mocked(faststartVideoFile).mock.calls.length === 0) await new Promise((r) => setImmediate(r))
+
+    await vi.advanceTimersByTimeAsync(LIMIT_MS + 60_000)
+    releaseFaststart()
+
+    expect(await settled).toMatchObject({ ok: true })
   })
 })

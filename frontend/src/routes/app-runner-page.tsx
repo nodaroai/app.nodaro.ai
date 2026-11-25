@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
+import { useSurfaceAvailabilityLoader } from "@/hooks/use-surface-availability-loader"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
@@ -38,6 +39,9 @@ export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
+  // What this install runs, as the editor reads it: the live estimate prices a
+  // node the way the run takes it (a mode this install cannot run is not quoted).
+  useSurfaceAvailabilityLoader()
 
   // Deep-linking query params
   const initialRunId = searchParams.get("run") ?? undefined

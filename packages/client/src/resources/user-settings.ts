@@ -54,7 +54,12 @@ export interface UserMcpPreferencesPatch {
 export interface UserSettings {
   /** The stored billing tier (`"free"`, `"basic"`, …). */
   tier: string | null
-  /** Whether generations are visible in the public gallery. */
+  /**
+   * Whether new generations are visible in the public gallery. Turning it off
+   * also takes every existing item out of the public gallery (see
+   * `UserSettingsSaved.hiddenFromGallery`); turning it back on republishes
+   * nothing.
+   */
   publicOutputs: boolean
   /** Per-template overrides of the system prompts, by template key. */
   promptTemplates: Record<string, string>
@@ -79,7 +84,16 @@ export interface UserSettings {
  * field of it.
  */
 export interface UserSettingsPatch {
-  /** `false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError` otherwise). */
+  /**
+   * `false` needs the Standard plan or above on Nodaro Cloud (`ForbiddenError`
+   * otherwise) and also takes every existing item out of the public gallery,
+   * in the same transaction as the setting, then makes one more pass after
+   * that commits for a generation that finished during it; from then on the
+   * server keeps new results private. If either step fails `update()` throws
+   * and no other field of the patch is written; sending `false` again is
+   * safe and finishes the job. `true` republishes nothing: items hidden by
+   * the switch stay private.
+   */
   publicOutputs?: boolean
   promptTemplates?: Record<string, string>
   /** Up to 100. */
@@ -94,7 +108,15 @@ export interface UserSettingsPatch {
 }
 
 /** What `update()` answers: the settings as saved (without `tier`). */
-export type UserSettingsSaved = Omit<UserSettings, "tier">
+export type UserSettingsSaved = Omit<UserSettings, "tier"> & {
+  /**
+   * How many existing items this update took out of the public gallery: the
+   * count when it sent `publicOutputs: false` (0 when none were public, as on
+   * a repeat), otherwise 0. Absent from a server that predates the field
+   * (an older or self-hosted install); read it as `?? 0`.
+   */
+  hiddenFromGallery?: number
+}
 
 export class UserSettingsResource {
   constructor(private client: NodaroClientCore) {}
@@ -114,7 +136,9 @@ export class UserSettingsResource {
    * settings as saved. A `NodaroError` with status 400 names an invalid
    * value (`validation_error`), or says so for a patch with nothing to
    * change; `ForbiddenError` for `publicOutputs: false` below the Standard
-   * plan; `NotFoundError` with no profile row.
+   * plan; `NotFoundError` with no profile row; a `NodaroError` with status 500
+   * or 503 when `publicOutputs: false` could not finish hiding the existing
+   * items (send it again; it is safe to repeat).
    */
   async update(patch: UserSettingsPatch): Promise<UserSettingsSaved> {
     const res = await this.client.request<{ data: UserSettingsSaved }>("PATCH", "/v1/user/settings", { body: patch })

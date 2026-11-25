@@ -46,7 +46,10 @@ export interface QuickFieldCardProps {
  * route to reject. Two app-only rules:
  *  - a restriction filters the options, and an UNSET field whose run value (the strip's `defaultValue`) is not
  *    allowed is moved onto the first allowed option — otherwise the run would quietly use a model the publisher
- *    ruled out (nothing is submitted, so the server has nothing to check);
+ *    ruled out (nothing is submitted, so the server has nothing to check) — onto an OPEN option only, never a
+ *    greyed one; with none open it stays unset;
+ *  - when every allowed value is unavailable here (withheld from this deployment or greyed) the card stays,
+ *    showing the value with why, so the user sees which field stops the run;
  *  - read-only never writes.
  */
 export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, customLabel, onPatch }: QuickFieldCardProps) {
@@ -66,6 +69,16 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `availability` is the version the filter reads through
   }, [control, nodeData, allowedValues, availability])
 
+  // Everything the control declares that the publisher allows, offered here or not.
+  const allowedAll = useMemo<ReadonlyArray<QuickConfigOption>>(() => {
+    const all = allQuickConfigOptions(control, nodeData)
+    return allowedValues ? all.filter((o) => allowedValues.some((av) => String(av) === o.value)) : all
+  }, [control, nodeData, allowedValues])
+  // The options a run can take: offered here and not greyed.
+  const open = useMemo(() => options.filter((o) => !o.disabled), [options])
+  // The field has allowed values, but none this install can run.
+  const blocked = open.length === 0 && allowedAll.length > 0
+
   const stored = readQuickConfigValue(control, nodeData)
   const effective = stored !== "" ? stored : (control.defaultFor?.(nodeData) ?? control.defaultValue ?? "")
 
@@ -83,13 +96,43 @@ export function QuickFieldCard({ control, nodeData, allowedValues, readOnly, cus
       onPatchRef.current(snap)
       return
     }
-    if (stored === "" && allowedValues && options.length > 0 && !options.some((o) => o.value === effective)) {
+    // Only ever onto an option the run can take: a greyed one would be refused.
+    if (stored === "" && allowedValues && open.length > 0 && !open.some((o) => o.value === effective)) {
       // A field with a model's own default never lands on Auto by itself.
-      const first = (control.defaultFor ? options.find((o) => o.value !== "auto") : undefined) ?? options[0]!
+      const first = (control.defaultFor ? open.find((o) => o.value !== "auto") : undefined) ?? open[0]!
       onPatchRef.current(quickConfigSnapWrite(control, first.value))
     }
-  }, [control, stored, effective, options, nodeData, allowedValues, readOnly, autoCorrect, keepRetained])
+  }, [control, stored, effective, options, open, nodeData, allowedValues, readOnly, autoCorrect, keepRetained])
 
+  const unavailableHere = t("vidcfg.nodaroModeTransparentUnavailable")
+  if (blocked) {
+    // The value the node holds, else the one it runs as when the publisher allows it, else the first allowed.
+    const value = stored !== "" ? stored : allowedAll.some((o) => o.value === effective) ? effective : allowedAll[0]!.value
+    const held = allowedAll.find((o) => o.value === value) ?? allQuickConfigOptions(control, nodeData).find((o) => o.value === value)
+    const reasonOf = (o: QuickConfigOption) => (o.disabled && o.reason ? o.reason : unavailableHere)
+    const label = customLabel ?? control.ariaLabel
+    return (
+      <GlassCard>
+        <Label className={cn(LABEL_CLS, "mb-2 block")}>{label}</Label>
+        <Select value={undefined} onValueChange={() => undefined} disabled={readOnly}>
+          <SelectTrigger className={cn("w-full", readOnly && "opacity-70 cursor-default")} aria-label={label}>
+            <SelectValue placeholder={held ? localizeOption(held.label) : value} />
+          </SelectTrigger>
+          <SelectContent>
+            {allowedAll.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="opacity-60 cursor-not-allowed" aria-disabled title={reasonOf(o)}>
+                <span>{localizeOption(o.label)}</span>
+                <span className="ms-1.5 text-xs text-muted-foreground">- {reasonOf(o)}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="mt-1.5 text-xs text-muted-foreground" role="note">
+          {held?.disabled && held.reason ? held.reason : unavailableHere}
+        </p>
+      </GlassCard>
+    )
+  }
   if (options.length === 0) return null
 
   // An in-range custom value (a panel slider's 46s) is valid though no preset lists it: show it as it is.

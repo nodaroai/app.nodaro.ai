@@ -59,21 +59,45 @@ export function useUserSettings(userId: string | undefined) {
   })
 }
 
+/** What switching gallery visibility answers. */
+export interface PublicOutputsSaved {
+  publicOutputs: boolean
+  /** How many existing items this switch took out of the public gallery (0 when switching to public). */
+  hiddenFromGallery: number
+}
+
 export function useUpdatePublicOutputsMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ userId, publicOutputs }: { userId: string; publicOutputs: boolean }) => {
+    mutationFn: async ({ userId, publicOutputs }: { userId: string; publicOutputs: boolean }): Promise<PublicOutputsSaved> => {
       const authHeaders = await getAuthHeaders()
       const res = await fetch(`/v1/user/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ userId, publicOutputs }),
       })
-      if (!res.ok) throw new Error("Failed to update settings")
-      return res.json()
+      let json: { data?: Record<string, unknown>; error?: unknown } | null = null
+      try {
+        json = await res.json()
+      } catch {
+        json = null
+      }
+      if (!res.ok) {
+        // The server's own sentence (a plan gate, "nothing was changed") reads
+        // better than a generic one.
+        const message = typeof json?.error === "string" ? json.error : "Failed to update settings"
+        throw new Error(message)
+      }
+      const data = (json?.data ?? json ?? {}) as Record<string, unknown>
+      return {
+        publicOutputs: typeof data.publicOutputs === "boolean" ? data.publicOutputs : publicOutputs,
+        hiddenFromGallery: typeof data.hiddenFromGallery === "number" ? data.hiddenFromGallery : 0,
+      }
     },
     onSuccess: (_data, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })
+      // Going private takes items out of the gallery; any cached page of it is stale.
+      qc.invalidateQueries({ queryKey: queryKeys.gallery.all })
     },
   })
 }

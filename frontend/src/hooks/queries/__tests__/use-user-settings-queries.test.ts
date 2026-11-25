@@ -23,6 +23,7 @@ vi.mock("@/lib/query-keys", () => ({
       all: ["user-settings"],
       detail: (userId: string) => ["user-settings", userId],
     },
+    gallery: { all: ["gallery"] },
   },
 }))
 
@@ -203,6 +204,38 @@ describe("useUpdatePublicOutputsMutation", () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["user-settings", "u1"],
     })
+    // Going private takes items out of the gallery: its cached pages are stale.
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["gallery"] })
+  })
+
+  it("mutationFn answers how many items the switch hid", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: { publicOutputs: false, hiddenFromGallery: 8221 } }) })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdatePublicOutputsMutation()
+
+    await expect(captured.mutationFn({ userId: "u1", publicOutputs: false })).resolves.toEqual({
+      publicOutputs: false,
+      hiddenFromGallery: 8221,
+    })
+  })
+
+  it("mutationFn passes the server's sentence on a failure", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: "Couldn't make outputs private. Please try again." }),
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdatePublicOutputsMutation()
+
+    await expect(captured.mutationFn({ userId: "u1", publicOutputs: false })).rejects.toThrow("Please try again")
   })
 })
 
