@@ -546,7 +546,9 @@ export async function dispatchJob(
     return parseFailure(res.body)
   }
   const result = jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
-  const notes = opts.surfaceWarnings ? routeWarnings(res.body).map((n) => `Note: ${n}`) : []
+  const notes = opts.surfaceWarnings
+    ? [...routeWarnings(res.body).map((n) => `Note: ${n}`), ...routeAdjustments(res.body).map((n) => `Adjusted: ${n}`)]
+    : []
   if (flow && (await commitFlowNode(flow, jobId))) notes.push(flowLinkText(flow, session.addresses))
   if (notes.length === 0) return result
   const [first, ...rest] = result.content
@@ -570,3 +572,20 @@ function routeWarnings(body: string): string[] {
   }
 }
 
+
+/**
+ * The reasons of a route answer's `adjustments` array: each lever the server
+ * fitted to the model (an 8K size moved to the model's largest, a set dropped).
+ * None when absent or malformed.
+ */
+export function routeAdjustments(body: string | { adjustments?: unknown }): string[] {
+  try {
+    const parsed = (typeof body === "string" ? JSON.parse(body) : body) as { adjustments?: unknown }
+    if (!Array.isArray(parsed.adjustments)) return []
+    return parsed.adjustments
+      .map((a) => (a && typeof a === "object" && typeof (a as { reason?: unknown }).reason === "string" ? (a as { reason: string }).reason : ""))
+      .filter((m) => m.length > 0)
+  } catch {
+    return []
+  }
+}

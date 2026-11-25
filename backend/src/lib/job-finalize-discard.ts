@@ -118,16 +118,21 @@ async function fenceFinalizeClaim(jobId: string, claimTs: string, statuses: read
  * Returns the fenced claim's timestamp (the caller releases with it), or null
  * when it deleted nothing and the claim is as it was. Never throws.
  */
+/** A job's set size when it is a SET job, `null` when it is not; see `discardOwnedKeys`. */
+export type SetHint = { readonly setCount: number } | null
+
 export async function discardUnfinishedStores(
   jobId: string,
   userId: string | undefined,
   stored: readonly string[],
   claimTs: string,
   statuses: readonly JobStatus[],
+  /** Whether the job is a SET (its set size), when the caller already knows: no row read. */
+  set?: SetHint,
 ): Promise<string | null> {
   if (stored.length === 0) return null
   let keys: readonly string[] = []
-  let discard: ((jobId: string, userId: string | undefined, keys: readonly string[]) => Promise<void>) | undefined
+  let discard: ((jobId: string, userId: string | undefined, keys: readonly string[], opts?: { set?: SetHint }) => Promise<void>) | undefined
   try {
     // Loaded only here, so a finalize that completes never loads the delete lane.
     const lane = await import("./discard-job-copies.js")
@@ -142,6 +147,6 @@ export async function discardUnfinishedStores(
   const fenced = await fenceFinalizeClaim(jobId, claimTs, statuses)
   if (!fenced) return null
   // Never throws (it logs its own failure): the fenced claim is returned either way, for the release.
-  await discard(jobId, userId, keys)
+  await discard(jobId, userId, keys, set !== undefined ? { set } : {})
   return fenced
 }

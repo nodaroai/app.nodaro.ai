@@ -521,6 +521,9 @@ export async function cancelOwnedJob(jobId: string, userId: string): Promise<Can
   // R38: a `not-started` verdict is re-checked AFTER the flip (the worker may
   // have started its call in between): the job is not marked already-settled.
   await refundReservedHolds([jobId], { meteredSettled: metered === "not-started" ? new Set() : new Set([jobId]) })
+  // A cancelled SET job (Kling Image 4.0) leaves no picture behind: what its
+  // stores wrote is deleted and given back. A no-op for every other job.
+  if (typeof input?.setHoldCreditId === "string") await (await import("./image-set-storage.js")).discardEndedSetImages(jobId)
 
   // A use-case wrapper owns a hidden run: stop it too (its fee hold was
   // refunded above; the run's finaliser then finds the wrapper final and moves

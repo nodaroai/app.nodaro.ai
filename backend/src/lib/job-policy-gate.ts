@@ -22,6 +22,7 @@
  * block and the hold WRITE the null; declining to write the key would leave the
  * residue in place.
  */
+import { setStoreLimit } from "./image-set-storage.js"
 import { supabase } from "./supabase.js"
 import { hasAdmin } from "./config.js"
 import { markJobFailed, markJobFailedDetailed, type JobFailureOutcome } from "./job-failure.js"
@@ -317,6 +318,8 @@ async function applyBlock(
   userMessage: string,
   /** What was ALREADY on the row, when we could read it. */
   rowOutputData: Record<string, unknown> | null,
+  /** The row's request, when we could read it: whether the job is a SET. */
+  rowInputData?: Record<string, unknown> | null,
 ): Promise<ResultGateOutcome> {
   const { output_data: _withheld, ...columns } = fields
   const flipped = await markJobFailedDetailed(jobId, {
@@ -359,7 +362,7 @@ async function applyBlock(
   // at its public keys forever.
   // Their bytes go back to the owner's storage too: the job stored them, and
   // nothing will ever name them now.
-  await deleteOwnedObjects(jobId, allOwnedObjects(jobId, fields.output_data as Record<string, unknown> | undefined, rowOutputData), { refundOwner: true })
+  await deleteOwnedObjects(jobId, allOwnedObjects(jobId, fields.output_data as Record<string, unknown> | undefined, rowOutputData), { refundOwner: true, ...setHintOf(rowInputData) })
   // LAST, for the same reason as the hold: a row that is `failed` with a
   // policy-block hint while its decision still says `applied IS NULL` is a
   // block whose CAS landed and whose refund did not — the one residue this
@@ -472,7 +475,7 @@ async function reapplyStoredVerdict(
     const owned = ownedHeldObjects(jobId, extractJobOutputs(outputData), undefined, relayStemOf(fields))
     return await applyHold(jobId, fields, owned, commitReplay, reused.id, reused.policyId, read.row.job_type, read.row.user_id)
   }
-  return await applyBlock(jobId, fields, reused.id, reused.policyId, storedBlockMessage(reused), read.row.output_data)
+  return await applyBlock(jobId, fields, reused.id, reused.policyId, storedBlockMessage(reused), read.row.output_data, read.row.input_data)
 }
 
 /**
@@ -655,6 +658,7 @@ export async function applyResultGate(
     decision.policyId ?? PLATFORM_POLICY_ID,
     userMessage,
     row.output_data,
+    row.input_data,
   )
 }
 
@@ -705,7 +709,7 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
     // the complete withheld payload, while `held_objects` is the review UI's
     // bounded list. Deleting only the latter would strand the tail of a job
     // that produced more owned objects than a human would page through.
-    .select("id, status, held_completion_fields, held_objects, held_output_data, user_id, restricted_at")
+    .select("id, status, held_completion_fields, held_objects, held_output_data, user_id, restricted_at, setHoldCreditId:input_data->>setHoldCreditId")
     .eq("id", jobId)
     .single()
   const row = data as
@@ -753,7 +757,7 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
   // the reservation, and counted with it (a caller checks the count before
   // telling the user their credits came back).
   const refunded = (await refundReservedCreditsForJob(jobId)) + (await refundSettledLlmChargesSafely(jobId))
-  await deleteOwnedObjects(jobId, [...(row.held_objects ?? []), ...allOwnedObjects(jobId, row.held_output_data)])
+  await deleteOwnedObjects(jobId, [...(row.held_objects ?? []), ...allOwnedObjects(jobId, row.held_output_data)], setHintOf({ setHoldCreditId: (row as { setHoldCreditId?: unknown }).setHoldCreditId }))
   await recordJobPolicyDecision({
     jobId,
     hookPoint: input.hookPoint,
@@ -779,7 +783,7 @@ export async function rejectHeldJobRow(jobId: string, input: HeldRejectionInput)
 export async function withdrawHeldJob(jobId: string): Promise<HeldResolution> {
   const { data } = await supabase
     .from("jobs")
-    .select("id, status, held_objects, held_output_data, user_id, restricted_at")
+    .select("id, status, held_objects, held_output_data, user_id, restricted_at, setHoldCreditId:input_data->>setHoldCreditId")
     .eq("id", jobId)
     .single()
   const row = data as
@@ -818,7 +822,7 @@ export async function withdrawHeldJob(jobId: string): Promise<HeldResolution> {
     console.error(`[job-policy] settling the open side holds of withdrawn job ${jobId} failed — left to the side-hold sweep:`, err)
   }
   const refunded = reservationRefunded + (await refundSettledLlmChargesSafely(jobId))
-  await deleteOwnedObjects(jobId, [...(row.held_objects ?? []), ...allOwnedObjects(jobId, row.held_output_data)])
+  await deleteOwnedObjects(jobId, [...(row.held_objects ?? []), ...allOwnedObjects(jobId, row.held_output_data)], setHintOf({ setHoldCreditId: (row as { setHoldCreditId?: unknown }).setHoldCreditId }))
   await recordJobPolicyDecision({
     jobId,
     hookPoint: "review",
@@ -829,4 +833,15 @@ export async function withdrawHeldJob(jobId: string): Promise<HeldResolution> {
     userId: row.user_id,
   })
   return { ok: true, refunded }
+}
+
+/**
+ * Whether a job is a SET (Kling Image 4.0), read from the request the caller
+ * already has: its size, or null for any other job; nothing when the request
+ * was not read (the clean-up then reads the row).
+ */
+function setHintOf(inputData: Record<string, unknown> | null | undefined): { set?: { setCount: number } | null } {
+  if (inputData === undefined) return {}
+  const hold = inputData?.setHoldCreditId
+  return { set: typeof hold === "string" && hold.length > 0 ? { setCount: setStoreLimit(hold) } : null }
 }

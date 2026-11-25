@@ -15,7 +15,7 @@
  *
  * `// @test-watches` is for the test selector; the reads are direct.
  */
-// @test-watches backend/src/lib/prompt-policy.ts backend/src/lib/insert-job.ts backend/src/lib/http-errors.ts backend/src/services/workflow-engine/node-executor.ts backend/src/routes/character-training.ts backend/src/*.ts Dockerfile
+// @test-watches backend/src/providers/kie/image.ts backend/src/lib/prompt-policy.ts backend/src/lib/insert-job.ts backend/src/lib/http-errors.ts backend/src/services/workflow-engine/node-executor.ts backend/src/routes/character-training.ts backend/src/*.ts Dockerfile
 import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
@@ -26,6 +26,21 @@ const SRC = resolve(HERE, "..", "..")
 const read = (p: string): string => readFileSync(resolve(SRC, p), "utf8")
 
 describe("content-guard totality", () => {
+  // Kling Image 4.0 rewrites the prompt after the prompt funnel (its mention
+  // pass removes the `@` of undeclared words): it asks the guard again on the
+  // text it sends, between building the body and creating the task. (Kling 4.0
+  // video's wire check is a change of its own, not yet made.)
+  it.each([
+    ["providers/kie/image.ts", "buildKlingImage4Request(", "runKieTask("],
+  ])("%s asks the guard on the rewritten prompt before the provider is called", (file, build, call) => {
+    const src = read(file)
+    const at = src.indexOf(build)
+    expect(at, `${file} no longer builds with ${build}`).toBeGreaterThan(-1)
+    const guard = src.indexOf("guardProviderWireText(", at)
+    expect(guard, `${file} sends the rewritten prompt without asking the guard`).toBeGreaterThan(at)
+    expect(guard).toBeLessThan(src.indexOf(call, at))
+  })
+
   it("the prompt funnel asks the guard before any policy runs", () => {
     const src = read("lib/prompt-policy.ts")
     const fn = src.slice(src.indexOf("export function applyPromptPolicies("))

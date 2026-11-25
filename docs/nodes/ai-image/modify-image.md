@@ -50,6 +50,7 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 | Qwen / Qwen Edit | Versatile transformation and targeted editing |
 | Seedream 5 Pro / Seedream 5 Lite / Seedream 5 Flash / Seedream Edit | Seedream image-to-image — Pro for flagship instruction edits, Flash for fast low-cost edits (1K or 2K), Lite and Edit for lighter transforms |
 | MiniMax H3 Image | Change or combine up to 16 images in one edit, with readable text inside the picture, up to about 16 MP at 4K; priced by size and by each image |
+| Kling Image 4.0 | Edits and pictures from up to 10 images, the source included, natively at 2K, 4K or 8K, with text in quotation marks drawn into the picture; priced by size and by each image (more than 10 is refused before anything is charged) |
 | FLUX 3 Klein | Fast, low-cost edits from the light model of FLUX 3, with up to 10 images, the source included (more is refused before anything is charged); priced by size alone, the images cost nothing extra; PNG or JPEG |
 | Kontext Multi (Open) | Multi-image Flux Kontext via Replicate (up to 2 reference images) |
 | Flux 2 Pro / Flux 2 Max (Safety Tolerance) | BFL Flux 2 via Replicate; Max supports up to 8 refs |
@@ -59,7 +60,7 @@ Seedream 5.5 (10 images), GPT Image 2.6 Flare and Sunburst and MiniMax H3
 Image (16 each) count the source too. Run on this node with more images than
 that is refused before anything is charged, saying how many to remove; in a
 workflow run they send their first 10 or 16 and leave the rest out. FLUX 3
-Klein refuses in both. See [Image to Image](./image-to-image.md#supported-providers).
+Klein and Kling Image 4.0 (10 images) refuse in both. See [Image to Image](./image-to-image.md#supported-providers).
 
 ## Pricing
 
@@ -75,6 +76,7 @@ Credits depend on the selected provider, and several providers cost more at high
 | Seedream 5 Pro | 21<!-- credits: seedream-5-pro-i2i --> (basic / 1K) → 66<!-- credits: seedream-5-pro-i2i:high --> (high / 2K) |
 | Seedream 5 Flash | 11<!-- credits: seedream-5-flash-i2i --> (1K or 2K) |
 | MiniMax H3 Image | 7<!-- credits: minimax-h3-image-i2i:2K:1ref --> (1K or 2K, one image) → 17<!-- credits: minimax-h3-image-i2i:4K:1ref --> (4K, one image); 28<!-- credits: minimax-h3-image-i2i:2K:16ref --> at 2K with sixteen images |
+| Kling Image 4.0 | 33<!-- credits: kling-image-4-i2i:2K:1ref --> (2K, the source only) → 49<!-- credits: kling-image-4-i2i:4K:1ref --> (4K) → 80<!-- credits: kling-image-4-i2i:8K:1ref --> (8K); each further input image adds to it, up to 46<!-- credits: kling-image-4-i2i:2K:10ref --> (2K, ten images) |
 | FLUX 3 Klein | 5<!-- credits: flux-3-klein-i2i:1K --> (1K) → 8<!-- credits: flux-3-klein-i2i:2K --> (2K) → 19<!-- credits: flux-3-klein-i2i:4K --> (4K), whatever the number of images |
 | Seedream 5.5 | 15<!-- credits: seedream-5-5-i2i:1K:1ref --> (1K or 1.5K, the source only) → 22<!-- credits: seedream-5-5-i2i:2K:1ref --> (2K); each further input image adds to it, up to 58<!-- credits: seedream-5-5-i2i:2K:10ref --> (2K, ten images) |
 | Ideogram Edit / Remix | 50<!-- credits: ideogram-edit --> (Balanced) → 33<!-- credits: ideogram-edit:TURBO --> (Turbo) / 66<!-- credits: ideogram-edit:QUALITY --> (Quality) |

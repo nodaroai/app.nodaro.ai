@@ -361,6 +361,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
   "backend/src/lib/job-policy-outputs.ts": "deletes only keys in the blocked job's own key family (isOwnedObjectKey)",
   "backend/src/ee/lib/trends/run-delete.ts":
     "deletes only keys in the deleted run's own jobs' key family (ownedJobOutputKeys → isOwnedObjectKey), none a library row still names; the run's library rows go through permanentlyDeleteAsset, which asks key-ownership",
+  "backend/src/lib/image-set-storage.ts":
+    "deletes only the keys a set's own store wrote, in its own job's key family (isOwnedObjectKey); never a key from a row",
   "backend/src/lib/discard-job-copies.ts":
     "deletes only the copies the failed run itself just wrote, in its own job's key family (isOwnedObjectKey); never a key from a row",
   "backend/src/lib/workflow-delete.ts": "recast_audio_bases rows are service-role-only (334)",
@@ -389,6 +391,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
     "deletes only the run's side-by-side file under the key it builds itself (sideBySideVideoKey: its own upload when the record cannot be written, an older recipe's when replaced); no key comes from a row",
   "backend/src/lib/cast-swap-depth-clips-sweep.ts":
     "lists the plugin-written cast-swap/depth-clips/ prefix by age; no key comes from a row (the job a key names is read only to keep a make's or an unfinished run's)",
+  "backend/src/ee/lib/editor-projects/bucket.ts":
+    "the video-editor projects' private bucket: its one caller (ee/lib/editor-projects/store.ts discardFile) deletes only a key the request wrote itself (a save or a version row the database refused), the key its own save call answered as replaced, the key the caller's own deleted project row named and the keys of that project's version rows, or the key a version row named that the request itself deleted (thinning), each checked to sit under that caller's own editor-projects/<userId>/<projectId>/ prefix; nothing else is in this bucket",
 }
 
 describe("every storage deleter asks whose object it is", () => {

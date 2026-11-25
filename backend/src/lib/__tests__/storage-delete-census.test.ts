@@ -49,6 +49,7 @@ const RAW_DELETES_ALLOWED: Readonly<Record<string, { count: number; why: string;
     setting: "asks",
   },
   "lib/storage-delete.ts": { count: 2, why: "the funnel: it deletes, then records what failed", setting: "helpers" },
+
   "lib/storage-delete-retries.ts": {
     count: 1,
     why: "the retry pass: a failure counts an attempt on the existing record",
@@ -78,6 +79,11 @@ const RAW_DELETES_ALLOWED: Readonly<Record<string, { count: number; why: string;
   "services/scene3d-artifacts/object-store.ts": {
     count: 1,
     why: "a separate bucket with its own artifact cleanup lane; the retry pass deletes from the media bucket only",
+    setting: "asks",
+  },
+  "ee/lib/editor-projects/bucket.ts": {
+    count: 1,
+    why: "the video-editor projects' private bucket (EDITOR_PROJECTS_BUCKET); the retry pass deletes from the media bucket only, and a failed delete leaves an orphan no row can name (keys are never reused)",
     setting: "asks",
   },
 }

@@ -177,3 +177,4 @@ export type {
 } from "../node-execution-state.js"
 export { executionOutcome, countEmptyInputSkips } from "../execution-outcome.js"
 export type { ExecutionOutcome } from "../execution-outcome.js"
+export { manualReferenceImages, type ManualReferenceImage } from "../manual-reference-images.js"
