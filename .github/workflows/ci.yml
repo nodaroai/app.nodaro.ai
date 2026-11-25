@@ -1238,7 +1238,19 @@ jobs:
       #    host's cores instead (the README of tools/ci-runner says Node does)
       #    runs the single-threaded check in 270 s on 2 CPUs. `type_check`
       #    first prints what the slot gives (nproc, cgroup cpu.max and
-      #    memory.max).
+      #    memory.max), and after the check the slot's oom/oom_kill counts
+      #    (memory.events), so a kill says whether it was the memory limit.
+      #    The tree grew ~13% by 2026-11-24 and the backend was SIGKILLed
+      #    again after ~90 s (2 of 2 failed attempts, both alone on the
+      #    slot; re-runs passed in ~96 s). Most of the extra was declaration
+      #    output: backend/tsconfig.json asked for `declaration`,
+      #    `declarationMap` and `sourceMap`, which a `--noEmit` TS 7 run still
+      #    computes. On the Mac at GOMAXPROCS=2 --singleThreaded (2026-11-25):
+      #    with them 7.08-7.17 GB, 41-49 s; without 5.98-6.05 GB, 31-42 s
+      #    (src without tests: 3.69 GB, 9 s). They now live in
+      #    backend/tsconfig.build.json, the config that emits (Build Backend
+      #    Once and the Dockerfile, which still report declaration errors in
+      #    shipped code); tools/__tests__/typecheck-all.test.mjs holds that.
       #    Among the other four the parity tests get the CPU first: gen-skills,
       #    the surface report and gen-units run at `nice -n 10` (the checker's
       #    `nice -n 19` dates from when it shared the CPU), and the parity
@@ -1304,6 +1316,7 @@ jobs:
             echo "Slot: nproc $(nproc), cgroup cpu.max $(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo n/a), memory.max $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo n/a)"
             nice -n 19 env GOMEMLIMIT=4GiB npm run typecheck -- --serial frontend packages/cli packages/shared || status=1
             nice -n 19 env GOMEMLIMIT=4GiB GOMAXPROCS=2 npm run typecheck -- backend -- --singleThreaded || status=1
+            echo "Slot memory.events after the check: $(grep -E '^oom(_kill)? ' /sys/fs/cgroup/memory.events 2>/dev/null | tr '\n' ' ' || echo n/a)"
             return $status
           }
 
