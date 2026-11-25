@@ -2,6 +2,7 @@
 import { StrictMode } from "react"
 import { render, cleanup, act, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 
 /**
  * The v2 readiness contract, at the component boundary.
@@ -81,7 +82,7 @@ async function until(assertion: () => void): Promise<void> {
   // `waitFor` already wraps its polling in `act`; nesting it inside another
   // `act` deadlocks, because the outer one never yields to the timers the
   // inner one is waiting on.
-  await waitFor(assertion, { timeout: 2000 })
+  await waitFor(assertion, { timeout: scaledTimeout(2000) })
 }
 
 beforeEach(() => {

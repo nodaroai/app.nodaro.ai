@@ -7,7 +7,7 @@
 // limits), no test sets a file-wide limit below the CI default without
 // `scaledTimeout`, every workspace whose tests use Testing Library gives its
 // waits (findBy*, waitFor) the shared CI limit in a setup file and no file
-// sets that limit lower, the options are empty outside CI, the CI script that
+// sets that limit lower (nor gives one wait a plain limit below it), the options are empty outside CI, the CI script that
 // replaces the config's reporters names the slow-tests reporter too, and the
 // reporter lists exactly the tests that leaned on the default limit.
 import { test } from "node:test"
@@ -135,6 +135,26 @@ test("no file sets Testing Library's wait limit below the CI value as a plain nu
   }
   // A file-wide configure({ asyncUtilTimeout: 2000 }) would give every wait in it LESS time in CI than the shared default.
   assert.deepEqual(low, [], "use configure({ asyncUtilTimeout: scaledTimeout(ms) }) or the shared testingLibraryOptions() from tools/vitest/ci-limits.mjs")
+})
+
+test("no Testing Library test gives one wait a plain limit below the CI value", () => {
+  // The files that use Testing Library: their `{ timeout: N }` is a wait's own limit
+  // (`waitFor(fn, { timeout })`, `findBy*(q, {}, { timeout })`), which replaces the
+  // shared one, so a plain number below CI_ASYNC_UTIL_TIMEOUT_MS gets LESS time on a
+  // slow CI host than a wait left on the default. A test-level `{ timeout: N }` that
+  // low would be shorter than the CI test limit too, so any such number is flagged.
+  // Only literal numbers are read: a limit held in a variable is not seen.
+  const files = execFileSync("git", ["grep", "-l", "-E", "from ['\"]@testing-library/(react|dom)['\"]", "--", ":(glob)**/*.test.*", ":(glob)**/__tests__/**"], { cwd: root, encoding: "utf8" })
+    .split("\n").filter(Boolean).filter((f) => !f.startsWith("tools/"))
+  assert.ok(files.length > 100, `the listing found the Testing Library test files: ${files.length}`)
+  const low = []
+  for (const f of files) {
+    for (const m of read(f).matchAll(/\btimeout\s*:\s*([0-9_]+)\b/g)) {
+      const ms = Number(m[1].replace(/_/g, ""))
+      if (ms < CI_ASYNC_UTIL_TIMEOUT_MS) low.push(`${f}: ${m[1]}`)
+    }
+  }
+  assert.deepEqual(low, [], "leave the wait on the shared limit, or give it { timeout: scaledTimeout(ms) } from tools/vitest/ci-limits.mjs")
 })
 
 test("testingLibraryOptions: empty locally (Testing Library's 1 s), the CI factor in CI", () => {

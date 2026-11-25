@@ -91,7 +91,7 @@ describe("Admin → Video Remake → Engine prompt", { timeout: scaledTimeout(20
     expect(await within(prism).findByText("motion opener", { selector: "p" })).toBeInTheDocument()
     const face = within(prism).getByLabelText("Identity: your text")
     await user.type(face, "Faces stay.")
-    await waitFor(() => expect(within(prism).getByLabelText("The assembled prompt")).toHaveTextContent("Faces stay."), { timeout: 3000 })
+    await waitFor(() => expect(within(prism).getByLabelText("The assembled prompt")).toHaveTextContent("Faces stay."), { timeout: scaledTimeout(3000) })
     expect(sentTo(`POST ${URL}/preview`)).toContainEqual({ engine: "nodaro-prism", style: "motion", overrides: { face: "Faces stay." } })
     expect(within(prism).queryByText("Default changed")).not.toBeInTheDocument()
   })

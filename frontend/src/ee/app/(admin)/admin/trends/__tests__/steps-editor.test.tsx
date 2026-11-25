@@ -512,6 +512,10 @@ describe("Shot list", { timeout: scaledTimeout(20_000) }, () => {
   const SHOT_ENVS = [shotEnv("production", true), shotEnv("staging", true)]
   const shotList = () => section("Shot list step")
   const precise = () => within(shotList()).getByRole("switch", { name: "Precise shot list" })
+  // The models list is read only after the defaults (ModelsReader), so a model picker can be on
+  // screen holding the default model alone (its value already right) before the list is in.
+  // Wait for the option about to be picked, not for the value.
+  const modelsListed = (picker: HTMLElement) => within(picker).findByRole("option", { name: "Test Haiku" })
 
   beforeEach(() => {
     routes[`GET ${DEFAULTS_URL}`] = () => ({ body: { data: WITH_SHOT_LIST } })
@@ -533,7 +537,8 @@ describe("Shot list", { timeout: scaledTimeout(20_000) }, () => {
     await user.click(precise())
     expect(last()).toEqual({ shotList: { precise: { mode: "on" } } })
     const groups = within(shotList()).getAllByRole("combobox", { name: "Model" })
-    await waitFor(() => expect(groups[0]).toHaveValue("gemini-3.1-pro"))
+    expect(groups[0]).toHaveValue("gemini-3.1-pro")
+    await modelsListed(groups[0]!)
     await user.selectOptions(groups[0]!, "claude-haiku-5.5")
     expect(last()).toEqual({ shotList: { precise: { mode: "on", llm: { model: "claude-haiku-5.5", inputs: ["clip", "rolePhotos"], maxChars: 4000 } } } })
     await user.click(precise())
@@ -545,7 +550,8 @@ describe("Shot list", { timeout: scaledTimeout(20_000) }, () => {
     renderWith(<Harness envs={SHOT_ENVS} />)
     await waitFor(() => expect(precise()).toBeEnabled())
     const [flexModel] = within(shotList()).getAllByRole("combobox", { name: "Model" })
-    await waitFor(() => expect(flexModel).toHaveValue("gemini-3.1-pro"))
+    expect(flexModel).toHaveValue("gemini-3.1-pro")
+    await modelsListed(flexModel!)
     await user.selectOptions(flexModel!, "claude-haiku-5.5")
     expect(last()).toEqual({ shotList: { flex: { mode: "on", llm: { model: "claude-haiku-5.5", inputs: ["clip", "rolePhotos"], maxChars: 4000 } } } })
     await user.click(within(shotList()).getByRole("button", { name: "Flex shot list: use the engine's default" }))

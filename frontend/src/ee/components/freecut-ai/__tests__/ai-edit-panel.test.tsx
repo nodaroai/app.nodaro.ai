@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 
 const run = vi.hoisted(() => ({
@@ -250,7 +251,7 @@ describe("Edit with AI panel: before a run", () => {
     editor.videos = 2
     renderPanel()
     expect(queryRow("Switch cameras")).toBeNull()
-    expect(await screen.findByRole("checkbox", { name: /^Switch cameras/ }, { timeout: 2500 })).toBeTruthy()
+    expect(await screen.findByRole("checkbox", { name: /^Switch cameras/ }, { timeout: scaledTimeout(2500) })).toBeTruthy()
   })
 })
 
