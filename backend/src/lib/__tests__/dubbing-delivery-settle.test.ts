@@ -33,7 +33,7 @@ vi.mock("../../workers/shared.js", () => ({
   shouldSaveJobResult: vi.fn(async () => true),
   generateAndUploadThumbnail: vi.fn(async () => undefined),
   createAssetFromJob: vi.fn(async () => undefined),
-  watermarkLocalVideoAndUpload: vi.fn(async () => "https://cdn.example.com/videos/job-1.mp4"),
+  watermarkLocalVideoAndUpload: vi.fn(async () => ({ videoUrl: "https://cdn.example.com/videos/job-1.mp4" })),
 }))
 vi.mock("../credit-base-cost.js", () => ({
   baseCreditCostFor: vi.fn(async (id: string) => (id === "elevenlabs-dubbing" ? 40 : 999)),

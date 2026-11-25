@@ -35,7 +35,7 @@ describe("video-worker job-scratch wiring", () => {
     // The finally that holds it closes the try whose catch marks the row failed.
     const finallyAt = code.lastIndexOf("} finally {", discardAt)
     expect(finallyAt).toBeGreaterThan(-1)
-    const lastRun = code.lastIndexOf("runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx))")
+    const lastRun = code.lastIndexOf("runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)")
     expect(lastRun).toBeGreaterThan(-1)
     expect(finallyAt).toBeGreaterThan(lastRun)
     expect(finallyAt).toBeGreaterThan(code.lastIndexOf("await markJobFailed(jobId"))

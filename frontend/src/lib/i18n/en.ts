@@ -6567,6 +6567,7 @@ export const en = {
   "node.pausePreview": "Pause preview",
   "node.playPreview": "Play preview",
   "node.videoLoadFailed": "Video load failed",
+  "node.videoCannotPlayInBrowser": "This video couldn't be played here. Try downloading it.",
   "node.openUrl": "Open URL",
   "node.assembled": "Assembled",
   "node.startState": "Start state",

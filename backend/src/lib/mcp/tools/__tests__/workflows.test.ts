@@ -8,6 +8,9 @@ import { buildServer, callTool, listTools } from "./_helpers.js"
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))
+// The workflow delete goes through the one delete funnel (lib/workflow-delete.ts).
+const deleteFunnel = vi.hoisted(() => ({ deleteWorkflowWithPrivateMedia: vi.fn(async () => true) }))
+vi.mock("../../../workflow-delete.js", () => deleteFunnel)
 
 const { registerWorkflows } = await import("../workflows.js")
 const { supabase } = await import("../../../supabase.js")
@@ -245,12 +248,23 @@ describe("delete_workflow tool", () => {
   it("deletes a workflow that belongs to the mcp project", async () => {
     fromMock
       .mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID }, error: null }))
-      .mockReturnValueOnce(chain({ data: null, error: null }))
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
     const result = await callTool(server, "delete_workflow", { workflow_id: WORKFLOW_ID })
     expect(result.isError).toBeUndefined()
     expect(result.structuredContent?.deleted).toBe(true)
+    // Through the delete funnel, keyed by the session's user (decided 2026-11-25).
+    expect(deleteFunnel.deleteWorkflowWithPrivateMedia).toHaveBeenCalledWith({ workflowId: WORKFLOW_ID, userId: expect.any(String) })
+  })
+
+  it("a refused delete answers the funnel's error", async () => {
+    fromMock.mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID }, error: null }))
+    deleteFunnel.deleteWorkflowWithPrivateMedia.mockRejectedValueOnce(new Error("Failed to delete workflow: refused"))
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "delete_workflow", { workflow_id: WORKFLOW_ID })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("refused")
   })
 
   it("rejects a workflow from another project (and never issues the DELETE)", async () => {

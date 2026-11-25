@@ -82,12 +82,13 @@ export const handleCinematicAvatar: HandlerFn = async function handleCinematicAv
   await setJobProgress(job, ctx.jobId, 50)
 
   // HeyGen result URLs are signed + expiring — re-host to R2 immediately.
-  const r2Url = await uploadVideoMaybeWatermark(
+  const storedVideo = await uploadVideoMaybeWatermark(
     result.videoUrl,
     ctx.jobId,
     ctx.jobUserId,
     ctx.shouldWatermark,
   )
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
@@ -105,7 +106,7 @@ export const handleCinematicAvatar: HandlerFn = async function handleCinematicAv
       meteredCost: result.meteredCost,
       providerUsed: "heygen",
     },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       durationSec: result.durationSec,

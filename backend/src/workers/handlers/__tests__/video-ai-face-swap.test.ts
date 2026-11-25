@@ -50,7 +50,7 @@ function job(data: Record<string, unknown>) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.replicateFaceSwap.mockResolvedValue({ videoUrl: "https://replicate.example/out.mp4", cost: 0.05 })
-  mocks.uploadSwapWithSourceAudio.mockResolvedValue("https://r2.example/videos/job-1.mp4")
+  mocks.uploadSwapWithSourceAudio.mockResolvedValue({ videoUrl: "https://r2.example/videos/job-1.mp4" })
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://r2.example/thumbnails/job-1.png")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.faceSwapFaceImage.mockImplementation(async (url: string) => url)
@@ -63,7 +63,7 @@ describe("face-swap handler", () => {
     expect(mocks.replicateFaceSwap).toHaveBeenCalledWith(FACE, VIDEO, expect.objectContaining({ onTaskCreated: expect.any(Function) }))
     // The model returns the picture only; the source clip is where the sound comes from.
     expect(mocks.uploadSwapWithSourceAudio).toHaveBeenCalledWith("https://replicate.example/out.mp4", VIDEO, ctx)
-    expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example/videos/job-1.mp4" }))
+    expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ video: { videoUrl: "https://r2.example/videos/job-1.mp4" } }))
   })
 
   it("sends the face photo as fitted for the swap model (a large photo failed it)", async () => {

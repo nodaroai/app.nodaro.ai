@@ -61,6 +61,7 @@ import {
 import type { CreatedAssetMap } from "../../workflow-assets.js"
 import { describeEdgeAdjustments, normalizeWorkflowEdges, type EdgeAdjustment } from "../../workflow-edge-normalization.js"
 import { findUnroutableMedia, rehostForeignMedia } from "../../media-portability.js"
+import { deleteWorkflowWithPrivateMedia } from "../../workflow-delete.js"
 
 
 /** Refuse Cloud-only node types on editions that can't run them, plus any node
@@ -525,12 +526,15 @@ export function registerWorkflows({
         if ((existing as Record<string, unknown>).hub) {
           return err("That is the month's container of MCP conversations; delete a single conversation instead.")
         }
-        const { error } = await supabase
-          .from("workflows")
-          .delete()
-          .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-        if (error) return err(`Error: ${error.message}`)
+        // Through the one delete funnel (lib/workflow-delete.ts, decided
+        // 2026-11-25): its private media, covers and held steps go with it, and
+        // what its jobs recorded as stored is given back to each owner.
+        try {
+          const deleted = await deleteWorkflowWithPrivateMedia({ workflowId: args.workflow_id, userId: session.userId })
+          if (!deleted) return err(`Workflow not found ${projectNoun()}`)
+        } catch (e) {
+          return err(`Error: ${e instanceof Error ? e.message : String(e)}`)
+        }
         return ok(`Deleted workflow ${args.workflow_id} from the mcp project.`, {
           id: args.workflow_id,
           deleted: true,

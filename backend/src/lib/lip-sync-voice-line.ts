@@ -3,6 +3,7 @@ import { SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared/models"
 import { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 import { cleanupWorkDir, probeMediaStreams } from "../providers/video/ffmpeg-utils.js"
 import { watermarkLocalVideoAndUpload } from "../workers/shared.js"
+import type { StoredVideo } from "./video-result-store.js"
 import { draftAudioMuxMergeArgs, voiceTrackMuxRecipe } from "./seedance-draft-audio.js"
 import { isDrainAbortError } from "./worker-drain.js"
 
@@ -45,7 +46,7 @@ export class LipSyncVoiceLineError extends Error {
 /** What the step did with the provider's clip. */
 export type VoiceLineOutcome =
   /** The clip had no audio stream: the voice line was laid on it and THIS file stored. */
-  | { readonly kind: "muxed"; readonly url: string }
+  | { readonly kind: "muxed"; readonly stored: StoredVideo }
   /** The clip already carries audio: the caller stores it as it came. */
   | { readonly kind: "has-audio" }
   /** The clip could not be probed: the caller stores it as it came (see below). */
@@ -53,9 +54,9 @@ export type VoiceLineOutcome =
   /** The clip is silent and the voice line cannot be read: the caller stores the clip as it came (see below). */
   | { readonly kind: "voice-unreadable" }
 
-/** The stored voiced clip's URL, when the step made one. */
-export function voicedUrlOf(outcome: VoiceLineOutcome | undefined): string | undefined {
-  return outcome?.kind === "muxed" ? outcome.url : undefined
+/** The stored voiced clip, when the step made one. */
+export function voicedVideoOf(outcome: VoiceLineOutcome | undefined): StoredVideo | undefined {
+  return outcome?.kind === "muxed" ? outcome.stored : undefined
 }
 
 /** The `extraOutputData` a finalize records for the step (empty when the clip came with audio). */
@@ -148,7 +149,7 @@ export async function addVoiceLineIfSilent(args: {
       fitAudioToVideo: true,
     })
     try {
-      return { kind: "muxed", url: await watermarkLocalVideoAndUpload(mergedPath, args.jobId, args.userId, args.watermark) }
+      return { kind: "muxed", stored: await watermarkLocalVideoAndUpload(mergedPath, args.jobId, args.userId, args.watermark) }
     } finally {
       await cleanupWorkDir(dirname(mergedPath))
     }

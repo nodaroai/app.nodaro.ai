@@ -230,6 +230,21 @@ describe("the estimate names what the run holds and is charged", () => {
   })
 })
 
+describe("the clip's copy is size-scaled, inside the copy slot's hold", () => {
+  it("a run and a quote both download under the size-scaled rule, never the flat 120 s", async () => {
+    const { copyOutsideInput, inspectOutsideInput, OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD, OUTSIDE_INPUT_MAX_HOLD_MS } = await import("../../../lib/outside-input-copy.js")
+    probe.result = { width: 854, height: 480, durationSeconds: 10, videoDurationSeconds: 10, fps: 24 }
+    vi.mocked(copyOutsideInput).mockClear()
+    vi.mocked(inspectOutsideInput).mockClear()
+    await planTopazRheaUpscale(URL, "1080p", CTX)
+    await planTopazRheaUpscale(URL, "1080p", { ...CTX, quote: true })
+    expect(vi.mocked(copyOutsideInput).mock.calls[0]![1]).toMatchObject({ downloadRate: OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD })
+    expect(vi.mocked(inspectOutsideInput).mock.calls[0]![1]).toMatchObject({ downloadRate: OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD })
+    // The download's ceiling ends inside the 5-min hold that bounds the whole step.
+    expect(OUTSIDE_INPUT_SIZE_SCALED_DOWNLOAD.maxMs).toBeLessThan(OUTSIDE_INPUT_MAX_HOLD_MS)
+  })
+})
+
 describe("the plan refuses before anything is held", () => {
   it("a source already at or above the target", async () => {
     probe.result = { width: 1920, height: 1080, durationSeconds: 5, videoDurationSeconds: 5, fps: 30 }

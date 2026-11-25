@@ -129,19 +129,20 @@ const handleVideoSfx: HandlerFn = async function handleVideoSfx(job, ctx) {
   // generated SFX merged in — the user can still see their content, so we
   // honor the same watermark policy as face-swap / video-to-video (free
   // tier sees a "Nodaro.ai" overlay; paid tiers don't).
-  const r2Url = await uploadVideoMaybeWatermark(
+  const storedVideo = await uploadVideoMaybeWatermark(
     result.outputUrl,
     ctx.jobId,
     ctx.jobUserId,
     ctx.shouldWatermark,
   )
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
   // finalize: video-to-video is the closest FinalizeJobType — VIDEO_TYPES
   // path uploads via uploadVideoMaybeWatermark (we already did) and writes
-  // output_data.videoUrl. We pass mediaUrl so finalize doesn't re-upload.
+  // output_data.videoUrl. We pass the stored video so finalize doesn't re-upload.
   // Cost is null (Replicate predict_time → markup happens via the bucket-
   // pricing reservation, not per-prediction). providerUsed is the model
   // identifier so admin / audit views can see the route.
@@ -153,7 +154,7 @@ const handleVideoSfx: HandlerFn = async function handleVideoSfx(job, ctx) {
       cost: null,
       providerUsed: "replicate-mmaudio",
     },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta({ providerMs: Math.round(result.predictTime * 1000) }),

@@ -1524,6 +1524,24 @@ for (const entry of trash) {
 A "job" is a single AI generation unit (one image, one video render, one TTS
 call). Workflows produce one job per AI node.
 
+A completed **video** job's `output_data` is typed `VideoJobOutput`:
+`videoUrl` is always a file a browser can play. When the provider's file is
+one the browser-safe step would change (not H.264 `yuv420p`, e.g. HEVC 10-bit
+or HDR), that file is kept untouched as `originalVideoUrl` and `videoUrl` is
+its 8-bit H.264 preview (an HDR original's tone-mapped to SDR). Download
+`originalVideoUrl` when it is present. `videoPreviewUnavailable: true` means the
+preview could not be made, so `videoUrl` is the original itself. A watermarked
+run keeps no original.
+[Design note](./design/video-original-and-preview.md).
+
+```ts
+import type { VideoJobOutput } from "@nodaro/sdk/jobs"
+
+const { data: job } = await client.jobs.get(jobId)
+const out = job.output_data as VideoJobOutput
+const downloadUrl = out.originalVideoUrl ?? out.videoUrl
+```
+
 #### `get(id)`
 
 ```ts
@@ -2942,8 +2960,11 @@ if (previz === true) {
 On a previz run each role's `name` is the locator of its model in the clip
 (its colour, or its shape and position: `"the pink model"`); a role with
 pictures and no name is refused. `subject` (`VideoRemakeRolePrevizSettings`,
-on every role kind, 1–200 characters) says what the role is in the result,
-which its script calls it by; any other run ignores it. `previz`
+on every role kind, 1–200 characters) says what its model becomes in the
+result, which its script calls it by: the finished thing, not the previz
+model, and without the model's colour unless the real thing has it
+(`"a jockey on a bay racehorse"`, not `"the driver of the red car"`); any
+other run ignores it. `previz`
 (`VideoRemakePrevizOptions`): `lighting: true` also follows the clip's
 lighting direction and lighting changes; `sound` is `"clip"` (keep the clip's
 own sound) or `"generated"` (the engine makes environmental and action sounds,

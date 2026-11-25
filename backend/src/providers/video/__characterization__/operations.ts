@@ -24,6 +24,8 @@ import { applyEdl } from "../apply-edl.js"
 import { stitchExtension } from "../extend-stitch.js"
 import { composeSideBySide } from "../side-by-side.js"
 import { createWorkDir } from "../ffmpeg-utils.js"
+import { encodeBrowserSafePreview } from "../browser-safe-preview.js"
+import { probeMatched } from "../matched-encode.js"
 import { fixtureUrl, type FixtureSet } from "./fixtures.js"
 import type { CharacterizedOperation, RenderedOutput, OperationResult } from "./operation-types.js"
 import { UNIT_CHARACTERIZATIONS } from "../../../nodes/_generated/characterizations.char.js"
@@ -373,6 +375,31 @@ const tier1: CharacterizedOperation[] = [
         audioFadeSec: 0.15,
       })
       return single(outputPath, "video", workDir)
+    },
+  },
+  // The browser-safe preview of a kept video original (lib/video-result-store.ts,
+  // decided 2026-11-22): an HDR (HLG) HEVC 10-bit file tone-mapped to SDR BT.709
+  // through zscale + tonemap, and a 10-bit SDR one taken plainly to 8-bit
+  // H.264. The luma/chroma metrics pin the tone curve and the levels, which an
+  // ffmpeg or zimg bump can move.
+  {
+    name: "browser-safe-preview-hlg",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-preview")
+      const out = `${workDir}/preview.mp4`
+      await encodeBrowserSafePreview(f.clipHlgHevc10Mp4, out, await probeMatched(f.clipHlgHevc10Mp4))
+      return single(out, "video", workDir)
+    },
+  },
+  {
+    name: "browser-safe-preview-10bit-sdr",
+    tier: 1,
+    run: async (f) => {
+      const workDir = await createWorkDir("characterize-preview")
+      const out = `${workDir}/preview.mp4`
+      await encodeBrowserSafePreview(f.clipSdrHevc10Mp4, out, await probeMatched(f.clipSdrHevc10Mp4))
+      return single(out, "video", workDir)
     },
   },
   // apply-edl (the EDL renderer behind the podcast/multicam editing nodes).

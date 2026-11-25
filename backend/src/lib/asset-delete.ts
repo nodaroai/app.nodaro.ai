@@ -4,9 +4,13 @@ import { deleteKeyRecordingFailure } from "./storage-delete.js"
 import { heldAmong } from "./legal-hold.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
 import { jobOutputReferrerPaths } from "./job-output-urls.js"
+import { urlsLinkedByJobsSince } from "./job-output-references.js"
 import { relayPossible } from "./relay-possible.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { judgeAssetRowDelete } from "./key-ownership.js"
+import { isKeptOriginalKey, jobIdOfKeptOriginalKey, keptOriginalKeysOf } from "./video-original-keys.js"
+import { claimStoredObjects, jobIdOfStoreId } from "./job-server-output.js"
+import { headR2Object } from "./storage.js"
 import { companionsOf } from "./asset-companions.js"
 import { releaseCompanions } from "./asset-companion-release.js"
 
@@ -410,6 +414,69 @@ export type PermanentDeleteResult =
   | { ok: false; held: true }
   | { ok: false; dbError: { message: string } }
 
+/**
+ * The recorded objects a library delete of `assetKey` takes with it (decided
+ * 2026-11-23): the asset's own key when it IS a kept original (a job that
+ * completed on its original), and the original kept beside a preview
+ * (`lib/video-original-keys.ts`) when one is still in storage, not held as
+ * evidence and named by no other assets row. Each is its job's record's: it is
+ * claimed off that record before anything is deleted, and given back by the
+ * claim, never by a size of its own.
+ */
+async function recordedKeysGoingWith(assetKey: string, assetId: string, ownJobsKeepIt: boolean): Promise<string[]> {
+  if (isKeptOriginalKey(assetKey)) return [assetKey]
+  const out: string[] = []
+  for (const key of keptOriginalKeysOf(assetKey)) {
+    const head = await headR2Object(key)
+    if (!head.exists) continue
+    if ((await heldAmong([key])).has(key)) continue
+    const { count, error } = await supabase
+      .from("assets")
+      .select("id", { count: "exact", head: true })
+      .eq("r2_key", key)
+      .neq("id", assetId)
+    if (error || (count ?? 0) > 0) continue
+    // A job that still names the original (as its kept original, or as its
+    // result when it completed on it) keeps it (decided 2026-11-24). A look
+    // that fails keeps it too.
+    if (await jobStillNames(key, ownJobsKeepIt)) continue
+    out.push(key)
+  }
+  return out
+}
+
+/**
+ * Whether a job's output still names `key`'s public url (a kept original), as
+ * the delete's own referrer rule has it (decided 2026-11-25): with
+ * `ownJobsKeepIt` (the delete's `blockOnOwnJobReferrers`) any job keeps it;
+ * without, the caller asked for the file to go, so the original's own job does
+ * not keep it and only a job made after it does (a later job that names its
+ * output). Through the index on the urls a job output holds (migration 495,
+ * `urlsLinkedByJobsSince`), any depth, any owner. True when it cannot be told.
+ */
+async function jobStillNames(key: string, ownJobsKeepIt: boolean): Promise<boolean> {
+  const url = config.R2_PUBLIC_URL ? `${config.R2_PUBLIC_URL}/${key}` : key
+  try {
+    let since = new Date(0)
+    const ownJob = jobIdOfKeptOriginalKey(key)
+    if (!ownJobsKeepIt && ownJob) {
+      const { data, error } = await supabase
+        .from("jobs")
+        // trash-read: when the job a kept original belongs to was made, Trash included.
+        .select("created_at")
+        .eq("id", ownJob)
+        .maybeSingle()
+      if (error) return true
+      const createdAt = (data as { created_at?: string } | null)?.created_at
+      // Only jobs made after the original's own job can name its output.
+      if (createdAt) since = new Date(Date.parse(createdAt) + 1)
+    }
+    return (await urlsLinkedByJobsSince([{ url, since }])).has(url)
+  } catch {
+    return true
+  }
+}
+
 export async function permanentlyDeleteAsset(opts: {
   userId: string
   asset: OwnedAssetRow
@@ -450,6 +517,9 @@ export async function permanentlyDeleteAsset(opts: {
   // lookup keeps the object and refunds nothing.
   let deleteObject = false
   let refundable = false
+  // The claim of the recorded objects deleted with the asset (a kept original):
+  // already given back when it is made, so never added to the row's refund.
+  let recordedClaimFailed = false
   let rowOwned = false
   if (asset.r2_key && !relayOwned) {
     try {
@@ -527,8 +597,47 @@ export async function permanentlyDeleteAsset(opts: {
       const jobRefsExist = !!jobRefError || otherJobRefs > 0
 
       if (!assetRefsExist && !jobRefsExist) {
+        // The recorded objects that go with it (a kept original, the asset's
+        // own key when it is one) are claimed off their job's record FIRST
+        // (decided 2026-11-23): a claim that did not run deletes nothing, and
+        // the delete answers an error to be tried again. A claim that ran is
+        // given back at once, so nothing claimed is ever lost to a later
+        // failure (the row delete below, a row that was no charge).
+        // A look beside the asset that fails (storage or the hold unreadable)
+        // never stops the asset's own delete (decided 2026-11-23): the
+        // originals that could not be checked are neither deleted nor
+        // refunded, and stay with their job's record.
+        let recordedKeys: string[] = []
+        // Only a video key can have an original (a preview, or the original
+        // itself): any other asset delete asks nothing new at all.
+        // (and only one a job's store wrote: its id is the job's).
+        const mayHaveOriginal = [asset.r2_key, ...keptOriginalKeysOf(asset.r2_key)].some((k) => jobIdOfKeptOriginalKey(k) !== undefined)
+        if (mayHaveOriginal) {
+          try {
+            recordedKeys = await recordedKeysGoingWith(asset.r2_key, asset.id, blockOnOwnJobReferrers)
+          } catch (err) {
+            console.warn(`[asset-delete] could not check the original kept beside ${asset.r2_key}; it is left with its job's record:`, err)
+            recordedKeys = isKeptOriginalKey(asset.r2_key) ? [asset.r2_key] : []
+          }
+        }
+        const recordJob = jobIdOfKeptOriginalKey(recordedKeys[0] ?? "") ?? provenance?.jobId ?? jobIdOfStoreId(asset.r2_key.split("/").pop() ?? "")
+        if (recordedKeys.length > 0) {
+          const claim = recordJob ? await claimStoredObjects(recordJob, recordedKeys) : { ok: false, claimed: {} }
+          if (!claim.ok) {
+            recordedClaimFailed = true
+            throw new Error(`the record of ${recordedKeys.join(", ")} could not be claimed`)
+          }
+          const claimedBytes = Object.values(claim.claimed).reduce((sum, b) => sum + b, 0)
+          if (claim.ownerId && claimedBytes > 0) await updateStorageUsage(claim.ownerId, -claimedBytes)
+        }
+        // The recorded objects first, each on its own: their claim is spent, so
+        // each one goes now or to the retry pass (a failed delete is recorded
+        // there) — never left behind by the preview's own failure below.
+        for (const key of recordedKeys) {
+          await deleteKeyRecordingFailure(key, "asset").catch((err) => console.warn(`[asset-delete] deleting ${key} failed; recorded for retry:`, err))
+        }
         // A failed delete is recorded for the retry pass, then rethrown.
-        await deleteKeyRecordingFailure(asset.r2_key, "asset")
+        if (!recordedKeys.includes(asset.r2_key)) await deleteKeyRecordingFailure(asset.r2_key, "asset")
         r2Deleted = true
       } else {
         console.log(
@@ -541,6 +650,8 @@ export async function permanentlyDeleteAsset(opts: {
   } catch (err) {
     console.error("[asset-delete] R2 delete failed (continuing):", err)
   }
+  // Nothing was deleted: the row stays for the delete to be tried again.
+  if (recordedClaimFailed) return { ok: false, dbError: { message: "the kept original's record could not be claimed; try again" } }
 
   // Delete the row, scoped by owner, RETURNING the deleted ids so the storage
   // decrement below runs only when THIS call actually removed the row — two
@@ -582,7 +693,11 @@ export async function permanentlyDeleteAsset(opts: {
     // charge to this user: one naming an object they cannot be shown to have
     // made, or one that only recorded a url (a library save, an attached
     // pipeline image, whose size its caller chose) — see `judgeAssetRowDelete`.
-    const sizeBytes = !relayOwned && refundable ? (asset.size_bytes ?? 0) + companionRefund : 0
+    // A kept original's bytes were charged when it was stored, like the preview's.
+    // A row naming a kept original: its bytes came back with its claim above.
+    // The row's companions' recorded bytes join the refund (lib/asset-companions.ts).
+    const rowBytes = asset.r2_key && isKeptOriginalKey(asset.r2_key) ? 0 : (asset.size_bytes ?? 0)
+    const sizeBytes = !relayOwned && refundable ? rowBytes + companionRefund : 0
     if (sizeBytes > 0 && (deletedRows?.length ?? 0) > 0) {
       await updateStorageUsage(userId, -sizeBytes)
     }

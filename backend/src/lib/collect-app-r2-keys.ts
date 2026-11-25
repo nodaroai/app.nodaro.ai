@@ -1,3 +1,5 @@
+import { serverOutputOf } from "./job-server-output.js"
+import { withServerOutput } from "./job-server-output-column.js"
 import { supabase } from "./supabase.js"
 import { ownedJobOutputKeys, r2KeyFromUrl } from "./job-output-keys.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
@@ -70,6 +72,8 @@ interface JobRow {
   readonly user_id: unknown
   readonly workflow_execution_id: unknown
   readonly output_data: unknown
+  /** The job's server-only record (migration 695): a raw clip it names, the bytes each kept object was charged. */
+  readonly server_output?: unknown
 }
 
 /**
@@ -85,14 +89,17 @@ async function jobsOfExecutions(
     const chunk = executionIds.slice(i, i + EXECUTION_CHUNK)
     let cursor: string | null = null
     while (true) {
-      let q = owner
-        ? supabase.from("jobs").select("id, user_id, workflow_execution_id, output_data").eq("user_id", owner).in("workflow_execution_id", chunk)
-        : supabase.from("jobs").select("id, user_id, workflow_execution_id, output_data").in("workflow_execution_id", chunk)
-      q = q.order("id", { ascending: true }).limit(JOB_PAGE)
-      if (cursor) q = q.gt("id", cursor)
-      const { data, error } = await q
+      // The job's server-only store record too (695).
+      const { data, error } = await withServerOutput("id, user_id, workflow_execution_id, output_data", (_cols, more) => {
+        let q = owner
+          ? supabase.from("jobs").select(`id, user_id, workflow_execution_id, output_data${more}`).eq("user_id", owner).in("workflow_execution_id", chunk)
+          : supabase.from("jobs").select(`id, user_id, workflow_execution_id, output_data${more}`).in("workflow_execution_id", chunk)
+        q = q.order("id", { ascending: true }).limit(JOB_PAGE)
+        if (cursor) q = q.gt("id", cursor)
+        return q
+      })
       if (error) throw new Error(`collectAppR2Keys failed at jobs: ${error.message}`)
-      const rows = (data ?? []) as JobRow[]
+      const rows = (data ?? []) as unknown as JobRow[]
       out.push(...rows)
       if (rows.length < JOB_PAGE) break
       const last = rows[rows.length - 1]!.id
@@ -115,6 +122,8 @@ export type KeptKeyReason =
 /** The keys the expunge may delete, and every key it found but keeps. */
 export interface AppR2KeyReport {
   readonly keys: string[]
+  /** The deletable keys a job recorded as stored, each with its owner and the bytes it was charged (migration 695): what the expunge gives back for each one it deletes. */
+  readonly recorded?: ReadonlyArray<{ readonly key: string; readonly userId: string; readonly bytes: number; readonly jobId: string }>
   readonly kept: ReadonlyArray<{ readonly key: string; readonly reason: KeptKeyReason }>
 }
 
@@ -137,6 +146,19 @@ export async function collectAppR2KeyReport(appId: string, scope: AppR2KeyScope 
    *  the users who wrote them. Fenced at the end by whose object it is. */
   const writtenBy = new Map<string, Set<string>>()
   const appJobIds = new Set<string>()
+  // Each owned job's recorded stored objects (server_output.stored), for the expunge's refund.
+  const recorded: Array<{ key: string; userId: string; bytes: number; jobId: string }> = []
+  // Every object the record holds is the job's too, whether or not a url
+  // names it (decided 2026-11-23): collected in its own family, and reaped by
+  // its claim (`reapRecordedObjects`).
+  const noteRecorded = (j: JobRow) => {
+    if (typeof j.user_id !== "string" || typeof j.id !== "string") return
+    for (const [key, bytes] of Object.entries(serverOutputOf(j.server_output).stored ?? {})) {
+      if (!isOwnedObjectKey(j.id, key)) continue
+      jobKeys.add(key)
+      recorded.push({ key, userId: j.user_id, bytes, jobId: j.id })
+    }
+  }
   const skipRunIds = scope.skipRunIds ?? new Set<string>()
 
   const walk = (val: unknown, visit: (key: string) => void): void => {
@@ -245,7 +267,8 @@ export async function collectAppR2KeyReport(appId: string, scope: AppR2KeyScope 
           // Only an owned job is one of this app's jobs for `appOwnedKeys`: a
           // planted job's library row must not make a key deletable.
           appJobIds.add(jobId)
-          for (const key of ownedJobOutputKeys(jobId, j.output_data)) jobKeys.add(key)
+          for (const key of ownedJobOutputKeys(jobId, { output: j.output_data, server: j.server_output ?? null })) jobKeys.add(key)
+          noteRecorded(j)
         }
       }
     }
@@ -270,7 +293,8 @@ export async function collectAppR2KeyReport(appId: string, scope: AppR2KeyScope 
       if (typeof j.id !== "string" || j.user_id !== owner) continue
       const jobId = j.id
       appJobIds.add(jobId)
-      for (const key of ownedJobOutputKeys(jobId, j.output_data)) jobKeys.add(key)
+      for (const key of ownedJobOutputKeys(jobId, { output: j.output_data, server: j.server_output ?? null })) jobKeys.add(key)
+      noteRecorded(j)
     }
   }
 
@@ -296,7 +320,12 @@ export async function collectAppR2KeyReport(appId: string, scope: AppR2KeyScope 
   for (const key of candidates) {
     if (!deletable.has(key)) kept.set(key, "held_by_another_library")
   }
-  return { keys, kept: [...kept].map(([key, reason]) => ({ key, reason })) }
+  return {
+    keys,
+    kept: [...kept].map(([key, reason]) => ({ key, reason })),
+    // One entry per object, whichever page or job named it first: an object is refunded once.
+    recorded: recorded.filter((r, i) => deletable.has(r.key) && recorded.findIndex((o) => o.key === r.key) === i),
+  }
 }
 
 /**

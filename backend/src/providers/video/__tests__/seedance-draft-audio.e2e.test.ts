@@ -31,13 +31,13 @@ vi.mock("../../../workers/shared.js", async () => {
   return {
     uploadVideoMaybeWatermark: async () => {
       uploaded.streams.push({ hasVideo: true, hasAudio: false, duration: 0 })
-      return "https://r2.example/hd-as-rendered.mp4"
+      return { videoUrl: "https://r2.example/hd-as-rendered.mp4" }
     },
     watermarkLocalVideoAndUpload: async (path: string) => {
       const s = await probeMediaStreams(path)
       if (uploaded.keepAs) await (await import("node:fs")).promises.copyFile(path, uploaded.keepAs)
       uploaded.streams.push({ hasVideo: s.hasVideo, hasAudio: s.hasAudio, duration: await getVideoStreamDuration(path) })
-      return "https://r2.example/hd.mp4"
+      return { videoUrl: "https://r2.example/hd.mp4" }
     },
   }
 })
@@ -156,7 +156,7 @@ describe.skipIf(!mp3EncoderAvailable)("Lip Sync voice line on a silent clip (e2e
   }
 
   it.each(["voice-long.mp3", "voice-short.mp3"])("%s: the stored clip is the picture, untouched, with the voice as long as the picture", async (voice) => {
-    expect(await add("talk-silent.mp4", voice)).toEqual({ kind: "muxed", url: "https://r2.example/hd.mp4" })
+    expect(await add("talk-silent.mp4", voice)).toEqual({ kind: "muxed", stored: { videoUrl: "https://r2.example/hd.mp4" } })
     const stored = p(`stored-${voice}.mp4`)
     expect(uploaded.streams[0]).toMatchObject({ hasVideo: true, hasAudio: true })
     // The picture is copied: same codec, same frames, same length.

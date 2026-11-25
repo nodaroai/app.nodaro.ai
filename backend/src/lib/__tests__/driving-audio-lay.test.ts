@@ -21,13 +21,26 @@ describe("layDrivingAudioIfSilent", () => {
 
   it.each([true, false])("a silent render is laid on, fitted to the picture, and stored once at the job's key (watermark %s)", async (watermark) => {
     const merge = vi.fn().mockResolvedValue("/tmp/work-1/merged.mp4")
-    const store = vi.fn().mockResolvedValue("https://r2/videos/j.mp4")
+    // Through the video result funnel: its stored video comes back.
+    const store = vi.fn().mockResolvedValue({ videoUrl: "https://r2/videos/j.mp4" })
     const out = await layDrivingAudioIfSilent(args({ probe: vi.fn().mockResolvedValue({ hasAudio: false, hasVideo: true }), merge, store }, watermark))
-    expect(out).toEqual({ kind: "stored", url: "https://r2/videos/j.mp4" })
+    expect(out).toEqual({ kind: "stored", url: "https://r2/videos/j.mp4", stored: { videoUrl: "https://r2/videos/j.mp4" } })
     expect(merge.mock.calls[0]![0]).toMatchObject({ videoUrl: "https://x/out.mp4", fitAudioToVideo: true })
     expect(store).toHaveBeenCalledTimes(1)
     expect(store).toHaveBeenCalledWith("/tmp/work-1/merged.mp4", "j", "u", watermark)
     expect(JSON.stringify(store.mock.calls)).not.toContain("-driving-audio")
+  })
+
+  it("a cancel from the store is rethrown, never stored again as rendered", async () => {
+    const verdict = Object.assign(new Error("Job j was cancelled"), { name: "JobCancelledError" })
+    const store = vi.fn().mockRejectedValue(verdict)
+    await expect(layDrivingAudioIfSilent(args({ probe: vi.fn().mockResolvedValue({ hasAudio: false }), merge: vi.fn().mockResolvedValue("/tmp/w/m.mp4"), store }))).rejects.toBe(verdict)
+  })
+
+  it("an unusable verdict on our own merge output falls back to the provider's render as it came (before and after the migration)", async () => {
+    const verdict = Object.assign(new Error("unusable-video: the video delivered for j has no picture that decodes"), { name: "UnusableVideoError", deterministic: true })
+    const store = vi.fn().mockRejectedValue(verdict)
+    expect(await layDrivingAudioIfSilent(args({ probe: vi.fn().mockResolvedValue({ hasAudio: false }), merge: vi.fn().mockResolvedValue("/tmp/w/m.mp4"), store }))).toEqual({ kind: "as-rendered" })
   })
 
   it("a probe or merge failure never fails the paid render", async () => {

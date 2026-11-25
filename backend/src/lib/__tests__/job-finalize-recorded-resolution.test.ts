@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 const shared = vi.hoisted(() => ({
-  uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.example/vid-j1.mp4"),
+  uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.example/vid-j1.mp4" })),
   markJobCompletedDetailed: vi.fn(async (_id: string, _fields: Record<string, unknown>) => "completed" as const),
   commitJobCredits: vi.fn(async () => undefined),
   refundLoopTrimAddon: vi.fn(async () => undefined),
@@ -57,7 +57,7 @@ async function cronOutputOf(): Promise<Record<string, unknown> | undefined> {
 const KIE_TASK = { provider_task_id: "task-9", provider_kind: "kie-standard", relay_job_id: null }
 
 async function outputOf(extraOutputData: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
-  await finalizeJobWithMedia({ jobId: "j1", jobType: "image-to-video", result: { url: "https://provider.example/out.mp4", cost: null }, mediaUrl: R2, extraOutputData })
+  await finalizeJobWithMedia({ jobId: "j1", jobType: "image-to-video", result: { url: "https://provider.example/out.mp4", cost: null }, video: { videoUrl: R2 }, extraOutputData })
   return (shared.markJobCompletedDetailed.mock.calls.at(-1)?.[1] as { output_data: Record<string, unknown> } | undefined)?.output_data
 }
 

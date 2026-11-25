@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
 
   uploadImageMock: vi.fn().mockResolvedValue("https://r2/images/j-1.png"),
   storeFormattedImagesMock: vi.fn(),
-  uploadVideoMock: vi.fn().mockResolvedValue("https://r2/videos/j-1.mp4"),
+  uploadVideoMock: vi.fn().mockResolvedValue({ videoUrl: "https://r2/videos/j-1.mp4" }),
   shouldSaveMock: vi.fn().mockResolvedValue(true),
   markJobCompletedMock: vi.fn().mockResolvedValue(true),
   commitCreditsMock: vi.fn().mockResolvedValue(undefined),
@@ -154,7 +154,7 @@ beforeEach(() => {
   mocks.shouldSaveMock.mockResolvedValue(true)
   mocks.markJobCompletedMock.mockResolvedValue(true)
   mocks.uploadImageMock.mockResolvedValue("https://r2/images/j-1.png")
-  mocks.uploadVideoMock.mockResolvedValue("https://r2/videos/j-1.mp4")
+  mocks.uploadVideoMock.mockResolvedValue({ videoUrl: "https://r2/videos/j-1.mp4" })
   mocks.pollKieTaskMock.mockResolvedValue({
     resultJson: { resultUrls: ["https://kie/result.png"] },
     providerMs: 4200,

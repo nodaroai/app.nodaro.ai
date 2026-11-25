@@ -6,13 +6,15 @@
  * every request (the classic self-host failure mode).
  *
  * Usage:
- *   node scripts/generate-selfhost-keys.mjs            # print .env lines
- *   node scripts/generate-selfhost-keys.mjs >> .env    # append to .env
+ *   node tools/generate-selfhost-keys.mjs            # print .env lines
+ *   node tools/generate-selfhost-keys.mjs >> .env    # append to .env
  *
  * The community compose ships WORKING DEFAULT keys for local play (see
  * docker-compose.community.yml). Run this script and set the printed values
  * in .env before exposing an install to a network — the defaults are public
- * knowledge by definition.
+ * knowledge by definition. A production install (PUBLIC_URL not an address
+ * on this machine) refuses to start on them, and names this command
+ * (backend/src/lib/selfhost-keys-settings.ts).
  */
 import { createHmac, randomBytes } from "node:crypto"
 

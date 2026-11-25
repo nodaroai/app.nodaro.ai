@@ -48,7 +48,7 @@ const ctx = { jobId: "job-1", jobUserId: "user-1", usageLogId: "u1", shouldWater
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.runJobOnCloud.mockResolvedValue({ videoUrl: "https://cloud.r2/videos/cloud-job.mp4", durationSec: 6.5, thumbnailUrl: "https://cloud.r2/t.png" })
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://local.r2/videos/job-1.mp4")
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://local.r2/videos/job-1.mp4" })
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://local.r2/thumbnails/job-1.png")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
 })
@@ -67,7 +67,7 @@ describe("relayVideoJobToCloud", () => {
       expect.objectContaining({
         jobId: "job-1",
         jobType: "ai-avatar",
-        mediaUrl: "https://local.r2/videos/job-1.mp4",
+        video: { videoUrl: "https://local.r2/videos/job-1.mp4" },
         // Billed on the cloud side to the connected account — nothing local.
         result: { url: "https://cloud.r2/videos/cloud-job.mp4", cost: null, providerUsed: "nodaro" },
         extraOutputData: expect.objectContaining({

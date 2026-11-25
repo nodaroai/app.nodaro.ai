@@ -1,4 +1,5 @@
 import { join } from "node:path"
+import { copyFile } from "node:fs/promises"
 import { downloadFile, runFfmpeg, needsTranscode, probeMediaStreams, getVideoStreamDuration, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { NoVideoStreamError, isNoVideoStreamError } from "../../lib/media-stream-errors.js"
@@ -12,6 +13,8 @@ interface AudioTrack {
 
 interface MergeVideoAudioOptions {
   readonly videoUrl: string
+  /** The video as a LOCAL file already (a post-processed take kept on disk): read in place of `videoUrl`, never downloaded. */
+  readonly videoPath?: string
   readonly audioUrl?: string
   readonly audioTracks?: readonly AudioTrack[]
   readonly voiceoverVolume?: number
@@ -118,8 +121,12 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
     const videoPath = join(workDir, "input.mp4")
     const outputPath = join(workDir, "output.mp4")
 
-    console.log("[mergeVideoAudio] Downloading video")
-    await downloadFile(videoUrl, videoPath)
+    if (options.videoPath) {
+      await copyFile(options.videoPath, videoPath)
+    } else {
+      console.log("[mergeVideoAudio] Downloading video")
+      await downloadFile(videoUrl, videoPath)
+    }
 
     // THE MEDIA DECIDES. The merge maps `0:v`, so a "video" that carries no
     // video stream (an audio-only M4A uploaded as .mp4 — incident 2026-08-30)

@@ -27,7 +27,7 @@ import {
 import { csvFields } from "./ffprobe-csv.js"
 import { preparePluginRun } from "./plugin-run-guard.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
+import { DEFAULT_DOWNLOAD_LIMITS, watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
 import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
 import { acquireFfmpegSlot as acquireFfmpegAdmission, ffmpegMemoryBudgetNow } from "./ffmpeg-admission-instance.js"
 import { describeFfmpegMemoryBudget } from "./ffmpeg-memory.js"
@@ -109,16 +109,9 @@ export const BIG_MEDIA_DOWNLOAD_LIMITS: DownloadLimits = Object.freeze({
   maxMs: DOWNLOAD_MAX_MS,
 })
 
-/** The default path's body limits (`DEFAULT_DOWNLOAD_*`, decided 2026-11-24):
- *  looser than big media's, since its callers fetch provider results that can
- *  be large on slow hosts — see the constants' header in `ffmpeg-timeouts.ts`. */
-export const DEFAULT_DOWNLOAD_LIMITS: TransferRateLimits = Object.freeze({
-  responseMs: DOWNLOAD_TIMEOUT_MS,
-  windowMs: DEFAULT_DOWNLOAD_RATE_WINDOW_MS,
-  minBytesPerWindow: DEFAULT_DOWNLOAD_MIN_BYTES_PER_WINDOW,
-  floorBytesPerSec: DEFAULT_DOWNLOAD_FLOOR_BYTES_PER_SEC,
-  maxMs: DEFAULT_DOWNLOAD_MAX_MS,
-})
+/** The default path's body limits — defined beside the body rule
+ *  (`lib/transfer-watchdog.ts`), re-exported so every import keeps working. */
+export { DEFAULT_DOWNLOAD_LIMITS }
 
 /** A limit in words: whole seconds, or milliseconds under one. */
 const seconds = (ms: number) => (ms < 1000 ? `${Math.max(0, Math.round(ms))} ms` : `${Math.round(ms / 1000)} s`)
@@ -126,12 +119,24 @@ const seconds = (ms: number) => (ms < 1000 ? `${Math.max(0, Math.round(ms))} ms`
 /** A download that took longer than this is logged (how long, how much, how fast, which way). */
 const SLOW_DOWNLOAD_LOG_MS = 120_000
 
+/**
+ * What the source that writes a download's bytes says of them, before the
+ * body: the served `Content-Type` and `Content-Length` over HTTP (the length
+ * as announced, whatever its encoding), the object's own type and size for a
+ * read from storage. A field is absent when the source does not say.
+ */
+export interface DownloadSource {
+  readonly contentType?: string
+  readonly contentLength?: number
+}
+
 /** The bound a storage read inside `saveResponse`'s 404 fallback runs under. */
 interface StorageReadBounds {
   timeoutMs: number
   signal?: AbortSignal
   maxBytes?: number
   limits?: TransferRateLimits
+  onSource?: (source: DownloadSource) => void
 }
 
 /** What one `downloadFile` call is bounded by. */
@@ -140,6 +145,15 @@ interface DownloadOptions {
   limits?: DownloadLimits
   timeoutMs?: number
   signal?: AbortSignal
+  /** Told what the source says of the bytes ({@link DownloadSource}) once it
+   *  answers, before the body is written — again for each source tried
+   *  (storage, the link, storage again): the last call is the one that wrote. */
+  onSource?: (source: DownloadSource) => void
+  /** The DEFAULT path's overall ceiling, lowered for a caller whose own wait is
+   *  shorter (a synchronous route): the same size-scaled body rule, ending at
+   *  this many ms from the start (at most `DEFAULT_DOWNLOAD_MAX_MS`). Ignored
+   *  with `limits` or `timeoutMs`. */
+  ceilingMs?: number
 }
 
 /**
@@ -173,6 +187,9 @@ interface DownloadOptions {
  * after `responseMs` (review round 3 of #1656, decided 2026-09-25). The body is
  * fetched uncompressed and a compressed one is refused — the rate counts
  * decoded bytes, so gzip would let a drip-feed pass it at ~1000:1.
+ *
+ * `onSource` is told the served type and announced length (or the stored
+ * object's), for a caller that decides by them as it would by the headers.
  *
  * Every timeout starts "Download timeout:" and names its limit. On the DEFAULT
  * path a caller on a tighter budget passes `timeoutMs` (never above
@@ -210,7 +227,10 @@ async function downloadFileOnce(url: string, dest: string, opts: DownloadOptions
   const budgetMs = opts.limits || opts.timeoutMs === undefined ? undefined : Math.min(DOWNLOAD_TIMEOUT_MS, opts.timeoutMs)
   // ONE deadline for the whole call, whichever reads it takes (storage, the
   // link, storage again): the caller's budget, else its path's ceiling.
-  const deadlineAt = startedAt + (budgetMs ?? (opts.limits ? opts.limits.maxMs : DEFAULT_DOWNLOAD_LIMITS.maxMs))
+  const defaultLimits = !opts.limits && opts.ceilingMs !== undefined && opts.ceilingMs > 0 && opts.ceilingMs < DEFAULT_DOWNLOAD_LIMITS.maxMs
+    ? { ...DEFAULT_DOWNLOAD_LIMITS, maxMs: opts.ceilingMs }
+    : DEFAULT_DOWNLOAD_LIMITS
+  const deadlineAt = startedAt + (budgetMs ?? (opts.limits ? opts.limits.maxMs : defaultLimits.maxMs))
   const timeLeft = () => deadlineAt - Date.now()
   const maxBytes = opts.limits ? Math.min(opts.maxBytes ?? Infinity, opts.limits.maxBytes) : opts.maxBytes
   const signal = opts.limits ? undefined : opts.signal
@@ -223,6 +243,7 @@ async function downloadFileOnce(url: string, dest: string, opts: DownloadOptions
         ...(Number.isFinite(maxBytes) && maxBytes !== undefined ? { maxBytes } : {}),
         ...(opts.limits ? { limits: opts.limits } : {}),
         ...(signal ? { signal } : {}),
+        ...(opts.onSource ? { onSource: opts.onSource } : {}),
         timeLeft,
       })
     }
@@ -238,13 +259,14 @@ async function downloadFileOnce(url: string, dest: string, opts: DownloadOptions
       ...(signal ? { signal } : {}),
       ...(maxBytes !== undefined && Number.isFinite(maxBytes) ? { maxBytes } : {}),
       ...(opts.limits ? { limits: opts.limits } : {}),
+      ...(opts.onSource ? { onSource: opts.onSource } : {}),
     }),
   }
   route.push("http")
   try {
     await (opts.limits
-      ? downloadOverHttpBigMedia(url, dest, opts.limits, maxBytes!, { startedAt, deadlineAt, storageFallback })
-      : downloadOverHttpDefault(url, dest, { maxBytes, signal, budgetMs, deadlineAt, storageFallback }))
+      ? downloadOverHttpBigMedia(url, dest, opts.limits, maxBytes!, { startedAt, deadlineAt, storageFallback, onSource: opts.onSource })
+      : downloadOverHttpDefault(url, dest, { maxBytes, signal, budgetMs, deadlineAt, storageFallback, onSource: opts.onSource, limits: defaultLimits }))
   } catch (err) {
     // Our own file timed out at the public host: one more read from storage,
     // on whatever is left of the call's deadline.
@@ -332,7 +354,7 @@ async function readOwnStoredObject(
   key: string,
   url: string,
   dest: string,
-  bounds: { maxBytes?: number; limits?: TransferRateLimits; signal?: AbortSignal; timeLeft: () => number },
+  bounds: { maxBytes?: number; limits?: TransferRateLimits; signal?: AbortSignal; onSource?: (source: DownloadSource) => void; timeLeft: () => number },
 ): Promise<boolean> {
   const left = bounds.timeLeft()
   if (left <= 0) {
@@ -344,6 +366,7 @@ async function readOwnStoredObject(
       ...(bounds.maxBytes !== undefined ? { maxBytes: bounds.maxBytes } : {}),
       ...(bounds.limits ? { limits: bounds.limits } : {}),
       ...(bounds.signal ? { signal: bounds.signal } : {}),
+      ...(bounds.onSource ? { onSource: bounds.onSource } : {}),
       timeoutMs: left,
     })
     return true
@@ -367,6 +390,9 @@ async function downloadOverHttpDefault(
     budgetMs?: number
     deadlineAt: number
     storageFallback: { skip: boolean; bounds: () => StorageReadBounds }
+    onSource?: (source: DownloadSource) => void
+    /** `DEFAULT_DOWNLOAD_LIMITS`, or the same with the caller's lower ceiling. */
+    limits: TransferRateLimits
   },
 ): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
@@ -383,7 +409,7 @@ async function downloadOverHttpDefault(
   if (o.signal?.aborted) onCallerAbort()
   else o.signal?.addEventListener("abort", onCallerAbort, { once: true })
 
-  const limits = DEFAULT_DOWNLOAD_LIMITS
+  const limits = o.limits
   // Every timer is OURS, so every abort names its limit; safeFetch's own timer
   // is only a backstop set past them.
   const timers: Array<ReturnType<typeof setTimeout>> = []
@@ -410,6 +436,7 @@ async function downloadOverHttpDefault(
       // The storage fallback runs under what is left of the call's deadline.
       onFallback: clearTimers,
       storageFallback: o.storageFallback,
+      ...(o.onSource ? { onSource: o.onSource } : {}),
       ...(left === undefined
         ? {
           onBody: () => {
@@ -439,7 +466,12 @@ async function downloadOverHttpBigMedia(
   dest: string,
   limits: DownloadLimits,
   maxBytes: number,
-  call: { startedAt: number; deadlineAt: number; storageFallback: { skip: boolean; bounds: () => StorageReadBounds } },
+  call: {
+    startedAt: number
+    deadlineAt: number
+    storageFallback: { skip: boolean; bounds: () => StorageReadBounds }
+    onSource?: (source: DownloadSource) => void
+  },
 ): Promise<void> {
   const startedAt = Date.now()
   const { deadlineAt } = call
@@ -483,6 +515,7 @@ async function downloadOverHttpBigMedia(
       // of the call's deadline; ours stop here.
       onFallback: () => { clearTimeout(overall); overall = undefined },
       storageFallback: call.storageFallback,
+      ...(call.onSource ? { onSource: call.onSource } : {}),
       onBody: () => {
         const size = Number(response.headers?.get?.("content-length") ?? NaN)
         // The size deadline and, once `responseMs` has passed since the start
@@ -521,6 +554,8 @@ async function saveResponse(
     /** The 404 fallback's storage read: skipped when storage already failed for this
      *  link's key; else bounded by `bounds()` (read when the fallback starts). */
     readonly storageFallback?: { readonly skip: boolean; readonly bounds: () => StorageReadBounds }
+    /** Told the served type and announced length, before the body is written. */
+    readonly onSource?: (source: DownloadSource) => void
   },
 ): Promise<void> {
   if (!response.ok) {
@@ -558,6 +593,13 @@ async function saveResponse(
     // (unencoded only: an encoded length is not the size on disk).
     await response.body?.cancel().catch(() => undefined)
     throw new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: ${url}`)
+  }
+  if (hooks.onSource) {
+    const type = response.headers?.get?.("content-type")
+    hooks.onSource({
+      ...(type ? { contentType: type } : {}),
+      ...(Number.isFinite(announced) ? { contentLength: announced } : {}),
+    })
   }
   const count = hooks.onBody?.()
   const stages: Array<NodeJS.ReadableStream | NodeJS.ReadWriteStream | NodeJS.WritableStream> = [
@@ -611,8 +653,11 @@ export interface FfmpegLaunchOptions {
    *  picture slice and every re-encode does. */
   readonly peakMemoryMiB?: number
   /** Gives up WAITING for the launch's slot and memory when it aborts (the launch then rejects with its
-   *  reason); never stops a launch already admitted. `runFfmpeg` only. Omitted: waits as long as it takes. */
+   *  reason); never stops a launch already admitted, unless `stopOnAbort`. `runFfmpeg` only. Omitted: waits as long as it takes. */
   readonly signal?: AbortSignal
+  /** With `signal`: its abort also stops the launch once it runs (the child is killed; the failure then
+   *  carries `aborted`). `runFfmpeg` only. Omitted: an admitted launch runs to its end. */
+  readonly stopOnAbort?: boolean
   /** The child's environment: the probe guard's, for a run that reads a link through its proxy
    *  (`ffmpeg-reading-links.ts`). Omitted: this process's own. */
   readonly env?: NodeJS.ProcessEnv
@@ -807,9 +852,12 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
  * caller can classify without parsing text (Video Overlay: a timeout is
  * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
  */
-function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true } {
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true; signalledFromOutside?: true } {
   const killed = error.killed === true
   return {
+    // Ended by a signal this process did not send (the kernel's out-of-memory
+    // killer's SIGKILL, an operator): the box's failure, not the input's.
+    ...(!killed && typeof error.signal === "string" && error.signal.length > 0 ? { signalledFromOutside: true as const } : {}),
     killed,
     timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
     // The process never started (ENOENT, EAGAIN, EMFILE…: the spawn's own error): the server's failure, not the input's.
@@ -852,6 +900,7 @@ export async function runFfmpeg(
       maxBuffer: 10 * 1024 * 1024,
       timeout: limitMs,
       ...(launch?.env ? { env: launch.env } : {}),
+      ...(launch?.stopOnAbort && launch.signal ? { signal: launch.signal } : {}),
     }, (error, stdout, stderr) => {
       stopEscalation()
       stopWatch()

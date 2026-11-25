@@ -213,6 +213,14 @@ const isFullRange = (source: MatchedProbe): boolean => readTag(source.colorRange
  * 100-nit reference, BT.709 primaries, the Hable curve, and BT.709 again,
  * error-diffusion dithered on that step from float down to 8 bits so smooth
  * gradients (a sky) do not band.
+ *
+ * Every step is the same arithmetic on every CPU (decided 2026-11-24).
+ * `agamma=0` makes zimg compute each transfer exactly: its default
+ * approximate gamma picks a code path by CPU, and on AVX-512 machines the
+ * same HLG file came out far darker (mean luma 77.7) than on AVX2 or ARM ones
+ * (113.0); with `agamma=0` every machine measured 113.9. The tone map's
+ * peak stays automatic: it is read from the file's own HDR metadata where it
+ * carries some, the same on every machine.
  */
 function toSdr(source: MatchedProbe): string[] {
   if (!isHdr(source)) return []
@@ -221,11 +229,11 @@ function toSdr(source: MatchedProbe): string[] {
   const range = isFullRange(source) ? "pc" : "tv"
   return [
     `setparams=color_primaries=${primaries}:color_trc=${source.colorTransfer}:colorspace=${matrix}:range=${range}`,
-    "zscale=t=linear:npl=100",
+    "zscale=t=linear:npl=100:agamma=0",
     "format=gbrpf32le",
-    "zscale=p=bt709",
+    "zscale=p=bt709:agamma=0",
     "tonemap=tonemap=hable:desat=0",
-    "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion",
+    "zscale=t=bt709:m=bt709:r=tv:d=error_diffusion:agamma=0",
     `format=${DELIVERY_PIX_FMT}`,
   ]
 }

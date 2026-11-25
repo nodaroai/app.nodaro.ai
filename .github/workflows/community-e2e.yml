@@ -166,6 +166,40 @@ jobs:
           df -h /
           docker system df
 
+      # The image's own Supabase key check, as the compose file's keys-check
+      # one-shot runs it (start.sh runs the same CLI before anything starts):
+      # a production install on the shipped defaults must refuse, naming the
+      # three variables and the command that mints a set, never printing a key;
+      # a set from the generator must pass. Built image only: the published
+      # image predates the check until a release, and keys-check then skips
+      # (the nightly's path).
+      - name: Supabase key check refuses the public defaults in production
+        if: github.event_name != 'schedule'
+        env:
+          NODARO_IMAGE: nodaro-community:ci
+          PUBLIC_URL: https://studio.example.com
+        run: |
+          set -u
+          dc() { docker compose -f docker-compose.community.yml "$@"; }
+          if out=$(dc run --rm --no-deps keys-check 2>&1); then
+            echo "$out"
+            echo "::error::the public default keys were accepted in production"
+            exit 1
+          fi
+          echo "$out"
+          for expected in SUPABASE_JWT_SECRET SUPABASE_SERVICE_ROLE_KEY SUPABASE_ANON_KEY "node tools/generate-selfhost-keys.mjs >> .env"; do
+            printf '%s' "$out" | grep -qF -- "$expected" || { echo "::error::the refusal does not name: $expected"; exit 1; }
+          done
+          if printf '%s' "$out" | grep -qE 'eyJ[A-Za-z0-9_-]{10,}|change-me-please'; then
+            echo "::error::the refusal printed a key or the secret"
+            exit 1
+          fi
+          eval "$(node tools/generate-selfhost-keys.mjs | sed 's/^/export /')"
+          if ! dc run --rm --no-deps keys-check; then
+            echo "::error::a set from the generator was refused"
+            exit 1
+          fi
+
       # The published compose file verbatim, so this tests the file users
       # actually run. --no-build pins it to the image built above; every other
       # value is the committed default, which is what a fresh install gets.
