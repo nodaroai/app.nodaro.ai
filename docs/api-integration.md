@@ -6621,9 +6621,12 @@ On a previz run:
 - each role's `name` is the **locator** of its model in the clip: its colour,
   or its shape and position (`"the pink model"`, `"the tall model on the
   left"`). A role with pictures and no name is refused;
-- each role may say what it is in `subject` (`"the detective"`, `"a delivery
-  van"`, 1–200 characters), which the result's script calls it by; left out,
-  the script calls it by its picture. Any other run ignores `subject`;
+- each role may say in `subject` what its model becomes in the finished video
+  (1–200 characters), which the result's script calls it by; left out, the
+  script calls it by its picture. Write the finished thing, not the previz
+  model, and leave out the model's colour unless the real thing has it:
+  `"a jockey on a bay racehorse"`, not `"the driver of the red car"`. Any
+  other run ignores `subject`;
 - `previz` holds its options: `lighting: true` also follows the clip's
   lighting direction and lighting changes (default `false`); `sound` is
   `"clip"` (keep the clip's own sound) or `"generated"` (the engine makes

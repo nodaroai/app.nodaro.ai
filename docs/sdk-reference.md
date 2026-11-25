@@ -2942,8 +2942,11 @@ if (previz === true) {
 On a previz run each role's `name` is the locator of its model in the clip
 (its colour, or its shape and position: `"the pink model"`); a role with
 pictures and no name is refused. `subject` (`VideoRemakeRolePrevizSettings`,
-on every role kind, 1–200 characters) says what the role is in the result,
-which its script calls it by; any other run ignores it. `previz`
+on every role kind, 1–200 characters) says what its model becomes in the
+result, which its script calls it by: the finished thing, not the previz
+model, and without the model's colour unless the real thing has it
+(`"a jockey on a bay racehorse"`, not `"the driver of the red car"`); any
+other run ignores it. `previz`
 (`VideoRemakePrevizOptions`): `lighting: true` also follows the clip's
 lighting direction and lighting changes; `sound` is `"clip"` (keep the clip's
 own sound) or `"generated"` (the engine makes environmental and action sounds,
