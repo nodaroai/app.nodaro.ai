@@ -4,10 +4,12 @@ import {
   MAX_SAMPLE_REFERENCES,
   MAX_SURFACE_SAMPLES,
   MAX_TOOL_APP_PICTURES,
+  MAX_TOOL_APPS,
   MAX_VIDEO_SAMPLE_PROMPT,
   SURFACE_CATALOG_IMAGES,
   isBrandLogoRef,
   isSameSitePath,
+  isToolAppId,
   isWorldId,
   ownPictureAddress,
   type SurfaceCatalogImages,
@@ -128,8 +130,29 @@ export const surfaceToolAppsSchema = z
       return false
     }
     const pictures = toolAppPictures(raw.pictures)
-    return { menus: asked("menus"), pages: asked("pages"), ...(pictures ? { pictures } : {}) }
+    const apps = toolAppIds(raw.apps)
+    return { menus: asked("menus"), pages: asked("pages"), ...(pictures ? { pictures } : {}), ...(apps ? { apps } : {}) }
   })
+
+/**
+ * `toolApps.apps`: the mini apps the deployment offers, by id. Like
+ * `worlds.allow`, presence is what narrows: absent, there is no list (every
+ * app the viewer may run); a list offers exactly its apps, `[]` none. A value
+ * that is not a list offers none, and an entry that is not an app id is
+ * dropped, both loudly.
+ */
+function toolAppIds(raw: unknown): string[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) {
+    console.warn("[surface-profile] toolApps.apps must be an array of app ids — no app is offered")
+    return []
+  }
+  const known = [...new Set(raw.filter(isToolAppId))]
+  const dropped = raw.filter((id) => !isToolAppId(id))
+  if (dropped.length) console.warn(`[surface-profile] toolApps.apps dropped ${JSON.stringify(dropped)}: not app ids`)
+  if (known.length > MAX_TOOL_APPS) console.warn(`[surface-profile] toolApps.apps names ${known.length} apps — only the first ${MAX_TOOL_APPS} are kept`)
+  return known.slice(0, MAX_TOOL_APPS)
+}
 
 /** `toolApps.pictures`: the deployment's own picture per key. An entry that is not a path on the site or an https address is dropped, loudly. */
 function toolAppPictures(raw: unknown): Record<string, string> | undefined {

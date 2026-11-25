@@ -83,6 +83,7 @@ import {
 } from "./gpt-image-2-6.js"
 import { isMinimaxH3Image, minimaxH3ImageCreditId } from "./minimax-h3-image.js"
 import { flux3KleinCreditId, isFlux3Klein } from "./flux-3-klein.js"
+import { isKlingImage4, klingImage4CreditId } from "./kling-image-4.js"
 import {
   SEEDREAM_5_5_I2I,
   SEEDREAM_5_5_MAX_INPUT_IMAGES,
@@ -213,6 +214,8 @@ export function buildCreditModelIdentifier(
   referenceImageCount?: number,
   /** The output format, a GIF's frames and an SVG's level: read only by a model whose price depends on them (GPT Image 2.6). */
   imageFormat?: ImageFormatLevers,
+  /** The images a set asks for (2 to 10): read only by a model that makes sets (Kling Image 4.0). */
+  imageSetCount?: number,
 ): string {
   // Flux 2 family: billed per output megapixel AND per reference image (each
   // ref counts as input megapixels). Resolution arrives as "N MP" strings (the
@@ -233,6 +236,12 @@ export function buildCreditModelIdentifier(
   }
   if (isSeedream55(provider)) {
     return seedream55CreditId(provider, resolution, referenceImageCount)
+  }
+  // Kling Image 4.0: by size, by input item (an image or a named subject) and,
+  // for a set, by the images it asks for (`kling-image-4:8K`,
+  // `kling-image-4-i2i:2K:3ref:x4`).
+  if (isKlingImage4(provider)) {
+    return klingImage4CreditId(provider, resolution, referenceImageCount, imageSetCount)
   }
   // FLUX 3 Klein: by size alone, the same on both ids (`flux-3-klein:2K`,
   // `flux-3-klein-i2i:4K`); images move a text-to-image id onto the edit id.
@@ -286,6 +295,8 @@ export interface NormalizedImageGen {
   gifFrameDurationMs?: number
   /** An SVG's level of detail; set only for an SVG. */
   svgLevel?: string
+  /** The images a set asks for (2 to 10), on a model that makes sets; undefined for one image. */
+  imageSetCount?: number
   /** Empty when the caller's values were already valid for `modelId`. */
   adjustments: ModelInputAdjustment[]
 }
@@ -395,6 +406,10 @@ export function resolveNormalizedImageGen(opts: {
   sourceImage?: SourceImageSize
   /** The request carries an inpainting mask: on a model whose masked edit follows its photo, the photo's size decides the ratio and the priced size. */
   masked?: boolean
+  /** The images a set asks for: kept only on a model that makes sets (`imageSet` on its catalog entry), and priced. */
+  imageSetCount?: unknown
+  /** The request carries a mask: a set is dropped (a masked edit returns one picture) and the drop reported, nothing else moves. */
+  imageSetMasked?: boolean
 }): NormalizedImageGen {
   const str = (v: unknown): string | undefined =>
     typeof v === "string" && v.length > 0 ? v : undefined
@@ -409,8 +424,9 @@ export function resolveNormalizedImageGen(opts: {
       quality: str(opts.quality),
       background: str(opts.background),
       ...imageFormatInputOf(opts),
+      imageSetCount: imageSetCountInputOf(opts.imageSetCount),
     },
-    { sourceImage: opts.sourceImage, masked: opts.masked },
+    { sourceImage: opts.sourceImage, masked: opts.masked, imageSetMasked: opts.imageSetMasked },
   )
 
   return {
@@ -422,6 +438,7 @@ export function resolveNormalizedImageGen(opts: {
       undefined,
       opts.refCount,
       { outputFormat: n.outputFormat, gifFrames: n.gifFrames, svgLevel: n.svgLevel },
+      n.imageSetCount,
     ),
     modelId,
     aspectRatio: n.aspectRatio,
@@ -432,8 +449,15 @@ export function resolveNormalizedImageGen(opts: {
     gifFrames: n.gifFrames,
     gifFrameDurationMs: n.gifFrameDurationMs,
     svgLevel: n.svgLevel,
+    ...(n.imageSetCount !== undefined && { imageSetCount: n.imageSetCount }),
     adjustments: n.adjustments,
   }
+}
+
+/** A set's image count as a request body or node data carries it: a number, or a numeric string (a form field, a FieldMapping). */
+export function imageSetCountInputOf(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN
+  return Number.isFinite(n) ? n : undefined
 }
 
 /**

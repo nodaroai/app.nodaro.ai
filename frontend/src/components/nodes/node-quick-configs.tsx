@@ -87,6 +87,7 @@ import { isTopazVideoUpscaleProvider, nodaroTransparentRunsHere, nodaroVideoUpsc
 import { upscaleFactorSnapPatch } from "@/lib/upscale-factor-snap"
 import { SUNO_SEPARATE_TYPE_LABEL_KEYS } from "@/lib/suno-separate-labels"
 import {
+  imageResolutionFor8K,
   isSeedanceDraftCapable,
   SEEDANCE_DRAFT_RESOLUTION,
   IMAGE_MODEL_ROLE_DEFAULTS,
@@ -921,6 +922,8 @@ const referenceBoardQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
   {
     field: "resolution", ariaLabel: tx("field.resolution"), icon: Maximize2,
     options: (data) => toOptions(IMAGE_RESOLUTION_OPTIONS[referenceBoardProviderOf(data)] ?? []),
+    // "8K" on a model that does not list it lands on its largest size, as its run does.
+    snap: (value, data) => imageResolutionFor8K(referenceBoardProviderOf(data), value) ?? "",
   },
   {
     field: "quality", ariaLabel: tx("field.quality"), icon: Gauge,
@@ -1057,7 +1060,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       // A stale size snaps to the size the model renders unset where its
       // catalog declares one (MiniMax H3 Image: 2K); else ("" is no option) to
       // the first listed, as before.
-      snap: (_value, data) => declaredDefaultResolution(generateImageProviderOf(data)) ?? "",
+      // "8K" on a model that does not list it lands on its largest size, as its run does.
+      snap: (value, data) => imageResolutionFor8K(generateImageProviderOf(data), value) ?? declaredDefaultResolution(generateImageProviderOf(data)) ?? "",
     },
     {
       field: "repeatCount",

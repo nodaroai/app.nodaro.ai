@@ -27,7 +27,36 @@ afterAll(async () => { await rm(privateTmp.dir, { recursive: true, force: true }
 const safeFetch = vi.fn()
 vi.mock("../../safe-fetch.js", () => ({ safeFetch }))
 
-const { blockToGeminiPart, blocksToGeminiParts, __resetGeminiFileCache } = await import("../media.js")
+/** Our own storage: a link under OWN_BASE is read from here (by its key), never over HTTP. */
+const storage = vi.hoisted(() => ({
+  objects: new Map<string, { body: Buffer; contentType?: string }>(),
+  reads: [] as string[],
+}))
+vi.mock("../../storage.js", () => ({
+  isStorageConfigured: () => true,
+  r2KeyFromOurUrl: (url: string) => {
+    const base = process.env.R2_PUBLIC_URL
+    return base && url.startsWith(`${base}/`) ? url.slice(base.length + 1) : null
+  },
+  downloadR2ObjectToFile: async (key: string, dest: string, bounds: { onSource?: (s: { contentType?: string; contentLength?: number }) => void }) => {
+    storage.reads.push(key)
+    const object = storage.objects.get(key)
+    if (!object) throw Object.assign(new Error("NoSuchKey"), { name: "NoSuchKey" })
+    bounds.onSource?.({ ...(object.contentType ? { contentType: object.contentType } : {}), contentLength: object.body.length })
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(dest, object.body)
+  },
+}))
+vi.mock("../../storage-deletes-setting.js", () => ({ withheldObjectsGoPrivate: () => false }))
+const OWN_BASE = "https://files.own.test"
+const savedBase = process.env.R2_PUBLIC_URL
+afterAll(() => {
+  if (savedBase === undefined) delete process.env.R2_PUBLIC_URL
+  else process.env.R2_PUBLIC_URL = savedBase
+})
+
+const { blockToGeminiPart, blocksToGeminiParts, __resetGeminiFileCache, MEDIA_FETCH_CEILING_MS } = await import("../media.js")
+const { LLM_ROUTE_REQUEST_TIMEOUT_MS } = await import("../../llm-route-timeout.js")
 
 /** Minimal GoogleGenAI stand-in — only the surfaces media.ts actually touches. */
 function fakeAi(overrides: { uploadName?: string; states?: string[] } = {}) {
@@ -50,6 +79,9 @@ function bodyResponse(bytes: Buffer, headers: Record<string, string>) {
 beforeEach(() => {
   safeFetch.mockReset()
   __resetGeminiFileCache()
+  process.env.R2_PUBLIC_URL = OWN_BASE
+  storage.objects.clear()
+  storage.reads = []
 })
 
 describe("pure blocks need no network at all", () => {
@@ -464,12 +496,15 @@ describe("inline video bytes need no network and are validated first", () => {
 })
 
 /**
- * The 120 s download limit ends the BODY, not only the request: a body that
- * keeps its connection open and never ends is stopped at the limit even when
- * the fetch ignores its signal (the stub below does), and nothing is uploaded.
+ * The download runs under `downloadFile`'s default limits, which reach the
+ * BODY, not only the request: a body that keeps its connection open and never
+ * ends is stopped (here at the first window after the 120 s grace that
+ * delivers under the minimum) even when the fetch ignores its signal (the
+ * stub below does), and nothing is uploaded — while a slow body that keeps
+ * moving runs past the old flat 120 s.
  */
-describe("the download limit ends a body that never finishes", () => {
-  beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }) })
+describe("the download limits end a body that never finishes", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] }) })
   afterEach(() => { vi.useRealTimers() })
 
   /** A body that sends one chunk, then holds the stream open for ever. */
@@ -486,20 +521,31 @@ describe("the download limit ends a body that never finishes", () => {
 
   const uploadDirs = async () => (await readdir(privateTmp.dir)).filter((n) => n.startsWith("gemini-upload-"))
 
-  it("on the upload path: rejects at 120 s naming the limit, cancels the body, removes the temp dir, uploads nothing", async () => {
+  /** Fake time in steps, letting the real file writes through between them. */
+  async function advance(totalMs: number, stepMs = 1_000) {
+    for (let t = 0; t < totalMs; t += stepMs) {
+      await vi.advanceTimersByTimeAsync(Math.min(stepMs, totalMs - t))
+      for (let i = 0; i < 3; i++) await new Promise((r) => setImmediate(r))
+    }
+  }
+
+  it("on the upload path: a stalled body is stopped once 120 s have passed, naming its limit; the body is cancelled, the temp dir removed, nothing uploaded", async () => {
     const cancel = endlessResponse({ "content-type": "video/mp4" })
     const ai = fakeAi()
     const attempt = blockToGeminiPart(ai, { type: "video", url: "https://r2.example/endless.mp4" })
     const settled = attempt.then(() => undefined, (e: unknown) => e)
+    await vi.waitFor(() => expect(safeFetch).toHaveBeenCalled())
 
-    await vi.advanceTimersByTimeAsync(119_999)
+    await advance(119_000)
     expect(cancel).not.toHaveBeenCalled()
     // The download is writing into its own temp folder (in this file's tmpdir).
     expect(await uploadDirs()).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(1)
+    await advance(2_000)
 
     const err = await settled
-    expect(err).toMatchObject({ name: "TimeoutError", message: "Download timeout: over its 120 s limit" })
+    expect(err).toMatchObject({ name: "TimeoutError", message: "Download timeout: too slow — 0 bytes in the last 60 s, under the 1048576 minimum" })
+    // Without the link, as this lane's timeouts always were.
+    expect((err as Error).message).not.toContain("r2.example")
     expect(cancel).toHaveBeenCalled()
     expect(ai.files.upload).not.toHaveBeenCalled()
     expect(await uploadDirs()).toEqual([])
@@ -509,18 +555,65 @@ describe("the download limit ends a body that never finishes", () => {
     const cancel = endlessResponse({ "content-type": "image/png", "content-length": "1024" })
     const attempt = blockToGeminiPart(fakeAi(), { type: "image", url: "https://r2.example/endless.png" })
     const settled = attempt.then(() => undefined, (e: unknown) => e)
+    await vi.waitFor(() => expect(safeFetch).toHaveBeenCalled())
 
-    await vi.advanceTimersByTimeAsync(120_000)
+    await advance(121_000)
 
-    expect(await settled).toMatchObject({ name: "TimeoutError", message: "Download timeout: over its 120 s limit" })
+    expect(await settled).toMatchObject({ name: "TimeoutError", message: expect.stringMatching(/^Download timeout: [^:]*$/) })
     expect(cancel).toHaveBeenCalled()
+    expect(await uploadDirs()).toEqual([])
   })
 
-  it("the fetch and the body read get the same signal; the fetch's own timer is only a backstop past the limit", async () => {
+  it("a slow-but-steady body runs past the old flat 120 s and is sent", async () => {
+    // 2 MB every 30 s (≈ 68 kB/s, over the 1 MB-a-minute minimum), 10 MB in 150 s — no length announced.
+    let sent = 0
+    safeFetch.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        if (sent === 5) { controller.close(); return }
+        await new Promise((r) => setTimeout(r, 30_000))
+        sent++
+        controller.enqueue(new Uint8Array(2 * 1024 * 1024).fill(sent))
+      },
+    }), { status: 200, headers: { "content-type": "video/mp4" } }))
+    const ai = fakeAi()
+    const settled = blockToGeminiPart(ai, { type: "video", url: "https://r2.example/slow.mp4" }).then((v) => v, (e: unknown) => e)
+    await vi.waitFor(() => expect(safeFetch).toHaveBeenCalled())
+
+    await advance(160_000)
+
+    expect(await settled).toHaveProperty("fileData")
+    expect(ai.files.upload).toHaveBeenCalledOnce()
+  })
+
+  it("a fetch ends on its own 8-min ceiling, with its words, before the LLM routes' 10-min socket timeout could cut it", async () => {
+    expect(MEDIA_FETCH_CEILING_MS).toBe(8 * 60_000)
+    expect(MEDIA_FETCH_CEILING_MS).toBeLessThan(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+    // A body that keeps moving (2 MB a minute, no length announced) for ever: only the ceiling stops it.
+    let sent = 0
+    safeFetch.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        await new Promise((r) => setTimeout(r, 30_000))
+        sent++
+        controller.enqueue(new Uint8Array(1024 * 1024).fill(sent % 250))
+      },
+    }), { status: 200, headers: { "content-type": "video/mp4" } }))
+    const ai = fakeAi()
+    const settled = blockToGeminiPart(ai, { type: "video", url: "https://r2.example/forever.mp4" }).then((v) => v, (e: unknown) => e)
+    await vi.waitFor(() => expect(safeFetch).toHaveBeenCalled())
+
+    await advance(8 * 60_000 + 5_000, 5_000)
+
+    expect(await settled).toMatchObject({ name: "TimeoutError", message: "Download timeout: over its 480 s overall ceiling" })
+    expect(ai.files.upload).not.toHaveBeenCalled()
+    expect(await uploadDirs()).toEqual([])
+  })
+
+  it("the fetch and the body read get the same signal; the fetch's own timer is only a backstop past the ceiling", async () => {
     safeFetch.mockResolvedValue(bodyResponse(Buffer.from("stream"), { "content-type": "video/mp4" }))
     await blockToGeminiPart(fakeAi(), { type: "video", url: "https://r2.example/ok.mp4" })
     const init = safeFetch.mock.calls[0]![1] as { timeoutMs: number; signal: AbortSignal }
-    expect(init.timeoutMs).toBe(125_000)
+    // The lane's 8-min ceiling + 5 s: never the bound itself.
+    expect(init.timeoutMs).toBe(8 * 60_000 + 5_000)
     expect(init.signal).toBeInstanceOf(AbortSignal)
     expect(init.signal.aborted).toBe(false)
   })
@@ -537,5 +630,47 @@ describe("the download limit ends a body that never finishes", () => {
     await vi.advanceTimersByTimeAsync(200_000)
 
     expect(await settled).toHaveProperty("fileData")
+  })
+})
+
+describe("our own stored files are read from storage; others over HTTP", () => {
+  it("reads an own link from storage with no HTTP request, typed and sized from the stored object", async () => {
+    const bytes = Buffer.from("stored-image")
+    storage.objects.set("uploads/pic", { body: bytes, contentType: "image/webp" })
+
+    const part = await blockToGeminiPart(fakeAi(), { type: "image", url: `${OWN_BASE}/uploads/pic` })
+
+    // The stored type (no extension to go on), and inline: its stored size is small.
+    expect(part).toEqual({ inlineData: { mimeType: "image/webp", data: bytes.toString("base64") } })
+    expect(storage.reads).toEqual(["uploads/pic"])
+    expect(safeFetch).not.toHaveBeenCalled()
+  })
+
+  it("an own link storage does not have fails as the link's 404 would, and throws", async () => {
+    await expect(blockToGeminiPart(fakeAi(), { type: "video", url: `${OWN_BASE}/gone.mp4` })).rejects.toThrow(/fetch failed \(404\) for video/)
+    expect(safeFetch).not.toHaveBeenCalled()
+  })
+
+  it("a foreign link goes over HTTP and never to storage", async () => {
+    const bytes = Buffer.from("foreign")
+    safeFetch.mockResolvedValue(bodyResponse(bytes, { "content-type": "image/png", "content-length": String(bytes.length) }))
+    const part = await blockToGeminiPart(fakeAi(), { type: "image", url: "https://elsewhere.example/a.png" })
+    expect(part).toEqual({ inlineData: { mimeType: "image/png", data: bytes.toString("base64") } })
+    expect(safeFetch).toHaveBeenCalledOnce()
+    expect(storage.reads).toEqual([])
+  })
+})
+
+describe("the size cap still holds", () => {
+  it("a body announcing more than 512 MB is refused at its headers, throws, and uploads nothing", async () => {
+    const cancel = vi.fn()
+    safeFetch.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array(8)) }, cancel }), {
+      status: 200, headers: { "content-type": "video/mp4", "content-length": String(512 * 1024 * 1024 + 1) },
+    }))
+    const ai = fakeAi()
+    await expect(blockToGeminiPart(ai, { type: "video", url: "https://r2.example/huge.mp4" })).rejects.toThrow(/^Gemini media too large: /)
+    expect(cancel).toHaveBeenCalled()
+    expect(ai.files.upload).not.toHaveBeenCalled()
+    expect((await readdir(privateTmp.dir)).filter((n) => n.startsWith("gemini-upload-"))).toEqual([])
   })
 })

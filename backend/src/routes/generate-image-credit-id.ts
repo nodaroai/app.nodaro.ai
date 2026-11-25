@@ -5,6 +5,7 @@
  * loading the route's handler, queue, credit guard and batch replay. The
  * route imports these and re-exports `resolveImageCreditIdentifier`.
  */
+import { klingImage4PricedItems, klingImage4Subjects, subjectSourcesOf } from "../lib/kling-image-4-subjects.js"
 import type { FastifyRequest } from "fastify"
 import { config } from "../lib/config.js"
 import { rawImageBatchOf } from "../lib/image-batch.js"
@@ -126,7 +127,10 @@ export function imageCreditIdentifierFor(
     : (flatRefs ?? [])
   // On a model priced per input image the base of an edit is one more image
   // sent, as in the DEBIT.
-  const refCount = pricedSentImages(rawProvider, references, body?.baseImageUrl)
+  // Kling Image 4.0: a character sending 2 to 4 of those images is ONE named
+  // subject, one input item (the planner groups the same list the same way).
+  const subjects = klingImage4Subjects(rawProvider, subjectSourcesOf(body as Parameters<typeof subjectSourcesOf>[0]), references)
+  const refCount = klingImage4PricedItems(pricedSentImages(rawProvider, references, body?.baseImageUrl), subjects)
 
   // Shared reference-aware builder: mirrors the handler's T2I→I2I auto-swap
   // (triggered by refs being attached — in structured mode the ASSEMBLED count,
@@ -152,5 +156,8 @@ export function imageCreditIdentifierFor(
     svgLevel,
     refCount,
     swapToI2i: true,
+    // A set's images, on a model that makes sets; an inpaint returns one picture.
+    imageSetCount: body?.imageSetCount,
+    imageSetMasked: typeof body?.maskUrl === "string" && body.maskUrl.length > 0,
   }).identifier
 }

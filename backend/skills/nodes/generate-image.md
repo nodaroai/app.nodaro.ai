@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-11-10T19:20:28.607Z
-generated_from: 5b5897436
+generated_at: 2026-11-22T18:08:33.950Z
+generated_from: d1f3451e1d
 ---
 
 # generate-image
@@ -9,7 +9,7 @@ generated_from: 5b5897436
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-image`
 **Category:** ai
-**Credit cost:** `3-682` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `3-781` charged on Nodaro Cloud — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `prompt`, `negative`, `references`, `assets`, `elements`, `look`, `settings`
 **Outputs (source handles):** `image`
 
@@ -34,6 +34,7 @@ generated_from: 5b5897436
 - `gifFrames?: number`
 - `gifFrameDurationMs?: number`
 - `svgLevel?: string`
+- `imageSetCount?: number`
 - `seed?: number`
 - `renderingSpeed?: string`
 - `styleType?: string`
@@ -94,6 +95,7 @@ generated_from: 5b5897436
 - `model`
 - `count`
 - `models`
+- `image_set_count`
 - `resolution`
 - `quality`
 - `background`

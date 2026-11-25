@@ -22,8 +22,9 @@
  */
 
 // @reads-none reads only the base and layer images it downloads into its work dir
+import { fitImageUnderPixels } from "../../lib/image-pixel-fit.js"
 import { join } from "node:path"
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import sharp from "sharp"
 import { cleanupWorkDir, createWorkDir, downloadFile, withFfmpegSlot } from "../video/ffmpeg-utils.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
@@ -67,6 +68,15 @@ const MAX_CANVAS_EDGE = 8192
 /** Explicit decode ceiling for every image we did not create ourselves (sharp's
  *  default is ~268 MP; a 16k² layer would otherwise decode to ~1 GB). */
 const PIXEL_LIMIT = OVERLAY_PIXEL_LIMIT
+/** The longest the scale-down of the base, or of every layer, may take under the slot. */
+const FIT_TIMEOUT_MS = 120_000
+
+/** The picture at `path` scaled down in place to fit `maxPixels` / `maxEdge` (`fitImageUnderPixels`); left as is when it fits. */
+async function fitFileUnderPixels(path: string, maxPixels: number, maxEdge: number): Promise<void> {
+  const bytes = await readFile(path)
+  const fitted = await fitImageUnderPixels(bytes, maxPixels, maxEdge)
+  if (fitted !== bytes) await writeFile(path, fitted)
+}
 /** Sum of every layer box (px) one job may rasterise — 12 full-bleed 8K layers
  *  would otherwise hold ~3 GB of PNG buffers for one flat-priced run. */
 const MAX_TOTAL_LAYER_PIXELS = OVERLAY_MAX_TOTAL_LAYER_PIXELS
@@ -611,6 +621,10 @@ export async function createImageOverlay(params: ImageOverlayParams): Promise<Im
     // are refunded on failure — an unpaid disk-fill primitive otherwise).
     const basePath = join(workDir, "base")
     await downloadFile(params.imageUrl, basePath, { maxBytes: MAX_DOWNLOAD_BYTES })
+    // A base over the edge or pixel cap (an 8K model result) is scaled down
+    // to fit, not refused: under the shared slot, as the render is (a
+    // scale-down decodes the whole picture).
+    await withFfmpegSlot(() => fitFileUnderPixels(basePath, PIXEL_LIMIT, MAX_CANVAS_EDGE), { timeoutMs: FIT_TIMEOUT_MS, label: "Image Overlay fit" })
     const probed = await probeImageSize(basePath)
     if (probed.w <= 1 && probed.h <= 1) throw new Error("Image Overlay: the base image could not be decoded")
     if (Math.max(probed.w, probed.h) > MAX_CANVAS_EDGE) {
@@ -628,11 +642,20 @@ export async function createImageOverlay(params: ImageOverlayParams): Promise<Im
       DOWNLOAD_CONCURRENCY,
       { cancelled: false },
     )
-    const prepared: PreparedLayer[] = []
-    for (let i = 0; i < downloaded.length; i++) {
-      const r = downloaded[i]
+    for (const r of downloaded) {
       if (r.status === "rejected") throw r.reason instanceof Error ? r.reason : new Error(String(r.reason))
-      prepared.push({ buffer: r.value ? await readFile(r.value) : undefined, layer: layersIn[i] })
+    }
+    // A layer over the caps (an 8K model result) is scaled down to fit, one
+    // layer at a time and under the shared slot: a scale-down decodes the
+    // whole picture.
+    const layerPaths = downloaded.map((r) => (r.status === "fulfilled" ? r.value : null))
+    await withFfmpegSlot(async () => {
+      for (const path of layerPaths) if (path) await fitFileUnderPixels(path, PIXEL_LIMIT, MAX_LAYER_EDGE)
+    }, { timeoutMs: FIT_TIMEOUT_MS, label: "Image Overlay fit" })
+    const prepared: PreparedLayer[] = []
+    for (let i = 0; i < layerPaths.length; i++) {
+      const path = layerPaths[i]
+      prepared.push({ buffer: path ? await readFile(path) : undefined, layer: layersIn[i] })
     }
     const canvas = resolveCanvas(params.canvas)
 

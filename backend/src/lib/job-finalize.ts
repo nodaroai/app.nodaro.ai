@@ -1,7 +1,9 @@
 import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
+import { imageSetSettledBase } from "./image-set-settle.js"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
-import { requestedImageFormat, storeFormattedImages } from "./image-output-store.js"
+import { discardUndeliveredImages, imageStoredAsItsBytes, storeFormattedImages, type ImageSetNotStoredError } from "./image-output-store.js"
+import { setStoreLimit } from "./image-set-storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
 import { appendCharacterReferenceVideo } from "./character-auto-attach.js"
 import { FINALIZE_CLAIM_TTL_MS } from "./reconcile/types.js"
@@ -537,25 +539,49 @@ export async function finalizeJobWithMedia(
   let droppedExtras: DroppedExtraImages = {}
   // The handler's measured charge, resolved inside the claim (a function reads what was stored).
   let meteredBaseCredits: number | undefined
+  // How many images an image job stored (its result and its variants): what a set settles on.
+  let imagesStored = 0
   // Every object THIS finalize stored, as each store lands — what it deletes
   // again if it does not complete the job (lib/job-finalize-discard.ts).
   const ledger = storeLedger()
+  // Whether this job is a SET (its size): its clean-ups take the set's one claimed path.
+  const setHint = typeof job.input_data?.setHoldCreditId === "string" ? { setCount: setStoreLimit(job.input_data.setHoldCreditId) } : null
+  // A set's objects its store wrote and does not deliver: deleted only once
+  // this finalize's completion won, or behind its fence (never while another
+  // finalize of the job may deliver the same keys).
+  let undeliveredImages: ReadonlyMap<string, number> | undefined
+  const discardUndelivered = async (delivered: readonly string[] = [], statuses?: readonly string[]) => {
+    if (undeliveredImages?.size) await discardUndeliveredImages(jobId, job.user_id ?? undefined, undeliveredImages, delivered, statuses)
+  }
   const attempts = input.storeAttempts ?? 1
   try {
-    if (IMAGE_TYPES.has(jobType) && requestedImageFormat(job.input_data)) {
-      // A run that asked for JPEG, WebP, a GIF or an SVG: stored as what its
-      // bytes are, an SVG made safe first (a refused one fails the job with a
+    if (IMAGE_TYPES.has(jobType) && imageStoredAsItsBytes(job.input_data)) {
+      // A run that asked for JPEG, WebP, a GIF or an SVG, or of a model whose
+      // format follows its size (Kling Image 4.0): stored as what its bytes
+      // are, an SVG made safe first (a refused one fails the job with a
       // refund, lib/image-output-store.ts), with a PNG still of a GIF or SVG.
+      const isSet = typeof job.input_data?.setHoldCreditId === "string"
+      // A set stores at most the pictures it asked for: one the provider
+      // returned beyond them is never stored or charged (`setStoreLimit`).
+      const returned = [result.url, ...(result.extraUrls ?? [])]
       const stored = await storeFormattedImages({
-        sourceUrls: [result.url, ...(result.extraUrls ?? [])],
+        sourceUrls: isSet ? returned.slice(0, setStoreLimit(job.input_data?.setHoldCreditId)) : returned,
         jobId,
         userId: job.user_id ?? undefined,
         watermark,
+        // Only a set (held for its pictures) may deliver fewer than it made.
+        ...(typeof job.input_data?.setHoldCreditId === "string" && { isSet: true }),
       })
       ledger.add(...stored.urls, ...(stored.thumbnailUrl !== undefined ? [stored.thumbnailUrl] : []))
+      undeliveredImages = stored.undelivered
+      imagesStored = stored.urls.length
       outputData = {
         ...buildImageOutputData(result as Parameters<typeof buildImageOutputData>[0], stored.urls),
         imageMimeType: stored.mimeType,
+        // Each picture of a set its own type: one re-encoded to fit the cap is a WebP beside PNGs.
+        ...(typeof job.input_data?.setHoldCreditId === "string" && stored.urls.length > 1 && { imageMimeTypes: stored.mimeTypes }),
+        // A set's pictures that could not be stored, charged for nothing.
+        ...(stored.dropped > 0 && { imagesNotSaved: stored.dropped }),
         ...(stored.thumbnailUrl !== undefined && { thumbnailUrl: stored.thumbnailUrl }),
       }
     } else if (IMAGE_TYPES.has(jobType)) {
@@ -566,6 +592,7 @@ export async function finalizeJobWithMedia(
         watermark,
       ))
       ledger.add(...r2Urls)
+      imagesStored = r2Urls.length
       outputData = buildImageOutputData(
         result as Parameters<typeof buildImageOutputData>[0],
         r2Urls,
@@ -626,8 +653,11 @@ export async function finalizeJobWithMedia(
     // the same keys; a retry re-stores them. Then release our claim so a
     // BullMQ retry or the next reconcile tick can re-attempt immediately, and
     // surface the error unchanged (refund classification stays the caller's).
+    undeliveredImages ??= (err as ImageSetNotStoredError | undefined)?.undelivered
     if (claim.ts) {
-      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES)
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES, setHint)
+      // Behind our fence the row is terminal and ours: nothing will deliver a set's left-out keys.
+      if (fenced) await discardUndelivered()
       await releaseJobFinalizeClaim(jobId, fenced ?? claim.ts)
     }
     throw err
@@ -671,8 +701,11 @@ export async function finalizeJobWithMedia(
     extraNonProviderCredits: input.extraNonProviderCredits,
     meteredCost: result.cost,
     loopTrimAddonRefundCredits: input.loopTrimAddonRefundCredits,
-    // A handler's own measure wins; a GPT Image 2.6 Auto run settles on KIE's bill.
-    meteredBaseCredits: meteredBaseCredits ?? await gptImage26AutoSettledBase(result.autoQualityKieCredits),
+    // A handler's own measure wins; a GPT Image 2.6 Auto run settles on KIE's
+    // bill; a set that returned fewer images than it asked, on those it stored.
+    meteredBaseCredits: meteredBaseCredits
+      ?? await gptImage26AutoSettledBase(result.autoQualityKieCredits)
+      ?? await imageSetSettledBase(job.input_data, imagesStored),
   }
   // A plugin's engine child that asked to stay HELD after it completes
   // (deferred-child-settlement.ts): the replay and the figure it will cost are
@@ -722,8 +755,14 @@ export async function finalizeJobWithMedia(
     // holds — or will ever name — what we stored. The fence tells the two
     // apart in the database (it never matches pending_review), so a real hold
     // keeps its objects and a missed one deletes and gives them back.
+    if (outcome === "held") {
+      // A set's left-out keys are not part of what is held (the held row names
+      // only what was delivered), and approve or reject never sees them: they
+      // go now.
+      await discardUndelivered(ledger.urls(), ["pending_review"])
+    }
     if (outcome === "held" && claim.ts) {
-      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES)
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES, setHint)
       await releaseJobFinalizeClaim(jobId, fenced ?? claim.ts)
     }
     // A block the gate APPLIED already deleted every owned object and gave the
@@ -732,7 +771,8 @@ export async function finalizeJobWithMedia(
     // nothing: the cancelled row is fenced and discarded here. Only a
     // cancelled row — a failed one is the applied block itself.
     if (outcome === "blocked" && claim.ts) {
-      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_AFTER_MISSED_BLOCK)
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_AFTER_MISSED_BLOCK, setHint)
+      if (fenced) await discardUndelivered()
       if (fenced) await releaseJobFinalizeClaim(jobId, fenced)
     }
     // A lost completion is a row that went terminal while we stored: a cancel
@@ -742,11 +782,15 @@ export async function finalizeJobWithMedia(
     // the two apart in the database: it matches a cancelled or failed row
     // that still carries our claim, never a completed or held one.
     if (outcome === "lost_race" && claim.ts) {
-      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES)
+      const fenced = await discardUnfinishedStores(jobId, job.user_id ?? undefined, ledger.urls(), claim.ts, DISCARD_STATUSES, setHint)
+      if (fenced) await discardUndelivered()
       if (fenced) await releaseJobFinalizeClaim(jobId, fenced)
     }
     return { ok: false, reason: outcome }
   }
+  // Our completion won: the row names what we delivered, so a set's left-out
+  // keys are no one's (another finalize that stored one of them lost).
+  await discardUndelivered(ledger.urls(), ["completed"])
 
   // 5. Commit credits (idempotent: CAS on usage_logs.status='reserved' inside
   //    both branches; null usageLogId is a graceful no-op). When a loop-trim

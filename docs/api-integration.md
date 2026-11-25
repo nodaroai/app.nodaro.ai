@@ -1389,6 +1389,28 @@ single call for it costs.) Without `count` / `models` — or with `count: 1` —
 the answer is the usual `{ "jobId" }`, unchanged. `jobId` is always the first
 job, so code that reads it keeps working.
 
+**A set from one job (`imageSetCount`).** On a model that makes sets (Kling
+Image 4.0, `kling-image-4`), `imageSetCount` (2–10) asks ONE job for a
+coherent set of that many images: the answer is the usual `{ "jobId" }`, and
+the job's output carries every image (`imageUrl` is the first, `imageUrls`
+all of them). The job is held at the price of the images asked (a set of
+two at 2K holds **64 credits**<!-- credits: kling-image-4:2K:x2 -->, a set of
+ten **319 credits**<!-- credits: kling-image-4:2K:x10 -->) and charged for the
+images it stores; a picture that cannot be stored is left out (`imagesNotSaved`
+on the job) and not charged, and a set none of whose pictures can be stored
+fails and is refunded. On any other model, and with a `maskUrl`, the set is dropped and the
+correction is reported in `adjustments`; `imageSetCount` and a `count` above 1
+together are a `400 validation_error`. `1` is one image.
+
+**Named subjects on a flat request (`referenceCharacters`).** On Kling Image
+4.0 a character sent with 2 to 4 of its images goes as one named subject and
+costs one input item. A structured request (`connectedReferences`) is grouped
+from its entries; a flat request (a prompt you assembled, flat
+`referenceImageUrls`) can say which character each reference came from:
+`referenceCharacters: [{ url, characterSlug, defaultName?, variantSlug?,
+description? }]`. It changes neither the prompt nor the images sent, and other
+models ignore it.
+
 - **Credits: the batch as a whole, or not at all.** A batch costs the sum of
   its jobs. The balance is checked against that sum before anything is
   created — short, the request answers `402 insufficient_credits` with
@@ -2645,7 +2667,7 @@ The image-generating routes (`/v1/generate-character`,
 `/v1/generate-character-asset`, and the location equivalents
 `/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
 `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution` (`"1K"` /
-`"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
+`"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
 **credit-affecting** and price exactly like `/v1/generate-image` (composite
 ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
 reserves more credits than the same model at its base tier. A value the chosen
@@ -6599,9 +6621,12 @@ On a previz run:
 - each role's `name` is the **locator** of its model in the clip: its colour,
   or its shape and position (`"the pink model"`, `"the tall model on the
   left"`). A role with pictures and no name is refused;
-- each role may say what it is in `subject` (`"the detective"`, `"a delivery
-  van"`, 1–200 characters), which the result's script calls it by; left out,
-  the script calls it by its picture. Any other run ignores `subject`;
+- each role may say in `subject` what its model becomes in the finished video
+  (1–200 characters), which the result's script calls it by; left out, the
+  script calls it by its picture. Write the finished thing, not the previz
+  model, and leave out the model's colour unless the real thing has it:
+  `"a jockey on a bay racehorse"`, not `"the driver of the red car"`. Any
+  other run ignores `subject`;
 - `previz` holds its options: `lighting: true` also follows the clip's
   lighting direction and lighting changes (default `false`); `sound` is
   `"clip"` (keep the clip's own sound) or `"generated"` (the engine makes
