@@ -5,7 +5,9 @@
 // These tests hold that: every workspace whose tests run on Vitest has a
 // config, every suite config spreads `ciTestOptions()` (or sizes its own
 // limits), no test sets a file-wide limit below the CI default without
-// `scaledTimeout`, the options are empty outside CI, the CI script that
+// `scaledTimeout`, every workspace whose tests use Testing Library gives its
+// waits (findBy*, waitFor) the shared CI limit in a setup file and no file
+// sets that limit lower, the options are empty outside CI, the CI script that
 // replaces the config's reporters names the slow-tests reporter too, and the
 // reporter lists exactly the tests that leaned on the default limit.
 import { test } from "node:test"
@@ -16,13 +18,17 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  CI_ASYNC_UTIL_TIMEOUT_MS,
   CI_HOOK_TIMEOUT_MS,
+  CI_LIMIT_FACTOR,
   CI_TEST_TIMEOUT_MS,
+  LOCAL_ASYNC_UTIL_TIMEOUT_MS,
   LOCAL_TEST_TIMEOUT_MS,
   ciTestOptions,
   isCi,
   scaledTimeout,
   slowTestsReporterPath,
+  testingLibraryOptions,
 } from "../vitest/ci-limits.mjs"
 
 const SLOW_TESTS_REPORTER = slowTestsReporterPath()
@@ -82,6 +88,62 @@ test("no test sets a file-wide limit below the CI default as a plain number", ()
   // Written to be generous, such a limit gets LESS time in CI than a test on the
   // default; `scaledTimeout(ms)` keeps it ms locally and scales it in CI.
   assert.deepEqual(low, [], "use testTimeout: scaledTimeout(ms) from tools/vitest/ci-limits.mjs")
+})
+
+/** The workspace a repository path belongs to: the longest workspace directory it is under. */
+function workspaceOf(file, dirs) {
+  return dirs.filter((w) => file.startsWith(`${w}/`)).sort((a, b) => b.length - a.length)[0]
+}
+
+/** The setup files a suite config names (`setupFiles: ["./a.ts", …]`), as repository paths. */
+function setupFilesOf(config) {
+  const list = read(config).match(/\bsetupFiles\s*:\s*\[([^\]]*)\]/)
+  if (!list) return []
+  return [...list[1].matchAll(/["'`]([^"'`]+)["'`]/g)].map((m) => path.posix.join(path.posix.dirname(config), m[1]))
+}
+
+test("every workspace whose tests use Testing Library gives its waits the shared CI limit in a setup file", () => {
+  const dirs = workspaces()
+  const testFiles = execFileSync("git", ["grep", "-l", "-E", "from ['\"]@testing-library/(react|dom)['\"]", "--", ":(glob)**/*.test.*", ":(glob)**/__tests__/**"], { cwd: root, encoding: "utf8" })
+    .split("\n").filter(Boolean).filter((f) => !f.startsWith("tools/"))
+  const users = [...new Set(testFiles.map((f) => workspaceOf(f, dirs)).filter(Boolean))].sort()
+  assert.ok(users.includes("frontend") && users.includes("packages/picker-ui"), `the listing found the Testing Library workspaces: ${users.join(", ")}`)
+  const configs = suiteConfigs()
+  const missing = users.filter((w) => {
+    const config = configs.find((c) => path.dirname(c) === w && /\/vitest\.config\.[^/]+$/.test(c))
+    if (!config) return true
+    // configure() from @testing-library/dom (/react re-exports the same one) fed by the shared helper.
+    return !setupFilesOf(config).some((s) => {
+      if (!existsSync(path.join(root, s))) return false
+      const src = read(s)
+      return /\bconfigure\(\s*testingLibraryOptions\(\)\s*\)/.test(src) && /["']@testing-library\/(dom|react)["']/.test(src) && /ci-limits\.mjs["']/.test(src)
+    })
+  })
+  // Testing Library's waits default to 1 s; a slow CI host expires them while the test's own limit is far off.
+  assert.deepEqual(missing, [], "call configure(testingLibraryOptions()) (tools/vitest/ci-limits.mjs) in a setup file the workspace's vitest.config names")
+})
+
+test("no file sets Testing Library's wait limit below the CI value as a plain number", () => {
+  const files = execFileSync("git", ["grep", "-l", "asyncUtilTimeout", "--", ":(glob)**/*.ts", ":(glob)**/*.tsx", ":(glob)**/*.mts", ":(glob)**/*.mjs", ":(glob)**/*.js"], { cwd: root, encoding: "utf8" })
+    .split("\n").filter(Boolean).filter((f) => !f.startsWith("tools/__tests__/"))
+  const low = []
+  for (const f of files) {
+    for (const m of read(f).matchAll(/\basyncUtilTimeout\s*:\s*([0-9_]+)\b/g)) {
+      const ms = Number(m[1].replace(/_/g, ""))
+      if (ms < CI_ASYNC_UTIL_TIMEOUT_MS) low.push(`${f}: ${m[1]}`)
+    }
+  }
+  // A file-wide configure({ asyncUtilTimeout: 2000 }) would give every wait in it LESS time in CI than the shared default.
+  assert.deepEqual(low, [], "use configure({ asyncUtilTimeout: scaledTimeout(ms) }) or the shared testingLibraryOptions() from tools/vitest/ci-limits.mjs")
+})
+
+test("testingLibraryOptions: empty locally (Testing Library's 1 s), the CI factor in CI", () => {
+  assert.equal(LOCAL_ASYNC_UTIL_TIMEOUT_MS, 1_000)
+  assert.equal(CI_ASYNC_UTIL_TIMEOUT_MS, LOCAL_ASYNC_UTIL_TIMEOUT_MS * CI_LIMIT_FACTOR)
+  for (const env of [{}, { CI: "" }, { CI: "false" }, { CI: "0" }]) assert.deepEqual(testingLibraryOptions(env), {}, JSON.stringify(env))
+  assert.deepEqual(testingLibraryOptions({ CI: "true" }), { asyncUtilTimeout: CI_ASYNC_UTIL_TIMEOUT_MS })
+  // A wait that fails must report its own error, well before the test's limit cuts it off: room for several such waits.
+  assert.ok(CI_ASYNC_UTIL_TIMEOUT_MS * 4 < CI_TEST_TIMEOUT_MS, "the wait limit stays well under the per-test limit")
 })
 
 test("scaledTimeout: the budget as written locally, scaled by the CI factor in CI", () => {
