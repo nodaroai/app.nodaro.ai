@@ -1130,3 +1130,5 @@ export { AI_AVATAR_PROBED_FIELD, aiAvatarCreditIdOf, SWITCHX_PROBED_FIELD, SWITC
 export { AI_AVATAR_PLANNED_CLIP_SLACK_SEC, aiAvatarAudioSourceId, aiAvatarPlaysAudio, aiAvatarQuoteCreditId } from "./ai-avatar-audio"
 // Replace Audio as a client of its Cloud route: the node's settings, the request body both engines send, the credit id it quotes.
 export { REPLACE_AUDIO_CREDIT_IDS, REPLACE_AUDIO_LEVERS, REPLACE_AUDIO_MODES, REPLACE_AUDIO_MUSIC_PROMPT_MAX, REPLACE_AUDIO_MUSIC_SOURCES, REPLACE_AUDIO_NODE_TYPE, replaceAudioCreditId, replaceAudioLever, replaceAudioMode, replaceAudioMusicSource, replaceAudioNodeBody, replaceAudioNodeCreditId, replaceAudioProblemText, type ReplaceAudioBody, type ReplaceAudioLever, type ReplaceAudioMode, type ReplaceAudioMusicSource, type ReplaceAudioNodeProblem } from "./replace-audio"
+// Generate 3D Scene's brief limit and the plan check's warning codes, shared by the server and the editor.
+export { SCENE3D_BRIEF_MAX_CHARS, SCENE3D_PARTS_DETACHED_CODE, SCENE3D_SHOT_WITHOUT_SUBJECT_CODE } from "./scene3d-authoring"

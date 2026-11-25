@@ -67,6 +67,7 @@ import {
 import {
   WORKSPACE_HEADER_LOWER,
 } from "@nodaro/shared/organizations"
+import { SCENE3D_BRIEF_MAX_CHARS } from "@nodaro/render-rules"
 import { shouldProxyLlmToCloud } from "../lib/cloud-llm-proxy.js"
 import { config } from "../lib/config.js"
 import { enqueueRouteJob } from "../lib/enqueue-route-job.js"
@@ -100,7 +101,12 @@ export const SCENE3D_LLM_FEATURE = "3d-scene"
 /** The deterministic lane's identifier — priced at 0 (see credits.ts). */
 export const SCENE3D_OPS_CREDIT_ID = "3d-scene-ops"
 
-const SCENE3D_PROMPT_MAX = 8000
+const SCENE3D_PROMPT_MAX = SCENE3D_BRIEF_MAX_CHARS
+
+/** Names the limit and the uncapped way to author from a long video: its analysis rides the job, not the brief. */
+const SCENE3D_BRIEF_TOO_LONG =
+  `prompt is longer than ${SCENE3D_BRIEF_MAX_CHARS.toLocaleString("en-US")} characters. To build a scene from a long video, ` +
+  "attach the video itself as a reference (kind \"video\") instead of sending its analysis as the prompt: the analysis then reaches the planner without this limit."
 
 /**
  * DERIVED from the contract, never re-declared beside it.
@@ -157,7 +163,7 @@ const engineFields = {
 
 export const scene3DGenerateBody = z
   .object({
-    prompt: z.string().trim().min(1).max(SCENE3D_PROMPT_MAX),
+    prompt: z.string().trim().min(1).max(SCENE3D_PROMPT_MAX, SCENE3D_BRIEF_TOO_LONG),
     durationSeconds: z
       .number()
       .min(SCENE3D_LIMITS.minDurationSeconds)

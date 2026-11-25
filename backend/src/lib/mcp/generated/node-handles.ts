@@ -67,7 +67,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "forced-alignment": { inputs: ["audio", "transcript"], outputs: ["data"] },
   "framing": { inputs: ["in", "picker-json"], outputs: ["out"] },
   "furniture": { inputs: ["in"], outputs: ["out"] },
-  "generate-3d-scene": { inputs: ["references"], outputs: ["composition"] },
+  "generate-3d-scene": { inputs: ["prompt", "references"], outputs: ["composition"] },
   "generate-image": { inputs: ["prompt", "negative", "references", "assets", "elements", "look", "settings"], outputs: ["image"] },
   "generate-mask": { inputs: ["image"], outputs: ["image", "mask"] },
   "generate-music": { inputs: ["prompt", "ref-audio", "audio-style"], outputs: ["audio"] },

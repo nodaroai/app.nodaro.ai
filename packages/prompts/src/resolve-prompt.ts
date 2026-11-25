@@ -124,6 +124,11 @@ export const NODE_PROMPT_CANDIDATE_FIELDS: Readonly<Record<string, readonly stri
   "image-to-video": ["prompt", "motionPrompt"],
   "generate-video": ["prompt", "motionPrompt"],
   "text-to-audio": ["prompt", "text"],
+  // Generate 3D Scene writes its brief in `scenePrompt`. Both engines compose
+  // it with `appendWired`, so typed directions AND a wired prompt (a Video
+  // Analysis's breakdown) reach the planner; `{Label}` places a wired source
+  // inside the typed text instead.
+  "generate-3d-scene": ["scenePrompt"],
   // Social posts: the orchestrator + frontend executor match per-platform node
   // types (node.type is "instagram-post", "telegram-post", …), NOT a unified
   // "social-publish" type — so every platform needs its own ["caption"] entry.
@@ -134,6 +139,14 @@ export const NODE_PROMPT_CANDIDATE_FIELDS: Readonly<Record<string, readonly stri
   ),
   // Kept for any caller that passes the aggregate type instead of a platform.
   "social-publish": ["caption"],
+}
+
+/** The typed field a node's `{Label}` placements are read from — its first
+ *  prompt candidate, `prompt` when the registry has none. A wired prompt
+ *  source the author placed there by `{Label}` must not ALSO be injected (no
+ *  double); both input resolvers ask this. */
+export function promptPlacementField(nodeType: string | undefined): string {
+  return (nodeType ? ownEntry(NODE_PROMPT_CANDIDATE_FIELDS, nodeType)?.[0] : undefined) ?? "prompt"
 }
 
 export interface ComputeNodePromptArgs {

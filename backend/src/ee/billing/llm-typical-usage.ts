@@ -48,7 +48,10 @@ export const LLM_TYPICAL_USAGE: Readonly<Record<MeteredLlmFeature, Readonly<LlmT
   "motion-graphics-lottie": UNMEASURED,
   "lottie-overlay": UNMEASURED,
   "3d-title": UNMEASURED,
-  "3d-scene": UNMEASURED,
+  // Measured 2026-11-25: the median of five completed Generate 3D Scene runs
+  // (5.5k / 20k per run, repair passes included; outputs ran 15k–26k). The
+  // 2k/2k placeholder quoted Opus 5.5 at ≈11 against runs charged 174–241.
+  "3d-scene": { inputTokens: 5500, outputTokens: 20000 },
   "image-to-text": UNMEASURED,
   "meta-ads-analysis": UNMEASURED,
   "qa-check": UNMEASURED,

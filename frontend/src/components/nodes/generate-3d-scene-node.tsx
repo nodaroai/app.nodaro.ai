@@ -1,11 +1,12 @@
 import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Boxes, Images, Loader2, AlertCircle, History } from "lucide-react"
+import { Boxes, Images, Loader2, AlertCircle, History, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
+import { ACCEPTS_SCENE3D_PROMPT } from "@/lib/scene3d-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useLlmNodeCredits } from "@/hooks/use-llm-price"
 import { NodeJobProgress } from "./node-job-progress"
@@ -113,6 +114,7 @@ function Generate3DSceneNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
+    <HandleWithPopover nodeId={id} nodeType="generate-3d-scene" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR}        icon={<Type />}   side="left"  top="24px"               accepts={ACCEPTS_SCENE3D_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="generate-3d-scene" handleId="references"  type="target" position={Position.Left}  label="References"  color={HANDLE_COLORS.reference} icon={<Images />} side="left"  top="calc(100% - 24px)" />
     <HandleWithPopover nodeId={id} nodeType="generate-3d-scene" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control}   icon={<Boxes />}  side="right" top="24px" />
     </div>

@@ -10165,7 +10165,8 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-3d-scene",
     label: "Generate 3D Scene",
     category: "ai",
-    inputs: ["references"],
+    // `prompt`: wired text becomes the brief (scenePrompt) at run time.
+    inputs: ["prompt", "references"],
     outputs: ["composition"],
     defaultData: {
       label: "Generate 3D Scene",

@@ -10,7 +10,7 @@
 import * as THREE from "three"
 import type { Scene3DObject, Scene3DPlanV1, Vec3 } from "./types"
 import type { Scene3DRenderHandle } from "./handle"
-import { sampleScene3DFrame, type Scene3DFrameSample } from "./sampler"
+import { SCENE3D_CAMERA_FAR, SCENE3D_CAMERA_NEAR, sampleScene3DFrame, type Scene3DFrameSample } from "./sampler"
 import { createClayShadows } from "./clay-shadows"
 
 export interface Scene3DSceneHandle extends Scene3DRenderHandle {
@@ -110,7 +110,7 @@ export function buildScene3DScene(plan: Scene3DPlanV1): Scene3DSceneHandle {
   scene.background = new THREE.Color(plan.backgroundColor || "#000000")
 
   const aspect = plan.height > 0 ? plan.width / plan.height : 16 / 9
-  const camera = new THREE.PerspectiveCamera(50, aspect, 0.05, 5000)
+  const camera = new THREE.PerspectiveCamera(50, aspect, SCENE3D_CAMERA_NEAR, SCENE3D_CAMERA_FAR)
 
   const lighting = plan.lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, lighting?.ambientIntensity ?? 0.6)

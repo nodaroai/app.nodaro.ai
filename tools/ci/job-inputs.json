@@ -6,6 +6,7 @@
       "inputs": [
         "packages/prompts/**",
         "packages/remotion/**",
+        "packages/render-rules/**",
         "packages/shared/**",
         "tools/ci-build-artifact.mjs"
       ],
