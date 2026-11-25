@@ -6,6 +6,7 @@ import { payerCoverage } from "../lib/deployment-payer.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 import { invalidateUserPreferences } from "../lib/mcp/user-preferences.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { MakeOutputsPrivateError, makeOutputsPrivate } from "../lib/gallery-removal.js"
 import { LLM_REASONING_EFFORTS } from "@nodaro/shared/llm-models"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
@@ -211,6 +212,17 @@ export async function userSettingsRoutes(app: FastifyInstance) {
    * Body: { userId: string, publicOutputs?: boolean, promptTemplates?: Record<string, string> }
    *
    * Tier restriction: only Standard and above can set publicOutputs = false
+   *
+   * `publicOutputs: false` also takes every item of the user still in the
+   * public gallery out of it, in the same transaction as the setting, then
+   * sweeps once more after that commit for a generation that completed while
+   * it was open (`makeOutputsPrivate`). It runs FIRST, before any other field
+   * is written: if it fails, no other field is written and the answer is an
+   * error, so the person is never told "private" while items may still be
+   * listed. It runs on every such request, not only on a change, so a retry
+   * is safe. `publicOutputs: true`
+   * republishes nothing. The answer's `hiddenFromGallery` counts what this
+   * request took out (0 otherwise).
    */
   app.patch("/v1/user/settings", async (req, reply) => {
     const parsed = updateSettingsBody.safeParse(req.body ?? {})
@@ -246,10 +258,35 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       })
     }
 
-    // Build update object
+    const otherFieldsSent = Object.entries(parsed.data).some(
+      ([key, value]) => key !== "publicOutputs" && value !== undefined,
+    )
+    if (publicOutputs === undefined && !otherFieldsSent) {
+      return reply.status(400).send({ error: "No valid fields to update" })
+    }
+
+    // Going private hides the existing items in the same transaction as the
+    // setting itself, before anything else is written (see the doc comment).
+    let hiddenFromGallery = 0
+    if (publicOutputs === false) {
+      try {
+        hiddenFromGallery = (await makeOutputsPrivate(userId)).hidden
+      } catch (err) {
+        if (err instanceof MakeOutputsPrivateError && err.reason === "unavailable") {
+          return reply.status(503).send({
+            error: "Private mode can't be turned on right now. Please try again later.",
+          })
+        }
+        console.error("[user-settings] Make outputs private failed:", err)
+        return reply.status(500).send({ error: "Couldn't make outputs private. Please try again." })
+      }
+    }
+
+    // Build update object. `public_outputs = false` was written above, with
+    // the items it hid; `true` is a plain write that republishes nothing.
     const updates: Record<string, unknown> = {}
-    if (publicOutputs !== undefined) {
-      updates.public_outputs = publicOutputs
+    if (publicOutputs === true) {
+      updates.public_outputs = true
     }
 
     if (showRecentNodes !== undefined) {
@@ -324,21 +361,18 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       updates.mcp_preferences = merged
     }
 
-    if (Object.keys(updates).length === 0) {
-      return reply.status(400).send({ error: "No valid fields to update" })
-    }
+    if (Object.keys(updates).length > 0) {
+      const { error: updateError } = await updateProfile(userId, updates)
 
-    const { error: updateError } = await updateProfile(userId, updates)
-
-    if (updateError) {
-      console.error("[user-settings] Update failed:", updateError)
-      return reply.status(500).send({ error: "Failed to update settings" })
+      if (updateError) {
+        console.error("[user-settings] Update failed:", updateError)
+        return reply.status(500).send({ error: "Failed to update settings" })
+      }
     }
 
     // Drop the MCP-side preference cache so the next tool call reads fresh.
     if (mcpPreferences !== undefined) invalidateUserPreferences(userId)
 
-    // Gallery visibility setting only affects NEW jobs — existing items keep their current visibility
     const confirmedPublicOutputs = publicOutputs ?? (profile.public_outputs ?? true)
 
     const confirmedPreferredLocale =
@@ -361,6 +395,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         variableDisplayMode: variableDisplayMode ?? (profile.variable_display_mode ?? "raw"),
         nodeDoubleClickAction: nodeDoubleClickAction ?? (profile.node_double_click_action ?? "settings"),
         monthlyStatementEmail: monthlyStatementEmail ?? (profile.monthly_statement_email ?? false),
+        hiddenFromGallery,
       },
     })
   })

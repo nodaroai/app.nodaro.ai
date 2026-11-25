@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase.js", () => {
   return {
     supabase: {
       from: mockFrom,
+      rpc: vi.fn(),
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "user-123" } },
@@ -444,18 +445,9 @@ describe("DELETE /v1/gallery/:jobId", () => {
     const validJobId = "00000000-0000-4000-8000-000000000002"
     vi.mocked(checkIsAdmin).mockResolvedValue(true)
 
-    let callCount = 0
-    vi.mocked(supabase.from).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // Update jobs: from("jobs").update({is_public: false}).in("id", [jobId]).select("id")
-        const mockSelect = vi.fn().mockResolvedValue({ data: [{ id: validJobId }], error: null })
-        return { update: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ select: mockSelect }) }) } as never
-      }
-      // Update gallery_reports: from("gallery_reports").update({status: "reviewed"}).in("job_id", [...]).eq("status", "pending")
-      const mockEq = vi.fn().mockResolvedValue({ error: null })
-      return { update: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ eq: mockEq }) }) } as never
-    })
+    // remove_jobs_from_gallery (migration 706): the job out of the gallery and
+    // its pending reports reviewed, in one transaction.
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: 1, error: null } as never)
 
     const res = await app.inject({
       method: "DELETE",
@@ -465,6 +457,7 @@ describe("DELETE /v1/gallery/:jobId", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.success).toBe(true)
+    expect(supabase.rpc).toHaveBeenCalledWith("remove_jobs_from_gallery", { p_job_ids: [validJobId] })
   })
 
   it("returns 401 when not authenticated for delete", async () => {

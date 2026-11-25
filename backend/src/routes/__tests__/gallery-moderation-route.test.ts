@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
   calls: [] as Array<{ table: string; method: string; args: unknown[] }>,
 }))
 
-vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true,
@@ -89,6 +89,10 @@ beforeEach(async () => {
   state.batches = []
   state.calls = []
   vi.mocked(supabase.from).mockImplementation(((table: string) => chain(table)) as never)
+  vi.mocked(supabase.rpc).mockImplementation(((name: string, args: { p_job_ids: string[] }) => {
+    state.calls.push({ table: "rpc", method: name, args: [args] })
+    return Promise.resolve({ data: args.p_job_ids.length, error: null })
+  }) as never)
   vi.mocked(checkIsAdmin).mockResolvedValue(false)
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -240,8 +244,27 @@ describe("POST /v1/gallery/remove", () => {
     expect(state.calls.some((c) => c.method === "update")).toBe(false)
   })
 
-  it("takes the items out of the gallery and closes their reports", async () => {
+  it("takes the items out of the gallery and closes their reports, through the one database definition", async () => {
     vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    const res = await app.inject({ method: "POST", url: "/v1/gallery/remove", payload: { jobIds: [...ids, ids[0]] }, headers: { "x-user-id": ADMIN } })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, removed: 2 })
+    // remove_jobs_from_gallery (migration 706) hides the rows AND reviews
+    // their pending reports in one transaction — the same function the
+    // switch to private mode uses, so the two cannot drift.
+    expect(state.calls.filter((c) => c.table === "rpc")).toEqual([
+      { table: "rpc", method: "remove_jobs_from_gallery", args: [{ p_job_ids: ids }] },
+    ])
+    expect(state.calls.some((c) => c.method === "update")).toBe(false)
+  })
+
+  it("on a database without migration 706 yet, keeps the earlier two writes", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "PGRST202", message: "Could not find the function public.remove_jobs_from_gallery(p_job_ids) in the schema cache" },
+    } as never)
     const res = await app.inject({ method: "POST", url: "/v1/gallery/remove", payload: { jobIds: [...ids, ids[0]] }, headers: { "x-user-id": ADMIN } })
 
     expect(res.statusCode).toBe(200)
@@ -255,11 +278,21 @@ describe("POST /v1/gallery/remove", () => {
     expect(reports.find((c) => c.method === "eq")?.args).toEqual(["status", "pending"])
   })
 
+  it("any other database error is a failure, not a fallback", async () => {
+    vi.mocked(checkIsAdmin).mockResolvedValue(true)
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: { code: "57014", message: "statement timeout" } } as never)
+    const res = await app.inject({ method: "POST", url: "/v1/gallery/remove", payload: { jobIds: ids }, headers: { "x-user-id": ADMIN } })
+
+    expect(res.statusCode).toBe(500)
+    expect(state.calls.some((c) => c.method === "update")).toBe(false)
+  })
+
   it("the single delete does the same", async () => {
     vi.mocked(checkIsAdmin).mockResolvedValue(true)
     const res = await app.inject({ method: "DELETE", url: `/v1/gallery/${ids[0]}`, headers: { "x-user-id": ADMIN } })
     expect(res.statusCode).toBe(200)
-    expect(state.calls.find((c) => c.table === "jobs" && c.method === "in")?.args).toEqual(["id", [ids[0]]])
-    expect(state.calls.find((c) => c.table === "gallery_reports" && c.method === "in")?.args).toEqual(["job_id", [ids[0]]])
+    expect(state.calls.filter((c) => c.table === "rpc")).toEqual([
+      { table: "rpc", method: "remove_jobs_from_gallery", args: [{ p_job_ids: [ids[0]] }] },
+    ])
   })
 })

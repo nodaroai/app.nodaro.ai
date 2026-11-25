@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import {
-  Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
+  Loader2, RotateCcw, FileText, Save, Info,
   Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
   Plus, Trash2, Sparkles, Braces, KeyRound, Plug,
 } from "lucide-react"
@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { ConsentSettingsSlot } from "@/components/layout/consent-settings-slot"
+import { GalleryVisibilityCard } from "@/components/settings/gallery-visibility-card"
 import { StandingAuthorizationCard } from "@/components/content-rights/standing-authorization-card"
 import { ContentRestrictionsCard } from "@/components/content-rights/content-restrictions-card"
 import { hasAdmin, hasCredits, isCloud } from "@/lib/edition"
@@ -30,7 +31,7 @@ import {
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { nodeTypeDefaultLabel } from "@/components/editor/config-panel-label"
 import type { SceneNodeType } from "@/types/nodes"
-import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation, useUpdateVariableDisplayModeMutation } from "@/hooks/queries/use-user-settings-queries"
+import { useUserSettings, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation, useUpdateVariableDisplayModeMutation } from "@/hooks/queries/use-user-settings-queries"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { LlmModelSelect } from "@/components/editor/config-panels/llm-model-select"
@@ -75,7 +76,6 @@ export default function SettingsPage() {
   const [editingTextId, setEditingTextId] = useState<string | null>(null)
 
   const { data: settings, isLoading: settingsLoading, isError: settingsError, refetch: refetchSettings } = useUserSettings(user?.id)
-  const toggleMutation = useUpdatePublicOutputsMutation()
   const templatesMutation = useSaveTemplatesMutation()
   const nodeMenuMutation = useUpdateNodeMenuPrefsMutation()
   const variableModeMutation = useUpdateVariableDisplayModeMutation()
@@ -98,17 +98,6 @@ export default function SettingsPage() {
       setSavedTextTemplates(settings.textTemplates)
     }
   }, [settings?.textTemplates])
-
-  async function handleToggle() {
-    if (!user?.id) return
-    try {
-      await toggleMutation.mutateAsync({ userId: user.id, publicOutputs: !publicOutputs })
-      toast.success(!publicOutputs ? t("settings.outputsPublic") : t("settings.outputsPrivate"))
-    } catch (err) {
-      const message = err instanceof Error ? err.message : t("settings.failedToUpdate")
-      toast.error(message)
-    }
-  }
 
   async function handleToggleRecent(next: boolean) {
     if (!user?.id) return
@@ -322,58 +311,10 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">{t("settings.title")}</h1>
 
-      {/* Gallery Visibility */}
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              {publicOutputs ? (
-                <Globe className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <Lock className="h-4 w-4 text-muted-foreground" />
-              )}
-              <h2 className="text-base font-semibold">{t("settings.galleryVisibility")}</h2>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {publicOutputs
-                ? t("settings.galleryPublicDesc")
-                : t("settings.galleryPrivateDesc")}
-            </p>
-          </div>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!canToggle || toggleMutation.isPending}
-                    onClick={handleToggle}
-                    className={cn(
-                      "min-w-[100px]",
-                      !publicOutputs && canToggle && "border-[#ff0073] text-primary-ink",
-                    )}
-                  >
-                    {toggleMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : publicOutputs ? (
-                      t("settings.makePrivate")
-                    ) : (
-                      t("settings.makePublic")
-                    )}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {!canToggle && (
-                <TooltipContent>
-                  {t("settings.availableOnPlan")}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </div>
+      {/* Gallery Visibility — switching to private also hides existing items */}
+      {user?.id && (
+        <GalleryVisibilityCard userId={user.id} publicOutputs={publicOutputs} canToggle={canToggle} />
+      )}
 
       {/* Email preferences (Cloud-only; self-hiding) */}
       <ConsentSettingsSlot />
