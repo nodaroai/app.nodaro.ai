@@ -584,6 +584,14 @@ export async function redactAppExpungeTargets(targets: {
       // first — probing the column, so a process that has not seen it yet
       // still clears it — and released once the clear has landed.
       const covers = await readCoversInScope({ jobIds: chunk }, { probe: true })
+      // `server_output` (695) is not written here (decided 2026-11-25): its
+      // recorded objects were claimed and deleted before this clear, and
+      // what stays on it is the server's own bookkeeping, never the runner's
+      // content: `stored` entries a claim did not take (a held key, a
+      // deployment that deletes nothing, a delete left to the retry pass),
+      // `discarding` markers, the unpruned/pruned marks, a set clean-up's claim
+      // mark, and `rawExtensionUrl` (which no chain lookup reads once
+      // `output_data` is gone).
       const { error } = await supabase.from("jobs").update(jobContentRedaction()).in("id", chunk)
       if (error) throw new Error(`redactAppExpungeTargets failed at jobs: ${error.message}`)
       await releaseCoversOfJobs(covers)

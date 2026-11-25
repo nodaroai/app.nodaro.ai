@@ -1289,10 +1289,11 @@ export interface PluginMediaToolkit {
   /** Mirrors `applyImageWatermark` (`utils/watermark.ts`). */
   applyImageWatermark(buffer: Buffer): Promise<Buffer>
   /**
-   * Mirrors `uploadVideoMaybeWatermark` (`workers/shared.ts:513-541`) — also
+   * Mirrors `uploadVideoMaybeWatermark` (`workers/shared.ts`) — also
    * transcodes to browser-safe when `watermark` is false. Used for the final
    * stitched output only (per-segment uploads go through
-   * `storage.uploadVideoFromUrl`).
+   * `storage.uploadVideoFromUrl`). Returns the browser-safe file's url alone,
+   * so it keeps no original beside it (`storeVideoResult` does).
    */
   uploadVideoMaybeWatermark(
     url: string,
@@ -1300,6 +1301,30 @@ export interface PluginMediaToolkit {
     userId: string | undefined,
     watermark: boolean,
   ): Promise<string>
+  /**
+   * The host's video result funnel (`lib/video-result-store.ts`, decided
+   * 2026-11-22): `uploadVideoMaybeWatermark`, except that when the browser-safe
+   * step would change the file (it is not H.264 yuv420p) and the run is not
+   * watermarked, the file is kept untouched as the original
+   * (`originalVideoUrl`) beside its browser-safe preview (`videoUrl`); a
+   * preview that cannot be made leaves `videoUrl` on the original with
+   * `videoPreviewUnavailable`. The plugin writes EVERY returned field into its
+   * job's `output_data` at the completion write. Optional: an older host has
+   * only `uploadVideoMaybeWatermark`.
+   */
+  storeVideoResult?(
+    url: string,
+    jobId: string,
+    userId: string | undefined,
+    watermark: boolean,
+  ): Promise<PluginStoredVideo>
+}
+
+/** What `media.storeVideoResult` stored: the `output_data` fields of a video result. */
+export interface PluginStoredVideo {
+  videoUrl: string
+  originalVideoUrl?: string
+  videoPreviewUnavailable?: true
 }
 
 // ============================================================================

@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => {
   ))
   const markCompletedMock = vi.fn().mockResolvedValue(true)
   const shouldSaveMock = vi.fn().mockResolvedValue(true)
-  const watermarkUploadMock = vi.fn().mockResolvedValue("https://r2.example/video/j1.mp4")
+  const watermarkUploadMock = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example/video/j1.mp4" })
   const commitMock = vi.fn().mockResolvedValue(undefined)
   const createAssetMock = vi.fn().mockResolvedValue(undefined)
   const thumbnailMock = vi.fn().mockResolvedValue("https://r2.example/thumb.png")

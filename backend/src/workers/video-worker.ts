@@ -44,7 +44,7 @@ import { isPreviewRender } from "../lib/preview-render.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { isLoosenedRun } from "../lib/provider-safety.js"
 import { providerSafetyEntriesForJob } from "../providers/safety-entries.js"
-import { refundJobCredits, settleCancelledMeteredJob, settleDiscardedCancelledMeteredHold, LLM_PRODUCT_JOB_TYPES, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
+import { discardEndedJobStores, refundJobCredits, settleCancelledMeteredJob, settleDiscardedCancelledMeteredHold, LLM_PRODUCT_JOB_TYPES, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
 import { videoSfxHandlers } from "./handlers/video-sfx.js"
@@ -427,6 +427,10 @@ export function createVideoWorker() {
         // R38 (m5): a cancelled metered LLM job requeued for a retry or by a
         // drain still holds its hold — settled here, not left to the sweep.
         await settleDiscardedCancelledMeteredHold(usageLogId, jobId)
+        // A stall re-pick of a row cancelled while no worker was alive: what an
+        // earlier attempt's stores recorded goes now (a live or completed row
+        // is left alone). Never throws.
+        await discardEndedJobStores(jobId)
         laneOutcome = "cancelled"
         return
       }
@@ -495,7 +499,7 @@ export function createVideoWorker() {
       // Bind a cancellation context so provider poll loops abort the moment
       // the user cancels — instead of polling the upstream job to completion.
       try {
-        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx), { finalAttempt: () => isFinalJobAttempt(job) }))
       } catch (firstErr) {
         const firstBlock = safetyBlockOf(firstErr, modelId)
         if (!firstBlock || firstBlock.maxAttempts < 2) throw firstErr
@@ -509,7 +513,7 @@ export function createVideoWorker() {
         console.warn(
           `[worker] Job ${jobId} safety-blocked on ${modelId ?? "unknown model"} — retrying the same request once inline`,
         )
-        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx)))
+        await runHolding(admission.hold, () => runWithJobCancellation(jobId, jobUserId, () => handler(job, ctx), { finalAttempt: () => isFinalJobAttempt(job) }))
       }
 
       // Record execution duration for progress bar estimation
@@ -545,6 +549,10 @@ export function createVideoWorker() {
         // it billed, refunded when nothing was. A no-op (no read) for every
         // other job, whose refund the cancel route owns.
         await settleCancelledMeteredJob(usageLogId, jobId, err)
+        // What the job's video stores kept before the cancel landed (a kept
+        // original recorded before its preview encode was stopped) goes with
+        // the result: deleted, its charge given back. Never throws.
+        await discardEndedJobStores(jobId)
         laneOutcome = "cancelled"
         console.log(`[worker] Job ${jobId} cancelled by user — discarding result, leaving status='cancelled'`)
         return

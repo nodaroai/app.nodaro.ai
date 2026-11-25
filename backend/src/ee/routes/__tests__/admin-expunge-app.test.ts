@@ -85,6 +85,10 @@ vi.mock("@/lib/app-expunge-targets.js", () => ({
 vi.mock("@/lib/storage.js", () => ({
   batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 3, errors: 0 }),
 }))
+// A kept video original's charge is claimed off its job's record and given back (lib/job-server-output.ts).
+const mockRefundClaimed = vi.hoisted(() =>
+  vi.fn(async (..._a: unknown[]) => ({ failedJobIds: new Set<string>(), deletedKeys: new Set<string>(), deleted: 0, errors: 0, refunded: 0 })))
+vi.mock("@/lib/job-server-output.js", () => ({ refundClaimedRecordedObjects: mockRefundClaimed }))
 
 /**
  * THE RELAY DELETE RULE's shared predicate (lib/asset-delete.ts). Expunge
@@ -277,6 +281,10 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
     // Mock RPC
     vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: null } as never)
 
+    // One of the keys is a kept video original its job recorded as charged 9000 bytes (migration 695).
+    vi.mocked(collectAppR2KeyReport).mockResolvedValueOnce({
+      keys: ["key1", "key2", "key3"], kept: [], recorded: [{ key: "key2", userId: "owner-9", bytes: 9000, jobId: "job-9" }],
+    })
     // collectAppR2Keys returns 3 keys (already mocked globally)
     // batchDeleteFromR2 returns { deleted: 3, errors: 0 } (already mocked globally)
 
@@ -302,7 +310,13 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
     expect(collectAppR2KeyReport).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set(), extraExecutions: [] })
 
     // Verify batchDeleteFromR2 called with the collected keys
-    expect(batchDeleteFromR2).toHaveBeenCalledWith(["key1", "key2", "key3"])
+    // The recorded key2 is reaped by its claim (lib/job-server-output.ts); the rest in one batch.
+    expect(batchDeleteFromR2).toHaveBeenCalledWith(["key1", "key3"])
+    // The original's owner gets back exactly what its store was charged.
+    // Claimed (and given back) BEFORE the redaction clears the record.
+    expect(mockRefundClaimed).toHaveBeenCalledWith([{ key: "key2", userId: "owner-9", bytes: 9000, jobId: "job-9" }], new Set(["key1", "key2", "key3"]), "admin-expunge")
+    expect(mockRefundClaimed.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(mockRedactTargets).mock.invocationCallOrder[0] ?? Infinity)
+
 
     // Verify supabase.from was called with expected tables
     const fromArgs = vi.mocked(supabase.from).mock.calls.map((c) => c[0])
@@ -358,6 +372,33 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
 })
 
 describe("DELETE /v1/admin/apps/:appId/expunge — the relay fence", () => {
+
+  it("a recorded object whose claim does not run stops the expunge before the redaction: nothing cleared, the app row kept", async () => {
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "published_apps") {
+        const mockSingle = vi.fn().mockResolvedValue({ data: fakeApp, error: null })
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: mockSingle }) }), delete: vi.fn() } as never
+      }
+      return {} as never
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: null } as never)
+    mockRefundClaimed.mockResolvedValueOnce({ failedJobIds: new Set(["job-9"]), deletedKeys: new Set<string>(), deleted: 0, errors: 0, refunded: 0 })
+    vi.mocked(collectAppR2KeyReport).mockResolvedValueOnce({
+      keys: ["key1", "key2"], kept: [], recorded: [{ key: "key2", userId: "owner-9", bytes: 9000, jobId: "job-9" }],
+    })
+    mockRedactTargets.mockClear()
+    vi.mocked(batchDeleteFromR2).mockClear()
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/admin/apps/${TEST_APP_ID}/expunge`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { reason: TEST_REASON },
+    })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("recorded_claim_failed")
+    expect(mockRedactTargets).not.toHaveBeenCalled()
+    expect(batchDeleteFromR2).not.toHaveBeenCalled()
+  })
   it("passes every harvested key through deletableKeys and never batches a kept one", async () => {
     // A published app whose runs relayed their generations: `collectAppR2Keys`
     // harvests the FAR end's urls out of jobs.output_data, and before this

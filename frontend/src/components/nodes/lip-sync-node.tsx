@@ -1,6 +1,7 @@
 "use client"
 
 import { useT } from "@/lib/i18n"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
@@ -124,6 +125,8 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  // A kept original this browser cannot decode: a message and Download (decided 2026-11-22).
+  const unplayableVideo = useVideoUnplayable(activeUrl)
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -432,6 +435,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         <video
           ref={videoRef}
           src={activeUrl}
+          onError={unplayableVideo.onError}
           crossOrigin="anonymous"
           poster={activeThumbnail || undefined}
           className="w-full h-full object-cover rounded-xl"
@@ -445,6 +449,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
           loop={shouldPlay}
           playsInline
         />
+        {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
 
         {/* Version badge - top left */}
         {results.length > 1 && (

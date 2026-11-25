@@ -191,7 +191,7 @@ vi.mock("../../seedance2-ref-video-settle.js", () => ({
 // finalize re-applies the draft's audio mux (ffmpeg half stubbed).
 const draft = vi.hoisted(() => ({
   render: vi.fn(async (_args: Record<string, unknown>): Promise<number | undefined> => undefined),
-  apply: vi.fn(async (_args: Record<string, unknown>): Promise<{ url: string; warning?: { code: string; message: string } }> => ({ url: "https://r2/hd.mp4" })),
+  apply: vi.fn(async (_args: Record<string, unknown>): Promise<{ stored: { videoUrl: string }; warning?: { code: string; message: string } }> => ({ stored: { videoUrl: "https://r2/hd.mp4" } })),
 }))
 vi.mock("../../seedance-draft-finalize.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../seedance-draft-finalize.js")>()),
@@ -205,7 +205,7 @@ vi.mock("../../seedance-draft-audio-apply.js", async (importOriginal) => ({
 // A recovered lip sync's voice-line step (probe + ffmpeg stubbed; which rows
 // reach it is the real rule).
 const voiceLine = vi.hoisted(() => ({
-  add: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "muxed"; url: string } | { kind: "has-audio" } | { kind: "probe-failed" } | { kind: "voice-unreadable" }> => ({ kind: "has-audio" })),
+  add: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "muxed"; stored: { videoUrl: string } } | { kind: "has-audio" } | { kind: "probe-failed" } | { kind: "voice-unreadable" }> => ({ kind: "has-audio" })),
 }))
 vi.mock("../../lip-sync-voice-line.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lip-sync-voice-line.js")>()),
@@ -214,7 +214,7 @@ vi.mock("../../lip-sync-voice-line.js", async (importOriginal) => ({
 
 // A recovered audio-to-video run's lay-on (the worker's own step, stubbed; which rows reach it is the real rule).
 const drivingLay = vi.hoisted(() => ({
-  lay: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "stored"; url: string } | { kind: "as-rendered" }> => ({ kind: "as-rendered" })),
+  lay: vi.fn(async (_args: Record<string, unknown>): Promise<{ kind: "stored"; url: string; stored: { videoUrl: string } } | { kind: "as-rendered" }> => ({ kind: "as-rendered" })),
 }))
 vi.mock("../../driving-audio-lay.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../driving-audio-lay.js")>()),
@@ -436,7 +436,7 @@ describe("reconcileKieJob", () => {
   it("a recovered draft FINALIZE re-applies the draft's mux; a failed re-apply delivers silent with the warning", async () => {
     mocks.pollKieTaskMock.mockResolvedValueOnce({ resultJson: { resultUrls: ["https://kie.example/hd.mp4"] }, providerMs: 1, taskId: "t-hd" })
     mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
-    draft.apply.mockResolvedValueOnce({ url: "https://r2/hd-silent.mp4", warning: { code: "draft_audio_not_reapplied", message: "no audio" } })
+    draft.apply.mockResolvedValueOnce({ stored: { videoUrl: "https://r2/hd-silent.mp4" }, warning: { code: "draft_audio_not_reapplied", message: "no audio" } })
     const mux = { kind: "voice-track", audioUrl: "https://r2/t.mp3" }
     await reconcileKieJob({
       id: "j-hd", provider_kind: "kie-seedance-draft", provider_task_id: "t-hd", reconcile_attempts: 0, job_type: "video-upscale",
@@ -444,7 +444,7 @@ describe("reconcileKieJob", () => {
     })
     expect(draft.apply).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: "https://kie.example/hd.mp4", mux, draftVideoUrl: "https://r2/draft.mp4", jobId: "j-hd" }))
     expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({
-      mediaUrl: "https://r2/hd-silent.mp4",
+      video: { videoUrl: "https://r2/hd-silent.mp4" },
       extraOutputData: { warningCode: "draft_audio_not_reapplied", warningMessage: "no audio" },
     })
   })
@@ -457,7 +457,7 @@ describe("reconcileKieJob", () => {
     })
     expect(draft.apply).not.toHaveBeenCalled()
     const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
-    expect(arg).not.toHaveProperty("mediaUrl")
+    expect(arg).not.toHaveProperty("video")
     expect(arg).not.toHaveProperty("extraOutputData")
   })
 
@@ -471,12 +471,12 @@ describe("reconcileKieJob", () => {
     it.each(["seedance-2", "seedance-2-5-flash", "minimax-h3"])("%s: a silent clip is finalized with the caller's voice line on it", async (provider) => {
       polled()
       mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
-      voiceLine.add.mockResolvedValueOnce({ kind: "muxed", url: "https://r2/talk-voiced.mp4" })
+      voiceLine.add.mockResolvedValueOnce({ kind: "muxed", stored: { videoUrl: "https://r2/talk-voiced.mp4" } })
       await reconcileKieJob(lipSyncRow(provider))
       expect(voiceLine.add).toHaveBeenCalledWith({ videoUrl: "https://kie.example/talk.mp4", voiceUrl: "https://a/voice.mp3", jobId: "j-ls", userId: "u1", watermark: true })
       expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({
         jobType: "lip-sync",
-        mediaUrl: "https://r2/talk-voiced.mp4",
+        video: { videoUrl: "https://r2/talk-voiced.mp4" },
         extraOutputData: { voiceLineMuxed: true },
       })
     })
@@ -486,7 +486,7 @@ describe("reconcileKieJob", () => {
       await reconcileKieJob(lipSyncRow("seedance-2-5"))
       expect(voiceLine.add).toHaveBeenCalledTimes(1)
       const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
-      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("video")
       expect(arg).not.toHaveProperty("extraOutputData")
     })
 
@@ -498,7 +498,7 @@ describe("reconcileKieJob", () => {
       voiceLine.add.mockResolvedValueOnce(outcome)
       await reconcileKieJob(lipSyncRow("seedance-2-5-flash"))
       const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
-      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("video")
       expect(arg.extraOutputData).toEqual(flag)
       expect(mocks.jobsUpdateMock).not.toHaveBeenCalledWith(expect.objectContaining({ reconcile_attempts: expect.any(Number) }))
     })
@@ -508,7 +508,7 @@ describe("reconcileKieJob", () => {
       await reconcileKieJob(lipSyncRow("seedance-2-5-flash", { audioUrl: undefined }))
       expect(voiceLine.add).toHaveBeenCalledWith(expect.objectContaining({ videoUrl: "https://kie.example/talk.mp4", voiceUrl: undefined }))
       const arg = mocks.finalizeMock.mock.calls[0]![0] as Record<string, unknown>
-      expect(arg).not.toHaveProperty("mediaUrl")
+      expect(arg).not.toHaveProperty("video")
       expect(arg).not.toHaveProperty("extraOutputData")
     })
 
@@ -554,10 +554,10 @@ describe("reconcileKieJob", () => {
     it("goes through the worker's lay-on step; its one stored (watermarked) file is the job's media, never uploaded again", async () => {
       polled()
       mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: true, reconcile_attempts: 0 }, error: null })
-      drivingLay.lay.mockResolvedValueOnce({ kind: "stored", url: "https://r2/videos/j-a2v.mp4" })
+      drivingLay.lay.mockResolvedValueOnce({ kind: "stored", url: "https://r2/videos/j-a2v.mp4", stored: { videoUrl: "https://r2/videos/j-a2v.mp4" } })
       await reconcileKieJob(a2vRow({ audioToVideo: true }))
       expect(drivingLay.lay).toHaveBeenCalledWith({ videoUrl: "https://kie.example/a2v.mp4", audioUrl: "https://a/song.mp3", jobId: "j-a2v", userId: "u1", watermark: true })
-      expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({ mediaUrl: "https://r2/videos/j-a2v.mp4" })
+      expect(mocks.finalizeMock.mock.calls[0]![0]).toMatchObject({ video: { videoUrl: "https://r2/videos/j-a2v.mp4" } })
     })
 
     it("a render with its sound is finalized as it came", async () => {
@@ -565,14 +565,14 @@ describe("reconcileKieJob", () => {
       mocks.jobsSingleMock.mockResolvedValue({ data: { user_id: "u1", should_watermark: false, reconcile_attempts: 0 }, error: null })
       await reconcileKieJob(a2vRow({ audioToVideo: true }))
       expect(drivingLay.lay).toHaveBeenCalledTimes(1)
-      expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("mediaUrl")
+      expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("video")
     })
 
     it("a run the server did not stamp audio-to-video never reaches the step", async () => {
       polled()
       await reconcileKieJob(a2vRow({}))
       expect(drivingLay.lay).not.toHaveBeenCalled()
-      expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("mediaUrl")
+      expect(mocks.finalizeMock.mock.calls[0]![0]).not.toHaveProperty("video")
     })
   })
 

@@ -2,6 +2,8 @@ import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared/nodes"
 import { imageSetSettledBase } from "./image-set-settle.js"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
+import { storedVideoFields, uploadChargedVideoUrls, type StoredVideo } from "./video-result-store.js"
+import { discardStoredObjectsIfJobEnded } from "./job-server-output.js"
 import { discardUndeliveredImages, imageStoredAsItsBytes, storeFormattedImages, type ImageSetNotStoredError } from "./image-output-store.js"
 import { setStoreLimit } from "./image-set-storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
@@ -397,6 +399,12 @@ export interface FinalizeInput {
    *  produced its own image (the inpaint composite) passes it as `result.url`
    *  instead and lets finalize upload it (#2386). */
   mediaUrl?: string
+  /** A video job's pre-stored video (`lib/video-result-store.ts`): every
+   *  field it carries — the browser-safe file, and the original beside it —
+   *  is written at the completion write. A video job never passes a bare
+   *  `mediaUrl` (refused): a url alone would drop the original
+   *  (decided 2026-11-22). Absent: finalize stores `result.url` itself. */
+  video?: StoredVideo
   /** Extra fields merged into `output_data` (e.g., `thumbnailUrl`,
    *  provider-meta extras). Useful for video handlers that need to record
    *  a thumbnail alongside the main URL. A function is handed the stored URLs
@@ -491,6 +499,13 @@ export async function finalizeJobWithMedia(
     // accounting (#2386). Fail before any claim or write.
     throw new Error(`[job-finalize] ${jobType}: pass the image as result.url, not mediaUrl`)
   }
+  if (VIDEO_TYPES.has(jobType) && input.mediaUrl !== undefined) {
+    throw new Error(`[job-finalize] ${jobType}: pass the stored video as \`video\` (lib/video-result-store.ts), not mediaUrl`)
+  }
+  if (!VIDEO_TYPES.has(jobType) && input.video !== undefined) {
+    throw new Error(`[job-finalize] ${jobType}: \`video\` is for a video job`)
+  }
+
   assertExtraImageSets(jobType, input.extraImageSets)
 
   // 1. Load job row (the shape we need for upload / asset / reopen).
@@ -507,7 +522,10 @@ export async function finalizeJobWithMedia(
   if (job.status !== "pending" && job.status !== "processing") {
     // Already terminal — finalize is a no-op so we don't trample a prior
     // completion / cancellation. Caller should treat this as a successful
-    // skip (the work was already done).
+    // skip (the work was already done). A cancelled or failed row: what its
+    // video stores recorded before it ended goes now (every lane that
+    // finalizes reaches this — worker, reconcile, webhook).
+    await discardStoredObjectsIfJobEnded(jobId)
     return { ok: false }
   }
 
@@ -520,7 +538,12 @@ export async function finalizeJobWithMedia(
   //    mid-upload releases the claim below; a crashed one is covered by the
   //    TTL, and its own stall re-pick re-claims immediately (same claimant).
   const claim = await claimJobFinalize(jobId, input.claimant ?? "worker")
-  if (!claim.won) return { ok: false }
+  if (!claim.won) {
+    // A row that just went terminal: a cancelled or failed one's recorded
+    // objects go (a live row lost to another finalizer is left alone).
+    await discardStoredObjectsIfJobEnded(jobId)
+    return { ok: false }
+  }
 
   // 2. The job's open reservation, read from usage_logs by job_id (see
   //    loadUsageLogId for why not jobs.usage_log_id).
@@ -598,17 +621,20 @@ export async function finalizeJobWithMedia(
         r2Urls,
       )
     } else if (VIDEO_TYPES.has(jobType)) {
-      const r2Url = input.mediaUrl !== undefined
-        ? input.mediaUrl
+      const stored = input.video !== undefined
+        ? input.video
         : await uploadVideoMaybeWatermark(
             result.url,
             jobId,
             job.user_id ?? undefined,
             watermark,
           )
-      if (input.mediaUrl === undefined) ledger.add(r2Url)
-      videoR2Url = r2Url
-      outputData = { videoUrl: r2Url }
+      // What this finalize's store charged on upload (the preview). A kept
+      // original is its record's: claimed and given back through it, never
+      // through this ledger, so it is never given back twice.
+      if (input.video === undefined) ledger.add(...uploadChargedVideoUrls(stored))
+      videoR2Url = stored.videoUrl
+      outputData = storedVideoFields(stored)
     } else if (AUDIO_TYPES.has(jobType)) {
       // Audio is never watermarked. Callers with a pre-uploaded R2 URL pass it
       // through `input.mediaUrl`; otherwise finalize uploads via `uploadToR2`.
@@ -660,6 +686,9 @@ export async function finalizeJobWithMedia(
       if (fenced) await discardUndelivered()
       await releaseJobFinalizeClaim(jobId, fenced ?? claim.ts)
     }
+    // A row cancelled or failed under this finalize (a cancelled encode throws
+    // out here): what its video stores recorded goes too.
+    await discardStoredObjectsIfJobEnded(jobId)
     throw err
   }
 

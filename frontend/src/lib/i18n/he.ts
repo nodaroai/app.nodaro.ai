@@ -6520,6 +6520,7 @@ export const he: ChromeDict = {
   "node.pausePreview": "השהיית התצוגה המקדימה",
   "node.playPreview": "הפעלת התצוגה המקדימה",
   "node.videoLoadFailed": "טעינת הווידאו נכשלה",
+  "node.videoCannotPlayInBrowser": "לא ניתן היה להפעיל את הווידאו הזה כאן. נסו להוריד אותו.",
   "node.openUrl": "פתיחת הקישור",
   "node.assembled": "הורכב",
   "node.startState": "מצב פתיחה",

@@ -22,6 +22,7 @@ They read like lightweight RFDs (cf. [Oxide's RFDs](https://rfd.shared.oxide.com
 | [reduce-fan-in](./reduce-fan-in.md) | Fan-in / reduce across fanned-out branches (shipped as the `reduce` node) |
 | [generate-script-multi-handle](./generate-script-multi-handle.md) | Multi-handle output nodes, output dedup, backward compatibility |
 | [sync-node-job-persistence](./sync-node-job-persistence.md) | Job persistence wiring and race-condition safety |
+| [video-original-and-preview](./video-original-and-preview.md) | Keeping a provider's video file untouched beside a browser-safe preview (HDR tone-mapped), keyed on the probed file; what the API and Download return |
 
 ## Nodes & canvas UX
 

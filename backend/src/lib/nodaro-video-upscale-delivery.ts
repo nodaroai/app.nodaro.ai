@@ -25,6 +25,7 @@ import { finalizeJobWithMedia } from "./job-finalize.js"
 import type { HouseModelDeliveryOutcome, HouseModelPricedDelivery } from "./house-model-delivery.js"
 import { PostProcessingError } from "./post-processing-error.js"
 import { supabase } from "./supabase.js"
+import { discardStoredObjectsIfJobEnded } from "./job-server-output.js"
 import { generateAndUploadThumbnail, uploadVideoMaybeWatermark } from "../workers/shared.js"
 
 /** PostgREST's "no row" for a `.single()`: the one read error that says something about the job. */
@@ -47,16 +48,20 @@ export async function deliverNodaroVideoUpscale(d: HouseModelPricedDelivery): Pr
   }
   const row = (error ? null : data) as DeliveryRow | null
   // No row, or a job already ended: the finalize's own graceful skip, before any download.
-  if (!row || (row.status !== "pending" && row.status !== "processing")) return { ok: false }
+  if (!row || (row.status !== "pending" && row.status !== "processing")) {
+    // A cancelled or failed row: what an earlier attempt's store recorded goes now.
+    await discardStoredObjectsIfJobEnded(d.jobId)
+    return { ok: false }
+  }
   const userId = row.user_id ?? undefined
   const stored = await uploadVideoMaybeWatermark(resultUrl, d.jobId, userId, row.should_watermark === true)
-  const thumbnailUrl = await generateAndUploadThumbnail(stored, d.jobId, userId)
+  const thumbnailUrl = await generateAndUploadThumbnail(stored.videoUrl, d.jobId, userId)
   return finalizeJobWithMedia({
     jobId: d.jobId,
     jobType: d.jobType,
     claimant: d.claimant,
     result: { url: resultUrl, cost: d.providerCostUsd, providerUsed: d.id },
-    mediaUrl: stored,
+    video: stored,
     extraOutputData: {
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
       // The output size, where the run reports it.

@@ -66,8 +66,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.imageToVideo.mockResolvedValue(OUT)
   mocks.textToVideo.mockResolvedValue(OUT)
-  mocks.lay.mockResolvedValue({ kind: "stored", url: "https://r2.example.com/videos/job-1.mp4" })
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.lay.mockResolvedValue({ kind: "stored", url: "https://r2.example.com/videos/job-1.mp4", stored: { videoUrl: "https://r2.example.com/videos/job-1.mp4" } })
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.thumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   mocks.finalize.mockResolvedValue({ ok: true })
 })
@@ -82,7 +82,7 @@ describe("audio-to-video in the video worker", () => {
     expect(mocks.lay).toHaveBeenCalledWith({ videoUrl: OUT.url, audioUrl: AUDIO, jobId: "job-1", userId: "user-1", watermark: true })
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
     expect(mocks.uploadToR2).not.toHaveBeenCalled()
-    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example.com/videos/job-1.mp4" }))
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ video: { videoUrl: "https://r2.example.com/videos/job-1.mp4" } }))
   })
 
   it("a render with its sound is stored as usual", async () => {
@@ -109,7 +109,7 @@ describe("LTX 2.5 Fast on Lip Sync in the video worker (decided 2026-11-23)", ()
     expect(options).toMatchObject({ audioToVideo: true, referenceAudioUrls: [AUDIO], resolution: "720p", seed: 7 })
     expect(mocks.lay).toHaveBeenCalledWith({ videoUrl: OUT.url, audioUrl: AUDIO, jobId: "job-1", userId: "user-1", watermark: true })
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
-    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example.com/videos/job-1.mp4" }))
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ video: { videoUrl: "https://r2.example.com/videos/job-1.mp4" } }))
   })
 
   it("a job without the server's stamp is never guessed: it fails before any provider call", async () => {

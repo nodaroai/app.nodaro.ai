@@ -1,6 +1,7 @@
 "use client"
 
 import { useT, tx } from "@/lib/i18n"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
@@ -100,6 +101,8 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  // A kept original this browser cannot decode: a message and Download (decided 2026-11-22).
+  const unplayableVideo = useVideoUnplayable(activeUrl)
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -260,10 +263,12 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       {/* When result exists, show video fullscreen in node */}
       {status !== "running" && activeUrl ? (
       <div className="relative w-full h-full group/video">
-        <video ref={videoRef} src={activeUrl} crossOrigin="anonymous" poster={activeThumbnail || undefined}
+        <video ref={videoRef} src={activeUrl}
+              onError={unplayableVideo.onError} crossOrigin="anonymous" poster={activeThumbnail || undefined}
           className="w-full h-full object-cover rounded-xl"
           onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight }); if (shouldPlay) v.play().catch(() => {}) }}
           autoPlay={shouldPlay} muted loop={shouldPlay} playsInline />
+          {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
 
         {/* Version badge - top left */}
         {results.length > 1 && (

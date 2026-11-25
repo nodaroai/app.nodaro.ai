@@ -106,15 +106,6 @@ export function withUrlsNulled(value: unknown, urls: ReadonlySet<string>): unkno
 // ---------------------------------------------------------------------------
 
 /**
- * The key of a job's result with its audio stripped (Veo's silent copy):
- * `videos/<jobId>-silent.mp4`, in the job's family. ONE builder, called by
- * the writer and by the job-output census, so the two cannot drift apart.
- */
-export function silentVideoKey(jobId: string): string {
-  return `videos/${jobId}-silent.mp4`
-}
-
-/**
  * The key of a Video Remake run's side by side (its original and its result
  * in one video, ee/lib/video-remake-side-by-side.ts):
  * `videos/<jobId>-side-by-side-v<recipe>-<hash>.mp4`, in the job's family.

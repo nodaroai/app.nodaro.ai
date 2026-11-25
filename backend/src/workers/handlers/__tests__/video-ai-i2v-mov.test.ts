@@ -72,7 +72,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.imageToVideo.mockResolvedValue(MP4)
   mocks.uploadToR2.mockResolvedValue("https://r2.example.com/videos/job-1.mov")
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.thumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   mocks.finalize.mockResolvedValue({ ok: true })
 })
@@ -87,7 +87,7 @@ describe("image-to-video — seedance 2.5 mov output (child jobs)", () => {
     expect(mocks.uploadToR2).toHaveBeenCalledWith(MOV.url, "job-1", "video", "user-1", { ext: "mov" })
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
     expect(mocks.thumbnail).toHaveBeenCalledWith("https://r2.example.com/videos/job-1.mov", "job-1", "user-1")
-    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ jobType: "image-to-video", mediaUrl: "https://r2.example.com/videos/job-1.mov" }))
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ jobType: "image-to-video", video: { videoUrl: "https://r2.example.com/videos/job-1.mov" } }))
   })
 
   it("watermarked: the watermark step writes the stored file (an mp4), never a mov", async () => {
@@ -111,7 +111,7 @@ describe("image-to-video — seedance 2.5 mov output (child jobs)", () => {
     const without = providerOptions()
     vi.clearAllMocks()
     mocks.imageToVideo.mockResolvedValue(MP4)
-    mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+    mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
     mocks.finalize.mockResolvedValue({ ok: true })
     await handler(job({ ...CHILD, provider: "kling-4", outputFormat: "mov" }), ctx())
 

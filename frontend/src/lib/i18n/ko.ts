@@ -6374,6 +6374,7 @@ export const ko: ChromeDict = {
   "node.pausePreview": "미리 듣기 일시 정지",
   "node.playPreview": "미리 듣기 재생",
   "node.videoLoadFailed": "동영상을 불러오지 못했습니다",
+  "node.videoCannotPlayInBrowser": "이 동영상을 여기에서 재생할 수 없었습니다. 다운로드해 보세요.",
   "node.openUrl": "URL 열기",
   "node.assembled": "합성됨",
   "node.startState": "시작 상태",

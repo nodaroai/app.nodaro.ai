@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => {
     markJobCompleted: vi.fn().mockResolvedValue(true),
     generateAndUploadThumbnail: vi.fn().mockResolvedValue("https://local.r2/thumbnails/job-1.png"),
     setJobProgress: vi.fn(async () => {}),
-    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://local.r2/videos/job-1.mp4"),
+    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://local.r2/videos/job-1.mp4" }),
     uploadToR2: vi.fn().mockResolvedValue("https://local.r2/audio/job-1.mp3"),
     finalizeJobWithMedia: vi.fn().mockResolvedValue({ ok: true }),
     claimJobFinalize: vi.fn(async (): Promise<{ won: boolean; ts: string | null }> => ({ won: true, ts: "claim-ts-1" })),
@@ -139,7 +139,7 @@ beforeEach(() => {
     status: "completed",
     output_data: { videoUrl: "https://cloud.r2/videos/cloud-job-1.mp4" },
   })
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://local.r2/videos/job-1.mp4")
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://local.r2/videos/job-1.mp4" })
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://local.r2/thumbnails/job-1.png")
   mocks.uploadToR2.mockResolvedValue("https://local.r2/audio/job-1.mp3")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
@@ -652,7 +652,7 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
       expect.objectContaining({
         jobId: "job-1",
         jobType: "text-to-video", // storage classification: a video deliverable
-        mediaUrl: "https://local.r2/videos/job-1.mp4",
+        video: { videoUrl: "https://local.r2/videos/job-1.mp4" },
         result: {
           url: "https://cloud.r2/v.mp4",
           cost: null,

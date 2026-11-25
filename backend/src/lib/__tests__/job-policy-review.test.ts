@@ -95,6 +95,12 @@ const dims = vi.hoisted(() => ({
   withImageDimensions: vi.fn(async <T,>(output: T) => output),
 }))
 vi.mock("../job-output-dimensions.js", () => dims)
+// The prune a completion runs (lib/job-server-output.ts): an approved video's too.
+const prune = vi.hoisted(() => vi.fn(async (_jobId: string) => {}))
+vi.mock("../job-server-output.js", () => ({
+  pruneUnnamedStoredObjects: prune,
+  completionMayHoldRecordedObjects: (_jobId: string, out: { videoUrl?: unknown }) => typeof out?.videoUrl === "string",
+}))
 
 import { approveHeldJob, rejectHeldJob, resolveHeldJob } from "../job-policy-review.js"
 
@@ -123,6 +129,11 @@ beforeEach(() => {
 })
 
 describe("approveHeldJob", () => {
+  it("prunes what the record holds that the approved output does not name (as the worker's own completion does)", async () => {
+    expect(await approveHeldJob("job-1", REVIEWER)).toEqual({ ok: true })
+    expect(prune).toHaveBeenCalledWith("job-1")
+  })
+
   it("settles a failed-loop-trim job at (reserved minus the add-on), not the full reservation", async () => {
     db.heldRow.value!.held_completion_fields = {
       provider: "kie", provider_cost: 0.4, display_cost: 12,

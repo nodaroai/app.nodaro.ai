@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   const mockAttach = vi.fn().mockResolvedValue(true)
   const mockSetPortrait = vi.fn().mockResolvedValue(true)
   const mockAutoAttachObject = vi.fn().mockResolvedValue(undefined)

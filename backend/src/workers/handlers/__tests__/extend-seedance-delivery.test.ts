@@ -160,6 +160,6 @@ describe.skipIf(!isFfmpegAvailable())("the Seedance extend's deliverable (real f
     expect(upload!.transcodeNeeded).toBe(false)
     // H.264 4:2:0 and AAC, in an MP4 (major brand isom, never qt).
     expect(upload!.probe.split("\n")).toEqual(["h264,yuv420p", "aac", "isom"])
-    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example.com/videos/job-1.mp4" }))
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ video: { videoUrl: "https://r2.example.com/videos/job-1.mp4" } }))
   }, 120_000)
 })
