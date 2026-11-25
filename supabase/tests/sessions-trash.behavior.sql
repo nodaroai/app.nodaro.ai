@@ -440,14 +440,14 @@ SELECT pg_temp.assert_eq('the stranger cannot delete the owner''s trashed job',
     '00000000-0000-4000-8000-000000056102', false, 'infinity')::text, '{"deleted": false, "baseUrls": []}');
 SELECT pg_temp.assert_eq('the owner deletes their trashed job for good',
   delete_trashed_job_with_recast_cleanup('00000000-0000-4000-8000-000000056132',
-    '00000000-0000-4000-8000-000000056101', false, 'infinity')::text, '{"deleted": true, "baseUrls": []}');
+    '00000000-0000-4000-8000-000000056101', false, 'infinity')::text, '{"deleted": true, "baseUrls": [], "storedBytesByOwner": {}}');
 SELECT pg_temp.assert_eq('the job and its links are gone',
   (SELECT (SELECT count(*) FROM jobs WHERE id = '00000000-0000-4000-8000-000000056132')
         + (SELECT count(*) FROM session_items WHERE job_id = '00000000-0000-4000-8000-000000056132'))::text, '0');
 UPDATE jobs SET deleted_at = now() - interval '31 days' WHERE id = '00000000-0000-4000-8000-000000056131';
 SELECT pg_temp.assert_eq('the purge deletes a job trashed before the cutoff',
   delete_trashed_job_with_recast_cleanup('00000000-0000-4000-8000-000000056131',
-    NULL, true, now() - interval '30 days')::text, '{"deleted": true, "baseUrls": []}');
+    NULL, true, now() - interval '30 days')::text, '{"deleted": true, "baseUrls": [], "storedBytesByOwner": {}}');
 
 DO $$ BEGIN RAISE NOTICE 'ALL BEHAVIOR ASSERTIONS PASSED'; END $$;
 ROLLBACK;
