@@ -34,6 +34,7 @@ Outputs not produced by the chosen mode/model are inactive. Wire each stem from 
 - A video can be up to **500 MB**. A larger one fails with "This video is larger than 500 MB." and is refunded in full: trim it, or connect its audio instead.
 - A video **without sound** fails with "This video has no sound to separate." and the credits are refunded in full.
 - A picture or a GIF fails with "This file is an image, not audio or a video." and is refunded in full.
+- These three fail on the first attempt, before the split runs. Over the API and MCP the failed job carries the hint `{ "kind": "input-unusable" }` (and `retryable: false` in MCP's job reads): the same file fails the same way, so send a different one.
 - An audio file (an MP3 with cover art included) is separated exactly as it came, as before.
 
 ## Credits

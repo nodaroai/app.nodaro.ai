@@ -1568,6 +1568,17 @@ export type PluginJobErrorHint =
       kind: "request-refused"
       subject?: "input_video"
     }
+  | {
+      /**
+       * The input file was refused from what it is, before any provider call
+       * (a separation's source): a picture or GIF (`image`), a video without
+       * sound (`no-sound`), a video over the size cap (`too-large`). The same
+       * file is refused again. ADDITIVE-OPTIONAL — treat an unknown `reason`
+       * as an unclassified refusal of the input.
+       */
+      kind: "input-unusable"
+      reason: "no-sound" | "image" | "too-large"
+    }
 
 /** One job row as `readJobsOwnedBy` returns it, `output_data` already redacted. */
 export interface PluginOwnedJobRow {

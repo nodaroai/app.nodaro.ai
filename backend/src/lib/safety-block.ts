@@ -152,6 +152,19 @@ export type RequestRefusedHint = {
   subject?: "input_video"
 }
 
+/** WE refused the job's input file before any provider call, from what the
+ *  file is (never from a provider's word): the same file is refused the same
+ *  way on every run, so only a different file can succeed. The job is refunded.
+ *  `reason`: `no-sound` — a video with no sound in it, where the job needs its
+ *  sound (a separation); `image` — a picture or a GIF where audio or a video
+ *  with sound is needed; `too-large` — a video over the size the job can take
+ *  its sound out of. Carried by the thrown error (`failureHint`, read by
+ *  `inputUnusableHintOf`). The set may grow. */
+export type InputUnusableHint = {
+  kind: "input-unusable"
+  reason: "no-sound" | "image" | "too-large"
+}
+
 /** One jsonb column, several verdict sources. A DISCRIMINATED UNION on `kind` —
  *  which was already the discriminant every reader tested
  *  (`hint.kind === "safety-block"`), so widening it breaks none of them.
@@ -162,7 +175,7 @@ export type RequestRefusedHint = {
  *  `lib/private-plugins/types.ts` `PluginJobErrorHint` (and the plugin repo's
  *  copy of that contract).
  *  `packages/client/dist/index.d.ts` is REBUILT, never hand-edited. */
-export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint
+export type ErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint | InputUnusableHint
 
 /** A credits refusal code as a route sends it; anything else is not passed on. */
 const CREDITS_CODE_RE = /^[a-z0-9_]{1,64}$/
@@ -217,6 +230,33 @@ export function queueTimeoutHintOf(err: unknown): QueueTimeoutHint | null {
           typeof waitedMinutes === "number" && Number.isFinite(waitedMinutes)
         ) {
           return { kind: "queue-timeout", reason: reason as QueueTimeoutHint["reason"], waitedMinutes: Math.max(0, Math.floor(waitedMinutes)) }
+        }
+      }
+      cur = (cur as { cause?: unknown }).cause
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const INPUT_UNUSABLE_REASONS: ReadonlySet<InputUnusableHint["reason"]> = new Set(["no-sound", "image", "too-large"])
+
+/** An input file we refused from what it is, read off the thrown error (or
+ *  anything on its `cause` chain): a duck-typed `failureHint: { kind:
+ *  "input-unusable", reason }` (the separation's refusals,
+ *  providers/audio/separable-audio.ts). Returns a FRESH object of exactly those
+ *  two fields, `reason` one of the closed set; anything malformed is null.
+ *  Never throws, like `creditsHintOf`. */
+export function inputUnusableHintOf(err: unknown): InputUnusableHint | null {
+  try {
+    let cur: unknown = err
+    for (let depth = 0; depth < 8 && typeof cur === "object" && cur !== null; depth++) {
+      const hint = (cur as { failureHint?: unknown }).failureHint
+      if (typeof hint === "object" && hint !== null) {
+        const { kind, reason } = hint as { kind?: unknown; reason?: unknown }
+        if (kind === "input-unusable" && typeof reason === "string" && INPUT_UNUSABLE_REASONS.has(reason as InputUnusableHint["reason"])) {
+          return { kind: "input-unusable", reason: reason as InputUnusableHint["reason"] }
         }
       }
       cur = (cur as { cause?: unknown }).cause

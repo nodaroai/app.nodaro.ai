@@ -127,6 +127,21 @@ export type RequestRefusedHint = {
 }
 
 /**
+ * The platform refused the job's input file from what the file is, before any
+ * provider call, so the same file is refused the same way on every run: do not
+ * run it again unchanged, send a different file. The job's credits are
+ * refunded. `reason`: `image` — a picture or a GIF where audio or a video with
+ * sound is needed (a separation's source); `no-sound` — a video with no sound
+ * in it, where its sound is what the job uses; `too-large` — a video over the
+ * size the job can take its sound out of (send a shorter clip, or its audio).
+ * Treat an unknown `reason` as a refusal of the input file.
+ */
+export type InputUnusableHint = {
+  kind: "input-unusable"
+  reason: "no-sound" | "image" | "too-large"
+}
+
+/**
  * A job's `jobs.error_hint` (migration 376) — a user-safe, machine-readable
  * failure verdict, so a caller can act on it without parsing `error_message`
  * prose. One column, several verdict sources; `kind` is the discriminant.
@@ -137,7 +152,7 @@ export type RequestRefusedHint = {
  * pasted here verbatim in the same change, with a changeset.
  * `packages/client/dist/index.d.ts` is REBUILT, never hand-edited.
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint | InputUnusableHint
 
 /**
  * The billing lifecycle of a job's credit reservation — `usage_logs.status`

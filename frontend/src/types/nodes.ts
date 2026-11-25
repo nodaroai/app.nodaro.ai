@@ -317,6 +317,18 @@ export interface RequestRefusedHint {
 }
 
 /**
+ * The input file was refused from what it is, before any provider call (a
+ * separation's source: a picture or GIF, a video without sound, a video over
+ * the size cap): the same file is refused again. Shown like any unclassified
+ * failure (its sentence is the error message). Mirrors `InputUnusableHint` in
+ * `backend/src/lib/safety-block.ts`.
+ */
+export interface InputUnusableHint {
+  readonly kind: "input-unusable"
+  readonly reason: "no-sound" | "image" | "too-large"
+}
+
+/**
  * Structured hint attached to a job's failure. One jsonb column, several verdict
  * sources — a DISCRIMINATED UNION on `kind`, which was already the
  * discriminant every reader tested, so widening it breaks none of them.
@@ -327,7 +339,7 @@ export interface RequestRefusedHint {
  * `backend/src/lib/safety-block.ts`'s `ErrorHint`; update both in the same
  * change (that file's comment says the same thing).
  */
-export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint
+export type JobErrorHint = SafetyBlockHint | PolicyBlockHint | CreditsHint | InputRefusedHint | QueueTimeoutHint | RequestRefusedHint | InputUnusableHint
 
 /** Named region from a grok-2 segment map (RefineRegionsSection). */
 export interface GrokSegmentInfo {
