@@ -79,7 +79,14 @@ export interface SurfaceProfile {
   imports?: { links: boolean }
   header?: SurfaceHeaderMode
   /** The tools app's mini apps on a white-label deployment; see the backend twin. Absent = nothing of it is offered. */
-  toolApps?: { menus: boolean; pages: boolean; pictures?: Record<string, string>; apps?: string[] }
+  toolApps?: {
+    menus: boolean
+    pages: boolean
+    pictures?: Record<string, string>
+    apps?: string[]
+    /** The deployment's own before-and-after examples for a mini app, by app id. The tools app's pages show them; nothing here reads them. */
+    examples?: Record<string, { before: string; after: string; ask?: string; title?: string; text?: string }[]>
+  }
   /** The deployment's own welcome samples, by world; see the backend twin. Absent = none. */
   samples?: {
     image: { prompt: string; picture: string; model?: string; aspectRatio?: string; center?: true }[]

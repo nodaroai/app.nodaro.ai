@@ -101,6 +101,12 @@ describe("the backend's surface projection reaches a reader whole", () => {
         pages: true,
         pictures: { "image-upscale": "/brand/apps/upscale.webp", "tile:image:createImage": "https://media.acme.example/create.png" },
         apps: ["image-upscale", "video-captions"],
+        examples: {
+          "image-upscale": [
+            { before: "/brand/examples/room-before.webp", after: "https://media.acme.example/room-after.webp", ask: "make it sharper", title: "A sharper room", text: "One picture in, one out." },
+            { before: "/brand/examples/street-before.webp", after: "/brand/examples/street-after.webp" },
+          ],
+        },
       },
       samples: {
         image: [{ prompt: "a lighthouse at dusk", picture: "/brand/samples/lighthouse.webp", model: "model-a", aspectRatio: "16:9", center: true }],
@@ -155,10 +161,55 @@ describe("the backend's surface projection reaches a reader whole", () => {
       imports: { links: true },
       header: "default",
       worlds: {},
-      toolApps: { menus: false, pages: false, pictures: {} },
+      toolApps: { menus: false, pages: false, pictures: {}, examples: {} },
       samples: { image: [], video: [] },
       strings: {},
     })
+  })
+
+  it("an app's own examples: an authored profile's reach a reader as the backend kept them, and a profile with none gives a reader none", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const kept = { before: "/brand/examples/room-before.webp", after: "https://media.acme.example/room-after.webp", ask: "make it sharper", title: "A sharper room", text: "One picture in, one out." }
+    const { rendered, read } = readerView({
+      header: "white-label",
+      toolApps: {
+        pages: true,
+        examples: {
+          "image-upscale": [{ ...kept, before: ` ${kept.before} `, title: `  ${kept.title}  `, note: "a key no reader knows" }, { before: "/brand/examples/alone.webp" }],
+          "Bad Id": [kept],
+          "video-captions": "none",
+        },
+      },
+    })
+    expect(rendered.toolApps).toEqual({ menus: false, pages: true, examples: { "image-upscale": [kept] } })
+    expect((read as { toolApps: unknown }).toolApps).toEqual({ menus: false, pages: true, pictures: {}, examples: { "image-upscale": [kept] } })
+
+    // The key is the deployment's to set whatever its header: it reaches a page as `toolApps.pictures` does.
+    const plain = readerView({ toolApps: { examples: { "image-upscale": [kept] } } })
+    expect(plain.rendered.toolApps).toEqual({ menus: false, pages: false, examples: { "image-upscale": [kept] } })
+
+    const none = readerView({ header: "white-label", toolApps: { pages: true, examples: { "image-upscale": [{ before: "/brand/examples/alone.webp" }] } } })
+    expect(none.rendered.toolApps).toEqual({ menus: false, pages: true })
+    expect((none.read as { toolApps: unknown }).toolApps).toEqual({ menus: false, pages: true, pictures: {}, examples: {} })
+
+    // Past both limits, with a key that is no app id and an app with no example among them: the reader keeps what was rendered.
+    const many = Array.from({ length: 9 }, (_, i) => ({ before: `/brand/examples/${i}-before.webp`, after: `/brand/examples/${i}-after.webp` }))
+    const apps = Object.fromEntries(Array.from({ length: 205 }, (_, i) => [`app-${i}`, many]))
+    const full = readerView({ toolApps: { examples: { "Bad Id": many, "app-none": [], 9: many, ...apps } } })
+    const atLimits = (full.rendered.toolApps as { examples: Record<string, unknown[]> }).examples
+    expect(Object.keys(atLimits)).toHaveLength(200)
+    expect(Object.keys(atLimits).slice(0, 2)).toEqual(["9", "app-0"])
+    expect(atLimits["app-0"]).toEqual(many.slice(0, 6))
+    expect((full.read as { toolApps: { examples: unknown } }).toolApps.examples).toEqual(atLimits)
+    warn.mockRestore()
+  })
+
+  it("community: the profile is ignored, so no example reaches a page", () => {
+    config.EDITION = "community"
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ toolApps: { pages: true, examples: { "image-upscale": [{ before: "/b.webp", after: "/a.webp" }] } } })
+    __resetSurfaceProfileCacheForTests()
+    expect(renderSurfaceProfileForRuntimeConfig()).toBe("")
+    expect(parseRuntimeConfig(buildRuntimeConfig({ RUNTIME_SURFACE_PROFILE: renderSurfaceProfileForRuntimeConfig() }))).not.toHaveProperty("surface")
   })
 })
 
