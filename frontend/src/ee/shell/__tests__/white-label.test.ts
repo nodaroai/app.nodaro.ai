@@ -7,6 +7,8 @@ import {
   unitTranslator,
   WHITE_LABEL_MENU_PAGES,
   WHITE_LABEL_MENU_PAGES_NEVER_NAMED,
+  whiteLabelAppsMenus,
+  whiteLabelSoonWorlds,
   whiteLabelWorldMenus,
   whiteLabelWorlds,
   withHeaderBalance,
@@ -41,6 +43,34 @@ describe("whiteLabelWorlds", () => {
 
   it("no world offered: none drawn", () => {
     expect(whiteLabelWorlds([])).toEqual([])
+  })
+})
+
+describe("whiteLabelSoonWorlds", () => {
+  it("the worlds to come, in the profile's order, only those with an address on the site; none where it names none", () => {
+    expect(whiteLabelSoonWorlds(["music", "explore", "voice"])).toEqual(["music", "voice"])
+    expect(whiteLabelSoonWorlds([])).toEqual([])
+    expect(whiteLabelSoonWorlds(undefined)).toEqual([])
+  })
+})
+
+describe("whiteLabelAppsMenus", () => {
+  it("nothing unless the deployment asks for the menus with the literal true", () => {
+    expect(whiteLabelAppsMenus(undefined)).toEqual({})
+    expect(whiteLabelAppsMenus({ menus: false, apps: ["image-upscale"], pictures: { "image-upscale": "/brand/upscale.webp" } })).toEqual({})
+    expect(whiteLabelAppsMenus({ menus: "true" as unknown as boolean })).toEqual({})
+  })
+
+  it("the apps-first menus with the apps the deployment names; with no list, no app is drawn", () => {
+    expect(whiteLabelAppsMenus({ menus: true, apps: ["image-upscale", "video-captions"] })).toEqual({ appsMenus: true, offeredApps: ["image-upscale", "video-captions"] })
+    expect(whiteLabelAppsMenus({ menus: true })).toEqual({ appsMenus: true, offeredApps: [] })
+    expect(whiteLabelAppsMenus({ menus: true, apps: [] })).toEqual({ appsMenus: true, offeredApps: [] })
+  })
+
+  it("its own pictures ride along, where it gives any", () => {
+    const pictures = { "image-upscale": "/brand/upscale.webp", "tile:image:createImage": "https://media.acme.example/create.png" }
+    expect(whiteLabelAppsMenus({ menus: true, apps: ["image-upscale"], pictures })).toEqual({ appsMenus: true, offeredApps: ["image-upscale"], appPictures: pictures })
+    expect(whiteLabelAppsMenus({ menus: true, pictures: {} })).not.toHaveProperty("appPictures")
   })
 })
 

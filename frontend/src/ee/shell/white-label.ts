@@ -87,6 +87,47 @@ export function whiteLabelWorldMenus(unavailable: ((nodeType: string) => boolean
 }
 
 /**
+ * The worlds to come that the header marks "Soon": the profile's `worlds.soon`
+ * with an address on the site (`WHITE_LABEL_WORLD_PATHS`), in the profile's
+ * order. Such a world is never offered, so it is never among `whiteLabelWorlds`.
+ */
+export function whiteLabelSoonWorlds(soon: readonly WorldId[] | undefined): SiteWorldId[] {
+  return (soon ?? []).filter((id) => WHITE_LABEL_WORLD_PATHS[id] !== undefined)
+}
+
+/** The profile's `toolApps`, as this header reads it. */
+export interface WhiteLabelToolApps {
+  readonly menus: boolean
+  readonly pictures?: Readonly<Record<string, string>>
+  readonly apps?: readonly string[]
+}
+
+/** The header's props for the tools app's mini apps. */
+export interface WhiteLabelAppsMenus {
+  readonly appsMenus?: true
+  readonly offeredApps?: readonly string[]
+  readonly appPictures?: Readonly<Record<string, string>>
+}
+
+/**
+ * The apps-first menus, where the deployment asks for them (`toolApps.menus`),
+ * so this header and the worlds app's own agree on the site. The apps it
+ * lists are the ones the deployment names (`toolApps.apps`): this app does not
+ * know which node types a mini app runs, so with no list it draws no app (the
+ * header's rule for a white-label host). Its own pictures ride along
+ * (`toolApps.pictures`). Nothing where the deployment does not ask.
+ */
+export function whiteLabelAppsMenus(toolApps: WhiteLabelToolApps | undefined): WhiteLabelAppsMenus {
+  if (toolApps?.menus !== true) return {}
+  const pictures = toolApps.pictures ?? {}
+  return {
+    appsMenus: true,
+    offeredApps: toolApps.apps ?? [],
+    ...(Object.keys(pictures).length > 0 ? { appPictures: pictures } : {}),
+  }
+}
+
+/**
  * Where a link of the white-label header leads, as this app's router sees
  * it: the path of one of this app's own pages (the App world, `/projects`),
  * or null for a page another app serves on the same site (a world, the

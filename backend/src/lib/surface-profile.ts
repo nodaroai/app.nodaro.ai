@@ -167,6 +167,8 @@ export interface SurfaceToolApps {
   menus: boolean
   pages: boolean
   pictures?: Record<string, string>
+  /** The mini apps the deployment offers, by id. Present: exactly those may be offered (`[]`: none). Absent: every app the viewer may run. */
+  apps?: string[]
 }
 
 /** One welcome sample of a deployment's own: the prompt it sets, the picture it made, and how it was made. */

@@ -96,7 +96,12 @@ describe("the backend's surface projection reaches a reader whole", () => {
       worlds: { allow: ["image", "video", "app"], home: "app", order: ["app", "image"], soon: ["music"] },
       imports: { links: false },
       header: "white-label",
-      toolApps: { menus: true, pages: true, pictures: { "image-upscale": "/brand/apps/upscale.webp", "tile:image:createImage": "https://media.acme.example/create.png" } },
+      toolApps: {
+        menus: true,
+        pages: true,
+        pictures: { "image-upscale": "/brand/apps/upscale.webp", "tile:image:createImage": "https://media.acme.example/create.png" },
+        apps: ["image-upscale", "video-captions"],
+      },
       samples: {
         image: [{ prompt: "a lighthouse at dusk", picture: "/brand/samples/lighthouse.webp", model: "model-a", aspectRatio: "16:9", center: true }],
         video: [
