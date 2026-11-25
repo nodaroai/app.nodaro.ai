@@ -2369,6 +2369,19 @@ logo is dropped with a warning and the rest of `brand` is kept.
     (an app's id such as `image-upscale`, or `tile:<world>:<tile>`). Each
     value is a path on this site or an `https://` URL; any other entry is
     dropped with a warning. At most 200.
+  - `examples`: the deployment's own before-and-after examples for a mini
+    app, by app id (`image-upscale`), each app a list of
+    `{ "before", "after" }`. The tools app shows them on the app's own page
+    (`/apps/<id>`). `before` and `after` are a picture each, as a path on
+    this site or an `https://` URL. An example may also give `ask` (the words
+    the person typed, shown between the two pictures, at most 200
+    characters), `title` (at most 80) and `text` (one line under the title,
+    at most 240). At most 6 examples an app, for at most 200 apps: the first
+    6 usable examples of an app, and the first 200 apps that have one. A key
+    that is not an app id, a value that is not a list and an example without
+    both pictures are each dropped alone, with a warning. An `ask`, `title`
+    or `text` that is empty or over its limit is left out, with a warning,
+    and its example is kept. Leave the key out for none.
   - `apps`: the mini apps the deployment offers, by id (`image-upscale`). As
     with `worlds.allow`, **presence is what narrows**: a list offers exactly
     its apps (each still only while the viewer may run it), and `[]` offers

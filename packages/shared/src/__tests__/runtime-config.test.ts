@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
 import {
+  MAX_APP_EXAMPLES,
+  MAX_APP_EXAMPLE_ASK,
+  MAX_APP_EXAMPLE_TEXT,
+  MAX_APP_EXAMPLE_TITLE,
   MAX_SAMPLE_REFERENCES,
   MAX_SURFACE_SAMPLES,
   MAX_TOOL_APPS,
@@ -31,6 +35,7 @@ import {
   surfaceUnitLabel,
   worldAllowed,
   worldSoon,
+  type SurfaceAppExample,
 } from "../entries/runtime-config.js"
 
 describe("worlds", () => {
@@ -252,7 +257,7 @@ describe("parseRuntimeSurface — every default applied", () => {
       imports: { links: true },
       header: "default",
       worlds: {},
-      toolApps: { menus: false, pages: false, pictures: {} },
+      toolApps: { menus: false, pages: false, pictures: {}, examples: {} },
       samples: { image: [], video: [] },
       strings: {},
     })
@@ -260,9 +265,9 @@ describe("parseRuntimeSurface — every default applied", () => {
   })
 
   it("toolApps: a switch is on only for the literal true; pictures by key, each an address a deployment may name", () => {
-    expect(parseRuntimeSurface({ toolApps: { menus: true, pages: true } }).toolApps).toEqual({ menus: true, pages: true, pictures: {} })
-    expect(parseRuntimeSurface({ toolApps: { menus: "true", pages: 1 } }).toolApps).toEqual({ menus: false, pages: false, pictures: {} })
-    expect(parseRuntimeSurface({ toolApps: true }).toolApps).toEqual({ menus: false, pages: false, pictures: {} })
+    expect(parseRuntimeSurface({ toolApps: { menus: true, pages: true } }).toolApps).toEqual({ menus: true, pages: true, pictures: {}, examples: {} })
+    expect(parseRuntimeSurface({ toolApps: { menus: "true", pages: 1 } }).toolApps).toEqual({ menus: false, pages: false, pictures: {}, examples: {} })
+    expect(parseRuntimeSurface({ toolApps: true }).toolApps).toEqual({ menus: false, pages: false, pictures: {}, examples: {} })
     const pictures = {
       "image-upscale": " /brand/apps/upscale.webp ",
       "tile:image:createImage": "https://media.example.com/create.png",
@@ -291,6 +296,78 @@ describe("parseRuntimeSurface — every default applied", () => {
     expect(parseRuntimeSurface({ toolApps: { apps: many } }).toolApps.apps).toHaveLength(MAX_TOOL_APPS)
     expect(isToolAppId("image-upscale")).toBe(true)
     for (const bad of ["Image-Upscale", "image upscale", "-image", "", "x".repeat(81), 7, null, undefined]) expect(isToolAppId(bad)).toBe(false)
+  })
+
+  it("toolApps.examples: by app id, each a before and an after a deployment may name; the ask, title and text when given", () => {
+    const examples = {
+      "image-upscale": [
+        {
+          before: " /brand/examples/room-before.webp ",
+          after: "https://media.example.com/room-after.webp",
+          ask: "  make it a loft  ",
+          title: "  A loft  ",
+          text: "  One picture in, one out.  ",
+          note: "a key no reader knows",
+        },
+        { before: "/b.webp", after: "/a.webp", ask: "", title: 7, text: "   " },
+        { before: "/b.webp" },
+        { after: "/a.webp" },
+        { before: "//elsewhere.example.com/b.webp", after: "/a.webp" },
+        { before: "/b.webp", after: "http://media.example.com/a.webp" },
+        { before: "/b.webp", after: "data:image/png;base64,AAAA" },
+        { before: 7, after: null },
+        "a string",
+        null,
+      ],
+      "video-captions": [{ before: "/c-before.webp", after: "/c-after.webp" }],
+    }
+    const kept: Readonly<Record<string, readonly SurfaceAppExample[]>> = parseRuntimeSurface({ toolApps: { examples } }).toolApps.examples
+    expect(kept).toEqual({
+      "image-upscale": [
+        { before: "/brand/examples/room-before.webp", after: "https://media.example.com/room-after.webp", ask: "make it a loft", title: "A loft", text: "One picture in, one out." },
+        { before: "/b.webp", after: "/a.webp" },
+      ],
+      "video-captions": [{ before: "/c-before.webp", after: "/c-after.webp" }],
+    })
+  })
+
+  it("toolApps.examples: a key that is no app id, a value that is no list and an app left with no example are left out", () => {
+    const one = [{ before: "/b.webp", after: "/a.webp" }]
+    const examples = {
+      "image-upscale": one,
+      "Image-Upscale": one,
+      "tile:image:createImage": one,
+      "-image": one,
+      "": one,
+      ["x".repeat(81)]: one,
+      "video-trim": one[0],
+      "video-captions": "none",
+      "image-outpaint": [],
+      "image-relight": [{ before: "/b.webp" }],
+    }
+    expect(parseRuntimeSurface({ toolApps: { examples } }).toolApps.examples).toEqual({ "image-upscale": one })
+    // Absent, or anything but an object by app id: none.
+    for (const bad of [undefined, null, "all", 7, true, one]) expect(parseRuntimeSurface({ toolApps: { examples: bad } }).toolApps.examples).toEqual({})
+    expect(parseRuntimeSurface({}).toolApps.examples).toEqual({})
+    expect(parseRuntimeSurface({ toolApps: true }).toolApps.examples).toEqual({})
+    // The examples say nothing about what is offered: the switches and the list stand as they were.
+    expect(parseRuntimeSurface({ toolApps: { examples } }).toolApps).toEqual({ menus: false, pages: false, pictures: {}, examples: { "image-upscale": one } })
+  })
+
+  it("toolApps.examples: at most six an app and 200 apps; an ask, a title or a text over its limit is left out alone", () => {
+    const example = { before: "/b.webp", after: "/a.webp" }
+    const many = Array.from({ length: MAX_APP_EXAMPLES + 3 }, (_, i) => ({ ...example, title: `example ${i}` }))
+    // The first six that are examples: an entry that is not one takes no place.
+    const first = parseRuntimeSurface({ toolApps: { examples: { "image-upscale": [{ before: "/b.webp" }, ...many] } } }).toolApps.examples["image-upscale"]
+    expect(first?.map((e) => e.title)).toEqual(many.slice(0, MAX_APP_EXAMPLES).map((e) => e.title))
+    // The first 200 apps that have an example: a key that is no app id, or an app with none, takes no place.
+    const apps = Object.fromEntries(Array.from({ length: MAX_TOOL_APPS + 5 }, (_, i) => [`app-${i}`, [example]]))
+    const keptApps = Object.keys(parseRuntimeSurface({ toolApps: { examples: { "Bad Id": [example], "app-none": [], ...apps } } }).toolApps.examples)
+    expect(keptApps).toEqual(Object.keys(apps).slice(0, MAX_TOOL_APPS))
+    const atLimit = { ...example, ask: "a".repeat(MAX_APP_EXAMPLE_ASK), title: "t".repeat(MAX_APP_EXAMPLE_TITLE), text: "x".repeat(MAX_APP_EXAMPLE_TEXT) }
+    const over = { ...example, ask: "a".repeat(MAX_APP_EXAMPLE_ASK + 1), title: "t".repeat(MAX_APP_EXAMPLE_TITLE + 1), text: "x".repeat(MAX_APP_EXAMPLE_TEXT + 1) }
+    expect(parseRuntimeSurface({ toolApps: { examples: { "image-upscale": [atLimit, over, { ...over, title: "Kept" }] } } }).toolApps.examples["image-upscale"]).toEqual([atLimit, example, { ...example, title: "Kept" }])
+    expect([MAX_APP_EXAMPLES, MAX_APP_EXAMPLE_ASK, MAX_APP_EXAMPLE_TITLE, MAX_APP_EXAMPLE_TEXT]).toEqual([6, 200, 80, 240])
   })
 
   it("worlds.soon keeps known ids once each, and is absent when none is left", () => {
