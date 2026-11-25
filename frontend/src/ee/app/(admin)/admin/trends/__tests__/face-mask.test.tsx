@@ -10,6 +10,7 @@
  * - Publish refused for the face mask reads as a sentence.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -67,7 +68,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("the stored face mask", { timeout: 20_000 }, () => {
+describe("the stored face mask", { timeout: scaledTimeout(20_000) }, () => {
   it("makes one, shows it with its stats, and approves it with the held revision, adopting the next", async () => {
     const user = userEvent.setup()
     routes[`POST ${BASE}/face-mask`] = () => ({ status: 202, body: { data: { jobId: JOB, version: 1, revision: "rev-2", recorded: true, draftMoved: false } } })

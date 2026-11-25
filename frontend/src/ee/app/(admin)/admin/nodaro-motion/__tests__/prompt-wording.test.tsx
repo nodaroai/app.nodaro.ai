@@ -9,6 +9,7 @@
  * The Precise tab has no wording and its preview never sends one.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -86,7 +87,7 @@ const motionTab = async (name: string) => {
   return section
 }
 
-describe("Admin → Video Remake → the Flex prompt wording", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → the Flex prompt wording", { timeout: scaledTimeout(20_000) }, () => {
   it("promptWordingToSave keeps only the engines on the new wording", () => {
     expect(promptWordingToSave(null)).toEqual({})
     expect(promptWordingToSave({ "nodaro-prism": "current", "nodaro-pulse": "new" })).toEqual({ "nodaro-pulse": "new" })

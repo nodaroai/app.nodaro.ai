@@ -22,6 +22,7 @@
  * - a refused save is said under the switches.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -252,7 +253,7 @@ describe("Admin → Video Remake → Shot lock, by run type", () => {
   })
 })
 
-describe("the engine prompt's previews follow the draft by run type", { timeout: 20_000 }, () => {
+describe("the engine prompt's previews follow the draft by run type", { timeout: scaledTimeout(20_000) }, () => {
   const PREVIEW = "POST /v1/admin/video-remake/prompt-parts/preview"
   const previewsOf = (style: string) => (sentTo(PREVIEW) as Array<Record<string, unknown>>).filter((b) => b.engine === "nodaro-prism" && b.style === style)
 

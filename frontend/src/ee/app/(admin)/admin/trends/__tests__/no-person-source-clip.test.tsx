@@ -8,6 +8,7 @@
  *   the key is left out (an old draft loads and saves as before).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -60,7 +61,7 @@ describe("noPersonSourceClipOffered", () => {
   })
 })
 
-describe("send the clip as it is first", { timeout: 20_000 }, () => {
+describe("send the clip as it is first", { timeout: scaledTimeout(20_000) }, () => {
   it.each([
     ["a Faces hidden Precise trend", FACES],
     ["a masking-off trend", undefined],

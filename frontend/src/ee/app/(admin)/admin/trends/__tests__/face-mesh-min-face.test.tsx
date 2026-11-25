@@ -20,6 +20,7 @@
  * - Both pages show it: a trend's editor and the Motion column.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { useState } from "react"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -236,7 +237,7 @@ describe("the control", () => {
   })
 })
 
-describe("both pages show it", { timeout: 20_000 }, () => {
+describe("both pages show it", { timeout: scaledTimeout(20_000) }, () => {
   beforeEach(() => {
     resetRoutes()
     vi.stubGlobal("fetch", fetchMock)

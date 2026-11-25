@@ -1,6 +1,7 @@
 import { defineConfig } from "vitest/config"
 import path from "path"
 import mediaE2e from "./src/test/media-e2e-files.json"
+import { ciTestOptions } from "../tools/vitest/ci-limits.mjs"
 
 /**
  * The real-media end-to-end suite: exactly the files `src/test/media-e2e-files.json`
@@ -25,6 +26,8 @@ export default defineConfig({
     include: mediaE2e.files,
     setupFiles: ["./src/test/setup.ts"],
     fileParallelism: false,
+    // CI-only time limits and slow-test listing (tools/vitest/ci-limits.mjs).
+    ...ciTestOptions(),
   },
   resolve: {
     alias: {

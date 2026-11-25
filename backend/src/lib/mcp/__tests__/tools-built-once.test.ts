@@ -18,6 +18,7 @@
  * Callers kept apart: tools-built-once-isolation.test.ts.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import Fastify, { type FastifyInstance } from "fastify"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
@@ -156,7 +157,7 @@ afterEach(() => {
 // real builds), which takes 2–5 s alone and has passed the default 5 s limit on
 // a loaded runner. The limit is for this file only: a build that hangs still
 // fails, and no case builds less than it did.
-vi.setConfig({ testTimeout: 20_000 })
+vi.setConfig({ testTimeout: scaledTimeout(20_000) })
 
 describe("one build per build shape", () => {
   it("serves every request of one shape from one build, with the list a request's own build gives", async () => {

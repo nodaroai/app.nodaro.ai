@@ -5,13 +5,14 @@
 // store key the Text node's limit uses — and reaches the price and the run
 // through the plumbing that already reads `<nodeId>:directText`.
 import { describe, expect, it, beforeEach, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, render, screen, within } from "@testing-library/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { NodePickerDialog } from "../node-picker-dialog"
 import { ConfigFieldRenderer } from "../config-field-renderer"
 
-vi.setConfig({ testTimeout: 20000 })
+vi.setConfig({ testTimeout: scaledTimeout(20_000) })
 
 const tts = { id: "t", type: "text-to-speech", position: { x: 0, y: 0 }, data: { label: "Narration", textSource: "direct", directText: "hello", presentationInput: true } }
 

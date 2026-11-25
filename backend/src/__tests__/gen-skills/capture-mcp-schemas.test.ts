@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../tools/vitest/ci-limits.mjs"
 import { captureMcpToolSchemas } from "../../../scripts/lib/gen-skills/capture-mcp-schemas.js"
 
 describe("captureMcpToolSchemas", () => {
-  it("captures generate_image schema with prompt field", { timeout: 20_000 }, async () => {
+  it("captures generate_image schema with prompt field", { timeout: scaledTimeout(20_000) }, async () => {
     const schemas = await captureMcpToolSchemas()
     const gi = schemas.find((s) => s.name === "generate_image")
     expect(gi).toBeDefined()
@@ -11,19 +12,19 @@ describe("captureMcpToolSchemas", () => {
     expect(fieldNames).toContain("prompt")
   })
 
-  it("captures animate_image and generate_music tools", { timeout: 20_000 }, async () => {
+  it("captures animate_image and generate_music tools", { timeout: scaledTimeout(20_000) }, async () => {
     const schemas = await captureMcpToolSchemas()
     expect(schemas.find((s) => s.name === "animate_image")).toBeDefined()
     expect(schemas.find((s) => s.name === "generate_music")).toBeDefined()
   })
 
-  it("captures get_node_skill and start_workflow_editor (Phase A tools)", { timeout: 20_000 }, async () => {
+  it("captures get_node_skill and start_workflow_editor (Phase A tools)", { timeout: scaledTimeout(20_000) }, async () => {
     const schemas = await captureMcpToolSchemas()
     expect(schemas.find((s) => s.name === "get_node_skill")).toBeDefined()
     expect(schemas.find((s) => s.name === "start_workflow_editor")).toBeDefined()
   })
 
-  it("returns at least 30 tools (the full registered set)", { timeout: 20_000 }, async () => {
+  it("returns at least 30 tools (the full registered set)", { timeout: scaledTimeout(20_000) }, async () => {
     const schemas = await captureMcpToolSchemas()
     expect(schemas.length).toBeGreaterThanOrEqual(30)
   })

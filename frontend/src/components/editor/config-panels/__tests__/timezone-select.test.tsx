@@ -4,6 +4,7 @@
  * is UTC, and lets a person search and pick from every zone.
  */
 import { describe, it, expect, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent } from "@testing-library/react"
 
 import { TimezoneSelect, allTimezones, timezoneOffsetLabel } from "../timezone-select"
@@ -38,5 +39,5 @@ describe("TimezoneSelect", () => {
     expect(screen.queryByText("Europe/London")).toBeNull()
     fireEvent.click(screen.getByText("Asia/Jerusalem"))
     expect(onChange).toHaveBeenCalledWith("Asia/Jerusalem")
-  }, 20_000)
+  }, scaledTimeout(20_000))
 })

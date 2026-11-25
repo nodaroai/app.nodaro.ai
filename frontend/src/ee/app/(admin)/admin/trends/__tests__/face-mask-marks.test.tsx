@@ -12,6 +12,7 @@
  * - A draft save keeps the marks (`cleanMasking`).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -114,7 +115,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("marking faces on the face mask", { timeout: 20_000 }, () => {
+describe("marking faces on the face mask", { timeout: scaledTimeout(20_000) }, () => {
   it("draws a box over the whole clip, sets In and Out, and Apply edits saves the marks then makes the mask with that revision", async () => {
     const user = userEvent.setup()
     routes[`GET ${BASE}`] = () => ({ body: { data: detail({ faceMaskState: { status: "approved", reasons: [] }, faceMaskMarksSupported: true }, { faceMasking: MASKING, faceMask: STORED }) } })

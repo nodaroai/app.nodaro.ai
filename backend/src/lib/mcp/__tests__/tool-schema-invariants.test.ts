@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
@@ -16,7 +17,7 @@ import { ALL_SCOPES } from "../../scopes.js"
 describe("MCP tool-schema invariants", () => {
   // Builds the full MCP server: ~5 s on a loaded runner, i.e. right AT vitest's
   // 5 s default — it flaked under parallel load. Explicit headroom.
-  it("(d) every job-widget tool's outputSchema declares the keys widgetData emits (prompt + model)", { timeout: 20_000 }, async () => {
+  it("(d) every job-widget tool's outputSchema declares the keys widgetData emits (prompt + model)", { timeout: scaledTimeout(20_000) }, async () => {
     const tools = await captureMcpToolSchemas(ALL_SCOPES)
     // A generation verb routes its result through jobResultWithWidget, whose
     // widgetData is `Omit<SingleJobStructuredContent,"jobId">` — it carries

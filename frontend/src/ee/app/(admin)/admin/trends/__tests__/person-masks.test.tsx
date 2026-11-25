@@ -14,6 +14,7 @@
  * - The new publish blockers read as sentences.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -109,7 +110,7 @@ describe("the people's marks: helpers", () => {
   })
 })
 
-describe("the hint for optional people without person marks", { timeout: 20_000 }, () => {
+describe("the hint for optional people without person marks", { timeout: scaledTimeout(20_000) }, () => {
   it("lists them on a masked trend with no examples", async () => {
     expect(unmarkedPeople(PEOPLE, [AMY_MARK])).toEqual([{ key: "ben", label: "Ben" }])
     routes[`GET ${BASE}`] = () => ({
@@ -140,7 +141,7 @@ describe("the hint for optional people without person marks", { timeout: 20_000 
   })
 })
 
-describe("marking people and making their masks", { timeout: 20_000 }, () => {
+describe("marking people and making their masks", { timeout: scaledTimeout(20_000) }, () => {
   it("new boxes are for the chosen person; a box can be reassigned; the list counts them", async () => {
     routes[`GET ${BASE}`] = () => ({
       body: { data: detail({ faceMaskState: { status: "approved", reasons: [] }, faceMaskMarksSupported: true }, { slots: SLOTS, faceMasking: MASKING, faceMask: STORED }) },

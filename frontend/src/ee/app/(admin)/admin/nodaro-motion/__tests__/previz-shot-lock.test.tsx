@@ -21,6 +21,7 @@
  * - Prism has a "3D previz" tab while the engine lists the key; Pulse never.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -246,7 +247,7 @@ describe("Admin → Video Remake → Shot lock", () => {
   })
 })
 
-describe("the engine prompt beside them", { timeout: 20_000 }, () => {
+describe("the engine prompt beside them", { timeout: scaledTimeout(20_000) }, () => {
   it("previews are asked without a shot lock while nothing changed, and with the change once a switch moves", async () => {
     const user = userEvent.setup()
     routes[`GET ${SHOT_LOCK_URL}`] = () => shotLockView({ "nodaro-pulse": "on" })

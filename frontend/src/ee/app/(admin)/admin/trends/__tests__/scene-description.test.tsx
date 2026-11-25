@@ -13,6 +13,7 @@
  * - It writes the saved draft: while the form has unsaved edits, Save waits.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -60,7 +61,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("the stored scene description", { timeout: 20_000 }, () => {
+describe("the stored scene description", { timeout: scaledTimeout(20_000) }, () => {
   it("shows the Full run text alone, says previews cut it, and saves an edit with the held revision, adopting the next", async () => {
     const user = userEvent.setup()
     serve({ faceMasking: FULL, faceMask: STORED })

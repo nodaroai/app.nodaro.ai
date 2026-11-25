@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { z } from "zod"
 import { captureMcpToolSchemas } from "../../../../scripts/lib/gen-skills/capture-mcp-schemas.js"
 import { ALL_SCOPES } from "../../scopes.js"
@@ -21,7 +22,7 @@ const MCP_PARAM_FOR: Readonly<Record<TtsVoiceSettingKey, string>> = {
 
 describe("MCP generate_speech voice-setting ranges", () => {
   // Builds the full MCP server: give it the headroom the other capture tests use.
-  it("match TTS_VOICE_SETTING_RANGES, setting by setting", { timeout: 20_000 }, async () => {
+  it("match TTS_VOICE_SETTING_RANGES, setting by setting", { timeout: scaledTimeout(20_000) }, async () => {
     const tools = await captureMcpToolSchemas(ALL_SCOPES)
     const tool = tools.find((t) => t.name === "generate_speech")
     expect(tool, "generate_speech is registered").toBeDefined()

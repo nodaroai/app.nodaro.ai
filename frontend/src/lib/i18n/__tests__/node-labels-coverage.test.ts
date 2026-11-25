@@ -1,5 +1,6 @@
 // @test-always reads frontend sources by path, and checks every node unit's label too
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import fs from "node:fs"
 import path from "node:path"
 import { FACTORY_PRESETS } from "@nodaro/prompts/presets"
@@ -21,7 +22,7 @@ import type { LocaleLabelTables } from "../label-tables"
  * each assertion a generous timeout — CI runners are ~10x slower than local.
  */
 const SRC = path.resolve(__dirname, "../../..")
-const TIMEOUT = 20_000
+const TIMEOUT = scaledTimeout(20_000)
 
 function read(rel: string): string {
   return fs.readFileSync(path.join(SRC, rel), "utf8")

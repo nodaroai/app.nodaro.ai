@@ -15,6 +15,7 @@
  *   The engine prompts' Save sends the WHOLE draft, `styleOnly` included.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -111,7 +112,7 @@ const columnOf = async () => (await styleOnlyOf("Prism")).closest("[data-testid=
 const engineSection = async (name: string) =>
   (await screen.findByRole("heading", { name: new RegExp(`^Engine prompt: ${name}`) })).closest("section") as HTMLElement
 
-describe("Admin → Video Remake → style-only runs", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → style-only runs", { timeout: scaledTimeout(20_000) }, () => {
   it("styleOnlyToSaved leaves the defaults out and never writes null", () => {
     expect(styleOnlyToSaved(null)).toEqual({})
     expect(
@@ -255,7 +256,7 @@ describe("Admin → Video Remake → style-only runs", { timeout: 20_000 }, () =
   })
 })
 
-describe("Admin → Video Remake → the Style only engine prompt", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → the Style only engine prompt", { timeout: scaledTimeout(20_000) }, () => {
   it("is a Prism tab listing the engine's style-only parts, with no wording select; Pulse has none", async () => {
     const user = userEvent.setup()
     renderWith(<AdminNodaroMotionPage />)

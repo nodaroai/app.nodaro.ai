@@ -16,6 +16,7 @@
  *   is offered for Full depth with the scene from a description only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { offeredModels } from "../components/LlmStepEditor"
 import { useState } from "react"
 import { screen, waitFor, within } from "@testing-library/react"
@@ -168,7 +169,7 @@ describe("environmentsThatCannotTakeSteps", () => {
   })
 })
 
-describe("the step editors", { timeout: 20_000 }, () => {
+describe("the step editors", { timeout: scaledTimeout(20_000) }, () => {
   it("the editor is disabled naming the environment without the capability", async () => {
     renderWith(<Harness envs={[withSteps("production", true), withSteps("staging")]} />)
     expect(screen.getByText(/The Cast Swap engine of staging cannot take preparation steps yet/)).toBeInTheDocument()
@@ -345,7 +346,7 @@ describe("environmentsThatCannotTakeClipBody", () => {
   })
 })
 
-describe("Body from the clip", { timeout: 20_000 }, () => {
+describe("Body from the clip", { timeout: scaledTimeout(20_000) }, () => {
   const clipBody = () => section("Body from the clip step")
   const toggle = () => within(clipBody()).getByRole("switch", { name: "Body from the clip" })
   const prompt = () => within(clipBody()).getByRole("textbox", { name: "Image prompt" })
@@ -495,7 +496,7 @@ describe("Body from the clip", { timeout: 20_000 }, () => {
   })
 })
 
-describe("Shot list", { timeout: 20_000 }, () => {
+describe("Shot list", { timeout: scaledTimeout(20_000) }, () => {
   const SHOT_LLM = { model: "gemini-3.1-pro", instructions: "test shot list instructions", inputs: ["clip", "rolePhotos"] as const, maxChars: 4000 }
   const WITH_SHOT_LIST: CastSwapStepDefaults = {
     ...DEFAULTS,
@@ -569,7 +570,7 @@ describe("environmentsThatCannotTakeStyleRefs", () => {
   })
 })
 
-describe("Style the role pictures", { timeout: 20_000 }, () => {
+describe("Style the role pictures", { timeout: scaledTimeout(20_000) }, () => {
   const WITH_STYLE_REFS: CastSwapStepDefaults = {
     ...DEFAULTS,
     defaults: { ...DEFAULTS.defaults, styleRefs: { mode: "off", send: "styled-and-original", prompt: "test style refs prompt" } },

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
+import { scaledTimeout } from "../../../tools/vitest/ci-limits.mjs"
 import { loadUnits } from "../../../tools/units/manifest.mjs"
 import { centralMentions, composerExportProblems, loadTimeRegistryReads, sideEffectProblems, unitStringProblems } from "../../../tools/units/structure.mjs"
 import { AGGREGATE_FILE, collectRegistries } from "../../../tools/test-select/registry.mjs"
@@ -283,7 +284,7 @@ describe("G2b — unit-owned i18n keys", () => {
     const owned = units.map((u) => ({ type: u.type, keys: Object.keys(u.strings?.keys ?? {}) })).filter((u) => u.keys.length)
     const files = owned.length ? products.map((p) => ({ path: p, source: read(p) })) : []
     expect(unitStringProblems(ts, owned, owned.length ? DICTS.map((p) => ({ path: p, source: read(p) })) : [], files, inUnit)).toEqual([])
-  }, 20_000)
+  }, scaledTimeout(20_000))
 
   it("fixtures: a key that is also hand-written, or used outside the unit, stays central", () => {
     const dicts = [{ path: "frontend/src/lib/i18n/en.ts", source: 'export const en = {\n  "node.fixtureEcho": "x",\n  // gen:units start\n  "fixtureEcho.help": "y",\n  // gen:units end\n}\n' }]

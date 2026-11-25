@@ -1,6 +1,6 @@
 // @test-units-by-name prices only the video run routes it names (text-to-video, generate-video, video-to-video, video-upscale), and lists the quotable types (split-into-layers among them)
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
+import Fastify, { type FastifyInstance, type InjectOptions } from "fastify"
 import { z } from "zod"
 
 // The real credit guard, the real routes and the real pricing — only the
@@ -87,10 +87,50 @@ vi.mock("../../../lib/queue.js", () => ({
   videoQueue: { add: vi.fn(() => Promise.resolve({ id: "queue-1" })) },
 }))
 
+// The routes are imported once, before any case: the first case's time is
+// then its own work, not the module graph it would otherwise load cold (6 s
+// on a loaded CI host). The hook runs under the hook limit.
+beforeAll(async () => {
+  await Promise.all([
+    import("../../../routes/text-to-video.js"),
+    import("../../../routes/generate-video.js"),
+    import("../../../routes/video-to-video.js"),
+    import("../node-quote.js"),
+  ])
+})
+
 beforeEach(() => { vi.clearAllMocks() })
+
+// Vitest does not stop a test that runs past its time limit: its body carries
+// on beside the next test, and a request it still sends reaches the shared
+// spies after that test's clearAllMocks (a slow CI host once made one case's
+// run reserve inside its neighbour's "nothing reserved yet" check). So every
+// app a test builds is finished with the test: from the first moment of
+// afterEach a new request on it is refused, the requests already in flight
+// are awaited (until none is left), and then it is closed.
+interface BuiltApp { app: FastifyInstance; inFlight: Set<Promise<unknown>>; finished: boolean }
+const built: BuiltApp[] = []
+afterEach(async () => {
+  const apps = built.splice(0)
+  for (const b of apps) b.finished = true
+  for (const { app, inFlight } of apps) {
+    while (inFlight.size > 0) await Promise.allSettled([...inFlight])
+    await app.close()
+  }
+})
 
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify()
+  const entry: BuiltApp = { app, inFlight: new Set(), finished: false }
+  built.push(entry)
+  const inject = app.inject.bind(app) as (opts: InjectOptions | string) => Promise<unknown>
+  app.inject = ((opts: InjectOptions | string) => {
+    if (entry.finished) return Promise.reject(new Error("this test is over: its app takes no more requests"))
+    const request = inject(opts)
+    entry.inFlight.add(request)
+    void request.finally(() => entry.inFlight.delete(request)).catch(() => {})
+    return request
+  }) as FastifyInstance["inject"]
   app.addHook("preHandler", async (req) => {
     ;(req as unknown as { userId: string }).userId = "00000000-0000-4000-8000-000000000001"
   })

@@ -5,10 +5,11 @@
  * limit and shows a counter. The card is reached through InputCard.
  */
 import { describe, it, expect, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen } from "@testing-library/react"
 import type { WorkflowNode } from "@/types/nodes"
 
-vi.setConfig({ testTimeout: 20000 })
+vi.setConfig({ testTimeout: scaledTimeout(20_000) })
 
 vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: () => undefined }))
 vi.mock("@/lib/edition", () => ({ hasCredits: () => false }))

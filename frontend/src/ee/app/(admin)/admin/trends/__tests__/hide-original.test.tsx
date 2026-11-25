@@ -7,6 +7,7 @@
  * - The publish blocker for it reads as a sentence.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -44,7 +45,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("hide the original", { timeout: 20_000 }, () => {
+describe("hide the original", { timeout: scaledTimeout(20_000) }, () => {
   it("is off by default and saves hideOriginal: true once turned on, warning while the draft has no example", async () => {
     const user = userEvent.setup()
     renderEditor()

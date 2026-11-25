@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config"
+import { ciTestOptions } from "../../tools/vitest/ci-limits.mjs"
 
 export default defineConfig({
   test: {
@@ -9,5 +10,7 @@ export default defineConfig({
     globals: true,
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
     setupFiles: ["./vitest.setup.ts"],
+    // CI-only time limits and slow-test listing (tools/vitest/ci-limits.mjs).
+    ...ciTestOptions(),
   },
 })

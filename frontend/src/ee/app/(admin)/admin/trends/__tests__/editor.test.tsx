@@ -14,6 +14,7 @@
  *   window and played from its own file; it is never in a save's body.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -64,7 +65,7 @@ afterEach(() => vi.unstubAllGlobals())
 // examples, publish bar) in jsdom and queries it by role; on a loaded CI shard
 // these tests took 1–4s each and the 11-slot cap test 5.2s against the 5s
 // default. The room is for the machine, not a hang.
-describe("the trend editor", { timeout: 20_000 }, () => {
+describe("the trend editor", { timeout: scaledTimeout(20_000) }, () => {
   it("saves the draft with the slots edited and the revision it read", async () => {
     const user = userEvent.setup()
     routes[`PUT ${BASE}/draft`] = () => ({ body: { data: { version: 1, revision: "rev-2" } } })
@@ -1077,7 +1078,7 @@ describe("the trend editor", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the original's display copy and a slot's hint picture", { timeout: 20_000 }, () => {
+describe("the original's display copy and a slot's hint picture", { timeout: scaledTimeout(20_000) }, () => {
   const DISPLAY = {
     videoUrl: "https://cdn.test/trends/a1/display.mp4",
     posterUrl: "https://cdn.test/trends/a1/poster.png",
@@ -1199,7 +1200,7 @@ describe("the original's display copy and a slot's hint picture", { timeout: 20_
   })
 })
 
-describe("the 4 s preview's own prompt parts", { timeout: 20_000 }, () => {
+describe("the 4 s preview's own prompt parts", { timeout: scaledTimeout(20_000) }, () => {
   const PREVIEW_ROLE = /^in the 4 s preview/i
   const PREVIEW_LINE = /^prompt line in the 4 s preview/i
   const REFERENCE = { images: ["https://cdn.test/r.png"], line: "the neon sign" }
@@ -1287,7 +1288,7 @@ describe("the 4 s preview's own prompt parts", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the 4 s preview's input clip", { timeout: 20_000 }, () => {
+describe("the 4 s preview's input clip", { timeout: scaledTimeout(20_000) }, () => {
   const CLIP: AdminTrendPreviewClip = {
     videoUrl: "https://cdn.test/trends/a1/preview.mp4",
     durationSec: 5,

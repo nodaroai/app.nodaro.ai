@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import sharp from "sharp"
 import type { SheetSkin } from "@nodaro/shared/entities"
 import { composeSheet } from "../compositor.js"
@@ -50,5 +51,5 @@ describe("skins", () => {
     // Two real sheet composites take ~2 s idle and up to ~5 s on a loaded
     // machine — the default 5 s cap made this the suite's only flake (three
     // load-induced timeouts observed in one day, each passing in isolation).
-  }, 15_000)
+  }, scaledTimeout(15_000))
 })
