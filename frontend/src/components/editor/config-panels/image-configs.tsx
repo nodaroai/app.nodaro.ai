@@ -1,5 +1,6 @@
 "use client"
 
+import { ImageSetField } from "./image-set-field"
 import { nodeAspectRatio } from "@nodaro/shared/nodes"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
@@ -42,7 +43,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageFormatFailSafe, outputFormatOf, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, declaredDefaultResolution, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_QUALITY_OPTIONS, IMAGE_BACKGROUND_OPTIONS, imageFormatFailSafe, imageSetFailSafe, outputFormatOf, imageResolutionOptionsAt, transparentResolutionFor, defaultQualityFor, firstFixedQuality, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, declaredDefaultResolution, withoutDeniedModels } from "./model-options"
 import { ImageFormatFields, ImageBackgroundField } from "./image-format-fields"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
@@ -76,7 +77,7 @@ import { ConnectedCinematographySources } from "./connected-cinematography-sourc
 import { hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
-import { IMAGE_MODEL_ROLE_DEFAULTS, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
+import { IMAGE_MODEL_ROLE_DEFAULTS, imageResolutionFor8K, resolutionAtAspectRatio } from "@nodaro/shared/model-catalog"
 
 const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
 const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({ default: m.MaskPainterModal })))
@@ -252,7 +253,19 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     // A size the model does not list snaps to its first (Flux 2: its default).
     // One model: against its whole list; the ratio's own limit is applied below.
     const sizeOptions = isMulti ? resolutionOptions : imageResolutionOptionsAt(currentProvider, undefined)
-    if (sizeOptions) {
+    // "8K" on a model that does not list it lands on that model's largest
+    // size, the size its run is sent and charged at (decided 2026-11-23);
+    // every other stale value keeps its snap below.
+    // With several models selected, 8K stays as it is: each model's run takes
+    // it at that model's largest size (and says so in `adjustments`), which no
+    // one size of the shared list could give them all.
+    const keeps8KForEach = isMulti && typeof data.resolution === "string" && data.resolution.trim().toUpperCase() === "8K"
+    const largestFor8K = isMulti ? undefined : imageResolutionFor8K(currentProvider, data.resolution)
+    if (keeps8KForEach) {
+      // nothing to snap
+    } else if (sizeOptions && largestFor8K && sizeOptions.some((o) => o.value === largestFor8K)) {
+      updates.resolution = largestFor8K
+    } else if (sizeOptions) {
       if (flux2Default) {
         const valid = sizeOptions.some((o) => o.value === data.resolution)
         if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default
@@ -290,6 +303,9 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     // transparent background becomes auto with a format that cannot keep it —
     // before the transparent size snap below reads the background.
     Object.assign(updates, imageFormatFailSafe(formatProvider, { ...data, ...updates }))
+    // A set (one model at a time): cleared on a model that makes none, moved
+    // into the range of one that does (Kling Image 4.0: 2 to 10).
+    Object.assign(updates, imageSetFailSafe(formatProvider, data))
     // KIE renders a transparent background at one size only.
     const transparentAt = transparentResolutionFor(currentProvider)
     if ((updates.background ?? data.background) === "transparent" && transparentAt) {
@@ -732,6 +748,11 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             fieldMappings={fieldMappings}
             onMapField={onMapField}
           />
+          <ImageSetField
+            provider={formatProvider}
+            value={data.imageSetCount}
+            onChange={(imageSetCount) => onUpdate({ imageSetCount })}
+          />
           {supportsRefImage && (
             <>
               <input ref={refImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleRefImageUpload} />
@@ -1022,7 +1043,11 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     // the provider default (2 MP Pro/Max, 1 MP Klein) instead of options[0]
     // (0.5 MP) when the current value is absent or invalid.
     const flux2Default = defaultResolutionFor(currentProvider)
-    if (allResolutionOptions) {
+    // "8K" on a model that does not list it: its largest size, as its run (decided 2026-11-23).
+    const largestFor8K = imageResolutionFor8K(currentProvider, data.resolution)
+    if (allResolutionOptions && largestFor8K && allResolutionOptions.some((o) => o.value === largestFor8K)) {
+      updates.resolution = largestFor8K
+    } else if (allResolutionOptions) {
       if (flux2Default) {
         const valid = allResolutionOptions.some((o) => o.value === data.resolution)
         if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default

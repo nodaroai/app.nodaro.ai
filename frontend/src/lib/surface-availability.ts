@@ -28,8 +28,13 @@ import { runtimeSurfaceProfile } from "./surface-profile"
  * lists for the rest of the session: the narrowing silently did nothing in the
  * UI. Components that filter must call `useSurfaceAvailability()`.
  *
+ * WHO ASKS. The dashboard and every page that runs a workflow outside it (a
+ * published app, its embed, a shared presentation) load the signed-in
+ * viewer's answer (`useSurfaceAvailabilityLoader`); the route needs a
+ * signed-in viewer, so a signed-out visitor never has one.
+ *
  * BEFORE THE ANSWER — while it is awaited, after a read of it that failed, and
- * on every page that never asks (a published app, a signed-out visitor) — a
+ * for a signed-out visitor — a
  * deployment that set lists is judged by its OWN lists (`nodes.allow` /
  * `nodes.deny`, `models.allow` / `models.deny`, `worlds`), by the rule the
  * server applies before any admin setting (`nodeListsWithhold`, `listsWithhold`

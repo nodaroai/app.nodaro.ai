@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase.js", () => {
   return {
     supabase: {
       from: mockFrom,
+      rpc: vi.fn(),
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "user-123" } },
@@ -371,9 +372,13 @@ describe("plan gates under a deployment payer (decided 2026-11-08)", () => {
   it("private mode follows the payer account's plan: a Standard payer lets a covered user turn it on", async () => {
     __setDeploymentPayerForTests(PAYER, { tierForGates: "standard" })
     const { mockUpdate } = storedFreeProfile()
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: 0, error: null } as never)
     const res = await disablePublicOutputs()
     expect(res.statusCode).toBe(200)
-    expect(mockUpdate).toHaveBeenCalledWith({ public_outputs: false })
+    // The switch to private is the one transaction that also hides the
+    // existing items (lib/gallery-removal.ts :: makeOutputsPrivate).
+    expect(supabase.rpc).toHaveBeenCalledWith("make_outputs_private", { p_user_id: TEST_USER_ID })
+    expect(mockUpdate).not.toHaveBeenCalled()
   })
 
   it("a payer below Standard keeps the gate closed, as its own plan would", async () => {
@@ -382,6 +387,7 @@ describe("plan gates under a deployment payer (decided 2026-11-08)", () => {
     const res = await disablePublicOutputs()
     expect(res.statusCode).toBe(403)
     expect(res.json().error).toContain("Private mode")
+    expect(supabase.rpc).not.toHaveBeenCalled()
   })
 
   it("GET reports the payer account's plan as the tier", async () => {

@@ -34,6 +34,7 @@ import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import type { GoogleGenAI, Part } from "@google/genai"
 import { safeFetch } from "../safe-fetch.js"
+import { downloadTimeoutError, transferDeadline, type TransferDeadline } from "../transfer-watchdog.js"
 import type { LlmContentBlock } from "../llm-client.js"
 import { FILE_LANE_ERROR } from "../llm/message-builders.js"
 import { LLM_VIDEO_FPS_MAX } from "../llm/types.js"
@@ -54,7 +55,9 @@ export const INLINE_REQUEST_MAX_BYTES = 12 * 1024 * 1024
 /** Refuse absurd inputs rather than streaming them to disk indefinitely. */
 const MAX_MEDIA_BYTES = 512 * 1024 * 1024
 
-/** Download budget. Long videos on a cold R2 edge are genuinely slow. */
+/** Download budget: one hard total over the response AND the body (the body
+ *  is read under the same signal, so the limit really ends it). Long videos
+ *  on a cold R2 edge are genuinely slow. */
 const FETCH_TIMEOUT_MS = 120_000
 
 /** Google's documented ceiling for `VideoMetadata.fps`. */
@@ -199,13 +202,22 @@ async function uploadViaTempFile(
   response: Response,
   url: string,
   mimeType: string,
+  deadline: TransferDeadline,
 ): Promise<Part> {
   const workDir = join(tmpdir(), `gemini-upload-${randomUUID()}`)
   await mkdir(workDir, { recursive: true })
   const localPath = join(workDir, "media")
   try {
     if (!response.body) throw new Error(`Gemini media fetch returned no body: ${url}`)
-    await pipeline(Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(localPath))
+    // The download's signal reaches the stream writing the body, so the
+    // limit ends a body that stalls or trickles, not only the request.
+    await pipeline(
+      Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+      createWriteStream(localPath),
+      { signal: deadline.signal },
+    )
+    // The bytes are held: the upload and its processing wait are not the download's.
+    deadline.clear()
 
     const { size } = await stat(localPath)
     if (size > MAX_MEDIA_BYTES) {
@@ -404,23 +416,48 @@ async function resolveBlockPart(ai: GoogleGenAI, block: LlmContentBlock, opts: G
   const cached = cacheGet(block.url)
   if (cached) return { fileData: { fileUri: cached.fileUri, mimeType: cached.mimeType } }
 
-  const response = await safeFetch(block.url, { timeoutMs: FETCH_TIMEOUT_MS })
-  if (!response.ok) {
-    throw new Error(`Gemini media fetch failed (${response.status}) for ${block.type}: ${block.url}`)
+  // One limit over the response AND the body, held by our own timer and given
+  // to the body read as well as the fetch (`transferDeadline`); the fetch's own
+  // timeout is only a backstop past it.
+  const deadline = transferDeadline({ ms: FETCH_TIMEOUT_MS, reason: () => downloadTimeoutError(FETCH_TIMEOUT_MS) })
+  try {
+    const response = await safeFetch(block.url, { timeoutMs: FETCH_TIMEOUT_MS + 5_000, signal: deadline.signal })
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`Gemini media fetch failed (${response.status}) for ${block.type}: ${block.url}`)
+    }
+
+    const mimeType = resolveMimeType(block.type, declared, response.headers.get("content-type"), block.url)
+    const declaredLength = Number(response.headers.get("content-length") ?? Number.NaN)
+
+    // Small and self-declared: inline it and skip the upload round-trip entirely.
+    if (Number.isFinite(declaredLength) && declaredLength > 0 && declaredLength <= INLINE_MAX_BYTES && (!opts.inlineBudget || declaredLength <= opts.inlineBudget.left)) {
+      const bytes = await readBodyWithin(response, deadline.signal)
+      spendInline(opts, bytes.length)
+      return { inlineData: { mimeType, data: bytes.toString("base64") } }
+    }
+
+    // Unknown or large: stream to disk, upload by path.
+    return await uploadViaTempFile(ai, response, block.url, mimeType, deadline)
+  } catch (err) {
+    // The limit's own words, not the stream layer's bare "aborted".
+    if (deadline.timedOut()) throw deadline.signal.reason
+    throw err
+  } finally {
+    deadline.clear()
   }
+}
 
-  const mimeType = resolveMimeType(block.type, declared, response.headers.get("content-type"), block.url)
-  const declaredLength = Number(response.headers.get("content-length") ?? Number.NaN)
-
-  // Small and self-declared: inline it and skip the upload round-trip entirely.
-  if (Number.isFinite(declaredLength) && declaredLength > 0 && declaredLength <= INLINE_MAX_BYTES && (!opts.inlineBudget || declaredLength <= opts.inlineBudget.left)) {
-    const bytes = Buffer.from(await response.arrayBuffer())
-    spendInline(opts, bytes.length)
-    return { inlineData: { mimeType, data: bytes.toString("base64") } }
-  }
-
-  // Unknown or large: stream to disk, upload by path.
-  return uploadViaTempFile(ai, response, block.url, mimeType)
+/** A whole (small) body, read under `signal` so a limit ends it mid-body. */
+async function readBodyWithin(response: Response, signal: AbortSignal): Promise<Buffer> {
+  if (!response.body) return Buffer.alloc(0)
+  const chunks: Buffer[] = []
+  await pipeline(
+    Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+    async (source: AsyncIterable<Buffer>) => { for await (const chunk of source) chunks.push(chunk) },
+    { signal },
+  )
+  return Buffer.concat(chunks)
 }
 
 /** Resolve a whole message's content. Sequential by design: a fan-out here would

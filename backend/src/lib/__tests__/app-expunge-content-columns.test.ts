@@ -126,6 +126,9 @@ const KEPT_JOB_COLUMNS = [
   "restricted_at",
   "idempotency_key",
   "is_public",
+  // When the owner's switch to private took the row out of the gallery (706):
+  // a visibility stamp, not content.
+  "hidden_by_owner_at",
   "force_private",
   "should_watermark",
   "mcp_client",

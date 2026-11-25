@@ -20,6 +20,7 @@ export {
   resolveImageGenCreditIdentifier,
   resolveNormalizedImageGen,
   imageFormatInputOf,
+  imageSetCountInputOf,
   normalizedImageGenModelId,
   imageGenAutoAspectNeedsSourceImage,
   buildVideoCreditModelIdentifier,

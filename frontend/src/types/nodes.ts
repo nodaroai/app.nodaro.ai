@@ -1858,6 +1858,11 @@ export type GenerateImageData = PromptAffixFields & {
   gifFrameDurationMs?: number
   /** An SVG's level of detail. Kept while another format is chosen; read only with `outputFormat: "svg"`. */
   svgLevel?: string
+  /** A coherent SET of 2 to 10 images from one run, on a model that makes sets
+   *  (Kling Image 4.0, the catalog's `imageSet`): one job, held for the images
+   *  asked and charged for the images returned. Unset is one image. Cleared
+   *  when the model makes no sets. */
+  imageSetCount?: number
   seed?: number
   renderingSpeed?: string
   styleType?: string

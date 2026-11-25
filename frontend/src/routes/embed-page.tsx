@@ -21,6 +21,7 @@ import { useParams, useSearchParams } from "react-router-dom"
 import { useTheme } from "next-themes"
 import { Loader2, Clock } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { useSurfaceAvailabilityLoader } from "@/hooks/use-surface-availability-loader"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
@@ -43,6 +44,9 @@ export default function EmbedPage() {
   const { slug } = useParams<{ slug: string }>()
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
+  // What this install runs, as the editor reads it: the live estimate prices a
+  // node the way the run takes it (a mode this install cannot run is not quoted).
+  useSurfaceAvailabilityLoader()
   const { setTheme } = useTheme()
   const themeParam = searchParams.get("theme")
 

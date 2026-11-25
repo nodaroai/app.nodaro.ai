@@ -1,4 +1,5 @@
 import { safeFetch } from "./safe-fetch.js"
+import { limitInWords, readWithin, transferDeadline } from "./transfer-watchdog.js"
 
 const MAX_CAPTURE_BYTES = 25 * 1024 * 1024
 
@@ -24,14 +25,32 @@ export async function safeFetchBytes(url: string, maxBytes: number, signal?: Abo
 }
 
 /** Shared decoded-byte limiter for memory and disk consumers. No origin read
- * fallback is permitted, including on an own-storage HTTP 404. */
+ * fallback is permitted, including on an own-storage HTTP 404. `timeoutMs` is
+ * one limit over the response AND the body: our own timer, whose signal goes
+ * to the fetch and ends every read, so a body that stalls or trickles stops
+ * at it (`transferDeadline`). */
 export async function* boundedPublicChunks(url: string, options: {
   maxBytes: number; timeoutMs: number; label: "Image" | "Video" | "File"; signal?: AbortSignal
 }): AsyncGenerator<Buffer> {
   const { maxBytes, timeoutMs, label, signal } = options
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 500 * 1024 * 1024
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000) throw new Error("Invalid public download limits")
-  const response = await safeFetch(url, signal ? { timeoutMs, signal } : { timeoutMs })
+  // Worded like this module's other errors: no link (a caller logs the message).
+  const reason = () => Object.assign(new Error(`${label} download timed out: over its ${limitInWords(timeoutMs)} limit`), { name: "TimeoutError" })
+  const deadline = transferDeadline({ ms: timeoutMs, reason, ...(signal ? { signal } : {}) })
+  try {
+    yield* readBounded(url, { maxBytes, timeoutMs, label, signal: deadline.signal })
+  } finally {
+    deadline.clear()
+  }
+}
+
+async function* readBounded(url: string, options: {
+  maxBytes: number; timeoutMs: number; label: "Image" | "Video" | "File"; signal: AbortSignal
+}): AsyncGenerator<Buffer> {
+  const { maxBytes, timeoutMs, label, signal } = options
+  // safeFetch's own timer is only a backstop past the limit.
+  const response = await safeFetch(url, { timeoutMs: timeoutMs + 5_000, signal })
   const reader = response.body?.getReader()
   if (!reader) throw new Error(`${label} download returned no body`)
   let finished = false
@@ -40,7 +59,7 @@ export async function* boundedPublicChunks(url: string, options: {
     if (Number(response.headers.get("content-length")) > maxBytes) throw new PublicDownloadTooLargeError(`${label} download exceeds the size limit`)
     let length = 0
     while (true) {
-      const part = await reader.read()
+      const part = await readWithin(signal, reader.read())
       if (part.done) { finished = true; break }
       length += part.value.byteLength
       if (length > maxBytes) throw new PublicDownloadTooLargeError(`${label} download exceeds the size limit`)

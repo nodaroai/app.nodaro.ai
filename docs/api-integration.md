@@ -1389,6 +1389,28 @@ single call for it costs.) Without `count` / `models` — or with `count: 1` —
 the answer is the usual `{ "jobId" }`, unchanged. `jobId` is always the first
 job, so code that reads it keeps working.
 
+**A set from one job (`imageSetCount`).** On a model that makes sets (Kling
+Image 4.0, `kling-image-4`), `imageSetCount` (2–10) asks ONE job for a
+coherent set of that many images: the answer is the usual `{ "jobId" }`, and
+the job's output carries every image (`imageUrl` is the first, `imageUrls`
+all of them). The job is held at the price of the images asked (a set of
+two at 2K holds **64 credits**<!-- credits: kling-image-4:2K:x2 -->, a set of
+ten **319 credits**<!-- credits: kling-image-4:2K:x10 -->) and charged for the
+images it stores; a picture that cannot be stored is left out (`imagesNotSaved`
+on the job) and not charged, and a set none of whose pictures can be stored
+fails and is refunded. On any other model, and with a `maskUrl`, the set is dropped and the
+correction is reported in `adjustments`; `imageSetCount` and a `count` above 1
+together are a `400 validation_error`. `1` is one image.
+
+**Named subjects on a flat request (`referenceCharacters`).** On Kling Image
+4.0 a character sent with 2 to 4 of its images goes as one named subject and
+costs one input item. A structured request (`connectedReferences`) is grouped
+from its entries; a flat request (a prompt you assembled, flat
+`referenceImageUrls`) can say which character each reference came from:
+`referenceCharacters: [{ url, characterSlug, defaultName?, variantSlug?,
+description? }]`. It changes neither the prompt nor the images sent, and other
+models ignore it.
+
 - **Credits: the batch as a whole, or not at all.** A batch costs the sum of
   its jobs. The balance is checked against that sum before anything is
   created — short, the request answers `402 insufficient_credits` with
@@ -2437,7 +2459,14 @@ Two behaviors to know:
 - **Outputs are public by default.** Private mode is a subscription
   feature (Standard plan and above) — pay-as-you-go outputs appear in
   the public gallery like free-tier outputs do. (Jobs created through
-  the MCP server are always private, regardless of tier.)
+  the MCP server are always private, regardless of tier.) Turning
+  private mode on also takes everything you already made out of the
+  public gallery, in the same step: other people can no longer see those
+  items, open them from their favorites, or use them as an input. A
+  generation that finishes during the switch is caught by a second pass
+  right after it, and one that finishes later stays private. Turning
+  private mode off again applies to new outputs only: items the switch
+  hid stay private, even if a moderation hold on one is lifted later.
 - **Media retention follows account activity.** Your generated files are
   stored while your account is active; after roughly 3 months without a
   purchase or any credit spend, files older than 60 days may be cleaned
@@ -2623,7 +2652,7 @@ The image-generating routes (`/v1/generate-character`,
 `/v1/generate-character-asset`, and the location equivalents
 `/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
 `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution` (`"1K"` /
-`"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
+`"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
 **credit-affecting** and price exactly like `/v1/generate-image` (composite
 ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
 reserves more credits than the same model at its base tier. A value the chosen
@@ -4918,6 +4947,23 @@ back to their own default for it (`{ "mcpPreferences": { "image": { "model": nul
 Nodaro Cloud (`403`); an invalid value is `400 validation_error`, a patch with
 nothing to change `400`, a missing profile `404`. SDK:
 `client.userSettings.get()` / `update(patch)`.
+
+`publicOutputs: false` also takes every one of the person's items that is
+still in the public gallery out of it, in the same transaction as the setting
+and before any other field of the patch is written. The item and its file
+stay, and the person still sees and uses it; other people can no longer see
+it (in the gallery, through their favorites) or use it as an input. Once that
+transaction has committed, the server makes one more pass for an item that
+finished generating while it was running (that item read the setting as it
+was before), and from then on every result of the person's is kept private
+as it completes. The answer's `hiddenFromGallery` is the total of both passes;
+it is `0` for any other patch, and for a repeat of `false` when nothing was
+public. If either pass fails, the answer is `500` (or `503` while the
+deployment's database does not support it yet), never the settings as saved,
+and no other field of the patch is written; sending `false` again is safe and
+finishes the job. `publicOutputs: true` republishes nothing: every item the
+switch hid stays private, including one under a moderation hold that is
+lifted later.
 
 `Transaction` fields: `id`, `created_at`, `credits_charged`,
 `credits_reserved`, `credits_used`, `action`, `provider`, `status`,

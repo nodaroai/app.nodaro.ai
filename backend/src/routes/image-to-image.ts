@@ -22,7 +22,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
 import { IMAGE_TO_IMAGE_ATTACH_COLUMNS } from "@nodaro/shared/entities"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel, sourceImageSizeNeeded, type SourceImageSize } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, sourceImageSizeNeeded, type SourceImageSize, imageToImageSentImages } from "@nodaro/shared/model-catalog"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_MODEL,
@@ -98,7 +98,7 @@ const imageToImageRequest = imageToImageBody.superRefine((data, ctx) => {
   // No model named: the limit of the default the handler will run it on.
   const model = data.provider ?? defaultImageModel("edit", data.aspectRatio)
   const limit = requestImageLimit(model)
-  const sent = 1 + (data.referenceImageUrls?.length ?? 0)
+  const sent = imageToImageSentImages(model, data.imageUrl, data.referenceImageUrls)
   if (sent > limit) {
     // A model with a request image limit of its own says how many to remove
     // (`imageInputLimitProblem`); a model held to the default keeps its message.
@@ -123,7 +123,7 @@ function oversizedReferencesProblem(body: unknown, error: z.ZodError): { code: "
   const raw = body as { provider?: unknown; aspectRatio?: unknown; referenceImageUrls?: unknown } | null
   if (!raw || !Array.isArray(raw.referenceImageUrls)) return null
   const model = typeof raw.provider === "string" ? raw.provider : defaultImageModel("edit", typeof raw.aspectRatio === "string" ? raw.aspectRatio : undefined)
-  return imageInputLimitProblem(model, 1 + raw.referenceImageUrls.length, "request")
+  return imageInputLimitProblem(model, imageToImageSentImages(model, (raw as { imageUrl?: unknown }).imageUrl, raw.referenceImageUrls as string[]), "request")
 }
 
 const IDENTITY_PRESERVE_SUFFIX =
@@ -211,7 +211,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // (GPT Image 2.6 Flare and Sunburst) also takes its size from the photo,
     // and the size is priced, so the check and this reservation read the one
     // size `readImageSourceSize` read before the check.
-    const i2iRefCount = 1 + (referenceImageUrls?.length ?? 0)
+    // Kling Image 4.0 sends each image once (the source included): counted once.
+    const i2iRefCount = imageToImageSentImages(provider, imageUrl, referenceImageUrls)
     // The size the preHandler read for the credit check, so the reservation
     // prices the same size; read here only when it was not (a direct call).
     const masked = isMasked(maskUrl)

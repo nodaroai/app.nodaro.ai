@@ -652,6 +652,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Up to 16 reference images in one edit, readable text, up to 4K": "한 번의 편집에 레퍼런스 이미지 최대 16장, 선명한 텍스트, 최대 4K",
   "Natural light, materials and skin, small text, transparent backgrounds": "자연스러운 빛·재질·피부, 작은 글자, 투명 배경",
   "Edits that keep the rest of the picture, up to 10 input images": "나머지는 그대로 두는 편집, 입력 이미지 최대 10장",
+  "Native 2K, 4K or 8K, text in the picture, sets of 2 to 10 images": "네이티브 2K·4K·8K, 이미지 속 글자, 2~10장 세트",
+  "Up to 10 references and named subjects, at 2K, 4K or 8K": "참조 이미지와 이름 있는 피사체 최대 10개, 2K·4K·8K",
   "Light FLUX 3: fast, low cost, up to 4K, edits from up to 10 references": "가벼운 FLUX 3: 빠르고 저렴함, 최대 4K, 레퍼런스 이미지 최대 10장으로 편집",
   "Fast, low-cost edits from up to 10 references, no extra cost per image": "레퍼런스 이미지 최대 10장으로 빠르고 저렴한 편집, 이미지당 추가 비용 없음",
   "Fast Gemini, agentic-tuned": "빠른 Gemini, 에이전트 작업에 맞게 튜닝",

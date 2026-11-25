@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { createClient, StaticTokenAuth, UnauthorizedError, ForbiddenError, NodaroError } from "../../index.js"
-import type { UserSettings, UserMcpPreferencesPatch } from "../../index.js"
+import type { UserSettings, UserSettingsSaved, UserMcpPreferencesPatch } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -53,6 +53,18 @@ describe("userSettings", () => {
     expect(JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)).toEqual({
       mcpPreferences: { image: { model: null }, video: { duration: null } },
     })
+  })
+
+  it("update({ publicOutputs: false }) answers how many existing items left the public gallery", async () => {
+    const { tier: _tier, ...rest } = { ...SETTINGS, publicOutputs: false }
+    const saved: UserSettingsSaved = { ...rest, hiddenFromGallery: 8221 }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: saved }))
+    const answer = await client(fetchMock).userSettings.update({ publicOutputs: false })
+    expect(answer.hiddenFromGallery).toBe(8221)
+    expect(answer.publicOutputs).toBe(false)
+    // A failed hide changed nothing and is an error, never a saved "private".
+    const failed = client(vi.fn().mockReturnValueOnce(mockErr(500, { error: "Couldn't make outputs private. Please try again." }))).userSettings.update({ publicOutputs: false })
+    await expect(failed).rejects.toMatchObject({ status: 500 })
   })
 
   it("throws UnauthorizedError signed out, ForbiddenError for private outputs below the plan, and a NodaroError with the server's code on a bad value", async () => {
