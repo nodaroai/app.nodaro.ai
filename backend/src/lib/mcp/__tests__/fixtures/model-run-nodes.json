@@ -94,6 +94,8 @@
  "kling-4-keyframes": "character creature generate-video image-to-video location object text-to-video video-to-video",
  "kling-avatar": "lip-sync",
  "kling-avatar-pro": "lip-sync",
+ "kling-image-4": "character creature face generate-image location object reference-board",
+ "kling-image-4-i2i": "character creature face generate-image location modify-image object reference-board",
  "kling-master": "character creature generate-video image-to-video location object text-to-video",
  "kling-turbo": "character creature generate-video image-to-video location object text-to-video video-to-video",
  "kontext-multi": "modify-image",

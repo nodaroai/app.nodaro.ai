@@ -4,6 +4,8 @@
  * of generate-image.ts so the planner (generate-image-plan.ts) can name the
  * schema without importing the route.
  */
+import { klingImage4PricedItems, klingImage4Subjects, subjectSourcesOf } from "../lib/kling-image-4-subjects.js"
+import { KLING_IMAGE_4_MAX_PICTURES, KLING_IMAGE_4_SET_MAX as IMAGE_SET_MAX } from "@nodaro/shared/model-catalog"
 import { z } from "zod"
 import { clientOriginSchema } from "../lib/client-origin-schema.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -11,7 +13,7 @@ import { imageBatchFields, imageBatchIssues } from "../lib/image-batch.js"
 import { imageFormatFields, maskFormatConflict } from "../lib/image-format-schema.js"
 import { presetIdSchema, presetVariablesSchema } from "../lib/presets/generate-image-preset-hook.js"
 import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_RESOLUTION_VALUES, IMAGE_QUALITY_VALUES, IMAGE_BACKGROUND_VALUES, IMAGE_RENDERING_SPEED_VALUES, PROMPT_HARD_CEILING, DEFAULT_REQUEST_IMAGE_LIMIT, MAX_REQUEST_IMAGE_LIMIT, requestImageLimit } from "@nodaro/shared/models"
-import { defaultImageModel, pricedSentImages } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, getModel, isKlingImage4, pricedSentImages } from "@nodaro/shared/model-catalog"
 import { imageInputLimitProblem, structuredReferenceListLimit } from "../lib/image-input-limit.js"
 import { generateImageRunModelOfBody } from "../lib/generate-image-run-model.js"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
@@ -66,6 +68,20 @@ const structuredPromptFieldsSchema = z.object({
   mood: z.string().optional(),
 })
 
+/**
+ * One flat reference's character (`referenceCharacters`): the same fields,
+ * bounded exactly as a structured request's `connectedReferences` entry, so
+ * the editor's Run and a workflow run of the same graph are accepted alike.
+ * Where the provider takes less (a subject's description, its name), both
+ * paths cut it the same way where the subject is built (`klingImage4Subjects`).
+ */
+const referenceCharacterSchema = connectedReferenceSchema
+  .pick({ url: true, variantSlug: true, bucket: true, description: true, characterCanonicalDescription: true })
+  .extend({
+    characterSlug: z.string().min(1),
+    defaultName: connectedReferenceSchema.shape.defaultName.optional(),
+  })
+
 /** What the API reference says of the two structured lists' bound, read from
  *  the limits themselves (`parseGenerateImageRequest` holds a request to it). */
 const STRUCTURED_LIST_BOUND =
@@ -117,6 +133,12 @@ export const generateImageBody = z.object({
   // request on a model held to the default limit is checked against that
   // limit instead (`parseGenerateImageRequest`).
   connectedReferences: z.array(connectedReferenceSchema).max(MAX_REQUEST_IMAGE_LIMIT).optional().describe(STRUCTURED_LIST_BOUND),
+  /** On a flat request (a prompt the caller assembled, as the editor's Run of
+   *  one node does), which character each of `referenceImageUrls` came from:
+   *  read only to send a character's 2 to 4 images as one named subject on a
+   *  model that names them (Kling Image 4.0), priced as one input item. Never
+   *  changes the prompt or the images sent. */
+  referenceCharacters: z.array(referenceCharacterSchema).max(KLING_IMAGE_4_MAX_PICTURES).optional(),
   // References the caller NAMED and DESCRIBED but has no media for — an un-bound
   // cast role, an analysis slot. They attach no URL and consume no reference-image
   // budget; the assembler renders them as prose so a name in the prompt reaches
@@ -183,6 +205,12 @@ export const generateImageBody = z.object({
   background: z.enum(IMAGE_BACKGROUND_VALUES).optional(),
   // The file written (PNG, JPEG, WebP, GIF, SVG) and a GIF's or an SVG's own levers.
   ...imageFormatFields,
+  /** A coherent SET of 2 to 10 images from ONE job, on a model that makes sets
+   *  (Kling Image 4.0; `imageSet` on its catalog entry): held for the images
+   *  asked, charged for the images returned. Dropped (and said in
+   *  `adjustments`) on any other model and on a masked edit; 1 is one image.
+   *  Not with `count` above 1. */
+  imageSetCount: z.number().int().min(1).max(IMAGE_SET_MAX).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
   renderingSpeed: z.enum(IMAGE_RENDERING_SPEED_VALUES).optional(),
@@ -217,13 +245,18 @@ function requestModels(data: Pick<GenerateImageData, "models" | "provider" | "as
  *  limit. Shared by both request schemas below. */
 function imageRequestRules(data: GenerateImageData, ctx: z.RefinementCtx): void {
   for (const issue of imageBatchIssues(data)) ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message })
+  if ((data.imageSetCount ?? 1) > 1 && (data.count ?? 1) > 1) {
+    ctx.addIssue({ code: "custom", path: ["imageSetCount"], message: "a set is one job of several images: send imageSetCount or count, not both" })
+  }
   const maskConflict = maskFormatConflict(data)
   if (maskConflict) ctx.addIssue({ code: "custom", path: ["maskUrl"], message: maskConflict })
   const references = data.referenceImageUrls ?? []
   // No model named: the limit of the default the route will run it on.
   for (const model of requestModels(data)) {
     const limit = requestImageLimit(model)
-    const sent = pricedSentImages(model, references, data.baseImageUrl)
+    // Kling Image 4.0 counts items: a character sent with 2 to 4 of its images
+    // (named in `referenceCharacters` on a flat request) is one.
+    const sent = klingImage4PricedItems(pricedSentImages(model, references, data.baseImageUrl), klingImage4Subjects(model, subjectSourcesOf(data), references))
     if (sent > limit) {
       // A model with a request image limit of its own says how many to
       // remove, the base image counted (`imageInputLimitProblem`); a model
@@ -246,6 +279,15 @@ const ownLimitImageRequest = generateImageBody.superRefine(imageRequestRules)
 const defaultLimitImageRequest = generateImageBody.extend({
   connectedReferences: z.array(connectedReferenceSchema).max(DEFAULT_REQUEST_IMAGE_LIMIT).optional(),
   referenceOrder: z.array(z.string()).max(DEFAULT_REQUEST_IMAGE_LIMIT).optional(),
+}).superRefine(imageRequestRules)
+
+/** A request on Kling Image 4.0 alone: its picture lists may carry 10 named
+ *  subjects of 4 views (`KLING_IMAGE_4_MAX_PICTURES`); what is refused is more
+ *  than 10 input items, counted after assembly (decided 2026-11-23). */
+const klingImageRequest = generateImageBody.extend({
+  referenceImageUrls: z.array(safeUrlSchema).max(KLING_IMAGE_4_MAX_PICTURES).optional(),
+  connectedReferences: z.array(connectedReferenceSchema).max(KLING_IMAGE_4_MAX_PICTURES).optional(),
+  referenceOrder: z.array(z.string()).max(KLING_IMAGE_4_MAX_PICTURES).optional(),
 }).superRefine(imageRequestRules)
 
 /** The model ids the body's `provider` and `models` enums take. */
@@ -273,6 +315,32 @@ function rawRequestModels(body: unknown): (string | undefined)[] {
 }
 
 /**
+ * The body without the levers none of its models uses: `imageSetCount` unless
+ * one makes sets (`imageSet` on its catalog entry), `referenceCharacters`
+ * unless one names subjects (Kling Image 4.0). On every other model they are
+ * ignored as before they existed (an unknown key, stripped): never refused,
+ * priced or sent. A body whose models cannot be told keeps neither, except a
+ * well-formed set count, which the plan drops with an adjustment.
+ */
+export function withoutUnusedImageLevers(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body
+  const record = body as Record<string, unknown>
+  if (!("imageSetCount" in record) && !("referenceCharacters" in record)) return body
+  const models = rawRequestModels(record)
+  const makesSets = models.some((m) => m !== undefined && getModel(m)?.imageSet !== undefined)
+  const namesSubjects = models.some((m) => m !== undefined && isKlingImage4(m))
+  const { imageSetCount, referenceCharacters, ...rest } = record
+  // A well-formed set count on a model that makes none still reaches the plan,
+  // which drops it and says so in `adjustments`; anything else is stripped.
+  const keepSet = makesSets || (Number.isInteger(imageSetCount) && (imageSetCount as number) >= 1 && (imageSetCount as number) <= IMAGE_SET_MAX && !(typeof record.count === "number" && record.count > 1))
+  return {
+    ...rest,
+    ...(keepSet && imageSetCount !== undefined ? { imageSetCount } : {}),
+    ...(namesSubjects && referenceCharacters !== undefined ? { referenceCharacters } : {}),
+  }
+}
+
+/**
  * What the handler validates: the body, its cross-field rules and each model's
  * own image limit. `connectedReferences` and `referenceOrder` are bounded by
  * the models it runs on (`structuredReferenceListLimit`, decided 2026-11-15):
@@ -282,8 +350,11 @@ function rawRequestModels(body: unknown): (string | undefined)[] {
  * `generateImageBody` stays a plain object — `applySnappedLevers` and the
  * OpenAPI entry read its `shape`.
  */
-export function parseGenerateImageRequest(body: unknown) {
-  return structuredReferenceListLimit(rawRequestModels(body)) > DEFAULT_REQUEST_IMAGE_LIMIT
+export function parseGenerateImageRequest(rawBody: unknown) {
+  const body = withoutUnusedImageLevers(rawBody)
+  const limit = structuredReferenceListLimit(rawRequestModels(body))
+  if (limit > MAX_REQUEST_IMAGE_LIMIT) return klingImageRequest.safeParse(body)
+  return limit > DEFAULT_REQUEST_IMAGE_LIMIT
     ? ownLimitImageRequest.safeParse(body)
     : defaultLimitImageRequest.safeParse(body)
 }

@@ -299,14 +299,42 @@ export async function deleteOwnedObjects(
   /** `refundOwner`: give the bytes storage confirms deleted back to the job's
    *  owner (they were counted against their storage when the job stored them).
    *  Nothing is given back where deletes are skipped: the files stay. */
-  opts: { readonly refundOwner?: boolean } = {},
+  opts: {
+    readonly refundOwner?: boolean
+    /** Whether the job is a SET (its size), when the caller already knows it from the row it read; else the row is read. */
+    readonly set?: { readonly setCount: number } | null
+  } = {},
 ): Promise<number> {
   // Deduped: callers legitimately union two sources (the withheld list and the
   // row's residue), and the same key must not be sent twice.
   const keys = [...new Set(objects.map((o) => o.key).filter((k) => isOwnedObjectKey(jobId, k)))]
   if (keys.length === 0) return 0
+  // A SET job's objects go through the set's own clean-up, claimed on the job
+  // row, so this and the set's other clean-ups never give one back twice.
+  let set: { userId?: string; setCount: number; status?: string } | null | undefined = opts.set === undefined ? undefined : opts.set
+  let unreadable = false
   try {
-    const refund = opts.refundOwner === true && !storageDeletesSkipped()
+    if (set === undefined) set = await (await import("./image-set-storage.js")).setJobOwner(jobId)
+  } catch (err) {
+    // Whether this is a set cannot be read. Objects that may be a set's
+    // pictures still go through the usual path below (a blocked result must
+    // not stay at its public key; a failed delete is recorded for the retry
+    // pass) with nothing given back, so a set's own clean-up can never give the
+    // same bytes back twice. Any other job's objects are handled as always.
+    set = null
+    unreadable = (await import("./image-set-storage.js")).mayBeSetPictures(jobId, keys)
+    if (unreadable) console.warn(`[job-policy] job ${jobId}: its row could not be read; its pictures are deleted without giving storage back: ${(err as Error).message}`)
+  }
+  if (set) {
+    const removed = await (await import("./image-set-storage.js")).discardSetKeys(jobId, set.userId ?? (await ownerOf(jobId)), keys, { setCount: set.setCount, source: "job-policy", ...(set.status ? { rowStatus: set.status } : {}) })
+    if (storageDeletesSkipped()) {
+      const { keepWithheldObjectsPrivate } = await import("./withheld-objects-private.js")
+      await keepWithheldObjectsPrivate(jobId, keys)
+    }
+    return removed
+  }
+  try {
+    const refund = opts.refundOwner === true && !storageDeletesSkipped() && !unreadable
     // Sized BEFORE the delete: a deleted object has no size to read.
     const sizes = refund ? await ownedObjectSizes(keys) : undefined
     // A key storage fails to delete is recorded for the retry pass.
@@ -340,6 +368,17 @@ async function ownedObjectSizes(keys: readonly string[]): Promise<Map<string, nu
 }
 
 /** Give `bytes` back to the job owner's storage. Logs, never throws. */
+/** The job's owner, read from its row; undefined when it cannot be read. */
+async function ownerOf(jobId: string): Promise<string | undefined> {
+  try {
+    const { supabase } = await import("./supabase.js")
+    const { data } = await supabase.from("jobs").select("user_id").eq("id", jobId).single()
+    return (data as { user_id?: string | null } | null)?.user_id ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 async function refundOwnerStorage(jobId: string, bytes: number): Promise<void> {
   try {
     const { supabase } = await import("./supabase.js")

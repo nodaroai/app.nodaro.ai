@@ -121,6 +121,10 @@ export async function markJobFailedDetailed(jobId: string, input: MarkJobFailedI
   // a job that never waited (only wait entries are dropped, never a lease).
   // Lazy, so this module's static graph stays supabase + job-status.
   void import("./concurrency-lanes/withdraw.js").then((m) => m.withdrawFromLane(jobId)).catch(() => undefined)
+  // A SET job (Kling Image 4.0) that failed leaves no picture behind, whatever
+  // failed it: what its stores wrote is deleted and given back. A no-op for
+  // every other job. Not awaited and never throws; lazy, like the rest.
+  void import("./image-set-storage.js").then((m) => m.discardEndedSetImages(jobId)).catch(() => undefined)
   return "flipped"
 }
 

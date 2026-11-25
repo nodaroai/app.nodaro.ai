@@ -2,6 +2,8 @@ import {
   FLUX_3_KLEIN_KIE_HUNDREDTHS,
   GPT_IMAGE_2_KIE_CREDITS,
   KIE_CREDIT_USD,
+  KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS,
+  KLING_IMAGE_4_KIE_HUNDREDTHS,
   MINIMAX_H3_IMAGE_KIE_HUNDREDTHS,
   MINIMAX_H3_IMAGE_REFERENCE_KIE_HUNDREDTHS,
   SEEDREAM_5_5_INPUT_IMAGE_KIE_HUNDREDTHS,
@@ -12,10 +14,13 @@ import {
   MINIMAX_H3_IMAGE_DEFAULT_RESOLUTION,
   flux3KleinResolution,
   isFlux3Klein,
+  isKlingImage4,
+  isKlingImage4I2i,
   isMinimaxH3Image,
   isMinimaxH3ImageI2i,
   isSeedream55,
   isSeedream55I2i,
+  klingImage4Resolution,
   seedream55Resolution,
 } from "@nodaro/shared/model-catalog"
 
@@ -28,7 +33,8 @@ import {
  * (its 1K price) would understate a 2K or 4K picture. MiniMax H3 Image bills by
  * the size sent and, on an edit, by each reference image sent; Seedream 5.5 by
  * the size sent and, on an edit, by each input image sent; FLUX 3 Klein by the
- * size sent alone, the same on both endpoints.
+ * size sent alone, the same on both endpoints; Kling Image 4.0 by the size sent
+ * and each input item sent (an image or a named subject), per image returned.
  */
 
 const GPT_IMAGE_2_PROVIDERS: ReadonlySet<string> = new Set(["gpt-image-2", "gpt-image-2-i2i"])
@@ -49,7 +55,11 @@ export function kieImageCostUsd(
   modelConfig: KieModelConfig,
   resolution: string | number | undefined,
   inputImages = 0,
+  /** The images the task returned (a set's); one on every other model. */
+  imagesReturned = 1,
 ): number {
+  // Its text-to-image id is never sent images (the provider swaps to the edit id first).
+  if (isKlingImage4(provider)) return klingImage4CostUsd(resolution, isKlingImage4I2i(provider) ? inputImages : 0, imagesReturned)
   if (isMinimaxH3Image(provider)) return minimaxH3ImageCostUsd(provider, resolution, inputImages)
   if (isSeedream55(provider)) return seedream55CostUsd(provider, resolution, inputImages)
   // FLUX 3 Klein: the size sent (KIE's default 1K when none is), never the images.
@@ -105,4 +115,15 @@ export function kieTaskCreditsConsumed(record: Record<string, unknown> | undefin
   const raw = task?.creditsConsumed ?? task?.consumeCredits ?? task?.credits_consumed
   const credits = typeof raw === "string" ? Number(raw) : raw
   return typeof credits === "number" && Number.isFinite(credits) && credits > 0 ? credits : undefined
+}
+
+/**
+ * Kling Image 4.0: the size sent (lowercase on the wire, its default 2K when
+ * none is), plus each input item sent, for each image the task returned.
+ */
+export function klingImage4CostUsd(resolution: string | number | undefined, inputItems: number, imagesReturned: number): number {
+  const items = Math.max(0, Math.trunc(inputItems))
+  const images = Math.max(1, Math.trunc(imagesReturned))
+  const hundredths = (KLING_IMAGE_4_KIE_HUNDREDTHS[klingImage4Resolution(resolution)] + KLING_IMAGE_4_INPUT_ITEM_KIE_HUNDREDTHS * items) * images
+  return (hundredths / 100) * KIE_CREDIT_USD
 }

@@ -407,6 +407,8 @@ export async function cancelInFlightChildJobs(
       continue
     }
     result.cancelled++
+    // A cancelled SET job leaves no picture behind (no extra read for any other job).
+    if (typeof prevInput.setHoldCreditId === "string") await (await import("../image-set-storage.js")).discardEndedSetImages(id)
     // A cancelled child leaves its concurrency lane: on a cancel that ends the
     // run, and on the resume for a waiting child it could not adopt (a fan-out
     // iteration, an orphan) — left there it would stay at the head of its

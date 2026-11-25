@@ -99,7 +99,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       const { data: jobs, error: fetchError } = await supabase
         // trash-read: cancelling stops work: a deleted job still running is stopped too.
         .from("jobs")
-        .select("id, status, provider")
+        .select("id, status, provider, setHoldCreditId:input_data->>setHoldCreditId")
         .eq("user_id", userId)
         .in("status", [...IN_FLIGHT_JOB_STATUSES])
         // A background scrape saves its provider run only to re-attach after an
@@ -177,6 +177,13 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       if (cancelledIds.length > 0) {
         // Refund reserved credits for every cancelled job in one pass.
         await refundReservedHolds(cancelledIds)
+        // A cancelled SET job leaves no picture behind.
+        const sets = new Set(((jobs ?? []) as Array<{ id: string; setHoldCreditId?: string | null }>).filter((r) => typeof r.setHoldCreditId === "string" && r.setHoldCreditId.length > 0).map((r) => r.id))
+        const cancelledSets = cancelledIds.filter((id) => sets.has(id))
+        if (cancelledSets.length > 0) {
+          const { discardEndedSetImages } = await import("../lib/image-set-storage.js")
+          await Promise.all(cancelledSets.map((id) => discardEndedSetImages(id)))
+        }
       }
       if (cancelledIds.length > 0 || heldCancelled > 0) invalidateBalanceCache(userId)
 

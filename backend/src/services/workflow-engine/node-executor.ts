@@ -3479,9 +3479,13 @@ async function cancelJobAndThrow(
     .not("status", "in", "(completed,failed,cancelled)")
     // Real columns only: a returned column the table lacks fails the whole
     // UPDATE (it is one statement), which left the job running and unrefunded.
-    .select("id, user_id, provider_task_id, provider_kind, credits")
+    .select("id, user_id, provider_task_id, provider_kind, credits, setHoldCreditId:input_data->>setHoldCreditId")
 
   if (flipped && flipped.length > 0) {
+    // A cancelled SET job leaves no picture behind (no extra read for any other job).
+    if (typeof (flipped[0] as { setHoldCreditId?: unknown }).setHoldCreditId === "string") {
+      await (await import("../../lib/image-set-storage.js")).discardEndedSetImages(jobId)
+    }
     // A job waiting for a concurrency slot leaves its line (harmless for one
     // that was running: only wait entries are dropped). Bounded, never throws.
     await withdrawFromLane(jobId)
