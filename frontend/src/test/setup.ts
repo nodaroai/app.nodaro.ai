@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest"
 import { afterAll, afterEach } from "vitest"
 import { domTrapsInstalled, installDomTrapsInNodeEnvironment, removeDomTraps } from "./node-env-dom-trap"
 import { settleAfterCleanup } from "./teardown-drain"
+import { testingLibraryOptions } from "../../../tools/vitest/ci-limits.mjs"
 
 // First, before anything below probes a global: without isolation the previous
 // file's DOM trap may still be installed (see node-env-dom-trap.ts).
@@ -115,3 +116,13 @@ afterAll(removeDomTraps)
 // after Testing Library's cleanup (teardown-drain.ts). Not in node-env files:
 // they mount nothing, and `typeof window` would trip the trap above.
 if (!domTrapsInstalled()) afterEach(settleAfterCleanup)
+
+// jsdom files: Testing Library's waits (findBy*, waitFor) get CI's slow-host
+// factor like the test limits do (tools/vitest/ci-limits.mjs). From
+// @testing-library/dom, not /react: the React package registers its cleanup
+// when imported, which would put it before the drain above. The same module
+// instance @testing-library/react waits through, so a test's waits see it.
+if (!domTrapsInstalled()) {
+  const { configure } = await import("@testing-library/dom")
+  configure(testingLibraryOptions())
+}

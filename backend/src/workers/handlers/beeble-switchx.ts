@@ -218,7 +218,8 @@ export const handleBeebleSwitchX: HandlerFn = async function handleBeebleSwitchX
   // Re-host immediately (Beeble URLs expire after 72h) WITH watermark (free tier)
   // + browser-safe transcode (Beeble may deliver HEVC). Only the R2 url is
   // persisted — the vendor render/source/alpha URLs are never stored.
-  const r2Url = await uploadVideoMaybeWatermark(renderUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const storedVideo = await uploadVideoMaybeWatermark(renderUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
   const thumbnailUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -228,7 +229,7 @@ export const handleBeebleSwitchX: HandlerFn = async function handleBeebleSwitchX
     jobId: ctx.jobId,
     jobType: "switchx",
     result: { url: r2Url, cost: null, meteredCost: false, providerUsed: "beeble" },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl, ...(trimSourceToFrames ? { sourceTrimmedToFrames: trimSourceToFrames } : {}) },
   })
   if (!ok) return

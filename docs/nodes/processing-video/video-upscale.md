@@ -19,7 +19,7 @@ The Video Upscale node enhances video resolution using AI upscaling. Choose betw
 | Resolution | Select | 1080p | The output's **short side**: 720p, 1080p or 4K. A portrait clip stays portrait (a 1080×1920 source at 4K comes out 2160×3840). Choosing the source's own resolution enhances it without resizing. |
 | Frame rate | Select | Same as source | 24, 25, 30, 50 or 60 fps (any whole number from 15 to 60 through the API). Frames the source does not have are **interpolated** by Topaz; keep "Same as source" to leave the motion as it is. |
 
-The output is delivered as H.264 (the provider renders HEVC; Nodaro re-encodes it at a visually lossless quality so it plays in every browser and works as an input to every other node).
+The provider renders HEVC 10-bit. Nodaro keeps that file untouched as the result's original, and plays and passes on an H.264 copy encoded at a visually lossless quality, so it plays in every browser and works as an input to every other node. The original is in the job's output as `originalVideoUrl` (API, SDK and MCP). A watermarked run keeps only the watermarked H.264 file. See [Video originals and previews](../../design/video-original-and-preview.md).
 
 **Older workflows** that stored an upscale **factor** (1×, 2× or 4×) keep working: the factor is applied to the source's short side and the **nearest** resolution is used (a 720p clip at 2× renders at 1080p, at 4× at 4K; a 1080p clip at 2× at 4K), at the source's own frame rate. Opening the node and picking a resolution replaces the factor.
 

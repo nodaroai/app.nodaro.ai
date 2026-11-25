@@ -653,8 +653,11 @@ export interface FfmpegLaunchOptions {
    *  picture slice and every re-encode does. */
   readonly peakMemoryMiB?: number
   /** Gives up WAITING for the launch's slot and memory when it aborts (the launch then rejects with its
-   *  reason); never stops a launch already admitted. `runFfmpeg` only. Omitted: waits as long as it takes. */
+   *  reason); never stops a launch already admitted, unless `stopOnAbort`. `runFfmpeg` only. Omitted: waits as long as it takes. */
   readonly signal?: AbortSignal
+  /** With `signal`: its abort also stops the launch once it runs (the child is killed; the failure then
+   *  carries `aborted`). `runFfmpeg` only. Omitted: an admitted launch runs to its end. */
+  readonly stopOnAbort?: boolean
   /** The child's environment: the probe guard's, for a run that reads a link through its proxy
    *  (`ffmpeg-reading-links.ts`). Omitted: this process's own. */
   readonly env?: NodeJS.ProcessEnv
@@ -849,9 +852,12 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
  * caller can classify without parsing text (Video Overlay: a timeout is
  * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
  */
-function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true } {
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true; signalledFromOutside?: true } {
   const killed = error.killed === true
   return {
+    // Ended by a signal this process did not send (the kernel's out-of-memory
+    // killer's SIGKILL, an operator): the box's failure, not the input's.
+    ...(!killed && typeof error.signal === "string" && error.signal.length > 0 ? { signalledFromOutside: true as const } : {}),
     killed,
     timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
     // The process never started (ENOENT, EAGAIN, EMFILE…: the spawn's own error): the server's failure, not the input's.
@@ -894,6 +900,7 @@ export async function runFfmpeg(
       maxBuffer: 10 * 1024 * 1024,
       timeout: limitMs,
       ...(launch?.env ? { env: launch.env } : {}),
+      ...(launch?.stopOnAbort && launch.signal ? { signal: launch.signal } : {}),
     }, (error, stdout, stderr) => {
       stopEscalation()
       stopWatch()

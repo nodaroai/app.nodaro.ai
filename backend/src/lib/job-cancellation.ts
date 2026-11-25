@@ -32,6 +32,8 @@ interface JobCancelStore {
   cancelled: boolean
   /** Sticky once a graceful stop was observed (`stop_requested_at` stamped). */
   stopRequested?: boolean
+  /** Whether this is the job's last worker attempt (no BullMQ retry follows a failure), asked only when needed. */
+  readonly finalAttempt?: () => boolean
 }
 
 const storage = new AsyncLocalStorage<JobCancelStore>()
@@ -73,8 +75,15 @@ export function runWithJobCancellation<T>(
   jobId: string,
   userId: string | undefined,
   fn: () => Promise<T>,
+  /** `finalAttempt`: whether no BullMQ retry follows a failure of this attempt (`isFinalJobAttempt`), asked only when needed. */
+  opts: { finalAttempt?: () => boolean } = {},
 ): Promise<T> {
-  return storage.run({ jobId, userId, lastCheckMs: 0, cancelled: false }, fn)
+  return storage.run({ jobId, userId, lastCheckMs: 0, cancelled: false, ...(opts.finalAttempt !== undefined ? { finalAttempt: opts.finalAttempt } : {}) }, fn)
+}
+
+/** Whether the running job's attempt is its last, or undefined outside a context that knows (a reconcile or webhook lane). */
+export function isFinalAttemptOfRunningJob(): boolean | undefined {
+  return storage.getStore()?.finalAttempt?.()
 }
 
 /** The owner of the job whose context is currently active, or undefined

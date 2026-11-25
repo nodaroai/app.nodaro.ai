@@ -172,8 +172,8 @@ beforeEach(() => {
   mocks.mockDownloadFile.mockResolvedValue(undefined)
   mocks.mockMakeOnTaskCreated.mockReturnValue(ON_TASK_CREATED)
   mocks.mockRunGrokExtend.mockResolvedValue({ url: GROK_URL, kieTaskId: "task-grok-ext-1", providerMs: 52_000 })
-  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(R2_URL)
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue(R2_URL)
+  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue({ videoUrl: R2_URL })
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: R2_URL })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   // 6.04 s of the source, then 6.04 s of new footage.
@@ -240,7 +240,7 @@ describe("grok-extend — the deliverable", () => {
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(GROK_PATH, "job-1", "user-1", false)
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
-    expect(finalize).toMatchObject({ jobId: "job-1", jobType: "extend-video", mediaUrl: R2_URL })
+    expect(finalize).toMatchObject({ jobId: "job-1", jobType: "extend-video", video: { videoUrl: R2_URL } })
     expect(finalize.result).toMatchObject({ url: GROK_URL, cost: null, providerUsed: "grok-extend", kieTaskId: "task-grok-ext-1", providerMs: 52_000 })
     expect(finalize.extraOutputData).toEqual({ thumbnailUrl: "https://r2.example.com/images/thumb.png" })
     // The work folder is removed.

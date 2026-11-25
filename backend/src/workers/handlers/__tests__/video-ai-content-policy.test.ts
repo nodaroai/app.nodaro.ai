@@ -30,8 +30,8 @@ const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
-  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
+  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1-merged.mp4" })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   const mockSetJobProgress = vi.fn(async () => {})
 
@@ -223,7 +223,7 @@ beforeEach(() => {
   // fully (not just clear) to guarantee a blank queue each test.
   mocks.mockTextToVideo.mockReset()
   mocks.mockLlmCompleteStructured.mockReset()
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   mocks.mockMarkJobCompleted.mockResolvedValue(true)
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })

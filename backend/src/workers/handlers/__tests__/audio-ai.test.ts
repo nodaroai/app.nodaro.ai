@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => {
   // audio-vs-video mode from this, never from the input slot.
   const mockProbeMediaStreams = vi.fn().mockResolvedValue({ hasVideo: true, hasAudio: true })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumb.png")
-  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/video/job-1.mp4")
+  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/video/job-1.mp4" })
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   const mockFsReadFile = vi.fn().mockResolvedValue(Buffer.from("source-audio"))
   const mockIsNodaroConnected = vi.fn().mockResolvedValue(false)

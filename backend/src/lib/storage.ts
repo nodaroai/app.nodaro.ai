@@ -206,7 +206,14 @@ const MEDIA_MIME: Record<MediaType, string> = { video: "video/mp4", audio: "audi
  * text-to-video CHILD job that asked Seedance 2.5 for mov: its video is never
  * shown to its owner, and its parent re-encodes it before delivery.
  */
-const VIDEO_EXT_MIME = { mp4: "video/mp4", mov: "video/quicktime" } as const
+const VIDEO_EXT_MIME = {
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  // A kept original (`lib/video-result-store.ts`, decided 2026-11-22) is stored
+  // as the container it is: a WebM or Matroska file.
+  webm: "video/webm",
+  mkv: "video/x-matroska",
+} as const
 export type VideoContainerExt = keyof typeof VIDEO_EXT_MIME
 
 /**

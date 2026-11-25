@@ -6374,6 +6374,7 @@ export const es: ChromeDict = {
   "node.pausePreview": "Pausar vista previa",
   "node.playPreview": "Reproducir vista previa",
   "node.videoLoadFailed": "No se pudo cargar el video",
+  "node.videoCannotPlayInBrowser": "Este video no se pudo reproducir aquí. Prueba a descargarlo.",
   "node.openUrl": "Abrir URL",
   "node.assembled": "Montado",
   "node.startState": "Estado inicial",

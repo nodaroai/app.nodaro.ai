@@ -26,7 +26,9 @@
  */
 import { r2KeyFromOurUrl } from "./storage.js"
 import { storageDeletesSkipped } from "./storage-deletes-setting.js"
+import { isKeptOriginalKey } from "./video-original-keys.js"
 import type { JobOutputRef } from "./job-policy.js"
+import { isOwnedObjectKey, keyStem } from "./job-key-family.js"
 
 /** A withheld object, as stored in `jobs.held_objects` (D7). Keys, never URLs:
  *  the review preview reads one server-side by index and reject deletes by key.
@@ -117,40 +119,9 @@ export function mediaKindOf(outputData: Record<string, unknown> | null | undefin
   return "other"
 }
 
-/**
- * Ownership by KEY FAMILY. Every deliverable this platform writes is
- * `<prefix>/<jobId>.<ext>` — `images/`, `videos/`, `audios/` (mediaObjectKey),
- * plus `thumbnails/`, `reference-sheets/` and `lottie/` — and everything a job
- * writes ALONGSIDE its deliverable suffixes that same stem: `variantJobId` is
- * `<jobId>-v<i>`, and a plugin's intermediates are `<jobId>-seg1`,
- * `<jobId>-seg3-lastframe`, `<jobId>-seg2-anchor-start`, `<jobId>-video-audio`
- * and so on. So the family is the STEM PREFIX `<jobId>-`, and it is
- * prefix-agnostic on purpose: a new deliverable prefix — or a new suffix an
- * engine invents next week — inherits the rule instead of silently leaking.
- *
- * The `-` is load-bearing twice over. It keeps `job-10` out of `job-1`'s
- * family (a bare `startsWith(jobId)` would swallow it), and because every
- * engine builds its stems from the RUNNING job's own id, a continuation's
- * `<parentJobId>-segN` stays the PARENT's object: a child's block must not
- * delete the deliverable of a job that completed. Job ids are UUIDs, so a
- * `<jobId>-` prefix cannot collide with another job's id.
- */
-export function isOwnedObjectKey(jobId: string, key: string): boolean {
-  if (!jobId) return false
-  const stem = keyStem(key)
-  return stem === jobId || stem.startsWith(`${jobId}-`)
-}
-
-/** An object key's STEM: basename, extension removed. The half of the family
- *  rule that both `isOwnedObjectKey` ("does this key belong to job X?") and
- *  `objectKeyJobIdCandidates` ("which job could have written this key?") are
- *  built from — one implementation, so the fence and the family rule cannot
- *  drift apart. */
-export function keyStem(key: string): string {
-  const base = key.slice(key.lastIndexOf("/") + 1)
-  const dot = base.lastIndexOf(".")
-  return dot > 0 ? base.slice(0, dot) : base
-}
+// The key-family rule (`isOwnedObjectKey`, `keyStem`) lives in a leaf module
+// so the store-record code can use it without importing this one.
+export { isOwnedObjectKey, keyStem } from "./job-key-family.js"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -307,8 +278,20 @@ export async function deleteOwnedObjects(
 ): Promise<number> {
   // Deduped: callers legitimately union two sources (the withheld list and the
   // row's residue), and the same key must not be sent twice.
-  const keys = [...new Set(objects.map((o) => o.key).filter((k) => isOwnedObjectKey(jobId, k)))]
-  if (keys.length === 0) return 0
+  const owned = [...new Set(objects.map((o) => o.key).filter((k) => isOwnedObjectKey(jobId, k)))]
+  if (owned.length === 0) return 0
+  // A kept original's bytes are its job's record's (decided 2026-11-23): it is
+  // claimed off that record, deleted once the claim ran and given back by the
+  // claim — never sized here as well, so an original the failure funnel
+  // already claimed and refunded is not refunded twice.
+  const originals = storageDeletesSkipped() ? [] : owned.filter(isKeptOriginalKey)
+  const keys = owned.filter((k) => !originals.includes(k))
+  let originalsDeleted = 0
+  if (originals.length > 0) {
+    const { reapRecordedObjects } = await import("./job-server-output.js")
+    originalsDeleted = (await reapRecordedObjects(originals.map((key) => ({ jobId, key })), "job-output")).deleted
+  }
+  if (keys.length === 0) return originalsDeleted
   // A SET job's objects go through the set's own clean-up, claimed on the job
   // row, so this and the set's other clean-ups never give one back twice.
   let set: { userId?: string; setCount: number; status?: string } | null | undefined = opts.set === undefined ? undefined : opts.set
@@ -331,7 +314,7 @@ export async function deleteOwnedObjects(
       const { keepWithheldObjectsPrivate } = await import("./withheld-objects-private.js")
       await keepWithheldObjectsPrivate(jobId, keys)
     }
-    return removed
+    return removed + originalsDeleted
   }
   try {
     const refund = opts.refundOwner === true && !storageDeletesSkipped() && !unreadable
@@ -349,10 +332,10 @@ export async function deleteOwnedObjects(
       const freed = keys.filter((k) => !kept.has(k)).reduce((sum, k) => sum + (sizes.get(k) ?? 0), 0)
       if (freed > 0) await refundOwnerStorage(jobId, freed)
     }
-    return deleted
+    return deleted + originalsDeleted
   } catch (err) {
     console.warn(`[job-policy] object cleanup failed for job ${jobId}: ${(err as Error).message}`)
-    return 0
+    return originalsDeleted
   }
 }
 

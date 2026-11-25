@@ -6,6 +6,7 @@ import {
   restoreVideoAudioFromSource,
 } from "../../providers/video/ffmpeg-utils.js"
 import { uploadVideoMaybeWatermark, watermarkLocalVideoAndUpload } from "../shared.js"
+import type { StoredVideo } from "../../lib/video-result-store.js"
 
 export interface SwapUploadTarget {
   readonly jobId: string
@@ -29,7 +30,7 @@ export async function uploadSwapWithSourceAudio(
   swapUrl: string,
   sourceVideoUrl: string,
   target: SwapUploadTarget,
-): Promise<string> {
+): Promise<StoredVideo> {
   const workDir = await createWorkDir("face-swap-audio")
   try {
     const local = await swapWithSourceAudio(workDir, swapUrl, sourceVideoUrl, target.jobId)

@@ -54,8 +54,8 @@ const HD = "https://kie.example/hd.mp4"
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.finalize.mockResolvedValue({ url: HD, kieTaskId: "task-final" })
-  mocks.apply.mockResolvedValue({ url: "https://r2.example/hd-with-audio.mp4" })
-  mocks.upload.mockResolvedValue("https://r2.example/hd.mp4")
+  mocks.apply.mockResolvedValue({ stored: { videoUrl: "https://r2.example/hd-with-audio.mp4" } })
+  mocks.upload.mockResolvedValue({ videoUrl: "https://r2.example/hd.mp4" })
   mocks.finalizeJob.mockResolvedValue({ ok: true })
 })
 
@@ -68,7 +68,7 @@ describe("video-upscale seedance-2-5-hd — the draft's audio mux", () => {
       videoUrl: HD, mux, draftVideoUrl: "https://r2.example/draft.mp4", jobId: "job-hd", userId: "user-1", watermark: true,
     })
     expect(mocks.upload).not.toHaveBeenCalled()
-    expect(mocks.finalizeJob.mock.calls[0]![0]).toMatchObject({ mediaUrl: "https://r2.example/hd-with-audio.mp4" })
+    expect(mocks.finalizeJob.mock.calls[0]![0]).toMatchObject({ video: { videoUrl: "https://r2.example/hd-with-audio.mp4" } })
   })
 
   it("re-applies an audioUrl merge with its own settings", async () => {
@@ -79,12 +79,12 @@ describe("video-upscale seedance-2-5-hd — the draft's audio mux", () => {
 
   it("audio that could not be re-applied: the silent HD is delivered (job completes, charged) with a visible warning", async () => {
     mocks.apply.mockResolvedValueOnce({
-      url: "https://r2.example/hd-silent.mp4",
+      stored: { videoUrl: "https://r2.example/hd-silent.mp4" },
       warning: { code: "draft_audio_not_reapplied", message: "The 1080p video was delivered without the draft's audio" },
     })
     await videoAIHandlers["video-upscale"](job({ draftAudioMux: { kind: "voice-track", audioUrl: "https://r2/t.mp3" } }) as never, ctx as never)
-    const arg = mocks.finalizeJob.mock.calls[0]![0] as { mediaUrl: string; extraOutputData: Record<string, unknown> }
-    expect(arg.mediaUrl).toBe("https://r2.example/hd-silent.mp4")
+    const arg = mocks.finalizeJob.mock.calls[0]![0] as { video: { videoUrl: string }; extraOutputData: Record<string, unknown> }
+    expect(arg.video?.videoUrl).toBe("https://r2.example/hd-silent.mp4")
     expect(arg.extraOutputData).toMatchObject({ warningCode: "draft_audio_not_reapplied", warningMessage: expect.stringContaining("without the draft's audio") })
   })
 
@@ -92,7 +92,7 @@ describe("video-upscale seedance-2-5-hd — the draft's audio mux", () => {
     await videoAIHandlers["video-upscale"](job({}) as never, ctx as never)
     expect(mocks.apply).not.toHaveBeenCalled()
     expect(mocks.upload).toHaveBeenCalledWith(HD, "job-hd", "user-1", true)
-    expect(mocks.finalizeJob.mock.calls[0]![0]).toMatchObject({ mediaUrl: "https://r2.example/hd.mp4" })
+    expect(mocks.finalizeJob.mock.calls[0]![0]).toMatchObject({ video: { videoUrl: "https://r2.example/hd.mp4" } })
     expect((mocks.finalizeJob.mock.calls[0]![0] as { extraOutputData: Record<string, unknown> }).extraOutputData).not.toHaveProperty("warningCode")
   })
 
@@ -110,7 +110,7 @@ describe("video-upscale seedance-2-5-hd — the draft's audio mux", () => {
  * the same as before.
  */
 describe("video-upscale seedance-2-5-hd — the recorded provider cost", () => {
-  type FinalizeArg = { result: Record<string, unknown>; mediaUrl: string; extraOutputData: Record<string, unknown> } & Record<string, unknown>
+  type FinalizeArg = { result: Record<string, unknown>; video: { videoUrl: string }; extraOutputData: Record<string, unknown> } & Record<string, unknown>
   const arg = () => mocks.finalizeJob.mock.calls[0]![0] as FinalizeArg
 
   beforeEach(() => {
@@ -141,7 +141,7 @@ describe("video-upscale seedance-2-5-hd — the recorded provider cost", () => {
       expect(arg()).not.toHaveProperty("meteredBaseCredits")
       expect(arg().result).not.toHaveProperty("meteredCost")
       expect(arg().result).toEqual({ url: HD, cost: seedanceDraftFinalizeCostUsd(data.draftBilledSec, data.draftHasRefVideo), providerUsed: "seedance-2-5-hd" })
-      expect(arg().mediaUrl).toBe("https://r2.example/hd.mp4")
+      expect(arg().video?.videoUrl).toBe("https://r2.example/hd.mp4")
       expect(arg().extraOutputData).toEqual({ thumbnailUrl: null })
     }
   })

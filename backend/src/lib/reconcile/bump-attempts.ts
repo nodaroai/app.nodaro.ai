@@ -35,6 +35,10 @@ import { SVG_REFUSED_MESSAGE } from "../svg-sanitize.js"
  */
 const DETERMINISTIC_RECONCILE_ERRORS: readonly RegExp[] = [
   /^upload-size-exceeded/,
+  // A delivered video that is empty or has no picture that decodes
+  // (`UnusableVideoError`, lib/video-result-store.ts): the provider's saved
+  // result is the same file on every tick.
+  /^unusable-video:/,
 ]
 
 /** True for a failure every attempt repeats: an oversized file, or an SVG that

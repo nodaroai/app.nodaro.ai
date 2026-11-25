@@ -116,7 +116,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
     commitJobCredits: vi.fn().mockResolvedValue(undefined),
     shouldSaveJobResult: vi.fn().mockResolvedValue(true),
     markJobCompleted: vi.fn().mockResolvedValue(true),
-    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4"),
+    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" }),
     watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
     generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
     setJobProgress: vi.fn(async () => {}),
@@ -194,7 +194,7 @@ beforeEach(() => {
   mocks.mockRunPixverseExtend.mockResolvedValue({ url: PIXVERSE_URL, kieTaskId: "kie-px-1", providerMs: 90_000 })
   mocks.mockCutNativeExtension.mockResolvedValue(NEW_PART_PATH)
   mocks.mockStitchExtension.mockResolvedValue({ outputPath: STITCHED_PATH, boundary: BOUNDARY })
-  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
+  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue({ videoUrl: STITCHED_R2 })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockCreditIdBaseCredits.mockImplementation(async (id: string) => ROW_BASE[id])
@@ -349,11 +349,22 @@ describe("pixverse-v6-extend — the deliverable", () => {
     }
   })
 
+  it("a watermarked run never records PixVerse's own (unwatermarked, temporary) clip url (decided 2026-11-22)", async () => {
+    ctx.shouldWatermark = true
+    try {
+      await run()
+    } finally {
+      ctx.shouldWatermark = false
+    }
+    const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
+    expect(finalize.extraOutputData).not.toHaveProperty("rawExtensionUrl")
+  })
+
   it("finalizes the stitched clip as pixverse-v6-extend, PixVerse's clip kept as the raw extension", async () => {
     await run()
     const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
     expect(finalize.jobType).toBe("extend-video")
-    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.video?.videoUrl).toBe(STITCHED_R2)
     expect(finalize.result).toMatchObject({ url: STITCHED_R2, providerUsed: "pixverse-v6-extend" })
     expect(finalize.extraOutputData).toMatchObject({
       thumbnailUrl: "https://r2.example.com/images/thumb.png",
@@ -442,7 +453,7 @@ describe("pixverse-v6-extend — what the run is charged", () => {
     expect(settledBase()).toBeLessThan(ROW_BASE["pixverse-v6-extend:5s:540p:audio"]!)
     // The deliverable is as before: the new seconds cut as asked, the stitch padding them with silence.
     expect(mocks.mockCutNativeExtension).toHaveBeenCalledWith(PIXVERSE_PATH, 8.06, STITCH_DIR, { sound: true })
-    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].mediaUrl).toBe(STITCHED_R2)
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].video?.videoUrl).toBe(STITCHED_R2)
   })
 
   it("reads the silent row at the seconds and quality the run was priced at", async () => {

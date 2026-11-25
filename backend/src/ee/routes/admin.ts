@@ -8,6 +8,7 @@ import { collectAppExpungeTargets, redactAppExpungeTargets, type AppExpungeTarge
 import { appRunContentRedaction } from "../../lib/app-run-content.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
 import { deleteKeysRecordingFailures } from "../../lib/storage-delete.js"
+import { refundClaimedRecordedObjects } from "../../lib/job-server-output.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { noteModelSwitch } from "../../lib/model-switch.js"
 
@@ -632,6 +633,18 @@ export async function adminRoutes(app: FastifyInstance) {
       extraExecutions: targets.unpointedExecutions,
     })
     const r2Keys = await deletableKeys(harvest.keys)
+    // A kept video original (or raw clip) (migration 695): claimed off its
+    // job's record BEFORE the redaction clears that record, deleted only once
+    // its claim ran, and given back once, whichever other path deletes the
+    // same object (`reapRecordedObjects`). A claim that did not run stops the
+    // expunge here, before anything else is cleared: its record still names
+    // the object, and the next attempt reaps it.
+    const recordedReap = await refundClaimedRecordedObjects(harvest.recorded ?? [], new Set(r2Keys), "admin-expunge")
+    if (recordedReap.failedJobIds.size > 0) {
+      console.error(`[admin-expunge] ${appId}: the stored-object record of ${recordedReap.failedJobIds.size} job(s) could not be claimed; expunge stopped before the redaction`)
+      return reply.status(500).send({ error: { code: "recorded_claim_failed", message: "Kept originals could not be claimed; try again" } })
+    }
+    const recordedKeys = new Set((harvest.recorded ?? []).map((r) => r.key))
     // What stays in storage, and why, is told to the admin and written to the
     // audit row — never skipped silently (MEDIUM 3, review of 2026-10-15).
     const deletableSet = new Set(r2Keys)
@@ -686,11 +699,12 @@ export async function adminRoutes(app: FastifyInstance) {
       }
     }
 
-    let r2Result = { deleted: 0, errors: 0 }
+    let r2Result: { deleted: number; errors: number; notDeleted?: string[] } = { deleted: 0, errors: 0 }
     if (r2Keys.length > 0) {
       try {
         // A key storage fails to delete is recorded for the retry pass.
-        r2Result = await deleteKeysRecordingFailures(r2Keys, "admin-expunge")
+        const plain = await deleteKeysRecordingFailures(r2Keys.filter((k) => !recordedKeys.has(k)), "admin-expunge")
+        r2Result = { ...plain, deleted: plain.deleted + recordedReap.deleted, errors: plain.errors + recordedReap.errors }
       } catch (err) {
         console.error(`[admin-expunge] R2 batch delete failed for ${appId}:`, err)
       }

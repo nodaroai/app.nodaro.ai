@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockGenerateCinematicAvatar = vi.fn()
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/cinematic-job-1.mp4")
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/cinematic-job-1.mp4" })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/cinematic-job-1.png")
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
   const mockSetJobProgress = vi.fn(async () => {})
@@ -105,7 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   cloudMocks.shouldRunOnCloud.mockResolvedValue(false)
   mocks.mockGenerateCinematicAvatar.mockResolvedValue(CINEMATIC_RESULT)
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/cinematic-job-1.mp4")
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/cinematic-job-1.mp4" })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/cinematic-job-1.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
 })
@@ -199,7 +199,7 @@ describe("handleCinematicAvatar — happy path", () => {
           meteredCost: true,
           providerUsed: "heygen",
         }),
-        mediaUrl: "https://r2.example.com/videos/cinematic-job-1.mp4",
+        video: { videoUrl: "https://r2.example.com/videos/cinematic-job-1.mp4" },
         extraOutputData: expect.objectContaining({
           thumbnailUrl: "https://r2.example.com/thumbnails/cinematic-job-1.png",
           durationSec: CINEMATIC_RESULT.durationSec,

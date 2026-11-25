@@ -1,4 +1,5 @@
 // tools/vitest/ci-limits.mjs
+// @reads-none it only works out the slow-tests reporter's path (new URL from import.meta.url) for a config; it reads no file
 // The per-test and per-hook time limits every Vitest suite uses in CI, and the
 // reporter that lists the tests leaning on them. One definition: every suite
 // config spreads `ciTestOptions()` into its `test` block, and
@@ -31,6 +32,21 @@
 // budget keeps the same margin over the default on a slow host. A limit set
 // as a plain number is used as written everywhere (right for a limit that is
 // part of what the test asserts).
+//
+// Testing Library's waits (`findBy*`, `findAllBy*`, `waitFor`,
+// `waitForElementToBeRemoved`) have a limit of their own, `asyncUtilTimeout`,
+// 1 s by default, and a slow host expires it the same way: a screen that
+// renders well inside 1 s normally missed it on one (the face-mask editor test,
+// 2026-11-25, while the 20 s test limit was nowhere near). Every setup file of
+// a workspace whose tests use Testing Library passes `testingLibraryOptions()`
+// to its `configure` (tools/__tests__/vitest-ci-limits.test.mjs holds that):
+// 1 s locally, 1 s x CI_LIMIT_FACTOR in CI. A wait that passes returns as soon
+// as it does, so only a wait that is going to fail pays the longer limit — an
+// element that is really missing now fails after 4 s in CI instead of 1 s,
+// still well inside the 20 s test limit, so the test reports the wait's own
+// "Unable to find…" rather than a bare test timeout. A `{ timeout }` given to
+// one call keeps winning (use `scaledTimeout(ms)` there too when it buys time
+// for slow work).
 import { fileURLToPath } from "node:url"
 
 /** Vitest's own defaults: what a developer's run uses. */
@@ -43,6 +59,19 @@ export const CI_LIMIT_FACTOR = 4
 // `20_000` itself (sixteen do) by the value alone.
 export const CI_TEST_TIMEOUT_MS = LOCAL_TEST_TIMEOUT_MS * CI_LIMIT_FACTOR + 1
 export const CI_HOOK_TIMEOUT_MS = LOCAL_HOOK_TIMEOUT_MS * CI_LIMIT_FACTOR
+/** Testing Library's own default for its waits, and what CI gives them. */
+export const LOCAL_ASYNC_UTIL_TIMEOUT_MS = 1_000
+export const CI_ASYNC_UTIL_TIMEOUT_MS = LOCAL_ASYNC_UTIL_TIMEOUT_MS * CI_LIMIT_FACTOR
+
+/**
+ * What a test setup file passes to Testing Library's `configure` (imported
+ * from `@testing-library/dom`, which registers no test hooks). Empty outside
+ * CI, so a developer's wait keeps the 1 s default and a slow screen still
+ * fails where it is written.
+ */
+export function testingLibraryOptions(env = process.env) {
+  return isCi(env) ? { asyncUtilTimeout: CI_ASYNC_UTIL_TIMEOUT_MS } : {}
+}
 
 /**
  * The reporter's path, worked out only when a config asks: test files import
