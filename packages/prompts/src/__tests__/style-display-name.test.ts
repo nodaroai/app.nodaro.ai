@@ -3,8 +3,8 @@
  * and what models read has not moved. Wording that reaches a model shifts
  * results, so it stays byte-identical until someone decides to change it.
  */
-import { describe, it, expect } from "vitest"
-import { NON_EN_LOCALE_IDS, entryMatchesQuery, type LocaleCatalogMap } from "@nodaro/shared/i18n"
+import { beforeAll, describe, it, expect } from "vitest"
+import { NON_EN_LOCALE_IDS, entryMatchesQuery, type LocaleCatalogMap, type LocaleId } from "@nodaro/shared/i18n"
 import {
   FACTORY_PRESETS,
   STYLES,
@@ -121,25 +121,58 @@ describe("what users read never names the studio", () => {
     }
   })
 
-  it("catalog translations in every locale", async () => {
-    let read = 0
-    for (const catalog of getRegisteredPickerCatalogs()) {
-      for (const locale of NON_EN_LOCALE_IDS) {
-        let map: LocaleCatalogMap = {}
-        try {
-          const mod = (await import(`../../../shared/src/i18n/${catalog.catalogId}.${locale}.ts`)) as { default?: LocaleCatalogMap }
-          map = mod.default ?? {}
-        } catch {
-          continue // a missing sidecar is i18n-locale-completeness.test.ts's job
-        }
+  describe("catalog translations in every locale", () => {
+    /** Every sidecar that exists, by locale: one per (registered catalog, locale). */
+    const sidecars = new Map<LocaleId, { catalogId: string; map: LocaleCatalogMap }[]>()
+
+    // Importing the sidecars is nearly all of this check's time: 429 files,
+    // 6.4 MB of source, each transformed on first import. In one test body that
+    // took 1.1-1.4 s on CI and 5.1 s on a runner running 3-4x slow, past vitest's
+    // 5 s default. So they load once, here, in parallel (about 0.7 s locally,
+    // against 1.9 s one at a time), with a budget of their own.
+    beforeAll(async () => {
+      const loaded = await Promise.all(
+        getRegisteredPickerCatalogs().flatMap((catalog) =>
+          NON_EN_LOCALE_IDS.map(async (locale) => {
+            try {
+              const mod = (await import(`../../../shared/src/i18n/${catalog.catalogId}.${locale}.ts`)) as { default?: LocaleCatalogMap }
+              return { locale, catalogId: catalog.catalogId, map: mod.default ?? {} }
+            } catch {
+              return undefined // a missing sidecar is i18n-locale-completeness.test.ts's job
+            }
+          }),
+        ),
+      )
+      for (const sidecar of loaded) {
+        if (!sidecar) continue
+        sidecars.set(sidecar.locale, [...(sidecars.get(sidecar.locale) ?? []), sidecar])
+      }
+    }, 60_000)
+
+    /** The entries in a locale's sidecars whose label or description names the studio, and how many were read. */
+    function scan(locale: LocaleId): { read: number; offenders: string[] } {
+      let read = 0
+      const offenders: string[] = []
+      for (const { catalogId, map } of sidecars.get(locale) ?? []) {
         for (const [id, entry] of Object.entries(map)) {
           read += 1
-          expect(entry?.label ?? "", `${catalog.catalogId}.${locale}/${id}`).not.toMatch(STUDIO_NAME)
-          expect(entry?.description ?? "", `${catalog.catalogId}.${locale}/${id}`).not.toMatch(STUDIO_NAME)
+          if (STUDIO_NAME.test(entry?.label ?? "")) offenders.push(`${catalogId}.${locale}/${id} label: ${entry?.label}`)
+          if (STUDIO_NAME.test(entry?.description ?? "")) offenders.push(`${catalogId}.${locale}/${id} description: ${entry?.description}`)
         }
       }
+      return { read, offenders }
     }
-    expect(read).toBeGreaterThan(10_000)
+
+    it.each(NON_EN_LOCALE_IDS)("%s", (locale) => {
+      const { read, offenders } = scan(locale)
+      expect(offenders).toEqual([])
+      expect(read, locale).toBeGreaterThan(0)
+    })
+
+    it("reads more than 10,000 entries across the locales", () => {
+      const read = NON_EN_LOCALE_IDS.reduce((n, locale) => n + scan(locale).read, 0)
+      expect(read).toBeGreaterThan(10_000)
+    })
   })
 
   it("translates the style's name in every locale rather than keeping the English", async () => {
