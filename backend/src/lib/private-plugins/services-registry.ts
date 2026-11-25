@@ -44,8 +44,21 @@ export function setPluginServices(services: PluginServices): void {
   loaded = true
 }
 
+let pluginJobTypes: readonly string[] = []
+
+/** The job types the loaded plugins handle (their handlers' names): the services an admin may route a plugin's child jobs for. */
+export function getPluginJobTypes(): readonly string[] {
+  return pluginJobTypes
+}
+
+/** Written only by load.ts, with every load outcome. */
+export function setPluginJobTypes(types: readonly string[]): void {
+  pluginJobTypes = Object.freeze([...types].sort())
+}
+
 /** Test seam: back to a process that never loaded the plugins (the standalone orchestrator). */
 export function _resetPluginServicesForTests(): void {
   pluginServices = {}
+  pluginJobTypes = []
   loaded = false
 }

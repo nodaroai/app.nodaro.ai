@@ -6,6 +6,7 @@ import {
   seedanceDraftFinalizeCreditId,
 } from "@nodaro/shared/model-catalog"
 import { supabase } from "./supabase.js"
+import { ALTERNATE_ROUTE_DRAFT_MESSAGE, ALTERNATE_ROUTE_PROVIDER_KIND, ALTERNATE_ROUTE_REF_PREFIX } from "./alternate-route-request.js"
 import { hasCredits } from "./config.js"
 import { probeRefVideoDurations } from "./ref-video-probe.js"
 import { draftAudioMuxForSource, type DraftAudioMux } from "./seedance-draft-audio.js"
@@ -156,6 +157,11 @@ export async function resolveSeedanceDraftFinalize(args: {
       "draft_not_finalizable",
       "This draft was rendered through a connected nodaro.ai account, so it can't be finalized on this install.",
     )
+  }
+  // A draft the alternate route made holds the route's own reference, not a
+  // task the default upstream can finalize.
+  if (completed.provider_kind === ALTERNATE_ROUTE_PROVIDER_KIND || completed.provider_task_id?.startsWith(ALTERNATE_ROUTE_REF_PREFIX)) {
+    return refuse(409, "draft_not_finalizable", ALTERNATE_ROUTE_DRAFT_MESSAGE)
   }
   if (!completed.provider_task_id) {
     return refuse(

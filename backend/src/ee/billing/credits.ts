@@ -196,6 +196,10 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { modelOfPriceId, routedListedPrice, type RoutedListing } from "./video-route-listing.js"
+import { anyModelRouted } from "../../lib/video-route-policy.js"
+import { routeListingSource } from "../../lib/alternate-route-prices.js"
+import { HOST_ROUTES_PER_MODEL } from "../../lib/video-route-host.js"
 import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits, unpricedWiredClip } from "./seedance-ref-video-estimate.js"
 import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
 import { listingCeiling, listingFieldDomains, listingOpenValueNodeIds } from "./listing-range.js"
@@ -3921,6 +3925,9 @@ export interface ChargedPriceTable {
    *  finalizes (decided 2026-11-12; `withExistingSeedanceDrafts`): each one's
    *  exact finalize price by its provider task id, and the task a node that
    *  does not run hands on from an earlier run's state. */
+  /** True for an id whose model the admin routed but whose price the route does not list: refused
+   *  (`PriceNotConfiguredError`) wherever it is estimated, never a node-type row or 0. */
+  refuses?(identifier: string): boolean
   readonly seedanceDrafts?: {
     readonly stateTaskIdOf?: (nodeId: string) => string | undefined
     readonly credits: ReadonlyMap<string, number>
@@ -4000,7 +4007,20 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
 
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings, editPlanPerMinute] = await Promise.all([modelPricingRows(), getAppSettings(), editPlanPerMinuteActive()])
-  return chargedPriceTableFrom(rows, settings, editPlanPerMinute)
+  return chargedPriceTableFrom(rows, settings, editPlanPerMinute, routedListingOf(settings))
+}
+
+/**
+ * What the price table needs to list a routed model's prices
+ * (video-route-pricing.ts): undefined — no routed listing at all — unless the
+ * admin routed some model (the shipped state lists every price as before).
+ */
+function routedListingOf(settings: Awaited<ReturnType<typeof getAppSettings>>): RoutedListing | undefined {
+  // Only a build that also admits, runs and settles a routed job lists its price.
+  if (!HOST_ROUTES_PER_MODEL || !anyModelRouted(settings.video_route_policy)) return undefined
+  // One source per environment: this process's route, or the copy the API published (lib/alternate-route-prices.ts).
+  const { view, pricesUsd } = routeListingSource(settings.video_route_listing, modelOfPriceId)
+  return { policy: settings.video_route_policy, view, pricesUsd, factors: settings.video_route_price_factors }
 }
 
 /**
@@ -4014,8 +4034,14 @@ export function chargedPriceTableFrom(
   rows: ReadonlyMap<string, number>,
   settings: Parameters<typeof applyServiceMarkup>[1],
   editPlanPerMinute?: boolean,
+  /** A routed model's listed prices (video-route-pricing.ts); undefined = none routed. */
+  routed?: RoutedListing,
 ): ChargedPriceTable {
   return {
+    refuses: (asked) => {
+      const listed = routedListedPrice(routed, pricedAsId(asked))
+      return listed.routed && listed.base === undefined
+    },
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on
     // (lib/speech-credits.ts): its absence is how a client learns the flag.
@@ -4032,6 +4058,10 @@ export function chargedPriceTableFrom(
         return one === undefined ? undefined : quoteBaseCredits(one, metered.calls)
       }
       if (!speechUnitRowServed(identifier)) return undefined
+      // A model the admin put on the alternate route lists the ROUTE's price
+      // (never the default one; an id the route does not list is not listed).
+      const listed = routedListedPrice(routed, identifier)
+      if (listed.routed) return listed.base
       const rowOf = (id: string) => rows.get(id) ?? STATIC_CREDIT_COSTS[id]
       return rateCompositeBase(identifier, rowOf) ?? rowOf(identifier)
     },
@@ -6740,6 +6770,8 @@ function meteredUsageCredits(
 function meteredChargedOrThrow(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
   const credits = chargedCredits(prices, identifier, units)
   if (credits !== undefined) return credits
+  // A routed model's id the route does not list: refused, as its admission would be.
+  if (prices.refuses?.(identifier)) throw new PriceNotConfiguredError(identifier)
   const metered = meteredLlmIdOf(identifier)
   if (!metered) return undefined
   meteredLlmEstimateBase(metered) // throws LlmUnpricedModelError for the unpriced lane

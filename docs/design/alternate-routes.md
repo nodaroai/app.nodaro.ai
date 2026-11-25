@@ -112,3 +112,45 @@ as on the default route. The recorded provider cost is the route's own figure
 default upstream's rates), and `jobs.provider` records a generic value. The
 result carries no default-upstream task id, so no chain (extend, upscale)
 mistakes it for one.
+
+## Routing per model
+
+A deployment can also put whole models on the route: an admin chooses, per
+routable model (the Seedance 2.x family) and optionally per service, the
+default route or the alternate one (`video_route_policy`, Admin → Video
+route; `lib/video-route-policy.ts`). With nothing saved every model stays on
+the default route, and everything above applies unchanged.
+
+- **One decision, at admission.** `decideVideoRoute`
+  (`lib/video-route-decision.ts`) reads the policy first, so a model left on
+  the default route never consults the plugin. Then it asks this process's
+  route whether it speaks this version (its service has `prices`), knows the
+  model (`capable`), and takes the request (`accepts`, called with `service`
+  and `kind` set). The answer is stored on the job (`input_data.__videoRoute`,
+  server-only), and the run obeys it. A change in Admin affects only new jobs.
+- **A "service"** is the parent job's type for a plugin's child job, else the
+  job's own type.
+- **Shared settings.** Environments that share a database share the setting.
+  An environment whose route cannot take a model runs it on the default
+  route, at the default price.
+- **Price.** A routed run is held from the route's `quote` for the request,
+  times the model's correction factor, and settled from what the task billed.
+  Both are turned into credits by one rule: the cost at the credit's value,
+  rounded up to the next 10, the rule behind the default video prices. The
+  result is then marked up at the platform's own price id exactly as the
+  default price of that id is, with the same on/off switch and tier gates. When
+  the route gives no quote, the request is refused (`price_not_configured`).
+  It is never priced at the default. Listings of a routed model show the
+  route's `prices()` (USD per id) through the same rule; an id the route does
+  not list is refused, never priced at the default or as zero. A listing has
+  no service, so model lists show the model-level route; a node's estimate
+  and a quote price the request itself. The API publishes what its route
+  lists, so a process without the plugin lists the same prices.
+- **One switch.** A build lists a routed price, or lets an admin put a model
+  on the route, only when it also admits, runs and settles a routed job.
+- **Correction factors** (`video_route_price_factors`) are kept per model,
+  resolution, reference video and kind. They only ever rise automatically,
+  one capped step at a time, with an alert, and an admin can set or reset
+  them.
+- **Drafts.** A draft the route made holds the route's own reference. It is
+  never finalized on the default upstream.

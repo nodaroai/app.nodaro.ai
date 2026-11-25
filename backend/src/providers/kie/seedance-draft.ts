@@ -1,3 +1,4 @@
+import { ALTERNATE_ROUTE_DRAFT_MESSAGE, ALTERNATE_ROUTE_REF_PREFIX } from "../../lib/alternate-route-request.js"
 import { SEEDANCE_DRAFT_FINALIZE_PROVIDER, SEEDANCE_DRAFT_FINALIZE_RESOLUTION } from "@nodaro/shared/model-catalog"
 import type { ReconcileOpts } from "../provider.interface.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
@@ -71,6 +72,12 @@ export async function runSeedanceDraftFinalize(
     nsfwChecker?: boolean
   } = {},
 ): Promise<{ url: string; kieTaskId?: string; providerMs?: number; cost?: number }> {
+  // A draft the alternate route made holds the route's own reference
+  // (`alt:<ref>`, lib/alternate-route-request.ts), never a task of this
+  // upstream: it is never sent here, where it would be read as one.
+  if (draftTaskId.startsWith(ALTERNATE_ROUTE_REF_PREFIX)) {
+    throw new DeterministicJobError(ALTERNATE_ROUTE_DRAFT_MESSAGE)
+  }
   try {
     const r = await runKieTask(
       SEEDANCE_DRAFT_FINALIZE_KIE_MODEL,

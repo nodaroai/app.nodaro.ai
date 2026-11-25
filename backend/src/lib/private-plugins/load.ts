@@ -129,7 +129,7 @@ export interface LoadPrivatePluginsResult {
 }
 
 export { getPluginServices } from "./services-registry.js"
-import { setPluginServices } from "./services-registry.js"
+import { setPluginJobTypes, setPluginServices } from "./services-registry.js"
 export { getPluginEngines } from "./engine-registry.js"
 import { setPluginEngines } from "./engine-registry.js"
 export { getPluginRecipes } from "./recipe-registry.js"
@@ -158,6 +158,7 @@ function emptyResult(): LoadPrivatePluginsResult {
   // success path would leave a previous load's services readable after a
   // later one failed.
   setPluginServices({})
+  setPluginJobTypes([])
   setPluginEngines({})
   setPluginRecipes({})
   setPluginSupports({})
@@ -386,6 +387,7 @@ async function loadPrivatePluginsOnce(opts: LoadPrivatePluginsOpts): Promise<Loa
   applyJobLanes(Object.keys(handlers), jobLanes)
 
   setPluginServices(services)
+  setPluginJobTypes(Object.keys(handlers))
   setPluginEngines(engines)
   setPluginRecipes(recipes)
   setPluginSupports(supports)
