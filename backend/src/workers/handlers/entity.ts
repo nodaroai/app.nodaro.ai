@@ -1,3 +1,4 @@
+import { imageStoredAsItsBytes } from "../../lib/image-output-store.js"
 import type { Job } from "bullmq"
 import {
   CHARACTER_MOTION_DEFAULT_PROVIDER, CREATURE_MOTION_DEFAULT_PROVIDER, LOCATION_MOTION_DEFAULT_PROVIDER, OBJECT_MOTION_DEFAULT_PROVIDER,
@@ -212,6 +213,7 @@ function makeEntityImageHandler(
       shouldWatermark: ctx.shouldWatermark,
       usageLogId: ctx.usageLogId,
       spec: entityAttachSpecFrom(data as unknown as Record<string, unknown>),
+      storeAsItsBytes: imageStoredAsItsBytes({ provider: resolvedProvider }),
       result: {
         url: result.url,
         providerUsed: result.providerUsed,

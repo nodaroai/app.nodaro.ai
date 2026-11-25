@@ -114,6 +114,8 @@ export function runImageGeneration(
     gifFrames?: number
     gifFrameDurationMs?: number
     svgLevel?: string
+    imageSetCount?: number
+    referenceCharacters?: ReadonlyArray<import("@/lib/reference-characters").ReferenceCharacter>
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(

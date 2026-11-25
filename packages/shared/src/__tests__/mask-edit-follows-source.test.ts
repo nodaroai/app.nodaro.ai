@@ -148,3 +148,16 @@ describe("wiredImageSize / nodeIsMasked (what an estimate knows of the photo)", 
     expect(nodeIsMasked("n", {}, [{ source: "x", target: "n", targetHandle: "image" }])).toBe(false)
   })
 })
+
+describe("8K on a masked edit that follows its photo", () => {
+  it("with no photo size, runs at the model's largest size, as the badge and the estimate price it", () => {
+    const followers = Object.values(MODEL_CATALOG).filter((m) => m.maskEditMatchesSource === true && m.kind === "image")
+    expect(followers.length).toBeGreaterThan(0)
+    for (const m of followers) {
+      if ((m.resolutions ?? []).some((r) => r.toUpperCase() === "8K")) continue
+      const largest = [...(m.resolutions ?? [])].filter((r) => /^\d+(\.\d+)?K$/i.test(r)).sort((a, b) => parseFloat(b) - parseFloat(a))[0]
+      if (!largest) continue
+      expect(normalizeModelInput(m.id, { resolution: "8K" }, { masked: true }).resolution, m.id).toBe(largest)
+    }
+  })
+})

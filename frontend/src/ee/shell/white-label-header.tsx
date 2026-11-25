@@ -23,6 +23,8 @@ import {
   surfaceBrandLogo,
   surfaceConfiguredBrandName,
   surfaceLocalePicker,
+  surfaceSoonWorlds,
+  surfaceToolApps,
 } from "@/lib/surface-selectors"
 import { HEADER_QUERY_KEYS } from "./query-keys"
 import { WHITE_LABEL_WORLD_PATHS } from "./site"
@@ -30,7 +32,9 @@ import {
   imageOriginsFor,
   openSitePage,
   unitTranslator,
+  whiteLabelAppsMenus,
   whiteLabelRoute,
+  whiteLabelSoonWorlds,
   whiteLabelWorldMenus,
   whiteLabelWorlds,
   withHeaderBalance,
@@ -55,7 +59,10 @@ import type { SiteHeaderHandle, SiteHeaderLanguage, SiteHeaderTheme } from "./ty
  *     page below a world (Video's Translate) only for a viewer offered its
  *     node types (`whiteLabelWorldMenus`, judged by `settledNodeJudge`: the
  *     answer, or the deployment's node lists before it; none while the answer
- *     is awaited on a deployment that sets no node lists);
+ *     is awaited on a deployment that sets no node lists); a world to come
+ *     (`worlds.soon`) is a tab marked "Soon", and where the deployment asks
+ *     for them (`toolApps.menus`) the menus are the apps-first ones, listing
+ *     the apps it names (`whiteLabelAppsMenus`);
  *   - its name and logo (`brand.productName`, `brand.logo`), and images only
  *     from this site, the logo's own host and its media host (`mediaOrigin`);
  *   - its billing (`billing.selfServe`), and the credit pill in its own unit,
@@ -114,6 +121,9 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
   // the answer is awaited on a deployment without node lists).
   const worldMenus = useMemo(() => whiteLabelWorldMenus(settledNodeJudge()), [availability])
   const worlds = useMemo(() => whiteLabelWorlds(offeredWorlds()), [availability])
+  // What the worlds app's own header shows on this site: the worlds to come, and the apps-first menus where the deployment asks for them.
+  const soonWorlds = useMemo(() => whiteLabelSoonWorlds(surfaceSoonWorlds()), [])
+  const appsMenus = useMemo(() => whiteLabelAppsMenus(surfaceToolApps()), [])
   // The balance the header itself keeps (its own key; never fetched from here): its unit names the pill's words.
   const { data: balance } = useQuery<UserBalance>({
     queryKey: HEADER_QUERY_KEYS.credits,
@@ -242,6 +252,8 @@ export default function WhiteLabelHeader({ compact, onOpenMenu, onHeaderOverlay 
       whiteLabel
       worlds={worlds}
       worldMenus={worldMenus}
+      {...(soonWorlds.length > 0 ? { soonWorlds } : {})}
+      {...appsMenus}
       {...(logo ? { logo: { src: logo, alt: name ?? "" } } : {})}
       {...(name ? { brandName: name } : {})}
       imageOrigins={imageOriginsFor(logo, runtimeMediaOrigin())}

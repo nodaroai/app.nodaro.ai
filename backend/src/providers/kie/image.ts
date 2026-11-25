@@ -17,13 +17,19 @@ import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig, KIE_CREDIT_USD, GPT_IMAGE_2_6_SVG_AUTHOR_MODELS } from "./models.js"
 import { expectedKieCreditsFor, kieImageCostUsd, kieTaskCreditsConsumed } from "./image-cost.js"
 import { GPT_IMAGE_T2I_TO_I2I } from "./image-edit-sibling.js"
-import { IMAGE_GIF_FRAME_SIZE, flux3KleinResolution, isFlux3Klein, isGptImage26AutoRun } from "@nodaro/shared/model-catalog"
+import { IMAGE_GIF_FRAME_SIZE, flux3KleinResolution, isFlux3Klein, isGptImage26AutoRun, isKlingImage4 } from "@nodaro/shared/model-catalog"
+import { buildKlingImage4Request, klingImageSubjectsOf } from "./kling-image-4.js"
+import { settledOrThrow } from "../../lib/settled-or-throw.js"
+import { guardProviderWireText } from "../../lib/content-guard.js"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared/models"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { hasTransparentPixels } from "../../lib/image-transparency.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
+
+/** How many reference images are prepared (fetched, converted) at once. */
+const REFERENCE_CONVERSION_CONCURRENCY = 4
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
 // Nano Banana 2 and 2.1 use their own output_format from extraParams (jpg default), so they are NOT included.
@@ -429,23 +435,52 @@ export class KieImageProvider
     // URL. Lossless where the SKU takes it: a reference carries the identity
     // the run is paying to keep. A caller's inpainting mask is aligned to the
     // first reference, so its pixel grid must not move.
+    // The references as the caller named them, before any is converted below:
+    // Kling Image 4.0's named subjects name their views by these.
+    const callerReferenceUrls = referenceImageUrls ?? []
+    // Kling Image 4.0 sends each image once: a repeat (a base equal to a
+    // reference included) is dropped by its ORIGINAL url, before conversion,
+    // since each conversion is stored under a key of its own and two copies of
+    // one picture would otherwise go as two images. Its price counts it once
+    // too (`pricedSentImages`, `imageToImageSentImages`), so priced = sent.
+    if (isKlingImage4(provider) && referenceImageUrls?.length) {
+      referenceImageUrls = [...new Set(referenceImageUrls)]
+    }
     if (referenceImageUrls?.length) {
       const acceptedFormats = modelConfig.acceptedImageFormats
         ? new Set(modelConfig.acceptedImageFormats)
         : undefined
       const callerMask = typeof extraParams?.mask_url === "string" && extraParams.mask_url.length > 0
       const refProvider = provider
-      referenceImageUrls = await Promise.all(
-        referenceImageUrls.map((url, i) =>
-          ensureImageForProvider(url, refProvider, {
-            acceptedFormats,
-            context: "Image generation",
-            inputLabel: `reference image #${i + 1}`,
-            preferLossless: true,
-            preserveGeometry: callerMask,
-          }),
-        ),
-      )
+      const originals = referenceImageUrls
+      const convert = (url: string, i: number) =>
+        ensureImageForProvider(url, refProvider, {
+          acceptedFormats,
+          context: "Image generation",
+          inputLabel: `reference image #${i + 1}`,
+          preferLossless: true,
+          preserveGeometry: callerMask,
+        })
+      // Kling Image 4.0 prepares a few at a time: each conversion decodes the
+      // whole picture, and its request may carry up to 40 (10 subjects of 4
+      // views). Every other model converts them all at once, as before.
+      referenceImageUrls = isKlingImage4(provider)
+        ? await settledOrThrow(originals.map((url, i) => () => convert(url, i)), REFERENCE_CONVERSION_CONCURRENCY)
+        : await Promise.all(originals.map(convert))
+    }
+
+    // Kling Image 4.0: one endpoint, its body built whole (an allow-list, Kling's
+    // `@image_N` names, undeclared mentions removed last) by kling-image-4.ts.
+    if (isKlingImage4(provider)) {
+      const sent = referenceImageUrls ?? []
+      const unique = [...new Set(callerReferenceUrls)]
+      const converted = new Map(unique.map((url, i) => [url, sent[i] ?? url]))
+      // The prompt numbers the references as the caller listed them, repeats
+      // included (a base sent first is not one of them: `image_prompt_order`).
+      const params = Array.isArray(extraParams?.image_prompt_order)
+        ? extraParams
+        : { ...extraParams, image_prompt_order: callerReferenceUrls }
+      return this.klingImage4Task(prompt, sent, provider, modelConfig, params, reconcileOpts, (url) => converted.get(url) ?? url)
     }
 
     if (provider === "grok-2-i2i") {
@@ -711,6 +746,82 @@ export class KieImageProvider
       ...(providerMs !== undefined && { providerMs }),
       ...(autoQualityKieCredits !== undefined && { autoQualityKieCredits }),
       ...(maskEditSourceUrl !== undefined && { maskEditSourceUrl }),
+    }
+  }
+
+  /**
+   * One Kling Image 4.0 task: the body from `buildKlingImage4Request` (nothing
+   * of `extraParams` reaches the wire but the ratio, the size and a set's
+   * count), every image it returns (a set's become the job's variants), and
+   * the cost the task record states, else the listed price for what was sent
+   * times the images returned.
+   */
+  private async klingImage4Task(
+    prompt: string,
+    referenceImageUrls: string[],
+    provider: string,
+    modelConfig: KieModelConfig,
+    extraParams: Record<string, unknown> | undefined,
+    reconcileOpts: ReconcileOpts | undefined,
+    /** A caller's reference URL as it is sent (after the format conversion above). */
+    sentUrlOf: (url: string) => string,
+  ): Promise<ProviderResult> {
+    const request = buildKlingImage4Request({
+      prompt,
+      referenceImageUrls,
+      resolution: extraParams?.resolution,
+      aspectRatio: extraParams?.aspect_ratio,
+      setCount: extraParams?.image_set_count,
+      subjects: klingImageSubjectsOf(extraParams?.image_subjects, sentUrlOf),
+      ...(Array.isArray(extraParams?.image_prompt_order)
+        ? { promptOrder: (extraParams.image_prompt_order as unknown[]).filter((u): u is string => typeof u === "string").map(sentUrlOf) }
+        : {}),
+    })
+    for (const note of request.notes) console.warn(`[KIE.ai] ${provider}: ${note}`)
+    // The builder rewrote the prompt after the prompt funnel's guard ran (its
+    // mention pass): the guard is asked again on the text actually sent.
+    const elementTexts = Array.isArray(request.input.elements)
+      ? (request.input.elements as Array<{ description?: unknown }>).map((e) => e.description).filter((d): d is string => typeof d === "string")
+      : []
+    await guardProviderWireText([request.input.prompt as string, ...elementTexts], "image", provider)
+    console.log(`[KIE.ai] Request input:`, JSON.stringify(request.input, null, 2))
+    const resolution = request.input.resolution as string
+    const egressOpts: ReconcileOpts = {
+      ...reconcileOpts,
+      modelKey: provider,
+      dimensions: { ...reconcileOpts?.dimensions, resolution },
+    }
+    const result = await runKieTask(request.model, request.input, undefined, undefined, egressOpts)
+    const allUrls = result.resultJson.resultUrls ?? []
+    const imageUrl = allUrls[0]
+    if (!imageUrl) {
+      throw createSanitizedError("image task succeeded but no URL in resultUrls", "Image generation")
+    }
+    const extraUrls = allUrls.slice(1)
+    const rawInfo = "rawRecordInfo" in result ? result.rawRecordInfo : undefined
+    const listedCost = kieImageCostUsd(provider, modelConfig, resolution, request.inputItems, allUrls.length)
+    const taskCredits = kieTaskCreditsConsumed(rawInfo as Record<string, unknown> | undefined)
+    const cost = taskCredits !== undefined ? taskCredits * KIE_CREDIT_USD : listedCost
+    if (allUrls.length !== request.imagesAsked) {
+      console.warn(`[KIE.ai] ${provider}: asked for ${request.imagesAsked} image(s), the task returned ${allUrls.length}`)
+    }
+    console.log(`[KIE.ai] Image completed: ${imageUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${cost.toFixed(4)})`)
+    logCreditAudit({
+      modelKey: provider,
+      expectedKieCredits: expectedKieCreditsFor(modelConfig, listedCost),
+      modelConfig: { ...(extraParams ?? {}), provider },
+      rawResponseSample: rawInfo,
+      actualKieCredits: taskCredits ?? (extractCreditFields(rawInfo)?.credits as number | undefined),
+      notes: "image-generation",
+    })
+    const providerMs = ("providerMs" in result && typeof result.providerMs === "number") ? result.providerMs : undefined
+    const kieTaskId = ("taskId" in result && typeof result.taskId === "string") ? result.taskId : undefined
+    return {
+      url: imageUrl,
+      ...(extraUrls.length ? { extraUrls } : {}),
+      cost,
+      ...(kieTaskId && { kieTaskId }),
+      ...(providerMs !== undefined && { providerMs }),
     }
   }
 

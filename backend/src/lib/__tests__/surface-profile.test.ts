@@ -699,6 +699,16 @@ describe("toolApps — widens what a white-label deployment shows: on only for t
     expect(toolApps({ pictures: ["/a.png"] }).toolApps).toEqual({ menus: false, pages: false })
     expect(toolApps({ pictures: { "image-upscale": "nowhere" } }).toolApps).toEqual({ menus: false, pages: false })
   })
+
+  it("apps: presence narrows. Absent, no list; a list keeps its app ids once each; [] and a value that is not a list offer none, loudly", () => {
+    const { calls } = warn()
+    expect(toolApps({ menus: true }).toolApps).toEqual({ menus: true, pages: false })
+    expect(toolApps({ apps: ["image-upscale", "video-captions", "image-upscale"] }).toolApps).toEqual({ menus: false, pages: false, apps: ["image-upscale", "video-captions"] })
+    expect(toolApps({ apps: [] }).toolApps).toEqual({ menus: false, pages: false, apps: [] })
+    expect(toolApps({ apps: ["image-upscale", "Bad Id", 7] }).toolApps).toEqual({ menus: false, pages: false, apps: ["image-upscale"] })
+    expect(toolApps({ apps: "image-upscale" }).toolApps).toEqual({ menus: false, pages: false, apps: [] })
+    expect(calls().filter((m) => m.includes("toolApps.apps")).length).toBe(2)
+  })
 })
 
 describe("samples — a deployment's own welcome samples", () => {

@@ -147,6 +147,38 @@ describe("the header mount on a white-label deployment", () => {
     expect(seen.props?.worlds).toEqual(["video", "app"])
   })
 
+  it("a deployment that sets neither: no world to come and the classic menus, as before", () => {
+    const props = mount().props()
+    expect(Object.hasOwn(props, "soonWorlds")).toBe(false)
+    expect(Object.hasOwn(props, "appsMenus")).toBe(false)
+    expect(Object.hasOwn(props, "offeredApps")).toBe(false)
+    expect(Object.hasOwn(props, "appPictures")).toBe(false)
+  })
+
+  it("marks the profile's worlds to come, and never draws one as a world", () => {
+    window.__NODARO_RUNTIME__ = { surface: { ...WHITE_LABEL_SURFACE, worlds: { ...WHITE_LABEL_SURFACE.worlds, soon: ["music", "explore"] } } } as unknown as typeof window.__NODARO_RUNTIME__
+    const props = mount().props()
+    // Explore has no address on the site, so it is not marked either.
+    expect(props.soonWorlds).toEqual(["music"])
+    expect(props.worlds).toEqual(["app", "video", "image"])
+  })
+
+  it("opens the apps-first menus where the deployment asks, with the apps and pictures it names", () => {
+    const toolApps = { menus: true, pages: true, apps: ["image-upscale", "video-captions"], pictures: { "image-upscale": "/brand/upscale.webp" } }
+    window.__NODARO_RUNTIME__ = { surface: { ...WHITE_LABEL_SURFACE, toolApps } } as unknown as typeof window.__NODARO_RUNTIME__
+    const props = mount().props()
+    expect(props.appsMenus).toBe(true)
+    expect(props.offeredApps).toEqual(["image-upscale", "video-captions"])
+    expect(props.appPictures).toEqual({ "image-upscale": "/brand/upscale.webp" })
+  })
+
+  it("with the menus asked for and no list of apps, it draws none: this app cannot judge an app's node types", () => {
+    window.__NODARO_RUNTIME__ = { surface: { ...WHITE_LABEL_SURFACE, toolApps: { menus: true, pages: true } } } as unknown as typeof window.__NODARO_RUNTIME__
+    const props = mount().props()
+    expect(props.appsMenus).toBe(true)
+    expect(props.offeredApps).toEqual([])
+  })
+
   it("Video's menu opens Translate only once the viewer's answer offers dubbing", () => {
     const { view, client } = mount()
     const rerender = () =>

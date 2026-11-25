@@ -7,7 +7,7 @@
 import type { FastifyRequest } from "fastify"
 import { extractProvider } from "../lib/request-helpers.js"
 import { resolveNormalizedImageGen } from "@nodaro/shared/credits"
-import { defaultImageModel } from "@nodaro/shared/model-catalog"
+import { defaultImageModel, imageToImageSentImages } from "@nodaro/shared/model-catalog"
 import { imageToImageAspectRatio } from "../lib/image-auto-aspect.js"
 import { rawBodyRecord, textField } from "../lib/run-model.js"
 
@@ -36,7 +36,6 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
   // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
   // refCount = 1 + extras (the worker concatenates them into `allImages` before
   // dispatching). swapToI2i:false because i2i is already an i2i provider.
-  const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
   // A masked edit on a model that follows its photo is priced at the size
   // nearest the photo: the size the preHandler read, the one the handler's
   // reservation reads too (`req.imageSourceSize`).
@@ -52,7 +51,7 @@ export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string
     gifFrames: body?.gifFrames,
     gifFrameDurationMs: body?.gifFrameDurationMs,
     svgLevel: body?.svgLevel,
-    refCount: 1 + extraRefs,
+    refCount: imageToImageSentImages(provider, body?.imageUrl, body?.referenceImageUrls as string[] | undefined),
     swapToI2i: false,
     sourceImage: req.imageSourceSize ?? undefined,
     masked: isMasked(body?.maskUrl),
