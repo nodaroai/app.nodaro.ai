@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { scaledTimeout } from "../../../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -215,7 +216,7 @@ describe("AppearancePage", () => {
     expect(studio.approveMainImage).toHaveBeenCalledWith("candidate-1")
     expect(studio.setIsApprovingMainImage).toHaveBeenCalledWith(true)
     expect(studio.setIsApprovingMainImage).toHaveBeenLastCalledWith(false)
-  }, 20000)
+  }, scaledTimeout(20_000))
 
   it("Approve + Discard are disabled when a main-image generation job is in flight (Phase 2 #9)", async () => {
     // Drive the appearance page through a generate() so a tracked job exists
@@ -252,7 +253,7 @@ describe("AppearancePage", () => {
     expect(approveBtn).toBeDisabled()
     const discardBtn = screen.getByRole("button", { name: /^discard$/i })
     expect(discardBtn).toBeDisabled()
-  }, 20000)
+  }, scaledTimeout(20_000))
 
   it("renders canonical description when present", () => {
     const studio = makeStudio({

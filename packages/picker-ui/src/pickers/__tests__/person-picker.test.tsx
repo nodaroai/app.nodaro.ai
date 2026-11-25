@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { PersonPicker } from "../person-picker"
@@ -14,7 +15,7 @@ import { PERSON_DIMENSION_SECTIONS, type PersonValue } from "@nodaro/prompts/per
 // out on slower CI runners (the ethnicity-tab tests flaked on CI while passing
 // locally). Raise the per-file timeout to absorb CI variance. Scoped to this file
 // so it can't mask slow tests elsewhere.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 /**
  * Characterization tests for the DETAILED person-picker view.

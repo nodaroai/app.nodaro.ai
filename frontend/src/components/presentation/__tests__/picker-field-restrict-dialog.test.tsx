@@ -2,11 +2,12 @@
 // it lists a restrictable field's values and writes the WHOLE next
 // pickerAllowedValuesByField map, dropping a field once nothing is restricted.
 import { describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, render, screen } from "@testing-library/react"
 import { getParameterPickerMeta, type MultiDimParameterPickerMeta } from "@/lib/picker-ui"
 import { PickerFieldRestrictDialog, restrictableDimensions } from "../picker-restrict-dialog"
 
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 const meta = getParameterPickerMeta("person") as MultiDimParameterPickerMeta
 const first = restrictableDimensions(meta)[0]!

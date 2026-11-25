@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { CLOUD_ONLY_NODE_TYPES, NODARO_EXCLUSIVE_NODE_TYPES } from "@/lib/cloud-only-nodes"
@@ -31,7 +32,7 @@ describe("generate-video-pro discovery gating", () => {
   // 20s timeout: vi.resetModules + fresh dynamic imports re-evaluate the whole
   // editor import graph, which since the picker-ui seam includes the full
   // picker/editor surface — slow under a loaded parallel run, not a hang.
-  it("4b: appears on BOTH surfaces even without credits — exclusives relay through nodaro.ai; generative-pipeline stays hidden", { timeout: 20_000 }, async () => {
+  it("4b: appears on BOTH surfaces even without credits — exclusives relay through nodaro.ai; generative-pipeline stays hidden", { timeout: scaledTimeout(20_000) }, async () => {
     vi.doMock("@/lib/edition", () => ({ hasCredits: () => false, isCloud: () => false }))
     const { getNodeOptions: getPopupOptions } = await import("../add-node-popup")
     const { getNodeOptions: getToolbarOptions } = await import("../node-toolbar")

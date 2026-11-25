@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../tools/vitest/ci-limits.mjs"
 import { readFileSync } from "node:fs"
 import { resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -19,7 +20,7 @@ describe("orphan guard — stock profile strands no nav-entry route", () => {
     // A route that is neither link-only nor tied to a nav entry is a design gap:
     // add it to ENTRY_BY_LINK (link-only by design) or to NAV_ENTRY_ROUTES.
     expect(stranded, `unclassified routes: ${stranded.join(", ")}`).toEqual([])
-  }, 10_000) // explicit ceiling — this parses one file, well under it
+  }, scaledTimeout(10_000)) // explicit ceiling — this parses one file, well under it
 })
 
 describe("N1 — gallery routes actually gate on surfaceNavHidden(\"gallery\")", () => {
@@ -41,5 +42,5 @@ describe("N1 — gallery routes actually gate on surfaceNavHidden(\"gallery\")",
         `route ${route} is not gated by surfaceNavHidden("gallery")`,
       ).toBe(true)
     }
-  }, 10_000)
+  }, scaledTimeout(10_000))
 })

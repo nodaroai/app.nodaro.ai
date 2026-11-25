@@ -11,6 +11,7 @@
  * - The shot list's model picker offers Gemini 4 Hydrogen while it is shown the clip on Admin → Video Remake only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { useState } from "react"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -142,7 +143,7 @@ describe("the shot list's models", () => {
   })
 })
 
-describe("Speech in the script", { timeout: 20_000 }, () => {
+describe("Speech in the script", { timeout: scaledTimeout(20_000) }, () => {
   it("is shown in a trend's editor too, and writes the same", async () => {
     const user = userEvent.setup()
     renderWith(<Harness videoRemake={false} />)
@@ -210,7 +211,7 @@ describe("Speech in the script", { timeout: 20_000 }, () => {
   })
 })
 
-describe("Other mouths", { timeout: 20_000 }, () => {
+describe("Other mouths", { timeout: scaledTimeout(20_000) }, () => {
   const mouthOf = (style: "Precise" | "Flex") => within(shotList()).queryByRole("combobox", { name: `${style} shot list: other mouths` })
 
   it("is shown only while speech is not Off, its three choices with the default first", async () => {
@@ -266,7 +267,7 @@ describe("Other mouths", { timeout: 20_000 }, () => {
   })
 })
 
-describe("Gemini 4 Hydrogen while held (decided 2026-11-18)", { timeout: 20_000 }, () => {
+describe("Gemini 4 Hydrogen while held (decided 2026-11-18)", { timeout: scaledTimeout(20_000) }, () => {
   it("is listed disabled with a short note while an environment's platform lacks the claim; never on a trend", async () => {
     const envs = [env("production", { engine: true, platform: true }), env("staging", { engine: true })]
     const { unmount } = renderWith(<Harness envs={envs} />)

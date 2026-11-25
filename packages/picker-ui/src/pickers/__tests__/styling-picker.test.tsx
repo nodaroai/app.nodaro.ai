@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, within } from "@testing-library/react"
 import type { StylingValue } from "@nodaro/prompts/pickers"
 import { StylingPicker } from "../styling-picker"
 import { STYLING_TOPICS } from "../styling-topics"
 
 // Renders every setting of every topic — heavy in jsdom.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 afterEach(() => {
   vi.restoreAllMocks()

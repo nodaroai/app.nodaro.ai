@@ -11,6 +11,7 @@
  * - An engine without the route (503) reads as out of date.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -68,7 +69,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("the trend's engine prompt", { timeout: 20_000 }, () => {
+describe("the trend's engine prompt", { timeout: scaledTimeout(20_000) }, () => {
   it("asks the engine only once opened, and shows the parts the mode uses with their defaults and the assembled prompt", async () => {
     const user = userEvent.setup()
     renderEditor()

@@ -5,6 +5,7 @@
  * engine ids, and is held while a value is out of range.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -116,7 +117,7 @@ const preciseOf = async (name: RegExp) => within(await section(name)).getByRole(
  * ones with the most clicks went over 5 s. The page grows with every setting, so these times grow with it. The
  * describes of pure functions keep the default limit.
  */
-const PAGE = { timeout: 20_000 }
+const PAGE = { timeout: scaledTimeout(20_000) }
 
 describe("Admin → Video Remake", PAGE, () => {
   it("shows both engines by name, with the model each runs on, Off until saved", async () => {

@@ -3,6 +3,7 @@ import path from "path"
 import { coverageRequested, TIMING_UNDER_COVERAGE } from "./src/test/coverage-flag"
 import { SharedWorkerSequencer } from "./src/test/shared-worker-sequencer"
 import { readNoIsolateFiles, shuffleRequested, testProjects } from "./src/test/test-projects"
+import { ciTestOptions } from "../tools/vitest/ci-limits.mjs"
 
 // Keep vitest's default exclude (node_modules, dist, cypress, etc.) and add
 // `playwright/**` so the Playwright spec dir (bootstrapped in PR #2349 /
@@ -29,6 +30,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // CI-only time limits and slow-test listing (tools/vitest/ci-limits.mjs).
+    ...ciTestOptions(),
     // Coverage slows timed code several-fold on any machine; the latency
     // budgets scale for it (three-hour-fixture.ts `budgetMs`). Omitted, not
     // "0", when off so a developer's own export is left alone.

@@ -13,6 +13,7 @@
  * - The new publish refusals read as sentences.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -187,7 +188,7 @@ describe("the publish refusals", () => {
   })
 })
 
-describe("choosing the clip preparation", { timeout: 20_000 }, () => {
+describe("choosing the clip preparation", { timeout: scaledTimeout(20_000) }, () => {
   beforeEach(() => {
     resetRoutes()
     vi.stubGlobal("fetch", fetchMock)

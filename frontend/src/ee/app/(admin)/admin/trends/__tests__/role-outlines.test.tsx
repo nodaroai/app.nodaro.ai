@@ -13,6 +13,7 @@
  *   hint says a whole-person mask needs the box over the person's middle.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { useState } from "react"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -159,7 +160,7 @@ describe("the switch", () => {
   })
 })
 
-describe("the marks with role outlines on", { timeout: 20_000 }, () => {
+describe("the marks with role outlines on", { timeout: scaledTimeout(20_000) }, () => {
   beforeEach(() => {
     resetRoutes()
     vi.stubGlobal("fetch", fetchMock)

@@ -6,10 +6,11 @@
  * it.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, cleanup } from "@testing-library/react"
 
 // Full-render tests can exceed the default 5s on slow CI runners (as in add-node-popup-tabs).
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 vi.mock("lucide-react", () => new Proxy({}, {
   get: (_t, prop) => (typeof prop === "string" && prop !== "then" ? () => null : undefined),

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { FACTORY_PRESETS } from "@nodaro/prompts/presets"
 import { PRESET_CONTENT_MAPS } from "../labels"
 
-const TIMEOUT = 20_000
+const TIMEOUT = scaledTimeout(20_000)
 
 /**
  * Each locale's preset copy (preset-content.<locale>.ts) is keyed by preset id.

@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config"
 import path from "path"
 import mediaE2e from "./src/test/media-e2e-files.json"
+import { ciTestOptions } from "../tools/vitest/ci-limits.mjs"
 
 export default defineConfig({
   test: {
@@ -11,6 +12,8 @@ export default defineConfig({
     // (vitest.media-e2e.config.ts, `npm run test:media-e2e`), not here.
     exclude: [...configDefaults.exclude, ...mediaE2e.files],
     setupFiles: ["./src/test/setup.ts"],
+    // CI-only time limits and slow-test listing (tools/vitest/ci-limits.mjs).
+    ...ciTestOptions(),
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
