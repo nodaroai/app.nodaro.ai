@@ -8,7 +8,7 @@
  * against `Object3D.updateMatrixWorld()`, which is what makes preview and
  * export agree.
  */
-import type { Vec3 } from "./types"
+import type { Vec3 } from "@nodaro/shared/scene3d"
 
 /** 16 numbers, column-major — same layout as `THREE.Matrix4.elements`. */
 export type Mat4 = number[]

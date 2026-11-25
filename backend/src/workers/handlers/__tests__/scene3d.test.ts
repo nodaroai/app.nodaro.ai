@@ -136,6 +136,18 @@ describe("generate-3d-scene", () => {
     )
   })
 
+  it("publishes no validation block on a scene that passed the plan check", async () => {
+    await handleGenerate3dScene(job(GENERATE), CTX)
+    expect(completedOutput()).not.toHaveProperty("validation")
+  })
+
+  it("publishes the plan check's leftover findings in the delivery contract's warnings slot", async () => {
+    const warning = { code: "SCENE_SHOT_WITHOUT_SUBJECT", message: "the camera shot over frames 0-95 shows no subject" }
+    mocks.generateScenePlan.mockResolvedValue({ plan: PLAN, inputTokens: 100, outputTokens: 200, revisions: 2, warnings: [warning] })
+    await handleGenerate3dScene(job(GENERATE), CTX)
+    expect(completedOutput()).toMatchObject({ scenePlan: PLAN, revisions: 2, validation: { warnings: [warning] } })
+  })
+
   it("hands the authoring service the server-owned frame verbatim", async () => {
     await handleGenerate3dScene(job({ ...GENERATE, fps: 30, durationInFrames: 60 }), CTX)
     expect(mocks.generateScenePlan).toHaveBeenCalledWith(expect.objectContaining({ fps: 30, durationInFrames: 60, revisionId: REV }))

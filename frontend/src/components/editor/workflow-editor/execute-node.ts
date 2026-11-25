@@ -121,7 +121,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleModeTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, SCENE3D_BRIEF_MAX_CHARS, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleModeTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -303,6 +303,7 @@ import {
   defaultImageModel
 } from "@nodaro/shared/model-catalog";
 import { tx, type MessageKey } from "@/lib/i18n";
+import { formatNumber } from "@/lib/i18n/format";
 import { confirmNodeLink, hasOwnLinkBox, isNodeLinkRightsTicked } from "@/lib/node-link-rights";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
@@ -9798,10 +9799,23 @@ function executeNodeCore(
   // `output_data.scenePlan`, so both go through `runScene3DJob`.
   if (node.type === "generate-3d-scene") {
     const g3d = node.data as Generate3DSceneData;
-    const g3dPrompt = applyPromptAffixes(inputs.prompt || g3d.scenePrompt, readPromptAffixes(g3d), refMap);
-    if (!g3dPrompt?.trim()) {
+    // The typed brief with a wired prompt APPENDED (a Video Analysis's
+    // breakdown under the author's directions), or placed by `{Label}` — the
+    // backend's promptFor("generate-3d-scene", true).
+    const g3dPrompt = promptOf("generate-3d-scene", true);
+    if (!g3dPrompt.trim()) {
       toast.error(nodeRunError(g3d.label, "nodeRun.noScenePromptSet"));
       return Promise.reject(new Error("No scene prompt"));
+    }
+    // Before the request, as the orchestrator refuses it: an analysis of a
+    // long video outgrows the brief; the video itself on References does not.
+    const g3dLength = g3dPrompt.trim().length;
+    if (g3dLength > SCENE3D_BRIEF_MAX_CHARS) {
+      toast.error(nodeRunError(g3d.label, "nodeRun.scenePromptTooLong", {
+        count: formatNumber(g3dLength),
+        max: formatNumber(SCENE3D_BRIEF_MAX_CHARS),
+      }));
+      return Promise.reject(new Error("Scene prompt too long"));
     }
     const g3dRefs = resolveScene3DReferences({
       nodeId: node.id,

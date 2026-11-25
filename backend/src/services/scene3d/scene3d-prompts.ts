@@ -20,6 +20,7 @@ const WORLD_RULES = `WORLD
 - Available primitives: box, sphere, cylinder, cone, plane, capsule, group. \`group\` has no geometry — it exists so children inherit its transform.
 - \`parentId\` must name another object in the same scene. No cycles, at most ${SCENE3D_LIMITS.maxHierarchyDepth} levels.
 - Child transforms and keyframes are LOCAL to the parent. Animate a moving assembly once on a group or body; keep handles, wheels and other attached parts at fixed local offsets. Never duplicate the parent travel in its children.
+- Every part of an assembly (a vehicle's body and wings, a figure's limbs, a cockpit's seat and panel) MUST set \`parentId\` to the group or body that carries it. A part without one stays at its local offset in WORLD space, and a \`group\` nothing is parented to shows nothing and moves nothing.
 - A plane spans dimensions.x by dimensions.y in XY, facing +Z. A floor needs rotation [-1.5708, 0, 0] to lie in XZ; setting y=0 alone does not make it horizontal.
 - Colors are OPAQUE hex strings — #rrggbb or #rgb. No alpha: #rrggbbaa and #rgba are rejected.
 - Easing is "linear" or "easeInOut". There is nothing else — no springs, no physics, no expressions, no code.
@@ -35,6 +36,7 @@ const CRAFT_RULES = `CRAFT
 - Ground the scene: unless the brief says otherwise, put a large \`plane\` at y=0 and stand everything on it (an object of height h centred at y=h/2 rests on the ground).
 - Frame it like a shot. Point \`camera.target\` at the subject, not at the origin by reflex, and place the camera where the described lens and distance actually put it.
 - For a dolly that keeps a stationary subject centered, move camera.position and keep camera.target on that subject; do not translate both together.
+- Every shot must show its subject: keep camera.target on it and the subject inside the lens's field of view for the whole shot. A cut is two camera keys one frame apart.
 - Occlusion must be geometric: an object passing behind an obstacle must be farther from the camera along the viewing direction. With a +Z camera and an obstacle at z=0, the hidden path belongs on the negative-Z side. Check projected overlap at the requested hiding time; do not fake occlusion with scale or visibility.
 - Give ids that read (\`hero\`, \`table\`, \`chair-left\`) — lowercase, no spaces. \`name\` is the human label.
 - Animate only what the brief asks to move, with the fewest keyframes that express it. A camera move needs two keys, not twenty.

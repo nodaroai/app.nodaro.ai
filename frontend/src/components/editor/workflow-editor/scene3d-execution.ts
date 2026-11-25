@@ -47,6 +47,7 @@ import type { Scene3DRevisionContext, Scene3DRevisionEntry } from "@/types/nodes
 import { tx } from "@/lib/i18n";
 import { failedJobError } from "@/lib/failed-job-error";
 import { localizeJobLabel } from "./job-label";
+import { SCENE3D_SHOT_WITHOUT_SUBJECT_CODE } from "@nodaro/render-rules";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -98,6 +99,17 @@ export type Scene3DCompletionContext = {
   /** The node's data re-read after the status await, i.e. what it holds NOW. */
   liveNode: Record<string, unknown>;
 };
+
+/**
+ * The server delivered the scene although its plan check still found a shot
+ * that shows no subject (Generate 3D Scene, once its revisions ran out). The
+ * finding rides the delivery contract's `validation.warnings[]`.
+ */
+export function deliveredWithShotWithoutSubject(output: Record<string, unknown>): boolean {
+  const validation = output.validation as { warnings?: unknown } | undefined;
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings : [];
+  return warnings.some((w) => (w as { code?: unknown } | null)?.code === SCENE3D_SHOT_WITHOUT_SUBJECT_CODE);
+}
 
 /**
  * Run one 3D-scene authoring job to completion.
@@ -256,6 +268,10 @@ export function runScene3DJob({ nodeId, start, source, ctx, label, context, extr
                 if (result.outcome === "park") {
                   guardedToast.warning(tx("nodeRun.finishedOnAnOlderRevision", { label: shown }), {
                     description: tx("nodeRun.yourLaterEditsWereKept"),
+                  });
+                } else if (deliveredWithShotWithoutSubject(out)) {
+                  guardedToast.warning(tx("nodeRun.sceneShotWithoutSubject", { label: shown }), {
+                    description: tx("nodeRun.sceneShotWithoutSubjectHint"),
                   });
                 } else {
                   guardedToast.success(tx("nodeRun.complete", { label: shown }));

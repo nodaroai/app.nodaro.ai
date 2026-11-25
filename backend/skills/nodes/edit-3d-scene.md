@@ -1,7 +1,7 @@
 ---
 node_type: edit-3d-scene
-generated_at: 2026-10-20T21:12:34.690Z
-generated_from: 9ae3392be
+generated_at: 2026-11-25T18:01:29.693Z
+generated_from: 1d6aa96028
 ---
 
 # Edit 3D Scene
@@ -9,7 +9,7 @@ generated_from: 9ae3392be
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `edit-3d-scene`
 **Category:** ai
-**Credit cost:** `≈6` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=3d-scene:<model id>` (MCP: `list_models` with `priceIds: ["3d-scene:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
+**Credit cost:** `≈48` typical on Nodaro Cloud (an estimate on the default model: an LLM call is charged per token at its model's rate) — a call on any model is quoted by `GET /v1/credits/model-cost?model=3d-scene:<model id>` (MCP: `list_models` with `priceIds: ["3d-scene:<model id>"]`); `GET /v1/nodes` gives this node's figure live.
 **Inputs (target handles):** `scene`, `references`
 **Outputs (source handles):** `composition`
 
