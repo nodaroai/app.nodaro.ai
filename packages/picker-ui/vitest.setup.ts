@@ -1,4 +1,10 @@
 import "@testing-library/jest-dom/vitest"
+import { configure } from "@testing-library/dom"
+import { testingLibraryOptions } from "../../tools/vitest/ci-limits.mjs"
+
+// Testing Library's waits (findBy*, waitFor) get CI's slow-host factor like
+// the test limits do (tools/vitest/ci-limits.mjs); locally its 1 s default.
+configure(testingLibraryOptions())
 
 // Polyfill localStorage for the test environment. On newer Node (v26) jsdom no
 // longer exposes a usable `localStorage` global, so tests that touch it see

@@ -11,3 +11,6 @@ export declare function ciTestOptions(env?: Record<string, string | undefined>):
   hookTimeout?: number
   reporters?: string[]
 }
+export declare const LOCAL_ASYNC_UTIL_TIMEOUT_MS: number
+export declare const CI_ASYNC_UTIL_TIMEOUT_MS: number
+export declare function testingLibraryOptions(env?: Record<string, string | undefined>): { asyncUtilTimeout?: number }
