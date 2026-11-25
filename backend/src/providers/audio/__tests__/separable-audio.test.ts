@@ -28,8 +28,12 @@ vi.mock("../../../lib/job-scratch.js", () => ({ uploadJobScratchFile: m.upload }
 import { NoAudioTrackError } from "../../video/extract-audio-track.js"
 import { BIG_MEDIA_DOWNLOAD_LIMITS } from "../../video/ffmpeg-utils.js"
 import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
+import { inputUnusableHintOf } from "../../../lib/safety-block.js"
+import { failureGuidance } from "../../../lib/mcp/tools/_job-error.js"
+import { containerRefusalOf } from "../../video/probe-guard.js"
 import {
   isImageFormat,
+  isPictureByBytes,
   NoAudioToSeparateError,
   NotSeparableMediaError,
   SEPARABLE_AUDIO_PROBE_TIMEOUT_MS,
@@ -159,7 +163,56 @@ describe("toSeparableAudio — a video", () => {
   })
 })
 
-describe("toSeparableAudio — a picture or a GIF", () => {
+/** What the probe guard throws for a link it refuses for its format: the real refusal, built from ffprobe's real line. */
+const formatRefusal = (demuxer: string) => {
+  const refusal = containerRefusalOf(new Error(`ffprobe failed: [${demuxer} @ 0x7b45044000] Format not on whitelist 'mp3,wav,mov'`))
+  if (!refusal) throw new Error("containerRefusalOf no longer reads ffprobe's whitelist line")
+  return refusal
+}
+
+describe("toSeparableAudio — a picture or a GIF LINK (the probe guard refuses it for its format)", () => {
+  // The guard reads a link only with ordinary audio and video demuxers, so a
+  // picture link never reaches the stream list: the probe REJECTS, naming the
+  // demuxer ffprobe picked from the bytes (separable-audio-probe.e2e.test.ts
+  // runs the real ffprobe). The case that shipped: a WebP sent to the provider.
+  it.each([
+    ["a WebP", "webp_pipe"],
+    ["a PNG", "png_pipe"],
+    ["a JPEG", "jpeg_pipe"],
+    ["a GIF", "gif"],
+    ["an SVG", "svg_pipe"],
+  ])("%s gets its own sentence on the first attempt, final, nothing probed further or downloaded", async (_label, demuxer) => {
+    m.streams.mockRejectedValue(formatRefusal(demuxer))
+    const err = await toSeparableAudio("https://cdn.example.com/picture", "job-1").catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(NotSeparableMediaError)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(inputUnusableHintOf(err)).toEqual({ kind: "input-unusable", reason: "image" })
+    expect(m.formatProbe).not.toHaveBeenCalled()
+    expect(m.extract).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["a streaming playlist", "hls"],
+    ["a stream manifest", "dash"],
+    ["an audio format off the guard's list", "sox"],
+    ["a refusal naming a picture AND another demuxer", "png_pipe,hls"],
+    ["a file NAMED like a picture (image2 is picked from the name, not the bytes)", "image2"],
+    ["image2pipe (no content verdict either)", "image2pipe"],
+  ])("%s is no picture: the link is left as it came (fail open, as before)", async (_label, demuxer) => {
+    m.streams.mockRejectedValue(formatRefusal(demuxer))
+    expect(await toSeparableAudio(URL_IN, "job-1")).toBe(URL_IN)
+    expect(m.extract).not.toHaveBeenCalled()
+  })
+
+  it("a refused host or unreadable data is no verdict on the file: the link is left as it came", async () => {
+    m.streams.mockRejectedValue(Object.assign(new Error("probeVideoSource: blocked — private address"), { reason: "address" }))
+    expect(await toSeparableAudio(URL_IN, "job-1")).toBe(URL_IN)
+    m.streams.mockRejectedValue(new Error("ffprobe failed: a.html: Invalid data found when processing input"))
+    expect(await toSeparableAudio(URL_IN, "job-1")).toBe(URL_IN)
+  })
+})
+
+describe("toSeparableAudio — a picture or a GIF on DISK (no guard whitelist: its stream list is read)", () => {
   it.each([
     ["a PNG", ["png_pipe"]],
     ["a JPEG", ["jpeg_pipe"]],
@@ -169,7 +222,7 @@ describe("toSeparableAudio — a picture or a GIF", () => {
   ])("%s gets its own sentence, final, nothing downloaded", async (_label, formatNames) => {
     m.streams.mockResolvedValue(listing([VIDEO]))
     m.formatProbe.mockResolvedValue({ formatNames })
-    const err = await toSeparableAudio("https://cdn.example.com/picture", "job-1").catch((e: unknown) => e)
+    const err = await toSeparableAudio("/tmp/w/picture", "job-1").catch((e: unknown) => e)
     expect(err).toBeInstanceOf(NotSeparableMediaError)
     expect(isDeterministicJobError(err)).toBe(true)
     expect((err as Error).message).toBe("This file is an image, not audio or a video. Connect a song, a recording, or a video with sound.")
@@ -184,5 +237,39 @@ describe("toSeparableAudio — a picture or a GIF", () => {
     expect(isImageFormat(["matroska", "webm"])).toBe(false)
     expect(isImageFormat(["mp3"])).toBe(false)
     expect(isImageFormat([])).toBe(false)
+  })
+
+  it("isPictureByBytes: content-based picture demuxers only, never the name-based image2", () => {
+    expect(isPictureByBytes(["png_pipe"])).toBe(true)
+    expect(isPictureByBytes(["gif"])).toBe(true)
+    expect(isPictureByBytes(["image2"])).toBe(false)
+    expect(isPictureByBytes(["image2pipe"])).toBe(false)
+    expect(isPictureByBytes(["png_pipe", "image2"])).toBe(false)
+    expect(isPictureByBytes([])).toBe(false)
+  })
+})
+
+describe("the three refusals report as not retryable (the job hint input-unusable)", () => {
+  // Their sentences name the file, not a limit word the message classifier
+  // knows, so without the hint an MCP caller was told "This may be transient —
+  // retrying the same request is reasonable" (seen in production).
+  it.each([
+    [() => new NoAudioToSeparateError(), "no-sound"],
+    [() => new NotSeparableMediaError(), "image"],
+    [() => new VideoTooLargeToSeparateError(), "too-large"],
+  ] as const)("%#: the hint the worker writes, and what get_job then says", (make, reason) => {
+    const err = make()
+    expect(failureGuidance({ error_message: err.message }).retryable).toBe(true)
+    const hint = inputUnusableHintOf(err)
+    expect(hint).toEqual({ kind: "input-unusable", reason })
+    const g = failureGuidance({ error_message: err.message, error_hint: hint })
+    expect(g.retryable).toBe(false)
+    expect(g.guidance).not.toMatch(/transient/i)
+    expect(g.guidance).toMatch(/Do NOT retry the same request/)
+  })
+
+  it("the hint survives a wrapper (the cause chain)", () => {
+    const wrapped = new Error("separation failed", { cause: new NotSeparableMediaError() })
+    expect(inputUnusableHintOf(wrapped)).toEqual({ kind: "input-unusable", reason: "image" })
   })
 })

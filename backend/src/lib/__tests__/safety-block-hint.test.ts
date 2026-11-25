@@ -28,6 +28,7 @@ import {
   creditsHintOf,
   errorHintFor,
   inputRefusedHint,
+  inputUnusableHintOf,
   policyBlockHint,
   promptRefusedOf,
   queueTimeoutHintOf,
@@ -93,6 +94,8 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
           return `queue:${hint.reason}:${hint.waitedMinutes}`
         case "request-refused":
           return `request:${hint.subject ?? "as sent"}`
+        case "input-unusable":
+          return `unusable:${hint.reason}`
         default: {
           const exhaustive: never = hint
           return exhaustive
@@ -106,6 +109,7 @@ describe("ErrorHint is a discriminated union on `kind`", () => {
     expect(describeHint({ kind: "queue-timeout", reason: "timeout", waitedMinutes: 120 })).toBe("queue:timeout:120")
     expect(describeHint({ kind: "request-refused" })).toBe("request:as sent")
     expect(describeHint({ kind: "request-refused", subject: "input_video" })).toBe("request:input_video")
+    expect(describeHint({ kind: "input-unusable", reason: "image" })).toBe("unusable:image")
   })
 
   it("keeps errorHintFor producing the safety arm (migration 376 readers unchanged)", () => {
@@ -359,5 +363,38 @@ describe("queueTimeoutHintOf — a wait for a concurrency slot that ran out", ()
   it("never throws", () => {
     expect(queueTimeoutHintOf(Object.defineProperty(new Error("x"), "failureHint", { get() { throw new Error("boom") } }))).toBeNull()
     expect(queueTimeoutHintOf(null)).toBeNull()
+  })
+})
+
+describe("inputUnusableHintOf — an input file refused from what it is", () => {
+  const refused = (failureHint: unknown) => Object.assign(new Error("This file is an image, not audio or a video."), { failureHint })
+
+  it("reads the hint a separation's refusal carries, also through a wrapper", async () => {
+    const { NotSeparableMediaError } = await import("../../providers/audio/separable-audio.js")
+    const err = new NotSeparableMediaError()
+    expect(inputUnusableHintOf(err)).toEqual({ kind: "input-unusable", reason: "image" })
+    expect(inputUnusableHintOf(new Error("outer", { cause: err }))).toEqual({ kind: "input-unusable", reason: "image" })
+  })
+
+  it("copies only the two fields, as a fresh object", () => {
+    const hint = { kind: "input-unusable", reason: "too-large", internal: "x" }
+    const read = inputUnusableHintOf(refused(hint))
+    expect(read).toEqual({ kind: "input-unusable", reason: "too-large" })
+    expect(read).not.toBe(hint)
+    expect(Object.keys(read ?? {})).toEqual(["kind", "reason"])
+  })
+
+  it.each([
+    ["another kind", { kind: "credits", reason: "image" }],
+    ["a reason outside the set", { kind: "input-unusable", reason: "corrupt" }],
+    ["no reason", { kind: "input-unusable" }],
+    ["a string hint", "input-unusable"],
+  ])("ignores a malformed hint: %s", (_label, failureHint) => {
+    expect(inputUnusableHintOf(refused(failureHint))).toBeNull()
+  })
+
+  it("never throws", () => {
+    expect(inputUnusableHintOf(Object.defineProperty(new Error("x"), "failureHint", { get() { throw new Error("boom") } }))).toBeNull()
+    expect(inputUnusableHintOf(null)).toBeNull()
   })
 })
