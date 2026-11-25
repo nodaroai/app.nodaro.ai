@@ -1,4 +1,7 @@
+// @reads-none reads only the layer image it is handed, from the job's work dir
 import sharp from "sharp"
+import { readFile } from "node:fs/promises"
+import { fitImageUnderPixels } from "../../lib/image-pixel-fit.js"
 import { OVERLAY_PIXEL_LIMIT } from "../image/overlay-contract.js"
 
 /**
@@ -19,7 +22,10 @@ export async function prefitVideoOverlayLayer(
   size: { readonly width: number; readonly height: number },
   fit: "contain" | "cover",
 ): Promise<{ width: number; height: number }> {
-  const info = await sharp(src, { limitInputPixels: OVERLAY_PIXEL_LIMIT })
+  // A layer over the decode cap (an 8K model result) is scaled down to fit
+  // it first, not refused.
+  const input = await fitImageUnderPixels(await readFile(src), OVERLAY_PIXEL_LIMIT)
+  const info = await sharp(input, { limitInputPixels: OVERLAY_PIXEL_LIMIT })
     .rotate()
     .resize(size.width, size.height, fit === "cover" ? { fit: "cover", position: "centre" } : { fit: "fill" })
     .toColourspace("srgb")

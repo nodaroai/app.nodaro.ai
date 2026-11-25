@@ -1389,6 +1389,28 @@ single call for it costs.) Without `count` / `models` — or with `count: 1` —
 the answer is the usual `{ "jobId" }`, unchanged. `jobId` is always the first
 job, so code that reads it keeps working.
 
+**A set from one job (`imageSetCount`).** On a model that makes sets (Kling
+Image 4.0, `kling-image-4`), `imageSetCount` (2–10) asks ONE job for a
+coherent set of that many images: the answer is the usual `{ "jobId" }`, and
+the job's output carries every image (`imageUrl` is the first, `imageUrls`
+all of them). The job is held at the price of the images asked (a set of
+two at 2K holds **64 credits**<!-- credits: kling-image-4:2K:x2 -->, a set of
+ten **319 credits**<!-- credits: kling-image-4:2K:x10 -->) and charged for the
+images it stores; a picture that cannot be stored is left out (`imagesNotSaved`
+on the job) and not charged, and a set none of whose pictures can be stored
+fails and is refunded. On any other model, and with a `maskUrl`, the set is dropped and the
+correction is reported in `adjustments`; `imageSetCount` and a `count` above 1
+together are a `400 validation_error`. `1` is one image.
+
+**Named subjects on a flat request (`referenceCharacters`).** On Kling Image
+4.0 a character sent with 2 to 4 of its images goes as one named subject and
+costs one input item. A structured request (`connectedReferences`) is grouped
+from its entries; a flat request (a prompt you assembled, flat
+`referenceImageUrls`) can say which character each reference came from:
+`referenceCharacters: [{ url, characterSlug, defaultName?, variantSlug?,
+description? }]`. It changes neither the prompt nor the images sent, and other
+models ignore it.
+
 - **Credits: the batch as a whole, or not at all.** A batch costs the sum of
   its jobs. The balance is checked against that sum before anything is
   created — short, the request answers `402 insufficient_credits` with
@@ -2645,7 +2667,7 @@ The image-generating routes (`/v1/generate-character`,
 `/v1/generate-character-asset`, and the location equivalents
 `/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
 `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution` (`"1K"` /
-`"1.5K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
+`"1.5K"` / `"2K"` / `"4K"` / `"8K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
 **credit-affecting** and price exactly like `/v1/generate-image` (composite
 ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
 reserves more credits than the same model at its base tier. A value the chosen
@@ -6599,9 +6621,12 @@ On a previz run:
 - each role's `name` is the **locator** of its model in the clip: its colour,
   or its shape and position (`"the pink model"`, `"the tall model on the
   left"`). A role with pictures and no name is refused;
-- each role may say what it is in `subject` (`"the detective"`, `"a delivery
-  van"`, 1–200 characters), which the result's script calls it by; left out,
-  the script calls it by its picture. Any other run ignores `subject`;
+- each role may say in `subject` what its model becomes in the finished video
+  (1–200 characters), which the result's script calls it by; left out, the
+  script calls it by its picture. Write the finished thing, not the previz
+  model, and leave out the model's colour unless the real thing has it:
+  `"a jockey on a bay racehorse"`, not `"the driver of the red car"`. Any
+  other run ignores `subject`;
 - `previz` holds its options: `lighting: true` also follows the clip's
   lighting direction and lighting changes (default `false`); `sound` is
   `"clip"` (keep the clip's own sound) or `"generated"` (the engine makes
@@ -8759,6 +8784,251 @@ curl -s -X POST "$BASE/v1/freecut-export" \
       }' | jq .
 # → { "url": "https://…/exports/<userId>/freecut-<uuid>.json", "format": "json", "assetId": "<uuid>" }
 ```
+
+## 18b. Video-editor projects (Cloud edition)
+
+> **Cloud edition only.** The video editor saves a project to the signed-in
+> person's account: its content, a revision counter, and labelled versions
+> the person can go back to. On Community and Business the routes are not
+> registered (`404`). On a Cloud deployment without a private bucket for
+> project files, or a database without the project tables yet, every route
+> answers `503 not_available`.
+
+Every route needs a signed-in caller (a session, an API token or an OAuth app
+token) and acts only on the caller's own projects. Another person's project, a
+deleted one and a malformed id all answer `404 not_found`, never `403`. OAuth
+app tokens need `assets:read` for the reads (`GET`) and `assets:write` for
+everything else.
+
+### One tab at a time
+
+A project is edited from one browser tab at a time. A tab picks a holder id
+(8 to 64 of `A-Z a-z 0-9 _ -`), claims the project before it edits, and sends
+that holder id with every save and version request. Only the holder saves;
+any other holder is refused `409 not_holder`. A claim whose holder has not
+claimed or saved for 90 seconds can be taken by another tab; `takeover: true`
+takes it at once. `GET /v1/editor-projects/:id` tells a tab whether a live
+holder has the project (`held`).
+
+### Content, hashes and limits
+
+A project's content is one JSON value. Its hash is the SHA-256, as 64
+lowercase hex characters, of its **canonical text**: `JSON.stringify` with the
+keys of every object sorted by UTF-16 code unit at every depth, arrays in
+order, and no whitespace. The server re-canonicalises what it receives and
+checks the hash itself; a request whose content does not have the hash it
+names is refused `422 hash_mismatch` and nothing is stored.
+
+| Limit | Value |
+|---|---|
+| Whole save body (`PUT`, gzip) | 5 MB |
+| Patch save body (`PATCH`, gzip) | 1 MB |
+| A patch, inflated | 5 MB |
+| A project's content, inflated (and its canonical text): saves, patch results, version reads, restores | 8 MB |
+| Operations in one patch | 20,000 (`add`, `remove`, `replace`, `test` only) |
+| `add` / `remove` operations on an array position in one patch (a path whose last part is a number, empty, or `-`) | 2,000 (`422 too_complex` past it) |
+| Saves per credential | 120 a minute for each of `PUT`, `PATCH` and restore, counted per route (`429` past it) |
+| Version cuts per user | 30 a minute, `POST /:id/versions` and `x-cut-version` counted together (see [Versions](#versions)) |
+| File reads per credential (`GET /:id/file`) | 120 a minute for the saved content, and, counted apart, 60 a minute for `?version=n` (`429` past it) |
+| Project creates per credential (`POST /v1/editor-projects`) | 30 a minute (`429` past it) |
+| Live projects per person | 500 (`409 too_many_projects` past it; deleted projects do not count) |
+| Stored project files per person | 2 GB: the saved content of every live project plus all their versions (`413 project_storage_full` past it; deleted projects do not count). A save counts its new file less the file it replaces, and a save of the content already saved is never refused |
+| Heavy requests per user at a time | 1 save, cut, restore or version read (`429 busy` for a second, see below) |
+| Version request body (cut, restore) | 16 KB |
+| Versions per project | 50, then up to 200 in all (see [Versions](#versions)) |
+| Names and labels | 1 to 120 characters; a version's author 1 to 60 |
+
+Over a size limit is `413 too_large`, whether the body itself or what it
+inflates to.
+
+**One heavy request at a time.** A user's save, version cut, restore and
+version read each run alone: while one runs, another from the same user is
+refused `429 busy` with `retry-after: 1`, and is safe to send again after that
+second. Send saves one at a time (wait for each answer before the next), as
+the editor does; reading the saved content (`GET /:id/file` without
+`?version`) is never refused `busy`. `busy` is also the answer, rarely, when
+the server has no capacity free for the work within 10 seconds.
+
+**Work that would cost too much.** Parsing, patching, hashing and comparing
+content runs under a time and a memory limit. A save whose own work passes
+them is refused `422 too_complex` and nothing is stored: send the content
+whole with `PUT`, or make it smaller. A version read that passes them is
+`500 version_unreadable`.
+
+### Routes
+
+| Method | Path | Body | Answer |
+|---|---|---|---|
+| `GET` | `/v1/editor-projects` | query `limit` (1–100, default 50) | `{ projects: [{ id, name, updated_at, size_bytes, revision }] }`, most recently updated first |
+| `POST` | `/v1/editor-projects` | `{ name }` | `{ id, name, revision }` |
+| `GET` | `/v1/editor-projects/:id` | — | `{ id, name, revision, updated_at, held, versions }` |
+| `PATCH` | `/v1/editor-projects/:id` | `{ name }` | `{ id, name }` |
+| `DELETE` | `/v1/editor-projects/:id` | — | `{ deleted: true }` |
+| `POST` | `/v1/editor-projects/:id/claim` | `{ holder, takeover? }` | `{ held: true }`, or `409 held_elsewhere` |
+| `POST` | `/v1/editor-projects/:id/release` | `{ holder }` | `{ released }` (`false` when that holder did not hold it) |
+| `GET` | `/v1/editor-projects/:id/file` | query `version` (optional) | the content's gzip |
+| `PUT` | `/v1/editor-projects/:id/file` | the whole content, gzip | `{ revision, saved, version? }` |
+| `PATCH` | `/v1/editor-projects/:id/file` | a JSON Patch, gzip | `{ revision, saved, version? }` |
+| `POST` | `/v1/editor-projects/:id/versions` | `{ label, author, holder }` | `{ number }`, or `{ number: null, unchanged: true }` |
+| `POST` | `/v1/editor-projects/:id/versions/:n/restore` | `{ holder }` | `{ revision }`, `{ revision, unchanged: true }`, or `{ revision, repaired: true }` |
+
+Names, labels and authors are trimmed. `versions` in `GET /:id` lists the
+project's versions newest first, each `{ number, label, author, created_at,
+size_bytes, kind }` (`kind` is `full` or `patch`, how the version is stored).
+Deleting a project deletes its saved content and every version's content.
+
+### Reading the content
+
+`GET /v1/editor-projects/:id/file` answers the gzip of the saved content's
+canonical text (`content-type: application/gzip`, `cache-control: no-store`)
+with the header `x-revision`: the revision those bytes belong to. A project
+that was never saved is `404 not_found`.
+
+`?version=n` answers version `n`'s whole content the same way, with
+`x-revision` (the project's current revision) and `x-version: n`. The answer
+is always checked against the hash the version was cut with; a version whose
+stored content is missing or does not match answers `500 version_unreadable`,
+never other content. An unknown version is `404 not_found`; a `version` that
+is not a whole number from 1 up is `400 validation_error`.
+
+Both headers are readable by a page on another origin
+(`access-control-expose-headers`).
+
+### Saving
+
+Both saves send `content-type: application/gzip` and these headers:
+
+| Header | Required | Meaning |
+|---|---|---|
+| `x-holder` | yes | The tab's holder id. |
+| `x-content-hash` | yes | The hash of the content the project will have after this save. |
+| `x-base-hash` | `PATCH` only | The hash of the saved content the patch was computed from. |
+| `x-cut-version` | no | A version label, URI-encoded, 1 to 120 characters once decoded and trimmed (blank is `400 validation_error`): after the save, a version of this save's content is cut with this label and author `you` (see [Versions](#versions)). |
+
+- **`PUT`** sends the gzip of the whole content.
+- **`PATCH`** sends the gzip of an RFC 6902 JSON Patch (an array of
+  operations) against the saved content. It is refused `409 base_mismatch`
+  when `x-base-hash` is no longer the saved content's hash (another save
+  landed first): send the whole content with `PUT` instead. Operations other
+  than `add`, `remove`, `replace` and `test`, more than 20,000 of them, or a
+  patch that does not apply, are `422 patch_failed`. More than 2,000 `add` or
+  `remove` operations on an array position (a path whose last part is a
+  number, empty, or `-`) are `422 too_complex`, before anything is applied:
+  send the whole content with `PUT` instead.
+
+The answer is `{ revision, saved }`. `saved: false` means the content was
+already the saved content (nothing was written; the revision is unchanged),
+which is also what a retry of a save that already landed answers. With
+`x-cut-version`, the answer also carries `version` (the new version's number)
+when a version was cut, and that version always holds this save's content. It
+is absent when the saved content already was the newest version, when
+another save landed before the version was cut, when the user has already
+cut 30 versions in the last minute, or when a version would take the user's
+stored project files past 2 GB (the save still stands either way). A version that
+cannot be cut never fails the save.
+
+### Versions
+
+A version is cut by the server from the content already saved, never from
+anything the request sends. `POST /v1/editor-projects/:id/versions` needs the
+holder; it answers `{ number }` (versions are numbered 1, 2, 3… per project),
+or `{ number: null, unchanged: true }` when the saved content is already the
+newest version's. A project that was never saved is `404 not_found`; one whose
+saved file is missing from storage is `500 file_missing`; one deleted while
+the version was being cut is `404 not_found`. `author` is free text: the
+editor uses `you` for a person's own versions and another name for a version
+an agent made.
+
+A user may cut 30 versions a minute, counting `POST /:id/versions` and
+`x-cut-version` together. Past that, the `POST` is `429` in the rate-limit
+envelope (`{ "statusCode": 429, "error": { "code": "rate_limit_exceeded", … } }`,
+with `retry-after` in seconds), and a save's `x-cut-version` cuts nothing.
+
+A version is stored as a difference from an earlier whole version (`kind:
+patch`) only when the content is at most 2 MB and the difference is small;
+otherwise it is stored whole (`kind: full`). Either way it reads back the same.
+
+Each new version keeps the project within two limits, removing the oldest
+versions first:
+
+- **50:** past 50 versions, versions authored `you` and not labelled
+  `Exported` are removed. A version by any other author, or labelled
+  `Exported`, is kept.
+- **200 in all:** past 200 versions, the oldest go even when they are another
+  author's or labelled `Exported`.
+
+The newest version is never removed, and neither is a version that another
+kept version is stored against (it is removed only after them).
+
+`POST /v1/editor-projects/:id/versions/:n/restore` makes version `n`'s content
+the project's content:
+
+1. A version `n` that does not exist is `404 not_found`.
+2. When version `n` is the content saved now, the answer is
+   `{ revision, unchanged: true }` and nothing else happens.
+3. Version `n` is read and checked; one that cannot be read is
+   `500 version_unreadable` and nothing has changed.
+4. The current content is kept as a version labelled `Before restore`
+   (author `you`), unless it already is the newest version. If that fails,
+   the restore fails and nothing has changed. The one exception is a project
+   whose current file is missing or unreadable (`500 file_missing`): there is
+   no state to keep, so the restore replaces it with the chosen version
+   without first keeping a `Before restore` version. This repairs the
+   project only when version `n` holds different content from what the
+   project names: when version `n` is that same content, step 2 answers
+   `unchanged` and the project stays unreadable. Repair it then with a `PUT`
+   of different content, or by restoring a different version.
+5. Version `n`'s content is saved like any save: the revision goes up and the
+   answer is `{ revision }`, or `{ revision, repaired: true }` whenever the
+   project's current file was missing or unreadable. If another save landed after the restore began, the restore is
+   refused `409 base_mismatch` and that save stays. Only after this save has
+   landed are old versions removed past the limits above, so a restore that
+   fails removes no version, version `n` included.
+
+### Errors
+
+Every refusal is `{ "error": "<code>" }`, with these exceptions:
+
+- No signed-in caller (`401`, `{ "error": { "code": "unauthorized", … } }`), a
+  missing scope (`403`, `{ "error": { "code": "insufficient_scope", … } }`)
+  and a rate limit (`429`, `{ "statusCode": 429, "error": { "code": "rate_limit_exceeded", … } }`,
+  the cut limit included) are answered in the API's general error envelope
+  ([§8](#8-error-envelope)).
+- A JSON body that does not parse is `400` in the web framework's own shape
+  (`{ "statusCode": 400, "code": "FST_ERR_CTP_INVALID_JSON", "error": "Bad Request", "message": … }`).
+- A save (`PUT` / `PATCH /:id/file`) with no `content-type`, or one the API
+  does not parse, is `415` in the web framework's own shape
+  (`{ "statusCode": 415, "code": "FST_ERR_CTP_INVALID_MEDIA_TYPE", … }`).
+  Send `content-type: application/gzip`.
+
+A client therefore meets `429` in two shapes: `{ "error": "busy" }` (another
+heavy request of yours is running; retry after the `retry-after` second) and
+the rate-limit envelope (too many requests this minute; retry after
+`retry-after` seconds).
+
+| Status | Code | What it means for a client |
+|---|---|---|
+| 400 | `validation_error` | A body, query or header that does not parse (for a body or query, the `message` field says which part). |
+| 400 | `invalid_holder` | A holder id that is not 8 to 64 of `A-Z a-z 0-9 _ -`. |
+| 400 | `invalid_content` | An `x-content-hash` or `x-base-hash` that is not 64 lowercase hex characters. |
+| 400 | `invalid_gzip` / `invalid_json` | A save body that is not gzip, or does not inflate to JSON. |
+| 401 | `unauthorized` | No signed-in caller (in the general envelope). |
+| 403 | `insufficient_scope` | An OAuth app token without the scope the route needs (in the general envelope). |
+| 404 | `not_found` | No such project of the caller's (including another person's), no such version, or content not saved yet. |
+| 409 | `not_holder` | This holder does not hold the project: claim it (or take it over) first. |
+| 409 | `held_elsewhere` | The claim was refused: another live tab holds the project. |
+| 409 | `base_mismatch` | The saved content changed since the patch, or the restore, began: read the project again or send the whole content. |
+| 409 | `too_many_projects` | Creating a project past the 500 live projects one person may hold: delete one first. |
+| 413 | `too_large` | Over a size limit above. |
+| 413 | `project_storage_full` | A save, version cut or restore would take your stored project files past 2 GB. Nothing was stored. Delete projects you no longer need, then try again. A save's `x-cut-version` past it cuts nothing, and the save still stands. |
+| 422 | `hash_mismatch` | The content does not have the hash `x-content-hash` names: nothing was stored; send the whole content. |
+| 422 | `patch_failed` | The patch takes a disallowed operation, has too many, or does not apply. |
+| 422 | `too_complex` | The save would cost too much: a patch with more than 2,000 `add` / `remove` operations on an array position (a path whose last part is a number, empty, or `-`), or work past the time or memory limit (rarely, a version cut whose check of the saved content passes them). Nothing was stored: send the whole content with `PUT`, or smaller content. |
+| 422 | `upload_blocked` | This deployment does not accept the content. |
+| 429 | `busy` | Another save, cut, restore or version read of yours is running (or, rarely, the server had no capacity free within 10 seconds): retry after `retry-after` (1 second). |
+| 500 | `file_missing` | The saved content's file is missing from storage or unreadable (on a read, a cut, a save of the same content, or a `PATCH` whose base file is gone). Saving different content with `PUT` repairs it, and so does restoring a version whose content differs from the content the project names (restoring one with that same content answers `unchanged` and repairs nothing). |
+| 500 | `version_unreadable` | A version's stored content is missing or does not match what was cut, or rebuilding it passed the time or memory limit. A version stored against an unreadable version is unreadable too; other versions are unaffected. |
+| 503 | `not_available` | Video-editor projects are not available on this deployment. |
 
 ## Voice, Voice Changer Pro & media endpoints
 

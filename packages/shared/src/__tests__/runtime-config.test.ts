@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   MAX_SAMPLE_REFERENCES,
   MAX_SURFACE_SAMPLES,
+  MAX_TOOL_APPS,
   MAX_VIDEO_SAMPLE_PROMPT,
   RUNTIME_CONFIG_GLOBAL,
   RUNTIME_SURFACE_DEFAULT,
@@ -15,6 +16,7 @@ import {
   isSameSitePath,
   isHttpsOrigin,
   isSsoOnly,
+  isToolAppId,
   isWorldId,
   orderWorlds,
   ownPictureAddress,
@@ -275,6 +277,20 @@ describe("parseRuntimeSurface — every default applied", () => {
       "tile:image:createImage": "https://media.example.com/create.png",
     })
     expect(parseRuntimeSurface({ toolApps: { pictures: ["/a.png"] } }).toolApps.pictures).toEqual({})
+  })
+
+  it("toolApps.apps: absent, there is no list; a list keeps its app ids, each once; anything else names none", () => {
+    expect(parseRuntimeSurface({ toolApps: { menus: true } }).toolApps).not.toHaveProperty("apps")
+    expect(parseRuntimeSurface({}).toolApps).not.toHaveProperty("apps")
+    expect(parseRuntimeSurface({ toolApps: { apps: ["image-upscale", "video-captions", "image-upscale", "Bad Id", 7, "", "-x"] } }).toolApps.apps).toEqual(["image-upscale", "video-captions"])
+    expect(parseRuntimeSurface({ toolApps: { apps: [] } }).toolApps.apps).toEqual([])
+    // A reader must not offer more than a value it cannot read asks for.
+    expect(parseRuntimeSurface({ toolApps: { apps: "image-upscale" } }).toolApps.apps).toEqual([])
+    expect(parseRuntimeSurface({ toolApps: { apps: { "image-upscale": true } } }).toolApps.apps).toEqual([])
+    const many = Array.from({ length: MAX_TOOL_APPS + 5 }, (_, i) => `app-${i}`)
+    expect(parseRuntimeSurface({ toolApps: { apps: many } }).toolApps.apps).toHaveLength(MAX_TOOL_APPS)
+    expect(isToolAppId("image-upscale")).toBe(true)
+    for (const bad of ["Image-Upscale", "image upscale", "-image", "", "x".repeat(81), 7, null, undefined]) expect(isToolAppId(bad)).toBe(false)
   })
 
   it("worlds.soon keeps known ids once each, and is absent when none is left", () => {

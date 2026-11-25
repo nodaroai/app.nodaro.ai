@@ -59,13 +59,14 @@ describe.each(MODELS)("%s: every offered ratio renders every size", (model) => {
   })
 
   // Off-list values are still the per-lever snaps, and only those: a ratio the
-  // model does not offer moves to its first ("auto") and keeps its size; a
-  // size it does not list moves to its first (1K). Spelling is canonicalised.
+  // model does not offer moves to its first ("auto") and keeps its size; a K
+  // size above every size it lists (8K) moves to its largest (4K), as MCP sends
+  // it. Spelling is canonicalised.
   it.each([
     ["21:9", "4K", "auto", "4K", ["aspectRatio"]],
     ["21:9", "2K", "auto", "2K", ["aspectRatio"]],
     ["1x1", "4K", "auto", "4K", ["aspectRatio"]],
-    ["1:1", "8K", "1:1", "1K", ["resolution"]],
+    ["1:1", "8K", "1:1", "4K", ["resolution"]],
     ["1:1", "4k", "1:1", "4K", []],
     ["auto", "2k", "auto", "2K", []],
     ["AUTO", "4K", "auto", "4K", []],

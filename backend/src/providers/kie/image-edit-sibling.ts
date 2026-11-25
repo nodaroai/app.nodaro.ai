@@ -28,6 +28,9 @@ export const GPT_IMAGE_T2I_TO_I2I: Readonly<Record<string, string>> = {
   "minimax-h3-image": "minimax-h3-image-i2i",
   "seedream-5-5": "seedream-5-5-i2i",
   "flux-3-klein": "flux-3-klein-i2i",
+  // Kling Image 4.0: one KIE endpoint for both ids; the swap keeps the model
+  // logged and priced as the edit it runs.
+  "kling-image-4": "kling-image-4-i2i",
 }
 
 /**
