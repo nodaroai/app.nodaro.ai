@@ -5,9 +5,11 @@ import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
-import { safeFetch } from "../lib/safe-fetch.js"
 import { execFileFfmpeg } from "../providers/video/ffmpeg-process.js"
 import { unguardedProbeLinkRefusal } from "../providers/video/probe-guard.js"
+
+/** How long a thumbnail's source video may take to download, response and body together. */
+const THUMBNAIL_DOWNLOAD_TIMEOUT_MS = 60_000
 
 // ============================================================
 // Types
@@ -184,13 +186,15 @@ export async function generateThumbnailFromUrl(videoUrl: string): Promise<Buffer
   const framePath = join(workDir, "frame.png")
 
   try {
-    // Download video to temp file. safeFetch validates DNS resolution against
-    // private/reserved IP ranges at connection time — defense in depth in case
-    // a caller ever passes a URL that hasn't been laundered through R2.
-    const response = await safeFetch(videoUrl, { timeoutMs: 60_000 })
-    if (!response.ok) throw new Error(`Failed to download video: ${response.status}`)
-    const buffer = Buffer.from(await response.arrayBuffer())
-    await fs.writeFile(videoPath, buffer)
+    // Download video to temp file through the shared downloader: SSRF-safe
+    // (DNS resolution checked against private/reserved IP ranges — defense in
+    // depth in case a caller ever passes a URL that hasn't been laundered
+    // through R2), streamed rather than buffered, and the 60 s is one hard
+    // total that ends the BODY too, not only the request.
+    // Loaded here: the downloader's module (and its config) stays out of the
+    // graph of every importer that only processes bytes it already holds.
+    const { downloadFile } = await import("../providers/video/ffmpeg-utils.js")
+    await downloadFile(videoUrl, videoPath, { timeoutMs: THUMBNAIL_DOWNLOAD_TIMEOUT_MS })
 
     // Extract the very first frame at original resolution (lossless PNG)
     await extractFrame(videoPath, framePath, 0)

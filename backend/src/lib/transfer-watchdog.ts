@@ -84,3 +84,88 @@ export function watchTransferBody(opts: {
     stop: () => { stopped = true; clear() },
   }
 }
+
+/**
+ * A transfer's flat limit, held so it really ends the BODY. Give `signal` to
+ * the fetch AND to whatever reads the body (`pipeline(..., { signal })`, or
+ * {@link readWithin} around each read): the limit then stops the stream that
+ * writes the bytes, not only the request.
+ *
+ * The limit is held on our own timer and the same signal goes to the code
+ * that reads the body, so it ends the body whatever the fetch layer does with
+ * its own timeout — as `downloadFile` does (`providers/video/ffmpeg-utils.ts`).
+ * The timer is unref'd: a consumer that never finishes cannot hold the
+ * process open at shutdown.
+ *
+ * The caller's own `signal` (a client that went away) stops it too, with the
+ * caller's reason; the limit stops it with `reason()`. `timedOut()` tells the
+ * two apart. Call `clear()` once the body is held — on every way out.
+ */
+export interface TransferDeadline {
+  readonly signal: AbortSignal
+  /** Whether this limit (not the caller's signal) stopped the transfer. */
+  readonly timedOut: () => boolean
+  /** Clear the timer and the caller listener. */
+  readonly clear: () => void
+}
+
+export function transferDeadline(opts: {
+  /** The limit, from now. */
+  readonly ms: number
+  /** The error the limit aborts with (named `TimeoutError` by convention). */
+  readonly reason: () => Error
+  readonly signal?: AbortSignal
+}): TransferDeadline {
+  const ctrl = new AbortController()
+  let fired = false
+  const timer = setTimeout(() => {
+    if (ctrl.signal.aborted) return
+    fired = true
+    ctrl.abort(opts.reason())
+  }, Math.max(0, opts.ms))
+  ;(timer as { unref?: () => void }).unref?.()
+  const outer = opts.signal
+  const onCallerAbort = () => { if (!ctrl.signal.aborted) ctrl.abort(outer!.reason) }
+  if (outer?.aborted) onCallerAbort()
+  else outer?.addEventListener("abort", onCallerAbort, { once: true })
+  return {
+    signal: ctrl.signal,
+    timedOut: () => fired,
+    clear: () => {
+      clearTimeout(timer)
+      outer?.removeEventListener("abort", onCallerAbort)
+    },
+  }
+}
+
+/** A limit in words: whole minutes from ten minutes up, else seconds. */
+export function limitInWords(limitMs: number): string {
+  return limitMs >= 600_000 && limitMs % 60_000 === 0 ? `${limitMs / 60_000} min` : seconds(limitMs)
+}
+
+/** A `Download timeout:` error naming its limit, as `downloadFile`'s are —
+ *  and its link only when given one (leave it out where the words reach a
+ *  user or a log that keeps links out, as a signed link's query is a credential). */
+export function downloadTimeoutError(limitMs: number, url?: string): Error {
+  return Object.assign(new Error(`Download timeout: over its ${limitInWords(limitMs)} limit${url ? `: ${url}` : ""}`), { name: "TimeoutError" })
+}
+
+/**
+ * `read` (one body read), or the signal's reason the moment it aborts —
+ * whether or not the source honours the abort. A reader whose source ignores
+ * the fetch's signal would otherwise wait on its next read for ever.
+ */
+export function readWithin<T>(signal: AbortSignal, read: Promise<T>): Promise<T> {
+  if (signal.aborted) {
+    read.catch(() => undefined)
+    return Promise.reject(signal.reason)
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason)
+    signal.addEventListener("abort", onAbort, { once: true })
+    read.then(
+      (v) => { signal.removeEventListener("abort", onAbort); resolve(v) },
+      (e) => { signal.removeEventListener("abort", onAbort); reject(e) },
+    )
+  })
+}

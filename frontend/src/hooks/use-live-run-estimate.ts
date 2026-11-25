@@ -39,6 +39,7 @@ import { estimateWholeRun } from "@/components/editor/workflow-editor/estimate-r
 import { chosenRecordingUrl } from "@/lib/run-price"
 import { withoutMediaLength } from "@nodaro/render-rules"
 import { useEditPlanModes } from "@/lib/edit-plan-modes"
+import { useSurfaceAvailability } from "@/lib/surface-availability"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export interface LiveRunEstimateDeps {
@@ -152,6 +153,10 @@ export function useLiveRunFigure(args: LiveRunEstimateArgs, deps: LiveRunEstimat
   // the nodes (the runner seeds it from the app detail, the dashboard asks the
   // capabilities route): recompute when it does.
   const editPlanModesVersion = useEditPlanModes()
+  // What this install runs (`GET /v1/surface/availability`) lands after the
+  // nodes too, and decides the mode a node with none is priced in (Nodaro
+  // Video Upscale: Sharp where Transparent cannot run): recompute when it does.
+  const availabilityVersion = useSurfaceAvailability()
   const firstRunRef = useRef(true)
   // Read through a ref so a caller passing fresh function identities each
   // render does not re-trigger the effect (only the graph and inputs should).
@@ -192,7 +197,7 @@ export function useLiveRunFigure(args: LiveRunEstimateArgs, deps: LiveRunEstimat
       cancelled = true
       clearTimeout(timer)
     }
-  }, [nodes, edges, inputValues, enabled, mediaLengths, editPlanModesVersion])
+  }, [nodes, edges, inputValues, enabled, mediaLengths, editPlanModesVersion, availabilityVersion])
 
   return estimate
 }
