@@ -158,6 +158,7 @@ export const ROUTE_ONLY_FAMILIES: Readonly<Record<string, string>> = {
   "deployment-billing": "a deployment's own billing for its users",
   download: "downloading a finished asset",
   "edit-image": "the Edit Image route",
+  "editor-projects": "video-editor projects saved to the account, read and written by the video editor page (Cloud)",
   embed: "embedded apps",
   "extract-youtube-audio": "audio from a YouTube link",
   faces: "saved faces",

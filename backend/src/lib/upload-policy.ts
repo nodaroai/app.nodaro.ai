@@ -62,6 +62,10 @@ export type UploadLane =
   // (lib/site-capture-store.ts) — a capture run's records, or a relayed
   // capture's images downloaded from the connected cloud.
   | "site-capture"
+  // A video-editor project saved to the account (ee/routes/editor-projects-file.ts):
+  // the canonical JSON text the server re-wrote from a whole save or a patched
+  // one, asked before it is stored, like /v1/upload-json.
+  | "editor-project"
 
 export interface UploadCheckInput {
   readonly kind: UploadKind
