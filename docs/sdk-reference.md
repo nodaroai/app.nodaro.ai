@@ -1588,7 +1588,7 @@ request the provider refused as it was sent, naming a fault of it, so the same
 request is refused again (`kind: "request-refused"` — change the input images,
 the video, the prompt or the settings; with `subject: "input_video"` when the
 provider's words name the clip as the fault (its length or size, or no character
-found in it), so a different clip is what can change; on a Video Remake or trend run this is one step's refusal), or that never
+found in it), so a different clip is what can change; on a Video Remake or trend run this is one step's refusal), or whose input file the platform refused from what it is, before any provider call (`kind: "input-unusable"`, carrying `reason` — `"image"`, `"no-sound"` or `"too-large"`: a separation sent a picture, a video without sound, or a video over the size it can take the sound out of; the job was refunded and the same file fails again, so send a different one), or that never
 got one of the account's concurrency slots and did not run (`kind:
 "queue-timeout"`, carrying `reason` — `"timeout"`, `"lost"` or `"live-wait"` —
 and `waitedMinutes`; the job was refunded, so run it again — it only occurs

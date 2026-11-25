@@ -11,6 +11,23 @@ export interface ClassifiedMediaSource {
   readonly hasAudio: boolean
   /** false when the probe failed and the slot's word was assumed instead. */
   readonly probed: boolean
+  /**
+   * Set only when the probe failed because the probe guard refused the file
+   * for its FORMAT (a refusal with reason `container`): the ffprobe demuxer
+   * names it read the file as (`webp_pipe`, `gif`, `hls`, …), the same on every
+   * attempt. Most are picked from the file's bytes, but not all: `image2` is
+   * picked from the file NAME (an MP3 served at `/song.png`), so a caller
+   * refusing on it must tell the two apart. Every other failure (a timeout, a
+   * refused host, unreadable data) leaves it unset.
+   */
+  readonly refusedFormats?: readonly string[]
+}
+
+/** The demuxer names of a probe-guard refusal for the file's format (reason `container`), read by its shape; else undefined. */
+function refusedFormatsOf(err: unknown): readonly string[] | undefined {
+  const e = err as { reason?: unknown; demuxer?: unknown } | null
+  if (e?.reason !== "container" || typeof e.demuxer !== "string" || e.demuxer === "") return undefined
+  return e.demuxer.split(",")
 }
 
 /**
@@ -45,7 +62,8 @@ export async function classifyMediaSource(
     console.warn(
       `[media-source] stream probe failed for the ${slot} input — assuming the slot is honest: ${err instanceof Error ? err.message : String(err)}`,
     )
-    return { url, slot, hasVideo: slot === "video", hasAudio: true, probed: false }
+    const refusedFormats = refusedFormatsOf(err)
+    return { url, slot, hasVideo: slot === "video", hasAudio: true, probed: false, ...(refusedFormats ? { refusedFormats } : {}) }
   }
 }
 

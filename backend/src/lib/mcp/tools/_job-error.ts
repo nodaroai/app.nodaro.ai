@@ -202,6 +202,12 @@ export function isRetryableFailure(errorMessage: string | null | undefined): boo
  * `kind: "request-refused"` is the same case once more: the provider refused
  * the request as it was sent. A run built of steps words that itself, in a
  * sentence the classifier reads as transient, so the hint decides.
+ *
+ * `kind: "input-unusable"` is ours, not a provider's: a worker refused the
+ * input file from what it is before any provider call (a separation's source
+ * that is a picture, a video without sound, or a video over the size cap). Its
+ * sentences name the file, not a limit word the classifier knows, so the hint
+ * decides here too.
  */
 export function failureGuidance(job: {
   error_message?: string | null
@@ -252,6 +258,27 @@ export function failureGuidance(job: {
         (code ? ` (${code})` : "") +
         ", so it stopped and its credits were refunded. Ask the user to top up (check_balance shows the balance) " +
         "or raise the plan or workspace cap, then run the same request again.",
+    }
+  }
+
+  // WE refused the input file before any provider call, from what the file is
+  // (a separation's source: a picture, a video without sound, a video over the
+  // size cap): the same file is refused again, whatever the message's words.
+  if (hint && hint.kind === "input-unusable") {
+    const what =
+      hint.reason === "image"
+        ? "The input file is a picture or a GIF, not audio or a video with sound"
+        : hint.reason === "no-sound"
+          ? "The input video has no sound in it, so there is nothing to separate"
+          : hint.reason === "too-large"
+            ? "The input video is over the size this job can take its sound out of"
+            : "The input file cannot be used for this job"
+    return {
+      retryable: false,
+      guidance:
+        `${what}; the same file will be refused again, and its credits were refunded. ` +
+        "Do NOT retry the same request: send a different file (audio, or a video with sound; for an oversized video, " +
+        "a shorter clip or its audio), or ask the user for one.",
     }
   }
 

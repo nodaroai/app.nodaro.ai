@@ -66,3 +66,24 @@ test("the frontend lib override is applied to TS 7 only, and to the frontend onl
   assert.deepEqual(tscArgs(ts7, "backend", ["--listFilesOnly"]), ["tsc", "--noEmit", "--listFilesOnly"])
   assert.deepEqual(tscArgs(ts5, "frontend"), ["tsc.js", "--noEmit"])
 })
+
+// The backend type check is the job's largest program and runs on a 2 vCPU /
+// 8 GB slot. Asking it for declaration output it never writes (--noEmit) made
+// TS 7 build every file's declarations anyway: 7.08-7.17 GB peak against
+// 5.98-6.05 GB without (GOMAXPROCS=2 --singleThreaded, 2026-11-25), and SIGKILLs
+// on the slot. Emit settings belong to the config that emits:
+// tsconfig.build.json (Build Backend Once and the Dockerfile, on TS 5.9, where
+// declaration errors in shipped code are still reported).
+test("the backend check config asks for no emit output; the build config owns it", () => {
+  const check = JSON.parse(readFileSync("backend/tsconfig.json", "utf8")).compilerOptions
+  const build = JSON.parse(readFileSync("backend/tsconfig.build.json", "utf8"))
+  assert.equal(check.noEmit, true)
+  for (const key of ["declaration", "declarationMap", "sourceMap", "composite", "emitDeclarationOnly"]) {
+    assert.ok(!check[key], `backend/tsconfig.json sets ${key}: move it to tsconfig.build.json`)
+  }
+  assert.equal(build.extends, "./tsconfig.json")
+  assert.equal(build.compilerOptions.noEmit, false)
+  for (const key of ["declaration", "declarationMap", "sourceMap"]) {
+    assert.equal(build.compilerOptions[key], true, `tsconfig.build.json keeps ${key}`)
+  }
+})

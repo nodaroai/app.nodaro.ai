@@ -34,6 +34,7 @@ import {
   creditsHintOf,
   jobBlockHintOf,
   queueTimeoutHintOf,
+  inputUnusableHintOf,
   safetyBlockMessage,
   fallbackLabelOf,
   hasUserSafeMessage,
@@ -748,7 +749,7 @@ export function createVideoWorker() {
         // blamed the generated audio (`subject: "audio"`), not the picture.
         // Shared with the reconcile path (lib/reconcile/kie.ts).
         const errorHint =
-          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err) ?? jobBlockHintOf(err)
+          refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err) ?? jobBlockHintOf(err) ?? inputUnusableHintOf(err)
         const flipped = await markJobFailed(jobId, {
           error_message: errorMessage,
           // W0: the provider's own error, redacted — the sanitized message
@@ -759,8 +760,10 @@ export function createVideoWorker() {
           // parsing prose. A classified content-policy block, else a
           // refused input video, else a refused request, else a handler's credits refusal (`failureHint` on the error or its
           // cause chain — a plugin's child job refused for credits), else a
-          // wait for a concurrency slot that ran out; NULL for anything
-          // else. The refund below is unchanged either way.
+          // wait for a concurrency slot that ran out, else an input file
+          // refused from what it is (a separation's source: a picture, a
+          // silent or an oversized video); NULL for anything else. The
+          // refund below is unchanged either way.
           ...(errorHint ? { error_hint: errorHint } : {}),
         })
 

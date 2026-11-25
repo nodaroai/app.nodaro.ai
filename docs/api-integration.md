@@ -2155,6 +2155,21 @@ change the input images, the video, the prompt or the settings. It is not a
 content-policy block. On a job made of steps (a Video Remake or trend run) this
 is one step's refusal.
 
+Or, when the platform refused the job's input file from what the file is,
+before any provider call:
+
+```json
+{ "kind": "input-unusable", "reason": "image" | "no-sound" | "too-large" }
+```
+
+`reason: "image"` — a picture or a GIF where audio or a video with sound is
+needed (an Audio Separation or Suno Separate source); `"no-sound"` — a video
+with no sound in it, where its sound is what the job uses; `"too-large"` — a
+video over the size the job can take its sound out of. The same file is refused
+the same way on every run, so do not run it again unchanged: send a different
+file (for `"too-large"`, a shorter clip or its audio). The job's credits are
+refunded. Treat an unknown `reason` as a refusal of the input file.
+
 Or, when the job never got one of your account's concurrency slots, so it did
 not run:
 

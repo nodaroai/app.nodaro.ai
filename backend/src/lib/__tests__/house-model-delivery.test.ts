@@ -88,6 +88,7 @@ import {
   creditsHintOf,
   fallbackLabelOf,
   inputImageRefusedOf,
+  inputUnusableHintOf,
   inputVideoRefusedOf,
   jobBlockHintOf,
   jobModelIdOf,
@@ -149,7 +150,8 @@ function workerFailureFields(err: unknown): Record<string, unknown> {
     refusalHintFor(block, false, inputVideoRefusedOf(err) && sentVideoInput(INPUT), inputImageRefusedOf(err), requestRefusedHintOf(err, INPUT), promptRefusedOf(err), audioRefusedOf(err)) ??
     creditsHintOf(err) ??
     queueTimeoutHintOf(err) ??
-    jobBlockHintOf(err)
+    jobBlockHintOf(err) ??
+    inputUnusableHintOf(err)
   return { error_message: errorMessage, error_detail: providerDetailOf(err), ...(hint ? { error_hint: hint } : {}) }
 }
 
@@ -496,7 +498,7 @@ describe("the worker path's fields are the video worker's own", () => {
     expect(src).toContain(": userFacingMessage(err, message)")
     expect(src).toContain("error_detail: providerDetailOf(err),")
     expect(src).toContain(
-      "refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err) ?? jobBlockHintOf(err)",
+      "refusalHintFor(block, safetyRetried, inputVideoRefused, inputImageRefusedOf(err), requestRefusedHintOf(err, job.data), promptRefusedOf(err), audioRefusedOf(err)) ?? creditsHintOf(err) ?? queueTimeoutHintOf(err) ?? jobBlockHintOf(err) ?? inputUnusableHintOf(err)",
     )
     expect(src).toContain("const block = safetyBlockOf(err, modelId)")
     expect(src).toContain("safetyBlockMessage(block.fallback ? fallbackLabelOf(block.fallback) : undefined, safetyRetried)")
