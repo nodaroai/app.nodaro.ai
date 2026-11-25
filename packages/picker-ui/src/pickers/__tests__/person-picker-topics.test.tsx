@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, within } from "@testing-library/react"
 import { PERSON_DIMENSION_SECTIONS, registerPersonPack, resetPersonPacks } from "@nodaro/prompts/person"
 import { resetCatalogPacks } from "@nodaro/prompts/catalog-packs"
@@ -6,7 +7,7 @@ import { PersonPickerDetailed } from "../person-picker-detailed"
 import { PERSON_MORE_TOPIC } from "../person-topics"
 
 // Renders the full open view (every setting of every topic) — heavy in jsdom.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 const TOPICS = PERSON_DIMENSION_SECTIONS.map((s) => s.label)
 

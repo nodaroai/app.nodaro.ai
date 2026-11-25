@@ -9,6 +9,7 @@
  *   another scene description step (the texts are still sent).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -72,7 +73,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 const stepsEditor = async () => screen.findByTestId("steps-editor")
 
-describe("a trend's preparation steps", { timeout: 20_000 }, () => {
+describe("a trend's preparation steps", { timeout: scaledTimeout(20_000) }, () => {
   it("saving sends exactly the edited object on the draft", async () => {
     const user = userEvent.setup()
     serve({})

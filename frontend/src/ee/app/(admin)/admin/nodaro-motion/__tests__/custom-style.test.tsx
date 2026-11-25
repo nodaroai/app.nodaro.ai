@@ -14,6 +14,7 @@
  *   steps are greyed out and the switch still saves.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -124,7 +125,7 @@ const saveButton = () => screen.getByRole("button", { name: "Save" })
 
 // The whole page renders in each test, and a test that types into it takes about 1.5-1.8 s on a CI runner and three
 // times that on a slow one: the folder's 20 s limit, not Vitest's default 5 s.
-describe("Admin → Video Remake → Custom style", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → Custom style", { timeout: scaledTimeout(20_000) }, () => {
   it("shows the resolved switch and names this deployment's default (on), Save off", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const toggle = await customSwitch()

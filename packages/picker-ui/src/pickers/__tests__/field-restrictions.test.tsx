@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, within } from "@testing-library/react"
 import { PickerFieldRestrictionsProvider } from "../../lib/field-restrictions"
 import { PersonPickerDetailed } from "../person-picker-detailed"
 import { DimensionTileGrid } from "../dimension-tile-grid"
 
 // The detailed person view is large; person-picker.test.tsx explains why 5s is too tight.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 const ageTiles = () => within(screen.getByRole("radiogroup", { name: /^Age$/ })).getAllByRole("radio").map((el) => el.getAttribute("data-entry-id") ?? el.textContent)
 

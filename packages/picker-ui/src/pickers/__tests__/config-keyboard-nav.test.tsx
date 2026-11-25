@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, within } from "@testing-library/react"
 import {
   estimateGridCols,
@@ -13,7 +14,7 @@ import type { DimensionEntry } from "../dimension-modal-browser"
 
 // PersonPickerDetailed full-render + getByRole over its large tree is slow on
 // CI runners (same reasoning as person-picker.test.tsx). Scoped to this file.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 /**
  * Guard tests for config-panel keyboard navigation — the invariant that every

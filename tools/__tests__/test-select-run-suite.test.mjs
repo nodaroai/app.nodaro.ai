@@ -58,7 +58,7 @@ for a in "$@"; do case "$a" in --outputFile.json=*) printf '{"testResults":[]}' 
 exit 1
 `
 
-function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"], runList, event, registry } = {}) {
+function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelection, unset = [], shard, files = ["src/a.test.ts"], runList, event, registry, slowReporter = false } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), "run-suite-"))
   const bin = path.join(root, "bin")
   const project = path.join(root, "frontend")
@@ -67,6 +67,8 @@ function runSuite(selection, scenario, { list = "src/a.test.ts\n", shadowSelecti
   for (const f of files) { mkdirSync(path.join(project, path.dirname(f)), { recursive: true }); writeFileSync(path.join(project, f), "") }
   // a copy, not a symlink: failed-files.mjs compares argv[1] with its real path
   cpSync(path.join(tools, "test-select"), path.join(root, "tools/test-select"), { recursive: true })
+  // the slow-tests reporter beside it, as in the repository (absent: the run goes on without it)
+  if (slowReporter) cpSync(path.join(tools, "vitest"), path.join(root, "tools/vitest"), { recursive: true })
   writeFileSync(path.join(bin, "npx"), scenario === "crash" ? FAKE_NPX_CRASH : FAKE_NPX)
   chmodSync(path.join(bin, "npx"), 0o755)
   const env = {
@@ -139,6 +141,22 @@ test("registry rule, affected mode: the run writes a JSON report and checks it; 
   const pass = runSuite("affected", "pass", { registry: { list: "src/a.test.ts\n", selection: "affected" } })
   assert.equal(pass.status, 0)
   assert.deepEqual(pass.registry.registryMisses, [])
+})
+
+// A --reporter on the command line replaces the config's reporters, so every
+// run that names its own also names the slow-tests reporter (tools/vitest/ci-limits.mjs).
+test("with tools/vitest beside it, every run with a JSON report also names the slow-tests reporter", { skip }, () => {
+  const slow = /--reporter=\S+\/tools\/vitest\/slow-tests-reporter\.mjs /
+  const postMerge = runSuite("post-merge", "pass", { slowReporter: true })
+  assert.equal(postMerge.status, 0, postMerge.output)
+  assert.match(postMerge.calls[0], /^vitest run --reporter=default --reporter=json --reporter=\S+ --outputFile\.json=\S+report\.json$/)
+  assert.match(postMerge.calls[0], slow)
+  const shadow = runSuite("shadow", "pass", { slowReporter: true, shadowSelection: "full" })
+  assert.match(shadow.calls[0], slow)
+  const affected = runSuite("affected", "pass", { slowReporter: true, registry: { list: "src/a.test.ts\n", selection: "affected" } })
+  assert.match(affected.calls[0], slow)
+  // a plain run passes no --reporter, so the config's reporters (which list it in CI) apply
+  assert.deepEqual(runSuite("affected", "pass", { slowReporter: true }).calls, ["vitest run src/a.test.ts"])
 })
 
 test("registry rule, affected mode without REGISTRY_OUT: the command is unchanged", { skip }, () => {

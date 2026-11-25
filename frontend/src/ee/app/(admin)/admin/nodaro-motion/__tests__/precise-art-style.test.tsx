@@ -9,6 +9,7 @@
  *   none, only the default stays choosable. The server's 409 is said in place.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -109,7 +110,7 @@ const preciseGroup = (name: string) => screen.findByRole("group", { name: `Nodar
 const openerOf = async (name: string) => within(await preciseGroup(name)).findByRole("group", { name: PRECISE_ART_STYLE_LEGEND })
 const columnOf = async () => (await openerOf("Prism")).closest("[data-testid='precise-art-style-column']") as HTMLElement
 
-describe("Admin → Video Remake → Precise runs with an art style", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → Precise runs with an art style", { timeout: scaledTimeout(20_000) }, () => {
   it("preciseArtStyleToSaved leaves the default opener out and keeps the style-refs step as picked", () => {
     expect(preciseArtStyleToSaved(null)).toEqual({})
     expect(preciseArtStyleToSaved({ "nodaro-prism": { opener: "restyle" }, "nodaro-pulse": {} })).toEqual({})

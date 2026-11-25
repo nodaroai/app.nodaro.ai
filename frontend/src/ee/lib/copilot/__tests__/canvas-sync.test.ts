@@ -5,6 +5,7 @@
  * do NOT adopt the remote graph because it would eat the user's edits.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 
 // Mirrors the real store: adopting a snapshot advances the version token.
 const reconcileFromRemote = vi.fn((args: { version?: number | null }) => {
@@ -62,7 +63,7 @@ describe("ensureCanvasVersion", () => {
     expect(reconcileFromRemote).toHaveBeenCalledWith(
       expect.objectContaining({ version: 7, nodes: [{ id: "n1" }] }),
     )
-  }, 10_000)
+  }, scaledTimeout(10_000))
 
   it("refuses to adopt a remote graph over unsaved local edits", async () => {
     state.isDirty = true
@@ -72,19 +73,19 @@ describe("ensureCanvasVersion", () => {
     await expect(ensureCanvasVersion("wf-1", 7)).resolves.toBe("dirty")
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(reconcileFromRemote).not.toHaveBeenCalled()
-  }, 10_000)
+  }, scaledTimeout(10_000))
 
   it("reports failure rather than reconciling a malformed row", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ data: { version: 7 } }) })))
 
     await expect(ensureCanvasVersion("wf-1", 7)).resolves.toBe("failed")
     expect(reconcileFromRemote).not.toHaveBeenCalled()
-  }, 10_000)
+  }, scaledTimeout(10_000))
 
   it("reports failure on a non-2xx response", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({}) })))
     await expect(ensureCanvasVersion("wf-1", 7)).resolves.toBe("failed")
-  }, 10_000)
+  }, scaledTimeout(10_000))
 
   it("gives up quietly when the turn was aborted while waiting", async () => {
     const controller = new AbortController()

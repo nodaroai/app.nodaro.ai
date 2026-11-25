@@ -15,6 +15,7 @@
  *   kept frame is checked across the whole clip.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -107,7 +108,7 @@ describe("checking the crop across the clip", () => {
   })
 })
 
-describe("cropping", { timeout: 20_000 }, () => {
+describe("cropping", { timeout: scaledTimeout(20_000) }, () => {
   it("shows the split (centered by default), sends the position, runs on the server and takes the cropped clip when done", async () => {
     const user = userEvent.setup()
     serve({ ...wide(), faceMask: undefined })

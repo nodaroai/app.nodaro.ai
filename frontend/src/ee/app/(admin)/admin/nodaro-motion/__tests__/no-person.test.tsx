@@ -10,6 +10,7 @@
  *   back. The server's 409 is said in place.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -87,7 +88,7 @@ const switchOf = async (name: string) => within(await preciseGroup(name)).findBy
 const columnOf = async (name: string) => (await switchOf(name)).closest("[data-testid='no-person-column']") as HTMLElement
 const saveButton = () => screen.getByRole("button", { name: "Save" })
 
-describe("Admin → Video Remake → runs with no person", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → runs with no person", { timeout: scaledTimeout(20_000) }, () => {
   it("noPersonToSaved keeps only an engine switched off, in the engines' order, as new objects", () => {
     expect(noPersonToSaved(null)).toEqual({})
     expect(noPersonToSaved(undefined)).toEqual({})

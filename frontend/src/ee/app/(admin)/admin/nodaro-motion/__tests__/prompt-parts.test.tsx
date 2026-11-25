@@ -6,6 +6,7 @@
  * each problem in its own engine and style.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -72,7 +73,7 @@ afterEach(() => vi.unstubAllGlobals())
 const engineSection = async (name: string) =>
   (await screen.findByRole("heading", { name: new RegExp(`^Engine prompt: ${name}`) })).closest("section") as HTMLElement
 
-describe("Admin → Video Remake → Engine prompt", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → Engine prompt", { timeout: scaledTimeout(20_000) }, () => {
   it("promptPartsToSave drops empty texts, styles and engines", () => {
     expect(promptPartsToSave({ "nodaro-prism": { precise: { face: "" }, motion: { face: "x", avoid: " " } }, "nodaro-pulse": { precise: {} } })).toEqual({
       "nodaro-prism": { motion: { face: "x" } },

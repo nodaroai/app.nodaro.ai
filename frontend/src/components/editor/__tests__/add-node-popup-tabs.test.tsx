@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, fireEvent, cleanup } from "@testing-library/react"
 
 // Full-render tests can exceed the default 5s on slow CI runners (precedent:
 // person-picker, #3223) — scope a higher timeout to this file only.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 // ---------------------------------------------------------------------------
 // Mocks — lucide-react needs an explicit export list (Proxy-based mocks can

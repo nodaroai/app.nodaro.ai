@@ -4,11 +4,12 @@
 // through the estimator's one-hop rule, so the author must be able to set it
 // here — not only on a `field` card.
 import { describe, expect, it, beforeEach, vi } from "vitest"
+import { scaledTimeout } from "../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, render, screen } from "@testing-library/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NodePickerDialog } from "../node-picker-dialog"
 
-vi.setConfig({ testTimeout: 20000 })
+vi.setConfig({ testTimeout: scaledTimeout(20_000) })
 
 const node = (id: string, type: string, data: Record<string, unknown>) => ({ id, type, position: { x: 0, y: 0 }, data })
 

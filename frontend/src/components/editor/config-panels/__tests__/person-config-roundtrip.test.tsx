@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { useState } from "react"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { PersonConfig } from "../parameter-configs"
@@ -24,7 +25,7 @@ beforeAll(() => {
 })
 
 // Rendering the full PersonConfig (all dimensions + options) is heavy.
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 /** A controlled harness: PersonConfig is value-driven, so we feed onUpdate
  *  patches straight back into `data` — exactly what the real config panel does. */

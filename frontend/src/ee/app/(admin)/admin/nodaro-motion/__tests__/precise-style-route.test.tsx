@@ -8,6 +8,7 @@
  * - It saves whatever the engines; a note names the environments whose engine does not route yet.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -94,7 +95,7 @@ afterEach(() => vi.unstubAllGlobals())
 const section = async () => within(await screen.findByRole("group", { name: PRECISE_STYLE_ROUTE_LEGEND }))
 const saveButton = () => screen.getByRole("button", { name: "Save" })
 
-describe("the page", { timeout: 20_000 }, () => {
+describe("the page", { timeout: scaledTimeout(20_000) }, () => {
   it("never saved reads as On, under Prism's Precise settings, and there is nothing to save", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const route = await section()
@@ -172,7 +173,7 @@ describe("the page", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the routed depth blur", { timeout: 20_000 }, () => {
+describe("the routed depth blur", { timeout: scaledTimeout(20_000) }, () => {
   it("never saved reads as 0, with a hint that it is the routed runs' alone", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const route = await section()
@@ -211,7 +212,7 @@ describe("the routed depth blur", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the routed colour switch", { timeout: 20_000 }, () => {
+describe("the routed colour switch", { timeout: scaledTimeout(20_000) }, () => {
   it("never saved reads as on, with a hint that it is the routed runs' alone", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const route = await section()
@@ -242,7 +243,7 @@ describe("the routed colour switch", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the routed face mesh switch", { timeout: 20_000 }, () => {
+describe("the routed face mesh switch", { timeout: scaledTimeout(20_000) }, () => {
   it("never saved reads as off, with a hint that it is the routed runs' alone", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const route = await section()
@@ -273,7 +274,7 @@ describe("the routed face mesh switch", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the routed mesh's parts and wording", { timeout: 20_000 }, () => {
+describe("the routed mesh's parts and wording", { timeout: scaledTimeout(20_000) }, () => {
   it("never saved: as the Motion masking, and Motion wording, each with a hint that it is the routed runs' alone", async () => {
     renderWith(<AdminNodaroMotionPage />)
     const route = await section()
@@ -312,7 +313,7 @@ describe("the routed mesh's parts and wording", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the routed mesh's picture", { timeout: 20_000 }, () => {
+describe("the routed mesh's picture", { timeout: scaledTimeout(20_000) }, () => {
   const beside = (route: ReturnType<typeof within>) => route.getByLabelText(PRECISE_STYLE_ROUTE_MESH_PARTS_LABEL).parentElement!
 
   it("beside the choice, its lines on a depth face; as the Motion masking, the Flex masking's own lines", async () => {
@@ -339,7 +340,7 @@ describe("the routed mesh's picture", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the routed mesh's layers", { timeout: 20_000 }, () => {
+describe("the routed mesh's layers", { timeout: scaledTimeout(20_000) }, () => {
   it("Choose the layers shows one switch per layer, from the lines chosen before; a set no parts value names saves as layers", async () => {
     const user = userEvent.setup()
     routes[`PUT ${URL_}`] = (init) => view(JSON.parse(String(init?.body)).preciseStyleRoute)
@@ -384,7 +385,7 @@ describe("the routed mesh's layers", { timeout: 20_000 }, () => {
 // The route of each art style (`styleRoutes`): the Flex way (the default, never saved), Precise, or Precise in black
 // and white, in one table grouped by the catalog's medium. Saved whatever the engines, with a note naming where it does
 // not hold yet. A stored `photographicStyles: "precise"` reads as Precise for the photographic styles.
-describe("the route per art style", { timeout: 20_000 }, () => {
+describe("the route per art style", { timeout: scaledTimeout(20_000) }, () => {
   /**
    * An environment whose engine routes (unless `routes` is false), reads the map with its platform when `yes`, takes
    * the photographic path with its platform when `photographic`, and whose platform sends that path in the map's place

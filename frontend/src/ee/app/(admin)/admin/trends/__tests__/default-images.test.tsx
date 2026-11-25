@@ -26,6 +26,7 @@
  *   required slot with default pictures.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -65,7 +66,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-describe("where the section shows", { timeout: 20_000 }, () => {
+describe("where the section shows", { timeout: scaledTimeout(20_000) }, () => {
   it("on each optional slot of a Full depth trend, never on a required one", async () => {
     serve({ faceMasking: FULL, slots: [slot(), GUEST] })
     renderEditor()
@@ -170,7 +171,7 @@ describe("where the section shows", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the three actions", { timeout: 20_000 }, () => {
+describe("the three actions", { timeout: scaledTimeout(20_000) }, () => {
   it("Upload copies the picture into trend storage as a default, saves it, and ✕ removes it", async () => {
     const user = userEvent.setup()
     routes[`POST ${BASE}/media`] = () => ({ body: { data: { url: DEFAULT } } })
@@ -261,7 +262,7 @@ describe("the three actions", { timeout: 20_000 }, () => {
   })
 })
 
-describe("the upscale factors offered", { timeout: 20_000 }, () => {
+describe("the upscale factors offered", { timeout: scaledTimeout(20_000) }, () => {
   /** The thumbnail's picture as loaded, at `width`×`height`. */
   function loaded(width: number, height: number) {
     const img = screen.getByRole("img", { name: "Slot 2 default image 1" }) as HTMLImageElement

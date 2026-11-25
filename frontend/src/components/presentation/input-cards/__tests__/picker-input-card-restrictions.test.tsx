@@ -2,11 +2,12 @@
 // the per-field lists to the picker; a field with no list, or a list that would
 // leave nothing, offers every option.
 import { describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { render, screen, within } from "@testing-library/react"
 import { PickerInputCard } from "../picker-input-card"
 
 vi.mock("@/components/editor/locale-picker", () => ({ LocalePicker: () => null }))
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 function renderPerson(allowedValuesByField?: Record<string, string[]>) {
   return render(

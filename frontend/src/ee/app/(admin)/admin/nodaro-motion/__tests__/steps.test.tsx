@@ -9,6 +9,7 @@
  * - The server's 409 `engine_unsupported` is said with its own words.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -96,7 +97,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 const stepsOf = async (name: string) => screen.findByRole("group", { name: `Nodaro ${name} preparation steps` })
 
-describe("Admin → Video Remake → preparation steps", { timeout: 20_000 }, () => {
+describe("Admin → Video Remake → preparation steps", { timeout: scaledTimeout(20_000) }, () => {
   it("leaves out an engine with nothing set", () => {
     expect(stepsToSaved(null)).toEqual({})
     expect(stepsToSaved({ "nodaro-prism": {}, "nodaro-pulse": { enginePrompt: { mode: "template" } } })).toEqual({

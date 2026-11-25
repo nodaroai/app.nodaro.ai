@@ -51,7 +51,14 @@ if [ -n "${RUN_LIST:-}" ] && [ -f "$RUN_LIST" ] && [ "${GITHUB_EVENT_NAME:-}" = 
 fi
 # The pass cache records only from a run whose exit code it knows.
 trap 'echo "$?" > "$REPORT.rc"' EXIT
-JSON_ARGS=(--reporter=default --reporter=json --outputFile.json="$REPORT")
+# A --reporter on the command line replaces the config's reporters, so the
+# slow-tests listing the suite configs add in CI (tools/vitest/ci-limits.mjs)
+# is named here too. It is information only: without the file the run goes on
+# without it.
+SLOW_TESTS_REPORTER="$(dirname "${BASH_SOURCE[0]}")/../vitest/slow-tests-reporter.mjs"
+SLOW_ARGS=()
+if [ -f "$SLOW_TESTS_REPORTER" ]; then SLOW_ARGS=(--reporter="$(cd "$(dirname "$SLOW_TESTS_REPORTER")" && pwd)/slow-tests-reporter.mjs"); fi
+JSON_ARGS=(--reporter=default --reporter=json "${SLOW_ARGS[@]}" --outputFile.json="$REPORT")
 registry_check_wanted() { [ "${SELECTION:-}" = affected ] && [ -n "${REGISTRY_LIST:-}" ] && [ -n "${REGISTRY_OUT:-}" ]; }
 # Affected mode: the registry rule's miss check over this run's JSON report.
 registry_check() {
@@ -133,7 +140,7 @@ esac
 # masked failure. A failed file is re-run once, alone, only to LABEL it for the
 # attribution comment — failed again ($FAILED) or passed alone, likely flaky
 # ($FAILED.flaky) — and the run stays red either way.
-npx vitest run "${SHARD_ARGS[@]}" --reporter=default --reporter=json --outputFile.json="$REPORT" 2>&1 | tee "$REPORT.log"
+npx vitest run "${SHARD_ARGS[@]}" "${JSON_ARGS[@]}" 2>&1 | tee "$REPORT.log"
 rc=${PIPESTATUS[0]}
 [ "$rc" -eq 0 ] && exit 0
 [ -s "$REPORT" ] || exit "$rc"

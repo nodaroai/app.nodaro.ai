@@ -3,11 +3,12 @@
 // must withdraw the viewer's pick — never submit the catalog default, which the
 // restriction may exclude (it would turn a harmless Clear into a 400).
 import { describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../tools/vitest/ci-limits.mjs"
 import { fireEvent, render, screen } from "@testing-library/react"
 import { PickerInputCard, type PickerDisplayMode } from "../picker-input-card"
 
 vi.mock("@/components/editor/locale-picker", () => ({ LocalePicker: () => null }))
-vi.setConfig({ testTimeout: 15000 })
+vi.setConfig({ testTimeout: scaledTimeout(15_000) })
 
 function renderEra(mode: PickerDisplayMode, inputValues: Record<string, Record<string, unknown>>, onUpdateInput = vi.fn()) {
   render(

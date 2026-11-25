@@ -19,6 +19,7 @@
  * - An upscale whose example is gone can only be discarded.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { scaledTimeout } from "../../../../../../../../tools/vitest/ci-limits.mjs"
 import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
@@ -112,7 +113,7 @@ describe("trendUpscaleOfferFor", () => {
   })
 })
 
-describe("upscaling an example", { timeout: 20_000 }, () => {
+describe("upscaling an example", { timeout: scaledTimeout(20_000) }, () => {
   it("upscales a 720p example (a 1080p one is offered an enhance); start, follow, before/after, Use it with the revision start returned", async () => {
     const user = userEvent.setup()
     serve({ examples: [example(1), example(2, { width: 1080, height: 1920 })] })
@@ -191,7 +192,7 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
     await user.click(within(card).getByRole("button", { name: /try use it again/i }))
     await waitFor(() => expect(sentTo(`POST ${BASE}/upscale/apply`)).toEqual([{ jobId: JOB, revision: "rev-1" }, { jobId: JOB, revision: "rev-3" }]))
     expect(await screen.findByText(/1080×1920 · 10\.0 s/)).toBeInTheDocument()
-  }, 20_000)
+  }, scaledTimeout(20_000))
 
   it("a failed upscale says why and offers the targets again; Discard drops it with the held revision", async () => {
     const user = userEvent.setup()
@@ -281,7 +282,7 @@ describe("upscaling an example", { timeout: 20_000 }, () => {
   })
 })
 
-describe("upscaling the source clip", { timeout: 20_000 }, () => {
+describe("upscaling the source clip", { timeout: scaledTimeout(20_000) }, () => {
   it("warns the face mask must be made again; using it reloads the form, so the next save carries the 1080p clip", async () => {
     const user = userEvent.setup()
     serve({ faceMasking: { mode: "always" }, faceMask: MASK })

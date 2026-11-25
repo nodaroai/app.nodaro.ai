@@ -10,6 +10,8 @@ import { matchesAny } from "./glob.mjs"
 export const GLOBAL_TRIGGERS = [
   "package.json", "**/package.json", "package-lock.json",
   "**/vitest.config.*", "**/vitest.*.config.*", "**/vite.config.*", "**/tsconfig*.json",
+  // the time limits and reporters every suite config spreads in CI
+  "tools/vitest/**",
   "frontend/src/test/**", "backend/src/test/**",
   ".github/workflows/ci.yml", ".github/actions/**",
   // this engine: its code, the script that runs every suite, and the data its
