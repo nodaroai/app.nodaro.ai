@@ -461,6 +461,14 @@ are bounded only until the store answers — a paused viewer is not a stall. A
 store much slower than that — a congested self-hosted MinIO — will see these
 errors on large media.
 
+Media workers verify a downloaded file against the stored object's byte count,
+including compressed objects. For HTTP sources, the worker compares an
+unencoded body with its announced length and accepts a 206 response that
+covers the whole file. A range that explicitly omits bytes fails the download.
+HTTP sources can also stream without a known size or use a content coding.
+An interrupted write or byte-count mismatch discards the partial file. A failed
+direct storage read can still fall back to the media link.
+
 Uploads of 2 MB or more first ask the store `Expect: 100-continue` and wait for
 its answer within their budget. Cloudflare R2, MinIO and AWS S3 answer it; a
 store, or a proxy in front of it, that ignores the header fails every such
@@ -2947,6 +2955,14 @@ builds is verified against the same characterization baseline (54/54
 operations within tolerance as of the current pin); re-verify after any
 ffmpeg pin bump with
 `CHARACTERIZE_ARCH=arm64 backend/scripts/characterize-in-image.sh check`.
+
+**Finding the cause of an ffmpeg render failure.** Search the video worker logs
+for the job ID and `ffmpeg failure`. The line records the exit code or signal,
+up to 15 distinct diagnostic lines, and recent output, within 4,096 characters.
+An earlier decoder or encoder error can explain a generic ending such as
+`Conversion failed!`. Worker diagnostics can include local paths. The
+owner-readable job detail keeps only their basenames. Both diagnostic forms
+redact credentials and filter arguments before shortening the output.
 
 **Docker build fails downloading or checksum-verifying the ffmpeg
 tarball.** ffmpeg is deliberately pinned in the Dockerfile to an exact

@@ -14,6 +14,7 @@ import { isAlternateRoutePending } from "../lib/alternate-route.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
 import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
+import { ffmpegFailureLogOf } from "../providers/video/ffmpeg-failure-detail.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { markJobFailed } from "../lib/job-failure.js"
 import { discardJobScratch } from "../lib/job-scratch.js"
@@ -639,6 +640,11 @@ export function createVideoWorker() {
         const detail = providerDetailOf(err)
         console.error(`[worker] Job ${jobId} failed:`, detail ? `${message} | provider: ${detail}` : message)
       }
+      // An ffmpeg failure's whole detail (how it ended, every error line, with
+      // local paths; filter-graph text dropped) on a line of its own: the stored
+      // detail above is cut to 500 characters and keeps only paths' basenames.
+      const ffmpegLog = ffmpegFailureLogOf(err)
+      if (ffmpegLog) console.error(`[worker] Job ${jobId} ffmpeg failure: ${ffmpegLog}`)
 
       // A provider content-policy block gets its OWN bounded retry policy
       // (backend/src/lib/safety-block.ts), decoupled from the queue's global

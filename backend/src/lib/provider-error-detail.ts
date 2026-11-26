@@ -17,12 +17,18 @@
 
 export const ERROR_DETAIL_MAX = 500
 
-const URL_RE = /https?:\/\/[^\s"'<>)\]]+/g
+const URL_RE = /https?:\/\/[^\s"'<>]+/gi
 const BEARER_RE = /\bbearer\s+[A-Za-z0-9._~+/=-]+/gi
-const SECRET_QUERY_RE = /([?&](?:signature|sig|token|access_token|api_key|apikey|key)=)[^&\s"'<>]+/gi
+const SECRET_QUERY_RE = /([?&](?:(?:x-amz-|x-goog-)?signature|sig|token|access_token|api_key|apikey|key)=)[^&\s"'<>]+/gi
 
-export function redactProviderDetail(raw: string | null | undefined): string | null {
-  if (typeof raw !== "string") return null
+/**
+ * The redaction alone — each link cut to its host, bearer tokens and secret
+ * query values replaced — with no whitespace folding and no length cap. For a
+ * writer that builds a longer detail before it reaches the column (the ffmpeg
+ * failure detail, `providers/video/ffmpeg-failure-detail.ts`); the column's
+ * own writer still runs {@link redactProviderDetail} over it.
+ */
+export function redactDetailText(raw: string): string {
   let s = raw.replace(URL_RE, (u) => {
     try {
       return `${new URL(u).host}/…`
@@ -31,7 +37,12 @@ export function redactProviderDetail(raw: string | null | undefined): string | n
     }
   })
   s = s.replace(BEARER_RE, "Bearer <redacted>")
-  s = s.replace(SECRET_QUERY_RE, "$1<redacted>")
+  return s.replace(SECRET_QUERY_RE, "$1<redacted>")
+}
+
+export function redactProviderDetail(raw: string | null | undefined): string | null {
+  if (typeof raw !== "string") return null
+  let s = redactDetailText(raw)
   s = s.replace(/\s+/g, " ").trim()
   if (s.length === 0) return null
   return s.length > ERROR_DETAIL_MAX ? s.slice(0, ERROR_DETAIL_MAX) : s

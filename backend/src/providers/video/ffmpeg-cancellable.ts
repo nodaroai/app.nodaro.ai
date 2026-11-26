@@ -1,3 +1,4 @@
+import { FfmpegDiagnostics } from "./ffmpeg-failure-detail.js"
 import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { withFfmpegSlot, type FfmpegLaunchOptions } from "./ffmpeg-utils.js"
 import { retryOnShortage, spawnShowsShortage, stderrShowsShortage } from "./ffmpeg-shortage-retry.js"
@@ -22,9 +23,9 @@ export function runFfmpegCancellable(
       killTimer = setTimeout(() => child.kill("SIGKILL"), 1000)
     }
     const abort = () => stop(signal.reason instanceof Error ? signal.reason : new Error("FFmpeg cancelled"))
-    const timeout = setTimeout(() => stop(new Error("FFmpeg timed out")), tryTimeoutMs)
-    // Drain stderr without retaining potentially large logs or media URLs — only whether it
-    // reported the box's passing shortage (a thread it could not create) is kept.
+    let timedOut = false
+    const timeout = setTimeout(() => { timedOut = true; stop(new Error("FFmpeg timed out")) }, tryTimeoutMs)
+    const diagnostics = FfmpegDiagnostics.capture(child.stderr)
     let shortage = false
     child.stderr.on("data", (chunk: Buffer) => {
       if (!shortage && stderrShowsShortage(chunk.toString())) shortage = true
@@ -32,12 +33,18 @@ export function runFfmpegCancellable(
     child.once("error", (error) => {
       failure ??= Object.assign(error, spawnShowsShortage(error as NodeJS.ErrnoException) ? { resourceShortage: true as const } : {})
     })
-    child.once("close", (code) => {
+    child.once("close", (code, exitSignal) => {
       clearTimeout(timeout)
       clearTimeout(killTimer)
       signal.removeEventListener("abort", abort)
-      if (failure || code !== 0) reject(failure ?? Object.assign(new Error("FFmpeg failed"), shortage ? { resourceShortage: true as const } : {}))
-      else resolve()
+      if (signal.aborted) return reject(failure)
+      if (!failure && code === 0) return resolve()
+      const detail = diagnostics.fields({
+        code, signal: exitSignal, signalledByUs: timedOut, stoppedBecause: timedOut ? "its time limit" : undefined,
+        processError: (failure as NodeJS.ErrnoException | undefined)?.code,
+      })
+      const error = failure ?? Object.assign(new Error("FFmpeg failed"), shortage ? { resourceShortage: true as const } : {})
+      reject(Object.assign(error, detail))
     })
     signal.addEventListener("abort", abort, { once: true })
     if (signal.aborted) abort()

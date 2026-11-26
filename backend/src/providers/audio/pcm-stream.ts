@@ -4,8 +4,9 @@
  * a shared ffmpeg slot. Audio Sync correlates it; Speaker Map measures levels
  * on it. Moved out of audio-sync.ts unchanged.
  */
+import { FfmpegDiagnostics, spawnExit } from "../video/ffmpeg-failure-detail.js"
 import { spawnFfmpeg } from "../video/ffmpeg-process.js"
-import { ffmpegFailureMessage, withFfmpegSlot } from "../video/ffmpeg-utils.js"
+import { ffmpegFailureError, withFfmpegSlot } from "../video/ffmpeg-utils.js"
 import { INPUT_SEEK_MARGIN_SEC } from "../video/apply-edl-budget.js"
 
 /** Every stream is decoded at this rate: speech lives below 4 kHz. */
@@ -42,9 +43,10 @@ export async function streamPcm(
   ]
   await withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
     const proc = spawnFfmpeg(args, { stdio: ["ignore", "pipe", "pipe"] })
-    let stderr = ""
+    const stderr = FfmpegDiagnostics.capture(proc.stderr, 8_000)
     let carry = Buffer.alloc(0)
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)
+    let timedOut = false
+    const watchdog = setTimeout(() => { timedOut = true; proc.kill("SIGKILL") }, timeoutMs)
     proc.stdout.on("data", (chunk: Buffer) => {
       const buf = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk
       const whole = buf.length - (buf.length % 4)
@@ -54,12 +56,11 @@ export async function streamPcm(
       }
       carry = Buffer.from(buf.subarray(whole))
     })
-    proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-8_000) })
     proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
     proc.on("close", (code, signal) => {
       clearTimeout(watchdog)
       if (code === 0) resolve()
-      else reject(new Error(ffmpegFailureMessage(stderr, signal ? `killed (${signal}) after ${timeoutMs} ms` : `exit ${code}`)))
+      else reject(ffmpegFailureError(stderr, signal ? `killed (${signal}) after ${timeoutMs} ms` : `exit ${code}`, spawnExit(code, signal, timedOut)))
     })
   }), { timeoutMs, label })
 }

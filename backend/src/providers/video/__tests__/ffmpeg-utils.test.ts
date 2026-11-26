@@ -46,12 +46,12 @@ const mocks = vi.hoisted(() => {
   const fsRm = vi.fn().mockResolvedValue(undefined)
   const safeFetch = vi.fn()
   const dnsLookup = vi.fn()
-  const createWriteStream = vi.fn(() => ({}))
+  const createWriteStream = vi.fn(() => ({ once: vi.fn(), bytesWritten: 0 }))
   const pipeline = vi.fn().mockResolvedValue(undefined)
   const readableFromWeb = vi.fn(() => ({}))
   // spawn (streamed ffprobe packet scans): each call pops a script
   // `{ stdout, code }` and replays it as chunked data + close events.
-  const spawnScripts: Array<{ stdout: string; code?: number; stderr?: string }> = []
+  const spawnScripts: Array<{ stdout: string; code?: number | null; signal?: string; stderr?: string }> = []
   const spawn = vi.fn((_cmd: string, _args: string[]) => {
     const script = spawnScripts.shift() ?? { stdout: "", code: 0 }
     const listeners: Record<string, Array<(...a: unknown[]) => void>> = {}
@@ -68,7 +68,7 @@ const mocks = vi.hoisted(() => {
         if (part) for (const cb of stdoutL.data ?? []) cb(Buffer.from(part))
       }
       if (script.stderr) for (const cb of stderrL.data ?? []) cb(Buffer.from(script.stderr))
-      for (const cb of listeners.close ?? []) cb(script.code ?? 0)
+      for (const cb of listeners.close ?? []) cb(script.code === undefined ? 0 : script.code, script.signal ?? null)
     })
     return proc
   })
@@ -491,6 +491,72 @@ describe("runFfmpeg", () => {
     expect(err?.message).toMatch(/^ffmpeg failed: /)
     expect(err?.message).toContain("out.mp4")
     expect(err?.message.length).toBeLessThan(500)
+  })
+
+  // The generic -22 ending is printed for ANY failure to open the encoder: the
+  // line naming the cause comes earlier, and the message's tail drops it. It
+  // rides on the error for the operator (`internalDetails` → error_detail).
+  it("keeps the line that names the cause, and how the process ended, for the operator — the message unchanged", async () => {
+    const stderr = [
+      "ffmpeg version n8.1.2 Copyright (c) 2000-2026 the FFmpeg developers",
+      ...Array.from({ length: 30 }, (_, i) => `  Stream #0:${i}: metadata ${"x".repeat(40)}`),
+      "[libx264 @ 0x5598a1c2e480] malloc of size 1638400 failed",
+      "[vost#0:0/libx264 @ 0x5598a1c2e480] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.",
+      "[vost#0:0/libx264 @ 0x5598a1c2e480] Terminating thread with return code -22 (Invalid argument)",
+      "[out#0/mp4 @ 0x5598a1c0b9c0] Nothing was written into output file, because at least one of its streams received no packets.",
+      "Conversion failed!",
+    ].join("\n")
+    execFileOnce("", Object.assign(new Error("Command failed: ffmpeg"), { code: 234 }) as unknown as NodeJS.ErrnoException, stderr)
+
+    const err = await runFfmpeg(["bad"]).then(() => null, (e: Error & { internalDetails?: string }) => e)
+
+    expect(err?.message).toBe(ffmpegFailureMessage(stderr, "unused"))
+    expect(err?.message).not.toContain("malloc")
+    expect(err?.internalDetails).toMatch(/^ffmpeg exit code 234 \| errors: \[libx264 @ 0x5598a1c2e480\] malloc of size 1638400 failed/)
+  })
+
+  it("redacts complete operator lines before narrowing either end of the user message", async () => {
+    const stderr = [
+      `Error parsing filterchain 'a quoted caption ${"long caption ".repeat(60)}'`,
+      `Error opening input file https://media.example/${"long-path/".repeat(70)}clip?X-Amz-Signature=sample-only`,
+    ].join("\n")
+    execFileOnce("", Object.assign(new Error("Command failed"), { code: 1 }) as unknown as NodeJS.ErrnoException, stderr)
+    const err = await runFfmpeg(["bad"]).catch(e => e)
+    expect(err.message).toBe(ffmpegFailureMessage(stderr, "unused"))
+    for (const detail of [err.internalDetails, err.ffmpegFailureLog]) {
+      expect(detail).toContain("media.example")
+      expect(detail).not.toMatch(/long caption|long-path|sample-only/)
+    }
+  })
+
+  it("identifies a capture overflow even when Node omits killed and signal", async () => {
+    execFileOnce("", Object.assign(new Error("stderr maxBuffer length exceeded"), { code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }), "frame=1")
+    await expect(runFfmpeg(["x"])).rejects.toMatchObject({ internalDetails: expect.stringContaining("capture buffer") })
+  })
+
+  it("names a kill this process did not send apart from an ffmpeg error", async () => {
+    execFileOnce("", Object.assign(new Error("Command failed"), { code: null, signal: "SIGKILL", killed: false }) as unknown as NodeJS.ErrnoException, "frame=  10 fps=1\r")
+
+    const err = await runFfmpeg(["x"]).then(() => null, (e: Error & { internalDetails?: string; signalledFromOutside?: boolean }) => e)
+
+    expect(err?.signalledFromOutside).toBe(true)
+    expect(err?.internalDetails).toContain("ended by SIGKILL, not sent by this process")
+  })
+
+  it("names its own time limit when it stopped the run", async () => {
+    execFileOnce("", Object.assign(new Error("Command failed"), { code: null, signal: "SIGTERM", killed: true }) as unknown as NodeJS.ErrnoException, "")
+
+    const err = await runFfmpeg(["x"]).then(() => null, (e: Error & { internalDetails?: string }) => e)
+
+    expect(err?.internalDetails).toContain("ended by SIGTERM, sent by this process (its time limit)")
+  })
+
+  it("runFfmpegCapture carries the same detail", async () => {
+    execFileOnce("", Object.assign(new Error("Command failed"), { code: 1 }) as unknown as NodeJS.ErrnoException, "[libx264 @ 0x1] width not divisible by 2 (1279x720)\nConversion failed!")
+
+    const err = await runFfmpegCapture(["x"]).then(() => null, (e: Error & { internalDetails?: string }) => e)
+
+    expect(err?.internalDetails).toBe("ffmpeg exit code 1 | errors: [libx264 @ 0x1] width not divisible by 2 (1279x720) | Conversion failed!")
   })
 })
 
@@ -2018,5 +2084,18 @@ describe("probeVideoFramePtsMs", () => {
   it("a failed probe rejects with ffprobe's stderr", async () => {
     mocks.spawnScripts.push({ stdout: "", code: 1, stderr: "moov atom not found" })
     await expect(probeVideoFramePtsMs("/tmp/bad.mp4")).rejects.toThrow(/moov atom not found/)
+  })
+})
+
+describe("runFfmpegWithProgress failure detail", () => {
+  it("keeps a cause line its 8 KB stderr tail already dropped, and names an outside SIGKILL", async () => {
+    const stderr = `[libx264 @ 0x1] malloc of size 1638400 failed\n${"frame=1 fps=1 q=1 size=1KiB\r".repeat(2_000)}Conversion failed!\n`
+    mocks.spawnScripts.push({ stdout: "", code: null, signal: "SIGKILL", stderr })
+
+    const err = await runFfmpegWithProgress(["-i", "x", "y.mp4"]).then(() => null, (e: Error & { internalDetails?: string }) => e)
+
+    expect(err?.message).toMatch(/^ffmpeg failed: /)
+    expect(err?.message).not.toContain("malloc")
+    expect(err?.internalDetails).toMatch(/^ffmpeg ended by SIGKILL, not sent by this process .* \| errors: \[libx264 @ 0x1\] malloc of size 1638400 failed/)
   })
 })

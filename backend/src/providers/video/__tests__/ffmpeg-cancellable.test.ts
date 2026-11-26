@@ -26,6 +26,18 @@ describe("cancellable FFmpeg process", () => {
     await rejected
     expect(mocks.released).toHaveBeenCalledOnce()
   })
+  it("keeps an early error before repeated progress when the process fails", async () => {
+    const process = child()
+    const running = runFfmpegCancellable([], new AbortController().signal)
+    process.stderr.write("malloc of size 1024 failed\n")
+    process.stderr.write("frame=10 fps=2\r".repeat(2000))
+    process.emit("close", 1, null)
+    await expect(running).rejects.toMatchObject({
+      message: "FFmpeg failed",
+      internalDetails: expect.stringContaining("malloc of size 1024 failed"),
+    })
+  })
+
   it("escalates to SIGKILL and still waits for close", async () => {
     vi.useFakeTimers()
     const process = child(), controller = new AbortController()

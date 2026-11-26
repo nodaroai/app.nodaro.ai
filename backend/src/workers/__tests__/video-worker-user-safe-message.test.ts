@@ -454,3 +454,38 @@ describe("video worker — a plugin's user-safe failure message", () => {
     })
   })
 })
+
+describe("video worker — an ffmpeg failure's detail", () => {
+  it("stores the owner-readable form in error_detail and logs the whole form on its own line", async () => {
+    const { ffmpegFailureDetail } = await import("../../providers/video/ffmpeg-failure-detail.js")
+    const input = {
+      exit: { code: 234 },
+      diagnostics: [
+        "[libx264 @ 0x1] malloc of size 1638400 failed",
+        "Error opening output file /tmp/nodaro-work-1/chunks/out.mp4.",
+        "[Parsed_drawtext_0 @ 0x2] Error initializing filter 'drawtext' with args 'text=my secret caption:fontsize=48'",
+      ],
+      tail: "Conversion failed!",
+    }
+    const err = Object.assign(new Error("ffmpeg failed: Conversion failed!"), {
+      internalDetails: ffmpegFailureDetail(input),
+      ffmpegFailureLog: ffmpegFailureDetail({ ...input, keepPaths: true }),
+    })
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {})
+    createVideoWorker()
+    const processor = mocks.getCapturedProcessor()!
+    mocks.mockPluginHandler.mockRejectedValueOnce(Object.assign(new Error("Recast could not render this clip.", { cause: err })))
+
+    await processor(makeBullJob("cast-swap")).catch(() => {})
+
+    const stored = failedUpdate()?.error_detail as string
+    expect(stored).toContain("malloc of size 1638400 failed")
+    expect(stored).toContain("…/out.mp4")
+    expect(stored).not.toContain("/tmp/nodaro-work-1")
+    expect(stored).not.toContain("my secret caption")
+    const line = logged.mock.calls.map((c) => c.join(" ")).find((l) => l.includes("[worker] Job job-1 ffmpeg failure: "))
+    expect(line).toContain("/tmp/nodaro-work-1/chunks/out.mp4")
+    expect(line).not.toContain("my secret caption")
+    logged.mockRestore()
+  })
+})

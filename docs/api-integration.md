@@ -2265,6 +2265,12 @@ job payload that carries `error_message`: `GET /v1/jobs`, `GET /v1/jobs/:id`,
 
 #### The provider's own words (`error_detail`)
 
+For a failed ffmpeg render, `error_detail` can include the exit code or signal
+and the earlier diagnostic lines that explain the failure. This field is capped
+at 500 characters and follows the same reader permissions as a provider error.
+Local paths appear as basenames. Continue to use `error_message` for the job's
+user-facing message.
+
 Beside `error_message` — the platform's sentence about what went wrong — a
 failed job carries `error_detail`: what the provider itself said, as the
 server stored it when the job failed. Links in it are cut to their host and

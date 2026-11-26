@@ -15,6 +15,11 @@ describe("redactProviderDetail", () => {
     )
   })
 
+  it("redacts signed links with URL punctuation in their path and mixed-case schemes", () => {
+    const raw = "Error opening HTTPS://media.example/clips/(take-2)/scene.mp4?X-Amz-Signature=sample"
+    expect(redactProviderDetail(raw)).toBe("Error opening media.example/…")
+  })
+
   it("strips bearer tokens and secret-looking query params outside URLs", () => {
     expect(redactProviderDetail("Authorization: Bearer abc.def-ghi rejected")).toBe(
       "Authorization: Bearer <redacted> rejected",
