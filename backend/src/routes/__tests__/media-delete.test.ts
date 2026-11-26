@@ -403,6 +403,7 @@ describe("POST /v1/media/delete — job-output path", () => {
     ["published Music", MUSIC_LAYER_URL, "output_data->audio->layers->music->>url"],
     ["published Video", VIDEO_LAYER_URL, "output_data->audio->layers->video->>url"],
     ["Video Remake engine-version", ENGINE_VIDEO_URL, "output_data->>engineVideoUrl"],
+    ["Video Remake engine-version (delivered-resolution run)", ENGINE_VIDEO_URL, "output_data->>__castSwapEngineVideoUrl"],
   ])("proves ownership of a row-less %s output", async (_name, url, expectedPath) => {
     useScenario((table, calls, terminal) => {
       if (table === "assets" && terminal === "maybeSingle") return { data: null, error: null }

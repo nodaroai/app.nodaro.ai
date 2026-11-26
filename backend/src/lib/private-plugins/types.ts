@@ -4728,6 +4728,11 @@ export type PluginNodaroMotionPreciseUpscale = {
 /** Video Remake's upscale choice: per engine id (or Flash choice), each engine size's next size ("next" delivers it). */
 export type PluginCastSwapUpscaleNext = Readonly<Record<string, Readonly<Partial<Record<"480p" | "720p" | "1080p", "720p" | "1080p" | "4k">>>>>
 
+/** Video Remake's delivered sizes: per engine id (or Flash choice), smallest first, each made as the engine makes it or stepped up `from` an engine size. */
+export type PluginCastSwapDeliveredResolutions = Readonly<
+  Record<string, readonly { readonly size: "480p" | "720p" | "1080p" | "4k"; readonly from?: "480p" | "720p" | "1080p" }[]>
+>
+
 /** Video Remake's Precise art-style route. Absent `routing`: on; absent `bypassEmails`: nobody. */
 export type PluginNodaroMotionPreciseStyleRoute = {
   readonly routing?: "on" | "off"
@@ -5569,6 +5574,28 @@ export interface PluginSupports {
      * lib/video-remake-upscale-choice.ts): an unknown engine id, size or target is dropped, never thrown on.
      */
     readonly upscaleNext?: PluginCastSwapUpscaleNext
+    /**
+     * Video Remake's delivered resolution (2026-11-26): a run and its estimate that carry no `upscale`
+     * key read `resolution` as the size DELIVERED (`"480p" | "720p" | "1080p" | "4k"`), however the engine
+     * makes it; the estimate's and the completed job's `resolution` answer the size delivered, and the
+     * step's credits are in the engine's own breakdown line. A request that carries `upscale` is read as
+     * before (`upscaleChoice`). A size not offered for the engine choice is refused 400
+     * `resolution_not_offered` (with `offered`), one that cannot be had for that request 409
+     * `resolution_unavailable`. Declared only while the deployment has turned it on (read at load).
+     * Absent: `resolution` is the engine's size, as before, and `GET /v1/video-remake/style-choice`
+     * answers no delivered sizes (lib/video-remake-delivered-resolution.ts).
+     */
+    readonly deliveredResolution?: boolean
+    /**
+     * The sizes each engine choice delivers, smallest (its default) first, e.g.
+     * `{ "nodaro-prism": [{ size: "720p", from: "480p" }, { size: "1080p", from: "720p" }, { size: "4k", from: "1080p" }],
+     * "nodaro-pulse": [{ size: "720p" }, …] }`. `from`: the engine size it is stepped up from (that step's
+     * kill switch is the admin's, read as the engine reads it); absent: made as the engine makes it. What
+     * the engine CAN do: the platform removes the steps the admin switched off and answers the rest as
+     * `resolutions` on `GET /v1/video-remake/style-choice`. Read defensively (`deliveredResolutionsOf`,
+     * lib/video-remake-delivered-resolution.ts): an unknown engine id, size or `from` is dropped, never thrown on.
+     */
+    readonly deliveredResolutions?: PluginCastSwapDeliveredResolutions
   }
 }
 

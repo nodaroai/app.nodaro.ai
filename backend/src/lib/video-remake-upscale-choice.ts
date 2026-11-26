@@ -64,15 +64,18 @@ export function loadedEngineTakesUpscaleChoice(): boolean {
   return engineTakesUpscaleChoice(getPluginSupports().castSwap)
 }
 
-/** The estimate's upscale fields, each kept only when it is a value of the contract. */
+/**
+ * The estimate's upscale fields, each kept only when it is a value of the contract. `resolution` is the
+ * engine's size on a request read the earlier way, the size delivered on one read the new way
+ * (lib/video-remake-delivered-resolution.ts), so it may be "4k".
+ */
 export interface VideoRemakeUpscaleQuote {
-  resolution?: VideoRemakeResolution
+  resolution?: VideoRemakeOutputResolution
   outputResolution?: VideoRemakeOutputResolution
   upscale?: VideoRemakeUpscaleChoice
   upscaleOffered?: boolean
 }
 
-const isResolution = (v: unknown): v is VideoRemakeResolution => v === "480p" || v === "720p" || v === "1080p"
 const isOutputResolution = (v: unknown): v is VideoRemakeOutputResolution =>
   typeof v === "string" && (VIDEO_REMAKE_OUTPUT_RESOLUTIONS as readonly string[]).includes(v)
 const isChoice = (v: unknown): v is VideoRemakeUpscaleChoice => v === "off" || v === "next"
@@ -82,7 +85,7 @@ export function upscaleQuoteOf(quote: unknown): VideoRemakeUpscaleQuote {
   if (typeof quote !== "object" || quote === null) return {}
   const q = quote as Record<string, unknown>
   return {
-    ...(isResolution(q.resolution) ? { resolution: q.resolution } : {}),
+    ...(isOutputResolution(q.resolution) ? { resolution: q.resolution } : {}),
     ...(isOutputResolution(q.outputResolution) ? { outputResolution: q.outputResolution } : {}),
     ...(isChoice(q.upscale) ? { upscale: q.upscale } : {}),
     ...(typeof q.upscaleOffered === "boolean" ? { upscaleOffered: q.upscaleOffered } : {}),
@@ -162,6 +165,20 @@ function prismRowOffers(precise: unknown, size: VideoRemakeUpscaleSize, flash: b
 }
 
 /**
+ * The deployment's kill switch for one step up from the engine's `size` on `engine` (an engine or a Flash
+ * choice), read exactly as the engine reads it: off everywhere while this deployment withholds Topaz; Nodaro
+ * Pulse and Nodaro Pulse Flash have no row (on); Nodaro Prism reads the size's row, Nodaro Prism Flash its own
+ * `flash` row, else the size's. `precise` is the value the engine is handed (`enginePreciseUpscale`), or null
+ * (no Prism-family step). The one rule `upscaleToOffered` and the delivered sizes
+ * (lib/video-remake-delivered-resolution.ts) share.
+ */
+export function upscaleStepOffered(engine: VideoRemakeUpscaleEngine, size: VideoRemakeUpscaleSize, precise: unknown): boolean {
+  if (topazVideoDisabledHere()) return false
+  const base = isFlashEngine(engine) ? NODARO_MOTION_ENGINE_OF_FLASH[engine] : engine
+  return base === "nodaro-pulse" || prismRowOffers(precise, size, engine === "nodaro-prism-flash")
+}
+
+/**
  * `upscaleTo`: the engine's declared map with every size the admin switched off removed (the module
  * doc above). `precise` is the value the engine is handed (`enginePreciseUpscale`), or null when it is
  * null or the settings could not be read: Prism and Prism Flash are then offered nowhere, Pulse and
@@ -178,12 +195,11 @@ export function upscaleToOffered(cs: PluginSupports["castSwap"] | undefined, pre
   for (const engine of UPSCALE_ENGINES) {
     const sizes = declared[engine]
     if (!sizes) continue
-    const base = isFlashEngine(engine) ? NODARO_MOTION_ENGINE_OF_FLASH[engine] : engine
     const kept: Partial<Record<VideoRemakeUpscaleSize, VideoRemakeUpscaleTarget>> = {}
     for (const size of UPSCALE_SIZES) {
       const target = sizes[size]
       if (target === undefined) continue
-      if (base === "nodaro-pulse" || prismRowOffers(precise, size, engine === "nodaro-prism-flash")) kept[size] = target
+      if (upscaleStepOffered(engine, size, precise)) kept[size] = target
     }
     if (Object.keys(kept).length > 0) out[engine] = kept
   }

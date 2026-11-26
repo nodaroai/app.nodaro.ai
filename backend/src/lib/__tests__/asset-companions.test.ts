@@ -53,6 +53,17 @@ describe("companionsForRow", () => {
     ).resolves.toEqual([{ key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000 }])
   })
 
+  it("records the same file under a delivered-resolution run's server-only key", async () => {
+    await expect(
+      companionsForRow(JOB, { __castSwapEngineVideoUrl: `https://r2.test.com/videos/${JOB}-engine.mp4` }, "video", PRIMARY, sizeOf),
+    ).resolves.toEqual([{ key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000 }])
+    // Named under both keys: recorded once.
+    const url = `https://r2.test.com/videos/${JOB}-engine.mp4`
+    await expect(companionsForRow(JOB, { engineVideoUrl: url, __castSwapEngineVideoUrl: url }, "video", PRIMARY, sizeOf)).resolves.toEqual([
+      { key: `videos/${JOB}-engine.mp4`, sizeBytes: 7000 },
+    ])
+  })
+
   it.each([
     `videos/../videos/${JOB}-engine.mp4`,
     `videos//${JOB}-engine.mp4`,

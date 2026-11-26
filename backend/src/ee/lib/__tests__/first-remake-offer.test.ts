@@ -6,7 +6,7 @@
  * supabase/tests/first-remake-offer.behavior.sql and
  * backend/scripts/verify-first-remake-offer-concurrency.mjs.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const h = vi.hoisted(() => ({
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
@@ -29,7 +29,11 @@ vi.mock("@/ee/billing/balance-cache.js", () => ({
 }))
 
 import Fastify from "fastify"
+import { _resetPluginSupportsForTests, setPluginSupports } from "../../../lib/private-plugins/supports-registry.js"
 import {
+  FIRST_REMAKE_ALLOWED_DELIVERED_RUNS,
+  FIRST_REMAKE_OPTION_LOCKED_MESSAGE,
+  FIRST_REMAKE_OPTION_LOCKED_MESSAGE_DELIVERED,
   FIRST_REMAKE_ALLOWED_RUNS,
   registerFirstRemakeEstimateHook,
   FIRST_REMAKE_OPTION_LOCKED,
@@ -104,6 +108,69 @@ describe("firstRemakeRunAllowed — the runs the offer covers", () => {
       { engine: "nodaro-prism", resolution: "480p", preview: true },
       { engine: "nodaro-pulse", resolution: "720p", preview: true },
     ])
+  })
+})
+
+describe("firstRemakeRunAllowed — a request read the new way (resolution = the size delivered)", () => {
+  const DELIVERS = { roleKinds: [], fixedReferences: true, fullQuality: true, resolutions: ["720p" as const], trendRun: true, upscaleChoice: true, deliveredResolution: true }
+  beforeEach(() => setPluginSupports({ castSwap: DELIVERS } as never))
+  afterEach(() => _resetPluginSupportsForTests())
+
+  it.each([
+    ["Prism preview, resolution left out (delivered at 720p)", { preview: true }],
+    ["Prism preview delivered at 720p", { preview: true, engine: "nodaro-prism", resolution: "720p" }],
+    ["Prism preview at 480p (a deployment that offers no step)", { preview: true, resolution: "480p" }],
+    ["Pulse preview at 720p", { preview: true, engine: "nodaro-pulse", resolution: "720p" }],
+    ["Pulse preview, resolution left out", { preview: true, engine: "nodaro-pulse" }],
+  ])("allows %s", (_label, body) => {
+    expect(firstRemakeRunAllowed(body)).toBe(true)
+  })
+
+  it.each([
+    ["Prism 1080p", { preview: true, resolution: "1080p" }],
+    ["Prism 4K", { preview: true, resolution: "4k" }],
+    ["Pulse 1080p", { preview: true, engine: "nodaro-pulse", resolution: "1080p" }],
+    ["Pulse 4K", { preview: true, engine: "nodaro-pulse", resolution: "4k" }],
+    ["a full-length Prism run at 720p", { resolution: "720p" }],
+  ])("refuses %s", (_label, body) => {
+    expect(firstRemakeRunAllowed(body)).toBe(false)
+  })
+
+  it("reads a body that still sends upscale, a draft and a trend run exactly as before", () => {
+    // Old mode: the engine's size. Prism 720p is a larger engine run, never covered; 480p is.
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", upscale: "next" })).toBe(false)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", upscale: "off" })).toBe(false)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "480p", upscale: "next" })).toBe(true)
+    expect(firstRemakeRunAllowed({ preview: true, upscale: "off" })).toBe(true)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", draft: true })).toBe(false)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "480p", draft: true })).toBe(true)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p", trendRun: { slug: "x" } })).toBe(false)
+  })
+
+  it("an engine without delivered sizes reads every body as before", () => {
+    _resetPluginSupportsForTests()
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "720p" })).toBe(false)
+    expect(firstRemakeRunAllowed({ preview: true, resolution: "480p" })).toBe(true)
+  })
+
+  it("the balance adds the covered runs by the size delivered, beside the engine's sizes", async () => {
+    status("available")
+    expect(await firstRemakeOfferForBalance(USER, undefined)).toEqual({ status: "available", allowed: FIRST_REMAKE_ALLOWED_RUNS, allowedDelivered: FIRST_REMAKE_ALLOWED_DELIVERED_RUNS })
+    expect(FIRST_REMAKE_ALLOWED_DELIVERED_RUNS).toEqual([
+      { engine: "nodaro-prism", resolution: "720p", preview: true },
+      { engine: "nodaro-pulse", resolution: "720p", preview: true },
+    ])
+    _resetPluginSupportsForTests()
+    expect(await firstRemakeOfferForBalance(USER, undefined)).toEqual({ status: "available", allowed: FIRST_REMAKE_ALLOWED_RUNS })
+  })
+
+  it("a refused run is told the covered sizes in the words of its own request", async () => {
+    status("available", 0)
+    const locked = await firstRemakeAdmit(runReq({ ...PRISM_PREVIEW, resolution: "1080p" }) as never, undefined, 500)
+    expect(locked).toMatchObject({ kind: "locked", body: { error: { code: FIRST_REMAKE_OPTION_LOCKED, message: FIRST_REMAKE_OPTION_LOCKED_MESSAGE_DELIVERED } } })
+    const old = await firstRemakeAdmit(runReq({ ...PRISM_PREVIEW, resolution: "1080p", upscale: "off" }) as never, undefined, 500)
+    expect(old).toMatchObject({ kind: "locked", body: { error: { message: FIRST_REMAKE_OPTION_LOCKED_MESSAGE } } })
+    expect(await firstRemakeAdmit(runReq({ ...PRISM_PREVIEW, resolution: "720p" }) as never, undefined, 500)).toEqual({ kind: "cover", cover: 500 })
   })
 })
 

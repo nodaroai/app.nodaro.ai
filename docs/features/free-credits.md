@@ -98,8 +98,8 @@ includes are on the [pricing page](https://app.nodaro.ai/pricing).
 
 Until an account buys anything (a free trial that ended unpaid does not
 count), its first Video Remake run is on us when its credits cannot cover
-it: a 4-second preview on Nodaro Prism at 480p or on
-Nodaro Pulse at 720p, with any roles, pictures, style or extra steps. The run
+it: a 4-second preview at 720p on Nodaro Prism or on
+Nodaro Pulse, with any roles, pictures, style or extra steps. The run
 shows its real price, with "Your first Remake: we cover what your credits
 don't (this once)" beside it. It runs, it is charged as any run, and the
 offer covers what your credits could not, so your balance ends at 0.

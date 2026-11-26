@@ -903,6 +903,7 @@
         "backend/src/lib/video-frame-fit.ts",
         "backend/src/lib/video-original-keys.ts",
         "backend/src/lib/video-output-length.ts",
+        "backend/src/lib/video-remake-delivered-resolution.ts",
         "backend/src/lib/video-remake-paths.ts",
         "backend/src/lib/video-remake-upscale-choice.ts",
         "backend/src/lib/video-request-norm.ts",

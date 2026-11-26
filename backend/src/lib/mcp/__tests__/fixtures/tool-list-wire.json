@@ -1,13 +1,13 @@
 {
   "cloud/every-scope": {
     "tools": 268,
-    "bytes": 582417,
-    "sha256": "53963a3ab13ca5a29db42de82e63a059dbc0523b90dfea74231c843836b4184e"
+    "bytes": 582377,
+    "sha256": "d836ba36fdefe5315c0e27646db9abe04bfacb641e785709456460ce5d891b6f"
   },
   "cloud/all": {
     "tools": 259,
-    "bytes": 572895,
-    "sha256": "510ddfefb0afb30ad463c3837bf8344a6e01e99f450199cb0771ee99eeb160e4"
+    "bytes": 572855,
+    "sha256": "fdab06b7c949d27728eaecfac3df051ce8f1f64f19b2089b3a0e256b8d73ff57"
   },
   "cloud/jobs": {
     "tools": 28,

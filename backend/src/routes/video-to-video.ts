@@ -40,6 +40,7 @@ import {
   videoRemakeQuoteAnswer,
   videoRemakeRunOf,
 } from "../lib/video-remake-engine-quote.js"
+import { VIDEO_REMAKE_DELIVERED_SIZES } from "../lib/video-remake-delivered-resolution.js"
 
 const SEEDANCE_EDIT_ONLY_LISTS = ["referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls"] as const
 
@@ -94,7 +95,8 @@ const VIDEO_TO_VIDEO_ROUTE = "/v1/video-to-video"
 const videoRemakeEngineBody = z.object({
   videoUrl: safeUrlSchema,
   prompt: z.string().trim().min(1, "prompt is required: say what to change in the clip").max(5000),
-  resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+  // The size delivered (4K included) where the engine delivers resolutions; which sizes an engine choice offers is its own to refuse.
+  resolution: z.enum(VIDEO_REMAKE_DELIVERED_SIZES).optional(),
   draft: z.boolean().optional(),
 })
 

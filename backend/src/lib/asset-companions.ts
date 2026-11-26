@@ -39,7 +39,11 @@ export const COMPANION_OUTPUT_FIELDS: ReadonlyArray<{
   readonly field: string
   /** The media type of the Library row it accompanies. */
   readonly of: "image" | "video" | "audio"
-}> = [{ field: "engineVideoUrl", of: "video" }]
+}> = [
+  { field: "engineVideoUrl", of: "video" },
+  // The same file of a run whose `resolution` is the size delivered, kept server-only (lib/video-remake-delivered-resolution.ts).
+  { field: "__castSwapEngineVideoUrl", of: "video" },
+]
 
 export interface AssetCompanion {
   readonly key: string

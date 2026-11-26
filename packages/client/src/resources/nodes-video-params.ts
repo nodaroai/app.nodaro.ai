@@ -1,6 +1,6 @@
 import type { VideoToVideoNodeProvider } from "@nodaro/shared/models"
 import type { GenerationSessionParams } from "./nodes.js"
-import type { VideoRemakeEngine, VideoRemakeEstimate, VideoRemakeParams } from "./cast-swap.js"
+import type { VideoRemakeEngine, VideoRemakeEstimate, VideoRemakeParams, VideoRemakeResolution } from "./cast-swap.js"
 
 /**
  * Typed request body for `nodes.run("video-to-video", …)` / `runAndWait` /
@@ -97,8 +97,8 @@ export interface VideoToVideoRemakeParams {
   prompt: string
   /** The Video Remake engine, by its public id. */
   provider: VideoRemakeEngine
-  /** Nodaro Prism: 480p (its default), 720p or 1080p. Nodaro Pulse: 720p (its default) or 1080p. */
-  resolution?: "480p" | "720p" | "1080p"
+  /** The size delivered (see {@link VideoRemakeResolution}): Nodaro Prism and Nodaro Pulse 720p (the default), 1080p or 4k. */
+  resolution?: VideoRemakeResolution
   /** Nodaro Prism only: a 480p draft that Full Quality can finish at 1080p. */
   draft?: boolean
   [k: string]: unknown

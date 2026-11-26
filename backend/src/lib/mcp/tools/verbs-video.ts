@@ -60,6 +60,7 @@ import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 import { videoRemakeQuote, videoRemakeRefusal, type VideoRemakeInstructionRun } from "./cast-swap.js"
+import { VIDEO_REMAKE_DELIVERED_SIZES } from "../../video-remake-delivered-resolution.js"
 import { MOTION_TRANSFER_REMAKE_POINTER, RECAST_POINTER, recastOffered, videoRemakeOffered } from "./_video-lanes.js"
 
 // Derive video model enums from MODEL_CATALOG. `includeHidden: true` keeps
@@ -1684,6 +1685,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   // surface (the route, the node and the SDK keep that default everywhere).
   const remakeEngines = videoRemakeOffered(session) ? NODARO_MOTION_ENGINES : []
   const REMAKE_ENGINE_WHEN_NO_MODEL: (typeof NODARO_MOTION_ENGINES)[number] = "nodaro-prism"
+  // The sizes this tool's own models take; Video Remake's engines also deliver 4K, listed only where they are offered.
+  const V2V_OWN_RESOLUTIONS: readonly ("480p" | "720p" | "1080p" | "4k")[] = ["480p", "720p", "1080p"]
   const DIRECT_EDIT_INSTEAD = 'To run an instruction edit at once instead, call modify_video again with model: "seedance-2-5" (or another edit model).'
   server.registerTool(
     "modify_video",
@@ -1739,7 +1742,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe(`seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? ", nodaro-prism (480p default) / nodaro-pulse (720p default, or 1080p)" : ""}.`),
+        resolution: z.enum(remakeEngines.length ? VIDEO_REMAKE_DELIVERED_SIZES : V2V_OWN_RESOLUTIONS).optional().describe(`seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? "; nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k" : ""}.`),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
@@ -1842,6 +1845,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         // The estimate refused it (the clip's length, the prompt's): the refusal, and the way on.
         if (answer.isError && instead) return { ...answer, content: answer.content.map((c, i) => (i === 0 ? { ...c, text: `${c.text}${instead}` } : c)) }
         return answer
+      }
+      // 4K is a size Video Remake's engines deliver; no model of this tool's own renders it.
+      if (args.resolution === "4k") {
+        return errorResult(400, JSON.stringify({ error: { code: "validation_error", message: "resolution 4k is offered on nodaro-prism and nodaro-pulse only." } }))
       }
       const provider = videoToVideoProviderOf(args.model)
       // Seedance edits a REFERENCE video (no v2v endpoint): dispatch through the

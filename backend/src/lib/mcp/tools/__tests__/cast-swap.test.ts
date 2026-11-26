@@ -1119,75 +1119,66 @@ describe("video_remake: the intent check (check_intent) and the run's intent", (
   })
 })
 
-describe("video_remake: the upscale choice", () => {
+describe("video_remake: resolution is the size delivered", () => {
   afterEach(() => _resetPluginSupportsForTests())
-  const run = { statusCode: 202, body: { jobId: "job-up" } }
+  const run = { statusCode: 202, body: { jobId: "job-res" } }
 
-  it("sends upscale to the quote and the run only where the loaded engine takes the choice", async () => {
-    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
-    for (const upscale of ["off", "next"] as const) {
-      const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake": run })
-      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale })
-      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale, confirm: true })
-      expect(calls.map((c) => (c.payload as { upscale?: unknown }).upscale), upscale).toEqual([upscale, upscale])
-    }
+  it("lists no upscale argument, and describes resolution as the size delivered, 4K included", async () => {
+    const { fastify } = stubFastify({})
+    const tool = (await listTools(serverWith(fastify))).find((t) => t.name === "video_remake")!
+    const properties = (tool.inputSchema as { properties: Record<string, { description?: string; enum?: string[] }> }).properties
+    expect(Object.keys(properties)).not.toContain("upscale")
+    expect(properties.resolution!.enum).toEqual(["480p", "720p", "1080p", "4k"])
+    expect(properties.resolution!.description).toContain("The size delivered")
+    expect(JSON.stringify(tool).toLowerCase()).not.toContain("upscale")
   })
 
-  it("drops it, quote and run alike, where the engine does not take it (an engine from before it, or a deployment that has not turned it on)", async () => {
-    for (const castSwap of [undefined, {}, { upscaleChoice: false }]) {
+  it("never sends upscale, quote and run alike, whatever the engine declares and an older client sends", async () => {
+    for (const castSwap of [undefined, { upscaleChoice: true }, { upscaleChoice: true, deliveredResolution: true }]) {
       _resetPluginSupportsForTests()
       if (castSwap) setPluginSupports({ castSwap: castSwap as never })
       const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE }, "/v1/video-remake": run })
-      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "next" })
-      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "next", confirm: true })
-      expect(calls.map((c) => c.payload), JSON.stringify(castSwap)).toEqual([BODY, BODY])
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "next", resolution: "4k" })
+      await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "off", resolution: "4k", confirm: true })
+      expect(calls.map((c) => c.payload), JSON.stringify(castSwap)).toEqual([{ ...BODY, resolution: "4k" }, { ...BODY, resolution: "4k" }])
     }
   })
 
-  it("refuses a value it does not list", async () => {
+  it("answers the size delivered and names it, with no word of how it is made", async () => {
+    setPluginSupports({ castSwap: { upscaleChoice: true, deliveredResolution: true } as never })
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "4k" }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, resolution: "4k" })
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 15, references: 0 }, settlesLower: false, resolution: "4k", confirmed: false })
+    expect(res.content[0]!.text).toContain("It is delivered at 4K.")
+    expect(String(res.content[0]?.text).toLowerCase()).not.toContain("upscale")
+  })
+
+  it("names the size an engine that answers the earlier fields delivers, and keeps none of those fields", async () => {
     setPluginSupports({ castSwap: { upscaleChoice: true } as never })
-    const { fastify, calls } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: QUOTE } })
-    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "1080p" })
+    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
+    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
+    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0 }, settlesLower: false, resolution: "720p", confirmed: false })
+    expect(res.content[0]!.text).toContain("It is delivered at 720p.")
+    expect(String(res.content[0]?.text).toLowerCase()).not.toContain("upscale")
+  })
+
+  it("passes the route's refusal of a size it does not offer through", async () => {
+    setPluginSupports({ castSwap: { deliveredResolution: true } as never })
+    const refusal = { error: { code: "resolution_not_offered", message: "Nodaro Prism offers 720p, 1080p or 4K here.", offered: ["720p", "1080p", "4k"] } }
+    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 400, body: refusal } })
+    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, resolution: "480p" })
     expect(res.isError).toBe(true)
-    expect(calls).toEqual([])
+    expect(res.content[0]!.text).toContain("resolution_not_offered")
   })
 
-  it("answers the engine's size, the delivered size, the choice and the offer, and says the upscale part", async () => {
-    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
-    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true }
-    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
-    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
-    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "480p", outputResolution: "720p", upscale: "next", upscaleOffered: true, confirmed: false })
-    expect(res.content[0]!.text).toContain("delivered upscaled to 720p, which adds 8 credits")
-    expect(res.content[0]!.text).toContain('upscale: "off" keeps 480p')
-  })
-
-  it("says a 1080p run is delivered at 4K, and keeps \"4k\" as the engine spells it", async () => {
-    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
-    const quote = { totalCredits: 20, breakdown: { base: 5, motion: 7, references: 0, upscale: 8 }, settlesLower: false, resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true }
-    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: quote } })
-    const res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, resolution: "1080p" })
-    expect(res.structuredContent).toMatchObject({ resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true })
-    expect(res.content[0]!.text).toContain("delivered upscaled to 4K, which adds 8 credits")
-    expect(res.content[0]!.text).toContain('upscale: "off" keeps 1080p')
-  })
-
-  it("says the choice is offered on an \"off\" quote where it is, and nothing where it is not", async () => {
-    setPluginSupports({ castSwap: { upscaleChoice: true } as never })
-    const off = { ...QUOTE, resolution: "720p", outputResolution: "720p", upscale: "off", upscaleOffered: true }
-    let { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: off } })
-    let res = await callTool(serverWith(fastify), "video_remake", { ...ARGS, upscale: "off" })
-    expect(res.content[0]!.text).toContain('upscale: "next"')
-    ;({ fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: { ...off, resolution: "1080p", outputResolution: "1080p", upscaleOffered: false } } }))
-    res = await callTool(serverWith(fastify), "video_remake", ARGS)
-    expect(res.content[0]!.text).not.toContain("upscale")
-    expect(res.structuredContent).toMatchObject({ resolution: "1080p", outputResolution: "1080p", upscale: "off", upscaleOffered: false })
-  })
-
-  it("keeps only the contract's values of the fields, and adds none for an engine that answers none", async () => {
-    const odd = { ...QUOTE, resolution: "4k", outputResolution: 720, upscale: "applied", upscaleOffered: "yes" }
-    const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: odd } })
-    const res = await callTool(serverWith(fastify), "video_remake", ARGS)
-    expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
+  it("keeps only a size of the contract, and adds none for an engine that answers none", async () => {
+    for (const odd of [{ ...QUOTE, resolution: "8k", outputResolution: 720 }, QUOTE]) {
+      const { fastify } = stubFastify({ "/v1/video-remake/estimate": { statusCode: 200, body: odd } })
+      const res = await callTool(serverWith(fastify), "video_remake", ARGS)
+      expect(res.structuredContent).toEqual({ ...PRO, totalCredits: 12, breakdown: { base: 5, references: 0, motion: 7 }, settlesLower: false, confirmed: false })
+      expect(res.content[0]!.text).not.toContain("delivered at")
+    }
   })
 })

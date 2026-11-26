@@ -49,6 +49,8 @@ export const JOB_OUTPUT_URL_PATHS = [
   // row-less, a companion recorded on the result's Library row
   // (lib/asset-companions.ts).
   "output_data->>engineVideoUrl",
+  // The same file of a run whose `resolution` is the size delivered: a server-only key there.
+  "output_data->>__castSwapEngineVideoUrl",
   // A video's kept original beside its preview (lib/video-result-store.ts):
   // a Library row saved from it must not take it from the job that names it.
   "output_data->>originalVideoUrl",

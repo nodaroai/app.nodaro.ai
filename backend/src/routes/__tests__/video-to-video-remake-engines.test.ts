@@ -221,6 +221,22 @@ describe("POST /v1/video-to-video — Video Remake's engines are quoted, never r
     expect(state.estimates[1]!.body.engine).toBe("kling-4")
   })
 
+  it("takes 4K as the size delivered: sent as asked, never with an upscale key, and answered as the engine answers it", async () => {
+    state.estimate = { status: 200, body: { ...PULSE_ESTIMATE, resolution: "4k" } }
+    const res = await run({ provider: "nodaro-pulse", resolution: "4k" })
+    expect(res.statusCode).toBe(200)
+    expect(state.estimates.at(-1)!.body).toEqual({ videoUrl: CLIP, roles: [], postPrompt: "make it night", engine: "kling-4", resolution: "4k" })
+    expect(res.json().videoRemake.quote.resolution).toBe("4k")
+    expect(res.json().videoRemake.run.body).toEqual({ videoUrl: CLIP, roles: [], postPrompt: "make it night", engine: "nodaro-pulse", resolution: "4k" })
+    // A size the engine choice does not offer is the engine's refusal, as it gives it.
+    const refusal = { error: { code: "resolution_not_offered", message: "Nodaro Prism offers 720p, 1080p or 4K here.", offered: ["720p", "1080p", "4k"] } }
+    state.estimate = { status: 400, body: refusal }
+    const refused = await run({ provider: "nodaro-prism", resolution: "480p" })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json()).toEqual(refusal)
+    expectNothingStarted()
+  })
+
   it("an older engine's key names are answered as the neutral ones", async () => {
     state.estimate = { status: 200, body: { data: { totalCredits: 500, breakdown: { castSwap: 40, references: 0, seedance: 460 }, maskingCredits: 30, settlesLower: true } } }
     const { videoRemake } = (await run({ provider: "nodaro-prism" })).json()
