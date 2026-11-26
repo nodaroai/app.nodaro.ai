@@ -112,7 +112,7 @@ describe("accessibility statement page", () => {
   it("has the required parts: level, what was done, what is not accessible, how to report, the date", () => {
     renderPage()
     expect(screen.getByRole("heading", { level: 1, name: "הצהרת נגישות" })).toBeInTheDocument()
-    for (const name of ["רמת הנגישות", "מה הונגש", "תפריט הנגישות", "רכיבים שאינם נגישים במלואם", "נתקלתם בבעיית נגישות?"]) {
+    for (const name of ["רמת הנגישות", "מה הונגש", "תפריט הנגישות", "תכנים שאינם נגישים במלואם", "נתקלתם בבעיית נגישות?"]) {
       expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument()
     }
     expect(screen.getByText(/ת״י 5568/)).toBeInTheDocument()

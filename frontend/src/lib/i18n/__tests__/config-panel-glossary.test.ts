@@ -8,8 +8,10 @@ import { he } from "../he"
 /**
  * Glossary guard for the Hebrew strings the EDITOR renders (config panels,
  * node cards, presets, cost drawer, and the toasts of the hooks behind
- * them): node = רכיב (never צומת), reference =
- * ייחוס (never הפניה — a cross-reference/link), "(optional)" = (אופציונלי).
+ * them): node = רכיב (never צומת), a media reference =
+ * רפרנס (never הפניה — a cross-reference/link), "(optional)" = (אופציונלי).
+ * The whole-dictionary rules (typography, the owner's terms) are in
+ * he-dictionary.test.ts.
  * A key from another page (executions table, marketplace) may legitimately
  * keep its own term, so only keys actually rendered by editor components are
  * checked — found by scanning their source for the quoted key.
@@ -36,7 +38,7 @@ for (const f of [...walk(path.join(SRC, "components/editor")), ...walk(path.join
 const RULES: ReadonlyArray<{ name: string; bad: RegExp; when?: (enValue: string) => boolean }> = [
   { name: "node → רכיב", bad: /צומת|צמתים/ },
   // The NOUN only (הפניה / הפניות, with a ל- or ה- prefix); הפניתם is the verb "you referred", fine.
-  { name: "reference → ייחוס", bad: /(?:^|[\s,(—-])[להו]?הפני(?:ה|ות)\b/, when: (e) => /referen/i.test(e) },
+  { name: "reference → רפרנס", bad: /(?:^|[\s,(—-])[להו]?הפני(?:ה|ות)\b/, when: (e) => /referen/i.test(e) },
   { name: "(optional) → (אופציונלי)", bad: /\(רשות\)|לא חובה/ },
 ]
 

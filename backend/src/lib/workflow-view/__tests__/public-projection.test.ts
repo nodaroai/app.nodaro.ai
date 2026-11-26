@@ -225,8 +225,8 @@ describe("the public projection", () => {
     const html = viewCardHtml(content, { cardUrl: "https://app.example/view/x", defaultImage: null, indexable: true }, text).html
     expectNoSecrets("the card", JSON.stringify({ content, text }) + html)
     expect(content.picture).toEqual({ kind: "grid", sources: ["https://cdn.example/images/hero.png", "https://cdn.example/thumbnails/v.jpg"] })
-    expect(content.title).toBe("Astronaut mockup · זרימת עבודה")
-    expect(content.description).toBe("זרימת עבודה ב-9 שלבים שנוצרה עם Nodaro")
+    expect(content.title).toBe("Astronaut mockup · תהליך עבודה")
+    expect(content.description).toBe("תהליך עבודה ב־9 שלבים שנוצר עם Nodaro")
     expect(text).toContain("Made for the article")
   })
 

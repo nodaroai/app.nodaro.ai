@@ -2,11 +2,11 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   "y2k": {
-    description: "פופ טכנולוגי של סוף שנות ה-90 ותחילת שנות ה-2000",
+    description: "פופ טכנולוגי של סוף שנות ה־90 ותחילת שנות ה־2000",
   },
   "cottagecore": {
     label: "Cottagecore",
-    description: "כפריות פסטורלית בעבודת יד",
+    description: "חיים כפריים פסטורליים ואפייה ביתית",
   },
   "dark-academia": {
     label: "אקדמיה אפלה",
@@ -14,19 +14,19 @@ const map: LocaleCatalogMap = {
   },
   "light-academia": {
     label: "אקדמיה בהירה",
-    description: "למדנות בסגנון אייבי-ליג שטופת שמש",
+    description: "למדנות בסגנון אייבי־ליג שטופת שמש",
   },
   "techwear": {
     label: "Techwear / Gorpcore",
-    description: "ציוד טקטי אורבני בעל ביצועים גבוהים",
+    description: "ביגוד אורבני טקטי וטכני",
   },
   "old-money": {
     label: "Old Money / Preppy",
-    description: "יוקרה שקטה במורשת preppy",
+    description: "יוקרה שקטה בסגנון preppy קלאסי",
   },
   "streetwear": {
     label: "Streetwear",
-    description: "סטייל אורבני קז'ואל של סניקרס והודיז",
+    description: "סטייל אורבני קז׳ואל של סניקרס והודיז",
   },
   "coquette": {
     label: "Coquette",
@@ -38,19 +38,19 @@ const map: LocaleCatalogMap = {
   },
   "goblincore": {
     label: "Goblincore",
-    description: "שמחת בר פראית של טחב ובוץ",
+    description: "הנאה פראית מהטבע, מטחב ומבוץ",
   },
   "normcore": {
     label: "Normcore",
-    description: "בסיסיים אנטי-אופנתיים",
+    description: "פריטי בסיס פשוטים ואנטי־אופנתיים",
   },
   "balletcore": {
     label: "Balletcore",
-    description: "חן ורוד רך של חזרת בלט",
+    description: "חן של חזרת בלט בוורוד רך",
   },
   "e-girl": {
     label: "E-Girl",
-    description: "אינטרנט webcore עם אייליינר וסומק",
+    description: "מראה אינטרנטי webcore עם אייליינר וסומק",
   },
   "soft-girl": {
     label: "Soft Girl",
@@ -65,7 +65,7 @@ const map: LocaleCatalogMap = {
   },
   "womancore": {
     label: "Womancore",
-    description: "נשיות בוגרת בטוחה ובלתי מסובכת",
+    description: "נשיות בוגרת, בטוחה ולא מתאמצת",
   },
   "angelcore": {
     label: "Angelcore",
@@ -73,24 +73,24 @@ const map: LocaleCatalogMap = {
   },
   "hikecore": {
     label: "Hikecore",
-    description: "אלגנטיות הררית ליום טיול",
+    description: "שיק של יום טיול בהרים",
   },
   "mote-kei": {
     description: "נשיות יפנית שמרנית וחמודה",
   },
   "kombuchapunk": {
     label: "Kombuchapunk",
-    description: "תרבות-נגד של רווחה מותססת",
+    description: "תרבות־נגד של וולנס ותסיסה ביתית",
   },
   "chinapunk": {
     label: "Chinapunk",
     description: "גלאם סייבר Y2K של הונג קונג",
   },
   "karencore": {
-    description: "כוח Karen פרברי עם תספורת בוב",
+    description: "נוכחות תקיפה של Karen מהפרברים עם תספורת בוב חדה",
   },
   "candycore": {
-    description: "רוויה בצבעי קשת מסוכרים",
+    description: "צבעי קשת רוויים כמו בהיי של סוכר",
   },
   "babycore": {
     label: "Babycore",
@@ -98,15 +98,15 @@ const map: LocaleCatalogMap = {
   },
   "catcore": {
     label: "Catcore",
-    description: "ביתי נעים עם אוזני חתול",
+    description: "נעימות ביתית עם אוזני חתול",
   },
   "minimalism": {
     label: "מינימליזם",
-    description: "ריסון של יוקרה שקטה ומזוקקת",
+    description: "יוקרה שקטה, מזוקקת ומאופקת",
   },
   "maximalism": {
     label: "מקסימליזם",
-    description: "תבניות מתנגשות של ״יותר זה יותר״",
+    description: "הדפסים מתנגשים ברוח \"יותר זה יותר\"",
   },
   "avant-garde": {
     label: "אוונגרד",
@@ -114,7 +114,7 @@ const map: LocaleCatalogMap = {
   },
   "old-hollywood-glam": {
     label: "זוהר הוליווד הישנה",
-    description: "זוהר מסך כסף של שנות ה-40",
+    description: "הזוהר של מסך הכסף בשנות ה־40",
   },
   "main-character-energy": {
     label: "אנרגיית דמות ראשית",
@@ -125,44 +125,44 @@ const map: LocaleCatalogMap = {
     description: "שלווה חמה, עדינה וללא מאמץ",
   },
   "casual-lived-in": {
-    label: "קז'ואל / יומיומי",
+    label: "קז׳ואל / יומיומי",
     description: "יומיומי, משופשף ולא מסוגנן",
   },
   "effortless-cool": {
-    label: "Cool ללא מאמץ",
-    description: "טבעיות off-duty בסגנון French-girl",
+    label: "מגניבות בלי מאמץ",
+    description: "קלילות טבעית של בחורה צרפתייה ביום חופש",
   },
   "retro-90s": {
-    label: "רטרו שנות ה-90",
-    description: "שילוב גראנג' וקניון של שנות ה-90",
+    label: "רטרו שנות ה־90",
+    description: "שילוב גראנג' וקניון של שנות ה־90",
   },
   "weirdcore": {
     label: "Weirdcore",
-    description: "חרדת מרחב לימינלי סוריאליסטי, glitch + נוסטלגיה",
+    description: "אי־נוחות סוריאליסטית של מרחבים לימינליים",
   },
   "dreamcore": {
     label: "Dreamcore",
-    description: "סוריאליזם דמוי חלום בפוקוס רך, פסטל סוכרייתי",
+    description: "שלווה סוריאליסטית ורכה כמו בחלום",
   },
   "traumacore": {
     label: "Traumacore",
-    description: "ילדות נוסטלגית מעוותת, עריכות מלנכוליות",
+    description: "קולאז׳ מעוות של ילדות נוסטלגית",
   },
   "baddie": {
     label: "Baddie",
-    description: "אסתטיקה טרנדית מסוגננת ובוטחת, גבות חדות, עגילי חישוק",
+    description: "ביטחון עצמי, סטייל מוקפד והתמצאות בטרנדים",
   },
   "alt-girl": {
-    label: "Alt-Girl",
-    description: "תערובת תת-תרבות אלט, שיער צבוע, שרשראות, איפור מרוח",
+    label: "אלט גירל",
+    description: "סגנון אלט גירל, בין גראנג׳ לאימו",
   },
   "blokecore": {
     label: "Blokecore",
-    description: "חולצת כדורגל + adidas + dadcore קז'ואל גברי",
+    description: "אופנת גברים בסגנון dadcore עם חולצת כדורגל",
   },
   "y2k-rave": {
     label: "Y2K Rave",
-    description: "Decora יפני של club-kid, Rave פלורסנטי בניאון",
+    description: "סגנון Decora יפני של ילדי רייב, בצבעי ניאון",
   },
 }
 

@@ -18,7 +18,7 @@ describe("picker tab labels", () => {
 
   it("resolves a tab label in the given locale", () => {
     expect(pickerTabLabel("all", "en")).toBe("All")
-    expect(pickerTabLabel("all", "he")).toBe("הכל")
+    expect(pickerTabLabel("all", "he")).toBe("הכול")
   })
 })
 
@@ -71,8 +71,8 @@ describe("pickerSectionLabel", () => {
   })
 
   it("composes TAB · FAMILY from the chrome tab name and the node-group table in Hebrew", () => {
-    expect(pickerSectionLabel(prefixed, "he")).toBe("תמונה · העלאה משלכם")
-    expect(pickerSectionLabel(bare, "he")).toBe("העלאה משלכם")
+    expect(pickerSectionLabel(prefixed, "he")).toBe("תמונה · חומרים משלכם")
+    expect(pickerSectionLabel(bare, "he")).toBe("חומרים משלכם")
   })
 
   it("prefixes Creative Controls families on the All tab", () => {

@@ -4,16 +4,16 @@ import type { PresetCopy } from "./preset-content.he"
 
 export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   "generate-image/thumb-versus-battle": {
-    name: "קרב מול",
-    description: "סוקרי טכנולוגיה, מבחני אוכל, השוואות מוצרים. 'X מול Y' כל שבוע.",
+    name: "קרב ראש בראש",
+    description: "סוקרי טכנולוגיה, מבחני אוכל, השוואות מוצרים. \"X מול Y\" כל שבוע.",
   },
   "generate-image/thumb-hero-object": {
     name: "מוצר במרכז",
-    description: "טכנולוגיה, גאדג'טים, כלי מטבח, DIY. המוצר לבד, גדול ונקי.",
+    description: "טכנולוגיה, גאדג׳טים, כלי מטבח, DIY. המוצר לבד, גדול ונקי.",
   },
   "generate-image/thumb-unboxing": {
     name: "אנבוקסינג",
-    description: "ערוצי אנבוקסינג וסוקרי גאדג'טים. ידיים, קופסה והלם.",
+    description: "ערוצי אנבוקסינג וסוקרי גאדג׳טים. ידיים, קופסה והלם.",
   },
   "generate-image/thumb-tech-glitch": {
     name: "גליץ' טכנולוגי",
@@ -25,15 +25,15 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-ai-tool-reveal": {
     name: "חשיפת כלי AI",
-    description: "משפיעני AI. 'ה-AI החדש הזה עושה X' כל יום.",
+    description: "משפיעני AI. \"ה־AI החדש הזה עושה X\" כל יום.",
   },
   "generate-image/thumb-coding-tutorial": {
     name: "מדריך קוד",
-    description: "ערוצי תכנות. עורך קוד, תג שפה, 'ב-10 דקות'.",
+    description: "ערוצי תכנות. עורך קוד, תג שפה, \"ב־10 דקות\".",
   },
   "generate-image/thumb-ai-feature-grid": {
-    name: "רשת פיצ'רים של AI",
-    description: "מחנכי AI: 'כל פיצ'ר חדש מוסבר'. שורת כרטיסי אייקונים.",
+    name: "רשת פיצ׳רים של AI",
+    description: "מדריכי AI: \"כל פיצ׳ר חדש מוסבר\". היום: שעות ב־Figma על הכנת כרטיסי אייקונים.",
   },
   "generate-image/thumb-ai-os-icons": {
     name: "AI OS לעסק",
@@ -41,14 +41,14 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-new-model-drop": {
     name: "מודל חדש יצא",
-    description: "ערוצי חדשות AI: 'מודל X שוחרר היום, בדקנו'. יומי.",
+    description: "ערוצי חדשות AI: \"מודל X שוחרר היום, בדקנו\". יומי.",
   },
   "generate-image/thumb-model-vs-model": {
     name: "מודל מול מודל",
-    description: "סוקרי AI שמשווים שני מודלי תמונה או וידאו. 'מי יותר טוב?'",
+    description: "סוקרי AI שמשווים שני מודלי תמונה או וידאו. \"מי יותר טוב?\"",
   },
   "generate-image/thumb-node-diagram": {
-    name: "תרשים צמתים",
+    name: "תרשים זרימה",
     description: "ערוצי אוטומציה וסוכני AI: אדם אחד במרכז תרשים זרימה נקי.",
   },
   "generate-image/thumb-finance-shock": {
@@ -57,15 +57,15 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-earnings-proof": {
     name: "הוכחת הכנסה",
-    description: "יוצרי 'איך להרוויח אונליין'. צילום מסך של דשבורד, הצבעה גאה.",
+    description: "יוצרי \"איך להרוויח אונליין\". צילום מסך של דשבורד, הצבעה גאה.",
   },
   "generate-image/thumb-analytics-growth": {
     name: "צמיחה בגרף",
-    description: "יוצרי צמיחת ערוץ ושיווק. קו רקטה אחד, מספר גדול אחד.",
+    description: "יוצרי תוכן על צמיחת ערוצים ושיווק. קו שמזנק למעלה, מספר גדול אחד.",
   },
   "generate-image/thumb-crypto-pump": {
     name: "פאמפ קריפטו",
-    description: "יוטיוברים של קריפטו. כיסוי יומי: מטבע, רקטה ומספר.",
+    description: "יוטיוברים של קריפטו. קאבר יומי: מטבע, רקטה ומספר.",
   },
   "generate-image/thumb-stock-call": {
     name: "המלצת מניה",
@@ -77,11 +77,11 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-founder-story": {
     name: "סיפור של מייסד",
-    description: "יזמים וערוצי סטארטאפ. משרד, מספר, 'איך בניתי'.",
+    description: "יזמים וערוצי סטארטאפ. משרד, מספר, \"איך בניתי\".",
   },
   "generate-image/thumb-course-launch": {
     name: "השקת קורס",
-    description: "מוכרי קורסים ומאמנים. מראה של וובינר, לפטופ, 'הדרכה חינם'.",
+    description: "מוכרי קורסים ומאמנים. מראה של וובינר, לפטופ, \"הדרכה חינם\".",
   },
   "generate-image/thumb-motivation": {
     name: "מוטיבציה",
@@ -89,7 +89,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-stage-talk": {
     name: "הרצאה על במה",
-    description: "דוברים בכנסים ומייסדי SaaS שמעלים הרצאות.",
+    description: "מרצים בכנסים ומייסדי SaaS שמשתפים את ההרצאות שלהם.",
   },
   "generate-image/thumb-screen-portals": {
     name: "מסכים מרחפים",
@@ -97,7 +97,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-copy-me-arrow": {
     name: "חץ של טרנספורמציה",
-    description: "ערוצי יזמות: מצללית אנונימית למייסדת בטוחה, חץ צהוב אחד גדול.",
+    description: "ערוצי יזמות: מצללית אנונימית למייסדת בטוחה בעצמה, עם חץ צהוב גדול אחד.",
   },
   "generate-image/thumb-challenge-timer": {
     name: "אתגר עם טיימר",
@@ -125,7 +125,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-fitness-transform": {
     name: "שינוי גוף",
-    description: "מאמני כושר וערוצי טרנספורמציה. פיצול גוף + ספירת ימים.",
+    description: "מאמני כושר וערוצי טרנספורמציה. הגוף לפני ואחרי + ספירת ימים.",
   },
   "generate-image/thumb-beauty-makeup": {
     name: "איפור",
@@ -133,7 +133,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-diet-plan": {
     name: "תוכנית תזונה",
-    description: "דיאטניות ומאמני תזונה. צלחת מפוצלת, קלוריות, 'מה אני אוכל'.",
+    description: "דיאטניות ומאמני תזונה. צלחת מפוצלת, קלוריות, \"מה אני אוכל\".",
   },
   "generate-image/thumb-doctor-health": {
     name: "רופא מסביר",
@@ -141,7 +141,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-travel-wanderlust": {
     name: "טיולים",
-    description: "ולוגרים של טיולים. מקום אפי, אדם קטן, טענה אחת.",
+    description: "ולוגרים של טיולים. מקום אפי, אדם קטן, אמירה אחת.",
   },
   "generate-image/thumb-map-pin": {
     name: "סיכה על מפה",
@@ -149,7 +149,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-food-feast": {
     name: "סעודה",
-    description: "ולוגרים של אוכל וערוצי מתכונים. אוכל מקרוב, פנים רעבות, מחיר או טענה.",
+    description: "ולוגרים של אוכל וערוצי מתכונים. אוכל מקרוב, פנים רעבות, מחיר או אמירה.",
   },
   "generate-image/thumb-vlog-bright": {
     name: "ולוג שמשי",
@@ -157,11 +157,11 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-science-explainer": {
     name: "הסבר מדעי",
-    description: "ערוצי מדע וחינוך. אובייקט גדול אחד, טענת וואו אחת.",
+    description: "ערוצי מדע וחינוך. אובייקט גדול אחד, אמירת וואו אחת.",
   },
   "generate-image/thumb-real-estate-agent": {
     name: "סוכן נדל\"ן",
-    description: "סוכנים וערוצי סיורי בתים. בית, מחיר, 'בפנים'.",
+    description: "סוכנים וערוצי סיורי בתים. בית, מחיר, \"בפנים\".",
   },
   "generate-image/thumb-legal-explainer": {
     name: "עורך דין מסביר",
@@ -169,14 +169,14 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-language-learning": {
     name: "לימוד שפה",
-    description: "מורים לשפות. דגלים, בועת דיבור, '30 יום'.",
+    description: "מורים לשפות. דגלים, בועת דיבור, \"30 יום\".",
   },
   "generate-image/thumb-docu-expose": {
     name: "חשיפה תיעודית",
     description: "ערוצי סיפורים אמיתיים ותחקירים. עיניים מושחרות, מראה של עיתון.",
   },
   "generate-image/thumb-true-crime-board": {
-    name: "לוח פשע",
+    name: "לוח חקירה",
     description: "ערוצי פשע אמיתי. לוח שעם, חוט אדום, תמונות.",
   },
   "generate-image/thumb-breaking-news": {
@@ -201,22 +201,22 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-shocked-reaction": {
     name: "תגובת הלם",
-    description: "ערוצי תגובות ובידור. הכיסוי הקלאסי של 'אין מצב'.",
+    description: "ערוצי תגובות ובידור. הקאבר הקלאסי של \"אין מצב\".",
   },
   "generate-image/thumb-mystery-blur": {
     name: "טשטוש מסתורי",
-    description: "ערוצי חשיפה והדלפות. פער סקרנות זה כל הקליק.",
+    description: "ערוצי חשיפה והדלפות. הסקרנות היא מה שמביא את הקליק.",
   },
   "generate-image/thumb-listicle-number": {
     name: "מספר ענק",
-    description: "ערוצי טופ-10 וטיפים. המספר הענק הוא ההוק.",
+    description: "ערוצי טופ־10 וטיפים. המספר הענק הוא ההוק.",
   },
   "generate-image/thumb-red-x-green-check": {
     name: "נכון ולא נכון",
     description: "ערוצי הדרכה ועצות: ככה כן, ככה לא.",
   },
   "generate-image/thumb-playful-cast": {
-    name: "צוות משועשע",
+    name: "חבורה שובבה",
     description: "יוצרי אנימציה ותוכן לילדים: מנחה מוקף בדמויות תלת־ממד מקוריות.",
   },
   "generate-image/thumb-pets": {
@@ -224,12 +224,12 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "ערוצי חיות וסיפורי חילוץ.",
   },
   "generate-image/thumb-sports-highlight": {
-    name: "הייליט ספורט",
-    description: "ערוצי ספורט. פעולה קפואה, מילה אחת.",
+    name: "רגע שיא בספורט",
+    description: "ערוצי ספורט. אקשן מוקפא, מילה אחת.",
   },
   "generate-image/thumb-parenting": {
     name: "הורות",
-    description: "יוצרי משפחה והורות. הורה + ילד, כאוס שמזדהים איתו.",
+    description: "יוצרי תוכן על משפחה והורות. הורה + ילד, כאוס שמזדהים איתו.",
   },
   "generate-image/thumb-swiss-collage": {
     name: "קולאז' שוויצרי",
@@ -237,15 +237,15 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/thumb-editorial-type": {
     name: "טיפוגרפיה עיתונאית",
-    description: "אופנה ותרבות: פנים דרך מילה אחת ענקית, איפוק של פוסטר קמפיין.",
+    description: "אופנה ותרבות: פנים שמציצות מתוך מילה ענקית אחת, בסגנון מאופק של פוסטר קמפיין.",
   },
   "generate-image/thumb-reel-cover-bold": {
     name: "שתי מילים בערפל",
-    description: "ערוצי מוטיבציה: שתי מילים ענקיות בערפל ודמות קטנה לקנה מידה.",
+    description: "ערוצי מוטיבציה: שתי מילים ענקיות בערפל ודמות קטנה שממחישה את הגודל.",
   },
   "generate-image/short-pov-hook": {
     name: "הוק POV",
-    description: "יוצרי טיקטוק: פורמט ה-POV, ההוק הכי מועתק באפליקציה.",
+    description: "יוצרי טיקטוק: פורמט ה־POV, ההוק הכי מועתק באפליקציה.",
   },
   "generate-image/short-morning-routine": {
     name: "שגרת בוקר",
@@ -261,7 +261,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/short-quick-recipe": {
     name: "מתכון מהיר",
-    description: "יוצרי אוכל: מחבת מלמעלה, מזלג, טענת זמן.",
+    description: "יוצרי אוכל: מחבת מלמעלה, מזלג, הבטחת זמן.",
   },
   "generate-image/short-fitness-daily": {
     name: "תרגיל יומי",
@@ -269,7 +269,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/short-grwm-outfit": {
     name: "GRWM אאוטפיט",
-    description: "יוצרות אופנה: תתכוננו איתי, סלפי במראה, תווית עונה.",
+    description: "יוצרות אופנה: \"מתארגנים איתי\", סלפי במראה, תווית עונה.",
   },
   "generate-image/short-side-income": {
     name: "הכנסה צדדית",
@@ -277,31 +277,31 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/short-ai-free-tool": {
     name: "כלי AI חינמי",
-    description: "יוצרי AI בטיקטוק ושורטס: 'הכלי הזה חינמי', פנים מופתעות, זוהר של לפטופ.",
+    description: "יוצרי AI בטיקטוק ושורטס: \"הכלי הזה חינמי\", פנים מופתעות, זוהר של לפטופ.",
   },
   "generate-image/short-dance-trend": {
     name: "טרנד ריקוד",
-    description: "יוצרי ריקוד ומוזיקה: כיסוי טרנד, חדר ניאון, תנועה.",
+    description: "יוצרי ריקוד ומוזיקה: קאבר לטרנד, חדר ניאון, תנועה.",
   },
   "generate-image/post-old-vs-new": {
     name: "ישן מול חדש",
-    description: "משפיעני טכנולוגיה בלינקדאין ופייסבוק: 'הכלים הישנים ✗ מול הדרך שלי ✓'.",
+    description: "משפיעני טכנולוגיה בלינקדאין ופייסבוק: \"הכלים הישנים ✗ מול הדרך שלי ✓\".",
   },
   "generate-image/post-big-caption": {
     name: "כיתוב גדול",
     description: "כל מי שמפרסם דעה: פנים + כיתוב של 3 שורות. הפורמט הכי נפוץ בפייסבוק.",
   },
   "generate-image/post-carousel-cover": {
-    name: "כיסוי קרוסלה",
+    name: "קאבר לקרוסלה",
     description: "יוצרי קרוסלות בלינקדאין. שקף 1 = הבטחה גדולה + חץ החלקה.",
   },
   "generate-image/post-quote-card": {
     name: "כרטיס ציטוט",
-    description: "מאמנים, דוברים, מותגים. ציטוט על רקע עם טקסטורה.",
+    description: "מאמנים, מרצים, מותגים. ציטוט על רקע עם טקסטורה.",
   },
   "generate-image/post-hiring": {
     name: "מגייסים",
-    description: "HR ומייסדים: פוסט 'מגייסים'. כל שבוע בכל חברה.",
+    description: "HR ומייסדים: פוסט \"מגייסים\". כל שבוע בכל חברה.",
   },
   "generate-image/post-employee-spotlight": {
     name: "הכירו את הצוות",
@@ -312,12 +312,12 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "קהילות וחברות שמכריזות על מיטאפ או וובינר.",
   },
   "generate-image/ig-carousel-cover": {
-    name: "כיסוי קרוסלה לאינסטגרם",
-    description: "מחנכים ומאמנים באינסטגרם: שקף 1, הבטחה גדולה, חץ החלקה. פורמט יומי.",
+    name: "קאבר לקרוסלה באינסטגרם",
+    description: "מדריכים ומאמנים באינסטגרם: שקף 1, הבטחה גדולה, חץ החלקה. פורמט יומי.",
   },
   "generate-image/ig-flatlay": {
-    name: "פלאט-ליי",
-    description: "מותגי לייפסטייל ויוצרים: הפלאט-ליי הרגוע שממלא פיד בין השקות.",
+    name: "פלאט־ליי",
+    description: "מותגי לייפסטייל ויוצרים: הפלאט־ליי הרגוע שממלא פיד בין השקות.",
   },
   "generate-image/ig-photo-dump": {
     name: "פוטו דאמפ",
@@ -325,7 +325,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/ig-giveaway": {
     name: "הגרלה",
-    description: "מותגים וחנויות: פוסט הגרלה, מוצר + קונפטי + 'תייגו חבר'.",
+    description: "מותגים וחנויות: פוסט הגרלה, מוצר + קונפטי + \"תייגו חבר\".",
   },
   "generate-image/ig-new-drop": {
     name: "דרופ חדש",
@@ -345,7 +345,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/story-link-above": {
     name: "קישור למעלה",
-    description: "בלוגרים וניוזלטרים: סטורי 'פוסט חדש' עם סטיקר קישור.",
+    description: "בלוגרים וניוזלטרים: סטורי \"פוסט חדש\" עם סטיקר קישור.",
   },
   "generate-image/wa-status-offer": {
     name: "מבצע בסטטוס",
@@ -353,11 +353,11 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/x-statement-card": {
     name: "כרטיס אמירה",
-    description: "מובילי דעה ב-X: אמירה חדה כתמונה, כדי שלציוץ תהיה תמונה.",
+    description: "מובילי דעה ב־X: אמירה חדה כתמונה, כדי שלציוץ תהיה תמונה.",
   },
   "generate-image/x-chart-take": {
     name: "גרף עם מילה",
-    description: "חשבונות פיננסים וטכנולוגיה ב-X: קו עולה אחד, מילה אחת.",
+    description: "חשבונות פיננסים וטכנולוגיה ב־X: קו עולה אחד, מילה אחת.",
   },
   "generate-image/pin-recipe": {
     name: "פין מתכון",
@@ -381,7 +381,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/li-certified": {
     name: "הסמכה",
-    description: "אנשי מקצוע: פוסט ה'שמח לשתף' עם תעודה. כל שבוע בלינקדאין.",
+    description: "אנשי מקצוע: פוסט ה\"שמח לשתף\" עם תעודה. כל שבוע בלינקדאין.",
   },
   "generate-image/li-infographic": {
     name: "אינפוגרפיקה",
@@ -405,15 +405,15 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/ad-clinic": {
     name: "מודעה למרפאה",
-    description: "מרפאות שיניים ורפואה. אמון + הצעה אחת.",
+    description: "מרפאות שיניים וקליניקות רפואיות. אמון + הצעה אחת.",
   },
   "generate-image/ad-service-van": {
-    name: "שירות עם רכב",
+    name: "רכב שירות",
     description: "אינסטלטורים, חשמלאים, מובילים. מודעת שירות מקומי.",
   },
   "generate-image/ad-real-estate-listing": {
     name: "נכס חדש בשוק",
-    description: "סוכני נדל\"ן: כרטיס 'נכנס לשוק' לאינסטגרם ולפורטלים.",
+    description: "סוכני נדל\"ן: כרטיס \"נכנס לשוק\" לאינסטגרם ולפורטלים.",
   },
   "generate-image/ad-facebook-lead": {
     name: "מודעת לידים",
@@ -425,7 +425,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/brand-profile-picture": {
     name: "תמונת פרופיל",
-    description: "פרילנסרים ומייסדים: תמונת פרופיל נקייה ללינקדאין ול-X.",
+    description: "פרילנסרים ומייסדים: תמונת פרופיל נקייה ללינקדאין ול־X.",
   },
   "generate-image/brand-linkedin-banner": {
     name: "באנר לינקדאין",
@@ -453,19 +453,19 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/ecom-infographic": {
     name: "אינפוגרפיקת מוצר",
-    description: "תמונת פיצ'רים של מוכרים: מוצר + 3 הדגשות.",
+    description: "תמונת פיצ׳רים של מוכרים: מוצר + 3 הדגשות.",
   },
   "generate-image/ecom-etsy-handmade": {
     name: "עבודת יד לאטסי",
-    description: "יוצרי אטסי: מוצר בעבודת יד, פלאט-ליי חמים.",
+    description: "יוצרי אטסי: מוצר בעבודת יד, פלאט־ליי חמים.",
   },
   "generate-image/ecom-fashion-ghost": {
-    name: "בובת רפאים",
+    name: "בובה בלתי נראית",
     description: "מוכרי בגדים: צילום פריט על בובה בלתי נראית.",
   },
   "generate-image/ecom-sale-badge": {
     name: "תג מבצע",
-    description: "טייל מבצע של מוכרים: מוצר + תג הנחה גדול.",
+    description: "מוכרים: תמונת מבצע עם המוצר ותג הנחה גדול.",
   },
   "generate-image/work-report-cover": {
     name: "כריכת דוח",
@@ -485,10 +485,10 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/edu-worksheet-header": {
     name: "כותרת לדף עבודה",
-    description: "מורים: כותרת לדף עבודה או דף חלוקה.",
+    description: "מורים: כותרת לדף עבודה או לדף מידע.",
   },
   "generate-image/edu-flashcard": {
-    name: "כרטיסייה",
+    name: "כרטיסיית לימוד",
     description: "תלמידים ואפליקציות שפה: כרטיסייה עם מילה ותמונה.",
   },
   "generate-image/merch-tshirt-design": {
@@ -496,12 +496,12 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "מוכרי הדפסה לפי דרישה: גרפיקה לחולצה, הדפס קדמי.",
   },
   "generate-image/merch-standalone-print-art": {
-    name: "הדפס לחולצה בלבד",
+    name: "הדפס לחולצה בלי מוקאפ",
     description: "מוכרי הדפסה לפי דרישה: הגרפיקה לבדה, בלי חולצה, על רקע לבן.",
   },
   "generate-image/layout-visionary-magazine-cover": {
     name: "שער מגזין",
-    description: "יזמים ומותגים אישיים: שער מגזין אופנה אנכי עם כותרת ראשית וסיפור שער.",
+    description: "יזמים, מאמנים ומותגים אישיים: שער מגזין אופנה אנכי עם שם המגזין, כותרת גג וסיפור שער.",
   },
   "generate-image/merch-sticker-sheet": {
     name: "גיליון מדבקות",
@@ -509,7 +509,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/merch-mug": {
     name: "ספל",
-    description: "חנויות מתנות ו-POD: מוקאפ ספל עם ציטוט.",
+    description: "חנויות מתנות ומוכרי הדפסה לפי דרישה: מוקאפ ספל עם ציטוט.",
   },
   "generate-image/event-wedding-invite": {
     name: "הזמנה לחתונה",
@@ -517,11 +517,11 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/event-birthday-invite": {
     name: "הזמנה ליום הולדת",
-    description: "הורים: הזמנה ליום הולדת לילדים. חודשי לכל משפחה.",
+    description: "הורים: הזמנה ליום הולדת לילדים. כל חודש, בכל משפחה עם ילדים.",
   },
   "generate-image/event-club-flyer": {
     name: "פלייר למועדון",
-    description: "מפיקים ו-DJ-ים: פלייר ללילה במועדון. שבועי.",
+    description: "מפיקים ותקליטנים: פלייר ללילה במועדון. שבועי.",
   },
   "generate-image/event-conference-banner": {
     name: "באנר לכנס",
@@ -541,7 +541,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/personal-pet-portrait": {
     name: "פורטרט חיית מחמד",
-    description: "בעלי חיות: פורטרט מצויר של החיה. שוק מתנות.",
+    description: "בעלי חיות מחמד: פורטרט מצויר של חיית המחמד. שוק מתנות.",
   },
   "generate-image/personal-family-holiday-card": {
     name: "כרטיס חג משפחתי",
@@ -549,7 +549,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/personal-phone-wallpaper": {
     name: "רקע לטלפון",
-    description: "לכולם: רקע לטלפון. נפח יומי, מגנט לחינמי.",
+    description: "לכולם: רקע לטלפון. ביקוש יומיומי, מושך משתמשים לחבילה החינמית.",
   },
   "generate-image/personal-meme-template": {
     name: "תבנית מם",
@@ -565,7 +565,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/sport-player-card": {
     name: "כרטיס שחקן",
-    description: "ליגות נוער וקבוצות פנטזי: כרטיס שחקן בסגנון קלף.",
+    description: "ליגות נוער וקבוצות פנטזי: כרטיס שחקן בסגנון קלף אספנים.",
   },
   "generate-image/community-fundraiser": {
     name: "גיוס תרומות",
@@ -621,7 +621,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "גיבור קומיקס",
   },
   "generate-image/text-retro-serif-70s": {
-    name: "סריף רטרו שנות ה-70",
+    name: "סריף רטרו שנות ה־70",
   },
   "generate-image/text-vhs-glow": {
     name: "זוהר VHS",
@@ -630,7 +630,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "כרום Y2K",
   },
   "generate-image/text-psychedelic-60s": {
-    name: "פסיכדלי שנות ה-60",
+    name: "פסיכדלי שנות ה־60",
   },
   "generate-image/text-disco-funk": {
     name: "דיסקו פאנק",
@@ -639,7 +639,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "ארט דקו",
   },
   "generate-image/text-80s-synthwave": {
-    name: "סינת'ווייב שנות ה-80",
+    name: "סינת׳ווייב שנות ה־80",
   },
   "generate-image/text-pixel-8bit": {
     name: "פיקסל 8 ביט",
@@ -657,13 +657,13 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "סטיקר פופ",
   },
   "generate-image/text-ransom-note": {
-    name: "מכתב סחיטה",
+    name: "מכתב כופר",
   },
   "generate-image/text-glitch": {
     name: "גליץ'",
   },
   "generate-image/text-gold-foil-luxury": {
-    name: "נייר זהב יוקרתי",
+    name: "פויל זהב יוקרתי",
   },
   "generate-image/text-molten-gold": {
     name: "זהב מותך",
@@ -723,7 +723,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     name: "סריף בוטני",
   },
   "generate-image/text-wedding-script": {
-    name: "כתב חתונה",
+    name: "כתב מסולסל לחתונה",
   },
   "generate-image/text-kids-party": {
     name: "מסיבת ילדים",
@@ -748,15 +748,15 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-004-business": {
     name: "מודעת מבצע בזק",
-    description: "מבצע מוגבל בזמן, מודעה נועזת",
+    description: "מבצע מוגבל בזמן, מודעה בולטת",
   },
   "generate-image/uc-005-business": {
     name: "מודעה למרפאת שיניים",
     description: "מודעה שכונתית אמינה למרפאה",
   },
   "generate-image/uc-006-business": {
-    name: "כיסוי לנכס למכירה",
-    description: "תמונת שער לפרסום נכס",
+    name: "קאבר למודעת נכס",
+    description: "קאבר לפרסום נכס",
   },
   "generate-image/uc-007-business": {
     name: "מנוי לסטודיו כושר",
@@ -767,7 +767,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "תמונת פתיחה לדף השקה",
   },
   "generate-image/uc-009-business": {
-    name: "פוסטר גיוס",
+    name: "פוסטר גיוס עובדים",
     description: "מודעת דרושים מעוצבת",
   },
   "generate-image/uc-010-business": {
@@ -788,7 +788,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-014-business": {
     name: "מודעת משלוחי אוכל",
-    description: "מודעת הירו למשלוחים",
+    description: "מודעה מעוררת תיאבון למשלוחים",
   },
   "generate-image/uc-015-business": {
     name: "קמפיין לקורס אונליין",
@@ -803,11 +803,11 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "מודעת גיוס תרומות לעמותה",
   },
   "generate-image/uc-018-business": {
-    name: "הכרזת פיצ'ר ב־SaaS",
+    name: "הכרזת פיצ׳ר ב־SaaS",
     description: "הכרזה על יכולת חדשה",
   },
   "generate-image/uc-019-business": {
-    name: "שער למקרה בוחן B2B",
+    name: "קאבר למקרה בוחן B2B",
     description: "כריכה למסמך מקרה בוחן",
   },
   "generate-image/uc-020-business": {
@@ -816,11 +816,11 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-021-business": {
     name: "הדמיית שלט לחנות",
-    description: "שלט חזית על חנות",
+    description: "שלט על חזית החנות",
   },
   "generate-image/uc-022-business": {
-    name: "תמונת שער לניוזלטר",
-    description: "ויז'ואל פתיחה לניוזלטר",
+    name: "קאבר לניוזלטר",
+    description: "ויז׳ואל פתיחה לניוזלטר",
   },
   "generate-image/uc-023-business": {
     name: "טיזר למותג יוקרה",
@@ -832,7 +832,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-025-business": {
     name: "מודעה להורדת אפליקציה",
-    description: "מודעה עם טלפון ותועלת",
+    description: "מודעה עם מסך האפליקציה בטלפון",
   },
   "generate-image/uc-026-business": {
     name: "ערכת מרצ' ממותגת",
@@ -856,119 +856,119 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-031-personal": {
     name: "שחזור תמונה משפחתית ישנה",
-    description: "מהתמונה שלך: תיקון ושחזור",
+    description: "מהתמונה שלכם: תיקון ושחזור",
   },
   "generate-image/uc-032-personal": {
-    name: "צביעת תמונה בשחור-לבן",
-    description: "מהתמונה שלך: הוספת צבע",
+    name: "צביעת תמונת שחור־לבן",
+    description: "מהתמונה שלכם: הוספת צבע",
   },
   "generate-image/uc-033-personal": {
     name: "תיקון שריטות בתמונה",
-    description: "מהתמונה שלך: הסרת שריטות",
+    description: "מהתמונה שלכם: הסרת שריטות",
   },
   "generate-image/uc-034-personal": {
     name: "שיפור פורטרט דהוי",
-    description: "מהתמונה שלך: החייאת צבע וחדות",
+    description: "מהתמונה שלכם: החייאת צבע וחדות",
   },
   "generate-image/uc-035-personal": {
     name: "החלפת רקע לתמונה",
-    description: "מהתמונה שלך: רקע חדש",
+    description: "מהתמונה שלכם: רקע חדש",
   },
   "generate-image/uc-036-personal": {
     name: "שדרוג תמונת פרופיל עסקית",
-    description: "מהתמונה שלך: הדשוט מקצועי",
+    description: "מהתמונה שלכם: הדשוט מקצועי",
   },
   "generate-image/uc-037-personal": {
     name: "הדשוט לליהוק",
-    description: "מהתמונה שלך: תמונת שחקן",
+    description: "מהתמונה שלכם: תמונת שחקן",
   },
   "generate-image/uc-038-personal": {
     name: "תמונת פספורט מקצועית",
-    description: "מהתמונה שלך: תמונת תעודה",
+    description: "מהתמונה שלכם: תמונת תעודה",
   },
   "generate-image/uc-039-personal": {
     name: "לנסות תסרוקת חדשה",
-    description: "מהתמונה שלך: תסרוקת אחרת",
+    description: "מהתמונה שלכם: תסרוקת אחרת",
   },
   "generate-image/uc-040-personal": {
     name: "לנסות צבע שיער חדש",
-    description: "מהתמונה שלך: צבע שיער אחר",
+    description: "מהתמונה שלכם: צבע שיער אחר",
   },
   "generate-image/uc-041-personal": {
-    name: "תצוגה מקדימה של זקן",
-    description: "מהתמונה שלך: סגנון זקן",
+    name: "הדמיית סגנון זקן",
+    description: "מהתמונה שלכם: סגנון זקן",
   },
   "generate-image/uc-042-personal": {
-    name: "תצוגה מקדימה של קעקוע",
-    description: "מהתמונה שלך: קעקוע על הגוף",
+    name: "הדמיית קעקוע",
+    description: "מהתמונה שלכם: קעקוע על הגוף",
   },
   "generate-image/uc-043-personal": {
     name: "ריטוש פורטרט חתונה",
-    description: "מהתמונה שלך: ריטוש עדין",
+    description: "מהתמונה שלכם: ריטוש עדין",
   },
   "generate-image/uc-044-personal": {
-    name: "להעביר פורטרט למקום אחר",
-    description: "מהתמונה שלך: רקע של יעד טיול",
+    name: "פורטרט ביעד טיול",
+    description: "מהתמונה שלכם: רקע של יעד טיול",
   },
   "generate-image/uc-045-personal": {
     name: "סלפי טיול דמיוני",
-    description: "מהתמונה שלך: יעד דמיוני",
+    description: "מהתמונה שלכם: יעד דמיוני",
   },
   "generate-image/uc-046-personal": {
     name: "פורטרט אמנותי של חיית מחמד",
-    description: "מהתמונה שלך: ציור קלאסי",
+    description: "מהתמונה שלכם: ציור קלאסי",
   },
   "generate-image/uc-047-personal": {
     name: "אווטאר מצויר מפורטרט",
-    description: "מהתמונה שלך: דמות מצוירת",
+    description: "מהתמונה שלכם: דמות מצוירת",
   },
   "generate-image/uc-048-personal": {
     name: "סלפי קוספליי פנטזיה",
-    description: "מהתמונה שלך: דמות פנטזיה",
+    description: "מהתמונה שלכם: דמות פנטזיה",
   },
   "generate-image/uc-049-personal": {
     name: "פורטרט הריון אלגנטי",
-    description: "מהתמונה שלך: פורטרט הריון",
+    description: "מהתמונה שלכם: פורטרט הריון",
   },
   "generate-image/uc-050-personal": {
-    name: "תצוגה מקדימה של אאוטפיט",
-    description: "מהתמונה שלך: בגד אחר",
+    name: "מדידת בגדים וירטואלית",
+    description: "מהתמונה שלכם: בגד אחר",
   },
   "generate-image/uc-051-products": {
     name: "מצילום טלפון לתמונת פרסומת",
-    description: "מהצילום שלך: תמונת מוצר מקצועית",
+    description: "מהצילום שלכם: תמונת מוצר מקצועית",
   },
   "generate-image/uc-052-products": {
     name: "פקשוט על רקע לבן",
-    description: "מהצילום שלך: רקע לבן נקי",
+    description: "מהצילום שלכם: רקע לבן נקי",
   },
   "generate-image/uc-053-products": {
     name: "קמפיין בושם יוקרתי",
-    description: "מהצילום שלך: קמפיין בושם",
+    description: "מהצילום שלכם: קמפיין בושם",
   },
   "generate-image/uc-054-products": {
     name: "טיפוח עם התזת מים",
-    description: "מהצילום שלך: התזה ורעננות",
+    description: "מהצילום שלכם: התזה ורעננות",
   },
   "generate-image/uc-055-products": {
     name: "מאקרו קוסמטיקה בסטודיו",
-    description: "מהצילום שלך: תקריב סטודיו",
+    description: "מהצילום שלכם: תקריב סטודיו",
   },
   "generate-image/uc-056-products": {
     name: "אדיטוריאל לתיק מעצבים",
-    description: "מהצילום שלך: צילום אופנה",
+    description: "מהצילום שלכם: צילום אופנה",
   },
   "generate-image/uc-057-products": {
-    name: "הירו לייפסטייל לסניקרס",
-    description: "מהצילום שלך: סניקרס בסצנה",
+    name: "תמונת לייפסטייל לסניקרס",
+    description: "מהצילום שלכם: סניקרס בסצנה",
   },
   "generate-image/uc-058-products": {
     name: "מאקרו אבן חן לתכשיט",
-    description: "מהצילום שלך: תקריב תכשיט",
+    description: "מהצילום שלכם: תקריב תכשיט",
   },
   "generate-image/uc-059-products": {
     name: "פרטי שעון יוקרה",
-    description: "מהצילום שלך: תקריב שעון",
+    description: "מהצילום שלכם: תקריב שעון",
   },
   "generate-image/uc-060-products": {
     name: "קונספט אריזה לקפה",
@@ -976,39 +976,39 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-061-products": {
     name: "תצוגת מוצרי קרמיקה",
-    description: "מהצילום שלך: קרמיקה מוצגת",
+    description: "מהצילום שלכם: קרמיקה בתצוגה",
   },
   "generate-image/uc-062-products": {
-    name: "איור מפורק של מוצר אלקטרוני",
-    description: "מהצילום שלך: מבט מפורק",
+    name: "מוצר אלקטרוני מפורק לחלקים",
+    description: "מהצילום שלכם: המוצר מפורק לחלקים",
   },
   "generate-image/uc-063-products": {
     name: "דוגמן וירטואלי",
-    description: "מהצילום שלך: הבגד על דוגמן",
+    description: "מהצילום שלכם: הבגד על דוגמן",
   },
   "generate-image/uc-064-products": {
     name: "רשת דוגמנים מגוונת",
-    description: "מהצילום שלך: בגד על כמה דוגמנים",
+    description: "מהצילום שלכם: בגד על כמה דוגמנים",
   },
   "generate-image/uc-065-products": {
     name: "קמפיין לייפסטייל לאקססורי",
-    description: "מהצילום שלך: אקססורי בשימוש",
+    description: "מהצילום שלכם: אקססורי בשימוש",
   },
   "generate-image/uc-066-products": {
-    name: "פלאט-ליי אופנה",
+    name: "פלאט־ליי אופנה",
     description: "אאוטפיט מסודר מלמעלה",
   },
   "generate-image/uc-067-products": {
     name: "רשת קטלוג של 4 מוצרים",
-    description: "מהצילום שלך: 4 מוצרים ברשת",
+    description: "מהצילום שלכם: 4 מוצרים במשבצות",
   },
   "generate-image/uc-068-products": {
-    name: "גיליון סיבוב מוצר",
-    description: "מהצילום שלך: המוצר מכמה זוויות",
+    name: "גיליון רפרנס למוצר",
+    description: "מהצילום שלכם: המוצר מכמה זוויות",
   },
   "generate-image/uc-069-products": {
     name: "השוואת גודל של מוצר",
-    description: "מהצילום שלך: המוצר לצד קנה מידה",
+    description: "מהצילום שלכם: המוצר ליד חפץ מוכר",
   },
   "generate-image/uc-070-products": {
     name: "הדמיית אריזת מזון פרימיום",
@@ -1043,8 +1043,8 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
     description: "עטיפה עם שם הפודקאסט",
   },
   "generate-image/uc-078-creative": {
-    name: "כיסוי לסרטון היסטוריה",
-    description: "כיסוי יוטיוב עם כותרת",
+    name: "תמונה ממוזערת לסרטון היסטוריה",
+    description: "תמונה ממוזערת ליוטיוב עם כותרת",
   },
   "generate-image/uc-079-creative": {
     name: "אייקון למשחק פנטזיה",
@@ -1060,7 +1060,7 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-082-creative": {
     name: "אמנות סביבה לעולם בדיוני",
-    description: "נוף קונספט לעולם",
+    description: "איור קונספט של נוף",
   },
   "generate-image/uc-083-creative": {
     name: "סיפור קומיקס בארבעה פאנלים",
@@ -1096,67 +1096,67 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-091-home": {
     name: "סלון בסגנון סקנדינבי",
-    description: "מהתמונה שלך: הסלון מעוצב מחדש",
+    description: "מהתמונה שלכם: הסלון מעוצב מחדש",
   },
   "generate-image/uc-092-home": {
     name: "שיפוץ מטבח מודרני",
-    description: "מהתמונה שלך: המטבח אחרי שיפוץ",
+    description: "מהתמונה שלכם: המטבח אחרי שיפוץ",
   },
   "generate-image/uc-093-home": {
-    name: "חדר שינה ג'פנדי",
-    description: "מהתמונה שלך: חדר שינה בסגנון ג'פנדי",
+    name: "חדר שינה ג׳פנדי",
+    description: "מהתמונה שלכם: חדר שינה בסגנון ג׳פנדי",
   },
   "generate-image/uc-094-home": {
     name: "חדר אמבטיה בסגנון ספא",
-    description: "מהתמונה שלך: אמבטיה כמו ספא",
+    description: "מהתמונה שלכם: אמבטיה כמו ספא",
   },
   "generate-image/uc-095-home": {
     name: "משרד ביתי",
-    description: "מהתמונה שלך: פינת עבודה מעוצבת",
+    description: "מהתמונה שלכם: פינת עבודה מעוצבת",
   },
   "generate-image/uc-096-home": {
     name: "קונספט לחדר תינוקות",
-    description: "מהתמונה שלך: חדר תינוקות",
+    description: "מהתמונה שלכם: חדר תינוקות",
   },
   "generate-image/uc-097-home": {
     name: "גינה במרפסת קטנה",
-    description: "מהתמונה שלך: מרפסת ירוקה",
+    description: "מהתמונה שלכם: מרפסת ירוקה",
   },
   "generate-image/uc-098-home": {
     name: "עיצוב נוף לחצר",
-    description: "מהתמונה שלך: חצר מתוכננת",
+    description: "מהתמונה שלכם: חצר מתוכננת",
   },
   "generate-image/uc-099-home": {
     name: "חזית בית מודרנית",
-    description: "מהתמונה שלך: חזית מחודשת",
+    description: "מהתמונה שלכם: חזית מחודשת",
   },
   "generate-image/uc-100-home": {
     name: "אפשרויות צבע חיצוני",
-    description: "מהתמונה שלך: צבעי חזית",
+    description: "מהתמונה שלכם: צבעי חזית",
   },
   "generate-image/uc-101-home": {
-    name: "להציב ספה בחדר שלך",
-    description: "מהתמונה שלך: הספה בחדר",
+    name: "ספה חדשה בחדר שלכם",
+    description: "מהתמונה שלכם: הספה בחדר",
   },
   "generate-image/uc-102-home": {
     name: "תצוגה מקדימה לצביעת ארונות",
-    description: "מהתמונה שלך: ארונות בצבע אחר",
+    description: "מהתמונה שלכם: ארונות בצבע אחר",
   },
   "generate-image/uc-103-home": {
     name: "תאורה לפינת אוכל",
-    description: "מהתמונה שלך: גוף תאורה חדש",
+    description: "מהתמונה שלכם: גוף תאורה חדש",
   },
   "generate-image/uc-104-home": {
-    name: "דירה קטנה חוסכת מקום",
-    description: "מהתמונה שלך: פתרונות אחסון",
+    name: "ניצול מקום בדירה קטנה",
+    description: "מהתמונה שלכם: פתרונות אחסון",
   },
   "generate-image/uc-105-home": {
     name: "עיצוב פנים לקפה בוטיק",
-    description: "מהתמונה שלך: בית קפה מעוצב",
+    description: "מהתמונה שלכם: בית קפה מעוצב",
   },
   "generate-image/uc-106-family": {
     name: "הזמנה אלגנטית לחתונה",
-    description: "הזמנה ו־RSVP מעוצבים",
+    description: "הזמנה וכרטיס אישור הגעה",
   },
   "generate-image/uc-107-family": {
     name: "הזמנה ליום הולדת לילדים",
@@ -1180,19 +1180,19 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-112-family": {
     name: "פוסטר סרט משפחתי",
-    description: "מהתמונה שלך: המשפחה כפוסטר סרט",
+    description: "מהתמונה שלכם: המשפחה כפוסטר סרט",
   },
   "generate-image/uc-113-family": {
     name: "כרטיס הודעת לידה",
-    description: "מהתמונה שלך: הודעת לידה",
+    description: "מהתמונה שלכם: הודעת לידה",
   },
   "generate-image/uc-114-family": {
     name: "פורטרט יום הולדת לחיית מחמד",
-    description: "מהתמונה שלך: מסיבה לחיה",
+    description: "מהתמונה שלכם: חיית המחמד חוגגת",
   },
   "generate-image/uc-115-family": {
     name: "כרטיס חג חורפי למשפחה",
-    description: "מהתמונה שלך: כרטיס חג",
+    description: "מהתמונה שלכם: כרטיס חג",
   },
   "generate-image/uc-116-family": {
     name: "ברכה לראש השנה",
@@ -1208,10 +1208,10 @@ export const PRESET_TILES_HE: Record<string, PresetCopy> = {
   },
   "generate-image/uc-119-family": {
     name: "כרטיס הנצחה",
-    description: "מהתמונה שלך: כרטיס זיכרון",
+    description: "מהתמונה שלכם: כרטיס זיכרון",
   },
   "generate-image/uc-120-family": {
     name: "כרטיס ליום נישואין",
-    description: "מהתמונה שלך: כרטיס לזוג",
+    description: "מהתמונה שלכם: כרטיס לזוג",
   },
 }

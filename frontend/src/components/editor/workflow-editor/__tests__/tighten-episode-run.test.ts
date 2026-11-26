@@ -115,7 +115,7 @@ describe("a fresh run", () => {
   it("names the node type in the no-recording refusal in the reader's language (Tighten Episode's own sentence)", async () => {
     const CASES: ReadonlyArray<readonly [LocaleId, string]> = [
       ["en", "Connect a recording to Tighten Episode first"],
-      ["he", "חברו קודם הקלטה להידוק פרק"],
+      ["he", "חברו קודם הקלטה לרכיב \"עריכת פודקאסט\""],
       ["ja", "先に「エピソードを引き締める」に録音を接続してください"],
       ["ko", "먼저 “에피소드 다듬기”에 녹음을 연결하세요"],
       ["pt-BR", "Conecte primeiro uma gravação ao Enxugar episódio"],

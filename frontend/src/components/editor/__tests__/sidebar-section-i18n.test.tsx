@@ -31,7 +31,7 @@ describe("sidebar section in Hebrew", () => {
     const header = screen.getByRole("button", { expanded: true })
     expect(header.textContent).toContain("תמונה")
     expect(header.textContent).not.toContain("Image")
-    expect(screen.getByText("העלאה משלכם")).toBeTruthy()
+    expect(screen.getByText("חומרים משלכם")).toBeTruthy()
     expect(screen.queryByText("Add Your Own")).toBeNull()
     expect(screen.getByText("העלאת תמונה")).toBeTruthy()
     expect(screen.queryByText("Upload Image")).toBeNull()

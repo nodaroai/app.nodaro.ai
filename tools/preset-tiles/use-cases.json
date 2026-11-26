@@ -183,7 +183,7 @@
         },
         "he": {
           "name": "מודעת מבצע בזק",
-          "description": "מבצע מוגבל בזמן, מודעה נועזת"
+          "description": "מבצע מוגבל בזמן, מודעה בולטת"
         },
         "ja": {
           "name": "フラッシュセール広告",
@@ -280,8 +280,8 @@
           "description": "Portada promocional inmobiliaria de una espléndida villa moderna bañada por el sol, fotografía de arquitectura editorial, título grande y claro «JUST LISTED», casa despejada y un diseño pulido y sobrio con espacio para los datos de contacto."
         },
         "he": {
-          "name": "כיסוי לנכס למכירה",
-          "description": "תמונת שער לפרסום נכס"
+          "name": "קאבר למודעת נכס",
+          "description": "קאבר לפרסום נכס"
         },
         "ja": {
           "name": "物件リスティング表紙",
@@ -427,7 +427,7 @@
           "description": "Cartel moderno de contratación para un restaurante, con una brigada de cocina alegre y auténtica preparando platos, un titular elegante y comedido «JOIN OUR TEAM», personalidad acogedora y una maquetación profesional y bien estructurada."
         },
         "he": {
-          "name": "פוסטר גיוס",
+          "name": "פוסטר גיוס עובדים",
           "description": "מודעת דרושים מעוצבת"
         },
         "ja": {
@@ -673,7 +673,7 @@
         },
         "he": {
           "name": "מודעת משלוחי אוכל",
-          "description": "מודעת הירו למשלוחים"
+          "description": "מודעה מעוררת תיאבון למשלוחים"
         },
         "ja": {
           "name": "フードデリバリー広告",
@@ -868,7 +868,7 @@
           "description": "Anuncio moderno de lanzamiento de software, con la interfaz realista y cuidada de un producto de analítica en una ventana de navegador en perspectiva, el título preciso y exacto «MEET YOUR NEW WORKSPACE», en blanco y negro con un acento verde lima brillante."
         },
         "he": {
-          "name": "הכרזת פיצ'ר ב־SaaS",
+          "name": "הכרזת פיצ׳ר ב־SaaS",
           "description": "הכרזה על יכולת חדשה"
         },
         "ja": {
@@ -917,7 +917,7 @@
           "description": "Portada de caso de estudio corporativa pero convincente, que muestra una fábrica de embalajes sostenibles en fotografía documental cinematográfica, tipografía comedida con el texto exacto «BETTER BY DESIGN», maquetación elegante orientada a las pruebas, sin estadísticas inventadas."
         },
         "he": {
-          "name": "שער למקרה בוחן B2B",
+          "name": "קאבר למקרה בוחן B2B",
           "description": "כריכה למסמך מקרה בוחן"
         },
         "ja": {
@@ -1016,7 +1016,7 @@
         },
         "he": {
           "name": "הדמיית שלט לחנות",
-          "description": "שלט חזית על חנות"
+          "description": "שלט על חזית החנות"
         },
         "ja": {
           "name": "店舗看板モックアップ",
@@ -1064,8 +1064,8 @@
           "description": "Cabecera elegante de boletín empresarial para una consultora creativa, con papel plegado escultural y fotografía editorial minimalista, título simple y exacto «THE WEEKLY EDIT» y una jerarquía impecable."
         },
         "he": {
-          "name": "תמונת שער לניוזלטר",
-          "description": "ויז'ואל פתיחה לניוזלטר"
+          "name": "קאבר לניוזלטר",
+          "description": "ויז׳ואל פתיחה לניוזלטר"
         },
         "ja": {
           "name": "ニュースレターのカバー",
@@ -1212,7 +1212,7 @@
         },
         "he": {
           "name": "מודעה להורדת אפליקציה",
-          "description": "מודעה עם טלפון ותועלת"
+          "description": "מודעה עם מסך האפליקציה בטלפון"
         },
         "ja": {
           "name": "アプリダウンロード広告",
@@ -1507,7 +1507,7 @@
         },
         "he": {
           "name": "שחזור תמונה משפחתית ישנה",
-          "description": "מהתמונה שלך: תיקון ושחזור"
+          "description": "מהתמונה שלכם: תיקון ושחזור"
         },
         "ja": {
           "name": "古い家族写真の修復",
@@ -1556,8 +1556,8 @@
           "description": "Retrato callejero auténtico de los años 60 de la misma mujer ficticia, en comparación lado a lado: a la izquierda en monocromo, a la derecha una versión colorizada realista y respetuosa con la época, que conserva la expresión, la ropa de época y el entorno original."
         },
         "he": {
-          "name": "צביעת תמונה בשחור-לבן",
-          "description": "מהתמונה שלך: הוספת צבע"
+          "name": "צביעת תמונת שחור־לבן",
+          "description": "מהתמונה שלכם: הוספת צבע"
         },
         "ja": {
           "name": "白黒写真のカラー化",
@@ -1607,7 +1607,7 @@
         },
         "he": {
           "name": "תיקון שריטות בתמונה",
-          "description": "מהתמונה שלך: הסרת שריטות"
+          "description": "מהתמונה שלכם: הסרת שריטות"
         },
         "ja": {
           "name": "傷の修復",
@@ -1657,7 +1657,7 @@
         },
         "he": {
           "name": "שיפור פורטרט דהוי",
-          "description": "מהתמונה שלך: החייאת צבע וחדות"
+          "description": "מהתמונה שלכם: החייאת צבע וחדות"
         },
         "ja": {
           "name": "色あせたポートレートの改善",
@@ -1707,7 +1707,7 @@
         },
         "he": {
           "name": "החלפת רקע לתמונה",
-          "description": "מהתמונה שלך: רקע חדש"
+          "description": "מהתמונה שלכם: רקע חדש"
         },
         "ja": {
           "name": "写真の背景変更",
@@ -1757,7 +1757,7 @@
         },
         "he": {
           "name": "שדרוג תמונת פרופיל עסקית",
-          "description": "מהתמונה שלך: הדשוט מקצועי"
+          "description": "מהתמונה שלכם: הדשוט מקצועי"
         },
         "ja": {
           "name": "ビジネス用ヘッドショット",
@@ -1807,7 +1807,7 @@
         },
         "he": {
           "name": "הדשוט לליהוק",
-          "description": "מהתמונה שלך: תמונת שחקן"
+          "description": "מהתמונה שלכם: תמונת שחקן"
         },
         "ja": {
           "name": "俳優のオーディション写真",
@@ -1857,7 +1857,7 @@
         },
         "he": {
           "name": "תמונת פספורט מקצועית",
-          "description": "מהתמונה שלך: תמונת תעודה"
+          "description": "מהתמונה שלכם: תמונת תעודה"
         },
         "ja": {
           "name": "証明写真",
@@ -1907,7 +1907,7 @@
         },
         "he": {
           "name": "לנסות תסרוקת חדשה",
-          "description": "מהתמונה שלך: תסרוקת אחרת"
+          "description": "מהתמונה שלכם: תסרוקת אחרת"
         },
         "ja": {
           "name": "新しいヘアスタイルを試す",
@@ -1957,7 +1957,7 @@
         },
         "he": {
           "name": "לנסות צבע שיער חדש",
-          "description": "מהתמונה שלך: צבע שיער אחר"
+          "description": "מהתמונה שלכם: צבע שיער אחר"
         },
         "ja": {
           "name": "新しい髪色を試す",
@@ -2006,8 +2006,8 @@
           "description": "Comparación limpia de tres looks en retrato del mismo hombre adulto ficticio: afeitado, barba de pocos días bien recortada y barba completa esculpida; con la misma iluminación, identidad facial fiel y un estilismo fotográfico sobrio."
         },
         "he": {
-          "name": "תצוגה מקדימה של זקן",
-          "description": "מהתמונה שלך: סגנון זקן"
+          "name": "הדמיית סגנון זקן",
+          "description": "מהתמונה שלכם: סגנון זקן"
         },
         "ja": {
           "name": "ひげスタイルのプレビュー",
@@ -2056,8 +2056,8 @@
           "description": "Concepto profesional de estudio de tatuajes que muestra en primer plano un refinado tatuaje botánico de línea fina en el antebrazo, con piel natural y bellos detalles de tinta, además de una pequeña ilustración flash en papel a juego dentro de la composición."
         },
         "he": {
-          "name": "תצוגה מקדימה של קעקוע",
-          "description": "מהתמונה שלך: קעקוע על הגוף"
+          "name": "הדמיית קעקוע",
+          "description": "מהתמונה שלכם: קעקוע על הגוף"
         },
         "ja": {
           "name": "タトゥーのプレビュー",
@@ -2107,7 +2107,7 @@
         },
         "he": {
           "name": "ריטוש פורטרט חתונה",
-          "description": "מהתמונה שלך: ריטוש עדין"
+          "description": "מהתמונה שלכם: ריטוש עדין"
         },
         "ja": {
           "name": "ウェディング写真のレタッチ",
@@ -2156,8 +2156,8 @@
           "description": "Una viajera ficticia en solitario con ropa práctica de lino, fotografiada en las icónicas escaleras junto al mar de Positano en un cálido amanecer, editorial de viajes informal y auténtico con perspectiva atmosférica natural y texturas de piel realistas."
         },
         "he": {
-          "name": "להעביר פורטרט למקום אחר",
-          "description": "מהתמונה שלך: רקע של יעד טיול"
+          "name": "פורטרט ביעד טיול",
+          "description": "מהתמונה שלכם: רקע של יעד טיול"
         },
         "ja": {
           "name": "ポートレートを旅先へ",
@@ -2207,7 +2207,7 @@
         },
         "he": {
           "name": "סלפי טיול דמיוני",
-          "description": "מהתמונה שלך: יעד דמיוני"
+          "description": "מהתמונה שלכם: יעד דמיוני"
         },
         "ja": {
           "name": "空想旅行セルフィー",
@@ -2257,7 +2257,7 @@
         },
         "he": {
           "name": "פורטרט אמנותי של חיית מחמד",
-          "description": "מהתמונה שלך: ציור קלאסי"
+          "description": "מהתמונה שלכם: ציור קלאסי"
         },
         "ja": {
           "name": "ペットのアート肖像画",
@@ -2307,7 +2307,7 @@
         },
         "he": {
           "name": "אווטאר מצויר מפורטרט",
-          "description": "מהתמונה שלך: דמות מצוירת"
+          "description": "מהתמונה שלכם: דמות מצוירת"
         },
         "ja": {
           "name": "ポートレートからアバター",
@@ -2357,7 +2357,7 @@
         },
         "he": {
           "name": "סלפי קוספליי פנטזיה",
-          "description": "מהתמונה שלך: דמות פנטזיה"
+          "description": "מהתמונה שלכם: דמות פנטזיה"
         },
         "ja": {
           "name": "ファンタジーコスプレセルフィー",
@@ -2407,7 +2407,7 @@
         },
         "he": {
           "name": "פורטרט הריון אלגנטי",
-          "description": "מהתמונה שלך: פורטרט הריון"
+          "description": "מהתמונה שלכם: פורטרט הריון"
         },
         "ja": {
           "name": "エレガントなマタニティポートレート",
@@ -2456,8 +2456,8 @@
           "description": "El mismo rostro y la misma pose de una profesional ficticia con tres conjuntos de entrevista sofisticados y claramente distintos, en paneles editoriales alineados y limpios sobre un fondo de estudio neutro."
         },
         "he": {
-          "name": "תצוגה מקדימה של אאוטפיט",
-          "description": "מהתמונה שלך: בגד אחר"
+          "name": "מדידת בגדים וירטואלית",
+          "description": "מהתמונה שלכם: בגד אחר"
         },
         "ja": {
           "name": "バーチャル試着",
@@ -2507,7 +2507,7 @@
         },
         "he": {
           "name": "מצילום טלפון לתמונת פרסומת",
-          "description": "מהצילום שלך: תמונת מוצר מקצועית"
+          "description": "מהצילום שלכם: תמונת מוצר מקצועית"
         },
         "ja": {
           "name": "スマホ写真をヒーロー画像に",
@@ -2557,7 +2557,7 @@
         },
         "he": {
           "name": "פקשוט על רקע לבן",
-          "description": "מהצילום שלך: רקע לבן נקי"
+          "description": "מהצילום שלכם: רקע לבן נקי"
         },
         "ja": {
           "name": "白背景のパックショット",
@@ -2607,7 +2607,7 @@
         },
         "he": {
           "name": "קמפיין בושם יוקרתי",
-          "description": "מהצילום שלך: קמפיין בושם"
+          "description": "מהצילום שלכם: קמפיין בושם"
         },
         "ja": {
           "name": "ラグジュアリー香水キャンペーン",
@@ -2657,7 +2657,7 @@
         },
         "he": {
           "name": "טיפוח עם התזת מים",
-          "description": "מהצילום שלך: התזה ורעננות"
+          "description": "מהצילום שלכם: התזה ורעננות"
         },
         "ja": {
           "name": "スキンケアの水しぶき",
@@ -2707,7 +2707,7 @@
         },
         "he": {
           "name": "מאקרו קוסמטיקה בסטודיו",
-          "description": "מהצילום שלך: תקריב סטודיו"
+          "description": "מהצילום שלכם: תקריב סטודיו"
         },
         "ja": {
           "name": "コスメのマクロスタジオ撮影",
@@ -2757,7 +2757,7 @@
         },
         "he": {
           "name": "אדיטוריאל לתיק מעצבים",
-          "description": "מהצילום שלך: צילום אופנה"
+          "description": "מהצילום שלכם: צילום אופנה"
         },
         "ja": {
           "name": "デザイナーバッグのエディトリアル",
@@ -2806,8 +2806,8 @@
           "description": "Imagen promocional dinámica y fotorrealista de unas zapatillas de correr originales en crema y naranja, llevadas por un corredor que esprinta sobre un pavimento oscurecido por la lluvia, con la zapatilla perfectamente nítida, movimiento urbano enérgico de fondo y sin marcas."
         },
         "he": {
-          "name": "הירו לייפסטייל לסניקרס",
-          "description": "מהצילום שלך: סניקרס בסצנה"
+          "name": "תמונת לייפסטייל לסניקרס",
+          "description": "מהצילום שלכם: סניקרס בסצנה"
         },
         "ja": {
           "name": "スニーカーのライフスタイル写真",
@@ -2857,7 +2857,7 @@
         },
         "he": {
           "name": "מאקרו אבן חן לתכשיט",
-          "description": "מהצילום שלך: תקריב תכשיט"
+          "description": "מהצילום שלכם: תקריב תכשיט"
         },
         "ja": {
           "name": "ジュエリーの宝石マクロ",
@@ -2907,7 +2907,7 @@
         },
         "he": {
           "name": "פרטי שעון יוקרה",
-          "description": "מהצילום שלך: תקריב שעון"
+          "description": "מהצילום שלכם: תקריב שעון"
         },
         "ja": {
           "name": "高級時計のディテール",
@@ -3006,7 +3006,7 @@
         },
         "he": {
           "name": "תצוגת מוצרי קרמיקה",
-          "description": "מהצילום שלך: קרמיקה מוצגת"
+          "description": "מהצילום שלכם: קרמיקה בתצוגה"
         },
         "ja": {
           "name": "陶器製品のショーケース",
@@ -3055,8 +3055,8 @@
           "description": "Visualización de vista despiece de alta calidad, técnica pero hermosa, de unos auriculares inalámbricos compactos separados en carcasa, drivers, batería y estuche de carga, flotando en capas claras y precisas, fondo grafito, sin etiquetas ni logos."
         },
         "he": {
-          "name": "איור מפורק של מוצר אלקטרוני",
-          "description": "מהצילום שלך: מבט מפורק"
+          "name": "מוצר אלקטרוני מפורק לחלקים",
+          "description": "מהצילום שלכם: המוצר מפורק לחלקים"
         },
         "ja": {
           "name": "電子機器の分解図",
@@ -3106,7 +3106,7 @@
         },
         "he": {
           "name": "דוגמן וירטואלי",
-          "description": "מהצילום שלך: הבגד על דוגמן"
+          "description": "מהצילום שלכם: הבגד על דוגמן"
         },
         "ja": {
           "name": "バーチャルファッションモデル",
@@ -3156,7 +3156,7 @@
         },
         "he": {
           "name": "רשת דוגמנים מגוונת",
-          "description": "מהצילום שלך: בגד על כמה דוגמנים"
+          "description": "מהצילום שלכם: בגד על כמה דוגמנים"
         },
         "ja": {
           "name": "多様なモデルのアパレルグリッド",
@@ -3206,7 +3206,7 @@
         },
         "he": {
           "name": "קמפיין לייפסטייל לאקססורי",
-          "description": "מהצילום שלך: אקססורי בשימוש"
+          "description": "מהצילום שלכם: אקססורי בשימוש"
         },
         "ja": {
           "name": "アクセサリーのライフスタイルキャンペーン",
@@ -3254,7 +3254,7 @@
           "description": "Flat lay cenital, ordenado y con dirección de arte, de un armario cápsula masculino a la moda con camisa de lino, pantalones de pinzas, mocasines marrones, reloj de cuero y bolsa de tela, fondo neutro cálido sin costuras y luz de día suave."
         },
         "he": {
-          "name": "פלאט-ליי אופנה",
+          "name": "פלאט־ליי אופנה",
           "description": "אאוטפיט מסודר מלמעלה"
         },
         "ja": {
@@ -3305,7 +3305,7 @@
         },
         "he": {
           "name": "רשת קטלוג של 4 מוצרים",
-          "description": "מהצילום שלך: 4 מוצרים ברשת"
+          "description": "מהצילום שלכם: 4 מוצרים במשבצות"
         },
         "ja": {
           "name": "4製品のカタロググリッド",
@@ -3354,8 +3354,8 @@
           "description": "Hoja de contactos comercial estilo referencia que muestra la MISMA tetera de cerámica verde pálido, única, de frente, de lado, por detrás y en tres cuartos, con material y proporciones idénticos y un fondo de estudio sencillo."
         },
         "he": {
-          "name": "גיליון סיבוב מוצר",
-          "description": "מהצילום שלך: המוצר מכמה זוויות"
+          "name": "גיליון רפרנס למוצר",
+          "description": "מהצילום שלכם: המוצר מכמה זוויות"
         },
         "ja": {
           "name": "製品の回転リファレンスシート",
@@ -3405,7 +3405,7 @@
         },
         "he": {
           "name": "השוואת גודל של מוצר",
-          "description": "מהצילום שלך: המוצר לצד קנה מידה"
+          "description": "מהצילום שלכם: המוצר ליד חפץ מוכר"
         },
         "ja": {
           "name": "製品のサイズ比較",
@@ -3845,8 +3845,8 @@
           "description": "Una miniatura de YouTube 16:9 lista para publicar sobre historia antigua, con un primer plano de un historiador ficticio asombrado a la derecha, arquitectura romana monumental y una tormenta dramática a la izquierda, y las palabras enormes y exactas «ROME'S SECRET»."
         },
         "he": {
-          "name": "כיסוי לסרטון היסטוריה",
-          "description": "כיסוי יוטיוב עם כותרת"
+          "name": "תמונה ממוזערת לסרטון היסטוריה",
+          "description": "תמונה ממוזערת ליוטיוב עם כותרת"
         },
         "ja": {
           "name": "歴史動画のサムネイル",
@@ -4040,7 +4040,7 @@
         },
         "he": {
           "name": "אמנות סביבה לעולם בדיוני",
-          "description": "נוף קונספט לעולם"
+          "description": "איור קונספט של נוף"
         },
         "ja": {
           "name": "世界観の環境アート",
@@ -4481,7 +4481,7 @@
         },
         "he": {
           "name": "סלון בסגנון סקנדינבי",
-          "description": "מהתמונה שלך: הסלון מעוצב מחדש"
+          "description": "מהתמונה שלכם: הסלון מעוצב מחדש"
         },
         "ja": {
           "name": "北欧風リビングのリデザイン",
@@ -4531,7 +4531,7 @@
         },
         "he": {
           "name": "שיפוץ מטבח מודרני",
-          "description": "מהתמונה שלך: המטבח אחרי שיפוץ"
+          "description": "מהתמונה שלכם: המטבח אחרי שיפוץ"
         },
         "ja": {
           "name": "モダンなキッチンリノベ",
@@ -4580,8 +4580,8 @@
           "description": "Visión de diseño fotorrealista y serena de un dormitorio corriente transformado con una cama plataforma baja de roble, biombos shoji color crema, lino de textura táctil, iluminación indirecta discreta y una decoración orgánica contenida, con una atmósfera natural."
         },
         "he": {
-          "name": "חדר שינה ג'פנדי",
-          "description": "מהתמונה שלך: חדר שינה בסגנון ג'פנדי"
+          "name": "חדר שינה ג׳פנדי",
+          "description": "מהתמונה שלכם: חדר שינה בסגנון ג׳פנדי"
         },
         "ja": {
           "name": "ジャパンディ寝室メイクオーバー",
@@ -4631,7 +4631,7 @@
         },
         "he": {
           "name": "חדר אמבטיה בסגנון ספא",
-          "description": "מהתמונה שלך: אמבטיה כמו ספא"
+          "description": "מהתמונה שלכם: אמבטיה כמו ספא"
         },
         "ja": {
           "name": "スパのようなバスルーム",
@@ -4681,7 +4681,7 @@
         },
         "he": {
           "name": "משרד ביתי",
-          "description": "מהתמונה שלך: פינת עבודה מעוצבת"
+          "description": "מהתמונה שלכם: פינת עבודה מעוצבת"
         },
         "ja": {
           "name": "在宅ワークのオフィス",
@@ -4731,7 +4731,7 @@
         },
         "he": {
           "name": "קונספט לחדר תינוקות",
-          "description": "מהתמונה שלך: חדר תינוקות"
+          "description": "מהתמונה שלכם: חדר תינוקות"
         },
         "ja": {
           "name": "ベビールームのコンセプト",
@@ -4781,7 +4781,7 @@
         },
         "he": {
           "name": "גינה במרפסת קטנה",
-          "description": "מהתמונה שלך: מרפסת ירוקה"
+          "description": "מהתמונה שלכם: מרפסת ירוקה"
         },
         "ja": {
           "name": "小さなバルコニーガーデン",
@@ -4831,7 +4831,7 @@
         },
         "he": {
           "name": "עיצוב נוף לחצר",
-          "description": "מהתמונה שלך: חצר מתוכננת"
+          "description": "מהתמונה שלכם: חצר מתוכננת"
         },
         "ja": {
           "name": "裏庭のランドスケープ",
@@ -4881,7 +4881,7 @@
         },
         "he": {
           "name": "חזית בית מודרנית",
-          "description": "מהתמונה שלך: חזית מחודשת"
+          "description": "מהתמונה שלכם: חזית מחודשת"
         },
         "ja": {
           "name": "モダンな家の外観",
@@ -4931,7 +4931,7 @@
         },
         "he": {
           "name": "אפשרויות צבע חיצוני",
-          "description": "מהתמונה שלך: צבעי חזית"
+          "description": "מהתמונה שלכם: צבעי חזית"
         },
         "ja": {
           "name": "外壁の塗装オプション",
@@ -4980,8 +4980,8 @@
           "description": "Visualización fotorrealista de un nuevo sofá modular color arena en una sala de estar de aspecto real, con las ventanas y la alfombra originales conservadas, escala realista y sombras de contacto, sin personas."
         },
         "he": {
-          "name": "להציב ספה בחדר שלך",
-          "description": "מהתמונה שלך: הספה בחדר"
+          "name": "ספה חדשה בחדר שלכם",
+          "description": "מהתמונה שלכם: הספה בחדר"
         },
         "ja": {
           "name": "部屋にソファを置く",
@@ -5031,7 +5031,7 @@
         },
         "he": {
           "name": "תצוגה מקדימה לצביעת ארונות",
-          "description": "מהתמונה שלך: ארונות בצבע אחר"
+          "description": "מהתמונה שלכם: ארונות בצבע אחר"
         },
         "ja": {
           "name": "キャビネット塗り替えプレビュー",
@@ -5081,7 +5081,7 @@
         },
         "he": {
           "name": "תאורה לפינת אוכל",
-          "description": "מהתמונה שלך: גוף תאורה חדש"
+          "description": "מהתמונה שלכם: גוף תאורה חדש"
         },
         "ja": {
           "name": "ダイニング照明の試着",
@@ -5130,8 +5130,8 @@
           "description": "Diseño funcional de un apartamento de 35 metros cuadrados con una ingeniosa cama abatible de pared, una mesa de comedor compacta y un almacenamiento ligero empotrado de roble, en una fotografía de arquitectura limpia y gran angular, con una escala humana honesta."
         },
         "he": {
-          "name": "דירה קטנה חוסכת מקום",
-          "description": "מהתמונה שלך: פתרונות אחסון"
+          "name": "ניצול מקום בדירה קטנה",
+          "description": "מהתמונה שלכם: פתרונות אחסון"
         },
         "ja": {
           "name": "狭い部屋の省スペース化",
@@ -5181,7 +5181,7 @@
         },
         "he": {
           "name": "עיצוב פנים לקפה בוטיק",
-          "description": "מהתמונה שלך: בית קפה מעוצב"
+          "description": "מהתמונה שלכם: בית קפה מעוצב"
         },
         "ja": {
           "name": "ブティックカフェの内装",
@@ -5230,7 +5230,7 @@
         },
         "he": {
           "name": "הזמנה אלגנטית לחתונה",
-          "description": "הזמנה ו־RSVP מעוצבים"
+          "description": "הזמנה וכרטיס אישור הגעה"
         },
         "ja": {
           "name": "エレガントな結婚式の招待状",
@@ -5525,7 +5525,7 @@
         },
         "he": {
           "name": "פוסטר סרט משפחתי",
-          "description": "מהתמונה שלך: המשפחה כפוסטר סרט"
+          "description": "מהתמונה שלכם: המשפחה כפוסטר סרט"
         },
         "ja": {
           "name": "家族の映画ポスター",
@@ -5575,7 +5575,7 @@
         },
         "he": {
           "name": "כרטיס הודעת לידה",
-          "description": "מהתמונה שלך: הודעת לידה"
+          "description": "מהתמונה שלכם: הודעת לידה"
         },
         "ja": {
           "name": "出産報告カード",
@@ -5625,7 +5625,7 @@
         },
         "he": {
           "name": "פורטרט יום הולדת לחיית מחמד",
-          "description": "מהתמונה שלך: מסיבה לחיה"
+          "description": "מהתמונה שלכם: חיית המחמד חוגגת"
         },
         "ja": {
           "name": "ペットの誕生日ポートレート",
@@ -5675,7 +5675,7 @@
         },
         "he": {
           "name": "כרטיס חג חורפי למשפחה",
-          "description": "מהתמונה שלך: כרטיס חג"
+          "description": "מהתמונה שלכם: כרטיס חג"
         },
         "ja": {
           "name": "冬のホリデー家族カード",
@@ -5870,7 +5870,7 @@
         },
         "he": {
           "name": "כרטיס הנצחה",
-          "description": "מהתמונה שלך: כרטיס זיכרון"
+          "description": "מהתמונה שלכם: כרטיס זיכרון"
         },
         "ja": {
           "name": "追悼カード",
@@ -5920,7 +5920,7 @@
         },
         "he": {
           "name": "כרטיס ליום נישואין",
-          "description": "מהתמונה שלך: כרטיס לזוג"
+          "description": "מהתמונה שלכם: כרטיס לזוג"
         },
         "ja": {
           "name": "記念日のお祝いカード",

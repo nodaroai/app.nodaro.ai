@@ -32,7 +32,7 @@ describe("video-overlay i18n (audit U7 — the canvas never shows the validator'
   it("a plan layer without an image or video says so in the plan's terms, in every locale that has the key", () => {
     const planIssue = validateVideoOverlayRequest({ layers: [{ start: 0, planLayer: 2 }] }) as VideoOverlayIssue
     expect(videoOverlayIssueText(planIssue, tEn)).toBe("Plan layer 2: No image or video — set imageUrl or videoUrl on this layer in the plan")
-    expect(videoOverlayIssueText(planIssue, tHe)).toBe("שכבת תוכנית 2: אין תמונה או וידאו — הגדירו imageUrl או videoUrl לשכבה הזו בתוכנית")
+    expect(videoOverlayIssueText(planIssue, tHe)).toBe("שכבה 2 בתוכנית: אין תמונה או וידאו — הגדירו imageUrl או videoUrl לשכבה הזו בתוכנית")
     const handleIssue = validateVideoOverlayRequest({ layers: [{ start: 0, slot: 3 }] }) as VideoOverlayIssue
     expect(videoOverlayIssueText(handleIssue, tEn)).toBe("Layer 3: No image or video — connect one to this layer's handle")
   })
