@@ -709,6 +709,73 @@ describe("toolApps — widens what a white-label deployment shows: on only for t
     expect(toolApps({ apps: "image-upscale" }).toolApps).toEqual({ menus: false, pages: false, apps: [] })
     expect(calls().filter((m) => m.includes("toolApps.apps")).length).toBe(2)
   })
+
+  const example = { before: "/brand/examples/before.webp", after: "/brand/examples/after.webp" }
+
+  it("examples: by app id, each a before and an after, trimmed; the ask, title and text when given; any other entry is dropped alone, loudly", () => {
+    const { calls } = warn()
+    const examples = {
+      "image-upscale": [
+        { before: " /brand/examples/before.webp ", after: " /brand/examples/after.webp ", ask: "  make it a loft  ", title: " A loft ", text: " One picture in, one out. ", note: "a key no reader knows" },
+        { ...example, after: "https://media.example.com/after.webp", ask: "", title: 7, text: "x".repeat(241) },
+        { before: "/brand/examples/before.webp" },
+        { ...example, before: "//elsewhere.example.com/before.webp" },
+        { ...example, after: "http://media.example.com/after.webp" },
+        "a string",
+        null,
+      ],
+      "video-captions": [example],
+    }
+    expect(toolApps({ pages: true, examples }).toolApps).toEqual({
+      menus: false,
+      pages: true,
+      examples: {
+        "image-upscale": [
+          { ...example, ask: "make it a loft", title: "A loft", text: "One picture in, one out." },
+          { ...example, after: "https://media.example.com/after.webp" },
+        ],
+        "video-captions": [example],
+      },
+    })
+    expect(calls().filter((m) => m.includes('toolApps.examples["image-upscale"][') && m.includes("dropped")).length).toBe(5)
+    for (const word of ["ask", "title", "text"]) expect(calls().some((m) => m.includes(`toolApps.examples["image-upscale"][1].${word}`) && m.includes("left out")), word).toBe(true)
+  })
+
+  it("examples: a key that is not an app id, a value that is not a list and an app left with no example are dropped, loudly; nothing usable leaves the key out", () => {
+    const { calls } = warn()
+    const examples = { "image-upscale": [example], "Bad Id": [example], "tile:image:createImage": [example], "video-captions": example, "video-trim": [{ before: "/b.webp" }] }
+    expect(toolApps({ menus: true, examples }).toolApps).toEqual({ menus: true, pages: false, examples: { "image-upscale": [example] } })
+    expect(calls().filter((m) => m.includes("toolApps.examples") && m.includes("not an app id")).length).toBe(2)
+    expect(calls().some((m) => m.includes('toolApps.examples["video-captions"]') && m.includes("must be an array"))).toBe(true)
+    expect(toolApps({ menus: true }).toolApps).toEqual({ menus: true, pages: false })
+    expect(toolApps({ examples: {} }).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps({ examples: { "image-upscale": [] } }).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps({ examples: { "video-trim": [{ before: "/b.webp" }] } }).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps({ examples: [example] }).toolApps).toEqual({ menus: false, pages: false })
+    expect(toolApps({ examples: "all" }).toolApps).toEqual({ menus: false, pages: false })
+    expect(calls().filter((m) => m.includes("toolApps.examples must be an object")).length).toBe(2)
+    // A bad block of examples never takes a sibling key down.
+    expect(toolApps({ pages: true, apps: ["image-upscale"], pictures: { "image-upscale": "/brand/apps/upscale.webp" }, examples: "all" }).toolApps).toEqual({
+      menus: false,
+      pages: true,
+      pictures: { "image-upscale": "/brand/apps/upscale.webp" },
+      apps: ["image-upscale"],
+    })
+  })
+
+  it("examples: keeps at most six an app and 200 apps, each text within its limit", () => {
+    const { calls } = warn()
+    const many = Array.from({ length: 9 }, (_, i) => ({ ...example, title: `example ${i}` }))
+    const apps = Object.fromEntries(Array.from({ length: 205 }, (_, i) => [`app-${i}`, [example]]))
+    const kept = toolApps({ examples: { "image-upscale": [{ before: "/b.webp" }, ...many], ...apps } }).toolApps?.examples ?? {}
+    expect(kept["image-upscale"]?.map((e) => e.title)).toEqual(many.slice(0, 6).map((e) => e.title))
+    expect(Object.keys(kept)).toEqual(["image-upscale", ...Object.keys(apps).slice(0, 199)])
+    expect(calls().some((m) => m.includes('toolApps.examples["image-upscale"]') && m.includes("only the first 6"))).toBe(true)
+    expect(calls().some((m) => m.includes("toolApps.examples") && m.includes("only the first 200"))).toBe(true)
+    const atLimit = { ...example, ask: "a".repeat(200), title: "t".repeat(80), text: "x".repeat(240) }
+    const over = { ...example, ask: "a".repeat(201), title: "t".repeat(81), text: "x".repeat(241) }
+    expect(toolApps({ examples: { "image-upscale": [atLimit, over] } }).toolApps?.examples).toEqual({ "image-upscale": [atLimit, example] })
+  })
 })
 
 describe("samples — a deployment's own welcome samples", () => {

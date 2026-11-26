@@ -161,7 +161,8 @@ export interface SurfaceWorlds {
 /**
  * The tools app's mini apps on a white-label deployment: `pages` serves their
  * pages, `menus` opens the header's apps-first menus, `pictures` gives the
- * deployment's own picture for an app or a menu tile, by key.
+ * deployment's own picture for an app or a menu tile, by key, and `examples`
+ * its own before-and-after examples for an app, by app id.
  */
 export interface SurfaceToolApps {
   menus: boolean
@@ -169,6 +170,19 @@ export interface SurfaceToolApps {
   pictures?: Record<string, string>
   /** The mini apps the deployment offers, by id. Present: exactly those may be offered (`[]`: none). Absent: every app the viewer may run. */
   apps?: string[]
+  /** The deployment's own before-and-after examples for a mini app, by app id; the app's page shows them. Absent = none. */
+  examples?: Record<string, SurfaceAppExample[]>
+}
+
+/** One example of a deployment's own for a mini app: a picture before the app ran and the picture it made. */
+export interface SurfaceAppExample {
+  before: string
+  after: string
+  /** The words the person typed, shown between the two pictures. */
+  ask?: string
+  title?: string
+  /** One line under the title. */
+  text?: string
 }
 
 /** One welcome sample of a deployment's own: the prompt it sets, the picture it made, and how it was made. */

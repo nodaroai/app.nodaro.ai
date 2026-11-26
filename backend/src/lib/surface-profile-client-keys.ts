@@ -1,6 +1,10 @@
 import { z } from "zod"
 import { LANGUAGES } from "@nodaro/shared/i18n"
 import {
+  MAX_APP_EXAMPLES,
+  MAX_APP_EXAMPLE_ASK,
+  MAX_APP_EXAMPLE_TEXT,
+  MAX_APP_EXAMPLE_TITLE,
   MAX_SAMPLE_REFERENCES,
   MAX_SURFACE_SAMPLES,
   MAX_TOOL_APP_PICTURES,
@@ -16,7 +20,7 @@ import {
   type SurfaceHeaderMode,
   type WorldId,
 } from "@nodaro/shared/runtime-config"
-import type { SurfaceSample, SurfaceSamples, SurfaceToolApps, SurfaceVideoSample, SurfaceWorlds } from "./surface-profile.js"
+import type { SurfaceAppExample, SurfaceSample, SurfaceSamples, SurfaceToolApps, SurfaceVideoSample, SurfaceWorlds } from "./surface-profile.js"
 
 /**
  * The surface-profile keys the client apps read through /config.js (worlds,
@@ -131,7 +135,8 @@ export const surfaceToolAppsSchema = z
     }
     const pictures = toolAppPictures(raw.pictures)
     const apps = toolAppIds(raw.apps)
-    return { menus: asked("menus"), pages: asked("pages"), ...(pictures ? { pictures } : {}), ...(apps ? { apps } : {}) }
+    const examples = toolAppExamples(raw.examples)
+    return { menus: asked("menus"), pages: asked("pages"), ...(pictures ? { pictures } : {}), ...(apps ? { apps } : {}), ...(examples ? { examples } : {}) }
   })
 
 /**
@@ -170,6 +175,68 @@ function toolAppPictures(raw: unknown): Record<string, string> | undefined {
     else out[key] = address
   }
   return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * `toolApps.examples`: the deployment's own before-and-after examples for a
+ * mini app, by app id, which the app's page shows. A key that is not an app
+ * id, a value that is not a list and an entry without two pictures a
+ * deployment may name are each dropped alone, loudly. An app left with no
+ * example is left out, and nothing usable leaves the key out.
+ */
+function toolAppExamples(raw: unknown): Record<string, SurfaceAppExample[]> | undefined {
+  if (raw === undefined) return undefined
+  if (!isPlainObject(raw)) {
+    console.warn("[surface-profile] toolApps.examples must be an object { <app id>: [{ before, after }] } — no example is given")
+    return undefined
+  }
+  const kept: [string, SurfaceAppExample[]][] = []
+  let beyond = 0
+  for (const [id, given] of Object.entries(raw)) {
+    if (!isToolAppId(id)) {
+      console.warn(`[surface-profile] toolApps.examples[${JSON.stringify(id)}] is not an app id — dropped`)
+      continue
+    }
+    if (kept.length === MAX_TOOL_APPS) {
+      beyond++
+      continue
+    }
+    const examples = appExamples(id, given)
+    if (examples.length) kept.push([id, examples])
+  }
+  if (beyond) console.warn(`[surface-profile] toolApps.examples: ${beyond} more app ids were not read — only the first ${MAX_TOOL_APPS} apps with an example are kept`)
+  return kept.length ? Object.fromEntries(kept) : undefined
+}
+
+/** One mini app's examples: each a before and an after, and the ask, title and text it gives within their limits. */
+function appExamples(id: string, raw: unknown): SurfaceAppExample[] {
+  const where = `toolApps.examples[${JSON.stringify(id)}]`
+  if (!Array.isArray(raw)) {
+    console.warn(`[surface-profile] ${where} must be an array of { before, after } — dropped`)
+    return []
+  }
+  if (raw.length > MAX_APP_EXAMPLES) console.warn(`[surface-profile] ${where} has ${raw.length} entries — only the first ${MAX_APP_EXAMPLES} valid ones are kept`)
+  const out: SurfaceAppExample[] = []
+  raw.forEach((entry, index) => {
+    if (out.length === MAX_APP_EXAMPLES) return
+    const given = isPlainObject(entry) ? entry : {}
+    const before = ownPictureAddress(given.before)
+    const after = ownPictureAddress(given.after)
+    if (before === undefined || after === undefined) {
+      console.warn(`[surface-profile] ${where}[${index}] needs a before and an after (each a path on the site or an https address) — dropped`)
+      return
+    }
+    const words = (key: "ask" | "title" | "text", max: number): string | undefined => {
+      const text = sampleText(given[key], max)
+      if (given[key] !== undefined && text === undefined) console.warn(`[surface-profile] ${where}[${index}].${key} is not a text of 1 to ${max} characters — left out`)
+      return text
+    }
+    const ask = words("ask", MAX_APP_EXAMPLE_ASK)
+    const title = words("title", MAX_APP_EXAMPLE_TITLE)
+    const text = words("text", MAX_APP_EXAMPLE_TEXT)
+    out.push({ before, after, ...(ask ? { ask } : {}), ...(title ? { title } : {}), ...(text ? { text } : {}) })
+  })
+  return out
 }
 
 /**

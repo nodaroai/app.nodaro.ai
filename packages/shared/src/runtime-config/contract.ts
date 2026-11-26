@@ -92,12 +92,34 @@ export interface RuntimeSurfaceBilling {
  */
 /** How many pictures `toolApps.pictures` may name, and how many samples a world may give. */
 export const MAX_TOOL_APP_PICTURES = 200
-/** How many mini apps `toolApps.apps` may name. */
+/** How many mini apps `toolApps.apps` may name, and how many `toolApps.examples` may give examples for. */
 export const MAX_TOOL_APPS = 200
 
 /** A mini app's id, as the tools app addresses it below `/apps` (`image-upscale`). */
 export function isToolAppId(value: unknown): value is string {
   return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(value)
+}
+
+/** How many examples `toolApps.examples` may give one mini app, and the longest an example's ask, title and text may be. */
+export const MAX_APP_EXAMPLES = 6
+export const MAX_APP_EXAMPLE_ASK = 200
+export const MAX_APP_EXAMPLE_TITLE = 80
+export const MAX_APP_EXAMPLE_TEXT = 240
+
+/**
+ * One example of a deployment's own for a mini app, shown on the app's page:
+ * a picture before the app ran and the picture it made. Each address is a path
+ * on the deployment's own site or an https address.
+ */
+export interface SurfaceAppExample {
+  readonly before: string
+  readonly after: string
+  /** The words the person typed, shown between the two pictures. */
+  readonly ask?: string
+  /** The example's title. */
+  readonly title?: string
+  /** One line under the title. */
+  readonly text?: string
 }
 export const MAX_SURFACE_SAMPLES = 12
 
@@ -169,10 +191,18 @@ export interface RuntimeSurface {
    * `{}` = none. `apps` names the mini apps the deployment offers, by id:
    * when present, exactly those may be offered (each still only while the
    * viewer may run it), and `[]` offers none; absent, every app the viewer
-   * may run. The editor's own header lists apps only from this list. No
-   * effect where the header is not white-label.
+   * may run. The editor's own header lists apps only from this list.
+   * `examples` gives the deployment's own before-and-after examples for an
+   * app, by app id, which the app's page shows; `{}` = none. No effect where
+   * the header is not white-label.
    */
-  readonly toolApps: { readonly menus: boolean; readonly pages: boolean; readonly pictures: Readonly<Record<string, string>>; readonly apps?: readonly string[] }
+  readonly toolApps: {
+    readonly menus: boolean
+    readonly pages: boolean
+    readonly pictures: Readonly<Record<string, string>>
+    readonly apps?: readonly string[]
+    readonly examples: Readonly<Record<string, readonly SurfaceAppExample[]>>
+  }
   /**
    * The deployment's own welcome samples, by world: what a white-label
    * deployment shows where the platform's sites show the platform's samples
@@ -561,13 +591,52 @@ function toolAppIdsOf(value: unknown): readonly string[] | undefined {
 
 function toolAppsOf(value: unknown): RuntimeSurface["toolApps"] {
   const given = record(value)
-  return { menus: given.menus === true, pages: given.pages === true, pictures: toolAppPicturesOf(given.pictures), ...optional("apps", toolAppIdsOf(given.apps)) }
+  return {
+    menus: given.menus === true,
+    pages: given.pages === true,
+    pictures: toolAppPicturesOf(given.pictures),
+    ...optional("apps", toolAppIdsOf(given.apps)),
+    examples: toolAppExamplesOf(given.examples),
+  }
 }
 
 const nonEmpty = (value: unknown, max: number): string | undefined => {
   if (typeof value !== "string") return undefined
   const text = value.trim()
   return text.length > 0 && text.length <= max ? text : undefined
+}
+
+/** One mini app's own examples: an entry without a before and an after a deployment may name is left out, and so is an ask, a title or a text that is empty or over its limit. */
+function appExamplesOf(value: unknown): readonly SurfaceAppExample[] {
+  if (!Array.isArray(value)) return []
+  const out: SurfaceAppExample[] = []
+  for (const entry of value) {
+    if (out.length === MAX_APP_EXAMPLES) break
+    const given = record(entry)
+    const before = ownPictureAddress(given.before)
+    const after = ownPictureAddress(given.after)
+    if (before === undefined || after === undefined) continue
+    out.push({
+      before,
+      after,
+      ...optional("ask", nonEmpty(given.ask, MAX_APP_EXAMPLE_ASK)),
+      ...optional("title", nonEmpty(given.title, MAX_APP_EXAMPLE_TITLE)),
+      ...optional("text", nonEmpty(given.text, MAX_APP_EXAMPLE_TEXT)),
+    })
+  }
+  return out
+}
+
+/** `toolApps.examples`: each mini app's own examples, by app id. A key that is no app id, a value that is no list and an app left with no example are left out. */
+function toolAppExamplesOf(value: unknown): Readonly<Record<string, readonly SurfaceAppExample[]>> {
+  const kept: [string, readonly SurfaceAppExample[]][] = []
+  for (const [id, given] of Object.entries(record(value))) {
+    if (kept.length === MAX_TOOL_APPS) break
+    if (!isToolAppId(id)) continue
+    const examples = appExamplesOf(given)
+    if (examples.length > 0) kept.push([id, examples])
+  }
+  return Object.fromEntries(kept)
 }
 
 /** One world's own welcome samples: an entry without a prompt or a picture a deployment may name is left out. */
