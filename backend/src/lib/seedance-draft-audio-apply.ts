@@ -2,6 +2,7 @@ import { dirname } from "node:path"
 import { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 import { cleanupWorkDir, probeMediaStreams } from "../providers/video/ffmpeg-utils.js"
 import { uploadVideoMaybeWatermark, watermarkLocalVideoAndUpload } from "../workers/shared.js"
+import type { StoredVideo } from "./video-result-store.js"
 import { draftAudioMuxMergeArgs, type DraftAudioMux } from "./seedance-draft-audio.js"
 import { videoStreamSeconds } from "./seedance-draft-finalize.js"
 
@@ -59,8 +60,8 @@ export const DRAFT_AUDIO_NOT_REAPPLIED = {
 } as const
 
 export interface DraftAudioMuxResult {
-  /** The delivered clip's R2 URL. */
-  readonly url: string
+  /** The delivered clip as stored (`lib/video-result-store.ts`): every field its output records. */
+  readonly stored: StoredVideo
   /** Set when the audio could not be re-applied and the picture went out silent. */
   readonly warning?: { readonly code: string; readonly message: string }
 }
@@ -142,13 +143,13 @@ export async function applyDraftAudioMux(args: {
     }
   }
   if (outcome?.kind !== "merged") {
-    const url = await uploadVideoMaybeWatermark(args.videoUrl, args.jobId, args.userId, args.watermark)
+    const stored = await uploadVideoMaybeWatermark(args.videoUrl, args.jobId, args.userId, args.watermark)
     // Silent without a warning only when there was no audio to keep.
-    return outcome?.kind === "no-audio" ? { url } : { url, warning: { ...DRAFT_AUDIO_NOT_REAPPLIED } }
+    return outcome?.kind === "no-audio" ? { stored } : { stored, warning: { ...DRAFT_AUDIO_NOT_REAPPLIED } }
   }
   const merged = outcome.path
   try {
-    return { url: await watermarkLocalVideoAndUpload(merged, args.jobId, args.userId, args.watermark) }
+    return { stored: await watermarkLocalVideoAndUpload(merged, args.jobId, args.userId, args.watermark) }
   } finally {
     await cleanupWorkDir(dirname(merged))
   }

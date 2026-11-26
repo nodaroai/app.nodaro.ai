@@ -41,8 +41,12 @@ import type { NodaroClientCore } from "../core.js"
  * Nodaro Prism), more than 15 roles in all, more than 30 images sent in all
  * (a role whose pictures are prepared sends one), `draft: true` above 480p, a
  * `prePrompt` or `postPrompt` over 4,000 characters); `place_roles_need_names`
- * (two place roles with the same name: an unnamed place is "the setting"); on Nodaro Pulse,
- * `draft_unsupported` (`draft: true`), `resolution_unsupported` (480p),
+ * (two place roles with the same name: an unnamed place is "the setting");
+ * `resolution_not_offered` (a `resolution` the engine choice does not offer
+ * here; the error's `details.offered` lists the sizes it does, see
+ * {@link VideoRemakeResolution}); on Nodaro Pulse,
+ * `draft_unsupported` (`draft: true`), `resolution_unsupported` (480p, where
+ * the engine does not deliver resolutions yet),
  * `output_format_unsupported` (a MOV edit output) and `too_many_images` (more
  * than 10 images in the run, across every role and fixed reference);
  * `raw_reference_token` (also in a reference's `line`),
@@ -56,9 +60,10 @@ import type { NodaroClientCore } from "../core.js"
  * it sends no images; Nodaro Pulse's cap is 8,000 characters); 401; 402 `insufficient_credits` (`run()` only); 404
  * (a `sessionId` you may not use, `run()` only); 422 `job_blocked` (`run()`
  * only); 503 `host_too_old` (both); 503 `estimate_unavailable` (`estimate()`
- * only).  A Flash choice ({@link VideoRemakeFlashEngine}) adds 409
+ * only); 409 `resolution_unavailable` (a size the engine choice offers that
+ * this request cannot have: try a smaller one). A Flash choice ({@link VideoRemakeFlashEngine}) adds 409
  * `flash_not_offered` (not offered here) and 400
- * `flash_model_unsupported` (what it cannot take: 1080p, a draft, Nodaro Prism
+ * `flash_model_unsupported` (what it cannot take: a draft, Nodaro Prism
  * Flash's 10 images, Nodaro Pulse Flash's 20 seconds).
  */
 
@@ -66,12 +71,13 @@ import type { NodaroClientCore } from "../core.js"
  * The engine a Video Remake run is made on, by its public id. Left out =
  * `"nodaro-prism"`.
  *
- * - `"nodaro-prism"` (Nodaro Prism): 480p (the default; plain unless
- *   `draft: true`), 720p or 1080p; Full Quality finishes a draft's own take at
- *   1080p.
- * - `"nodaro-pulse"` (Nodaro Pulse): 720p (the default) or 1080p, never a
- *   draft (`draft: true` answers 400 `draft_unsupported`), so no Full Quality:
- *   run it again at 1080p instead. A preview is still 4 s from `previewStart`.
+ * - `"nodaro-prism"` (Nodaro Prism): delivered at 720p (the default), 1080p
+ *   or 4K (see {@link VideoRemakeResolution}); `draft: true` makes a 480p
+ *   draft, whose own take Full Quality finishes at 1080p.
+ * - `"nodaro-pulse"` (Nodaro Pulse): delivered at 720p (the default), 1080p or
+ *   4K, never a draft (`draft: true` answers 400 `draft_unsupported`), so no
+ *   Full Quality: run it again at a larger size instead. A preview is still 4 s
+ *   from `previewStart`.
  */
 export type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse"
 
@@ -82,12 +88,12 @@ export type VideoRemakeEngine = "nodaro-prism" | "nodaro-pulse"
  * engine; anywhere else a run or estimate naming one is refused 409
  * `flash_not_offered`. A trend may be made on one too.
  *
- * - `"nodaro-prism-flash"` (Nodaro Prism Flash, a Nodaro Prism run): 480p (the
- *   default, plain) or 720p; no draft and no Full Quality; at most 10 images
- *   per run.
- * - `"nodaro-pulse-flash"` (Nodaro Pulse Flash, a Nodaro Pulse run): 720p; no draft
- *   and no Full Quality; at most 20 seconds of output, and 20 seconds of
- *   reference video in all.
+ * - `"nodaro-prism-flash"` (Nodaro Prism Flash, a Nodaro Prism run): delivered
+ *   at 720p (the default) or 1080p; no draft and no Full Quality; at most 10
+ *   images per run.
+ * - `"nodaro-pulse-flash"` (Nodaro Pulse Flash, a Nodaro Pulse run): delivered
+ *   at 720p (the default) or 1080p; no draft and no Full Quality; at most 20
+ *   seconds of output, and 20 seconds of reference video in all.
  *
  * What a Flash choice cannot take is refused 400 `flash_model_unsupported`,
  * before anything is held. The job records the choice in `input_data.engine`,
@@ -153,11 +159,14 @@ export interface VideoRemakeRolePreviewSettings {
  */
 export interface VideoRemakeRolePrevizSettings {
   /**
-   * What the role IS in the video to make, in your own words (`"the
-   * detective"`, `"a delivery van"`; 1–200 characters). On a previz run the
-   * role's `name` is the LOCATOR of its model in the clip (its colour, or its
-   * shape and position: `"the pink model"`), and `subject` is what the
-   * result's script calls it. Left out: the script calls it by its picture.
+   * What the role's model BECOMES in the video to make, in your own words
+   * (1–200 characters). On a previz run the role's `name` is the LOCATOR of
+   * its model in the clip (its colour, or its shape and position: `"the pink
+   * model"`), and `subject` is what the result's script calls it. Write the
+   * finished thing, not the previz model, and leave out the model's colour
+   * unless the real thing has it: `"a jockey on a bay racehorse"`, not
+   * `"the driver of the red car"`. Left out: the script calls it by its
+   * picture.
    */
   subject?: string
 }
@@ -412,32 +421,17 @@ export interface VideoRemakeParams {
   /** @deprecated use {@link motionLength} (still accepted). */
   klingLength?: VideoRemakeMotionLength
   /**
-   * The size the engine makes the video at. Nodaro Prism: `"480p"` (default),
-   * `"720p"` or `"1080p"`. Nodaro Pulse: `"720p"` (default) or `"1080p"`;
-   * `"480p"` answers 400. The video is delivered at this size unless the run
-   * is upscaled to the next one (see {@link upscale}); the estimate's
-   * `outputResolution` says which.
+   * The size the video is delivered at (see {@link VideoRemakeResolution}).
+   * Left out: the engine choice's default, its smallest size offered (720p).
+   * The estimate answers the size the run delivers as its `resolution`.
    */
-  resolution?: "480p" | "720p" | "1080p"
-  /**
-   * Whether the finished video is upscaled to the next size (see
-   * {@link VideoRemakeUpscaleChoice}). Left out: `"next"` where the choice is
-   * offered, `"off"` where it is not. A 1080p run's next size is 4K. It is
-   * not offered on a draft or a trend run, nor where the deployment has not
-   * turned it on
-   * ({@link VideoRemakeResource.styleChoice} answers `upscaleChoice` false):
-   * there the field is accepted and ignored, and a `"next"` sent anyway runs as
-   * `"off"` (never an error). The estimate, sent the same field, is the
-   * authority: `upscaleOffered`, the effective `upscale` and its price
-   * (`breakdown.upscale`).
-   */
-  upscale?: VideoRemakeUpscaleChoice
+  resolution?: VideoRemakeResolution
   /**
    * `true` makes a draft: a 480p run whose same take Full Quality can finish
-   * at 1080p (Nodaro Prism only). Default `false`: a plain run, at 480p
-   * too, which Full Quality cannot finish. `true` with `"720p"` or `"1080p"`
-   * answers 400 (draft is 480p only). Nodaro Pulse has no draft: `true`
-   * answers 400 `draft_unsupported`.
+   * at 1080p (Nodaro Prism only; leave `resolution` out, or send `"480p"`).
+   * Default `false`. `true` with a larger `resolution` answers 400 (draft is
+   * 480p only). Nodaro Pulse has no draft: `true` answers 400
+   * `draft_unsupported`.
    */
   draft?: boolean
   /**
@@ -471,37 +465,25 @@ export interface VideoRemakeParams {
 }
 
 /**
- * Video Remake's upscale choice ({@link VideoRemakeParams.upscale}):
- * - `"next"`: the result is upscaled straight to the next size and delivered
- *   at it (480p → 720p, 720p → 1080p, 1080p → 4K), at the price the estimate shows in
- *   `breakdown.upscale`;
- * - `"off"`: the result is delivered at the engine's size (`resolution`).
+ * The size a Video Remake run is delivered at (`resolution` on `run()` and
+ * `estimate()`, on the estimate's answer and on a completed job's output;
+ * `"4k"` is lower-case). Each engine choice offers its own, its default first:
+ *
+ * - Nodaro Prism and Nodaro Pulse: `"720p"` (default), `"1080p"` or `"4k"`;
+ * - Nodaro Prism Flash and Nodaro Pulse Flash: `"720p"` (default) or `"1080p"`.
+ *
+ * A deployment may offer fewer: {@link VideoRemakeStyleChoice.resolutions}
+ * lists what each engine choice offers there, and a size it does not offer is
+ * refused 400 `resolution_not_offered`, the thrown `NodaroError`'s
+ * `details.offered` naming the sizes it does (the body's `error.offered`). A
+ * size offered that a given request cannot have is refused 409
+ * `resolution_unavailable` before anything is held. Where `resolutions` is
+ * empty, the deployment's engine does not deliver resolutions yet and
+ * `resolution` is the size it makes: Nodaro Prism `"480p"` (default),
+ * `"720p"` or `"1080p"`, Nodaro Pulse `"720p"` (default) or `"1080p"`, Nodaro
+ * Prism Flash `"480p"` (default) or `"720p"`, Nodaro Pulse Flash `"720p"`.
  */
-export type VideoRemakeUpscaleChoice = "off" | "next"
-
-/**
- * What became of a `"next"` run's upscale, on its completed job's output
- * (`upscale`): `"applied"` (delivered at the next size) or `"skipped"` (the
- * upscale step failed and the video was delivered at the engine's size).
- */
-export type VideoRemakeUpscaleOutcome = "applied" | "skipped"
-
-/**
- * The size a Video Remake run is delivered at (`outputResolution`, on the
- * estimate and on a completed job's output): the engine's sizes, and `"4k"`
- * (lower-case) for a 1080p run upscaled to the next size. The engine's own
- * size (`resolution`) is never `"4k"`.
- */
-export type VideoRemakeOutputResolution = "480p" | "720p" | "1080p" | "4k"
-
-/**
- * What the upscale choice's `"next"` delivers here, per engine (or Flash
- * choice) and the engine's size: e.g. `{ "nodaro-prism": { "480p": "720p",
- * "720p": "1080p", "1080p": "4k" }, "nodaro-pulse": { "720p": "1080p" } }`.
- * A size missing from an engine's map, or an engine missing from the answer,
- * is not offered here. See {@link VideoRemakeStyleChoice.upscaleTo}.
- */
-export type VideoRemakeUpscaleTo = Partial<Record<VideoRemakeEngineChoice, Partial<Record<"480p" | "720p" | "1080p", Exclude<VideoRemakeOutputResolution, "480p">>>>>
+export type VideoRemakeResolution = "480p" | "720p" | "1080p" | "4k"
 
 /**
  * The Video Remake keys of a completed job's output (`GET /v1/jobs/:id`,
@@ -512,35 +494,12 @@ export interface VideoRemakeJobOutput {
   videoUrl?: string
   /** The engine the run used, by its public id. */
   engine?: VideoRemakeEngineChoice
-  /** The size the engine made the video at. */
-  resolution?: "480p" | "720p" | "1080p"
   /**
-   * The size delivered: the next size on a `"next"` run whose upscale was
-   * applied (`"4k"` for a 1080p run), else `resolution`. Absent from a run
-   * made where the upscale choice is not taken: read `resolution` then.
+   * The size the video was delivered at (see {@link VideoRemakeResolution}).
+   * Rarely smaller than the size asked for, when that size could not be
+   * finished: this says the size the video has.
    */
-  outputResolution?: VideoRemakeOutputResolution
-  /** On a `"next"` run only: whether its upscale was applied (see {@link VideoRemakeUpscaleOutcome}). */
-  upscale?: VideoRemakeUpscaleOutcome
-  /**
-   * The engine's own version of the video, at the engine's size, beside the
-   * upscaled `videoUrl`. Present only when `upscale` is `"applied"`; it is
-   * removed together with `videoUrl` when the run's Library item is deleted
-   * for good.
-   */
-  engineVideoUrl?: string
-  /** The engine version's width in pixels. Present only when `upscale` is `"applied"`. */
-  engineWidth?: number
-  /** The engine version's height in pixels. Present only when `upscale` is `"applied"`. */
-  engineHeight?: number
-  /**
-   * Whether the run's upscale step was charged: `true` when its upscaled
-   * file is the video delivered, `false` when the step was skipped (its
-   * credits are given back, so the run's charge is its total less the
-   * estimate's `breakdown.upscale`). Present on a run that had an upscale
-   * step, from a server that charges the step only when it is delivered.
-   */
-  upscaleCharged?: boolean
+  resolution?: VideoRemakeResolution
   [key: string]: unknown
 }
 
@@ -554,8 +513,9 @@ export interface VideoRemakeJobOutput {
  *   motion are followed and its look is not: it is rendered into the run's
  *   art style or custom style (`direction`), and with neither into real-world,
  *   live-action footage. Name each role by its model in the clip (its colour,
- *   or its shape and position: `name: "the pink model"`), say what it is in
- *   `subject`, and give it the pictures that replace the model.
+ *   or its shape and position: `name: "the pink model"`), say in `subject`
+ *   what that model becomes (the finished thing, not the model), and give it
+ *   the pictures that replace the model.
  */
 export type VideoRemakeClipKind = "footage" | "previz"
 
@@ -943,16 +903,6 @@ export interface VideoRemakeEstimate {
    *   Nodaro's setting for the engine does so (absent otherwise).
    * - `referenceAudio`: preparing the clip's sound for the video model, when
    *   Nodaro's setting for the engine runs that step (absent otherwise).
-   * - `upscale`: where the deployment offers the upscale choice
-   *   ({@link VideoRemakeStyleChoice.upscaleChoice}), the upscale to the next
-   *   size on a run whose `upscale` is `"next"` (absent on `"off"`). Elsewhere,
-   *   a Topaz video upscale of the result (it is then scaled back
-   *   to the run's resolution), when the deployment's setting adds that step
-   *   for a Precise run on Nodaro Prism at the run's resolution (absent
-   *   otherwise; never on a draft); it settles to the units
-   *   Topaz used. A Topaz step that fails or is refused is not charged; one
-   *   that finished is charged even if the run then delivers without it
-   *   (rare). Either way it is in both totals.
    *
    * `motion` and `motionExpected` are alternatives, so the parts sum to more
    * than either total: read `totalCredits` and `expectedCredits`, never the
@@ -968,7 +918,6 @@ export interface VideoRemakeEstimate {
     privacy?: number
     prompt?: number
     referenceAudio?: number
-    upscale?: number
   } & Record<string, number>
   /**
    * The extra credits charged only if the video model refuses the clip and
@@ -994,20 +943,10 @@ export interface VideoRemakeEstimate {
    */
   firstRemakeOffer?: FirstRemakeOfferQuote
   /**
-   * The size the engine would make the video at. Answered where the
-   * deployment offers the upscale choice; absent from any other server.
+   * The size the run would deliver (see {@link VideoRemakeResolution}).
+   * Absent from a server whose engine does not answer it.
    */
-  resolution?: "480p" | "720p" | "1080p"
-  /** The size the video would be delivered at: the next size on a `"next"` run (`"4k"` for a 1080p run), else `resolution`. */
-  outputResolution?: VideoRemakeOutputResolution
-  /** The upscale choice the run would be made with: the one asked for, `"off"` where it is not offered. */
-  upscale?: VideoRemakeUpscaleChoice
-  /**
-   * Whether the upscale choice is offered for this run: the authority (never
-   * on a draft or a trend run; a 1080p run's next size is 4K). Absent: read
-   * it as `false`.
-   */
-  upscaleOffered?: boolean
+  resolution?: VideoRemakeResolution
 }
 
 /** `VideoRemakeEstimate.firstRemakeOffer` / `TrendEstimate.firstRemakeOffer`. */
@@ -1242,25 +1181,17 @@ export interface VideoRemakeStyleChoice {
    */
   flash?: Partial<Record<VideoRemakeEngine, boolean>>
   /**
-   * Whether a run and its estimate take the upscale choice here
-   * ({@link VideoRemakeParams.upscale}): one answer for the deployment, not
-   * per engine, `true` only where the deployment has turned it on. It says the
-   * field is taken, not that a given run is offered it: read the estimate's
-   * `upscaleOffered` for that. Absent from an older server: `false` (offer no
-   * upscale choice; the field sent anyway is ignored).
-   */
-  upscaleChoice?: boolean
-  /**
-   * Per engine (or Flash choice) and the engine's size, the size `"next"`
-   * delivers here, so a page can show its Upscale control before a clip is
-   * added: what the engine can do, less every size this deployment has
-   * switched off. An engine with no size offered is left out; `{}` where
-   * {@link upscaleChoice} is false. It says what the deployment offers in
-   * general; the estimate's `upscaleOffered` stays the authority for an
-   * actual run (never on a draft or a trend run). Absent from an older
+   * Per engine choice (each engine and Flash choice), the sizes a run is
+   * delivered at here, smallest (the default) first (see
+   * {@link VideoRemakeResolution}): e.g. `{ "nodaro-prism": ["720p", "1080p",
+   * "4k"], "nodaro-pulse": ["720p", "1080p", "4k"], "nodaro-prism-flash":
+   * ["720p", "1080p"], "nodaro-pulse-flash": ["720p", "1080p"] }`. List
+   * exactly these. Whether a Flash choice is offered at all is {@link flash}'s
+   * to say. `{}` where the deployment's engine does not deliver resolutions
+   * yet (`resolution` is then the engine's size). Absent from an older
    * server: treat it as `{}`.
    */
-  upscaleTo?: VideoRemakeUpscaleTo
+  resolutions?: Partial<Record<VideoRemakeEngineChoice, VideoRemakeResolution[]>>
 }
 
 /**

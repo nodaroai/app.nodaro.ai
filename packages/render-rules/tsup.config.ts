@@ -1,7 +1,9 @@
 import { defineConfig } from "tsup"
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  // The sampler is its own entry (`@nodaro/render-rules/scene3d-sampler`): the
+  // Remotion renderer and the editor's 3D preview load it without the root.
+  entry: { index: "src/index.ts", "scene3d-sampler": "src/scene3d-sampler/index.ts" },
   // Both formats, like @nodaro/shared: the backend loads this at runtime
   // (Node ESM), the editor bundles it (Vite).
   format: ["esm", "cjs"],

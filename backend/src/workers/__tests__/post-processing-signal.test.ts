@@ -28,7 +28,8 @@ const h = vi.hoisted(() => ({
   createWorkDir: vi.fn().mockResolvedValue("/tmp/wm-test"),
   cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
   needsTranscode: vi.fn().mockResolvedValue(false),
-  runFfprobe: vi.fn().mockResolvedValue("h264"),
+  // The preview's own frame check (-count_frames) finds its frames; any other probe reads as before.
+  runFfprobe: vi.fn(async (args: readonly string[]) => (args.includes("-count_frames") ? "5" : "h264")),
   // storage primitives
   uploadFileToR2: vi.fn(),
   uploadBufferToR2: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: h.cleanupWorkDir,
   needsTranscode: h.needsTranscode,
   runFfprobe: h.runFfprobe,
+  videoStreamNeedsTranscode: (s: { codec: string; pixFmt: string }) => s.codec !== "h264" || s.pixFmt !== "yuv420p",
   BROWSER_SAFE_VIDEO_ARGS: [],
 }))
 

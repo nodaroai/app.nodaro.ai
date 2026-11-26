@@ -174,6 +174,8 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "gallery-moderation",
   // Provider safety — admin-only: what can be changed about each provider's content filter.
   "provider-safety",
+  // Video route — admin-only, Cloud (per-model routing of the Seedance family).
+  "video-route",
   // Trends — admin-only (and only where credits exist), its editor a child path.
   "trends",
   "trends/:id",

@@ -140,7 +140,7 @@ async function prefitVideoOverlayLayerOrRefuse(
     return await prefitVideoOverlayLayer(src, dest, size, fit)
   } catch (err) {
     if (typeof (err as { code?: unknown } | null)?.code === "string") throw err
-    const detail = err instanceof Error ? err.message : String(err)
+    const detail = operatorDetailOf(err)
     throw Object.assign(
       new DeterministicJobError(`${videoOverlayLayerLabel(ref)}: not an image (PNG, JPEG or WebP)`, { cause: err }),
       { internalDetails: detail },
@@ -290,7 +290,7 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
       await runFfmpeg(graph.args, DEFAULT_FFMPEG_TIMEOUT_MS, { peakMemoryMiB: videoOverlayPeakMemoryMiB(canvas, decoded, !!basePlacement) })
     }
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err)
+    const detail = operatorDetailOf(err)
     const message =
       (err as { timedOut?: unknown }).timedOut === true
         ? "Render exceeded the 10-minute limit"
@@ -298,4 +298,12 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
     throw Object.assign(new DeterministicJobError(message, { cause: err }), { internalDetails: detail })
   }
   return { outputPath, warnings, width: canvas.w, height: canvas.h, durationSec: probe.streamDurationSec }
+}
+
+/** What the operator keeps of a failed step: its own detail when it carries one
+ *  (an ffmpeg failure's exit and error lines, `ffmpegFailureError`), else its message. */
+function operatorDetailOf(err: unknown): string {
+  const inner = (err as { internalDetails?: unknown } | null | undefined)?.internalDetails
+  if (typeof inner === "string" && inner.length > 0) return inner
+  return err instanceof Error ? err.message : String(err)
 }

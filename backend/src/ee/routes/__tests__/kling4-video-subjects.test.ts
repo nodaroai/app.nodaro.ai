@@ -165,6 +165,7 @@ async function quoteRunSettle(route: "text-to-video" | "generate-video", params:
     characterReferences: queued.characterReferences,
     duration: params.duration,
     referenceTaskType: undefined,
+    dynamicRange: undefined,
   })
   return { quote, identifier, reserved, charged: settle.baseCredits === undefined ? reserved : mk(settle.baseCredits), queued }
 }

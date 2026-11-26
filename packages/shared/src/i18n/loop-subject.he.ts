@@ -14,7 +14,7 @@ const map: LocaleCatalogMap = {
   "nebula":           { label: "ערפילית" },
   "sunbeams":         { label: "קרני שמש" },
   "cherry-blossoms":  { label: "פריחת דובדבן" },
-  "underwater":       { label: "אור תת-ימי" },
+  "underwater":       { label: "אור תת־ימי" },
   "embers":           { label: "גחלים מרחפות" },
   // Abstract / VJ
   "tunnel":           { label: "מנהרה — מסעירה" },
@@ -23,7 +23,7 @@ const map: LocaleCatalogMap = {
   "plasma":           { label: "שדה פלזמה" },
   "particle-swirl":   { label: "מערבולת חלקיקים" },
   "fractal-zoom":     { label: "זום פרקטלי" },
-  "synthwave":        { label: "רשת סינת'וויב" },
+  "synthwave":        { label: "רשת סינת׳וויב" },
   "wireframe":        { label: "כדור Wireframe" },
   "equalizer":        { label: "פסי אקולייזר" },
   "dna-helix":        { label: "סליל DNA" },

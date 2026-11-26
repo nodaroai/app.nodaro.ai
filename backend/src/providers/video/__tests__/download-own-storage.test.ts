@@ -110,6 +110,14 @@ describe("downloadFile — our own stored files", () => {
     expect(await written()).toBe("from-http")
   })
 
+  it("a storage read that ended short of the object's size falls back to HTTP like any failed read", async () => {
+    const { DownloadIncompleteError } = await import("../../../lib/download-incomplete.js")
+    mocks.downloadR2ObjectToFile.mockRejectedValueOnce(new DownloadIncompleteError("short storage read"))
+    await downloadFile(OWN, dest)
+    expect(mocks.safeFetch).toHaveBeenCalledOnce()
+    expect(await written()).toBe("from-http")
+  })
+
   it("a storage refusal that is not about the file (a bucket it does not know) falls back to HTTP", async () => {
     mocks.downloadR2ObjectToFile.mockRejectedValueOnce(storageError("NoSuchBucket", 404))
     await downloadFile(OWN, dest)

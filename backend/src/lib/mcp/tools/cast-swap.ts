@@ -101,14 +101,17 @@
  * the roles are planned as an ordinary clip's, as before it, and the run
  * still states the clip.
  *
- * The upscale choice (`upscale: "off" | "next"`, 2026-11-24): "next" delivers
- * the result upscaled to the next size (a 1080p run at 4K, `"4k"`). Sent only to an engine that declares
- * `castSwap.upscaleChoice` (lib/video-remake-upscale-choice.ts); elsewhere it
- * is dropped, which is what such a deployment makes of it ("off"). Where it is
- * offered, and the choice left out's default, is the engine's to say: the
- * quote carries its `resolution` (the engine's size), `outputResolution`,
- * `upscale` and `upscaleOffered`, and its text names the delivered size and
- * the `breakdown.upscale` part.
+ * `resolution` is the size the run DELIVERS (decided 2026-11-26): Nodaro Prism
+ * and Nodaro Pulse 720p (default), 1080p or 4K, their Flash choices 720p
+ * (default) or 1080p, as this deployment offers them (the route refuses any
+ * other, 400 `resolution_not_offered` with the sizes offered, or 409
+ * `resolution_unavailable` for one this request cannot have). How the engine
+ * makes the size is its own, so the tool sends no `upscale` key, ever: an
+ * older client's `upscale` argument passes the loose schema and is never
+ * sent. The quote answers `resolution`, the size delivered, and its text
+ * names it (lib/video-remake-delivered-resolution.ts). An engine that does not
+ * deliver resolutions yet (`castSwap.deliveredResolution` absent) reads
+ * `resolution` as its own size, and the quote's text names what it answers.
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
@@ -151,7 +154,7 @@ import { clientRequestIdSchema, errorResult, GET_JOB_POLL_HINT, idempotencyHeade
 import { amountsNote, amountWord, statedAmount, statedAmountRecord, unitFields } from "../amounts.js"
 import { statedName } from "../deployment-name.js"
 import { checkIntentArg, intentMismatchSentence, runIntentArg, videoRemakeIntentMismatch } from "./_video-remake-intent.js"
-import { VIDEO_REMAKE_UPSCALE_CHOICES, loadedEngineTakesUpscaleChoice, outputResolutionLabel, upscaleQuoteOf } from "../../video-remake-upscale-choice.js"
+import { VIDEO_REMAKE_DELIVERED_SIZES, deliveredSizeLabel, deliveredSizeOfQuote, type VideoRemakeDeliveredSize } from "../../video-remake-delivered-resolution.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
@@ -182,7 +185,7 @@ export interface VideoRemakeInstructionRun {
   roles: []
   post_prompt: string
   engine: NodaroMotionEngine
-  resolution?: "480p" | "720p" | "1080p"
+  resolution?: VideoRemakeDeliveredSize
   draft?: boolean
 }
 
@@ -475,7 +478,7 @@ export const castSwapRolePreviewArgs = {
  * pointed at from the others (each kind's copy is in the tool list). Exported for the schema walk.
  */
 const roleSubject = (description: string) => ({ subject: z.string().max(200).optional().describe(description) })
-export const castSwapRolePrevizArgs = roleSubject("previz only: what the role is, used in the script; name is then the locator of its model.")
+export const castSwapRolePrevizArgs = roleSubject('previz only: what its model becomes in the finished video, not the previz model; no model colour the real thing lacks ("a jockey on a racehorse", not "the red car\'s driver").')
 export const castSwapRolePrevizArgsBrief = roleSubject("As a person's subject.")
 
 function refusal(statusCode: number, body: string) {
@@ -503,9 +506,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         "By default each person, pet and product's images are first made into one clean reference picture (extra credits, about a minute; prepare_references: false skips it). " +
         "Without `confirm` it returns the PRICE QUOTE only (nothing is charged): show the credits to the user, and call again with `confirm: true` only once they accept. " +
         "That returns a job id: poll it with wait_for_job. `preview: true` renders 4 s first, a cheaper check of the look. " +
-        'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default; 480p, 720p, 1080p) or "nodaro-pulse" (Nodaro Pulse; 720p default or 1080p, no draft). ' +
-        "Image and video URLs must be http(s): upload local files with the upload tools first. " +
-        "check_intent: true on the quote also checks (free) if the prompt asks for something Video Remake does not do." +
+        'engine picks the engine: "nodaro-prism" (Nodaro Prism, the default) or "nodaro-pulse" (Nodaro Pulse; no draft); resolution is the size delivered, 720p by default, up to 4k. ' +
+        "Image and video URLs must be http(s): upload local files with the upload tools first." +
         (recastOffered(session) ? ` ${RECAST_POINTER}` : "") +
         amountsNote(),
       // A LOOSE object: an argument the tool no longer lists still reaches the handler, which
@@ -581,7 +583,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         engine: castSwapEngineArg
           .optional()
           .describe(
-            'Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality. Where offered, at a lower price (else flash_not_offered): "nodaro-prism-flash" (480p or 720p, at most 10 images) and "nodaro-pulse-flash" (720p, at most 20 s); neither has a draft or Full Quality.',
+            'Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): no draft, no Full Quality. Where offered, at a lower price (else flash_not_offered): "nodaro-prism-flash" (at most 10 images) and "nodaro-pulse-flash" (at most 20 s); neither has a draft or Full Quality. Their sizes: see resolution.',
           ),
         style: z
           .enum(CAST_SWAP_STYLES)
@@ -606,18 +608,17 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         clip_kind: z
           .enum(CLIP_KINDS)
           .optional()
-          .describe('"previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model\'s colour or position; with no art_style or custom_style the result is real-world, live-action footage. Default "footage".'),
-        previz_lighting: z.boolean().optional().describe("previz only: also take the lighting direction and lighting changes from the clip."),
+          .describe('"previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model\'s colour or position, its subject by what it becomes; with no art_style or custom_style the result is real-world, live-action footage. Default "footage".'),
+        previz_lighting: z.boolean().optional().describe("previz only: also take the clip's lighting direction and changes."),
         previz_sound: z.enum(["clip", "generated"]).optional().describe("previz only: keep the clip's sound, or have it generated."),
         motion_length: z
           .enum(LENGTHS)
           .optional()
           .describe('nodaro-pulse only: cut the clip to whole seconds at its end (default) or start.'),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe('The engine\'s size. Default "480p" (nodaro-pulse: "720p"; no 480p).'),
-        upscale: z
-          .enum(VIDEO_REMAKE_UPSCALE_CHOICES)
+        resolution: z
+          .enum(VIDEO_REMAKE_DELIVERED_SIZES)
           .optional()
-          .describe('"next" (default where the quote has upscaleOffered): delivered at the next size (480p→720p→1080p→4K), priced in breakdown.upscale; "off": at resolution.'),
+          .describe('The size delivered. nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; their Flash choices: "720p" (default) or "1080p". A size not offered here is refused (resolution_not_offered, naming the sizes offered).'),
         draft: z.boolean().optional().describe("true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain."),
         prepare_references: z.boolean().optional().describe("Default true: prepare the reference pictures first."),
         quality: z.enum(["draft"]).optional().describe('Deprecated: use resolution + draft. "draft" means a 480p draft.'),
@@ -778,9 +779,7 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
         ...(length !== undefined ? { [castSwapLengthKey()]: length } : {}),
         ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
         ...(args.draft !== undefined ? { draft: args.draft } : {}),
-        // Sent only to an engine that takes the choice (where the deployment has turned it on); elsewhere the run
-        // is made as "off", which is what the engine would make of it, and an older engine never sees the key.
-        ...(args.upscale !== undefined && loadedEngineTakesUpscaleChoice() ? { upscale: args.upscale } : {}),
+        // Never an `upscale` key: `resolution` is the size delivered, however the engine makes it.
         ...(args.prepare_references !== undefined ? { prepareReferences: args.prepare_references } : {}),
         ...(args.quality !== undefined ? { quality: args.quality } : {}),
         ...(args.session_id !== undefined ? { sessionId: args.session_id } : {}),
@@ -921,21 +920,17 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
           expected === null && quote.settlesLower
             ? " The video's length is left to the model, so the final charge is expected to come out lower than this quote."
             : ""
-        // The upscale choice, where the engine answers it: the size delivered, and what "next" adds.
-        const upscaleQuote = upscaleQuoteOf(quote)
-        const upscaleSentence =
-          upscaleQuote.upscale === "next" && upscaleQuote.outputResolution
-            ? ` It is delivered upscaled to ${outputResolutionLabel(upscaleQuote.outputResolution)}${breakdown.upscale !== undefined ? `, which adds ${statedAmount(breakdown.upscale)} ${amountWord()}` : ""} (upscale: "off" keeps ${upscaleQuote.resolution ?? "the run's resolution"}).`
-            : upscaleQuote.upscaleOffered === true && upscaleQuote.upscale === "off"
-              ? " Upscaling it to the next size is offered (upscale: \"next\")."
-              : ""
+        // The size the run delivers, where the engine answers it (an engine that answers the earlier fields names
+        // it `outputResolution`; an older one, nothing).
+        const delivered = deliveredSizeOfQuote(quote)
+        const sizeSentence = delivered !== undefined ? ` It is delivered at ${deliveredSizeLabel(delivered)}.` : ""
         const imageStyle = customImage !== undefined ? " The image's style is read when the run is confirmed; the price does not depend on it." : ""
         return {
           content: [
             {
               type: "text" as const,
               text:
-                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${references}${upscaleSentence}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
+                `This ${engineName} ${args.preview ? "preview " : "run "}costs about ${statedAmount(expected ?? quote.totalCredits)} ${amountWord()}${held}.${sizeSentence}${references}${retry}${lower}${imageStyle}${intentMismatch ? intentMismatchSentence(intentMismatch) : ""} ` +
                 (plannedAnswer ? `${plannedAnswer.sentence} ` : "") +
                 `${QUOTE_NEXT}${
                   quoteFor?.next ??
@@ -955,8 +950,8 @@ export function registerCastSwapTools({ server, session, fastify, quoteFor }: Re
             breakdown: statedAmountRecord(breakdown),
             ...(privacyCredits !== undefined ? { privacyCredits: statedAmount(privacyCredits) } : {}),
             settlesLower: quote.settlesLower === true,
-            // The engine's size, the size delivered, the choice made and whether it is offered (an older engine: none).
-            ...upscaleQuote,
+            // The size delivered, where the engine answers it.
+            ...(delivered !== undefined ? { resolution: delivered } : {}),
             confirmed: false,
             ...(plannedAnswer ? { planned: plannedAnswer.planned, arguments: plannedAnswer.arguments } : {}),
             ...(intentMismatch ? { intent: intentMismatch } : {}),

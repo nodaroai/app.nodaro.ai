@@ -7,6 +7,7 @@ import { composeSet, jsonListItems, unitOutputPip, unitPipIsImage, unitsWith } f
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint, PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
+import { promptPlacementField } from "@nodaro/prompts/prompt-fields"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
 import { UGC_CREATOR_PICKER_TYPES, UGC_NODE_TYPES, ugcClipSavedList } from "@nodaro/shared/ugc"
@@ -1479,8 +1480,10 @@ export function resolveNodeInputs(
   // placed explicitly via {label} in the consumer's prompt/negative — or when
   // Inject Prompt is off — must NOT also flow into inputs.prompt (no double).
   const consumerData = node.data as Record<string, unknown>;
+  // The typed field placements are read from: `prompt`, or the node's own
+  // prompt field (Generate 3D Scene's `scenePrompt`) — mirrors the backend.
   const referencedLabels = extractReferencedLabels(
-    consumerData.prompt as string | undefined,
+    consumerData[promptPlacementField(node.type)] as string | undefined,
     consumerData.negativePrompt as string | undefined,
   );
   const promptInjectOff = consumerData.injectPrompt === false;

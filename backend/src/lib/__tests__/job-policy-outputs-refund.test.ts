@@ -18,6 +18,9 @@ const m = vi.hoisted(() => ({
 vi.mock("@/lib/storage-delete.js", () => ({ deleteKeysRecordingFailures: m.deleteKeys }))
 vi.mock("@/lib/storage.js", () => ({ getR2ObjectSize: m.size, r2KeyFromOurUrl: (u: string) => u.replace("https://r2.example/", "") }))
 vi.mock("@/lib/storage-deletes-setting.js", () => ({ storageDeletesSkipped: m.skipped }))
+const reap = vi.hoisted(() => ({ reapRecordedObjects: vi.fn(async () => ({ deleted: 1, failedJobIds: new Set(), keptKeys: new Set(), deletedKeys: new Set(), errors: 0, refunded: 0 })) }))
+vi.mock("@/lib/job-server-output.js", () => reap)
+vi.mock("@/lib/image-set-storage.js", () => ({ setJobOwner: vi.fn(async () => null), mayBeSetPictures: () => false }))
 vi.mock("@/lib/withheld-objects-private.js", () => ({ keepWithheldObjectsPrivate: vi.fn(async () => {}) }))
 vi.mock("@/utils/file-validation.js", () => ({ updateStorageUsage: m.updateStorageUsage }))
 vi.mock("@/lib/supabase.js", () => ({
@@ -67,5 +70,13 @@ describe("deleteOwnedObjects — giving the owner's storage back", () => {
     m.owner = { user_id: null }
     await deleteOwnedObjects("j1", objects, { refundOwner: true })
     expect(m.updateStorageUsage).not.toHaveBeenCalled()
+  })
+
+  it("a kept original's delete still counts when the rest of the clean-up fails (decided 2026-11-25)", async () => {
+    const J = "11111111-2222-4333-8444-555555555555"
+    m.deleteKeys.mockRejectedValueOnce(new Error("storage down"))
+    const both = [{ key: `videos/${J}-master.mov`, kind: "video" as const, index: 0 }, { key: `videos/${J}.mp4`, kind: "video" as const, index: 0 }]
+    await expect(deleteOwnedObjects(J, both)).resolves.toBe(1)
+    expect(reap.reapRecordedObjects).toHaveBeenCalledWith([{ jobId: J, key: `videos/${J}-master.mov` }], "job-output")
   })
 })

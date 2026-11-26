@@ -160,10 +160,10 @@ describe("GET /v1/video-remake/art-styles", () => {
       watercolor: "צבעי מים",
       cyberpunk: "Cyberpunk",
       "low-poly": "Low Poly",
-      claymation: "Claymation",
-      "pixar-3d": "סרט אנימציה בתלת-ממד",
+      claymation: "אנימציית חימר",
+      "pixar-3d": "סרט אנימציה בתלת־ממד",
       "felt-puppet": "בובות לבד",
-      "toy-figure-3d": "בובת צעצוע תלת-ממד",
+      "toy-figure-3d": "בובת צעצוע בתלת־ממד",
     })
     expect(labels(await list(`${URL}?locale=ja`))).toMatchObject({ anime: "アニメ", "oil-painting": "油絵", "felt-puppet": "フェルト人形" })
     expect(labels(await list(`${URL}?locale=ko`))).toMatchObject({ anime: "애니메이션", "oil-painting": "유화", "felt-puppet": "펠트 인형" })

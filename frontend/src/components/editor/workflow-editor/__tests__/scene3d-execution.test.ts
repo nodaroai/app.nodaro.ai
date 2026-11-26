@@ -126,6 +126,46 @@ describe("runScene3DJob", () => {
     expect(toastSuccess).toHaveBeenCalled()
   })
 
+  it("adopts a scene delivered with a shot that shows no subject, and WARNS instead of reporting success", async () => {
+    seed({ scenePlan: makePlan() })
+    const incoming = makePlan({ revisionId: REV_B, parentRevisionId: REV_A })
+    mockGetJobStatusLean.mockResolvedValue({
+      id: "j1",
+      status: "completed",
+      output_data: {
+        scenePlan: incoming,
+        validation: { warnings: [{ code: "SCENE_SHOT_WITHOUT_SUBJECT", message: "the camera shot over frames 0-95 shows no subject" }] },
+      },
+    })
+    const result = await drain(
+      runScene3DJob({ nodeId: "n1", source: "generate", label: "Scene generation", ctx, start: async () => ({ jobId: "j1" }) }),
+    )
+    expect(result).toBe("plan-ready")
+    expect(mockNodes[0].data.scenePlan).toEqual(incoming)
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(toastWarning).toHaveBeenCalledWith(
+      expect.stringContaining("shows only background"),
+      expect.objectContaining({ description: expect.stringContaining("aim the camera") }),
+    )
+  })
+
+  it("an advanced engine's authoring assumptions are not mistaken for a missed shot", async () => {
+    seed({ scenePlan: makePlan() })
+    mockGetJobStatusLean.mockResolvedValue({
+      id: "j1",
+      status: "completed",
+      output_data: {
+        scenePlan: makePlan({ revisionId: REV_B, parentRevisionId: REV_A }),
+        validation: { warnings: [{ code: "SCENE_AUTHORING_ASSUMPTION", message: "assumed daylight" }] },
+      },
+    })
+    await drain(
+      runScene3DJob({ nodeId: "n1", source: "generate", label: "Scene generation", ctx, start: async () => ({ jobId: "j1" }) }),
+    )
+    expect(toastSuccess).toHaveBeenCalled()
+    expect(toastWarning).not.toHaveBeenCalled()
+  })
+
   it("PARKS the produced revision when the user edited the scene mid-flight", async () => {
     seed({ scenePlan: makePlan() })
     const manual = makePlan({ revisionId: "33333333-3333-4333-8333-333333333333" })

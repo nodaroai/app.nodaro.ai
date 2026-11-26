@@ -25,8 +25,9 @@
  * our own stored proxy, and a host that cannot detect (model or native binary
  * missing) are all deterministic — the job fails and refunds once.
  */
+import { FfmpegDiagnostics, spawnExit } from "../../providers/video/ffmpeg-failure-detail.js"
 import {
-  ffmpegFailureMessage,
+  ffmpegFailureError,
   runFfprobeReadingLinks,
   withFfmpegSlot,
 } from "../../providers/video/ffmpeg-utils.js"
@@ -235,8 +236,7 @@ export async function* streamBgrFrames(
     "pipe:1",
   ]
   const proc = spawnFfmpeg(args, { stdio: ["ignore", "pipe", "pipe"] })
-  let stderr = ""
-  proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-8_000) })
+  const stderr = FfmpegDiagnostics.capture(proc.stderr, 8_000)
   const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
     proc.on("error", reject)
     proc.on("close", (code: number | null, signal: NodeJS.Signals | null) => resolve({ code, signal }))
@@ -264,8 +264,8 @@ export async function* streamBgrFrames(
       }
     }
     const { code, signal } = await closed
-    if (timedOut) throw new Error(`face detect: the decode passed its ${Math.round(opts.timeoutMs / 1000)} s budget`)
-    if (code !== 0) throw new Error(ffmpegFailureMessage(stderr, signal ? `killed (${signal})` : `exit ${code}`))
+    if (timedOut) throw Object.assign(new Error(`face detect: the decode passed its ${Math.round(opts.timeoutMs / 1000)} s budget`), stderr.fields(spawnExit(code, signal, true)))
+    if (code !== 0) throw ffmpegFailureError(stderr, signal ? `killed (${signal})` : `exit ${code}`, spawnExit(code, signal, timedOut))
   } finally {
     clearTimeout(watchdog)
     // An early return (a cap hit, a failed run) leaves ffmpeg mid-stream.

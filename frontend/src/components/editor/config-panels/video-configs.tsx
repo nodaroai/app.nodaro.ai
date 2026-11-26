@@ -68,7 +68,7 @@ import { motionTransferShownSize, motionTransferSizes, motionTransferSnap } from
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText } from "@/lib/video-start-frame-only"
 import { nodaroTransparentRunsHere, nodaroVideoUpscaleShownMode, topazVideoQuotedTarget } from "@/lib/video-utility-estimate"
-import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
+import { isSeedance2Provider, isSeedanceVideoEditProvider, isMinimaxH3Provider, isGeminiOmniProvider, isWan3Provider, isViduQ4Provider, isKling4Provider, isKling4FlashProvider, kling4KeyframeFrameCap, isGrokVideo15Provider, isPixverseV6MaxProvider, isLtx25Provider, videoTakesHdr, videoKeyframesMiddleCap, VIDEO_REF_LIMITS_BY_PROVIDER, defaultVideoAspectRatio, maxSegmentSecFor, supportsExtendRender, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, GVP_ANCHOR_CHOICES, type GvpAnchorChoice } from "@nodaro/shared/models"
 import { gvpAnchorChoicesFor } from "@nodaro/render-rules"
 import { videoToVideoProviderOf, videoSourceTrimMaxSec, extendHasSoundSwitch, isCatalogExtendProvider, isGrokExtendProvider, isPixverseExtendProvider, pricedOutputDurationSec, snapToNearestDuration, GROK_EXTEND_PROVIDER, type CatalogExtendProvider } from "@nodaro/shared/models"
 import { VIDEO_AUDIT_BUCKET_CREDITS, catalogExtendCreditId, geminiOmniExtendQuoteCreditId, grokExtendCreditId, grokExtendSeconds, grokExtendWiredSourceResolution, ltxExtendDurationSec, pixverseExtendQuality, drivingAudioMaxSec, drivingAudioMinSec, drivingAudioOf, isDrivingAudioRun } from "@nodaro/shared/credits"
@@ -92,7 +92,7 @@ import { SeedanceDraftToggle, SeedanceDraftResolutionHint, isSeedanceDraftOn, ha
 import { SeedanceTaskTypeSelect, SeedanceExtendAutoLengthHint, seedanceTaskTypePanelState, hasStaleSeedanceTaskType } from "./seedance-task-type-select"
 import { useWiredSettingField } from "./wired-settings-context"
 import { useSeedanceTaskTypeAsRun } from "@/hooks/use-seedance-task-type-as-run"
-import { generateVideoProviderSnap } from "@/lib/generate-video-provider-snap"
+import { generateVideoProviderSnap, hdrResolutionOptions, videoHdrSnap } from "@/lib/generate-video-provider-snap"
 import { Switch } from "@/components/ui/switch"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
@@ -3183,7 +3183,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   // control rendered below. The unified provider type is widened separately
   // via `currentProvider`. This mirrors the t2v config which casts
   // GenerateVideoNodeData → ImageToVideoData when dispatching to Kling3Studio.
-  type DataView = ImageToVideoData & { referenceImageOrder?: readonly string[]; keepOriginalSound?: boolean; audioSoundtrack?: boolean }
+  type DataView = ImageToVideoData & { referenceImageOrder?: readonly string[]; keepOriginalSound?: boolean; audioSoundtrack?: boolean; dynamicRange?: "sdr" | "hdr" }
   const data = rawData as unknown as DataView
   const onUpdate = rawOnUpdate as unknown as (u: Partial<DataView>) => void
 
@@ -4270,12 +4270,12 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
       {(isKling4 || isKling4Flash) && (
         <>
-          {/* Resolution — catalog-driven (720p / 1080p; Flash 720p only). The
+          {/* Resolution — catalog-driven (720p / 1080p / 4K; Flash 720p only). The
               displayed default is 720p (uiResolutionFill): the tier the bare
               credit identifier, the fail-safe persist above and `runKling4` all
-              default to. */}
+              default to. With HDR on, only the sizes HDR renders at are offered. */}
           {(() => {
-            const opts = getVideoResolutionOptions(currentProvider)
+            const opts = hdrResolutionOptions(currentProvider, data.dynamicRange, getVideoResolutionOptions(currentProvider))
             return opts && opts.length > 0 ? (
               <MappableField field="resolution" label={t("field.resolution")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
                 <Select
@@ -4302,6 +4302,25 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                 onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
               />
             </MappableField>
+          )}
+          {videoTakesHdr(currentProvider) && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  type="checkbox"
+                  id="gv-kling4Hdr"
+                  checked={data.dynamicRange === "hdr"}
+                  // On at a size HDR does not render (720p) moves the size up
+                  // to 1080p, shown here with its price (videoHdrSnap).
+                  onChange={(e) => onUpdate(e.target.checked
+                    ? { dynamicRange: "hdr", ...videoHdrSnap({ ...data, dynamicRange: "hdr" }, currentProvider) }
+                    : { dynamicRange: undefined })}
+                  className="rounded border-muted-foreground/40"
+                />
+                <label htmlFor="gv-kling4Hdr" className="text-xs">{t("vidcfg.hdr")}</label>
+              </div>
+              <p className="text-[11px] text-muted-foreground px-1">{t("vidcfg.hdrNote")}</p>
+            </div>
           )}
           {!isKling4Keyframes && connectedRefVideos.length > 0 && (
             <div className="flex items-center gap-2 px-1">

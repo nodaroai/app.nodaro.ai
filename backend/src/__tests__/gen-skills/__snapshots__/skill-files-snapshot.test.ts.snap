@@ -307,6 +307,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`reference_audio_urls\`
 - \`character_references\`
 - \`keep_original_sound\`
+- \`dynamic_range\`
 - \`audio_soundtrack\`
 - \`user_request\`
 - \`flow_id\`",
@@ -380,6 +381,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`pausedAtTime?: number\`
 - \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"\`
 - \`keepOriginalSound?: boolean\`
+- \`dynamicRange?: "sdr" | "hdr"\`
 - \`referenceImageOrder?: readonly string[]\`
 
 **Default data:**

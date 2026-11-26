@@ -68,7 +68,7 @@ import {
   asEditPlanTier,
   transcriptDurationSec
 } from "@nodaro/shared/edl"
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
+import { cameraSwitchSpeakerMapProblem, SCENE3D_BRIEF_MAX_CHARS, cameraSwitchSpeakerMapProblemText, editPlanSourceKind, EXTEND_VIDEO_DEFAULT_PROVIDER, geminiOmniExtendAddedCreditId, isGeminiOmniExtendProvider, isSeedanceExtendPricedBySecondsSent, loopVideoRunFields, nodaroVideoUpscaleModeCreditId, nodaroVideoUpscaleModeTierOf, ownTaskInputOf, pickSunoSeparateSource, seedanceExtendRateCreditId, switchXMaxResolutionOf, TOPAZ_VIDEO_UNIT_CREDIT_ID, topazTargetFpsOf, trimVideoRunFields, type UpstreamTaskGraph } from "@nodaro/render-rules"
 import {
   assembleVideoOverlayRequest,
   formatVideoOverlayError,
@@ -198,6 +198,8 @@ import {
   isGeminiOmniProvider,
   videoProviderTakesLoneEndFrame,
   videoStartFrameOnlyProblem,
+  videoHdrResolutionProblem,
+  videoRunsHdr,
   PRICING_DEFAULT_RESOLUTION,
   supportsExtendRender,
   COMPOSER_PLAN_MAP,
@@ -4935,6 +4937,10 @@ function buildPayloadOf(
         endFrameUrl,
         inBetweenFrameUrls: referenceImageUrls,
       })
+      // HDR at a size that does not render it (Kling 4.0 at 720p): refused
+      // before the reservation, with the sentence the routes answer.
+      const hdrProblem = videoHdrResolutionProblem(resolvedProvider, { resolution: gvNorm.resolution, dynamicRange: data.dynamicRange, nothingCharged: true })
+      if (hdrProblem) throw new Error(hdrProblem.message)
       return videoGenerationResult(
         effectiveMode,
         {
@@ -4997,6 +5003,8 @@ function buildPayloadOf(
           elements: data.elements,
           ...(gvCharacterReferences && gvCharacterReferences.length > 0 ? { characterReferences: gvCharacterReferences } : {}),
           keepOriginalSound: data.keepOriginalSound,
+          // Only on an HDR run: the reservation prices its add-on from it, the runner sends it.
+          ...(videoRunsHdr(resolvedProvider, data.dynamicRange) ? { dynamicRange: "hdr" } : {}),
           audioSoundtrack: data.audioSoundtrack,
           grokMode: data.grokMode,
           videoSize: data.videoSize,
@@ -8724,17 +8732,24 @@ function buildPayloadOf(
       const frame = scene3DFrameFromNode(data)
       const sceneLlmModel = data.llmModel as string | undefined
       const sceneEffort = data.reasoningEffort as string | undefined
-      // BESPOKE prompt field (`scenePrompt`, per NODE_PROMPT_FIELDS), so the
-      // affixes are wrapped explicitly — the motion-graphics-lottie idiom.
-      // `promptFor` would read `data.prompt`, which this node does not have.
-      const scenePrompt =
-        applyPromptAffixes(
-          resolvedInputs.prompt || resolveRefs(data.scenePrompt as string | undefined, refMap),
-          readPromptAffixes(data),
-          refMap,
-        ) ?? ""
+      // The typed brief (`scenePrompt`, NODE_PROMPT_CANDIDATE_FIELDS) with a
+      // wired prompt APPENDED — a Video Analysis's breakdown under the
+      // author's directions — or placed by `{Label}`; affixes wrap it. The
+      // editor composes it with the same call (`promptOf`).
+      const scenePrompt = promptFor("generate-3d-scene", true)
       if (!scenePrompt.trim()) {
         throw new Error("Generate 3D Scene has no brief — describe the scene, or wire a prompt in.")
+      }
+      // Refused here, before the reservation, rather than as a validation error
+      // at the route: a wired analysis of a long video outgrows the brief, and
+      // the analysis of the video itself (a References wire) has no such cap.
+      const sceneBriefLength = scenePrompt.trim().length
+      if (sceneBriefLength > SCENE3D_BRIEF_MAX_CHARS) {
+        throw new Error(
+          `Generate 3D Scene: the scene text is ${sceneBriefLength.toLocaleString("en-US")} characters, over the ` +
+          `${SCENE3D_BRIEF_MAX_CHARS.toLocaleString("en-US")}-character limit. To build a scene from a long video, ` +
+          "connect the video itself to References instead of its analysis.",
+        )
       }
       const sceneEngine = resolveScene3DAuthoringEngine({ requested: data.engine as string | undefined })
       if (!sceneEngine.ok) throw new Error(`Generate 3D Scene: ${sceneEngine.message}`)

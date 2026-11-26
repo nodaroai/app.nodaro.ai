@@ -3,8 +3,7 @@ import type { CopyObjectCommandInput, CreateMultipartUploadCommandInput, ObjectC
 import { type S3ClientConfig, S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command, CreateBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import { randomUUID } from "node:crypto"
-import { createReadStream, createWriteStream } from "node:fs"
-import { pipeline } from "node:stream/promises"
+import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
 import { extname } from "node:path"
 import { Readable, Transform } from "node:stream"
@@ -19,6 +18,7 @@ import { r2KeyFromPublicUrl } from "./r2-public-key.js"
 import { templateKeptKey, templatePreviewKey } from "./template-preview-key.js"
 import { IMAGE_HEADER_MAX_READ_BYTES, forgetStoredImage, noteStoredImage } from "./image-dimensions.js"
 import type { TransferRateLimits } from "./transfer-watchdog.js"
+import { writeDownloadToFile } from "./download-incomplete.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
   boundedStorageClientConfig,
@@ -206,7 +206,14 @@ const MEDIA_MIME: Record<MediaType, string> = { video: "video/mp4", audio: "audi
  * text-to-video CHILD job that asked Seedance 2.5 for mov: its video is never
  * shown to its owner, and its parent re-encodes it before delivery.
  */
-const VIDEO_EXT_MIME = { mp4: "video/mp4", mov: "video/quicktime" } as const
+const VIDEO_EXT_MIME = {
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  // A kept original (`lib/video-result-store.ts`, decided 2026-11-22) is stored
+  // as the container it is: a WebM or Matroska file.
+  webm: "video/webm",
+  mkv: "video/x-matroska",
+} as const
 export type VideoContainerExt = keyof typeof VIDEO_EXT_MIME
 
 /**
@@ -780,19 +787,18 @@ export async function downloadR2ObjectToFile(
   const body = guardStorageReadBody(res.Body as Readable, {
     sizeBytes: res.ContentLength, startedAt: Date.now(), label: `r2 object ${key}`, controller, limits: bounds.limits ?? STORAGE_DOWNLOAD_LIMITS,
   })
-  if (stops.length === 1 && maxBytes === undefined) {
-    await pipeline(body, createWriteStream(dest))
-    return
-  }
-  let total = 0
-  const cap = new Transform({
+  // The S3 Node handler streams the stored representation, including any
+  // content coding. ContentLength measures exactly the bytes written here.
+  const expected = typeof res.ContentLength === "number" && Number.isSafeInteger(res.ContentLength) && res.ContentLength >= 0 ? res.ContentLength : undefined
+  let received = 0
+  const transforms = maxBytes === undefined ? [] : [new Transform({
     transform(chunk: Buffer, _enc, cb) {
-      total += chunk.length
-      if (maxBytes !== undefined && total > maxBytes) cb(new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: r2 object ${key}`))
+      received += chunk.length
+      if (received > maxBytes) cb(new Error(`Download exceeds ${Math.round(maxBytes / (1024 * 1024))} MB: r2 object ${key}`))
       else cb(null, chunk)
     },
-  })
-  await pipeline(body, cap, createWriteStream(dest), { signal })
+  })]
+  await writeDownloadToFile(body, dest, transforms, expected, `r2 object ${key}`, stops.length > 1 ? signal : undefined)
 }
 
 /**

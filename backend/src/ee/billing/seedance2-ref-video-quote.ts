@@ -79,6 +79,9 @@ export interface Seedance2RefVideoQuoteRequest {
   unknownClips: number
   /** The node's trim of its source clip (per-second Gemini Omni: it decides what is billed). */
   videoTrim?: VideoSourceTrim
+  /** A Kling 4.0 HDR run's add-on, in BASE credits (0 or absent without one): its own line on the output
+   *  seconds, added to every figure before the markup, as the run holds it — never on the reference ladder. */
+  hdrAddonBase?: number
 }
 
 /**
@@ -90,6 +93,7 @@ export function seedance2RefVideoQuote(
   args: Seedance2RefVideoQuoteRequest & { charge: (identifier: string, baseCredits: number) => number },
 ): Seedance2RefVideoQuote {
   const { provider, videoTrim } = args
+  const hdr = Math.max(0, args.hdrAddonBase ?? 0)
   const cap = refVideoCapFor(provider)
   const known = args.durationsSec.slice(0, cap)
   const unknown = Math.max(0, Math.min(args.unknownClips, cap - known.length))
@@ -100,7 +104,7 @@ export function seedance2RefVideoQuote(
   const ceiling = seedance2RefVideoQuoteBasis(args, withUnknownAt(refVideoWorstCaseSecFor(provider)))
   const ceilingBase = seedance2RefVideoBaseCreditsFromDurations({ ...ceiling.priceArgs, videoTrim, durationsSec: withUnknownAt(Number.NaN) })
   // Marked up once, at the identifier the run's reservation is marked up at.
-  const credits = args.charge(ceiling.identifier, ceilingBase)
+  const credits = args.charge(ceiling.identifier, ceilingBase + hdr)
   if (unknown === 0) return { credits, min: credits, exact: true }
 
   // The floor: the cheapest run the unknown clips' lengths allow. A run costs
@@ -116,7 +120,7 @@ export function seedance2RefVideoQuote(
   const min = Math.min(...floorLengths.map((sec) => {
     const clips = withUnknownAt(sec)
     const { priceArgs, identifier } = seedance2RefVideoQuoteBasis(args, clips)
-    return args.charge(identifier, seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, videoTrim, durationsSec: clips }))
+    return args.charge(identifier, seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, videoTrim, durationsSec: clips }) + hdr)
   }))
   return { credits, min, exact: false }
 }

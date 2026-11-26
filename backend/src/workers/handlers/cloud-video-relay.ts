@@ -26,6 +26,7 @@ import {
   type JobContext,
 } from "../shared.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../../lib/job-finalize.js"
+import { relaySourceOf } from "../../lib/video-result-store.js"
 
 export type CloudRelayJobType = Extract<FinalizeJobType, "ai-avatar" | "cinematic-avatar" | "switchx">
 
@@ -48,8 +49,12 @@ export async function relayVideoJobToCloud(job: Job, ctx: JobContext, jobType: C
   await setJobProgress(job, ctx.jobId, 50)
 
   // The cloud's URL is the cloud's storage — bring the file home under this
-  // instance's own key, watermarked by THIS instance's rules.
-  const r2Url = await uploadVideoMaybeWatermark(cloudUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // instance's own key, watermarked by THIS instance's rules. When the far end
+  // kept the provider's original, an unwatermarked run brings THAT home, so
+  // this instance keeps it too (decided 2026-11-22); a watermarked one keeps
+  // the far end's browser-safe copy as its source, as before.
+  const storedVideo = await uploadVideoMaybeWatermark(relaySourceOf(output, cloudUrl, ctx.shouldWatermark), ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = storedVideo.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
@@ -62,7 +67,7 @@ export async function relayVideoJobToCloud(job: Job, ctx: JobContext, jobType: C
     jobId: ctx.jobId,
     jobType,
     result: { url: cloudUrl, cost: null, providerUsed: "nodaro" },
-    mediaUrl: r2Url,
+    video: storedVideo,
     extraOutputData: { thumbnailUrl: thumbUrl, ...carried, viaNodaroCloud: true },
   })
   if (!ok) return

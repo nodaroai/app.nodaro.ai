@@ -19,7 +19,7 @@ import { characterReferencesFromWired, videoCharacterRefProblem } from "../video
 import type { ConnectedReference } from "../types.js"
 
 describe("kling-4 / kling-4-keyframes catalog", () => {
-  it("two Kling-series ids, both modes, 3-30s, 720p/1080p, no seed", () => {
+  it("two Kling-series ids, both modes, 3-30s, 720p/1080p/4k, no seed", () => {
     for (const id of ["kling-4", "kling-4-keyframes"]) {
       const m = MODEL_CATALOG[id]!
       expect(m.series).toBe("Kling") // ⇒ closed to the free tier (FREE_BLOCKED_VIDEO_SERIES)
@@ -27,9 +27,9 @@ describe("kling-4 / kling-4-keyframes catalog", () => {
       expect([...m.modes]).toEqual(["i2v", "t2v"])
       expect(m.durations).toEqual(Array.from({ length: 28 }, (_, i) => i + 3))
       expect(m.defaultDuration).toBe(5)
-      expect(m.resolutions).toEqual(["720p", "1080p"])
+      expect(m.resolutions).toEqual(["720p", "1080p", "4k"])
       expect(m.noSeed).toBe(true)
-      expect(m.aspectRatios).toEqual(["auto", "16:9", "9:16", "1:1", "21:9"])
+      expect(m.aspectRatios).toEqual(["auto", "16:9", "9:16", "1:1", "21:9", "4:3"])
       expect(IMAGE_TO_VIDEO_PROVIDERS as readonly string[]).toContain(id)
       expect(TEXT_TO_VIDEO_PROVIDERS as readonly string[]).toContain(id)
       expect(videoProviderRequiresImage(id)).toBe(false)
@@ -62,10 +62,13 @@ describe("kling-4 / kling-4-keyframes catalog", () => {
     }
   })
 
-  it("normalizeKling4Resolution folds case and collapses anything else to 720p", () => {
+  it("normalizeKling4Resolution folds case, honours 4k, and collapses anything else to 720p", () => {
     expect(normalizeKling4Resolution("1080P")).toBe("1080p")
     expect(normalizeKling4Resolution(" 1080p ")).toBe("1080p")
-    for (const v of [undefined, "", "720p", "480p", "4k", "garbage"]) expect(normalizeKling4Resolution(v)).toBe("720p")
+    // `4k` renders and bills 4K (decided 2026-11-22; it used to collapse to 720p).
+    expect(normalizeKling4Resolution("4k")).toBe("4k")
+    expect(normalizeKling4Resolution(" 4K ")).toBe("4k")
+    for (const v of [undefined, "", "720p", "480p", "2k", "garbage"]) expect(normalizeKling4Resolution(v)).toBe("720p")
     expect(MODEL_CATALOG["kling-4"]!.unlistedResolutionRendersAs).toBe("720p")
   })
 

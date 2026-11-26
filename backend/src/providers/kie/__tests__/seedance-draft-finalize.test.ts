@@ -49,6 +49,15 @@ describe("Seedance draft finalize — KIE wire", () => {
   })
 })
 
+describe("Seedance draft finalize — a draft the alternate route made", () => {
+  it("never sends the route's reference to this upstream, and fails deterministically", async () => {
+    const err = await runSeedanceDraftFinalize("alt:route-task-1").catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toMatch(/another route/)
+    expect(kie.calls).toEqual([])
+  })
+})
+
 describe("Seedance draft finalize — the recorded provider cost", () => {
   it("returns what KIE bills for the seconds the finalize's charge bills, by whether the draft had a reference video", async () => {
     const ref = await runSeedanceDraftFinalize("task-draft", { billing: { billedSec: 12, hasRefVideo: true } })

@@ -264,10 +264,13 @@ export function seedanceRefVideoEstimateCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   prices: ChargedPriceTable,
+  /** A Kling 4.0 HDR run's add-on, in BASE credits (0 without one): marked up with the clip's price, as the run holds it. */
+  hdrAddonBase = 0,
 ): number | undefined {
   const input = seedanceRefVideoEstimateInput(node, nodes, edges, prices)
   if (!input) return undefined
   return seedance2RefVideoQuote({
+    hdrAddonBase,
     provider: input.provider,
     resolution: input.resolution,
     duration: input.duration,

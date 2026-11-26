@@ -2429,6 +2429,11 @@ export type GenerateVideoNodeData =
      *  new sound (KIE `keep_original_sound`). Ignored without a reference video
      *  and by every other model. */
     keepOriginalSound?: boolean
+    /** Kling 4.0 (both ids): `"hdr"` renders HDR (HEVC 10-bit, BT.2020, HLG) at
+     *  1080p or 4K, priced as an add-on on the output seconds. The downloaded
+     *  clip keeps HDR; editing nodes produce SDR. Unset = SDR. Ignored by every
+     *  other model. */
+    dynamicRange?: "sdr" | "hdr"
     /** Kling 4.0: play the first Audio Refs clip as the result's soundtrack
      *  (sent as a reference video with its sound kept); further clips stay
      *  voice samples. Unset = on; `false` makes every clip a voice sample. */
@@ -10165,7 +10170,8 @@ const LEGACY_NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "generate-3d-scene",
     label: "Generate 3D Scene",
     category: "ai",
-    inputs: ["references"],
+    // `prompt`: wired text becomes the brief (scenePrompt) at run time.
+    inputs: ["prompt", "references"],
     outputs: ["composition"],
     defaultData: {
       label: "Generate 3D Scene",

@@ -32,6 +32,7 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { uploadToR2 } from "../../lib/storage.js"
+import { relaySourceOf, storedVideoFields } from "../../lib/video-result-store.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { supabase } from "../../lib/supabase.js"
 import {
@@ -413,7 +414,7 @@ export async function finalizeExclusiveCloudOutput(args: {
     const claim = await claimJobFinalize(jobId, claimant)
     if (!claim.won) return false
     const home = await holdingFinalizeClaim(jobId, claimant, claim.ts, () => bringRenderHome(renderUrl, jobId, jobUserId))
-    const { videoUrl: _v, thumbnailUrl: farThumbnail, ...rest } = output
+    const { videoUrl: _v, thumbnailUrl: farThumbnail, originalVideoUrl: _o, videoPreviewUnavailable: _p, ...rest } = output
     const thumbnailUrl = home.thumbnailUrl ?? (typeof farThumbnail === "string" ? farThumbnail : null)
     return markJobCompleted(jobId, {
       output_data: { videoUrl: home.videoUrl, thumbnailUrl, ...rest, viaNodaroCloud: true },
@@ -460,9 +461,12 @@ export async function finalizeExclusiveCloudOutput(args: {
     // gvp / evp / vcp-video-mode: bring the video home under this instance's
     // key, watermarked by THIS install's rules; carry the rest of the cloud
     // output verbatim — gvp's `pro` checkpoint is what stop/continue read.
-    const r2Url = await uploadVideoMaybeWatermark(videoUrl, jobId, jobUserId, shouldWatermark)
+    // The far end's kept original, on an unwatermarked run (`relaySourceOf`), so this instance keeps it too.
+    const storedVideo = await uploadVideoMaybeWatermark(relaySourceOf(output, videoUrl, shouldWatermark), jobId, jobUserId, shouldWatermark)
+    const r2Url = storedVideo.videoUrl
     const thumbUrl = await generateAndUploadThumbnail(r2Url, jobId, jobUserId)
-    const { videoUrl: _v, ...rest } = output
+    // The far end's own original and preview flag are its storage, never ours: this store's replace them.
+    const { videoUrl: _v, originalVideoUrl: _o, videoPreviewUnavailable: _p, ...rest } = output
     if (jobType === "generate-video-pro" || jobType === "edit-video-pro") {
       const { ok } = await finalizeJobWithMedia({
         jobId,
@@ -473,13 +477,13 @@ export async function finalizeExclusiveCloudOutput(args: {
         // (`relayFieldsFrom`), and that is the ONE completion a result-gate
         // HOLD can park in `held_completion_fields` and approve can replay.
         result: { url: videoUrl, cost: null, providerUsed: "nodaro", ...relayResult },
-        mediaUrl: r2Url,
+        video: storedVideo,
         extraOutputData: { thumbnailUrl: thumbUrl, ...rest, viaNodaroCloud: true },
       })
       return ok
     }
     return markJobCompleted(jobId, {
-      output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...rest, viaNodaroCloud: true },
+      output_data: { ...storedVideoFields(storedVideo), thumbnailUrl: thumbUrl, ...rest, viaNodaroCloud: true },
       provider: "nodaro",
       ...relayColumns,
     })

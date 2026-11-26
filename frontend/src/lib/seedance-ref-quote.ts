@@ -30,6 +30,7 @@ import {
   isSeedanceVideoEditProvider,
   videoToVideoProviderOf,
   listedSeedanceTaskType,
+  videoRunsHdr,
 } from "@nodaro/shared/models"
 import {
   referenceModalityForHandle,
@@ -161,6 +162,8 @@ export function seedanceRefQuoteRequest(
     // Flash 1.2 bills the stretch of the clip the node's trim keeps.
     ...(isGeminiOmniPerSecondProvider(provider) && typeof data.videoTrimStart === "number" ? { videoTrimStart: data.videoTrimStart } : {}),
     ...(isGeminiOmniPerSecondProvider(provider) && typeof data.videoTrimEnd === "number" ? { videoTrimEnd: data.videoTrimEnd } : {}),
+    // Kling 4.0 HDR: its add-on rides on the quote, as the run holds it.
+    ...(isGeneration && videoRunsHdr(provider, data.dynamicRange) ? { dynamicRange: "hdr" as const } : {}),
   }
 }
 

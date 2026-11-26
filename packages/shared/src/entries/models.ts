@@ -190,6 +190,12 @@ export {
   videoStartFrameOnlyResolution,
   videoStartFrameOnlyMessage,
   videoStartFrameOnlyProblem,
+  VIDEO_DYNAMIC_RANGES,
+  VIDEO_HDR_RESOLUTION_CODE,
+  videoTakesHdr,
+  videoRunsHdr,
+  videoHdrResolution,
+  videoHdrResolutionProblem,
   VIDEO_MODE_ALIASES,
   RETIRED_VIDEO_PROVIDERS,
   canonicalVideoProvider,
@@ -298,6 +304,7 @@ export {
   PRICING_DEFAULT_RESOLUTION,
 } from "../model-constants.js"
 export type { VideoStartFrameOnlyProblem } from "../model-constants.js"
+export type { VideoDynamicRange, VideoHdrResolutionProblem } from "../model-constants.js"
 export type { ImageRunKind } from "../model-constants.js"
 export type { VideoReferenceCounts } from "../model-constants.js"
 export type { Ltx25Provider } from "../model-constants.js"

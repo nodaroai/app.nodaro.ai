@@ -40,6 +40,7 @@
 import * as THREE from "three"
 import { SCENE3D_GLB_EXTRAS_ENTITY_ID, SCENE3D_PRIMITIVE_MATERIAL_ROLE } from "@nodaro/shared/scene3d"
 import { buildScene3DGeometry } from "../scene-builder"
+import { SCENE3D_CAMERA_FAR, SCENE3D_CAMERA_NEAR } from "../sampler"
 import type { Scene3DObject } from "../types"
 import type { Scene3DRenderHandle } from "../handle"
 import { bindScene3DClip, selectScene3DClip, type Scene3DBoundClip } from "./clip-sampler"
@@ -144,7 +145,7 @@ export function buildScene3DV2Scene(loaded: Scene3DLoadedScene): Scene3DV2SceneH
   scene.background = new THREE.Color(plan.backgroundColor || "#000000")
 
   const aspect = plan.height > 0 ? plan.width / plan.height : 16 / 9
-  const camera = new THREE.PerspectiveCamera(50, aspect, 0.05, 5000)
+  const camera = new THREE.PerspectiveCamera(50, aspect, SCENE3D_CAMERA_NEAR, SCENE3D_CAMERA_FAR)
   camera.matrixAutoUpdate = true
 
   // The clay lighting preset, recreated identically in every host. `preset` is

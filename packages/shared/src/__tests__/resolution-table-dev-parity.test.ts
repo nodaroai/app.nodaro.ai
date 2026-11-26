@@ -16,6 +16,18 @@ const fixture = JSON.parse(readFileSync(join(__dirname, "fixtures", "resolution-
   table: Record<string, string>
 }
 
+/**
+ * Sizes that move on purpose since the table was recorded, each with its
+ * decision: Kling 4.0 (both ids) renders and bills 4K for `4k` (decided
+ * 2026-11-22; it used to collapse to 720p).
+ */
+const DECIDED_SINCE: Readonly<Record<string, string>> = {
+  "kling-4|4k": "4k",
+  "kling-4|4K": "4k",
+  "kling-4-keyframes|4k": "4k",
+  "kling-4-keyframes|4K": "4k",
+}
+
 function lineFor(id: string, v: string): string {
   const res = normalizeModelInput(id, { resolution: v }).resolution ?? "-"
   if (MODEL_CATALOG[id]!.kind !== "image") return res
@@ -34,7 +46,8 @@ describe("every size valid before 8K resolves and prices as it did", () => {
       if (!MODEL_CATALOG[id]) continue
       compared++
       const now = lineFor(id, v)
-      if (now !== dev) differ.push(`${key}: ${dev} -> ${now}`)
+      const want = DECIDED_SINCE[key] ?? dev
+      if (now !== want) differ.push(`${key}: ${want} -> ${now}`)
     }
     expect(compared).toBeGreaterThan(1500)
     expect(differ).toEqual([])

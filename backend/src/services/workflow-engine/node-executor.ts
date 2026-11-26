@@ -59,6 +59,7 @@ import { speechChargeOverride } from "../../lib/speech-estimate.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { holdShortfallMessage } from "../../lib/stated-credit-messages.js"
 import { CreditsService } from "../../ee/billing/credits.js"
+import { videoHdrAddonBaseCredits } from "../../lib/video-hdr-addon.js"
 import { freeVideoRequestForJob } from "../../ee/billing/free-video-limits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildLottieRequest, type MotionGraphicsLottiePayload } from "../../lib/lottie-request.js"
@@ -2055,18 +2056,53 @@ async function computeSeedance2RefVideoCreditOverride(
   // this payload for any provider with a declared bound, so the DEBIT prices
   // from the very array the CHECK read (NaN entries included, still charged at
   // the worst case). No stash => no gate ran for this provider => probe here.
-  const baseCredits = pricedDurationsSec
+  const refBaseCredits = pricedDurationsSec
     ? seedance2RefVideoBaseCreditsFromDurations({ ...priceArgs, durationsSec: pricedDurationsSec })
     : await seedance2RefVideoBaseCreditsFromUrls({
         ...priceArgs,
         referenceVideoUrls: referenceVideoUrls as unknown[],
       })
+  // The HDR add-on (Kling 4.0) rides on top as its own line on the output
+  // seconds, as the routes hold it (`withVideoHdrAddon`).
+  const baseCredits = refBaseCredits + await payloadHdrAddonBaseCredits(payload)
 
   // Apply the markup ONCE, at this identifier's effective percent — the same
   // helper credit-guard-impl.ts applies to a route reservation and the
   // count-based commit applies to the settlement, so all three share a basis.
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
   return applyServiceMarkup(baseCredits, await getAppSettings(), modelIdentifier)
+}
+
+/** The HDR add-on's BASE credits for a video payload (0 on an SDR run). */
+function payloadHdrAddonBaseCredits(payload: Record<string, unknown>): Promise<number> {
+  return videoHdrAddonBaseCredits({
+    provider: payload.provider as string | undefined,
+    duration: payload.duration as number | string | undefined,
+    resolution: payload.resolution as string | undefined,
+    dynamicRange: payload.dynamicRange,
+  })
+}
+
+/**
+ * The hold of an HDR video run with no reference video (Kling 4.0, decided
+ * 2026-11-22): the clip's own row plus the HDR add-on's row on the output
+ * seconds, marked up ONCE at the clip's identifier, exactly as the routes
+ * reserve it. `undefined` on every SDR run and every other job, so their hold
+ * is the identifier's price as before. A reference-video run's HDR rides on
+ * {@link computeSeedance2RefVideoCreditOverride} instead.
+ */
+async function computeVideoHdrCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "image-to-video" && jobName !== "text-to-video") return undefined
+  const hdrBase = await payloadHdrAddonBaseCredits(payload)
+  if (hdrBase <= 0) return undefined
+  const { getModelCreditBaseCost } = await import("../../ee/billing/credits.js")
+  const clipBase = (await getModelCreditBaseCost(modelIdentifier)).creditCost
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(clipBase + hdrBase, await getAppSettings(), modelIdentifier)
 }
 
 /**
@@ -3173,7 +3209,9 @@ async function executeWorkerNode(
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??
         // MiniMax Hailuo 3 twin — unit×(input+output) ref-video billing plus
         // the >5-input-images surcharge (same heuristic-gated fallback slot).
-        (await computeMinimaxH3CreditOverride(payload, refVideoDurationsSec, modelIdentifier))
+        (await computeMinimaxH3CreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??
+        // An HDR run with no reference video (Kling 4.0): the clip's row plus its HDR add-on.
+        (await computeVideoHdrCreditOverride(jobName, payload, modelIdentifier))
 
       // Free-tier / blocked-models gate. reserveCredits does NOT check
       // blockedModels, so without this a free-tier workflow/app run could

@@ -20,7 +20,7 @@ export const labels = {
   "Tighten Episode": {
     "de": "Episode straffen",
     "es": "Condensar episodio",
-    "he": "הידוק פרק",
+    "he": "עריכת פודקאסט",
     "ja": "エピソードを引き締める",
     "ko": "에피소드 다듬기",
     "pt-br": "Enxugar episódio"

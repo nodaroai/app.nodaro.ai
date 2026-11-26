@@ -70,6 +70,8 @@ import {
   videoProviderRefsReplaceStartFrame,
   videoProviderTakesLoneEndFrame,
   videoStartFrameOnlyProblem,
+  videoHdrResolutionProblem,
+  videoRunsHdr,
   selectLoraRoutingForMentions,
   resolveGvpAnchorWire,
   DEFAULT_TRANSCRIBE_NODE_PROVIDER,
@@ -121,7 +123,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { UNIT_EXECUTORS } from "@/nodes/_generated/executors";
 import { createUnitExecKit } from "./unit-exec-kit";
 import { runGraph } from "./run-graph";
-import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleModeTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
+import { cameraSwitchSpeakerMapProblem, cameraSwitchSpeakerMapProblemText, carriedNodeSettings, SCENE3D_BRIEF_MAX_CHARS, editPlanSourceKind, isUseCaseNodeType, loopVideoRunFields, nodaroVideoUpscaleModeTierOf, pickSunoSeparateSource, runOutputTaskFields, topazTargetFpsOf, trimVideoRunFields } from "@nodaro/render-rules";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES, effectiveAudioSyncReference, orderAudioSyncSources } from "@/lib/audio-sync";
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n";
@@ -303,6 +305,7 @@ import {
   defaultImageModel
 } from "@nodaro/shared/model-catalog";
 import { tx, type MessageKey } from "@/lib/i18n";
+import { formatNumber } from "@/lib/i18n/format";
 import { confirmNodeLink, hasOwnLinkBox, isNodeLinkRightsTicked } from "@/lib/node-link-rights";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
@@ -565,6 +568,7 @@ import {
 } from "@/lib/upstream-duration";
 import { editPlanIssueText, nodeRunError, nodeRunText } from "@/components/editor/workflow-editor/node-run-message";
 import { startFrameOnlyText } from "@/lib/video-start-frame-only";
+import { hdrResolutionText } from "@/lib/video-hdr";
 
 /** The models that clone a voice, by their names, for the refusal on any other model (`replicaModels`). */
 function cloningModelNames(): string {
@@ -3229,6 +3233,18 @@ function executeNodeCore(
       toast.error(nodeRunText(i2vData.label, startFrameOnlyText(nodeProvider, startFrameOnly, "nodeRun.startFrameOnlyResolution")));
       return Promise.reject(new Error(startFrameOnly.message));
     }
+    // HDR at a size that does not render it (Kling 4.0 at 720p): refused here,
+    // before the server is called, with the rule the server and the workflow
+    // run use.
+    const i2vHdrProblem = videoHdrResolutionProblem(nodeProvider, {
+      resolution: i2vData.resolution ?? (nodeProvider ? uiResolutionFill(nodeProvider) : undefined),
+      dynamicRange: (i2vData as Record<string, unknown>).dynamicRange,
+      nothingCharged: true,
+    });
+    if (i2vHdrProblem && nodeProvider) {
+      toast.error(nodeRunText(i2vData.label, hdrResolutionText(nodeProvider, i2vHdrProblem)));
+      return Promise.reject(new Error(i2vHdrProblem.message));
+    }
 
     // Read canonical `mode`/`sound` first, fall back to legacy
     // `kling3Mode`/`kling3Sound`. The generate-video widget writes to the
@@ -3331,6 +3347,8 @@ function executeNodeCore(
           ? { characterReferences: wiredSubjectReferences(node, nodes, edges, nodeProvider) }
           : {}),
         keepOriginalSound: (i2vData as Record<string, unknown>).keepOriginalSound as boolean | undefined,
+        // Kling 4.0 HDR, only on an HDR run (the route drops it on any other model).
+        ...(videoRunsHdr(nodeProvider, (i2vData as Record<string, unknown>).dynamicRange) ? { dynamicRange: "hdr" as const } : {}),
         audioSoundtrack: (i2vData as Record<string, unknown>).audioSoundtrack as boolean | undefined,
         // The frame rate as stored, as the orchestrator sends it (payload-builder);
         // the server reads it once through `videoFrameRateFor` (a numeric string
@@ -3750,10 +3768,22 @@ function executeNodeCore(
         ? { characterReferences: wiredSubjectReferences(node, nodes, edges, t2vProvider) }
         : {}),
       keepOriginalSound: t2vRaw.keepOriginalSound as boolean | undefined,
+      // Kling 4.0 HDR, only on an HDR run — see the image path above.
+      ...(videoRunsHdr(t2vProvider, t2vRaw.dynamicRange) ? { dynamicRange: "hdr" as const } : {}),
       audioSoundtrack: t2vRaw.audioSoundtrack as boolean | undefined,
       // Seedance 2.5 reference task type — see the image path above.
       ...(t2vTaskType ? { referenceTaskType: t2vTaskType } : {}),
     };
+    // HDR at a size that does not render it (Kling 4.0 at 720p): refused before the server is called.
+    const t2vHdrProblem = videoHdrResolutionProblem(t2vProvider, {
+      resolution: (t2vOptions.resolution as string | undefined) ?? (t2vProvider ? uiResolutionFill(t2vProvider) : undefined),
+      dynamicRange: t2vRaw.dynamicRange,
+      nothingCharged: true,
+    });
+    if (t2vHdrProblem && t2vProvider) {
+      toast.error(nodeRunText(t2vData.label, hdrResolutionText(t2vProvider, t2vHdrProblem)));
+      return Promise.reject(new Error(t2vHdrProblem.message));
+    }
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(
       node.id,
@@ -9798,10 +9828,23 @@ function executeNodeCore(
   // `output_data.scenePlan`, so both go through `runScene3DJob`.
   if (node.type === "generate-3d-scene") {
     const g3d = node.data as Generate3DSceneData;
-    const g3dPrompt = applyPromptAffixes(inputs.prompt || g3d.scenePrompt, readPromptAffixes(g3d), refMap);
-    if (!g3dPrompt?.trim()) {
+    // The typed brief with a wired prompt APPENDED (a Video Analysis's
+    // breakdown under the author's directions), or placed by `{Label}` — the
+    // backend's promptFor("generate-3d-scene", true).
+    const g3dPrompt = promptOf("generate-3d-scene", true);
+    if (!g3dPrompt.trim()) {
       toast.error(nodeRunError(g3d.label, "nodeRun.noScenePromptSet"));
       return Promise.reject(new Error("No scene prompt"));
+    }
+    // Before the request, as the orchestrator refuses it: an analysis of a
+    // long video outgrows the brief; the video itself on References does not.
+    const g3dLength = g3dPrompt.trim().length;
+    if (g3dLength > SCENE3D_BRIEF_MAX_CHARS) {
+      toast.error(nodeRunError(g3d.label, "nodeRun.scenePromptTooLong", {
+        count: formatNumber(g3dLength),
+        max: formatNumber(SCENE3D_BRIEF_MAX_CHARS),
+      }));
+      return Promise.reject(new Error("Scene prompt too long"));
     }
     const g3dRefs = resolveScene3DReferences({
       nodeId: node.id,

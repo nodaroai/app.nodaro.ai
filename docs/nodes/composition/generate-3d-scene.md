@@ -18,8 +18,8 @@ The output is a **composition plan**, not an MP4. Connect it to [Edit 3D Scene](
 
 | Input | Purpose |
 |---|---|
-| Prompt | Describe objects, their motion, camera placement/movement and timing. |
-| References | Up to 8 total, including at most 1 video. Images guide appearance/layout; video guides motion/layout. |
+| Prompt | Describe objects, their motion, camera placement/movement and timing. Text wired into the node's **Prompt** input — a [Video Analysis](../processing-video/video-analysis.md)'s `json` or `text` output, for example — is added after what you type; write the source node's name in braces (`{Video Analysis}`) to place it inside your text instead. The whole brief is at most 8,000 characters; a run whose brief comes out longer is refused before it is charged. |
+| References | Up to 8 total, including at most 1 video. Images guide appearance/layout; video guides motion/layout. A video reference is analyzed as part of the run (a [Video Analysis](../processing-video/video-analysis.md) charge), and that analysis reaches the planner in full, outside the 8,000-character brief — the way to author from a clip whose analysis is too long to wire into the Prompt. |
 | Input assets | Optional `inputAssets`: up to 8 GLBs selected as `{id, revisionId, assetId, label?}`. Requires an advanced engine with import support. |
 | Duration | 1–60 seconds; default 4. |
 | FPS | 15–60; default 24. |
@@ -33,6 +33,15 @@ Reference-based reconstruction is approximate. Images do not recover unseen geom
 The scene stores object IDs, transforms, dimensions, camera position/target/lens, lighting and keyframes. The canvas preview supports playback, scrubbing and direct property editing. Direct edits create a new scene revision and do not require an LLM call. Previous generated scenes remain available in result history.
 
 Coordinates use meters with Y pointing up. Euler rotations are radians. Timeline frames start at zero. Each rendered MP4 uses a specific scene revision.
+
+## How a new scene is checked
+
+On the Basic engine, a scene the planner writes is checked twice before it is accepted. First its structure: valid values, known parents, no cycles, keyframes inside the scene. Then what it shows:
+
+- **Parts attached to what moves them.** A `group` has no geometry of its own; its parts follow it only when they name it as their `parentId`. A group that carries the motion while nothing is attached to it, or whose parts (named after it, such as `jet-wing` for `jet`) were left unattached, would render its parts frozen in place and the group as nothing.
+- **Every camera shot shows a subject.** Each shot — the camera's timeline split at its cuts, a cut being two camera keyframes one frame apart — is sampled at its first, middle and last frame. At least one subject must be inside the frame and at least 2% of the frame's height. Scenery does not count: an object larger than 100 m that never moves (ground, mountains). A scene with nothing but scenery is not checked this way.
+
+A scene that fails either check goes back to the planner with what is wrong and where things are, as a repair pass, up to 2 times (`max_repair_passes` applies to advanced engines only). When the repair passes are spent, a scene whose parts are still unattached **fails** the run. A scene whose camera still misses its subject is **delivered** — the check is an estimate from the objects' sizes and positions, not a render — with a `SCENE_SHOT_WITHOUT_SUBJECT` entry in `output_data.validation.warnings[]` naming the shot, and the canvas shows a warning instead of a success message. Every pass is a charged call.
 
 Deleting your account removes retained scene metadata and schedules its private
 files, including abandoned uploads, for cleanup.
@@ -51,8 +60,10 @@ construction inputs; new asset selections belong to new-scene requests.
 `POST /v1/3d-scene/generate` returns `{ jobId }`. Poll the job; its completed `output_data.scenePlan` contains the editable scene.
 
 When an **advanced** engine authored the scene, `output_data` additionally
-reports what that run knows about its own answer. Every field below is optional
-and none of them appears on the deterministic Basic lane, which asks no model:
+reports what that run knows about its own answer. Every field below is optional.
+On the Basic engine only `validation.warnings[]` can appear, for a scene
+delivered with a camera shot that shows no subject
+([How a new scene is checked](#how-a-new-scene-is-checked)):
 
 | Field | Meaning |
 |---|---|
@@ -129,9 +140,9 @@ const video = await client.nodes.runAndWait("render-video", {
 
 References use `{ id, url, kind, role }`; `kind` is `image` or `video`, and `role` is `appearance`, `layout` or `motion`. An optional `objectId` binds the reference to an object. V1 analyzes the whole reference clip. To use a segment, run `trim-video` first and reference its result; authoring rejects partial `startSeconds` / `endSeconds` windows before charging.
 
-Scene authoring is charged for the tokens its LLM call actually used — your prompt, the references' descriptions and any video analysis text, and the scene plan it writes — at the selected model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical run: ≈4 credits<!-- credits: 3d-scene:gemini-3.6-flash --> on Gemini 3.6 Flash, ≈6<!-- credits: 3d-scene:claude-sonnet-5.5 --> on the default Claude Sonnet 5.5, ≈11<!-- credits: 3d-scene:claude-opus-5.5 --> on Claude Opus 5.5; a long prompt, many references or a repair pass costs more. A higher reasoning effort costs more only through the tokens it writes, and on a Claude model any effort runs on Anthropic's own API, at that lane's rate. A failure the provider billed is charged for that usage; one it did not bill is refunded. A run that could not be queued to start is not removed: it shows as failed, with its credits refunded, and you can run it again. A video reference adds the existing [Video Analysis](../processing-video/video-analysis.md) charge. MP4 export adds **55 credits**<!-- credits: render-video --> through Render Video for a scene up to 1920 px on its longest side, **83**<!-- credits: render-video:3d-large --> above that up to 5.12 megapixels, and **138**<!-- credits: render-video:3d-xlarge --> for a larger frame — see [what a 3D scene render costs](render-video.md#what-a-3d-scene-render-costs).
+Scene authoring is charged for the tokens its LLM call actually used — your prompt, the references' descriptions and any video analysis text, and the scene plan it writes — at the selected model's rate on the lane that served it ([LLM model rates](../../pricing/llm-models.md)), with a hold first, as on [Generate Text](../ai-text/llm-chat.md#credit-pricing). The Run button shows an estimate of a typical run: ≈27 credits<!-- credits: 3d-scene:gemini-3.6-flash --> on Gemini 3.6 Flash, ≈48<!-- credits: 3d-scene:claude-sonnet-5.5 --> on the default Claude Sonnet 5.5, ≈94<!-- credits: 3d-scene:claude-opus-5.5 --> on Claude Opus 5.5; a long prompt or many references cost more, and each repair pass is another full call, so a scene sent back once costs about twice the estimate. A higher reasoning effort costs more through the tokens it writes, and on a Claude model any effort runs on Anthropic's own API, at that lane's rate: a typical scene on Claude Opus 5.5 with an effort set is estimated at ≈233 credits<!-- credits: 3d-scene:claude-opus-5.5:direct -->. For the price on any model, ask the model-cost API for `3d-scene:<model id>`. A failure the provider billed is charged for that usage; one it did not bill is refunded. A run that could not be queued to start is not removed: it shows as failed, with its credits refunded, and you can run it again. A video reference adds the existing [Video Analysis](../processing-video/video-analysis.md) charge. MP4 export adds **55 credits**<!-- credits: render-video --> through Render Video for a scene up to 1920 px on its longest side, **83**<!-- credits: render-video:3d-large --> above that up to 5.12 megapixels, and **138**<!-- credits: render-video:3d-xlarge --> for a larger frame — see [what a 3D scene render costs](render-video.md#what-a-3d-scene-render-costs).
 
-The total is **scene authoring + optional video analysis + optional MP4 export**. For example, a typical scene on the default Claude Sonnet 5.5 using only image references is estimated at ≈6 credits<!-- credits: 3d-scene:claude-sonnet-5.5 --> to author and ≈61<!-- credits: 3d-scene:claude-sonnet-5.5 + render-video --> including one MP4 export. Every aspect ratio this node offers renders at 1920 px or less on its longest side, so its exports are always at the base render price; a larger frame only arises when a scene plan is resized in the editor or supplied through the API or MCP, and it is the export that costs more, never the authoring. Preview playback and local property edits are free. These are the built-in defaults; the model-cost API supplies the instance's current prices. Community and Business editions do not use Cloud credit billing.
+The total is **scene authoring + optional video analysis + optional MP4 export**. For example, a typical scene on the default Claude Sonnet 5.5 using only image references is estimated at ≈48 credits<!-- credits: 3d-scene:claude-sonnet-5.5 --> to author and ≈103<!-- credits: 3d-scene:claude-sonnet-5.5 + render-video --> including one MP4 export. Every aspect ratio this node offers renders at 1920 px or less on its longest side, so its exports are always at the base render price; a larger frame only arises when a scene plan is resized in the editor or supplied through the API or MCP, and it is the export that costs more, never the authoring. Preview playback and local property edits are free. These are the built-in defaults; the model-cost API supplies the instance's current prices. Community and Business editions do not use Cloud credit billing.
 
 ## Using the result as a video reference
 

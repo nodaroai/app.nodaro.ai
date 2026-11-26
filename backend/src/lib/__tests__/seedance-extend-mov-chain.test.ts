@@ -58,8 +58,8 @@ const JOB_ID = "11111111-2222-3333-4444-555555555555"
 const SOURCE = `https://r2.test.com/videos/${JOB_ID}.mp4`
 const OUR_MOV = "https://r2.test.com/videos/abc-raw.mov"
 
-function stubJob(outputData: unknown) {
-  mocks.maybeSingle.mockResolvedValue({ data: outputData === null ? null : { output_data: outputData }, error: null })
+function stubJob(outputData: unknown, serverOutput?: unknown) {
+  mocks.maybeSingle.mockResolvedValue({ data: outputData === null ? null : { output_data: outputData, ...(serverOutput !== undefined ? { server_output: serverOutput } : {}) }, error: null })
 }
 
 beforeEach(() => {
@@ -90,6 +90,16 @@ describe("findChainedMovReference", () => {
     // Scoped to the caller: never chain off someone else's job row.
     expect(mocks.eq).toHaveBeenCalledWith("id", JOB_ID)
     expect(mocks.eq).toHaveBeenCalledWith("user_id", "user-1")
+  })
+
+  it("reads a watermarked run's raw mov from jobs.server_output (decided 2026-11-22)", async () => {
+    stubJob({ videoUrl: "https://r2.test.com/videos/x.mp4" }, { rawExtensionUrl: OUR_MOV })
+    await expect(findChainedMovReference(SOURCE, "user-1")).resolves.toBe(OUR_MOV)
+  })
+
+  it("a job whose content was erased (an expunge, output_data null) is never a chain source, whatever its server-only record names (decided 2026-11-25)", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: { output_data: null, server_output: { rawExtensionUrl: OUR_MOV } }, error: null })
+    await expect(findChainedMovReference(SOURCE, "user-1")).resolves.toBeUndefined()
   })
 
   it("a foreign source URL is not looked up at all", async () => {

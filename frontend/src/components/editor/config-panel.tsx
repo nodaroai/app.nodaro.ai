@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { carriedEdges } from "@/components/editor/workflow-editor/carried-edges"
 import { useNodeVideoPrice, runButtonCreditOverride } from "@/hooks/use-seedance-ref-price"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { hdrAddonCreditIdOf } from "@/lib/video-hdr"
 import { recordingAccountTriggerUpdate } from "@/lib/account-trigger-intent"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
@@ -908,6 +910,10 @@ export function ConfigPanel() {
   // A Seedance run with reference video(s): the server's quote from the probed
   // clips, exactly as the node prices it (never the -ref row, below the reserve).
   const _videoPrice = useNodeVideoPrice(displayNode?.id ?? "", 0)
+  // Kling 4.0 HDR: the add-on's own row on top of the clip's, as the run holds both (and as the node's pill shows).
+  const _hdrAddonId = displayNode ? hdrAddonCreditIdOf(displayNode) : undefined
+  const _hdrAddonCredits = useModelCredits(_hdrAddonId, 0)
+  const _hdrClipCredits = useModelCredits(_hdrAddonId && displayNode ? getModelIdentifier(displayNode, _pricedEdges, nodes) : undefined, 0)
   const _repeatMultiplier = (_earlyType && REPEATABLE_NODE_TYPES.has(_earlyType)
     ? getEffectiveRepeatCount(_earlyData)
     : 1) * (_unitRateId !== undefined && _unitQuote === undefined ? Math.ceil(_units) : 1)
@@ -1253,7 +1259,9 @@ export function ConfigPanel() {
                         ? (nodeData.estimatedCredits as number) || undefined
                         : _isMultiProviderNode && _providerSum > 0
                           ? _providerSum
-                          : _unitQuote,
+                          : _hdrAddonId && _hdrAddonCredits > 0 && _hdrClipCredits > 0
+                            ? _hdrClipCredits + _hdrAddonCredits
+                            : _unitQuote,
                     )}
                     multiplier={_repeatMultiplier}
                   />

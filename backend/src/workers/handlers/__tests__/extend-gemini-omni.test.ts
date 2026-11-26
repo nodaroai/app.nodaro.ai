@@ -115,7 +115,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
     commitJobCredits: vi.fn().mockResolvedValue(undefined),
     shouldSaveJobResult: vi.fn().mockResolvedValue(true),
     markJobCompleted: vi.fn().mockResolvedValue(true),
-    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4"),
+    uploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" }),
     watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
     generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
     setJobProgress: vi.fn(async () => {}),
@@ -220,7 +220,7 @@ beforeEach(() => {
   mocks.mockDownloadFile.mockResolvedValue(undefined)
   mocks.mockCutNativeExtension.mockResolvedValue(NEW_PART_PATH)
   mocks.mockStitchExtension.mockResolvedValue({ outputPath: `${STITCH_DIR}/stitched.mp4`, boundary: BOUNDARY })
-  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
+  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue({ videoUrl: STITCHED_R2 })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
   mocks.mockDiscardFailedRunCopies.mockResolvedValue(undefined)

@@ -19,11 +19,12 @@
  * (`withFfmpegSlot`, `maskOutlinePeakMemoryMiB`), started through the one
  * launcher (`spawnFfmpeg`), in lockstep with `-fps_mode passthrough`.
  */
+import { FfmpegDiagnostics, spawnExit } from "../../providers/video/ffmpeg-failure-detail.js"
 import { once } from "node:events"
 import { join } from "node:path"
 import type { Writable } from "node:stream"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { ffmpegFailureMessage, probeVideoOverlayBase, runFfprobe, withFfmpegSlot, type VideoOverlayBaseProbe } from "../../providers/video/ffmpeg-utils.js"
+import { ffmpegFailureError, prefixedFfmpegFailure, probeVideoOverlayBase, runFfprobe, withFfmpegSlot, type VideoOverlayBaseProbe } from "../../providers/video/ffmpeg-utils.js"
 import { spawnFfmpeg } from "../../providers/video/ffmpeg-process.js"
 import { ffmpegEffectiveThreads } from "../../providers/video/ffmpeg-threads.js"
 import { countVideoFrames } from "../../providers/video/video-mask.js"
@@ -141,15 +142,15 @@ export async function drawMaskOutlineVideo(input: DrawMaskOutlineInput): Promise
       buildFaceMeshEncodeArgs({ ...draw, frameRate, audioFrom: input.videoPath, outputPath: input.outputPath, colour }),
       { stdio: ["pipe", "ignore", "pipe"] },
     )
-    let encErr = ""
-    enc.stderr.on("data", (c: Buffer) => { encErr = (encErr + c.toString()).slice(-8_000) })
+    const encErr = FfmpegDiagnostics.capture(enc.stderr, 8_000)
     const encClosed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
       enc.on("error", reject)
       enc.on("close", (code: number | null, signal: NodeJS.Signals | null) => resolve({ code, signal }))
     })
     encClosed.catch(() => undefined)
     enc.stdin.on("error", () => { /* surfaced by close */ })
-    const watchdog = setTimeout(() => enc.kill("SIGKILL"), timeoutMs)
+    let timedOut = false
+    const watchdog = setTimeout(() => { timedOut = true; enc.kill("SIGKILL") }, timeoutMs)
 
     const video = streamFrames(input.videoPath, { pixFmt: "rgb24", ...draw, timeoutMs, colour, exact: true, what: "mask outline" })
     const maskStream = streamFrames(input.maskPath, { pixFmt: "gray", ...maskSize, timeoutMs, what: "mask outline" })
@@ -197,7 +198,7 @@ export async function drawMaskOutlineVideo(input: DrawMaskOutlineInput): Promise
       await maskStream.return(undefined)
       enc.stdin.end()
       const { code, signal } = await encClosed
-      if (code !== 0) throw new Error(`mask outline encode: ${ffmpegFailureMessage(encErr, signal ? `killed (${signal})` : `exit ${code}`)}`)
+      if (code !== 0) throw prefixedFfmpegFailure("mask outline encode", ffmpegFailureError(encErr, signal ? `killed (${signal})` : `exit ${code}`, spawnExit(code, signal, timedOut)))
     } catch (err) {
       enc.kill("SIGKILL")
       await Promise.all([video, maskStream].map((s) => s.return(undefined).catch(() => undefined)))

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { STALE_THRESHOLD_MS, KIE_RECOVER_KINDS } from "../types.js"
 import {
   providerKindForImageModel,
   providerKindForVideoModel,
@@ -46,6 +47,24 @@ describe("providerKindFor*", () => {
   it("routes lip-sync uniformly to kie-lip-sync", () => {
     expect(providerKindForLipSyncModel("kling-avatar")).toBe("kie-lip-sync")
     expect(providerKindForLipSyncModel("infinitalk")).toBe("kie-lip-sync")
+  })
+
+  it("a Kling 4.0 run at 4K or in HDR is kie-long-video, past its ~45-min poll; 720p / 1080p SDR stays kie-standard", () => {
+    for (const model of ["kling-4", "kling-4-keyframes"]) {
+      expect(providerKindForVideoModel(model, { resolution: "720p" })).toBe("kie-standard")
+      expect(providerKindForVideoModel(model, { resolution: "1080p", dynamicRange: "sdr" })).toBe("kie-standard")
+      expect(providerKindForVideoModel(model, {})).toBe("kie-standard")
+      expect(providerKindForVideoModel(model, { resolution: "4k" })).toBe("kie-long-video")
+      expect(providerKindForVideoModel(model, { resolution: "1080p", dynamicRange: "hdr" })).toBe("kie-long-video")
+      expect(providerKindForVideoModel(model, { resolution: "4K", dynamicRange: "hdr" })).toBe("kie-long-video")
+    }
+    // Flash has no 4K or HDR: always the standard kind.
+    expect(providerKindForVideoModel("kling-4-flash", { resolution: "4k", dynamicRange: "hdr" })).toBe("kie-standard")
+    expect(providerKindForVideoModel("seedance-2-5", { resolution: "4k" })).toBe("kie-standard")
+    // The threshold is past the worker's poll (2 × 45 s per output second of a 30 s clip = 45 min).
+    expect(STALE_THRESHOLD_MS["kie-long-video"]).toBe(75 * 60 * 1000)
+    expect(STALE_THRESHOLD_MS["kie-standard"]).toBe(20 * 60 * 1000)
+    expect(KIE_RECOVER_KINDS.has("kie-long-video")).toBe(true)
   })
 
   it("routes Suno music to kie-suno", () => {

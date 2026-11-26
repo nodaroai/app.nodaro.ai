@@ -1,6 +1,7 @@
 "use client"
 
 import { useT, tx } from "@/lib/i18n"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import {
@@ -37,6 +38,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { hdrAddonCreditIdOf } from "@/lib/video-hdr"
 import { useNodeVideoPrice } from "@/hooks/use-seedance-ref-price"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -126,6 +128,8 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = (nodeData.activeResultIndex as number | undefined) ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? (nodeData.generatedVideoUrl as string | undefined)
+  // A kept original this browser cannot decode: a message and Download (decided 2026-11-22).
+  const unplayableVideo = useVideoUnplayable(activeUrl)
   const activeThumbnail = activeResult?.thumbnailUrl
   // What the node runs with once its Settings input is read (the wired Aspect
   // Ratio / Duration / Provider) — its chips, run strip and price all read it,
@@ -186,7 +190,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
     hasVideoRef,
     fps: runData.fps,
   })
-  const rowCredits = useModelCredits(creditIdentifier, 25)
+  // Kling 4.0 HDR: its add-on's own row on top of the clip's, as the run holds both.
+  const hdrAddonCredits = useModelCredits(hdrAddonCreditIdOf({ type: "generate-video", data: runData }), 0)
+  const rowCredits = useModelCredits(creditIdentifier, 25) + (drivingAudioId ? 0 : hdrAddonCredits)
   // A Seedance run with reference video(s) is priced by the server from the
   // probed clips — exactly what the run reserves (see useNodeVideoPrice).
   const price = useNodeVideoPrice(id, rowCredits)
@@ -311,6 +317,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             <video
               ref={videoRef}
               src={activeUrl}
+              onError={unplayableVideo.onError}
               crossOrigin="anonymous"
               autoPlay={shouldPlay}
               loop={shouldPlay}
@@ -326,6 +333,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
                 if (shouldPlay) v.play().catch(() => {})
               }}
             />
+            {unplayableVideo.unplayable && activeUrl && <VideoUnplayableNotice url={activeUrl} label={(nodeData.label as string | undefined) ?? ""} />}
             {/* Top-right: delete */}
             {results.length > 0 && (
               <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">

@@ -38,7 +38,8 @@ import { config } from "./config.js"
 import { callerGrantOf, withJobSubmissionContext } from "./job-submission-context.js"
 import { neutralBreakdown, privacyCreditsOf } from "./nodaro-motion-quote.js"
 import { CAST_SWAP_PREFIX, VIDEO_REMAKE_PREFIX } from "./video-remake-paths.js"
-import { upscaleQuoteOf, type VideoRemakeOutputResolution, type VideoRemakeResolution, type VideoRemakeUpscaleChoice } from "./video-remake-upscale-choice.js"
+import { upscaleQuoteOf } from "./video-remake-upscale-choice.js"
+import type { VideoRemakeDeliveredSize } from "./video-remake-delivered-resolution.js"
 
 /** The engine's estimate route, in the spelling every engine version serves. */
 export const VIDEO_REMAKE_ESTIMATE_ROUTE = `${CAST_SWAP_PREFIX}/estimate`
@@ -83,7 +84,8 @@ export function videoRemakeChoiceName(choice: VideoRemakeProviderChoice): string
 export interface VideoRemakeInstruction {
   readonly videoUrl: string
   readonly prompt: string
-  readonly resolution?: "480p" | "720p" | "1080p"
+  /** The size delivered where the engine delivers resolutions (lib/video-remake-delivered-resolution.ts), else the engine's size. */
+  readonly resolution?: VideoRemakeDeliveredSize
   readonly draft?: boolean
 }
 
@@ -94,7 +96,7 @@ export interface VideoRemakeInstructionRun {
   postPrompt: string
   /** The engine, or the Flash choice named. */
   engine: NodaroMotionEngine | VideoRemakeFlashEngine
-  resolution?: "480p" | "720p" | "1080p"
+  resolution?: VideoRemakeDeliveredSize
   draft?: boolean
 }
 
@@ -127,14 +129,12 @@ export interface VideoRemakeEngineQuote {
   /** Charged only if a refused clip is retried; in neither total. */
   privacyCredits?: number
   settlesLower: boolean
-  /** The engine's size, where the engine answers the upscale choice (lib/video-remake-upscale-choice.ts). */
-  resolution?: VideoRemakeResolution
-  /** The size delivered: the next size on a run the choice upscales ("4k" for a 1080p run). */
-  outputResolution?: VideoRemakeOutputResolution
-  /** The choice the run would be made with ("next" where offered and not turned off in the run's body). */
-  upscale?: VideoRemakeUpscaleChoice
-  /** Whether the choice is offered for this run. */
-  upscaleOffered?: boolean
+  /**
+   * The size the run would deliver, as the engine answers it (lib/video-remake-delivered-resolution.ts). An engine
+   * that still answers the earlier quote fields (lib/video-remake-upscale-choice.ts) has them passed through beside
+   * it, untyped, for the clients built for them.
+   */
+  resolution?: VideoRemakeDeliveredSize
 }
 
 /** The engine's estimate answer (bare, or under `data`) as a quote; undefined when it is not one. */

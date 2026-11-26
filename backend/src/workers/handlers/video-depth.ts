@@ -24,6 +24,7 @@ import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import type { StoredVideo } from "../../lib/video-result-store.js"
 import {
   uploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload,
@@ -74,27 +75,27 @@ const handleVideoDepth: HandlerFn = async function handleVideoDepth(job, ctx) {
   }
 
   await setJobProgress(job, ctx.jobId, 50)
-  let r2Url: string
+  let stored: StoredVideo
   if (videoDepthNeedsGrayscalePass(provider, colormap)) {
     // A crash-recovered Replicate row skips this pass: reconcile finalizes the provider (inferno) URL as-is.
     let gray: { outputPath: string; workDir: string } | undefined
     try {
       gray = await runPostProcessing(() => grayscaleVideo(out.videoUrl))
-      r2Url = await watermarkLocalVideoAndUpload(gray.outputPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      stored = await watermarkLocalVideoAndUpload(gray.outputPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
     } finally {
       if (gray) await cleanupWorkDir(gray.workDir)
     }
   } else {
-    r2Url = await uploadVideoMaybeWatermark(out.videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    stored = await uploadVideoMaybeWatermark(out.videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   }
   await setJobProgress(job, ctx.jobId, 100)
 
-  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+  const thumbUrl = await generateAndUploadThumbnail(stored.videoUrl, ctx.jobId, ctx.jobUserId)
   await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "video-depth",
     result: { url: out.videoUrl, cost: out.cost, providerUsed },
-    mediaUrl: r2Url,
+    video: stored,
     extraOutputData: { thumbnailUrl: thumbUrl },
   })
 }

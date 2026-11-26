@@ -208,6 +208,8 @@ import { videoRemakeSideBySideRoutes } from "./ee/routes/video-remake-side-by-si
 import { adminTrendsRoutes } from "./ee/routes/admin-trends.js"
 import { trendRadarRoutes } from "./ee/routes/trend-radar.js"
 import { adminNodaroMotionRoutes } from "./ee/routes/admin-nodaro-motion.js"
+import { adminVideoRouteRoutes } from "./ee/routes/admin-video-route.js"
+import { publishRouteListing } from "./ee/billing/video-route-listing-publish.js"
 import { adminProviderSafetyRoutes } from "./ee/routes/admin-provider-safety.js"
 import { providerSafetyLocksRoutes } from "./routes/provider-safety-locks.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
@@ -863,6 +865,8 @@ export async function buildApp() {
   if (hasAdmin() && hasCredits()) await app.register(trendRadarRoutes)
 // Video Remake (Cast Swap): the admin's face masking per engine, read by the engine through tk.settings.
 if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
+// Admin → Video route: per-model routing of the Seedance 2.x family (ee/routes/admin-video-route.ts).
+if (hasAdmin() && hasCredits()) await app.register(adminVideoRouteRoutes)
   // Provider content filters, per model (admin read; platform operator write).
   if (hasAdmin()) await app.register(adminProviderSafetyRoutes)
   // Which models an admin forced the filter on for: the node checkbox shows it.
@@ -1068,6 +1072,8 @@ if (hasAdmin() && hasCredits()) await app.register(adminNodaroMotionRoutes)
   // inside the loader) unless PRIVATE_MODULES=optional. See
   // backend/src/lib/private-plugins/load.ts.
   const privatePlugins = await loadPrivatePlugins({ app })
+  // What this environment's alternate route lists, for the processes that load no plugin (fire and forget; never rejects).
+  if (hasCredits()) void publishRouteListing()
   // Trends (spec D17): record what this environment's engine supports, so
   // publishing a trend can check every environment. Fire and forget: it
   // never rejects, and boot never waits on it (cloud + Railway only).

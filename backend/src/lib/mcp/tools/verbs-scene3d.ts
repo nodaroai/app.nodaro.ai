@@ -14,6 +14,7 @@ import {
   scene3DInputAssetsSchema,
   scene3DReferenceSchema,
 } from "@nodaro/shared/scene3d"
+import { SCENE3D_BRIEF_MAX_CHARS } from "@nodaro/render-rules"
 import { safeUrlSchema } from "../../url-validator.js"
 import { passesGate } from "../tool-schemas.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
@@ -73,7 +74,7 @@ export function registerScene3DVerbs({ server, session, fastify }: RegisterOpts)
       "Use edit_3d_scene to change the scene and render_3d_scene to export MP4. " +
       "Scene generation does not generate a photorealistic video.",
     inputSchema: {
-      prompt: z.string().min(1).max(8000),
+      prompt: z.string().min(1).max(SCENE3D_BRIEF_MAX_CHARS),
       duration_seconds: z.number().min(1).max(SCENE3D_LIMITS.maxDurationSeconds).optional(),
       fps: z.number().int().min(SCENE3D_LIMITS.minFps).max(SCENE3D_LIMITS.maxFps).optional(),
       aspect_ratio: z.string().optional(),

@@ -93,7 +93,7 @@ afterEach(() => {
 describe("add-node popup in Hebrew", () => {
   it("names the tabs in Hebrew", () => {
     renderPopup()
-    expect(tab("הכל")).toBeTruthy()
+    expect(tab("הכול")).toBeTruthy()
     expect(tab("תמונה")).toBeTruthy()
     expect(screen.queryByRole("tab", { name: "All" })).toBeNull()
     expect(screen.queryByRole("tab", { name: "Image" })).toBeNull()
@@ -107,14 +107,14 @@ describe("add-node popup in Hebrew", () => {
 
   it("renders family headers in Hebrew", () => {
     renderPopup()
-    expect(screen.getByText("העלאה משלכם")).toBeTruthy()
+    expect(screen.getByText("חומרים משלכם")).toBeTruthy()
     expect(screen.queryByText("Add Your Own")).toBeNull()
   })
 
   it("prefixes All-tab headers with the Hebrew tab name", () => {
     renderPopup()
-    fireEvent.click(tab("הכל"))
-    expect(screen.getByText("תמונה · העלאה משלכם")).toBeTruthy()
+    fireEvent.click(tab("הכול"))
+    expect(screen.getByText("תמונה · חומרים משלכם")).toBeTruthy()
     expect(screen.queryByText("Image · Add Your Own")).toBeNull()
   })
 

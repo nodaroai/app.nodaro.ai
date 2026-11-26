@@ -68,6 +68,15 @@ describe("nodes run video-to-video with a Video Remake engine", () => {
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
+  it("names the size the run delivers where the quote answers it, 4K as people write it", async () => {
+    mocks.run.mockResolvedValue({ ...QUOTE, videoRemake: { ...QUOTE.videoRemake, quote: { ...QUOTE.videoRemake.quote, resolution: "4k" } } })
+    await runCli("--param", "resolution=4k")
+    expect(mocks.run.mock.calls[0]![1]).toMatchObject({ provider: "nodaro-prism", resolution: "4k" })
+    const text = out.lines.join("\n")
+    expect(text).toContain("delivered at 4K")
+    expect(text.toLowerCase()).not.toContain("upscale")
+  })
+
   it("--json emits the answer as it is, with --watch too", async () => {
     await runCli("--json", "--watch")
     expect(out.emitted).toEqual([QUOTE])

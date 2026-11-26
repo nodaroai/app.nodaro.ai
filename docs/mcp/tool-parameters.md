@@ -1471,6 +1471,7 @@ Needs `workflows:execute`.
 | `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
 | `character_references[].video_url` | string |  | kling-4(-flash): 3-8s clip; a video subject. |
 | `keep_original_sound` | boolean |  | kling-4(-flash): keep ref videos' sound. |
+| `dynamic_range` | string |  | kling-4(-keyframes): hdr at 1080p/4k, extra cost. One of `sdr`, `hdr`. |
 | `audio_soundtrack` | boolean |  | kling-4: false = every audio clip a voice, no soundtrack. |
 | `user_request` | string |  | The user's latest message to you, word for word. At most 4000 characters. |
 | `flow_id` | string |  | "new" starts a flow; a flow id from a result continues it. At most 36 characters. |
@@ -2371,7 +2372,7 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  |  |
 | `model` | string |  | No model: a Video Remake quote on `nodaro-prism` (nothing runs); name `seedance-2-5` for an edit that runs at once. Options: nodaro-prism, nodaro-pulse, wan, wan-flash, wan-videoedit, luma-modify, runway-aleph, happyhorse-edit, seedance-2-5, seedance-2-5-flash. An unknown model is refused. `seedance-2-5`/`seedance-2-5-flash` edit by instruction, keeping length and ratio (clip 4-30s; billed input + output seconds, settled to the delivered length). `wan`/`wan-flash` make a new clip featuring the input video's subject; they do not edit or restyle the clip. `happyhorse-edit` (3-60s clip; 720p default) and `wan-videoedit` (2-10s) bill per clip second, else refused uncharged (per 10 s: happyhorse-edit 720p 1540<!-- credits: happyhorse-edit:720p:per-4s@2.5 --> cr, wan-videoedit 660<!-- credits: wan-videoedit:1080p:per-4s@2.5 -->, min 352<!-- credits: wan-videoedit -->). |
 | `duration` | string |  | Wan / Wan Flash only — 5s or 10s output. One of `5`, `10`. |
-| `resolution` | string |  | seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p), nodaro-prism (480p default) / nodaro-pulse (720p default, or 1080p). One of `480p`, `720p`, `1080p`. |
+| `resolution` | string |  | seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p); nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k. One of `480p`, `720p`, `1080p`, `4k`. |
 | `aspect_ratio` | string |  | Runway Aleph only. One of `16:9`, `9:16`, `4:3`, `3:4`, `1:1`, `21:9`. |
 | `audio` | boolean |  | Wan Flash only — generate the clip with audio. |
 | `multi_shots` | boolean |  | Wan Flash only — several shots with transitions instead of one continuous shot. |
@@ -3770,7 +3771,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `roles[].face` | string |  | As body; "original" keeps their own face (to change only clothes, hair or build). One of `new`, `original`. Only when `kind` is `person`. |
 | `roles[].preview_name` | string |  | Name used instead of name in a preview. From 1 to 200 characters. |
 | `roles[].in_preview` | boolean |  | false = left out of a preview (not prepared or charged). Default true. |
-| `roles[].subject` | string |  | previz only: what the role is, used in the script; name is then the locator of its model. At most 200 characters. |
+| `roles[].subject` | string |  | previz only: what its model becomes in the finished video, not the previz model; no model colour the real thing lacks ("a jockey on a racehorse", not "the red car's driver"). At most 200 characters. |
 | `roles[].coat` | string |  | Fur, colors and markings; as body. One of `new`, `original`. Only when `kind` is `pet`. |
 | `roles[].shape` | string |  | Shape and proportions; as a person's body. One of `new`, `original`. Only when `kind` is `product`. |
 | `roles[].finish` | string |  | Colors, materials and markings; as shape. One of `new`, `original`. Only when `kind` is `product`. |
@@ -3782,17 +3783,16 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `post_prompt` | string |  | Extra instructions. Mention a role as {role:N}, N 1-based over roles (empty roles count). At most 4000 characters. |
 | `preview` | boolean |  | true = render 4 s from preview_start. |
 | `preview_start` | number |  | Seconds, default 0; preview_start + 4 must fit the clip. At least 0. |
-| `engine` | string |  | Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): 720p or 1080p only, no draft, no Full Quality. Where offered, at a lower price (else flash_not_offered): "nodaro-prism-flash" (480p or 720p, at most 10 images) and "nodaro-pulse-flash" (720p, at most 20 s); neither has a draft or Full Quality. One of `nodaro-prism`, `nodaro-pulse`, `nodaro-prism-flash`, `nodaro-pulse-flash`. |
+| `engine` | string |  | Default "nodaro-prism" (Nodaro Prism). "nodaro-pulse" (Nodaro Pulse): no draft, no Full Quality. Where offered, at a lower price (else flash_not_offered): "nodaro-prism-flash" (at most 10 images) and "nodaro-pulse-flash" (at most 20 s); neither has a draft or Full Quality. Their sizes: see resolution. One of `nodaro-prism`, `nodaro-pulse`, `nodaro-prism-flash`, `nodaro-pulse-flash`. |
 | `style` | string |  | "precise" (default) follows the clip exactly; "motion" follows the clip's movement and takes the looks from the photos, more freely than precise. Its price may differ: the quote shows it. An admin may force "motion" for the engine, which overrides this. One of `precise`, `motion`. |
 | `art_style` | string |  | An art style on Nodaro Prism (Flex; a Precise call may run as Flex): a "style" picker catalog id (get_picker_catalog "style"), e.g. "pop-art". The prompt takes its video wording. With no role images and no references it restyles the whole clip, where the engine takes style-only runs (Flex). Pulse takes none. From 1 to 100 characters. |
 | `custom_style` | string |  | The style in your own words, instead of art_style (never both). Write it yourself: describe the visual style only — the medium (drawn, 3D-rendered or filmed), line, colour, lighting and texture — never who or what is in the video, and no names of people. At most 600 characters. Nodaro Prism only. At most 600 characters. |
 | `custom_style_image_url` | string (URL) |  | A public https image whose visual style the video should take. Nodaro reads the image's style (never its content) and restyles the clip in it. With custom_style too, your text is a note on the image's style (for example 'like this, but darker'). Not with art_style. At most 4096 characters. |
-| `clip_kind` | string |  | "previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model's colour or position; with no art_style or custom_style the result is real-world, live-action footage. Default "footage". One of `footage`, `previz`. |
-| `previz_lighting` | boolean |  | previz only: also take the lighting direction and lighting changes from the clip. |
+| `clip_kind` | string |  | "previz": a 3D previz / clay-model clip is rendered into your look, not edited; name each role by its model's colour or position, its subject by what it becomes; with no art_style or custom_style the result is real-world, live-action footage. Default "footage". One of `footage`, `previz`. |
+| `previz_lighting` | boolean |  | previz only: also take the clip's lighting direction and changes. |
 | `previz_sound` | string |  | previz only: keep the clip's sound, or have it generated. One of `clip`, `generated`. |
 | `motion_length` | string |  | nodaro-pulse only: cut the clip to whole seconds at its end (default) or start. One of `cut-end`, `cut-start`. |
-| `resolution` | string |  | The engine's size. Default "480p" (nodaro-pulse: "720p"; no 480p). One of `480p`, `720p`, `1080p`. |
-| `upscale` | string |  | "next" (default where the quote has upscaleOffered): delivered at the next size (480p→720p→1080p→4K), priced in breakdown.upscale; "off": at resolution. One of `off`, `next`. |
+| `resolution` | string |  | The size delivered. nodaro-prism and nodaro-pulse: "720p" (default), "1080p" or "4k"; their Flash choices: "720p" (default) or "1080p". A size not offered here is refused (resolution_not_offered, naming the sizes offered). One of `480p`, `720p`, `1080p`, `4k`. |
 | `draft` | boolean |  | true = a 480p draft (nodaro-prism only) that full_quality can finish at 1080p. Default false: plain. |
 | `prepare_references` | boolean |  | Default true: prepare the reference pictures first. |
 | `quality` | string |  | Deprecated: use resolution + draft. "draft" means a 480p draft. Always `draft`. |

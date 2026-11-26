@@ -23,6 +23,8 @@ export function seedanceRefQuoteKey(request: SeedanceRefEstimateRequest): string
     unknownSoundtrack: request.unknownSoundtrack,
     videoTrimStart: request.videoTrimStart,
     videoTrimEnd: request.videoTrimEnd,
+    // Kling 4.0 HDR: absent on an SDR run, so every other key is unchanged.
+    dynamicRange: request.dynamicRange,
   })
 }
 

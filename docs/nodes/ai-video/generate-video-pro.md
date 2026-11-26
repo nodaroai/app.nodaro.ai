@@ -99,9 +99,11 @@ Generate Video Pro offers every video model that can drive the engine's **keyfra
 | `wan-3-prime` | Wan 3.0 Prime | 2–30s | 480p / 720p / 1080p | Keyframes |
 | `happyhorse-ref2v` | HappyHorse 1.1 Ref2V | 3–15s | 720p / 1080p | Keyframes |
 | `vidu-q4` | Vidu Q4 | 3–16s | 720p / 1080p / 4K | Keyframes |
-| `kling-4` | Kling 4.0 | 3–30s | 720p / 1080p | Keyframes |
+| `kling-4` | Kling 4.0 | 3–30s | 720p / 1080p / 4K | Keyframes |
 | `kling-4-flash` | Kling 4.0 Flash | 3–20s | 720p | Keyframes |
 | `pixverse-v6-max` | PixVerse V6 Max | 1–15s | 720p / 1080p | Keyframes |
+
+Kling 4.0's **HDR** setting is not offered here: every segment renders SDR (a plugin's own segment request has the field removed).
 
 Kling 4.0 **Keyframes** (`kling-4-keyframes`) and Grok Imagine 1.5 (`grok-imagine-video-1.5`) are not offered: their Image References are in-between frames, so the identity references each segment carries would land in the clip as frames. Kling 4.0 (`kling-4`) is keyframes-only here — like Wan 3.0, it takes reference videos on Generate Video but the continuation transport is not wired for it. Kling 4.0 Flash (`kling-4-flash`) is keyframes-only for the same reason, at 720p, its only resolution.
 

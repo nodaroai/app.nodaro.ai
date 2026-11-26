@@ -1,14 +1,13 @@
 import { execFile, spawn, type ExecFileException } from "node:child_process"
 import { execFileFfmpeg, spawnFfmpeg } from "./ffmpeg-process.js"
 import { retryOnShortage, spawnShowsShortage, stderrShowsShortage } from "./ffmpeg-shortage-retry.js"
-import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { Readable, Transform } from "node:stream"
-import { pipeline } from "node:stream/promises"
 import { safeFetch } from "../../lib/safe-fetch.js"
+import { DownloadIncompleteError, writeDownloadToFile } from "../../lib/download-incomplete.js"
 import { isOwnStoredFileUrl } from "../../lib/own-storage-url.js"
 import {
   assertSafeProbeSource,
@@ -50,6 +49,7 @@ import {
   downloadBodyDeadlineMs,
 } from "./ffmpeg-timeouts.js"
 import { constantFrameRate, parseFrameRate } from "./frame-rate.js"
+import { FfmpegDiagnostics, spawnExit, type FfmpegExit } from "./ffmpeg-failure-detail.js"
 import { UNREADABLE_CLIP_FPS } from "@nodaro/render-rules"
 
 // The frame-rate rule lives in a dependency-free leaf (see its header);
@@ -587,7 +587,8 @@ async function saveResponse(
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }
   const capped = maxBytes !== undefined && maxBytes > 0 && Number.isFinite(maxBytes)
-  const announced = Number(response.headers?.get?.("content-length") ?? NaN)
+  const header = response.headers?.get?.("content-length")?.trim()
+  const announced = header && /^\d+$/.test(header) ? Number(header) : NaN
   if (capped && !contentEncoding(response) && announced > maxBytes) {
     // A body that says up front it is over the cap fails at the headers
     // (unencoded only: an encoded length is not the size on disk).
@@ -601,10 +602,24 @@ async function saveResponse(
       ...(Number.isFinite(announced) ? { contentLength: announced } : {}),
     })
   }
+  // A whole-file GET can receive 206 from a media host. A full range is
+  // usable, but a middle section or a known prefix is not the source file.
+  let rangeSize: number | undefined
+  if (response.status === 206) {
+    const value = response.headers.get("content-range") ?? ""
+    const range = /^bytes (\d+)-(\d+)\/(\d+|\*)$/i.exec(value)
+    const partial = range && (BigInt(range[1]!) !== 0n ||
+      (range[3] !== "*" && BigInt(range[2]!) + 1n !== BigInt(range[3]!)))
+    const multipart = /^multipart\/byteranges\b/i.test(response.headers.get("content-type") ?? "")
+    if (partial || multipart) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new DownloadIncompleteError(`the server returned a partial response: ${linkWithoutQuery(url)}`)
+    }
+    if (range) rangeSize = Number(BigInt(range[2]!) + 1n)
+  }
   const count = hooks.onBody?.()
-  const stages: Array<NodeJS.ReadableStream | NodeJS.ReadWriteStream | NodeJS.WritableStream> = [
-    Readable.fromWeb(response.body as import("stream/web").ReadableStream),
-  ]
+  const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+  const stages: Transform[] = []
   if (count) {
     // Every chunk counts toward the current rate window.
     stages.push(new Transform({ transform(chunk: Buffer, _enc, cb) { count(chunk.length); cb(null, chunk) } }))
@@ -622,11 +637,14 @@ async function saveResponse(
       },
     }))
   }
-  stages.push(createWriteStream(dest))
-  // The signal goes to the pipeline as well as the fetch: aborting only the
-  // fetch does not reliably end a body already streaming (after a garbage
-  // collection it kept arriving past its limit), so a limit was not real.
-  await (pipeline as (...s: unknown[]) => Promise<void>)(...stages, ...(hooks.signal ? [{ signal: hooks.signal }] : []))
+  const length = rangeSize ?? announced
+  const expected = !contentEncoding(response) && Number.isSafeInteger(length) && length >= 0 ? length : undefined
+  await writeDownloadToFile(source, dest, stages, expected, linkWithoutQuery(url), hooks.signal)
+}
+
+/** A link without its query (a signed link's query is a credential). */
+function linkWithoutQuery(url: string): string {
+  try { const u = new URL(url); return `${u.origin}${u.pathname}` } catch { return "(unparseable link)" }
 }
 
 // The ffmpeg admission (`ffmpeg-admission-instance.ts`): FFMPEG_CONCURRENCY
@@ -653,8 +671,11 @@ export interface FfmpegLaunchOptions {
    *  picture slice and every re-encode does. */
   readonly peakMemoryMiB?: number
   /** Gives up WAITING for the launch's slot and memory when it aborts (the launch then rejects with its
-   *  reason); never stops a launch already admitted. `runFfmpeg` only. Omitted: waits as long as it takes. */
+   *  reason); never stops a launch already admitted, unless `stopOnAbort`. `runFfmpeg` only. Omitted: waits as long as it takes. */
   readonly signal?: AbortSignal
+  /** With `signal`: its abort also stops the launch once it runs (the child is killed; the failure then
+   *  carries `aborted`). `runFfmpeg` only. Omitted: an admitted launch runs to its end. */
+  readonly stopOnAbort?: boolean
   /** The child's environment: the probe guard's, for a run that reads a link through its proxy
    *  (`ffmpeg-reading-links.ts`). Omitted: this process's own. */
   readonly env?: NodeJS.ProcessEnv
@@ -837,8 +858,56 @@ function lastLines(lines: readonly string[], maxChars: number): string {
  * whole budget with the command line.
  */
 export function ffmpegFailureMessage(stderr: string | undefined, fallback: string): string {
-  const tail = ffmpegOutputTail(stderr ?? "") || ffmpegOutputTail(fallback) || "no output"
-  return `ffmpeg failed: ${tail}`
+  return `${FFMPEG_FAILED_PREFIX}${ffmpegFailureTail(stderr, fallback)}`
+}
+
+const FFMPEG_FAILED_PREFIX = "ffmpeg failed: "
+
+function ffmpegFailureTail(stderr: string | undefined, fallback: string): string {
+  return ffmpegOutputTail(stderr ?? "") || ffmpegOutputTail(fallback) || "no output"
+}
+
+/**
+ * The error a failed ffmpeg run throws: {@link ffmpegFailureMessage} as its
+ * message (unchanged — what `jobs.error_message` stores and the person sees),
+ * and as `internalDetails` the operator's detail (`ffmpeg-failure-detail.ts`):
+ * how the process ended, and the lines anywhere in its output that name an
+ * error, before the tail (paths cut to their basename, filter-graph text
+ * dropped). `providerDetailOf` writes that to `jobs.error_detail`; the whole
+ * detail with paths, `ffmpegFailureLog`, goes to the worker's own log line. Streamed runners pass their bounded collector.
+ */
+export function ffmpegFailureError(
+  stderr: string | FfmpegDiagnostics | undefined,
+  fallback: string,
+  exit: FfmpegExit,
+): Error & { internalDetails: string; ffmpegFailureLog: string } {
+  const capture = stderr instanceof FfmpegDiagnostics ? stderr : new FfmpegDiagnostics()
+  if (typeof stderr === "string") capture.push(stderr)
+  const tail = ffmpegFailureTail(typeof stderr === "string" ? stderr : capture.messageTail, fallback)
+  // Node's fallback may contain the full command and filter arguments. Only
+  // stderr collected from its beginning feeds the separate operator outputs.
+  return Object.assign(new Error(`${FFMPEG_FAILED_PREFIX}${tail}`), capture.fields(exit))
+}
+
+/** `err` (an {@link ffmpegFailureError}) with its message led by `step: `, its operator detail kept. */
+export function prefixedFfmpegFailure(step: string, err: Error & { internalDetails: string; ffmpegFailureLog: string }): Error & { internalDetails: string; ffmpegFailureLog: string } {
+  return Object.assign(new Error(`${step}: ${err.message}`), { internalDetails: err.internalDetails, ffmpegFailureLog: err.ffmpegFailureLog })
+}
+
+/** How an execFile'd ffmpeg ended, from its error (the same facts `execFailureFlags` reads). */
+function execExit(error: ExecFileException): FfmpegExit {
+  const maxBuffer = error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+  const aborted = error.name === "AbortError"
+  const stoppedBecause = maxBuffer ? "its output outgrew the capture buffer"
+    : aborted ? "its caller's abort"
+    : error.killed === true ? "its time limit" : undefined
+  return {
+    code: typeof error.code === "number" ? error.code : null,
+    signal: typeof error.signal === "string" ? error.signal : null,
+    signalledByUs: error.killed === true || maxBuffer || aborted,
+    ...(stoppedBecause ? { stoppedBecause } : {}),
+    ...(typeof error.code === "string" && !maxBuffer ? { processError: error.code } : {}),
+  }
 }
 
 /**
@@ -849,9 +918,12 @@ export function ffmpegFailureMessage(stderr: string | undefined, fallback: strin
  * caller can classify without parsing text (Video Overlay: a timeout is
  * "Render exceeded the 10-minute limit"; a probe timeout stays retryable).
  */
-function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true } {
+function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut: boolean; notStarted?: true; aborted?: true; truncated?: true; signalledFromOutside?: true } {
   const killed = error.killed === true
   return {
+    // Ended by a signal this process did not send (the kernel's out-of-memory
+    // killer's SIGKILL, an operator): the box's failure, not the input's.
+    ...(!killed && typeof error.signal === "string" && error.signal.length > 0 ? { signalledFromOutside: true as const } : {}),
     killed,
     timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
     // The process never started (ENOENT, EAGAIN, EMFILE…: the spawn's own error): the server's failure, not the input's.
@@ -894,13 +966,17 @@ export async function runFfmpeg(
       maxBuffer: 10 * 1024 * 1024,
       timeout: limitMs,
       ...(launch?.env ? { env: launch.env } : {}),
+      ...(launch?.stopOnAbort && launch.signal ? { signal: launch.signal } : {}),
     }, (error, stdout, stderr) => {
       stopEscalation()
       stopWatch()
       if (stalledAfterMs !== undefined) {
-        reject(ffmpegStallError(stalledAfterMs, stallWatch?.stallMs))
+        const capture = new FfmpegDiagnostics()
+        capture.push(stderr)
+        const detail = capture.fields({ signal: "SIGKILL", signalledByUs: true, stoppedBecause: "no progress" })
+        reject(Object.assign(ffmpegStallError(stalledAfterMs, stallWatch?.stallMs), detail))
       } else if (error) {
-        reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error), shortageMark(error, stderr)))
+        reject(Object.assign(ffmpegFailureError(stderr, error.message, execExit(error)), execFailureFlags(error), shortageMark(error, stderr)))
       } else {
         resolve(stdout)
       }
@@ -948,7 +1024,7 @@ export async function runFfmpegCapture(
           // that was stopped (`killed`, `timedOut`) is told apart from ffmpeg
           // refusing its input.
           reject(
-            Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), {
+            Object.assign(ffmpegFailureError(stderr, error.message, execExit(error)), {
               stdout,
               stderr,
               ...execFailureFlags(error),
@@ -994,12 +1070,7 @@ export async function runFfmpegWithProgress(
         proc.kill("SIGKILL")
       }, limitMs)
 
-      // Keep only the stderr tail — that's where ffmpeg writes its real error.
-      // (8 KB here, then `ffmpegFailureMessage` narrows it to the last lines.)
-      let stderrTail = ""
-      proc.stderr.on("data", (chunk: Buffer) => {
-        stderrTail = (stderrTail + chunk.toString()).slice(-8192)
-      })
+      const diagnostics = FfmpegDiagnostics.capture(proc.stderr, 8192)
 
       let lineBuf = ""
       proc.stdout.on("data", (chunk: Buffer) => {
@@ -1014,16 +1085,19 @@ export async function runFfmpegWithProgress(
 
       proc.on("error", (err) => {
         clearTimeout(watchdog)
-        reject(Object.assign(new Error(`ffmpeg failed to spawn: ${err.message}`), spawnShowsShortage(err as NodeJS.ErrnoException) ? { resourceShortage: true as const } : {}))
+        const detail = diagnostics.fields({ processError: (err as NodeJS.ErrnoException).code })
+        reject(Object.assign(new Error(`ffmpeg failed to spawn: ${err.message}`), detail, spawnShowsShortage(err as NodeJS.ErrnoException) ? { resourceShortage: true as const } : {}))
       })
-      proc.on("close", (code) => {
+      proc.on("close", (code: number | null, signal?: NodeJS.Signals | null) => {
         clearTimeout(watchdog)
         if (timedOut) {
-          reject(new Error(`ffmpeg timed out after ${limitMs}ms`))
+          reject(Object.assign(new Error(`ffmpeg timed out after ${limitMs}ms`), diagnostics.fields(spawnExit(code, signal ?? null, true))))
         } else if (code === 0) {
           resolve()
         } else {
-          reject(Object.assign(new Error(ffmpegFailureMessage(stderrTail, `exit code ${code}`)), stderrShowsShortage(stderrTail) ? { resourceShortage: true as const } : {}))
+          // `signal` set here was not ours: the only kill this runner sends is the watchdog's (`timedOut` above).
+          const exit: FfmpegExit = { code, signal: signal ?? null, signalledByUs: false }
+          reject(Object.assign(ffmpegFailureError(diagnostics, `exit code ${code}`, exit), stderrShowsShortage(diagnostics.messageTail) ? { resourceShortage: true as const } : {}))
         }
       })
   }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB }), { limitMs: ffmpegLimitMs(timeoutMs), label: "ffmpeg" })

@@ -3,7 +3,7 @@ import type { GenerateImageBatchResult, NodeQuote } from "@nodaro/sdk/nodes"
 import { isVideoToVideoRemakeQuote } from "@nodaro/sdk/nodes"
 import { SEEDANCE_REFERENCE_TASK_TYPES } from "@nodaro/shared/models"
 import { buildClient, handleError } from "../client.js"
-import { detail, emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
+import { detail, emit, success, dim, info, warn, table, terminalSafe, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic, watchJobsUntilTerminal, watchUntilTerminal } from "../util.js"
 import { pickFromList, isInteractive } from "../interactive.js"
@@ -264,6 +264,8 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
             }
             const quote = result.videoRemake.quote
             info(`${quote.engineName} quote: about ${quote.expectedCredits ?? quote.totalCredits} credits (${quote.totalCredits} held while it runs). Nothing was started.`)
+            // The size the run delivers, where the engine answers it ("4k" said as 4K).
+            if (quote.resolution !== undefined) dim(`delivered at ${terminalSafe(quote.resolution === "4k" ? "4K" : quote.resolution)}`)
             dim(`run it with POST ${result.videoRemake.run.path} (client.videoRemake.run) and this body:`)
             detail(result.videoRemake.run.body)
             return

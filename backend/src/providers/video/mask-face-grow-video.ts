@@ -10,9 +10,10 @@
  * for (a clip a frame short) is kept as it is: the frame count never moves.
  * The composite then reads the grown mask exactly as it read the mask.
  */
+import { FfmpegDiagnostics, spawnExit } from "./ffmpeg-failure-detail.js"
 import { join } from "node:path"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { constantFrameRate, ffmpegFailureMessage, parseFrameRate, probeVideoOverlayBase, withFfmpegSlot } from "./ffmpeg-utils.js"
+import { constantFrameRate, ffmpegFailureError, parseFrameRate, probeVideoOverlayBase, withFfmpegSlot } from "./ffmpeg-utils.js"
 import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { canvasPeakMemoryMiB, cameraMegapixelsOf } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
@@ -109,11 +110,12 @@ export async function growFaceMaskVideo(args: {
   }
   await withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
     const proc = spawnFfmpeg(buildFaceGrowClipDecodeArgs(args.clipPath, geometry, rle.length, plan?.fps), { stdio: ["ignore", "pipe", "pipe"] })
-    let stderr = ""
+    const stderr = FfmpegDiagnostics.capture(proc.stderr, 4_000)
     let failed: unknown = null
     const frame = new Uint8Array(frameBytes)
     let filled = 0
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)
+    let timedOut = false
+    const watchdog = setTimeout(() => { timedOut = true; proc.kill("SIGKILL") }, timeoutMs)
     proc.stdout.on("data", (chunk: Buffer) => {
       let at = 0
       while (at < chunk.length && failed === null) {
@@ -143,12 +145,11 @@ export async function growFaceMaskVideo(args: {
         setImmediate(() => proc.stdout.resume())
       }
     })
-    proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-4_000) })
     proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
     proc.on("close", (code, signal) => {
       clearTimeout(watchdog)
       if (failed !== null) return reject(failed)
-      if (code !== 0) return reject(new Error(ffmpegFailureMessage(stderr, signal ? `face grow clip decode killed (${signal}) after ${timeoutMs} ms` : `face grow clip decode exited with code ${code}`)))
+      if (code !== 0) return reject(ffmpegFailureError(stderr, signal ? `face grow clip decode killed (${signal}) after ${timeoutMs} ms` : `face grow clip decode exited with code ${code}`, spawnExit(code, signal, timedOut)))
       resolve()
     })
   }), {

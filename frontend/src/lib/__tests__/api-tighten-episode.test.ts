@@ -88,7 +88,7 @@ describe("estimateUseCase", () => {
 describe("a refused start or estimate names the node in each locale", () => {
   const CASES: ReadonlyArray<readonly [LocaleId, string, string]> = [
     ["en", "Couldn't start Tighten Episode", "Couldn't estimate Tighten Episode"],
-    ["he", "לא ניתן להפעיל את הידוק פרק", "לא ניתן להעריך את הידוק פרק"],
+    ["he", "לא ניתן להפעיל את \"עריכת פודקאסט\"", "לא ניתן לחשב את העלות של \"עריכת פודקאסט\""],
     ["ja", "「エピソードを引き締める」を開始できませんでした", "「エピソードを引き締める」の見積もりができませんでした"],
     ["ko", "“에피소드 다듬기”를 시작하지 못했습니다", "“에피소드 다듬기”의 예상 비용을 계산하지 못했습니다"],
     ["pt-BR", "Não foi possível iniciar o Enxugar episódio", "Não foi possível estimar o Enxugar episódio"],

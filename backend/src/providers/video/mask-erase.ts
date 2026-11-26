@@ -35,9 +35,10 @@
  * them the result reports `erasedTracks` and `unmatchedSeeds`.
  */
 
+import { FfmpegDiagnostics, spawnExit } from "./ffmpeg-failure-detail.js"
 import { join } from "node:path"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { constantFrameRate, downloadFile, ffmpegFailureMessage, parseFrameRate, probeVideoOverlayBase, withFfmpegSlot } from "./ffmpeg-utils.js"
+import { constantFrameRate, downloadFile, ffmpegFailureError, parseFrameRate, probeVideoOverlayBase, withFfmpegSlot } from "./ffmpeg-utils.js"
 import { spawnFfmpeg } from "./ffmpeg-process.js"
 import {
   countVideoFrames,
@@ -256,10 +257,11 @@ export async function decodeMaskVideoRle(path: string, geometry: MaskGeometry): 
   const frames: string[] = []
   await withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
     const proc = spawnFfmpeg(buildMaskDecodeArgs(path), { stdio: ["ignore", "pipe", "pipe"] })
-    let stderr = ""
+    const stderr = FfmpegDiagnostics.capture(proc.stderr, 4_000)
     const frame = new Uint8Array(frameBytes)
     let filled = 0
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)
+    let timedOut = false
+    const watchdog = setTimeout(() => { timedOut = true; proc.kill("SIGKILL") }, timeoutMs)
     proc.stdout.on("data", (chunk: Buffer) => {
       let at = 0
       while (at < chunk.length) {
@@ -273,11 +275,10 @@ export async function decodeMaskVideoRle(path: string, geometry: MaskGeometry): 
         }
       }
     })
-    proc.stderr.on("data", (c: Buffer) => { stderr = (stderr + c.toString()).slice(-4_000) })
     proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
     proc.on("close", (code, signal) => {
       clearTimeout(watchdog)
-      if (code !== 0) return reject(new Error(ffmpegFailureMessage(stderr, signal ? `mask decode killed (${signal}) after ${timeoutMs} ms` : `mask decode exited with code ${code}`)))
+      if (code !== 0) return reject(ffmpegFailureError(stderr, signal ? `mask decode killed (${signal}) after ${timeoutMs} ms` : `mask decode exited with code ${code}`, spawnExit(code, signal, timedOut)))
       if (filled !== 0) return reject(new DeterministicJobError(`The mask video's last frame is incomplete (${filled} of ${frameBytes} bytes)`))
       resolve()
     })

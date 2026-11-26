@@ -56,9 +56,12 @@ export interface UserBalance {
   /**
    * "First Remake on us": present only while the account never bought
    * anything and has not used its first Video Remake run (the offer). `status`:
-   * `"available"`, or `"in_use"` while a run holds it. `allowed`: the runs it
-   * covers (a 4-second preview on Nodaro Prism at 480p or Nodaro Pulse at
-   * 720p) — offer only those while this is present. A run the offer would
+   * `"available"`, or `"in_use"` while a run holds it. `allowedDelivered`:
+   * the runs it covers by the size delivered (a 4-second preview at 720p on
+   * Nodaro Prism or Nodaro Pulse), present only where the deployment's engine
+   * delivers resolutions; `allowed`: the same runs by the engine's size
+   * (Nodaro Prism at 480p, Nodaro Pulse at 720p), for an engine without
+   * delivered resolutions — offer only those while this is present. A run the offer would
    * have to cover outside them is refused (402 `first_remake_option_locked`).
    */
   firstRemakeOffer?: FirstRemakeOfferState
@@ -84,6 +87,8 @@ export interface UserBalance {
 export interface FirstRemakeOfferState {
   status: "available" | "in_use"
   allowed: Array<{ engine: "nodaro-prism" | "nodaro-pulse"; resolution: "480p" | "720p"; preview: true }>
+  /** The covered runs by the size delivered; absent where the deployment's engine does not deliver resolutions. */
+  allowedDelivered?: Array<{ engine: "nodaro-prism" | "nodaro-pulse"; resolution: "720p"; preview: true }>
 }
 
 /** `UserBalance.allowance` — a deployment with a single payer: the caller's own allowance, in credits. */

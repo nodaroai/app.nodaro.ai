@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify"
 import { castSwapEngineFrom } from "@nodaro/shared/models"
 import { supabase } from "../../lib/supabase.js"
 import { castSwapSpelling } from "../../lib/video-remake-paths.js"
+import { loadedEngineDeliversResolution } from "../../lib/video-remake-delivered-resolution.js"
 import { invalidateBalanceCache } from "../billing/balance-cache.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 
@@ -45,6 +46,10 @@ export const FIRST_REMAKE_OPTION_LOCKED = "first_remake_option_locked" as const
 export const FIRST_REMAKE_OPTION_LOCKED_MESSAGE =
   "Your first Remake on us covers a 4-second preview with Nodaro Prism at 480p or Nodaro Pulse at 720p. Add credits to run this one."
 
+/** The same refusal for a request whose `resolution` is the size delivered (lib/video-remake-delivered-resolution.ts). */
+export const FIRST_REMAKE_OPTION_LOCKED_MESSAGE_DELIVERED =
+  "Your first Remake on us covers a 4-second preview at 720p with Nodaro Prism or Nodaro Pulse. Add credits to run this one."
+
 /** One run the offer covers. */
 export interface FirstRemakeAllowedRun {
   readonly engine: "nodaro-prism" | "nodaro-pulse"
@@ -52,9 +57,25 @@ export interface FirstRemakeAllowedRun {
   readonly preview: true
 }
 
-/** The runs the offer covers: a 4 s preview, on Prism at 480p or on Pulse at 720p. */
+/** The runs the offer covers: a 4 s preview, on Prism at 480p or on Pulse at 720p, each by the size the ENGINE makes. */
 export const FIRST_REMAKE_ALLOWED_RUNS: readonly FirstRemakeAllowedRun[] = [
   { engine: "nodaro-prism", resolution: "480p", preview: true },
+  { engine: "nodaro-pulse", resolution: "720p", preview: true },
+]
+
+/** One covered run named by the size it is DELIVERED at (a request read the new way). */
+export interface FirstRemakeAllowedDeliveredRun {
+  readonly engine: "nodaro-prism" | "nodaro-pulse"
+  readonly resolution: "720p"
+  readonly preview: true
+}
+
+/**
+ * The same covered runs as `FIRST_REMAKE_ALLOWED_RUNS`, named by the size delivered: Nodaro Prism's 480p take
+ * stepped up once is delivered at 720p, Nodaro Pulse's 720p is delivered as made.
+ */
+export const FIRST_REMAKE_ALLOWED_DELIVERED_RUNS: readonly FirstRemakeAllowedDeliveredRun[] = [
+  { engine: "nodaro-prism", resolution: "720p", preview: true },
   { engine: "nodaro-pulse", resolution: "720p", preview: true },
 ]
 
@@ -64,7 +85,10 @@ export type FirstRemakeOfferState = "available" | "in_use" | "used" | "not_eligi
 /** What `GET /v1/user/credits` carries while an account may still take the offer. */
 export interface FirstRemakeOfferBalanceField {
   readonly status: "available" | "in_use"
+  /** By the engine's size: what a request carrying `upscale` (or any request, on an engine before delivered sizes) names. */
   readonly allowed: readonly FirstRemakeAllowedRun[]
+  /** By the size delivered: present only while the engine reads a request without `upscale` that way. */
+  readonly allowedDelivered?: readonly FirstRemakeAllowedDeliveredRun[]
 }
 
 /** What a Video Remake estimate carries while an account may still take the offer. */
@@ -147,6 +171,11 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
   const engine = body.engine === undefined ? "seedance-2-5" : castSwapEngineFrom(body.engine)
   if (engine === undefined) return false
   const resolution = body.resolution
+  // Read the new way, Nodaro Prism's covered run is asked by the size it delivers: 720p (its 480p take stepped up),
+  // absent = 720p; 480p where the deployment offers no step (then the engine's own size). Never 1080p or 4K.
+  if (engine === "seedance-2-5" && readsDeliveredResolution(body)) {
+    return resolution === undefined || resolution === "480p" || resolution === "720p"
+  }
   if (engine === "seedance-2-5") {
     if (resolution !== undefined && resolution !== "480p") return false
     return true
@@ -154,6 +183,16 @@ export function firstRemakeRunAllowed(body: unknown): boolean {
   // Nodaro Pulse: 720p (its default); it has no draft.
   if (body.draft === true || body.quality === "draft") return false
   return resolution === undefined || resolution === "720p"
+}
+
+/**
+ * Whether the loaded engine reads this body's `resolution` as the size delivered, as the engine decides it: it
+ * declares `castSwap.deliveredResolution`, and the body is a direct run (no `trendRun`) that is no draft (`draft:
+ * true`, the legacy `quality: "draft"`) and carries no `upscale` key.
+ */
+export function readsDeliveredResolution(body: Record<string, unknown>): boolean {
+  if (!loadedEngineDeliversResolution()) return false
+  return !Object.hasOwn(body, "upscale") && body.trendRun === undefined && body.draft !== true && body.quality !== "draft"
 }
 
 /** Whether the request is a Video Remake RUN (either prefix), the one route the offer admits. */
@@ -198,7 +237,11 @@ export async function firstRemakeOfferForBalance(userId: string, ctx: BillingCon
   if (!personalPayer(ctx)) return null
   const status = await firstRemakeOfferStatus(userId)
   if (!status || (status.state !== "available" && status.state !== "in_use")) return null
-  return { status: status.state, allowed: FIRST_REMAKE_ALLOWED_RUNS }
+  return {
+    status: status.state,
+    allowed: FIRST_REMAKE_ALLOWED_RUNS,
+    ...(loadedEngineDeliversResolution() ? { allowedDelivered: FIRST_REMAKE_ALLOWED_DELIVERED_RUNS } : {}),
+  }
 }
 
 /** The cover a run's quote needs from a balance: never negative, 0 for an overdrawn balance (never covered). */
@@ -248,7 +291,10 @@ export async function firstRemakeAdmit(
       kind: "locked",
       statusCode: 402,
       body: {
-        error: { code: FIRST_REMAKE_OPTION_LOCKED, message: FIRST_REMAKE_OPTION_LOCKED_MESSAGE },
+        error: {
+          code: FIRST_REMAKE_OPTION_LOCKED,
+          message: isRecord(req.body) && readsDeliveredResolution(req.body) ? FIRST_REMAKE_OPTION_LOCKED_MESSAGE_DELIVERED : FIRST_REMAKE_OPTION_LOCKED_MESSAGE,
+        },
         required: Math.ceil(credits),
         balance: status.balance,
       },

@@ -215,6 +215,22 @@ describe("generate-3d-scene", () => {
       build("generate-3d-scene", { scenePrompt: "typed", promptPrefix: "PRE", promptSuffix: "POST" }).payload.prompt,
     ).toBe("PRE typed POST")
   })
+
+  it("APPENDS a wired prompt to the typed brief, so directions and a wired analysis both reach the planner", () => {
+    const analysis = JSON.stringify({ shots: [{ id: "s1", description: "two jets bank left" }] })
+    expect(
+      build("generate-3d-scene", { scenePrompt: "Previs of this clip, grey-box only." }, { prompt: analysis }).payload.prompt,
+    ).toBe(`Previs of this clip, grey-box only. ${analysis}`)
+  })
+
+  it("refuses a brief over the limit before any payload, naming the References alternative", () => {
+    const long = "x".repeat(8001)
+    expect(() => build("generate-3d-scene", { scenePrompt: "Previs." }, { prompt: long })).toThrow(
+      /scene text is 8,009 characters, over the 8,000-character limit[\s\S]*connect the video itself to References/,
+    )
+    // Exactly at the limit is accepted.
+    expect(build("generate-3d-scene", { scenePrompt: "y".repeat(8000) }).payload.prompt).toHaveLength(8000)
+  })
 })
 
 describe("edit-3d-scene", () => {

@@ -10,6 +10,12 @@
  * call in a bounded revision loop that hands the refusal back to the model in
  * its own words and asks again.
  *
+ * On the generate lane a plan the contract accepts meets a second gate, the
+ * plan check (`scene3d-plan-check.ts`): parts left unattached to the group
+ * that moves them, and camera shots that show no subject. Its findings are
+ * revised the same way; when the revisions run out, a blocking finding fails
+ * the run and an advisory one rides the delivered scene as a warning.
+ *
  * The edit lane never lets the model write a plan. It writes OPERATIONS, and
  * `applyScene3DEditOperations` — the same function the deterministic lane
  * calls — decides whether they are allowed. Locks are therefore enforced on
@@ -23,6 +29,7 @@ import {
   type Scene3DEditOperation,
   type Scene3DEditResult,
   type Scene3DPlanV1,
+  type Scene3DDeliveryWarning,
   type Scene3DReference,
 } from "@nodaro/shared/scene3d"
 import {
@@ -43,6 +50,7 @@ import {
   toEditOperations,
 } from "./scene3d-draft.js"
 import { scene3DEditSystemPrompt, scene3DGenerateSystemPrompt } from "./scene3d-prompts.js"
+import { scene3DPlanFindings, type Scene3DPlanFinding } from "./scene3d-plan-check.js"
 import {
   buildScene3DUserContent,
   describeScene3DReferences,
@@ -76,6 +84,12 @@ export interface Scene3DAuthoringResult extends Scene3DAuthoringUsage {
   changeSummary?: string
   /** How many extra attempts the semantic layer cost. 0 on a clean first pass. */
   revisions: number
+  /**
+   * What the plan check still found when the revisions ran out and the scene
+   * was delivered anyway — only ADVISORY findings ever ride a delivered scene
+   * (`scene3d-plan-check.ts`). Absent on a scene that passed it.
+   */
+  warnings?: Scene3DDeliveryWarning[]
 }
 
 interface CommonInput {
@@ -235,15 +249,29 @@ function firstIssues(error: { issues: { path: PropertyKey[]; message: string }[]
 /** Append the refusal as a user turn so the next attempt sees exactly what
  *  was wrong. Roles alternate (Anthropic rejects two user turns in a row), so
  *  the model's own output goes back as the assistant turn between them. */
-function withRefusal(messages: LlmMessage[], previous: unknown, refusal: string): LlmMessage[] {
+function withRefusal(messages: LlmMessage[], previous: unknown, refusal: string, instruction = REFUSAL_FIX_EXACTLY): LlmMessage[] {
   return [
     ...messages,
     { role: "assistant", content: JSON.stringify(previous) },
     {
       role: "user",
-      content: `That was rejected: ${refusal}\n\nFix exactly that and return the corrected answer. Change nothing else.`,
+      content: `That was rejected: ${refusal}\n\n${instruction}`,
     },
   ]
+}
+
+const REFUSAL_FIX_EXACTLY = "Fix exactly that and return the corrected answer. Change nothing else."
+
+/** A plan-check finding is fixed by re-staging (parenting parts, re-aiming a camera), so the model may move what the fix needs. */
+const REFUSAL_RESTAGE =
+  "Fix these problems and return the whole corrected scene. Re-parent parts, move the camera, its target or the objects as far as the fix needs; keep everything else as it was."
+
+function describeFindings(findings: readonly Scene3DPlanFinding[]): string {
+  return findings.map((finding, index) => `(${index + 1}) ${finding.message}`).join(" ")
+}
+
+function asWarnings(findings: readonly Scene3DPlanFinding[]): Scene3DDeliveryWarning[] {
+  return findings.map((finding) => ({ code: finding.code, message: finding.message }))
 }
 
 /**
@@ -274,6 +302,10 @@ export async function generateScenePlan(input: GenerateScenePlanInput): Promise<
 
   const usage: Scene3DAuthoringUsage = { inputTokens: 0, outputTokens: 0 }
   let lastRefusal = ""
+  // The latest VALID plan whose only findings are advisory: what is delivered,
+  // with its warnings, when the revisions run out. A plan with a blocking
+  // finding is never kept here.
+  let deliverable: { plan: Scene3DPlanV1; warnings: Scene3DDeliveryWarning[] } | undefined
 
   for (let attempt = 0; attempt <= SCENE3D_MAX_REVISIONS; attempt++) {
     const completion = await plannerCall(
@@ -302,13 +334,23 @@ export async function generateScenePlan(input: GenerateScenePlanInput): Promise<
       references: input.references,
     })
     const validated = scene3DPlanSchema.safeParse(candidate)
-    if (validated.success) {
-      return { ...usage, plan: validated.data as Scene3DPlanV1, revisions: attempt }
+    if (!validated.success) {
+      lastRefusal = firstIssues(validated.error)
+      messages = withRefusal(messages, completion.output, lastRefusal)
+      continue
     }
-    lastRefusal = firstIssues(validated.error)
-    messages = withRefusal(messages, completion.output, lastRefusal)
+    // The contract accepted it; the plan check asks what it SHOWS.
+    const plan = validated.data as Scene3DPlanV1
+    const findings = scene3DPlanFindings(plan)
+    if (findings.length === 0) return { ...usage, plan, revisions: attempt }
+    const blocking = findings.filter((finding) => finding.severity === "blocking")
+    if (blocking.length === 0) deliverable = { plan, warnings: asWarnings(findings) }
+    lastRefusal = describeFindings(blocking.length > 0 ? blocking : findings)
+    messages = withRefusal(messages, completion.output, describeFindings(findings), REFUSAL_RESTAGE)
   }
 
+  // Every revision was spent getting here, whichever attempt wrote the scene delivered.
+  if (deliverable) return { ...usage, ...deliverable, revisions: SCENE3D_MAX_REVISIONS }
   throw new Error(`3D scene authoring failed validation after ${SCENE3D_MAX_REVISIONS + 1} attempts: ${lastRefusal}`)
 }
 

@@ -22,6 +22,7 @@ import { isDrivingAudioRun } from "@nodaro/shared/credits"
 import { viduQ4InputProblem } from "../lib/vidu-q4-inputs.js"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
 import { seatCharacterVideosPreHandler } from "../lib/character-video-seat.js"
+import { dropHdrFromPluginChildPreHandler, refuseHdrAtUnsupportedResolutionPreHandler, withVideoHdrAddon } from "../lib/video-hdr-pricing.js"
 import { videoMaterialCounts } from "../lib/video-material-counts.js"
 import { applyAudioSoundtrack } from "../lib/audio-soundtrack.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
@@ -35,7 +36,7 @@ import { judgeVoicesUnderLock } from "../lib/voice-lock.js"
 import { voiceNotAvailableBody } from "../lib/voice-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { videoReferencesOverLimitProblem, type VideoReferenceCounts, VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoStartFrameOnlyProblem, videoProviderRefModeFrameSeats, resolveVideoProviderForMode } from "@nodaro/shared/models"
+import { videoReferencesOverLimitProblem, type VideoReferenceCounts, VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoSourceTrimMaxSec, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoProviderTakesLoneEndFrame, videoProviderRefsReplaceStartFrame, videoStartFrameOnlyProblem, videoProviderRefModeFrameSeats, resolveVideoProviderForMode, VIDEO_DYNAMIC_RANGES, videoRunsHdr } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable, hasFeature, ttsNamedVoices } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem, FRAME_FITS, FRAME_DELIVERIES } from "@nodaro/shared/video"
@@ -148,6 +149,11 @@ const generateVideoPublicFields = z.object({
   // sound (KIE `keep_original_sound`). Ignored without a reference video and by
   // every other model.
   keepOriginalSound: z.boolean().optional(),
+  // Kling 4.0 (both ids; catalog `hdr`): `hdr` renders HDR (HEVC 10-bit,
+  // BT.2020, HLG) at 1080p or 4K, priced as its own add-on line on the output
+  // seconds; at 720p it is refused before anything is held. Dropped on every
+  // other model (never sent, never billed). Unset = `sdr`.
+  dynamicRange: z.enum(VIDEO_DYNAMIC_RANGES).optional(),
   // Kling 4.0: play the first reference audio clip as the result's soundtrack
   // (lib/audio-soundtrack.ts). Unset = on; `false` keeps every clip a voice sample.
   audioSoundtrack: z.boolean().optional(),
@@ -959,7 +965,7 @@ export async function validateRefVideoDurationPreHandler(
  * is what the run reserves).
  */
 export const generateVideoPricing: RoutePricing = {
-  prechecks: [imageToVideoModelPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler, drivingAudioPreHandler],
+  prechecks: [imageToVideoModelPreHandler, dropHdrFromPluginChildPreHandler, refuseHdrAtUnsupportedResolutionPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler, drivingAudioPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
@@ -1001,7 +1007,9 @@ export const generateVideoPricing: RoutePricing = {
   },
   opts: {
     runModel: videoRunModel,
-    computeCredits: async (rawBody, req) => {
+    // The HDR add-on (Kling 4.0) is its own line on top of whatever base and
+    // add-ons this prices (`withVideoHdrAddon`).
+    computeCredits: withVideoHdrAddon(async (rawBody, req) => {
       // The body as the run sends it: a declared reference task type's ratio
       // and length replace the requested ones (the same object otherwise), so
       // every read below — the reference-video base, the add-ons — prices the
@@ -1186,7 +1194,7 @@ export const generateVideoPricing: RoutePricing = {
       const expectedBase = req.priceNotes?.expectedBase
       if (expectedBase !== undefined) noteExpectedBase(req, expectedBase + addon + audioAddon)
       return baseCost + addon + audioAddon
-    },
+    }),
   },
 }
 
@@ -1679,6 +1687,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
               ...(drivingAudio ? { audioToVideo: true, drivingAudioSec: drivingAudio.audioSec, drivingAudioBilledSec: drivingAudio.billedSec } : {}),
               // Only when declared, so `auto` records exactly what no field does.
               ...(referenceTaskType ? { referenceTaskType } : {}),
+              // Only on an HDR run (the settlement and the reconcile price its add-on from it); SDR records none.
+              dynamicRange: videoRunsHdr(provider, parsed.data.dynamicRange) ? "hdr" : undefined,
               // The pre-check's ffprobe of the reference clips: the settlement
               // (worker, or the reconcile cron) prices from the SAME numbers
               // the reservation did instead of probing again.
@@ -1766,6 +1776,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       referenceAudioUrls,
       characterReferences,
       keepOriginalSound,
+      ...(videoRunsHdr(provider, parsed.data.dynamicRange) ? { dynamicRange: "hdr" } : {}),
       refVideoDurationsSec: req.refVideoDurationsSec,
       webSearch,
       nsfwChecker,

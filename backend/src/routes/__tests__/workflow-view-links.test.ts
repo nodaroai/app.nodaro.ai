@@ -298,7 +298,7 @@ describe("the preview card", () => {
     const on = await app.inject({ method: "GET", url: `/og/view/${token}` })
     expect(on.statusCode).toBe(200)
     expect(on.headers["x-robots-tag"]).toBe("all")
-    expect(on.body).toContain('<meta property="og:title" content="Astronaut mockup · זרימת עבודה">')
+    expect(on.body).toContain('<meta property="og:title" content="Astronaut mockup · תהליך עבודה">')
     expect(on.body).toContain('<meta name="robots" content="index, follow">')
     expect(on.body).toContain(`<link rel="canonical" href="https://app.example/view/${token}">`)
     expect(on.body).not.toContain("location.replace")

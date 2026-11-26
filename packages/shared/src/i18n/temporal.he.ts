@@ -3,11 +3,11 @@ import type { LocaleCatalogMap } from "./types.js"
 const map: LocaleCatalogMap = {
   // Speed
   "real-time": { label: "זמן אמת", description: "מהירות ניגון רגילה" },
-  "slow-motion": { label: "הילוך איטי", description: "צילום מואט באופן מתון" },
+  "slow-motion": { label: "הילוך איטי", description: "האטה מתונה" },
   "super-slow-mo": { label: "הילוך איטי במיוחד", description: "צילום איטי במיוחד" },
   "time-lapse": { label: "Time-lapse", description: "זמן דחוס, מעבר מהיר" },
   "hyper-lapse": { label: "Hyper-lapse", description: "Time-lapse בתנועה" },
-  "speed-ramp": { label: "Speed Ramp", description: "שינוי מהירות דינמי באמצע צילום" },
+  "speed-ramp": { label: "Speed Ramp", description: "שינוי מהירות דינמי באמצע השוט" },
 
   // Freeze
   "full-freeze": { label: "הקפאת פריים מלאה", description: "כל התנועה קפואה" },
@@ -21,11 +21,11 @@ const map: LocaleCatalogMap = {
   "loop-boomerang": { label: "לופ / בומרנג", description: "קדימה ואז לאחור" },
 
   // Shutter
-  "long-exposure": { label: "חשיפה ארוכה", description: "שבילי תנועה ופסים" },
-  "crisp-shutter": { label: "Crisp Shutter", description: "תנועה חדה, ללא טשטוש" },
+  "long-exposure": { label: "חשיפה ארוכה", description: "שובלי תנועה ופסי אור" },
+  "crisp-shutter": { label: "תריס מהיר", description: "תנועה חדה, ללא טשטוש" },
   "motion-blur": { label: "טשטוש תנועה", description: "טשטוש כיווני בולט" },
-  "stutter-strobe": { label: "Stutter / Strobe", description: "תנועה קופצנית בסגנון סטרובוסקופ" },
-  "stop-motion": { label: "סטופ-מושן", description: "תנועת פריים-אחר-פריים מדורגת" },
+  "stutter-strobe": { label: "קיטוע / סטרובו", description: "תנועה קופצנית בסגנון סטרובוסקופ" },
+  "stop-motion": { label: "סטופ־מושן", description: "תנועה מקוטעת, פריים אחר פריים" },
 }
 
 export default map

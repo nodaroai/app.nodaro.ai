@@ -51,6 +51,7 @@ import {
   Gavel,
   Receipt,
   OctagonAlert,
+  Route,
 } from "lucide-react"
 import { useAdminComplaintCount } from "@/ee/hooks/queries/use-admin-complaints-queries"
 import { Button } from "@/components/ui/button"
@@ -91,6 +92,7 @@ const ADMIN_NAV = [
   // there is no admin `NavKey` and `nav.hide`'s vocabulary is the END-USER
   // nav; the whole /admin block is already edition-gated by hasAdmin().
   { href: "/admin/provider-safety", label: "Provider Safety", icon: ShieldCheck },
+  ...(hasCredits() ? [{ href: "/admin/video-route", label: "Video Route", icon: Route }] : []),
   { href: "/admin/review", label: "Content Review", labelKey: "adminReview.navLabel" as MessageKey, icon: ShieldAlert },
   { href: "/admin/pricing", label: "Pricing", icon: DollarSign },
   { href: "/admin/credit-audit", label: "Credit Audit", icon: Scale },

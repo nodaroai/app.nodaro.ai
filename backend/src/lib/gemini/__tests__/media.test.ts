@@ -8,7 +8,8 @@
  * not as an error. Hence the coverage.
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest"
-import { readdir, rm } from "node:fs/promises"
+import { readdir, rm, stat } from "node:fs/promises"
+import { join } from "node:path"
 import type { GoogleGenAI } from "@google/genai"
 
 /** This file's own temp folder (the module's `tmpdir()`), so a check that its
@@ -72,6 +73,7 @@ function fakeAi(overrides: { uploadName?: string; states?: string[] } = {}) {
   }
 }
 
+/** A response with `bytes` as its body; a `content-length` header must be their true length (downloads check it). */
 function bodyResponse(bytes: Buffer, headers: Record<string, string>) {
   return new Response(new Uint8Array(bytes), { status: 200, headers })
 }
@@ -148,7 +150,7 @@ describe("large assets upload via the Files API", () => {
 
   it("uploads, waits for ACTIVE, and returns a fileData part", async () => {
     safeFetch.mockResolvedValue(
-      bodyResponse(Buffer.from("x".repeat(1024)), {
+      bodyResponse(Buffer.alloc(big, 120), {
         "content-type": "video/mp4",
         "content-length": String(big),
       }),
@@ -171,7 +173,7 @@ describe("large assets upload via the Files API", () => {
 
   it("throws when the upload lands in FAILED", async () => {
     safeFetch.mockResolvedValue(
-      bodyResponse(Buffer.from("x"), { "content-type": "video/mp4", "content-length": String(big) }),
+      bodyResponse(Buffer.alloc(big, 120), { "content-type": "video/mp4", "content-length": String(big) }),
     )
     const ai = fakeAi({ states: ["FAILED"] })
 
@@ -193,7 +195,7 @@ describe("large assets upload via the Files API", () => {
 
   it("reuses the cached handle for a repeated URL instead of re-uploading", async () => {
     safeFetch.mockResolvedValue(
-      bodyResponse(Buffer.from("x"), { "content-type": "video/mp4", "content-length": String(big) }),
+      bodyResponse(Buffer.alloc(big, 120), { "content-type": "video/mp4", "content-length": String(big) }),
     )
     const ai = fakeAi()
     const block = { type: "video" as const, url: "https://r2.example/same.mp4" }
@@ -263,7 +265,7 @@ describe("video sampling rate (videoMetadata.fps)", () => {
     )
   const bigVideo = () =>
     safeFetch.mockResolvedValue(
-      bodyResponse(Buffer.from("v"), { "content-type": "video/mp4", "content-length": String(big) }),
+      bodyResponse(Buffer.alloc(big, 118), { "content-type": "video/mp4", "content-length": String(big) }),
     )
 
   // fps must survive EVERY way a video part can be produced. The builder has
@@ -589,19 +591,24 @@ describe("the download limits end a body that never finishes", () => {
     expect(MEDIA_FETCH_CEILING_MS).toBe(8 * 60_000)
     expect(MEDIA_FETCH_CEILING_MS).toBeLessThan(LLM_ROUTE_REQUEST_TIMEOUT_MS)
     // A body that keeps moving (2 MB a minute, no length announced) for ever: only the ceiling stops it.
-    let sent = 0
+    let controller!: ReadableStreamDefaultController<Uint8Array>
     safeFetch.mockImplementation(async () => new Response(new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        await new Promise((r) => setTimeout(r, 30_000))
-        sent++
-        controller.enqueue(new Uint8Array(1024 * 1024).fill(sent % 250))
-      },
+      start(stream) { controller = stream },
     }), { status: 200, headers: { "content-type": "video/mp4" } }))
     const ai = fakeAi()
     const settled = blockToGeminiPart(ai, { type: "video", url: "https://r2.example/forever.mp4" }).then((v) => v, (e: unknown) => e)
     await vi.waitFor(() => expect(safeFetch).toHaveBeenCalled())
 
-    await advance(8 * 60_000 + 5_000, 5_000)
+    // The disk uses real time. Confirm each minute's bytes were written
+    // before advancing the fake clock into the next rate window.
+    const [directory] = await uploadDirs()
+    const file = join(privateTmp.dir, directory!, "media")
+    const chunk = new Uint8Array(2 * 1024 * 1024)
+    for (let minute = 1; minute <= 8; minute++) {
+      controller.enqueue(chunk)
+      await vi.waitFor(async () => expect((await stat(file)).size).toBe(minute * chunk.length))
+      await vi.advanceTimersByTimeAsync(60_000)
+    }
 
     expect(await settled).toMatchObject({ name: "TimeoutError", message: "Download timeout: over its 480 s overall ceiling" })
     expect(ai.files.upload).not.toHaveBeenCalled()

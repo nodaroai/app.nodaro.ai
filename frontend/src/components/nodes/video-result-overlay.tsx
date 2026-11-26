@@ -7,6 +7,8 @@ import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { EditVideoButton } from "./edit-video-button"
 import { useSeamlessVideoLoop } from "@/hooks/use-seamless-video-loop"
+import { downloadVideoFile } from "./video-unplayable"
+import { useVideoUnplayable, VideoUnplayableNotice } from "./video-unplayable-notice"
 
 interface VideoResultOverlayProps {
   url: string
@@ -55,6 +57,11 @@ function VideoResultOverlayComponent({
   // shows as a visible jitter at the seam on tight loops. Native `loop`
   // attribute is intentionally NOT set when this is on (loop={false}).
   useSeamlessVideoLoop(videoElRef, videoAutoplay)
+  // A file that is there but this browser cannot decode (a kept original with
+  // no preview copy, decided 2026-11-22): say so and offer Download, rather
+  // than the node's "failed to load" state, which is for a file that is gone.
+  const { unplayable, onError: handleError } = useVideoUnplayable(url, onVideoError)
+  const download = () => downloadVideoFile(url, label)
   return (
     <div
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: squareBottom ? '12px 12px 0 0' : 12, overflow: 'hidden', zIndex: 10 }}
@@ -70,7 +77,7 @@ function VideoResultOverlayComponent({
         playsInline
         preload="auto"
         className="w-full h-full object-cover"
-        onError={onVideoError}
+        onError={handleError}
         onLoadedMetadata={(e) => {
           onVideoLoad?.()
           const video = e.currentTarget
@@ -84,6 +91,7 @@ function VideoResultOverlayComponent({
           if (videoAutoplay) video.play().catch(() => {})
         }}
       />
+      {unplayable && <VideoUnplayableNotice url={url} label={label} />}
       {hasResults && (
         <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
           <button
@@ -115,10 +123,7 @@ function VideoResultOverlayComponent({
           className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
           onClick={(e) => {
             e.stopPropagation()
-            const a = document.createElement('a')
-            a.href = `/v1/image-proxy?url=${encodeURIComponent(url)}&download=1`
-            a.download = `${label || 'video'}.mp4`
-            a.click()
+            download()
           }}
         >
           <Download className="w-3.5 h-3.5" />

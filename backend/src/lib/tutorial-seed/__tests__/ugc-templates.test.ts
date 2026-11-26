@@ -151,7 +151,7 @@ const SPECS: readonly Spec[] = [
     exposesProduct: false,
     language: "he",
     figures: HEBREW_FIGURES,
-    ui: { lookTitle: "המראה של הדמות (לא חובה)", lengthTitle: "אורך הסרטון", creatorTitle: "דמות" },
+    ui: { lookTitle: "המראה של הדמות (אופציונלי)", lengthTitle: "אורך הסרטון", creatorTitle: "דמות" },
   },
 ]
 

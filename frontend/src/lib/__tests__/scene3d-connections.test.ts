@@ -10,6 +10,52 @@ function types(map: Record<string, string>) {
   return (id: string) => map[id]
 }
 
+describe("Generate 3D Scene's `prompt` input — text becomes the brief", () => {
+  it("takes both of a Video Analysis's outputs, and a Video Audit's", () => {
+    for (const [sourceType, sourceHandle] of [["video-analysis", "json"], ["video-analysis", "text"], ["video-audit", "json"]]) {
+      expect(
+        isValidWorkflowConnection(
+          { source: "a", target: "g", sourceHandle, targetHandle: "prompt" },
+          types({ a: sourceType, g: "generate-3d-scene" }),
+        ),
+      ).toBe(true)
+    }
+  })
+
+  it("takes plain text producers", () => {
+    for (const sourceType of ["text-prompt", "llm-chat"]) {
+      expect(
+        isValidWorkflowConnection(
+          { source: "t", target: "g", sourceHandle: "out", targetHandle: "prompt" },
+          types({ t: sourceType, g: "generate-3d-scene" }),
+        ),
+      ).toBe(true)
+    }
+  })
+
+  it("refuses media on the prompt, and still refuses text on References", () => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "i", target: "g", sourceHandle: "image", targetHandle: "prompt" },
+        types({ i: "generate-image", g: "generate-3d-scene" }),
+      ),
+    ).toBe(false)
+    expect(
+      isValidWorkflowConnection(
+        { source: "a", target: "g", sourceHandle: "json", targetHandle: "references" },
+        types({ a: "video-analysis", g: "generate-3d-scene" }),
+      ),
+    ).toBe(false)
+  })
+
+  it("is declared, and the drop rule and the popover agree", () => {
+    expect(NODE_DEF_MAP.get("generate-3d-scene")?.inputs).toContain("prompt")
+    const entry = TARGET_HANDLE_ACCEPTS["generate-3d-scene"]?.find((h) => h.handleId === "prompt")
+    expect(entry?.accepts("video-analysis")).toBe(true)
+    expect(entry?.accepts("generate-image")).toBe(false)
+  })
+})
+
 describe("3D scene wiring — generate → edit → render-video", () => {
   it("lets a generated scene feed Edit 3D Scene's `scene` input", () => {
     expect(

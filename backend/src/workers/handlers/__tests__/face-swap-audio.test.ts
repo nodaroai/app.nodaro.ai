@@ -11,8 +11,8 @@ const mocks = vi.hoisted(() => ({
   cleanupWorkDir: vi.fn(async () => {}),
   downloadFile: vi.fn(async () => {}),
   restoreVideoAudioFromSource: vi.fn(async () => true),
-  watermarkLocalVideoAndUpload: vi.fn(async () => "https://r2.example/videos/job-1.mp4"),
-  uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.example/videos/job-1.mp4"),
+  watermarkLocalVideoAndUpload: vi.fn(async () => ({ videoUrl: "https://r2.example/videos/job-1.mp4" })),
+  uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.example/videos/job-1.mp4" })),
 }))
 
 vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
@@ -48,7 +48,7 @@ describe("uploadSwapWithSourceAudio", () => {
       "/tmp/face-swap-audio-1/with-audio.mp4",
     )
     expect(mocks.watermarkLocalVideoAndUpload).toHaveBeenCalledWith("/tmp/face-swap-audio-1/with-audio.mp4", "job-1", "user-1", true)
-    expect(url).toBe("https://r2.example/videos/job-1.mp4")
+    expect(url).toEqual({ videoUrl: "https://r2.example/videos/job-1.mp4" })
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/face-swap-audio-1")
   })
 
@@ -70,7 +70,7 @@ describe("uploadSwapWithSourceAudio", () => {
 
     expect(mocks.watermarkLocalVideoAndUpload).not.toHaveBeenCalled()
     expect(mocks.uploadVideoMaybeWatermark).toHaveBeenCalledWith(SWAP, "job-1", "user-1", true)
-    expect(url).toBe("https://r2.example/videos/job-1.mp4")
+    expect(url).toEqual({ videoUrl: "https://r2.example/videos/job-1.mp4" })
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/face-swap-audio-1")
   })
 

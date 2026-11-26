@@ -26,7 +26,12 @@
 # SECURITY — before exposing this stack to a network:
 #   1. Run `node tools/generate-selfhost-keys.mjs >> .env` to replace the
 #      default JWT secret + anon/service keys (the defaults are public
-#      knowledge by definition).
+#      knowledge by definition; the service key bypasses row level security).
+#      ENFORCED: once PUBLIC_URL is anything but an address on this machine
+#      (localhost, 127.0.0.1, ::1), the stack refuses to start on the
+#      defaults, naming each variable and this command. On localhost it
+#      starts and logs a warning — port 3000 below is published on every
+#      network interface, so mint your own before anyone else can reach it.
 #   2. Set POSTGRES_PASSWORD, DATABASE_URL, and the MinIO credentials
 #      (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) to fresh values.
 #   Changing SUPABASE_ANON_KEY (or PUBLIC_URL) needs only a restart — the
@@ -74,12 +79,35 @@ services:
       timeout: 5s
       retries: 12
 
+  # One-shot: the app's own rule on the Supabase keys, run before the auth and
+  # rest services start (they start on their own and read the same secret).
+  # A production install (PUBLIC_URL not an address on this machine) on the
+  # public defaults stops here, naming each variable and the command that
+  # mints your own; the quick-start on localhost passes with a warning. The
+  # app container runs the same check again before it starts anything. An
+  # image from before the check (a pinned NODARO_IMAGE) skips it and says so.
+  keys-check:
+    image: ${NODARO_IMAGE:-ghcr.io/nodaroai/nodaro-community:latest}
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - if [ -f /app/backend/dist/lib/selfhost-keys-check.js ]; then exec node /app/backend/dist/lib/selfhost-keys-check.js '[keys-check]'; else echo '[keys-check] this image predates the Supabase key check; skipped'; fi
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      SUPABASE_URL: ${SUPABASE_URL:-http://localhost:3000/supabase}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-nodaro-community-default-jwt-secret-change-me-please}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzU0Nzg0MDAwLCJleHAiOjIwNzAxNDQwMDB9.Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTQ3ODQwMDAsImV4cCI6MjA3MDE0NDAwMH0.1S--a7iJ0v6nNEKWYcqAfE3-xI0iZ30ypsFs_xrLLbA}
+
   auth:
     image: supabase/gotrue:v2.177.0
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      keys-check:
+        condition: service_completed_successfully
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -104,6 +132,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      keys-check:
+        condition: service_completed_successfully
     environment:
       PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-nodaro-postgres-pw}@db:5432/postgres
       PGRST_DB_SCHEMAS: public
@@ -195,6 +225,11 @@ services:
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzU0Nzg0MDAwLCJleHAiOjIwNzAxNDQwMDB9.Z1_aDD7opHbwv6f8yrHK0ptlIM2tg1ulhXsggLuDyqo}
       FRONTEND_SUPABASE_URL: ${FRONTEND_SUPABASE_URL:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTQ3ODQwMDAsImV4cCI6MjA3MDE0NDAwMH0.1S--a7iJ0v6nNEKWYcqAfE3-xI0iZ30ypsFs_xrLLbA}
+      # The secret the auth and rest services verify keys with. The app only
+      # checks with it at boot: a production install (PUBLIC_URL not on this
+      # machine) refuses to start on the public default, or on keys it did not
+      # sign. See the SECURITY note at the top.
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-nodaro-community-default-jwt-secret-change-me-please}
       # Self-host migration runner (start.sh): applies supabase/migrations/
       # before the API starts. Keep the password segment in sync with
       # POSTGRES_PASSWORD if you change it.

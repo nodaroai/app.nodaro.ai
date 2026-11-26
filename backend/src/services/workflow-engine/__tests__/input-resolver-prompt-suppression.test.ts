@@ -46,6 +46,25 @@ describe("input-resolver: prompt-handle variable/toggle suppression", () => {
   })
 })
 
+describe("input-resolver: Generate 3D Scene reads placements from its own brief (scenePrompt)", () => {
+  const analysisStates: Record<string, NodeExecutionState> = {
+    src: { status: "completed", output: { text: "{\"shots\":[]}" } },
+  }
+  const analysis = () => node("src", "video-analysis") // label === "src"
+
+  it("routes a wired Video Analysis into the prompt by default", () => {
+    const g = node("g1", "generate-3d-scene", { scenePrompt: "Previs of this clip." })
+    const r = resolveNodeInputs(g, [edge("src", "g1", "prompt")], analysisStates, [analysis(), g])
+    expect(r.prompt).toBe("{\"shots\":[]}")
+  })
+
+  it("drops it when the brief places it as {src} — the brief is scenePrompt, not prompt", () => {
+    const g = node("g1", "generate-3d-scene", { scenePrompt: "Previs of {src}, grey-box only." })
+    const r = resolveNodeInputs(g, [edge("src", "g1", "prompt")], analysisStates, [analysis(), g])
+    expect(r.prompt).toBeUndefined()
+  })
+})
+
 describe("input-resolver: negative-handle variable/toggle suppression (generate-image/video only)", () => {
   it("includes the wired negative by default", () => {
     const g = node("g1", "generate-image", { prompt: "a cat" })

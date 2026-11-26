@@ -22,6 +22,8 @@ import { config } from "./config.js"
  *                                    its current derivatives onto the child.
  *   engineVideoUrl                   Video Remake's engine version beside an
  *                                    upscaled result — row-less too.
+ *   originalVideoUrl                 a video's kept original beside its
+ *                                    preview (also on the primary list).
  *
  * One `.eq()` per path, NEVER a hand-built `.or()` string: PostgREST does not
  * quote values inside an `.or()` filter and URLs contain reserved chars
@@ -47,16 +49,25 @@ export const JOB_OUTPUT_URL_PATHS = [
   // row-less, a companion recorded on the result's Library row
   // (lib/asset-companions.ts).
   "output_data->>engineVideoUrl",
+  // The same file of a run whose `resolution` is the size delivered: a server-only key there.
+  "output_data->>__castSwapEngineVideoUrl",
+  // A video's kept original beside its preview (lib/video-result-store.ts):
+  // a Library row saved from it must not take it from the job that names it.
+  "output_data->>originalVideoUrl",
 ] as const
 
 /**
- * The three paths the ASSET-referrer probes have always read. Kept as its own
+ * The paths the ASSET-referrer probes always read (the three media urls, and a
+ * video's kept original). Kept as its own
  * export so "what mainline queries" is a named thing rather than a slice.
  */
 export const PRIMARY_JOB_OUTPUT_URL_PATHS = [
   "output_data->>imageUrl",
   "output_data->>videoUrl",
   "output_data->>audioUrl",
+  // A video's kept original (decided 2026-11-24): its job names it here, not
+  // in `videoUrl`, whenever it has a preview.
+  "output_data->>originalVideoUrl",
 ] as const
 
 /**

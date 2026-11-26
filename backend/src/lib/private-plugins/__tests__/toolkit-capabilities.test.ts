@@ -13,6 +13,13 @@ import { CONTRACT_VERSION, type NodaroPrivatePlugin, type PrivatePluginsModule }
  * 2026-10-06: ship capability markers, leave the version alone.
  */
 describe("tk.capabilities", () => {
+  // Flipped to true only by the change that makes the host honour the second
+  // version of the alternate route (per-model routing, route prices, no fallback):
+  // a plugin must never see a host that claims it before it delivers it.
+  it("does not advertise the second version of the alternate route yet", () => {
+    expect(buildToolkit().capabilities?.alternateRouteV2).toBeUndefined()
+  })
+
   it("advertises mix-audio ducking", () => {
     expect(buildToolkit().capabilities?.mixAudioDuck).toBe(true)
   })

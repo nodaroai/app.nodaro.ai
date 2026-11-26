@@ -65,6 +65,14 @@ const KEPT_EXECUTION_COLUMNS = [
 
 /** `jobs` columns expunge keeps: billing, status, provenance and pointers. */
 const KEPT_JOB_COLUMNS = [
+  // The server-only store record (695, decided 2026-11-25): the expunge claims
+  // and deletes its recorded objects before the clear. What stays is
+  // bookkeeping, never content: `stored` entries a claim did not take (held,
+  // a deployment that deletes nothing, a delete left to the retry pass),
+  // `discarding` markers, the unpruned/pruned marks, a set clean-up's claim
+  // mark, and `rawExtensionUrl` (no chain lookup reads it once `output_data`
+  // is gone).
+  "server_output",
   "id",
   "user_id",
   "job_type",
@@ -77,10 +85,6 @@ const KEPT_JOB_COLUMNS = [
   // The metered LLM billing ledger (552): the billing record — cost, source,
   // lanes — never the runner's content, kept with the other billing columns.
   "llm_billing",
-  // The server-only bookkeeping of stored files (695, decided 2026-11-24):
-  // nothing writes it until the code that uses it ships, which erases it with
-  // the job's content and moves it to the erased side.
-  "server_output",
   "display_cost",
   "credits",
   "credits_actual",

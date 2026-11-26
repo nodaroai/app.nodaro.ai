@@ -2004,6 +2004,13 @@ const MERGED_HEADROOM_BYTES = 52
 // so it is raised by exactly what it measures.
 const SPLIT_TAKES_VIDEO_BYTES = 86
 
+// RAISED by Kling 4.0's HDR setting (decided 2026-11-22): `generate_video` takes `dynamic_range` ("sdr" |
+// "hdr", 1080p / 4K only). No tool was added, so the membership fixtures do NOT move (tool-list-wire.json
+// does). Measured by this suite on the same tree: the list 571_129 B, then 571_245 B, 116 B more
+// (`generate_video` stays under the per-tool budget). The list had no headroom, so it is raised by exactly
+// what it measures.
+const KLING_4_HDR_ARG_BYTES = 116
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES + SEEDANCE_DRAFT_PER_TOOL_BYTES + GENERATE_IMAGE_SUBJECT_PER_TOOL_BYTES + USER_REQUEST_ARG_PER_TOOL_BYTES + GPT_IMAGE_2_6_PER_TOOL_BYTES + GPT_IMAGE_2_6_FORMAT_PER_TOOL_BYTES + MINIMAX_H3_IMAGE_PER_TOOL_BYTES + SEEDREAM_5_5_PER_TOOL_BYTES + FLUX_3_KLEIN_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_PER_TOOL_BYTES + SEEDANCE_2_5_FLASH_REFERENCE_LIMIT_PER_TOOL_BYTES + OMNI_FLASH_1_2_CHARACTERS_BYTES + VIDEO_REMAKE_PREVIZ_PER_TOOL_BYTES + ROLE_FACE_PER_TOOL_BYTES + FLASH_CHOICES_PER_TOOL_BYTES + REMAKE_INTENT_CHECK_PER_TOOL_BYTES + REMAKE_UPSCALE_CHOICE_PER_TOOL_BYTES + REMAKE_UPSCALE_4K_PER_TOOL_BYTES,
   totalBytes:
@@ -2255,7 +2262,8 @@ export const TOOL_WIRE_BUDGET = {
     LIP_SYNC_RESOLUTION_LIST_BYTES +
     LIP_SYNC_SERVER_TIERS_BYTES +
     MERGED_HEADROOM_BYTES +
-    SPLIT_TAKES_VIDEO_BYTES,
+    SPLIT_TAKES_VIDEO_BYTES +
+    KLING_4_HDR_ARG_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

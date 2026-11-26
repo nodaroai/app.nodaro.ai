@@ -41,7 +41,9 @@ describe("the upscale choice", () => {
       upscale: "next",
       upscaleOffered: true,
     })
-    expect(upscaleQuoteOf({ resolution: "4k", outputResolution: 720, upscale: "applied", upscaleOffered: "yes" })).toEqual({})
+    expect(upscaleQuoteOf({ resolution: "8k", outputResolution: 720, upscale: "applied", upscaleOffered: "yes" })).toEqual({})
+    // A request read the new way answers the size delivered as `resolution`, 4K included.
+    expect(upscaleQuoteOf({ resolution: "4k" })).toEqual({ resolution: "4k" })
     // A 1080p run is delivered at 4K: "4k" (lower-case, exactly) is a delivered size, never the engine's.
     expect(upscaleQuoteOf({ resolution: "1080p", outputResolution: "4k", upscale: "next", upscaleOffered: true })).toEqual({
       resolution: "1080p",

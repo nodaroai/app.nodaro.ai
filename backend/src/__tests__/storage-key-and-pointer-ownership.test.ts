@@ -361,6 +361,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
   "backend/src/lib/job-policy-outputs.ts": "deletes only keys in the blocked job's own key family (isOwnedObjectKey)",
   "backend/src/ee/lib/trends/run-delete.ts":
     "deletes only keys in the deleted run's own jobs' key family (ownedJobOutputKeys → isOwnedObjectKey), none a library row still names; the run's library rows go through permanentlyDeleteAsset, which asks key-ownership",
+  "backend/src/lib/job-server-output.ts":
+    "deletes only keys the server itself recorded in jobs.server_output (695, service-role-only, never written by a client), each claimed off that record first, and an object a video store uploaded a moment before under a key it built itself (discardJustStored)",
   "backend/src/lib/image-set-storage.ts":
     "deletes only the keys a set's own store wrote, in its own job's key family (isOwnedObjectKey); never a key from a row",
   "backend/src/lib/discard-job-copies.ts":

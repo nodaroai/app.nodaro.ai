@@ -62,7 +62,7 @@
  "get_node_skill forced-alignment": "tools: list_models | models: -",
  "get_node_skill framing": "tools: get_picker_catalog list_models | models: -",
  "get_node_skill furniture": "tools: get_picker_catalog list_models | models: -",
- "get_node_skill generate-3d-scene": "tools: generate_3d_scene list_models | models: -",
+ "get_node_skill generate-3d-scene": "tools: generate_3d_scene list_models | models: claude-opus-5.5 claude-sonnet-5.5",
  "get_node_skill generate-image": "tools: generate_image list_models | models: flux gpt-image-2=\"GPT Image 2\" gpt-image-2-6-flare gpt-image-2-6-sunburst nano-banana=\"Nano Banana\" nano-banana-2-1 nano-banana-pro z-image",
  "get_node_skill generate-mask": "tools: generate_mask list_models | models: -",
  "get_node_skill generate-music": "tools: generate_music list_models | models: minimax",

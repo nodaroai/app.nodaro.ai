@@ -29,7 +29,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { lipSyncResolutions, lipSyncResolutionSummary } from "@nodaro/shared/models"
+import { lipSyncResolutions, lipSyncResolutionSummary, VIDEO_DYNAMIC_RANGES } from "@nodaro/shared/models"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER, NODARO_VIDEO_UPSCALE_MODES, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
@@ -60,6 +60,7 @@ import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
 import { videoRemakeQuote, videoRemakeRefusal, type VideoRemakeInstructionRun } from "./cast-swap.js"
+import { VIDEO_REMAKE_DELIVERED_SIZES } from "../../video-remake-delivered-resolution.js"
 import { MOTION_TRANSFER_REMAKE_POINTER, RECAST_POINTER, recastOffered, videoRemakeOffered } from "./_video-lanes.js"
 
 // Derive video model enums from MODEL_CATALOG. `includeHidden: true` keeps
@@ -343,6 +344,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
           ),
         keep_original_sound: z.boolean().optional().describe("kling-4(-flash): keep ref videos' sound."),
+        dynamic_range: z.enum(VIDEO_DYNAMIC_RANGES).optional().describe("kling-4(-keyframes): hdr at 1080p/4k, extra cost."),
         audio_soundtrack: z.boolean().optional().describe("kling-4: false = every audio clip a voice, no soundtrack."),
       },
               outputSchema: {
@@ -554,6 +556,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             }
           : {}),
         ...(args.keep_original_sound !== undefined ? { keepOriginalSound: args.keep_original_sound } : {}),
+        ...(args.dynamic_range !== undefined ? { dynamicRange: args.dynamic_range } : {}),
         ...(args.audio_soundtrack !== undefined ? { audioSoundtrack: args.audio_soundtrack } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
@@ -1682,6 +1685,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   // surface (the route, the node and the SDK keep that default everywhere).
   const remakeEngines = videoRemakeOffered(session) ? NODARO_MOTION_ENGINES : []
   const REMAKE_ENGINE_WHEN_NO_MODEL: (typeof NODARO_MOTION_ENGINES)[number] = "nodaro-prism"
+  // The sizes this tool's own models take; Video Remake's engines also deliver 4K, listed only where they are offered.
+  const V2V_OWN_RESOLUTIONS: readonly ("480p" | "720p" | "1080p" | "4k")[] = ["480p", "720p", "1080p"]
   const DIRECT_EDIT_INSTEAD = 'To run an instruction edit at once instead, call modify_video again with model: "seedance-2-5" (or another edit model).'
   server.registerTool(
     "modify_video",
@@ -1737,7 +1742,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `(${videoToVideoClipPriceHint()}).`,
           ),
         duration: z.enum(["5", "10"]).optional().describe("Wan / Wan Flash only — 5s or 10s output."),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe(`seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? ", nodaro-prism (480p default) / nodaro-pulse (720p default, or 1080p)" : ""}.`),
+        resolution: z.enum(remakeEngines.length ? VIDEO_REMAKE_DELIVERED_SIZES : V2V_OWN_RESOLUTIONS).optional().describe(`seedance-2-5 (480p-1080p; 480p when no model is named), seedance-2-5-flash (480p/720p), Wan / Wan Flash / happyhorse-edit (720p/1080p)${remakeEngines.length ? "; nodaro-prism / nodaro-pulse: the size delivered, 720p (default), 1080p or 4k" : ""}.`),
         aspect_ratio: z
           .enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"])
           .optional()
@@ -1840,6 +1845,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         // The estimate refused it (the clip's length, the prompt's): the refusal, and the way on.
         if (answer.isError && instead) return { ...answer, content: answer.content.map((c, i) => (i === 0 ? { ...c, text: `${c.text}${instead}` } : c)) }
         return answer
+      }
+      // 4K is a size Video Remake's engines deliver; no model of this tool's own renders it.
+      if (args.resolution === "4k") {
+        return errorResult(400, JSON.stringify({ error: { code: "validation_error", message: "resolution 4k is offered on nodaro-prism and nodaro-pulse only." } }))
       }
       const provider = videoToVideoProviderOf(args.model)
       // Seedance edits a REFERENCE video (no v2v endpoint): dispatch through the
