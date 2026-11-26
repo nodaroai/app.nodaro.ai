@@ -10,6 +10,7 @@
  */
 
 import { config, hasCredits } from "../../lib/config.js"
+import { pollDelay } from "./poll-delay.js"
 import { PLATFORM_CAPACITY_MESSAGE } from "../../lib/llm-platform-exhaustion.js"
 import { requireProviderKey, MissingProviderKeyError } from "../provider-keys.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
@@ -854,12 +855,8 @@ export async function sleep(ms: number): Promise<void> {
   if (isWorkerDraining()) throw new DrainAbortError()
 }
 
-/** Exponential backoff: 2s for first 5, ramp to 10s cap */
-export function pollDelay(attempt: number): number {
-  if (attempt <= 5) return 2000
-  if (attempt <= 15) return Math.min(2000 + (attempt - 5) * 1000, 10000)
-  return 10000
-}
+/** Exponential backoff: 2s for first 5, ramp to 10s cap (`poll-delay.ts`). */
+export { pollDelay }
 
 // =============================================================================
 // CORE API FUNCTIONS

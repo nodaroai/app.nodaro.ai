@@ -57,7 +57,7 @@ vi.mock("@/providers/index.js", () => ({
   videoUpscale: vi.fn(),
 }))
 vi.mock("@/providers/video/merge-video-audio.js", () => ({ mergeVideoAudio: vi.fn(async () => "/tmp/merge/merged.mp4") }))
-vi.mock("@/providers/video/apply-smart-loop-cut.js", () => ({ applySmartLoopCutToR2Url: m.loopCut }))
+vi.mock("@/providers/video/apply-smart-loop-cut.js", () => ({ applySmartLoopCutLocal: m.loopCut }))
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: vi.fn(async () => undefined),
   createWorkDir: vi.fn(async () => "/tmp/workdir"),
@@ -79,8 +79,8 @@ vi.mock("@/providers/kie/client.js", async (importOriginal) => ({
 }))
 vi.mock("@/workers/shared.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/workers/shared.js")>()),
-  uploadVideoMaybeWatermark: vi.fn(async () => "https://r2.example.com/videos/job-1.mp4"),
-  watermarkLocalVideoAndUpload: vi.fn(async () => "https://r2.example.com/videos/job-1-merged.mp4"),
+  uploadVideoMaybeWatermark: vi.fn(async () => ({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })),
+  watermarkLocalVideoAndUpload: vi.fn(async () => ({ videoUrl: "https://r2.example.com/videos/job-1-merged.mp4" })),
   generateAndUploadThumbnail: vi.fn(async () => "https://r2.example.com/thumbnails/job-1.png"),
   setJobProgress: vi.fn(async () => undefined),
   startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
@@ -132,12 +132,13 @@ describe("the image-to-video lane", () => {
 
   it("a loop cut changed the stored file: its own length is probed and recorded", async () => {
     measuredAt(17.52)
-    m.loopCut.mockResolvedValue("https://r2.example.com/videos/looped.mp4")
+    m.loopCut.mockResolvedValue({ path: "/tmp/slc/looped.mp4", dir: "/tmp/slc" })
     m.probe.mockResolvedValue(14.6)
     await handler(job("image-to-video", "image-to-video", { ...request, loopTrim: { enabled: true, framesToTest: 16 } }), ctx as never)
     expect(recorded().durationSec).toBe(14.6)
     expect(m.probe).toHaveBeenCalledTimes(1)
-    expect(m.probe).toHaveBeenCalledWith("https://r2.example.com/videos/job-1.mp4", { timeoutMs: 5_000 })
+    // The loop-cut take is stored from local disk (watermarkLocalVideoAndUpload's mock url): that stored file is probed.
+    expect(m.probe).toHaveBeenCalledWith("https://r2.example.com/videos/job-1-merged.mp4", { timeoutMs: 5_000 })
   })
 
   it("nothing measured (an edition with no credits): the stored file is probed once", async () => {

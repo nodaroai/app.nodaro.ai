@@ -29,7 +29,7 @@ import {
 import { WIDGET_URI } from "../widgets/registrar.js"
 import { widgetModelOf } from "../widget-models.js"
 import { MODEL_CATALOG, modelIdsByKindMode, SEEDANCE_DRAFT_FINALIZE_PROVIDER, isSeedanceDraftCapable, VIDEO_UPSCALE_RESOLUTIONS } from "@nodaro/shared/model-catalog"
-import { lipSyncResolutions, lipSyncResolutionSummary } from "@nodaro/shared/models"
+import { lipSyncResolutions, lipSyncResolutionSummary, VIDEO_DYNAMIC_RANGES } from "@nodaro/shared/models"
 import { VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, videoToVideoProviderOf, SEEDANCE_VIDEO_EDIT_SHAPE, SEEDANCE_VIDEO_EDIT_TASK_TYPE, SEEDANCE_REFERENCE_TASK_TYPES, CAPTION_TRANSCRIBE_LANES, TOPAZ_VIDEO_FPS_MAX, TOPAZ_VIDEO_FPS_MIN, VIDEO_UPSCALE_PROVIDERS, NODARO_MOTION_ENGINES, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, resolveVideoModeForInputs, EXTEND_VIDEO_PROVIDERS, canonicalVideoProvider, extendHasSoundSwitch, isGrokExtendProvider, type ExtendVideoProvider, NODARO_VIDEO_UPSCALE_PROVIDER, NODARO_VIDEO_UPSCALE_MODES, TOPAZ_RHEA_VIDEO_UPSCALE_PROVIDER } from "@nodaro/shared/models"
 import { ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared/captions"
 import { COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSpeakerMap, speakerMapResultOf, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS } from "@nodaro/shared/edl"
@@ -343,6 +343,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
           ),
         keep_original_sound: z.boolean().optional().describe("kling-4(-flash): keep ref videos' sound."),
+        dynamic_range: z.enum(VIDEO_DYNAMIC_RANGES).optional().describe("kling-4(-keyframes): hdr at 1080p/4k, extra cost."),
         audio_soundtrack: z.boolean().optional().describe("kling-4: false = every audio clip a voice, no soundtrack."),
       },
               outputSchema: {
@@ -554,6 +555,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             }
           : {}),
         ...(args.keep_original_sound !== undefined ? { keepOriginalSound: args.keep_original_sound } : {}),
+        ...(args.dynamic_range !== undefined ? { dynamicRange: args.dynamic_range } : {}),
         ...(args.audio_soundtrack !== undefined ? { audioSoundtrack: args.audio_soundtrack } : {}),
         mcp_client: session.clientName,
         userId: session.userId,

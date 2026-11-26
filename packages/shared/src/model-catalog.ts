@@ -547,6 +547,22 @@ export interface ModelCatalogEntryFields {
    * provider's own refusal, never guessed.
    */
   startFrameOnlyResolutions?: readonly string[]
+  /**
+   * The video model can render HDR (a request's `dynamicRange: "hdr"`; Kling
+   * 4.0: the provider's `dynamic_range`, HEVC 10-bit BT.2020 HLG). Absent: no
+   * such setting, and a value sent is dropped (`normalizeModelInput`) — never
+   * sent, never billed.
+   *
+   *  - `resolutions`: the sizes HDR renders at (catalog spelling). HDR at any
+   *    other size is refused before any credits are held
+   *    (`videoHdrResolutionProblem`); the editor moves the size up instead.
+   *  - `addonCreditPrefix`: HDR is priced as its own add-on line on the
+   *    output seconds (`videoHdrAddonCreditId`: `<prefix>:<N>s:<res>`), beside
+   *    the model's own price, never a row of its ladder.
+   *
+   * Declared with the feature `"hdr"` (`video-hdr.test.ts`).
+   */
+  hdr?: { readonly resolutions: readonly string[]; readonly addonCreditPrefix: string }
   qualities?: readonly string[]
   /**
    * The quality a run renders at when none is named, where that is not the
@@ -935,7 +951,14 @@ const VIDEO_RATIOS_VIDU_Q4 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 // Kling 4.0 — both endpoints share the enum (docs.kie.ai/market/kling/v4-reference-to-video,
 // /v4-keyframe-to-video). `auto` follows the materials; with none it renders 16:9.
 // The keyframe endpoint ignores the ratio once any frame is attached.
+// Kling 4.0 Flash keeps this list.
 const VIDEO_RATIOS_KLING_4 = ["auto", "16:9", "9:16", "1:1", "21:9"] as const
+// Kling 4.0 (both endpoints): the same list plus 4:3, which both schemas take.
+const VIDEO_RATIOS_KLING_4_0 = [...VIDEO_RATIOS_KLING_4, "4:3"] as const
+// Kling 4.0 HDR (both endpoints, `dynamic_range: "hdr"`): 1080p and 4K only
+// (720p with HDR is the provider's parameter error), priced as its own add-on
+// line on the output seconds.
+const KLING_4_HDR = { resolutions: ["1080p", "4k"], addonCreditPrefix: "kling-4-hdr" } as const
 // PixVerse V6 Max — the text-to-video enum, in KIE's own order
 // (docs.kie.ai/market/pixverse/v6-max-text-to-video). The image-to-video
 // endpoint takes NO aspect ratio: its output follows the start frame, so these
@@ -2869,7 +2892,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
   // start frame joins the reference images. Keyframes:
   // docs.kie.ai/market/kling/v4-keyframe-to-video — start frame, up to 8
   // in-between frames (the node's Image References, in order) and an end
-  // frame; with no frame it is text-to-video. Both: 3-30s, 720p/1080p, native
+  // frame; with no frame it is text-to-video. Both: 3-30s, 720p/1080p/4K (HDR
+  // at 1080p and 4K, priced as an add-on on the output seconds), native
   // audio always on, no seed. Per-second billing; a reference-video run bills
   // its input seconds too (ee/billing/ref-video-billing.ts).
   "kling-4": {
@@ -2880,26 +2904,31 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "kuaishou",
     label: "Kling 4.0",
     series: "Kling",
-    description: "Kling 4.0 — up to 30s with native audio and lip-sync; reference images, videos, characters and voices, or plain text.",
+    description: "Kling 4.0 — up to 30s at up to 4K (HDR at 1080p and 4K) with native audio and lip-sync; reference images, videos, characters and voices, or plain text.",
     useCases: ["premium", "narrative", "cinematic", "reference"],
     // Reference VIDEOS are taken (VIDEO_REF_LIMITS_BY_PROVIDER `videos: 5`) but
     // `video-reference` is NOT declared: like wan-3, the generate-video-pro
     // extend chain (a continuation tail sent as a reference video) is unwired
     // for it, so the pro node offers it in keyframes mode only.
-    features: ["audio", "reference-image", "reference-to-video", "character-subjects", "voice-references", "audio-soundtrack"],
-    aspectRatios: VIDEO_RATIOS_KLING_4,
+    features: ["audio", "reference-image", "reference-to-video", "character-subjects", "voice-references", "audio-soundtrack", "hdr"],
+    aspectRatios: VIDEO_RATIOS_KLING_4_0,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 5,
-    resolutions: ["720p", "1080p"],
+    resolutions: ["720p", "1080p", "4k"],
     unlistedResolutionRendersAs: "720p",
+    hdr: KLING_4_HDR,
     noSeed: true,  // neither Kling 4.0 schema has a `seed` (additionalProperties: false)
     pricing: [
       { identifier: "kling-4", credits: 360, note: "default 5s 720p — see :Ns:res variants for exact" },
       { identifier: "kling-4:5s:720p", credits: 360, note: "5s 720p (the default tier)" },
       { identifier: "kling-4:5s:1080p", credits: 540, note: "5s 1080p" },
+      { identifier: "kling-4:5s:4k", credits: 1240, note: "5s 4K" },
       { identifier: "kling-4:3s:720p", credits: 220, note: "3s 720p (min)" },
-      { identifier: "kling-4:30s:1080p", credits: 3190, note: "30s 1080p (max)" },
+      { identifier: "kling-4:30s:4k", credits: 7430, note: "30s 4K (max)" },
       { identifier: "kling-4:8s:720p-ref", credits: 340, note: "per-second anchor with a reference video: billed × (output + max(output, input seconds)) ÷ 8" },
+      { identifier: "kling-4:8s:4k-ref", credits: 1180, note: "4K per-second anchor with a reference video" },
+      { identifier: "kling-4-hdr:5s:1080p", credits: 110, note: "HDR add-on, 5s at 1080p (on the output seconds, beside the clip's own price)" },
+      { identifier: "kling-4-hdr:5s:4k", credits: 180, note: "HDR add-on, 5s at 4K" },
     ],
   },
   "kling-4-keyframes": {
@@ -2910,23 +2939,27 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     maker: "kuaishou",
     label: "Kling 4.0 Keyframes",
     series: "Kling",
-    description: "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s with native audio.",
+    description: "Kling 4.0 Keyframes — start frame, up to 8 in-between frames and an end frame; up to 30s at up to 4K (HDR at 1080p and 4K) with native audio.",
     useCases: ["premium", "narrative", "keyframes"],
     // `reference-to-video`: in-between frames alone (no start frame) run —
     // KIE takes `keyframe_urls` without `first_frame_url`.
-    features: ["end-frame", "audio", "reference-image", "reference-to-video", "keyframes"],
-    aspectRatios: VIDEO_RATIOS_KLING_4,
+    features: ["end-frame", "audio", "reference-image", "reference-to-video", "keyframes", "hdr"],
+    aspectRatios: VIDEO_RATIOS_KLING_4_0,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     defaultDuration: 5,
-    resolutions: ["720p", "1080p"],
+    resolutions: ["720p", "1080p", "4k"],
     unlistedResolutionRendersAs: "720p",
+    hdr: KLING_4_HDR,
     noSeed: true,
     pricing: [
       { identifier: "kling-4-keyframes", credits: 360, note: "default 5s 720p — see :Ns:res variants for exact" },
       { identifier: "kling-4-keyframes:5s:720p", credits: 360, note: "5s 720p (the default tier)" },
       { identifier: "kling-4-keyframes:5s:1080p", credits: 540, note: "5s 1080p" },
+      { identifier: "kling-4-keyframes:5s:4k", credits: 1240, note: "5s 4K" },
       { identifier: "kling-4-keyframes:3s:720p", credits: 220, note: "3s 720p (min)" },
-      { identifier: "kling-4-keyframes:30s:1080p", credits: 3190, note: "30s 1080p (max)" },
+      { identifier: "kling-4-keyframes:30s:4k", credits: 7430, note: "30s 4K (max)" },
+      { identifier: "kling-4-hdr:5s:1080p", credits: 110, note: "HDR add-on, 5s at 1080p (on the output seconds, beside the clip's own price)" },
+      { identifier: "kling-4-hdr:5s:4k", credits: 180, note: "HDR add-on, 5s at 4K" },
     ],
   },
   // Kling 4.0 Flash — ONE id over KIE's two Flash endpoints, picked by what is
@@ -5615,6 +5648,8 @@ export const MODEL_INPUT_ADJUSTMENT_FIELDS = [
   "outputFormat", "gifFrames", "gifFrameDurationMs", "svgLevel", "imageSetCount",
   // A video model's frame rate (catalog `frameRates`, LTX 2.5).
   "fps",
+  // A video model's HDR setting (catalog `hdr`, Kling 4.0).
+  "dynamicRange",
 ] as const
 export type ModelInputAdjustmentField = (typeof MODEL_INPUT_ADJUSTMENT_FIELDS)[number]
 
@@ -5649,6 +5684,8 @@ export interface NormalizedModelInput {
   svgLevel?: string
   /** The images a set asks for (2 to 10), on a model that makes sets (`imageSet`); undefined for one image. */
   imageSetCount?: number
+  /** `"sdr"` / `"hdr"` on a video model with an HDR setting (catalog `hdr`); undefined on every other model. */
+  dynamicRange?: string
   /** Empty when the input was already valid. */
   adjustments: ModelInputAdjustment[]
 }
@@ -6003,6 +6040,8 @@ export function normalizeModelInput(
     gifFrameDurationMs?: number
     svgLevel?: string
     imageSetCount?: number
+    /** A video model's HDR setting (`"sdr"` | `"hdr"`), as the request names it. */
+    dynamicRange?: string
   },
   context: ModelInputContext = {},
 ): NormalizedModelInput {
@@ -6224,7 +6263,47 @@ export function normalizeModelInput(
     out.background = undefined
   }
 
+  normalizeDynamicRange(m, input.dynamicRange, out, adjustments)
+
   return out
+}
+
+/**
+ * A video model's HDR setting (catalog `hdr`), after the size: dropped on a
+ * model without the setting, an unknown value read as SDR, and HDR on a size
+ * that does not render it (Kling 4.0 at 720p, or no size named: the 720p it
+ * renders) moves the size up to the first that does (1080p) — what the editor
+ * shows when HDR is turned on there. The run itself refuses that pair rather
+ * than move it (`videoHdrResolutionProblem`); this is the write boundary's
+ * correction, so a node written straight into workflow JSON shows the size and
+ * price it will run at.
+ */
+function normalizeDynamicRange(m: ModelCatalogEntry, asked: string | undefined, out: NormalizedModelInput, adjustments: ModelInputAdjustment[]): void {
+  if (asked === undefined) return
+  if (!m.hdr) {
+    adjustments.push({ field: "dynamicRange", from: asked, to: undefined, reason: `${m.label} has no HDR setting — the value was dropped.` })
+    out.dynamicRange = undefined
+    return
+  }
+  const value = asked.trim().toLowerCase()
+  if (value !== "sdr" && value !== "hdr") {
+    adjustments.push({ field: "dynamicRange", from: asked, to: "sdr", reason: `${m.label} takes dynamicRange "sdr" or "hdr" — using "sdr".` })
+    out.dynamicRange = "sdr"
+    return
+  }
+  out.dynamicRange = value
+  if (value !== "hdr") return
+  const hdrSizes = m.hdr.resolutions
+  const rendered = out.resolution ?? m.unlistedResolutionRendersAs ?? m.defaultResolution ?? m.resolutions?.[0]
+  if (rendered !== undefined && hdrSizes.some((r) => sameOptionValue(r, rendered))) return
+  const to = hdrSizes[0]!
+  adjustments.push({
+    field: "resolution",
+    from: rendered ?? "",
+    to,
+    reason: `${m.label} renders HDR at ${hdrSizes.join(" or ")} only — using ${to}.`,
+  })
+  out.resolution = to
 }
 
 /** The format levers of a request after `normalizeOutputFormat`: a GIF's and an SVG's only when that is the file written. */

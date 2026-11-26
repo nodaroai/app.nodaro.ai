@@ -89,6 +89,7 @@ import { outputPipSourceType } from "@nodaro/shared/entities"
 import { PERSON_FIELD_BY_DIMENSION } from "@nodaro/prompts/person"
 import { PICKER_CATALOGS } from "@nodaro/prompts/picker-catalogs"
 import { SUBJECT_CUSTOM_AGE_KEY } from "@nodaro/prompts/prompt-builder"
+import { promptPlacementField } from "@nodaro/prompts/prompt-fields"
 import { CAMERA_SWITCH_SPEAKER_MAP_HANDLE, cameraSwitchSpeakerMapLanding, isUseCaseNodeType, usecaseResultIsText } from "@nodaro/render-rules"
 import { usecaseSavedNodeOutput } from "./use-case-output.js"
 import { routeUseCaseInput } from "./use-case-inputs.js"
@@ -224,8 +225,10 @@ export function resolveNodeInputs(
   // is off — must NOT also flow into inputs.prompt (no double). Mirror of FE
   // node-input-resolver.ts.
   const consumerData = targetNode.data as Record<string, unknown>
+  // The typed field placements are read from: `prompt`, or the node's own
+  // prompt field (Generate 3D Scene's `scenePrompt`) — mirrors the frontend.
   const referencedLabels = extractReferencedLabels(
-    consumerData.prompt as string | undefined,
+    consumerData[promptPlacementField(targetNode.type)] as string | undefined,
     consumerData.negativePrompt as string | undefined,
   )
   const promptInjectOff = consumerData.injectPrompt === false

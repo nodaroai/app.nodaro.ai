@@ -179,7 +179,7 @@ beforeEach(async () => {
   mocks.safeFetch.mockResolvedValue({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(100) })
   mocks.runKieTask.mockResolvedValue({ resultJson: { resultUrls: ["https://kie.example/out.mp4"] }, taskId: "t-1", providerMs: 1 })
   mocks.uploadToR2.mockResolvedValue("https://r2.example.com/videos/out.mov")
-  mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/out.mp4")
+  mocks.uploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/out.mp4" })
   mocks.finalize.mockResolvedValue({ ok: true })
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {

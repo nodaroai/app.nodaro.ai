@@ -22,6 +22,7 @@ import { mergeVideoAudio } from "../providers/video/merge-video-audio.js"
 import { cleanupWorkDir, probeMediaStreams } from "../providers/video/ffmpeg-utils.js"
 import { watermarkLocalVideoAndUpload } from "../workers/shared.js"
 import { draftAudioMuxMergeArgs, voiceTrackMuxRecipe } from "./seedance-draft-audio.js"
+import type { StoredVideo } from "./video-result-store.js"
 import { isDrainAbortError } from "./worker-drain.js"
 
 /** Is this job an audio-to-video run (stamped by the server after measuring), and which clip drives it? */
@@ -32,10 +33,12 @@ export function drivingAudioUrlOf(input: Record<string, unknown> | null | undefi
 }
 
 /** What the step did: the stored, laid-on file (the job's final media), or nothing (store the render as it came). */
-export type DrivingAudioLayResult = { readonly kind: "stored"; readonly url: string } | { readonly kind: "as-rendered" }
+export type DrivingAudioLayResult = { readonly kind: "stored"; readonly url: string; readonly stored: StoredVideo } | { readonly kind: "as-rendered" }
 
 export async function layDrivingAudioIfSilent(args: {
   videoUrl: string
+  /** The render already on local disk (a loop cut): read from there instead of `videoUrl`. */
+  videoPath?: string
   audioUrl: string | undefined
   jobId: string
   userId: string | undefined
@@ -53,7 +56,7 @@ export async function layDrivingAudioIfSilent(args: {
   const store = args.deps?.store ?? watermarkLocalVideoAndUpload
   if (!args.audioUrl) return { kind: "as-rendered" }
   try {
-    const streams = await probe(args.videoUrl)
+    const streams = await probe(args.videoPath ?? args.videoUrl)
     if (streams.hasAudio) return { kind: "as-rendered" }
   } catch (err) {
     if (isDrainAbortError(err)) throw err
@@ -63,12 +66,23 @@ export async function layDrivingAudioIfSilent(args: {
   let merged: string | undefined
   try {
     // Fitted to the picture: the audio never outlasts the clip.
-    merged = await merge({ ...draftAudioMuxMergeArgs(args.videoUrl, voiceTrackMuxRecipe(args.audioUrl)), fitAudioToVideo: true })
-    const url = await store(merged, args.jobId, args.userId, args.watermark)
+    merged = await merge({
+      ...draftAudioMuxMergeArgs(args.videoUrl, voiceTrackMuxRecipe(args.audioUrl)),
+      ...(args.videoPath ? { videoPath: args.videoPath } : {}),
+      fitAudioToVideo: true,
+    })
+    // Through the video result funnel (lib/video-result-store.ts): the stored
+    // file and, where it keeps one, the original beside it.
+    const stored = await store(merged, args.jobId, args.userId, args.watermark)
     console.warn(`[driving-audio] job ${args.jobId}: the render had no audio stream; the driving clip was laid on`)
-    return { kind: "stored", url }
+    return { kind: "stored", url: stored.videoUrl, stored }
   } catch (err) {
     if (isDrainAbortError(err)) throw err
+    // A cancel is final (never stored again as rendered). Anything else —
+    // an unusable verdict on OUR OWN merge output included — falls back to
+    // the provider's render as it came, the video the user paid for, as
+    // before this change (decided 2026-11-24).
+    if ((err as { name?: unknown } | null)?.name === "JobCancelledError") throw err
     console.warn(`[driving-audio] job ${args.jobId}: laying the driving clip on a silent render failed; storing it as rendered:`, err)
     return { kind: "as-rendered" }
   } finally {

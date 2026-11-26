@@ -25,7 +25,7 @@ vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/providers/fal/topaz-rhea.js", () => ({ falTopazRheaUpscale: mocks.rhea }))
 // The delivery (crop / sound) is lib/topaz-rhea-delivery.ts's own test; here it stores the engine's file through the given store.
 vi.mock("@/lib/topaz-rhea-delivery.js", () => ({
-  deliverRheaOutput: vi.fn(async (opts: { outputUrl: string; store: (p: string) => Promise<string>; expected: unknown }) => {
+  deliverRheaOutput: vi.fn(async (opts: { outputUrl: string; store: (p: string) => Promise<unknown>; expected: unknown }) => {
     mocks.delivered.push(opts)
     // The delivery reports the stored file's probed frame (here one pixel off the plan, to tell them apart).
     return { stored: await opts.store(`/tmp/fitted-of-${opts.outputUrl}`), width: 720, height: 1278 }
@@ -72,7 +72,7 @@ beforeEach(() => {
   mocks.makeOnTaskCreated.mockReturnValue(mocks.onTaskCreated)
   mocks.rhea.mockReset()
   mocks.rhea.mockResolvedValue({ url: "https://fal.media/out.mp4", cost: 0.05, providerMs: 35_000, requestId: "req-x" })
-  mocks.upload.mockResolvedValue("https://r2.example/out.mp4")
+  mocks.upload.mockResolvedValue({ videoUrl: "https://r2.example/out.mp4" })
   mocks.thumbnail.mockResolvedValue("https://r2.example/thumb.png")
   mocks.finalizeJob.mockResolvedValue({ ok: true })
   mocks.claim.mockResolvedValue({ won: true, ts: "2026-11-24T10:00:00.000Z" })
@@ -102,7 +102,7 @@ describe("video-upscale topaz-rhea", () => {
     expect(arg).toMatchObject({
       jobId: "job-rhea",
       jobType: "video-upscale",
-      mediaUrl: "https://r2.example/out.mp4",
+      video: { videoUrl: "https://r2.example/out.mp4" },
       result: { url: "https://fal.media/out.mp4", cost: 0.05, providerUsed: "topaz-rhea", providerMs: 35_000 },
       // The stored file's probed frame, never the plan's.
       extraOutputData: { thumbnailUrl: "https://r2.example/thumb.png", width: 720, height: 1278 },

@@ -17,11 +17,12 @@ import { probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection } from "@nodaro/shared/models"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_5_REF_LIMITS, SEEDANCE_REFERENCE_TASK_TYPES, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, billsReferenceVideoSeconds, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection, VIDEO_DYNAMIC_RANGES, videoRunsHdr } from "@nodaro/shared/models"
 import { VIDEO_DURATION_AUTO, isAutoVideoDuration, isSeedanceDraftCapable } from "@nodaro/shared/model-catalog"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared/credits"
 import { videoCharacterRefProblem } from "@nodaro/shared/video"
 import { kling4InputProblem } from "../lib/kling4-inputs.js"
+import { dropHdrFromPluginChildPreHandler, refuseHdrAtUnsupportedResolutionPreHandler, withVideoHdrAddon } from "../lib/video-hdr-pricing.js"
 import { videoMaterialCounts } from "../lib/video-material-counts.js"
 import { seatCharacterVideosPreHandler } from "../lib/character-video-seat.js"
 import type { ConnectedReference, DescribedReference } from "@nodaro/shared/types"
@@ -92,6 +93,11 @@ export const textToVideoBody = z.object({
   // Kling 4.0: keep the reference videos' own sound (KIE `keep_original_sound`).
   // Ignored without a reference video and by every other model.
   keepOriginalSound: z.boolean().optional(),
+  // Kling 4.0 (both ids; catalog `hdr`): `hdr` renders HDR (HEVC 10-bit,
+  // BT.2020, HLG) at 1080p or 4K, priced as its own add-on line on the output
+  // seconds; at 720p it is refused before anything is held. Dropped on every
+  // other model (never sent, never billed). Unset = `sdr`.
+  dynamicRange: z.enum(VIDEO_DYNAMIC_RANGES).optional(),
   // Kling 4.0: play the first reference audio clip as the result's soundtrack
   // (lib/audio-soundtrack.ts). Unset = on; `false` keeps every clip a voice sample.
   audioSoundtrack: z.boolean().optional(),
@@ -144,7 +150,7 @@ export const textToVideoBody = z.object({
 export const textToVideoPricing: RoutePricing = {
   // Reference audio the provider would refuse (format, length) is refused here,
   // before the reservation — the same check /v1/generate-video runs.
-  prechecks: [seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler, drivingAudioPreHandler],
+  prechecks: [dropHdrFromPluginChildPreHandler, refuseHdrAtUnsupportedResolutionPreHandler, seatCharacterVideosPreHandler, applyAudioSoundtrackPreHandler, refuseVideoReferencesOverLimitPreHandler, validateSeedance2AudioPreHandler, validateRefVideoDurationPreHandler, drivingAudioPreHandler],
   modelResolver: (req) => {
     const body = req.body as Record<string, unknown>
     const sel = applyDefaultVideoSelection({ provider: body?.provider as string | undefined, duration: body?.duration as number | string | undefined })
@@ -186,7 +192,9 @@ export const textToVideoPricing: RoutePricing = {
   },
   opts: {
     runModel: videoRunModel,
-    computeCredits: async (rawBody, req) => {
+    // The HDR add-on (Kling 4.0) is its own line on top of whatever base this
+    // prices (`withVideoHdrAddon`).
+    computeCredits: withVideoHdrAddon(async (rawBody, req) => {
       // The body as the run sends it: a declared reference task type's ratio
       // and length replace the requested ones (the same object otherwise), so
       // every read below prices the run that is sent.
@@ -328,7 +336,7 @@ export const textToVideoPricing: RoutePricing = {
       const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
       const { creditCost } = await getModelCreditBaseCost(modelId)
       return creditCost
-    },
+    }),
   },
 }
 
@@ -616,6 +624,8 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
             ...(drivingAudio ? { audioToVideo: true, drivingAudioSec: drivingAudio.audioSec, drivingAudioBilledSec: drivingAudio.billedSec } : {}),
             // Only when declared, so `auto` records exactly what no field does.
             ...(referenceTaskType ? { referenceTaskType } : {}),
+            // Only on an HDR run (the settlement and the reconcile price its add-on from it); SDR records none.
+            dynamicRange: videoRunsHdr(provider, parsed.data.dynamicRange) ? "hdr" : undefined,
             // The pre-check's ffprobe of the reference clips — the
             // settlement prices from the same numbers the reservation did.
             ...(req.refVideoDurationsSec ? { refVideoDurationsSec: req.refVideoDurationsSec } : {}),
@@ -669,6 +679,7 @@ export async function handleTextToVideoRequest(req: FastifyRequest, reply: Fasti
     referenceAudioUrls,
     characterReferences,
     keepOriginalSound,
+    ...(videoRunsHdr(provider, parsed.data.dynamicRange) ? { dynamicRange: "hdr" } : {}),
     refVideoDurationsSec: req.refVideoDurationsSec,
     webSearch,
     nsfwChecker,

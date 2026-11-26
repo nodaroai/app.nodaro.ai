@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-11-22T18:00:57.198Z
-generated_from: 249066c36b
+generated_at: 2026-11-25T11:06:18.784Z
+generated_from: 813b57b11a
 ---
 
 # Text to Video
@@ -96,6 +96,7 @@ generated_from: 249066c36b
 - `reference_audio_urls`
 - `character_references`
 - `keep_original_sound`
+- `dynamic_range`
 - `audio_soundtrack`
 - `user_request`
 - `flow_id`

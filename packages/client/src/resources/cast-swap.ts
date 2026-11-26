@@ -153,11 +153,14 @@ export interface VideoRemakeRolePreviewSettings {
  */
 export interface VideoRemakeRolePrevizSettings {
   /**
-   * What the role IS in the video to make, in your own words (`"the
-   * detective"`, `"a delivery van"`; 1–200 characters). On a previz run the
-   * role's `name` is the LOCATOR of its model in the clip (its colour, or its
-   * shape and position: `"the pink model"`), and `subject` is what the
-   * result's script calls it. Left out: the script calls it by its picture.
+   * What the role's model BECOMES in the video to make, in your own words
+   * (1–200 characters). On a previz run the role's `name` is the LOCATOR of
+   * its model in the clip (its colour, or its shape and position: `"the pink
+   * model"`), and `subject` is what the result's script calls it. Write the
+   * finished thing, not the previz model, and leave out the model's colour
+   * unless the real thing has it: `"a jockey on a bay racehorse"`, not
+   * `"the driver of the red car"`. Left out: the script calls it by its
+   * picture.
    */
   subject?: string
 }
@@ -554,8 +557,9 @@ export interface VideoRemakeJobOutput {
  *   motion are followed and its look is not: it is rendered into the run's
  *   art style or custom style (`direction`), and with neither into real-world,
  *   live-action footage. Name each role by its model in the clip (its colour,
- *   or its shape and position: `name: "the pink model"`), say what it is in
- *   `subject`, and give it the pictures that replace the model.
+ *   or its shape and position: `name: "the pink model"`), say in `subject`
+ *   what that model becomes (the finished thing, not the model), and give it
+ *   the pictures that replace the model.
  */
 export type VideoRemakeClipKind = "footage" | "previz"
 

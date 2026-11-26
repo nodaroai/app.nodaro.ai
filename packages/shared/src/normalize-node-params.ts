@@ -158,7 +158,11 @@ export function normalizeNodeModelParams<T extends NodeLike>(
     if (type === "video-upscale") return normalizeVideoUpscaleNode(node, adjustments)
     if (type === "motion-transfer") return normalizeMotionTransferNode(node, adjustments)
     // The stored reference task type: the one rule every workflow write runs.
-    if (REFERENCE_TASK_TYPE_NODE_MODES.has(type)) return withListedReferenceTaskTypes([node], adjustments)[0]!
+    // A Generate Video node's HDR setting is held to its model first.
+    if (REFERENCE_TASK_TYPE_NODE_MODES.has(type)) {
+      const hdrFitted = type === "generate-video" ? normalizeVideoHdrNode(node, adjustments) : node
+      return withListedReferenceTaskTypes([hdrFitted], adjustments)[0]!
+    }
     if (!MODEL_PARAM_NODE_TYPES.has(type)) return node
 
     const data = node.data
@@ -262,6 +266,38 @@ function normalizeMotionTransferNode<T extends NodeLike>(node: T, adjustments: N
   const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
   for (const adj of sized.adjustments) adjustments.push({ ...adj, nodeId, provider })
   return { ...node, data: { ...d, resolution: sized.resolution } }
+}
+
+/**
+ * A Generate Video node's HDR setting (`dynamicRange`, catalog `hdr`, Kling
+ * 4.0), held to its model by `normalizeModelInput`: removed on a model without
+ * the setting, an unknown value read as SDR, and HDR at a size it does not
+ * render at (720p, or none stored: the 720p it renders) moves the size to 1080p
+ * — what the editor shows when HDR is turned on. Only those two keys are
+ * rewritten, and only on a node that stores a `dynamicRange`.
+ */
+function normalizeVideoHdrNode<T extends NodeLike>(node: T, adjustments: NodeParamAdjustment[]): T {
+  const data = node.data
+  if (!data || typeof data !== "object" || Array.isArray(data)) return node
+  const d = data as Record<string, unknown>
+  if (d.dynamicRange === undefined) return node
+  const provider = applyDefaultVideoSelection({ provider: namedModel(d.provider) }).provider
+  const fitted = normalizeModelInput(provider, {
+    resolution: typeof d.resolution === "string" ? d.resolution : undefined,
+    dynamicRange: String(d.dynamicRange),
+  })
+  if (fitted.adjustments.length === 0) return node
+  const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
+  for (const adj of fitted.adjustments) adjustments.push({ ...adj, nodeId, provider })
+  const { dynamicRange: _old, ...rest } = d
+  return {
+    ...node,
+    data: {
+      ...rest,
+      ...(fitted.dynamicRange !== undefined ? { dynamicRange: fitted.dynamicRange } : {}),
+      ...(fitted.resolution !== undefined ? { resolution: fitted.resolution } : {}),
+    },
+  }
 }
 
 /** A video run's mode: the twin of an aliased model it sends to (`resolveVideoProviderForMode`). */

@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-11-22T18:00:57.051Z
-generated_from: 249066c36b
+generated_at: 2026-11-25T11:06:18.633Z
+generated_from: 813b57b11a
 ---
 
 # Generate Video
@@ -77,6 +77,7 @@ generated_from: 249066c36b
 - `pausedAtTime?: number`
 - `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "4:5" | "5:4" | "2:3" | "3:2" | "21:9" | "9:21" | "adaptive" | "Auto" | "auto"`
 - `keepOriginalSound?: boolean`
+- `dynamicRange?: "sdr" | "hdr"`
 - `referenceImageOrder?: readonly string[]`
 
 **Default data:**
@@ -132,6 +133,7 @@ The per-family doctrine below (Kling, MiniMax, VEO, Gemini Omni, Grok, Wan, Happ
 - `reference_audio_urls`
 - `character_references`
 - `keep_original_sound`
+- `dynamic_range`
 - `audio_soundtrack`
 - `user_request`
 - `flow_id`

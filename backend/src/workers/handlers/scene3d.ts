@@ -202,6 +202,9 @@ export const handleGenerate3dScene: HandlerFn = async function handleGenerate3dS
       inputTokens: authored.inputTokens,
       outputTokens: authored.outputTokens,
       revisions: authored.revisions,
+      // What the plan check still found when the revisions ran out — the
+      // delivery contract's advisory slot (`scene3d-delivery-notes.ts`).
+      ...(authored.warnings?.length ? { validation: { warnings: authored.warnings } } : {}),
       ...(payload.analysisJobId ? { analysisJobId: payload.analysisJobId } : {}),
       ...(analysisCredits != null ? { analysisCredits } : {}),
     })

@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   mockRunLtxExtend: vi.fn(),
   mockRunLtxRetake: vi.fn(),
   mockFinalizeJobWithMedia: vi.fn().mockResolvedValue({ ok: true }),
-  mockUploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4"),
+  mockUploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" }),
   mockGenerateAndUploadThumbnail: vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png"),
   mockSetJobProgress: vi.fn(async () => {}),
   mockEq: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -87,7 +87,7 @@ beforeEach(() => {
   mocks.mockRunLtxImageToVideo.mockResolvedValue(LTX_RESULT)
   mocks.mockRunLtxExtend.mockResolvedValue(LTX_RESULT)
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
 })
 

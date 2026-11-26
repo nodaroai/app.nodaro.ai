@@ -17,8 +17,8 @@ const mocks = vi.hoisted(() => {
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
-  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
+  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1-merged.mp4" })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
 
   const mockSetJobProgress = vi.fn(async () => {})
@@ -52,9 +52,11 @@ vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: mocks.mockFrom },
 }))
 
+const storageExtra = vi.hoisted(() => ({ uploadFileToR2: vi.fn(async (_path: string, id: string) => `https://r2.example.com/videos/${id}.mp4`) }))
 vi.mock("@/lib/storage.js", () => ({
   uploadToR2: mocks.mockUploadToR2,
   uploadBufferToR2: vi.fn().mockResolvedValue("https://r2.example.com/buffer.mp4"),
+  uploadFileToR2: storageExtra.uploadFileToR2,
 }))
 
 vi.mock("@/providers/index.js", () => ({
@@ -67,7 +69,7 @@ vi.mock("@/providers/index.js", () => ({
 }))
 
 vi.mock("@/providers/video/apply-smart-loop-cut.js", () => ({
-  applySmartLoopCutToR2Url: mocks.mockApplySmartLoopCut,
+  applySmartLoopCutLocal: mocks.mockApplySmartLoopCut,
 }))
 
 vi.mock("@/providers/video/merge-video-audio.js", () => ({
@@ -142,7 +144,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/videos/raw.mp4")
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   mocks.mockMarkJobCompleted.mockResolvedValue(true)
@@ -156,7 +158,7 @@ describe("image-to-video handler — smart-loop-cut", () => {
   const handler = videoAIHandlers["image-to-video"]
 
   it("applies smart-loop-cut when loopTrim.enabled", async () => {
-    mocks.mockApplySmartLoopCut.mockResolvedValueOnce("https://r2.example.com/trimmed.mp4")
+    mocks.mockApplySmartLoopCut.mockResolvedValueOnce({ path: "/tmp/slc-1/trimmed.mp4", dir: "/tmp/slc-1" })
 
     const job = makeJob("image-to-video", {
       imageUrl: "https://x.png",
@@ -170,20 +172,17 @@ describe("image-to-video handler — smart-loop-cut", () => {
     expect(mocks.mockApplySmartLoopCut).toHaveBeenCalledTimes(1)
     expect(mocks.mockApplySmartLoopCut).toHaveBeenCalledWith(
       "https://r2.example.com/raw.mp4",
-      "job-1",
-      "user-1",
       expect.objectContaining({
         lookbackFrames: 16,
         quality: "precise",
       }),
     )
-    // The trimmed URL should be the one uploaded, not the raw
-    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
-      "https://r2.example.com/trimmed.mp4",
-      "job-1",
-      "user-1",
-      false,
-    )
+    // The trimmed take is stored straight from local disk (decided 2026-11-22),
+    // and its folder is removed; no intermediate copy of it is stored.
+    expect(storageExtra.uploadFileToR2).not.toHaveBeenCalled()
+    expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith("/tmp/slc-1/trimmed.mp4", "job-1", "user-1", false)
+    expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/slc-1")
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
     const arg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
     expect(arg.extraNonProviderCredits).toBe(30)
@@ -270,8 +269,22 @@ describe("image-to-video handler — smart-loop-cut", () => {
     expect(arg.loopTrimAddonRefundCredits).toBe(0)
   })
 
+  it("a watermarked run: the trimmed take never reaches storage unwatermarked, and its folder goes even when the store fails", async () => {
+    mocks.mockApplySmartLoopCut.mockResolvedValueOnce({ path: "/tmp/slc-2/trimmed.mp4", dir: "/tmp/slc-2" })
+    mocks.mockWatermarkLocalVideoAndUpload.mockRejectedValueOnce(new Error("R2 down"))
+    const job = makeJob("image-to-video", {
+      imageUrl: "https://x.png", provider: "veo3.1", duration: 8,
+      loopTrim: { enabled: true, framesToTest: 16, quality: "precise" },
+    })
+    await expect(handler(job as never, makeCtx({ shouldWatermark: true }))).rejects.toThrow(/R2 down/)
+    // The only store attempted is the watermarked one, from local disk.
+    expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith("/tmp/slc-2/trimmed.mp4", "job-1", "user-1", true)
+    expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+    expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/slc-2")
+  })
+
   it("forwards outputSilent=true when sound=false", async () => {
-    mocks.mockApplySmartLoopCut.mockResolvedValueOnce("https://r2.example.com/trimmed.mp4")
+    mocks.mockApplySmartLoopCut.mockResolvedValueOnce({ path: "/tmp/slc-1/trimmed.mp4", dir: "/tmp/slc-1" })
 
     // Use a non-VEO provider so the post-process audio-strip path doesn't
     // run; only smart-loop-cut should care about outputSilent here.
@@ -286,8 +299,6 @@ describe("image-to-video handler — smart-loop-cut", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockApplySmartLoopCut).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
       expect.any(String),
       expect.objectContaining({ outputSilent: true }),
     )

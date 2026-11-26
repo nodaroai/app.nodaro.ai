@@ -7,11 +7,32 @@
  */
 import type { PluginAlternateRouteRequest } from "./private-plugins/types.js"
 
-/** The job types an alternate route may run: the two video generation lanes that reach the seam. */
-export type AlternateRouteJobType = "image-to-video" | "text-to-video"
+/**
+ * The job types an alternate route may run on: every platform lane that sends
+ * a video model to the provider seam. The first two are the only ones an
+ * older host (and the legacy consult) ever names.
+ */
+export const ALTERNATE_ROUTE_JOB_TYPES = [
+  "image-to-video",
+  "text-to-video",
+  "extend-video",
+  "lip-sync",
+  "voiced-video",
+  "generate-character-motion",
+  "generate-location-motion",
+  "generate-object-motion",
+  "generate-creature-motion",
+  "video-upscale",
+] as const
+
+export type AlternateRouteJobType = (typeof ALTERNATE_ROUTE_JOB_TYPES)[number]
 
 /** `jobs.provider_kind` of a job an alternate route holds. Never `kie-*`: such a kind reads as "ran on the default upstream". */
 export const ALTERNATE_ROUTE_PROVIDER_KIND = "alternate-route"
+
+/** Why a draft the alternate route made is not finalized on the default upstream (its reference is the route's own). */
+export const ALTERNATE_ROUTE_DRAFT_MESSAGE =
+  "This draft was made on another route, so it can't be finalized here. Make a new draft."
 
 /** `jobs.provider_task_id` prefix of an alternate route's task reference. */
 export const ALTERNATE_ROUTE_REF_PREFIX = "alt:"

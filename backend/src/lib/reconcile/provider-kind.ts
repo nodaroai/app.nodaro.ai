@@ -4,7 +4,7 @@
  * router) to the corresponding `ProviderKind` so `makeOnTaskCreated`
  * persists the right kind on the job row.
  */
-import { isVeoProvider } from "@nodaro/shared/models"
+import { isKling4Provider, isVeoProvider, normalizeKling4Resolution, videoRunsHdr } from "@nodaro/shared/models"
 import { REPLICATE_IMAGE_EDIT_MODEL_IDS, REPLICATE_IMAGE_MODEL_IDS } from "../../providers/replicate/image.js"
 import type { ProviderKind } from "./types.js"
 
@@ -46,7 +46,17 @@ const VIDEO_REPLICATE_MODELS: ReadonlySet<string> = new Set([
   "ltx-2.3-fast",
 ])
 
-export function providerKindForVideoModel(model: string): ProviderKind {
+/**
+ * `run`: the run's resolution and dynamic range, where the kind depends on
+ * them — a Kling 4.0 run at 4K or in HDR renders far slower (polled up to ~45
+ * min, `kling4PollAttempts`), so it is `kie-long-video`, whose threshold is past
+ * that; at 720p / 1080p SDR it stays `kie-standard`.
+ */
+export function providerKindForVideoModel(model: string, run?: { resolution?: unknown; dynamicRange?: unknown }): ProviderKind {
+  if (isKling4Provider(model) && run) {
+    const res = typeof run.resolution === "string" ? run.resolution : undefined
+    if (normalizeKling4Resolution(res) === "4k" || videoRunsHdr(model, run.dynamicRange)) return "kie-long-video"
+  }
   if (isVeoProvider(model)) return "kie-veo"
   if (model === "kling-3.0") return "kie-kling3"
   if (model === "runway-kie") return "kie-runway"

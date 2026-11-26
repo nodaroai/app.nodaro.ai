@@ -277,7 +277,8 @@ describe("bumpAttemptsOrExhaust", () => {
       "status",
       ["pending", "queued", "processing"],
     )
-    expect(mocks.jobsUpdateSelectMock).toHaveBeenCalledWith("id")
+    // The failure CAS also returns the row's server-only store record (695), for its discard.
+    expect(mocks.jobsUpdateSelectMock).toHaveBeenCalledWith("id, user_id, server_output")
 
     // Refund + anomaly
     expect(mocks.refundMock).toHaveBeenCalledWith("j-1")

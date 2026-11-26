@@ -1524,6 +1524,24 @@ for (const entry of trash) {
 A "job" is a single AI generation unit (one image, one video render, one TTS
 call). Workflows produce one job per AI node.
 
+A completed **video** job's `output_data` is typed `VideoJobOutput`:
+`videoUrl` is always a file a browser can play. When the provider's file is
+one the browser-safe step would change (not H.264 `yuv420p`, e.g. HEVC 10-bit
+or HDR), that file is kept untouched as `originalVideoUrl` and `videoUrl` is
+its 8-bit H.264 preview (an HDR original's tone-mapped to SDR). Download
+`originalVideoUrl` when it is present. `videoPreviewUnavailable: true` means the
+preview could not be made, so `videoUrl` is the original itself. A watermarked
+run keeps no original.
+[Design note](./design/video-original-and-preview.md).
+
+```ts
+import type { VideoJobOutput } from "@nodaro/sdk/jobs"
+
+const { data: job } = await client.jobs.get(jobId)
+const out = job.output_data as VideoJobOutput
+const downloadUrl = out.originalVideoUrl ?? out.videoUrl
+```
+
 #### `get(id)`
 
 ```ts
@@ -2942,8 +2960,11 @@ if (previz === true) {
 On a previz run each role's `name` is the locator of its model in the clip
 (its colour, or its shape and position: `"the pink model"`); a role with
 pictures and no name is refused. `subject` (`VideoRemakeRolePrevizSettings`,
-on every role kind, 1–200 characters) says what the role is in the result,
-which its script calls it by; any other run ignores it. `previz`
+on every role kind, 1–200 characters) says what its model becomes in the
+result, which its script calls it by: the finished thing, not the previz
+model, and without the model's colour unless the real thing has it
+(`"a jockey on a bay racehorse"`, not `"the driver of the red car"`); any
+other run ignores it. `previz`
 (`VideoRemakePrevizOptions`): `lighting: true` also follows the clip's
 lighting direction and lighting changes; `sound` is `"clip"` (keep the clip's
 own sound) or `"generated"` (the engine makes environmental and action sounds,
@@ -3817,8 +3838,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `imageUrl`, up to 8 in-between frames as `referenceImageUrls` (in order) and
 > `endFrameUrl`; the frames in all are capped by `duration` (3 s → 4 … 9 s or
 > longer → 10), more is a `400`. Both: `duration` 3–30 (default 5);
-> `resolution` `720p` / `1080p` (anything else → 720p); `aspectRatio` `auto` /
-> `16:9` / `9:16` / `1:1` / `21:9`; audio always on; no seed. See
+> `resolution` `720p` / `1080p` / `4k` (anything else → 720p); `aspectRatio`
+> `auto` / `16:9` / `9:16` / `1:1` / `21:9` / `4:3`; audio always on; no seed.
+> `dynamicRange: "hdr"` renders HDR (HEVC 10-bit HLG) at `1080p` or `4k`,
+> priced as an add-on on the output seconds; at `720p` (or with no
+> `resolution`) it is a `400` before anything is reserved. The downloaded clip
+> keeps HDR; editing nodes produce SDR. See
 > [Kling 4.0](nodes/ai-video/generate-video.md#kling-40-references-characters-and-keyframes).
 > **Kling 4.0 Flash** (`kling-4-flash`) takes an `imageUrl` alone as the exact
 > opening frame; anything else (a prompt alone, `referenceImageUrls` ≤ 10,

@@ -72,6 +72,7 @@ import {
   addCaptionsNemotronBaseCredits,
   addCaptionsNemotronQuoteCreditId,
   videoGenerationCreditId,
+  videoHdrAddonCreditId,
   parseUnitQuoteCreditId,
   VIDEO_OVERLAY_PRICING,
   videoOverlayVideoUnits,
@@ -195,11 +196,16 @@ import { applyServiceMarkup } from "./service-margin.js"
 import { MEASURED_VIDEO_UTILITY_JOBS, videoUtilityEstimateBody, videoUtilityUnits } from "../../lib/video-utility-credits.js"
 import { priceMarginKey, speechUnitRowServed } from "../../lib/speech-credits.js"
 import { wholeRequestQuoteOf } from "./whole-request-quotes.js"
+import { modelOfPriceId, routedListedPrice, type RoutedListing } from "./video-route-listing.js"
+import { anyModelRouted } from "../../lib/video-route-policy.js"
+import { routeListingSource } from "../../lib/alternate-route-prices.js"
+import { HOST_ROUTES_PER_MODEL } from "../../lib/video-route-host.js"
 import { refVideoClipSources, seedanceDraftFinalizeEstimateCredits, seedanceFinalizeDraftQuoteOf, seedanceRefVideoEstimateCredits, unpricedWiredClip } from "./seedance-ref-video-estimate.js"
 import { uploadClipSec, withUploadClipLengths } from "./upload-clip-lengths.js"
 import { listingCeiling, listingFieldDomains, listingOpenValueNodeIds } from "./listing-range.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { quoteBaseCredits } from "../../lib/credit-base-cost.js"
+import { uiResolutionFill } from "@nodaro/shared/video"
 import { UNIT_QUOTE_MAX_UNITS } from "../../lib/unit-quote-rates.js"
 import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
@@ -1747,7 +1753,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "vidu-q4:13s:4k": 2030, "vidu-q4:14s:4k": 2190, "vidu-q4:15s:4k": 2340, "vidu-q4:16s:4k": 2500,
   // ── Kling 4.0 (KIE kling-4.0/reference-to-video + kling-4.0/keyframe-to-video) ──
   //    Two ids, one per endpoint, ONE ROW PER SECOND across 3-30s at 720p /
-  //    1080p: credits = KIE cr/s × seconds × 2.5, rounded UP to the next 10
+  //    1080p (4K below): credits = KIE cr/s × seconds × 2.5, rounded UP to the next 10
   //    (the wan-3 / gemini-omni rule). KIE cr/s: 28.5 @720p, 42.5 @1080p on
   //    both endpoints. `kling-4` adds `-ref` rows for a run with a reference
   //    VIDEO, from KIE's with-video rate (17 / 25.5 cr/s): they price one
@@ -1793,6 +1799,45 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = composeRecord("STATIC
   "kling-4-keyframes:18s:1080p": 1920, "kling-4-keyframes:19s:1080p": 2020, "kling-4-keyframes:20s:1080p": 2130, "kling-4-keyframes:21s:1080p": 2240, "kling-4-keyframes:22s:1080p": 2340,
   "kling-4-keyframes:23s:1080p": 2450, "kling-4-keyframes:24s:1080p": 2550, "kling-4-keyframes:25s:1080p": 2660, "kling-4-keyframes:26s:1080p": 2770, "kling-4-keyframes:27s:1080p": 2870,
   "kling-4-keyframes:28s:1080p": 2980, "kling-4-keyframes:29s:1080p": 3090, "kling-4-keyframes:30s:1080p": 3190,
+  // ── Kling 4.0 at 4K, and the HDR add-on (decided 2026-11-22) ──
+  //    4K on both ids by the same ladder rule (KIE 99 cr/s), and `kling-4`'s
+  //    `-ref` rate at 4K (59 cr/s, priced on output + max(output, input
+  //    seconds) like the other `-ref` rows). HDR (1080p and 4K only) is its
+  //    OWN add-on line, `kling-4-hdr:<N>s:<res>`, on the OUTPUT seconds only
+  //    and shared by both ids (KIE 8.5 cr/s at 1080p, 14 at 4K): it never rides
+  //    the `-ref` ladder, and a reference-video settle keeps it
+  //    (`videoHdrAddonCreditId`). Machine-generated with its seed migration
+  //    (`*_kling_4_4k_hdr_pricing.sql`) — never edit one value by hand.
+  "kling-4:3s:4k": 750, "kling-4:4s:4k": 990, "kling-4:5s:4k": 1240, "kling-4:6s:4k": 1490, "kling-4:7s:4k": 1740,
+  "kling-4:8s:4k": 1980, "kling-4:9s:4k": 2230, "kling-4:10s:4k": 2480, "kling-4:11s:4k": 2730, "kling-4:12s:4k": 2970,
+  "kling-4:13s:4k": 3220, "kling-4:14s:4k": 3470, "kling-4:15s:4k": 3720, "kling-4:16s:4k": 3960, "kling-4:17s:4k": 4210,
+  "kling-4:18s:4k": 4460, "kling-4:19s:4k": 4710, "kling-4:20s:4k": 4950, "kling-4:21s:4k": 5200, "kling-4:22s:4k": 5450,
+  "kling-4:23s:4k": 5700, "kling-4:24s:4k": 5940, "kling-4:25s:4k": 6190, "kling-4:26s:4k": 6440, "kling-4:27s:4k": 6690,
+  "kling-4:28s:4k": 6930, "kling-4:29s:4k": 7180, "kling-4:30s:4k": 7430,
+  "kling-4:3s:4k-ref": 450, "kling-4:4s:4k-ref": 590, "kling-4:5s:4k-ref": 740, "kling-4:6s:4k-ref": 890, "kling-4:7s:4k-ref": 1040,
+  "kling-4:8s:4k-ref": 1180, "kling-4:9s:4k-ref": 1330, "kling-4:10s:4k-ref": 1480, "kling-4:11s:4k-ref": 1630, "kling-4:12s:4k-ref": 1770,
+  "kling-4:13s:4k-ref": 1920, "kling-4:14s:4k-ref": 2070, "kling-4:15s:4k-ref": 2220, "kling-4:16s:4k-ref": 2360, "kling-4:17s:4k-ref": 2510,
+  "kling-4:18s:4k-ref": 2660, "kling-4:19s:4k-ref": 2810, "kling-4:20s:4k-ref": 2950, "kling-4:21s:4k-ref": 3100, "kling-4:22s:4k-ref": 3250,
+  "kling-4:23s:4k-ref": 3400, "kling-4:24s:4k-ref": 3540, "kling-4:25s:4k-ref": 3690, "kling-4:26s:4k-ref": 3840, "kling-4:27s:4k-ref": 3990,
+  "kling-4:28s:4k-ref": 4130, "kling-4:29s:4k-ref": 4280, "kling-4:30s:4k-ref": 4430,
+  "kling-4-keyframes:3s:4k": 750, "kling-4-keyframes:4s:4k": 990, "kling-4-keyframes:5s:4k": 1240, "kling-4-keyframes:6s:4k": 1490, "kling-4-keyframes:7s:4k": 1740,
+  "kling-4-keyframes:8s:4k": 1980, "kling-4-keyframes:9s:4k": 2230, "kling-4-keyframes:10s:4k": 2480, "kling-4-keyframes:11s:4k": 2730, "kling-4-keyframes:12s:4k": 2970,
+  "kling-4-keyframes:13s:4k": 3220, "kling-4-keyframes:14s:4k": 3470, "kling-4-keyframes:15s:4k": 3720, "kling-4-keyframes:16s:4k": 3960, "kling-4-keyframes:17s:4k": 4210,
+  "kling-4-keyframes:18s:4k": 4460, "kling-4-keyframes:19s:4k": 4710, "kling-4-keyframes:20s:4k": 4950, "kling-4-keyframes:21s:4k": 5200, "kling-4-keyframes:22s:4k": 5450,
+  "kling-4-keyframes:23s:4k": 5700, "kling-4-keyframes:24s:4k": 5940, "kling-4-keyframes:25s:4k": 6190, "kling-4-keyframes:26s:4k": 6440, "kling-4-keyframes:27s:4k": 6690,
+  "kling-4-keyframes:28s:4k": 6930, "kling-4-keyframes:29s:4k": 7180, "kling-4-keyframes:30s:4k": 7430,
+  "kling-4-hdr:3s:1080p": 70, "kling-4-hdr:4s:1080p": 90, "kling-4-hdr:5s:1080p": 110, "kling-4-hdr:6s:1080p": 130, "kling-4-hdr:7s:1080p": 150,
+  "kling-4-hdr:8s:1080p": 170, "kling-4-hdr:9s:1080p": 200, "kling-4-hdr:10s:1080p": 220, "kling-4-hdr:11s:1080p": 240, "kling-4-hdr:12s:1080p": 260,
+  "kling-4-hdr:13s:1080p": 280, "kling-4-hdr:14s:1080p": 300, "kling-4-hdr:15s:1080p": 320, "kling-4-hdr:16s:1080p": 340, "kling-4-hdr:17s:1080p": 370,
+  "kling-4-hdr:18s:1080p": 390, "kling-4-hdr:19s:1080p": 410, "kling-4-hdr:20s:1080p": 430, "kling-4-hdr:21s:1080p": 450, "kling-4-hdr:22s:1080p": 470,
+  "kling-4-hdr:23s:1080p": 490, "kling-4-hdr:24s:1080p": 510, "kling-4-hdr:25s:1080p": 540, "kling-4-hdr:26s:1080p": 560, "kling-4-hdr:27s:1080p": 580,
+  "kling-4-hdr:28s:1080p": 600, "kling-4-hdr:29s:1080p": 620, "kling-4-hdr:30s:1080p": 640,
+  "kling-4-hdr:3s:4k": 110, "kling-4-hdr:4s:4k": 140, "kling-4-hdr:5s:4k": 180, "kling-4-hdr:6s:4k": 210, "kling-4-hdr:7s:4k": 250,
+  "kling-4-hdr:8s:4k": 280, "kling-4-hdr:9s:4k": 320, "kling-4-hdr:10s:4k": 350, "kling-4-hdr:11s:4k": 390, "kling-4-hdr:12s:4k": 420,
+  "kling-4-hdr:13s:4k": 460, "kling-4-hdr:14s:4k": 490, "kling-4-hdr:15s:4k": 530, "kling-4-hdr:16s:4k": 560, "kling-4-hdr:17s:4k": 600,
+  "kling-4-hdr:18s:4k": 630, "kling-4-hdr:19s:4k": 670, "kling-4-hdr:20s:4k": 700, "kling-4-hdr:21s:4k": 740, "kling-4-hdr:22s:4k": 770,
+  "kling-4-hdr:23s:4k": 810, "kling-4-hdr:24s:4k": 840, "kling-4-hdr:25s:4k": 880, "kling-4-hdr:26s:4k": 910, "kling-4-hdr:27s:4k": 950,
+  "kling-4-hdr:28s:4k": 980, "kling-4-hdr:29s:4k": 1020, "kling-4-hdr:30s:4k": 1050,
   // ── Kling 4.0 Flash (KIE kling-4.0/flash-reference-to-video + flash-keyframe-to-video) ──
   //    ONE id over both endpoints (picked by what is wired), ONE ROW PER SECOND
   //    across 3-20s at 720p (its only tier): credits = KIE cr/s × seconds × 2.5,
@@ -3880,6 +3925,9 @@ export interface ChargedPriceTable {
    *  finalizes (decided 2026-11-12; `withExistingSeedanceDrafts`): each one's
    *  exact finalize price by its provider task id, and the task a node that
    *  does not run hands on from an earlier run's state. */
+  /** True for an id whose model the admin routed but whose price the route does not list: refused
+   *  (`PriceNotConfiguredError`) wherever it is estimated, never a node-type row or 0. */
+  refuses?(identifier: string): boolean
   readonly seedanceDrafts?: {
     readonly stateTaskIdOf?: (nodeId: string) => string | undefined
     readonly credits: ReadonlyMap<string, number>
@@ -3959,7 +4007,20 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
 
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings, editPlanPerMinute] = await Promise.all([modelPricingRows(), getAppSettings(), editPlanPerMinuteActive()])
-  return chargedPriceTableFrom(rows, settings, editPlanPerMinute)
+  return chargedPriceTableFrom(rows, settings, editPlanPerMinute, routedListingOf(settings))
+}
+
+/**
+ * What the price table needs to list a routed model's prices
+ * (video-route-pricing.ts): undefined — no routed listing at all — unless the
+ * admin routed some model (the shipped state lists every price as before).
+ */
+function routedListingOf(settings: Awaited<ReturnType<typeof getAppSettings>>): RoutedListing | undefined {
+  // Only a build that also admits, runs and settles a routed job lists its price.
+  if (!HOST_ROUTES_PER_MODEL || !anyModelRouted(settings.video_route_policy)) return undefined
+  // One source per environment: this process's route, or the copy the API published (lib/alternate-route-prices.ts).
+  const { view, pricesUsd } = routeListingSource(settings.video_route_listing, modelOfPriceId)
+  return { policy: settings.video_route_policy, view, pricesUsd, factors: settings.video_route_price_factors }
 }
 
 /**
@@ -3973,8 +4034,14 @@ export function chargedPriceTableFrom(
   rows: ReadonlyMap<string, number>,
   settings: Parameters<typeof applyServiceMarkup>[1],
   editPlanPerMinute?: boolean,
+  /** A routed model's listed prices (video-route-pricing.ts); undefined = none routed. */
+  routed?: RoutedListing,
 ): ChargedPriceTable {
   return {
+    refuses: (asked) => {
+      const listed = routedListedPrice(routed, pricedAsId(asked))
+      return listed.routed && listed.base === undefined
+    },
     editPlanPerMinute,
     // A speech `:per-100-chars` row is served only while length pricing is on
     // (lib/speech-credits.ts): its absence is how a client learns the flag.
@@ -3991,6 +4058,10 @@ export function chargedPriceTableFrom(
         return one === undefined ? undefined : quoteBaseCredits(one, metered.calls)
       }
       if (!speechUnitRowServed(identifier)) return undefined
+      // A model the admin put on the alternate route lists the ROUTE's price
+      // (never the default one; an id the route does not list is not listed).
+      const listed = routedListedPrice(routed, identifier)
+      if (listed.routed) return listed.base
       const rowOf = (id: string) => rows.get(id) ?? STATIC_CREDIT_COSTS[id]
       return rateCompositeBase(identifier, rowOf) ?? rowOf(identifier)
     },
@@ -6558,7 +6629,11 @@ function estimateNodeCredits(
   // A Seedance run with reference video(s) is billed input + output seconds:
   // priced as the reservation prices it, from the clips' probed lengths (the
   // worst case for a clip the estimate cannot know).
-  const refVideo = seedanceRefVideoEstimateCredits(node, nodes, edges, prices)
+  // A Kling 4.0 HDR run's add-on (its own row on the output seconds), carried
+  // on whichever price follows: the reference-video quote or the clip's row,
+  // each marked up once with it, as the run holds it.
+  const hdrBase = videoHdrEstimateBaseCredits(priced, prices)
+  const refVideo = seedanceRefVideoEstimateCredits(node, nodes, edges, prices, hdrBase)
   if (refVideo !== undefined) return refVideo
   // A Seedance 2.5 HD finalize of a draft this run makes: priced at the length
   // the draft's run reserves for (decided 2026-11-12) — the shared rule the
@@ -6620,12 +6695,32 @@ function estimateNodeCredits(
   // An LLM Chat node that says how large its call is (`data.expectedUsage`, a plugin's quote graph): that call on
   // the model's primary lane, never below the feature's typical one (each token count floored at it, so the field
   // can only raise a quote). Without it (or invalid): as before.
+  if (hdrBase > 0) {
+    const clipBase = prices.base(modelId)
+    if (clipBase !== undefined) return prices.charge(modelId, quoteBaseCredits(clipBase + hdrBase, unitsOf(node, priced)))
+  }
   const sized = node.type === "llm-chat" ? expectedLlmUsageOf(priced.data) : null
   if (sized) {
     const credits = meteredUsageCredits(prices, modelId, sized, unitsOf(node, priced))
     if (credits !== undefined) return credits
   }
   return (meteredChargedOrThrow(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
+}
+
+/**
+ * The HDR add-on's BASE credits for a Generate Video node an estimate prices
+ * (Kling 4.0 with HDR on, decided 2026-11-22): its row
+ * (`videoHdrAddonCreditId`) at the node's length and the size it runs at (its
+ * resolution, else the model's UI fill). 0 for every other node, an SDR one,
+ * or HDR at a size the run refuses.
+ */
+function videoHdrEstimateBaseCredits(node: EstimateNode, prices: ChargedPriceTable): number {
+  if (node.type !== "generate-video") return 0
+  const data = node.data ?? {}
+  const { provider, duration } = applyDefaultVideoSelection({ provider: data.provider as string | undefined, duration: data.duration as number | string | undefined })
+  const resolution = (data.resolution as string | undefined) ?? uiResolutionFill(provider)
+  const id = videoHdrAddonCreditId(provider, duration, resolution, data.dynamicRange)
+  return id === undefined ? 0 : prices.base(id) ?? 0
 }
 
 /** The largest call an `llm-chat` node's `expectedUsage` may name (tokens): past it, the node is priced as before. */
@@ -6675,6 +6770,8 @@ function meteredUsageCredits(
 function meteredChargedOrThrow(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
   const credits = chargedCredits(prices, identifier, units)
   if (credits !== undefined) return credits
+  // A routed model's id the route does not list: refused, as its admission would be.
+  if (prices.refuses?.(identifier)) throw new PriceNotConfiguredError(identifier)
   const metered = meteredLlmIdOf(identifier)
   if (!metered) return undefined
   meteredLlmEstimateBase(metered) // throws LlmUnpricedModelError for the unpriced lane

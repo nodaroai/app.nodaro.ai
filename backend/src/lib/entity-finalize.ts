@@ -53,6 +53,7 @@ import {
   uploadVideoMaybeWatermark,
 } from "../workers/shared.js"
 import { gptImage26AutoSettledBase } from "./gpt-image-2-6-settle.js"
+import { storedVideoFields } from "./video-result-store.js"
 import {
   attachAssetToCharacter,
   resolveAssetColumn,
@@ -221,19 +222,21 @@ export async function finalizeEntityJob(input: EntityFinalizeInput): Promise<str
   const job = ENTITY_MEDIA_JOB_SPECS.get(jobType)
   if (!job) throw new Error(`[entity-finalize] not an entity media job type: ${jobType}`)
 
-  const r2Url = job.media !== "image"
-    ? await uploadVideoMaybeWatermark(result.url, jobId, userId, shouldWatermark)
-    : input.storeAsItsBytes === true
-      ? (await storeFormattedImages({ sourceUrls: [result.url], jobId, userId, watermark: shouldWatermark })).urls[0]!
-      : await uploadImageMaybeWatermark(result.url, jobId, userId, shouldWatermark)
+  // A video's every stored field (the preview and the original) is written below.
+  const stored = job.media === "image"
+    ? {
+        imageUrl: input.storeAsItsBytes === true
+          ? (await storeFormattedImages({ sourceUrls: [result.url], jobId, userId, watermark: shouldWatermark })).urls[0]!
+          : await uploadImageMaybeWatermark(result.url, jobId, userId, shouldWatermark),
+      }
+    : storedVideoFields(await uploadVideoMaybeWatermark(result.url, jobId, userId, shouldWatermark))
+  const r2Url = "imageUrl" in stored ? stored.imageUrl : stored.videoUrl
 
   await input.afterUpload?.(r2Url)
 
   if (!await shouldSaveJobResult(jobId)) return null
 
-  const outputData: Record<string, unknown> = job.media === "image"
-    ? { imageUrl: r2Url }
-    : { videoUrl: r2Url }
+  const outputData: Record<string, unknown> = { ...stored }
   if (job.includeAssetType && spec.assetType) outputData.assetType = spec.assetType
 
   const ok = await markJobCompleted(jobId, {

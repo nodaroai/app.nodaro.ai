@@ -40,6 +40,9 @@ import { audioIsolationQuote, lipSyncQuoteIsEstimate, motionTransferPriceIds, mo
 import { NODARO_VIDEO_UPSCALE_MAX_SEC } from "@nodaro/shared/models"
 import { tx } from "@/lib/i18n"
 import { nodeStartFrameOnlyProblem, startFrameOnlyText, wiredVideoFrames } from "@/lib/video-start-frame-only"
+import { hdrAddonCreditIdOf, hdrResolutionText } from "@/lib/video-hdr"
+import { applyDefaultVideoSelection, videoHdrResolutionProblem } from "@nodaro/shared/models"
+import { uiResolutionFill } from "@nodaro/shared/video"
 // @registry-lookup prices each node of a run by its own type (NODE_CREDIT_COSTS / estimateNodeCredits)
 
 /** The units a run is priced at, exactly: the factors' whole units unless they carry fractional ones. */
@@ -120,7 +123,8 @@ export function estimateRunCreditLines(
     // Imagine Video 1.5 takes a start frame only at 1080p): no price either —
     // the line carries no credits, so no total counts a run nobody is charged
     // for — and the refusal's own sentence.
-    const startFrameOnly = startFrameOnlyRefusal(node, edges)
+    // A run the editor's Run refuses before calling the server: a start-frame-only size, or HDR at a size without it.
+    const startFrameOnly = startFrameOnlyRefusal(node, edges) ?? hdrResolutionRefusal(node)
     const unpricedMessage = unpricedId !== undefined ? refusedModelMessage(unpricedId) : startFrameOnly
     // Both factors are shown by the confirm; the units are already in `cost`.
     return {
@@ -132,6 +136,19 @@ export function estimateRunCreditLines(
       ...(unpricedId !== undefined || startFrameOnly !== undefined ? { unpriced: true as const, ...(unpricedMessage ? { unpricedMessage } : {}) } : {}),
     }
   })
+}
+
+/**
+ * The sentence a Generate Video node's run is refused with for HDR at a size
+ * that does not render it (Kling 4.0 at 720p, `videoHdrResolutionProblem`),
+ * judged on its saved settings, else undefined.
+ */
+function hdrResolutionRefusal(node: WorkflowNode): string | undefined {
+  if (node.type !== "generate-video") return undefined
+  const data = (node.data ?? {}) as Record<string, unknown>
+  const provider = applyDefaultVideoSelection({ provider: data.provider as string | undefined }).provider
+  const problem = videoHdrResolutionProblem(provider, { resolution: (data.resolution as string | undefined) ?? uiResolutionFill(provider), dynamicRange: data.dynamicRange })
+  return problem ? hdrResolutionText(provider, problem) : undefined
 }
 
 /**
@@ -245,7 +262,7 @@ export function runModelIds(
         // A Seedance 2.5 HD finalize of a draft this run makes: its row, or the server's quote of it.
         // A Motion Transfer: its rate row, the whole-run quote of it and its floor row — both figures its floor rule compares.
         const motion = v.type === "motion-transfer" ? motionTransferPriceIds(v, allNodes, edges, rerunIds) : []
-        return [id, ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, ...motion, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds), seedanceHdQuoteIdFor(v, allNodes, edges, rerunIds)]
+        return [id, hdrAddonCreditIdOf(v), ...(llm ? [llm.key, llm.tierId] : []), ...(scrape ? [scrape.fixedId, scrape.quoteId] : []), ...probe, ...motion, unitQuoteIdFor(id, units), seedanceRefQuoteKeyFor(v, allNodes, edges, rerunIds), seedanceHdQuoteIdFor(v, allNodes, edges, rerunIds)]
       })
     }),
     ...speechPriceIdsFor(runs, allNodes, edges),
@@ -326,10 +343,13 @@ function oneRunCost(
   const scrape = scrapeAnalysisRunCredits(node, cachedCost)
   if (scrape !== undefined) return scrape
   const modelId = getModelIdentifier(node, edges, allNodes, rerunIds)
+  // Kling 4.0 HDR: its add-on's own row on top of the clip's, as the run holds both.
+  const hdrId = hdrAddonCreditIdOf(node)
+  const hdr = hdrId === undefined ? 0 : (cachedCost(hdrId) ?? NODE_CREDIT_COSTS[hdrId] ?? 0) * upperUnits(units)
   const quoteId = unitQuoteIdFor(modelId, units)
   const whole = quoteId === undefined ? undefined : cachedCost(quoteId)
-  if (whole !== undefined) return whole
-  return oneUnitCost(node, modelId, allNodes, edges, rerunIds, cachedCost) * upperUnits(units)
+  if (whole !== undefined) return whole + hdr
+  return oneUnitCost(node, modelId, allNodes, edges, rerunIds, cachedCost) * upperUnits(units) + hdr
 }
 
 /** The price of one unit of one run of `node` (one provider), priced at `modelId`. */

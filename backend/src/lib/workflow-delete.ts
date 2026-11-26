@@ -32,6 +32,48 @@ function parseDeleteResult(value: unknown): DeleteWorkflowResult | null {
   return { deleted: row.deleted, baseUrls: row.baseUrls as string[] }
 }
 
+/** Whether a delete answer without its stored bytes was already reported (once per process). */
+let storedBytesFieldMissingReported = false
+
+/**
+ * Give back to each owner the bytes its deleted jobs recorded as stored, as
+ * the delete answered them (`storedBytesByOwner`, migration 708). A delete
+ * function that does not answer them yet (that migration not applied) gives
+ * back nothing, said once — never a read of the records here, which the delete
+ * has just destroyed. Never throws.
+ */
+async function giveBackDeletedJobsStoredBytes(answer: unknown, logger?: WorkflowDeleteLogger): Promise<void> {
+  const field = (answer as { storedBytesByOwner?: unknown } | null)?.storedBytesByOwner
+  if (field === undefined) {
+    if (!storedBytesFieldMissingReported) {
+      storedBytesFieldMissingReported = true
+      const message = "the delete answered no stored bytes (migration 708 not applied): nothing given back"
+      if (logger) logger.warn({}, message)
+      else console.warn(`[workflow-delete] ${message}`)
+    }
+    return
+  }
+  if (typeof field !== "object" || field === null || Array.isArray(field)) return
+  for (const [ownerId, value] of Object.entries(field as Record<string, unknown>)) {
+    const bytes = Number(value)
+    if (!Number.isFinite(bytes) || bytes <= 0) continue
+    // The record is gone with the delete: a give-back that does not land is
+    // logged with its owner and bytes so it can be repaired by hand.
+    if (!hasCredits()) continue
+    try {
+      const { error } = await supabase.rpc("increment_storage", { p_user_id: ownerId, p_bytes: -bytes })
+      if (error) throw new Error(error.message)
+    } catch (err) {
+      console.error(`[ALERT] [workflow-delete] giving back stored bytes after a delete failed — owner ${ownerId}, bytes ${bytes}:`, err instanceof Error ? err.message : err)
+    }
+  }
+}
+
+/** For tests: report a missing stored-bytes answer again. */
+export function _resetStoredBytesReportForTests(): void {
+  storedBytesFieldMissingReported = false
+}
+
 /**
  * Atomically delete an owner-scoped workflow while retaining the server-only
  * R2 cleanup manifest that its cascading job delete would otherwise erase.
@@ -109,6 +151,12 @@ async function deleteWithPrivateMedia(args: {
   const result = parseDeleteResult(data)
   if (!result) throw new Error(`Malformed ${args.resourceLabel} delete response`)
   if (!result.deleted) return false
+
+  // What the deleted jobs recorded as stored (a video's kept original), read by
+  // the delete itself under the row lock in its own transaction (decided
+  // 2026-11-25, migration 708): given back to each job's own owner now that the
+  // delete really happened. Never throws.
+  await giveBackDeletedJobsStoredBytes(data, args.logger)
 
   const keys = new Set<string>()
   let skipped = 0

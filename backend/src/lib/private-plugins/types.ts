@@ -1289,10 +1289,11 @@ export interface PluginMediaToolkit {
   /** Mirrors `applyImageWatermark` (`utils/watermark.ts`). */
   applyImageWatermark(buffer: Buffer): Promise<Buffer>
   /**
-   * Mirrors `uploadVideoMaybeWatermark` (`workers/shared.ts:513-541`) — also
+   * Mirrors `uploadVideoMaybeWatermark` (`workers/shared.ts`) — also
    * transcodes to browser-safe when `watermark` is false. Used for the final
    * stitched output only (per-segment uploads go through
-   * `storage.uploadVideoFromUrl`).
+   * `storage.uploadVideoFromUrl`). Returns the browser-safe file's url alone,
+   * so it keeps no original beside it (`storeVideoResult` does).
    */
   uploadVideoMaybeWatermark(
     url: string,
@@ -1300,6 +1301,30 @@ export interface PluginMediaToolkit {
     userId: string | undefined,
     watermark: boolean,
   ): Promise<string>
+  /**
+   * The host's video result funnel (`lib/video-result-store.ts`, decided
+   * 2026-11-22): `uploadVideoMaybeWatermark`, except that when the browser-safe
+   * step would change the file (it is not H.264 yuv420p) and the run is not
+   * watermarked, the file is kept untouched as the original
+   * (`originalVideoUrl`) beside its browser-safe preview (`videoUrl`); a
+   * preview that cannot be made leaves `videoUrl` on the original with
+   * `videoPreviewUnavailable`. The plugin writes EVERY returned field into its
+   * job's `output_data` at the completion write. Optional: an older host has
+   * only `uploadVideoMaybeWatermark`.
+   */
+  storeVideoResult?(
+    url: string,
+    jobId: string,
+    userId: string | undefined,
+    watermark: boolean,
+  ): Promise<PluginStoredVideo>
+}
+
+/** What `media.storeVideoResult` stored: the `output_data` fields of a video result. */
+export interface PluginStoredVideo {
+  videoUrl: string
+  originalVideoUrl?: string
+  videoPreviewUnavailable?: true
 }
 
 // ============================================================================
@@ -4201,6 +4226,20 @@ export interface PluginCapabilities {
    * host, which ignores them and runs the download under its defaults.
    */
   readonly downloadFileBounds?: boolean
+  /**
+   * The host routes video runs per model and per service from its admin
+   * setting (`video_route_policy`), and speaks the second version of
+   * `PluginServices.alternateRoutes`: it fills `PluginAlternateRouteRequest`'s
+   * `service` / `kind` / `draftRouteTaskRef`, calls `accepts` at admission
+   * (before credits are held) with the request as it is known there, holds a
+   * routed run's credits from `quote()` and settles them from the task's
+   * billed cost (`prices()` feeds listings), never falls back to the default
+   * route for a run the setting routed, and reads `capable` / `account` /
+   * `spend`. False
+   * (or absent): an older host, which consults `accepts` only from the
+   * image-to-video and text-to-video lanes, with today's same-price fallback.
+   */
+  readonly alternateRouteV2?: boolean
 }
 
 /**
@@ -6289,8 +6328,34 @@ export interface PluginServices {
  */
 export interface PluginAlternateRouteRequest {
   jobId: string
-  /** One of the two video generation lanes (`AlternateRouteJobType`). */
+  /**
+   * The job type of the row the run is held on (`AlternateRouteJobType`). An
+   * older host sends only the image-to-video and text-to-video lanes; a V2 host
+   * (`tk.capabilities.alternateRouteV2`) every lane that sends a video model
+   * (extend, lip-sync, voiced video, entity motion, the draft finalize's
+   * video upscale). Read unknown values as "not mine".
+   */
   jobType: AlternateRouteJobType
+  /**
+   * ADDITIVE-OPTIONAL. The service the run belongs to, as the admin setting
+   * names it: the parent job's type for a plugin's child job (cast-swap,
+   * generate-video-pro, ugc, …), else the platform lane (the job type).
+   * Absent on an older host.
+   */
+  service?: string
+  /**
+   * ADDITIVE-OPTIONAL. "generate" (absent = generate on an older host) or
+   * "draft-finalize": the 1080p finalize of a draft THIS route made, whose own
+   * task reference is `draftRouteTaskRef`; prompt and media fields are then
+   * the draft's as recorded, for information only.
+   */
+  kind?: "generate" | "draft-finalize"
+  /**
+   * ADDITIVE-OPTIONAL. For `kind: "draft-finalize"`: the route's own task
+   * reference of the draft (what `start` returned for it, without the host's
+   * `alt:` prefix). Never a default-upstream task id.
+   */
+  draftRouteTaskRef?: string
   /** The catalog model id the run was priced on. */
   model: string
   /** The job's parent (read from `jobs.parent_job_id`), or null for a job run on its own. */
@@ -6308,6 +6373,14 @@ export interface PluginAlternateRouteRequest {
   referenceAudioUrls: readonly string[]
   firstFrameUrl?: string
   lastFrameUrl?: string
+  /**
+   * ADDITIVE-OPTIONAL (V2). The MEASURED lengths of `referenceVideoUrls`, in
+   * order, as the platform probed them (NaN-free; a clip it could not read is
+   * left out of the request instead). Set when the platform has them.
+   */
+  referenceVideoDurationsSec?: number[]
+  /** ADDITIVE-OPTIONAL (V2). The output length the run asks for, in seconds (the priced length; Auto = the model's longest). */
+  outputSec?: number
 }
 
 /**
@@ -6321,18 +6394,50 @@ export interface PluginAlternateRouteStartError {
   created: "none" | "unknown"
   message: string
   retryAfterMs?: number
+  /**
+   * ADDITIVE-OPTIONAL (proposed with V2). A machine reason for the refusal.
+   * `"insufficient_balance"`: the route's prepaid account cannot hold the run
+   * (the upstream answered 402); with `created: "none"`. A V2 host raises a
+   * distinct alert for it, so it is never read as a model failure.
+   * "refused": refused before anything existed; "unknown": no answer. A host
+   * reads any other value as "unknown".
+   */
+  code?: "refused" | "insufficient_balance" | "unknown"
 }
 
 export type PluginAlternateRoutePoll =
   | { state: "running"; nextPollMs?: number }
-  | { state: "done"; resultUrl: string; providerCostUsd?: number; providerMs?: number }
+  | {
+      state: "done"
+      resultUrl: string
+      /** What the upstream billed for the task, in USD: a V2 host settles a routed run's charge from it. */
+      providerCostUsd?: number
+      providerMs?: number
+      /** ADDITIVE-OPTIONAL (V2). The seconds the upstream billed (compared with the admission quote's). */
+      billedSec?: number
+    }
   /** Ended without a result and NOT charged (a refusal included): core falls back. */
   | { state: "failed" | "expired"; message: string; code?: string }
   /** This process cannot read that task (no key here): core leaves the job alone for a process that can. */
   | { state: "unreadable" }
 
 export interface PluginAlternateRoutesService {
-  /** Pure and synchronous: the plugin's switch and rules. A route id, or null for "not mine". */
+  /**
+   * Pure and synchronous: the plugin's switch and rules. A route id, or null for "not mine".
+   *
+   * Two kinds of consult (a V2 host):
+   *   - LEGACY: the admin setting leaves the model on the default route. Only
+   *     the image-to-video and text-to-video lanes ask, at run time, with the
+   *     prepared request exactly as an older host builds it — `service` and
+   *     `kind` are ABSENT. A yes runs at the default price with today's
+   *     fallback.
+   *   - ADMIN-ROUTED: the setting routes the model (and service) here. Asked
+   *     ONCE, at admission, before credits are held, with the request as it is
+   *     known there (`service` and `kind` always set; media URLs as the person
+   *     gave them, before re-encoding). A yes is stored on the job and held
+   *     from `quote()`; the run is never asked again and never falls back. A
+   *     null keeps that one request on the default route at the default price.
+   */
   accepts(req: PluginAlternateRouteRequest): { routeId: string } | null
   /**
    * Submits the run, once per job (core holds the job before calling). Resolves
@@ -6346,6 +6451,45 @@ export interface PluginAlternateRoutesService {
   ): Promise<{ taskRef: string; plannedCostUsd?: number }>
   /** One status read. An upstream failure is RETURNED; a throw means the read itself failed (core reads again). */
   poll(routeId: string, taskRef: string): Promise<PluginAlternateRoutePoll>
+  /**
+   * ADDITIVE-OPTIONAL (V2). What a run on this route costs, in USD (the unit
+   * of `quote`), per listed platform price id — same grammar as the default
+   * rows (`seedance-2-5:8s:720p`, `…-ref`, extend and draft-finalize rows).
+   * The host turns each into credits with the ONE rule it uses for a quote
+   * and a settlement, and keeps them in a table of their own (never over a
+   * default price). For LISTINGS only (model lists, "from" prices): a run is
+   * held from `quote` and charged from what the task billed. Pure; never
+   * throws. Its presence is how the host knows this service speaks V2.
+   */
+  prices?(): ReadonlyArray<{ id: string; usd: number }>
+  /**
+   * ADDITIVE-OPTIONAL (V2). The route's own billing rule applied to `req`:
+   * the seconds it would bill and their USD cost. A V2 host holds a routed
+   * run's credits from this (through the same USD → credits rule behind the
+   * default prices, then the markup) and settles from the finished task's
+   * `providerCostUsd`. Pure and synchronous; never throws. Null = this request
+   * cannot be quoted (the host then refuses to admit it on the route: 503
+   * `price_not_configured`). `prices()` is for listings only.
+   */
+  quote?(req: PluginAlternateRouteRequest): { billedSeconds: number; usd: number } | null
+  /**
+   * ADDITIVE-OPTIONAL (V2). Whether this route knows `model` at all (the
+   * admin page greys out a model it cannot take, and the host refuses to
+   * route one). Pure; never throws. Absent = the models `prices()` names.
+   */
+  capable?(model: string): boolean
+  /**
+   * ADDITIVE-OPTIONAL (V2). The route's prepaid account right now: what it
+   * can still spend and what running tasks hold. Null when it cannot be read.
+   * Never throws.
+   */
+  account?(): Promise<{ availableUsd: number; heldUsd: number; observedAt: string } | null>
+  /**
+   * ADDITIVE-OPTIONAL (V2). What the upstream itself reports as spent since
+   * `sinceIso` (an ISO timestamp), and the video seconds it billed. Null when
+   * it cannot be read. Never throws.
+   */
+  spend?(sinceIso: string): Promise<{ actualUsd: number; videoSeconds: number } | null>
 }
 
 // ============================================================================

@@ -18,10 +18,11 @@ import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import type { ImportRights } from "../lib/import-gate.js"
 import { parseImportVia } from "../lib/import-via.js"
 import sharp from "sharp"
-import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
+import { applyImageWatermark } from "../utils/watermark.js"
 import { getSizeLimit } from "../utils/file-validation.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
-import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
+import { cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
+import { storeVideoResult, type StoredVideo } from "../lib/video-result-store.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 import { billedContentRefusal } from "../lib/llm-errors.js"
 import type { LlmSettleOutcome, LlmSpend } from "../lib/llm-billing.js"
@@ -185,6 +186,8 @@ export async function shouldSaveJobResult(jobId: string): Promise<boolean> {
 
   if (currentJob?.status === "cancelled") {
     console.log(`[worker] Job ${jobId} was cancelled during processing, discarding result`)
+    // Every caller returns on false: what this job's video stores kept goes with the result.
+    await discardEndedJobStores(jobId)
     return false
   }
   return true
@@ -334,7 +337,7 @@ export async function markJobCompletedDetailed(
   // below is then exactly what ran before.
   if (hasCredits()) {
     const atomic = await completeJobAndSettle(jobId, completion)
-    if (atomic !== "unavailable") return afterCompletion(jobId, atomic)
+    if (atomic !== "unavailable") return afterCompletion(jobId, atomic, fields.output_data)
   }
   // CAS on LIVE statuses (audit H3) — not .neq("cancelled"): the old guard
   // let a slow finalizer flip a FAILED row (already exhaustion-refunded)
@@ -350,14 +353,14 @@ export async function markJobCompletedDetailed(
 
   if (error) {
     console.error(`[worker] Failed to mark job ${jobId} completed:`, error.message)
-    return "lost_race"
+    return afterCompletion(jobId, "lost_race")
   }
   if (!data || data.length === 0) {
     console.log(`[worker] Job ${jobId} already terminal (cancelled/failed/completed) — not flipping to completed`)
-    return "lost_race"
+    return afterCompletion(jobId, "lost_race")
   }
   await settleManagedJobOnCompletion(jobId, (data[0] as { usage_log_id?: string | null }).usage_log_id)
-  return afterCompletion(jobId, "completed")
+  return afterCompletion(jobId, "completed", fields.output_data)
 }
 
 /**
@@ -365,12 +368,40 @@ export async function markJobCompletedDetailed(
  * result (lib/mcp/flows/hydrate.ts). Not awaited and never throws, so the
  * completion and its settlement are exactly as they were; a dynamic import, so
  * this module's graph (and every worker suite that mocks it) is unchanged.
+ *
+ * After a LOST race: the row was cancelled or failed while this worker stored
+ * its result, so what its video stores kept beside the result (a kept
+ * original, a raw clip) is deleted and its charge given back
+ * (`discardStoredObjectsIfJobEnded`, which never throws and leaves a row that
+ * is live or completed alone).
  */
-function afterCompletion<T extends MarkJobCompletedOutcome | "completed" | "lost_race">(jobId: string, outcome: T): T {
+async function afterCompletion<T extends MarkJobCompletedOutcome | "completed" | "lost_race">(jobId: string, outcome: T, outputData?: unknown): Promise<T> {
   if (outcome === "completed") {
     void import("../lib/mcp/flows/hydrate.js").then((m) => m.hydrateFlowNodeForJob(jobId)).catch(() => undefined)
+    // What the job's record holds that the completed output does not name (an
+    // earlier attempt's original, one whose store could not tell it was
+    // recorded): claimed, deleted, given back. Only a completion that may
+    // hold such objects (a video result) pays its read. Never throws.
+    await import("../lib/job-server-output.js")
+      .then((m) => (m.completionMayHoldRecordedObjects(jobId, outputData) ? m.pruneUnnamedStoredObjects(jobId) : undefined))
+      .catch(() => undefined)
   }
+  if (outcome === "lost_race") await discardEndedJobStores(jobId)
   return outcome
+}
+
+/**
+ * The ONE hook for a worker whose result did not land (decided 2026-11-22):
+ * the completion's lost race, and every `shouldSaveJobResult` that answered
+ * false. A dynamic import, like the hydrate above. Never throws.
+ */
+export async function discardEndedJobStores(jobId: string): Promise<void> {
+  try {
+    const { discardStoredObjectsIfJobEnded } = await import("../lib/job-server-output.js")
+    await discardStoredObjectsIfJobEnded(jobId)
+  } catch (err) {
+    console.error(`[worker] Job ${jobId}: discarding its stored objects failed:`, err)
+  }
 }
 
 /** What `public.complete_job_and_settle` answers (migrations 513, 514). */
@@ -1653,65 +1684,34 @@ export async function uploadImageVariantsMaybeWatermark(
 }
 
 /**
- * Upload video to R2, optionally applying a watermark first.
- * When watermark is true, downloads to a temp file, runs ffmpeg drawtext,
- * then uploads the watermarked file.
+ * Store a provider's delivered video (fetched from `sourceUrl`) through the
+ * video result funnel (`lib/video-result-store.ts`): watermarked when the run
+ * is, else browser-safe, with the provider's file kept as the original when
+ * the browser-safe step changed it. Write EVERY field it returns into the
+ * job's output (`storedVideoFields`, or hand it to `finalizeJobWithMedia`).
  */
 export async function uploadVideoMaybeWatermark(
   sourceUrl: string,
   jobId: string,
   jobUserId: string | undefined,
   watermark: boolean,
-  /** `crf`: the browser-safe transcode's CRF when one is needed (default 23). */
+  /** `crf`: the preview's CRF when one is made (default 23). */
   opts?: { crf?: string },
-): Promise<string> {
-  // POST-PROVIDER by construction: `sourceUrl` is the provider's delivered
-  // video. Download-of-result / watermark / transcode / R2-upload failures all
-  // happen after we were billed → PostProcessingError (refund guard skips).
-  return runPostProcessing(async () => {
-    const workDir = await createWorkDir("wm")
-    try {
-      const inputPath = join(workDir, "input.mp4")
-      await downloadFile(sourceUrl, inputPath)
-
-      if (watermark) {
-        const outputPath = join(workDir, "output.mp4")
-        await applyVideoWatermark(inputPath, outputPath)
-        return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
-      }
-
-      // Even without watermark, transcode if the codec isn't browser-safe
-      const uploadPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"), opts?.crf)
-      return await uploadFileToR2(uploadPath, jobId, "video", jobUserId)
-    } finally {
-      await cleanupWorkDir(workDir)
-    }
-  })
+): Promise<StoredVideo> {
+  return storeVideoResult({ url: sourceUrl }, { jobId, userId: jobUserId, watermark, ...(opts?.crf ? { crf: opts.crf } : {}) })
 }
 
 /**
- * Apply video watermark to a local file on disk, then upload to R2.
- * Used when the file is already local (e.g. after ffmpeg merge).
+ * `uploadVideoMaybeWatermark` for a file already on disk (a merge or stitch
+ * of the provider's video): the same funnel and the same fields.
  */
 export async function watermarkLocalVideoAndUpload(
   localPath: string,
   jobId: string,
   jobUserId: string | undefined,
   watermark: boolean,
-): Promise<string> {
-  // POST-PROVIDER: `localPath` is a post-delivery artifact (e.g. the merged
-  // provider video). Watermark / transcode / upload failures → skip refund.
-  return runPostProcessing(async () => {
-    if (watermark) {
-      const wmPath = `${localPath}-wm.mp4`
-      await applyVideoWatermark(localPath, wmPath)
-      return uploadFileToR2(wmPath, jobId, "video", jobUserId)
-    }
-
-    // Transcode if the codec isn't browser-safe
-    const uploadPath = await transcodeToBrowserSafe(localPath, `${localPath}-norm.mp4`)
-    return uploadFileToR2(uploadPath, jobId, "video", jobUserId)
-  })
+): Promise<StoredVideo> {
+  return storeVideoResult({ path: localPath }, { jobId, userId: jobUserId, watermark })
 }
 
 /**

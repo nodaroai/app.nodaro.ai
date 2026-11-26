@@ -202,6 +202,77 @@ describe("generateScenePlan", () => {
   })
 })
 
+describe("generateScenePlan — the plan check", () => {
+  /** A jet whose parts never name the group that flies it: valid, and it shows nothing. */
+  const LOOSE_JET = {
+    ...DRAFT_PLAN,
+    objects: [
+      { ...DRAFT_OBJECT, id: "jet", primitive: "group" as const, keyframes: [{ frame: 95, position: [4, 0, 0] }] },
+      { ...DRAFT_OBJECT, id: "jet-body", primitive: "box" as const },
+    ],
+  }
+  const ASSEMBLED_JET = {
+    ...LOOSE_JET,
+    objects: [LOOSE_JET.objects[0], { ...LOOSE_JET.objects[1], parentId: "jet" }],
+  }
+  /** The hero sits behind the camera for the whole (only) shot. */
+  const CAMERA_AWAY = { ...DRAFT_PLAN, camera: { ...DRAFT_PLAN.camera, target: [0, 2, 20] } }
+
+  it("revises a valid scene whose parts are not attached, and lets the model re-stage it", async () => {
+    answers(LOOSE_JET, ASSEMBLED_JET)
+    const result = await generateScenePlan(generateArgs)
+    expect(result.revisions).toBe(1)
+    expect(result.warnings).toBeUndefined()
+    const feedback = userTextAt(1)
+    expect(feedback).toContain('group "jet" has nothing attached to it')
+    expect(feedback).toContain('"jet-body"')
+    // A re-staging fix: "change nothing else" would forbid it.
+    expect(feedback).toContain("move the camera, its target or the objects")
+    expect(feedback).not.toContain("Change nothing else")
+  })
+
+  it("fails the run when the parts are still loose after every revision", async () => {
+    answers(...Array.from({ length: SCENE3D_MAX_REVISIONS + 1 }, () => LOOSE_JET))
+    await expect(generateScenePlan(generateArgs)).rejects.toThrow(/group "jet" has nothing attached to it/)
+    expect(mocks.llmCompleteStructured).toHaveBeenCalledTimes(SCENE3D_MAX_REVISIONS + 1)
+  })
+
+  it("revises a shot that shows no subject, feeding back where the camera and the subjects are", async () => {
+    answers(CAMERA_AWAY, DRAFT_PLAN)
+    const result = await generateScenePlan(generateArgs)
+    expect(result.revisions).toBe(1)
+    expect(result.warnings).toBeUndefined()
+    expect(userTextAt(1)).toMatch(/shows no subject[\s\S]*"hero" at \[0, 0\.9, 0\]/)
+  })
+
+  it("delivers a scene whose camera still misses the subject, with the finding as a warning", async () => {
+    answers(...Array.from({ length: SCENE3D_MAX_REVISIONS + 1 }, () => CAMERA_AWAY))
+    const result = await generateScenePlan(generateArgs)
+    expect(result.revisions).toBe(SCENE3D_MAX_REVISIONS)
+    expect(result.plan.camera.target).toEqual([0, 2, 20])
+    expect(result.warnings).toEqual([
+      expect.objectContaining({ code: "SCENE_SHOT_WITHOUT_SUBJECT", message: expect.stringContaining("shows no subject") }),
+    ])
+    // Every attempt was a billed call.
+    expect(result.inputTokens).toBe(100 * (SCENE3D_MAX_REVISIONS + 1))
+  })
+
+  it("keeps an earlier deliverable scene when the last attempt breaks the contract", async () => {
+    const past = { ...DRAFT_PLAN, objects: [{ ...DRAFT_OBJECT, keyframes: [{ frame: 9999 }] }] }
+    answers(CAMERA_AWAY, past, past)
+    const result = await generateScenePlan(generateArgs)
+    expect(result.plan.camera.target).toEqual([0, 2, 20])
+    expect(result.warnings?.[0]?.code).toBe("SCENE_SHOT_WITHOUT_SUBJECT")
+    expect(result.revisions).toBe(SCENE3D_MAX_REVISIONS)
+  })
+
+  it("never delivers a scene with loose parts, even when its camera finding is only advisory", async () => {
+    const both = { ...LOOSE_JET, camera: { ...LOOSE_JET.camera, target: [0, 2, 20] } }
+    answers(...Array.from({ length: SCENE3D_MAX_REVISIONS + 1 }, () => both))
+    await expect(generateScenePlan(generateArgs)).rejects.toThrow(/nothing attached/)
+  })
+})
+
 describe("editScenePlan", () => {
   it("applies the model's operations and produces the pinned revision", async () => {
     answers({

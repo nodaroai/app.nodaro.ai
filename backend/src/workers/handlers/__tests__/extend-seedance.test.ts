@@ -27,8 +27,8 @@ const mocks = vi.hoisted(() => {
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
-  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
+  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   const mockSetJobProgress = vi.fn(async () => {})
 
@@ -62,6 +62,11 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: mocks.mockFrom },
+}))
+// A watermarked run clears an earlier attempt's raw-clip reference on the job's record first.
+vi.mock("@/lib/job-server-output.js", async (orig) => ({
+  ...(await orig<object>()),
+  clearRawExtensionUrl: vi.fn(async () => true),
 }))
 
 vi.mock("@/lib/storage.js", () => ({
@@ -456,7 +461,7 @@ describe("extend-video / seedance-2-0-extend", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
       jobId: "job-1",
       jobType: "extend-video",
-      mediaUrl: "https://r2.example.com/videos/job-1.mp4",
+      video: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
       result: expect.objectContaining({ providerUsed: "seedance-2-0-extend", cost: 0.2 }),
       extraOutputData: expect.objectContaining({
         thumbnailUrl: "https://r2.example.com/thumbnails/job-1.png",

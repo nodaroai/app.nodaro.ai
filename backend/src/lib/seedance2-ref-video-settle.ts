@@ -2,6 +2,7 @@ import { billsReferenceVideoSeconds, isGeminiOmniPerSecondProvider, isSeedance2P
 import { isAutoVideoDuration } from "@nodaro/shared/model-catalog"
 import { hasCredits } from "./config.js"
 import { pricedRefVideoInput } from "./ref-video-probe.js"
+import { videoHdrAddonBaseCredits } from "./video-hdr-addon.js"
 
 /**
  * The BASE credits a Seedance 2 reference-video run actually billed, measured
@@ -54,6 +55,12 @@ export interface Seedance2SettleArgs {
    *  Auto duration was held at the worst case, so it is charged what it delivered up to that
    *  hold, not capped at the edit's. Required so no lane can skip it. */
   referenceTaskType: unknown
+  /** The run's dynamic range (the job's `input_data.dynamicRange`). An HDR run's
+   *  add-on (Kling 4.0) is its own line on the output seconds: the measured
+   *  base replaces the hold, so the add-on is added back to it here, never
+   *  priced on the reference-video ladder and never refunded. Required so no
+   *  lane can skip it. */
+  dynamicRange: unknown
   /** The job being settled — named by the over-the-hold alert. */
   jobId?: string
 }
@@ -166,7 +173,10 @@ export async function measureSeedance2Settle(args: Seedance2SettleArgs): Promise
     const measured = await seedance2RefVideoActualSeconds(run)
     return await priceMeasured(
       { outputSec: measured.deliveredSec, inputSec: measured.inputSec },
-      () => seedance2RefVideoActualBaseCredits(run, measured),
+      // The HDR add-on rides on the measured base at the price it was held at
+      // (the requested seconds, which Kling 4.0 renders exactly).
+      async () => (await seedance2RefVideoActualBaseCredits(run, measured))
+        + (await videoHdrAddonBaseCredits({ provider, duration: typeof args.duration === "number" || typeof args.duration === "string" ? args.duration : undefined, resolution: args.resolution, dynamicRange: args.dynamicRange })),
       "reference run",
       measured.measuredSec,
     )

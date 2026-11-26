@@ -59,7 +59,7 @@ const job = (data: Record<string, unknown> = {}) => ({
   updateProgress: vi.fn(),
 })
 const run = (data?: Record<string, unknown>) => videoAIHandlers["video-upscale"](job(data) as never, ctx as never)
-type FinalizeArg = { result: Record<string, unknown>; mediaUrl: string; extraOutputData: Record<string, unknown> } & Record<string, unknown>
+type FinalizeArg = { result: Record<string, unknown>; video: { videoUrl: string }; extraOutputData: Record<string, unknown> } & Record<string, unknown>
 const finalized = () => mocks.finalizeJob.mock.calls[0]![0] as FinalizeArg
 
 beforeEach(() => {
@@ -69,7 +69,7 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {})
   vi.spyOn(console, "warn").mockImplementation(() => {})
   mocks.run.mockResolvedValue({ resultUrls: ["https://results.example/out.mp4"], width: 2560, height: 1440, reportedCostUsd: 0.4, plannedCostUsd: 0.45 })
-  mocks.upload.mockResolvedValue("https://r2.example/out.mp4")
+  mocks.upload.mockResolvedValue({ videoUrl: "https://r2.example/out.mp4" })
   mocks.thumbnail.mockResolvedValue("https://r2.example/thumb.png")
   mocks.finalizeJob.mockResolvedValue({ ok: true })
 })
@@ -90,7 +90,7 @@ describe("video-upscale nodaro-video-upscale — a served run", () => {
     expect(mocks.upload).toHaveBeenCalledWith("https://results.example/out.mp4", "job-nvu", "user-1", false)
     expect(mocks.thumbnail).toHaveBeenCalledWith("https://r2.example/out.mp4", "job-nvu", "user-1")
     expect(mocks.finalizeJob).toHaveBeenCalledTimes(1)
-    expect(finalized()).toMatchObject({ jobId: "job-nvu", jobType: "video-upscale", claimant: "worker", mediaUrl: "https://r2.example/out.mp4" })
+    expect(finalized()).toMatchObject({ jobId: "job-nvu", jobType: "video-upscale", claimant: "worker", video: { videoUrl: "https://r2.example/out.mp4" } })
     expect(finalized().extraOutputData).toMatchObject({ thumbnailUrl: "https://r2.example/thumb.png" })
   })
 

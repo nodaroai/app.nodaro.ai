@@ -26,8 +26,8 @@ const mocks = vi.hoisted(() => {
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
-  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
+  const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1-merged.mp4" })
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
 
   // Supabase chain
@@ -214,11 +214,11 @@ beforeEach(() => {
   mocks.mockVideoUpscale.mockResolvedValue(VIDEO_RESULT)
   mocks.mockSpeechToVideo.mockResolvedValue(S2V_RESULT)
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/videos/raw.mp4")
   mocks.mockMergeVideoAudio.mockResolvedValue("/tmp/workdir/merged.mp4")
   mocks.mockProbeMediaStreams.mockResolvedValue({ hasVideo: true, hasAudio: true })
-  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
+  mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1-merged.mp4" })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
 })
 
@@ -245,31 +245,34 @@ describe("image-to-video handler", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
-  it("audio merge branch: uploads raw → merges → watermarks local", async () => {
+  it("audio merge branch: merges straight from the delivered file → stores only the merge (decided 2026-11-22)", async () => {
     const job = makeJob("image-to-video", {
       imageUrl: "https://img.png",
       audioUrl: "https://audio.mp3",
       prompt: "with sound",
     })
-    await handler(job as never, makeCtx())
+    await handler(job as never, makeCtx({ shouldWatermark: true }))
 
-    // Should upload raw without watermark
-    expect(mocks.mockUploadToR2).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "video", "user-1")
+    // Nothing unmerged is stored: no raw copy at the job's bare key (on a
+    // watermarked run it was the unwatermarked picture, at a derivable key).
+    expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
     expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
 
-    // Should merge
+    // Should merge, from the provider's own url
     // Strict: exactly these args, no extra keys (shared builder, draftAudioMuxMergeArgs).
     expect(mocks.mockMergeVideoAudio.mock.calls).toStrictEqual([[{
-      videoUrl: "https://r2.example.com/videos/raw.mp4",
+      videoUrl: VIDEO_RESULT.url,
       audioUrl: "https://audio.mp3",
       voiceoverVolume: 100,
       backgroundVolume: 30,
       keepOriginalAudio: false,
+      // An HDR picture is copied as it is (decided 2026-11-25); any other merges as before.
+      keepHdrPicture: true,
     }]])
 
     // Should watermark the merged file
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalledWith(
-      "/tmp/workdir/merged.mp4", "job-1-merged", "user-1", false,
+      "/tmp/workdir/merged.mp4", "job-1-merged", "user-1", true,
     )
 
     expect(mocks.mockCleanupWorkDir).toHaveBeenCalledWith("/tmp/workdir")
@@ -468,7 +471,7 @@ describe("text-to-video handler", () => {
       expect(mocks.mockUploadToR2).toHaveBeenCalledWith(MOV_RESULT.url, "job-1", "video", "user-1", { ext: "mov" })
       expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
       expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalledWith("https://r2.example.com/videos/job-1.mov", "job-1", "user-1")
-      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ mediaUrl: "https://r2.example.com/videos/job-1.mov" }))
+      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ video: { videoUrl: "https://r2.example.com/videos/job-1.mov" } }))
     })
 
     it("watermarked: the watermark step writes the stored file (an mp4), never a mov", async () => {
@@ -856,7 +859,7 @@ describe("lip-sync handler", () => {
       expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
       expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalledWith(VOICED, "job-1", "user-1")
       const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
-      expect(finalized.mediaUrl).toBe(VOICED)
+      expect(finalized.video?.videoUrl).toBe(VOICED)
       expect(finalized.extraOutputData.voiceLineMuxed).toBe(true)
       // One provider call, ever.
       expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
@@ -869,7 +872,7 @@ describe("lip-sync handler", () => {
       expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
       expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
       const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
-      expect(finalized.mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+      expect(finalized.video?.videoUrl).toBe("https://r2.example.com/videos/job-1.mp4")
       expect(finalized.extraOutputData).not.toHaveProperty("voiceLineMuxed")
       expect(finalized.extraOutputData).not.toHaveProperty("voiceLineProbeFailed")
     })
@@ -897,7 +900,7 @@ describe("lip-sync handler", () => {
       expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
       expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
       const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
-      expect(finalized.mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+      expect(finalized.video?.videoUrl).toBe("https://r2.example.com/videos/job-1.mp4")
       expect(finalized.extraOutputData.voiceLineProbeFailed).toBe(true)
       expect(finalized.extraOutputData).not.toHaveProperty("voiceLineMuxed")
     })
@@ -920,7 +923,7 @@ describe("lip-sync handler", () => {
       expect(mocks.mockWatermarkLocalVideoAndUpload).not.toHaveBeenCalled()
       expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_RESULT.url, "job-1", "user-1", false)
       const finalized = mocks.mockFinalizeJobWithMedia.mock.calls[0][0]
-      expect(finalized.mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+      expect(finalized.video?.videoUrl).toBe("https://r2.example.com/videos/job-1.mp4")
       expect(finalized.extraOutputData.voiceLineUnreadable).toBe(true)
       expect(finalized.extraOutputData).not.toHaveProperty("voiceLineMuxed")
       expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)

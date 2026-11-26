@@ -40,7 +40,7 @@ import { snapAspectRatioToken } from "../video/aspect-ratio.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterError, isInvalidOmniAudioError } from "./omni-character.js"
 import { kling3Generate } from "./kling3-client.js"
-import { buildKling4Request } from "./kling4.js"
+import { buildKling4Request, kling4PollAttempts } from "./kling4.js"
 import { buildGrokVideo15Request } from "./grok-video-15.js"
 import { buildPixverseV6MaxRequest } from "./pixverse-v6-max.js"
 import { buildLtx25AudioRequest, buildLtx25Request } from "./ltx-2-5.js"
@@ -2040,6 +2040,7 @@ async function runKling4(
     referenceAudioUrls: options?.referenceAudioUrls,
     characterReferences: options?.characterReferences,
     keepOriginalSound: options?.keepOriginalSound,
+    dynamicRange: options?.dynamicRange,
   })
   for (const note of notes) console.log(`[KIE.ai] ${logLabel}: ${note}`)
   if (typeof input.prompt !== "string" || !input.prompt.trim()) {
@@ -2107,6 +2108,7 @@ async function runKling4(
   const tierCostUsd = kling4CostUsd({
     provider: modelKey,
     resolution: input.resolution as string,
+    dynamicRange: input.dynamic_range,
     // A video subject is video input only where the model bills it as a
     // reference video (`videoCharactersBillAsReferenceVideo`, set on no model
     // today); Kling 4.0 and Flash bill it as an image subject (measured,
@@ -2118,7 +2120,8 @@ async function runKling4(
 
   console.log(`[KIE.ai] ${logLabel} (${model}) input:`, JSON.stringify(input, null, 2))
   const { resultJson, taskId, providerMs } = await runKieTask(
-    model, input, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+    // 4K and HDR render slower: polled longer (kling4PollAttempts).
+    model, input, kling4PollAttempts(input, MAX_POLL_ATTEMPTS_VIDEO), options?.onProgress,
     { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input), ...videoInputOverride } },
   )
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl

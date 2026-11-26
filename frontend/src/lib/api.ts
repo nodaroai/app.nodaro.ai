@@ -3326,6 +3326,8 @@ export interface GenerateVideoOptions {
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0: keep the reference videos' own sound. */
   keepOriginalSound?: boolean
+  /** Kling 4.0: "hdr" renders HDR at 1080p / 4K (refused at 720p before anything is charged). */
+  dynamicRange?: "sdr" | "hdr"
   /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
   audioSoundtrack?: boolean
   webSearch?: boolean            // Seedance 2 (required field)
@@ -3412,6 +3414,7 @@ export async function generateVideo(
       referenceAudioUrls: opts.referenceAudioUrls,
       characterReferences: opts.characterReferences?.length ? opts.characterReferences : undefined,
       keepOriginalSound: opts.keepOriginalSound,
+      ...(opts.dynamicRange ? { dynamicRange: opts.dynamicRange } : {}),
       audioSoundtrack: opts.audioSoundtrack,
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
@@ -3677,6 +3680,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   characterReferences?: VideoCharacterReference[]
   /** Kling 4.0: keep the reference videos' own sound. */
   keepOriginalSound?: boolean
+  /** Kling 4.0: "hdr" renders HDR at 1080p / 4K (refused at 720p before anything is charged). */
+  dynamicRange?: "sdr" | "hdr"
   /** Kling 4.0: play the first audio clip as the soundtrack (unset = on). */
   audioSoundtrack?: boolean
   webSearch?: boolean
@@ -11737,6 +11742,8 @@ export interface SeedanceRefEstimateRequest {
   /** Gemini Omni Flash 1.2: the node's trim of its source clip, in seconds. */
   readonly videoTrimStart?: number
   readonly videoTrimEnd?: number
+  /** Kling 4.0: "hdr" adds the HDR add-on on the output seconds. */
+  readonly dynamicRange?: "hdr"
 }
 
 /**

@@ -1,4 +1,5 @@
 import { DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX } from "@nodaro/shared/models"
+import { storedVideoFields, storeVideoResult } from "../../lib/video-result-store.js"
 import { variantJobId } from "@nodaro/shared/workflow"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
@@ -398,13 +399,16 @@ const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
 /** Shared tail for suno-music-video: upload to this instance's R2, thumbnail, persist. */
 async function finalizeSunoMusicVideo(job: Job, ctx: JobContext, result: SunoMusicVideoResult, provider: SunoProviderUsed): Promise<void> {
   await setJobProgress(job, ctx.jobId, 50)
-  // POST-PROVIDER: Suno delivered the music video (billed) → skip refund on R2 fail.
-  const r2Url = await runPostProcessing(() => uploadToR2(result.videoUrl, ctx.jobId, "video", ctx.jobUserId))
+  // POST-PROVIDER: Suno delivered the music video (billed) → the funnel's
+  // failures skip the refund. Never watermarked, as before; a file the
+  // browser-safe step would change is kept as the original beside its preview.
+  const stored = await storeVideoResult({ url: result.videoUrl }, { jobId: ctx.jobId, userId: ctx.jobUserId, watermark: false })
+  const r2Url = stored.videoUrl
   await setJobProgress(job, ctx.jobId, 100)
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, sunoTaskId: result.taskId },
+    output_data: { ...storedVideoFields(stored), thumbnailUrl: thumbUrl, sunoTaskId: result.taskId },
     provider,
   })
   if (!ok) return

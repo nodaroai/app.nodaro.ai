@@ -4,7 +4,7 @@ import { tx, useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge, Layers } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge, Layers, Sun } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -80,6 +80,7 @@ import {
   lipSyncModelSwitchPatch,
   NODARO_VIDEO_UPSCALE_PROVIDER,
   RETIRED_LIP_SYNC_PROVIDERS,
+  videoTakesHdr,
 } from "@nodaro/shared/models"
 import { nodaroVideoUpscaleModeTierOf } from "@nodaro/render-rules"
 import { TOPAZ_VIDEO_RESOLUTION_LABELS, VIDEO_UPSCALE_RESOLUTION_LABELS } from "@/lib/topaz-video-labels"
@@ -96,6 +97,7 @@ import {
   videoDurationsAt,
 } from "@nodaro/shared/model-catalog"
 import { uiResolutionFill } from "@nodaro/shared/video"
+import { hdrResolutionOptions, videoHdrSnap } from "@/lib/generate-video-provider-snap"
 import { SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin } from "@nodaro/shared/entities"
 import { SCENE3D_LIMITS } from "@nodaro/shared/scene3d"
 import { VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared/video"
@@ -1130,10 +1132,33 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
         return withFreeVideoLocks(
-          draftLockedResolutions(provider, data.draft, VIDEO_RESOLUTION_OPTIONS[provider] ?? []),
+          // With HDR on (Kling 4.0), only the sizes HDR renders at.
+          draftLockedResolutions(provider, data.draft, hdrResolutionOptions(provider, data.dynamicRange, VIDEO_RESOLUTION_OPTIONS[provider] ?? []) ?? []),
           (v, limits) => lockedVideoResolution(limits, provider, v),
         )
       },
+    },
+    {
+      // HDR, on a model with the setting (catalog `hdr`, Kling 4.0); [] for
+      // every other model, so the strip hides it and clears a stale one.
+      // Turning it on at 720p moves the size to 1080p (videoHdrSnap), as the
+      // config panel's switch does.
+      field: "dynamicRange",
+      ariaLabel: tx("vidcfg.hdr"),
+      icon: Sun,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        return videoTakesHdr(provider) ? [{ value: "sdr", label: "SDR" }, { value: "hdr", label: "HDR" }] : []
+      },
+      write: (value, data) => {
+        if (value !== "hdr") return { dynamicRange: undefined }
+        const provider = typeof data?.provider === "string" ? data.provider : undefined
+        return provider && data ? { dynamicRange: "hdr", ...videoHdrSnap({ ...data, dynamicRange: "hdr" }, provider) } : { dynamicRange: "hdr" }
+      },
+      // Not a published app's input: its HDR choice moves the size with it,
+      // which an app's input card does not apply, and offering HDR to an app's
+      // visitors was not part of the decision (2026-11-22).
+      exposable: false,
     },
     {
       // The frame rate, on a model whose catalog entry lists them (LTX 2.5);

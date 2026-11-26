@@ -551,6 +551,12 @@ refunded.
   nodes.
 - Pull each scene's layered audio (speech quotes plus music/sfx descriptions —
   every concurrent layer) for a matching soundtrack pass.
+- Block out a 3D previs of the clip: wire the `json` or `text` output into
+  [Generate 3D Scene](../composition/generate-3d-scene.md)'s **Prompt** input,
+  under your own directions. Its brief holds at most 8,000 characters, which a
+  breakdown of a clip longer than a few seconds can exceed; for a longer clip,
+  connect the video itself to Generate 3D Scene's **References** instead — the
+  scene then runs its own analysis and reads it in full.
 
 ## See Also
 

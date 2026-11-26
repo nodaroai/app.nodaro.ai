@@ -51,14 +51,22 @@ generated_from: b46bdac042
 
 ## When to use
 
-(Add prose here. Auto-gen will preserve it across regenerations.)
+Use to turn a video into a structured breakdown — `meta`, the clip's `look`, castable entity `slots[]`, and `scenes[]` with their shots, camera and audio — to recreate a clip shot by shot, re-shoot it with your own characters, objects and locations, or feed prompt-ready descriptions to generation nodes.
+
+The `json` and `text` outputs carry the same breakdown; `text` is that JSON as a string, for text inputs. extract-field and json-process read `generatedJson` directly. To block the clip out in 3D, wire either output into generate-3d-scene's `prompt` input.
 
 <!-- AUTO-GEN:START mcp-call -->
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
 
-(Add prose here.)
+The price is set by the video's length and the tier, not by tokens; the model-cost lookup named in the Credit cost line quotes the run.
+
+The breakdown is long: a clip of a few seconds already yields thousands of characters. generate-3d-scene's brief holds at most 8,000, so for a longer clip wire the video itself into generate-3d-scene's `references`: the scene runs its own analysis and reads it in full.
+
+The `text` output is the JSON breakdown, not prose. A consumer that wants prose should take it through an LLM node first.
+
+Needs a video: an upload, a generated video, or a link wired into `video`.
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

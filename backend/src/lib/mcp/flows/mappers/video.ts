@@ -6,7 +6,7 @@ const generateVideo = (tools: readonly string[], { loopTrim = false } = {}): Rou
   tools,
   fields: new Set([
     "prompt", "provider", "duration", "aspectRatio", "resolution", "sound", "generateAudio",
-    "negativePrompt", "seed", "draft", "referenceTaskType", "keepOriginalSound",
+    "negativePrompt", "seed", "draft", "referenceTaskType", "keepOriginalSound", "dynamicRange",
     "imageUrl", "endFrameUrl", "referenceImageUrls", "referenceVideoUrls", "referenceAudioUrls",
     ...(loopTrim ? ["loopTrim"] : []),
   ]),
@@ -41,6 +41,7 @@ const generateVideo = (tools: readonly string[], { loopTrim = false } = {}): Rou
         draft: body.draft === true ? true : undefined,
         referenceTaskType: declaredTaskTypeOf(body.referenceTaskType),
         keepOriginalSound: bool(body.keepOriginalSound),
+        dynamicRange: body.dynamicRange === "hdr" || body.dynamicRange === "sdr" ? body.dynamicRange : undefined,
         loopTrim: loopTrimOf(body.loopTrim),
         fieldMappings: {},
       }),

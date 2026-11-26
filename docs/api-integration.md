@@ -1632,6 +1632,29 @@ On a deployment's own server the card is the bundled proxy's `/s/*`, handed to
 the API's `GET /og/s/:token`; `SHARE_SITE_ORIGIN` is set in
 [deployment.md](./deployment.md).
 
+<a id="video-outputs-original-and-preview"></a>
+### Video outputs: the original and its preview
+
+A completed video job's `output_data.videoUrl` is always a file a browser can
+play. When the provider's file is one the browser-safe step would change (it
+is not H.264 `yuv420p`: HEVC, 10-bit, HDR, ProRes…), that file is kept untouched
+and named by `output_data.originalVideoUrl` (its own container and content
+type), and `videoUrl` is its 8-bit H.264 preview. An HDR original (HLG or PQ)
+has a preview tone-mapped to SDR BT.709. Use `originalVideoUrl` to download and
+`videoUrl` to play.
+
+- An H.264 `yuv420p` file gets no `originalVideoUrl`: the file is already
+  browser-safe.
+- A watermarked run never has an `originalVideoUrl`.
+- A file whose picture does not decode keeps no original; a file with no
+  video frame at all (sound alone, an empty or broken picture) fails the job,
+  and its credits are refunded.
+- `videoPreviewUnavailable: true`: the preview could not be made. The job still
+  completed, and `videoUrl` names the original, which some browsers cannot play.
+
+MCP job views (`get_job`, `wait_for_job`) carry it in `outputData.originalVideoUrl`;
+`outputUrl` is the playable file. See the [design note](./design/video-original-and-preview.md).
+
 ## 4i. A workflow's view link
 
 A workflow's creator can open a **read-only view of its canvas** to anyone
@@ -3447,12 +3470,28 @@ so a value the model doesn't support is ignored, never a 400:
   rewritten to `@keyframe_N`). `aspectRatio` applies only with no frame
   attached. No reference videos, audio or characters.
 - **Both Kling 4.0 ids:** `duration` is a whole number of seconds from **3 to
-  30** (default 5); `resolution` is `720p` (default) or `1080p`, and anything
-  else renders and bills 720p; `aspectRatio` is `auto` (default — follows the
-  materials, 16:9 with none) / `16:9` / `9:16` / `1:1` / `21:9`; native audio is
-  always on (`sound` is ignored); no `seed`; `prompt` up to 8,000 characters.
-  Priced per second on one ladder per resolution. Not available on the free
-  tier.
+  30** (default 5); `resolution` is `720p` (default), `1080p` or `4k` (`4K`
+  accepted), and anything else renders and bills 720p (a `4k` sent before this
+  release rendered and billed 720p; it now renders and bills 4K); `aspectRatio`
+  is `auto` (default — follows the materials, 16:9 with none) / `16:9` / `9:16`
+  / `1:1` / `21:9` / `4:3`; native audio is always on (`sound` is ignored); no
+  `seed`; `prompt` up to 8,000 characters. Priced per second on one ladder per
+  resolution. Not available on the free tier.
+- **HDR on both Kling 4.0 ids:** `dynamicRange` is `sdr` (default) or `hdr`
+  (on `POST /v1/generate-video` and `POST /v1/text-to-video`). `hdr` renders
+  HEVC 10-bit, BT.2020, HLG, at `1080p` or `4k` only. `hdr` at `720p`, or with
+  no `resolution` (which renders 720p), is a `400`
+  `hdr_resolution_unsupported` before anything is reserved; the quote
+  endpoints (`POST /v1/quote`, `POST /v1/credits/seedance-ref-estimate`)
+  refuse it the same way. HDR is priced as its own add-on on the output
+  seconds (`kling-4-hdr:<N>s:<resolution>`), added to the clip's price and
+  charged once with it; a reference video's seconds never move it. The job's
+  stored original keeps the HDR file (`output_data.originalVideoUrl`; none on a
+  watermarked run), and the
+  `videoUrl` the browser plays is an SDR copy; editing nodes produce SDR. A 4K
+  or HDR task the provider cannot deliver fails and is refunded; it never
+  falls back to 1080p SDR. Every other model ignores `dynamicRange` (it is not
+  sent and not billed). Kling 4.0 Flash has no 4K and no HDR.
 - **`kling-4-flash`** (Kling 4.0 Flash) is one id over two provider
   endpoints, picked by what is sent: an `imageUrl` with no
   `referenceImageUrls`, no `referenceVideoUrls` and no `characterReferences`
@@ -6646,9 +6685,12 @@ On a previz run:
 - each role's `name` is the **locator** of its model in the clip: its colour,
   or its shape and position (`"the pink model"`, `"the tall model on the
   left"`). A role with pictures and no name is refused;
-- each role may say what it is in `subject` (`"the detective"`, `"a delivery
-  van"`, 1–200 characters), which the result's script calls it by; left out,
-  the script calls it by its picture. Any other run ignores `subject`;
+- each role may say in `subject` what its model becomes in the finished video
+  (1–200 characters), which the result's script calls it by; left out, the
+  script calls it by its picture. Write the finished thing, not the previz
+  model, and leave out the model's colour unless the real thing has it:
+  `"a jockey on a bay racehorse"`, not `"the driver of the red car"`. Any
+  other run ignores `subject`;
 - `previz` holds its options: `lighting: true` also follows the clip's
   lighting direction and lighting changes (default `false`); `sound` is
   `"clip"` (keep the clip's own sound) or `"generated"` (the engine makes

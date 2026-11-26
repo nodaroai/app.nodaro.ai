@@ -21,6 +21,7 @@ import { NODARO_MOTION_PREVIZ_KEY, parseNodaroMotionPreviz, type NodaroMotionPre
 import { NODARO_MOTION_SHOT_LOCK_KEY, parseNodaroMotionShotLock, type NodaroMotionShotLock } from "./nodaro-motion-shot-lock.js"
 import { NODARO_MOTION_SHOT_LIST_FPS_KEY, parseNodaroMotionShotListFps, type NodaroMotionShotListFps } from "./nodaro-motion-shot-list-fps.js"
 import { NODARO_MOTION_FLASH_OFFER_KEY, parseNodaroMotionFlashOffer, type NodaroMotionFlashOffer } from "./nodaro-motion-flash-offer.js"
+import { videoRoutePolicyKey, videoRoutePriceFactorsKey, parseVideoRoutePolicy, parseVideoRoutePriceFactors, type VideoRoutePolicy, type VideoRoutePriceFactors } from "./video-route-policy.js"
 import { NODARO_MOTION_FACE_GROW_KEY, parseNodaroMotionFaceGrow, type NodaroMotionFaceGrow } from "./nodaro-motion-face-grow-setting.js"
 import { NODARO_MOTION_STEPS_KEY, parseNodaroMotionSteps, type NodaroMotionSteps } from "./nodaro-motion-steps.js"
 import { NODARO_MOTION_PULSE_AUDIO_KEY, parseNodaroMotionPulseAudio, type CastSwapPulseAudio } from "./cast-swap-pulse-audio.js"
@@ -273,6 +274,16 @@ export interface AppSettings {
    * cost-shortfall jobs are still recorded and alerted, nothing is switched off.
    */
   cost_shortfall_auto_pause_enabled: boolean
+  /**
+   * Which route each routable video model takes, per service
+   * (video-route-policy.ts). Absent / null = never saved: every model on the
+   * default route.
+   */
+  video_route_policy?: VideoRoutePolicy | null
+  /** The routed price's correction factors (video-route-policy.ts). Absent = none (every factor 1). */
+  video_route_price_factors?: VideoRoutePriceFactors
+  /** What each environment's route lists, as its API published it (lib/alternate-route-prices.ts). Raw; read per environment. */
+  video_route_listing?: unknown
 }
 
 // The settings are kept in memory so a job does not read every row each time.
@@ -496,6 +507,18 @@ async function refreshSettings(): Promise<AppSettings> {
     }
     if (row.key === GALLERY_BANNED_USERS_KEY) {
       settings.gallery_banned_users = parseGalleryBannedUsers(row.value)
+      continue
+    }
+    if (row.key === videoRoutePolicyKey()) {
+      settings.video_route_policy = parseVideoRoutePolicy(row.value)
+      continue
+    }
+    if (row.key === "video_route_listing") {
+      settings.video_route_listing = row.value
+      continue
+    }
+    if (row.key === videoRoutePriceFactorsKey()) {
+      settings.video_route_price_factors = parseVideoRoutePriceFactors(row.value)
       continue
     }
     if (row.key === "cost_shortfall_auto_pause_enabled" && typeof row.value === "boolean") {

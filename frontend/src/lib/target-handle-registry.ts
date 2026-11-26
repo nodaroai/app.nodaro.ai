@@ -466,9 +466,11 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   ],
 
   // 3D Scene previz — `references` takes image/video producers the authoring
-  // LLM reads; Edit 3D Scene's `scene` takes an upstream 3D scene plan (which
-  // travels on the source's `composition` pip).
+  // LLM reads; Generate 3D Scene's `prompt` takes text that becomes its brief
+  // (a Video Analysis included); Edit 3D Scene's `scene` takes an upstream 3D
+  // scene plan (which travels on the source's `composition` pip).
   "generate-3d-scene": [
+    { handleId: "prompt",     label: SCENE3D_HANDLE_LABELS.prompt,     accepts: (s) => isValidScene3DConnection("prompt", s) },
     { handleId: "references", label: SCENE3D_HANDLE_LABELS.references, accepts: (s) => isValidScene3DConnection("references", s) },
   ],
   "edit-3d-scene": [

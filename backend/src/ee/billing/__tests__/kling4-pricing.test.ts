@@ -33,8 +33,8 @@ import {
  * input seconds). Base credits = KIE cr × 2.5, rounded up to the next 10.
  * Migration 556 seeds the same rows (static-costs-match-migrations.test.ts).
  */
-const KIE_PER_SEC = { "720p": 28.5, "1080p": 42.5 } as const
-const KIE_REF_PER_SEC = { "720p": 17, "1080p": 25.5 } as const
+const KIE_PER_SEC = { "720p": 28.5, "1080p": 42.5, "4k": 99 } as const
+const KIE_REF_PER_SEC = { "720p": 17, "1080p": 25.5, "4k": 59 } as const
 const DURATIONS = Array.from({ length: 28 }, (_, i) => i + 3)
 const ladder = (kiePerSec: number, sec: number) => Math.ceil((kiePerSec * sec * 2.5) / 10) * 10
 
@@ -66,8 +66,10 @@ describe("kling-4 / kling-4-keyframes static credits", () => {
   it("carries exactly the bare ids plus their composites", () => {
     const count = (prefix: string) =>
       Object.keys(STATIC_CREDIT_COSTS).filter((k) => k === prefix || k.startsWith(`${prefix}:`)).length
-    expect(count("kling-4")).toBe(1 + 56 + 56)
-    expect(count("kling-4-keyframes")).toBe(1 + 56)
+    expect(count("kling-4")).toBe(1 + 84 + 84)
+    expect(count("kling-4-keyframes")).toBe(1 + 84)
+    // The HDR add-on: its own rows on the output seconds, at 1080p and 4K.
+    expect(count("kling-4-hdr")).toBe(56)
   })
 
   it("matches the worked examples", () => {
@@ -88,7 +90,7 @@ describe("kling-4 / kling-4-keyframes static credits", () => {
   it("every id the builder can emit is priced (no price_not_configured)", () => {
     for (const id of ["kling-4", "kling-4-keyframes"]) {
       for (const d of [undefined, 1, 2, ...DURATIONS, 31, 60]) {
-        for (const r of [undefined, "720p", "1080p", "1080P", "480p", "4k", "garbage"]) {
+        for (const r of [undefined, "720p", "1080p", "1080P", "480p", "4k", "4K", "garbage"]) {
           for (const ref of [false, true]) {
             for (const mode of ["image-to-video", "text-to-video"] as const) {
               const credit = buildVideoCreditModelIdentifier(id, d, undefined, mode, undefined, r, ref)
@@ -138,9 +140,11 @@ describe("kling-4 reference-video billing (output + max(output, input))", () => 
     expect(seedance2RefVideoBaseCredits({ provider: "kling-4", resolution: "720p", outputDurationSec: 10, inputVideoDurationSec: 15 })).toBe(1063)
   })
 
-  it("1080p uses the 63.75/s anchor; an off-list resolution renders and bills 720p", () => {
+  it("1080p uses the 63.75/s anchor, 4K the 147.5/s one; an off-list resolution renders and bills 720p", () => {
     expect(seedance2RefVideoBaseCredits({ provider: "kling-4", resolution: "1080p", outputDurationSec: 10, inputVideoDurationSec: 15 })).toBe(Math.ceil(63.75 * 25))
-    expect(seedance2RefVideoBaseCredits({ provider: "kling-4", resolution: "4k", outputDurationSec: 5, inputVideoDurationSec: 0 })).toBe(425)
+    // 4k renders and bills 4K (decided 2026-11-22; it used to bill 720p).
+    expect(seedance2RefVideoBaseCredits({ provider: "kling-4", resolution: "4k", outputDurationSec: 5, inputVideoDurationSec: 0 })).toBe(Math.ceil(147.5 * 10))
+    expect(seedance2RefVideoBaseCredits({ provider: "kling-4", resolution: "2k", outputDurationSec: 5, inputVideoDurationSec: 0 })).toBe(425)
   })
 
   it("the reservation bills the REQUESTED output (no edit mode) and an unprobed clip at the 30s per-clip cap", () => {

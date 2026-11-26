@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   mockTextToVideo: vi.fn(),
   mockMeasure: vi.fn(),
   mockFinalizeJobWithMedia: vi.fn().mockResolvedValue({ ok: true }),
-  mockUploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4"),
+  mockUploadVideoMaybeWatermark: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" }),
   mockGenerateAndUploadThumbnail: vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png"),
   mockSetJobProgress: vi.fn(async () => {}),
   mockApplySmartLoopCut: vi.fn(),
@@ -33,9 +33,11 @@ vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: vi.fn().mockReturnValue({ update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }) }) },
 }))
 
+const storageExtra = vi.hoisted(() => ({ uploadFileToR2: vi.fn(async (_path: string, id: string) => `https://r2.example.com/videos/${id}.mp4`) }))
 vi.mock("@/lib/storage.js", () => ({
   uploadToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/raw.mp4"),
   uploadBufferToR2: vi.fn().mockResolvedValue("https://r2.example.com/buffer.mp4"),
+  uploadFileToR2: storageExtra.uploadFileToR2,
 }))
 
 vi.mock("@/providers/index.js", () => ({
@@ -52,7 +54,7 @@ vi.mock("@/providers/video/merge-video-audio.js", () => ({
 }))
 
 vi.mock("@/providers/video/apply-smart-loop-cut.js", () => ({
-  applySmartLoopCutToR2Url: mocks.mockApplySmartLoopCut,
+  applySmartLoopCutLocal: mocks.mockApplySmartLoopCut,
 }))
 
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
@@ -83,7 +85,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
     shouldSaveJobResult: vi.fn().mockResolvedValue(true),
     markJobCompleted: vi.fn().mockResolvedValue(true),
     uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
-    watermarkLocalVideoAndUpload: vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4"),
+    watermarkLocalVideoAndUpload: vi.fn().mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1-merged.mp4" }),
     generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
     setJobProgress: mocks.mockSetJobProgress,
     refundLoopTrimAddon: vi.fn().mockResolvedValue(undefined),
@@ -121,7 +123,7 @@ beforeEach(() => {
   mocks.mockMeasure.mockResolvedValue(NOT_MEASURED)
   mocks.mockDraftMeasure.mockResolvedValue(undefined)
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue({ videoUrl: "https://r2.example.com/videos/job-1.mp4" })
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
 })
 
@@ -145,7 +147,7 @@ describe("image-to-video handler — Seedance reference-video settlement", () =>
 
   it("measures BEFORE the smart-loop-cut shortens the kept clip — the provider billed the raw length", async () => {
     mocks.mockMeasure.mockResolvedValueOnce(measured(7193, 8, 5))
-    mocks.mockApplySmartLoopCut.mockResolvedValueOnce("https://r2.example.com/trimmed.mp4")
+    mocks.mockApplySmartLoopCut.mockResolvedValueOnce({ path: "/tmp/slc/trimmed.mp4", dir: "/tmp/slc" })
     await handler(
       makeJob("image-to-video", {
         imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "720p", duration: 8, referenceVideoUrls: REFS,
@@ -202,7 +204,7 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
     const job = { prompt: "a cat in the style of @video_1", provider: "seedance-2-5", resolution: "720p", duration: -1, referenceVideoUrls: REFS, refVideoDurationsSec: [5] }
     await handler(makeJob("text-to-video", { ...job, referenceTaskType: "reference" }) as never, ctx as never)
     expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toStrictEqual({
-      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], characterReferences: undefined, duration: -1, referenceTaskType: "reference", jobId: "job-1",
+      provider: "seedance-2-5", resolution: "720p", outputUrl: RAW_URL, referenceVideoUrls: REFS, refVideoDurationsSec: [5], characterReferences: undefined, duration: -1, referenceTaskType: "reference", dynamicRange: undefined, jobId: "job-1",
     })
     await handler(makeJob("text-to-video", job) as never, ctx as never)
     expect(mocks.mockMeasure.mock.calls.at(-1)![0]).toHaveProperty("referenceTaskType", undefined)
@@ -226,7 +228,7 @@ describe("text-to-video handler — Seedance reference-video settlement", () => 
 describe("Seedance draft — the RAW take length is recorded for the 1080p finalize", () => {
   it("image-to-video: measured on the provider's clip BEFORE the loop-cut, recorded on the job", async () => {
     mocks.mockDraftMeasure.mockResolvedValueOnce(4.04)
-    mocks.mockApplySmartLoopCut.mockResolvedValueOnce("https://r2.example.com/trimmed.mp4")
+    mocks.mockApplySmartLoopCut.mockResolvedValueOnce({ path: "/tmp/slc/trimmed.mp4", dir: "/tmp/slc" })
     await videoAIHandlers["image-to-video"](
       makeJob("image-to-video", {
         imageUrl: "https://x.png", provider: "seedance-2-5", resolution: "480p", duration: 4, draft: true,
@@ -310,7 +312,7 @@ describe("Seedance 2.5 — the recorded provider cost", () => {
     expect(finalizeArg().meteredBaseCredits).toBe(1900)
     // Only the cost differs: the rest of the result, the media and the output are as before.
     expect(finalResult()).toEqual({ ...RESULT, cost: finalResult().cost })
-    expect(finalizeArg().mediaUrl).toBe("https://r2.example.com/videos/job-1.mp4")
+    expect((finalizeArg().video as { videoUrl?: string } | undefined)?.videoUrl).toBe("https://r2.example.com/videos/job-1.mp4")
     expect(finalizeArg().extraOutputData).toEqual({ thumbnailUrl: "https://r2.example.com/thumbnails/job-1.png" })
     expect(finalizeArg()).not.toHaveProperty("result.meteredCost")
   })

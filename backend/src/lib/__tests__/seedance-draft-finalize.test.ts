@@ -141,6 +141,16 @@ describe("resolveSeedanceDraftFinalize — refusals", () => {
     expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })).toMatchObject({ ok: false, code: "draft_not_finalizable" })
   })
 
+  it("a draft the alternate route made is refused: its reference is the route's own, never sent to the default upstream", async () => {
+    db.rows = [draftRow({ provider_kind: "alternate-route", provider_task_id: "alt:route-task-1" })]
+    const r = await resolveSeedanceDraftFinalize({ userId: USER, taskId: "alt:route-task-1" })
+    expect(r).toMatchObject({ ok: false, status: 409, code: "draft_not_finalizable" })
+    expect((r as { message: string }).message).toMatch(/another route/)
+    // Even when its kind was moved on, an `alt:` reference is never a default-upstream task.
+    db.rows = [draftRow({ provider_kind: "kie-video", provider_task_id: "alt:route-task-1" })]
+    expect(await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })).toMatchObject({ ok: false, code: "draft_not_finalizable" })
+  })
+
   it("a draft with no recorded provider task is refused, without blaming a relay", async () => {
     db.rows = [draftRow({ provider_task_id: null })]
     const r = await resolveSeedanceDraftFinalize({ userId: USER, sourceJobId: DRAFT_ID })

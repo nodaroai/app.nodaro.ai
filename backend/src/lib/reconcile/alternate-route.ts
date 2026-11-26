@@ -333,7 +333,8 @@ async function resendDefault(
     console.warn(`[reconcile/alternate-route] job ${jobId}: sending the default request failed: ${redactProviderDetail(err instanceof Error ? err.message : String(err)) ?? "(no words)"}`)
     return failForUpstream(jobId, err instanceof Error ? err : String(err), current.input_data)
   }
-  const kind = providerKindForVideoModel(fallback.modelKey)
+  // The resend's own resolution and dynamic range: a 4K or HDR Kling 4.0 run keeps the long kind.
+  const kind = providerKindForVideoModel(fallback.modelKey, { resolution: body.resolution, dynamicRange: body.dynamic_range })
   // The cron reads a row once it is past its kind's threshold: a resend the
   // cron made is stamped just past it, so the next tick reads the new task.
   const stampedAt = opts?.pollToEnd ? Date.now() : Date.now() - STALE_THRESHOLD_MS[kind] - 1_000
